@@ -27,30 +27,30 @@ class DriftSection(_Section):
         return workspace.PowerSpectraPlot(results, {'dataset': dskey})
 
     @_Section.figure_factory()
-    def germ_fiducial_power_spectra_plot(workspace, results=None, circuit_list=None, switchboard=None,
+    def germ_fiducial_power_spectra_plot(workspace, results=None, switchboard=None,
                                          dskey=None, **kwargs):
         return workspace.GermFiducialPowerSpectraPlot(
-            results, circuit_list, switchboard.prep_fiducials, switchboard.germs,
+            results, switchboard.prep_fiducials, switchboard.germs,
             switchboard.meas_fiducials, dskey, None, True
         )
 
     @_Section.figure_factory()
-    def germ_fiducial_prob_trajectories_plot(workspace, results=None, circuit_list=None, switchboard=None,
+    def germ_fiducial_prob_trajectories_plot(workspace, results=None, switchboard=None,
                                              dskey=None, **kwargs):
         return workspace.GermFiducialProbTrajectoriesPlot(
-            results, circuit_list, switchboard.prep_fiducials, switchboard.germs,
+            results, switchboard.prep_fiducials, switchboard.germs,
             switchboard.meas_fiducials, switchboard.outcomes, 1, None,
             dskey, None, None, True
         )
 
     @_Section.figure_factory()
-    def drift_detector_colorbox_plot(workspace, results=None, circuit_list=None, **kwargs):
+    def drift_detector_colorbox_plot(workspace, stabilityanalyzer=None, circuit_list=None, **kwargs):
         return workspace.ColorBoxPlot(
-            'driftdetector', circuit_list, None, None, linlg_pcntle=.05, stability_analyzer=results
+            'driftdetector', circuit_list, None, None, linlg_pcntle=.05, stabilityanalyzer=stabilityanalyzer
         )
 
     @_Section.figure_factory()
-    def drift_size_colorbox_plot(workspace, results=None, circuit_list=None, **kwargs):
+    def drift_size_colorbox_plot(workspace, stabilityanalyzer=None, circuit_list=None, **kwargs):
         return workspace.ColorBoxPlot(
-            'driftsize', circuit_list, None, None, linlg_pcntle=.05, stability_analyzer=results
+            'driftsize', circuit_list, None, None, linlg_pcntle=.05, stabilityanalyzer=stabilityanalyzer
         )
