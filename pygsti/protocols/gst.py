@@ -1835,6 +1835,10 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
     percentile = 0.05; nboxes = len(circuits_to_use)
     two_dlogl_threshold = _chi2.ppf(1 - percentile, ds_dof - nparams)
     redbox_threshold = _chi2.ppf(1 - percentile / nboxes, 1)
+    # if p is prob that box is red and there are N boxes, then prob of no red boxes is q = (1-p)^N ~= 1-p*N
+    # and so probability of any red boxes is ~p*N.  Here `percentile` is the probability of seeing *any* red
+    # boxes, i.e. ~p*N, so to compute the prob of a single box being red we compute `p = percentile/N`.
+
     eta = 10.0  # some default starting value - this *shouldn't* really matter
     #print("DB2: ",twoDeltaLogL_threshold,redbox_threshold)
 
@@ -1924,7 +1928,7 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
                             if global_criteria_met: continue  # no contribution at all_circuits_needing_data
                             else: prefactor = 1.0
 
-                    chis = dlogl_delements[layout.indices_for_index(i)]  # ~ f/p
+                    chis = dlogl_delements[layout.indices_for_index(i)]  # ~ f/p  (deriv of f*log(p))
                     highest_chi, lowest_chi = _np.max(chis), _np.min(chis)
                     bmaxes = _np.array(_np.abs(chis - highest_chi) < 1.e-4, dtype=bool)
                     bmins = _np.array(_np.abs(chis - lowest_chi) < 1.e-4, dtype=bool)
@@ -2041,6 +2045,40 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
 
                     #Experiment with "soft" min and max functions to see if that fixes cvxopt getting stuck
                     # so far, this hasn't helped.
+
+                    # Aggregate 2-delta-logl criteria (for cvxopt call below, as we want this function to be <= 0)
+                    #  - for each circuit, we have the sum of -Nf*logl(p) + const. terms
+                    #  - the derivatives taken below are complicated because they're derivatives with respect to
+                    #     the circuit's *wildcard budget*, which is effectively w.r.t `p` except all the p's must
+                    #     sum to 1.  We compute these derivatives as follows:
+                    #    - 1st deriv: the first derivative of each term is -Nf/p and N is common to all the terms of
+                    #      a single circuit so this is dictated by chi = f/p >= 0.  All these terms are positive (the
+                    #      deriv is negative), and we want to move probability from the terms with largest chi to
+                    #      smallest chi.  When multiple terms have the same chi then we split the total dp
+                    #      (delta-probability) according to 1 / 2nd-deriv = p**2/Nf.  This is so that if
+                    #      chi1 = f1/p1 = chi2 = f2/p2 and we want the chi's to remain equal after
+                    #      p1 -> p1 + lambda1*dp, p2 -> p2 + lambda2*dp then we get:
+                    #      (p1 + lambda1*dp) / f1 = 1/chi1 + lambda1/f1 * dp = 1/chi2 + lambda2/f2 * dp, so
+                    #      lambda1/f1 = lambda2/f2 => lambda1/lambda2 = f1/f2.  Since lambda1 + lambda2 = 1,
+                    #      we get lambda1 (1 + f2/f1) = 1 => lambda1 = f1 / (f1 + f2)
+                    #      In general, lambda_i = f_i / sum_fs_with_max_chi.
+                    #      Note: f1/p1 = f2/p2 => f1/f2 = p1/p2 so lambda_i also could be = p_i / sum_ps_with_max_chi
+                    #      We could also derive by wanting the derivs wrt chi be equal:
+                    #       d(chi1)/dp = d(chi2)/dp => -f1/p1**2 * lambda_1 = -f2/p2**2 * lambda_2
+                    #       => lambda1/lambda2 = p1/p2 as before (recall dp1 = lambda1 * dp)
+                    #      Note that this also means the lambdas could be weighted by the full 2nd deriv: Nf/p**2
+                    #      ** IN SUMMARY, the total derivative is:
+                    #           -2N * (sum_max_chi(f_i/p_i * lambda_i) - sum_min_chi(f_i/p_i * lambda_i))
+                    #           = -2N * (max_chi - min_chi)
+                    #
+                    #    - 2nd deriv: same as above, but now different lambda_i matter:
+                    #         = 2N * (sum_max_chi(f_i/p_i**2 * lambda_i**2) - sum_min_chi(f_i/p_i**2 * lambda_i**2))
+                    #         (where we take the lambda_i as given by the frequencies, so they aren't diff'd)
+                    #      If we took lambda_i = p_i / sum_of_ps then we'd get:
+                    #      d/dp (f_i/p_i * lambda_i) = -f_i/p_i**2 * lambda_i**2 + f_i/p_i * dlambda_i/dp
+                    #                                = -f_i/p_i**2 * lambda_i**2 (see below)
+                    #      Note dlambda_i/dp = lambda_i / sum_of_ps - p_i / (sum_ps)**2 * sum(lambda_i) = 0
+                    #      So we get the same result.        
                     
                     def _softmax(ar):
                         return _np.log(_np.sum([_np.exp(x) for x in ar]))
@@ -2049,7 +2087,7 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
                         return -_np.log(_np.sum([_np.exp(-x) for x in ar]))
 
                     def _agg_dlogl(current_probs, dlogl_elements):
-                        return SCALE * (2 * _np.sum(dlogl_elements) - two_dlogl_threshold)
+                        return SCALE * (2 * _np.sum(dlogl_elements) - two_dlogl_threshold)  # ~ -Nf*log(p)
 
                     def _agg_dlogl_deriv(current_probs, dlogl_elements):
                         #dlogl_delements = objfn.raw_objfn.dterms(current_probs, objfn.counts, objfn.total_counts, objfn.freqs)
@@ -2070,15 +2108,15 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
                             #maxes = _np.array(_np.abs(chis - _np.max(chis)) < 1.e-4, dtype=int)
                             #mins = _np.array(_np.abs(chis - _np.min(chis)) < 1.e-4, dtype=int)
                             #agg_dlogl_deriv_wrt_percircuit_budgets[i] = -_np.sum(chis * ((mins * wts) / sum(mins * wts) - (maxes * wts) / sum(maxes * wts)))
-                        assert(_np.all(agg_dlogl_deriv_wrt_percircuit_budgets <= 0)), "Derivative of aggregate LLR wrt any circuit budget should be negitive"
+                        assert(_np.all(agg_dlogl_deriv_wrt_percircuit_budgets <= 0)), "Derivative of aggregate LLR wrt any circuit budget should be negative"
                         return SCALE * _np.dot(agg_dlogl_deriv_wrt_percircuit_budgets, percircuit_budget_deriv)
 
                     def _agg_dlogl_hessian(current_probs, dlogl_elements):
                         #dlogl_delements = objfn.raw_objfn.dterms(current_probs, objfn.counts, objfn.total_counts, objfn.freqs)
                         #dlogl_helements = objfn.raw_objfn.hterms(current_probs, objfn.counts, objfn.total_counts, objfn.freqs)
                         p, f, N = current_probs, objfn.freqs, objfn.total_counts
-                        #dlogl_delements = -N*f/p
-                        #dlogl_helements = N*f/p**2
+                        #dlogl_delements = -N*f/p  < 0
+                        #dlogl_helements = N*f/p**2 > 0
                         chi_elements = f / p  # -dlogl_delements / N  # i.e. f/p
                         one_over_dchi_elements = p**2 / f  # N / dlogl_helements # i.e. p**2/f
 
@@ -2098,7 +2136,7 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
                             agg_dlogl_hessian_wrt_percircuit_budgets[i] = 2 * Nloc[0] * (1 / _np.sum(one_over_dchi * maxes) + 1 / _np.sum(one_over_dchi * mins))
                             
                             #wts = 1.0 / _np.abs(dlogl_helements[layout.indices_for_index(i)])
-                            #hterms = dlogl_helements[layout.indices_for_index(i)]  # ~ f/p
+                            #hterms = dlogl_helements[layout.indices_for_index(i)]  # ~ -f/p**2
                             #maxes = _np.array(_np.abs(chis - _np.max(chis)) < 1.e-4, dtype=int)
                             #mins = _np.array(_np.abs(chis - _np.min(chis)) < 1.e-4, dtype=int)
                             ##Deriv of -N*f/p * (N*f/p**2) / 
