@@ -277,7 +277,7 @@ class GermFiducialPowerSpectraPlot(_ws.WorkspacePlot):
             dskey = list(stabilityanalyzer.data.keys())[0]
 
         prepind = gss.prepStrs.index(prep)
-        measind = gss.prepStrs.index(meas)
+        measind = gss.effectStrs.index(meas)
         circuitdict = {}
 
         #UNUSED: numL = len(gss.Ls)
@@ -466,7 +466,7 @@ class GermFiducialProbTrajectoriesPlot(_ws.WorkspacePlot):
             meas = _Circuit(None, stringrep=meas)
 
         prepind = gss.prepStrs.index(prep)
-        measind = gss.prepStrs.index(meas)
+        measind = gss.effectStrs.index(meas)
         # data = []
         circuitsdict = {}
 
