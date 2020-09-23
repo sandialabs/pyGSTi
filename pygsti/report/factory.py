@@ -415,7 +415,7 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
             switchBd.mdl_all_modvi[d, i] = est_modvi.models['iteration estimates']
 
             if confidence_level is not None:
-                misfit_sigma = est.misfit_sigma(use_accurate_np=True)
+                misfit_sigma = est.misfit_sigma()
 
                 for il, l in enumerate(gauge_opt_labels):
                     if l in est.models:
