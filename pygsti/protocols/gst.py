@@ -1620,7 +1620,7 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options,
     printer = _objs.VerbosityPrinter.create_printer(verbosity, comm)
 
     if badfit_options.threshold is not None and \
-       base_estimate.misfit_sigma(use_accurate_np=True, comm=comm) <= badfit_options.threshold:
+       base_estimate.misfit_sigma(comm=comm) <= badfit_options.threshold:
         return  # fit is good enough - no need to add any estimates
 
     assert(parameters.get('weights', None) is None), \
@@ -1831,7 +1831,7 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
 
     ds_dof = ds.degrees_of_freedom(circuits_to_use)  # number of independent parameters
     # in dataset (max. model # of params)
-    nparams = model.num_params  # just use total number of params
+    nparams = model.num_modeltest_params  # just use total number of params
     percentile = 0.05; nboxes = len(circuits_to_use)
     two_dlogl_threshold = _chi2.ppf(1 - percentile, ds_dof - nparams)
     redbox_threshold = _chi2.ppf(1 - percentile / nboxes, 1)
