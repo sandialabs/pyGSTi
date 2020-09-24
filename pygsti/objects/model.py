@@ -52,6 +52,7 @@ from .resourceallocation import ResourceAllocation as _ResourceAllocation
 
 MEMLIMIT_FOR_NONGAUGE_PARAMS = None
 
+
 class Model(object):
     """
     A predictive model for a Quantum Information Processor (QIP).
