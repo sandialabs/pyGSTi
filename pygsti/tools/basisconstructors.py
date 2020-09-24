@@ -377,6 +377,7 @@ class VectorBasisConstructor(object):
 def std_matrices(matrix_dim):
     """
     Get the elements of the matrix unit, or "standard", basis of matrix-dimension `matrix_dim`.
+    The matrices are ordered so that the row index changes the fastest. 
 
     Constructs the standard basis spanning the density-matrix space given by
     `matrix_dim` x `matrix_dim` matrices.
@@ -428,6 +429,63 @@ def std_labels(matrix_dim):
     if matrix_dim == 0: return []
     if matrix_dim == 1: return ['']  # special case - use empty label instead of "I"
     return ["(%d,%d)" % (i, j) for i in range(matrix_dim) for j in range(matrix_dim)]
+
+
+def col_matrices(matrix_dim):
+    """
+    Get the elements of the matrix unit, or "column-stacked", basis of matrix-dimension `matrix_dim`.
+    The matrices are ordered so that the column index changes the fastest. 
+
+    Constructs the standard basis spanning the density-matrix space given by
+    `matrix_dim` x `matrix_dim` matrices.
+
+    The returned matrices are orthonormal basis under
+    the trace inner product, i.e. Tr( dot(Mi,Mj) ) == delta_ij.
+
+    Parameters
+    ----------
+    matrix_dim : int
+        matrix dimension of the density-matrix space, e.g. 2
+        for a single qubit in a 2x2 density matrix basis.
+
+    Returns
+    -------
+    list
+        A list of N numpy arrays each of shape (matrix_dim, matrix_dim).
+
+    Notes
+    -----
+    Each element is a matrix containing
+    a single "1" entry amidst a background of zeros.
+    """
+    _check_dim(matrix_dim)
+    basisDim = matrix_dim ** 2
+
+    mxList = []
+    for row_index in range(matrix_dim):
+        for col_index in range(matrix_dim):
+            mxList.append(mut(col_index, row_index, matrix_dim))
+    assert len(mxList) == basisDim
+    return mxList
+
+
+def col_labels(matrix_dim):
+    """
+    Return the column-stacked-matrix-basis labels based on a matrix dimension.
+
+    Parameters
+    ----------
+    matrix_dim : int
+        The matrix dimension of the basis to generate labels for (the
+        number of rows or columns in a matrix).
+
+    Returns
+    -------
+    list of strs
+    """
+    if matrix_dim == 0: return []
+    if matrix_dim == 1: return ['']  # special case - use empty label instead of "I"
+    return ["(%d,%d)" % (j, i) for i in range(matrix_dim) for j in range(matrix_dim)]
 
 
 def _get_gell_mann_non_identity_diag_mxs(dimension):
@@ -576,6 +634,108 @@ def gm_labels(matrix_dim):
     return lblList
 
 
+def qsim_matrices(matrix_dim):
+    """
+    Get the elements of the QuantumSim basis with matrix dimension `matrix_dim`.
+
+    These matrices span the space of matrix_dim x matrix_dim density matrices
+    (matrix-dimension matrix_dim, space dimension matrix_dim^2).
+
+    The returned matrices are given in the QuantumSim representation of the
+    density matrix space, and are thus kronecker products of
+    the standard representation of the QuantumSim matrices: 
+        '0' == [[1, 0],[0,0]]
+        'X' == [[0, 1],[1,0]]
+        'Y' == [[0,-1.j],[1.j,0]]
+        '1' == [[0, 0],[0,1]]
+    The normalization is such that the resulting basis is orthonormal 
+    under the trace inner product:
+        Tr( dot(Mi,Mj) ) == delta_ij.  
+    In the returned list, the right-most factor of the kronecker product 
+    varies the fastest, so, for example, when matrix_dim == 4 the 
+    returned list is:
+        [ 00,0X,0Y,01,X0,XX,XY,X1,Y0,Y0,YX,YY,Y1,10,1X,1Y,11 ].
+
+    Parameters
+    ----------
+    matrix_dim : int
+        Matrix-dimension of the density-matrix space.  Must be
+        a power of 2.
+
+    Returns
+    -------
+    list
+        A list of N numpy arrays each of shape (matrix_dim, matrix_dim), where N == matrix_dim^2,
+        the dimension of the density-matrix space. 
+
+    Notes
+    -----
+    Matrices are ordered with first qubit being most significant,
+    e.g., for 2 qubits: 00, 0X, 0Y, 01, X0, XX, XY, X1, Y0, ... 11
+    """
+    sig0q = _np.array([[1., 0], [0, 0]], dtype='complex')
+    sigXq = _np.array([[0, 1], [1, 0]], dtype='complex')
+    sigYq = _np.array([[0, -1], [1, 0]], dtype='complex') * 1.j 
+    sig1q = _np.array([[0, 0], [0, 1]], dtype='complex')
+    
+    _check_dim(matrix_dim)
+    sigmaVec = (sig0q, sigXq / _np.sqrt(2.), sigYq / _np.sqrt(2.), sig1q)
+    if matrix_dim == 0: return []
+
+    def _is_integer(x):
+        return bool(abs(x - round(x)) < 1e-6)
+
+    nQubits = _np.log2(matrix_dim)
+    if not _is_integer(nQubits):
+        raise ValueError(
+            "Dimension for QuantumSim tensor product matrices must be an integer *power of 2* (not %d)" % matrix_dim)
+    nQubits = int(round(nQubits))
+
+    if nQubits == 0:  # special case: return single 1x1 identity mx
+        return [_np.identity(1, 'complex')]
+
+    matrices = []
+    basisIndList = [[0, 1, 2, 3]] * nQubits
+    for sigmaInds in _itertools.product(*basisIndList):
+
+        M = _np.identity(1, 'complex')
+        for i in sigmaInds:
+            M = _np.kron(M, sigmaVec[i])
+        matrices.append(M)
+
+    return matrices
+
+
+def qsim_labels(matrix_dim):
+    """
+    QSim basis labels.
+
+    Parameters
+    ----------
+    matrix_dim : int
+        The matrix dimension to get labels for.
+
+    Returns
+    -------
+    list
+    """
+    def _is_integer(x):
+        return bool(abs(x - round(x)) < 1e-6)
+    if matrix_dim == 0: return []
+    if matrix_dim == 1: return ['']  # special case - use empty label instead of "I"
+
+    nQubits = _np.log2(matrix_dim)
+    if not _is_integer(nQubits):
+        raise ValueError("Dimension for QuantumSim tensor product matrices must be an integer *power of 2*")
+    nQubits = int(round(nQubits))
+
+    lblList = []
+    basisLblList = [['0', 'X', 'Y', '1']] * nQubits
+    for sigmaLbls in _itertools.product(*basisLblList):
+        lblList.append(''.join(sigmaLbls))
+    return lblList
+
+
 def pp_matrices(matrix_dim, max_weight=None):
     """
     Get the elements of the Pauil-product basis with matrix dimension `matrix_dim`.
@@ -590,7 +750,7 @@ def pp_matrices(matrix_dim, max_weight=None):
     resulting basis is orthonormal under the trace inner product,
     i.e. Tr( dot(Mi,Mj) ) == delta_ij.  In the returned list,
     the right-most factor of the kronecker product varies the
-    fastsest, so, for example, when matrix_dim == 4 the returned list
+    fastest, so, for example, when matrix_dim == 4 the returned list
     is [ II,IX,IY,IZ,XI,XX,XY,XY,YI,YX,YY,YZ,ZI,ZX,ZY,ZZ ].
 
     Parameters
@@ -910,10 +1070,12 @@ def unknown_labels(dim):
 
 _basis_constructor_dict = dict()  # global dict holding all builtin basis constructors (used by Basis objects)
 _basis_constructor_dict['std'] = MatrixBasisConstructor('Matrix-unit basis', std_matrices, std_labels, False)
+_basis_constructor_dict['col'] = MatrixBasisConstructor('Column-stacked matrix-unit basis', col_matrices, col_labels, False)
 _basis_constructor_dict['gm_unnormalized'] = MatrixBasisConstructor(
     'Unnormalized Gell-Mann basis', gm_matrices_unnormalized, gm_labels, True)
 _basis_constructor_dict['gm'] = MatrixBasisConstructor('Gell-Mann basis', gm_matrices, gm_labels, True)
 _basis_constructor_dict['pp'] = MatrixBasisConstructor('Pauli-Product basis', pp_matrices, pp_labels, True)
+_basis_constructor_dict['qsim'] = MatrixBasisConstructor('QuantumSim basis', qsim_matrices, qsim_labels, True)
 _basis_constructor_dict['qt'] = MatrixBasisConstructor('Qutrit basis', qt_matrices, qt_labels, True)
 _basis_constructor_dict['id'] = SingleElementMatrixBasisConstructor('Identity-only subbasis', identity_matrices,
                                                                     identity_labels, True)
