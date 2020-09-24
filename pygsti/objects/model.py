@@ -50,6 +50,7 @@ from .circuitlist import CircuitList as _CircuitList
 from .layerrules import LayerRules as _LayerRules
 from .resourceallocation import ResourceAllocation as _ResourceAllocation
 
+MEMLIMIT_FOR_NONGAUGE_PARAMS = None
 
 class Model(object):
     """
@@ -89,6 +90,7 @@ v
         else:
             self._state_space_labels = _ld.StateSpaceLabels(state_space_labels)
 
+        self._num_modeltest_params = None
         self._hyperparams = {}
         self._paramvec = _np.zeros(0, 'd')
         self._paramlbls = None  # a placeholder for FUTURE functionality
@@ -127,6 +129,52 @@ v
             the number of model parameters.
         """
         return len(self._paramvec)
+
+    @property
+    def num_modeltest_params(self):
+        """
+        The parameter count to use when testing this model against data.
+
+        Often times, this is the same as :method:`num_params`, but there are times
+        when it can convenient or necessary to use a parameter count different than
+        the actual number of parameters in this model.
+
+        Returns
+        -------
+        int
+            the number of model parameters.
+        """
+        if not hasattr(self, '_num_modeltest_params'):  # for backward compatibility
+            self._num_modeltest_params = None
+
+        if self._num_modeltest_params is not None:
+            return self._num_modeltest_params
+        elif hasattr(self, 'num_nongauge_params'):
+            if MEMLIMIT_FOR_NONGAUGE_PARAMS is not None:
+                if hasattr(self, 'num_elements'):
+                    memForNumGaugeParams = self.num_elements * (self.num_params + self.dim**2) \
+                        * _np.dtype('d').itemsize  # see Model._buildup_dpg (this is mem for dPG)
+                else:
+                    return self.num_params
+
+                if memForNumGaugeParams > MEMLIMIT_FOR_NONGAUGE_PARAMS:
+                    _warnings.warn(("Model.num_modeltest_params did not compute number of *non-gauge* parameters - "
+                                    "using total (make MEMLIMIT_FOR_NONGAUGE_PARAMS larger if you really want "
+                                    "the count of nongauge params"))
+                    return self.num_params
+
+            try:
+                return self.num_nongauge_params  # len(x0)
+            except:  # numpy can throw a LinAlgError or sparse cases can throw a NotImplementedError
+                _warnings.warn(("Model.num_modeltest_params could not obtain number of *non-gauge* parameters"
+                                " - using total instead"))
+                return self.num_params
+        else:
+            return self.num_params
+
+    @num_modeltest_params.setter
+    def num_modeltest_params(self, count):
+        self._num_modeltest_params = count
 
     def to_vector(self):
         """

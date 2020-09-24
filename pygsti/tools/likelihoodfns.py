@@ -717,7 +717,7 @@ def two_delta_logl(model, dataset, circuits=None,
         the dataset. Defaults to the empty dictionary (no aliases defined)
         e.g. op_label_aliases['Gx^3'] = ('Gx','Gx','Gx')
 
-    dof_calc_method : {None, "all", "nongauge"}
+    dof_calc_method : {None, "all", "modeltest"}
         How `model`'s number of degrees of freedom (parameters) are obtained
         when computing the number of standard deviations and p-value relative to
         a chi2_k distribution, where `k` is additional degrees of freedom
@@ -762,11 +762,8 @@ def two_delta_logl(model, dataset, circuits=None,
 
     if dof_calc_method is None:
         return two_delta_logl
-    elif dof_calc_method == "nongauge":
-        if hasattr(model, 'num_nongauge_params'):
-            mdl_dof = model.num_nongauge_params
-        else:
-            mdl_dof = model.num_params
+    elif dof_calc_method == "modeltest":
+        mdl_dof = model.num_modeltest_params
     elif dof_calc_method == "all":
         mdl_dof = model.num_params
     else: raise ValueError("Invalid `dof_calc_method` arg: %s" % dof_calc_method)
@@ -836,7 +833,7 @@ def two_delta_logl_per_circuit(model, dataset, circuits=None,
         the dataset. Defaults to the empty dictionary (no aliases defined)
         e.g. op_label_aliases['Gx^3'] = ('Gx','Gx','Gx')
 
-    dof_calc_method : {"all", "nongauge"}
+    dof_calc_method : {"all", "modeltest"}
         How `model`'s number of degrees of freedom (parameters) are obtained
         when computing the number of standard deviations and p-value relative to
         a chi2_k distribution, where `k` is additional degrees of freedom
@@ -878,7 +875,7 @@ def two_delta_logl_per_circuit(model, dataset, circuits=None,
 
     if dof_calc_method is None: return two_dlogl_percircuit
     elif dof_calc_method == "all": mdl_dof = model.num_params
-    elif dof_calc_method == "nongauge": mdl_dof = model.num_nongauge_params
+    elif dof_calc_method == "modeltest": mdl_dof = model.num_modeltest_params
     else: raise ValueError("Invalid `dof_calc_method` arg: %s" % dof_calc_method)
 
     if circuits is not None:

@@ -2867,17 +2867,7 @@ class FitComparisonTable(WorkspaceTable):
             raise ValueError("Invalid `objfn_builder` argument: %s" % str(objfn_builder))
 
         if np_by_x is None:
-            try:
-                np_by_x = [mdl.num_nongauge_params for mdl in model_by_x]
-            except _np.linalg.LinAlgError:
-                _warnings.warn(("LinAlgError when trying to compute the number"
-                                " of non-gauge parameters.  Using total"
-                                " parameters instead."))
-                np_by_x = [mdl.num_params for mdl in model_by_x]
-            except (NotImplementedError, AttributeError):
-                _warnings.warn(("FitComparisonTable could not obtain number of"
-                                "*non-gauge* parameters - using total params instead"))
-                np_by_x = [mdl.num_params for mdl in model_by_x]
+            np_by_x = [mdl.num_modeltest_params for mdl in model_by_x]
 
         tooltips = ('', 'Difference in logL', 'number of degrees of freedom',
                     'difference between observed logl and expected mean',
