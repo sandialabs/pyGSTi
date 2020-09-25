@@ -2047,14 +2047,17 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
                     # so far, this hasn't helped.
 
                     # Aggregate 2-delta-logl criteria (for cvxopt call below, as we want this function to be <= 0)
-                    #  - for each circuit, we have the sum of -Nf*logl(p) + const. terms
+                    #  - for each circuit, we have the sum of -2Nf*logl(p) + const. terms
                     #  - the derivatives taken below are complicated because they're derivatives with respect to
                     #     the circuit's *wildcard budget*, which is effectively w.r.t `p` except all the p's must
                     #     sum to 1.  We compute these derivatives as follows:
+                    #
                     #    - 1st deriv: the first derivative of each term is -Nf/p and N is common to all the terms of
                     #      a single circuit so this is dictated by chi = f/p >= 0.  All these terms are positive (the
-                    #      deriv is negative), and we want to move probability from the terms with largest chi to
-                    #      smallest chi.  When multiple terms have the same chi then we split the total dp
+                    #      deriv is negative), and we want to move probability from the terms with smallest chi to
+                    #      largest chi.  Note here that positive `p` means *more* wildcard budget and so the largest-chi
+                    #      terms have their p_i increase (dp_i = dp) whereas the smallest-chi terms have p_i decrease
+                    #      (dp_i = -dp).  When multiple terms have the same chi then we split the total dp
                     #      (delta-probability) according to 1 / 2nd-deriv = p**2/Nf.  This is so that if
                     #      chi1 = f1/p1 = chi2 = f2/p2 and we want the chi's to remain equal after
                     #      p1 -> p1 + lambda1*dp, p2 -> p2 + lambda2*dp then we get:
@@ -2118,7 +2121,8 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
                         #dlogl_delements = -N*f/p  < 0
                         #dlogl_helements = N*f/p**2 > 0
                         chi_elements = f / p  # -dlogl_delements / N  # i.e. f/p
-                        one_over_dchi_elements = p**2 / f  # N / dlogl_helements # i.e. p**2/f
+                        #one_over_dchi_elements = p**2 / f  # N / dlogl_helements # i.e. p**2/f
+                        dchi_elements = f / p**2  # N / dlogl_helements # i.e. p**2/f
 
                         # derivative of firstterms wrt per-circuit wilcard budgets - namely if that budget goes up how to most efficiently reduce firstterms
                         # in doing so, this computes how the per-circuit budget should be allocated to probabilities (i.e. how probs should be updated) to achieve this decrease in firstterms
@@ -2127,13 +2131,33 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
                         for i in range(num_circuits):
                             chis = chi_elements[layout.indices_for_index(i)]  # ~ f/p
                             Nloc = N[layout.indices_for_index(i)]
-                            maxes = _np.array(_np.abs(chis - _np.max(chis)) < TOL, dtype=int)
-                            mins = _np.array(_np.abs(chis - _np.min(chis)) < TOL, dtype=int)
+                            max_mask = _np.abs(chis - _np.max(chis)) < TOL
+                            min_mask = _np.abs(chis - _np.min(chis)) < TOL
+                            # maxes = _np.array(max_mask, dtype=int)
+                            # mins = _np.array(min_mask, dtype=int)
 
-                            #maxes = _np.exp(chis) / _np.sum(_np.exp(chis))  # SOFT MAX
-                            #mins = _np.exp(-chis) / _np.sum(_np.exp(-chis))  # SOFT MIN
-                            one_over_dchi = one_over_dchi_elements[layout.indices_for_index(i)]  # ~ p**2/f
-                            agg_dlogl_hessian_wrt_percircuit_budgets[i] = 2 * Nloc[0] * (1 / _np.sum(one_over_dchi * maxes) + 1 / _np.sum(one_over_dchi * mins))
+                            freqs = f[layout.indices_for_index(i)]
+                            lambdas_max = freqs[max_mask] / sum(freqs[max_mask])
+                            lambdas_min = freqs[min_mask] / sum(freqs[min_mask])
+
+                            dchi = dchi_elements[layout.indices_for_index(i)]  # ~ f/p**2
+                            agg_dlogl_hessian_wrt_percircuit_budgets[i] = \
+                                2 * Nloc[0] * (sum(dchi[max_mask] * lambdas_max**2)
+                                               + sum(dchi[min_mask] * lambdas_min**2))
+
+                            #HERE - starting to think about alternate objectives with softened "Hessian jump" at dlogl == 0 point.
+                            # when two outcomes and very close to all f/p == 1: f1/p1 = f1/(f1-eps) ~= 1 + eps/f1   ,   f2/p2 = f2/(f2 + eps) ~= 1 - eps/f2
+                            # then hessian is f1/p1^2 + f2/p2^2 ~= 1/p1 + eps/(f1p1) + 1/p2 + eps/(f2p2) = 1/(f1-eps) + eps/(f1*(f1-eps)) ... ~= 1/f1 + 1/f2
+                            
+                            # at all chi=f/p == 1 (where dlogl = 0), hessian is sum( (f/p) * 1/p * f/f_sum ) = sum( f/p ) = N_outcomes
+                            # if added -Noutcomes to hessian, then get:
+                            #  -Noutcomes*wc_budget + C1  addition to derivative
+                            #  -0.5*Noutcomes*wc_budget^2 + C1*wc_budget + C2   addition to objective
+
+                            # #maxes = _np.exp(chis) / _np.sum(_np.exp(chis))  # SOFT MAX
+                            # #mins = _np.exp(-chis) / _np.sum(_np.exp(-chis))  # SOFT MIN
+                            # one_over_dchi = one_over_dchi_elements[layout.indices_for_index(i)]  # ~ p**2/f
+                            # agg_dlogl_hessian_wrt_percircuit_budgets[i] = 2 * Nloc[0] * (1 / _np.sum(one_over_dchi * maxes) + 1 / _np.sum(one_over_dchi * mins))
                             
                             #wts = 1.0 / _np.abs(dlogl_helements[layout.indices_for_index(i)])
                             #hterms = dlogl_helements[layout.indices_for_index(i)]  # ~ -f/p**2
@@ -2143,8 +2167,8 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
                             #agg_dlogl_hessian_wrt_percircuit_budgets[i] = _np.sum(hterms * ((mins * wts) / sum(mins * wts) - (maxes * wts) / sum(maxes * wts)))
                         assert(_np.all(agg_dlogl_hessian_wrt_percircuit_budgets >= 0)), "Hessian of aggregate LLR wrt any circuit budget should be positive"
                         return SCALE * _np.dot(percircuit_budget_deriv.T,
-                                       _np.dot(_np.diag(agg_dlogl_hessian_wrt_percircuit_budgets),
-                                               percircuit_budget_deriv))   # (nW, nC)(nC)(nC, nW)
+                                               _np.dot(_np.diag(agg_dlogl_hessian_wrt_percircuit_budgets),
+                                                       percircuit_budget_deriv))   # (nW, nC)(nC)(nC, nW)
                     
                     # OLD cvxopt "F" function when using cvxopt.cp
                     #def F(x=None, z=None):
@@ -2237,8 +2261,8 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
                         #print(grad)
                         #print(grad_chk)
                         #print("  diff = ",grad - grad_chk, " rel_diff_norm=", rel_diff_norm)
-                        #print("GRAD CHK ",rel_diff_norm)
-                        #assert(rel_diff_norm < 1e-3)
+                        print("GRAD CHK ",rel_diff_norm)
+                        assert(rel_diff_norm < 1e-3)
                         if chk_hessian is False: return
     
                         hess = _np.zeros((3,3), 'd')
@@ -2264,9 +2288,145 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
                     check_fd([0.0001]*3, True)
                     #import bpdb; bpdb.set_trace()
 
-                    print("Beginning cvxopt solve...")
-                    c = _cvxopt.matrix(L1weights.reshape((n, 1)))
-                    result = _cvxopt.solvers.cpl(c, F) # kktsolver='ldl2'
+                    #CVXOPT
+                    #print("Beginning cvxopt solve...")
+                    #c = _cvxopt.matrix(L1weights.reshape((n, 1)))
+                    #result = _cvxopt.solvers.cpl(c, F) # kktsolver='ldl2'
+
+                    #BARRIER method:
+                    # Solve:            min c^T * x
+                    # Subject to:       F(x) <= 0
+                    # by actually solving (via Newton):
+                    #  min t * c^T * x + phi(x)
+                    # where phi(x) = -log(-F(x))
+                    # for increasing values of t until 1/t <= epsilon (precision tolerance)
+                    print("Beginning custom barrier method solve...")
+                    c = L1weights.reshape((n, 1))
+
+                    def barrierF(x, compute_deriv=True):  # new & current "F" function for use with cvxopt.cpl
+                        assert(min(x) >= 0)  # don't allow negative wildcard vector components
+
+                        budget.from_vector(_np.array(x))
+                        budget.update_probs(initial_probs, current_probs, objfn.freqs, layout, percircuit_budget_deriv)
+                        #dlogl_elements = objfn.raw_objfn.terms(current_probs, objfn.counts, objfn.total_counts, objfn.freqs)
+                        p, f, N = current_probs, objfn.freqs, objfn.total_counts
+                        dlogl_elements = N*f*_np.log(f/p)
+
+                        #Evaluate F(x) => return (f, Df)
+                        f = _np.array([_agg_dlogl(current_probs, dlogl_elements)]).reshape((1,1))  # shape (m,1)
+                        if not compute_deriv: return f
+                        
+                        Df = _np.empty((1, n), 'd')  # shape (m, n)
+                        Df[0, :] = _agg_dlogl_deriv(current_probs, dlogl_elements)
+                        #print("DB: rank Df=", _np.linalg.matrix_rank(Df))  # REMOVE
+                        
+                        # additionally, compute H = z_0 * Hessian(f_0)(wv)
+                        H = _agg_dlogl_hessian(current_probs, dlogl_elements)
+                        #DEBUG REMOVE
+                        #print("rank Hf=", _np.linalg.matrix_rank(H), " z[0]=",z[0])
+                        #print(H)
+                        #print("EVALSH = ",_np.linalg.eigvals(H))
+                        evals = _np.linalg.eigvals(H)
+                        assert(_np.all(evals >= 0))
+                        #print("DB wvec = ", ",".join(["%.3g" % vv for vv in x]), "=> f=%g" % f[0])
+                        #print("  Df = ",["%g" % vv for vv in Df])
+                        #print("  evals(H)= ", ["%g" % vv for vv in evals], " z=",z[0])
+                        #check_fd(x, True)
+                        return f, Df, H
+                    
+                    DXTOL = 1e-8
+                    def NewtonSolve(initial_x, t_value, lmbda=0.0, debug=False):  # lmbda interpolates between Newton (0.0) and gradient (1.0) descent
+                        #  min t * c^T * x + phi(x)
+                        # where phi(x) = -log(-F(x))
+                        x = initial_x.copy()
+                        max_iters = 1000; i = 0
+                        test_obj = None
+                        I = _np.identity(len(c),'d')
+                        while i < max_iters:
+                            f, Df, H = barrierF(x)
+                            assert(f <= 0)
+                            obj = t_value * _np.dot(c.T, x) - _np.log(-f)
+                            Dobj = t_value * c.T - 1/f * Df
+                            Hobj = 1/f**2 * Df.T * Df - 1/f * H
+                            evalsH = _np.linalg.eigvals(Hobj)
+                            assert(_np.all(evalsH >= 0))
+                            #print(" evalsH = ",evalsH)
+                            
+                            norm_Dobj = _np.linalg.norm(Dobj)
+                            #dx = - _np.dot(_np.linalg.inv(H), Df.T)
+                            dx = - _np.dot((1-lmbda) * _np.linalg.inv(Hobj) + lmbda * I, Dobj.T)
+                            #dx = - Dobj.T / _np.linalg.norm(Dobj)
+                            if debug and i == 0:
+                                print(" initial newton iter: f=%g, |Df|=%g, |Hf|=%g" % (obj, norm_Dobj, _np.linalg.norm(Hobj)))
+                                print(" dx = ",dx)
+                            if test_obj is not None:
+                                assert(_np.isclose(obj,test_obj))  # Sanity check
+                            
+                            while(_np.linalg.norm(dx) >= DXTOL):
+                                test_x = _np.clip(x + dx,0,None)
+                                test_f = barrierF(test_x, False)
+                                test_obj = t_value * _np.dot(c.T, test_x) - _np.log(-test_f)
+                                #print("TEST: ",list(test_x),test_f,test_obj,obj,test_obj[0,0] < obj[0,0],dx)
+                                if test_obj < obj: break
+                                else:
+                                    dx *= 0.5  #backtrack
+                                    if debug: print("Backtrack |dx| = ",_np.linalg.norm(dx))
+                            else:
+                                # if debug: print("Can't step in Newton direction and reduce objective - trying gradient descent")
+                                # 
+                                # dx = - Dobj.T / _np.linalg.norm(Dobj)
+                                # while(_np.linalg.norm(dx) >= DXTOL):
+                                #     test_x = _np.clip(x + dx,0,None)
+                                #     test_f = barrierF(test_x, False)
+                                #     test_obj = t_value * _np.dot(c.T, test_x) - _np.log(-test_f)
+                                #     #print("TEST: ",list(test_x),test_f,test_obj,obj,test_obj[0,0] < obj[0,0],dx)
+                                #     if test_obj < obj: break
+                                #     else: dx *= 0.5  #backtrack
+                                # else:
+                                #     if debug: print("Can't step in gradient direction and reduce objective - converged at f=%g" % obj)
+                                #     break
+
+                                if debug: print("Can't step in Newton direction and reduce objective - converged at f=%g" % obj)
+                                break
+
+                            norm_dx = _np.linalg.norm(dx)
+                            if debug: print(" newton iter %d: f=%g, |Df|=%g, |dx|=%g" % (i, obj, norm_Dobj, norm_dx))
+                            x += dx
+                            x = _np.clip(x,0,None)
+                            i += 1
+                            if norm_Dobj < 1e-4 or norm_dx < DXTOL: break
+                        if i == max_iters:
+                            print("WARNING: max iterations exceeded!!!")
+                        return x
+
+                    i = 0
+                    while i < 100:
+                        if barrierF(x0, compute_deriv=False) < 0: break
+                        x0 *= 1.1; i += 1
+                    else:
+                        raise ValueError("Could not find feasible starting point!")
+                    print("Found initial feasible point: ",x0)
+                    x = x0 #TODO set initial point
+                    t = 1.0
+                    epsilon = 1e-6
+                    mu = 10
+                    import scipy.optimize
+                    while 1/t > epsilon:
+                        print("Newtonsolve for t=",t,"starting at x=",x)
+                        #x = NewtonSolve(x, t, lmbda=0.0)
+                        #x = NewtonSolve(x, t, lmbda=1.0)
+                        x = NewtonSolve(x, t, lmbda=0.0, debug=True)
+
+                        #def barrier_obj(x):
+                        #    x = _np.clip(x, 1e-10, None)
+                        #    return t * _np.dot(c.T, x) - _np.log(-barrierF(x, False))
+                        #result = scipy.optimize.minimize(barrier_obj, x, method="CG")
+                        #x = _np.clip(result.x, 0, None)
+                        
+                        t = mu*t
+                    print("Finished! Final x = ",x)
+                    result = {'x': x, 'y': barrierF(x, compute_deriv=False) , 'znl': [], 'snl': []}  # mimic cvxopt
+                    
 
                     #This didn't seem to help much:
                     #print("Attempting restart...")
@@ -2279,6 +2439,7 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
                     print("znl = ",list(result['znl']))
                     print("snl = ",list(result['snl']))
                     wv = result['x']
+#                    assert(False), "STOP"
             else:
                 wv = budget.to_vector().copy()
 
