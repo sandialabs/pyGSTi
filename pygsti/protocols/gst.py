@@ -2131,8 +2131,14 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
                         for i in range(num_circuits):
                             chis = chi_elements[layout.indices_for_index(i)]  # ~ f/p
                             Nloc = N[layout.indices_for_index(i)]
-                            max_mask = _np.abs(chis - _np.max(chis)) < TOL
-                            min_mask = _np.abs(chis - _np.min(chis)) < TOL
+                            max_chi = _np.max(chis)
+                            min_chi = _np.min(chis)
+                            if (max_chi - min_chi) < TOL:  # Special case when all f==p - nothing more to change
+                                agg_dlogl_hessian_wrt_percircuit_budgets[i] = 0
+                                continue
+                            
+                            max_mask = _np.abs(chis - max_chi) < TOL
+                            min_mask = _np.abs(chis - min_chi) < TOL
                             # maxes = _np.array(max_mask, dtype=int)
                             # mins = _np.array(min_mask, dtype=int)
 
@@ -2327,34 +2333,112 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
                         #print(H)
                         #print("EVALSH = ",_np.linalg.eigvals(H))
                         evals = _np.linalg.eigvals(H)
-                        assert(_np.all(evals >= 0))
+                        #print("MIN H-eval = ",_np.min(evals))
+                        assert(_np.all(evals >= -1e-8))
                         #print("DB wvec = ", ",".join(["%.3g" % vv for vv in x]), "=> f=%g" % f[0])
                         #print("  Df = ",["%g" % vv for vv in Df])
                         #print("  evals(H)= ", ["%g" % vv for vv in evals], " z=",z[0])
                         #check_fd(x, True)
                         return f, Df, H
-                    
+
+                    #Prepare for proxy_barrierF evaluations
+                    tvds = _np.zeros(num_circuits, 'd')
+                    fn0s = _np.zeros(num_circuits, 'd')
+                    for i in range(num_circuits):
+                        p = initial_probs[layout.indices_for_index(i)]
+                        f = objfn.freqs[layout.indices_for_index(i)]
+                        N = objfn.total_counts[layout.indices_for_index(i)]
+                        dlogl_elements = N*f*_np.log(f/p)
+                        fn0s[i] = 2 * _np.sum(dlogl_elements)
+                        tvds[i] = 0.5 * _np.sum(_np.abs(p-f))
+                        #return tvds, fn0s
+
+                    def proxy_barrierF(x, compute_deriv=True):
+                        percircuit_budgets = _np.dot(percircuit_budget_deriv, x)
+                        assert(len(percircuit_budgets) == num_circuits)
+                        a = 4; b = 2
+                        f = 0
+                        for i in range(num_circuits):
+                            fn0 = fn0s[i]; tvd = tvds[i]; x = percircuit_budgets[i]
+                            f += (fn0/_np.exp(a)) *_np.exp(a - b*(x/tvd)**2 - _np.sqrt(2*b)*(x/tvd))
+                        f -= two_dlogl_threshold
+                        if not compute_deriv: return f
+
+                        Df = _np.empty((1, n), 'd')  # shape (m, n)
+                        agg_dlogl_deriv_wrt_percircuit_budgets = _np.zeros(num_circuits)
+                        for i in range(num_circuits):
+                            fn0 = fn0s[i]; tvd = tvds[i]; x = percircuit_budgets[i]
+                            agg_dlogl_deriv_wrt_percircuit_budgets[i] = \
+                                (fn0/_np.exp(a)) * _np.exp(a - b*(x/tvd)**2 - _np.sqrt(2*b)*(x/tvd)) * (-2*b*x/tvd**2 - _np.sqrt(2*b)/tvd)
+                        assert(_np.all(agg_dlogl_deriv_wrt_percircuit_budgets <= 0)), "Derivative of aggregate LLR wrt any circuit budget should be negative"
+                        Df[0, :] = _np.dot(agg_dlogl_deriv_wrt_percircuit_budgets, percircuit_budget_deriv)
+
+                        agg_dlogl_hessian_wrt_percircuit_budgets = _np.zeros(num_circuits)
+                        for i in range(num_circuits):
+                            fn0 = fn0s[i]; tvd = tvds[i]; x = percircuit_budgets[i]
+                            agg_dlogl_hessian_wrt_percircuit_budgets[i] = \
+                                (fn0/_np.exp(a)) * _np.exp(a - b*(x/tvd)**2 - _np.sqrt(2*b)*(x/tvd)) * (
+                                    (-2*b*x/tvd**2 - _np.sqrt(2*b)/tvd)**2 - 2*b/tvd**2)
+                        assert(_np.all(agg_dlogl_hessian_wrt_percircuit_budgets >= -1e-8)), "Hessian of aggregate LLR wrt any circuit budget should be positive"
+                        H = _np.dot(percircuit_budget_deriv.T,
+                                    _np.dot(_np.diag(agg_dlogl_hessian_wrt_percircuit_budgets),
+                                            percircuit_budget_deriv))   # (nW, nC)(nC)(nC, nW)
+
+                        evals = _np.linalg.eigvals(H)
+                        #print("MIN H-eval = ",_np.min(evals))
+                        assert(_np.all(evals >= -1e-8))
+                        return f, Df, H
+
+                    def F2(x=None, z=None, debug=True):  # new & current "F" function for use with cvxopt.cpl
+                        if z is None and x is None:
+                            # (m, x0) where m is number of nonlinear constraints and x0 is in domain of f
+                            return (1, _cvxopt.matrix(x0))
+
+                        if min(x) < 0.0:
+                            return None  # don't allow negative wildcard vector components
+
+                        f, Df, H = proxy_barrierF(x)                        
+                        f = _cvxopt.matrix(_np.array([f]).reshape((1,1)))
+                        Df = _cvxopt.matrix(Df)
+                        if z is None:
+                            #print("DB wvec = ", ",".join(["%.3g" % vv for vv in x]), "=> %g" % f[0], ["%g" % vv for vv in Df])
+                            if debug: check_fd(x, False)
+                            return f, Df
+
+                        # additionally, compute H = z_0 * Hessian(f_0)(wv)
+                        H = _cvxopt.matrix(z[0] * H)
+                        evals = _np.linalg.eigvals(H)
+                        assert(_np.all(evals >= -1e-8))
+                        print("DB wvec = ", ",".join(["%.3g" % vv for vv in x]), "=> f=%g" % f[0])
+                        if debug: check_fd(x, True)
+                        return f, Df, H
+                                            
                     DXTOL = 1e-8
-                    def NewtonSolve(initial_x, t_value, lmbda=0.0, debug=False):  # lmbda interpolates between Newton (0.0) and gradient (1.0) descent
+                    def NewtonSolve(initial_x, t_value, bFn, lmbda=0.0, debug=False):  # lmbda interpolates between Newton (0.0) and gradient (1.0) descent
                         #  min t * c^T * x + phi(x)
                         # where phi(x) = -log(-F(x))
                         x = initial_x.copy()
-                        max_iters = 1000; i = 0
+                        max_iters = 100; i = 0
                         test_obj = None
                         I = _np.identity(len(c),'d')
                         while i < max_iters:
-                            f, Df, H = barrierF(x)
+                            f, Df, H = bFn(x)
                             assert(f <= 0)
                             obj = t_value * _np.dot(c.T, x) - _np.log(-f)
                             Dobj = t_value * c.T - 1/f * Df
                             Hobj = 1/f**2 * Df.T * Df - 1/f * H
                             evalsH = _np.linalg.eigvals(Hobj)
-                            assert(_np.all(evalsH >= 0))
+                            assert(_np.all(evalsH >= -1e-8))
                             #print(" evalsH = ",evalsH)
                             
                             norm_Dobj = _np.linalg.norm(Dobj)
                             #dx = - _np.dot(_np.linalg.inv(H), Df.T)
-                            dx = - _np.dot((1-lmbda) * _np.linalg.inv(Hobj) + lmbda * I, Dobj.T)
+                            Hrank = _np.linalg.matrix_rank(Hobj)
+                            if Hrank < Hobj.shape[0]:
+                                print("Rank defficient Hessian (%d < %d) - using gradient step" % (Hrank, Hobj.shape[0]))
+                                dx = - Dobj.T / _np.linalg.norm(Dobj)
+                            else:
+                                dx = - _np.dot((1-lmbda) * _np.linalg.inv(Hobj) + lmbda * I, Dobj.T)
                             #dx = - Dobj.T / _np.linalg.norm(Dobj)
                             if debug and i == 0:
                                 print(" initial newton iter: f=%g, |Df|=%g, |Hf|=%g" % (obj, norm_Dobj, _np.linalg.norm(Hobj)))
@@ -2364,20 +2448,20 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
                             
                             while(_np.linalg.norm(dx) >= DXTOL):
                                 test_x = _np.clip(x + dx,0,None)
-                                test_f = barrierF(test_x, False)
+                                test_f = bFn(test_x, False)
                                 test_obj = t_value * _np.dot(c.T, test_x) - _np.log(-test_f)
                                 #print("TEST: ",list(test_x),test_f,test_obj,obj,test_obj[0,0] < obj[0,0],dx)
                                 if test_obj < obj: break
                                 else:
-                                    dx *= 0.5  #backtrack
-                                    if debug: print("Backtrack |dx| = ",_np.linalg.norm(dx))
+                                    dx *= 0.1  #backtrack
+                                    #if debug: print("Backtrack |dx| = ",_np.linalg.norm(dx))
                             else:
                                 # if debug: print("Can't step in Newton direction and reduce objective - trying gradient descent")
                                 # 
                                 # dx = - Dobj.T / _np.linalg.norm(Dobj)
                                 # while(_np.linalg.norm(dx) >= DXTOL):
                                 #     test_x = _np.clip(x + dx,0,None)
-                                #     test_f = barrierF(test_x, False)
+                                #     test_f = bFn(test_x, False)
                                 #     test_obj = t_value * _np.dot(c.T, test_x) - _np.log(-test_f)
                                 #     #print("TEST: ",list(test_x),test_f,test_obj,obj,test_obj[0,0] < obj[0,0],dx)
                                 #     if test_obj < obj: break
@@ -2390,7 +2474,7 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
                                 break
 
                             norm_dx = _np.linalg.norm(dx)
-                            if debug: print(" newton iter %d: f=%g, |Df|=%g, |dx|=%g" % (i, obj, norm_Dobj, norm_dx))
+                            if debug: print(" newton iter %d: f=%g, |Df|=%g, |dx|=%g |Hf|=%g" % (i, obj, norm_Dobj, norm_dx, _np.linalg.norm(Hobj)))
                             x += dx
                             x = _np.clip(x,0,None)
                             i += 1
@@ -2399,33 +2483,47 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
                             print("WARNING: max iterations exceeded!!!")
                         return x
 
-                    i = 0
-                    while i < 100:
-                        if barrierF(x0, compute_deriv=False) < 0: break
-                        x0 *= 1.1; i += 1
-                    else:
-                        raise ValueError("Could not find feasible starting point!")
-                    print("Found initial feasible point: ",x0)
-                    x = x0 #TODO set initial point
-                    t = 1.0
-                    epsilon = 1e-6
-                    mu = 10
-                    import scipy.optimize
-                    while 1/t > epsilon:
-                        print("Newtonsolve for t=",t,"starting at x=",x)
-                        #x = NewtonSolve(x, t, lmbda=0.0)
-                        #x = NewtonSolve(x, t, lmbda=1.0)
-                        x = NewtonSolve(x, t, lmbda=0.0, debug=True)
+                    use_barrier_method = True
+                    if use_barrier_method:
+                        i = 0
+                        while i < 100:
+                            if barrierF(x0, compute_deriv=False) < 0: break
+                            x0 *= 1.1; i += 1
+                        else:
+                            raise ValueError("Could not find feasible starting point!")
+                        print("Found initial feasible point: ",x0)
+                        x = x0 #TODO set initial point
+                        t = 1.0
+                        epsilon = 1e-6
+                        mu = 10
+                        import scipy.optimize
+                        while 1/t > epsilon:
+                            print("Newtonsolve for t=",t,"starting at x=",x)
+                            #x = NewtonSolve(x, t, lmbda=0.0)
+                            #x = NewtonSolve(x, t, lmbda=1.0)
+                            #x = NewtonSolve(x, t, barrierF, lmbda=0.0, debug=True)
+                            #x = NewtonSolve(x, t, barrierF, lmbda=0.0, debug=True)
+                            x = NewtonSolve(x, t, proxy_barrierF, lmbda=0.0, debug=True)
+                            
+    
+                            #def barrier_obj(x):
+                            #    x = _np.clip(x, 1e-10, None)
+                            #    return t * _np.dot(c.T, x) - _np.log(-barrierF(x, False))
+                            #result = scipy.optimize.minimize(barrier_obj, x, method="CG")
+                            #x = _np.clip(result.x, 0, None)
+                            
+                            t = mu*t
+                        x = NewtonSolve(x, t, barrierF, lmbda=0.5, debug=True)
+                        print("Finished! Final x = ",x)
+                        result = {'x': x, 'y': barrierF(x, compute_deriv=False) , 'znl': [], 'snl': []}  # mimic cvxopt
 
-                        #def barrier_obj(x):
-                        #    x = _np.clip(x, 1e-10, None)
-                        #    return t * _np.dot(c.T, x) - _np.log(-barrierF(x, False))
-                        #result = scipy.optimize.minimize(barrier_obj, x, method="CG")
-                        #x = _np.clip(result.x, 0, None)
-                        
-                        t = mu*t
-                    print("Finished! Final x = ",x)
-                    result = {'x': x, 'y': barrierF(x, compute_deriv=False) , 'znl': [], 'snl': []}  # mimic cvxopt
+                    else:
+
+                        #CVXOPT with smoothed "proxy" objective:
+                        print("Beginning cvxopt solve w/proxy...")
+                        c = _cvxopt.matrix(L1weights.reshape((n, 1)))
+                        result = _cvxopt.solvers.cpl(c, F2) # kktsolver='ldl2'
+
                     
 
                     #This didn't seem to help much:
