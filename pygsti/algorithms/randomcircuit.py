@@ -1409,11 +1409,11 @@ def create_direct_rb_circuit(pspec, length, qubit_labels=None, sampler='Qelimina
                                                    citerations, *compilerargs)
     if cliffordtwirl:
         full_circuit = initial_circuit.copy(editable=True)
-        full_circuit.append_circuit(circuit)
-        full_circuit.append_circuit(inversion_circuit)
+        full_circuit.append_circuit_inplace(circuit)
+        full_circuit.append_circuit_inplace(inversion_circuit)
     else:
         full_circuit = circuit.copy(editable=True)
-        full_circuit.append_circuit(inversion_circuit)
+        full_circuit.append_circuit_inplace(inversion_circuit)
 
     full_circuit.done_editing()
 
@@ -1665,11 +1665,11 @@ def sample_simultaneous_direct_rb_circuit(pspec, length, structure='1Q', sampler
 
     if cliffordtwirl:
         full_circuit = initial_circuit.copy(editable=True)
-        full_circuit.append_circuit(circuit)
-        full_circuit.append_circuit(inversion_circuit)
+        full_circuit.append_circuit_inplace(circuit)
+        full_circuit.append_circuit_inplace(inversion_circuit)
     else:
         full_circuit = _copy.deepcopy(circuit)
-        full_circuit.append_circuit(inversion_circuit)
+        full_circuit.append_circuit_inplace(inversion_circuit)
 
     full_circuit.done_editing()
 
@@ -2065,7 +2065,7 @@ def create_clifford_rb_circuit(pspec, length, qubit_labels=None, randomizeout=Fa
         circuit = _cmpl.compile_clifford(s, p, pspec, qubit_labels=qubit_labels, iterations=citerations, *compilerargs)
         # Keeps track of the current composite Clifford
         s_composite, p_composite = _symp.compose_cliffords(s_composite, p_composite, s, p)
-        full_circuit.append_circuit(circuit)
+        full_circuit.append_circuit_inplace(circuit)
 
     # Find the symplectic rep of the inverse clifford
     s_inverse, p_inverse = _symp.inverse_clifford(s_composite, p_composite)
@@ -2078,7 +2078,7 @@ def create_clifford_rb_circuit(pspec, length, qubit_labels=None, randomizeout=Fa
     # Compile the inversion circuit
     inversion_circuit = _cmpl.compile_clifford(s_inverse, p_for_inversion, pspec, qubit_labels=qubit_labels,
                                                iterations=citerations, *compilerargs)
-    full_circuit.append_circuit(inversion_circuit)
+    full_circuit.append_circuit_inplace(inversion_circuit)
     full_circuit.done_editing()
     # Find the expected outcome of the circuit.
     s_out, p_out = _symp.symplectic_rep_of_clifford_circuit(full_circuit, pspec=pspec)
@@ -2327,7 +2327,7 @@ def create_mirror_rb_circuit(pspec, length, qubit_labels=None, sampler='Qelimina
             circuit_inv.insert_circuit_inplace(pauli_circuit, random_natives_circuit_length - i)
 
     # We then append the "back" circuit to the "out" circuit. At length 0 this will be a length 0 circuit.
-    circuit.append_circuit(circuit_inv)
+    circuit.append_circuit_inplace(circuit_inv)
 
     # If we Pauli randomize, There should also be a random Pauli at the start of this circuit; so we add that. If we
     # have a length 0 circuit we now end up with a length 1 circuit (or longer, if compiled Paulis). So, there is always
