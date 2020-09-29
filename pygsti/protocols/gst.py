@@ -1885,6 +1885,7 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
             #Begin with a zero budget
             initial_probs = objfn.probs.copy()
             current_probs = initial_probs.copy()
+
             percircuit_budget_deriv = budget.precompute_for_same_circuits(circuits_to_use)
 
             #def _wildcard_objective_firstterms(current_probs):
@@ -2255,10 +2256,11 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
                     #DEBUG: check with finite diff derivatives:
                     def check_fd(wv_base, chk_hessian=False):
                         wv_base = _np.array(wv_base, 'd') # [0.0001]*3
-                        grad = _np.zeros(3, 'd')
+                        wv_len = len(wv_base)
+                        grad = _np.zeros(wv_len, 'd')
                         f0, grad_chk = F(wv_base, debug=False)
                         eps = 1e-7
-                        for k in range(3):
+                        for k in range(len(wv_base)):
                             wv_eps = wv_base.copy(); wv_eps[k] += eps
                             f_eps, _ = F(wv_eps, debug=False)
                             grad[k] = (f_eps[0] - f0[0]) / eps
@@ -2271,13 +2273,13 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
                         assert(rel_diff_norm < 1e-3)
                         if chk_hessian is False: return
     
-                        hess = _np.zeros((3,3), 'd')
+                        hess = _np.zeros((wv_len,wv_len), 'd')
                         f0, _, H_chk = F(wv_base, [1.0], debug=False)
                         eps = 1e-7
-                        for k in range(3):
+                        for k in range(wv_len):
                             wv_eps_k = wv_base.copy(); wv_eps_k[k] += eps
                             f_eps_k, _ = F(wv_eps_k, debug=False)
-                            for l in range(3):
+                            for l in range(wv_len):
                                 wv_eps_l = wv_base.copy(); wv_eps_l[l] += eps
                                 f_eps_l, _ = F(wv_eps_l, debug=False)
                                 wv_eps_kl = wv_eps_k.copy(); wv_eps_kl[l] += eps
@@ -2291,7 +2293,7 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
                         print("HESS CHK ",rel_diff_norm)
                         #assert(rel_diff_norm < 5e-2)
 
-                    check_fd([0.0001]*3, True)
+                    check_fd([0.0001]*n, True)
                     #import bpdb; bpdb.set_trace()
 
                     #CVXOPT
@@ -2412,21 +2414,40 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
                         print("DB wvec = ", ",".join(["%.3g" % vv for vv in x]), "=> f=%g" % f[0])
                         if debug: check_fd(x, True)
                         return f, Df, H
-                                            
+
+                    SMALL = 1e-5
+                    SMALL2 = SMALL**2
+                    def NewtonObjective(x, t_value, bFn):  # for debugging
+                        f = bFn(x, compute_deriv=False)
+                        #if(f > 0):
+                        #    print("Warning f=%g" % f)
+                        #return t_value * _np.dot(c.T, x) - _np.log(-f)
+                        return t_value * _np.sum(_np.sqrt((c * x)**2 + SMALL2)) - _np.log(-f)
+                        
                     DXTOL = 1e-8
                     def NewtonSolve(initial_x, t_value, bFn, lmbda=0.0, debug=False):  # lmbda interpolates between Newton (0.0) and gradient (1.0) descent
                         #  min t * c^T * x + phi(x)
                         # where phi(x) = -log(-F(x))
+                        # - try: c^T * x = sum(c_i * x_i) => sum( sqrt((c_i * x_i)^2 + SMALL^2) )
+                        #        deriv =>  0.5/sqrt(...)* 2*c_i^2*x_i
+                        #        hess => sum( -1.0/(...)^(3/2) * (c_i^2*x_i)^2 + 1.0/sqrt(...)*c_i^2 )
+                        x_list = [initial_x.copy()]
                         x = initial_x.copy()
                         max_iters = 100; i = 0
                         test_obj = None
                         I = _np.identity(len(c),'d')
                         while i < max_iters:
                             f, Df, H = bFn(x)
+                            #if f >= 0 and f < 1e-10: f = -1e-16
                             assert(f <= 0)
-                            obj = t_value * _np.dot(c.T, x) - _np.log(-f)
-                            Dobj = t_value * c.T - 1/f * Df
-                            Hobj = 1/f**2 * Df.T * Df - 1/f * H
+                            #obj = t_value * _np.dot(c.T, x) - _np.log(-f)
+                            #Dobj = t_value * c.T - 1/f * Df
+                            #Hobj = 1/f**2 * Df.T * Df - 1/f * H
+                            sqrtVec = _np.sqrt((c * x)**2 + SMALL2)
+                            obj = t_value * _np.sum(sqrtVec) - _np.log(-f)
+                            Dobj = t_value * (c**2 * x / sqrtVec).T - 1/f * Df
+                            Hobj = t_value * _np.diag(-1.0/(sqrtVec**3) * (c * x)**2 + c**2/sqrtVec) + 1/f**2 * Df.T * Df - 1/f * H
+                            
                             evalsH = _np.linalg.eigvals(Hobj)
                             assert(_np.all(evalsH >= -1e-8))
                             #print(" evalsH = ",evalsH)
@@ -2445,11 +2466,13 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
                                 print(" dx = ",dx)
                             if test_obj is not None:
                                 assert(_np.isclose(obj,test_obj))  # Sanity check
+                            downhill_direction = - Dobj.T / _np.linalg.norm(Dobj)
+                            dx_before_backtrack = dx.copy()
                             
                             while(_np.linalg.norm(dx) >= DXTOL):
                                 test_x = _np.clip(x + dx,0,None)
                                 test_f = bFn(test_x, False)
-                                test_obj = t_value * _np.dot(c.T, test_x) - _np.log(-test_f)
+                                test_obj = t_value * _np.sum(_np.sqrt((c * test_x)**2 + SMALL2)) - _np.log(-test_f)
                                 #print("TEST: ",list(test_x),test_f,test_obj,obj,test_obj[0,0] < obj[0,0],dx)
                                 if test_obj < obj: break
                                 else:
@@ -2474,14 +2497,20 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
                                 break
 
                             norm_dx = _np.linalg.norm(dx)
-                            if debug: print(" newton iter %d: f=%g, |Df|=%g, |dx|=%g |Hf|=%g" % (i, obj, norm_Dobj, norm_dx, _np.linalg.norm(Hobj)))
+                            if debug:
+                                print(" newton iter %d: f=%g, |Df|=%g, |dx|=%g |Hf|=%g" % (i, obj, norm_Dobj, norm_dx, _np.linalg.norm(Hobj)))
+                                print("   downhill = ", list(downhill_direction.flat))
+                                print("   dx_before_backtrack = ", list(dx_before_backtrack.flat))
+                                print("   dx = ",list(dx.flat))
+                                print("   new_x = ", list((x+dx).flat))
                             x += dx
                             x = _np.clip(x,0,None)
+                            x_list.append(x.copy())
                             i += 1
                             if norm_Dobj < 1e-4 or norm_dx < DXTOL: break
                         if i == max_iters:
                             print("WARNING: max iterations exceeded!!!")
-                        return x
+                        return x, x_list
 
                     use_barrier_method = True
                     if use_barrier_method:
@@ -2493,17 +2522,42 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
                             raise ValueError("Could not find feasible starting point!")
                         print("Found initial feasible point: ",x0)
                         x = x0 #TODO set initial point
-                        t = 1.0
+                        t = 100000.0
                         epsilon = 1e-6
                         mu = 10
+
+                        #Works only when there are 2 coordinates:
+                        import pickle
+                        VIEW = 0.0003
+                        #x0 = _np.linspace(0, 0.0002, 100)
+                        #x1 = _np.linspace(0.00017, 0.0003, 100)
+                        x0 = _np.linspace(0.00015, VIEW, 100)
+                        x1 = _np.linspace(0, VIEW, 100)
+                        #x2 = _np.linspace(0, VIEW, 10)
+                        with open("debug/contour_x0", 'wb') as pipe:
+                            pickle.dump(x0, pipe)
+                        with open("debug/contour_x1", 'wb') as pipe:
+                            pickle.dump(x1, pipe)
+                        #with open("debug/contour_x2", 'wb') as pipe:
+                        #    pickle.dump(x2, pipe)
+                        #for ii,xx2 in enumerate(x2):
+                        zvals = _np.zeros((len(x1),len(x0)),'d')
+                        for jj,xx1 in enumerate(x1):
+                            for kk,xx0 in enumerate(x0):
+                                xvec = _np.array([xx0,xx1]) # ,xx2
+                                zvals[jj,kk] = float(NewtonObjective(xvec, t, barrierF))
+                        #with open("debug/contour_vals_%d" % (ii), 'wb') as pipe:
+                        with open("debug/contour_vals", 'wb') as pipe:
+                            pickle.dump(zvals, pipe)
+                        
                         import scipy.optimize
                         while 1/t > epsilon:
                             print("Newtonsolve for t=",t,"starting at x=",x)
                             #x = NewtonSolve(x, t, lmbda=0.0)
                             #x = NewtonSolve(x, t, lmbda=1.0)
                             #x = NewtonSolve(x, t, barrierF, lmbda=0.0, debug=True)
-                            #x = NewtonSolve(x, t, barrierF, lmbda=0.0, debug=True)
-                            x = NewtonSolve(x, t, proxy_barrierF, lmbda=0.0, debug=True)
+                            x, debug_x_list = NewtonSolve(x, t, barrierF, lmbda=0.0, debug=True)
+                            #x = NewtonSolve(x, t, proxy_barrierF, lmbda=0.0, debug=True)
                             
     
                             #def barrier_obj(x):
@@ -2511,9 +2565,34 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
                             #    return t * _np.dot(c.T, x) - _np.log(-barrierF(x, False))
                             #result = scipy.optimize.minimize(barrier_obj, x, method="CG")
                             #x = _np.clip(result.x, 0, None)
+
+                            import pickle
+                            with open("debug/t%.0f_xlist" % (t), 'wb') as pipe:
+                                pickle.dump(debug_x_list, pipe)
+                            VIEW = 0.00002
+                            #print("Dumping plot info for t=%f => x = " % t, list(x))
+                            with open("debug/t%.0f_x" % (t), 'wb') as pipe:
+                                pickle.dump(x, pipe)
+                            for ii in range(len(x)):
+                                xcopy = x.copy(); pairs = []
+                                for xx in _np.linspace(max(x[ii]-VIEW,0), x[ii]+VIEW, 100):
+                                    xcopy[ii] = xx
+                                    #pairs.append((xx,barrierF(xcopy, compute_deriv=False)))
+                                    pairs.append((xx, NewtonObjective(xcopy, t, barrierF)))
+                                with open("debug/t%.0f_axis%d.pairs" % (t, ii), 'wb') as pipe:
+                                    pickle.dump(pairs, pipe)
                             
                             t = mu*t
-                        x = NewtonSolve(x, t, barrierF, lmbda=0.5, debug=True)
+
+                        #If using proxy_barrierF above use this to ensure the final point is valid
+                        # i = 0
+                        # while i < 100:
+                        #     if barrierF(x, compute_deriv=False) < 0: break
+                        #     x *= 1.1; i += 1
+                        # else:
+                        #     raise ValueError("Could not find feasible starting point for full opt!")
+                        # x = NewtonSolve(x, t, barrierF, lmbda=0.0, debug=True)
+                        
                         print("Finished! Final x = ",x)
                         result = {'x': x, 'y': barrierF(x, compute_deriv=False) , 'znl': [], 'snl': []}  # mimic cvxopt
 
