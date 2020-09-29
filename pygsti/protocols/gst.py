@@ -1835,7 +1835,7 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
     ds_dof = ds.degrees_of_freedom(circuits_to_use)  # number of independent parameters
     # in dataset (max. model # of params)
     nparams = model.num_modeltest_params  # just use total number of params
-    percentile = 0.05; nboxes = len(circuits_to_use)
+    percentile = 0.025; nboxes = len(circuits_to_use)
     two_dlogl_threshold = _chi2.ppf(1 - percentile, ds_dof - nparams)
     redbox_threshold = _chi2.ppf(1 - percentile / nboxes, 1)
     # if p is prob that box is red and there are N boxes, then prob of no red boxes is q = (1-p)^N ~= 1-p*N
@@ -2776,9 +2776,9 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
 
                 toprint = "   - Constraints still satisfied, budget NOT ADMISSABLE! Global = %.3g, \
                                 max per-circuit = %.3g " % (glob_constraint, _np.max(percircuit_constraint))
-                # Throw a warning if we are optimizing since this shouldn't happen then, otherwise just notify user
+                # Throw an error if we are optimizing since this shouldn't happen then, otherwise just notify user
                 if badfit_options.optimize_initial_budget:
-                    _warnings.warn(toprint)
+                    raise ValueError(toprint)
                 else:
                     printer.log(toprint)
             else:
@@ -2803,7 +2803,7 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
                     printer.log("   - Snapping to zero NOT accepted! Global = %.3g, max per-circuit = %.3g " %
                                 (glob_constraint, _np.max(percircuit_constraint)))
             else:
-                # We do this instead when we're not optimizing the budget? Otherwise we'd be changing the budget.
+                # We do this instead when we're not optimizing the budget, as otherwise we'd be changing the budget.
                 printer.log(" - Skipping trialing reducing element %.3g below %.3g, as it is less than 10^-6" %
                             (w_ind, w_ele))
         active_constraints_list.append(active_constraints)
