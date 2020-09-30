@@ -718,6 +718,10 @@ class StdInputParser(object):
     # the outcome label from the dataset label
 
     def _extract_labels_from_multi_data_col_labels(self, col_labels):
+
+        def str_to_outcome(x):  # always return a tuple as the "outcome label" (even if length 1)
+            return tuple(x.strip().split(":"))
+
         dsOutcomeLabels = _OrderedDict()
         countCols = []; freqCols = []; impliedCounts1Q = []
         for i, colLabel in enumerate(col_labels):
@@ -727,7 +731,7 @@ class StdInputParser(object):
             if wordsInColLabel[-1] == 'count':
                 if len(wordsInColLabel) > 3:
                     _warnings.warn("Column label '%s' has more words than were expected (3)" % colLabel)
-                outcomeLabel = wordsInColLabel[-2]
+                outcomeLabel = str_to_outcome(wordsInColLabel[-2])
                 dsLabel = wordsInColLabel[-3]
                 if dsLabel not in dsOutcomeLabels:
                     dsOutcomeLabels[dsLabel] = [outcomeLabel]
@@ -737,7 +741,7 @@ class StdInputParser(object):
             elif wordsInColLabel[-1] == 'frequency':
                 if len(wordsInColLabel) > 3:
                     _warnings.warn("Column label '%s' has more words than were expected (3)" % colLabel)
-                outcomeLabel = wordsInColLabel[-2]
+                outcomeLabel = str_to_outcome(wordsInColLabel[-2])
                 dsLabel = wordsInColLabel[-3]
                 if '%s count total' % dsLabel not in col_labels:
                     raise ValueError("Frequency columns specified without"
@@ -751,14 +755,14 @@ class StdInputParser(object):
 
         for dsLabel, outcomeLabels in dsOutcomeLabels.items():
             if '%s count total' % dsLabel in col_labels:
-                if '1' in outcomeLabels and '0' not in outcomeLabels:
-                    dsOutcomeLabels[dsLabel].append('0')
+                if ('1',) in outcomeLabels and ('0',) not in outcomeLabels:
+                    dsOutcomeLabels[dsLabel].append(('0',))
                     iTotal = col_labels.index('%s count total' % dsLabel)
-                    impliedCounts1Q.append((dsLabel, '0', iTotal))
-                if '0' in outcomeLabels and '1' not in outcomeLabels:
-                    dsOutcomeLabels[dsLabel].append('1')
+                    impliedCounts1Q.append((dsLabel, ('0',), iTotal))
+                if ('0',) in outcomeLabels and ('1',) not in outcomeLabels:
+                    dsOutcomeLabels[dsLabel].append(('1',))
                     iTotal = col_labels.index('%s count total' % dsLabel)
-                    impliedCounts1Q.append((dsLabel, '1', iTotal))
+                    impliedCounts1Q.append((dsLabel, ('1',), iTotal))
 
             #TODO - add standard count completion for 2Qubit case?
 

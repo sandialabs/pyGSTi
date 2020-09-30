@@ -1178,6 +1178,39 @@ class Circuit(object):
 
         Returns
         -------
+        Circuit
+        """
+        cpy = self.copy(editable=True)
+        cpy.insert_idling_layers_inplace(insert_before, num_to_insert, lines)
+        cpy.done_editing()
+        return cpy
+
+    def insert_idling_layers_inplace(self, insert_before, num_to_insert, lines=None):
+        """
+        Inserts into this circuit one or more idling (blank) layers.
+
+        By default, complete layer(s) are inserted.  The `lines` argument
+        allows you to insert partial layers (on only a subset of the lines).
+
+        Parameters
+        ----------
+        insert_before : int
+            The layer index to insert the new layers before.  Can be from 0
+            (insert at the beginning) to `len(self)-1` (insert at end), and
+            negative indexing can be used to insert relative to the last layer.
+            The special value `None` inserts at the end.
+
+        num_to_insert : int
+            The number of new layers to insert.
+
+        lines : str/int, slice, or list/tuple of strs/ints, optional
+            Which lines should have new layers (blank circuit space)
+            inserted into them.  A single or multiple line-labels can be
+            specified, similarly as in :method:`extract_labels`.  The default
+            value `None` stands for *all* lines.
+
+        Returns
+        -------
         None
         """
         assert(not self._static), "Cannot edit a read-only circuit!"
@@ -1205,7 +1238,7 @@ class Circuit(object):
                 for k in reversed(inds_to_delete):
                     del self._labels[i][k]
 
-    def _append_idling_layers(self, num_to_insert, lines=None):
+    def _append_idling_layers_inplace(self, num_to_insert, lines=None):
         """
         Adds one or more idling (blank) layers to the end of this circuit.
 
@@ -1227,9 +1260,44 @@ class Circuit(object):
         -------
         None
         """
-        self.insert_idling_layers(None, num_to_insert, lines)
+        self.insert_idling_layers_inplace(None, num_to_insert, lines)
 
     def insert_labels_into_layers(self, lbls, layer_to_insert_before, lines=None):
+        """
+        Inserts into this circuit the contents of `lbls` into new full or partial layers.
+
+        By default, complete layer(s) are inserted.  The `lines` argument
+        allows you to insert partial layers (on only a subset of the lines).
+
+        Parameters
+        ----------
+        lbls : list/tuple of Labels, or Circuit
+            The full or partial layer labels to insert.  The length of this
+            list, tuple, or circuit determines the number of layers which are
+            inserted.
+
+        layer_to_insert_before : int
+            The layer index to insert `lbls` before.  Can be from 0
+            (insert at the beginning) to `len(self)-1` (insert at end), and
+            negative indexing can be used to insert relative to the last layer.
+            The special value `None` inserts at the end.
+
+        lines : str/int, slice, or list/tuple of strs/ints, optional
+            Which lines should have `lbls` inserted into them.  Currently
+            this can only be a larger set than the set of line labels present
+            in `lbls` (in future versions this may allow filtering of `lbls`).
+            value `None` stands for *all* lines.
+
+        Returns
+        -------
+        Circuit
+        """
+        cpy = self.copy(editable=True)
+        cpy.insert_labels_into_layers_inplace(lbls, layer_to_insert_before, lines)
+        cpy.done_editing()
+        return cpy
+
+    def insert_labels_into_layers_inplace(self, lbls, layer_to_insert_before, lines=None):
         """
         Inserts into this circuit the contents of `lbls` into new full or partial layers.
 
@@ -1263,11 +1331,34 @@ class Circuit(object):
         # lbls is expected to be a list/tuple of Label-like items, one per inserted layer
         lbls = tuple(map(to_label, lbls))
         numLayersToInsert = len(lbls)
-        self.insert_idling_layers(layer_to_insert_before, numLayersToInsert, lines)  # make space
+        self.insert_idling_layers_inplace(layer_to_insert_before, numLayersToInsert, lines)  # make space
         self.set_labels(lbls, slice(layer_to_insert_before, layer_to_insert_before + numLayersToInsert), lines)
         #Note: set_labels expects lbls to be a list/tuple of Label-like items b/c it's given a layer *slice*
 
-    def insert_idling_lines(self, insert_before, line_labels):  # INPLACE
+    def insert_idling_lines(self, insert_before, line_labels):
+        """
+        Insert one or more idling (blank) lines into this circuit.
+
+        Parameters
+        ----------
+        insert_before : str or int
+            The line label to insert new lines before.  The special value `None`
+            inserts lines at the bottom of this circuit.
+
+        line_labels : list or tuple
+            A list or tuple of the new line labels to insert (can be integers
+            and/or strings).
+
+        Returns
+        -------
+        Circuit
+        """
+        cpy = self.copy(editable=True)
+        cpy.insert_idling_lines_inplace(insert_before, line_labels)
+        cpy.done_editing()
+        return cpy
+
+    def insert_idling_lines_inplace(self, insert_before, line_labels):
         """
         Insert one or more idling (blank) lines into this circuit.
 
@@ -1307,9 +1398,10 @@ class Circuit(object):
         -------
         None
         """
-        self.insert_idling_lines(None, line_labels)
+        self.insert_idling_lines_inplace(None, line_labels)
 
-    def insert_labels_as_lines(self, lbls, layer_to_insert_before=None, line_to_insert_before=None, line_labels="auto"):
+    def insert_labels_as_lines_inplace(self, lbls, layer_to_insert_before=None, line_to_insert_before=None,
+                                       line_labels="auto"):
         """
         Inserts into this circuit the contents of `lbls` into new lines.
 
@@ -1356,15 +1448,54 @@ class Circuit(object):
         if len(existing_labels) > 0:
             raise ValueError("Cannot insert line(s) labeled %s - they already exist!" % str(existing_labels))
 
-        self.insert_idling_lines(line_to_insert_before, line_labels)
+        self.insert_idling_lines_inplace(line_to_insert_before, line_labels)
 
         #add additional layers to end of circuit if new lines are longer than current circuit depth
         numLayersToInsert = len(lbls)
         if layer_to_insert_before + numLayersToInsert > len(self._labels):
-            self._append_idling_layers(layer_to_insert_before + numLayersToInsert - len(self._labels))
+            self._append_idling_layers_inplace(layer_to_insert_before + numLayersToInsert - len(self._labels))
 
         #Note: set_labels expects lbls to be a list/tuple of Label-like items b/c it's given a layer *slice*
         self.set_labels(lbls, slice(layer_to_insert_before, layer_to_insert_before + numLayersToInsert), line_labels)
+
+    def insert_labels_as_lines(self, lbls, layer_to_insert_before=None, line_to_insert_before=None, line_labels="auto"):
+        """
+        Inserts into this circuit the contents of `lbls` into new lines.
+
+        By default, `lbls` is inserted at the beginning of the new lines(s). The
+        `layer_to_insert_before` argument allows you to insert `lbls` beginning at
+        a layer of your choice.
+
+        Parameters
+        ----------
+        lbls : list/tuple of Labels, or Circuit
+            A list of layer labels to insert as new lines.  The state-space
+            (line) labels within `lbls` must not overlap with that of this
+            circuit or an error is raised.  If `lbls` contains more layers
+            than this circuit currently has, new layers are added automatically.
+
+        layer_to_insert_before : int
+            The layer index to insert `lbls` before.  Can be from 0
+            (insert at the beginning) to `len(self)-1` (insert at end), and
+            negative indexing can be used to insert relative to the last layer.
+            The default value of `None` inserts at the beginning.
+
+        line_to_insert_before : str or int
+            The line label to insert the new lines before.  The default value
+            of `None` inserts lines at the bottom of the circuit.
+
+        line_labels : list, tuple, or "auto"
+            The labels of the new lines being inserted.  If `"auto"`, then
+            these are inferred from `lbls`.
+
+        Returns
+        -------
+        None
+        """
+        cpy = self.copy(editable=True)
+        cpy.insert_labels_as_lines_inplace(lbls, layer_to_insert_before, line_to_insert_before, line_labels)
+        cpy.done_editing()
+        return cpy
 
     def _append_labels_as_lines(self, lbls, layer_to_insert_before=None, line_labels="auto"):
         """
@@ -1682,7 +1813,7 @@ class Circuit(object):
         parallel_lbls = [_Label(lbl_list) if len(lbl_list) != 1 else lbl_list[0] for lbl_list in parallel_lbls]
         return Circuit._fastinit(tuple(parallel_lbls), self.line_labels, editable=False, occurrence=self.occurrence)
 
-    def expand_subcircuits(self):  # INPLACE
+    def expand_subcircuits_inplace(self):
         """
         Expands all :class:`CircuitLabel` labels within this circuit.
 
@@ -1707,11 +1838,24 @@ class Circuit(object):
                     layers_to_add = max(layers_to_add, l.depth - 1)
 
             if layers_to_add > 0:
-                self.insert_idling_layers(i + 1, layers_to_add)
+                self.insert_idling_layers_inplace(i + 1, layers_to_add)
             for subc in circuits_to_expand:
                 self.clear_labels(slice(i, i + subc.depth), subc.sslbls)  # remove the CircuitLabel
                 self.set_labels(subc.components * subc.reps, slice(i, i + subc.depth),
                                 subc.sslbls)  # dump in the contents
+
+    def expand_subcircuits(self):
+        """
+        Returns a new circuit with :class:`CircuitLabel` labels expanded.
+
+        Returns
+        -------
+        Circuit
+        """
+        cpy = self.copy(editable=True)
+        cpy.expand_subcircuits_inplace()
+        cpy.done_editing()
+        return cpy
 
     def factorize_repetitions_inplace(self):
         """
@@ -1774,6 +1918,33 @@ class Circuit(object):
 
         Returns
         -------
+        Circuit
+        """
+        cpy = self.copy(editable=True)
+        cpy.insert_layer_inplace(circuit_layer, j)
+        cpy.done_editing()
+        return cpy
+
+    def insert_layer_inplace(self, circuit_layer, j):
+        """
+        Inserts a single layer into a circuit.
+
+        The input layer does not need to contain a gate that acts on
+        every qubit, but it should not contain more than one gate on
+        a qubit.
+
+        Parameters
+        ----------
+        circuit_layer : Label
+            The layer to insert.  A (possibly compound) Label object or
+            something that can be converted into one, e.g.
+            `(('Gx',0),('Gcnot',1,2))` or just `'Gx'`.
+
+        j : int
+            The layer index (depth) at which to insert the `circuit_layer`.
+
+        Returns
+        -------
         None
         """
         assert(not self._static), "Cannot edit a read-only circuit!"
@@ -1782,9 +1953,37 @@ class Circuit(object):
             layer_lbl = to_label(circuit_layer)
             self.line_labels = layer_lbl.sslbls if (layer_lbl.sslbls is not None) else ('*',)
 
-        self.insert_labels_into_layers([circuit_layer], j)
+        self.insert_labels_into_layers_inplace([circuit_layer], j)
 
     def insert_circuit(self, circuit, j):
+        """
+        Inserts a circuit into this circuit.
+
+        The circuit to insert can be over more qubits than this circuit, as long
+        as all qubits that are not part of this circuit are idling. In this
+        case, the idling qubits are all discarded. The circuit to insert can
+        also be on less qubits than this circuit: all other qubits are set to
+        idling. So, the labels of the circuit to insert for all non-idling
+        qubits must be a subset of the labels of this circuit.
+
+        Parameters
+        ----------
+        circuit : Circuit
+            The circuit to be inserted.
+
+        j : int
+            The layer index (depth) at which to insert the circuit.
+
+        Returns
+        -------
+        Circuit
+        """
+        cpy = self.copy(editable=True)
+        cpy.insert_circuit_inplace(circuit, j)
+        cpy.done_editing()
+        return cpy
+
+    def insert_circuit_inplace(self, circuit, j):
         """
         Inserts a circuit into this circuit.
 
@@ -1817,7 +2016,7 @@ class Circuit(object):
                     "There are non-idling lines in the circuit to insert that are *not* lines in this circuit!"
 
         labels_to_insert = circuit.extract_labels(layers=None, lines=lines_to_insert)
-        self.insert_labels_into_layers(labels_to_insert, j)
+        self.insert_labels_into_layers_inplace(labels_to_insert, j)
 
     def append_circuit(self, circuit):
         """
@@ -1833,9 +2032,27 @@ class Circuit(object):
 
         Returns
         -------
-        None
+        Circuit
         """
         self.insert_circuit(circuit, self.num_layers)
+
+    def append_circuit_inplace(self, circuit):
+        """
+        Append a circuit to the end of this circuit.
+
+        This circuit must satisfy the requirements of
+        :method:`insert_circuit()`. See that method for more details.
+
+        Parameters
+        ----------
+        circuit : A Circuit object
+            The circuit to be appended.
+
+        Returns
+        -------
+        None
+        """
+        self.insert_circuit_inplace(circuit, self.num_layers)
 
     def prefix_circuit(self, circuit):
         """
@@ -1851,11 +2068,29 @@ class Circuit(object):
 
         Returns
         -------
-        None
+        Circuit
         """
         self.insert_circuit(circuit, 0)
 
-    def tensor_circuit(self, circuit, line_order=None):
+    def prefix_circuit_inplace(self, circuit):
+        """
+        Prefix a circuit to the beginning of this circuit.
+
+        This circuit must satisfy the requirements of the
+        :method:`insert_circuit()`. See that method for more details.
+
+        Parameters
+        ----------
+        circuit : A Circuit object
+            The circuit to be prefixed.
+
+        Returns
+        -------
+        None
+        """
+        self.insert_circuit_inplace(circuit, 0)
+
+    def tensor_circuit_inplace(self, circuit, line_order=None):
         """
         The tensor product of this circuit and `circuit`.
 
@@ -1906,10 +2141,38 @@ class Circuit(object):
             new_line_labels = self.line_labels + circuit.line_labels
 
         #Add circuit's labels into this circuit
-        self.insert_labels_as_lines(circuit._labels, line_labels=circuit.line_labels)
+        self.insert_labels_as_lines_inplace(circuit._labels, line_labels=circuit.line_labels)
         self._line_labels = new_line_labels  # essentially just reorders labels if needed
 
-    def replace_layer_with_circuit(self, circuit, j):
+    def tensor_circuit(self, circuit, line_order=None):
+        """
+        The tensor product of this circuit and `circuit`.
+
+        That is, it adds `circuit` to this circuit as new lines.  The line
+        labels of `circuit` must be disjoint from the line labels of this
+        circuit, as otherwise applying the circuits in parallel does not make
+        sense.
+
+        Parameters
+        ----------
+        circuit : A Circuit object
+            The circuit to be tensored.
+
+        line_order : List, optional
+            A list of all the line labels specifying the order of the circuit in the updated
+            circuit. If None, the lines of `circuit` are added below the lines of this circuit.
+            Note that, for many purposes, the ordering of lines of the circuit is irrelevant.
+
+        Returns
+        -------
+        Circuit
+        """
+        cpy = self.copy(editable=True)
+        cpy.tensor_circuit_inplace(circuit, line_order)
+        cpy.done_editing()
+        return cpy
+
+    def replace_layer_with_circuit_inplace(self, circuit, j):
         """
         Replaces the `j`-th layer of this circuit with `circuit`.
 
@@ -1926,7 +2189,28 @@ class Circuit(object):
         None
         """
         del self[j]
-        self.insert_labels_into_layers(circuit, j)
+        self.insert_labels_into_layers_inplace(circuit, j)
+
+    def replace_layer_with_circuit(self, circuit, j):
+        """
+        Replaces the `j`-th layer of this circuit with `circuit`.
+
+        Parameters
+        ----------
+        circuit : Circuit
+            The circuit to insert
+
+        j : int
+            The layer index to replace.
+
+        Returns
+        -------
+        Circuit
+        """
+        cpy = self.copy(editable=True)
+        cpy.replace_layer_with_circuit_inplace(circuit, j)
+        cpy.done_editing()
+        return cpy
 
     def replace_gatename_inplace(self, old_gatename, new_gatename):
         """
@@ -2207,7 +2491,7 @@ class Circuit(object):
                     # Replace the gate with a circuit: remove the gate and add insert
                     # the replacement circuit as the following layers.
                     icomps_to_remove.append(icomp)
-                    self.insert_labels_into_layers(replacement_circuit, ilayer + 1)
+                    self.insert_labels_into_layers_inplace(replacement_circuit, ilayer + 1)
                 else:
                     # We never consider not having a compilation for the identity to be a failure.
                     if not allow_unchanged_gates:
@@ -2310,7 +2594,7 @@ class Circuit(object):
         return Circuit([l.map_state_space_labels(mapper_func) for l in self.layertup],
                        mapped_line_labels, None, not self._static, occurrence=self.occurrence)
 
-    def reorder_lines(self, order):
+    def reorder_lines_inplace(self, order):
         """
         Reorders the lines (wires/qubits) of the circuit.
 
@@ -2326,9 +2610,30 @@ class Circuit(object):
         -------
         None
         """
-        # OK even for static circuits because it won't affect the hashed value (labels only)
+        assert(not self._static), "Cannot edit a read-only circuit!"
         assert(set(order) == set(self.line_labels)), "The line labels must be the same!"
         self._line_labels = tuple(order)
+
+    def reorder_lines(self, order):
+        """
+        Reorders the lines (wires/qubits) of the circuit.
+
+        Note that the ordering of the lines is unimportant for most purposes.
+
+        Parameters
+        ----------
+        order : list
+            A list containing all of the circuit line labels (self.line_labels) in the
+            order that the should be converted to.
+
+        Returns
+        -------
+        Circuit
+        """
+        cpy = self.copy(editable=True)
+        cpy.reorder_lines_inplace(order)
+        cpy.done_editing()
+        return cpy
 
     def _is_line_idling(self, line_label, idle_layer_labels=None):
         """
@@ -2392,7 +2697,7 @@ class Circuit(object):
             return tuple([x for x in self.line_labels
                           if x not in all_sslbls])  # preserve order
 
-    def delete_idling_lines(self, idle_layer_labels=None):
+    def delete_idling_lines_inplace(self, idle_layer_labels=None):
         """
         Removes from this circuit all lines that are idling at every layer.
 
@@ -2429,6 +2734,27 @@ class Circuit(object):
         # to remove in self._labels (as all the lines are idling)
         self._line_labels = tuple([x for x in self.line_labels
                                    if x in all_sslbls])  # preserve order
+
+    def delete_idling_lines(self, idle_layer_labels=None):
+        """
+        Removes from this circuit all lines that are idling at every layer.
+
+        Parameters
+        ----------
+        idle_layer_labels : iterable, optional
+            A list or tuple of layer-labels that should be treated
+            as idle operations, so their presence will not disqualify
+            a line from being "idle".  E.g. `["Gi"]` will cause `"Gi"`
+            layers to be considered idle layers.
+
+        Returns
+        -------
+        Circuit
+        """
+        cpy = self.copy(editable=True)
+        cpy.delete_idling_lines_inplace(idle_layer_labels)
+        cpy.done_editing()
+        return cpy
 
     def replace_with_idling_line_inplace(self, line_label, clear_straddlers=True):
         """

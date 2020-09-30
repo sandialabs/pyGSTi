@@ -96,7 +96,9 @@ class CircuitTester(BaseCase):
         c[1, 0] = "Gx"
         self.assertEqual(c.tup, ('Gi', (CircuitLabel('', [('Gx', 1)], (1,), 2), ('Gx', 0))) + ('@', 0, 1, 2))
 
-        c.expand_subcircuits()
+        c_expanded = c.expand_subcircuits()
+        c.expand_subcircuits_inplace()
+        self.assertEqual(c, c_expanded)
         self.assertEqual(c.tup, ('Gi', (('Gx', 0), ('Gx', 1)), ('Gx', 1)) + ('@', 0, 1, 2))
         self.assertEqual(c, ('Gi', (('Gx', 0), ('Gx', 1)), ('Gx', 1)))   # `c` compares vs. labels when RHS is not a Circuit
 
@@ -231,7 +233,7 @@ class CircuitMethodTester(BaseCase):
     def test_insert_labels_into_layers_with_nonidle_qubits(self):
         # Test inserting a gate when the relevant qubits aren't
         # idling at that layer
-        self.c.insert_labels_into_layers([Label('Gx', 'Q0')], 2)
+        self.c.insert_labels_into_layers_inplace([Label('Gx', 'Q0')], 2)
         self.assertEqual(self.c.size, 9)
         self.assertEqual(self.c.depth, 6)
         self.assertEqual(self.c[2, 'Q0'], Label('Gx', 'Q0'))
@@ -247,11 +249,11 @@ class CircuitMethodTester(BaseCase):
     def test_insert_layer(self):
         # Test layer insertion
         layer = [Label('Gx', 'Q1'), ]
-        self.c.insert_layer(layer, 1)
+        self.c.insert_layer_inplace(layer, 1)
         self.assertEqual(self.c.size, 9)
         self.assertEqual(self.c.depth, 6)
         self.assertEqual(self.c[1], Label('Gx', 'Q1'))
-        self.c.insert_layer([], 1)
+        self.c.insert_layer_inplace([], 1)
         self.assertTrue(len(self.c[1, ('Q0', 'Q1')].components) == 0)
         self.assertTrue(len(self.c[1, 'Q0'].components) == 0)
         self.assertFalse(len(self.c[2, 'Q1'].components) == 0)
@@ -269,54 +271,54 @@ class CircuitMethodTester(BaseCase):
 
     def test_replace_layer_with_circuit(self):
         # Test replacing a layer with a circuit
-        self.c.replace_layer_with_circuit(self.c.copy(), 1)
+        self.c.replace_layer_with_circuit_inplace(self.c.copy(), 1)
         self.assertEqual(self.c.depth, 2 * 5 - 1)
 
     def test_delete_layers(self):
         # Test layer deletion
         layer = [Label('Gx', 'Q1'), ]
         c_copy = self.c.copy()
-        c_copy.insert_layer(layer, 1)
+        c_copy.insert_layer_inplace(layer, 1)
         c_copy.delete_layers([1])
         self.assertEqual(self.c, c_copy)
 
     def test_insert_circuit_label_collision(self):
         # Test inserting a circuit when they are over the same labels.
         c_copy = self.c.copy()
-        self.c.insert_circuit(c_copy, 2)
+        self.c.insert_circuit_inplace(c_copy, 2)
         self.assertTrue(Label('Gx', 'Q0') in self.c[2].components)
 
     def test_insert_circuit_with_qubit_superset(self):
         # Test insert a circuit that is over *more* qubits but which has the additional
         # lines idling.
         c2 = circuit.Circuit(layer_labels=self.labels, line_labels=['Q0', 'Q1', 'Q2', 'Q3'])
-        self.c.insert_circuit(c2, 0)
+        self.c.insert_circuit_inplace(c2, 0)
         self.assertEqual(self.c.line_labels, ('Q0', 'Q1'))
         self.assertEqual(self.c.num_lines, 2)
 
     def test_insert_circuit_with_qubit_subset(self):
         # Test inserting a circuit that is on *less* qubits.
         c2 = circuit.Circuit(layer_labels=[Label('Gx', 'Q0')], line_labels=['Q0', ])
-        self.c.insert_circuit(c2, 1)
+        self.c.insert_circuit_inplace(c2, 1)
         self.assertEqual(self.c.line_labels, ('Q0', 'Q1'))
         self.assertEqual(self.c.num_lines, 2)
 
     def test_append_circuit(self):
         # Test appending
         c2 = circuit.Circuit(layer_labels=[Label('Gx', 'Q0')], line_labels=['Q0', ], editable=True)
-        self.c.append_circuit(c2)
+        self.c.append_circuit_inplace(c2)
         # TODO assert correctness
 
     def test_prefix_circuit(self):
         c2 = circuit.Circuit(layer_labels=[Label('Gx', 'Q0')], line_labels=['Q0', ], editable=True)
-        self.c.prefix_circuit(c2)
+        self.c.prefix_circuit_inplace(c2)
         # TODO assert correctness
 
     def test_tensor_circuit(self):
         # Test tensoring circuits of same length
         gatestring2 = circuit.Circuit(None, stringrep="[Gx:Q2Gy:Q3]^2[Gy:Q2Gx:Q3]Gi:Q2Gi:Q3")
         c2 = circuit.Circuit(layer_labels=gatestring2, line_labels=['Q2', 'Q3'])
-        self.c.tensor_circuit(c2)
+        self.c.tensor_circuit_inplace(c2)
         self.assertEqual(self.c.depth, max(self.c.depth, c2.depth))
         self.assertEqual(self.c[:, 'Q2'], c2[:, 'Q2'])
 
@@ -324,14 +326,14 @@ class CircuitMethodTester(BaseCase):
         # Test tensoring circuits where the inserted circuit is shorter
         gatestring2 = circuit.Circuit(None, stringrep="[Gx:Q2Gy:Q3]^2[Gy:Q2Gx:Q3]Gi:Q2Gi:Q3")
         c2 = circuit.Circuit(layer_labels=gatestring2, line_labels=['Q2', 'Q3'])
-        self.c.tensor_circuit(c2, line_order=['Q1', 'Q3', 'Q0', 'Q2'])
+        self.c.tensor_circuit_inplace(c2, line_order=['Q1', 'Q3', 'Q0', 'Q2'])
         self.assertEqual(self.c.depth, max(self.c.depth, c2.depth))
 
     def test_tensor_circuit_with_longer(self):
         # Test tensoring circuits where the inserted circuit is shorter
         gatestring2 = circuit.Circuit(None, stringrep="[Gx:Q2Gy:Q3]^2[Gy:Q2Gx:Q3]Gi:Q2Gi:Q3Gy:Q2")
         c2 = circuit.Circuit(layer_labels=gatestring2, line_labels=['Q2', 'Q3'])
-        self.c.tensor_circuit(c2)
+        self.c.tensor_circuit_inplace(c2)
         self.assertEqual(self.c.depth, max(self.c.depth, c2.depth))
 
     def test_replace_gatename_inplace(self):
@@ -373,7 +375,7 @@ class CircuitMethodTester(BaseCase):
     def test_reorder_lines(self):
         # Check we can re-order wires
         self.c.map_state_space_labels_inplace({'Q0': 0, 'Q1': 1})
-        self.c.reorder_lines([1, 0])
+        self.c.reorder_lines_inplace([1, 0])
         self.assertEqual(self.c.line_labels, (1, 0))
 
     def test_append_and_delete_idling_lines(self):
@@ -381,7 +383,7 @@ class CircuitMethodTester(BaseCase):
         self.c._append_idling_lines(['Q2'])
         self.assertEqual(self.c.line_labels, ('Q0', 'Q1', 'Q2'))
         self.assertEqual(self.c.num_lines, 3)
-        self.c.delete_idling_lines()
+        self.c.delete_idling_lines_inplace()
         self.assertEqual(self.c.line_labels, ('Q0', 'Q1'))
         self.assertEqual(self.c.num_lines, 2)
 

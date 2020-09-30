@@ -459,7 +459,7 @@ class QubitGraph(object):
         """
         count = 0
         for selected_nodes in _itertools.combinations(possible_nodes, size):
-            if self.are_glob_connected(selected_nodes): count += 1
+            if self.is_connected_subgraph(selected_nodes): count += 1
         return count
 
     def _indices_connected(self, i, j):
@@ -526,11 +526,50 @@ class QubitGraph(object):
         i, j = self._nodeinds[node1], self._nodeinds[node2]
         return self._indices_connected(i, j)
 
-    def are_glob_connected(self, nodes):
+    def _is_connected_subgraph(self, node_indices):
         """
-        Does there exist a path from every node in `nodes` to every other node in `nodes`?
+        Whether the nodes indexed by the elements of `node_indices` form a connected subgraph.
+        """
+        if len(node_indices) < 2: return True  # 0 or 1 nodes are considered "connected"
 
-        That is, do these nodes form a connected set?
+        node_indices_set = set(node_indices)
+        if not node_indices_set.issubset(set(self._nodeinds.values())):
+            return False  # node_indices contains indices not found in this graph
+
+        def add_to_glob(glob, i):  # glob = set of everything (all node indices) connected to node index i
+            glob.add(i)
+            for j in node_indices:
+                if self._indices_connected(i, j) and j not in glob:
+                    add_to_glob(glob, j)
+
+        if not self.directed:
+            # then just check that we can get from node-index 0 to all the others:
+            glob = set(); add_to_glob(glob, 0)
+            return node_indices_set.issubset(glob)
+        else:
+            # we need to check that, starting at *any* initial node, we can
+            # reach all the others:
+            for i in node_indices:
+                glob = set(); add_to_glob(glob, i)
+                if not node_indices_set.issubset(glob): return False
+            return True
+
+    def is_connected_graph(self):
+        """
+        Computes whether this graph is connected (there exist paths between every pair of nodes).
+
+        Returns
+        -------
+        bool
+        """
+        return self._is_connected_subgraph(list(self._nodeinds.values()))
+
+    def is_connected_subgraph(self, nodes):
+        """
+        Do a give set of nodes form a connected subgraph?
+
+        That is, does there exist a path from every node in `nodes` to every other node
+        in `nodes` using only the edges between the nodes in `nodes`.
 
         Parameters
         ----------
@@ -541,29 +580,9 @@ class QubitGraph(object):
         -------
         bool
         """
-        if len(nodes) < 2: return True  # 0 or 1 nodes are "connected"
-
         for node in nodes:  # check
             if node not in self._nodeinds: return False
-
-        def add_to_glob(glob, node):
-            glob.add(node)
-            i = self._nodeinds[node]
-            for jlbl, j in self._nodeinds.items():
-                if self._indices_connected(i, j) and jlbl not in glob:
-                    add_to_glob(glob, jlbl)
-
-        if not self.directed:
-            # then just check that we can get from nodes[0] to all the others:
-            glob = set(); add_to_glob(glob, nodes[0])
-            return set(nodes).issubset(glob)
-        else:
-            # we need to check that, starting at *any* initial node, we can
-            # reach all the others:
-            for node in nodes:
-                glob = set(); add_to_glob(glob, node)
-                if not set(nodes).issubset(glob): return False
-            return True
+        return self._is_connected_subgraph([self._nodeinds[node] for node in nodes])
 
     def _brute_get_all_connected_sets(self, n):
         """
@@ -585,7 +604,7 @@ class QubitGraph(object):
         """
         connectedqubits = []
         for combo in _itertools.combinations(self.node_names, n):
-            if self.subgraph(list(combo)).are_glob_connected(combo):
+            if self.is_connected_subgraph(combo):
                 connectedqubits.append(combo)
 
         return connectedqubits

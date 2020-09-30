@@ -78,6 +78,86 @@ bulk_eval_compact_polynomials_real = _partial(_typed_bulk_eval_compact_polynomia
 bulk_eval_compact_polynomials_complex = _partial(_typed_bulk_eval_compact_polynomials, dtype='complex')
 
 
+def _typed_bulk_eval_compact_polynomials_derivs(vtape, ctape, wrt_params, paramvec, dest_shape, dtype="auto"):
+    #Note: assumes wrt_params is SORTED but doesn't assert it like Python version does
+
+    vtape_sz = vtape.size
+    wrt_sz = wrt_params.size
+
+    assert(len(dest_shape) == 2)
+    assert(len(wrt_params) == dest_shape[1])
+
+    if dtype == "auto":
+        result = _np.zeros(dest_shape, ctape.dtype)  # auto-determine type?
+    elif dtype == "complex":
+        result = _np.zeros(dest_shape, complex)  # indices [iPoly, iParam]
+    elif dtype == "real":
+        result = _np.zeros(dest_shape, 'd')  # indices [iPoly, iParam]
+    else:
+        raise ValueError("Invalid dtype: %s" % dtype)
+
+    c = 0; i = 0; iPoly = 0
+    while i < vtape_sz:
+        j = i  # increment j instead of i for this poly
+        nTerms = vtape[j]; j += 1
+        #print "POLY w/%d terms (i=%d)" % (nTerms,i)
+
+        for m in range(nTerms):
+            coeff = ctape[c]; c += 1
+            nVars = vtape[j]; j += 1  # number of variable indices in this term
+
+            #print "  TERM%d: %d vars, coeff=%s" % (m,nVars,str(coeff))
+            cur_iWrt = 0
+            j0 = j  # the vtape index where the current term starts
+            j1 = j + nVars  # the ending index
+
+            #Loop to get counts of each variable index that is also in `wrt`.
+            # Once we've passed an element of `wrt` process it, since there can't
+            # see it any more (the var indices are sorted).
+            while j < j1:  # loop over variable indices for this term
+                # can't be while True above in case nVars == 0 (then vtape[j] isn't valid)
+
+                #find an iVar that is also in wrt.
+                # - increment the cur_iWrt or j as needed
+                while cur_iWrt < wrt_sz and vtape[j] > wrt_params[cur_iWrt]:  # condition to increment cur_iWrt
+                    cur_iWrt += 1  # so wrt_params[cur_iWrt] >= vtape[j]
+                if cur_iWrt == wrt_sz: break  # no more possible iVars we're interested in;
+                #                               we're done with all wrt elements
+                # - at this point we know wrt[cur_iWrt] is valid and wrt[cur_iWrt] >= tape[j]
+                cur_wrt = wrt_params[cur_iWrt]
+                while j < j1 and vtape[j] < cur_wrt:
+                    j += 1  # so vtape[j] >= wrt[cur_iWrt]
+                if j == j1: break  # no more iVars - we're done
+
+                #print " check j=%d, val=%d, wrt=%d, cur_iWrt=%d" % (j,vtape[j],cur_wrt,cur_iWrt)
+                if vtape[j] == cur_wrt:
+                    #Yay! a value we're looking for is present in the vtape.
+                    # Figure out how many there are (easy since vtape is sorted
+                    # and we'll always stop on the first one)
+                    cnt = 0
+                    while j < j1 and vtape[j] == cur_wrt:
+                        cnt += 1; j += 1
+                    #Process cur_iWrt: add a term to evaluated poly for derivative w.r.t. wrt_params[cur_iWrt]
+                    a = coeff * cnt
+                    for k in range(j0, j1):
+                        if k == j - 1: continue  # remove this index
+                        a *= paramvec[vtape[k]]
+                    result[iPoly, cur_iWrt] += a
+                    cur_iWrt += 1  # processed this wrt param - move to next one
+
+            j = j1  # move to next term; j may not have been incremented if we exited b/c of cur_iWrt reaching end
+
+        i = j  # update location in vtape after processing poly - actually could just use i instead of j it seems??
+        iPoly += 1
+
+    return result
+
+
+# These have separate cython implementations but the same python implementation, so we'll simply alias the names
+bulk_eval_compact_polynomials_derivs_real = _partial(_typed_bulk_eval_compact_polynomials_derivs, dtype='real')
+bulk_eval_compact_polynomials_derivs_complex = _partial(_typed_bulk_eval_compact_polynomials_derivs, dtype='complex')
+
+
 def abs_sum_bulk_eval_compact_polynomials_complex(vtape, ctape, paramvec, dest_size, **kwargs):
     """Equivalent to np.sum(np.abs(bulk_eval_compact_polynomials_complex(.)))"""
     return _np.sum(_np.abs(bulk_eval_compact_polynomials_complex(vtape, ctape, paramvec, (dest_size,), **kwargs)))

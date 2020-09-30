@@ -1184,6 +1184,8 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                 raise MemoryError("Attempted layout creation w/memory limit = %g <= 0!" % mem_limit)
             printer.log("Layout creation w/mem limit = %.2fGB" % (mem_limit * C))
 
+        if not hasattr(self, '_mode'): self._mode = 'time_independent'  # HACK for backward compatibility (REMOVE?)
+
         if self._mode == "distribute_by_timestamp":
             #Special case: time dependent data that gets grouped & distributed by unique timestamp
             layout = _MatrixTimeDepCOPALayout(circuits, self.model, dataset,
