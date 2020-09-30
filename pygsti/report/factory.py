@@ -415,7 +415,7 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
             switchBd.mdl_all_modvi[d, i] = est_modvi.models['iteration estimates']
 
             if confidence_level is not None:
-                misfit_sigma = est.misfit_sigma(use_accurate_np=True)
+                misfit_sigma = est.misfit_sigma()
 
                 for il, l in enumerate(gauge_opt_labels):
                     if l in est.models:
@@ -1591,8 +1591,7 @@ def create_drift_report(results, title='auto', ws=None, verbosity=1):
     from ..extras.drift import driftreport
     assert(isinstance(results, _StabilityAnalysisResults)), \
         "Support for multiple results as a Dict is not yet included!"
-    circuit_list = results.data.edesign.circuit_lists[-1]
-    singleresults = results.stabilityanalyzer
+    #stabilityanalyzer = results.stabilityanalyzer
 
     printer = _VerbosityPrinter.create_printer(verbosity)  # , comm=comm)
 
@@ -1611,24 +1610,26 @@ def create_drift_report(results, title='auto', ws=None, verbosity=1):
                ('Keywords', 'GST'), ('pyGSTi Version', _version.__version__)]
 
     results_dict = results if isinstance(results, dict) else {"unique": results}
+    assert(len(results_dict) == 1), "Drift reports do not support multiple results objects yet."
+    single_results = next(iter(results_dict.values()))
+    single_stabilityanalyzer = single_results.stabilityanalyzer
 
-    drift_switchBd = driftreport._create_drift_switchboard(ws, results.stabilityanalyzer, circuit_list)
+    drift_switchBd = driftreport._create_drift_switchboard(ws, single_results)
 
     # Sets whether or not the dataset key is a switchboard or not.
-    if len(singleresults.data.keys()) > 1:
+    if len(single_stabilityanalyzer.data.keys()) > 1:
         dskey = drift_switchBd.dataset
-        arb_dskey = list(singleresults.data.keys())[0]
+        arb_dskey = list(single_stabilityanalyzer.data.keys())[0]
     else:
-        dskey = list(singleresults.data.keys())[0]
+        dskey = list(single_stabilityanalyzer.data.keys())[0]
         arb_dskey = dskey
 
     # Generate Switchboard
     printer.log("*** Generating switchboard ***")
 
     #Create master switchboard
-    stabilityanalyzer_dict = {k: res.stabilityanalyzer for k, res in results_dict.items()}
     switchBd, _dataset_labels = \
-        driftreport._create_switchboard(ws, stabilityanalyzer_dict)
+        driftreport._create_switchboard(ws, results_dict)
 
     global_qtys = {
         'title': title,
@@ -1640,12 +1641,13 @@ def create_drift_report(results, title='auto', ws=None, verbosity=1):
 
     report_params = {
         'results': switchBd.results,
-        'circuit_list': circuit_list,
+        'circuit_list': single_results.data.edesign.circuit_lists[-1],
         'dskey': dskey,
-        'switchboard': drift_switchBd
+        'switchboard': drift_switchBd,
+        'stabilityanalyzer': single_stabilityanalyzer
     }
 
-    averaging_allowed = singleresults.averaging_allowed({'dataset': arb_dskey}, checklevel=1)
+    averaging_allowed = single_stabilityanalyzer.averaging_allowed({'dataset': arb_dskey}, checklevel=1)
     sections = [
         _section.DriftSection(global_power_spectra_plot=averaging_allowed)
     ]
@@ -1654,7 +1656,7 @@ def create_drift_report(results, title='auto', ws=None, verbosity=1):
         html='~drift_html_report',
         pdf='drift_pdf_report.tex'
     )
-    return _Report(templates, singleresults, sections, set(), global_qtys, report_params, workspace=ws)
+    return _Report(templates, results_dict, sections, set(), global_qtys, report_params, workspace=ws)
 
 
 # # XXX this needs to be revised into a script

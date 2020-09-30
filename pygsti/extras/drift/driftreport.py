@@ -54,15 +54,16 @@ class DriftSummaryTable(_ws.WorkspaceTable):
     todo
     """
 
-    def __init__(self, ws, stabilityanalyzer, dskey=None, detectorkey=None, estimatekey=None):
+    def __init__(self, ws, results, dskey=None, detectorkey=None, estimatekey=None):
         """
         todo
         """
-        super(DriftSummaryTable, self).__init__(ws, self._create, stabilityanalyzer, dskey, detectorkey, estimatekey)
+        super(DriftSummaryTable, self).__init__(ws, self._create, results, dskey, detectorkey, estimatekey)
 
-    def _create(self, stabilityanalyzer, dskey, detectorkey, estimatekey):
+    def _create(self, results, dskey, detectorkey, estimatekey):
         colHeadings = ['', '', ]
         table = _reporttable.ReportTable(colHeadings, (None,) * len(colHeadings))
+        stabilityanalyzer = results.stabilityanalyzer
         table.add_row(['Global statistical significance level',
                       stabilityanalyzer.get_statistical_significance(detectorkey=detectorkey)], [None, None])
         table.add_row(['Instability detected', stabilityanalyzer.instability_detected(
@@ -78,13 +79,14 @@ class DriftDetailsTable(_ws.WorkspaceTable):
     todo
     """
 
-    def __init__(self, ws, stabilityanalyzer, detectorkey=None, estimatekey=None):
+    def __init__(self, ws, results, detectorkey=None, estimatekey=None):
         """
         todo
         """
-        super(DriftDetailsTable, self).__init__(ws, self._create, stabilityanalyzer, detectorkey, estimatekey)
+        super(DriftDetailsTable, self).__init__(ws, self._create, results, detectorkey, estimatekey)
 
-    def _create(self, stabilityanalyzer, detectorkey, estimatekey):
+    def _create(self, results, detectorkey, estimatekey):
+        stabilityanalyzer = results.stabilityanalyzer
         if detectorkey is None:
             detectorkey = stabilityanalyzer._def_detection
         if estimatekey is None:
@@ -109,16 +111,17 @@ class PowerSpectraPlot(_ws.WorkspacePlot):
     Plot of time-series data power spectrum
     """
 
-    def __init__(self, ws, stabilityanalyzer, spectrumlabel={}, detectorkey=None,
+    def __init__(self, ws, results, spectrumlabel={}, detectorkey=None,
                  showlegend=False, scale=1.0):
         """
         todo
         """
-        super(PowerSpectraPlot, self).__init__(ws, self._create, stabilityanalyzer,
+        super(PowerSpectraPlot, self).__init__(ws, self._create, results,
                                                spectrumlabel, detectorkey, showlegend, scale)
 
-    def _create(self, stabilityanalyzer, spectrumlabel, detectorkey, showlegend, scale):
+    def _create(self, results, spectrumlabel, detectorkey, showlegend, scale):
 
+        stabilityanalyzer = results.stabilityanalyzer
         circuits = spectrumlabel.get('circuit', None)
 
         # If we're plotting spectra for more than one circuit.
@@ -254,15 +257,17 @@ class GermFiducialPowerSpectraPlot(_ws.WorkspacePlot):
     Plot of time-series data power spectrum
     """
 
-    def __init__(self, ws, stabilityanalyzer, circuits, prep, germ, meas, dskey=None, detectorkey=None,
+    def __init__(self, ws, results, prep, germ, meas, dskey=None, detectorkey=None,
                  showlegend=False, scale=1.0):
         """
         todo
         """
-        super(GermFiducialPowerSpectraPlot, self).__init__(ws, self._create, stabilityanalyzer, circuits, prep, germ,
+        super(GermFiducialPowerSpectraPlot, self).__init__(ws, self._create, results, prep, germ,
                                                            meas, dskey, detectorkey, showlegend, scale)
 
-    def _create(self, stabilityanalyzer, circuits, prep, germ, meas, dskey, detectorkey, showlegend, scale):
+    def _create(self, results, prep, germ, meas, dskey, detectorkey, showlegend, scale):
+
+        stabilityanalyzer = results.stabilityanalyzer
 
         if isinstance(germ, str):
             germ = _Circuit(None, stringrep=germ)
@@ -276,22 +281,24 @@ class GermFiducialPowerSpectraPlot(_ws.WorkspacePlot):
                 "There is more than one DataSet, so must specify the `dskey`!"
             dskey = list(stabilityanalyzer.data.keys())[0]
 
-        circuit_struct = circuits.circuit_structure
-        prepind = circuit_struct.prep_fiducials.index(prep)
-        measind = circuit_struct.prep_fiducials.index(meas)
+        #Note: assumes a StandardGSTDesign as the experiment design (is this ok?)
+        edesign = results.data.edesign
+        circuit_struct = edesign.circuit_lists[-1]
+        prepind = edesign.prep_fiducials.index(prep)
+        measind = edesign.meas_fiducials.index(meas)
         circuitdict = {}
 
         #UNUSED: numL = len(circuit_struct.Ls)
         #UNUSED: colors = ['rgb' + str(tuple(i)) for i in _sns.color_palette("coolwarm", numL)]
-        for Lind, L in enumerate(circuit_struct.Ls):
-            for j, k, circuit in circuit_struct.get_plaquette(L, germ):
+        for Lind, L in enumerate(edesign.maxlengths):
+            for j, k, circuit in circuit_struct.plaquette(L, germ, empty_if_missing=True):
                 if j == prepind:
                     if k == measind:
                         circuitdict[L] = circuit
 
         spectrumlabel = {'dataset': dskey, 'circuit': circuitdict}
 
-        psp = PowerSpectraPlot(self.ws, stabilityanalyzer, spectrumlabel, detectorkey,
+        psp = PowerSpectraPlot(self.ws, results, spectrumlabel, detectorkey,
                                showlegend, scale)
         assert(len(psp.figs) == 1), "Only one figure should have been created!"
         return psp.figs[0]
@@ -443,7 +450,7 @@ class GermFiducialProbTrajectoriesPlot(_ws.WorkspacePlot):
     todo
     """
 
-    def __init__(self, ws, stabilityanalyzer, circuits, prep, germ, meas, outcome, min_length=1, times=None, dskey=None,
+    def __init__(self, ws, results, prep, germ, meas, outcome, min_length=1, times=None, dskey=None,
                  estimatekey=None, estimator=None, showlegend=False, scale=1.0):
         """
         todo
@@ -452,12 +459,14 @@ class GermFiducialProbTrajectoriesPlot(_ws.WorkspacePlot):
             Specifies the set of operation sequences along with their structure, e.g. fiducials, germs,
             and maximum lengths.
         """
-        super(GermFiducialProbTrajectoriesPlot, self).__init__(ws, self._create, stabilityanalyzer, circuits,
+        super(GermFiducialProbTrajectoriesPlot, self).__init__(ws, self._create, results,
                                                                prep, germ, meas, outcome, min_length, times,
                                                                dskey, estimatekey, estimator, showlegend, scale)
 
-    def _create(self, stabilityanalyzer, circuits, prep, germ, meas, outcome, min_length, times, dskey, estimatekey,
+    def _create(self, results, prep, germ, meas, outcome, min_length, times, dskey, estimatekey,
                 estimator, showlegend, scale):
+
+        stabilityanalyzer = results.stabilityanalyzer
 
         if isinstance(germ, str):
             germ = _Circuit(None, stringrep=germ)
@@ -466,22 +475,23 @@ class GermFiducialProbTrajectoriesPlot(_ws.WorkspacePlot):
         if isinstance(meas, str):
             meas = _Circuit(None, stringrep=meas)
 
-        circuit_struct = circuits.circuit_structure
-        prepind = circuit_struct.prep_fiducials.index(prep)
-        measind = circuit_struct.prep_fiducials.index(meas)
+        edesign = results.data.edesign
+        circuit_struct = edesign.circuit_lists[-1]
+        prepind = edesign.prep_fiducials.index(prep)
+        measind = edesign.meas_fiducials.index(meas)
         # data = []
         circuitsdict = {}
 
         truncatedL = []
-        for L in circuit_struct.Ls:
+        for L in edesign.maxlengths:
             if L >= min_length:
                 truncatedL.append(L)
 
         #numL = len(circuit_struct.Ls)
-        for Lind, L in enumerate(circuit_struct.Ls):
+        for Lind, L in enumerate(edesign.maxlengths):
             if L >= min_length:
                 #trace_pt = None
-                for j, k, circuit in circuit_struct.get_plaquette(L, germ):
+                for j, k, circuit in circuit_struct.plaquette(L, germ, empty_if_missing=True):
                     if j == prepind:
                         if k == measind:
                             circuitsdict[L] = circuit
@@ -534,19 +544,21 @@ def _create_switchboard(ws, results_dict):
     return switchBd, dataset_labels
 
 
-def _create_drift_switchboard(ws, results, circuits):
+def _create_drift_switchboard(ws, results):
     """
     todo
     """
-    circuit_struct = circuits.circuit_structure
-    if len(results.data.keys()) > 1:  # multidataset
+    edesign = results.data.edesign
+    stabilityanalyzer = results.stabilityanalyzer
+
+    if len(stabilityanalyzer.data.keys()) > 1:  # multidataset
         drift_switchBd = ws.Switchboard(
             ["Dataset              ", "Germ                 ", "Preparation Fiducial ", "Measurement Fiducial",
              "Outcome             "],
-            [list(results.data.keys()), [c.str for c in circuit_struct.germs],
-             [c.str for c in circuit_struct.prep_fiducials],
-             [c.str for c in circuit_struct.meas_fiducials],
-             [i.str for i in results.data.outcome_labels]],
+            [list(results.data.keys()), [c.str for c in edesign.germs],
+             [c.str for c in edesign.prep_fiducials],
+             [c.str for c in edesign.meas_fiducials],
+             [i.str for i in stabilityanalyzer.data.outcome_labels]],
             ["dropdown", "dropdown", "dropdown", "dropdown", "dropdown"], [0, 1, 0, 0, 0],
             show=[True, True, True, True, True])
         drift_switchBd.add("dataset", (0,))
@@ -558,18 +570,18 @@ def _create_drift_switchboard(ws, results, circuits):
     else:
         drift_switchBd = ws.Switchboard(
             ["Germ", "Preperation Fiducial", "Measurement Fiducial", "Outcome"],
-            [[c.str for c in circuit_struct.germs], [c.str for c in circuit_struct.prep_fiducials],
-             [c.str for c in circuit_struct.meas_fiducials], [str(o) for o in results.data.outcome_labels]],
+            [[c.str for c in edesign.germs], [c.str for c in edesign.prep_fiducials],
+             [c.str for c in edesign.meas_fiducials], [str(o) for o in stabilityanalyzer.data.outcome_labels]],
             ["dropdown", "dropdown", "dropdown", "dropdown"], [0, 0, 0, 0], show=[True, True, True, True])
         drift_switchBd.add("germs", (0,))
         drift_switchBd.add("prep_fiducials", (1,))
         drift_switchBd.add("meas_fiducials", (2,))
         drift_switchBd.add("outcomes", (3,))
 
-        drift_switchBd.germs[:] = circuit_struct.germs
-        drift_switchBd.prep_fiducials[:] = circuit_struct.prep_fiducials
-        drift_switchBd.meas_fiducials[:] = circuit_struct.meas_fiducials
-        drift_switchBd.outcomes[:] = results.data.outcome_labels
+        drift_switchBd.germs[:] = edesign.germs
+        drift_switchBd.prep_fiducials[:] = edesign.prep_fiducials
+        drift_switchBd.meas_fiducials[:] = edesign.meas_fiducials
+        drift_switchBd.outcomes[:] = stabilityanalyzer.data.outcome_labels
 
     return drift_switchBd
 

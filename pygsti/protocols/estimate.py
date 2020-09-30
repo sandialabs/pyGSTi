@@ -537,7 +537,7 @@ class Estimate(object):
             else:
                 return p.dataset
 
-    def misfit_sigma(self, use_accurate_np=False, comm=None):
+    def misfit_sigma(self, comm=None):
         """
         Returns the number of standard deviations (sigma) of model violation.
 
@@ -568,10 +568,8 @@ class Estimate(object):
 
         ds_allstrs = _tools.apply_aliases_to_circuits(circuit_list, aliases)
         ds_dof = ds.degrees_of_freedom(ds_allstrs)  # number of independent parameters in dataset
-        if hasattr(mdl, 'num_nongauge_params'):
-            mdl_dof = mdl.num_nongauge_params if use_accurate_np else mdl.num_params
-        else:
-            mdl_dof = mdl.num_params
+        mdl_dof = mdl.num_modeltest_params
+
         k = max(ds_dof - mdl_dof, 1)  # expected chi^2 or 2*(logL_ub-logl) mean
         if ds_dof <= mdl_dof: _warnings.warn("Max-model params (%d) <= model params (%d)!  Using k == 1."
                                              % (ds_dof, mdl_dof))

@@ -1620,7 +1620,7 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options,
     printer = _objs.VerbosityPrinter.create_printer(verbosity, comm)
 
     if badfit_options.threshold is not None and \
-       base_estimate.misfit_sigma(use_accurate_np=True, comm=comm) <= badfit_options.threshold:
+       base_estimate.misfit_sigma(comm=comm) <= badfit_options.threshold:
         return  # fit is good enough - no need to add any estimates
 
     assert(parameters.get('weights', None) is None), \
@@ -1646,8 +1646,11 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options,
 
         elif badfit_typ == "wildcard":
             try:
-                unmodeled = _compute_wildcard_budget(mdc_store, parameters, badfit_options, printer - 1)
+                unmodeled, active_constraint_list = \
+                    _compute_wildcard_budget(mdc_store, parameters, badfit_options, printer - 1)
                 base_estimate.parameters[badfit_options.wildcard_budget_keyname] = unmodeled
+                base_estimate.parameters[badfit_options.wildcard_budget_keyname + " active constraints"] \
+                    = active_constraint_list
             except NotImplementedError as e:
                 printer.warning("Failed to get wildcard budget - continuing anyway.  Error was:\n" + str(e))
                 new_params['unmodeled_error'] = None
@@ -1831,8 +1834,8 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
 
     ds_dof = ds.degrees_of_freedom(circuits_to_use)  # number of independent parameters
     # in dataset (max. model # of params)
-    nparams = model.num_params  # just use total number of params
-    percentile = 0.05; nboxes = len(circuits_to_use)
+    nparams = model.num_modeltest_params  # just use total number of params
+    percentile = 0.025; nboxes = len(circuits_to_use)
     two_dlogl_threshold = _chi2.ppf(1 - percentile, ds_dof - nparams)
     redbox_threshold = _chi2.ppf(1 - percentile / nboxes, 1)
     # if p is prob that box is red and there are N boxes, then prob of no red boxes is q = (1-p)^N ~= 1-p*N
@@ -1880,7 +1883,7 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
         # Note: evaluate objfn before passing to wildcard fn init so internal probs are init
         dlogl_percircuit = objfn.percircuit(model.to_vector())
 
-        bNew = True  # Enable the experimental new code to test better (hopefully) methods of computing the wildcard budget
+        bNew = False  # Enable the experimental new code to test better (hopefully) methods of computing the wildcard budget
         if bNew:
             #Begin with a zero budget
             initial_probs = objfn.probs.copy()
@@ -2773,6 +2776,15 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
             return max(0, two_dlogl - two_dlogl_threshold) \
                 + sum(_np.clip(two_dlogl_percircuit - redbox_threshold, 0, None))
 
+        def _evaluate_constraints(wv):
+            dlogl_elements = logl_wildcard_fn.lsvec(wv)**2  # b/c WC fn only has sqrt of terms implemented now
+            for i in range(num_circuits):
+                dlogl_percircuit[i] = _np.sum(dlogl_elements[layout.indices_for_index(i)], axis=0)
+
+            two_dlogl_percircuit = 2 * dlogl_percircuit
+            two_dlogl = sum(two_dlogl_percircuit)
+            return max(0, two_dlogl - two_dlogl_threshold), _np.clip(two_dlogl_percircuit - redbox_threshold, 0, None)
+
         ##For debugging wildcard (see below for suggested insertion point)
         #def _wildcard_objective_firstterms_debug(wv):
         #    dlogl_elements = logl_wildcard_fn.lsvec(wv)**2  # b/c WC fn only has sqrt of terms implemented now
@@ -2874,10 +2886,74 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
 
     #print("Wildcard budget found for wvec = ",wvec)
     #print("FINAL Wildcard budget = ", str(budget))
-    budget.from_vector(wvec)
+
+    # Test that the found wildcard budget is admissable (there is not a strictly smaller wildcard budget
+    # that also satisfies the constraints), and while doing this find the active constraints.
+    printer.log("VERIFYING that the final wildcard budget vector is admissable")
+    active_constraints_list = []
+    for w_ind, w_ele in enumerate(wvec):
+        active_constraints = {}
+        strictly_smaller_wvec = wvec.copy()
+        if abs(w_ele) > 1e-6:  # Use absolute values everywhere, as wildcard vector is allowed to be negative.
+            strictly_smaller_wvec[w_ind] = 0.99 * abs(w_ele)  # Decrease the vector element by 1%.
+            printer.log(" - Trialing strictly smaller vector, with element %.3g reduced from %.3g to %.3g" %
+                        (w_ind, w_ele, strictly_smaller_wvec[w_ind]))
+            glob_constraint, percircuit_constraint = _evaluate_constraints(strictly_smaller_wvec)
+            if glob_constraint + _np.sum(percircuit_constraint) < 1e-4:
+
+                toprint = "   - Constraints still satisfied, budget NOT ADMISSABLE! Global = %.3g, \
+                                max per-circuit = %.3g " % (glob_constraint, _np.max(percircuit_constraint))
+                # Throw an error if we are optimizing since this shouldn't happen then, otherwise just notify user
+                if badfit_options.optimize_initial_budget:
+                    raise ValueError(toprint)
+                else:
+                    printer.log(toprint)
+            else:
+                printer.log("   - Constraints (correctly) no longer satisfied! Global = %.3g, max per-circuit = %.3g " %
+                            (glob_constraint, _np.max(percircuit_constraint)))
+
+            circ_ind_max = _np.argmax(percircuit_constraint)
+            if glob_constraint > 0:
+                active_constraints['global'] = glob_constraint,
+            if percircuit_constraint[circ_ind_max] > 0:
+                active_constraints['percircuit'] = (circ_ind_max, layout.circuits[circ_ind_max], percircuit_constraint[circ_ind_max])
+        else:
+            if badfit_options.optimize_initial_budget:
+                printer.log(" - Element %.3g is %.3g. This is below 10^-6, so trialing snapping to zero and updating." %
+                            (w_ind, w_ele))
+                strictly_smaller_wvec[w_ind] = 0.
+                glob_constraint, percircuit_constraint = _evaluate_constraints(strictly_smaller_wvec)
+                if glob_constraint + _np.sum(percircuit_constraint) < 1e-4:
+                    printer.log("   - Snapping to zero accepted!")
+                    wvec = strictly_smaller_wvec.copy()
+                else:
+                    printer.log("   - Snapping to zero NOT accepted! Global = %.3g, max per-circuit = %.3g " %
+                                (glob_constraint, _np.max(percircuit_constraint)))
+            else:
+                # We do this instead when we're not optimizing the budget, as otherwise we'd be changing the budget.
+                printer.log(" - Skipping trialing reducing element %.3g below %.3g, as it is less than 10^-6" %
+                            (w_ind, w_ele))
+        active_constraints_list.append(active_constraints)
+
+    # Note: active_constraints_list is typically stored in parameters['unmodeled_error active constraints']
+    # of the relevant Estimate object.
+    primOp_labels = _collections.defaultdict(list)
+    for lbl, i in budget.primOpLookup.items(): primOp_labels[i].append(str(lbl))
+    for i, active_constraints in enumerate(active_constraints_list):
+        if active_constraints:
+            printer.log("** ACTIVE constraints for " + "--".join(primOp_labels[i]) + " **")
+            if 'global' in active_constraints:
+                printer.log("   global constraint:" + str(active_constraints['global']))
+            if 'percircuit' in active_constraints:
+                _, circuit, constraint_amt = active_constraints['percircuit']
+                printer.log("   per-circuit constraint:" + circuit.str + " = " + str(constraint_amt))
+        else:
+            printer.log("(no active constraints for " + "--".join(primOp_labels[i]) + ")")
+
+    budget.from_vector(abs(wvec))  # OK to abs(wvec) b/c we assume all its elements are positive above
     printer.log("FINAL wildcard budget = %s" % str(budget))
-    print("COMPARE with wvnew = ", wv_new)
-    return budget
+    #print("COMPARE with wvnew = ", wv_new)
+    return budget, active_constraints_list
 
 
 def _reoptimize_with_weights(mdc_store, circuit_weights_dict, objfn_builder, optimizer, verbosity):
