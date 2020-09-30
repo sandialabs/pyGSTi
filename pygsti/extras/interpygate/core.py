@@ -321,6 +321,7 @@ class PhysicalProcess(object):
                 else:
                     data_by_time = self.from_vector_physical(point)
 
+                # "data_by_time or []" is because "data_by_time" might be None and you can't iterate over None
                 generators_by_times = [self._error_generator_from_gate(gate, v=point) for gate in data_by_time or []]
                 data[ind] = generators_by_times
                 if self.has_auxdata:
