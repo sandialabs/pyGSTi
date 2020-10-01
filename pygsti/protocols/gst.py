@@ -512,6 +512,7 @@ class GSTBadFitOptions(object):
         self.wildcard_initial_budget = wildcard_initial_budget
         self.wildcard_methods = wildcard_methods
 
+
 class GSTObjFnBuilders(object):
     """
     Holds the objective-function builders needed for long-sequence GST.

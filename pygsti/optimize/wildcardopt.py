@@ -839,7 +839,7 @@ def NewtonSolve(initial_x, fn, fn_with_derivs=None, dx_tol=1e-6, max_iters=20, p
         x = _np.clip(x, 0, None)
         x_list.append(x.copy())
         i += 1
-        if norm_dx < dx_tol: break  # norm_Dobj < 1e-4 or 
+        if norm_dx < dx_tol: break  # norm_Dobj < 1e-4 or
     if i == max_iters and printer:
         printer.log("WARNING: max iterations exceeded!!!")
     return x, x_list
