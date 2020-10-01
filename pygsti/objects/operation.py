@@ -5795,7 +5795,8 @@ class EmbeddedOp(LinearOperator):
             qubit_indices = _np.array([qubitLabels.index(targetLbl)
                                        for targetLbl in target_labels], _np.int64)
 
-            nQubits = int(round(_np.log2(opDim)))
+            nQubits = self.state_space_labels.nqubits
+            assert(nQubits is not None), "State space does not contain a definite number of qubits!"
             rep = replib.SBOpRepEmbedded(self.embedded_op._rep,
                                          nQubits, qubit_indices)
 
