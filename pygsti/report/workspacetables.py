@@ -419,15 +419,15 @@ class GatesTable(WorkspaceTable):
         for gl in opLabels:
             # may want to gracefully handle index error here?
             tup_of_ops = tuple([model.operations[gl] for model in models])
-            label_op_tups.append((gl, tup_of_ops))
+            label_op_tups.append((gl, None, tup_of_ops))
         for il in instLabels:
             for comp_lbl in models[0].instruments[il].keys():
                 tup_of_ops = tuple([model.instruments[il][comp_lbl] for model in models]
                                    )  # may want to gracefully handle index error here?
-                label_op_tups.append((il + "." + comp_lbl, tup_of_ops))
+                label_op_tups.append((il, comp_lbl, tup_of_ops))
 
-        for lbl, per_model_ops in label_op_tups:
-            row_data = [lbl]
+        for lbl, comp_lbl, per_model_ops in label_op_tups:
+            row_data = [lbl if (comp_lbl is None) else (lbl + '.' + comp_lbl)]
             row_formatters = [None]
 
             for model, op in zip(models, per_model_ops):
@@ -448,7 +448,8 @@ class GatesTable(WorkspaceTable):
 
             if confidence_region_info is not None:
                 intervalVec = confidence_region_info.retrieve_profile_likelihood_confidence_intervals(
-                    lbl)[:, None]  # TODO: won't work for instruments
+                    lbl, comp_lbl)[:, None]
+
                 if isinstance(per_model_ops[-1], _objs.FullDenseOp):
                     #then we know how to reshape into a matrix
                     op_dim = models[-1].dim
@@ -1249,26 +1250,14 @@ class GatesVsTargetTable(WorkspaceTable):
                             wildcard.budget_for(il)))
                     continue  # Note: don't append anything if 'not wildcard'
 
-                if disp == "inf":
-                    sqrt_component_fidelities = [_np.sqrt(_reportables.entanglement_fidelity(inst[l], tinst[l], basis))
-                                                 for l in inst.keys()]
-                    qty = 1 - sum(sqrt_component_fidelities)**2
-                    row_data.append(_objs.reportableqty.ReportableQty(qty))
-
-                elif disp == "diamond":
-                    nComps = len(inst.keys())
-                    tpbasis = _DirectSumBasis([basis] * nComps)
-                    composite_op = _np.zeros((inst.dim * nComps, inst.dim * nComps), 'd')
-                    composite_top = _np.zeros((inst.dim * nComps, inst.dim * nComps), 'd')
-                    for i, clbl in enumerate(inst.keys()):
-                        a, b = i * inst.dim, (i + 1) * inst.dim
-                        composite_op[a:b, a:b] = inst[clbl].to_dense()
-                        composite_top[a:b, a:b] = tinst[clbl].to_dense()
-                        qty = _reportables.half_diamond_norm(composite_op, composite_top, tpbasis)
-                    row_data.append(_objs.reportableqty.ReportableQty(qty))
-
+                if target_model is None:
+                    qty = _objs.reportableqty.ReportableQty(_np.nan)
                 else:
-                    row_data.append(_objs.reportableqty.ReportableQty(_np.nan))
+                    qty = _reportables.evaluate_instrumentfn_by_name(
+                        disp, model, target_model, il, confidence_region_info)
+                #tm = _time.time()-tStart #DEBUG
+                #if tm > 0.01: print("DB: Evaluated %s in %gs" % (disp, tm)) #DEBUG
+                row_data.append(qty)
 
             table.add_row(row_data, formatters)
 

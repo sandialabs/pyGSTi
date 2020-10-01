@@ -2441,3 +2441,102 @@ def evaluate_opfn_by_name(name, model, target_model, op_label_or_string,
             Circuit_fro_diff
 
     return evaluate(fn(model, target_model, gl), confidence_region_info)
+
+
+def instrument_infidelity(a, b, mx_basis):
+    """
+    Infidelity between instruments a and b
+
+    Parameters
+    ----------
+    a : Instrument
+        The first instrument.
+
+    b : Instrument
+        The second instrument.
+
+    mx_basis : Basis or {'pp', 'gm', 'std'}
+        the basis that `a` and `b` are in.
+
+    Returns
+    -------
+    float
+    """
+    sqrt_component_fidelities = [_np.sqrt(entanglement_fidelity(a[l], b[l], mx_basis))
+                                 for l in a.keys()]
+    return 1 - sum(sqrt_component_fidelities)**2
+
+
+Instrument_infidelity = _modf.instrumentfn_factory(instrument_infidelity)
+# init args == (model1, model2, instrument_label)
+
+
+def instrument_half_diamond_norm(a, b, mx_basis):
+    """
+    The diamond norm distance between instruments a and b.
+
+    Parameters
+    ----------
+    a : Instrument
+        The first instrument.
+
+    b : Instrument
+        The second instrument.
+
+    mx_basis : Basis or {'pp', 'gm', 'std'}
+        the basis that `a` and `b` are in.
+
+    Returns
+    -------
+    float
+    """
+    nComps = len(a.keys())
+    tpbasis = _DirectSumBasis([mx_basis] * nComps)
+    composite_op = _np.zeros((a.dim * nComps, a.dim * nComps), 'd')
+    composite_top = _np.zeros((a.dim * nComps, a.dim * nComps), 'd')
+    for i, clbl in enumerate(a.keys()):
+        aa, bb = i * a.dim, (i + 1) * a.dim
+        composite_op[aa:bb, aa:bb] = a[clbl].to_dense()
+        composite_top[aa:bb, aa:bb] = b[clbl].to_dense()
+    return half_diamond_norm(composite_op, composite_top, tpbasis)
+
+Instrument_half_diamond_norm = _modf.instrumentfn_factory(instrument_half_diamond_norm)
+# init args == (model1, model2, instrument_label)
+
+
+def evaluate_instrumentfn_by_name(name, model, target_model, inst_label,
+                                  confidence_region_info):
+    """
+    Evaluates that instrument-function named by the abbreviation `name`.
+
+    Parameters
+    ----------
+    name : str
+        An appreviation for a operation-function name.  Allowed values are the
+        same as those of :func:`info_of_opfn_by_name`.
+
+    model : Model
+        The model used by the operation-function.
+
+    target_model : Model
+        The target model.
+
+    inst_label : Label
+        The instrument label to compare.
+
+    confidence_region_info : ConfidenceRegion, optional
+        If not None, specifies a confidence-region  used to compute error
+        intervals.
+
+    Returns
+    -------
+    ReportableQty
+    """
+    if name == "inf":
+        fn = Instrument_infidelity
+    elif name == "diamond":
+        fn = Instrument_half_diamond_norm
+    else:
+        return _ReportableQty(_np.nan)
+
+    return evaluate(fn(model, target_model, inst_label), confidence_region_info)

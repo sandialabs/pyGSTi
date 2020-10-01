@@ -240,6 +240,47 @@ def opsfn_factory(fn):
     return GSFTemp
 
 
+def instrumentfn_factory(fn):
+    """
+    Creates a class that evaluates `fn(instrument1,instrument2,basis,...)`.
+
+    Here `instrument1` and `instrument2` are a :class:`Instrument`s, `basis`
+    describes what basis they're in, and `...` are additional arguments (see below).
+
+    Parameters
+    ----------
+    fn : function
+        A function of at least the two parameters as discussed above.
+
+    Returns
+    -------
+    cls : class
+        A :class:`ModelFunction`-derived class initialized by
+        `cls(model1, model2, gl, ...)` where `model1` and `model2` are
+        Models (only `model1` and `op1` are varied when computing a
+        confidence region), `gl` is a operation label, and `...` are optional
+        additional arguments passed to `fn`.
+    """
+    class GSFTemp(ModelFunction):
+        """ ModelFunction class created by opsfn_factory """
+
+        def __init__(self, model1, model2, instrument_lbl, *args, **kwargs):
+            """ Creates a new ModelFunction dependent on a single gate"""
+            self.other_model = model2
+            self.il = instrument_lbl
+            self.args = args
+            self.kwargs = kwargs
+            ModelFunction.__init__(self, model1, [("instrument", instrument_lbl)])
+
+        def evaluate(self, model):
+            """ Evaluate this model-function at `model`."""
+            return fn(model.instruments[self.il], self.other_model.instruments[self.il],
+                      model.basis, *self.args, **self.kwargs)  # assume functions want *dense* gates
+
+    GSFTemp.__name__ = fn.__name__ + str("_class")
+    return GSFTemp
+
+
 def vecfn_factory(fn):
     """
     Creates a class that evaluates `fn(vec,basis,...)`.
