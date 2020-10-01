@@ -13,7 +13,7 @@ Wildcard budget fitting routines
 import numpy as _np
 import pickle as _pickle
 from ..objects.wildcardbudget import update_circuit_probs as _update_circuit_probs
-from .. import optimize as _opt
+from .optimize import minimize as _minimize
 
 
 def optimize_wildcard_budget_neldermead(budget, L1weights, wildcard_objfn, layout, two_dlogl_threshold,
@@ -120,10 +120,10 @@ def optimize_wildcard_budget_neldermead(budget, L1weights, wildcard_objfn, layou
         #                     method='Nelder-Mead', callback=callbackf, tol=1e-6)
         #if not soln.success:
         #    _warnings.warn("Nelder-Mead optimization failed to converge!")
-        soln = _opt.minimize(_wildcard_objective, wvec_init, 'supersimplex',
-                             callback=callbackf, maxiter=10, tol=1e-2, abs_outer_tol=1e-4,
-                             min_inner_maxiter=1000, max_inner_maxiter=1000, inner_tol=1e-6,
-                             verbosity=printer)
+        soln = _minimize(_wildcard_objective, wvec_init, 'supersimplex',
+                         callback=callbackf, maxiter=10, tol=1e-2, abs_outer_tol=1e-4,
+                         min_inner_maxiter=1000, max_inner_maxiter=1000, inner_tol=1e-6,
+                         verbosity=printer)
         wvec = soln.x
         fit_penalty = _wildcard_fit_criteria(wvec)
         #printer.log("  Firstterms value = %g" % firstTerms)

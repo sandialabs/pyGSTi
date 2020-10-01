@@ -41,7 +41,6 @@ from ..objects.circuitlist import CircuitList as _CircuitList
 from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
 from ..objects.termforwardsim import TermForwardSimulator as _TermFSim
 from ..objects.objectivefns import ModelDatasetCircuitsStore as _ModelDatasetCircuitStore
-from pygsti.protocols import wildcard_opt as _wildcardopt
 
 
 #For results object:
@@ -1903,27 +1902,27 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
 
                 #Run the method
                 if method_name == "neldermead":
-                    _wildcardopt.optimize_wildcard_budget_neldermead(budget, L1weights, logl_wildcard_fn, layout,
-                                                                     two_dlogl_threshold, redbox_threshold, printer,
-                                                                     **method_options)
+                    _opt.optimize_wildcard_budget_neldermead(budget, L1weights, logl_wildcard_fn, layout,
+                                                             two_dlogl_threshold, redbox_threshold, printer,
+                                                             **method_options)
                 elif method_name == "barrier":
-                    _wildcardopt.optimize_wildcard_budget_barrier(budget, L1weights, objfn, layout, two_dlogl_threshold,
-                                                                  redbox_threshold, printer, **method_options)
+                    _opt.optimize_wildcard_budget_barrier(budget, L1weights, objfn, layout, two_dlogl_threshold,
+                                                          redbox_threshold, printer, **method_options)
                 elif method_name == "cvxopt":
-                    _wildcardopt.optimize_wildcard_budget_cvxopt(budget, L1weights, objfn, layout, two_dlogl_threshold,
-                                                                 redbox_threshold, printer, **method_options)
+                    _opt.optimize_wildcard_budget_cvxopt(budget, L1weights, objfn, layout, two_dlogl_threshold,
+                                                         redbox_threshold, printer, **method_options)
                 elif method_name == "cvxopt_smoothed":
-                    _wildcardopt.optimize_wildcard_budget_cvxopt_smoothed(budget, L1weights, objfn, layout,
-                                                                          two_dlogl_threshold, redbox_threshold,
-                                                                          printer, **method_options)
+                    _opt.optimize_wildcard_budget_cvxopt_smoothed(budget, L1weights, objfn, layout,
+                                                                  two_dlogl_threshold, redbox_threshold,
+                                                                  printer, **method_options)
                 elif method_name == "cvxopt_small":
-                    _wildcardopt.optimize_wildcard_budget_cvxopt_zeroreg(budget, L1weights, objfn, layout,
-                                                                         two_dlogl_threshold, redbox_threshold, printer,
-                                                                         **method_options)
+                    _opt.optimize_wildcard_budget_cvxopt_zeroreg(budget, L1weights, objfn, layout,
+                                                                 two_dlogl_threshold, redbox_threshold, printer,
+                                                                 **method_options)
                 elif method_name == "cvxpy_noagg":
-                    _wildcardopt.optimize_wildcard_budget_percircuit_only_cvxpy(budget, L1weights, objfn, layout,
-                                                                                redbox_threshold, printer,
-                                                                                **method_options)
+                    _opt.optimize_wildcard_budget_percircuit_only_cvxpy(budget, L1weights, objfn, layout,
+                                                                        redbox_threshold, printer,
+                                                                        **method_options)
                 elif method_name == "none":
                     pass
                 else:
