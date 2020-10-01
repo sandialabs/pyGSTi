@@ -1888,15 +1888,22 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
         if bNew:
             print(" ------------------- using new experimental methods --------------------------- ")
             wv_orig = budget.to_vector()
+            budget.from_vector(_np.array([0.01] * len(wv_orig)))  # just a guess at a nice starting point
             #_wildcardopt.optimize_wildcard_budget_barrier(budget, L1weights, objfn, layout, two_dlogl_threshold,
-            #                                              redbox_threshold, use_proxy_fn=False,
-            #                                              save_debugplot_data=True)
-            _wildcardopt.optimize_wildcard_budget_cvxopt(budget, L1weights, objfn, layout, two_dlogl_threshold,
-                                                         redbox_threshold)
+            #                                              redbox_threshold, tol=1e-6, max_iters=50,
+            #                                              save_debugplot_data=False)
+            #_wildcardopt.optimize_wildcard_budget_cvxopt(budget, L1weights, objfn, layout, two_dlogl_threshold,
+            #                                             redbox_threshold)
+            _wildcardopt.optimize_wildcard_budget_cvxopt_smoothed(budget, L1weights, objfn, layout, two_dlogl_threshold,
+                                                                  redbox_threshold)
+            #_wildcardopt.optimize_wildcard_budget_cvxopt_SMALL(budget, L1weights, objfn, layout, two_dlogl_threshold,
+            #                                                   redbox_threshold, SMALL=1e-5)
+            #_wildcardopt.optimize_wildcard_budget_percircuit_only_cvxpy(budget, L1weights, objfn, layout,
+            #                                                            redbox_threshold)
             wv_new = budget.to_vector()
             budget.from_vector(wv_orig) #restore original (pre-experimental stuff) budget before carrying on
             print(" ------------------- continuing using old method --------------------------- ")
-        
+
         logl_wildcard_fn = _objfns.LogLWildcardFunction(objfn, model.to_vector(), budget)
         num_circuits = len(circuits_to_use)
         assert(len(dlogl_percircuit) == num_circuits)
@@ -2036,8 +2043,8 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
             glob_constraint, percircuit_constraint = _evaluate_constraints(strictly_smaller_wvec)
             if glob_constraint + _np.sum(percircuit_constraint) < 1e-4:
 
-                toprint = "   - Constraints still satisfied, budget NOT ADMISSABLE! Global = %.3g, \
-                                max per-circuit = %.3g " % (glob_constraint, _np.max(percircuit_constraint))
+                toprint = ("   - Constraints still satisfied, budget NOT ADMISSABLE! Global = %.3g,"
+                           " max per-circuit = %.3g ") % (glob_constraint, _np.max(percircuit_constraint))
                 # Throw an error if we are optimizing since this shouldn't happen then, otherwise just notify user
                 if badfit_options.optimize_initial_budget:
                     raise ValueError(toprint)
