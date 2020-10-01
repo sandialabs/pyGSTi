@@ -103,7 +103,7 @@ class ProcessorSpec(object):
     """
 
     def __init__(self, num_qubits, gate_names, nonstd_gate_unitaries={}, availability={},
-                 qubit_labels=None, construct_models=('clifford', 'target'),
+                 qubit_labels=None, construct_models=(),
                  construct_clifford_compilations={'paulieq': ('1Qcliffords', 'allcnots'),
                                                   'absolute': ('paulis', '1Qcliffords')}, verbosity=0):
         """
@@ -163,10 +163,11 @@ class ProcessorSpec(object):
             valid way on the qubits (e.g., the device does not have all-to-all connectivity).
 
         construct_models : tuple, optional
-            Standard model for the gates to add.
+            Standard models for the gates to add.
                 - If 'target' is in the tuple, "target" process matrices corresponding to ideal gates are added.
                 - If 'clifford' is in the tuple, the Clifford gates in the model are represented in their efficient-in-n
                 symplectic form (these are reps. of perfect gates).
+            See :method:`add_std_model` for a complete description of allowed model names.
 
         construct_clifford_compilations : dict, optional
             The compilations for "standard" Clifford gates that are constructed. These are mostly only of importance for
