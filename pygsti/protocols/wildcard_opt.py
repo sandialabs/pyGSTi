@@ -1,11 +1,149 @@
-
+"""
+Wildcard budget fitting routines
+"""
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
 
 import numpy as _np
 import pickle as _pickle
 from ..objects.wildcardbudget import update_circuit_probs as _update_circuit_probs
+from .. import optimize as _opt
 
 
-def optimize_wildcard_budget_percircuit_only_cvxpy(budget, L1weights, objfn, layout, redbox_threshold):
+def optimize_wildcard_budget_neldermead(budget, L1weights, wildcard_objfn, layout, two_dlogl_threshold,
+                                        redbox_threshold, printer, smart_init=True, max_outer_iters=10,
+                                        initial_eta=10.0):
+    """
+    Uses repeated Nelder-Mead to optimize the wildcard budget.
+    Includes both aggregate and per-circuit constraints.
+    """
+    objfn = wildcard_objfn.logl_objfn
+
+    num_circuits = len(layout.circuits)
+    dlogl_percircuit = objfn.percircuit()
+    assert(len(dlogl_percircuit) == num_circuits)
+
+    def L1term(wv): return _np.sum(_np.abs(wv) * L1weights)
+
+    def _wildcard_fit_criteria(wv):
+        dlogl_elements = wildcard_objfn.lsvec(wv)**2  # b/c WC fn only has sqrt of terms implemented now
+        for i in range(num_circuits):
+            dlogl_percircuit[i] = _np.sum(dlogl_elements[layout.indices_for_index(i)], axis=0)
+
+        two_dlogl_percircuit = 2 * dlogl_percircuit
+        two_dlogl = sum(two_dlogl_percircuit)
+        return max(0, two_dlogl - two_dlogl_threshold) \
+            + sum(_np.clip(two_dlogl_percircuit - redbox_threshold, 0, None))
+
+    ##For debugging wildcard (see below for suggested insertion point)
+    #def _wildcard_fit_criteria_debug(wv):
+    #    dlogl_elements = logl_wildcard_fn.lsvec(wv)**2  # b/c WC fn only has sqrt of terms implemented now
+    #    for i in range(num_circuits):
+    #        dlogl_percircuit[i] = _np.sum(dlogl_elements[layout.indices_for_index(i)], axis=0)
+    #    two_dlogl_percircuit = 2 * dlogl_percircuit
+    #    two_dlogl = sum(two_dlogl_percircuit)
+    #    print("Aggregate penalty = ", two_dlogl, "-", two_dlogl_threshold, "=", two_dlogl - two_dlogl_threshold)
+    #    print("Per-circuit (redbox) penalty = ", sum(_np.clip(two_dlogl_percircuit - redbox_threshold, 0, None)))
+    #    print(" per-circuit threshold = ", redbox_threshold, " highest violators = ")
+    #    sorted_percircuit = sorted(enumerate(two_dlogl_percircuit), key=lambda x: x[1], reverse=True)
+    #    print('\n'.join(["(%d) %s: %g" % (i, layout.circuits[i].str, val) for i, val in sorted_percircuit[0:10]]))
+
+    num_iters = 0
+    wvec_init = budget.to_vector()
+
+    # Optional: set initial wildcard budget by pushing on each Wvec component individually
+    if smart_init:
+        MULT = 2                                                                                                    # noqa
+        probe = wvec_init.copy()
+        for i in range(len(wvec_init)):
+            #print("-------- Index ----------", i)
+            wv = wvec_init.copy()
+            #See how big Wv[i] needs to get before penalty stops decreasing
+            last_penalty = 1e100; fit_penalty = 0.9e100
+            delta = 1e-6
+            while fit_penalty < last_penalty:
+                wv[i] = delta
+                last_penalty = fit_penalty
+                fit_penalty = _wildcard_fit_criteria(wv)
+                #print("  delta=%g  => penalty = %g" % (delta, penalty))
+                delta *= MULT
+            probe[i] = delta / MULT**2
+            #print(" ==> Probe[%d] = %g" % (i, probe[i]))
+
+        probe /= len(wvec_init)  # heuristic: set as new init point
+        budget.from_vector(probe)
+        wvec_init = budget.to_vector()
+
+    printer.log("Beginning Nelder-Mead wildcard budget optimization.")
+    #printer.log("Initial budget (smart_init=%s) = %s" % (str(smart_init), str(budget)))
+
+    # Find a value of eta that is small enough that the "first terms" are 0.
+    eta = initial_eta  # some default starting value - this *shouldn't* really matter
+    while num_iters < max_outer_iters:
+        printer.log("  Iter %d: trying eta = %g" % (num_iters, eta))
+
+        def _wildcard_objective(wv):
+            return _wildcard_fit_criteria(wv) + eta * L1term(wv)
+
+        #TODO REMOVE
+        #import bpdb; bpdb.set_trace()
+        #Wvec_init[:] = 0.0; print("TEST budget 0\n", _wildcard_objective(Wvec_init))
+        #Wvec_init[:] = 1e-5; print("TEST budget 1e-5\n", _wildcard_objective(Wvec_init))
+        #Wvec_init[:] = 0.1; print("TEST budget 0.1\n", _wildcard_objective(Wvec_init))
+        #Wvec_init[:] = 1.0; print("TEST budget 1.0\n", _wildcard_objective(Wvec_init))
+
+        if printer.verbosity > 1:
+            printer.log(("NOTE: optimizing wildcard budget with verbose progress messages"
+                         " - this *increases* the runtime significantly."), 2)
+
+            def callbackf(wv):
+                a, b = _wildcard_fit_criteria(wv), eta * L1term(wv)
+                printer.log('wildcard: misfit + L1_reg = %.3g + %.3g = %.3g Wvec=%s' %
+                            (a, b, a + b, str(wv)), 2)
+        else:
+            callbackf = None
+
+        #DEBUG: If you need to debug a wildcard budget, uncommend the function above and try this:
+        # import bpdb; bpdb.set_trace()
+        # wv_test = _np.array([5e-1, 5e-1, 5e-1, 5e-1, 0.2])  # trial budget
+        # _wildcard_fit_criteria_debug(wv_test)  # try this
+        # callbackf(_np.array([5e-1, 5e-1, 5e-1, 5e-1, 0.2]))  # or this
+
+        #OLD: scipy optimize - proved unreliable
+        #soln = _spo.minimize(_wildcard_objective, wvec_init,
+        #                     method='Nelder-Mead', callback=callbackf, tol=1e-6)
+        #if not soln.success:
+        #    _warnings.warn("Nelder-Mead optimization failed to converge!")
+        soln = _opt.minimize(_wildcard_objective, wvec_init, 'supersimplex',
+                             callback=callbackf, maxiter=10, tol=1e-2, abs_outer_tol=1e-4,
+                             min_inner_maxiter=1000, max_inner_maxiter=1000, inner_tol=1e-6,
+                             verbosity=printer)
+        wvec = soln.x
+        fit_penalty = _wildcard_fit_criteria(wvec)
+        #printer.log("  Firstterms value = %g" % firstTerms)
+        meets_conditions = bool(fit_penalty < 1e-4)  # some zero-tolerance here
+        if meets_conditions:  # try larger eta
+            break
+        else:  # nonzero objective => take Wvec as new starting point; try smaller eta
+            wvec_init = wvec
+            eta /= 10
+
+        printer.log("  Trying eta = %g" % eta)
+        num_iters += 1
+
+    budget.from_vector(wvec)
+    printer.log("Optimal wildcard vector = " + str(wvec))
+    return
+
+
+def optimize_wildcard_budget_percircuit_only_cvxpy(budget, L1weights, objfn, layout, redbox_threshold, printer):
+    """Uses CVXPY to optimize the wildcard budget.  Includes only per-circuit constraints."""
     # Try using cvxpy to solve the problem with only per-circuit constraints
     # convex program to solve:
     # Minimize |wv|_1 (perhaps weighted) subject to the constraint:
@@ -27,7 +165,7 @@ def optimize_wildcard_budget_percircuit_only_cvxpy(budget, L1weights, objfn, lay
     #print("CVXPY solution gives wv = ", wv_dest, " advancing probs to this point...")
     #probs = wildcard_probs_propagation(budget, wv, wv_dest, objfn, layout, num_steps=10)
 
-    print("CVXPY solution (using only per-circuit constraints) gives wv = ", var_wv.value)
+    printer.log("CVXPY solution (using only per-circuit constraints) gives wv = ", var_wv.value)
     budget.from_vector(var_wv.value)
     return
 
@@ -40,7 +178,7 @@ def _get_critical_circuit_budgets(objfn, layout, redbox_threshold):
         p = objfn.probs[layout.indices_for_index(i)]
         f = objfn.freqs[layout.indices_for_index(i)]
         N = objfn.total_counts[layout.indices_for_index(i)]
-        n = objfn.counts[layout.indices_for_index(i)]
+        #n = objfn.counts[layout.indices_for_index(i)]
 
         #This could be done more intelligently in future:
         # to hit budget, need deltaLogL = redbox_threshold
@@ -60,7 +198,7 @@ def _get_critical_circuit_budgets(objfn, layout, redbox_threshold):
         TOL = 1e-6
         lbound = 0.0
         ubound = 1.0
-        while ubound-lbound > TOL:
+        while ubound - lbound > TOL:
             mid = (ubound + lbound) / 2
             mid_val = two_delta_logl(mid)
             if mid_val < redbox_threshold:  # fits well, can decrease budget
@@ -68,7 +206,7 @@ def _get_critical_circuit_budgets(objfn, layout, redbox_threshold):
             else:  # fits poorly (red box!), must increase budget
                 lbound = mid
         percircuit_budget = (ubound + lbound) / 2
-        
+
         #percircuit_budget = 0; step = 1e-5
         #while True:
         #    #dlogl_per_outcome = objfn.raw_objfn.terms(p, n, N, f)
@@ -229,6 +367,7 @@ def _agg_dlogl_hessian(current_probs, objfn, layout, percircuit_budget_deriv):
     assert(_np.all(evals >= -1e-8))
     return H
 
+
 def _proxy_agg_dlogl(x, tvds, fn0s, layout, percircuit_budget_deriv, two_dlogl_threshold):
     percircuit_budgets = _np.dot(percircuit_budget_deriv, x)
     num_circuits = len(layout.circuits)
@@ -279,7 +418,9 @@ def _proxy_agg_dlogl_hessian(x, tvds, fn0s, layout, percircuit_budget_deriv):
     return H
 
 
-def optimize_wildcard_budget_cvxopt(budget, L1weights, objfn, layout, two_dlogl_threshold, redbox_threshold):
+def optimize_wildcard_budget_cvxopt(budget, L1weights, objfn, layout, two_dlogl_threshold, redbox_threshold,
+                                    printer, abs_tol=1e-5, rel_tol=1e-5, max_iters=50):
+    """Uses CVXOPT to optimize the wildcard budget.  Includes both aggregate and per-circuit constraints."""
     #Use cvxopt
     import cvxopt as _cvxopt
     # Minimize f_0(wv) = |wv|_1 (perhaps weighted) subject to the constraints:
@@ -296,9 +437,9 @@ def optimize_wildcard_budget_cvxopt(budget, L1weights, objfn, layout, two_dlogl_
     critical_percircuit_budgets = _get_critical_circuit_budgets(objfn, layout, redbox_threshold)
     critical_percircuit_budgets.shape = (len(critical_percircuit_budgets), 1)
 
-    _cvxopt.solvers.options['abstol'] = 1e-5
-    _cvxopt.solvers.options['reltol'] = 1e-5
-    _cvxopt.solvers.options['maxiters'] = 50
+    _cvxopt.solvers.options['abstol'] = abs_tol
+    _cvxopt.solvers.options['reltol'] = rel_tol
+    _cvxopt.solvers.options['maxiters'] = max_iters
 
     def F(x=None, z=None, debug=True):
         if z is None and x is None:
@@ -312,7 +453,8 @@ def optimize_wildcard_budget_cvxopt(budget, L1weights, objfn, layout, two_dlogl_
         budget.update_probs(initial_probs, current_probs, objfn.freqs, layout, percircuit_budget_deriv)
 
         #Evaluate F(x) => return (f, Df)
-        f = _cvxopt.matrix(_np.array([_agg_dlogl(current_probs, objfn, two_dlogl_threshold)]).reshape((1, 1)))  # shape (m,1)
+        f = _cvxopt.matrix(_np.array([_agg_dlogl(current_probs, objfn,
+                                                 two_dlogl_threshold)]).reshape((1, 1)))  # shape (m,1)
         Df = _cvxopt.matrix(_np.empty((1, n), 'd'))  # shape (m, n)
         Df[0, :] = _agg_dlogl_deriv(current_probs, objfn, layout, percircuit_budget_deriv)
         #print("DB: rank Df=", _np.linalg.matrix_rank(Df))  # REMOVE
@@ -339,7 +481,7 @@ def optimize_wildcard_budget_cvxopt(budget, L1weights, objfn, layout, two_dlogl_
     #check_fd([0.0001] * n, True)
 
     #CVXOPT
-    print("Beginning cvxopt.cpl solve...")
+    printer.log("Beginning cvxopt.cpl solve...")
     c = _cvxopt.matrix(L1weights.reshape((n, 1)))
     G = -_cvxopt.matrix(_np.concatenate((percircuit_budget_deriv, _np.identity(n, 'd')), axis=0))
     h = -_cvxopt.matrix(_np.concatenate((critical_percircuit_budgets, _np.zeros((n, 1), 'd')), axis=0))
@@ -351,17 +493,18 @@ def optimize_wildcard_budget_cvxopt(budget, L1weights, objfn, layout, two_dlogl_
     #x0[:,0] = list(result['x'])
     #result = _cvxopt.solvers.cpl(c, F) # kktsolver='ldl2'
 
-    print("CVXOPT result = ", result)
-    print("x = ", list(result['x']))
-    print("y = ", list(result['y']))
-    print("znl = ", list(result['znl']))
-    print("snl = ", list(result['snl']))
+    printer.log("CVXOPT result = " + str(result))
+    printer.log("x = " + str(list(result['x'])))
+    printer.log("y = " + str(list(result['y'])))
+    printer.log("znl = " + str(list(result['znl'])))
+    printer.log("snl = " + str(list(result['snl'])))
     budget.from_vector(result['x'])
     return
 
 
-def optimize_wildcard_budget_cvxopt_SMALL(budget, L1weights, objfn, layout, two_dlogl_threshold, redbox_threshold,
-                                          SMALL=1e-6):
+def optimize_wildcard_budget_cvxopt_zeroreg(budget, L1weights, objfn, layout, two_dlogl_threshold, redbox_threshold,
+                                            printer, abs_tol=1e-5, rel_tol=1e-5, max_iters=50, small=1e-6):
+    """Adds regularization of the L1 term around zero values of the budget.  This doesn't seem to help much."""
     #Use cvxopt
     import cvxopt as _cvxopt
     # Minimize f_0(wv) = |wv|_1 (perhaps weighted) subject to the constraints:
@@ -372,7 +515,7 @@ def optimize_wildcard_budget_cvxopt_SMALL(budget, L1weights, objfn, layout, two_
     n = len(wv)
     x0 = wv.reshape((n, 1))
     c = L1weights.reshape((n, 1))
-    SMALL2 = SMALL**2
+    SMALL2 = small**2
 
     initial_probs = objfn.probs.copy()
     current_probs = initial_probs.copy()
@@ -382,9 +525,9 @@ def optimize_wildcard_budget_cvxopt_SMALL(budget, L1weights, objfn, layout, two_
     assert(_np.all(critical_percircuit_budgets >= 0))
     assert(_np.all(percircuit_budget_deriv >= 0))
 
-    _cvxopt.solvers.options['abstol'] = 1e-5
-    _cvxopt.solvers.options['reltol'] = 1e-5
-    _cvxopt.solvers.options['maxiters'] = 50
+    _cvxopt.solvers.options['abstol'] = abs_tol
+    _cvxopt.solvers.options['reltol'] = rel_tol
+    _cvxopt.solvers.options['maxiters'] = max_iters
 
     def F(x=None, z=None):
         if z is None and x is None:
@@ -401,7 +544,7 @@ def optimize_wildcard_budget_cvxopt_SMALL(budget, L1weights, objfn, layout, two_
         sqrtVec = _np.sqrt((c * x)**2 + SMALL2)
         f = _cvxopt.matrix(_np.array([float(_np.sum(sqrtVec)),
                                       _agg_dlogl(current_probs, objfn,
-                                                 two_dlogl_threshold)]).reshape((2,1)))  # shape (m+1,1)
+                                                 two_dlogl_threshold)]).reshape((2, 1)))  # shape (m+1,1)
 
         L1term_grad = c if SMALL2 == 0.0 else c**2 * x / sqrtVec
         Df = _cvxopt.matrix(_np.empty((2, n), 'd'))  # shape (m+1, n)
@@ -420,31 +563,35 @@ def optimize_wildcard_budget_cvxopt_SMALL(budget, L1weights, objfn, layout, two_
         return f, Df, Hf
 
     #CVXOPT
-    print("Beginning cvxopt.cp solve...")
+    printer.log("Beginning cvxopt.cp solve...")
     #print("Rank G = ",_np.linalg.matrix_rank(percircuit_budget_deriv))
     #result = _cvxopt.solvers.cp(F)
     # Condition is Gx <= h => -Gx >= -h
     G = -_cvxopt.matrix(_np.concatenate((percircuit_budget_deriv, _np.identity(n, 'd')), axis=0))
     h = -_cvxopt.matrix(_np.concatenate((critical_percircuit_budgets, _np.zeros((n, 1), 'd')), axis=0))
     result = _cvxopt.solvers.cp(F, G, h)
-                                
 
     #This didn't seem to help much:
     #print("Attempting restart...")
     #x0[:,0] = list(result['x'])
     #result = _cvxopt.solvers.cpl(c, F) # kktsolver='ldl2'
 
-    print("CVXOPT result = ", result)
-    print("x = ", list(result['x']))
-    print("y = ", list(result['y']))
-    print("znl = ", list(result['znl']))
-    print("snl = ", list(result['snl']))
+    printer.log("CVXOPT result = " + str(result))
+    printer.log("x = " + str(list(result['x'])))
+    printer.log("y = " + str(list(result['y'])))
+    printer.log("znl = " + str(list(result['znl'])))
+    printer.log("snl = " + str(list(result['snl'])))
     budget.from_vector(result['x'])
-    return  
+    return
 
 
 def optimize_wildcard_budget_barrier(budget, L1weights, objfn, layout, two_dlogl_threshold,
-                                     redbox_threshold, tol=1e-7, max_iters=50, save_debugplot_data=False):
+                                     redbox_threshold, printer, tol=1e-7, max_iters=50, num_steps=3,
+                                     save_debugplot_data=False):
+    """
+    Uses a barrier method (for convex optimization) to optimize the wildcard budget.
+    Includes both aggregate and per-circuit constraints.
+    """
     #BARRIER method:
     # Solve:            min c^T * x
     # Subject to:       F(x) <= 0
@@ -452,15 +599,13 @@ def optimize_wildcard_budget_barrier(budget, L1weights, objfn, layout, two_dlogl
     #  min t * c^T * x + phi(x)
     # where phi(x) = -log(-F(x))
     # for increasing values of t until 1/t <= epsilon (precision tolerance)
-    print("Beginning custom barrier method solve...")
-    num_circuits = len(layout.circuits)
+    printer.log("Beginning wildcard budget optimization using a barrier method.")
     percircuit_budget_deriv = budget.precompute_for_same_circuits(layout.circuits)
     critical_percircuit_budgets = _get_critical_circuit_budgets(objfn, layout, redbox_threshold)
 
     x0 = budget.to_vector()
     initial_probs = objfn.probs.copy()
     current_probs = initial_probs.copy()
-    n = len(x0)
 
     # f0 = 2DLogL - threshold <= 0
     # fi = critical_budget_i - circuit_budget_i <= 0
@@ -489,7 +634,7 @@ def optimize_wildcard_budget_barrier(budget, L1weights, objfn, layout, two_dlogl
         deriv = -1 / f0 * Df0 - _np.dot(1 / fi, percircuit_budget_deriv) - 1 / x
 
         Hf0 = _agg_dlogl_hessian(current_probs, objfn, layout, percircuit_budget_deriv)
-        hess =  1 / f0**2 * Df0[:, None] * Df0[None, :] - 1 / f0 * Hf0 \
+        hess = 1 / f0**2 * Df0[:, None] * Df0[None, :] - 1 / f0 * Hf0 \
             + _np.einsum('i,ij,ik->jk', 1 / fi**2, percircuit_budget_deriv, percircuit_budget_deriv) \
             + _np.diag(1 / x**2)
         # sum_i 1 / fi[i]**2 * percircuit_budget_deriv[i,:,None] * percircuit_budget_deriv[i,None,:]
@@ -500,7 +645,7 @@ def optimize_wildcard_budget_barrier(budget, L1weights, objfn, layout, two_dlogl
     initial_penalty_vec = penalty_vec(x0)
     num_constraints = len(initial_penalty_vec) + len(x0)  # 2nd term b/c x >= 0 constraints
     if _np.all(initial_penalty_vec <= 0):
-        print("Initial (feasible) point: ", x0)
+        printer.log("Initial (feasible) point: " + str(x0))
     else:
         if _np.linalg.norm(x0) < 1e-5: x0[:] = 1e-5  # just so we don't start at all zeros
         i = 0
@@ -509,16 +654,15 @@ def optimize_wildcard_budget_barrier(budget, L1weights, objfn, layout, two_dlogl
             x0 *= 2.0; i += 1
         else:
             raise ValueError("Could not find feasible starting point!")
-        print("Found initial feasible point: ", x0)
+        printer.log("Found initial feasible point: " + str(x0))
     x = x0.copy()  # set initial point
 
-    nSteps = 3
     log10_end = int(_np.ceil(_np.log10(2 * num_constraints / tol)))  # 2 factor just for good measure
-    log10_begin = log10_end - (nSteps-1)
-    t_values = _np.logspace(log10_begin, log10_end, nSteps)
+    log10_begin = log10_end - (num_steps - 1)
+    t_values = _np.logspace(log10_begin, log10_end, num_steps)
     #t_values = [1e5, 1e6, 1.e7, 1e8, 1e9]
-    
-    SMALL_values = [0]*len(t_values)
+
+    SMALL_values = [0] * len(t_values)
     #SMALL_values = [1 / (10 * t) for t in t_values]
 
     if save_debugplot_data:
@@ -527,7 +671,7 @@ def optimize_wildcard_budget_barrier(budget, L1weights, objfn, layout, two_dlogl
 
     for iStage, (t, SMALL) in enumerate(zip(t_values, SMALL_values)):  # while 1/t > epsilon:
 
-        print("*** Beginning stage %d with t=%g, SMALL=%g ***" % (iStage, t, SMALL))
+        printer.log("*** Beginning stage %d with t=%g, SMALL=%g ***" % (iStage, t, SMALL))
         SMALL2 = SMALL**2
         bFn = barrierF
 
@@ -566,8 +710,8 @@ def optimize_wildcard_budget_barrier(budget, L1weights, objfn, layout, two_dlogl
         #result = scipy.optimize.minimize(barrier_obj, x, method="CG")
         #x = _np.clip(result.x, 0, None)
 
-        x, debug_x_list = NewtonSolve(x, NewtonObjective, NewtonObjective_derivs, tol, max_iters, debug=True)
-        #x, debug_x_list = NewtonSolve(x, NewtonObjective, None, tol, max_iters, debug=True)  # use finite-diff derivs
+        x, debug_x_list = NewtonSolve(x, NewtonObjective, NewtonObjective_derivs, tol, max_iters, printer - 1)
+        #x, debug_x_list = NewtonSolve(x, NewtonObjective, None, tol, max_iters, printer - 1)  # use finite-diff derivs
 
         if save_debugplot_data:
             with open("debug/xlist_stage%d" % iStage, 'wb') as pipe:
@@ -587,14 +731,14 @@ def optimize_wildcard_budget_barrier(budget, L1weights, objfn, layout, two_dlogl
             if len(x0) >= 2:  # Contour plots works only when there are at least 2 coordinates
                 w0_list = [xx[0] for xx in debug_x_list]
                 w1_list = [xx[1] for xx in debug_x_list]
-                w0 = _np.linspace(min(w0_list)*0.9, max(w0_list)*1.1, 50)
-                w1 = _np.linspace(min(w1_list)*0.9, max(w1_list)*1.1, 50)
-    
+                w0 = _np.linspace(min(w0_list) * 0.9, max(w0_list) * 1.1, 50)
+                w1 = _np.linspace(min(w1_list) * 0.9, max(w1_list) * 1.1, 50)
+
                 with open("debug/contour_w0_stage%d" % iStage, 'wb') as pipe:
                     _pickle.dump(w0, pipe)
                 with open("debug/contour_w1_stage%d" % iStage, 'wb') as pipe:
                     _pickle.dump(w1, pipe)
-    
+
                 zvals = _np.zeros((len(w1), len(w0)), 'd')
                 for jj, ww1 in enumerate(w1):
                     for kk, ww0 in enumerate(w0):
@@ -603,12 +747,12 @@ def optimize_wildcard_budget_barrier(budget, L1weights, objfn, layout, two_dlogl
                 with open("debug/contour_vals_stage%d" % iStage, 'wb') as pipe:
                     _pickle.dump(zvals, pipe)
 
-    print("Finished! Final x = ", x)
     budget.from_vector(x)
+    printer.log("Optimal wildcard vector = " + str(x))
     return
 
 
-def NewtonSolve(initial_x, fn, fn_with_derivs=None, dx_tol=1e-6, max_iters=20, lmbda=0.0, debug=False):
+def NewtonSolve(initial_x, fn, fn_with_derivs=None, dx_tol=1e-6, max_iters=20, printer=None, lmbda=0.0):
     # lmbda crudely interpolates between Newton (0.0) and gradient (1.0) descent
 
     x_list = [initial_x.copy()]
@@ -640,7 +784,7 @@ def NewtonSolve(initial_x, fn, fn_with_derivs=None, dx_tol=1e-6, max_iters=20, l
         #dx = - _np.dot(_np.linalg.inv(H), Df.T)
         Hrank = _np.linalg.matrix_rank(Hobj)
         if Hrank < Hobj.shape[0]:
-            if debug: print("Rank defficient Hessian (%d < %d) - using gradient step" % (Hrank, Hobj.shape[0]))
+            if printer: printer.log("Rank defficient Hessian (%d < %d) - using gradient step" % (Hrank, Hobj.shape[0]))
             dx = - Dobj / _np.linalg.norm(Dobj)
         else:
             dx = - _np.dot((1 - lmbda) * _np.linalg.inv(Hobj) + lmbda * I, Dobj)
@@ -651,8 +795,8 @@ def NewtonSolve(initial_x, fn, fn_with_derivs=None, dx_tol=1e-6, max_iters=20, l
         if test_obj is not None:
             assert(_np.isclose(obj, test_obj))  # Sanity check
 
-        downhill_direction = - Dobj / _np.linalg.norm(Dobj)
-        dx_before_backtrack = dx.copy()
+        #downhill_direction = - Dobj / _np.linalg.norm(Dobj)
+        #dx_before_backtrack = dx.copy()
 
         #print("DB: last obj = ",obj)
         while(_np.linalg.norm(dx) >= dx_tol):
@@ -677,13 +821,13 @@ def NewtonSolve(initial_x, fn, fn_with_derivs=None, dx_tol=1e-6, max_iters=20, l
             #     if debug: print("Can't step in gradient direction and reduce objective - converged at f=%g" % obj)
             #     break
 
-            if debug: print("Can't step in Newton direction and reduce objective - converged at f=%g" % obj)
+            if printer: printer.log("Can't step in Newton direction and reduce objective - converged at f=%g" % obj)
             break
 
         norm_dx = _np.linalg.norm(dx)
-        if debug:
-            print(" newton iter %d: f=%g, |Df|=%g, |dx|=%g |Hf|=%g" %
-                  (i, obj, norm_Dobj, norm_dx, _np.linalg.norm(Hobj)))
+        if printer:
+            printer.log(" newton iter %d: f=%g, |Df|=%g, |dx|=%g |Hf|=%g" %
+                        (i, obj, norm_Dobj, norm_dx, _np.linalg.norm(Hobj)))
             #print("   downhill = ", list(downhill_direction.flat))
             #print("   dx_before_backtrack = ", list(dx_before_backtrack.flat))
             #print("   dx = ", list(dx.flat))
@@ -695,13 +839,19 @@ def NewtonSolve(initial_x, fn, fn_with_derivs=None, dx_tol=1e-6, max_iters=20, l
         x = _np.clip(x, 0, None)
         x_list.append(x.copy())
         i += 1
-        if norm_Dobj < 1e-4 or norm_dx < dx_tol: break
-    if i == max_iters:
-        print("WARNING: max iterations exceeded!!!")
+        if norm_dx < dx_tol: break  # norm_Dobj < 1e-4 or 
+    if i == max_iters and printer:
+        printer.log("WARNING: max iterations exceeded!!!")
     return x, x_list
 
 
-def optimize_wildcard_budget_cvxopt_smoothed(budget, L1weights, objfn, layout, two_dlogl_threshold, redbox_threshold):
+def optimize_wildcard_budget_cvxopt_smoothed(budget, L1weights, objfn, layout, two_dlogl_threshold, redbox_threshold,
+                                             printer, abs_tol=1e-5, rel_tol=1e-5, max_iters=50):
+    """
+    Uses a smooted version of the objective function.  Doesn't seem to help much.
+
+    The thinking here was to eliminate the 2nd derivative discontinuities of the original problem.
+    """
     import cvxopt as _cvxopt
     wv = budget.to_vector().copy()
     n = len(wv)
@@ -714,9 +864,9 @@ def optimize_wildcard_budget_cvxopt_smoothed(budget, L1weights, objfn, layout, t
     critical_percircuit_budgets.shape = (len(critical_percircuit_budgets), 1)
     num_circuits = len(layout.circuits)
 
-    _cvxopt.solvers.options['abstol'] = 1e-5
-    _cvxopt.solvers.options['reltol'] = 1e-5
-    _cvxopt.solvers.options['maxiters'] = 50
+    _cvxopt.solvers.options['abstol'] = abs_tol
+    _cvxopt.solvers.options['reltol'] = rel_tol
+    _cvxopt.solvers.options['maxiters'] = max_iters
 
     #Prepare for proxy_barrierF evaluations
     tvds = _np.zeros(num_circuits, 'd')
@@ -756,17 +906,17 @@ def optimize_wildcard_budget_cvxopt_smoothed(budget, L1weights, objfn, layout, t
         assert(_np.all(evals >= -1e-8))
         return f, Df, H
 
-    print("Beginning cvxopt.cpl solve with smoothed (proxy) fn...")
+    printer.log("Beginning cvxopt.cpl solve with smoothed (proxy) fn...")
     c = _cvxopt.matrix(L1weights.reshape((n, 1)))
     G = -_cvxopt.matrix(_np.concatenate((percircuit_budget_deriv, _np.identity(n, 'd')), axis=0))
     h = -_cvxopt.matrix(_np.concatenate((critical_percircuit_budgets, _np.zeros((n, 1), 'd')), axis=0))
     result = _cvxopt.solvers.cpl(c, F, G, h)  # kktsolver='ldl2'
 
-    print("CVXOPT result = ", result)
-    print("x = ", list(result['x']))
-    print("y = ", list(result['y']))
-    print("znl = ", list(result['znl']))
-    print("snl = ", list(result['snl']))
+    printer.log("CVXOPT result = " + str(result))
+    printer.log("x = " + str(list(result['x'])))
+    printer.log("y = " + str(list(result['y'])))
+    printer.log("znl = " + str(list(result['znl'])))
+    printer.log("snl = " + str(list(result['snl'])))
     budget.from_vector(result['x'])
     return
 
@@ -889,7 +1039,8 @@ def _compute_fd(x, fn, compute_hessian=True, eps=1e-7):
 #        print("  wv=", wv)
 #
 #        delta_percircuit_budgets = _np.dot(percircuit_budget_deriv, delta_wv)
-#        delta_probs = _advance_probs(layout, current_probs, dlogl_percircuit, dlogl_delements, delta_percircuit_budgets)  # updates current_probs
+#        delta_probs = _advance_probs(layout, current_probs, dlogl_percircuit,
+#                                     dlogl_delements, delta_percircuit_budgets)  # updates current_probs
 #        print("|delta probs| = ", _np.linalg.norm(delta_probs))
 #        current_probs += delta_probs
 #    return currrent_probs
@@ -898,10 +1049,13 @@ def _compute_fd(x, fn, compute_hessian=True, eps=1e-7):
 #    #wv = budget.to_vector().copy()
 #
 #    def _criteria_deriv(current_probs, dlogl_percircuit, dlogl_delements, mode, global_criteria_met):
-#        # derivative of firstterms wrt per-circuit wilcard budgets - namely if that budget goes up how to most efficiently reduce firstterms
-#        # in doing so, this computes how the per-circuit budget should be allocated to probabilities (i.e. how probs should be updated) to achieve this decrease in firstterms
+#        # derivative of firstterms wrt per-circuit wilcard budgets - namely if that budget goes up how to most
+#        # efficiently reduce firstterms
+#        # in doing so, this computes how the per-circuit budget should be allocated to probabilities
+#        # (i.e. how probs should be updated) to achieve this decrease in firstterms
 #        ret = _np.zeros(num_circuits)
-#        max_delta = _np.zeros(num_circuits)  # maximum amount of change in per-circuit budget before hitting a discontinuity in 2nd deriv
+#        max_delta = _np.zeros(num_circuits)  # maximum amount of change in per-circuit budget before hitting a
+#        #   discontinuity in 2nd deriv
 #        for i in range(num_circuits):
 #            if mode == "percircuit" and 2 * dlogl_percircuit[i] <= redbox_threshold:
 #                continue  # don't include this circuit's contribution
@@ -936,7 +1090,7 @@ def _compute_fd(x, fn, compute_hessian=True, eps=1e-7):
 #        return ret, max_delta
 #
 #
-#    for mode in (): #("both",): #("percircuit", "aggregate"):  # choose how many and which criteria to enforce on each pass.
+#    for mode in (): #("both",): #("percircuit", "aggregate"):  # how many & which criteria to enforce on each pass.
 #        print("Stage w/mode = ",mode)
 #        step = 0.01
 #        itr = 0
@@ -962,7 +1116,8 @@ def _compute_fd(x, fn, compute_hessian=True, eps=1e-7):
 #                perbox_residual = sum(_np.clip(two_dlogl_percircuit - redbox_threshold, 0, None))
 #                objfn_value = perbox_residual
 #            elif mode == "both":
-#                objfn_value = max(two_dlogl - two_dlogl_threshold, 0) + sum(_np.clip(two_dlogl_percircuit - redbox_threshold, 0, None))
+#                objfn_value = max(two_dlogl - two_dlogl_threshold, 0) \
+#                    + sum(_np.clip(two_dlogl_percircuit - redbox_threshold, 0, None))
 #
 #            print("Iter ", itr, ": mode=", mode, " objfn=", objfn_value, " moved in", imax)
 #            print("  wv=", wv); itr += 1
@@ -970,8 +1125,10 @@ def _compute_fd(x, fn, compute_hessian=True, eps=1e-7):
 #                break  # DONE!
 #            if last_objfn_value is not None and last_objfn_value < objfn_value:
 #                iproblem = _np.argmax(dlogl_percircuit - last_dlogl_percircuit)
-#                print("Circuit  ",iproblem," dlogl=", last_dlogl_percircuit[iproblem], " => ", dlogl_percircuit[iproblem])
-#                print("  probs: ",last_probs[layout.indices_for_index(iproblem)], " => ", current_probs[layout.indices_for_index(iproblem)])
+#                print("Circuit  ",iproblem," dlogl=", last_dlogl_percircuit[iproblem], " => ",
+#                      dlogl_percircuit[iproblem])
+#                print("  probs: ",last_probs[layout.indices_for_index(iproblem)], " => ",
+#                      current_probs[layout.indices_for_index(iproblem)])
 #                print("  freqs: ",objfn.freqs[layout.indices_for_index(iproblem)])
 #                import bpdb; bpdb.set_trace()
 #                assert(False), "Objective function should be monotonic!!!"
@@ -1012,7 +1169,8 @@ def _compute_fd(x, fn, compute_hessian=True, eps=1e-7):
 #                import bpdb; bpdb.set_trace()
 #                pass
 #
-#            delta_probs = _advance_probs(layout, current_probs, dlogl_percircuit, dlogl_delements, delta_percircuit_budgets)  #, global_criteria_met)  # updates current_probs
+#            delta_probs = _advance_probs(layout, current_probs, dlogl_percircuit, dlogl_delements,
+#                                         delta_percircuit_budgets)  #, global_criteria_met)  # updates current_probs
 #            print("|delta probs| = ", _np.linalg.norm(delta_probs))
 #            current_probs += delta_probs
 #
