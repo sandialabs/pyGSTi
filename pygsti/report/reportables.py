@@ -2500,6 +2500,7 @@ def instrument_half_diamond_norm(a, b, mx_basis):
         composite_top[aa:bb, aa:bb] = b[clbl].to_dense()
     return half_diamond_norm(composite_op, composite_top, tpbasis)
 
+
 Instrument_half_diamond_norm = _modf.instrumentfn_factory(instrument_half_diamond_norm)
 # init args == (model1, model2, instrument_label)
 

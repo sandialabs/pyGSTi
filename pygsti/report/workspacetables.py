@@ -1237,9 +1237,6 @@ class GatesVsTargetTable(WorkspaceTable):
         #Iterate over instruments
         for il in instLabels:
             row_data = [str(il)]
-            inst = model.instruments[il]
-            tinst = target_model.instruments[il]
-            basis = model.basis
 
             #Note: could move this to a reportables function in future for easier
             # confidence region support - for now, no CI support:

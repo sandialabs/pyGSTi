@@ -125,10 +125,10 @@ class CircuitList(object):
         CircuitList
         """
         if isinstance(circuits_to_keep, set):
-            new_circuits  = list(filter(lambda c: c in circuits_to_keep, self._circuits))
+            new_circuits = list(filter(lambda c: c in circuits_to_keep, self._circuits))
         else:
             current_circuits = set(self._circuits)
-            new_circuits  = list(filter(lambda c: c in current_circuits, circuits_to_keep))
+            new_circuits = list(filter(lambda c: c in current_circuits, circuits_to_keep))
         return CircuitList(new_circuits, self.op_label_aliases)  # don't transfer weights or name
 
     def truncate_to_dataset(self, dataset):

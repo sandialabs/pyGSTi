@@ -15,7 +15,8 @@ fixture_1Q = Namespace(
                            [0, 1]], dtype=np.int8),
     clifford_phase=np.array([0, 2])
 )
-fixture_1Q.pspec = ProcessorSpec(num_qubits=1, gate_names=['Gcnot', 'Gh', 'Gp', 'Gxpi', 'Gypi', 'Gzpi'])
+fixture_1Q.pspec = ProcessorSpec(num_qubits=1, gate_names=['Gcnot', 'Gh', 'Gp', 'Gxpi', 'Gypi', 'Gzpi'],
+                                 construct_models=('target','clifford'))
 fixture_2Q = Namespace(
     n=2,
     qubit_labels=['Q0', 'Q1'],
@@ -30,7 +31,7 @@ fixture_2Q = Namespace(
 )
 fixture_2Q.pspec = ProcessorSpec(
     fixture_2Q.n, gate_names=fixture_2Q.gate_names, availability=fixture_2Q.availability,
-    qubit_labels=fixture_2Q.qubit_labels
+    qubit_labels=fixture_2Q.qubit_labels, construct_models=('target','clifford')
 )
 # Totally arbitrary CNOT circuit
 fixture_2Q.cnot_circuit = Circuit(layer_labels=[
@@ -59,7 +60,7 @@ fixture_3Q = Namespace(
 )
 fixture_3Q.pspec = ProcessorSpec(
     fixture_3Q.n, gate_names=fixture_3Q.gate_names, availability=fixture_3Q.availability,
-    qubit_labels=fixture_3Q.qubit_labels
+    qubit_labels=fixture_3Q.qubit_labels, construct_models=('target','clifford')
 )
 
 
