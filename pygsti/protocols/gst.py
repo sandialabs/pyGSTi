@@ -1100,6 +1100,14 @@ class StandardGST(_proto.Protocol):
         models_to_test = self.models_to_test
         if models_to_test is None: models_to_test = {}
 
+        # Choose an objective function to use for model testing
+        mt_builder = None  # None => use the default builder
+        if self.objfn_builders is not None:
+            if len(self.objfn_builders.final_builders) > 0:
+                mt_builder = self.objfn_builders.final_builders[0]
+            elif len(self.objfn_builders.iteration_builders) > 0:
+                mt_builder = self.objfn_builders.iteration_builders[0]
+
         ret = ModelEstimateResults(data, self)
         with printer.progress_logging(1):
             for i, mode in enumerate(modes):
@@ -1108,7 +1116,7 @@ class StandardGST(_proto.Protocol):
                 if mode == "Target":
                     model_to_test = data.edesign.target_model.copy()  # no parameterization change
                     mdltest = _ModelTest(model_to_test, None, self.gaugeopt_suite, self.gaugeopt_target,
-                                         None, self.badfit_options, verbosity=printer - 1, name=mode)
+                                         mt_builder, self.badfit_options, verbosity=printer - 1, name=mode)
                     result = mdltest.run(data, memlimit, comm)
                     ret.add_estimates(result)
 

@@ -377,7 +377,7 @@ class VectorBasisConstructor(object):
 def std_matrices(matrix_dim):
     """
     Get the elements of the matrix unit, or "standard", basis of matrix-dimension `matrix_dim`.
-    The matrices are ordered so that the row index changes the fastest. 
+    The matrices are ordered so that the row index changes the fastest.
 
     Constructs the standard basis spanning the density-matrix space given by
     `matrix_dim` x `matrix_dim` matrices.
@@ -434,7 +434,7 @@ def std_labels(matrix_dim):
 def col_matrices(matrix_dim):
     """
     Get the elements of the matrix unit, or "column-stacked", basis of matrix-dimension `matrix_dim`.
-    The matrices are ordered so that the column index changes the fastest. 
+    The matrices are ordered so that the column index changes the fastest.
 
     Constructs the standard basis spanning the density-matrix space given by
     `matrix_dim` x `matrix_dim` matrices.
@@ -643,16 +643,16 @@ def qsim_matrices(matrix_dim):
 
     The returned matrices are given in the QuantumSim representation of the
     density matrix space, and are thus kronecker products of
-    the standard representation of the QuantumSim matrices: 
+    the standard representation of the QuantumSim matrices:
         '0' == [[1, 0],[0,0]]
         'X' == [[0, 1],[1,0]]
         'Y' == [[0,-1.j],[1.j,0]]
         '1' == [[0, 0],[0,1]]
-    The normalization is such that the resulting basis is orthonormal 
+    The normalization is such that the resulting basis is orthonormal
     under the trace inner product:
-        Tr( dot(Mi,Mj) ) == delta_ij.  
-    In the returned list, the right-most factor of the kronecker product 
-    varies the fastest, so, for example, when matrix_dim == 4 the 
+        Tr( dot(Mi,Mj) ) == delta_ij.
+    In the returned list, the right-most factor of the kronecker product
+    varies the fastest, so, for example, when matrix_dim == 4 the
     returned list is:
         [ 00,0X,0Y,01,X0,XX,XY,X1,Y0,Y0,YX,YY,Y1,10,1X,1Y,11 ].
 
@@ -666,7 +666,7 @@ def qsim_matrices(matrix_dim):
     -------
     list
         A list of N numpy arrays each of shape (matrix_dim, matrix_dim), where N == matrix_dim^2,
-        the dimension of the density-matrix space. 
+        the dimension of the density-matrix space.
 
     Notes
     -----
@@ -675,9 +675,9 @@ def qsim_matrices(matrix_dim):
     """
     sig0q = _np.array([[1., 0], [0, 0]], dtype='complex')
     sigXq = _np.array([[0, 1], [1, 0]], dtype='complex')
-    sigYq = _np.array([[0, -1], [1, 0]], dtype='complex') * 1.j 
+    sigYq = _np.array([[0, -1], [1, 0]], dtype='complex') * 1.j
     sig1q = _np.array([[0, 0], [0, 1]], dtype='complex')
-    
+
     _check_dim(matrix_dim)
     sigmaVec = (sig0q, sigXq / _np.sqrt(2.), sigYq / _np.sqrt(2.), sig1q)
     if matrix_dim == 0: return []
@@ -1070,7 +1070,8 @@ def unknown_labels(dim):
 
 _basis_constructor_dict = dict()  # global dict holding all builtin basis constructors (used by Basis objects)
 _basis_constructor_dict['std'] = MatrixBasisConstructor('Matrix-unit basis', std_matrices, std_labels, False)
-_basis_constructor_dict['col'] = MatrixBasisConstructor('Column-stacked matrix-unit basis', col_matrices, col_labels, False)
+_basis_constructor_dict['col'] = MatrixBasisConstructor('Column-stacked matrix-unit basis', col_matrices,
+                                                        col_labels, False)
 _basis_constructor_dict['gm_unnormalized'] = MatrixBasisConstructor(
     'Unnormalized Gell-Mann basis', gm_matrices_unnormalized, gm_labels, True)
 _basis_constructor_dict['gm'] = MatrixBasisConstructor('Gell-Mann basis', gm_matrices, gm_labels, True)

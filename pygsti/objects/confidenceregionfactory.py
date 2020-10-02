@@ -797,17 +797,20 @@ class ConfidenceRegionFactoryView(object):
         else:
             return "standard"
 
-    def retrieve_profile_likelihood_confidence_intervals(self, label=None):
+    def retrieve_profile_likelihood_confidence_intervals(self, label=None, component_label=None):
         """
         Retrieve the profile-likelihood confidence intervals for a specified model object (or all such intervals).
 
         Parameters
         ----------
-        label : string, optional
+        label : Label, optional
             If not None, can be either a gate or SPAM vector label
             to specify the confidence intervals corresponding to gate, rhoVec,
             or EVec parameters respectively.  If None, then intervals corresponding
             to all of the model's parameters are returned.
+
+        component_label : Label, optional
+            Labels an effect within a POVM or a member within an instrument.
 
         Returns
         -------
@@ -828,7 +831,14 @@ class ConfidenceRegionFactoryView(object):
             return self.profLCI[self.model.preps[label].gpindices]
 
         elif label in self.model.povms:
+            if component_label is not None:
+                return self.profLCI[self.model.povms[label][component_label].gpindices]
             return self.profLCI[self.model.povms[label].gpindices]
+
+        elif label in self.model.instruments:
+            if component_label is not None:
+                return self.profLCI[self.model.instruments[label][component_label].gpindices]
+            return self.profLCI[self.model.instruments[label].gpindices]
 
         else:
             raise ValueError(("Invalid item label (%s) for computing" % label)
