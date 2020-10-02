@@ -24,6 +24,7 @@ from .. import construction as _cnst
 from .. import objects as _objs
 from .. import io as _io
 from ..objects import circuit as _cir
+from ..objects.circuitlist import CircuitList as _CircuitList
 from ..tools import listtools as _lt
 from ..tools import NamedDict as _NamedDict
 
@@ -717,6 +718,43 @@ class ExperimentDesign(_TreeNode):
         instance_name = default_protocol_instance.name
         self.default_protocols[instance_name] = default_protocol_instance
 
+    def truncate_to_available_data(self, dataset):
+        """
+        Builds a new experiment design containing only those circuits present in `dataset`.
+
+        Parameters
+        ----------
+        dataset : DataSet
+            The dataset to filter based upon.
+
+        Returns
+        -------
+        ExperimentDesign
+        """
+        base = _copy.deepcopy(self)  # so this works for derived classes tools
+        base._truncate_to_available_data_inplace(dataset)
+        return base
+
+    def _truncate_to_available_data_inplace(self, dataset):
+        self.all_circuits_needing_data = _CircuitList.cast(self.all_circuits_needing_data)
+        if self.alt_actual_circuits_executed is not None:
+            self.alt_actual_circuits_executed = _CircuitList.cast(self.alt_actual_circuits_executed)
+            ds_circuits = self.all_circuits_needing_data.apply_aliases()
+
+            allc = []; actualc = []
+            for c, ds_c, actual_c in zip(self.all_circuits_needing_data, ds_circuits,
+                                         self.alt_actual_circuits_executed):
+                if ds_c in dataset:
+                    allc.append(c)
+                    actualc.append(c)
+            self.all_circuits_needing_data.truncate_to_circuits(allc)
+            self.alt_actual_circuits_executed.truncate_to_circuits(actualc)
+        else:
+            self.all_circuits_needing_data = self.all_circuits_needing_data.truncate_to_dataset(dataset)
+
+        for _, sub_design in self._vals.items():
+            sub_design._truncate_to_available_data_inplace(dataset)
+
     def write(self, dirname=None, parent=None):
         """
         Write this experiment design to a directory.
@@ -902,6 +940,13 @@ class CircuitListsDesign(ExperimentDesign):
         """
         return CircuitListsDesign([self.circuit_lists[i] for i in list_indices_to_keep],
                                   qubit_labels=self.qubit_labels, nested=self.nested)
+
+    def _truncate_to_available_data_inplace(self, dataset):
+        truncated_lists = [_CircuitList.cast(clist).truncate_to_dataset(dataset)
+                           for clist in self.circuit_lists]
+        self.circuit_lists = truncated_lists
+        #self.nested = False
+        super()._truncate_to_available_data_inplace(dataset)
 
 
 class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the same dataset
