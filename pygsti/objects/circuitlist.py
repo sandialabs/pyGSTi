@@ -10,6 +10,7 @@ Defines the CircuitList class, for holding meta-data alongside a list or tuple o
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 import uuid as _uuid
+import copy as _copy
 
 from .circuit import Circuit as _Circuit
 from ..tools import listtools as _lt
@@ -106,6 +107,50 @@ class CircuitList(object):
             A list of :class:`Circuit`s.
         """
         return _lt.apply_aliases_to_circuits(self._circuits, self.op_label_aliases)
+
+    def truncate_to_circuits(self, circuits_to_keep):
+        """
+        Builds a new circuit list containing only a given subset.
+
+        This can be safer then just creating a new :class:`CircuitList`
+        because it preserves the aliases, etc., of this list.
+
+        Parameters
+        ----------
+        circuits_to_keep : list or set
+            The circuits to retain in the returned circuit list.
+
+        Returns
+        -------
+        CircuitList
+        """
+        if isinstance(circuits_to_keep, set):
+            new_circuits  = list(filter(lambda c: c in circuits_to_keep, self._circuits))
+        else:
+            current_circuits = set(self._circuits)
+            new_circuits  = list(filter(lambda c: c in current_circuits, circuits_to_keep))
+        return CircuitList(new_circuits, self.op_label_aliases)  # don't transfer weights or name
+
+    def truncate_to_dataset(self, dataset):
+        """
+        Builds a new circuit list containing only those elements in `dataset`.
+
+        Parameters
+        ----------
+        dataset : DataSet
+            The dataset to check.  Aliases are applied to the circuits in
+            this circuit list before they are tested.
+
+        Returns
+        -------
+        CircuitList
+        """
+        if dataset is None:
+            return _copy.deepcopy(self)
+
+        circuits_in_dataset = [c for c, aliased_c in zip(self._circuits, self.apply_aliases())
+                               if aliased_c in dataset]
+        return CircuitList(circuits_in_dataset, self.op_label_aliases)  # don't transfer weights or name
 
     def __hash__(self):
         if self.uuid is not None:
