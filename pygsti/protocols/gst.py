@@ -1101,12 +1101,12 @@ class StandardGST(_proto.Protocol):
         if models_to_test is None: models_to_test = {}
 
         # Choose an objective function to use for model testing
-        if len(self.objfn_builders.final_builders) > 0:
-            mt_builder = self.objfn_builders.final_builders[0]
-        elif len(self.objfn_builders.iteration_builders) > 0:
-            mt_builder = self.objfn_builders.iteration_builders[0]
-        else:
-            mt_builder = None
+        mt_builder = None  # None => use the default builder
+        if self.objfn_builders is not None:
+            if len(self.objfn_builders.final_builders) > 0:
+                mt_builder = self.objfn_builders.final_builders[0]
+            elif len(self.objfn_builders.iteration_builders) > 0:
+                mt_builder = self.objfn_builders.iteration_builders[0]
 
         ret = ModelEstimateResults(data, self)
         with printer.progress_logging(1):
