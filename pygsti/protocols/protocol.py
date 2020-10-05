@@ -747,8 +747,8 @@ class ExperimentDesign(_TreeNode):
                 if ds_c in dataset:
                     allc.append(c)
                     actualc.append(c)
-            self.all_circuits_needing_data.truncate_to_circuits(allc)
-            self.alt_actual_circuits_executed.truncate_to_circuits(actualc)
+            self.all_circuits_needing_data.truncate(allc)
+            self.alt_actual_circuits_executed.truncate(actualc)
         else:
             self.all_circuits_needing_data = self.all_circuits_needing_data.truncate_to_dataset(dataset)
 
@@ -924,7 +924,7 @@ class CircuitListsDesign(ExperimentDesign):
         self.auxfile_types['circuit_lists'] = 'pickle' \
             if any([isinstance(lst, _objs.CircuitList) for lst in circuit_lists]) else 'text-circuit-lists'
 
-    def truncate(self, list_indices_to_keep):
+    def truncate_to_lists(self, list_indices_to_keep):
         """
         Truncates this experiment design by only keeping a subset of its circuit lists.
 

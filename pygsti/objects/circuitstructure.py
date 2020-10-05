@@ -618,20 +618,20 @@ class PlaquetteGridCircuitStructure(_CircuitList):
         return [y for y in self.ys if any([len(self.plaquette(x, y, True)) > 0
                                            for x in self.xs])]
 
-    def truncate(self, xs_to_keep=None, ys_to_keep=None, circuits_to_keep=None):
+    def truncate(self, circuits_to_keep=None, xs_to_keep=None, ys_to_keep=None):
         """
-        Truncate this circuit structure to a subset of its current strings.
+        Truncate this circuit structure to a subset of its current circuits.
 
         Parameters
         ----------
+        circuits_to_keep : list
+            Keep only the circuits present in this list (of Circuit objects).
+
         xs_to_keep : list, optional
             The x-values to keep.  If None, then all are kept.
 
         ys_to_keep : list, optional
             The y-values to keep.  If None, then all are kept.
-
-        circuits_to_keep : list
-            Keep only the circuits present in this list (of Circuit objects).
 
         Returns
         -------

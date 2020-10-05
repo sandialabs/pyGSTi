@@ -108,7 +108,7 @@ class CircuitList(object):
         """
         return _lt.apply_aliases_to_circuits(self._circuits, self.op_label_aliases)
 
-    def truncate_to_circuits(self, circuits_to_keep):
+    def truncate(self, circuits_to_keep):
         """
         Builds a new circuit list containing only a given subset.
 
@@ -145,12 +145,13 @@ class CircuitList(object):
         -------
         CircuitList
         """
-        if dataset is None:
-            return _copy.deepcopy(self)
+        ret = _copy.deepcopy(self)  # so this works on derived classes too (e.g. PlaquetteGridCircuitStructure)
+        if dataset is None: return ret
 
+        ret.circuit_weights = ret.name = None  # don't transfer weights or name
         circuits_in_dataset = [c for c, aliased_c in zip(self._circuits, self.apply_aliases())
                                if aliased_c in dataset]
-        return CircuitList(circuits_in_dataset, self.op_label_aliases)  # don't transfer weights or name
+        return ret.truncate(circuits_in_dataset)  # uses truncate method, potentially of derived class
 
     def __hash__(self):
         if self.uuid is not None:
