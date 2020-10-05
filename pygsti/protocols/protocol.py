@@ -735,22 +735,55 @@ class ExperimentDesign(_TreeNode):
         base._truncate_to_available_data_inplace(dataset)
         return base
 
-    def _truncate_to_available_data_inplace(self, dataset):
+    def truncate_to_design(self, other_design):
+        """
+        Truncates this experiment design by only keeping the circuits also in `other_design`
+
+        Parameters
+        ----------
+        other_design : ExperimentDesign
+            The experiment design to compare with.
+
+        Returns
+        -------
+        ExperimentDesign
+            The truncated experiment design.
+        """
+        base = _copy.deepcopy(self)  # so this works for derived classes tools
+        base._truncate_to_design_inplace(other_design)
+        return base
+
+    def _truncate_to_circuits_inplace(self, circuits_to_keep):
         self.all_circuits_needing_data = _CircuitList.cast(self.all_circuits_needing_data)
         if self.alt_actual_circuits_executed is not None:
             self.alt_actual_circuits_executed = _CircuitList.cast(self.alt_actual_circuits_executed)
-            ds_circuits = self.all_circuits_needing_data.apply_aliases()
 
             allc = []; actualc = []
-            for c, ds_c, actual_c in zip(self.all_circuits_needing_data, ds_circuits,
-                                         self.alt_actual_circuits_executed):
-                if ds_c in dataset:
-                    allc.append(c)
-                    actualc.append(c)
+            if isinstance(circuits_to_keep, set):
+                for c, actual_c in zip(self.all_circuits_needing_data, self.alt_actual_circuits_executed):
+                    if c in circuits_to_keep:
+                        allc.append(c)
+                        actualc.append(c)
+            else:
+                actual_lookup = {c: actual_c for c, actual_c in zip(self.all_circuits_needing_data,
+                                                                    self.alt_actual_circuits_executed)}
+                allc[:] = circuits_to_keep
+                actualc[:] = [actual_lookup[c] for c in circuits_to_keep]
             self.all_circuits_needing_data.truncate(allc)
             self.alt_actual_circuits_executed.truncate(actualc)
         else:
-            self.all_circuits_needing_data = self.all_circuits_needing_data.truncate_to_dataset(dataset)
+            self.all_circuits_needing_data = self.all_circuits_needing_data.truncate(circuits_to_keep)
+
+    def _truncate_to_design_inplace(self, other_design):
+        self._truncate_to_circuits_inplace(other_design.all_circuits_needing_data)
+        for _, sub_design in self._vals.items():
+            sub_design._truncate_to_design_inplace(other_design)
+
+    def _truncate_to_available_data_inplace(self, dataset):
+        self.all_circuits_needing_data = _CircuitList.cast(self.all_circuits_needing_data)
+        ds_circuits = self.all_circuits_needing_data.apply_aliases()
+        circuits_to_keep = [c for c, ds_c in zip(self.all_circuits_needing_data, ds_circuits) if ds_c in dataset]
+        self._truncate_to_circuits_inplace(circuits_to_keep)
 
         for _, sub_design in self._vals.items():
             sub_design._truncate_to_available_data_inplace(dataset)
@@ -940,6 +973,11 @@ class CircuitListsDesign(ExperimentDesign):
         """
         return CircuitListsDesign([self.circuit_lists[i] for i in list_indices_to_keep],
                                   qubit_labels=self.qubit_labels, nested=self.nested)
+
+    def _truncate_to_design_inplace(self, other_design):
+        self.circuit_lists = [my_circuit_list.truncate(other_circuit_list) for my_circuit_list, other_circuit_list
+                              in zip(self.circuit_lists, other_design.circuit_lists)]
+        super()._truncate_to_design_inplace(other_design)
 
     def _truncate_to_available_data_inplace(self, dataset):
         truncated_lists = [_CircuitList.cast(clist).truncate_to_dataset(dataset)

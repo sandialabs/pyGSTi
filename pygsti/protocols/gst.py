@@ -292,11 +292,15 @@ class StandardGSTDesign(GateSetTomographyDesign):
             gll = self.germ_length_limits.copy() if (self.germ_length_limits is not None) else {}
             gll.update(germ_length_limits)
 
-        return StandardGSTDesign(self.target_model, self.prep_fiducials, self.meas_fiducials,
-                                 self.germs, max_lengths, gll, self.fiducial_pairs,
-                                 self.fpr_keep_fraction, self.fpr_keep_seed, self.include_lgst, self.nested,
-                                 self.circuit_rules, self.aliases, dscheck, action_if_missing, self.qubit_labels,
-                                 verbosity, add_default_protocol=False)
+        ret = StandardGSTDesign(self.target_model, self.prep_fiducials, self.meas_fiducials,
+                                self.germs, max_lengths, gll, self.fiducial_pairs,
+                                self.fpr_keep_fraction, self.fpr_keep_seed, self.include_lgst, self.nested,
+                                self.circuit_rules, self.aliases, dscheck, action_if_missing, self.qubit_labels,
+                                verbosity, add_default_protocol=False)
+
+        #filter the circuit lists in `ret` using those in `self` (in case self includes only a subset of
+        # the circuits dictated by the germs, fiducials, and  fidpairs).
+        return ret.truncate_to_design(self)
 
 
 class GSTInitialModel(object):
