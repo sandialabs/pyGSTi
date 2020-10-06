@@ -32,7 +32,7 @@ def optimize_wildcard_budget_neldermead(budget, L1weights, wildcard_objfn, layou
     def L1term(wv): return _np.sum(_np.abs(wv) * L1weights)
 
     def _wildcard_fit_criteria(wv):
-        dlogl_elements = wildcard_objfn.lsvec(wv)**2  # b/c WC fn only has sqrt of terms implemented now
+        dlogl_elements = wildcard_objfn.terms(wv)
         for i in range(num_circuits):
             dlogl_percircuit[i] = _np.sum(dlogl_elements[layout.indices_for_index(i)], axis=0)
 
@@ -165,7 +165,7 @@ def optimize_wildcard_budget_percircuit_only_cvxpy(budget, L1weights, objfn, lay
     #print("CVXPY solution gives wv = ", wv_dest, " advancing probs to this point...")
     #probs = wildcard_probs_propagation(budget, wv, wv_dest, objfn, layout, num_steps=10)
 
-    printer.log("CVXPY solution (using only per-circuit constraints) gives wv = ", var_wv.value)
+    printer.log("CVXPY solution (using only per-circuit constraints) gives wv = " + str(var_wv.value))
     budget.from_vector(var_wv.value)
     return
 
@@ -174,11 +174,13 @@ def _get_critical_circuit_budgets(objfn, layout, redbox_threshold):
     # get set of "critical" wildcard budgets per circuit:
     num_circuits = len(layout.circuits)
     critical_percircuit_budgets = _np.zeros(num_circuits, 'd')
+    raw_objfn = objfn.raw_objfn
+
     for i in range(num_circuits):
         p = objfn.probs[layout.indices_for_index(i)]
         f = objfn.freqs[layout.indices_for_index(i)]
         N = objfn.total_counts[layout.indices_for_index(i)]
-        #n = objfn.counts[layout.indices_for_index(i)]
+        n = objfn.counts[layout.indices_for_index(i)]
 
         #This could be done more intelligently in future:
         # to hit budget, need deltaLogL = redbox_threshold
@@ -192,7 +194,7 @@ def _get_critical_circuit_budgets(objfn, layout, redbox_threshold):
 
         def two_delta_logl(circuit_budget):
             q = _update_circuit_probs(p, f, circuit_budget)
-            dlogl_per_outcome = N * f * _np.log(f / q)
+            dlogl_per_outcome = raw_objfn.terms(q, n, N, f)  # N * f * _np.log(f / q)
             return 2 * float(_np.sum(dlogl_per_outcome))  # for this circuit
 
         TOL = 1e-6
@@ -207,6 +209,7 @@ def _get_critical_circuit_budgets(objfn, layout, redbox_threshold):
                 lbound = mid
         percircuit_budget = (ubound + lbound) / 2
 
+        #TODO REMOVE (OLD)
         #percircuit_budget = 0; step = 1e-5
         #while True:
         #    #dlogl_per_outcome = objfn.raw_objfn.terms(p, n, N, f)
@@ -265,17 +268,16 @@ def _get_critical_circuit_budgets(objfn, layout, redbox_threshold):
 
 
 def _agg_dlogl(current_probs, objfn, two_dlogl_threshold):
-    p, f, N = current_probs, objfn.freqs, objfn.total_counts
-    dlogl_elements = N * f * _np.log(f / p)
-    #dlogl_elements = objfn.raw_objfn.terms(current_probs, objfn.counts, objfn.total_counts, objfn.freqs)
-    return 2 * float(_np.sum(dlogl_elements)) - two_dlogl_threshold  # ~ -Nf*log(p)
+    p, f, n, N = current_probs, objfn.freqs, objfn.counts, objfn.total_counts
+    dlogl_elements = objfn.raw_objfn.terms(current_probs, n, N, f)  # N * f * _np.log(f / p)
+    return 2 * float(_np.sum(dlogl_elements)) - two_dlogl_threshold
 
 
 def _agg_dlogl_deriv(current_probs, objfn, layout, percircuit_budget_deriv):
     #dlogl_delements = objfn.raw_objfn.dterms(current_probs, objfn.counts, objfn.total_counts, objfn.freqs)
-    p, f, N = current_probs, objfn.freqs, objfn.total_counts
-    #dlogl_delements = -N*f/p
-    chi_elements = f / p  # -dlogl_delements / N  # i.e. f/p
+    p, f, n, N = current_probs, objfn.freqs, objfn.counts, objfn.total_counts
+    dlogl_delements = objfn.raw_objfn.dterms(p, n, N, f)  # -N*f/p
+    chi_elements = -dlogl_delements / N  # f/p = -dlogl_delements / N
     num_circuits = len(layout.circuits)
 
     # derivative of firstterms wrt per-circuit wilcard budgets - namely if that budget goes up how to most efficiently
@@ -301,12 +303,11 @@ def _agg_dlogl_deriv(current_probs, objfn, layout, percircuit_budget_deriv):
 def _agg_dlogl_hessian(current_probs, objfn, layout, percircuit_budget_deriv):
     #dlogl_delements = objfn.raw_objfn.dterms(current_probs, objfn.counts, objfn.total_counts, objfn.freqs)
     #dlogl_helements = objfn.raw_objfn.hterms(current_probs, objfn.counts, objfn.total_counts, objfn.freqs)
-    p, f, N = current_probs, objfn.freqs, objfn.total_counts
-    #dlogl_delements = -N*f/p  < 0
-    #dlogl_helements = N*f/p**2 > 0
-    chi_elements = f / p  # -dlogl_delements / N  # i.e. f/p
-    #one_over_dchi_elements = p**2 / f  # N / dlogl_helements # i.e. p**2/f
-    dchi_elements = f / p**2  # N / dlogl_helements # i.e. p**2/f
+    p, f, n, N = current_probs, objfn.freqs, objfn.counts, objfn.total_counts
+    dlogl_delements = objfn.raw_objfn.dterms(p, n, N, f)  # -N*f/p  < 0
+    dlogl_helements = objfn.raw_objfn.hterms(p, n, N, f)  # N*f/p**2 > 0
+    chi_elements = -dlogl_delements / N  # f / p
+    dchi_elements = dlogl_helements / N  # f / p**2
     num_circuits = len(layout.circuits)
 
     # derivative of firstterms wrt per-circuit wilcard budgets - namely if that budget goes up how to most efficiently
@@ -329,15 +330,16 @@ def _agg_dlogl_hessian(current_probs, objfn, layout, percircuit_budget_deriv):
         # mins = _np.array(min_mask, dtype=int)
 
         freqs = f[layout.indices_for_index(i)]
-        lambdas_max = freqs[max_mask] / sum(freqs[max_mask])
-        lambdas_min = freqs[min_mask] / sum(freqs[min_mask])
+        lambdas_max = freqs[max_mask] / (sum(freqs[max_mask]) + 1e-100)  # 1e-100 handles when all(freqs[mask] == 0)
+        lambdas_min = freqs[min_mask] / (sum(freqs[min_mask]) + 1e-100)
 
         dchi = dchi_elements[layout.indices_for_index(i)]  # ~ f/p**2
         agg_dlogl_hessian_wrt_percircuit_budgets[i] = \
             2 * Nloc[0] * (sum(dchi[max_mask] * lambdas_max**2)
                            + sum(dchi[min_mask] * lambdas_min**2))
 
-        #HERE - starting to think about alternate objectives with softened "Hessian jump" at dlogl == 0 point.
+        #TODO: see if there's anything useful here, and then REMOVE
+        #NOTE - starting to think about alternate objectives with softened "Hessian jump" at dlogl == 0 point.
         # when two outcomes and very close to all f/p == 1: f1/p1 = f1/(f1-eps) ~= 1 + eps/f1   ,   f2/p2 = f2/(f2 + eps) ~= 1 - eps/f2  # noqa
         # then hessian is f1/p1^2 + f2/p2^2 ~= 1/p1 + eps/(f1p1) + 1/p2 + eps/(f2p2) = 1/(f1-eps) + eps/(f1*(f1-eps)) ... ~= 1/f1 + 1/f2  # noqa
 
@@ -358,6 +360,7 @@ def _agg_dlogl_hessian(current_probs, objfn, layout, percircuit_budget_deriv):
         ##Deriv of -N*f/p * (N*f/p**2) /
         #agg_dlogl_hessian_wrt_percircuit_budgets[i] = _np.sum(hterms * ((mins * wts) / sum(mins * wts)
         #  - (maxes * wts) / sum(maxes * wts)))
+
     assert(_np.all(agg_dlogl_hessian_wrt_percircuit_budgets >= 0)), \
         "Hessian of aggregate LLR wrt any circuit budget should be positive"
     H = _np.dot(percircuit_budget_deriv.T,
@@ -799,8 +802,11 @@ def NewtonSolve(initial_x, fn, fn_with_derivs=None, dx_tol=1e-6, max_iters=20, p
         #dx_before_backtrack = dx.copy()
 
         #print("DB: last obj = ",obj)
+        orig_err = _np.geterr()
+        _np.seterr(divide='ignore', invalid='ignore')
         while(_np.linalg.norm(dx) >= dx_tol):
             test_x = _np.clip(x + dx, 0, None)
+
             test_obj = fn(test_x)
             #print("DB: test obj = ",test_obj, " (dx = ",_np.linalg.norm(dx),")")
             if test_obj < obj: break
@@ -821,9 +827,11 @@ def NewtonSolve(initial_x, fn, fn_with_derivs=None, dx_tol=1e-6, max_iters=20, p
             #     if debug: print("Can't step in gradient direction and reduce objective - converged at f=%g" % obj)
             #     break
 
+            _np.seterr(**orig_err)
             if printer: printer.log("Can't step in Newton direction and reduce objective - converged at f=%g" % obj)
             break
 
+        _np.seterr(**orig_err)
         norm_dx = _np.linalg.norm(dx)
         if printer:
             printer.log(" newton iter %d: f=%g, |Df|=%g, |dx|=%g |Hf|=%g" %
@@ -874,11 +882,11 @@ def optimize_wildcard_budget_cvxopt_smoothed(budget, L1weights, objfn, layout, t
     for i in range(num_circuits):
         p = objfn.probs[layout.indices_for_index(i)]
         f = objfn.freqs[layout.indices_for_index(i)]
+        n = objfn.counts[layout.indices_for_index(i)]
         N = objfn.total_counts[layout.indices_for_index(i)]
-        dlogl_elements = N * f * _np.log(f / p)
+        dlogl_elements = objfn.raw_objfn.terms(p, n, N, f)  # N * f * _np.log(f / p)
         fn0s[i] = 2 * _np.sum(dlogl_elements)
         tvds[i] = 0.5 * _np.sum(_np.abs(p - f))
-        #return tvds, fn0s
 
     def F(x=None, z=None, debug=True):
         if z is None and x is None:
