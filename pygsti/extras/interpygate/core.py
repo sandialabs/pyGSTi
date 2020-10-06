@@ -322,7 +322,11 @@ class PhysicalProcess(object):
                     data_by_time = self.from_vector_physical(point)
 
                 # "data_by_time or []" is because "data_by_time" might be None and you can't iterate over None
-                generators_by_times = [self._error_generator_from_gate(gate, v=point) for gate in data_by_time or []]
+                try:
+                    generators_by_times = [self._error_generator_from_gate(gate, v=point) for gate in data_by_time or []]
+                except:
+                    generators_by_times = []
+                    
                 data[ind] = generators_by_times
                 if self.has_auxdata:
                     auxdata[ind] = auxdata_by_time
