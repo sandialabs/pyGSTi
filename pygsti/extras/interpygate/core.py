@@ -485,7 +485,8 @@ class PhysicalProcess(object):
 if __name__ == '__main__':
 
     # from interface import *
-    from process_tomography import do_process_tomography, vec, unvec, change_basis
+    from . import do_process_tomography, vec, unvec
+    from ...tools.basistools import change_basis
 
     class ProcessFunction(object):
         def __init__(self):
@@ -528,16 +529,16 @@ if __name__ == '__main__':
         def __call__(self, v, times=None, comm=_comm):
             print(f'Calling process tomography as {comm.Get_rank()} of {comm.Get_size()} on {comm.Get_name()}.')
             processes = do_process_tomography(self.advance, opt_args={'v':v, 'times':times},
-                                              n_qubits = 1, time_dependent=True, comm=comm)
+                                              n_qubits = 1, basis='pp', time_dependent=True, comm=comm)
 
             return processes
 
-    gy = PhysicalProcess(mpi_workers_per_process=1)
+    gy = PhysicalProcess(mpi_workers_per_process=1, basis='pp')
     gy.set_process_function(ProcessFunction(), mpi_enabled=True)
     target = change_basis(_np.array([[1,0,0,0],
                                      [0,1,0,0],
                                      [0,0,0,-1],
-                                     [0,0,1,0]], dtype='complex'), 'pp', 'qsim')
+                                     [0,0,1,0]], dtype='complex'), 'pp', 'pp')
     gy.set_target(target)
 
     # # # Evaluate one time point per run
