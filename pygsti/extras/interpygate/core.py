@@ -86,6 +86,12 @@ class PhysicalProcess(object):
     def create_errorgen_matrices(self, v, times=None, comm=None):
         return _np.stack([self.create_errorgen_matrix(v, t, comm) for t in times], axis=0)
 
+    def create_aux_data(self, v, times, comm=None):
+        raise NotImplementedError("Derived classes must implement create_aux_data!")
+
+    def create_aux_datum(self, v, comm=None):
+        raise NotImplementedError("Derived classes must implement create_aux_datum!")
+
 
 class OpPhysicalProcess(PhysicalProcess):
 
@@ -314,6 +320,8 @@ class InterpolatedDenseOp(_DenseOperator):
             if (frozen_initial_parameter_values is not None) else _np.empty(0)
         self._nfrozen = len(self._frozen_initial_paramvals)
         self.time_is_in_frozen_vals = time_is_in_frozen_vals
+        self.aux_data = None
+        
         time_dependent = bool(self.base_interpolator.times is not None)
 
         dim = self.base_interpolator.data_shape[0]
@@ -367,6 +375,9 @@ class InterpolatedDenseOp(_DenseOperator):
 
         errorgen = self.base_interpolator(fullv)
         self.base[:, :] = _ot.operation_from_error_generator(errorgen, self.target_op.to_dense(), 'logGTi')
+
+        if self.aux_interpolator is not None:
+            self.aux_data = self.aux_interpolator(fullv)
 
     def transform_inplace(self, S):
         # Update self with inverse(S) * self * S (used in gauge optimization)
@@ -503,8 +514,8 @@ class InterpolatedQuantityFactory(object):
         if rank == 0:
             all_interpolators = _flatten(all_interpolators)
             interpolators = _np.empty(self.data_shape, dtype='object')
-            for interp, (indi, indj) in zip(all_interpolators, _flatten(all_index_tuples)):
-                interpolators[indi, indj] = interp
+            for interp, index_tuple in zip(all_interpolators, _flatten(all_index_tuples)):
+                interpolators[index_tuple] = interp
             comm.bcast(interpolators, root=0)
         else:
             interpolators = comm.bcast(None, root=0)
