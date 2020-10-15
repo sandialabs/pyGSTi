@@ -555,6 +555,28 @@ class StateSpaceLabels(object):
         space.
     """
 
+    @classmethod
+    def cast(cls, obj):
+        """
+        Casts `obj` into a :class:`StateSpaceLabels` object if possible.
+
+        If `obj` is already of this type, it is simply returned without modification.
+
+        Parameters
+        ----------
+        obj : StateSpaceLabels or list
+            Either an already-built state space labels object or a list of labels
+            as would be provided to the first argument of :method:`StateSpaceLabels.__init__`.
+
+        Returns
+        -------
+        StateSpaceLabels
+        """
+        if isinstance(obj, cls):
+            return obj
+        else:
+            return cls(obj)
+
     def __init__(self, label_list, dims=None, types=None, evotype="densitymx"):
         """
         Creates a new StateSpaceLabels object.
