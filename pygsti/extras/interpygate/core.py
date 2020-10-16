@@ -409,25 +409,31 @@ class InterpolatedQuantityFactory(object):
 
     def compute_data(self, comm=None, mpi_workers_per_process=1, verbose=False):
         grouped_by_time = bool(self.times is not None)
-        assert(comm is not None), "Currently, `comm` cannot be None"  # TODO - change this in FUTURE?
 
         # Define the MPI parameters
-        comm.Set_name('comm_world')
-        rank = comm.Get_rank()
-        size = comm.Get_size()
-        mpi_workers_per_process = min(size, mpi_workers_per_process)
+        if comm is not None:
+            comm.Set_name('comm_world')
+            rank = comm.Get_rank()
+            size = comm.Get_size()
+            mpi_workers_per_process = min(size, mpi_workers_per_process)
+        else:
+            rank = 0
+            size = 1
 
         # Create communicators for each chunk
         color = rank // mpi_workers_per_process
         root_ranks = [r for r in range(size) if r % mpi_workers_per_process == 0]
         num_mpi_groups = len(root_ranks)
-        groupcomm = comm.Split(color, rank)
-        groupcomm.Set_name('comm_group_%d' % color)
-        grouprank = groupcomm.Get_rank()
-        groupsize = groupcomm.Get_size()
-        rootcomm = comm.Create_group(comm.group.Incl(root_ranks))
-        if rank in root_ranks:
-            rootcomm.Set_name('comm_root')
+        if comm is not None:
+            groupcomm = comm.Split(color, rank)
+            groupcomm.Set_name('comm_group_%d' % color)
+            grouprank = groupcomm.Get_rank()
+            groupsize = groupcomm.Get_size()
+            rootcomm = comm.Create_group(comm.group.Incl(root_ranks))
+            if rank in root_ranks:
+                rootcomm.Set_name('comm_root')
+        else:
+            groupcomm = None
 
         # build the interpolation grid
         axial_points = _np.array(
@@ -437,11 +443,17 @@ class InterpolatedQuantityFactory(object):
         # scatter across mpi workers
         if rank in root_ranks:
             my_points = _split(num_mpi_groups, all_points)
-            my_points = rootcomm.scatter(my_points, root=0)
+            if comm is not None:
+                my_points = rootcomm.scatter(my_points, root=0)
         else:
             my_points = []
-        my_points = groupcomm.bcast(my_points, root=0)
-        if rank in root_ranks:
+
+        if comm is not None:
+            my_points = groupcomm.bcast(my_points, root=0)
+        else:
+            my_points = my_points[0]
+
+        if (rank in root_ranks) and (comm is not None):
             print("Group %d processing %d points on %d processors." % (color, len(my_points), mpi_workers_per_process))
 
         # compute the process matrices at each data point
@@ -458,7 +470,10 @@ class InterpolatedQuantityFactory(object):
 
         # Gather data from groups
         if rank in root_ranks:
-            gathered_data = _np.array(_flatten(rootcomm.gather(data, root=0)))
+            if comm is not None:
+                data = _np.array(_flatten(rootcomm.gather(data, root=0)))
+            else:
+                gathered_data = _np.array([*data])
             # Note: gather adds dim so have (iGroup, iPoint, ....) =flatten=> (iPoint, ...)
 
             #if self.grouped_by_time:
@@ -483,9 +498,10 @@ class InterpolatedQuantityFactory(object):
             gathered_data = _flatten(gathered_data)  # Flatten (iTime, iPoint, ...) => (iPoint, ...)
             all_points = _np.array(list(_itertools.product(self.times, *axial_points)))  # Add time to all_points
 
-        all_points = comm.bcast(all_points, root=0)
-        gathered_data = comm.bcast(gathered_data, root=0)
-        data_shape = comm.bcast(data_shape, root=0)  # just in case some procs didn't have any points
+        if comm is not None:
+            all_points = comm.bcast(all_points, root=0)
+            gathered_data = comm.bcast(gathered_data, root=0)
+            data_shape = comm.bcast(data_shape, root=0)  # just in case some procs didn't have any points
 
         self.data = gathered_data  # indices are (iPoint, <data_indices>)
         self.points = all_points
@@ -493,8 +509,12 @@ class InterpolatedQuantityFactory(object):
 
     def build(self, comm=None, mpi_workers_per_process=1, verbose=False):
 
-        size = comm.Get_size()
-        rank = comm.Get_rank()
+        if comm is not None:
+            size = comm.Get_size()
+            rank = comm.Get_rank()
+        else:
+            size = 1
+            rank = 0
 
         if self.data is None or self.points is None:
             self.compute_data(comm, mpi_workers_per_process, verbose)
@@ -510,13 +530,18 @@ class InterpolatedQuantityFactory(object):
             values = [data_at_point[index_tuple] for data_at_point in self.data]
             my_interpolators[int_ind] = _linND(self.points, values, rescale=True)
 
-        all_interpolators = comm.gather(my_interpolators, root=0)
+        if comm is not None:
+            all_interpolators = comm.gather(my_interpolators, root=0)
+        else:
+            all_interpolators = [my_interpolators]
+
         if rank == 0:
             all_interpolators = _flatten(all_interpolators)
             interpolators = _np.empty(self.data_shape, dtype='object')
             for interp, index_tuple in zip(all_interpolators, _flatten(all_index_tuples)):
                 interpolators[index_tuple] = interp
-            comm.bcast(interpolators, root=0)
+            if comm is not None:
+                comm.bcast(interpolators, root=0)
         else:
             interpolators = comm.bcast(None, root=0)
 
