@@ -213,7 +213,7 @@ class OpFactory(_gm.ModelMember):
             depending on the label requested.
         """
         op = self.create_op(args, sslbls)
-        if isinstance(op, _instrument.Instrument):
+        if isinstance(op, (_instrument.Instrument, _instrument.TPInstrument)):
             return op.simplify_operations("")[item_lbl]
         elif isinstance(op, _povm.POVM):
             return op.simplify_effects("")[item_lbl]
