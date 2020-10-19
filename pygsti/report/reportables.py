@@ -1777,7 +1777,7 @@ def errorgen_and_projections(errgen, mx_basis):
         _tools.std_errorgen_projections(
             errgen, "hamiltonian", mx_basis, mx_basis, return_scale_fctr=True)
     ret['hamiltonian projections'] = proj
-    ret['hamiltonian projection power'] = float(_np.sum(proj**2) / scale**2) / egnorm**2 \
+    ret['hamiltonian projection power'] = float(_np.sum(proj**2) * scale**2) / egnorm**2 \
         if (abs(scale) > 1e-8 and abs(egnorm) > 1e-8) else 0
     #sum of squared projections of normalized error generator onto normalized projectors
 
@@ -1785,7 +1785,7 @@ def errorgen_and_projections(errgen, mx_basis):
         _tools.std_errorgen_projections(
             errgen, "stochastic", mx_basis, mx_basis, return_scale_fctr=True)
     ret['stochastic projections'] = proj
-    ret['stochastic projection power'] = float(_np.sum(proj**2) / scale**2) / egnorm**2 \
+    ret['stochastic projection power'] = float(_np.sum(proj**2) * scale**2) / egnorm**2 \
         if (abs(scale) > 1e-8 and abs(egnorm) > 1e-8) else 0
     #sum of squared projections of normalized error generator onto normalized projectors
 
@@ -1793,7 +1793,7 @@ def errorgen_and_projections(errgen, mx_basis):
         _tools.std_errorgen_projections(
             errgen, "affine", mx_basis, mx_basis, return_scale_fctr=True)
     ret['affine projections'] = proj
-    ret['affine projection power'] = float(_np.sum(proj**2) / scale**2) / egnorm**2 \
+    ret['affine projection power'] = float(_np.sum(proj**2) * scale**2) / egnorm**2 \
         if (abs(scale) > 1e-8 and abs(egnorm) > 1e-8) else 0
     #sum of squared projections of normalized error generator onto normalized projectors
     return ret

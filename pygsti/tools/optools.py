@@ -1378,21 +1378,21 @@ def std_scale_factor(dim, projection_type):
     # then to change the output of XXX_to_linbladian (used in std_error_generators prior to normalization),
     # to be in terms of non-normalized mxs without any prefactors requires multiplication by:
     #  2.0 in hamiltonian case (there is a sqrt(d)/2 factor (WHY??) in numerator in hamiltonian_to_lindbladian)
-    #  d in stochastic case (no factors in stochastic_lindbladian)
+    #  1.0 in stochastic case (factor of d in stochastic_lindbladian)
     #  sqrt(d) in the affine case (not factors in affine_lindbladian)
 
     # So, the total factor needed to change the output of `std_error_generator` to generators using non-normalized
     # mxs without any prefactors requires multiplication by `norm` (since it was divided by in std_error_generators)
     # and multiplication by the factor mentioned above, giving:
     # d * sqrt(2) for hamiltonian case
-    # d**2 in stochastic case
+    # d in stochastic case
     # d in affine case
 
     if projection_type == "hamiltonian":
         scaleFctr = d * _np.sqrt(2)
         # so projection is coefficient of Hamiltonian term (w/un-normalized Paulis)
     elif projection_type == "stochastic":
-        scaleFctr = d2
+        scaleFctr = d
         # so projection is coefficient of P*rho*P stochastic term in generator (w/un-normalized Paulis)
     elif projection_type == "affine":
         scaleFctr = d  # so projection is coefficient of P affine term in generator (w/un-normalized Paulis)
