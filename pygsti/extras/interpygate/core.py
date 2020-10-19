@@ -144,7 +144,7 @@ class InterpolatedOpFactory(_OpFactory):
                         target_op.from_vector(params[0:target_op.num_params])
                         target_mxs.append(target_op.to_dense())
                     process_mxs = physical_process.create_process_matrices(v, times, comm=comm)
-                    return _np.stack([_ot.error_generator(gate, tgt, "logGTi")
+                    return _np.stack([_ot.error_generator(gate, tgt, "pp", "logGTi-quick")
                                       for (gate, tgt) in zip(process_mxs, target_mxs)], axis=0)
             else:
                 def fn(v, comm):
@@ -153,7 +153,7 @@ class InterpolatedOpFactory(_OpFactory):
                     target_op.from_vector(params[0:target_op.num_params])
                     target_mx = target_op.to_dense()
                     process_mx = physical_process.create_process_matrix(v, comm=comm)
-                    return _ot.error_generator(process_mx, target_mx, "logGTi")
+                    return _ot.error_generator(process_mx, target_mx, "pp", "logGTi-quick")
 
         base_interp_builder = InterpolatedQuantityFactory(fn, argument_ranges + parameter_ranges,
                                                           interpolation_order, times)
@@ -283,14 +283,14 @@ class InterpolatedDenseOp(_DenseOperator):
                     #    target_op.set_time(t)
                     #    target_mxs.append(target_op.to_dense())
                     process_mxs = physical_process.create_process_matrices(v, times, comm=comm)
-                    return _np.stack([_ot.error_generator(gate, tgt, "logGTi")
+                    return _np.stack([_ot.error_generator(gate, tgt, "pp", "logGTi-quick")
                                       for (gate, tgt) in zip(process_mxs, target_mxs)], axis=0)
             else:
                 def fn(v, comm):
                     target_op.from_vector(v[0:target_op.num_params])
                     target_mx = target_op.to_dense()
                     process_mx = physical_process.create_process_matrix(v, comm=comm)
-                    return _ot.error_generator(process_mx, target_mx, "logGTi")
+                    return _ot.error_generator(process_mx, target_mx, "pp", "logGTi-quick")
 
         base_interp_builder = InterpolatedQuantityFactory(fn, parameter_ranges, interpolation_order, times)
         base_interpolator = base_interp_builder.build(comm, mpi_workers_per_process, verbosity)
