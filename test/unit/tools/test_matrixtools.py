@@ -1,5 +1,6 @@
 from ..util import BaseCase
 import numpy as np
+import scipy.linalg as spl
 import scipy.sparse as sps
 import warnings
 
@@ -16,9 +17,6 @@ class MatrixToolsTester(BaseCase):
         self.assertTrue(mt.is_hermitian(herm_mx))
         self.assertFalse(mt.is_hermitian(non_herm_mx))
 
-        s = mt.mx_to_string(non_herm_mx)
-        # TODO assert correctness
-
     def test_is_pos_def(self):
         pos_mx = np.array([[ 4, 0.2],
                            [0.1, 3]], 'complex')
@@ -26,6 +24,21 @@ class MatrixToolsTester(BaseCase):
                                [1, 0]], 'complex')
         self.assertTrue(mt.is_pos_def(pos_mx))
         self.assertFalse(mt.is_pos_def(non_pos_mx))
+
+    def test_mx_to_string(self):
+        mx = np.array([[ 1, 1+2j],
+                       [1-2j, 3]], 'complex')
+
+        s = mt.mx_to_string(mx)
+
+        ls = s.split('\n')[:-1] # trim empty last line
+        mx2 = np.zeros_like(mx)
+        for i, row in enumerate(ls):
+            entries = row.split()
+            for j in range(len(entries) // 2):
+                mx2[i, j] = float(entries[2*j]) + 1j*float(entries[2*j+1][:-1]) # trim 'j'
+
+        self.assertArraysAlmostEqual(mx, mx2)
 
     def test_is_valid_density_mx(self):
         density_mx = np.array([[ 0.9,   0],
@@ -35,12 +48,9 @@ class MatrixToolsTester(BaseCase):
         self.assertTrue(mt.is_valid_density_mx(density_mx))
         self.assertFalse(mt.is_valid_density_mx(non_density_mx))
 
-        s = mt.mx_to_string(density_mx)
-        # TODO assert correctness
-
     def test_nullspace(self):
         a = np.array([[1, 1], [1, 1]])
-        print("Nullspace = ", mt.nullspace(a))
+        #print("Nullspace = ", mt.nullspace(a))
         expected = np.array(
             [[ 0.70710678],
              [-0.70710678]]
@@ -54,20 +64,24 @@ class MatrixToolsTester(BaseCase):
         diff2 = np.linalg.norm(mt.nullspace_qr(a) + expected)  # -1*expected is OK too (just an eigenvector)
         self.assertTrue(np.isclose(diff1, 0) or np.isclose(diff2, 0))
 
-        mt.print_mx(a)
+        #mt.print_mx(a)
 
     def test_matrix_log(self):
         M = np.array([[-1, 0], [0, -1]], 'complex')  # degenerate negative evals
-        mt.real_matrix_log(M, action_if_imaginary="raise", tol=1e-6)
-        # TODO assert correctness
+        logM = mt.real_matrix_log(M, action_if_imaginary="raise", tol=1e-6)
+        self.assertArraysAlmostEqual(spl.expm(logM), M)
 
         M = np.array([[-1, 1e-10], [1e-10, -1]], 'complex')  # degenerate negative evals, but will generate complex evecs
-        mt.real_matrix_log(M, action_if_imaginary="raise", tol=1e-6)
-        # TODO assert correctness
+        logM = mt.real_matrix_log(M, action_if_imaginary="raise", tol=1e-6)
+        self.assertArraysAlmostEqual(spl.expm(logM), M)
+
+        with self.assertRaises(ValueError):
+            M = np.array([[1, 0], [0, -1]], 'd')  # a negative *unparied* eigenvalue => log may be imaginary
+            mt.real_matrix_log(M, action_if_imaginary="raise", tol=1e-6)
 
         M = np.array([[1, 0], [0, -1]], 'd')  # a negative *unparied* eigenvalue => log may be imaginary
-        mt.real_matrix_log(M, action_if_imaginary="ignore", tol=1e-6)
-        # TODO assert correctness
+        logM = mt.real_matrix_log(M, action_if_imaginary="ignore", tol=1e-6)
+        self.assertArraysAlmostEqual(spl.expm(logM), M)
 
     def test_matrix_log_warns_on_imaginary(self):
         M = np.array([[1, 0], [0, -1]], 'd')
@@ -192,7 +206,9 @@ class MatrixToolsTester(BaseCase):
 
         B = np.array([1, 1], 'd')
         expA = mt._custom_expm_multiply_simple_core(A, B, mu, m_star, s, tol, eta)
-        # TODO assert correctness
+
+        sp_expA = np.inner(spl.expm(mx), B)
+        self.assertArraysAlmostEqual(expA, sp_expA)
 
     def test_fast_expm_raises_on_non_square(self):
         nonSq = np.array([[1, 2, 4],

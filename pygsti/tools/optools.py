@@ -1309,7 +1309,7 @@ def operation_from_error_generator(error_gen, target_op, typ="logG-logT"):
     """
     Construct a gate from an error generator and a target gate.
 
-    Inverts the computation fone in :func:`error_generator` and
+    Inverts the computation done in :func:`error_generator` and
     returns the value of the gate given by
     gate = target_op * exp(error_gen).
 
@@ -1321,11 +1321,12 @@ def operation_from_error_generator(error_gen, target_op, typ="logG-logT"):
     target_op : ndarray
         The target operation matrix
 
-    typ : {"logG-logT", "logTiG"}
-        The type of error generator to compute.  Allowed values are:
+    typ : {"logG-logT", "logTiG", "logGTi"}
+        The type of error generator to invert.  Allowed values are:
 
-        - "logG-logT" : errgen = log(gate) - log(target_op)
-        - "logTiG" : errgen = log( dot(inv(target_op), gate) )
+        - "logG-logT" : gate = exp( errgen + log(target_op) )
+        - "logTiG" : gate = dot( target_op, exp(errgen) )
+        - "logGTi" : gate = dot( exp(errgen), target_op )
 
     Returns
     -------
