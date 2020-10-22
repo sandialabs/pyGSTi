@@ -14,6 +14,7 @@ import numpy as _np
 import copy as _copy
 import numbers as _numbers
 import warnings as _warnings
+import sys as _sys
 
 from . import spamvec as _sv
 from . import operation as _op
@@ -679,10 +680,19 @@ class StateSpaceLabels(object):
 
         self.tpb_dims = []
         for iTPB, tpbLabels in enumerate(self.labels):
-            self.tpb_dims.append(int(_np.product([self.labeldims[lbl] for lbl in tpbLabels])))
+            float_prod = _np.product(_np.array([self.labeldims[lbl] for lbl in tpbLabels], 'd'))
+            if float_prod >= float(_sys.maxsize):  # too many qubits to hold dimension in an integer
+                self.tpb_dims.append(_np.inf)
+            else:
+                self.tpb_dims.append(int(_np.product([self.labeldims[lbl] for lbl in tpbLabels])))
             self.tpb_index.update({lbl: iTPB for lbl in tpbLabels})
 
         self.dim = sum(self.tpb_dims)
+
+        if len(self.labels) == 1 and all([v == 2 for v in self.labeldims.values()]):
+            self.nqubits = len(self.labels[0])  # there's a well-defined number of qubits
+        else:
+            self.nqubits = None
 
     def reduce_dims_densitymx_to_state_inplace(self):
         """
