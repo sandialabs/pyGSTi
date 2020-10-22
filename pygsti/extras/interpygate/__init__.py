@@ -8,5 +8,5 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from .core import PhysicalProcess
+from .core import PhysicalProcess, InterpolatedDenseOp, InterpolatedOpFactory
 from .process_tomography import vec, unvec, run_process_tomography
