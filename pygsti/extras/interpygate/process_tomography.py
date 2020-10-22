@@ -86,8 +86,8 @@ def split(n, a):
     return _np.array(list(a[i * k + min(i, m):(i + 1) * k + min(i + 1, m)] for i in range(n)))
 
 
-def do_process_tomography(state_to_density_matrix_fn, n_qubits=1, comm=_comm,
-                          verbose=False, basis='pp', time_dependent=False, opt_args={}):
+def run_process_tomography(state_to_density_matrix_fn, n_qubits=1, comm=_comm,
+                           verbose=False, basis='pp', time_dependent=False, opt_args={}):
     """ 
     A function to compute the process matrix for a quantum channel given a function 
     that maps a pure input state to an output density matrix. 
@@ -197,13 +197,13 @@ if __name__ == '__main__':
         return [unvec(_np.dot(test_process, rho)), unvec(_np.dot(_np.linalg.matrix_power(test_process,2), rho))]
 
 
-    process_matrix = do_process_tomography(single_time_test_function, n_qubits=2, verbose=False)
+    process_matrix = run_process_tomography(single_time_test_function, n_qubits=2, verbose=False)
     if _rank == 0:
         test_process_pp = change_basis(test_process, 'col', 'pp')
         print("\nSingle-time test result should be True:")
         print(_np.isclose(process_matrix, test_process_pp).all())
 
-    process_matrices = do_process_tomography(multi_time_test_function, n_qubits=2, verbose=False, time_dependent=True)
+    process_matrices = run_process_tomography(multi_time_test_function, n_qubits=2, verbose=False, time_dependent=True)
     if _rank==0:
         test_process = change_basis(test_process, 'col', 'pp')
         print("\nMulti-time test result should be [True, False]:")

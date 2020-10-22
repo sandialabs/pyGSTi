@@ -9,4 +9,4 @@
 #***************************************************************************************************
 
 from .core import PhysicalProcess
-from .process_tomography import vec, unvec, do_process_tomography
+from .process_tomography import vec, unvec, run_process_tomography
