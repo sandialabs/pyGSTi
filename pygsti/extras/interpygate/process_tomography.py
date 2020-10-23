@@ -5,17 +5,6 @@ from functools import reduce
 import numpy as _np
 import numpy.linalg as _lin
 import itertools as _itertools
-
-try:
-    from mpi4py import MPI
-    _comm = MPI.COMM_WORLD
-    _rank = _comm.Get_rank()
-    _size = _comm.Get_size()
-except ImportError:
-    _comm = None
-    _rank = 0
-    _size = 1
-
 from pygsti.tools.basistools import change_basis
 
 
@@ -26,17 +15,17 @@ def multi_kron(*a):
 
 
 def vec(matrix):
-    """A function that vectorizes a matrix. 
-    
+    """A function that vectorizes a matrix.
+
     Args:
         matrix (list,numpy.ndarray): NxN matrix
-    
+
     Returns:
         numpy.ndarray: N^2x1 dimensional column vector
-    
+
     Raises:
         ValueError: If the input matrix is not square.
-    
+
     """
     matrix = _np.array(matrix)
     if matrix.shape == (len(matrix), len(matrix)):
@@ -48,16 +37,16 @@ def vec(matrix):
 def unvec(vectorized):
     """A function that vectorizes a process in the basis of matrix units, sorted first
     by column, then row.
-    
+
     Args:
         vectorized (list,numpy.ndarray): Nx1 matrix or N-dimensional vector
-    
+
     Returns:
         numpy.ndarray: NxN dimensional column vector
-    
+
     Raises:
         ValueError: If the length of the input is not a perfect square
-    
+
     """
     vectorized = _np.array(vectorized)
     length = int(_np.sqrt(max(vectorized.shape)))
@@ -86,11 +75,11 @@ def split(n, a):
     return _np.array(list(a[i * k + min(i, m):(i + 1) * k + min(i + 1, m)] for i in range(n)))
 
 
-def run_process_tomography(state_to_density_matrix_fn, n_qubits=1, comm=_comm,
+def run_process_tomography(state_to_density_matrix_fn, n_qubits=1, comm=None,
                            verbose=False, basis='pp', time_dependent=False, opt_args={}):
-    """ 
-    A function to compute the process matrix for a quantum channel given a function 
-    that maps a pure input state to an output density matrix. 
+    """
+    A function to compute the process matrix for a quantum channel given a function
+    that maps a pure input state to an output density matrix.
 
     Args:
         state_to_density_matrix_fn : (function: array -> array)
@@ -114,7 +103,7 @@ def run_process_tomography(state_to_density_matrix_fn, n_qubits=1, comm=_comm,
 
         opt_args : (dict, optional)
             Optional keyword arguments for state_to_density_matrix_fn
-    
+
     Returns:
         numpy.ndarray
             The process matrix representation of the quantum channel in the basis
@@ -156,10 +145,12 @@ def run_process_tomography(state_to_density_matrix_fn, n_qubits=1, comm=_comm,
         # Flatten over processors
         out_density_matrices = _np.array([y for x in gathered_out_density_matrices for y in x])
         # Sort the list by time
-        out_density_matrices = _np.transpose(out_density_matrices, [1,0,2,3])
-        out_states = [_np.column_stack(list([vec(rho) for rho in density_matrices_at_time])) for density_matrices_at_time in out_density_matrices]
+        out_density_matrices = _np.transpose(out_density_matrices, [1, 0, 2, 3])
+        out_states = [_np.column_stack(list([vec(rho) for rho in density_matrices_at_time]))
+                      for density_matrices_at_time in out_density_matrices]
         process_matrices = [_np.dot(out_states_at_time, _lin.inv(in_states)) for out_states_at_time in out_states]
-        process_matrices = [change_basis(process_matrix_at_time, 'col', basis) for process_matrix_at_time in process_matrices]
+        process_matrices = [change_basis(process_matrix_at_time, 'col', basis)
+                            for process_matrix_at_time in process_matrices]
 
         if not time_dependent:
             return process_matrices[0]
@@ -168,45 +159,3 @@ def run_process_tomography(state_to_density_matrix_fn, n_qubits=1, comm=_comm,
     else:
         # print(f'Rank {rank} returning NONE from comm {comm}.')
         return None
-
-
-if __name__ == '__main__':
-    """ Demonstrate the process tomography function with (potentially) time-dependent outputs. """
-    sigI = _np.array([[1, 0], [0, 1]], dtype='complex')
-    sigX = _np.array([[0, 1], [1, 0]], dtype='complex')
-    sigY = _np.array([[0, -1.j], [1.j, 0]], dtype='complex')
-    sigZ = _np.array([[1, 0], [0, -1]], dtype='complex')
-    theta = .32723
-    u = _np.cos(theta) * sigI + 1.j * _np.sin(theta) * sigX
-    v = _np.sin(theta) * sigI - 1.j * _np.cos(theta) * sigX
-
-    U = _np.kron(u, v)
-    n_qubits = 2
-    # U = u
-    # n_qubits = 1
-    test_process = _np.kron(U.conj().T, U)
-
-
-    def single_time_test_function(pure_state, test_process=test_process):
-        rho = vec(_np.outer(pure_state, pure_state.conj()))
-        return unvec(_np.dot(test_process, rho))
-
-
-    def multi_time_test_function(pure_state, test_process=test_process):
-        rho = vec(_np.outer(pure_state, pure_state.conj()))
-        return [unvec(_np.dot(test_process, rho)), unvec(_np.dot(_np.linalg.matrix_power(test_process,2), rho))]
-
-
-    process_matrix = run_process_tomography(single_time_test_function, n_qubits=2, verbose=False)
-    if _rank == 0:
-        test_process_pp = change_basis(test_process, 'col', 'pp')
-        print("\nSingle-time test result should be True:")
-        print(_np.isclose(process_matrix, test_process_pp).all())
-
-    process_matrices = run_process_tomography(multi_time_test_function, n_qubits=2, verbose=False, time_dependent=True)
-    if _rank==0:
-        test_process = change_basis(test_process, 'col', 'pp')
-        print("\nMulti-time test result should be [True, False]:")
-        print([_np.isclose(x, test_process).all() for x in process_matrices])
-
-

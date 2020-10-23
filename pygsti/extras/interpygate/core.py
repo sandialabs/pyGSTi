@@ -24,28 +24,16 @@ from ...tools import optools as _ot
 from ...objects.operation import DenseOperator as _DenseOperator
 from ...objects.opfactory import OpFactory as _OpFactory
 
-#TODO REMOVE / INCORPORATE
-# import dill
-#try:
-#    from mpi4py import MPI
-#    _comm = MPI.COMM_WORLD
-#    _rank = _comm.Get_rank()
-#    _size = _comm.Get_size()
-#except ImportError:
-#    _comm = None
+#TODO: incorporate VerbosityPrinter
+#TODO: make type of interpolator into a user-specified argument (not always _linND)
 
-__version__ = '0.9.0'
-
-#TODO: replace with VerbosityPrinter usage
-def _print(l):
-    if _rank == 0:
-        print(l)
 
 #TODO move elsewhere?
 def _split(n, a, cast_to_array=True):
     k, m = divmod(len(a), n)
     lst = list(a[i * k + min(i, m):(i + 1) * k + min(i + 1, m)] for i in range(n))
     return _np.array(lst) if cast_to_array else lst
+
 
 def _flatten(x):
     try:
@@ -161,10 +149,10 @@ class InterpolatedOpFactory(_OpFactory):
                     target_mx = target_op.to_dense()
                     return _ot.error_generator(process_mx, target_mx, "pp", "logGTi-quick")
 
-        ranges = [None]*(len(argument_ranges) + len(parameter_ranges))
+        ranges = [None] * (len(argument_ranges) + len(parameter_ranges))
         for i, arg_range in zip(argument_indices, argument_ranges): ranges[i] = arg_range
         for i, param_range in zip(param_indices, parameter_ranges): ranges[i] = param_range
-            
+
         base_interp_builder = InterpolatedQuantityFactory(fn, process_shape, ranges, None, ngroups)
         base_interpolator = base_interp_builder.build(comm, mpi_workers_per_process, verbosity)
 
@@ -206,7 +194,7 @@ class InterpolatedOpFactory(_OpFactory):
             min_val, max_val = self.base_interpolator.parameter_ranges[i]
             initial_point.append((min_val + max_val) / 2)
         self._paramvec = _np.array(initial_point, 'd')
-        
+
         super().__init__(dim, evotype="densitymx")
         self.from_vector(self._paramvec)  # initialize object
 
@@ -243,7 +231,7 @@ class InterpolatedOpFactory(_OpFactory):
 
 
 class InterpolatedDenseOp(_DenseOperator):
-    
+
     #@classmethod
     #def from_dir(cls, dirname):
     #    dirname = _pathlib.Path(dirname)
@@ -291,7 +279,7 @@ class InterpolatedDenseOp(_DenseOperator):
                     grouped_dims = tuple(map(len, grouped_v))
                     ret = _np.empty(grouped_dims + process_shape, 'd')
                     assert(process_mxs.shape == ret.shape)
-                    
+
                     for index_tup, gv in zip(_itertools.product(*[range(d) for d in grouped_dims]),
                                              _itertools.product(*grouped_v)):
                         params = _np.concatenate((v, gv))
@@ -350,7 +338,6 @@ class InterpolatedDenseOp(_DenseOperator):
         assert(self.base_interpolator.qty_shape == (dim, dim)), \
             "Base interpolator must interpolate a square matrix value!"
         assert(target_op.dim == dim), "Target operation dim must match interpolated matrix dim!"
-        nfrozen = len(self._frozen_indices)
 
         if initial_point is None:
             initial_point = []
@@ -435,11 +422,11 @@ class InterpolatedQuantityFactory(object):
             equally spaced `num_points` points.  If the elements are `numpy.ndarray` objects, then they
             specify the values directly, e.g. `array([0, 0.1, 0.4, 1.0, 5.0])`.  If `parameter_ranges`
             is specified, `parameter_points` must be left as `None`.
-            
+
         parameter_points : list or numpy.ndarray, optional
             A list or array of parameter-space points, which can be used instead of `parameter_ranges`
             to specify a non-rectangular grid of points.  Each element is an array of real values specifying
-            a single point in parameter space (the length of each element must be the same, and sets the 
+            a single point in parameter space (the length of each element must be the same, and sets the
             number of parameters).  If `parameter_points` is used, then `num_params_to_evaluate_as_group`
             must be 0.
 
@@ -449,7 +436,7 @@ class InterpolatedQuantityFactory(object):
         """
         self.fn_to_interpolate = fn_to_interpolate
         assert(bool(parameter_ranges is not None) ^ bool(parameter_points is not None)), \
-               "Exactly one of `parameter_ranges` or `parameter_points` must be specified!"
+            "Exactly one of `parameter_ranges` or `parameter_points` must be specified!"
         self._parameter_ranges = parameter_ranges
         self._parameter_points = _np.array(parameter_points) if (parameter_points is not None) \
             else None  # ensures all points have same length
@@ -528,7 +515,8 @@ class InterpolatedQuantityFactory(object):
             flat_data = _np.empty(len(my_points) * int(_np.product(expected_fn_output_shape)), dtype='d')
             data = flat_data.view(); data.shape = (len(my_points),) + expected_fn_output_shape
             if (comm is not None):
-                print("Group %d processing %d points on %d processors." % (color, len(my_points), mpi_workers_per_process))
+                print("Group %d processing %d points on %d processors." % (color, len(my_points),
+                                                                           mpi_workers_per_process))
         else:
             flat_data = data = None  # to keep us from accidentally misusing these below
 
