@@ -23,9 +23,7 @@ from ...tools.basistools import change_basis as _change_basis
 from ...tools import optools as _ot
 from ...objects.operation import DenseOperator as _DenseOperator
 from ...objects.opfactory import OpFactory as _OpFactory
-
-#TODO: incorporate VerbosityPrinter
-#TODO: make type of interpolator into a user-specified argument (not always _linND)
+from ...objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 
 
 #TODO move elsewhere?
@@ -96,7 +94,8 @@ class InterpolatedOpFactory(_OpFactory):
     @classmethod
     def create_by_interpolating_physical_process(cls, target_factory, physical_process, argument_ranges,
                                                  parameter_ranges, argument_indices=None, comm=None,
-                                                 mpi_workers_per_process=1, verbosity=0):
+                                                 mpi_workers_per_process=1, interpolator_and_args=None, verbosity=0):
+        #printer = _VerbosityPrinter.create_printer(verbosity)
         nargs = len(argument_ranges)
         if argument_indices is None:
             argument_indices = _np.arange(nargs, dtype=int)
@@ -153,7 +152,8 @@ class InterpolatedOpFactory(_OpFactory):
         for i, arg_range in zip(argument_indices, argument_ranges): ranges[i] = arg_range
         for i, param_range in zip(param_indices, parameter_ranges): ranges[i] = param_range
 
-        base_interp_builder = InterpolatedQuantityFactory(fn, process_shape, ranges, None, ngroups)
+        base_interp_builder = InterpolatedQuantityFactory(fn, process_shape, ranges, None, ngroups,
+                                                          interpolator_and_args)
         base_interpolator = base_interp_builder.build(comm, mpi_workers_per_process, verbosity)
 
         if physical_process.aux_shape is not None:
@@ -166,7 +166,8 @@ class InterpolatedOpFactory(_OpFactory):
                 def aux_fn(v, comm):
                     return physical_process.create_aux_info(v, comm=comm)
 
-            aux_interp_builder = InterpolatedQuantityFactory(aux_fn, aux_shape, ranges, None, ngroups)
+            aux_interp_builder = InterpolatedQuantityFactory(aux_fn, aux_shape, ranges, None, ngroups,
+                                                             interpolator_and_args)
             aux_interpolator = aux_interp_builder.build(comm, mpi_workers_per_process, verbosity)
         else:
             aux_interpolator = None
@@ -253,13 +254,14 @@ class InterpolatedDenseOp(_DenseOperator):
     @classmethod
     def create_by_interpolating_physical_process(cls, target_op, physical_process, parameter_ranges=None,
                                                  parameter_points=None, comm=None,
-                                                 mpi_workers_per_process=1, verbosity=0):
+                                                 mpi_workers_per_process=1, interpolator_and_args=None, verbosity=0):
         # object_to_interpolate is a PhysicalProcess (or a LinearOperator with adapter?)
         # XXX- anything with from_vector and to_dense methods
         # or a create_process_matrix(v, time=None) method.
         # if times is not None, then this operator's set_time functions nontrivially and object_to_interpolate must be a
         # PhysicalProcess that implements the create_process_matrices(v, times) method
 
+        #printer = _VerbosityPrinter.create_printer(verbosity)
         ngroups = physical_process.num_params_evaluated_as_group
         process_shape = physical_process.item_shape
         if isinstance(physical_process, PhysicalErrorGenerator):
@@ -298,7 +300,7 @@ class InterpolatedDenseOp(_DenseOperator):
                     return _ot.error_generator(process_mx, target_mx, "pp", "logGTi-quick")
 
         base_interp_builder = InterpolatedQuantityFactory(fn, process_shape, parameter_ranges, parameter_points,
-                                                          ngroups)
+                                                          ngroups, interpolator_and_args)
         base_interpolator = base_interp_builder.build(comm, mpi_workers_per_process, verbosity)
 
         if physical_process.aux_shape is not None:
@@ -312,7 +314,7 @@ class InterpolatedDenseOp(_DenseOperator):
                     return physical_process.create_aux_info(v, comm=comm)
 
             aux_interp_builder = InterpolatedQuantityFactory(aux_fn, aux_shape, parameter_ranges, parameter_points,
-                                                             ngroups)
+                                                             ngroups, interpolator_and_args)
             aux_interpolator = aux_interp_builder.build(comm, mpi_workers_per_process, verbosity)
         else:
             aux_interpolator = None
@@ -392,7 +394,7 @@ class InterpolatedDenseOp(_DenseOperator):
 class InterpolatedQuantityFactory(object):
 
     def __init__(self, fn_to_interpolate, qty_shape=(), parameter_ranges=None, parameter_points=None,
-                 num_params_to_evaluate_as_group=0):
+                 num_params_to_evaluate_as_group=0, interpolator_and_args=None):
         """
         Creates an InterpolatedQuantityFactory object.
 
@@ -433,6 +435,10 @@ class InterpolatedQuantityFactory(object):
         num_params_to_evaluate_as_group : int, optional
             The number of parameter ranges, counted back from the last one, that should be passed to
             `fn_to_interpolate` as an entire range of values, i.e. via the `grouped_axial_pts` argument.
+
+        interpolator_and_args : tuple, optional
+            Optionally a 2-tuple of an interpolation class and argument dictionary.  If None, the
+            default of `(scipy.interpolate.LinearNDInterpolator, {'rescale': True})` is used.
         """
         self.fn_to_interpolate = fn_to_interpolate
         assert(bool(parameter_ranges is not None) ^ bool(parameter_points is not None)), \
@@ -444,8 +450,11 @@ class InterpolatedQuantityFactory(object):
         self.data = None
         self.points = None
         self.qty_shape = qty_shape
+        self.interpolator_and_args = interpolator_and_args
 
-    def compute_data(self, comm=None, mpi_workers_per_process=1, verbose=False):
+    def compute_data(self, comm=None, mpi_workers_per_process=1, verbosity=0):
+
+        printer = _VerbosityPrinter.create_printer(verbosity, comm)
 
         # Define the MPI parameters
         if comm is not None:
@@ -515,14 +524,14 @@ class InterpolatedQuantityFactory(object):
             flat_data = _np.empty(len(my_points) * int(_np.product(expected_fn_output_shape)), dtype='d')
             data = flat_data.view(); data.shape = (len(my_points),) + expected_fn_output_shape
             if (comm is not None):
-                print("Group %d processing %d points on %d processors." % (color, len(my_points),
-                                                                           mpi_workers_per_process))
+                printer.log("Group %d processing %d points on %d processors." % (color, len(my_points),
+                                                                                 mpi_workers_per_process))
         else:
             flat_data = data = None  # to keep us from accidentally misusing these below
 
         # compute the process matrices at each data point
         for ind, point in enumerate(my_points):
-            if verbose: print("Evaluating index %d , data = %s" % (ind, str(point)))
+            printer.log("Evaluating index %d , data = %s" % (ind, str(point)))
             val = self.fn_to_interpolate(point, grouped_axial_pts, comm=groupcomm) if grouped_axial_pts \
                 else self.fn_to_interpolate(point, comm=groupcomm)
             if rank in root_ranks:  # only the root proc of each groupcomm needs to produce a result
@@ -549,8 +558,9 @@ class InterpolatedQuantityFactory(object):
         self.data = flat_data.view()
         self.data.shape = (len(all_points),) + self.qty_shape  # indices are (iPoint, <data_indices>)
 
-    def build(self, comm=None, mpi_workers_per_process=1, verbose=False):
+    def build(self, comm=None, mpi_workers_per_process=1, verbosity=0):
 
+        printer = _VerbosityPrinter.create_printer(verbosity, comm)
         if comm is not None:
             size = comm.Get_size()
             rank = comm.Get_rank()
@@ -559,7 +569,7 @@ class InterpolatedQuantityFactory(object):
             rank = 0
 
         if self.data is None or self.points is None:
-            self.compute_data(comm, mpi_workers_per_process, verbose)
+            self.compute_data(comm, mpi_workers_per_process, printer)
 
         self.interpolator = _np.empty(self.qty_shape, dtype=object)
         all_index_tuples = _split(size, list(_itertools.product(*[range(d) for d in self.qty_shape])),
@@ -567,10 +577,15 @@ class InterpolatedQuantityFactory(object):
         my_index_tuples = all_index_tuples[rank]
         my_interpolators = _np.empty(len(my_index_tuples), dtype=object)
 
+        if self.interpolator_and_args is None:
+            interp_cls, interp_kwargs = (_linND, {'rescale': True})
+        else:
+            interp_cls, interp_kwargs = self.interpolator_and_args
+
         # Build the interpolators
         for int_ind, index_tuple in enumerate(my_index_tuples):
             values = [data_at_point[index_tuple] for data_at_point in self.data]
-            my_interpolators[int_ind] = _linND(self.points, values, rescale=True)
+            my_interpolators[int_ind] = interp_cls(self.points, values, **interp_kwargs)
 
         if comm is not None:
             all_interpolators = comm.gather(my_interpolators, root=0)
@@ -603,7 +618,7 @@ class InterpolatedQuantity(object):
     def from_file(cls, filename):
         raise NotImplementedError()
 
-    def __init__(self, interpolators, parameter_ranges, verbose=False):
+    def __init__(self, interpolators, parameter_ranges):
         self.interpolators = interpolators
         self.parameter_ranges = tuple(parameter_ranges)
 
