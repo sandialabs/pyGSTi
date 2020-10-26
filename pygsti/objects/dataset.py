@@ -1506,7 +1506,6 @@ class DataSet(object):
         count_dict = {str(key): value for key, value in histogram_counter.items()}
         self.add_count_dict(circuit, count_dict)
 
-
     def add_raw_series_data(self, circuit, outcome_label_list, time_stamp_list,
                             rep_count_list=None, overwrite_existing=True,
                             record_zero_counts=True, aux=None, update_ol=True,
