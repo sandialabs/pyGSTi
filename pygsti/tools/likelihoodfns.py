@@ -345,7 +345,7 @@ def logl_jacobian(model, dataset, circuits=None,
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
     obj = _objfns._objfn(obj_cls, model, dataset, circuits,
                          regularization, {'prob_clip_interval': prob_clip_interval},
-                         op_label_aliases, comm, mem_limit, ('jacobian',), (), mdc_store)
+                         op_label_aliases, comm, mem_limit, ('jacobian',), (), mdc_store, verbosity)
     return -obj.jacobian()  # negative b/c objective is deltaLogL = max_logl - logL
 
 
@@ -418,7 +418,7 @@ def logl_hessian(model, dataset, circuits=None,
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
     obj = _objfns._objfn(obj_cls, model, dataset, circuits,
                          regularization, {'prob_clip_interval': prob_clip_interval},
-                         op_label_aliases, comm, mem_limit, ('hessian',), (), mdc_store)
+                         op_label_aliases, comm, mem_limit, ('hessian',), (), mdc_store, verbosity)
     return -obj.hessian()  # negative b/c objective is deltaLogL = max_logl - logL
 
 
@@ -503,7 +503,7 @@ def logl_approximate_hessian(model, dataset, circuits=None,
                          {'min_prob_clip': min_prob_clip,
                           'radius': radius},
                          {'prob_clip_interval': prob_clip_interval},
-                         op_label_aliases, comm, mem_limit, ('approximate_hessian',), (), mdc_store)
+                         op_label_aliases, comm, mem_limit, ('approximate_hessian',), (), mdc_store, verbosity)
     return -obj.approximate_hessian()  # negative b/c objective is deltaLogL = max_logl - logL
 
 

@@ -55,9 +55,19 @@ class ForwardSimulator(object):
     @classmethod
     def _array_types_for_method(cls, method_name):
         # The array types of *intermediate* or *returned* values within various class methods (for memory estimates)
-        if method_name == 'bulk_probs': return ('E',) + cls.array_types_for_method('bulk_fill_probs')
-        if method_name == 'bulk_dprobs': return ('EP',) + cls.array_types_for_method('bulk_fill_dprobs')
-        if method_name == 'bulk_hprobs': return ('EPP',) + cls.array_types_for_method('bulk_fill_hprobs')
+        if method_name == 'bulk_probs': return ('E',) + cls._array_types_for_method('bulk_fill_probs')
+        if method_name == 'bulk_dprobs': return ('EP',) + cls._array_types_for_method('bulk_fill_dprobs')
+        if method_name == 'bulk_hprobs': return ('EPP',) + cls._array_types_for_method('bulk_fill_hprobs')
+        if method_name == 'bulk_hprobs_by_block': return cls._array_types_for_method('_bulk_hprobs_by_block')
+        if method_name == '_bulk_hprobs_by_block': return ('epp',) + cls._array_types_for_method('bulk_fill_hprobs')
+        if method_name == 'bulk_fill_probs': return cls._array_types_for_method('_bulk_fill_probs_block')
+        if method_name == 'bulk_fill_dprobs': return cls._array_types_for_method('_bulk_fill_dprobs_block')
+        if method_name == 'bulk_fill_hprobs': return cls._array_types_for_method('_bulk_fill_hprobs_block')
+        if method_name == '_bulk_fill_probs_block': return ()
+        if method_name == '_bulk_fill_dprobs_block':
+            return ('e',) + cls._array_types_for_method('_bulk_fill_probs_block')
+        if method_name == '_bulk_fill_hprobs_block':
+            return ('ep', 'ep') + cls._array_types_for_method('_bulk_fill_dprobs_block')
         return ()
 
     def __init__(self, model=None):

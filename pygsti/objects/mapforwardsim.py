@@ -74,9 +74,10 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
     @classmethod
     def _array_types_for_method(cls, method_name):
         # The array types of *intermediate* or *returned* values within various class methods (for memory estimates)
-        if method_name == 'bulk_fill_probs': return ('zd',)  # cache of rho-vectors
-        if method_name == 'bulk_fill_dprobs': return ('zd',)  # cache of rho-vectors
-        if method_name == 'bulk_fill_hprobs': return ('zd',)  # cache of rho-vectors
+        if method_name == '_bulk_fill_probs_block': return ('zd',)  # cache of rho-vectors
+        if method_name == '_bulk_fill_dprobs_block': return ('zd',)  # cache of rho-vectors
+        if method_name == '_bulk_fill_hprobs_block': return ('zd',)  # cache of rho-vectors
+
         if method_name == 'bulk_fill_timedep_loglpp': return ()
         if method_name == 'bulk_fill_timedep_dloglpp': return ('p',)  # just an additional parameter vector
         if method_name == 'bulk_fill_timedep_chi2': return ()

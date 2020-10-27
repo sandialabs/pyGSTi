@@ -26,7 +26,12 @@ class DistributableForwardSimulator(_ForwardSimulator):
     @classmethod
     def _array_types_for_method(cls, method_name):
         # give array types for this method because it's currently used publically in objective function's hessian
-        if method_name == '_bulk_hprobs_by_block_singleatom': return ('epp', 'epp')
+        if method_name == '_bulk_hprobs_by_block_singleatom':
+            return ('epp', 'epp') + cls._array_types_for_method('_bulk_fill_hprobs_singleatom')
+        if method_name == '_bulk_fill_hprobs_singleatom':
+            return cls._array_types_for_method('_bulk_fill_probs_block') \
+                + cls._array_types_for_method('_bulk_fill_dprobs_block') \
+                + cls._array_types_for_method('_bulk_fill_hprobs_block')
         return super()._array_types_for_method(method_name)
 
     def __init__(self, model=None):
