@@ -123,21 +123,57 @@ class ProjectModelTester(BaseCase):
         self.target_model = std2Q_XXYYII.target_model()
         self.model = self.target_model.depolarize(op_noise=0.01)
 
+    def _check_proj_model(self, proj_model, gen_type):
+        """Test projected models by reconstructing original error generator.
+        """
+        opLabels = self.target_model.operations
+        for pmodel, ptype in zip(proj_model, self.projectionTypes):
+            for op in opLabels:
+                # Full error generator from model to target
+                G = ot.error_generator(self.model.operations[op],
+                    self.target_model.operations[op],
+                    self.target_model.basis,
+                    gen_type)
+
+                # Error generator in projected space between model and target
+                G_inspace = ot.error_generator(pmodel.operations[op],
+                    self.target_model.operations[op],
+                    self.target_model.basis,
+                    gen_type)
+
+                # Error generator perpendicular to projected space between model and target
+                G_perp = ot.error_generator(pmodel.operations[op],
+                    self.model.operations[op],
+                    self.target_model.basis,
+                    gen_type)
+
+                # Error generators
+                # TODO: Why does H have to be flipped...
+                G_reconstruct = G_inspace + G_perp
+                if ptype == 'H':
+                    G_reconstruct *= -1
+
+                self.assertArraysAlmostEqual(G, G_reconstruct)
+
     @fake_minimize
     def test_log_diff_model_projection(self):
         basis = self.target_model.basis
-        gentype = 'logG-logT'
-        proj_model, Np_dict = ot.project_model(self.model, self.target_model, self.projectionTypes, gentype)
+        gen_type = 'logG-logT'
+        proj_model, Np_dict = ot.project_model(self.model, self.target_model, self.projectionTypes, gen_type)
         # TODO assert correctness
-        # Initial ideas about testing final projected errgen vs model errgen then projecting didn't quite work out yet
+        # The logG-logT generator is not always self-consistent with op -> errgen -> op checks, so this will fail
+        # Most often failures observed for the Gxx and Gxy in this gateset
+        # self._check_proj_model(proj_model, gen_type)
 
     def test_logTiG_model_projection(self):
-        proj_model, Np_dict = ot.project_model(self.model, self.target_model, self.projectionTypes, 'logTiG')
-        # TODO assert correctness
+        gen_type = 'logTiG'
+        proj_model, Np_dict = ot.project_model(self.model, self.target_model, self.projectionTypes, gen_type)
+        self._check_proj_model(proj_model, gen_type)
 
     def test_logGTi_model_projection(self):
-        proj_model, Np_dict = ot.project_model(self.model, self.target_model, self.projectionTypes, 'logGTi')
-        # TODO assert correctness
+        gen_type = 'logGTi'
+        proj_model, Np_dict = ot.project_model(self.model, self.target_model, self.projectionTypes, gen_type)
+        self._check_proj_model(proj_model, gen_type)
 
     def test_raises_on_basis_mismatch(self):
         with self.assertRaises(ValueError):
@@ -327,12 +363,12 @@ class ErrorGenTester(BaseCase):
                 for basisName in basisNames:
                     ot.std_errorgen_projections(errgen, projectionType, basisName)
 
-            originalGate = ot.operation_from_error_generator(errgen, gateTarget, 'logG-logT')
-            altOriginalGate = ot.operation_from_error_generator(altErrgen, gateTarget, 'logTiG')
-            altOriginalGate2 = ot.operation_from_error_generator(altErrgen, gateTarget, 'logGTi')
+            originalGate = ot.operation_from_error_generator(errgen, gateTarget, self.target_model.basis, 'logG-logT')
+            altOriginalGate = ot.operation_from_error_generator(altErrgen, gateTarget, self.target_model.basis, 'logTiG')
+            altOriginalGate2 = ot.operation_from_error_generator(altErrgen, gateTarget, self.target_model.basis, 'logGTi')
             with self.assertRaises(ValueError):
-                ot.operation_from_error_generator(errgen, gateTarget, 'adsf')
-            #self.assertArraysAlmostEqual(originalGate, gate) # sometimes need to approximate the log for this one
+                ot.operation_from_error_generator(errgen, gateTarget, self.target_model.basis, 'adsf')
+            self.assertArraysAlmostEqual(originalGate, gate) # sometimes need to approximate the log for this one
             self.assertArraysAlmostEqual(altOriginalGate, gate)
             self.assertArraysAlmostEqual(altOriginalGate2, gate)
 
