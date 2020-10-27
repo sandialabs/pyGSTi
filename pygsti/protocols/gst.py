@@ -1969,11 +1969,19 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
             # Test that the found wildcard budget is admissable (there is not a strictly smaller wildcard budget
             # that also satisfies the constraints), and while doing this find the active constraints.
             printer.log("VERIFYING that the final wildcard budget vector is admissable")
+
+            # Used for deciding what counts as a negligable per-gate wildcard.
+            max_depth = 0
+            for circ in ds.keys():
+                if circ.depth > max_depth:
+                    max_depth = circ.depth
+
             active_constraints_list = []
             for w_ind, w_ele in enumerate(wvec):
                 active_constraints = {}
                 strictly_smaller_wvec = wvec.copy()
-                if abs(w_ele) > 1e-6:  # Use absolute values everywhere, as wildcard vector is allowed to be negative.
+                negligable_budget = 1 / (100 * max_depth)
+                if abs(w_ele) > negligable_budget:  # Use absolute values everywhere, as wildcard vector is allowed to be negative.
                     strictly_smaller_wvec[w_ind] = 0.99 * abs(w_ele)  # Decrease the vector element by 1%.
                     printer.log(" - Trialing strictly smaller vector, with element %.3g reduced from %.3g to %.3g" %
                                 (w_ind, w_ele, strictly_smaller_wvec[w_ind]))
@@ -1999,8 +2007,8 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
                                                             percircuit_constraint[circ_ind_max])
                 else:
                     if budget_was_optimized:
-                        printer.log((" - Element %.3g is %.3g. This is below 10^-6, so trialing snapping to zero"
-                                     " and updating.") % (w_ind, w_ele))
+                        printer.log((" - Element %.3g is %.3g. This is below %.3g, so trialing snapping to zero"
+                                     " and updating.") % (w_ind, w_ele, negligable_budget))
                         strictly_smaller_wvec[w_ind] = 0.
                         glob_constraint, percircuit_constraint = _evaluate_constraints(strictly_smaller_wvec)
                         if glob_constraint + _np.sum(percircuit_constraint) < 1e-4:
@@ -2011,8 +2019,8 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
                                         (glob_constraint, _np.max(percircuit_constraint)))
                     else:
                         # We do this instead when we're not optimizing the budget, as otherwise we'd change the budget.
-                        printer.log(" - Skipping trialing reducing element %.3g below %.3g, as it is less than 10^-6" %
-                                    (w_ind, w_ele))
+                        printer.log(" - Skipping trialing reducing element %.3g below %.3g, as it is less than %.3g" %
+                                    (w_ind, w_ele, negligable_budget))
                 active_constraints_list.append(active_constraints)
 
             # Note: active_constraints_list is typically stored in parameters['unmodeled_error active constraints']
