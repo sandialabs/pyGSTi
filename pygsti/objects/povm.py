@@ -24,6 +24,7 @@ from .label import Label as _Label
 from ..tools import matrixtools as _mt
 from ..tools import basistools as _bt
 from ..tools import optools as _gt
+from .errorgencontainer import ErrorGeneratorContainer as _ErrorGeneratorContainer
 
 
 #Thoughts:
@@ -1075,7 +1076,7 @@ class ComputationalBasisPOVM(POVM):
         return s
 
 
-class LindbladPOVM(POVM):
+class LindbladPOVM(POVM, _ErrorGeneratorContainer):
     """
     A POVM that is effectively a *single* Lindblad-parameterized gate followed by a computational-basis POVM.
 
@@ -1158,7 +1159,8 @@ class LindbladPOVM(POVM):
         self.base_povm = povm
 
         items = []  # init as empty (lazy creation of members)
-        super(LindbladPOVM, self).__init__(dim, evotype, items)
+        POVM.__init__(self, dim, evotype, items)
+        _ErrorGeneratorContainer.__init__(self, self.error_map.errorgen)
 
     def __contains__(self, key):
         """ For lazy creation of effect vectors """

@@ -2410,13 +2410,18 @@ def lindblad_projections_to_paramvals(ham_projs, other_projs, param_mode="cptp",
             assert(_np.isclose(_np.linalg.norm(_np.imag(other_projs)), 0)), \
                 "Diagonal stochastic projections (coefficients) are not all real!"
 
-            if param_mode == "depol":  # otherParams is a *single-element* 1D vector of the sqrt of each diagonal el
-                assert(truncate or all([v >= -1e-12 for v in other_projs])), \
+            if param_mode in ("depol", "reldepol"):
+                # otherParams is a *single-element* 1D vector of the sqrt of each diagonal el
+                assert(param_mode == "reldepol" or truncate or all([v >= -1e-12 for v in other_projs])), \
                     "Lindblad coefficients are not CPTP (truncate == False)!"
                 assert(truncate or all([_np.isclose(v, other_projs[0]) for v in other_projs])), \
                     "Diagonal lindblad coefficients are not equal (truncate == False)!"
-                otherProj = _np.mean(other_projs.clip(1e-16, 1e100))
-                otherParams = _np.array(_np.sqrt(_np.real(otherProj)), 'd')  # shape (1,)
+                if param_mode == "depol":
+                    otherProj = _np.mean(other_projs.clip(1e-16, 1e100))
+                    otherParams = _np.array(_np.sqrt(_np.real(otherProj)), 'd')  # shape (1,)
+                else:  # "reldepol" -- no sqrt since not necessarily positive
+                    otherProj = _np.mean(other_projs)
+                    otherParams = _np.array(_np.real(otherProj), 'd')  # shape (1,)
 
             elif param_mode == "cptp":  # otherParams is a 1D vector of the sqrts of diagonal els
                 assert(truncate or all([v >= -1e-12 for v in other_projs])), \
@@ -2430,14 +2435,19 @@ def lindblad_projections_to_paramvals(ham_projs, other_projs, param_mode="cptp",
             assert(_np.isclose(_np.linalg.norm(_np.imag(other_projs)), 0)), \
                 "Diagonal stochastic and affine projections (coefficients) are not all real!"
 
-            if param_mode == "depol":  # otherParams is a single depol value + unconstrained affine coeffs
-                assert(truncate or all([v >= -1e-12 for v in other_projs[0]])), \
+            if param_mode in ("depol", "reldepol"):  # otherParams is a single depol value + unconstrained affine coeffs
+                assert(param_mode == "reldepol" or truncate or all([v >= -1e-12 for v in other_projs[0]])), \
                     "Lindblad coefficients are not CPTP (truncate == False)!"
                 assert(truncate or all([_np.isclose(v, other_projs[0, 0]) for v in other_projs[0]])), \
                     "Diagonal lindblad coefficients are not equal (truncate == False)!"
-                depolProj = _np.mean(other_projs[0, :].clip(1e-16, 1e100))
-                otherParams = _np.concatenate(([_np.sqrt(_np.real(depolProj))],
-                                               other_projs[1].real))  # shape (1+(bsO-1),)
+                if param_mode == "depol":
+                    depolProj = _np.mean(other_projs[0, :].clip(1e-16, 1e100))
+                    otherParams = _np.concatenate(([_np.sqrt(_np.real(depolProj))],
+                                                   other_projs[1].real))  # shape (1+(bsO-1),)
+                else:  # "reldepol" -- no sqrt
+                    depolProj = _np.mean(other_projs[0, :])
+                    otherParams = _np.concatenate(([_np.real(depolProj)],
+                                                   other_projs[1].real))  # shape (1+(bsO-1),)
 
             elif param_mode == "cptp":  # Note: does not constrained affine coeffs to CPTP
                 assert(truncate or all([v >= -1e-12 for v in other_projs[0]])), \
@@ -2652,6 +2662,189 @@ def paramvals_to_lindblad_projections(paramvals, ham_basis_size,
         otherCoeffs = None
 
     return hamCoeffs, otherCoeffs
+
+
+def paramvals_to_lindblad_projections_deriv(paramvals, ham_basis_size,
+                                            other_basis_size, param_mode="cptp",
+                                            other_mode="all", cache_mx=None):
+    """
+    Construct derivative of Lindblad-term projections with respect to the parameter values.
+
+    Computes separate derivative arrays of Hamiltonian and non-Hamiltonian Lindblad-term
+    projections from an array of Lindblad-operator parameter values.
+
+    This function gives the Jacobian of what is returned by
+    :function:`paramvals_to_lindblad_projections` (as a function of the parameters).
+
+    Parameters
+    ----------
+    paramvals : numpy.ndarray
+        A 1D array of real parameter values consisting of d-1 Hamiltonian
+        values followed by either (d-1)^2 or just d-1 non-Hamiltonian
+        values (the latter when `other_mode in ('diagonal','diag_affine')`).
+
+    ham_basis_size : int
+        The number of elements in the Hamiltonian basis used to construct
+        `paramvals`.  As such, `ham_basis_size` gives the offset into
+        `paramvals` where the non-Hamiltonian parameters begin.
+
+    other_basis_size : int
+        The number of elements in the non-Hamiltonian basis used to construct
+        `paramvals`.
+
+    param_mode : {"unconstrained", "cptp", "depol", "reldepol"}
+        Specifies how the Lindblad-term coefficients are mapped to the set of
+        (real) parameter values.  This really just applies to the "other"
+        (non-Hamiltonian) coefficients.  "unconstrained" means that ranging
+        over the parameter values lets the coefficient-matrix vary over all
+        matrices, "cptp" restricts this to postitive matrices. "depol"
+        maps all of the coefficients to the *same, positive* parameter (only
+        available for "diagonal" and "diag_affine" other-modes), and "reldepol"
+        does the same thing but without the positivity constraint.
+
+    other_mode : {"all", "diagonal", "diag_affine"}
+        Specifies the structure of the matrix of other (non-Hamiltonian)
+        coefficients.  If d is the gate dimension, "all" means a (d-1,d-1)
+        matrix is used; "diagonal" means just the (d2-1,) diagonal of this
+        matrix is used; "diag_affine" means the coefficients are in a (2,d2-1)
+        array with the diagonal-term coefficients being the first row and the
+        affine coefficients being the second row.
+
+    cache_mx : ndarray, optional
+        Scratch space that is used to store the lower-triangular
+        Cholesky decomposition matrix that is used to construct
+        the "other" projections when there is a CPTP constraint.
+
+    Returns
+    -------
+    ham_projs_deriv : numpy.ndarray
+        A real array of shape `(d-1,nP)`, where `d` is the Hamiltonian basis size and
+        `nP` is the number of parameters (the length of `paramvals`).
+    other_projs_deriv : numpy.ndarray
+        An array of shape `(d-1,d-1,nP)` or `(d-1,nP)` or `(2,d-1,nP)` where `d` is
+        the size of the "other" basis and `nP` is the number of parameters (the
+        length of `paramvals`).  In the first case, when `param_mode` is "unconstrained"
+        or "cptp", the array is complex, otherwise it is real.
+    """
+    bsH = ham_basis_size
+    bsO = other_basis_size
+    nP = len(paramvals)
+
+    if cache_mx is None:
+        cache_mx = _np.zeros((bsO - 1, bsO - 1), 'complex') if bsO > 0 else None
+
+    # self.paramvals = [hamCoeffs] + [otherParams]
+    #  where hamCoeffs are *real* and of length d2-1 (self.dim == d2)
+    if bsH > 0:
+        hamCoeffsDeriv = _np.zeros((bsH - 1, nP), 'd')
+        hamCoeffsDeriv[0:bsH - 1, 0:bsH - 1] = _np.identity(bsH - 1, 'd')
+        nHam = bsH - 1
+    else:
+        hamCoeffsDeriv = _np.empty((0, nP), 'd')
+        nHam = 0
+
+    #built up otherCoeffs based on param_mode and nonham_mode
+    if bsO > 0:
+        if other_mode == "diagonal":
+            otherParams = paramvals[nHam:]
+            otherCoeffsDeriv = _np.zeros((bsO - 1, nP), 'd')
+            #expected_shape = (1,) if (param_mode in ("depol", "reldepol")) else (bsO - 1,)
+            #assert(otherParams.shape == expected_shape)
+            if param_mode in ("depol", "reldepol"):
+                #otherParams = otherParams[0] * _np.ones(bsO - 1, 'd')  # replicate single param bsO-1 times
+                if param_mode in ("cptp", "depol"):
+                    otherCoeffsDeriv[:, nHam + 0] = 2.0 * otherParams
+                else:  # "unconstrained"
+                    otherCoeffsDeriv[:, nHam + 0] = 1.0
+            else:
+                if param_mode in ("cptp", "depol"):
+                    otherCoeffsDeriv[:, nHam:] = 2.0 * _np.diag(otherParams)
+                else:  # "unconstrained"
+                    otherCoeffsDeriv[::, nHam:] = _np.identity(bsO - 1, 'd')
+
+        elif other_mode == "diag_affine":
+
+            if param_mode in ("depol", "reldepol"):
+                otherParams = paramvals[nHam:].reshape((1 + bsO - 1,))
+                otherCoeffs = _np.empty((2, bsO - 1), 'd')  # leave as real type b/c doesn't have complex entries
+                otherCoeffsDeriv = _np.zeros((2, bsO - 1, nP), 'd')
+
+                if param_mode == "depol":
+                    #otherCoeffs[0, :] = otherParams[0]**2
+                    otherCoeffsDeriv[0, :, nHam] = 2.0 * otherParams[0]
+                else:
+                    #otherCoeffs[0, :] = otherParams[0]
+                    otherCoeffsDeriv[0, :, nHam] = 1.0
+                #otherCoeffs[1, :] = otherParams[1:]
+                otherCoeffsDeriv[1, :, nHam + 1:] = _np.identity(bsO - 1, 'd')
+
+            else:
+                otherParams = paramvals[nHam:].reshape((2, bsO - 1))
+                otherCoeffsDeriv = _np.zeros((2, bsO - 1, nP), 'd')
+                if param_mode == "cptp":
+                    #otherCoeffs = otherParams.copy()
+                    #otherCoeffs[0, :] = otherParams[0]**2
+                    otherCoeffsDeriv[0, :, nHam:nHam + (bsO - 1)] = 2.0 * _np.diag(otherParams[0])
+                else:  # param_mode == "unconstrained"
+                    #otherCoeffs = _np.empty((2,bsO-1),'complex')
+                    #otherCoeffs = otherParams
+                    otherCoeffsDeriv[0, :, nHam:nHam + (bsO - 1)] = _np.identity(bsO - 1, 'd')
+                otherCoeffsDeriv[1, :, nHam + (bsO - 1):] = _np.identity(bsO - 1, 'd')
+
+        else:  # other_mode == "all"
+            otherParams = paramvals[nHam:].reshape((bsO - 1, bsO - 1))
+            dcache_mx = _np.zeros((nP, bsO - 1, bsO - 1), 'complex')
+
+            if param_mode == "cptp":
+                #  otherParams is an array of length (bs-1)*(bs-1) that
+                #  encodes a lower-triangular matrix "cache_mx" via:
+                #  cache_mx[i,i] = otherParams[i,i]
+                #  cache_mx[i,j] = otherParams[i,j] + 1j*otherParams[j,i] (i > j)
+                stride = bsO - 1
+                for i in range(bsO - 1):
+                    cache_mx[i, i] = otherParams[i, i]
+                    dcache_mx[nHam + i * stride + i, i, i] = 1.0
+                    for j in range(i):
+                        cache_mx[i, j] = otherParams[i, j] + 1j * otherParams[j, i]
+                        dcache_mx[nHam + i * stride + j, i, j] = 1.0
+                        dcache_mx[nHam + j * stride + i, i, j] = 1.0j
+
+                #The matrix of (complex) "other"-coefficients is build by
+                # assuming cache_mx is its Cholesky decomp; means otherCoeffs
+                # is pos-def.
+
+                # NOTE that the Cholesky decomp with all positive real diagonal
+                # elements is *unique* for a given positive-definite otherCoeffs
+                # matrix, but we don't care about this uniqueness criteria and so
+                # the diagonal els of cache_mx can be negative and that's fine -
+                # otherCoeffs will still be posdef.
+                otherCoeffs = _np.dot(cache_mx, cache_mx.T.conjugate())  # C * C^T
+                otherCoeffsDeriv = _np.dot(dcache_mx, cache_mx.T.conjugate()) \
+                    + _np.dot(cache_mx, dcache_mx.conjugate().transpose((0, 2, 1))).transpose((1, 0, 2))
+                # deriv = dC * C^T + C * dC^T
+                
+                otherCoeffsDeriv = _np.rollaxis(otherCoeffsDeriv, 0, 3)  # => shape = (bsO-1, bsO-1, nP)
+
+                #DEBUG - test for pos-def
+                #evals = _np.linalg.eigvalsh(otherCoeffs)
+                #DEBUG_TOL = 1e-16; #print("EVALS DEBUG = ",evals)
+                #assert(all([ev >= -DEBUG_TOL for ev in evals]))
+
+            else:  # param_mode == "unconstrained"
+                #otherParams holds otherCoeff real and imaginary parts directly
+                otherCoeffsDeriv = _np.zeros((bsO - 1, bsO - 1, nP), 'd')
+
+                for i in range(bsO - 1):
+                    otherCoeffsDeriv[i, i, i * stride + i] = 1.0
+                    for j in range(i):
+                        otherCoeffsDeriv[i, j, i * stride + j] = 1.0
+                        otherCoeffsDeriv[i, j, j * stride + i] = 1.0j
+                        otherCoeffsDeriv[j, i, i * stride + j] = 1.0
+                        otherCoeffsDeriv[j, i, j * stride + i] = -1.0j
+    else:
+        otherCoeffsDeriv = _np.empty((0, nP), 'd')  # or just set to None?
+
+    return hamCoeffsDeriv, otherCoeffsDeriv
 
 
 #TODO: replace two_qubit_gate, one_qubit_gate, unitary_to_pauligate_* with
