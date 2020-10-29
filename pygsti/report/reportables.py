@@ -2490,6 +2490,7 @@ def instrument_half_diamond_norm(a, b, mx_basis):
     -------
     float
     """
+    mx_basis = _Basis.cast(mx_basis, dim=a.dim)
     nComps = len(a.keys())
     tpbasis = _DirectSumBasis([mx_basis] * nComps)
     composite_op = _np.zeros((a.dim * nComps, a.dim * nComps), 'd')
