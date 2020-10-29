@@ -5244,6 +5244,162 @@ class ComposedOp(LinearOperator):
         for operation in self.factorops:
             operation.transform_inplace(s)
 
+    def errorgen_coefficients(self, return_basis=False, logscale_nonham=False):
+        """
+        Constructs a dictionary of the Lindblad-error-generator coefficients of this operation.
+
+        Note that these are not necessarily the parameter values, as these
+        coefficients are generally functions of the parameters (so as to keep
+        the coefficients positive, for instance).
+
+        Parameters
+        ----------
+        return_basis : bool, optional
+            Whether to also return a :class:`Basis` containing the elements
+            with which the error generator terms were constructed.
+
+        logscale_nonham : bool, optional
+            Whether or not the non-hamiltonian error generator coefficients
+            should be scaled so that the returned dict contains:
+            `(1 - exp(-d^2 * coeff)) / d^2` instead of `coeff`.  This
+            essentially converts the coefficient into a rate that is
+            the contribution this term would have within a depolarizing
+            channel where all stochastic generators had this same coefficient.
+            This is the value returned by :method:`error_rates`.
+
+        Returns
+        -------
+        lindblad_term_dict : dict
+            Keys are `(termType, basisLabel1, <basisLabel2>)`
+            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            or `"A"` (Affine).  Hamiltonian and Affine terms always have a
+            single basis label (so key is a 2-tuple) whereas Stochastic tuples
+            have 1 basis label to indicate a *diagonal* term and otherwise have
+            2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
+            terms.  Basis labels are integers starting at 0.  Values are complex
+            coefficients.
+        basis : Basis
+            A Basis mapping the basis labels used in the
+            keys of `lindblad_term_dict` to basis matrices.
+        """
+        #*** Note: this function is nearly identitcal to ComposedErrorgen.coefficients() ***
+        Ltermdict = _collections.OrderedDict()
+        basisdict = _collections.OrderedDict()
+        first_nonempty_basis = None
+        constant_basis = None  # the single same Basis used for every factor with a nonempty basis
+
+        for op in self.factorops:
+            factor_coeffs = op.errorgen_coefficients(return_basis, logscale_nonham)
+
+            if return_basis:
+                ltdict, factor_basis = factor_coeffs
+                if len(factor_basis) > 0:
+                    if first_nonempty_basis is None:
+                        first_nonempty_basis = factor_basis
+                        constant_basis = factor_basis  # seed constant_basis
+                    elif factor_basis != constant_basis:
+                        constant_basis = None  # factors have different bases - no constant_basis!
+
+                # see if we need to update basisdict and ensure we do so in a consistent
+                # way - if factors use the same basis labels these must refer to the same
+                # basis elements.
+                #FUTURE: maybe a way to do this without always accessing basis *elements*?
+                #  (maybe do a pass to check for a constant_basis without any .elements refs?)
+                for lbl, basisEl in zip(factor_basis.labels, factor_basis.elements):
+                    if lbl in basisdict:
+                        assert(_mt.safe_norm(basisEl - basisdict[lbl]) < 1e-6), "Ambiguous basis label %s" % lbl
+                    else:
+                        basisdict[lbl] = basisEl
+            else:
+                ltdict = factor_coeffs
+
+            for key, coeff in ltdict.items():
+                if key in Ltermdict:
+                    Ltermdict[key] += coeff
+                else:
+                    Ltermdict[key] = coeff
+
+        if return_basis:
+            #Use constant_basis or turn basisdict into a Basis to return
+            if constant_basis is not None:
+                basis = constant_basis
+            elif first_nonempty_basis is not None:
+                #Create an ExplictBasis using the matrices in basisdict plus the identity
+                lbls = ['I'] + list(basisdict.keys())
+                mxs = [first_nonempty_basis[0]] + list(basisdict.values())
+                basis = _ExplicitBasis(mxs, lbls, name=None,
+                                       real=first_nonempty_basis.real,
+                                       sparse=first_nonempty_basis.sparse)
+            return Ltermdict, basis
+        else:
+            return Ltermdict
+
+    def errorgen_coefficients_array(self):
+        """
+        The weighted coefficients of this operation's error generator in terms of "standard" error generators.
+
+        Constructs a 1D array of all the coefficients returned by :method:`errorgen_coefficients`,
+        weighted so that different error generators can be weighted differently when a
+        `errorgen_penalty_factor` is used in an objective function.
+
+        Returns
+        -------
+        numpy.ndarray
+            A 1D array of length equal to the number of coefficients in the linear combination
+            of standard error generators that is this operation's error generator.
+        """
+        return _np.concatenate([op.errorgen_coefficients_array() for op in self.factorops])
+
+    def errorgen_coefficients_array_deriv_wrt_params(self):
+        """
+        The jacobian of :method:`errogen_coefficients_array` with respect to this operation's parameters.
+
+        Returns
+        -------
+        numpy.ndarray
+            A 2D array of shape `(num_coeffs, num_params)` where `num_coeffs` is the number of
+            coefficients of this operation's error generator and `num_params` is this operation's
+            number of parameters.
+        """
+        return _np.concatenate([op.errorgen_coefficients_array_deriv_wrt_params() for op in self.factorops], axis=0)
+
+    def error_rates(self):
+        """
+        Constructs a dictionary of the error rates associated with this operation.
+
+        The "error rate" for an individual Hamiltonian error is the angle
+        about the "axis" (generalized in the multi-qubit case)
+        corresponding to a particular basis element, i.e. `theta` in
+        the unitary channel `U = exp(i * theta/2 * BasisElement)`.
+
+        The "error rate" for an individual Stochastic error is the
+        contribution that basis element's term would have to the
+        error rate of a depolarization channel.  For example, if
+        the rate corresponding to the term ('S','X') is 0.01 this
+        means that the coefficient of the rho -> X*rho*X-rho error
+        generator is set such that if this coefficient were used
+        for all 3 (X,Y, and Z) terms the resulting depolarizing
+        channel would have error rate 3*0.01 = 0.03.
+
+        Note that because error generator terms do not necessarily
+        commute with one another, the sum of the returned error
+        rates is not necessarily the error rate of the overall
+        channel.
+
+        Returns
+        -------
+        lindblad_term_dict : dict
+            Keys are `(termType, basisLabel1, <basisLabel2>)`
+            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            or `"A"` (Affine).  Hamiltonian and Affine terms always have a
+            single basis label (so key is a 2-tuple) whereas Stochastic tuples
+            have 1 basis label to indicate a *diagonal* term and otherwise have
+            2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
+            terms.  Values are real error rates except for the 2-basis-label
+            case.
+        """
+        return self.errorgen_coefficients(return_basis=False, logscale_nonham=True)
+
     def __str__(self):
         """ Return string representation """
         s = "Composed operation of %d factors:\n" % len(self.factorops)
@@ -6188,6 +6344,133 @@ class EmbeddedOp(LinearOperator):
         # s and Sinv matrices... but haven't needed it yet.
         raise NotImplementedError("Cannot transform an EmbeddedDenseOp yet...")
 
+    def errorgen_coefficients(self, return_basis=False, logscale_nonham=False):
+        """
+        Constructs a dictionary of the Lindblad-error-generator coefficients of this operation.
+
+        Note that these are not necessarily the parameter values, as these
+        coefficients are generally functions of the parameters (so as to keep
+        the coefficients positive, for instance).
+
+        Parameters
+        ----------
+        return_basis : bool, optional
+            Whether to also return a :class:`Basis` containing the elements
+            with which the error generator terms were constructed.
+
+        logscale_nonham : bool, optional
+            Whether or not the non-hamiltonian error generator coefficients
+            should be scaled so that the returned dict contains:
+            `(1 - exp(-d^2 * coeff)) / d^2` instead of `coeff`.  This
+            essentially converts the coefficient into a rate that is
+            the contribution this term would have within a depolarizing
+            channel where all stochastic generators had this same coefficient.
+            This is the value returned by :method:`error_rates`.
+
+        Returns
+        -------
+        lindblad_term_dict : dict
+            Keys are `(termType, basisLabel1, <basisLabel2>)`
+            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            or `"A"` (Affine).  Hamiltonian and Affine terms always have a
+            single basis label (so key is a 2-tuple) whereas Stochastic tuples
+            have 1 basis label to indicate a *diagonal* term and otherwise have
+            2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
+            terms.  Basis labels are integers starting at 0.  Values are complex
+            coefficients.
+        basis : Basis
+            A Basis mapping the basis labels used in the
+            keys of `lindblad_term_dict` to basis matrices.
+        """
+        #*** Note: this function is nearly identitcal to EmbeddedErrorgen.coefficients() ***
+        embedded_coeffs = self.embedded_op.errorgen_coefficients(return_basis, logscale_nonham)
+        embedded_Ltermdict = _collections.OrderedDict()
+
+        if return_basis:
+            # embed basis
+            Ltermdict, basis = embedded_coeffs
+            embedded_basis = _EmbeddedBasis(basis, self.state_space_labels, self.targetLabels)
+            bel_map = {lbl: embedded_lbl for lbl, embedded_lbl in zip(basis.labels, embedded_basis.labels)}
+
+            #go through and embed Ltermdict labels
+            for k, val in Ltermdict.items():
+                embedded_key = (k[0],) + tuple([bel_map[x] for x in k[1:]])
+                embedded_Ltermdict[embedded_key] = val
+            return embedded_Ltermdict, embedded_basis
+        else:
+            #go through and embed Ltermdict labels
+            Ltermdict = embedded_coeffs
+            for k, val in Ltermdict.items():
+                embedded_key = (k[0],) + tuple([_EmbeddedBasis.embed_label(x, self.targetLabels) for x in k[1:]])
+                embedded_Ltermdict[embedded_key] = val
+            return embedded_Ltermdict
+
+    def errorgen_coefficients_array(self):
+        """
+        The weighted coefficients of this operation's error generator in terms of "standard" error generators.
+
+        Constructs a 1D array of all the coefficients returned by :method:`errorgen_coefficients`,
+        weighted so that different error generators can be weighted differently when a
+        `errorgen_penalty_factor` is used in an objective function.
+
+        Returns
+        -------
+        numpy.ndarray
+            A 1D array of length equal to the number of coefficients in the linear combination
+            of standard error generators that is this operation's error generator.
+        """
+        return self.embedded_op.errorgen_coefficients_array()
+
+    def errorgen_coefficients_array_deriv_wrt_params(self):
+        """
+        The jacobian of :method:`errogen_coefficients_array` with respect to this operation's parameters.
+
+        Returns
+        -------
+        numpy.ndarray
+            A 2D array of shape `(num_coeffs, num_params)` where `num_coeffs` is the number of
+            coefficients of this operation's error generator and `num_params` is this operation's
+            number of parameters.
+        """
+        return self.embedded_op.errorgen_coefficients_array_deriv_wrt_params()
+
+    def error_rates(self):
+        """
+        Constructs a dictionary of the error rates associated with this operation.
+
+        The "error rate" for an individual Hamiltonian error is the angle
+        about the "axis" (generalized in the multi-qubit case)
+        corresponding to a particular basis element, i.e. `theta` in
+        the unitary channel `U = exp(i * theta/2 * BasisElement)`.
+
+        The "error rate" for an individual Stochastic error is the
+        contribution that basis element's term would have to the
+        error rate of a depolarization channel.  For example, if
+        the rate corresponding to the term ('S','X') is 0.01 this
+        means that the coefficient of the rho -> X*rho*X-rho error
+        generator is set such that if this coefficient were used
+        for all 3 (X,Y, and Z) terms the resulting depolarizing
+        channel would have error rate 3*0.01 = 0.03.
+
+        Note that because error generator terms do not necessarily
+        commute with one another, the sum of the returned error
+        rates is not necessarily the error rate of the overall
+        channel.
+
+        Returns
+        -------
+        lindblad_term_dict : dict
+            Keys are `(termType, basisLabel1, <basisLabel2>)`
+            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            or `"A"` (Affine).  Hamiltonian and Affine terms always have a
+            single basis label (so key is a 2-tuple) whereas Stochastic tuples
+            have 1 basis label to indicate a *diagonal* term and otherwise have
+            2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
+            terms.  Values are real error rates except for the 2-basis-label
+            case.
+        """
+        return self.errorgen_coefficients(return_basis=False, logscale_nonham=True)
+    
     def depolarize(self, amount):
         """
         Depolarize this operation by the given `amount`.
@@ -6635,6 +6918,35 @@ class ComposedErrorgen(LinearOperator):
             return Ltermdict, basis
         else:
             return Ltermdict
+
+    def coefficients_array(self):
+        """
+        The weighted coefficients of this error generator in terms of "standard" error generators.
+
+        Constructs a 1D array of all the coefficients returned by :method:`coefficients`,
+        weighted so that different error generators can be weighted differently when a
+        `errorgen_penalty_factor` is used in an objective function.
+
+        Returns
+        -------
+        numpy.ndarray
+            A 1D array of length equal to the number of coefficients in the linear
+            combination of standard error generators that is this error generator.
+        """
+        return _np.concatenate([eg.coefficients_array() for eg in self.factors])
+    
+    def coefficients_array_deriv_wrt_params(self):
+        """
+        The jacobian of :method:`coefficients_array` with respect to this error generator's parameters.
+
+        Returns
+        -------
+        numpy.ndarray
+            A 2D array of shape `(num_coeffs, num_params)` where `num_coeffs` is the number of
+            coefficients in the linear combination of standard error generators that is this error
+            generator, and `num_params` is this error generator's number of parameters.
+        """
+        return _np.concatenate([eg.coefficients_array_deriv_wrt_params() for eg in self.factors], axis=0)
 
     def error_rates(self):
         """
@@ -7398,6 +7710,35 @@ class EmbeddedErrorgen(EmbeddedOp):
                 embedded_key = (k[0],) + tuple([_EmbeddedBasis.embed_label(x, self.targetLabels) for x in k[1:]])
                 embedded_Ltermdict[embedded_key] = val
             return embedded_Ltermdict
+
+    def coefficients_array(self):
+        """
+        The weighted coefficients of this error generator in terms of "standard" error generators.
+
+        Constructs a 1D array of all the coefficients returned by :method:`coefficients`,
+        weighted so that different error generators can be weighted differently when a
+        `errorgen_penalty_factor` is used in an objective function.
+
+        Returns
+        -------
+        numpy.ndarray
+            A 1D array of length equal to the number of coefficients in the linear
+            combination of standard error generators that is this error generator.
+        """
+        return self.embedded_op.coefficients_array()
+    
+    def coefficients_array_deriv_wrt_params(self):
+        """
+        The jacobian of :method:`coefficients_array` with respect to this error generator's parameters.
+
+        Returns
+        -------
+        numpy.ndarray
+            A 2D array of shape `(num_coeffs, num_params)` where `num_coeffs` is the number of
+            coefficients in the linear combination of standard error generators that is this error
+            generator, and `num_params` is this error generator's number of parameters.
+        """
+        return self.embedded_op.coefficients_array_deriv_wrt_params()
 
     def error_rates(self):
         """
@@ -8633,7 +8974,17 @@ class LindbladErrorgen(LinearOperator):
 
     def coefficients_array(self):
         """
-        TODO: docstring
+        The weighted coefficients of this error generator in terms of "standard" error generators.
+
+        Constructs a 1D array of all the coefficients returned by :method:`coefficients`,
+        weighted so that different error generators can be weighted differently when a
+        `errorgen_penalty_factor` is used in an objective function.
+
+        Returns
+        -------
+        numpy.ndarray
+            A 1D array of length equal to the number of coefficients in the linear
+            combination of standard error generators that is this error generator.
         """
         hamC, otherC = _gt.paramvals_to_lindblad_projections(
             self.paramvals, self.ham_basis_size, self.other_basis_size,
@@ -8642,7 +8993,14 @@ class LindbladErrorgen(LinearOperator):
     
     def coefficients_array_deriv_wrt_params(self):
         """
-        TODO: docstring
+        The jacobian of :method:`coefficients_array` with respect to this error generator's parameters.
+
+        Returns
+        -------
+        numpy.ndarray
+            A 2D array of shape `(num_coeffs, num_params)` where `num_coeffs` is the number of
+            coefficients in the linear combination of standard error generators that is this error
+            generator, and `num_params` is this error generator's number of parameters.
         """
         hamCderiv, otherCderiv = _gt.paramvals_to_lindblad_projections_deriv(
             self.paramvals, self.ham_basis_size, self.other_basis_size,
