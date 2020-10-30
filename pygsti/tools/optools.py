@@ -1214,7 +1214,7 @@ def spam_error_generator(spamvec, target_spamvec, mx_basis, typ="logGTi"):
     return _spl.logm(errgen)
 
 
-def error_generator(gate, target_op, mx_basis, typ="logG-logT"):
+def error_generator(gate, target_op, mx_basis, typ="logG-logT", logG_weight=None):
     """
     Construct the error generator from a gate and its target.
 
@@ -1242,6 +1242,13 @@ def error_generator(gate, target_op, mx_basis, typ="logG-logT"):
         - "logTiG" : errgen = log( dot(inv(target_op), gate) )
         - "logGTi" : errgen = log( dot(gate,inv(target_op)) )
 
+    logG_weight: float or None (default)
+        Regularization weight for logG-logT penalty of approximate logG.
+        If None, the default weight in :func:`approximate_matrix_log` is used.
+        Note that this will result in a logG close to logT, but G may not exactly equal exp(logG).
+        If self-consistency with func:`operation_from_error_generator` is desired,
+        consider testing lower (or zero) regularization weight.
+
     Returns
     -------
     errgen : ndarray
@@ -1254,7 +1261,11 @@ def error_generator(gate, target_op, mx_basis, typ="logG-logT"):
             logT = _mt.unitary_superoperator_matrix_log(target_op, mx_basis)
         except AssertionError:  # if not unitary, fall back to just taking the real log
             logT = _mt.real_matrix_log(target_op, "raise", TOL)  # make a fuss if this can't be done
-        logG = _mt.approximate_matrix_log(gate, logT)
+
+        if logG_weight is not None:
+            logG = _mt.approximate_matrix_log(gate, logT, target_weight=logG_weight)
+        else:
+            logG = _mt.approximate_matrix_log(gate, logT)
 
         # Both logG and logT *should* be real, so we just take the difference.
         if _np.linalg.norm(_np.imag(logG)) < TOL and \
@@ -2724,7 +2735,8 @@ def rotation_gate_mx(r, mx_basis="gm"):
 
 def project_model(model, target_model,
                   projectiontypes=('H', 'S', 'H+S', 'LND'),
-                  gen_type="logG-logT"):
+                  gen_type="logG-logT",
+                  logG_weight=None):
     """
     Construct a new model(s) by projecting the error generator of `model` onto some sub-space then reconstructing.
 
@@ -2746,11 +2758,13 @@ def project_model(model, target_model,
         - 'LND' = errgen projected to a normal (CPTP) Lindbladian
         - 'LNDF' = errgen projected to an unrestricted (full) Lindbladian
 
-    gen_type : {"logG-logT", "logTiG"}
-        The type of error generator to compute.  Allowed values are:
+    gen_type : {"logG-logT", "logTiG", "logGTi"}
+        The type of error generator to compute.
+        For more details, see func:`error_generator`.
 
-        - "logG-logT" : errgen = log(gate) - log(target_op)
-        - "logTiG" : errgen = log( dot(inv(target_op), gate) )
+    logG_weight: float or None (default)
+        Regularization weight for approximate logG in logG-logT generator.
+        For more details, see func:`error_generator`.
 
     Returns
     -------
@@ -2788,7 +2802,7 @@ def project_model(model, target_model,
 
     errgens = [error_generator(model.operations[gl],
                                target_model.operations[gl],
-                               target_model.basis, gen_type)
+                               target_model.basis, gen_type, logG_weight)
                for gl in opLabels]
 
     for gl, errgen in zip(opLabels, errgens):
