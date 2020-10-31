@@ -5847,8 +5847,10 @@ def _cptp_penalty_size(mdl):
 def _spam_penalty_size(mdl):
     return len(mdl.preps) + sum([len(povm) for povm in mdl.povms.values()])
 
+
 def _errorgen_penalty_size(mdl):
     return 1
+
 
 def _cptp_penalty(mdl, prefactor, op_basis):
     """
@@ -6070,7 +6072,6 @@ def _errorgen_penalty_jac_fill(errorgen_penalty_vec_grad_to_fill, mdl, prefactor
 
     def get_local_deriv(op):
         z = op.errorgen_coefficients_array()  # val**2 term is abs(z) = sqrt(z*z.conj)
-        terms = _np.abs(z)
         dz = op.errorgen_coefficients_array_deriv_wrt_params()
         dterms = 0.5 * (z.conjugate()[:, None] * dz + z[:, None] * dz.conjugate()) / _np.abs(z)[:, None]
         # dterms = 0.5/sqrt(z*z.conj) * (dz * z.conj + z * dz.conj)  -- shape (nCoeffs, nOpParams)
@@ -6078,6 +6079,7 @@ def _errorgen_penalty_jac_fill(errorgen_penalty_vec_grad_to_fill, mdl, prefactor
         assert(_np.linalg.norm(dsumterms.imag) < 1e-8)
         return prefactor**2 * dsumterms.real  # (2 `prefactor` factors since deriv of val**2)
         #Add these lines if we treat different ops as different LS terms.
+        # terms = _np.abs(z)
         # val = _np.sqrt(sum(_np.abs(z)))
         # dval = 0.5 * dsumterms / val[:, None]  # 0.5/sqrt(sum(terms)) * dsumterms
         # return dval
@@ -6115,7 +6117,7 @@ def _errorgen_penalty_jac_fill(errorgen_penalty_vec_grad_to_fill, mdl, prefactor
     # mdl.from_vector(orig)
     # if diff > 1e-3:
     #     import bpdb; bpdb.set_trace()
-    
+
     #return the number of leading-dim indicies we filled in
     return 1
 

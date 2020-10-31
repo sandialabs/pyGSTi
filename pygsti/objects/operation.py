@@ -6470,7 +6470,7 @@ class EmbeddedOp(LinearOperator):
             case.
         """
         return self.errorgen_coefficients(return_basis=False, logscale_nonham=True)
-    
+
     def depolarize(self, amount):
         """
         Depolarize this operation by the given `amount`.
@@ -6934,7 +6934,7 @@ class ComposedErrorgen(LinearOperator):
             combination of standard error generators that is this error generator.
         """
         return _np.concatenate([eg.coefficients_array() for eg in self.factors])
-    
+
     def coefficients_array_deriv_wrt_params(self):
         """
         The jacobian of :method:`coefficients_array` with respect to this error generator's parameters.
@@ -7726,7 +7726,7 @@ class EmbeddedErrorgen(EmbeddedOp):
             combination of standard error generators that is this error generator.
         """
         return self.embedded_op.coefficients_array()
-    
+
     def coefficients_array_deriv_wrt_params(self):
         """
         The jacobian of :method:`coefficients_array` with respect to this error generator's parameters.
@@ -8204,6 +8204,7 @@ class LindbladErrorgen(LinearOperator):
         self.hamGens_1norms = self.otherGens_1norms = None
         self._onenorm_upbound = None
         self.Lmx = None
+        self._coefficient_weights = None
 
         if evotype == "densitymx":
             self.hamGens, self.otherGens = self._init_generators(dim)
@@ -8989,8 +8990,12 @@ class LindbladErrorgen(LinearOperator):
         hamC, otherC = _gt.paramvals_to_lindblad_projections(
             self.paramvals, self.ham_basis_size, self.other_basis_size,
             self.param_mode, self.nonham_mode, self.Lmx)
-        return _np.concatenate((hamC, otherC.flat))  # will be complex if otherC is
-    
+
+        ret = _np.concatenate((hamC, otherC.flat))  # will be complex if otherC is
+        if self._coefficient_weights is not None:
+            ret *= self._coefficient_weights
+        return ret
+
     def coefficients_array_deriv_wrt_params(self):
         """
         The jacobian of :method:`coefficients_array` with respect to this error generator's parameters.
@@ -9009,7 +9014,10 @@ class LindbladErrorgen(LinearOperator):
         if otherCderiv.ndim == 3:  # (coeff_dim_1, coeff_dim_2, param_dim) => (coeff_dim, param_dim)
             otherCderiv = otherCderiv.reshape((otherCderiv.shape[0] * otherCderiv.shape[1], otherCderiv.shape[2]))
 
-        return _np.concatenate((hamCderiv, otherCderiv), axis=0)
+        ret = _np.concatenate((hamCderiv, otherCderiv), axis=0)
+        if self._coefficient_weights is not None:
+            ret *= self._coefficient_weights[:, None]
+        return ret
 
     def error_rates(self):
         """
@@ -9145,6 +9153,32 @@ class LindbladErrorgen(LinearOperator):
         None
         """
         self.set_coefficients(lindblad_term_dict, action, logscale_nonham=True)
+
+    def coefficient_weights(self, weights):
+        """
+        TODO: docstring
+        """
+        lookup = _gt.lindblad_terms_projection_indices(self.ham_basis, self.other_basis, self.nonham_mode)
+        rev_lookup = {i: lbl for lbl, i in lookup.items()}
+
+        if self._coefficient_weights is None:
+            return {}
+
+        ret = {}
+        for i, val in enumerate(self._coefficient_weights):
+            if val != 1.0:
+                ret[rev_lookup[i]] = val
+        return ret
+
+    def set_coefficient_weights(self, weights):
+        """
+        TODO: docstring
+        """
+        lookup = _gt.lindblad_terms_projection_indices(self.ham_basis, self.other_basis, self.nonham_mode)
+        if self._coefficient_weights is None:
+            self._coefficient_weights = _np.ones(len(self.coefficients_array()), 'd')
+        for lbl, wt in weights.items():
+            self._coefficient_weights[lookup[lbl]] = wt
 
     def transform_inplace(self, s):
         """

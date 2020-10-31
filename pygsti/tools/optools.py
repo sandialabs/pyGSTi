@@ -2511,6 +2511,79 @@ def lindblad_projections_to_paramvals(ham_projs, other_projs, param_mode="cptp",
     return _np.concatenate((hamParams, otherParams.flat))
 
 
+def lindblad_terms_projection_indices(ham_basis, other_basis, other_mode="all"):
+    """
+    Constructs a  dictionary mapping Lindblad term labels to projection coefficients.
+
+    This method is used for finding the index of a particular error generator coefficient
+    in the 1D array formed by concatenating the Hamiltonian and flattened stochastic
+    projection arrays.
+
+    Parameters
+    ----------
+    ham_basis : {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
+        The basis used to construct `ham_projs`.  Allowed values are Matrix-unit
+        (std), Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt), list of
+        numpy arrays, or a custom basis object.
+
+    other_basis : {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
+        The basis used to construct `other_projs`.  Allowed values are
+        Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt),
+        list of numpy arrays, or a custom basis object.
+
+    other_mode : {"diagonal", "diag_affine", "all"}
+        Which non-Hamiltonian Lindblad error projections `other_projs` includes.
+        Allowed values are: `"diagonal"` (only the diagonal Stochastic),
+        `"diag_affine"` (diagonal + affine generators), and `"all"`
+        (all generators).
+
+    Returns
+    -------
+    Ltermdict : dict
+        Keys are `(termType, basisLabel1, <basisLabel2>)`
+        tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic), or
+        `"A"` (Affine).  Hamiltonian and Affine terms always have a single basis
+        label (so key is a 2-tuple) whereas Stochastic tuples have 1 basis label
+        to indicate a *diagonal* term and otherwise have 2 basis labels to
+        specify off-diagonal non-Hamiltonian Lindblad terms.  Basis labels
+        are taken from `ham_basis` and `other_basis`.  Values are integer indices.
+    """
+    assert(not (ham_basis is None and other_basis is None)), \
+        "At least one of `ham_basis` and `other_basis` must be non-None"
+
+    Lterm_indexdict = _collections.OrderedDict()
+
+    #Add Hamiltonian error elements
+    if ham_basis is not None:
+        ham_lbls = ham_basis.labels
+        for i, lbl in enumerate(ham_lbls[1:]):  # skip identity
+            Lterm_indexdict[('H', lbl)] = i
+        nHam = len(ham_lbls) - 1
+    else:
+        nHam = 0
+
+    #Add "other" error elements
+    if other_basis is not None:
+        other_lbls = other_basis.labels
+        if other_mode == "diagonal":
+            for i, lbl in enumerate(other_lbls[1:]):  # skip identity
+                Lterm_indexdict[('S', lbl)] = i + nHam
+
+        elif other_mode == "diag_affine":
+            for i, lbl in enumerate(other_lbls[1:]):  # skip identity
+                Lterm_indexdict[('S', lbl)] = i + nHam
+            for i, lbl in enumerate(other_lbls[1:], start=len(other_lbls[1:])):  # skip identity
+                Lterm_indexdict[('A', lbl)] = i + nHam
+
+        else:
+            stride = len(other_lbls[1:])
+            for i, lbl1 in enumerate(other_lbls[1:]):  # skip identity
+                for j, lbl2 in enumerate(other_lbls[1:]):  # skip identity
+                    Lterm_indexdict[('S', lbl1, lbl2)] = i * stride + j + nHam
+
+    return Lterm_indexdict
+
+
 def paramvals_to_lindblad_projections(paramvals, ham_basis_size,
                                       other_basis_size, param_mode="cptp",
                                       other_mode="all", cache_mx=None):
@@ -2766,7 +2839,7 @@ def paramvals_to_lindblad_projections_deriv(paramvals, ham_basis_size,
 
             if param_mode in ("depol", "reldepol"):
                 otherParams = paramvals[nHam:].reshape((1 + bsO - 1,))
-                otherCoeffs = _np.empty((2, bsO - 1), 'd')  # leave as real type b/c doesn't have complex entries
+                #otherCoeffs = _np.empty((2, bsO - 1), 'd')  # leave as real type b/c doesn't have complex entries
                 otherCoeffsDeriv = _np.zeros((2, bsO - 1, nP), 'd')
 
                 if param_mode == "depol":
@@ -2818,11 +2891,11 @@ def paramvals_to_lindblad_projections_deriv(paramvals, ham_basis_size,
                 # matrix, but we don't care about this uniqueness criteria and so
                 # the diagonal els of cache_mx can be negative and that's fine -
                 # otherCoeffs will still be posdef.
-                otherCoeffs = _np.dot(cache_mx, cache_mx.T.conjugate())  # C * C^T
+                #otherCoeffs = _np.dot(cache_mx, cache_mx.T.conjugate())  # C * C^T
                 otherCoeffsDeriv = _np.dot(dcache_mx, cache_mx.T.conjugate()) \
                     + _np.dot(cache_mx, dcache_mx.conjugate().transpose((0, 2, 1))).transpose((1, 0, 2))
                 # deriv = dC * C^T + C * dC^T
-                
+
                 otherCoeffsDeriv = _np.rollaxis(otherCoeffsDeriv, 0, 3)  # => shape = (bsO-1, bsO-1, nP)
 
                 #DEBUG - test for pos-def
