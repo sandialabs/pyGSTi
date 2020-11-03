@@ -314,7 +314,7 @@ class ResidualTVD:
     probability distributions and T is a transition matrix.
     """
 
-    def __init__(self, weight, n_bits, initial_treg_factor=1e-3, solver="SCS"):
+    def __init__(self, weight, n_bits, reference, initial_treg_factor=1e-3, solver="SCS"):
         """
         Create a ResidualTVD function object.
 
@@ -346,6 +346,7 @@ class ResidualTVD:
         self.solver = solver
         self.initial_treg_factor = initial_treg_factor
         self.warning_msg = None
+        self.P0 = _np.array(reference)
 
         # Hold values *separate* from cvxpy variables as we sometimes need to revert
         # cvxpy optimizations which actually move values in a way that gives a *worse*
@@ -376,7 +377,7 @@ class ResidualTVD:
 
     def _build_problem(self):
         # Initialize the variables - the parameters used to define the T matrix
-        self.T_params = _cp.Variable(self.dim, value=self.t_params.copy())
+        self.T_params = _cp.Variable(self.dim, value=self.t_params.copy(), nonneg=True)
 
         # Constraints
         # T must be stochastic, so
@@ -389,8 +390,39 @@ class ResidualTVD:
                             self.T_params >= 0]
 
         # Form objective.
-        self.T = _cp.sum([self.T_params[ind] * self.t_basis[ind] for ind in range(self.dim)]) + _np.eye(2**self.n_bits)
-        self.resid_tvd = _cp.sum(_cp.abs(self.Q - self.T @ self.P)) / 2
+        self.T = _cp.sum([self.T_params[ind] * _cp.abs(self.t_basis[ind]) for ind in range(self.dim)]) \
+            + _np.eye(2**self.n_bits)
+        print("DB: T = ", self.T.is_dcp())
+        #self.resid_tvd = _cp.sum(_cp.abs(self.Q - self.T @ self.P)) / 2  # OLD - using normal TVD
+        #CHECK t_basis is always positive?? KEVIN
+
+        #Just checking curvature of ratio:
+        # d(f/g) = f'/g - f/g^2 * g'
+        # d2(f/g) = f''/g - f'/g^2 * g' - f'/g^2 * g' + 2*f/g^3 * g' * g' - f/g^2 * g''
+        # when f'' = g'' == 0 =>  -2f'g'/g^2 + 2fg'^2/g^3
+
+        # TP_i = sum_i Tij * P_j
+        # TP0_i = sum_i Tij * P0_j
+        # TP0_i = sum_i Tij * (P0_j - P_j) + Tij * P_j = TP_i + sum_i Tij * (P0_j - P_j)
+        # TP0_i / TP_i = 1 + sum_i Tij * (P0_j - P_j) / sum_i Tij * P_j
+
+        #HERE - need to check what _cp.max does - we need elementwise max and '*' to be elementwise mult
+        # OK: self.resid_tvd = _cp.sum( _cp.maximum(self.T @ self.P - self.Q, 0) )
+        term1 = _cp.maximum(self.T @ self.P - self.Q, 0)
+        term2 = _cp.abs(self.T) @ self.P0 / self.T @ self.P
+        mult = _cp.multiply(term1, term2)
+        print("DB: mult = ", mult.is_dcp())
+        import bpdb; bpdb.set_trace()
+
+        self.resid_tvd = _cp.sum(mult)
+        print("DB: resid_tvd = ", self.resid_tvd.is_dcp())
+
+        #self.resid_tvd = _cp.sum( _cp.multiply(_cp.maximum(self.T @ self.P - self.Q, 0),
+        #                                       self.P0) # self.T @
+        #                         )  # NEW
+        #  _cp.multiply(self.T @ self.P0, _cp.inv_pos(self.T @ self.P))
+
+        # above uses "origintal variational distance" (OVD)
         self.obj = _cp.Minimize(self.resid_tvd + self.Treg_factor * _cp.norm(self.T_params, 1))
 
         # Form the problem.
@@ -1215,7 +1247,7 @@ class ProfileLikelihoodPlot:
         ax.ticklabel_format(useOffset=False)
 
 
-def compute_disturbances_with_confidence(n_bits, data_ref, data_test, confidence_percent=68.0,
+def compute_disturbances_with_confidence(n_bits, data_ref, data_test, reference, confidence_percent=68.0,
                                          max_weight=4, maxiters=20, search_tol=0.1, reltol=1e-5,
                                          abstol=1e-5, solver="SCS", initial_treg_factor=1e-3, verbosity=1):
     """
@@ -1277,7 +1309,7 @@ def compute_disturbances_with_confidence(n_bits, data_ref, data_test, confidence
         `(disturbance, errorbar_length)` tuple for the weight (i+1) disturbance.
         That is, the weight (i+1) disturbance = `disturbance +/- errorbar_length`.
     """
-    rtvds_by_weight = compute_residual_tvds(n_bits, data_ref, data_test, confidence_percent,
+    rtvds_by_weight = compute_residual_tvds(n_bits, data_ref, data_test, reference, confidence_percent,
                                             max_weight, maxiters, search_tol, reltol,
                                             abstol, solver, initial_treg_factor, verbosity)
     rtvds = [value_and_errorbar[0] for value_and_errorbar in rtvds_by_weight]
@@ -1291,7 +1323,7 @@ def compute_disturbances_with_confidence(n_bits, data_ref, data_test, confidence
     return disturbance_by_weight
 
 
-def compute_residual_tvds(n_bits, data_ref, data_test, confidence_percent=68.0,
+def compute_residual_tvds(n_bits, data_ref, data_test, reference, confidence_percent=68.0,
                           max_weight=4, maxiters=20, search_tol=0.1, reltol=1e-5,
                           abstol=1e-5, solver="SCS", initial_treg_factor=1e-3, verbosity=1):
     """
@@ -1369,7 +1401,7 @@ def compute_residual_tvds(n_bits, data_ref, data_test, confidence_percent=68.0,
         else:
             p_ml = _np.array(data_ref) / _np.sum(data_ref)
             q_ml = _np.array(data_test) / _np.sum(data_test)
-            residual_tvd_fn = ResidualTVD(weight, n_bits, solver=solver)
+            residual_tvd_fn = ResidualTVD(weight, n_bits, reference, solver=solver)
             resid_tvd = residual_tvd_fn(p_ml, q_ml, verbosity=verbosity - 2)
             errorbar = None
 
@@ -1390,7 +1422,7 @@ def compute_residual_tvds(n_bits, data_ref, data_test, confidence_percent=68.0,
                 else:
                     p_ml = _np.array(data_ref) / _np.sum(data_ref)
                     q_ml = _np.array(data_test) / _np.sum(data_test)
-                    residual_tvd_fn = ResidualTVD(weight, n_bits, solver=solver)
+                    residual_tvd_fn = ResidualTVD(weight, n_bits, reference, solver=solver)
                     resid_tvd = residual_tvd_fn(p_ml, q_ml, verbosity=verbosity - 2)
                     errorbar = None
             else:
@@ -1423,7 +1455,7 @@ def resample_data(data, n_data_points=None, seed=None):
     return resampled
 
 
-def compute_disturbances_bootstrap_rawdata(n_bits, data_ref, data_test, num_bootstrap_samples=20,
+def compute_disturbances_bootstrap_rawdata(n_bits, data_ref, data_test, reference, num_bootstrap_samples=20,
                                            max_weight=4, solver="SCS", verbosity=1, seed=0,
                                            return_resampled_data=False, add_one_to_data=True):
     """
@@ -1475,7 +1507,7 @@ def compute_disturbances_bootstrap_rawdata(n_bits, data_ref, data_test, num_boot
     if verbosity > 0:
         print("Computing base disturbances")
     dist_by_weight_ml = compute_disturbances_with_confidence(
-        n_bits, data_ref, data_test, None, max_weight, solver=solver, verbosity=verbosity - 1)
+        n_bits, data_ref, data_test, reference, None, max_weight, solver=solver, verbosity=verbosity - 1)
 
     dist_by_weight = _np.zeros((max_weight, num_bootstrap_samples), 'd')
     resampled_data = []
@@ -1494,12 +1526,13 @@ def compute_disturbances_bootstrap_rawdata(n_bits, data_ref, data_test, num_boot
 
         try:
             disturbances = compute_disturbances_with_confidence(
-                n_bits, redata_ref, redata_test, None, max_weight, solver=solver, verbosity=verbosity - 2)
+                n_bits, redata_ref, redata_test, reference, None, max_weight, solver=solver, verbosity=verbosity - 2)
         except Exception:
             try:
                 if verbosity > 0: print("\nFalling back on ECOS")
                 disturbances = compute_disturbances_with_confidence(
-                    n_bits, redata_ref, redata_test, None, max_weight, solver="ECOS", verbosity=verbosity - 2)
+                    n_bits, redata_ref, redata_test, reference, None, max_weight, solver="ECOS",
+                    verbosity=verbosity - 2)
             except Exception:
                 if verbosity > 0: print("\nFailed using %s and ECOS - reporting nans" % solver)
                 for w in range(max_weight):
@@ -1570,7 +1603,7 @@ def compute_disturbances_from_bootstrap_rawdata(ml_disturbances, bootstrap_distu
     return [(ml_disturbances[w],) + rms_disturbance_error[w] for w in range(max_weight)]
 
 
-def compute_disturbances(n_bits, data_ref, data_test, num_bootstrap_samples=20,
+def compute_disturbances(n_bits, data_ref, data_test, reference, num_bootstrap_samples=20,
                          max_weight=4, solver="SCS", verbosity=1, add_one_to_data=True):
     """
     Compute the weight-X disturbances between two data sets (including error bars).
@@ -1614,7 +1647,7 @@ def compute_disturbances(n_bits, data_ref, data_test, num_bootstrap_samples=20,
         That is, the weight (i+1) disturbance = `disturbance +/- errorbar_length`.
     """
     dist_ml, dist = compute_disturbances_bootstrap_rawdata(
-        n_bits, data_ref, data_test, num_bootstrap_samples,
+        n_bits, data_ref, data_test, reference, num_bootstrap_samples,
         max_weight, solver, verbosity, add_one_to_data=add_one_to_data)
     return compute_disturbances_from_bootstrap_rawdata(dist_ml, dist)
 
