@@ -171,7 +171,7 @@ class CircuitPlaquette(object):
 
         Parameters
         ----------
-        circuits_to_keep : list
+        circuits_to_keep : list or set
             List of circuits to keep.  If None, then a copy of this object is returned.
 
         keep_rows_cols : bool
@@ -185,6 +185,7 @@ class CircuitPlaquette(object):
         if circuits_to_keep is None:
             return self.copy()
 
+        if not isinstance(circuits_to_keep, set): circuits_to_keep = set(circuits_to_keep)
         num_rows, num_cols = (self.num_rows, self.num_cols) if keep_rows_cols else (None, None)
         elements = {(i, j): c for (i, j), c in self.elements.items() if c in circuits_to_keep}
         return CircuitPlaquette(elements, num_rows, num_cols, self.op_label_aliases)
@@ -311,7 +312,7 @@ class FiducialPairPlaquette(CircuitPlaquette):
 
         Parameters
         ----------
-        circuits_to_keep : list
+        circuits_to_keep : list or set
             List of circuits to keep.  If None, then a copy of this object is returned.
 
         keep_rows_cols : bool
@@ -325,6 +326,7 @@ class FiducialPairPlaquette(CircuitPlaquette):
         if circuits_to_keep is None:
             return self.copy()
 
+        if not isinstance(circuits_to_keep, set): circuits_to_keep = set(circuits_to_keep)
         fidpairs = _collections.OrderedDict()
         for (i, j), c in self.elements.items():
             if c in circuits_to_keep:
@@ -456,7 +458,7 @@ class GermFiducialPairPlaquette(FiducialPairPlaquette):
 
         Parameters
         ----------
-        circuits_to_keep : list
+        circuits_to_keep : list or set
             List of circuits to keep.  If None, then a copy of this object is returned.
 
         keep_rows_cols : bool
@@ -470,6 +472,7 @@ class GermFiducialPairPlaquette(FiducialPairPlaquette):
         if circuits_to_keep is None:
             return self.copy()
 
+        if not isinstance(circuits_to_keep, set): circuits_to_keep = set(circuits_to_keep)
         fidpairs = _collections.OrderedDict()
         for (i, j), c in self.elements.items():
             if c in circuits_to_keep:
