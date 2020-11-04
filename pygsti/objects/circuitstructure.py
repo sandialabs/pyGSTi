@@ -557,14 +557,17 @@ class PlaquetteGridCircuitStructure(_CircuitList):
         if additional_circuits_location == 'start':
             circuits.update([(c, None) for c in additional_circuits])
 
+        circuits_in_plaquettes = _collections.OrderedDict()
         for plaq in plaquettes.values():
-            circuits.update([(c, None) for c in plaq.circuits])
+            circuits_in_plaquettes.update([(c, None) for c in plaq.circuits])
+        circuits.update(circuits_in_plaquettes)
 
         if additional_circuits_location == 'end':
             circuits.update([(c, None) for c in additional_circuits])
 
         # ordered-sets => tuples
-        additional = _collections.OrderedDict([(c, None) for c in additional_circuits if (c not in circuits)])
+        additional = _collections.OrderedDict([(c, None) for c in additional_circuits
+                                               if (c not in circuits_in_plaquettes)])
         self._additional_circuits = tuple(additional.keys())  # only those circuits *not* in plaquettes
         circuits = tuple(circuits.keys())
 

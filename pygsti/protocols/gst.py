@@ -2091,8 +2091,8 @@ def _reoptimize_with_weights(mdc_store, circuit_weights_dict, objfn_builder, opt
     printer.log("--- Re-optimizing after robust data scaling ---")
     circuit_weights = _np.array([circuit_weights_dict.get(c, 1.0) for c in circuit_list], 'd')
     bulk_circuit_list = _CircuitList(circuit_list, circuit_weights=circuit_weights)
-    opt_result, mdl_reopt = _alg.run_gst_fit_simple(ds, mdc_store.model, bulk_circuit_list, optimizer, objfn_builder,
-                                                    resource_alloc, printer - 1)
+    opt_result, mdl_reopt = _alg.run_gst_fit_simple(ds, mdc_store.model.copy(), bulk_circuit_list, optimizer,
+                                                    objfn_builder, resource_alloc, printer - 1)
     return mdl_reopt
 
 
