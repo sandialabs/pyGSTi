@@ -54,7 +54,7 @@ def unvec(vectorized):
         return _np.reshape(vectorized, [length, length]).T
     else:
         raise ValueError(
-            f'The input vector length must be a perfect square, but this input has length {len(vectorized)}.')
+            'The input vector length must be a perfect square, but this input has length %d.' % len(vectorized))
 
 
 def split(n, a):
@@ -117,7 +117,8 @@ def run_process_tomography(state_to_density_matrix_fn, n_qubits=1, comm=None,
         rank = 0
         size = 1
     if verbose:
-        print(f'Running process tomography as {comm.Get_rank()} if {comm.Get_size()} on {comm.Get_name()}.')
+        print('Running process tomography as %d of %d on %s.' %
+              (comm.Get_rank(), comm.Get_size(), comm.Get_name()))
 
     # Define and preprocess the input test states
     one_qubit_states = _np.array([[1, 0], [0, 1], [1, 1], [1., 1.j]], dtype='complex')
@@ -128,7 +129,7 @@ def run_process_tomography(state_to_density_matrix_fn, n_qubits=1, comm=None,
     in_states = _np.column_stack(list([vec(rho) for rho in in_density_matrices]))
     my_states = split(size, states)[rank]
     if verbose:
-        print(f"Process {rank} of {size} evaluating {len(my_states)} input states.")
+        print("Process %d of %d evaluating %d input states." % (rank, size, len(my_states)))
     if time_dependent:
         my_out_density_matrices = [state_to_density_matrix_fn(state, **opt_args) for state in my_states]
     else:

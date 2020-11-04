@@ -134,11 +134,11 @@ class InterpygateTestCase(BaseTestCase):
     def test_timedep_op(self):
         example_process = ExampleProcess_timedep()
         target_mxs = example_process.create_process_matrices(_np.array([1.0, 0.0, 0.0, 0.0, 0.0]), [[_np.pi / 2]], comm=_comm)
-        if _comm.rank == 0:
+        if _comm is None or _comm.rank == 0:
             target_mx = target_mxs[0]
             target_op = pygsti.obj.StaticDenseOp(target_mx)
             print(target_op)
-            _comm.bcast(target_op, root=0)
+            if _comm is not None: _comm.bcast(target_op, root=0)
         else:
             target_op = _comm.bcast(None, root=0)
 
