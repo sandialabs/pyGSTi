@@ -1078,7 +1078,7 @@ class DirectSumBasis(LazyBasis):
             for lbl, vel in zip(compbasis.labels, compbasis.vector_elements):
                 assert(_sps.issparse(vel) == self.sparse), "Inconsistent sparsity!"
                 if self.sparse:
-                    mx = _sps.lil_matrix((self.dim, 1))
+                    mx = _sps.lil_matrix((self.dim, 1), dtype='complex')
                     mx[start:start + compbasis.dim, 0] = vel
                     compMxs.append(mx)
                 else:
