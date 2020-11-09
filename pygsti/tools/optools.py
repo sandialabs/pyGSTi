@@ -1306,6 +1306,10 @@ def error_generator(gate, target_op, mx_basis, typ="logG-logT", logG_weight=None
             errgen = _mt.approximate_matrix_log(_np.dot(gate, target_op_inv),
                                                 _np.zeros(gate.shape, 'd'), tol=TOL)
 
+    elif typ == "logGTi-quick":
+        #errgen = _spl.logm(_np.dot(gate, _spl.inv(target_op)))
+        return _np.real(_spl.logm(_np.dot(gate, _spl.inv(target_op))))
+
     else:
         raise ValueError("Invalid error-generator type: %s" % typ)
 
