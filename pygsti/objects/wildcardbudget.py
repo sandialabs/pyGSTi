@@ -161,13 +161,19 @@ class WildcardBudget(object):
         -------
         object
         """
+        def budget_deriv_for_label(lbl):
+            if lbl in self.primOpLookup:  # Note: includes len(lbl.components) == 0 case of (global) idle
+                deriv = _np.zeros(len(self.wildcard_vector), 'd')
+                deriv[self.primOpLookup[lbl]] = 1.0
+                return deriv
+            else:
+                assert(not lbl.is_simple()), "Simple label %s must be a primitive op of this WEB!" % str(lbl)
+                return sum([budget_deriv_for_label(component) for component in lbl.components])
+
         circuit_budget_matrix = _np.zeros((len(circuits), len(self.wildcard_vector)), 'd')
         for i, circuit in enumerate(circuits):
             for layer in circuit:
-                if len(layer.components) == 0:  # special case of global idle, which has 0 components
-                    circuit_budget_matrix[i, self.primOpLookup[layer]] += 1.0
-                for component in layer.components:
-                    circuit_budget_matrix[i, self.primOpLookup[component]] += 1.0
+                circuit_budget_matrix[i, :] += budget_deriv_for_label(layer)
 
         if self.spam_index is not None:
             circuit_budget_matrix[:, self.spam_index] = 1.0
@@ -396,13 +402,13 @@ class WildcardBudget(object):
             #Now A,B,C are fixed to what they need to be for our given W
             # test if len(A) > 0, make tol here *smaller* than that assigned to zero freqs above
             if sum_fA > MIN_FREQ_OVER_2:
-                alpha = (sum_qA - sum_qB - 2 * W) / sum_fA if sum_fB == 0 else \
-                    (sum_qA - sum_qB + 1.0 - sum_qC - 2 * W) / (2 * sum_fA)  # compute_alpha
+                alpha = (sum_qA - sum_qB + sum_qD - 2 * W) / sum_fA if sum_fB == 0 else \
+                    (sum_qA - sum_qB + sum_qD + 1.0 - sum_qC - 2 * W) / (2 * sum_fA)  # compute_alpha
                 beta = _np.nan if sum_fB == 0 else (1.0 - alpha * sum_fA - sum_qC) / sum_fB  # beta_fn
                 pushedSD = 0.0
             else:  # fall back to this when len(A) == 0
                 beta = -(sum_qA - sum_qB + sum_qD + sum_qC - 1 - 2 * W) / (2 * sum_fB) if sum_fA == 0 else \
-                    -(sum_qA - sum_qB - 1.0 + sum_qC - 2 * W) / (2 * sum_fB)  # compute_beta
+                    -(sum_qA - sum_qB + sum_qD - 1.0 + sum_qC - 2 * W) / (2 * sum_fB)  # compute_beta
                 alpha = 0.0  # doesn't matter OLD: _alpha_fn(beta, A, B, C, qvec, fvec)
                 pushedSD = 1 - beta * sum_fB - sum_qC
 
@@ -507,13 +513,17 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
         -------
         float
         """
+        def budget_for_label(lbl):
+            if lbl in self.primOpLookup:  # Note: includes len(lbl.components) == 0 case of (global) idle
+                return pos(Wvec[self.primOpLookup[lbl]])
+            else:
+                assert(not lbl.is_simple()), "Simple label %s must be a primitive op of this WEB!" % str(lbl)
+                return sum([budget_for_label(component) for component in lbl.components])
+
         Wvec = self.wildcard_vector
         budget = 0 if (self.spam_index is None) else pos(Wvec[self.spam_index])
         for layer in circuit:
-            if len(layer.components) == 0:  # special case of global idle, which has 0 components
-                budget += pos(Wvec[self.primOpLookup[layer]])
-            for component in layer.components:
-                budget += pos(Wvec[self.primOpLookup[component]])
+            budget += budget_for_label(layer)
         return budget
 
     def circuit_budgets(self, circuits, precomp=None):
@@ -586,37 +596,37 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
 
 #For these helper functions, see Robin's notes
 def _compute_tvd(a, b, d, alpha, beta, pushedD, q, f):
-    # TVD = 0.5 * (qA - alpha*SA + beta*SB - qB)  - difference between p=[alpha|beta]*f and q
+    # TVD = 0.5 * (qA - alpha*SA + beta*SB - qB + qD - pushed_pd) = difference between p=[alpha|beta]*f and q
     # (no contrib from set C)
     pushed_pd = pushedD * q[d] / sum(q[d])  # vector that sums to pushedD and aligns with q[d]
     ret = 0.5 * (sum(q[a] - alpha * f[a]) + sum(beta * f[b] - q[b]) + sum(q[d] - pushed_pd))
     return ret
 
 
-def _compute_alpha(a, b, c, tvd, q, f):
+def _compute_alpha(a, b, c, d, tvd, q, f):
     # beta = (1-alpha*SA - qC)/SB
-    # 2*tvd = qA - alpha*SA + [(1-alpha*SA - qC)/SB]*SB - qB
-    # 2*tvd = qA - alpha(SA + SA) + (1-qC) - qB
-    # alpha = [ qA-qB + (1-qC) - 2*tvd ] / 2*SA
-    # But if SB == 0 then 2*tvd = qA - alpha*SA - qB => alpha = (qA-qB-2*tvd)/SA
+    # 2*tvd = qA - alpha*SA + [(1-alpha*SA - qC)/SB]*SB - qB + qD  (pushedSD == 0 b/c A is nonempty if we call this fn)
+    # 2*tvd = qA - alpha(SA + SA) + (1-qC) - qB + qD
+    # alpha = [ qA-qB+qD + (1-qC) - 2*tvd ] / 2*SA
+    # But if SB == 0 then 2*tvd = qA - alpha*SA - qB + qD => alpha = (qA-qB+qD-2*tvd)/SA
     # Note: no need to deal with pushedSD > 0 since this only occurs when alpha is irrelevant.
     if sum(f[b]) == 0:
-        return (sum(q[a]) - sum(q[b]) - 2 * tvd) / sum(f[a])
-    return (sum(q[a]) - sum(q[b]) + 1.0 - sum(q[c]) - 2 * tvd) / (2 * sum(f[a]))
+        return (sum(q[a]) - sum(q[b]) + sum(q[d]) - 2 * tvd) / sum(f[a])
+    return (sum(q[a]) - sum(q[b]) + sum(q[d]) + 1.0 - sum(q[c]) - 2 * tvd) / (2 * sum(f[a]))
 
 
-def _compute_beta(a, b, c, d, tvd, q, f, pushedD):
+def _compute_beta(a, b, c, d, tvd, q, f):
     # alpha = (1-beta*SB - qC)/SA
-    # 2*tvd = qA - [(1-beta*SB - qC)/SA]*SA + beta*SB - qB
-    # 2*tvd = qA - (1-qC) + beta(SB + SB) - qB
-    # beta = -[ qA-qB - (1-qC) - 2*tvd ] / 2*SB
-    # But if SA == 0 then:
+    # 2*tvd = qA - [(1-beta*SB - qC)/SA]*SA + beta*SB - qB + qD  (assume pushedD == 0)
+    # 2*tvd = qA - (1-qC) + beta(SB + SB) - qB + qD
+    # beta = -[ qA-qB+qD - (1-qC) - 2*tvd ] / 2*SB
+    # But if SA == 0 then some probability may be "pushed" into set D:
     # 2*tvd = qA + (beta*SB - qB) + (qD - pushed_pD) and pushed_pD = 1 - beta * SB - qC, so
     # 2*tvd = qA + (beta*SB - qB) + (qD - 1 + beta*SB + qC) = qA - qB + qD +qC -1 + 2*beta*SB
     #  => beta = -(qA-qB+qD+qC-1-2*tvd)/(2*SB)
     if sum(f[a]) == 0:
         return -(sum(q[a]) - sum(q[b]) + sum(q[d]) + sum(q[c]) - 1 - 2 * tvd) / (2 * sum(f[b]))
-    return -(sum(q[a]) - sum(q[b]) - 1.0 + sum(q[c]) - 2 * tvd) / (2 * sum(f[b]))
+    return -(sum(q[a]) - sum(q[b]) + sum(q[d]) - 1.0 + sum(q[c]) - 2 * tvd) / (2 * sum(f[b]))
 
 
 def _compute_pvec(alpha, beta, pushedD, a, b, c, d, q, f):
@@ -761,14 +771,14 @@ def update_circuit_probs(probs, freqs, circuit_budget):
     pushedSD = 0.0
     if debug: print("Final A=", A, "B=", B, "C=", C, "W=", W, "qvec=", qvec, 'fvec=', fvec)
     if len(A) > 0:
-        alpha = _compute_alpha(A, B, C, W, qvec, fvec)
+        alpha = _compute_alpha(A, B, C, D, W, qvec, fvec)
         beta = _beta_fn(alpha, A, B, C, qvec, fvec)
-        if debug and len(B) > 0:
-            abeta = _compute_beta(A, B, C, W, qvec, fvec)
-            aalpha = _alpha_fn(beta, A, B, C, qvec, fvec)
-            print("ALT final alpha,beta = ", aalpha, abeta)
+        #if debug and len(B) > 0:
+        #    abeta = _compute_beta(A, B, C, W, qvec, fvec)
+        #    aalpha = _alpha_fn(beta, A, B, C, qvec, fvec)
+        #    print("ALT final alpha,beta = ", aalpha, abeta)
     else:  # fall back to this when len(A) == 0
-        beta = _compute_beta(A, B, C, D, W, qvec, fvec, pushedSD)
+        beta = _compute_beta(A, B, C, D, W, qvec, fvec)
         alpha = 0.0  # doesn't matter OLD: _alpha_fn(beta, A, B, C, qvec, fvec)
         pushedSD = _pushedD_fn(beta, B, C, qvec, fvec)
 
