@@ -957,7 +957,7 @@ class ExplicitOpModel(_mdl.OpModel):
         for lbl, obj in _itertools.chain(self.preps.items(),
                                          self.povms.items(),
                                          self.operations.items(),
-                                         self.instruments.items()
+                                         self.instruments.items(),
                                          self.factories.items()):
             yield (lbl, obj)
 
