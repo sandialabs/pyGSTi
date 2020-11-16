@@ -169,7 +169,7 @@ class ExplicitOpModel(_mdl.OpModel):
         self.povms = _ld.OrderedMemberDict(self, default_param, povm_prefix, flagfn("povm"))
         self.operations = _ld.OrderedMemberDict(self, default_param, gate_prefix, flagfn("operation"))
         self.instruments = _ld.OrderedMemberDict(self, default_param, instrument_prefix, flagfn("instrument"))
-        self.factories = _ld.OrderedMemberDict(self, default_param, instrument_prefix, flagfn("factory"))
+        self.factories = _ld.OrderedMemberDict(self, default_param, gate_prefix, flagfn("factory"))
         self.effects_prefix = effect_prefix
         self._default_gauge_group = None
 
@@ -518,6 +518,9 @@ class ExplicitOpModel(_mdl.OpModel):
             state_dict['_basis'] = state_dict['basis']; del state_dict['basis']
         if 'state_space_labels' in state_dict:
             state_dict['_state_space_labels'] = state_dict['state_space_labels']; del state_dict['_state_space_labels']
+        if 'factories' not in state_dict:
+            ops = state_dict['operations']
+            state_dict['factories'] = _ld.OrderedMemberDict(self, ops.default_param, ops._prefix, ops.flags)
 
         super().__setstate__(state_dict)  # ~ self.__dict__.update(state_dict)
 
