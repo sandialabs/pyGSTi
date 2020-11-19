@@ -457,7 +457,12 @@ class SuccessFailModel(OplessModel):
     def __init__(self, state_space_labels, use_cache=False):
         OplessModel.__init__(self, state_space_labels)
         self.use_cache = use_cache
-        self.sim = _SuccessFailForwardSimulator(self)
+        self._sim = _SuccessFailForwardSimulator(self)
+
+    @property
+    def sim(self):
+        """ Forward simulator for this model """
+        return self._sim
 
     def _post_copy(self, copy_into, memo):
         """
@@ -523,7 +528,7 @@ class SuccessFailModel(OplessModel):
             A dictionary with keys equal to outcome labels and
             values equal to probabilities.
         """
-        return self._sim.probs(circuit, outcomes, time)
+        return self.sim.probs(circuit, outcomes, time)
 
     def bulk_probabilities(self, circuits, clip_to=None, comm=None, mem_limit=None, smartc=None):
         """
