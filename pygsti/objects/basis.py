@@ -1320,11 +1320,15 @@ class TensorProdBasis(LazyBasis):
 
         real = all([c.real for c in self.component_bases])
         sparse = all([c.sparse for c in self.component_bases])
-        assert(all([c.real == real for c in self.component_bases])), "Inconsistent `real` value among component bases!"
+        #assert(all([c.real == real for c in self.component_bases])), "Inconsistent `real` value among component bases!"
         assert(all([c.sparse == sparse for c in self.component_bases])), "Inconsistent sparsity among component bases!"
         assert(sparse is False), "Sparse matrices are not supported within TensorProductBasis objects yet"
 
         dim = int(_np.product([c.dim for c in self.component_bases]))
+        #NOTE: this is actually to restrictive -- what we need is a test/flag for whether the elements of a
+        # basis are in their "natrual" representation where it makes sense to take tensor products.  For
+        # example, a direct-sum basis may hold elements in a compact way that violate this... but I'm not sure if they
+        # do and this needs to be checked.  For now, we could just disable this overly-restrictive assert:
         assert(all([c.is_simple() for c in self.component_bases])), \
             "Components of a tensor product basis must be *simple* (have vector-dimension == size of elements)"
         # because we use the natural representation to take tensor (kronecker) products.
@@ -1388,6 +1392,14 @@ class TensorProdBasis(LazyBasis):
         -------
         TensorProdBasis
         """
+        # FUTURE: we may want a way of creating a 'std' equivalent of tensor product bases that include classical lines.
+        # This is a part of what woudl go into that... but it's not complete.
+        # if builtin_basis_name == 'std':  # special case when we change classical components to 'cl'
+        #     equiv_components = []
+        #     for c in self.component_bases:
+        #         if c.elndim == 1: equiv_components.append(c.create_equivalent('cl'))
+        #         else: equiv_components.append(c.create_equivalent('std'))
+        # else:
         equiv_components = [c.create_equivalent(builtin_basis_name) for c in self.component_bases]
         return TensorProdBasis(equiv_components)
 
@@ -1414,6 +1426,14 @@ class TensorProdBasis(LazyBasis):
         -------
         Basis
         """
+        #if builtin_basis_name == 'std':  # special case when we change classical components to 'clmx'
+        #    equiv_components = []
+        #    for c in self.component_bases:
+        #        if c.elndim == 1: equiv_components.append(BuiltinBasis('clmx', c.dim**2, sparse=self.sparse))    #c.create_simple_equivalent('clmx'))
+        #        else: equiv_components.append(c.create_simple_equivalent('std'))
+        #    expanded_basis = TensorProdBasis(equiv_components)
+        #    return BuiltinBasis('std', expanded_basis.elsize, sparse=expanded_basis.sparse)
+
         if builtin_basis_name is None:
             builtin_basis_name = self.name  # default
             if len(self.component_bases) > 0:
