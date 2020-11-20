@@ -390,39 +390,9 @@ class ResidualTVD:
                             self.T_params >= 0]
 
         # Form objective.
-        self.T = _cp.sum([self.T_params[ind] * _cp.abs(self.t_basis[ind]) for ind in range(self.dim)]) \
+        self.T = _cp.sum([self.T_params[ind] * self.t_basis[ind] for ind in range(self.dim)]) \
             + _np.eye(2**self.n_bits)
-        print("DB: T = ", self.T.is_dcp())
-        #self.resid_tvd = _cp.sum(_cp.abs(self.Q - self.T @ self.P)) / 2  # OLD - using normal TVD
-        #CHECK t_basis is always positive?? KEVIN
-
-        #Just checking curvature of ratio:
-        # d(f/g) = f'/g - f/g^2 * g'
-        # d2(f/g) = f''/g - f'/g^2 * g' - f'/g^2 * g' + 2*f/g^3 * g' * g' - f/g^2 * g''
-        # when f'' = g'' == 0 =>  -2f'g'/g^2 + 2fg'^2/g^3
-
-        # TP_i = sum_i Tij * P_j
-        # TP0_i = sum_i Tij * P0_j
-        # TP0_i = sum_i Tij * (P0_j - P_j) + Tij * P_j = TP_i + sum_i Tij * (P0_j - P_j)
-        # TP0_i / TP_i = 1 + sum_i Tij * (P0_j - P_j) / sum_i Tij * P_j
-
-        #HERE - need to check what _cp.max does - we need elementwise max and '*' to be elementwise mult
-        # OK: self.resid_tvd = _cp.sum( _cp.maximum(self.T @ self.P - self.Q, 0) )
-        term1 = _cp.maximum(self.T @ self.P - self.Q, 0)
-        term2 = _cp.abs(self.T) @ self.P0 / self.T @ self.P
-        mult = _cp.multiply(term1, term2)
-        print("DB: mult = ", mult.is_dcp())
-        import bpdb; bpdb.set_trace()
-
-        self.resid_tvd = _cp.sum(mult)
-        print("DB: resid_tvd = ", self.resid_tvd.is_dcp())
-
-        #self.resid_tvd = _cp.sum( _cp.multiply(_cp.maximum(self.T @ self.P - self.Q, 0),
-        #                                       self.P0) # self.T @
-        #                         )  # NEW
-        #  _cp.multiply(self.T @ self.P0, _cp.inv_pos(self.T @ self.P))
-
-        # above uses "origintal variational distance" (OVD)
+        self.resid_tvd = _cp.sum(_cp.abs(self.Q - self.T @ self.P)) / 2
         self.obj = _cp.Minimize(self.resid_tvd + self.Treg_factor * _cp.norm(self.T_params, 1))
 
         # Form the problem.
@@ -554,7 +524,29 @@ class ResidualTVD:
             self.T_params.value[:] = self.t_params[:]
             self.T.value[:, :] = self.build_transfer_mx(self.t_params)
 
-        return self._obj(self.t_params)  # not self.obj.value b/c that has additional norm regularization
+        #OLD: returns the residual TVD:
+        #return self._obj(self.t_params)  # not self.obj.value b/c that has additional norm regularization
+
+        #NEW: returns the residual OVD, but using the t-params found by the ResidualTVD calculation to compute the OVD:
+        p0 = self.P0
+        p = self.P.value
+        q = self.Q.value
+        tmx = self.build_transfer_mx(self.t_params)
+        ratio = _np.zeros(p.shape, 'd')
+        numerator = _np.dot(tmx, p0)
+        nonzero_inds = _np.where(numerator > 0)[0]
+        ratio[nonzero_inds] = numerator[nonzero_inds] / _np.dot(tmx, p)[nonzero_inds]
+        return _np.sum(ratio * _np.maximum(_np.dot(tmx, p) - q, 0))  # OVD
+
+        #Just checking curvature of ratio:
+        # d(f/g) = f'/g - f/g^2 * g'
+        # d2(f/g) = f''/g - f'/g^2 * g' - f'/g^2 * g' + 2*f/g^3 * g' * g' - f/g^2 * g''
+        # when f'' = g'' == 0 =>  -2f'g'/g^2 + 2fg'^2/g^3
+
+        # TP_i = sum_i Tij * P_j
+        # TP0_i = sum_i Tij * P0_j
+        # TP0_i = sum_i Tij * (P0_j - P_j) + Tij * P_j = TP_i + sum_i Tij * (P0_j - P_j)
+        # TP0_i / TP_i = 1 + sum_i Tij * (P0_j - P_j) / sum_i Tij * P_j
 
 
 class RegularizedDeltaLikelihood:
