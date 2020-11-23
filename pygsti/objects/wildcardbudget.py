@@ -161,24 +161,7 @@ class WildcardBudget(object):
         -------
         object
         """
-        def budget_deriv_for_label(lbl):
-            if lbl in self.primOpLookup:  # Note: includes len(lbl.components) == 0 case of (global) idle
-                deriv = _np.zeros(len(self.wildcard_vector), 'd')
-                deriv[self.primOpLookup[lbl]] = 1.0
-                return deriv
-            else:
-                assert(not lbl.is_simple()), "Simple label %s must be a primitive op of this WEB!" % str(lbl)
-                return sum([budget_deriv_for_label(component) for component in lbl.components])
-
-        circuit_budget_matrix = _np.zeros((len(circuits), len(self.wildcard_vector)), 'd')
-        for i, circuit in enumerate(circuits):
-            for layer in circuit:
-                circuit_budget_matrix[i, :] += budget_deriv_for_label(layer)
-
-        if self.spam_index is not None:
-            circuit_budget_matrix[:, self.spam_index] = 1.0
-
-        return circuit_budget_matrix
+        raise NotImplementedError("Derived classes must implement `precompute_for_same_circuits`")
 
     def slow_update_probs(self, probs_in, probs_out, freqs, layout, precomp=None):
         """
@@ -457,7 +440,7 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
         dictionary mapping primitive operation labels to initial values.
     """
 
-    def __init__(self, primitive_op_labels, start_budget=0.0):
+    def __init__(self, primitive_op_labels, start_budget=0.0, idle_name=None):
         """
         Create a new PrimitiveOpsWildcardBudget.
 
@@ -479,6 +462,12 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
         start_budget : float or dict, optional
             An initial value to set all the parameters to (if a float), or a
             dictionary mapping primitive operation labels to initial values.
+
+        idle_name : str, optional
+            The gate name to be used for the 1-qubit idle gate.  If not `None`, then
+            circuit budgets are computed by considering layers of the circuit as being
+            "padded" with `1-qubit` idles gates on any empty lines.
+
         """
         if isinstance(primitive_op_labels, dict):
             assert(set(primitive_op_labels.values()) == set(range(len(set(primitive_op_labels.values())))))
@@ -490,6 +479,8 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
             self.spam_index = self.primOpLookup['SPAM']
         else:
             self.spam_index = None
+
+        self._idlename = idle_name
 
         nParams = len(set(self.primOpLookup.values()))
         if isinstance(start_budget, dict):
@@ -522,7 +513,9 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
 
         Wvec = self.wildcard_vector
         budget = 0 if (self.spam_index is None) else pos(Wvec[self.spam_index])
-        for layer in circuit:
+        layers = [circuit.layer_label(i) for i in range(circuit.depth)] if (self._idlename is None) \
+            else [circuit.layer_label_with_idles(i, idle_gate_name=self._idlename) for i in range(circuit.depth)]
+        for layer in layers:
             budget += budget_for_label(layer)
         return budget
 
@@ -549,6 +542,44 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
             Wvec = _np.abs(self.wildcard_vector)
             circuit_budgets = _np.dot(precomp, Wvec)
         return circuit_budgets
+
+    def precompute_for_same_circuits(self, circuits):
+        """
+        Compute a pre-computed quantity for speeding up circuit calculations.
+
+        This value can be passed to `update_probs` or `circuit_budgets` whenever this
+        same `circuits` list is passed to `update_probs` to speed things up.
+
+        Parameters
+        ----------
+        circuits : list
+            A list of :class:`Circuit` objects.
+
+        Returns
+        -------
+        object
+        """
+        def budget_deriv_for_label(lbl):
+            if lbl in self.primOpLookup:  # Note: includes len(lbl.components) == 0 case of (global) idle
+                deriv = _np.zeros(len(self.wildcard_vector), 'd')
+                deriv[self.primOpLookup[lbl]] = 1.0
+                return deriv
+            else:
+                assert(not lbl.is_simple()), "Simple label %s must be a primitive op of this WEB!" % str(lbl)
+                return sum([budget_deriv_for_label(component) for component in lbl.components])
+
+        circuit_budget_matrix = _np.zeros((len(circuits), len(self.wildcard_vector)), 'd')
+        for i, circuit in enumerate(circuits):
+
+            layers = [circuit.layer_label(i) for i in range(circuit.depth)] if (self._idlename is None) \
+                else [circuit.layer_label_with_idles(i, idle_gate_name=self._idlename) for i in range(circuit.depth)]
+            for layer in layers:
+                circuit_budget_matrix[i, :] += budget_deriv_for_label(layer)
+
+        if self.spam_index is not None:
+            circuit_budget_matrix[:, self.spam_index] = 1.0
+
+        return circuit_budget_matrix
 
     @property
     def description(self):
@@ -706,7 +737,7 @@ def update_circuit_probs(probs, freqs, circuit_budget):
     if debug:
         print(" budget = ", W, " A=", A, " B=", B, " C=", C, " D=", D)
 
-    ratio_vec = qvec / fvec
+    ratio_vec = qvec / _np.where(fvec > 0, fvec, 1.0)  # avoid divide-by-zero warning (on sets C & D)
     ratio_vec[C] = _np.inf  # below we work in order of ratios distance
     ratio_vec[D] = _np.inf  # from 1.0 - and we don't want exactly-1.0 ratios.
 
