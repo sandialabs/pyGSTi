@@ -507,6 +507,8 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
         def budget_for_label(lbl):
             if lbl in self.primOpLookup:  # Note: includes len(lbl.components) == 0 case of (global) idle
                 return pos(Wvec[self.primOpLookup[lbl]])
+            elif lbl.name in self.primOpLookup:
+                return pos(Wvec[self.primOpLookup[lbl.name]])
             else:
                 assert(not lbl.is_simple()), "Simple label %s must be a primitive op of this WEB!" % str(lbl)
                 return sum([budget_for_label(component) for component in lbl.components])
@@ -563,6 +565,10 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
             if lbl in self.primOpLookup:  # Note: includes len(lbl.components) == 0 case of (global) idle
                 deriv = _np.zeros(len(self.wildcard_vector), 'd')
                 deriv[self.primOpLookup[lbl]] = 1.0
+                return deriv
+            elif lbl.name in self.primOpLookup:
+                deriv = _np.zeros(len(self.wildcard_vector), 'd')
+                deriv[self.primOpLookup[lbl.name]] = 1.0
                 return deriv
             else:
                 assert(not lbl.is_simple()), "Simple label %s must be a primitive op of this WEB!" % str(lbl)
