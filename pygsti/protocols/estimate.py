@@ -543,11 +543,6 @@ class Estimate(object):
 
         Parameters
         ----------
-        use_accurate_np : bool, optional
-            Whether to use the more accurate number of *non-gauge* parameters
-            (but more expensive to compute), or just use the total number of
-            model parameters.
-
         comm : mpi4py.MPI.Comm, optional
             When not None, an MPI communicator for distributing the computation
             across multiple processors.

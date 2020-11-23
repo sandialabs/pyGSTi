@@ -381,11 +381,17 @@ def gather_slices(slices, slice_owners, ar_to_fill,
 
     #Perform broadcasts for each slice in order
     my_rank = comm.Get_rank()
-    arIndx = [slice(None, None)] * ar_to_fill.ndim
-    arIndx[0:len(ar_to_fill_inds)] = ar_to_fill_inds
 
     axes = (axes,) if _compat.isint(axes) else axes
 
+    # if ar_to_fill_inds only contains slices (or is empty), then we can slice ar_to_fill once up front
+    # and not use generic arIndx in loop below (slower, especially with lots of procs)
+    if all([isinstance(indx, slice) for indx in ar_to_fill_inds]):
+        ar_to_fill = ar_to_fill[tuple(ar_to_fill_inds)]  # Note: this *doesn't* reduce its .ndim
+        ar_to_fill_inds = ()  # now ar_to_fill requires no further indexing
+
+    arIndx = [slice(None, None)] * ar_to_fill.ndim
+    arIndx[0:len(ar_to_fill_inds)] = ar_to_fill_inds
     max_indices = [None] * len(axes)
     if max_buffer_size is not None:  # no maximum of buffer size
         chunkBytes = ar_to_fill.nbytes  # start with the entire array as the "chunk"
@@ -404,6 +410,48 @@ def gather_slices(slices, slice_owners, ar_to_fill,
                 break
         else:
             _warnings.warn("gather_slices: Could not achieve max_buffer_size")
+
+    #TEST TODO REMOVE:
+    # Tried doing something faster (Allgatherv) when slices elements are simple slices (not tuples of slices).
+    # This ultimately showed that our repeated use of Bcast isn't any slower than fewer calls to Allgatherv,
+    # and since the Allgatherv case complicates the code and ignores the memory limit, it's best to just drop it.
+    #from mpi4py import MPI  # not at top so can import pygsti on cluster login nodes
+    #nProcs = comm.Get_size()
+    #if len(slices) == nProcs and len(ar_to_fill_inds) == 0 and \
+    #   all([isinstance(slcOrSlcTup, slice) for slcOrSlcTup in slices]):
+    #    # see if we can find a single owned slice for each processors
+    #    owned_slices = {i: None for i in range(nProcs)}
+    #    for i, slc in enumerate(slices):
+    #        if owned_slices[slice_owners[i]] is None:
+    #            owned_slices[slice_owners[i]] = slc
+    #        else: break  # processor w/rank == slice_owners[i] owns more than 1 slice
+    #    else:
+    #        # each processor owns a single slice, given by owned_slice -- use Allgatherv instead of Bcast
+    #        assert(len(axes) == 1), "Logic error: simple slices given with multiple axes!"
+    #        axis = axes[0]
+    #        local_result = ar_to_fill.swapaxes(0, axis)[owned_slices[my_rank]].flatten()  # (flatten copies)
+    #        result = _np.empty(ar_to_fill.size, ar_to_fill.dtype)  # NOTE: this allocates a lot of memory!
+    #        stride = ar_to_fill.size // ar_to_fill.shape[axis]
+    #
+    #        sizes = _np.array([_slct.length(owned_slices[i]) * stride for i in range(nProcs)], int)
+    #        displacements = _np.array([owned_slices[i].start * stride for i in range(nProcs)], int)
+    #        assert(local_result.size == sizes[my_rank])
+    #        comm.Allgatherv([local_result, sizes[my_rank], MPI.F_DOUBLE], \
+    #                        [result, (sizes,displacements), MPI.F_DOUBLE])
+    #        gathered_shape = list(ar_to_fill.shape)  # we gathered with distributed index swapped to position 0
+    #        t = gathered_shape[0]; gathered_shape[0] = gathered_shape[axis]; gathered_shape[axis] = t
+    #        result.shape = tuple(gathered_shape)
+    #        ar_to_fill[tuple(arIndx)] = result.swapaxes(0, axis)
+    #        #if comm.Get_rank() == 0:
+    #        #    print("Sizes = ", sizes)
+    #        #    print("Displacements = ", displacements)
+    #        #    print("Gathered shape = ", gathered_shape)
+    #        #    print("ar_to_fill shape = ", ar_to_fill.shape)
+    #        #print("Local result shape = ",local_result.shape, " result shape = ",result.shape, " tofill = ",ar_to_fill.shape)
+    #        #import sys
+    #        #sys.exit(0)
+    #        return
+    #If we can't use Allgatherv, broadcast slices one-by-one (slower, but more general):
 
     for iSlice, slcOrSlcTup in enumerate(slices):
         owner = slice_owners[iSlice]  # owner's rank
