@@ -10,8 +10,11 @@ Resource allocation manager
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 import numpy as _np
+import socket as _socket
+import collections as _collections
 from contextlib import contextmanager as _contextmanager
 from pygsti.objects.profiler import DummyProfiler as _DummyProfiler
+from hashlib import blake2b as _blake2b
 
 _dummy_profiler = _DummyProfiler()
 
@@ -68,12 +71,44 @@ v        MPI communicator holding the number of available processors.
     def __init__(self, comm=None, mem_limit=None, profiler=None, distribute_method="default"):
         self.comm = comm
         self.mem_limit = mem_limit
+        self.host_comm = None  # comm of the processors local to each processor's host (distinct hostname)
+        self.interhost_comm = None  # comm used to spread results to other hosts; 1 proc on each host (node)
+        self.interhost_ranks = None  # tuple of the self.comm ranks that belong to self.interhostcomm
         if profiler is not None:
             self.profiler = profiler
         else:
             self.profiler = _dummy_profiler
         self.distribute_method = distribute_method
         self.reset()  # begin with no memory allocated
+
+    def build_hostcomms(self):
+        if self.comm is None:
+            self.host_comm = None
+            self.interhost_comm = None
+            self.interhost_ranks = None
+            return
+
+        my_rank = self.comm.rank
+        my_color = None  # set to the index of my_rank within the ranks_by_hostname value that contains my_rank
+        my_hostname = _socket.gethostname()
+        my_hostid = int(_blake2b(my_hostname.encode('utf-8'), digest_size=4).hexdigest(), 16) % (1 << 31)
+        self.host_comm = self.comm.Split(color=int(my_hostid), key=int(my_rank))  # Note: 32-bit ints only for mpi4py
+        #print("CREATED HOSTCOMM: ",my_hostname, my_hostid, self.host_comm.size, self.host_comm.rank)
+
+        hostnames_by_rank = self.comm.allgather(my_hostname)  # ~"node id" of each processor in self.comm
+        ranks_by_hostname = _collections.defaultdict(list)
+        for rank, hostname in enumerate(hostnames_by_rank):
+            if rank == my_rank: my_color = len(ranks_by_hostname[hostname])
+            ranks_by_hostname[hostname].append(rank)
+
+        #check to make sure that each host id that is present occurs the same number of times
+        assert(len(set(map(len, ranks_by_hostname.values()))) == 1), \
+            ("Could not build an inter-host comm because procs-per-node is not uniform.  Ranks by hostname =\n%s"
+             % str(ranks_by_hostname))
+
+        #create sub-comm that groups disjoint sets of processors across all the (present) nodes
+        self.interhost_comm = self.comm.Split(color=my_color, key=my_rank)
+        self.interhost_ranks = tuple(self.interhost_comm.allgather(my_rank))  # store all the original ranks by color
 
     def copy(self):
         """

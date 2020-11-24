@@ -22,6 +22,8 @@ from ..tools import slicetools as _slct, mpitools as _mpit
 from . import profiler as _profiler
 from .circuitlist import CircuitList as _CircuitList
 from .resourceallocation import ResourceAllocation as _ResourceAllocation
+from multiprocessing import shared_memory as _shared_memory
+
 
 #REMOVE:
 #CHECK = False
@@ -4118,10 +4120,28 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         self.resource_alloc.add_tracked_memory(self.nelements)  # 'E' - see compute_array_types above
         self.probs = _np.empty(self.nelements, 'd')
         self.jac = None
+        self._jac_shm = None
 
         if 'EP' in self.array_types:
-            self.resource_alloc.add_tracked_memory((self.nelements + self.ex) * self.nparams)  # ~ 'EP'
-            self.jac = _np.empty((self.nelements + self.ex, self.nparams), 'd')
+            self.resource_alloc.build_hostcomms()  # signals that we want to use shared intra-host memory
+            hostcomm = self.resource_alloc.host_comm
+            if hostcomm is None:
+                # every processor allocates its own memory
+                self.resource_alloc.add_tracked_memory((self.nelements + self.ex) * self.nparams)  # ~ 'EP'
+                self.jac = _np.empty((self.nelements + self.ex, self.nparams), 'd')
+            else:
+                # Create shared memory instance or grab existing depending on "hostrank" (rank of proc within host)
+                self.resource_alloc.add_tracked_memory(((self.nelements + self.ex) * self.nparams) // hostcomm.size)
+                if hostcomm.rank == 0:
+                    self._jac_shm = _shared_memory.SharedMemory(
+                        create=True, size=(self.nelements + self.ex) * self.nparams * _np.dtype('d').itemsize)
+                    #print("RANK ",self.resource_alloc.comm.rank, "created shared mem (%s)" % self._jac_shm.name)
+                    hostcomm.bcast(self._jac_shm.name, root=0)
+                else:
+                    shm_name = hostcomm.bcast(None, root=0)
+                    self._jac_shm = _shared_memory.SharedMemory(name=shm_name)
+                    #print("RANK ",self.resource_alloc.comm.rank, "attached to existing shared mem (%s)" % shm_name)
+                self.jac = _np.ndarray((self.nelements + self.ex, self.nparams), dtype='d', buffer=self._jac_shm.buf)
 
         self.maxCircuitLength = max([len(x) for x in self.circuits])
         self.add_count_vectors()  # allocates 3x 'E' arrays
@@ -4130,6 +4150,10 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
     def __del__(self):
         # Reset the allocated memory to the value it had in __init__, effectively releasing the allocations made there.
         self.resource_alloc.reset(allocated_memory=self.initial_allocated_memory)
+        if self._jac_shm is not None:
+            self._jac_shm.close()
+            if self.resource_alloc.host_comm.rank == 0:
+                self._jac_shm.unlink()
 
     #Model-based regularization and penalty support functions
     def set_penalties(self, regularize_factor=0, cptp_penalty_factor=0, spam_penalty_factor=0,
@@ -4634,6 +4658,10 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         else:
             paramvec = self.model.to_vector()
 
+        # Whether this rank is the "leader" of all the processors accessing the same shared self.jac memory.
+        #  Only leader processors should modify the contents of the shared memory, so we only apply operations *once*
+        shared_mem_leader = bool(self.resource_alloc.host_comm is None or self.resource_alloc.host_comm.rank == 0)
+
         with self.resource_alloc.temporarily_track_memory(2 * self.nelements):  # 'E' (dg_dprobs, lsvec)
             self.model.sim.bulk_fill_dprobs(dprobs, self.layout, self.probs, self.resource_alloc)
             if self.prob_clip_interval is not None:
@@ -4662,16 +4690,18 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
                     self.dprobs_omitted_rowsum[ii, :] = _np.sum(dprobs[self.layout.indices_for_index(i), :], axis=0)
 
             dg_dprobs, lsvec = self.raw_objfn.dlsvec_and_lsvec(self.probs, self.counts, self.total_counts, self.freqs)
-            dprobs *= dg_dprobs[:, None]
+            if shared_mem_leader: # only "leader" modifies shared mem (dprobs)
+                dprobs *= dg_dprobs[:, None]
             # (nelements,N) * (nelements,1)   (N = dim of vectorized model)
             # this multiply also computes jac, which is just dprobs
             # with a different shape (jac.shape == [nelements,nparams])
 
-        if self.firsts is not None:
+        if self.firsts is not None and shared_mem_leader:  # only "leader" modifies shared mem (dprobs)
             #Note: lsvec is assumed to be *not* updated w/omitted probs contribution
             self._update_dlsvec_for_omitted_probs(dprobs, lsvec, self.probs, self.dprobs_omitted_rowsum)
 
-        self._fill_lspenaltyvec_jac(paramvec, self.jac[self.nelements:, :])  # jac.shape == (nelements+N,N)
+        if shared_mem_leader:  # only "leader" modifies shared mem (self.jac)
+            self._fill_lspenaltyvec_jac(paramvec, self.jac[self.nelements:, :])  # jac.shape == (nelements+N,N)
 
         # REMOVE => unit tests?
         #if self.check_jacobian: _opt.check_jac(lambda v: self.lsvec(
@@ -4710,6 +4740,10 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         else:
             paramvec = self.model.to_vector()
 
+        # Whether this rank is the "leader" of all the processors accessing the same shared self.jac memory.
+        #  Only leader processors should modify the contents of the shared memory, so we only apply operations *once*
+        shared_mem_leader = bool(self.resource_alloc.host_comm is None or self.resource_alloc.host_comm.rank == 0)
+
         with self.resource_alloc.temporarily_track_memory(2 * self.nelements):  # 'E' (dg_dprobs, lsvec)
             self.model.sim.bulk_fill_dprobs(dprobs, self.layout, self.probs, self.resource_alloc)
             if self.prob_clip_interval is not None:
@@ -4719,15 +4753,17 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
                 for ii, i in enumerate(self.indicesOfCircuitsWithOmittedData):
                     self.dprobs_omitted_rowsum[ii, :] = _np.sum(dprobs[self.layout.indices_for_index(i), :], axis=0)
 
-            dprobs *= self.raw_objfn.dterms(self.probs, self.counts, self.total_counts, self.freqs)[:, None]
+            if shared_mem_leader:
+                dprobs *= self.raw_objfn.dterms(self.probs, self.counts, self.total_counts, self.freqs)[:, None]
             # (nelements,N) * (nelements,1)   (N = dim of vectorized model)
             # this multiply also computes jac, which is just dprobs
             # with a different shape (jac.shape == [nelements,nparams])
 
-        if self.firsts is not None:
+        if self.firsts is not None and shared_mem_leader:
             self._update_dterms_for_omitted_probs(dprobs, self.probs, self.dprobs_omitted_rowsum)
 
-        self._fill_dterms_penalty(paramvec, self.jac[self.nelements:, :])  # jac.shape == (nelements+N,N)
+        if shared_mem_leader:
+            self._fill_dterms_penalty(paramvec, self.jac[self.nelements:, :])  # jac.shape == (nelements+N,N)
 
         # REMOVE => unit tests
         #if self.check_jacobian: _opt.check_jac(lambda v: self.lsvec(

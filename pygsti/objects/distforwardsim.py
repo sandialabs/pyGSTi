@@ -58,13 +58,14 @@ class DistributableForwardSimulator(_ForwardSimulator):
             self._bulk_fill_probs_block(array_to_fill[atom.element_slice], atom, sub_resource_alloc)
 
         #collect/gather results
-        all_atom_element_slices = [atom.element_slice for atom in layout.atoms]
-        _mpit.gather_slices(all_atom_element_slices, atomOwners, array_to_fill, [], 0,
-                            resource_alloc.comm, layout.gather_mem_limit)
+        if resource_alloc.comm is not None: resource_alloc.comm.barrier()  # just in case above call uses MPI
+        if len(layout.atoms) > 1:  # no need to gather anything when there's just a single atom
+            all_atom_element_slices = [atom.element_slice for atom in layout.atoms]
+            _mpit.gather_slices(all_atom_element_slices, atomOwners, array_to_fill, [], 0,
+                                resource_alloc.comm, layout.gather_mem_limit)
 
     def _bulk_fill_dprobs(self, array_to_fill, layout, pr_array_to_fill, resource_alloc, wrt_filter):
-        myAtomIndices, atomOwners, mySubComm = layout.distribute(resource_alloc.comm)
-        sub_resource_alloc = _ResourceAllocation(comm=mySubComm)
+        myAtomIndices, atomOwners, sub_resource_alloc = layout.distribute(resource_alloc)
         wrt_block_size = layout.additional_dimension_blk_sizes[0]
         Np = self.model.num_params
 
@@ -80,7 +81,7 @@ class DistributableForwardSimulator(_ForwardSimulator):
                 self._bulk_fill_probs_block(pr_array_to_fill[atom.element_slice], atom, sub_resource_alloc)
 
             #Set wrt_block_size to use available processors if it isn't specified
-            blkSize = self._set_param_block_size(wrt_filter, wrt_block_size, mySubComm)
+            blkSize = self._set_param_block_size(wrt_filter, wrt_block_size, sub_resource_alloc.comm)
 
             if blkSize is None:  # wrt_filter gives entire computed parameter block
                 #Compute all requested derivative columns at once
@@ -94,13 +95,12 @@ class DistributableForwardSimulator(_ForwardSimulator):
                 blocks = _mpit.slice_up_range(Np, nBlks)
 
                 #distribute derivative computation across blocks
-                myBlkIndices, blkOwners, blkComm = \
-                    _mpit.distribute_indices(list(range(nBlks)), mySubComm)
-                if blkComm is not None:
-                    _warnings.warn("Note: more CPUs(%d)" % mySubComm.Get_size()
+                myBlkIndices, blkOwners, blk_resource_alloc = \
+                    _mpit.distribute_indices(list(range(nBlks)), sub_resource_alloc)
+                if blk_resource_alloc.comm is not None:
+                    _warnings.warn("Note: more CPUs(%d)" % sub_resource_alloc.comm.Get_size()
                                    + " than derivative columns(%d)!" % Np
                                    + " [blkSize = %.1f, nBlks=%d]" % (blkSize, nBlks))  # pragma: no cover
-                blk_resource_alloc = _ResourceAllocation(comm=blkComm)
 
                 for iBlk in myBlkIndices:
                     paramSlice = blocks[iBlk]  # specifies which deriv cols calc_and_fill computes
@@ -109,18 +109,20 @@ class DistributableForwardSimulator(_ForwardSimulator):
 
                 #gather results
                 _mpit.gather_slices(blocks, blkOwners, array_to_fill, [atom.element_slice],
-                                    1, mySubComm, layout.gather_mem_limit)
+                                    1, sub_resource_alloc, layout.gather_mem_limit)
                 #note: gathering axis 1 of mx_to_fill[:,fslc], dim=(ks,M)
 
         #collect/gather results
-        all_atom_element_slices = [atom.element_slice for atom in layout.atoms]
-        _mpit.gather_slices(all_atom_element_slices, atomOwners, array_to_fill, [], 0,
-                            resource_alloc.comm, layout.gather_mem_limit)
+        if resource_alloc.comm is not None: resource_alloc.comm.barrier()  # ensure gathering above is finished
+        if len(layout.atoms) > 1:  # no need to gather anything when there's just a single atom
+            all_atom_element_slices = [atom.element_slice for atom in layout.atoms]
+            _mpit.gather_slices(all_atom_element_slices, atomOwners, array_to_fill, [], 0,
+                                resource_alloc, layout.gather_mem_limit)
 
-        if pr_array_to_fill is not None:
-            _mpit.gather_slices(all_atom_element_slices, atomOwners, pr_array_to_fill, [], 0,
-                                resource_alloc.comm, layout.gather_mem_limit)
-            #note: pass pr_mx_to_fill, dim=(KS,), so gather pr_mx_to_fill[felInds] (axis=0)
+            if pr_array_to_fill is not None:
+                _mpit.gather_slices(all_atom_element_slices, atomOwners, pr_array_to_fill, [], 0,
+                                    resource_alloc.comm, layout.gather_mem_limit)  # NOTE: don't remove ".comm" until pr_array_to_fill is actually *shared* mem!!
+                #note: pass pr_mx_to_fill, dim=(KS,), so gather pr_mx_to_fill[felInds] (axis=0)
 
     def _bulk_fill_hprobs(self, array_to_fill, layout,
                           pr_array_to_fill, deriv1_array_to_fill, deriv2_array_to_fill,

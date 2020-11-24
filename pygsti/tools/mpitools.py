@@ -28,9 +28,11 @@ def distribute_indices(indices, comm, allow_split_comm=True):
     indices : list
         An array of items (any type) which are to be partitioned.
 
-    comm : mpi4py.MPI.Comm
+    comm : mpi4py.MPI.Comm or ResourceAllocation
         The communicator which specifies the number of processors and
-        which may be split into returned sub-communicators.
+        which may be split into returned sub-communicators.  If a
+        :class:`ResourceAllocation` object, node information is also
+        taken into account when available (for shared memory compatibility).
 
     allow_split_comm : bool
         If True, when there are more processors than indices,
@@ -54,12 +56,19 @@ def distribute_indices(indices, comm, allow_split_comm=True):
         processor rank "owns" the element, and is thus responsible for sharing
         the results.  This notion of ownership is useful when gathering the
         results.
-    loc_comm : mpi4py.MPI.Comm or None
+    loc_comm : mpi4py.MPI.Comm or ResourceAllocation or None
         The local communicator for the group of processors which have been
         given the same `loc_indices` to compute, obtained by splitting `comm`.
         If `loc_indices` is unique to the current processor, or if
         `allow_split_comm` is False, None is returned.
     """
+    from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
+    if isinstance(comm, _ResourceAllocation):
+        ralloc = comm
+        comm = ralloc.comm
+    else:
+        ralloc = None
+
     if comm is None:
         nprocs, rank = 1, 0
     else:
@@ -82,6 +91,12 @@ def distribute_indices(indices, comm, allow_split_comm=True):
         loc_comm = comm.Split(color=color, key=rank)
     else:
         loc_comm = None
+
+    if ralloc is not None:  # then return a ResourceAllocation instead of a comm
+        loc_comm = _ResourceAllocation(loc_comm, ralloc.mem_limit, ralloc.profiler,
+                                       ralloc.distribute_method)
+        if ralloc.host_comm is not None:
+            loc_comm.build_hostcomms()  # signals that we want to use shared intra-host memory
 
     return loc_indices, owners, loc_comm
 
@@ -170,7 +185,6 @@ def distribute_indices_base(indices, nprocs, rank, allow_split_comm=True):
         if rank < extra:
             nloc = nloc_std + 1
             nstart = rank * (nloc_std + 1)
-            loc_indices = [indices[rank // (nloc_std + 1)]]
         else:
             nloc = nloc_std
             nstart = extra * (nloc_std + 1) + (rank - extra) * nloc_std
@@ -258,9 +272,11 @@ def distribute_slice(s, comm, allow_split_comm=True):
     s : slice
         The slice to be partitioned.
 
-    comm : mpi4py.MPI.Comm
+    comm : mpi4py.MPI.Comm or ResourceAllocation
         The communicator which specifies the number of processors and
-        which may be split into returned sub-communicators.
+        which may be split into returned sub-communicators.  If a
+        :class:`ResourceAllocation` object, node information is also
+        taken into account when available (for shared memory compatibility).
 
     allow_split_comm : bool
         If True, when there are more processors than slice indices,
@@ -282,12 +298,19 @@ def distribute_slice(s, comm, allow_split_comm=True):
     owners : dict
         A dictionary giving the owning rank of each slice.  Values are integer
         ranks and keys are integers into `slices`, specifying which slice.
-    loc_comm : mpi4py.MPI.Comm or None
-        The local communicator for the group of processors which have been
-        given the same `loc_slice` to compute, obtained by splitting `comm`.
-        If `loc_slice` is unique to the current processor, or if
-        `allow_split_comm` is False, None is returned.
+    loc_comm : mpi4py.MPI.Comm or ResourceAllocation or None
+        The local communicator/ResourceAllocation for the group of processors
+        which have been given the same `loc_slice` to compute, obtained by
+        splitting `comm`.  If `loc_slice` is unique to the current processor,
+        or if `allow_split_comm` is False, None is returned.
     """
+    from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
+    if isinstance(comm, _ResourceAllocation):
+        ralloc = comm
+        comm = ralloc.comm
+    else:
+        ralloc = None
+
     if comm is None:
         nprocs, rank = 1, 0
     else:
@@ -313,10 +336,15 @@ def distribute_slice(s, comm, allow_split_comm=True):
             loc_comm = comm.Split(color=loc_iSlices[0], key=rank)
         else:
             loc_comm = None
-
     else:
         loc_slice = slice(None)
         loc_comm = None
+
+    if ralloc is not None:  # then return a ResourceAllocation instead of a comm
+        loc_comm = _ResourceAllocation(loc_comm, ralloc.mem_limit, ralloc.profiler,
+                                       ralloc.distribute_method)
+        if ralloc.host_comm is not None:
+            loc_comm.build_hostcomms()  # signals that we want to use shared intra-host memory
 
     return slices, loc_slice, slcOwners, loc_comm
 
@@ -365,9 +393,11 @@ def gather_slices(slices, slice_owners, ar_to_fill,
         be equal to the number of slices (i.e. the tuple length) of each
         element of `slices`.
 
-    comm : mpi4py.MPI.Comm or None
+    comm : mpi4py.MPI.Comm or ResourceAllocation or None
         The communicator specifying the processors involved and used
-        to perform the gather operation.
+        to perform the gather operation.  If a :class:`ResourceAllocation`
+        is provided, then inter-host communication is used when available
+        to facilitate use of shared intra-host memory.
 
     max_buffer_size : int or None
         The maximum buffer size in bytes that is allowed to be used
@@ -377,6 +407,29 @@ def gather_slices(slices, slice_owners, ar_to_fill,
     -------
     None
     """
+    from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
+    if isinstance(comm, _ResourceAllocation):
+        ralloc = comm
+        comm = ralloc.comm
+
+        #For use with shared intra-host (intra-node) memory:
+        # my_interhost_ranks = ranks of comm, 1 per host, that this processor uses to send/receive data between hosts
+        # broadcast_comm = the comm of my_interhost_ranks used to send/receive data.
+        if ralloc.interhost_ranks is not None:
+            my_interhost_ranks = set(ralloc.interhost_ranks)
+            broadcast_rank_map = {comm_rank: broadcast_comm_rank
+                                  for broadcast_comm_rank, comm_rank in enumerate(ralloc.interhost_ranks)}
+            broadcast_comm = ralloc.interhost_comm
+        else:
+            my_interhost_ranks = None
+            broadcast_rank_map = {i: i for i in range(comm.Get_size())}  # trivial mapping
+            broadcast_comm = comm
+    else:
+        ralloc = None
+        my_interhost_ranks = None
+        broadcast_rank_map = {i: i for i in range(comm.Get_size())}  # trivial mapping
+        broadcast_comm = comm
+
     if comm is None: return  # no gathering needed!
 
     #Perform broadcasts for each slice in order
@@ -384,11 +437,14 @@ def gather_slices(slices, slice_owners, ar_to_fill,
 
     axes = (axes,) if _compat.isint(axes) else axes
 
-    # if ar_to_fill_inds only contains slices (or is empty), then we can slice ar_to_fill once up front
-    # and not use generic arIndx in loop below (slower, especially with lots of procs)
-    if all([isinstance(indx, slice) for indx in ar_to_fill_inds]):
-        ar_to_fill = ar_to_fill[tuple(ar_to_fill_inds)]  # Note: this *doesn't* reduce its .ndim
-        ar_to_fill_inds = ()  # now ar_to_fill requires no further indexing
+    #print("DB: Rank %d (%d): BEGIN GATHER SLICES: interhost=%s, group=%s" %
+    #      (my_rank, broadcast_comm.rank, str(my_interhost_ranks), str(broadcast_comm.Get_group())))
+
+    # # if ar_to_fill_inds only contains slices (or is empty), then we can slice ar_to_fill once up front
+    # # and not use generic arIndx in loop below (slower, especially with lots of procs)
+    # if all([isinstance(indx, slice) for indx in ar_to_fill_inds]):
+    #     ar_to_fill = ar_to_fill[tuple(ar_to_fill_inds)]  # Note: this *doesn't* reduce its .ndim
+    #     ar_to_fill_inds = ()  # now ar_to_fill requires no further indexing
 
     arIndx = [slice(None, None)] * ar_to_fill.ndim
     arIndx[0:len(ar_to_fill_inds)] = ar_to_fill_inds
@@ -455,6 +511,11 @@ def gather_slices(slices, slice_owners, ar_to_fill,
 
     for iSlice, slcOrSlcTup in enumerate(slices):
         owner = slice_owners[iSlice]  # owner's rank
+        if my_interhost_ranks is not None and owner not in my_interhost_ranks:
+            # if the "source" (owner) of the data isn't a part of my "circle" of ranks, then we
+            # don't need to send or receive this data - other ranks on the same hosts will do it.
+            continue
+
         slcTup = (slcOrSlcTup,) if isinstance(slcOrSlcTup, slice) else slcOrSlcTup
         assert(len(slcTup) == len(axes))
 
@@ -476,9 +537,13 @@ def gather_slices(slices, slice_owners, ar_to_fill,
             #broadcast arIndx slice
             buf = _findx(ar_to_fill, arIndx, True) if (my_rank == owner) \
                 else _np.empty(_findx_shape(ar_to_fill, arIndx), ar_to_fill.dtype)
-            comm.Bcast(buf, root=owner)
-            if my_rank != owner: _fas(ar_to_fill, arIndx, buf)
+            if len(my_interhost_ranks) > 1:
+                #print("DB: Rank %d (%d) Broadcast: arIndx = %s, owner=%d root=%d" %
+                #      (my_rank, broadcast_comm.rank, str(arIndx), owner, broadcast_rank_map[owner]))
+                broadcast_comm.Bcast(buf, root=broadcast_rank_map[owner])
+                if my_rank != owner: _fas(ar_to_fill, arIndx, buf)
             buf = None  # free buffer mem asap
+    #print("DB: Rank %d: END GATHER SLICES" % my_rank)
 
 
 def gather_slices_by_owner(current_slices, ar_to_fill, ar_to_fill_inds,

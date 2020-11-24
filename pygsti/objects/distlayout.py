@@ -16,6 +16,7 @@ from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
 from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from .copalayout import CircuitOutcomeProbabilityArrayLayout as _CircuitOutcomeProbabilityArrayLayout
+from .resourceallocation import ResourceAllocation as _ResourceAllocation
 
 import numpy as _np
 import warnings as _warnings
@@ -144,9 +145,12 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
 
         Parameters
         ----------
-        comm : mpi4py.MPI.Comm
+        comm : mpi4py.MPI.Comm or ResourceAllocation
             When not None, an MPI communicator for distributing subtrees
-            across processor groups
+            across processor groups.  Providing a :class:`ResourceAllocation`
+            causes a :class:`ResourceAllocation` to be returned (when not None)
+            as `mySubComm` (see below), allowing additional accounting so that
+            shared memory can be utilized between processors on the same host.
 
         verbosity : int, optional
             How much detail to send to stdout.
@@ -161,7 +165,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
             whose values are processor ranks, which indicates which
             processor is responsible for communicating the final
             results of each atom.
-        mySubComm : mpi4py.MPI.Comm or None
+        mySubComm : mpi4py.MPI.Comm or ResourceAllocation or None
             The communicator for the processor group that is responsible
             for computing the same `myAtomIndices` list.  This
             communicator is used for further processor division (e.g.
@@ -171,6 +175,10 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         # processors (group can then parallelize derivative calcs over
         # model parameters)
 
+        comm_or_ralloc = comm
+        if isinstance(comm, _ResourceAllocation):
+            comm = comm_or_ralloc.comm
+
         #rank = 0 if (comm is None) else comm.Get_rank()
         nprocs = 1 if (comm is None) else comm.Get_size()
         nAtomComms = self.num_atom_processing_subcomms
@@ -178,8 +186,8 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         assert(nAtomComms <= nAtoms), "Cannot request more sub-comms ({nAtomComms}) than there are atoms ({nAtoms})!"
 
         assert(nAtomComms <= nprocs), "Not enough processors (%d) to make nAtomComms=%d" % (nprocs, nAtomComms)
-        mySubCommIndices, subCommOwners, mySubComm = \
-            _mpit.distribute_indices(list(range(nAtomComms)), comm)
+        mySubCommIndices, subCommOwners, mySubCommOrRalloc = \
+            _mpit.distribute_indices(list(range(nAtomComms)), comm_or_ralloc)
         assert(len(mySubCommIndices) == 1), "Each rank should be assigned to exactly 1 subComm group"
         mySubCommIndex = mySubCommIndices[0]
 
@@ -195,7 +203,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         printer.log("*** Distributing %d atoms into %d sub-comms (%s processors) ***" %
                     (nAtoms, nAtomComms, nprocs))
 
-        return myAtomIndices, atomOwners, mySubComm
+        return myAtomIndices, atomOwners, mySubCommOrRalloc
 
     def distribution_info(self, nprocs):
         """
