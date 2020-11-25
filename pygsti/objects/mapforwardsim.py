@@ -217,24 +217,24 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         # Note: *don't* set dest_indices arg = layout.element_slice, as this is already done by caller
         resource_alloc.check_can_allocate_memory(layout_atom.cache_size * self.model.dim)
         replib.DM_mapfill_probs_block(self, array_to_fill, slice(0, array_to_fill.shape[0]),  # all indices
-                                      layout_atom, resource_alloc.comm)
+                                      layout_atom, resource_alloc)
 
     def _bulk_fill_dprobs_block(self, array_to_fill, dest_param_slice, layout_atom, param_slice, resource_alloc):
         # Note: *don't* set dest_indices arg = layout.element_slice, as this is already done by caller
         resource_alloc.check_can_allocate_memory(layout_atom.cache_size * self.model.dim * self.model.num_params)
         replib.DM_mapfill_dprobs_block(self, array_to_fill, slice(0, array_to_fill.shape[0]), dest_param_slice,
-                                       layout_atom, param_slice, resource_alloc.comm)
+                                       layout_atom, param_slice, resource_alloc)
 
     def _bulk_fill_hprobs_block(self, array_to_fill, dest_param_slice1, dest_param_slice2, layout_atom,
                                 param_slice1, param_slice2, resource_alloc):
         # Note: *don't* set dest_indices arg = layout.element_slice, as this is already done by caller
         resource_alloc.check_can_allocate_memory(layout_atom.cache_size * self.model.dim * self.model.num_params**2)
         self._dm_mapfill_hprobs_block(array_to_fill, slice(0, array_to_fill.shape[0]), dest_param_slice1,
-                                      dest_param_slice2, layout_atom, param_slice1, param_slice2, resource_alloc.comm)
+                                      dest_param_slice2, layout_atom, param_slice1, param_slice2, resource_alloc)
 
     #Not used enough to warrant pushing to replibs yet... just keep a slow version
     def _dm_mapfill_hprobs_block(self, array_to_fill, dest_indices, dest_param_indices1, dest_param_indices2,
-                                 layout_atom, param_indices1, param_indices2, comm):
+                                 layout_atom, param_indices1, param_indices2, resource_alloc):
 
         """
         Helper function for populating hessian values by block.
@@ -254,8 +254,8 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         dest_param_indices1 = _slct.to_array(dest_param_indices1)
         #dest_param_indices2 = _slct.to_array(dest_param_indices2)  # OK if a slice
 
-        all_slices, my_slice, owners, subComm = \
-            _mpit.distribute_slice(slice(0, len(param_indices1)), comm)
+        all_slices, my_slice, owners, sub_resource_alloc = \
+            _mpit.distribute_slice(slice(0, len(param_indices1)), resource_alloc)
 
         my_param_indices = param_indices1[my_slice]
         st = my_slice.start
@@ -268,7 +268,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         nP2 = _slct.length(param_indices2) if isinstance(param_indices2, slice) else len(param_indices2)
         dprobs = _np.empty((nEls, nP2), 'd')
         dprobs2 = _np.empty((nEls, nP2), 'd')
-        replib.DM_mapfill_dprobs_block(self, dprobs, slice(0, nEls), None, layout_atom, param_indices2, comm)
+        replib.DM_mapfill_dprobs_block(self, dprobs, slice(0, nEls), None, layout_atom, param_indices2, resource_alloc)
 
         orig_vec = self.model.to_vector().copy()
         for i in range(self.model.num_params):
@@ -277,12 +277,12 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
                 vec = orig_vec.copy(); vec[i] += eps
                 self.model.from_vector(vec, close=True)
                 replib.DM_mapfill_dprobs_block(self, dprobs2, slice(0, nEls), None, layout_atom,
-                                               param_indices2, subComm)
+                                               param_indices2, sub_resource_alloc)
                 _fas(array_to_fill, [dest_indices, iFinal, dest_param_indices2], (dprobs2 - dprobs) / eps)
         self.model.from_vector(orig_vec)
 
         #Now each processor has filled the relavant parts of mx_to_fill, so gather together:
-        _mpit.gather_slices(all_slices, owners, array_to_fill, [], axes=1, comm=comm)
+        _mpit.gather_slices(all_slices, owners, array_to_fill, [], axes=1, comm=resource_alloc)
 
     ## ---------------------------------------------------------------------------------------------
     ## TIME DEPENDENT functionality ----------------------------------------------------------------

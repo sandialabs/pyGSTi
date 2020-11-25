@@ -1645,7 +1645,18 @@ def propagate_staterep(staterep, operationreps):
     return ret
 
 
-def DM_mapfill_probs_block(fwdsim, mx_to_fill, dest_indices, layout_atom, comm):
+def DM_mapfill_probs_block(fwdsim, mx_to_fill, dest_indices, layout_atom, resource_alloc):
+
+    if resource_alloc.comm is not None and resource_alloc.comm.rank != 0:
+        # we cannot utilize multiplie processors when computing a single block.  The required
+        # ending condition is that the *root* processor has its array_to_fill filled (the
+        # framework broadcasts the results of each "owner" processor (rank=0 in the sub-comm) to all
+        # other processors).  Before shared memory was utilized, it was fine to have all the
+        # processors just compute the same thing (wasteful, but fine) - but *if* array_to_fill is
+        # shared memory then having multiple processors write to the same indices could cause issues
+        # (corrupted data or slower performance).  Thus, it is better to just do nothing on all of
+        # the non-root processors.  We could also print a warning (?).
+        return
 
     dest_indices = _slct.to_array(dest_indices)  # make sure this is an array and not a slice
     cacheSize = layout_atom.cache_size
@@ -1659,8 +1670,7 @@ def DM_mapfill_probs_block(fwdsim, mx_to_fill, dest_indices, layout_atom, comm):
     effectreps = {i: fwdsim.model._circuit_layer_operator(Elbl, 'povm')._rep
                   for i, Elbl in enumerate(layout_atom.full_effect_labels)}  # cache these in future
 
-    #comm is currently ignored
-    #TODO: if layout_atom is split, distribute among processors
+    #TODO: if layout_atom is split, distribute somehow among processors(?) instead of punting for all but rank-0 above
     for iDest, iStart, remainder, iCache in layout_atom.table.contents:
         remainder = remainder.circuit_without_povm.layertup
 
@@ -1682,7 +1692,8 @@ def DM_mapfill_probs_block(fwdsim, mx_to_fill, dest_indices, layout_atom, comm):
             mx_to_fill[j] = erep.probability(final_state)  # outcome probability
 
 
-def DM_mapfill_dprobs_block(fwdsim, mx_to_fill, dest_indices, dest_param_indices, layout_atom, param_indices, comm):
+def DM_mapfill_dprobs_block(fwdsim, mx_to_fill, dest_indices, dest_param_indices, layout_atom, param_indices,
+                            resource_alloc):
 
     eps = 1e-7  # hardcoded?
 
@@ -1694,8 +1705,8 @@ def DM_mapfill_dprobs_block(fwdsim, mx_to_fill, dest_indices, dest_param_indices
     param_indices = _slct.to_array(param_indices)
     dest_param_indices = _slct.to_array(dest_param_indices)
 
-    all_slices, my_slice, owners, subComm = \
-        _mpit.distribute_slice(slice(0, len(param_indices)), comm)
+    all_slices, my_slice, owners, sub_resource_alloc = \
+        _mpit.distribute_slice(slice(0, len(param_indices)), resource_alloc)
 
     my_param_indices = param_indices[my_slice]
     st = my_slice.start  # beginning of where my_param_indices results
@@ -1705,26 +1716,29 @@ def DM_mapfill_dprobs_block(fwdsim, mx_to_fill, dest_indices, dest_param_indices
     # final index within mx_to_fill (fpoffset = final parameter offset)
     iParamToFinal = {i: dest_param_indices[st + ii] for ii, i in enumerate(my_param_indices)}
 
-    orig_vec = fwdsim.model.to_vector().copy()
-    fwdsim.model.from_vector(orig_vec, close=False)  # ensure we call with close=False first
+    if sub_resource_alloc.comm is None or sub_resource_alloc.comm.rank == 0:
+        #Note: DM_mapfill_probs_block calls don't do anything unless above if statement is true
 
-    nEls = layout_atom.num_elements
-    probs = _np.empty(nEls, 'd')
-    probs2 = _np.empty(nEls, 'd')
-    DM_mapfill_probs_block(fwdsim, probs, slice(0, nEls), layout_atom, comm)
+        orig_vec = fwdsim.model.to_vector().copy()
+        fwdsim.model.from_vector(orig_vec, close=False)  # ensure we call with close=False first
 
-    for i in range(fwdsim.model.num_params):
-        #print("dprobs cache %d of %d" % (i,self.Np))
-        if i in iParamToFinal:
-            iFinal = iParamToFinal[i]
-            vec = orig_vec.copy(); vec[i] += eps
-            fwdsim.model.from_vector(vec, close=True)
-            DM_mapfill_probs_block(fwdsim, probs2, slice(0, nEls), layout_atom, subComm)
-            _fas(mx_to_fill, [dest_indices, iFinal], (probs2 - probs) / eps)
-    fwdsim.model.from_vector(orig_vec, close=True)
+        nEls = layout_atom.num_elements
+        probs = _np.empty(nEls, 'd')
+        probs2 = _np.empty(nEls, 'd')
+        DM_mapfill_probs_block(fwdsim, probs, slice(0, nEls), layout_atom, sub_resource_alloc)
 
-    #Now each processor has filled the relavant parts of mx_to_fill, so gather together:
-    _mpit.gather_slices(all_slices, owners, mx_to_fill, [], axes=1, comm=comm)
+        for i in range(fwdsim.model.num_params):
+            #print("dprobs cache %d of %d" % (i,self.Np))
+            if i in iParamToFinal:
+                iFinal = iParamToFinal[i]
+                vec = orig_vec.copy(); vec[i] += eps
+                fwdsim.model.from_vector(vec, close=True)
+                DM_mapfill_probs_block(fwdsim, probs2, slice(0, nEls), layout_atom, sub_resource_alloc)
+                _fas(mx_to_fill, [dest_indices, iFinal], (probs2 - probs) / eps)
+        fwdsim.model.from_vector(orig_vec, close=True)
+
+    #Now each rank-0 sub_resource_alloc processor has filled the relavant parts of mx_to_fill, so gather together:
+    _mpit.gather_slices(all_slices, owners, mx_to_fill, [], axes=1, comm=resource_alloc)
 
 
 def DM_mapfill_TDchi2_terms(fwdsim, array_to_fill, dest_indices, num_outcomes, layout_atom, dataset_rows,

@@ -2086,7 +2086,18 @@ cdef vector[DMEffectCRep*] convert_ereps(ereps):
 
 
 def DM_mapfill_probs_block(fwdsim, np.ndarray[double, mode="c", ndim=1] array_to_fill,
-                           dest_indices, layout_atom, comm):
+                           dest_indices, layout_atom, resource_alloc):
+
+    if resource_alloc.comm is not None and resource_alloc.comm.rank != 0:
+        # we cannot utilize multiplie processors when computing a single block.  The required
+        # ending condition is that the *root* processor has its array_to_fill filled (the
+        # framework broadcasts the results of each "owner" processor (rank=0 in the sub-comm) to all
+        # other processors).  Before shared memory was utilized, it was fine to have all the
+        # processors just compute the same thing (wasteful, but fine) - but *if* array_to_fill is
+        # shared memory then having multiple processors write to the same indices could cause issues
+        # (corrupted data or slower performance).  Thus, it is better to just do nothing on all of
+        # the non-root processors.  We could also print a warning (?).
+        return
 
     dest_indices = _slct.to_array(dest_indices)  # make sure this is an array and not a slice
     #dest_indices = np.ascontiguousarray(dest_indices) #unneeded
@@ -2113,7 +2124,7 @@ def DM_mapfill_probs_block(fwdsim, np.ndarray[double, mode="c", ndim=1] array_to
         layout_atom.elindices_by_expcircuit, dest_indices)
 
     dm_mapfill_probs(array_to_fill, c_layout_atom, c_opreps, c_rhos, c_ereps, &rho_cache,
-                     elabel_indices_per_circuit, final_indices_per_circuit, fwdsim.model.dim, comm)
+                     elabel_indices_per_circuit, final_indices_per_circuit, fwdsim.model.dim)
 
     free_rhocache(rho_cache)  #delete cache entries
 
@@ -2125,7 +2136,7 @@ cdef dm_mapfill_probs(double[:] array_to_fill,
                       vector[DMStateCRep*]* prho_cache,
                       vector[vector[INT]] elabel_indices_per_circuit,
                       vector[vector[INT]] final_indices_per_circuit,
-                      INT dim, comm): # any way to transmit comm?
+                      INT dim):
 
     #Note: we need to take in rho_cache as a pointer b/c we may alter the values its
     # elements point to (instead of copying the states) - we just guarantee that in the end
@@ -2214,7 +2225,7 @@ def DM_mapfill_dprobs_block(fwdsim,
                             np.ndarray[double, mode="c", ndim=2] array_to_fill,
                             dest_indices,
                             dest_param_indices,
-                            layout_atom, param_indices, comm):
+                            layout_atom, param_indices, resource_alloc):
 
     cdef double eps = 1e-7 #hardcoded?
 
@@ -2254,8 +2265,8 @@ def DM_mapfill_dprobs_block(fwdsim,
     cdef vector[vector[INT]] elabel_indices_per_circuit = convert_dict_of_intlists(layout_atom.elbl_indices_by_expcircuit)
     cdef vector[vector[INT]] final_indices_per_circuit = convert_dict_of_intlists(layout_atom.elindices_by_expcircuit)
 
-    all_slices, my_slice, owners, subComm = \
-        _mpit.distribute_slice(slice(0, len(param_indices)), comm)
+    all_slices, my_slice, owners, sub_resource_alloc = \
+        _mpit.distribute_slice(slice(0, len(param_indices)), resource_alloc)
 
     my_param_indices = param_indices[my_slice]
     st = my_slice.start  # beginning of where my_param_indices results get placed into dpr_cache
@@ -2264,27 +2275,29 @@ def DM_mapfill_dprobs_block(fwdsim,
     # final index within array_to_fill (fpoffset = final parameter offset)
     iParamToFinal = {i: dest_param_indices[st + ii] for ii, i in enumerate(my_param_indices)}
 
-    orig_vec = fwdsim.model.to_vector().copy()
-    fwdsim.model.from_vector(orig_vec, close=False)  # ensure we call with close=False first
+    if sub_resource_alloc.comm is None or sub_resource_alloc.comm.rank == 0:  # only compute on 0th rank
+        orig_vec = fwdsim.model.to_vector().copy()
+        fwdsim.model.from_vector(orig_vec, close=False)  # ensure we call with close=False first
 
-    nEls = layout_atom.num_elements
-    probs = np.empty(nEls, 'd') #must be contiguous!
-    probs2 = np.empty(nEls, 'd') #must be contiguous!
-    dm_mapfill_probs(probs, c_layout_atom, c_opreps, c_rhos, c_ereps, &rho_cache,
-                     elabel_indices_per_circuit, final_indices_per_circuit, fwdsim.model.dim, subComm)
+        nEls = layout_atom.num_elements
+        probs = np.empty(nEls, 'd') #must be contiguous!
+        probs2 = np.empty(nEls, 'd') #must be contiguous!
 
-    for i in range(fwdsim.model.num_params):
-        #print("dprobs cache %d of %d" % (i,self.Np))
-        if i in iParamToFinal:
-            iFinal = iParamToFinal[i]
-            vec = orig_vec.copy(); vec[i] += eps
-            fwdsim.model.from_vector(vec, close=True)
-            dm_mapfill_probs(probs2, c_layout_atom, c_opreps, c_rhos, c_ereps, &rho_cache,
-                             elabel_indices_per_circuit, final_indices_per_circuit, fwdsim.model.dim, subComm)
-            _fas(array_to_fill, [dest_indices, iFinal], (probs2 - probs) / eps)
-    fwdsim.model.from_vector(orig_vec, close=True)
+        dm_mapfill_probs(probs, c_layout_atom, c_opreps, c_rhos, c_ereps, &rho_cache,
+                         elabel_indices_per_circuit, final_indices_per_circuit, fwdsim.model.dim)
 
-    #Now each processor has filled the relavant parts of array_to_fill, so gather together:
+        for i in range(fwdsim.model.num_params):
+            #print("dprobs cache %d of %d" % (i,self.Np))
+            if i in iParamToFinal:
+                iFinal = iParamToFinal[i]
+                vec = orig_vec.copy(); vec[i] += eps
+                fwdsim.model.from_vector(vec, close=True)
+                dm_mapfill_probs(probs2, c_layout_atom, c_opreps, c_rhos, c_ereps, &rho_cache,
+                                 elabel_indices_per_circuit, final_indices_per_circuit, fwdsim.model.dim)
+                _fas(array_to_fill, [dest_indices, iFinal], (probs2 - probs) / eps)
+        fwdsim.model.from_vector(orig_vec, close=True)
+
+    #Now each rank-0 sub_resource_alloc processor has filled the relavant parts of array_to_fill, so gather together:
     _mpit.gather_slices(all_slices, owners, array_to_fill, [], axes=1, comm=comm)
 
     free_rhocache(rho_cache)  #delete cache entries

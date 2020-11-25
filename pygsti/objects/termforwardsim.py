@@ -340,6 +340,18 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         return layout
 
     def _bulk_fill_probs_block(self, array_to_fill, layout_atom, resource_alloc):
+
+        if resource_alloc.comm is not None and resource_alloc.comm.rank != 0:
+            # we cannot utilize multiplie processors when computing a single block.  The required
+            # ending condition is that the *root* processor has its array_to_fill filled (the
+            # framework broadcasts the results of each "owner" processor (rank=0 in the sub-comm) to all
+            # other processors).  Before shared memory was utilized, it was fine to have all the
+            # processors just compute the same thing (wasteful, but fine) - but *if* array_to_fill is
+            # shared memory then having multiple processors write to the same indices could cause issues
+            # (corrupted data or slower performance).  Thus, it is better to just do nothing on all of
+            # the non-root processors.  We could also print a warning (?).
+            return
+
         nEls = layout_atom.num_elements
         if self.mode == "direct":
             probs = self._prs_directly(layout_atom, resource_alloc)  # could make into a fill_routine? HERE
@@ -350,6 +362,9 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         _fas(array_to_fill, [slice(0, array_to_fill.shape[0])], probs)
 
     def _bulk_fill_dprobs_block(self, array_to_fill, dest_param_slice, layout_atom, param_slice, resource_alloc):
+        if resource_alloc.comm is not None and resource_alloc.comm.rank != 0:
+            return  # see above
+
         if param_slice is None: param_slice = slice(0, self.model.num_params)
         if dest_param_slice is None: dest_param_slice = slice(0, _slct.length(param_slice))
 
@@ -371,6 +386,9 @@ class TermForwardSimulator(_DistributableForwardSimulator):
 
     def _bulk_fill_hprobs_block(self, array_to_fill, dest_param_slice1, dest_param_slice2, layout_atom,
                                 param_slice1, param_slice2, resource_alloc):
+        if resource_alloc.comm is not None and resource_alloc.comm.rank != 0:
+            return  # see above
+
         if param_slice1 is None or param_slice1.start is None: param_slice1 = slice(0, self.model.num_params)
         if param_slice2 is None or param_slice2.start is None: param_slice2 = slice(0, self.model.num_params)
         if dest_param_slice1 is None: dest_param_slice1 = slice(0, _slct.length(param_slice1))
