@@ -4157,9 +4157,16 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         # Reset the allocated memory to the value it had in __init__, effectively releasing the allocations made there.
         self.resource_alloc.reset(allocated_memory=self.initial_allocated_memory)
         if self._jac_shm is not None:
+            #if self.resource_alloc.host_comm.rank == 0:
+            #Close and unlink *if* it's still alive, otherwise unregister it so resourcetracker doesn't complain
             self._jac_shm.close()
-            if self.resource_alloc.host_comm.rank == 0:
+            try:
+                #import os as _os
+                #fd = _shared_memory._posixshmem.shm_open('/' + self._jac_shm.name, _os.O_RDONLY)
+                #_os.close(fd)
                 self._jac_shm.unlink()
+            except FileNotFoundError:
+                _resource_tracker.unregister(self._jac_shm.name, 'shared_memory')
 
     #Model-based regularization and penalty support functions
     def set_penalties(self, regularize_factor=0, cptp_penalty_factor=0, spam_penalty_factor=0,
