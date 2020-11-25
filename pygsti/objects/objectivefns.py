@@ -22,7 +22,12 @@ from ..tools import slicetools as _slct, mpitools as _mpit
 from . import profiler as _profiler
 from .circuitlist import CircuitList as _CircuitList
 from .resourceallocation import ResourceAllocation as _ResourceAllocation
-from multiprocessing import shared_memory as _shared_memory
+
+try:
+    #Enables the use of shared memory in Python 3.8+
+    from multiprocessing import shared_memory as _shared_memory
+except ImportError:
+    _shared_memory = None
 
 
 #REMOVE:
@@ -4123,7 +4128,8 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         self._jac_shm = None
 
         if 'EP' in self.array_types:
-            self.resource_alloc.build_hostcomms()  # signals that we want to use shared intra-host memory
+            if _shared_memory is not None:
+                self.resource_alloc.build_hostcomms()  # signals that we want to use shared intra-host memory
             hostcomm = self.resource_alloc.host_comm
             if hostcomm is None:
                 # every processor allocates its own memory
