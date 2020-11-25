@@ -537,7 +537,7 @@ def gather_slices(slices, slice_owners, ar_to_fill,
             #broadcast arIndx slice
             buf = _findx(ar_to_fill, arIndx, True) if (my_rank == owner) \
                 else _np.empty(_findx_shape(ar_to_fill, arIndx), ar_to_fill.dtype)
-            if len(my_interhost_ranks) > 1:
+            if my_interhost_ranks is None or len(my_interhost_ranks) > 1:
                 #print("DB: Rank %d (%d) Broadcast: arIndx = %s, owner=%d root=%d" %
                 #      (my_rank, broadcast_comm.rank, str(arIndx), owner, broadcast_rank_map[owner]))
                 broadcast_comm.Bcast(buf, root=broadcast_rank_map[owner])
