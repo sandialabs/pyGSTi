@@ -422,12 +422,12 @@ def gather_slices(slices, slice_owners, ar_to_fill,
             broadcast_comm = ralloc.interhost_comm
         else:
             my_interhost_ranks = None
-            broadcast_rank_map = {i: i for i in range(comm.Get_size())}  # trivial mapping
+            broadcast_rank_map = {i: i for i in range(comm.Get_size())} if (comm is not None) else {0: 0}  # trivial map
             broadcast_comm = comm
     else:
         ralloc = None
         my_interhost_ranks = None
-        broadcast_rank_map = {i: i for i in range(comm.Get_size())}  # trivial mapping
+        broadcast_rank_map = {i: i for i in range(comm.Get_size())} if (comm is not None) else {0: 0}  # trivial map
         broadcast_comm = comm
 
     if comm is None: return  # no gathering needed!
