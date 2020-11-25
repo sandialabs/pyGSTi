@@ -4148,7 +4148,6 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
                     self._jac_shm = _shared_memory.SharedMemory(name=shm_name)
                     #print("RANK ",self.resource_alloc.comm.rank, "attached to existing shared mem (%s)" % shm_name)
                 self.jac = _np.ndarray((self.nelements + self.ex, self.nparams), dtype='d', buffer=self._jac_shm.buf)
-                #print("*** (%s) Allocating STORE *** " % str(id(self)), self._jac_shm.name)
 
         self.maxCircuitLength = max([len(x) for x in self.circuits])
         self.add_count_vectors()  # allocates 3x 'E' arrays
@@ -4158,21 +4157,13 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         # Reset the allocated memory to the value it had in __init__, effectively releasing the allocations made there.
         self.resource_alloc.reset(allocated_memory=self.initial_allocated_memory)
         if self._jac_shm is not None:
-            #print("*** (%s) DELETING STORE *** " % str(id(self)), (self._jac_shm.name if (self._jac_shm is not None) else "NONE"))
-            #if self.resource_alloc.host_comm.rank == 0:
             #Close and unlink *if* it's still alive, otherwise unregister it so resourcetracker doesn't complain
             self._jac_shm.close()
             try:
-                #import os as _os
-                #fd = _shared_memory._posixshmem.shm_open('/' + self._jac_shm.name, _os.O_RDONLY)
-                #_os.close(fd)
                 self._jac_shm.unlink()
-                #print("   - Closed and unlinked")
             except FileNotFoundError:
                 from multiprocessing import resource_tracker as _resource_tracker
                 _resource_tracker.unregister('/' + self._jac_shm.name, 'shared_memory')
-                #print("   - Closed and unregistered (FileNotFoundError)")
-            #print("*** END DELETING STORE ***")
 
     #Model-based regularization and penalty support functions
     def set_penalties(self, regularize_factor=0, cptp_penalty_factor=0, spam_penalty_factor=0,
