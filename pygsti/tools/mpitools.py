@@ -432,6 +432,11 @@ def gather_slices(slices, slice_owners, ar_to_fill,
 
     if comm is None: return  # no gathering needed!
 
+    # To be safe, since use of broadcast_comm below means we don't always need to wait for all procs
+    # to finish what they were doing last, which could involve updating a shared ar_to_fill so that
+    # values accessed by the already-finished front-running processors are affected!
+    comm.barrier()
+
     #Perform broadcasts for each slice in order
     my_rank = comm.Get_rank()
 
@@ -544,6 +549,10 @@ def gather_slices(slices, slice_owners, ar_to_fill,
                 if my_rank != owner: _fas(ar_to_fill, arIndx, buf)
             buf = None  # free buffer mem asap
     #print("DB: Rank %d: END GATHER SLICES" % my_rank)
+
+    # Important: wait for everything to finish before proceeding
+    #  (when broadcast_comm != comm some procs may run ahead - see comment above)
+    comm.barrier()
 
 
 def gather_slices_by_owner(current_slices, ar_to_fill, ar_to_fill_inds,

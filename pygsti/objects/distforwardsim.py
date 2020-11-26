@@ -58,7 +58,6 @@ class DistributableForwardSimulator(_ForwardSimulator):
             self._bulk_fill_probs_block(array_to_fill[atom.element_slice], atom, sub_resource_alloc)
 
         #collect/gather results
-        if resource_alloc.comm is not None: resource_alloc.comm.barrier()  # just in case above call uses MPI
         all_atom_element_slices = [atom.element_slice for atom in layout.atoms]
         _mpit.gather_slices(all_atom_element_slices, atomOwners, array_to_fill, [], 0,
                             resource_alloc, layout.gather_mem_limit)
@@ -112,13 +111,11 @@ class DistributableForwardSimulator(_ForwardSimulator):
                 #note: gathering axis 1 of mx_to_fill[:,fslc], dim=(ks,M)
 
         #collect/gather results
-        if resource_alloc.comm is not None: resource_alloc.comm.barrier()  # ensure gathering above is finished
         all_atom_element_slices = [atom.element_slice for atom in layout.atoms]
         _mpit.gather_slices(all_atom_element_slices, atomOwners, array_to_fill, [], 0,
                             resource_alloc, layout.gather_mem_limit)
 
         if pr_array_to_fill is not None:
-            if resource_alloc.comm is not None: resource_alloc.comm.barrier()  # ensure gathering above is finished
             _mpit.gather_slices(all_atom_element_slices, atomOwners, pr_array_to_fill, [], 0,
                                 resource_alloc, layout.gather_mem_limit)
             #note: pass pr_mx_to_fill, dim=(KS,), so gather pr_mx_to_fill[felInds] (axis=0)
@@ -157,7 +154,6 @@ class DistributableForwardSimulator(_ForwardSimulator):
                                               layout.gather_mem_limit)
 
         #collect/gather results
-        if resource_alloc.comm is not None: resource_alloc.comm.barrier()  # ensure gathering above is finished
         all_atom_element_slices = [atom.element_slice for atom in layout.atoms]
         _mpit.gather_slices(all_atom_element_slices, atomOwners, array_to_fill, [], 0,
                             resource_alloc, layout.gather_mem_limit)
