@@ -2298,7 +2298,7 @@ def DM_mapfill_dprobs_block(fwdsim,
         fwdsim.model.from_vector(orig_vec, close=True)
 
     #Now each rank-0 sub_resource_alloc processor has filled the relavant parts of array_to_fill, so gather together:
-    _mpit.gather_slices(all_slices, owners, array_to_fill, [], axes=1, comm=comm)
+    _mpit.gather_slices(all_slices, owners, array_to_fill, [], axes=1, comm=resource_alloc)
 
     free_rhocache(rho_cache)  #delete cache entries
 
