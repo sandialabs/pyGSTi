@@ -4564,9 +4564,13 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         else:
             paramvec = self.model.to_vector()
 
+        # Whether this rank is the "leader" of all the processors accessing the same shared self.jac and self.probs mem.
+        #  Only leader processors should modify the contents of the shared memory, so we only apply operations *once*
+        shared_mem_leader = bool(self.resource_alloc.host_comm is None or self.resource_alloc.host_comm.rank == 0)
+
         with self.resource_alloc.temporarily_track_memory(self.nelements):  # 'E' (lsvec)
             self.model.sim.bulk_fill_probs(self.probs, self.layout, self.resource_alloc)
-            if self.prob_clip_interval is not None:
+            if self.prob_clip_interval is not None and shared_mem_leader:
                 _np.clip(self.probs, self.prob_clip_interval[0], self.prob_clip_interval[1], out=self.probs)
 
             if oob_check:  # Only used for termgap cases
@@ -4607,9 +4611,13 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         if paramvec is not None: self.model.from_vector(paramvec)
         else: paramvec = self.model.to_vector()
 
+        # Whether this rank is the "leader" of all the processors accessing the same shared self.jac and self.probs mem.
+        #  Only leader processors should modify the contents of the shared memory, so we only apply operations *once*
+        shared_mem_leader = bool(self.resource_alloc.host_comm is None or self.resource_alloc.host_comm.rank == 0)
+
         with self.resource_alloc.temporarily_track_memory(self.nelements):  # 'E' (terms)
             self.model.sim.bulk_fill_probs(self.probs, self.layout, self.resource_alloc)
-            if self.prob_clip_interval is not None:
+            if self.prob_clip_interval is not None and shared_mem_leader:
                 _np.clip(self.probs, self.prob_clip_interval[0], self.prob_clip_interval[1], out=self.probs)
 
             terms = self.raw_objfn.terms(self.probs, self.counts, self.total_counts, self.freqs)
