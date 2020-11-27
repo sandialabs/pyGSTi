@@ -110,6 +110,28 @@ v        MPI communicator holding the number of available processors.
         self.interhost_comm = self.comm.Split(color=my_color, key=my_rank)
         self.interhost_ranks = tuple(self.interhost_comm.allgather(my_rank))  # store all the original ranks by color
 
+    @property
+    def is_host_leader(self):
+        """True if this processors is the rank-0 "leader" of its host (node).  False otherwise. """
+        return bool(self.host_comm is None or self.host_comm.rank == 0)
+
+    def host_comm_barrier(self):
+        """
+        Calls self.host_comm.barrier() when self.host_comm is not None.
+
+        This convenience function provides an often-used barrier that
+        follows code where a single "leader" processor modifies a memory
+        block shared between all members of `self.host_comm`, and the
+        other processors must wait until this modification is performed
+        before proceeding with their own computations.
+
+        Returns
+        -------
+        None
+        """
+        if self.host_comm is not None:
+            self.host_comm.barrier()
+
     def copy(self):
         """
         Copy this object.

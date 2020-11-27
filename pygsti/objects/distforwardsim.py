@@ -114,6 +114,7 @@ class DistributableForwardSimulator(_ForwardSimulator):
         all_atom_element_slices = [atom.element_slice for atom in layout.atoms]
         _mpit.gather_slices(all_atom_element_slices, atomOwners, array_to_fill, [], 0,
                             resource_alloc, layout.gather_mem_limit)
+        #REMOVE print("Rank%d of %d: Gathered dprobs slices = %g" % (resource_alloc.comm.rank, resource_alloc.comm.size, _np.linalg.norm(array_to_fill)))
 
         if pr_array_to_fill is not None:
             _mpit.gather_slices(all_atom_element_slices, atomOwners, pr_array_to_fill, [], 0,

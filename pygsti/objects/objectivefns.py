@@ -1576,7 +1576,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
                 #probs = probs_mem[0:sub_nelements]  (OLD, using global per-proc memory pool)
                 probs, probs_shm = _smt.create_shared_ndarray(sub_resource_alloc, (sub_nelements,), 'd',
                                                               track_memory=False)
-                shared_mem_leader = bool(sub_resource_alloc.host_comm is None or sub_resource_alloc.host_comm.rank == 0)
+                shared_mem_leader = sub_resource_alloc.is_host_leader
 
                 # Take portions of count arrays for this subtree
                 counts = counts_all[atom.element_slice]
@@ -1586,9 +1586,11 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
 
                 #compute probs separately
                 #self.model.sim.bulk_fill_probs(probs, atom, sub_resource_alloc)
+                sub_resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory before reinit
                 self.model.sim._bulk_fill_probs_block(probs, atom, sub_resource_alloc)  # need to reach into internals!
                 if prob_clip_interval is not None and shared_mem_leader:
                     _np.clip(probs, prob_clip_interval[0], prob_clip_interval[1], out=probs)
+                sub_resource_alloc.host_comm_barrier()  # shared memory barrier
 
                 num_cols = self.model.num_params
                 blocks1 = _mpit.slice_up_range(num_cols, row_parts)
@@ -1605,8 +1607,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
 
                 subtree_hessian = _smt.create_shared_ndarray(blk_resource_alloc, (nparams, nparams), 'd',
                                                              zero_out=True, track_memory=False)
-                blk_shared_mem_leader = bool(blk_resource_alloc.host_comm is None
-                                             or blk_resource_alloc.host_comm.rank == 0)
+                blk_shared_mem_leader = blk_resource_alloc.is_host_leader
 
                 k, kmax = 0, len(my_slicetup_list)
                 for (slice1, slice2, hprobs, dprobs12) in self.model.sim._bulk_hprobs_by_block_singleatom(
@@ -1625,6 +1626,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
                         subtree_hessian[slice1, slice2] = \
                             self._hessian_from_block(hprobs, dprobs12, probs, counts,
                                                      total_counts, freqs, blk_resource_alloc)
+                    blk_resource_alloc.host_comm_barrier()  # shared memory barrier
                     #NOTE: _hessian_from_hprobs MAY modify hprobs and dprobs12
                     #NOTE2: we don't account for memory within _hessian_from_block - maybe we should?
 
@@ -4566,12 +4568,14 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
         # Whether this rank is the "leader" of all the processors accessing the same shared self.jac and self.probs mem.
         #  Only leader processors should modify the contents of the shared memory, so we only apply operations *once*
-        shared_mem_leader = bool(self.resource_alloc.host_comm is None or self.resource_alloc.host_comm.rank == 0)
+        shared_mem_leader = self.resource_alloc.is_host_leader
 
         with self.resource_alloc.temporarily_track_memory(self.nelements):  # 'E' (lsvec)
+            self.resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory before we reinit
             self.model.sim.bulk_fill_probs(self.probs, self.layout, self.resource_alloc)
             if self.prob_clip_interval is not None and shared_mem_leader:
                 _np.clip(self.probs, self.prob_clip_interval[0], self.prob_clip_interval[1], out=self.probs)
+            self.resource_alloc.host_comm_barrier()  # shared memory barrier
 
             if oob_check:  # Only used for termgap cases
                 if not self.model.sim.bulk_test_if_paths_are_sufficient(self.layout, self.probs,
@@ -4613,12 +4617,13 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
         # Whether this rank is the "leader" of all the processors accessing the same shared self.jac and self.probs mem.
         #  Only leader processors should modify the contents of the shared memory, so we only apply operations *once*
-        shared_mem_leader = bool(self.resource_alloc.host_comm is None or self.resource_alloc.host_comm.rank == 0)
+        shared_mem_leader = self.resource_alloc.is_host_leader
 
         with self.resource_alloc.temporarily_track_memory(self.nelements):  # 'E' (terms)
-            self.model.sim.bulk_fill_probs(self.probs, self.layout, self.resource_alloc)
+            self.resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory before we reinit
             if self.prob_clip_interval is not None and shared_mem_leader:
                 _np.clip(self.probs, self.prob_clip_interval[0], self.prob_clip_interval[1], out=self.probs)
+            self.resource_alloc.host_comm_barrier()  # shared mem barrier
 
             terms = self.raw_objfn.terms(self.probs, self.counts, self.total_counts, self.freqs)
             terms = _np.concatenate((terms, self._penaltyvec(paramvec)))
@@ -4659,12 +4664,18 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
         # Whether this rank is the "leader" of all the processors accessing the same shared self.jac and self.probs mem.
         #  Only leader processors should modify the contents of the shared memory, so we only apply operations *once*
-        shared_mem_leader = bool(self.resource_alloc.host_comm is None or self.resource_alloc.host_comm.rank == 0)
+        shared_mem_leader = self.resource_alloc.is_host_leader
 
         with self.resource_alloc.temporarily_track_memory(2 * self.nelements):  # 'E' (dg_dprobs, lsvec)
+            self.resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory before we reinit
             self.model.sim.bulk_fill_dprobs(dprobs, self.layout, self.probs, self.resource_alloc)
+            #REMOVE print("%d: DLSVEC dprobs = %g, probs = %g" % (self.resource_alloc.comm.rank, _np.linalg.norm(dprobs), _np.linalg.norm(self.probs)))
             if self.prob_clip_interval is not None and shared_mem_leader:
                 _np.clip(self.probs, self.prob_clip_interval[0], self.prob_clip_interval[1], out=self.probs)
+            self.resource_alloc.host_comm_barrier()  # shared mem barrier
+            #REMOVE print("%d: DLSVEC probs post clip = %g" % (self.resource_alloc.comm.rank, _np.linalg.norm(self.probs)))
+            # Note: barriers like the above must follow shared_mem_leader conditional blocks, as these the non-leader
+            # processors must wait until the leader makes the given update to (their) shared memory before proceeding.
 
             #DEBUG TODO REMOVE - test dprobs to make sure they look right.
             #eps = 1e-7
@@ -4688,7 +4699,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
                 for ii, i in enumerate(self.indicesOfCircuitsWithOmittedData):
                     self.dprobs_omitted_rowsum[ii, :] = _np.sum(dprobs[self.layout.indices_for_index(i), :], axis=0)
 
-            if shared_mem_leader:  # only "leader" modifies shared mem (self.probs, dprobs)
+            if shared_mem_leader:  # Note: no need for barrier directly below as barrier further down suffices
                 dg_dprobs, lsvec = self.raw_objfn.dlsvec_and_lsvec(self.probs, self.counts, self.total_counts,
                                                                    self.freqs)
                 dprobs *= dg_dprobs[:, None]
@@ -4696,12 +4707,14 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             # this multiply also computes jac, which is just dprobs
             # with a different shape (jac.shape == [nelements,nparams])
 
-        if self.firsts is not None and shared_mem_leader:  # only "leader" modifies shared mem (dprobs)
+        if shared_mem_leader:  # only "leader" modifies shared mem (dprobs & self.jac)
+            if self.firsts is not None:
             #Note: lsvec is assumed to be *not* updated w/omitted probs contribution
-            self._update_dlsvec_for_omitted_probs(dprobs, lsvec, self.probs, self.dprobs_omitted_rowsum)
+                self._update_dlsvec_for_omitted_probs(dprobs, lsvec, self.probs, self.dprobs_omitted_rowsum)
 
-        if shared_mem_leader:  # only "leader" modifies shared mem (self.jac)
             self._fill_lspenaltyvec_jac(paramvec, self.jac[self.nelements:, :])  # jac.shape == (nelements+N,N)
+        self.resource_alloc.host_comm_barrier()  # shared mem barrier
+        #REMOVE print("%d: DLSVEC jac = %g" % (self.resource_alloc.comm.rank, _np.linalg.norm(self.jac)))
 
         # REMOVE => unit tests?
         #if self.check_jacobian: _opt.check_jac(lambda v: self.lsvec(
@@ -4742,28 +4755,31 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
         # Whether this rank is the "leader" of all the processors accessing the same shared self.jac and self.probs mem.
         #  Only leader processors should modify the contents of the shared memory, so we only apply operations *once*
-        shared_mem_leader = bool(self.resource_alloc.host_comm is None or self.resource_alloc.host_comm.rank == 0)
+        shared_mem_leader = self.resource_alloc.is_host_leader
 
         with self.resource_alloc.temporarily_track_memory(2 * self.nelements):  # 'E' (dg_dprobs, lsvec)
+            self.resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory before we reinit
             self.model.sim.bulk_fill_dprobs(dprobs, self.layout, self.probs, self.resource_alloc)
             if self.prob_clip_interval is not None and shared_mem_leader:
                 _np.clip(self.probs, self.prob_clip_interval[0], self.prob_clip_interval[1], out=self.probs)
+            self.resource_alloc.host_comm_barrier()  # shared mem barrier
 
             if self.firsts is not None:
                 for ii, i in enumerate(self.indicesOfCircuitsWithOmittedData):
                     self.dprobs_omitted_rowsum[ii, :] = _np.sum(dprobs[self.layout.indices_for_index(i), :], axis=0)
 
-            if shared_mem_leader:
+            if shared_mem_leader:  # Note: barrier below work suffices for this condition too
                 dprobs *= self.raw_objfn.dterms(self.probs, self.counts, self.total_counts, self.freqs)[:, None]
             # (nelements,N) * (nelements,1)   (N = dim of vectorized model)
             # this multiply also computes jac, which is just dprobs
             # with a different shape (jac.shape == [nelements,nparams])
 
-        if self.firsts is not None and shared_mem_leader:
-            self._update_dterms_for_omitted_probs(dprobs, self.probs, self.dprobs_omitted_rowsum)
-
         if shared_mem_leader:
+            if self.firsts is not None:
+                self._update_dterms_for_omitted_probs(dprobs, self.probs, self.dprobs_omitted_rowsum)
+
             self._fill_dterms_penalty(paramvec, self.jac[self.nelements:, :])  # jac.shape == (nelements+N,N)
+        self.resource_alloc.host_comm_barrier()  # shared mem barrier
 
         # REMOVE => unit tests
         #if self.check_jacobian: _opt.check_jac(lambda v: self.lsvec(
@@ -4795,7 +4811,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
         # Whether this rank is the "leader" of all the processors accessing the same shared self.jac and self.probs mem.
         #  Only leader processors should modify the contents of the shared memory, so we only apply operations *once*
-        shared_mem_leader = bool(self.resource_alloc.host_comm is None or self.resource_alloc.host_comm.rank == 0)
+        shared_mem_leader = self.resource_alloc.is_host_leader
 
         #General idea of what we're doing:
         # Let f(pv) = g(probs(pv)), and let there be nelements elements (i.e. probabilities) & len(pv) == N
@@ -4813,9 +4829,11 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
         # 'E', 'EPP' (dg_dprobs, d2g_dprobs2, temporary variable dprobs_dp2 * dprobs_dp1 )
         with self.resource_alloc.temporarily_track_memory(2 * self.nelements + self.nelements * self.nparams**2):
+            self.resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory before we reinit
             self.model.sim.bulk_fill_hprobs(hprobs, self.layout, self.probs, dprobs, None, self.resource_alloc)
             if self.prob_clip_interval is not None and shared_mem_leader:
                 _np.clip(self.probs, self.prob_clip_interval[0], self.prob_clip_interval[1], out=self.probs)
+            self.resource_alloc.host_comm_barrier()  # shared mem barrier
 
             dg_dprobs = self.raw_objfn.dterms(self.probs, self.counts, self.total_counts, self.freqs)[:, None, None]
             d2g_dprobs2 = self.raw_objfn.hterms(self.probs, self.counts, self.total_counts, self.freqs)[:, None, None]
@@ -4828,6 +4846,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             if shared_mem_leader:
                 hessian *= dg_dprobs
                 hessian += d2g_dprobs2 * dprobs_dp2 * dprobs_dp1
+            self.resource_alloc.host_comm_barrier()  # shared mem barrier
 
         ret = _np.sum(hessian, axis=0)  # sum over operation sequences and spam labels => (N)
         _smt.cleanup_shared_ndarray(hprobs_shm)
@@ -4861,16 +4880,18 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
         # Whether this rank is the "leader" of all the processors accessing the same shared self.jac and self.probs mem.
         #  Only leader processors should modify the contents of the shared memory, so we only apply operations *once*
-        shared_mem_leader = bool(self.resource_alloc.host_comm is None or self.resource_alloc.host_comm.rank == 0)
+        shared_mem_leader = self.resource_alloc.is_host_leader
 
         if paramvec is not None: self.model.from_vector(paramvec)
         dprobs = self.jac[0:self.nelements, :]  # avoid mem copying: use jac mem for dprobs
 
         # 'E', 'PP' (d2g_dprobs2, einsum result )
         with self.resource_alloc.temporarily_track_memory(self.nelements + self.nparams**2):
+            self.resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory before we reinit
             self.model.sim.bulk_fill_dprobs(dprobs, self.layout, self.probs, self.resource_alloc)
             if self.prob_clip_interval is not None and shared_mem_leader:
                 _np.clip(self.probs, self.prob_clip_interval[0], self.prob_clip_interval[1], out=self.probs)
+            self.resource_alloc.host_comm_barrier()  # shared mem barrier
 
             d2g_dprobs2 = self.raw_objfn.hterms(self.probs, self.counts, self.total_counts, self.freqs)  # [:,None,None]
             #dprobs_dp1 = dprobs[:, :, None]  # (nelements,N,1)
