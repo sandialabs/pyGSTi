@@ -1754,8 +1754,10 @@ class TPDenseOp(DenseOperator):
         -------
         None
         """
-        assert(self.base.shape == (self.dim, self.dim))
-        self.base[1:, :] = v.reshape((self.dim - 1, self.dim))
+        #assert(self.base.shape == (self.dim, self.dim))
+        #self.base[1:, :] = v.reshape((self.dim - 1, self.dim))
+        #self._rep.base[1:, :] = v.reshape((self.dim - 1, self.dim))  # faster than line above
+        self._rep.base.flat[self.dim:] = v  # faster still
         self.dirty = dirty_value
 
     def deriv_wrt_params(self, wrt_filter=None):
