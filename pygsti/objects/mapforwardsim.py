@@ -84,9 +84,10 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         if method_name == 'bulk_fill_timedep_dchi2': return ('p',)  # just an additional parameter vector
         return super()._array_types_for_method(method_name)
 
-    def __init__(self, model=None, max_cache_size=None):
+    def __init__(self, model=None, max_cache_size=None, num_atoms=None):
         super().__init__(model)
         self._max_cache_size = max_cache_size
+        self._num_atoms = num_atoms
 
     def copy(self):
         """
@@ -121,7 +122,21 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
                                   (num_params, num_params), verbosity)
 
         #Start with how we'd like to split processors up (without regard to memory limit):
-        np1 = 1; np2 = 1; nc = Ng = min(nprocs, len(circuits))
+
+        # when there are lots of processors, the from_vector calls dominante over the actual fwdsim,
+        # but we can reduce from_vector calls by having np1, np2 > 0 (each param requires a from_vector
+        # call when using finite diffs) - so we want to choose nc = Ng < nprocs and np1 > 1 (so nc * np1 = nprocs).
+        #work_per_proc = self.model.dim**2
+
+        initial_atoms = self._num_atoms if (self._num_atoms is not None) else 2*self.model.dim  # heuristic
+        initial_atoms = min(initial_atoms, len(circuits))  # don't have more atoms than circuits
+        if initial_atoms >= nprocs:
+            np1 = 1; np2 = 1; nc = Ng = initial_atoms
+        else:
+            nproc_reduction_factor = 2**int(_np.log2(nprocs / initial_atoms))  # always a power of 2
+            initial_atoms = nprocs // nproc_reduction_factor  # nprocs / 2**pow ~= original initial_atoms
+            nc = Ng = initial_atoms
+            np1 = nproc_reduction_factor; np2 = 1  # so nc * np1 == nprocs
 
         #Create initial layout, and get the "final memory" that is required to hold the final results
         # for each array type.  This amount doesn't depend on how the layout is "split" into atoms.
@@ -156,7 +171,11 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
             while approx_mem_estimate(nc, np1, np2) > mem_limit:
                 if nc == num_circuits:  # even "maximal" splitting doesn't work!
                     raise MemoryError("Cannot split or layout enough to achieve memory limit")
-                nc += Ng
+                if np1 > 1:  # then nc < nprocs and np1 is a power of 2
+                    np1 //= 2  # keep dividing by 2 until hits 1, then nc == nprocs
+                    nc = Ng = nprocs // np1
+                else:
+                    nc += Ng
                 if nc > num_circuits: nc = num_circuits
 
             mem = mem_estimate(nc, np1, np2)
@@ -164,7 +183,11 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
             printer.log(" mem(%d atoms, %d,%d param-grps, %d proc-grps) = %.2fGB" %
                         (nc, np1, np2, Ng, mem * C))
             while mem > mem_limit:
-                nc += Ng; _next = mem_estimate(nc, np1, np2)
+                if np1 > 1:
+                    np1 //= 2;  nc = Ng = nprocs // np1
+                else:
+                    nc += Ng
+                _next = mem_estimate(nc, np1, np2)
                 if(_next >= mem): raise MemoryError("Not enough memory: splitting unproductive")
                 mem = _next
 
