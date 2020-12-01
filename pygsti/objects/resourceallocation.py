@@ -17,6 +17,7 @@ from pygsti.objects.profiler import DummyProfiler as _DummyProfiler
 from hashlib import blake2b as _blake2b
 
 _dummy_profiler = _DummyProfiler()
+_GB = 1.0 / (1024.0)**3  # converts bytes to GB
 
 
 class ResourceAllocation(object):
@@ -30,7 +31,7 @@ class ResourceAllocation(object):
     Parameters
     ----------
     comm : mpi4py.MPI.Comm, optional
-v        MPI communicator holding the number of available processors.
+        MPI communicator holding the number of available processors.
 
     mem_limit : int, optional
         A rough per-processor memory limit in bytes.
@@ -68,7 +69,7 @@ v        MPI communicator holding the number of available processors.
             return cls(arg.get('comm', None), arg.get('mem_limit', None),
                        arg.get('profiler', None), arg.get('distribute_method', 'default'))
 
-    def __init__(self, comm=None, mem_limit=None, profiler=None, distribute_method="default"):
+    def __init__(self, comm=None, mem_limit=None, profiler=None, distribute_method="default", allocated_memory=0):
         self.comm = comm
         self.mem_limit = mem_limit
         self.host_comm = None  # comm of the processors local to each processor's host (distinct hostname)
@@ -79,7 +80,7 @@ v        MPI communicator holding the number of available processors.
         else:
             self.profiler = _dummy_profiler
         self.distribute_method = distribute_method
-        self.reset()  # begin with no memory allocated
+        self.reset(allocated_memory)
 
     def build_hostcomms(self):
         if self.comm is None:
@@ -155,7 +156,7 @@ v        MPI communicator holding the number of available processors.
         -------
         None
         """
-        self.allocated_memory = 0
+        self.allocated_memory = allocated_memory
 
     def add_tracked_memory(self, num_elements, dtype='d'):
         """
@@ -179,8 +180,8 @@ v        MPI communicator holding the number of available processors.
         nbytes = num_elements * _np.dtype(dtype).itemsize
         self.allocated_memory += nbytes
         if self.mem_limit is not None and self.allocated_memory > self.mem_limit:
-            raise MemoryError("User-supplied memory limit of %.2fGB has been exceeded!"
-                              % (self.mem_limit / (1024.0**3)))
+            raise MemoryError("User-supplied memory limit of %.2fGB has been exceeded! (tracked_mem +  %.2fGB = %.2GB)"
+                              % (self.mem_limit * _GB, nbytes * _GB, self.allocated_memory * _GB))
 
     def check_can_allocate_memory(self, num_elements, dtype='d'):
         """
@@ -203,8 +204,8 @@ v        MPI communicator holding the number of available processors.
         """
         nbytes = num_elements * _np.dtype(dtype).itemsize
         if self.mem_limit is not None and self.allocated_memory + nbytes > self.mem_limit:
-            raise MemoryError("User-supplied memory limit of %.2fGB has been exceeded!"
-                              % (self.mem_limit / (1024.0**3)))
+            raise MemoryError("User-supplied memory limit of %.2fGB has been exceeded! (testing %.2fGB + %.2fGB)"
+                              % (self.mem_limit * _GB, self.allocated_memory * _GB, nbytes * _GB))
 
     @_contextmanager
     def temporarily_track_memory(self, num_elements, dtype='d'):
