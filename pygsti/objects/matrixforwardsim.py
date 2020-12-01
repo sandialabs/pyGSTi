@@ -1616,7 +1616,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
     def _bulk_fill_dprobs_block(self, array_to_fill, dest_param_slice, layout_atom, param_slice, resource_alloc):
         dim = self.model.dim
-        resource_alloc.check_can_allocate_memory(layout_atom.cache_size * dim * dim * self.model.num_params)
+        resource_alloc.check_can_allocate_memory(layout_atom.cache_size * dim * dim * _slct.length(param_slice))
         prodCache, scaleCache = self._compute_product_cache(layout_atom.tree)
         dProdCache = self._compute_dproduct_cache(layout_atom.tree, prodCache, scaleCache,
                                                   resource_alloc, param_slice)  # only computes cache on root processor
