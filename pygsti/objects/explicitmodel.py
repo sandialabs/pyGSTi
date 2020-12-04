@@ -1718,54 +1718,91 @@ class ExplicitOpModel(_mdl.OpModel):
                                                                  full_ham_fogi_vecs, full_ham_space_labels,
                                                                  full_other_fogi_vecs, full_other_space_labels)
 
+        ham_gauge_vecs = _mt.nice_nullspace(full_ham_fogi_vecs.T)
+        other_gauge_vecs = _mt.nice_nullspace(full_other_fogi_vecs.T)
+
         self.fogi_info = {'primitive_op_labels': primitive_op_labels,
                           'ham_vecs': full_ham_fogi_vecs,
+                          'ham_vecs_pinv': _np.linalg.pinv(full_ham_fogi_vecs),
                           'ham_fullspace_labels': full_ham_space_labels,
                           'ham_fogi_labels': ham_fogi_vec_names,
+                          'ham_gauge_vecs': ham_gauge_vecs,
+                          'ham_gauge_vecs_pinv': _np.linalg.pinv(ham_gauge_vecs),
                           'other_vecs': full_other_fogi_vecs,
+                          'other_vecs_pinv': _np.linalg.pinv(full_other_fogi_vecs),
                           'other_fullspace_labels': full_other_space_labels,
-                          'other_fogi_labels': other_fogi_vec_names}
+                          'other_fogi_labels': other_fogi_vec_names,
+                          'other_gauge_vecs': other_gauge_vecs,
+                          'other_gauge_vecs_pinv': _np.linalg.pinv(other_gauge_vecs)}
+
+        #Check that pseudo-inverse was computed correctly (~ matrices are full rank)
+        # full_other_vec = other_vecs * fogi
+        # fogi = pinv_other_vecs * full_other_vec = (pinv_other_vecs * other_vecs) * fogi
+        # so need (pinv_other_vecs * other_vecs) == identity
+        assert(_np.linalg.norm(_np.dot(self.fogi_info['ham_vecs_pinv'], self.fogi_info['ham_vecs'])
+                               - _np.identity(self.fogi_info['ham_vecs'].shape[1], 'd')) < 1e-6)
+        assert(_np.linalg.norm(_np.dot(self.fogi_info['other_vecs_pinv'], self.fogi_info['other_vecs'])
+                               - _np.identity(self.fogi_info['other_vecs'].shape[1], 'd')) < 1e-6)
+        assert(_np.linalg.norm(_np.dot(self.fogi_info['ham_gauge_vecs_pinv'], self.fogi_info['ham_gauge_vecs'])
+                               - _np.identity(self.fogi_info['ham_gauge_vecs'].shape[1], 'd')) < 1e-6)
+        assert(_np.linalg.norm(_np.dot(self.fogi_info['other_gauge_vecs_pinv'], self.fogi_info['other_gauge_vecs'])
+                               - _np.identity(self.fogi_info['other_gauge_vecs'].shape[1], 'd')) < 1e-6)
+
 
     #def errorgen_coefficients_array(self):
     #    pass
 
-    def fogi_errorgen_coefficient_labels(self):
+    def fogi_errorgen_coefficient_labels(self, complete=False):
         assert(self.fogi_info is not None)
-        return self.fogi_info['ham_fogi_labels'] + self.fogi_info['other_fogi_labels']
+        fogi_labels = self.fogi_info['ham_fogi_labels'] + self.fogi_info['other_fogi_labels']
+        if not complete:
+            return fogi_labels
+        else:
+            return fogi_labels + ["Gauge%d" % i for i in range(self.fogi_info['ham_gauge_vecs'].shape[1]
+                                                               + self.fogi_info['other_gauge_vecs'].shape[1])]
 
-    def fogi_errorgen_coefficients_array(self):
+    def fogi_errorgen_coefficients_array(self, complete=False):
         #  op_coeffs = dot(ham_vec, fogi_coeffs)
         # to get model's (Ham) linear combinations do:
         assert(self.fogi_info is not None)
         op_coeffs = {op_label: self.operations[op_label].errorgen_coefficients()
                      for op_label in self.fogi_info['primitive_op_labels']}
 
+        ham_vecs_pinv = self.fogi_info['ham_vecs_pinv']
+        other_vecs_pinv = self.fogi_info['other_vecs_pinv']
+        if complete:
+            ham_vecs_pinv = _np.concatenate((ham_vecs_pinv, self.fogi_info['ham_gauge_vecs_pinv']), axis=0)
+            other_vecs_pinv = _np.concatenate((other_vecs_pinv, self.fogi_info['other_gauge_vecs_pinv']), axis=0)
+            assert(_np.linalg.matrix_rank(ham_vecs_pinv) == max(ham_vecs_pinv.shape))  # should be square & full rank!
+            assert(_np.linalg.matrix_rank(other_vecs_pinv) == max(other_vecs_pinv.shape))  # ditto
+
         full_ham_vec = _np.zeros(self.fogi_info['ham_vecs'].shape[0], 'd')
         for i, (op_label, elem_lbl) in enumerate(self.fogi_info['ham_fullspace_labels']):
             full_ham_vec[i] += op_coeffs[op_label].get(elem_lbl, 0.0)
-        fogi_ham_coeffs = _np.dot(_np.linalg.pinv(self.fogi_info['ham_vecs']), full_ham_vec)
+        fogi_ham_coeffs = _np.dot(ham_vecs_pinv, full_ham_vec)
 
         full_other_vec = _np.zeros(self.fogi_info['other_vecs'].shape[0], complex)
         for i, (op_label, elem_lbl) in enumerate(self.fogi_info['other_fullspace_labels']):
             full_other_vec[i] += op_coeffs[op_label].get(elem_lbl, 0.0)
-        fogi_other_coeffs = _np.dot(_np.linalg.pinv(self.fogi_info['other_vecs']), full_other_vec)
-
-        # full_other_vec = other_vecs * fogi
-        # fogi = pinv_other_vecs * full_other_vec = (pinv_other_vecs * other_vecs) * fogi
-        # so need (pinv_other_vecs * other_vecs) == identity
-        assert(_np.linalg.norm(_np.dot(_np.linalg.pinv(self.fogi_info['ham_vecs']), self.fogi_info['ham_vecs'])
-                               - _np.identity(self.fogi_info['ham_vecs'].shape[1], 'd')) < 1e-6)
-        assert(_np.linalg.norm(_np.dot(_np.linalg.pinv(self.fogi_info['other_vecs']), self.fogi_info['other_vecs'])
-                               - _np.identity(self.fogi_info['other_vecs'].shape[1], 'd')) < 1e-6)
+        fogi_other_coeffs = _np.dot(other_vecs_pinv, full_other_vec)
 
         return _np.concatenate((fogi_ham_coeffs, fogi_other_coeffs))
 
-    def set_fogi_errorgen_coefficients_array(self, fogi_coefficients):
+    def set_fogi_errorgen_coefficients_array(self, fogi_coefficients, complete=False):
         # to set model's (Ham) linear combinations do:
         assert(self.fogi_info is not None)
         nHamVecs = self.fogi_info['ham_vecs'].shape[1]
-        full_ham_vec = _np.dot(self.fogi_info['ham_vecs'], fogi_coefficients[0:nHamVecs])
-        full_other_vec = _np.dot(self.fogi_info['other_vecs'], fogi_coefficients[nHamVecs:])
+        ham_vecs = self.fogi_info['ham_vecs']
+        other_vecs = self.fogi_info['other_vecs']
+        if complete:
+            nHamVecs += self.fogi_info['ham_gauge_vecs'].shape[1]
+            ham_vecs = _np.concatenate((ham_vecs, self.fogi_info['ham_gauge_vecs']), axis=1)
+            other_vecs = _np.concatenate((other_vecs, self.fogi_info['other_gauge_vecs']), axis=1)
+            assert(_np.linalg.matrix_rank(ham_vecs) == max(ham_vecs.shape))  # should be square & full rank!
+            assert(_np.linalg.matrix_rank(other_vecs) == max(other_vecs.shape))  # ditto
+
+        full_ham_vec = _np.dot(ham_vecs, fogi_coefficients[0:nHamVecs])
+        full_other_vec = _np.dot(other_vecs, fogi_coefficients[nHamVecs:])
         op_coeffs = {op_label: {}
                      for op_label in self.fogi_info['primitive_op_labels']}
         for (op_label, elem_lbl), coeff_value in zip(self.fogi_info['ham_fullspace_labels'], full_ham_vec):
