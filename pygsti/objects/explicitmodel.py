@@ -1521,16 +1521,6 @@ class ExplicitOpModel(_mdl.OpModel):
                 #Finally, compute the nullspace of the resulting gauge-action + already-tallied matrix:
                 nullspace = _mt.nice_nullspace(ham_ga_mx.T)
 
-                #DEBUG REMOVE
-                ##CHECK:
-                #check_mx = _np.concatenate((ham_ga_mx, nullspace), axis=1)
-                #initial_rank = _np.linalg.matrix_rank(ham_ga_mx)
-                #new_rank = _np.linalg.matrix_rank(check_mx)
-                ##assert(new_rank == check_mx.shape[1])
-                #if new_rank != initial_rank + nullspace.shape[1]:
-                #    import bpdb; bpdb.set_trace()
-                #    print("HERE4")
-
                 running_dim += nullspace.shape[1]
                 #print("Ham nullspace dim = ", nullspace.shape[1], " running=", running_dim)
                 ham_nullspaces[set_size][op_set] = (nullspace, ham_rows_by_op)
@@ -1559,29 +1549,11 @@ class ExplicitOpModel(_mdl.OpModel):
                           for i, op_label in enumerate(primitive_op_labels)}
         full_ham_fogi_vecs = _np.empty((num_ham_elem_errgens * len(primitive_op_labels), 0), 'd')
         for size in range(1, max_size + 1):
-            #print("Size",size)
             for op_set, (nullsp, op_set_rows) in ham_nullspaces[size].items():
-                #print(op_set)
                 padded_nullsp = _np.zeros((full_ham_fogi_vecs.shape[0], nullsp.shape[1]), 'd')
                 for op in op_set:
                     padded_nullsp[ham_rows_by_op[op], :] = nullsp[op_set_rows[op], :]
-                #REMOVE db_rank_before = _np.linalg.matrix_rank(full_ham_fogi_vecs) if (full_ham_fogi_vecs.size > 0) else 0
                 full_ham_fogi_vecs = _np.concatenate((full_ham_fogi_vecs, padded_nullsp), axis=1)
-                #REMOVE
-                #if full_ham_fogi_vecs.size > 0:
-                #    db_rank_after = _np.linalg.matrix_rank(full_ham_fogi_vecs)
-                #    if db_rank_after != db_rank_before + padded_nullsp.shape[1]:
-                #        print("ERROR: added a linearly dependent nullspace vector!")
-                #        cols_that_could_be_dep = []
-                #        for j in range(full_ham_fogi_vecs.shape[1]):
-                #            col_norm = sum([_np.linalg.norm(full_ham_fogi_vecs[ham_rows_by_op[op],j]) for op in op_set])
-                #            if col_norm > 1e-6: cols_that_could_be_dep.append(j)
-                #        sub_mx = full_ham_fogi_vecs.take(cols_that_could_be_dep, axis=1)
-                #        sub_mx = sub_mx[30:60,:]
-                #        sub_rank = _np.linalg.matrix_rank(sub_mx)
-                #        U,s,Vt = _np.linalg.svd(sub_mx)
-                #        import bpdb; bpdb.set_trace()
-                #        print("HERE3")
 
         other_rows_by_op = {op_label: slice(i * num_other_elem_errgens, (i + 1) * num_other_elem_errgens)
                             for i, op_label in enumerate(primitive_op_labels)}
