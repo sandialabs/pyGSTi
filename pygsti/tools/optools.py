@@ -2413,7 +2413,7 @@ def lindblad_projections_to_paramvals(ham_projs, other_projs, param_mode="cptp",
             if param_mode in ("depol", "reldepol"):
                 # otherParams is a *single-element* 1D vector of the sqrt of each diagonal el
                 assert(param_mode == "reldepol" or truncate or all([v >= -1e-12 for v in other_projs])), \
-                    "Lindblad coefficients are not CPTP (truncate == False)!"
+                    "Lindblad stochastic coefficients are not positive (and truncate == False): %s" % str(other_projs)
                 assert(truncate or all([_np.isclose(v, other_projs[0]) for v in other_projs])), \
                     "Diagonal lindblad coefficients are not equal (truncate == False)!"
                 if param_mode == "depol":
@@ -2425,7 +2425,7 @@ def lindblad_projections_to_paramvals(ham_projs, other_projs, param_mode="cptp",
 
             elif param_mode == "cptp":  # otherParams is a 1D vector of the sqrts of diagonal els
                 assert(truncate or all([v >= -1e-12 for v in other_projs])), \
-                    "Lindblad coefficients are not CPTP (truncate == False)!"
+                    "Lindblad stochastic coefficients are not positive (and truncate == False): %s" % str(other_projs)
                 other_projs = other_projs.clip(1e-16, 1e100)
                 otherParams = _np.sqrt(other_projs.real)  # shape (bsO-1,)
             else:  # "unconstrained": otherParams is a 1D vector of the real diagonal els of other_projs
@@ -3565,3 +3565,44 @@ def effect_label_to_povm(povm_and_effect_lbl):
             last_underscore = povm_and_effect_lbl.rindex('_')
             povm_name = povm_and_effect_lbl[:last_underscore]
         return povm_name
+
+
+def first_order_gauge_action_matrix(clifford_superop, dmbasis_ham, dmbasis_other, other_mode="all"):
+    #Note: clifford_superop must be in the *std* basis!
+    normalize = True  # I think ?
+    ham_gens, other_gens = lindblad_error_generators(dmbasis_ham, dmbasis_other, normalize, other_mode)
+
+    if dmbasis_ham is not None:
+        ham_action_mx = _np.empty((len(ham_gens), len(ham_gens)), complex)
+        for j, gen in enumerate(ham_gens):
+            conjugated_gen = _np.dot(clifford_superop, _np.dot(gen, _np.conjugate(clifford_superop.T)))
+            gauge_action_deriv = gen - conjugated_gen
+            for i, gen2 in enumerate(ham_gens):
+                val = _np.vdot(gen2.flat, gauge_action_deriv.flat)
+                ham_action_mx[i, j] = val
+        assert(_np.linalg.norm(ham_action_mx.imag) < 1e-6)
+        ham_action_mx = ham_action_mx.real
+    else:
+        ham_action_mx = None
+
+    if dmbasis_other is not None:
+        if other_mode == 'diagonal':
+            all_other_gens = other_gens
+        elif other_mode == 'all':
+            all_other_gens = [other_gens[i][j] for i in range(len(other_gens)) for j in range(len(other_gens))]
+        else:
+            raise ValueError("Invalid `other_mode`: only 'diagonal' and 'all' modes are supported so far.")
+
+        other_action_mx = _np.empty((len(all_other_gens), len(all_other_gens)), complex)
+        for j, gen in enumerate(all_other_gens):
+            conjugated_gen = _np.dot(clifford_superop, _np.dot(gen, _np.conjugate(clifford_superop.T)))
+            gauge_action_deriv = gen - conjugated_gen
+            for i, gen2 in enumerate(all_other_gens):
+                val = _np.vdot(gen2.flat, gauge_action_deriv.flat)
+                other_action_mx[i, j] = val
+        assert(_np.linalg.norm(other_action_mx.imag) < 1e-6)
+        other_action_mx = other_action_mx.real
+    else:
+        other_action_mx = None
+
+    return ham_action_mx, other_action_mx

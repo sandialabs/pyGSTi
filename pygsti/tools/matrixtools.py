@@ -220,6 +220,43 @@ def nullspace_qr(m, tol=1e-7):
     return q[:, rank:]
 
 
+def nice_nullspace(m, tol=1e-7):
+    """
+    Computes the nullspace of a matrix, and tries to return a "nice" basis for it.
+
+    Columns of the returned value (a basis for the nullspace) each have a maximum
+    absolute value of 1.0 and are chosen so as to align with the the original
+    matrix's basis as much as possible (the basis is found by projecting each
+    original basis vector onto an arbitrariliy-found nullspace and keeping only
+    a set of linearly independent projections).
+
+    Parameters
+    ----------
+    m : numpy array
+        An matrix of shape (M,N) whose nullspace to compute.
+
+    tol : float , optional
+        Nullspace tolerance, used when comparing diagonal values of R with zero.
+
+    Returns
+    -------
+    An matrix of shape (M,K) whose columns contain nullspace basis vectors.
+    """
+    nullsp = nullspace(m, tol)
+    nullsp_projector = _np.dot(nullsp, nullsp.T)
+    keepers = []; current_rank = 0
+    for i in range(nullsp_projector.shape[1]):  # same as mx.shape[1]
+        rank = _np.linalg.matrix_rank(nullsp_projector[:, 0:i + 1], tol=tol)
+        if rank > current_rank:
+            keepers.append(i)
+            current_rank = rank
+    ret = _np.take(nullsp_projector, keepers, axis=1)
+    for j in range(ret.shape[1]):  # normalize columns so largest element is +1.0
+        mx = abs(max(ret[:, j]))
+        if mx > 1e-6: ret[:, j] /= mx
+    return ret
+
+
 def matrix_sign(m):
     """
     The "sign" matrix of `m`
