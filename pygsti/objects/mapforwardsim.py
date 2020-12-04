@@ -128,10 +128,10 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         # call when using finite diffs) - so we want to choose nc = Ng < nprocs and np1 > 1 (so nc * np1 = nprocs).
         #work_per_proc = self.model.dim**2
 
-        initial_atoms = self._num_atoms if (self._num_atoms is not None) else 2*self.model.dim  # heuristic
+        initial_atoms = self._num_atoms if (self._num_atoms is not None) else 2 * self.model.dim  # heuristic
         initial_atoms = min(initial_atoms, len(circuits))  # don't have more atoms than circuits
         if initial_atoms >= nprocs:
-            np1 = 1; np2 = 1; nc = Ng = initial_atoms
+            np1 = 1; np2 = 1; nc = Ng = nprocs
         else:
             nproc_reduction_factor = 2**int(_np.log2(nprocs / initial_atoms))  # always a power of 2
             initial_atoms = nprocs // nproc_reduction_factor  # nprocs / 2**pow ~= original initial_atoms

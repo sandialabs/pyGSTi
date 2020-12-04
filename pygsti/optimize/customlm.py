@@ -446,6 +446,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
     nu = 2
     mu = 1  # just a guess - initialized on 1st iter and only used if rejected
     my_mpidot_qtys = None
+    JTJ = None
     JTJ_shm = None  # shared memory handle (used when sharing memory)
 
     # don't let any component change by more than ~max_dx_scale
@@ -502,7 +503,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
             #printer.log("--- Outer Iter %d: norm_f = %g, mu=%g" % (k,norm_f,mu))
 
             if profiler: profiler.memory_check("custom_leastsq: begin outer iter *before de-alloc*")
-            Jac = None; JTJ = None; JTf = None
+            Jac = None; JTf = None  # JTJ = None  # we re-use JTJ now via mpidot's `out` argument.
 
             if profiler: profiler.memory_check("custom_leastsq: begin outer iter")
             if k >= num_fd_iters:
@@ -526,20 +527,20 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
             #comm.barrier()
             #x_list = comm.gather(_np.linalg.norm(x), root=0)
             #Jac_list = comm.gather(_np.linalg.norm(Jac), root=0)
-            #f_list = comm.gather(_np.linalg.norm(f), root=0)
+            ##f_list = comm.gather(_np.linalg.norm(f), root=0)
             #if comm.rank == 0:
-            #    if all([_np.isclose(x_list[0], _x) for _x in x_list]):
-            #        pass #print("x OK")
-            #    else:
-            #        print("x BAD!!!"); assert(False)
+            #    #if all([_np.isclose(x_list[0], _x) for _x in x_list]):
+            #    #    pass #print("x OK")
+            #    #else:
+            #    #    print("x BAD!!!"); assert(False)
             #    if all([_np.isclose(Jac_list[0], _x) for _x in Jac_list]):
             #        pass #print("Jac OK")
             #    else:
             #        print("Jac BAD!!!"); assert(False)
-            #    if all([_np.isclose(f_list[0], _x) for _x in f_list]):
-            #        pass #print("f OK")
-            #    else:
-            #        print("f BAD!!!"); assert(False)
+            #    #if all([_np.isclose(f_list[0], _x) for _x in f_list]):
+            #    #    pass #print("f OK")
+            #    #else:
+            #    #    print("f BAD!!!"); assert(False)
 
 
             #DEBUG: compare with analytic jacobian (need to uncomment num_fd_iters DEBUG line above too)
@@ -567,7 +568,6 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
             #printer.log("PT3: %.3fs" % (_time.time()-t0)) # REMOVE
             JTJ, JTJ_shm = _mpit.mpidot(Jac.T, Jac, my_mpidot_qtys[0], my_mpidot_qtys[1],
                                         my_mpidot_qtys[2], resource_alloc, JTJ, JTJ_shm)  # _np.dot(Jac.T,Jac) 'PP'-type
-
             #DEBUG REMOVE
             #JTJ_list = comm.gather(_np.linalg.norm(JTJ), root=0)
             #if comm.rank == 0:
@@ -1046,6 +1046,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
 
     if comm is not None:
         comm.barrier()  # Just to be safe, so procs stay synchronized
+
     _smt.cleanup_shared_ndarray(JTJ_shm)  # cleaup shared memory, if it was used
 
     #DEBUG REMOVE

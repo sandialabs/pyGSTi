@@ -938,16 +938,17 @@ def mpidot(a, b, loc_row_slice, loc_col_slice, slice_tuples_by_rank, comm,
         result = out
         result_shm = out_shm
 
-    asave, bsave = a.copy(), b.copy()
+    #REMOVE asave, bsave = a.copy(), b.copy()
     rshape = (_slct.length(loc_row_slice), _slct.length(loc_col_slice))
     loc_result_flat = _np.empty(rshape[0] * rshape[1], a.dtype)
     loc_result = loc_result_flat.view(); loc_result.shape = rshape
     loc_result[:, :] = _np.dot(a[loc_row_slice, :], b[:, loc_col_slice])
-    assert(_np.linalg.norm( _np.dot(a,b)[loc_row_slice, loc_col_slice]-loc_result)/_np.linalg.norm(loc_result)<1e-6),\
-        "DIFFS with SAVE = %g, %g.  Other = %g, %s, %s, %s, %s" % (
-            _np.linalg.norm(a - asave), _np.linalg.norm(b - bsave),
-            _np.linalg.norm( _np.dot(a,b)[loc_row_slice, loc_col_slice] - loc_result )/loc_result.size,
-            str(test.shape), str(loc_result.shape), str(a.shape), str(b.shape))
+    #if loc_result.size > 0:
+    #    assert(_np.linalg.norm( _np.dot(a,b)[loc_row_slice, loc_col_slice]-loc_result)/(_np.linalg.norm(loc_result) + 1.0)<1e-6),\
+    #        "DIFFS with SAVE = %g, %g.  Other = %g, %g, %s, %s, %s" % (
+    #            _np.linalg.norm(a - asave), _np.linalg.norm(b - bsave),
+    #            _np.linalg.norm( _np.dot(a,b)[loc_row_slice, loc_col_slice] - loc_result ), _np.linalg.norm(loc_result),
+    #            str(loc_result.shape), str(a.shape), str(b.shape))
 
     # broadcast_com defines the group of processors this processor communicates with.
     # Without shared memory, this is *all* the other processors.  With shared memory, this
@@ -966,11 +967,16 @@ def mpidot(a, b, loc_row_slice, loc_col_slice, slice_tuples_by_rank, comm,
         if broadcast_comm.rank != r: buf.shape = cur_shape
         else: buf = loc_result  # already of correct shape
         result[cur_row_slice, cur_col_slice] = buf
-        assert(_np.linalg.norm( _np.dot(a,b)[cur_row_slice, cur_col_slice] - result[cur_row_slice, cur_col_slice] )
-               / _np.linalg.norm(result[cur_row_slice, cur_col_slice]) < 1e-6)
+        #if buf.size > 0:
+        #    assert(_np.linalg.norm( _np.dot(a,b)[cur_row_slice, cur_col_slice] - result[cur_row_slice, cur_col_slice] )
+        #           / (_np.linalg.norm(result[cur_row_slice, cur_col_slice] + 1.0)) < 1e-6), \
+        #        "Rank %d: DIFF = %g, %g, %s, %s" % (comm.rank, 
+        #                                            _np.linalg.norm( _np.dot(a,b)[cur_row_slice, cur_col_slice] - result[cur_row_slice, cur_col_slice] ),
+        #                                            _np.linalg.norm(result[cur_row_slice, cur_col_slice]), str(cur_row_slice), str(cur_col_slice))
     comm.barrier()  # wait for all ranks to finish writing to result
 
-    assert(_np.linalg.norm(_np.dot(a,b) - result)/(_np.linalg.norm(result) + result.size) < 1e-6)
+    #assert(_np.linalg.norm(_np.dot(a,b) - result)/(_np.linalg.norm(result) + result.size) < 1e-6),\
+    #    "DEBUG: %g, %g, %d" % (_np.linalg.norm(_np.dot(a,b) - result), _np.linalg.norm(result), result.size)
     return result, result_shm
 
     #myNCols = loc_col_slice.stop - loc_col_slice.start
