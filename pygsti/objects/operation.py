@@ -5334,9 +5334,21 @@ class ComposedOp(LinearOperator):
         else:
             return Ltermdict
 
+    def errorgen_coefficient_labels(self):
+        """
+        The elementary error-generator labels corresponding to the elements of :method:`errorgen_coefficients_array`.
+
+        Returns
+        -------
+        tuple
+            A tuple of (<type>, <basisEl1> [,<basisEl2]) elements identifying the elementary error
+            generators of this gate.
+        """
+        return tuple(_itertools.chain(*[op.errorgen_coefficient_labels() for op in self.factorops]))
+
     def errorgen_coefficients_array(self):
         """
-        The weighted coefficients of this operation's error generator in terms of "standard" error generators.
+        The weighted coefficients of this operation's error generator in terms of elementary error generators.
 
         Constructs a 1D array of all the coefficients returned by :method:`errorgen_coefficients`,
         weighted so that different error generators can be weighted differently when a
@@ -6407,7 +6419,7 @@ class EmbeddedOp(LinearOperator):
 
     def errorgen_coefficients_array(self):
         """
-        The weighted coefficients of this operation's error generator in terms of "standard" error generators.
+        The weighted coefficients of this operation's error generator in terms of elementary error generators.
 
         Constructs a 1D array of all the coefficients returned by :method:`errorgen_coefficients`,
         weighted so that different error generators can be weighted differently when a
@@ -6919,9 +6931,21 @@ class ComposedErrorgen(LinearOperator):
         else:
             return Ltermdict
 
+    def coefficient_labels(self):
+        """
+        The elementary error-generator labels corresponding to the elements of :method:`coefficients_array`.
+
+        Returns
+        -------
+        tuple
+            A tuple of (<type>, <basisEl1> [,<basisEl2]) elements identifying the elementary error
+            generators of this gate.
+        """
+        return tuple(_itertools.chain(*[eg.coefficient_labels() for eg in self.factors]))
+
     def coefficients_array(self):
         """
-        The weighted coefficients of this error generator in terms of "standard" error generators.
+        The weighted coefficients of this error generator in terms of elementary error generators.
 
         Constructs a 1D array of all the coefficients returned by :method:`coefficients`,
         weighted so that different error generators can be weighted differently when a
@@ -7711,9 +7735,21 @@ class EmbeddedErrorgen(EmbeddedOp):
                 embedded_Ltermdict[embedded_key] = val
             return embedded_Ltermdict
 
+    def coefficient_labels(self):
+        """
+        The elementary error-generator labels corresponding to the elements of :method:`coefficients_array`.
+
+        Returns
+        -------
+        tuple
+            A tuple of (<type>, <basisEl1> [,<basisEl2]) elements identifying the elementary error
+            generators of this gate.
+        """
+        return tuple([_EmbeddedBasis.embed_label(x, self.targetLabels) for x in self.embedded_op.coefficient_labels()])
+
     def coefficients_array(self):
         """
-        The weighted coefficients of this error generator in terms of "standard" error generators.
+        The weighted coefficients of this error generator in terms of elementary error generators.
 
         Constructs a 1D array of all the coefficients returned by :method:`coefficients`,
         weighted so that different error generators can be weighted differently when a
@@ -8973,9 +9009,34 @@ class LindbladErrorgen(LinearOperator):
 
         return Ltermdict_and_maybe_basis
 
+    def coefficient_labels(self):
+        """
+        The elementary error-generator labels corresponding to the elements of :method:`coefficients_array`.
+
+        Returns
+        -------
+        tuple
+            A tuple of (<type>, <basisEl1> [,<basisEl2]) elements identifying the elementary error
+            generators of this gate.
+        """
+        labels = []
+        if self.ham_basis is not None:
+            labels.extend([('H', basis_lbl) for basis_lbl in self.ham_basis.labels[1:]])
+        if self.other_basis is not None:
+            if self.nonham_mode == "diagonal":
+                labels.extend([('S', basis_lbl) for basis_lbl in self.other_basis.labels[1:]])
+            elif self.nonham_mode == "diag_affine":
+                labels.extend([('S', basis_lbl) for basis_lbl in self.other_basis.labels[1:]])
+                labels.extend([('A', basis_lbl) for basis_lbl in self.other_basis.labels[1:]])
+            else:  # 'all' mode
+                labels.extend([('S', basis_lbl1, basis_lbl2)
+                               for basis_lbl1 in self.other_basis.labels[1:]
+                               for basis_lbl2 in self.other_basis.labels[1:]])
+        return tuple(labels)
+
     def coefficients_array(self):
         """
-        The weighted coefficients of this error generator in terms of "standard" error generators.
+        The weighted coefficients of this error generator in terms of elementary error generators.
 
         Constructs a 1D array of all the coefficients returned by :method:`coefficients`,
         weighted so that different error generators can be weighted differently when a
@@ -9058,7 +9119,7 @@ class LindbladErrorgen(LinearOperator):
         """
         return self.coefficients(return_basis=False, logscale_nonham=True)
 
-    def set_coefficients(self, lindblad_term_dict, action="update", logscale_nonham=False):
+    def set_coefficients(self, lindblad_term_dict, action="update", logscale_nonham=False, truncate=False):
         """
         Sets the coefficients of terms in this error generator.
 
@@ -9089,6 +9150,12 @@ class LindbladErrorgen(LinearOperator):
             coefficients are set to `-log(1 - d^2*rate)/d^2`, where `rate` is
             the corresponding value given in `lindblad_term_dict`.  This is what is
             performed by the function :method:`set_error_rates`.
+
+        truncate : bool, optional
+            Whether to truncate the projections onto the Lindblad terms in
+            order to meet constraints (e.g. to preserve CPTP) when necessary.
+            If False, then an error is thrown when the given coefficients
+            cannot be parameterized as specified.
 
         Returns
         -------
@@ -9121,7 +9188,7 @@ class LindbladErrorgen(LinearOperator):
         hamC, otherC, _, _ = \
             _gt.lindblad_terms_to_projections(existing_Ltermdict, basis, self.nonham_mode)
         pvec = _gt.lindblad_projections_to_paramvals(
-            hamC, otherC, self.param_mode, self.nonham_mode, truncate=True)  # shouldn't need to truncate
+            hamC, otherC, self.param_mode, self.nonham_mode, truncate=truncate)
         self.from_vector(pvec)
 
     def set_error_rates(self, lindblad_term_dict, action="update"):

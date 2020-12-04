@@ -59,6 +59,18 @@ class ErrorGeneratorContainer(object):
         """
         return self.errorgen.coefficients(return_basis, logscale_nonham)
 
+    def errorgen_coefficient_labels(self):
+        """
+        The elementary error-generator labels corresponding to the elements of :method:`errorgen_coefficients_array`.
+
+        Returns
+        -------
+        tuple
+            A tuple of (<type>, <basisEl1> [,<basisEl2]) elements identifying the elementary error
+            generators of this gate.
+        """
+        return self.errorgen.coefficient_labels()
+
     def errorgen_coefficients_array(self):
         """
         The weighted coefficients of this operation's error generator in terms of "standard" error generators.
