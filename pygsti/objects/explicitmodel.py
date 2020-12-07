@@ -1465,7 +1465,8 @@ class ExplicitOpModel(_mdl.OpModel):
         self._opcaches['op-layers'] = simplified_ops
 
     # Gauge invariant errorgens and/or parameters support (initial & experimental)
-    def _construct_gauge_space_for_model(self, primitive_op_labels, ham_basis, other_basis, other_mode="all"):
+    def _construct_gauge_space_for_model(self, primitive_op_labels, ham_basis, other_basis, other_mode="all",
+                                         reduce_to_model_space=True):
         ham_elem_labels = [('H', bel) for bel in ham_basis.labels[1:]]
         other_elem_labels = [('S', bel) for bel in other_basis.labels[1:]] if other_mode != "all" else \
             [('S', bel1, bel2) for bel1 in other_basis.labels[1:] for bel2 in other_basis.labels[1:]]
@@ -1504,9 +1505,10 @@ class ExplicitOpModel(_mdl.OpModel):
         disallowed_row_indices = [full_ham_elem_labels.index(disallowed_lbl)
                                   for disallowed_lbl in disallowed_ham_space_labels]
 
-        if len(disallowed_row_indices) > 0:
+        if reduce_to_model_space and len(disallowed_row_indices) > 0:
             disallowed_rows = _np.take(ham_ga_mx, disallowed_row_indices, axis=0)
             allowed_ham_linear_combos = _mt.nice_nullspace(disallowed_rows, tol=1e-4)
+            ham_ga_mx = _np.delete(ham_ga_mx, disallowed_row_indices, axis=0)
         else:
             allowed_ham_linear_combos = None
 
@@ -1518,16 +1520,18 @@ class ExplicitOpModel(_mdl.OpModel):
         disallowed_row_indices = [full_other_elem_labels.index(disallowed_lbl)
                                   for disallowed_lbl in disallowed_other_space_labels]
 
-        if len(disallowed_row_indices) > 0:
+        if reduce_to_model_space and len(disallowed_row_indices) > 0:
             disallowed_rows = _np.take(other_ga_mx, disallowed_row_indices, axis=0)
             allowed_other_linear_combos = _mt.nice_nullspace(disallowed_rows, tol=1e-4)
+            other_ga_mx = _np.delete(other_ga_mx, disallowed_row_indices, axis=0)
         else:
             allowed_other_linear_combos = None
 
-        return allowed_ham_linear_combos, allowed_other_linear_combos
+        return ham_ga_mx, other_ga_mx, allowed_ham_linear_combos, allowed_other_linear_combos
 
     def _compute_fogi_via_nullspaces(self, primitive_op_labels, ham_basis, other_basis, other_mode="all",
-                                     op_label_abbrevs=None):
+                                     ham_gauge_linear_combos=None, other_gauge_linear_combos=None,
+                                     op_label_abbrevs=None, reduce_to_model_space=True):
         num_ham_elem_errgens = (len(ham_basis) - 1)
         num_other_elem_errgens = (len(other_basis) - 1)**2 if other_mode == "all" else (len(other_basis) - 1)
         ham_elem_labels = [('H', bel) for bel in ham_basis.labels[1:]]
@@ -1536,29 +1540,27 @@ class ExplicitOpModel(_mdl.OpModel):
         assert(len(ham_elem_labels) == num_ham_elem_errgens)
         assert(len(other_elem_labels) == num_other_elem_errgens)
 
-        ham_gauge_linear_combos, other_gauge_linear_combos = self._construct_gauge_space_for_model(
-            primitive_op_labels, ham_basis, other_basis, other_mode)
-
         #Get lists of the present (existing within the model) labels for each operation
         ham_labels_for_op = {op_label: ham_elem_labels[:] for op_label in primitive_op_labels}  # COPY lists!
         other_labels_for_op = {op_label: other_elem_labels[:] for op_label in primitive_op_labels}  # ditto
-        for op_label in primitive_op_labels:
-            op = self.operations[op_label]
-            lbls = op.errorgen_coefficient_labels()
-            present_ham_elem_lbls = set(filter(lambda lbl: lbl[0] == 'H', lbls))
-            present_other_elem_lbls = set(filter(lambda lbl: lbl[0] == 'S', lbls))
+        if reduce_to_model_space:
+            for op_label in primitive_op_labels:
+                op = self.operations[op_label]
+                lbls = op.errorgen_coefficient_labels()
+                present_ham_elem_lbls = set(filter(lambda lbl: lbl[0] == 'H', lbls))
+                present_other_elem_lbls = set(filter(lambda lbl: lbl[0] == 'S', lbls))
 
-            disallowed_ham_space_labels = set(ham_elem_labels) - present_ham_elem_lbls
-            disallowed_row_indices = [ham_elem_labels.index(disallowed_lbl)
-                                      for disallowed_lbl in disallowed_ham_space_labels]
-            for i in sorted(disallowed_row_indices, reverse=True):
-                del ham_labels_for_op[op_label][i]
+                disallowed_ham_space_labels = set(ham_elem_labels) - present_ham_elem_lbls
+                disallowed_row_indices = [ham_elem_labels.index(disallowed_lbl)
+                                          for disallowed_lbl in disallowed_ham_space_labels]
+                for i in sorted(disallowed_row_indices, reverse=True):
+                    del ham_labels_for_op[op_label][i]
 
-            disallowed_other_space_labels = set(other_elem_labels) - present_other_elem_lbls
-            disallowed_row_indices = [other_elem_labels.index(disallowed_lbl)
-                                      for disallowed_lbl in disallowed_other_space_labels]
-            for i in sorted(disallowed_row_indices, reverse=True):
-                del other_labels_for_op[op_label][i]
+                disallowed_other_space_labels = set(other_elem_labels) - present_other_elem_lbls
+                disallowed_row_indices = [other_elem_labels.index(disallowed_lbl)
+                                          for disallowed_lbl in disallowed_other_space_labels]
+                for i in sorted(disallowed_row_indices, reverse=True):
+                    del other_labels_for_op[op_label][i]
 
         if op_label_abbrevs is None: op_label_abbrevs = {}
 
@@ -1623,7 +1625,7 @@ class ExplicitOpModel(_mdl.OpModel):
                 disallowed_row_indices = [full_ham_elem_labels.index(disallowed_lbl)
                                           for disallowed_lbl in disallowed_ham_space_labels]
 
-                if len(disallowed_row_indices) > 0:
+                if reduce_to_model_space and len(disallowed_row_indices) > 0:
                     #disallowed_rows = _np.take(ham_ga_mx, disallowed_row_indices, axis=0)
                     #allowed_linear_combos = _mt.nice_nullspace(disallowed_rows, tol=1e-4)
                     #ham_ga_mx = _np.dot(ham_ga_mx, allowed_linear_combos)
@@ -1637,7 +1639,7 @@ class ExplicitOpModel(_mdl.OpModel):
                 disallowed_row_indices = [full_other_elem_labels.index(disallowed_lbl)
                                           for disallowed_lbl in disallowed_other_space_labels]
 
-                if len(disallowed_row_indices) > 0:
+                if reduce_to_model_space and len(disallowed_row_indices) > 0:
                     #disallowed_rows = _np.take(other_ga_mx, disallowed_row_indices, axis=0)
                     #allowed_linear_combos = _mt.nice_nullspace(disallowed_rows, tol=1e-4)
                     #other_ga_mx = _np.dot(other_ga_mx, allowed_linear_combos)
@@ -1664,7 +1666,8 @@ class ExplicitOpModel(_mdl.OpModel):
                 nullspace = _mt.nice_nullspace(ham_ga_mx.T)
                 ham_nullspaces[set_size][op_set] = (nullspace, ham_rows_by_op)
                 #DEBUG: print("  NULLSP DIM = ",nullspace.shape[1])
-                #DEBUG: labels = [(op_label, elem_lbl) for op_label in op_set for elem_lbl in ham_labels_for_op[op_label]]
+                #DEBUG: labels = [(op_label, elem_lbl) for op_label in op_set
+                #DEBUG:           for elem_lbl in ham_labels_for_op[op_label]]
                 #DEBUG: print("\n".join(fogi_names(nullspace, labels, op_label_abbrevs)))
 
                 nullspace = _mt.nice_nullspace(other_ga_mx.T)
@@ -1713,8 +1716,7 @@ class ExplicitOpModel(_mdl.OpModel):
 
         # Returns the vectors of FOGI (first order gauge invariant) linear combos as well
         # as lists of labels for the columns & rows, respectively.
-        return (full_ham_fogi_vecs, full_ham_space_labels), \
-            (full_other_fogi_vecs, full_other_space_labels)
+        return (full_ham_fogi_vecs, full_ham_space_labels), (full_other_fogi_vecs, full_other_space_labels)
 
     def _recompute_fogi_names(self, op_label_abbrevs=None):
         # Step 4: compute names (by a heuristic) for each FOGI vec
@@ -1795,14 +1797,20 @@ class ExplicitOpModel(_mdl.OpModel):
     #         ('Gypi2', 0): 'Gy',
     #         ('Gzpi2', 0): 'Gz'}
     def setup_fogi(self, ham_basis, other_basis, other_mode="all",
-                   op_label_abbrevs=None, reparameterize=False):
+                   op_label_abbrevs=None, reparameterize=False, reduce_to_model_space=True):
         """
         TODO: docstring
         """
         primitive_op_labels = list(self.operations.keys())
+
+        ham_gauge_action, other_gauge_action, ham_gauge_linear_combos, other_gauge_linear_combos = \
+            self._construct_gauge_space_for_model(primitive_op_labels, ham_basis, other_basis, other_mode,
+                                                  reduce_to_model_space)
+
         (full_ham_fogi_vecs, full_ham_space_labels), (full_other_fogi_vecs, full_other_space_labels) = \
             self._compute_fogi_via_nullspaces(primitive_op_labels, ham_basis, other_basis, other_mode,
-                                              op_label_abbrevs)
+                                              ham_gauge_linear_combos, other_gauge_linear_combos, op_label_abbrevs,
+                                              reduce_to_model_space)
 
         if reparameterize:
             self.param_interposer = self._add_reparameterization(primitive_op_labels,
@@ -1812,6 +1820,18 @@ class ExplicitOpModel(_mdl.OpModel):
         ham_gauge_vecs = _mt.nice_nullspace(full_ham_fogi_vecs.T)
         other_gauge_vecs = _mt.nice_nullspace(full_other_fogi_vecs.T)
 
+        #TESTING
+        #if ham_gauge_linear_combos is not None:
+        #    ham_gauge_action = _np.dot(ham_gauge_action, ham_gauge_linear_combos)
+        #if other_gauge_linear_combos is not None:
+        #    other_gauge_action = _np.dot(other_gauge_action, other_gauge_linear_combos)
+        pinv_ham_gauge_action = _np.linalg.pinv(ham_gauge_action)
+        pinv_other_gauge_action = _np.linalg.pinv(other_gauge_action)
+        ham_gauge_directions = _np.dot(pinv_ham_gauge_action, ham_gauge_vecs)
+        other_gauge_directions = _np.dot(pinv_other_gauge_action, other_gauge_vecs)
+        #import bpdb; bpdb.set_trace()
+        #print("TEST")
+
         self.fogi_info = {'primitive_op_labels': primitive_op_labels,
                           'ham_vecs': full_ham_fogi_vecs,
                           'ham_vecs_pinv': _np.linalg.pinv(full_ham_fogi_vecs),
@@ -1819,12 +1839,14 @@ class ExplicitOpModel(_mdl.OpModel):
                           'ham_fogi_labels': None,
                           'ham_gauge_vecs': ham_gauge_vecs,
                           'ham_gauge_vecs_pinv': _np.linalg.pinv(ham_gauge_vecs),
+                          'ham_gauge_directions': ham_gauge_directions,
                           'other_vecs': full_other_fogi_vecs,
                           'other_vecs_pinv': _np.linalg.pinv(full_other_fogi_vecs),
                           'other_fullspace_labels': full_other_space_labels,
                           'other_fogi_labels': None,
                           'other_gauge_vecs': other_gauge_vecs,
-                          'other_gauge_vecs_pinv': _np.linalg.pinv(other_gauge_vecs)}
+                          'other_gauge_vecs_pinv': _np.linalg.pinv(other_gauge_vecs),
+                          'other_gauge_directions': other_gauge_directions}
 
         self._recompute_fogi_names(op_label_abbrevs)
 
