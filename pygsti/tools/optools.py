@@ -3600,8 +3600,8 @@ def first_order_gauge_action_matrix(clifford_superop, dmbasis_ham, dmbasis_other
             for i, gen2 in enumerate(all_other_gens):
                 val = _np.vdot(gen2.flat, gauge_action_deriv.flat)
                 other_action_mx[i, j] = val
-        assert(_np.linalg.norm(other_action_mx.imag) < 1e-6)
-        other_action_mx = other_action_mx.real
+        #assert(_np.linalg.norm(other_action_mx.imag) < 1e-6)
+        other_action_mx = _np.real_if_close(other_action_mx) #.real
     else:
         other_action_mx = None
 
