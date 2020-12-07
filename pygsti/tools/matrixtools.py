@@ -2075,3 +2075,29 @@ def project_onto_antikite(mx, kite):
         k0 += k
     assert(k0 == dim), "Invalid kite %d-dimensional matrix: %s" % (dim, str(kite))
     return mx
+
+
+def remove_dependent_cols(mx, tol=1e-7):
+    """
+    Removes the linearly dependent columns of a matrix.
+
+    Parameters
+    ----------
+    mx : numpy.ndarray
+        The input matrix
+
+    Returns
+    -------
+    numpy.ndarray
+        A linearly independent subset of the columns of `mx`.
+    """
+    last_rank = 0; cols_to_remove = []
+    for j in range(mx.shape[1]):
+        rnk = _np.linalg.matrix_rank(mx[:, 0:j + 1], tol)
+        if rnk == last_rank:
+            cols_to_remove.append(j)
+        else:
+            last_rank = rnk
+    print("Removing %d cols" % len(cols_to_remove))
+    return _np.delete(mx, cols_to_remove, axis=1)
+

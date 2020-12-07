@@ -1465,17 +1465,108 @@ class ExplicitOpModel(_mdl.OpModel):
         self._opcaches['op-layers'] = simplified_ops
 
     # Gauge invariant errorgens and/or parameters support (initial & experimental)
+    def _construct_gauge_space_for_model(self, primitive_op_labels, ham_basis, other_basis, other_mode="all"):
+        ham_elem_labels = [('H', bel) for bel in ham_basis.labels[1:]]
+        other_elem_labels = [('S', bel) for bel in other_basis.labels[1:]] if other_mode != "all" else \
+            [('S', bel1, bel2) for bel1 in other_basis.labels[1:] for bel2 in other_basis.labels[1:]]
+
+        ham_gauge_action_mxs = []
+        other_gauge_action_mxs = []
+        for op_label in primitive_op_labels:  # Note: "ga" stands for "gauge action" in variable names below
+            op = self.operations[op_label]
+            op_mx = op.unitary_postfactor.to_dense()
+            U = _bt.change_basis(op_mx, self.basis, 'std')
+            ham_ga, other_ga = _gt.first_order_gauge_action_matrix(U, ham_basis,
+                                                                   other_basis, other_mode=other_mode)
+            ham_gauge_action_mxs.append(ham_ga)
+            other_gauge_action_mxs.append(other_ga)
+
+        #Stack matrices to form "base" gauge action matrix for op_set
+        ham_ga_mx = _np.concatenate(ham_gauge_action_mxs, axis=0)
+        other_ga_mx = _np.concatenate(other_gauge_action_mxs, axis=0)
+
+        # Intersect gauge action with the space of elementary errorgens present in the model.
+        # We may need to eliminate some rows of X_ga matrices, and (only) keep linear combos
+        # of the columns that are zero on these rows.
+        present_ham_elem_lbls = set()
+        present_other_elem_lbls = set()
+        for op_label in primitive_op_labels:
+            op = self.operations[op_label]
+            lbls = op.errorgen_coefficient_labels()  # length num_coeffs
+            present_ham_elem_lbls.update([(op_label, lbl) for lbl in lbls if lbl[0] == 'H'])
+            present_other_elem_lbls.update([(op_label, lbl) for lbl in lbls if lbl[0] == 'S'])
+
+        full_ham_elem_labels = [(op_label, elem_lbl) for op_label in primitive_op_labels
+                                for elem_lbl in ham_elem_labels]
+        assert(present_ham_elem_lbls.issubset(full_ham_elem_labels)), \
+            "The given space of hamiltonian elementary gauge-gens must encompass all those in model ops!"
+        disallowed_ham_space_labels = set(full_ham_elem_labels) - present_ham_elem_lbls
+        disallowed_row_indices = [full_ham_elem_labels.index(disallowed_lbl)
+                                  for disallowed_lbl in disallowed_ham_space_labels]
+
+        if len(disallowed_row_indices) > 0:
+            disallowed_rows = _np.take(ham_ga_mx, disallowed_row_indices, axis=0)
+            allowed_ham_linear_combos = _mt.nice_nullspace(disallowed_rows, tol=1e-4)
+        else:
+            allowed_ham_linear_combos = None
+
+        full_other_elem_labels = [(op_label, elem_lbl) for op_label in primitive_op_labels
+                                  for elem_lbl in other_elem_labels]
+        assert(present_other_elem_lbls.issubset(full_other_elem_labels)), \
+            "The given space of 'other' elementary gauge-gens must encompass all those in model ops!"
+        disallowed_other_space_labels = set(full_other_elem_labels) - present_other_elem_lbls
+        disallowed_row_indices = [full_other_elem_labels.index(disallowed_lbl)
+                                  for disallowed_lbl in disallowed_other_space_labels]
+
+        if len(disallowed_row_indices) > 0:
+            disallowed_rows = _np.take(other_ga_mx, disallowed_row_indices, axis=0)
+            allowed_other_linear_combos = _mt.nice_nullspace(disallowed_rows, tol=1e-4)
+        else:
+            allowed_other_linear_combos = None
+
+        return allowed_ham_linear_combos, allowed_other_linear_combos
+
     def _compute_fogi_via_nullspaces(self, primitive_op_labels, ham_basis, other_basis, other_mode="all",
                                      op_label_abbrevs=None):
         num_ham_elem_errgens = (len(ham_basis) - 1)
         num_other_elem_errgens = (len(other_basis) - 1)**2 if other_mode == "all" else (len(other_basis) - 1)
+        ham_elem_labels = [('H', bel) for bel in ham_basis.labels[1:]]
+        other_elem_labels = [('S', bel) for bel in other_basis.labels[1:]] if other_mode != "all" else \
+            [('S', bel1, bel2) for bel1 in other_basis.labels[1:] for bel2 in other_basis.labels[1:]]
+        assert(len(ham_elem_labels) == num_ham_elem_errgens)
+        assert(len(other_elem_labels) == num_other_elem_errgens)
+
+        ham_gauge_linear_combos, other_gauge_linear_combos = self._construct_gauge_space_for_model(
+            primitive_op_labels, ham_basis, other_basis, other_mode)
+
+        #Get lists of the present (existing within the model) labels for each operation
+        ham_labels_for_op = {op_label: ham_elem_labels[:] for op_label in primitive_op_labels}  # COPY lists!
+        other_labels_for_op = {op_label: other_elem_labels[:] for op_label in primitive_op_labels}  # ditto
+        for op_label in primitive_op_labels:
+            op = self.operations[op_label]
+            lbls = op.errorgen_coefficient_labels()
+            present_ham_elem_lbls = set(filter(lambda lbl: lbl[0] == 'H', lbls))
+            present_other_elem_lbls = set(filter(lambda lbl: lbl[0] == 'S', lbls))
+
+            disallowed_ham_space_labels = set(ham_elem_labels) - present_ham_elem_lbls
+            disallowed_row_indices = [ham_elem_labels.index(disallowed_lbl)
+                                      for disallowed_lbl in disallowed_ham_space_labels]
+            for i in sorted(disallowed_row_indices, reverse=True):
+                del ham_labels_for_op[op_label][i]
+
+            disallowed_other_space_labels = set(other_elem_labels) - present_other_elem_lbls
+            disallowed_row_indices = [other_elem_labels.index(disallowed_lbl)
+                                      for disallowed_lbl in disallowed_other_space_labels]
+            for i in sorted(disallowed_row_indices, reverse=True):
+                del other_labels_for_op[op_label][i]
+
         if op_label_abbrevs is None: op_label_abbrevs = {}
 
         #Step 1: construct nullspaces associated with sets of operations
         ham_nullspaces = {}
         other_nullspaces = {}
         max_size = len(primitive_op_labels)
-        running_dim = 0  # DEBUG!!!
+        #running_dim = 0  # DEBUG!!! REMOVE
         for set_size in range(1, max_size + 1):
             ham_nullspaces[set_size] = {}  # dict mapping operation-sets of `set_size` to nullspaces
             other_nullspaces[set_size] = {}
@@ -1487,19 +1578,76 @@ class ExplicitOpModel(_mdl.OpModel):
                 ham_rows_by_op = {}; h_off = 0
                 other_rows_by_op = {}; o_off = 0
                 for op_label in op_set:  # Note: "ga" stands for "gauge action" in variable names below
-                    U = _bt.change_basis(self.operations[op_label].to_dense(), self.basis, 'std')
+                    op = self.operations[op_label]
+                    if isinstance(op, _op.LindbladOp):
+                        op_mx = op.unitary_postfactor.to_dense()
+                    else:
+                        assert(False), "STOP - you probably don't want to do this!"
+                        op_mx = op.to_dense()
+                    U = _bt.change_basis(op_mx, self.basis, 'std')
                     ham_ga, other_ga = _gt.first_order_gauge_action_matrix(U, ham_basis,
                                                                            other_basis, other_mode=other_mode)
+                    if ham_gauge_linear_combos is not None:
+                        ham_ga = _np.dot(ham_ga, ham_gauge_linear_combos)
+                    if other_gauge_linear_combos is not None:
+                        other_ga = _np.dot(other_ga, other_gauge_linear_combos)
+
                     ham_gauge_action_mxs.append(ham_ga)
                     other_gauge_action_mxs.append(other_ga)
-                    ham_rows_by_op[op_label] = slice(h_off, h_off + ham_ga.shape[0]); h_off += ham_ga.shape[0]
-                    other_rows_by_op[op_label] = slice(o_off, o_off + other_ga.shape[0]); o_off += other_ga.shape[0]
+                    reduced_ham_nrows = len(ham_labels_for_op[op_label])  # ham_ga.shape[0] when unrestricted
+                    reduced_other_nrows = len(other_labels_for_op[op_label])  # other_ga.shape[0] when unrestricted
+                    ham_rows_by_op[op_label] = slice(h_off, h_off + reduced_ham_nrows); h_off += reduced_ham_nrows
+                    other_rows_by_op[op_label] = slice(o_off, o_off + reduced_other_nrows); o_off += reduced_other_nrows
                     assert(ham_ga.shape[0] == num_ham_elem_errgens)
                     assert(other_ga.shape[0] == num_other_elem_errgens)
 
                 #Stack matrices to form "base" gauge action matrix for op_set
                 ham_ga_mx = _np.concatenate(ham_gauge_action_mxs, axis=0)
                 other_ga_mx = _np.concatenate(other_gauge_action_mxs, axis=0)
+
+                #REMOVE
+                #if op_set == ('Gcz',):
+                #    print("BEFORE")
+                #    _mt.print_mx(ham_ga_mx, width=4, prec=1)
+
+                # Intersect gauge action with the space of elementary errorgens present in the model.
+                # We may need to eliminate some rows of X_ga matrices, and (only) keep linear combos
+                # of the columns that are zero on these rows.
+                present_ham_elem_lbls = set()
+                present_other_elem_lbls = set()
+                for op_label in op_set:
+                    op = self.operations[op_label]
+                    lbls = op.errorgen_coefficient_labels()  # length num_coeffs
+                    present_ham_elem_lbls.update([(op_label, lbl) for lbl in lbls if lbl[0] == 'H'])
+                    present_other_elem_lbls.update([(op_label, lbl) for lbl in lbls if lbl[0] == 'S'])
+
+                full_ham_elem_labels = [(op_label, elem_lbl) for op_label in op_set
+                                        for elem_lbl in ham_elem_labels]
+                assert(present_ham_elem_lbls.issubset(full_ham_elem_labels)), \
+                    "The given space of hamiltonian elementary gauge-gens must encompass all those in model ops!"
+                disallowed_ham_space_labels = set(full_ham_elem_labels) - present_ham_elem_lbls
+                disallowed_row_indices = [full_ham_elem_labels.index(disallowed_lbl)
+                                          for disallowed_lbl in disallowed_ham_space_labels]
+
+                if len(disallowed_row_indices) > 0:
+                    #disallowed_rows = _np.take(ham_ga_mx, disallowed_row_indices, axis=0)
+                    #allowed_linear_combos = _mt.nice_nullspace(disallowed_rows, tol=1e-4)
+                    #ham_ga_mx = _np.dot(ham_ga_mx, allowed_linear_combos)
+                    ham_ga_mx = _np.delete(ham_ga_mx, disallowed_row_indices, axis=0)
+
+                full_other_elem_labels = [(op_label, elem_lbl) for op_label in op_set
+                                          for elem_lbl in other_elem_labels]
+                assert(present_other_elem_lbls.issubset(full_other_elem_labels)), \
+                    "The given space of 'other' elementary gauge-gens must encompass all those in model ops!"
+                disallowed_other_space_labels = set(full_other_elem_labels) - present_other_elem_lbls
+                disallowed_row_indices = [full_other_elem_labels.index(disallowed_lbl)
+                                          for disallowed_lbl in disallowed_other_space_labels]
+
+                if len(disallowed_row_indices) > 0:
+                    #disallowed_rows = _np.take(other_ga_mx, disallowed_row_indices, axis=0)
+                    #allowed_linear_combos = _mt.nice_nullspace(disallowed_rows, tol=1e-4)
+                    #other_ga_mx = _np.dot(other_ga_mx, allowed_linear_combos)
+                    other_ga_mx = _np.delete(other_ga_mx, disallowed_row_indices, axis=0)
 
                 #Add all known (already tabulated) nullspace directions so that we avoid getting them again
                 # when we compute the nullspace of the gauge action matrix below.
@@ -1512,7 +1660,7 @@ class ExplicitOpModel(_mdl.OpModel):
                         ham_ga_mx = _np.concatenate((ham_ga_mx, padded_nullsp), axis=1)
 
                     for previous_op_set, (nullsp, previous_rows) in other_nullspaces[previous_size].items():
-                        padded_nullsp = _np.zeros((other_ga_mx.shape[0], nullsp.shape[1]), 'd')
+                        padded_nullsp = _np.zeros((other_ga_mx.shape[0], nullsp.shape[1]), other_ga_mx.dtype)
                         for op in previous_op_set:
                             if op not in other_rows_by_op: continue
                             padded_nullsp[other_rows_by_op[op], :] = nullsp[previous_rows[op], :]
@@ -1520,9 +1668,12 @@ class ExplicitOpModel(_mdl.OpModel):
 
                 #Finally, compute the nullspace of the resulting gauge-action + already-tallied matrix:
                 nullspace = _mt.nice_nullspace(ham_ga_mx.T)
+                #print("  NULLSP DIM = ",nullspace.shape[1])
+                #labels = [(op_label, elem_lbl) for op_label in op_set for elem_lbl in ham_labels_for_op[op_label]]
+                #print("\n".join(fogi_names(nullspace, labels, op_label_abbrevs)))
 
-                running_dim += nullspace.shape[1]
-                #print("Ham nullspace dim = ", nullspace.shape[1], " running=", running_dim)
+                #running_dim += nullspace.shape[1]  REMOVE
+                #print("Ham nullspace dim = ", nullspace.shape[1], " running=", running_dim)  REMOVE
                 ham_nullspaces[set_size][op_set] = (nullspace, ham_rows_by_op)
 
                 nullspace = _mt.nice_nullspace(other_ga_mx.T)
@@ -1530,24 +1681,21 @@ class ExplicitOpModel(_mdl.OpModel):
 
         # Step 2: convert these per-operation-set nullspaces into vectors over a single "full"
         #  space of all the elementary error generators (as given by ham_basis, other_basis, & other_mode)
-        ham_elem_labels = [('H', bel) for bel in ham_basis.labels[1:]]
-        other_elem_labels = [('S', bel) for bel in other_basis.labels[1:]] if other_mode != "all" else \
-            [('S', bel1, bel2) for bel1 in other_basis.labels[1:] for bel2 in other_basis.labels[1:]]
-        assert(len(ham_elem_labels) == num_ham_elem_errgens)
-        assert(len(other_elem_labels) == num_other_elem_errgens)
 
         # Note: "full" designation is for space of all elementary error generators as given by their
         #  supplied ham_basis, other_basis, and other_mode.
         full_ham_space_labels = [(op_label, elem_lbl) for op_label in primitive_op_labels
-                                 for elem_lbl in ham_elem_labels]
+                                 for elem_lbl in ham_labels_for_op[op_label]]
         full_other_space_labels = [(op_label, elem_lbl) for op_label in primitive_op_labels
-                                   for elem_lbl in other_elem_labels]
+                                   for elem_lbl in other_labels_for_op[op_label]]
 
         # Construct full-space vectors for each nullspace vector found by crawling through
         #  the X_nullspaces dictionary and embedding values as needed.
-        ham_rows_by_op = {op_label: slice(i * num_ham_elem_errgens, (i + 1) * num_ham_elem_errgens)
-                          for i, op_label in enumerate(primitive_op_labels)}
-        full_ham_fogi_vecs = _np.empty((num_ham_elem_errgens * len(primitive_op_labels), 0), 'd')
+        ham_rows_by_op = {}; off = 0
+        for op_label in primitive_op_labels:
+            ham_rows_by_op[op_label] = slice(off, off + len(ham_labels_for_op[op_label]))
+            off += len(ham_labels_for_op[op_label])
+        full_ham_fogi_vecs = _np.empty((off, 0), 'd')
         for size in range(1, max_size + 1):
             for op_set, (nullsp, op_set_rows) in ham_nullspaces[size].items():
                 padded_nullsp = _np.zeros((full_ham_fogi_vecs.shape[0], nullsp.shape[1]), 'd')
@@ -1555,12 +1703,14 @@ class ExplicitOpModel(_mdl.OpModel):
                     padded_nullsp[ham_rows_by_op[op], :] = nullsp[op_set_rows[op], :]
                 full_ham_fogi_vecs = _np.concatenate((full_ham_fogi_vecs, padded_nullsp), axis=1)
 
-        other_rows_by_op = {op_label: slice(i * num_other_elem_errgens, (i + 1) * num_other_elem_errgens)
-                            for i, op_label in enumerate(primitive_op_labels)}
-        full_other_fogi_vecs = _np.empty((num_other_elem_errgens * len(primitive_op_labels), 0), 'd')
+        other_rows_by_op = {}; off = 0
+        for op_label in primitive_op_labels:
+            other_rows_by_op[op_label] = slice(off, off + len(other_labels_for_op[op_label]))
+            off += len(other_labels_for_op[op_label])
+        full_other_fogi_vecs = _np.empty((off, 0), complex)
         for size in range(1, max_size + 1):
             for op_set, (nullsp, op_set_rows) in other_nullspaces[size].items():
-                padded_nullsp = _np.zeros((full_other_fogi_vecs.shape[0], nullsp.shape[1]), 'd')
+                padded_nullsp = _np.zeros((full_other_fogi_vecs.shape[0], nullsp.shape[1]), complex)
                 for op in op_set:
                     padded_nullsp[other_rows_by_op[op], :] = nullsp[op_set_rows[op], :]
                 full_other_fogi_vecs = _np.concatenate((full_other_fogi_vecs, padded_nullsp), axis=1)
@@ -1570,70 +1720,93 @@ class ExplicitOpModel(_mdl.OpModel):
         assert(_np.linalg.matrix_rank(full_ham_fogi_vecs) == full_ham_fogi_vecs.shape[1])
         assert(_np.linalg.matrix_rank(full_other_fogi_vecs) == full_other_fogi_vecs.shape[1])
 
-        # Step 3: pare down the "full" space to only those elementary generators present
-        #  in [operations within] the model.
-
-        # Get lists of the present labels
-        present_ham_elemgen_lbls = set()
-        present_other_elemgen_lbls = set()
-        for op_label in primitive_op_labels:
-            op = self.operations[op_label]
-            lbls = op.errorgen_coefficient_labels()  # length num_coeffs
-            present_ham_elemgen_lbls.update([(op_label, lbl) for lbl in lbls if lbl[0] == 'H'])
-            present_other_elemgen_lbls.update([(op_label, lbl) for lbl in lbls if lbl[0] == 'S'])
-
-        # Remove labels that aren't in the model from the "full-space" lists, so that the
-        # updated lists are equal to the set of elementary generators in the model.
-        assert(present_ham_elemgen_lbls.issubset(full_ham_space_labels)), \
-            "The given space of hamiltonian elementary error-gens must encompass all those found in model operations!"
-        disallowed_full_ham_space_labels = set(full_ham_space_labels) - present_ham_elemgen_lbls
-
-        for disallowed_lbl in disallowed_full_ham_space_labels:
-            i = full_ham_space_labels.index(disallowed_lbl)
-            full_ham_space_labels.remove(disallowed_lbl)
-
-            #check if any vectors in full_ham_fogi_vecs utilize this removed index - remove those
-            cols_to_keep = [j for j in range(full_ham_fogi_vecs.shape[1]) if abs(full_ham_fogi_vecs[i, j]) < 1e-6]
-            full_ham_fogi_vecs = full_ham_fogi_vecs.take(cols_to_keep, axis=1)
-            _np.delete(full_ham_fogi_vecs, i, axis=0)
-
-        assert(present_other_elemgen_lbls.issubset(full_other_space_labels)), \
-            "The given space of other elementary error-gens must encompass all those found in model operations!"
-        disallowed_full_other_space_labels = set(full_other_space_labels) - present_other_elemgen_lbls
-
-        for disallowed_lbl in disallowed_full_other_space_labels:
-            i = full_other_space_labels.index(disallowed_lbl)
-            full_other_space_labels.remove(disallowed_lbl)
-
-            #check if any vectors in full_ham_fogi_vecs utilize this removed index - remove those
-            cols_to_keep = [j for j in range(full_other_fogi_vecs.shape[1]) if abs(full_other_fogi_vecs[i, j]) < 1e-6]
-            full_other_fogi_vecs = full_other_fogi_vecs.take(cols_to_keep, axis=1)
-            _np.delete(full_other_fogi_vecs, i, axis=0)
-
-        # Step 4: compute names (by a heuristic) for each FOGI vec
-        def _fogi_names(fogi_vecs, full_space_labels):
-            fogi_vec_names = []
-            for j in range(fogi_vecs.shape[1]):
-                name = ""
-                for i, (op_lbl, elem_lbl) in enumerate(full_space_labels):
-                    val = fogi_vecs[i, j]
-                    if abs(val) < 1e-6: continue
-                    sign = ' + ' if val > 0 else ' - '
-                    abs_val_str = '' if _np.isclose(abs(val), 1.0) else ("%.1g " % abs(val))
-                    name += sign + abs_val_str + "%s(%s)_%s" % (elem_lbl[0], ','.join(elem_lbl[1:]),
-                                                                op_label_abbrevs.get(op_lbl, str(op_lbl)))
-                if name.startswith(' + '): name = name[3:]  # strip leading +
-                if name.startswith(' - '): name = '-' + name[3:]  # strip leading spaces
-                fogi_vec_names.append(name)
-            return fogi_vec_names
-
-        ham_fogi_vec_names = _fogi_names(full_ham_fogi_vecs, full_ham_space_labels)
-        other_fogi_vec_names = _fogi_names(full_other_fogi_vecs, full_other_space_labels)
+        # XXX DONE ABOVE - REMOVE
+        # # Step 3: pare down the "full" space to only those elementary generators present
+        # #  in [operations within] the model.
+        #
+        # # Get lists of the present labels
+        # present_ham_elemgen_lbls = set()
+        # present_other_elemgen_lbls = set()
+        # for op_label in primitive_op_labels:
+        #     op = self.operations[op_label]
+        #     lbls = op.errorgen_coefficient_labels()  # length num_coeffs
+        #     print(op_label, len(lbls))
+        #     present_ham_elemgen_lbls.update([(op_label, lbl) for lbl in lbls if lbl[0] == 'H'])
+        #     present_other_elemgen_lbls.update([(op_label, lbl) for lbl in lbls if lbl[0] == 'S'])
+        #
+        # # Remove labels that aren't in the model from the "full-space" lists, so that the
+        # # updated lists are equal to the set of elementary generators in the model.
+        # assert(present_ham_elemgen_lbls.issubset(full_ham_space_labels)), \
+        #     "The given space of hamiltonian elementary error-gens must encompass all those found in model operations!"
+        # disallowed_full_ham_space_labels = set(full_ham_space_labels) - present_ham_elemgen_lbls
+        # print(len(full_ham_space_labels), len(present_ham_elemgen_lbls))
+        # print(disallowed_full_ham_space_labels)
+        #
+        # disallowed_row_indices = [full_ham_space_labels.index(disallowed_lbl)
+        #                           for disallowed_lbl in disallowed_full_ham_space_labels]
+        # print("Orig shape = ",full_ham_fogi_vecs.shape)
+        # if len(disallowed_row_indices) > 0:
+        #     disallowed_rows = _np.take(full_ham_fogi_vecs, disallowed_row_indices, axis=0)
+        #     print("Disallowed rows shape =",disallowed_rows.shape)
+        #     allowed_linear_combos = _mt.nice_nullspace(disallowed_rows, tol=1e-4)
+        #     print("allowed LC shape =",allowed_linear_combos.shape)
+        #     full_ham_fogi_vecs = _np.dot(full_ham_fogi_vecs, allowed_linear_combos)
+        #     for i in sorted(disallowed_row_indices, reverse=True):
+        #         del full_ham_space_labels[i]
+        #     full_ham_fogi_vecs = _np.delete(full_ham_fogi_vecs, disallowed_row_indices, axis=0)
+        #
+        # #for i in sorted(indices_to_remove, reverse=True):
+        # #    del full_ham_space_labels[i]
+        # #print("Initial shape = ",full_ham_fogi_vecs.shape)
+        # #print("Removing %d rows" % len(indices_to_remove))
+        # #full_ham_fogi_vecs = _np.delete(full_ham_fogi_vecs, indices_to_remove, axis=0)
+        # #if len(indices_to_remove) > 0:
+        # #    full_ham_fogi_vecs = _mt.remove_dependent_cols(full_ham_fogi_vecs)
+        #
+        # assert(present_other_elemgen_lbls.issubset(full_other_space_labels)), \
+        #     "The given space of other elementary error-gens must encompass all those found in model operations!"
+        # disallowed_full_other_space_labels = set(full_other_space_labels) - present_other_elemgen_lbls
+        # print(len(full_other_space_labels), len(present_other_elemgen_lbls))
+        # print(disallowed_full_other_space_labels)
+        #
+        # disallowed_row_indices = [full_other_space_labels.index(disallowed_lbl)
+        #                           for disallowed_lbl in disallowed_full_other_space_labels]
+        # print("Orig shape = ",full_other_fogi_vecs.shape)
+        # if len(disallowed_row_indices) > 0:
+        #     disallowed_rows = _np.take(full_other_fogi_vecs, disallowed_row_indices, axis=0)
+        #     print("Disallowed rows shape =",disallowed_rows.shape)
+        #     allowed_linear_combos = _mt.nice_nullspace(disallowed_rows, tol=1e-4)
+        #     print("allowed LC shape =",allowed_linear_combos.shape)
+        #     full_other_fogi_vecs = _np.dot(full_other_fogi_vecs, allowed_linear_combos)
+        #     for i in sorted(disallowed_row_indices, reverse=True):
+        #         del full_other_space_labels[i]
+        #     full_other_fogi_vecs = _np.delete(full_other_fogi_vecs, disallowed_row_indices, axis=0)
+        #
+        # #indices_to_remove = [full_other_space_labels.index(disallowed_lbl)
+        # #                     for disallowed_lbl in disallowed_full_other_space_labels]
+        # #for i in sorted(indices_to_remove, reverse=True):
+        # #    del full_other_space_labels[i]
+        # #print("Initial shape = ",full_other_fogi_vecs.shape)
+        # #print("Removing %d rows" % len(indices_to_remove))
+        # #full_other_fogi_vecs = _np.delete(full_other_fogi_vecs, indices_to_remove, axis=0)
+        # #if len(indices_to_remove) > 0:
+        # #    full_other_fogi_vecs = _mt.remove_dependent_cols(full_other_fogi_vecs)
 
         # Returns the vectors of FOGI (first order gauge invariant) linear combos as well
         # as lists of labels for the columns & rows, respectively.
-        return (full_ham_fogi_vecs, ham_fogi_vec_names, full_ham_space_labels), \
-            (full_other_fogi_vecs, other_fogi_vec_names, full_other_space_labels)
+        return (full_ham_fogi_vecs, full_ham_space_labels), \
+            (full_other_fogi_vecs, full_other_space_labels)
+
+    def _recompute_fogi_names(self, op_label_abbrevs=None):
+        # Step 4: compute names (by a heuristic) for each FOGI vec
+        if op_label_abbrevs is None: op_label_abbrevs = {}
+        full_ham_fogi_vecs = self.fogi_info['ham_vecs']
+        full_ham_space_labels = self.fogi_info['ham_fullspace_labels']
+        full_other_fogi_vecs = self.fogi_info['other_vecs']
+        full_other_space_labels = self.fogi_info['other_fullspace_labels']
+        self.fogi_info['ham_fogi_labels'] = _fogi_names(full_ham_fogi_vecs, full_ham_space_labels, op_label_abbrevs)
+        self.fogi_info['other_fogi_labels'] = _fogi_names(full_other_fogi_vecs, full_other_space_labels,
+                                                          op_label_abbrevs)
 
     def _add_reparameterization(self, primitive_op_labels,
                                 full_ham_fogi_vecs, full_ham_space_labels,
@@ -1708,8 +1881,7 @@ class ExplicitOpModel(_mdl.OpModel):
         TODO: docstring
         """
         primitive_op_labels = list(self.operations.keys())
-        (full_ham_fogi_vecs, ham_fogi_vec_names, full_ham_space_labels), \
-            (full_other_fogi_vecs, other_fogi_vec_names, full_other_space_labels) = \
+        (full_ham_fogi_vecs, full_ham_space_labels), (full_other_fogi_vecs, full_other_space_labels) = \
             self._compute_fogi_via_nullspaces(primitive_op_labels, ham_basis, other_basis, other_mode,
                                               op_label_abbrevs)
 
@@ -1725,15 +1897,17 @@ class ExplicitOpModel(_mdl.OpModel):
                           'ham_vecs': full_ham_fogi_vecs,
                           'ham_vecs_pinv': _np.linalg.pinv(full_ham_fogi_vecs),
                           'ham_fullspace_labels': full_ham_space_labels,
-                          'ham_fogi_labels': ham_fogi_vec_names,
+                          'ham_fogi_labels': None,
                           'ham_gauge_vecs': ham_gauge_vecs,
                           'ham_gauge_vecs_pinv': _np.linalg.pinv(ham_gauge_vecs),
                           'other_vecs': full_other_fogi_vecs,
                           'other_vecs_pinv': _np.linalg.pinv(full_other_fogi_vecs),
                           'other_fullspace_labels': full_other_space_labels,
-                          'other_fogi_labels': other_fogi_vec_names,
+                          'other_fogi_labels': None,
                           'other_gauge_vecs': other_gauge_vecs,
                           'other_gauge_vecs_pinv': _np.linalg.pinv(other_gauge_vecs)}
+
+        self._recompute_fogi_names(op_label_abbrevs)
 
         #Check that pseudo-inverse was computed correctly (~ matrices are full rank)
         # full_other_vec = other_vecs * fogi
@@ -1747,7 +1921,6 @@ class ExplicitOpModel(_mdl.OpModel):
                                - _np.identity(self.fogi_info['ham_gauge_vecs'].shape[1], 'd')) < 1e-6)
         assert(_np.linalg.norm(_np.dot(self.fogi_info['other_gauge_vecs_pinv'], self.fogi_info['other_gauge_vecs'])
                                - _np.identity(self.fogi_info['other_gauge_vecs'].shape[1], 'd')) < 1e-6)
-
 
     #def errorgen_coefficients_array(self):
     #    pass
@@ -1771,8 +1944,14 @@ class ExplicitOpModel(_mdl.OpModel):
         ham_vecs_pinv = self.fogi_info['ham_vecs_pinv']
         other_vecs_pinv = self.fogi_info['other_vecs_pinv']
         if complete:
-            ham_vecs_pinv = _np.concatenate((ham_vecs_pinv, self.fogi_info['ham_gauge_vecs_pinv']), axis=0)
-            other_vecs_pinv = _np.concatenate((other_vecs_pinv, self.fogi_info['other_gauge_vecs_pinv']), axis=0)
+            # Do pinv's properly here -- I think this is the same as using the commented code below, but
+            # haven't checked yet.
+            ham_vecs_pinv = _np.linalg.pinv(_np.concatenate((self.fogi_info['ham_vecs'],
+                                                             self.fogi_info['ham_gauge_vecs']), axis=1))
+            other_vecs_pinv = _np.linalg.pinv(_np.concatenate((self.fogi_info['other_vecs'],
+                                                               self.fogi_info['other_gauge_vecs']), axis=1))
+            # _np.concatenate((ham_vecs_pinv, self.fogi_info['ham_gauge_vecs_pinv']), axis=0)
+            # _np.concatenate((other_vecs_pinv, self.fogi_info['other_gauge_vecs_pinv']), axis=0)
             assert(_np.linalg.matrix_rank(ham_vecs_pinv) == max(ham_vecs_pinv.shape))  # should be square & full rank!
             assert(_np.linalg.matrix_rank(other_vecs_pinv) == max(other_vecs_pinv.shape))  # ditto
 
@@ -1786,7 +1965,13 @@ class ExplicitOpModel(_mdl.OpModel):
             full_other_vec[i] += op_coeffs[op_label].get(elem_lbl, 0.0)
         fogi_other_coeffs = _np.dot(other_vecs_pinv, full_other_vec)
 
-        return _np.concatenate((fogi_ham_coeffs, fogi_other_coeffs))
+        if complete:  # need to weave together results to put gauge at bottom.
+            nHamFOGI = self.fogi_info['ham_vecs'].shape[1]
+            nOtherFOGI = self.fogi_info['other_vecs'].shape[1]
+            return _np.concatenate((fogi_ham_coeffs[0:nHamFOGI], fogi_other_coeffs[0:nOtherFOGI],
+                                    fogi_ham_coeffs[nHamFOGI:], fogi_other_coeffs[nOtherFOGI:]))
+        else:  # just concat the two sets of FIGO coeffs.
+            return _np.concatenate((fogi_ham_coeffs, fogi_other_coeffs))
 
     def set_fogi_errorgen_coefficients_array(self, fogi_coefficients, complete=False):
         # to set model's (Ham) linear combinations do:
@@ -1795,7 +1980,14 @@ class ExplicitOpModel(_mdl.OpModel):
         ham_vecs = self.fogi_info['ham_vecs']
         other_vecs = self.fogi_info['other_vecs']
         if complete:
-            nHamVecs += self.fogi_info['ham_gauge_vecs'].shape[1]
+            #rearrange FOGI coefficients to H and S parts are separated
+            nHamGauge = self.fogi_info['ham_gauge_vecs'].shape[1]
+            nFOGI = nHamVecs + self.fogi_info['other_vecs'].shape[1]
+            fc = fogi_coefficients  # shorthand
+            fogi_coefficients = _np.concatenate((fc[0:nHamVecs], fc[nFOGI:nFOGI + nHamGauge],
+                                                 fc[nHamVecs:nFOGI], fc[nFOGI + nHamGauge:]))
+
+            nHamVecs += nHamGauge
             ham_vecs = _np.concatenate((ham_vecs, self.fogi_info['ham_gauge_vecs']), axis=1)
             other_vecs = _np.concatenate((other_vecs, self.fogi_info['other_gauge_vecs']), axis=1)
             assert(_np.linalg.matrix_rank(ham_vecs) == max(ham_vecs.shape))  # should be square & full rank!
@@ -1868,3 +2060,20 @@ class ExplicitLayerRules(_LayerRules):
             return op
         else:
             return model.operations[layerlbl]
+
+
+def _fogi_names(fogi_vecs, full_space_labels, op_label_abbrevs):
+    fogi_vec_names = []
+    for j in range(fogi_vecs.shape[1]):
+        name = ""
+        for i, (op_lbl, elem_lbl) in enumerate(full_space_labels):
+            val = fogi_vecs[i, j]
+            if abs(val) < 1e-6: continue
+            sign = ' + ' if val > 0 else ' - '
+            abs_val_str = '' if _np.isclose(abs(val), 1.0) else ("%g " % abs(val))  # was %.1g
+            name += sign + abs_val_str + "%s(%s)_%s" % (elem_lbl[0], ','.join(elem_lbl[1:]),
+                                                        op_label_abbrevs.get(op_lbl, str(op_lbl)))
+        if name.startswith(' + '): name = name[3:]  # strip leading +
+        if name.startswith(' - '): name = '-' + name[3:]  # strip leading spaces
+        fogi_vec_names.append(name)
+    return fogi_vec_names
