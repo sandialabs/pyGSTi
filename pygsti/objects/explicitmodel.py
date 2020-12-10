@@ -1606,35 +1606,6 @@ class ExplicitOpModel(_mdl.OpModel):
                                           op_label_abbrevs.get(op_label, str(op_label)))
                                for egname in errgen_names])
 
-            #commutant_as_errgen = _np.zeros((len(ham_elem_labels), commutant.shape[1]), 'd'); jj = 0
-
-            #len(op_elemgen_labels)
-            #op_elemgen_label_lookup:
-            #full_commutant = _np.dot(ham_gauge_linear_combos, commutant) \
-            #    if (ham_gauge_linear_combos is not None) else commutant
-
-            #commutant_as_errgen = commutant
-            #if ham_disallowed_row_indices.get(op_label, None) is not None:  # remove disallowed rows in errgen space
-            #    must_be_zero = _np.take(commutant_as_errgen, ham_disallowed_row_indices[op_label], axis=0)
-            #    allowed_linear_combos = _mt.nice_nullspace(must_be_zero)
-            #    commutant_as_errgen = _np.dot(commutant_as_errgen, allowed_linear_combos)
-            #    commutant_as_errgen = _np.delete(commutant_as_errgen, ham_disallowed_row_indices, axis=0)
-            #commutant_as_errgen = _mt.remove_dependent_cols(commutant_as_errgen)
-
-            #for j in range(commutant.shape[1]):
-            #    for i, lbl in enumerate(ham_gauge_elemgen_labels):
-            #        commutant_as_errgen[op_elemgen_label_lookup[lbl], jj] = full_commutant[i, j]
-            #    if not _np.isclose(0, _np.linalg.norm(commutant_as_errgen[:, j])): jj += 1
-            #if jj < commutant_as_errgen.shape[1]:
-            #    commutant_as_errgen = commutant_as_errgen[:, 0:jj]
-            #
-            #fogi_vecs = _np.zeros((ham_fogi_vecs.shape[0], commutant_as_errgen.shape[1]), 'd')
-            #fogi_vecs[op_ham_errgen_indices[op_label], :] = commutant_as_errgen  # "juice" this op
-            #ham_fogi_vecs = _np.concatenate((ham_fogi_vecs, fogi_vecs), axis=1)
-            #commutant_names = _gauge_names(commutant, ham_gauge_elemgen_labels)
-            #ham_fogi_names.extend(["(%s)_%s" % (cname, op_label_abbrevs.get(op_label, str(op_label)))
-            #                       for cname in commutant_names])
-
             complement = _mt.nice_nullspace(commutant.T)  # complement of commutant - where op if faithful rep
             ccomms[(op_label,)] = complement
             gauge_action_for_op[op_label] = ga
@@ -1642,33 +1613,6 @@ class ExplicitOpModel(_mdl.OpModel):
             #print("Commutant:"); _mt.print_mx(commutant)
             #print("Names: ", errgen_names)
             #print("Complement:"); _mt.print_mx(complement)
-
-            ##Get Other commutant and communtant-complement spaces
-            #commutant = _mt.nice_nullspace(other_ga)  # columns = *gauge* elem gen directions
-            #op_elemgen_labels = other_labels_for_op[op_label]
-            #op_elemgen_label_lookup = {lbl: i for i, lbl in enumerate(op_elemgen_labels)}
-            #commutant_as_errgen = _np.zeros((len(op_elemgen_labels), commutant.shape[1]), 'd'); jj = 0
-            #full_commutant = _np.dot(other_gauge_linear_combos, commutant) \
-            #    if (other_gauge_linear_combos is not None) else commutant
-            #for j in range(commutant.shape[1]):
-            #    for i, lbl in enumerate(other_gauge_elemgen_labels):
-            #        if abs(full_commutant[i, j]) > 1e-7:
-            #            if lbl not in op_elemgen_label_lookup:
-            #                import bpdb; bpdb.set_trace()
-            #            commutant_as_errgen[op_elemgen_label_lookup[lbl], jj] = full_commutant[i, j]
-            #    if not _np.isclose(0, _np.linalg.norm(commutant_as_errgen[:, j])): jj += 1
-            #if jj < commutant_as_errgen.shape[1]:
-            #    commutant_as_errgen = commutant_as_errgen[:, 0:jj]
-            #fogi_vecs = _np.zeros((other_fogi_vecs.shape[0], commutant_as_errgen.shape[1]), 'd')
-            #fogi_vecs[op_other_errgen_indices[op_label], :] = commutant_as_errgen  # "juice" this op
-            #other_fogi_vecs = _np.concatenate((other_fogi_vecs, fogi_vecs), axis=1)
-            #commutant_names = _gauge_names(full_commutant, other_gauge_elemgen_labels)
-            #other_fogi_names.extend(["(%s)_%s" % (cname, op_label_abbrevs.get(op_label, str(op_label)))
-            #                        for cname in commutant_names])
-            #
-            #complement = _mt.nice_nullspace(commutant.T)  # complement of commutant - where op if faithful rep
-            #other_ccomms[(op_label,)] = complement
-            #other_gauge_action[op_label] = other_ga
 
         smaller_sets = [(op_label,) for op_label in primitive_op_labels]
         max_size = len(primitive_op_labels)
@@ -1715,11 +1659,6 @@ class ExplicitOpModel(_mdl.OpModel):
                                     indep_cols.append(j)
                                     fogi_vecs = test
 
-                            #indep_cols = [j for j in range(fogi_vecs.shape[1]) if _np.linalg.matrix_rank(
-                            #    _np.concatenate((ham_fogi_vecs, fogi_vecs[:, j:j + 1]), axis=1), tol=1e-7)
-                            #    == ham_fogi_vecs.shape[1] + 1]
-                            #fogi_vecs = _np.take(fogi_vecs, indep_cols, axis=1)
-                            #ham_fogi_vecs = _np.concatenate((ham_fogi_vecs, fogi_vecs), axis=1)
                             indep_intersection_space = _np.take(intersection_space, indep_cols, axis=1)
                             indep_intersection_space = _np.dot(gauge_linear_combos, indep_intersection_space) \
                                 if (gauge_linear_combos is not None) else indep_intersection_space
@@ -1732,94 +1671,6 @@ class ExplicitOpModel(_mdl.OpModel):
 
                         ccomms[new_set] = union_space
                         #print("Complement:\n"); _mt.print_mx(union_space)
-
-                    ##Stochastic: merge existing set + op_label => new set of larger size
-                    #ccommA = other_ccomms.get(existing_set, None)  # Note: commutant-complements are in *gauge* space,
-                    #ccommB = other_ccomms[(op_label,)]  # so they're all the same dimension.
-                    #
-                    #if ccommA is not None and ccommA.shape[1] > 0 and ccommB.shape[1] > 0:
-                    #    # merging with an empty complement does nothing (no intersection, same ccomm)
-                    #    intersection_space = _mt.intersection_space(ccommA, ccommB)
-                    #    union_space = _mt.union_space(ccommA, ccommB)
-                    #
-                    #    if intersection_space.shape[1] > 0:
-                    #        # Then each basis vector of the intersection space defines a gauge-invariant ("fogi")
-                    #        # direction via the difference between that gauge direction's action on A and B:
-                    #        gauge_action = _np.concatenate([other_gauge_action[ol] for ol in existing_set]
-                    #                                       + [other_gauge_action[op_label]], axis=0)
-                    #        n = sum([other_gauge_action[ol].shape[0] for ol in existing_set])  # boundary
-                    #        inv_diff_gauge_action = _np.concatenate((_np.linalg.pinv(gauge_action[0:n, :], rcond=1e-7),
-                    #                                                 -_np.linalg.pinv(gauge_action[n:, :], rcond=1e-7)),
-                    #                                                axis=1).T
-                    #        local_fogi_vecs = _np.dot(inv_diff_gauge_action, intersection_space)
-                    #        assert(_np.linalg.norm(_np.dot(gauge_action.T, local_fogi_vecs)) < 1e-8)
-                    #
-                    #        # want dot(gauge_action.T, local) == 0
-                    #        # dot(ga_A.T | ga_B.T, localA | localB) = dot(ga_A.T, localA) + dot(ga_B.T, localB)
-                    #        # so set localA = ga_A / dot(ga_A.T, ga_A) and localB = -ga_B / dot(ga_B.T, ga_B) if a vec
-                    #        # or localA = pinv(ga_A), localB = -pinv(ga_B) more generally
-                    #        # but localA = intersection_gaA * smallA, localB = intersection_gaB * smallB
-                    #        # so project the stacked(pinv(ga_A), -pinv(ga_B)) onto the intersection space via dot above
-                    #
-                    #        #DEBUG SCRATCH
-                    #        #intersection_ga = _np.dot(gauge_action, intersection_space)
-                    #        #diff_gauge_action = _np.concatenate((gauge_action[0:n, :],
-                    #        #                                     -gauge_action[n:, :]), axis=0)
-                    #
-                    #        #local_fogi_vecs = _np.linalg.pinv(diff_gauge_action).T
-                    #        #local_fogi_vecs[n:,:] *= -1
-                    #        #assert(_np.linalg.norm(_np.dot(gauge_action.T, local_fogi_vecs)) < 1e-8)
-                    #        #local_fogi_vecs = _np.dot(intersection_ga, _np.dot(_np.linalg.pinv(intersection_ga),
-                    #        #  local_fogi_vecs))  # project onto intersection space?
-                    #
-                    #        #wA = _np.dot(gauge_action[0:n, :].T, intersection_ga[0:n, :])  # e.g. (15,3)
-                    #        #wB = _np.dot(gauge_action[n:, :].T, intersection_ga[n:, :])
-                    #        #local_fogi_vecs = _np.dot(intersection_ga, _np.concatenate((_np.linalg.pinv(wA),
-                    #        #  -_np.linalg.pinv(wB)), axis=1))
-                    #
-                    #        #local_fogi_vecs = _np.concatenate((_np.linalg.pinv(intersection_ga[0:n, :]),
-                    #        #                                   -_np.linalg.pinv(intersection_ga[n:, :])), axis=1).T
-                    #        #local_fogi_vecs = _np.linalg.pinv(intersection_ga[:, :]).T
-                    #        #assert(_np.linalg.norm(_np.dot(intersection_ga.T, local_fogi_vecs)) < 1e-8)
-                    #        #try:
-                    #        #    assert(_np.linalg.norm(_np.dot(gauge_action.T, local_fogi_vecs)) < 1e-8)
-                    #        #except:
-                    #        #    alpha = intersection_ga[0:n, :]
-                    #        #    beta = intersection_ga[n:, :]
-                    #        #    palpha = _np.linalg.pinv(intersection_ga[0:n, :])
-                    #        #    pbeta = _np.linalg.pinv(intersection_ga[n:, :])
-                    #        #    import bpdb; bpdb.set_trace()
-                    #        #    print("PROBLEM")
-                    #
-                    #        fogi_vecs = _np.zeros((other_fogi_vecs.shape[0], local_fogi_vecs.shape[1]), 'd'); off = 0
-                    #        for ol in existing_set + (op_label,):  # NOT new_set here b/c concat order below
-                    #            n = len(other_labels_for_op[ol])
-                    #            fogi_vecs[op_other_errgen_indices[ol], :] = local_fogi_vecs[off:off + n, :]; off += n
-                    #
-                    #        indep_cols = []
-                    #        for j in range(fogi_vecs.shape[1]):
-                    #            test = _np.concatenate((other_fogi_vecs, fogi_vecs[:, j:j + 1]), axis=1)
-                    #            if _np.linalg.matrix_rank(test) == test.shape[1]:
-                    #                indep_cols.append(j)
-                    #                other_fogi_vecs = test
-                    #
-                    #        #indep_cols = [j for j in range(fogi_vecs.shape[1]) if _np.linalg.matrix_rank(
-                    #        #    _np.concatenate((other_fogi_vecs, fogi_vecs[:, j:j + 1]), axis=1))
-                    #        #    == other_fogi_vecs.shape[1] + 1]
-                    #        #fogi_vecs = _np.take(fogi_vecs, indep_cols, axis=1)
-                    #        #other_fogi_vecs = _np.concatenate((other_fogi_vecs, fogi_vecs), axis=1)
-                    #        indep_intersection_space = _np.take(intersection_space, indep_cols, axis=1)
-                    #        indep_intersection_space = _np.dot(other_gauge_linear_combos, indep_intersection_space) \
-                    #            if (other_gauge_linear_combos is not None) else indep_intersection_space
-                    #        intersection_names = _gauge_names(indep_intersection_space, other_gauge_elemgen_labels)
-                    #        other_fogi_names.extend(["ga(%s)_%s - ga(%s)_%s" % (
-                    #            iname, "|".join([op_label_abbrevs.get(l, str(l)) for l in existing_set]),
-                    #            iname, op_label_abbrevs.get(op_label, str(op_label))) for iname in intersection_names])
-                    #        #print("Fogi vecs:\n"); _mt.print_mx(local_fogi_vecs)
-                    #        #print("STO Intersection names: ", intersection_names)
-                    #
-                    #    other_ccomms[new_set] = union_space
-                    #    #print("Complement:\n"); _mt.print_mx(union_space)
 
                     larger_sets.append(new_set)
 
@@ -2093,13 +1944,6 @@ class ExplicitOpModel(_mdl.OpModel):
 
         return _LinearInterposer(F)
 
-    #primitive_op_labels = [(), ('Gxpi2',0), ('Gypi2',0), ('Gzpi2',0)]
-    #ham_basis = other_basis = pygsti.obj.Basis.cast('pp', 4)  # bases for "setup"
-    #other_mode = "diagonal"  # also given to "setup" to specify the set of elementary gauge error gens to consider
-    #op_abbrevs = {(): 'I',
-    #         ('Gxpi2', 0): 'Gx',
-    #         ('Gypi2', 0): 'Gy',
-    #         ('Gzpi2', 0): 'Gz'}
     def setup_fogi(self, ham_basis, other_basis, other_mode="all",
                    op_label_abbrevs=None, reparameterize=False, reduce_to_model_space=True, constructive=False):
         """
