@@ -1033,7 +1033,8 @@ class OpModel(Model):
         -------
         bool
         """
-        return lbl in self._primitive_povm_label_dict
+        # Have to check name since want a marginalized POVM to count
+        return lbl.name in self._primitive_povm_label_dict
 
     def _is_primitive_op_layer_lbl(self, lbl):
         """
