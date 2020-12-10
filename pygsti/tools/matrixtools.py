@@ -362,6 +362,7 @@ def mx_to_string(m, width=9, prec=4, withbrackets=False):
     string
         matrix m as a pretty formated string.
     """
+    if m.size == 0: return ""
     s = ""; tol = 10**(-prec)
     if _np.max(abs(_np.imag(m))) > tol:
         return mx_to_string_complex(m, width, width, prec)
@@ -2098,6 +2099,22 @@ def remove_dependent_cols(mx, tol=1e-7):
             cols_to_remove.append(j)
         else:
             last_rank = rnk
-    print("Removing %d cols" % len(cols_to_remove))
+    #print("Removing %d cols" % len(cols_to_remove))
     return _np.delete(mx, cols_to_remove, axis=1)
 
+
+def intersection_space(space1, space2, tol=1e-7):
+    """
+    TODO: docstring
+    """
+    VW = _np.concatenate((space1, -space2), axis=1)
+    nullsp = nice_nullspace(VW, tol)
+    return _np.dot(space1, nullsp[0:space1.shape[1], :])
+
+
+def union_space(space1, space2, tol=1e-7):
+    """
+    TODO: docstring
+    """
+    VW = _np.concatenate((space1, space2), axis=1)
+    return remove_dependent_cols(VW, tol)

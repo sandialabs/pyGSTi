@@ -3567,42 +3567,44 @@ def effect_label_to_povm(povm_and_effect_lbl):
         return povm_name
 
 
-def first_order_gauge_action_matrix(clifford_superop, dmbasis_ham, dmbasis_other, other_mode="all"):
+def first_order_ham_gauge_action_matrix(clifford_superop, dmbasis_ham):
     #Note: clifford_superop must be in the *std* basis!
     normalize = True  # I think ?
-    ham_gens, other_gens = lindblad_error_generators(dmbasis_ham, dmbasis_other, normalize, other_mode)
+    ham_gens, _ = lindblad_error_generators(dmbasis_ham, None, normalize)
 
-    if dmbasis_ham is not None:
-        ham_action_mx = _np.empty((len(ham_gens), len(ham_gens)), complex)
-        for j, gen in enumerate(ham_gens):
-            conjugated_gen = _np.dot(clifford_superop, _np.dot(gen, _np.conjugate(clifford_superop.T)))
-            gauge_action_deriv = gen - conjugated_gen
-            for i, gen2 in enumerate(ham_gens):
-                val = _np.vdot(gen2.flat, gauge_action_deriv.flat)
-                ham_action_mx[i, j] = val
-        assert(_np.linalg.norm(ham_action_mx.imag) < 1e-6)
-        ham_action_mx = ham_action_mx.real
+    ham_action_mx = _np.empty((len(ham_gens), len(ham_gens)), complex)
+    for j, gen in enumerate(ham_gens):
+        conjugated_gen = _np.dot(clifford_superop, _np.dot(gen, _np.conjugate(clifford_superop.T)))
+        gauge_action_deriv = gen - conjugated_gen
+        for i, gen2 in enumerate(ham_gens):
+            val = _np.vdot(gen2.flat, gauge_action_deriv.flat)
+            ham_action_mx[i, j] = val
+    assert(_np.linalg.norm(ham_action_mx.imag) < 1e-6)
+    ham_action_mx = ham_action_mx.real
+
+    return ham_action_mx
+
+
+def first_order_other_gauge_action_matrix(clifford_superop, dmbasis_other, other_mode="all"):
+    #Note: clifford_superop must be in the *std* basis!
+    normalize = True  # I think ?
+    _, other_gens = lindblad_error_generators(None, dmbasis_other, normalize, other_mode)
+
+    if other_mode == 'diagonal':
+        all_other_gens = other_gens
+    elif other_mode == 'all':
+        all_other_gens = [other_gens[i][j] for i in range(len(other_gens)) for j in range(len(other_gens))]
     else:
-        ham_action_mx = None
+        raise ValueError("Invalid `other_mode`: only 'diagonal' and 'all' modes are supported so far.")
 
-    if dmbasis_other is not None:
-        if other_mode == 'diagonal':
-            all_other_gens = other_gens
-        elif other_mode == 'all':
-            all_other_gens = [other_gens[i][j] for i in range(len(other_gens)) for j in range(len(other_gens))]
-        else:
-            raise ValueError("Invalid `other_mode`: only 'diagonal' and 'all' modes are supported so far.")
+    other_action_mx = _np.empty((len(all_other_gens), len(all_other_gens)), complex)
+    for j, gen in enumerate(all_other_gens):
+        conjugated_gen = _np.dot(clifford_superop, _np.dot(gen, _np.conjugate(clifford_superop.T)))
+        gauge_action_deriv = gen - conjugated_gen
+        for i, gen2 in enumerate(all_other_gens):
+            val = _np.vdot(gen2.flat, gauge_action_deriv.flat)
+            other_action_mx[i, j] = val
+    #assert(_np.linalg.norm(other_action_mx.imag) < 1e-6)
+    other_action_mx = _np.real_if_close(other_action_mx) #.real
 
-        other_action_mx = _np.empty((len(all_other_gens), len(all_other_gens)), complex)
-        for j, gen in enumerate(all_other_gens):
-            conjugated_gen = _np.dot(clifford_superop, _np.dot(gen, _np.conjugate(clifford_superop.T)))
-            gauge_action_deriv = gen - conjugated_gen
-            for i, gen2 in enumerate(all_other_gens):
-                val = _np.vdot(gen2.flat, gauge_action_deriv.flat)
-                other_action_mx[i, j] = val
-        #assert(_np.linalg.norm(other_action_mx.imag) < 1e-6)
-        other_action_mx = _np.real_if_close(other_action_mx) #.real
-    else:
-        other_action_mx = None
-
-    return ham_action_mx, other_action_mx
+    return other_action_mx
