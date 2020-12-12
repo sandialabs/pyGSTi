@@ -1551,6 +1551,7 @@ class ExplicitOpModel(_mdl.OpModel):
         #Get lists of the present (existing within the model) labels for each operation
         labels_for_op = {op_label: elem_labels[:] for op_label in primitive_op_labels}  # COPY lists!
         disallowed_row_indices = {}
+        if op_label_abbrevs is None: op_label_abbrevs = {}
 
         if reduce_to_model_space:
             for op_label in primitive_op_labels:
@@ -1562,8 +1563,6 @@ class ExplicitOpModel(_mdl.OpModel):
                                                     for disallowed_lbl in disallowed_labels]
                 for i in sorted(disallowed_row_indices[op_label], reverse=True):
                     del labels_for_op[op_label][i]
-
-        if op_label_abbrevs is None: op_label_abbrevs = {}
 
         gauge_elemgen_labels = elem_labels
 
@@ -1722,8 +1721,6 @@ class ExplicitOpModel(_mdl.OpModel):
                 for i in sorted(disallowed_row_indices, reverse=True):
                     del other_labels_for_op[op_label][i]
 
-        if op_label_abbrevs is None: op_label_abbrevs = {}
-
         #Step 1: construct nullspaces associated with sets of operations
         ham_nullspaces = {}
         other_nullspaces = {}
@@ -1875,7 +1872,6 @@ class ExplicitOpModel(_mdl.OpModel):
 
     def _recompute_fogi_names(self, op_label_abbrevs=None):
         # Step 4: compute names (by a heuristic) for each FOGI vec
-        if op_label_abbrevs is None: op_label_abbrevs = {}
         full_ham_fogi_vecs = self.fogi_info['ham_vecs']
         full_ham_space_labels = self.fogi_info['ham_fullspace_labels']
         full_other_fogi_vecs = self.fogi_info['other_vecs']
@@ -1967,7 +1963,7 @@ class ExplicitOpModel(_mdl.OpModel):
                 self._compute_fogi_via_nullspaces(primitive_op_labels, ham_basis, other_basis, other_mode,
                                                   ham_gauge_linear_combos, other_gauge_linear_combos, op_label_abbrevs,
                                                   reduce_to_model_space)
-            ham_fogi_labels = other_fogi_labels = None
+            ham_fogi_labels = other_fogi_labels = None  # nullspace method does not construct meaningful labels.
 
         full_ham_space_labels = [(op_label, elem_lbl) for op_label in primitive_op_labels
                                  for elem_lbl in ham_elem_errgen_labels_for_op[op_label]]
@@ -1995,24 +1991,31 @@ class ExplicitOpModel(_mdl.OpModel):
         ham_gauge_directions = _np.dot(pinv_ham_gauge_action, ham_gauge_vecs)
         other_gauge_directions = _np.dot(pinv_other_gauge_action, other_gauge_vecs)
 
+        raw_ham_fogi_labels = _fogi_names(ham_fogi_vecs, full_ham_space_labels, op_label_abbrevs)
+        raw_other_fogi_labels = _fogi_names(other_fogi_vecs, full_other_space_labels, op_label_abbrevs)
+
         self.fogi_info = {'primitive_op_labels': primitive_op_labels,
                           'ham_vecs': ham_fogi_vecs,
                           'ham_vecs_pinv': _np.linalg.pinv(ham_fogi_vecs),
-                          'ham_fullspace_labels': full_ham_space_labels,
+                          'ham_elgen_labels': full_ham_space_labels,
+                          'ham_elgen_labels_by_op': ham_elem_errgen_labels_for_op,
                           'ham_fogi_labels': ham_fogi_labels,
+                          'ham_fogi_labels_raw': raw_ham_fogi_labels,
                           'ham_gauge_vecs': ham_gauge_vecs,
                           'ham_gauge_vecs_pinv': _np.linalg.pinv(ham_gauge_vecs),
                           'ham_gauge_directions': ham_gauge_directions,
                           'other_vecs': other_fogi_vecs,
                           'other_vecs_pinv': _np.linalg.pinv(other_fogi_vecs),
-                          'other_fullspace_labels': full_other_space_labels,
+                          'other_elgen_labels': full_other_space_labels,
+                          'other_elgen_labels_by_op': other_elem_errgen_labels_for_op,
                           'other_fogi_labels': other_fogi_labels,
+                          'other_fogi_labels_raw': raw_other_fogi_labels,
                           'other_gauge_vecs': other_gauge_vecs,
                           'other_gauge_vecs_pinv': _np.linalg.pinv(other_gauge_vecs),
                           'other_gauge_directions': other_gauge_directions}
 
-        if not constructive:
-            self._recompute_fogi_names(op_label_abbrevs)
+        #if not constructive:
+        #    self._recompute_fogi_names(op_label_abbrevs)
 
         #Check that pseudo-inverse was computed correctly (~ matrices are full rank)
         # full_other_vec = other_vecs * fogi
@@ -2032,7 +2035,11 @@ class ExplicitOpModel(_mdl.OpModel):
 
     def fogi_errorgen_coefficient_labels(self, complete=False):
         assert(self.fogi_info is not None)
-        fogi_labels = self.fogi_info['ham_fogi_labels'] + self.fogi_info['other_fogi_labels']
+        ham_labels = self.fogi_info['ham_fogi_labels'] if (self.fogi_info['ham_fogi_labels'] is not None) \
+            else self.fogi_info['ham_fogi_labels_raw']
+        other_labels = self.fogi_info['other_fogi_labels'] if (self.fogi_info['other_fogi_labels'] is not None) \
+            else self.fogi_info['other_fogi_labels_raw']
+        fogi_labels = ham_labels + other_labels
         if not complete:
             return fogi_labels
         else:
@@ -2072,12 +2079,12 @@ class ExplicitOpModel(_mdl.OpModel):
             assert(_np.linalg.matrix_rank(other_vecs_pinv) == max(other_vecs_pinv.shape))  # ditto
 
         full_ham_vec = _np.zeros(self.fogi_info['ham_vecs'].shape[0], 'd')
-        for i, (op_label, elem_lbl) in enumerate(self.fogi_info['ham_fullspace_labels']):
+        for i, (op_label, elem_lbl) in enumerate(self.fogi_info['ham_elgen_labels']):
             full_ham_vec[i] += op_coeffs[op_label].get(elem_lbl, 0.0)
         fogi_ham_coeffs = _np.dot(ham_vecs_pinv, full_ham_vec)
 
         full_other_vec = _np.zeros(self.fogi_info['other_vecs'].shape[0], complex)
-        for i, (op_label, elem_lbl) in enumerate(self.fogi_info['other_fullspace_labels']):
+        for i, (op_label, elem_lbl) in enumerate(self.fogi_info['other_elgen_labels']):
             full_other_vec[i] += op_coeffs[op_label].get(elem_lbl, 0.0)
         fogi_other_coeffs = _np.dot(other_vecs_pinv, full_other_vec)
 
@@ -2113,9 +2120,9 @@ class ExplicitOpModel(_mdl.OpModel):
         full_other_vec = _np.dot(other_vecs, fogi_coefficients[nHamVecs:])
         op_coeffs = {op_label: {}
                      for op_label in self.fogi_info['primitive_op_labels']}
-        for (op_label, elem_lbl), coeff_value in zip(self.fogi_info['ham_fullspace_labels'], full_ham_vec):
+        for (op_label, elem_lbl), coeff_value in zip(self.fogi_info['ham_elgen_labels'], full_ham_vec):
             op_coeffs[op_label][elem_lbl] = coeff_value
-        for (op_label, elem_lbl), coeff_value in zip(self.fogi_info['other_fullspace_labels'], full_other_vec):
+        for (op_label, elem_lbl), coeff_value in zip(self.fogi_info['other_elgen_labels'], full_other_vec):
             op_coeffs[op_label][elem_lbl] = coeff_value
 
         if not normalized_elem_gens:
@@ -2187,6 +2194,7 @@ class ExplicitLayerRules(_LayerRules):
 
 
 def _fogi_names(fogi_vecs, full_space_labels, op_label_abbrevs):
+    if op_label_abbrevs is None: op_label_abbrevs = {}
     fogi_vec_names = []
     for j in range(fogi_vecs.shape[1]):
         name = ""
