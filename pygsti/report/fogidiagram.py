@@ -64,7 +64,7 @@ class FOGIDiagram(object):
                         table[info['label']] = {'Coefficient': info['coeff'],
                                                 'Raw Label': info['label_raw']}
             return table, tuple(table_rows), table_cols
-        
+
         self.op_set_info = {}
         for op_set, op_fogis_by_type in self.bins.items():
             self.op_set_info[op_set] = {
@@ -107,7 +107,8 @@ class FOGIDiagram(object):
         for i, coeff in enumerate(self.fogi_coeffs):
             vec = self.fogi_info['ham_vecs'][:, i] if i < nHam else self.fogi_info['other_vecs'][:, i - nHam]
             label = self.fogi_info['ham_fogi_labels'][i] if i < nHam else self.fogi_info['other_fogi_labels'][i - nHam]
-            label_raw = self.fogi_info['ham_fogi_labels_raw'][i] if i < nHam else self.fogi_info['other_fogi_labels_raw'][i - nHam]
+            label_raw = self.fogi_info['ham_fogi_labels_raw'][i] if i < nHam else \
+                self.fogi_info['other_fogi_labels_raw'][i - nHam]
             elemgen_info = ham_elemgen_info if i < nHam else other_elemgen_info
             present_elgen_indices = _np.where(_np.abs(vec) > 1e-5)[0]
 
@@ -137,7 +138,7 @@ class FOGIDiagram(object):
 
         return bins
 
-    def render(self, filename, op_to_target_qubits=None, all_edges=True, physics=False):
+    def render_grid(self, filename, op_to_target_qubits=None, all_edges=True, physics=False):
         op_set_info = self.op_set_info
         op_labels = self.fogi_info['primitive_op_labels']
 
@@ -220,14 +221,14 @@ class FOGIDiagram(object):
                                   next_xval_by_group[target_qubits], group_yvals[target_qubits],
                                   _node_color(info['Coherent'] + info['Stochastic'])))
             table_html[next_node_id] = _make_table(info['table'], "Qubits", "Local errors on %s" % str(op_set[0]))
-            long_table_html[next_node_id] = _make_table(info['longtable'], "Label", "FOGI quantities for %s" % str(op_set[0]))
-            
+            long_table_html[next_node_id] = _make_table(info['longtable'], "Label",
+                                                        "FOGI quantities for %s" % str(op_set[0]))
+
             node_locations[op_set[0]] = (next_xval_by_group[target_qubits], group_yvals[target_qubits])
             existing_pts.append(node_locations[op_set[0]])
             next_xval_by_group[target_qubits] += increment
             node_ids[op_set[0]] = next_node_id
             next_node_id += 1
-
 
         #process relational quantities
         relational_values = [(op_set, info['Coherent'] + info['Stochastic'])
@@ -264,7 +265,7 @@ class FOGIDiagram(object):
                                                    "Relational errors between " + ", ".join(map(str, op_set)))
             long_table_html[next_node_id] = _make_table(info['longtable'], "Label",
                                                         "FOGI quantities for " + ", ".join(map(str, op_set)))
-            
+
             #link to gate-nodes
             for op_label in op_set:
                 edge_js_lines.append('{ from: %d, to: %d, value: %.4f }' % (next_node_id, node_ids[op_label], val))
@@ -288,7 +289,174 @@ class FOGIDiagram(object):
                                 'edge_js': ",\n".join(edge_js_lines),
                                 'table_html': all_table_html,
                                 'long_table_html': all_long_table_html,
-                                'physics': 'true' if physics else "false"})
+                                'physics': 'true' if physics else "false",
+                                'springlength': 100,
+                                'beforeDrawingCalls': ''
+                                })
+        with open(filename, 'w') as f:
+            f.write(s)
+
+    def render_circle(self, filename, op_to_target_qubits=None, physics=True):
+        op_set_info = self.op_set_info
+        op_labels = self.fogi_info['primitive_op_labels']
+
+        if op_to_target_qubits is None:
+            all_qubits = set()
+            for op_label in op_labels:
+                if op_label.sslbls is not None:
+                    all_qubits.update(op_label.sslbls)
+            all_qubits = tuple(sorted(all_qubits))
+            op_to_target_qubits = {op_label: op_label.sslbls if (op_label.sslbls is not None) else all_qubits
+                                   for op_label in op_labels}
+
+        #Group ops based on target qubits
+        target_qubit_groups = tuple(sorted(set(op_to_target_qubits.values())))
+        groupids = {op_label: target_qubit_groups.index(op_to_target_qubits[op_label])
+                    for op_label in op_labels}
+        groups = {group_id: [] for group_id in range(len(target_qubit_groups))}
+        for op_label in op_labels:
+            groups[groupids[op_label]].append(op_label)
+
+        # Position ops around a circle with more space between groups)
+        nPositions = len(op_labels) + len(groups)  # includes gaps between groups
+        r0 = 40 * nPositions  # heuristic
+        theta = 0; dtheta = 2 * _np.pi / nPositions
+        springlength = r0 * dtheta / 3.0  # heuristic
+        polar_positions = {}; group_theta_ranges = {}
+        for group_id, ops_in_group in groups.items():
+            theta_begin = theta
+            for op_label in ops_in_group:
+                polar_positions[op_label] = (r0, theta)
+                theta += dtheta
+            group_theta_ranges[group_id] = (theta_begin - dtheta / 3, theta - dtheta + dtheta / 3)
+            theta += dtheta
+
+        # Background wedges
+        beforeDrawingCalls = ""
+        for group_id, (theta_begin, theta_end) in group_theta_ranges.items():
+            target_qubits = target_qubit_groups[group_id]
+            txt = ("Qubit %d" % target_qubits[0]) if len(target_qubits) == 1 \
+                else ("Qubits " + ", ".join(map(str, target_qubits)))
+            txt_theta = (theta_begin + theta_end) / 2
+            x, y = (r0 + 40) * _np.cos(txt_theta), (r0 + 40) * _np.sin(txt_theta)
+            txt_angle = (txt_theta + _np.pi) if (0 <= txt_theta <= _np.pi) else txt_theta
+            beforeDrawingCalls += ('ctx.beginPath();\n'
+                                   'ctx.arc(0, 0, %f, %f, %f, false);\n'
+                                   'ctx.lineTo(0, 0);\n'
+                                   'ctx.closePath();\n'
+                                   'ctx.fill();\n'
+                                   'ctx.save();\n'
+                                   'ctx.translate(%f, %f);\n'
+                                   'ctx.rotate(Math.PI / 2 + %f);\n'
+                                   'ctx.fillText("%s", 0, 0);\n'
+                                   'ctx.restore();\n') % (
+                                       r0 + 30, theta_begin, theta_end, x, y, txt_angle, txt)
+
+        node_js_lines = []
+        edge_js_lines = []
+        table_html = {}
+        long_table_html = {}
+
+        def _node_color(value):
+            if value < 1e-3: return "green"
+            if value < 1e-2: return "yellow"
+            if value < 1e-1: return "orange"
+            return "red"
+
+        def _make_table(table_info, rowlbl, title):
+            table_dict, table_rows, table_cols = table_info
+            html = "<table><thead><tr><th colspan=%d>%s</th></tr>\n" % (len(table_cols) + 1, title)
+            html += ("<tr><th>%s<th>" % rowlbl) + "</th><th>".join(table_cols) + "</th></tr></thead><tbody>\n"
+            for row in table_rows:
+                table_row_text = []
+                for col in table_cols:
+                    val = table_dict[row][col]
+                    if _np.iscomplex(val): val = _np.real_if_close(val)
+                    if _np.isreal(val) or _np.iscomplex(val):
+                        if abs(val) < 1e-6: val = 0.0
+                        if _np.isreal(val): table_row_text.append("%.3g" % val.real)
+                        else: table_row_text.append("%.3g + %.3gj" % (val.real, val.imag))
+                    else: table_row_text.append(str(val))
+                html += "<tr><th>" + str(row) + "</th><td>" + "</td><td>".join(table_row_text) + "</td></tr>\n"
+            return html + "</tbody></table>"
+
+        #process local quantities
+        node_ids = {}; node_locations = {}; next_node_id = 0
+        for op_set, info in op_set_info.items():
+            if len(op_set) != 1: continue
+            # create a gate-node in the graph
+            r, theta = polar_positions[op_set[0]]
+            node_js_lines.append(('{id: %d, label: "%s", group: %d, title: "%s", x: %d, y: %d,'
+                                  'color: {background: "%s", border: "%s"}, fixed: %s}') %
+                                 (next_node_id, str(op_set[0]), groupids[op_set[0]],
+                                  "Coherent: %.3g\\nStochastic: %.3g" % (info['Coherent'], info['Stochastic']),
+                                  int(r * _np.cos(theta)), int(r * _np.sin(theta)), _node_color(info['Stochastic']),
+                                  _node_color(info['Coherent']), 'true' if physics else 'false'))
+            table_html[next_node_id] = _make_table(info['table'], "Qubits", "Local errors on %s" % str(op_set[0]))
+            long_table_html[next_node_id] = _make_table(info['longtable'],
+                                                        "Label", "FOGI quantities for %s" % str(op_set[0]))
+            node_locations[op_set[0]] = int(r * _np.cos(theta)), int(r * _np.sin(theta))
+            node_ids[op_set[0]] = next_node_id
+            next_node_id += 1
+
+        #process relational quantities
+        relational_distances = []
+        for op_set, info in op_set_info.items():
+            if len(op_set) == 1: continue
+            max_dist = 0
+            for i in range(len(op_set)):
+                x1, y1 = node_locations[op_set[i]]
+                for j in range(i + 1, len(op_set)):
+                    x2, y2 = node_locations[op_set[j]]
+                    max_dist = max(max_dist, (x1 - x2)**2 + (y1 - y2)**2)
+            relational_distances.append((op_set, max_dist))
+        relational_opsets_by_distance = sorted(relational_distances, key=lambda x: x[1], reverse=True)
+
+        #place the longest nPositions linking nodes in the center; place the rest on the periphery
+        for i, (op_set, _) in enumerate(relational_opsets_by_distance):
+            info = op_set_info[op_set]
+
+            if abs(info['Coherent']) < 1e-6 and abs(info['Stochastic']): continue  # prune edges that are small
+
+            # create a relational node in the graph
+            if i < nPositions:  # place node in the middle (just average coords
+                x = int(_np.mean([node_locations[op_label][0] for op_label in op_set]))
+                y = int(_np.mean([node_locations[op_label][1] for op_label in op_set]))
+            else:  # place node along periphery
+                r = r0 * 1.1  # push outward from ring of operations
+                theta = _np.mean([polar_positions[op_label][1] for op_label in op_set])
+                x, y = int(r * _np.cos(theta)), int(r * _np.sin(theta))
+
+            node_js_lines.append(('{ id: %d, group: "%s", title: "%s", x: %d, y: %d,'
+                                  'color: {background: "%s", border: "%s"} }') %
+                                 (next_node_id, "relational",
+                                  "Coherent: %.3g\\nStochastic: %.3g" % (info['Coherent'], info['Stochastic']),
+                                  x, y, _node_color(info['Stochastic']), _node_color(info['Coherent'])))
+            table_html[next_node_id] = _make_table(info['table'], "Qubits",
+                                                   "Relational errors between " + ", ".join(map(str, op_set)))
+            long_table_html[next_node_id] = _make_table(info['longtable'], "Label",
+                                                        "FOGI quantities for " + ", ".join(map(str, op_set)))
+            #link to gate-nodes
+            for op_label in op_set:
+                val = info['Stochastic'] + info['Coherent']
+                edge_js_lines.append('{ from: %d, to: %d, value: %.4f }' % (next_node_id, node_ids[op_label], val))
+            next_node_id += 1
+
+        all_table_html = ""
+        for node_id, html in table_html.items():
+            all_table_html += ("<div class='infotable dataTable' id='%d'>\n" % node_id) + html + "</div>\n"
+
+        all_long_table_html = ""
+        for node_id, html in long_table_html.items():
+            all_long_table_html += ("<div class='infotable dataTable' id='long%d'>\n" % node_id) + html + "</div>\n"
+
+        s = _template.format(**{'node_js': ",\n".join(node_js_lines),
+                                'edge_js': ",\n".join(edge_js_lines),
+                                'table_html': all_table_html,
+                                'long_table_html': all_long_table_html,
+                                'physics': 'true' if physics else "false",
+                                'springlength': springlength,
+                                'beforeDrawingCalls': beforeDrawingCalls})
         with open(filename, 'w') as f:
             f.write(s)
 
@@ -298,8 +466,10 @@ _template = """<html>
     <!-- <link rel="stylesheet" href="pygsti_dataviz.css"> -->
     <!-- <script type="text/javascript" src="vis-network.js"></script> -->
     <!-- <script type="text/javascript" src="jquery-3.2.1.min.js"></script> -->
-    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
-    <script   src="https://code.jquery.com/jquery-3.5.1.min.js"   integrity="sha256-9/aliU8dGd2tb6OSsuzixeV4y/faTqgFtohetphbbj0=" crossorigin="anonymous"></script>
+    <script type="text/javascript" src="vis-network.js"></script>
+    <script type="text/javascript" src="jquery-3.2.1.min.js"></script>
+    <!-- <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script> -->
+    <!-- <script   src="https://code.jquery.com/jquery-3.5.1.min.js"   integrity="sha256-9/aliU8dGd2tb6OSsuzixeV4y/faTqgFtohetphbbj0=" crossorigin="anonymous"></script> -->
 
     <style type="text/css">
       body {{
@@ -408,10 +578,11 @@ function draw() {{
           font: {{
               size: 20,
           }},
-          borderWidth: 2,
+          borderWidth: 3,
       }},
       edges: {{
           smooth: false,
+          length: {springlength},
           color: {{color: "gray", highlight: "black"}},
           scaling: {{min: 1, max: 6}},
           //width: 2,
@@ -432,7 +603,8 @@ function draw() {{
       }},
       physics: {{
           enabled: {physics},
-          repulsion: {{nodeDistance: 100, springLength: 200, springConstant: 0.05}},
+          solver: "repulsion",
+          repulsion: {{nodeDistance: 100, springLength: {springlength}, springConstant: 0.05}},
       }},
   }};
   network = new vis.Network(container, data, options);
@@ -461,6 +633,15 @@ function draw() {{
         $("#" + params.nodes[i]).show()
         $("#long" + params.nodes[i]).show()
     }}
+  }});
+
+  network.on("beforeDrawing", function (ctx) {{
+    //ctx.strokeStyle = "#A6D5F7";
+    ctx.fillStyle = "#CCCCCC";
+    ctx.font = "20px Georgia";
+    ctx.textAlign = "center"
+    ctx.textBaseline = "middle";
+    {beforeDrawingCalls}
   }});
 
 }}
