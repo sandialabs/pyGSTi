@@ -14,7 +14,16 @@ import numpy as _np
 import collections as _collections
 from ..objects import Basis as _Basis
 import matplotlib.cm as _matplotlibcm
-_cmap = _matplotlibcm.get_cmap('inferno_r')
+from matplotlib.colors import LinearSegmentedColormap as _LinearSegmentedColormap
+#_cmap = _matplotlibcm.get_cmap('Reds')
+
+_cdict = {'red':   [[0.0,  1.0, 1.0],
+                   [1.0,  1.0, 1.0]],
+         'green': [[0.0,  0.0, 0.0],
+                   [1.0,  1.0, 1.0]],
+         'blue':  [[0.0,  0.0, 0.0],
+                   [1.0,  1.0, 1.0]]}
+_cmap = _LinearSegmentedColormap('lightReds', segmentdata=_cdict, N=256)
 
 
 class FOGIDiagram(object):
@@ -372,21 +381,20 @@ class FOGIDiagram(object):
         long_table_html = {}
 
         def _node_color(value):
-            #MAX_POWER = 5
-            #r, g, b, a = _cmap(-_np.log10(max(value, 10**(-MAX_POWER))) / MAX_POWER)  # or larger
-            #return "rgb(%d,%d,%d)" % (int(r * 255.9), int(g * 255.9), int(b * 255.9))
-            if value < 1e-5: return "rgb(133,173,133)"  # unsaturaged green
-            if value < 3e-5: return "rgb(0,230,0)"  # green
-            if value < 1e-4: return "rgb(115,230,0)"  # light green
-            if value < 3e-4: return "rgb(172,230,0)"  # lime green
-            if value < 1e-3: return "rgb(250,250,0)"  # yellow
-            if value < 3e-3: return "rgb(255,204,0)"  # yellow-orange
-            if value < 1e-2: return "rgb(255,153,0)"  # orange
-            if value < 3e-2: return "rgb(255,140,26)"  # dark orange
-            if value < 1e-1: return "rgb(255,102,0)"  # orange-red
-            if value < 3e-1: return "rgb(255,102,51)"  # red-orange
-            return "rgb(255,0,0)"  # red
-
+            MAX_POWER = 5
+            r, g, b, a = _cmap(-_np.log10(max(value, 10**(-MAX_POWER))) / MAX_POWER)  # or larger
+            return "rgb(%d,%d,%d)" % (int(r * 255.9), int(g * 255.9), int(b * 255.9))
+            #if value < 1e-5: return "rgb(133,173,133)"  # unsaturaged green
+            #if value < 3e-5: return "rgb(0,230,0)"  # green
+            #if value < 1e-4: return "rgb(115,230,0)"  # light green
+            #if value < 3e-4: return "rgb(172,230,0)"  # lime green
+            #if value < 1e-3: return "rgb(250,250,0)"  # yellow
+            #if value < 3e-3: return "rgb(255,204,0)"  # yellow-orange
+            #if value < 1e-2: return "rgb(255,153,0)"  # orange
+            #if value < 3e-2: return "rgb(255,140,26)"  # dark orange
+            #if value < 1e-1: return "rgb(255,102,0)"  # orange-red
+            #if value < 3e-1: return "rgb(255,102,51)"  # red-orange
+            #return "rgb(255,0,0)"  # red
             
             #if value < 1e-3: return "green"
             #if value < 1e-2: return "yellow"
