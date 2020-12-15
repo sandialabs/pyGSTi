@@ -13,6 +13,8 @@ Defines the FOGIDiagram class and supporting functionality.
 import numpy as _np
 import collections as _collections
 from ..objects import Basis as _Basis
+import matplotlib.cm as _matplotlibcm
+_cmap = _matplotlibcm.get_cmap('inferno_r')
 
 
 class FOGIDiagram(object):
@@ -65,6 +67,14 @@ class FOGIDiagram(object):
                                                 'Raw Label': info['label_raw']}
             return table, tuple(table_rows), table_cols
 
+        def _is_dependent(infos_by_type):
+            for typ, infos_by_actedon in infos_by_type.items():
+                for acted_on, infos in infos_by_actedon.items():
+                    for info in infos:
+                        if info['dependent'] is False:
+                            return False
+            return True
+
         self.op_set_info = {}
         for op_set, op_fogis_by_type in self.bins.items():
             self.op_set_info[op_set] = {
@@ -72,6 +82,7 @@ class FOGIDiagram(object):
                 'Stochastic': _total_contrib(op_fogis_by_type[('S',)]) if (('S',) in op_fogis_by_type) else 0.0,
                 'table': _make_coherent_stochastic_by_support_table(op_fogis_by_type),
                 'longtable': _make_long_table(op_fogis_by_type),
+                'dependent': _is_dependent(op_fogis_by_type),
                 'children': None  # FUTURE?
             }
             assert(('H', 'S') not in op_fogis_by_type)
@@ -104,6 +115,7 @@ class FOGIDiagram(object):
         other_elemgen_info = _create_elemgen_info(op_labels, self.fogi_info['other_elgen_labels_by_op'])
 
         bins = {}
+        dependent_indices = set(self.fogi_info['dependent_vec_indices'])
         for i, coeff in enumerate(self.fogi_coeffs):
             vec = self.fogi_info['ham_vecs'][:, i] if i < nHam else self.fogi_info['other_vecs'][:, i - nHam]
             label = self.fogi_info['ham_fogi_labels'][i] if i < nHam else self.fogi_info['other_fogi_labels'][i - nHam]
@@ -126,7 +138,8 @@ class FOGIDiagram(object):
                     'coeff': coeff,
                     'to_add': abs(coeff) if ('S' in types) else abs(coeff) * basismx,
                     'label': label,
-                    'label_raw': label_raw
+                    'label_raw': label_raw,
+                    'dependent': bool(i in dependent_indices)
                     }
             ops_involved = tuple(sorted(ops_involved))
             types = tuple(sorted(types))
@@ -268,7 +281,8 @@ class FOGIDiagram(object):
 
             #link to gate-nodes
             for op_label in op_set:
-                edge_js_lines.append('{ from: %d, to: %d, value: %.4f }' % (next_node_id, node_ids[op_label], val))
+                edge_js_lines.append('{ from: %d, to: %d, value: %.4f, dashes: %s}' % (
+                    next_node_id, node_ids[op_label], val, 'true' if info['dependent'] else 'false'))
             next_node_id += 1
 
             globs_to_reassign = set([globs[op_label] for op_label in op_set])
@@ -338,7 +352,7 @@ class FOGIDiagram(object):
             txt = ("Qubit %d" % target_qubits[0]) if len(target_qubits) == 1 \
                 else ("Qubits " + ", ".join(map(str, target_qubits)))
             txt_theta = (theta_begin + theta_end) / 2
-            x, y = (r0 + 40) * _np.cos(txt_theta), (r0 + 40) * _np.sin(txt_theta)
+            x, y = (r0 + 50) * _np.cos(txt_theta), (r0 + 50) * _np.sin(txt_theta)  # text location
             txt_angle = (txt_theta + _np.pi) if (0 <= txt_theta <= _np.pi) else txt_theta
             beforeDrawingCalls += ('ctx.beginPath();\n'
                                    'ctx.arc(0, 0, %f, %f, %f, false);\n'
@@ -358,10 +372,26 @@ class FOGIDiagram(object):
         long_table_html = {}
 
         def _node_color(value):
-            if value < 1e-3: return "green"
-            if value < 1e-2: return "yellow"
-            if value < 1e-1: return "orange"
-            return "red"
+            #MAX_POWER = 5
+            #r, g, b, a = _cmap(-_np.log10(max(value, 10**(-MAX_POWER))) / MAX_POWER)  # or larger
+            #return "rgb(%d,%d,%d)" % (int(r * 255.9), int(g * 255.9), int(b * 255.9))
+            if value < 1e-5: return "rgb(81,148,81)"  # unsaturaged green
+            if value < 3e-5: return "rgb(0,240,0)"  # green
+            if value < 1e-4: return "rgb(115,230,0)"  # light green
+            if value < 3e-4: return "rgb(172,230,0)"  # lime green
+            if value < 1e-3: return "rgb(230,230,0)"  # (darkish) yellow
+            if value < 3e-3: return "rgb(255,204,0)"  # yellow-orange
+            if value < 1e-2: return "rgb(255,153,0)"  # orange
+            if value < 3e-2: return "rgb(255,140,26)"  # dark orange
+            if value < 1e-1: return "rgb(255,102,0)"  # orange-red
+            if value < 3e-1: return "rgb(255,102,51)"  # red-orange
+            return "rgb(255,0,0)"  # red
+
+            
+            #if value < 1e-3: return "green"
+            #if value < 1e-2: return "yellow"
+            #if value < 1e-1: return "orange"
+            #return "red"
 
         def _make_table(table_info, rowlbl, title):
             table_dict, table_rows, table_cols = table_info
@@ -416,7 +446,7 @@ class FOGIDiagram(object):
         for i, (op_set, _) in enumerate(relational_opsets_by_distance):
             info = op_set_info[op_set]
 
-            if abs(info['Coherent']) < 1e-6 and abs(info['Stochastic']): continue  # prune edges that are small
+            if abs(info['Coherent']) < 1e-6 and abs(info['Stochastic']) < 1e-6: continue  # prune edges that are small
 
             # create a relational node in the graph
             if i < nPositions:  # place node in the middle (just average coords
@@ -424,7 +454,8 @@ class FOGIDiagram(object):
                 y = int(_np.mean([node_locations[op_label][1] for op_label in op_set]))
             else:  # place node along periphery
                 r = r0 * 1.1  # push outward from ring of operations
-                theta = _np.mean([polar_positions[op_label][1] for op_label in op_set])
+                theta = _np.arctan2(_np.sum([node_locations[op_label][1] for op_label in op_set]),
+                                    _np.sum([node_locations[op_label][0] for op_label in op_set]))
                 x, y = int(r * _np.cos(theta)), int(r * _np.sin(theta))
 
             node_js_lines.append(('{ id: %d, group: "%s", title: "%s", x: %d, y: %d,'
@@ -439,7 +470,8 @@ class FOGIDiagram(object):
             #link to gate-nodes
             for op_label in op_set:
                 val = info['Stochastic'] + info['Coherent']
-                edge_js_lines.append('{ from: %d, to: %d, value: %.4f }' % (next_node_id, node_ids[op_label], val))
+                edge_js_lines.append('{ from: %d, to: %d, value: %.4f, dashes: %s }' % (
+                    next_node_id, node_ids[op_label], val, 'true' if info['dependent'] else 'false'))
             next_node_id += 1
 
         all_table_html = ""
@@ -578,6 +610,8 @@ function draw() {{
           font: {{
               size: 20,
           }},
+          color: {{highlight: {{ background: "white", border: "black" }},
+                   hover: {{ background: "white", border: "black" }} }},
           borderWidth: 3,
       }},
       edges: {{
