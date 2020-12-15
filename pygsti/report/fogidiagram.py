@@ -375,11 +375,11 @@ class FOGIDiagram(object):
             #MAX_POWER = 5
             #r, g, b, a = _cmap(-_np.log10(max(value, 10**(-MAX_POWER))) / MAX_POWER)  # or larger
             #return "rgb(%d,%d,%d)" % (int(r * 255.9), int(g * 255.9), int(b * 255.9))
-            if value < 1e-5: return "rgb(81,148,81)"  # unsaturaged green
-            if value < 3e-5: return "rgb(0,240,0)"  # green
+            if value < 1e-5: return "rgb(133,173,133)"  # unsaturaged green
+            if value < 3e-5: return "rgb(0,230,0)"  # green
             if value < 1e-4: return "rgb(115,230,0)"  # light green
             if value < 3e-4: return "rgb(172,230,0)"  # lime green
-            if value < 1e-3: return "rgb(230,230,0)"  # (darkish) yellow
+            if value < 1e-3: return "rgb(250,250,0)"  # yellow
             if value < 3e-3: return "rgb(255,204,0)"  # yellow-orange
             if value < 1e-2: return "rgb(255,153,0)"  # orange
             if value < 3e-2: return "rgb(255,140,26)"  # dark orange
