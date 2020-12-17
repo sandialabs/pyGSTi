@@ -461,7 +461,7 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
                 color = get(line, 'color', None)
             if color is None:
                 color = 'rgb(0,0,0)'
-            
+
             if isinstance(color, tuple):
                 color = [mpl_color(c) for c in color]
             else:
@@ -481,16 +481,16 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
             if mode == 'lines':
                 if isinstance(color, list):
                     raise ValueError('List of colors incompatible with lines mode')
-                _plt.plot(x, y, linestyle='-', marker=None, color=color, linewidth=linewidth)
+                lines = _plt.plot(x, y, linestyle='-', marker=None, color=color, linewidth=linewidth)
             elif mode == 'markers':
-                _plt.scatter(x, y, marker=".", color=color)
+                lines = _plt.scatter(x, y, marker=".", color=color)
             elif mode == 'lines+markers':
-                if ininstance(color, list):
+                if isinstance(color, list):
                     # List of colors only works for markers with scatter, have default black line
-                    _plt.plot(x, y, linestyle='-', color=(0, 0, 0), linewidth=linewidth)
+                    lines = _plt.plot(x, y, linestyle='-', color=(0, 0, 0), linewidth=linewidth)
                     _plt.scatter(x, y, marker='.', color=color)
                 else:
-                    _plt.plot(x, y, linestyle='-', marker='.', color=color, linewidth=linewidth)
+                    lines = _plt.plot(x, y, linestyle='-', marker='.', color=color, linewidth=linewidth)
             else: raise ValueError("Unknown mode: %s" % mode)
 
             if showlegend and name:
