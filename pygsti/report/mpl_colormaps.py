@@ -329,15 +329,19 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
         #axes.yaxis.set_ticks_position('both')
 
     if title is not None:
+        # Sometimes Title object still is nested
+        title_text = title if isinstance(title, str) else get(title, 'text', '')
         if xaxisside == "top":
-            axes.set_title(mpl_process_lbl(title), fontsize=fontsize, y=2.5)  # push title up higher
-        axes.set_title(mpl_process_lbl(title), fontsize=fontsize)
+            axes.set_title(mpl_process_lbl(title_text), fontsize=fontsize, y=4)  # push title up higher
+        axes.set_title(mpl_process_lbl(title_text), fontsize=fontsize)
 
     if xlabel is not None:
-        axes.set_xlabel(mpl_process_lbl(xlabel), fontsize=fontsize)
+        xlabel_text = xlabel if isinstance(xlabel, str) else get(xlabel, 'text', '')
+        axes.set_xlabel(mpl_process_lbl(xlabel_text), fontsize=fontsize)
 
     if ylabel is not None:
-        axes.set_ylabel(mpl_process_lbl(ylabel), fontsize=fontsize)
+        ylabel_text = ylabel if isinstance(ylabel, str) else get(ylabel, 'text', '')
+        axes.set_ylabel(mpl_process_lbl(ylabel_text), fontsize=fontsize)
 
     if xtickvals is not None:
         axes.set_xticks(xtickvals, minor=False)
@@ -457,7 +461,11 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
                 color = get(line, 'color', None)
             if color is None:
                 color = 'rgb(0,0,0)'
-            color = mpl_color(color)
+            
+            if isinstance(color, tuple):
+                color = [mpl_color(c) for c in color]
+            else:
+                color = mpl_color(color)
 
             linewidth = float(line['width']) if (line and get(line, 'width', None) is not None) else 1.0
 
@@ -470,15 +478,20 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
                 y = traceDict['t']
 
             assert(x is not None and y is not None), "x and y both None in trace: %s" % traceDict
-            lines = _plt.plot(x, y)
             if mode == 'lines':
-                ls = '-'; ms = 'None'
+                if isinstance(color, list):
+                    raise ValueError('List of colors incompatible with lines mode')
+                _plt.plot(x, y, linestyle='-', marker=None, color=color, linewidth=linewidth)
             elif mode == 'markers':
-                ls = 'None'; ms = "."
+                _plt.scatter(x, y, marker=".", color=color)
             elif mode == 'lines+markers':
-                ls = '-'; ms = "."
+                if ininstance(color, list):
+                    # List of colors only works for markers with scatter, have default black line
+                    _plt.plot(x, y, linestyle='-', color=(0, 0, 0), linewidth=linewidth)
+                    _plt.scatter(x, y, marker='.', color=color)
+                else:
+                    _plt.plot(x, y, linestyle='-', marker='.', color=color, linewidth=linewidth)
             else: raise ValueError("Unknown mode: %s" % mode)
-            _plt.setp(lines, linestyle=ls, marker=ms, color=color, linewidth=linewidth)
 
             if showlegend and name:
                 handles.append(lines[0])
