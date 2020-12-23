@@ -25,6 +25,12 @@ _cdict = {'red':   [[0.0,  1.0, 1.0],
                    [1.0,  1.0, 1.0]]}
 _cmap = _LinearSegmentedColormap('lightReds', segmentdata=_cdict, N=256)
 
+#TODO:
+# - add ham/sto filter to diagram - then whole node is one color, etc
+# - add option to label to nodes/edges (w/ ham & sto strengths)
+# - create table/heatmap of relational & gate-local strengths - also filter by ham/sto
+# - create table of all quantities to show structure
+
 
 class FOGIDiagram(object):
     """
@@ -43,7 +49,12 @@ class FOGIDiagram(object):
             for acted_on, infos in infos_by_actedon.items():
                 for info in infos:
                     total = info['to_add'] if (total is None) else total + info['to_add']
-            return _np.linalg.norm(total)
+            if hasattr(total, 'ndim') and total.ndim == 2:  # then interpret as a numpy array and take norm
+                evals = _np.sort(_np.linalg.eigvals(total))
+                return abs(evals[-1] - evals[0])
+            else:
+                return total
+            #OLD (erik's hack): return _np.linalg.norm(total)
 
         def _make_coherent_stochastic_by_support_table(infos_by_type):
             table = {}
