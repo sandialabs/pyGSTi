@@ -2079,12 +2079,12 @@ class ExplicitOpModel(_mdl.OpModel):
     #def errorgen_coefficients_array(self):
     #    pass
 
-    def fogi_errorgen_coefficient_labels(self, complete=False):
+    def fogi_errorgen_coefficient_labels(self, complete=False, raw=False):
         assert(self.fogi_info is not None)
-        ham_labels = self.fogi_info['ham_fogi_labels'] if (self.fogi_info['ham_fogi_labels'] is not None) \
-            else self.fogi_info['ham_fogi_labels_raw']
-        other_labels = self.fogi_info['other_fogi_labels'] if (self.fogi_info['other_fogi_labels'] is not None) \
-            else self.fogi_info['other_fogi_labels_raw']
+        ham_labels = self.fogi_info['ham_fogi_labels_raw'] if (self.fogi_info['ham_fogi_labels'] is None or raw) \
+            else self.fogi_info['ham_fogi_labels']
+        other_labels = self.fogi_info['other_fogi_labels_raw'] if (self.fogi_info['other_fogi_labels'] is None or raw) \
+            else self.fogi_info['other_fogi_labels']
         fogi_labels = ham_labels + other_labels
         if not complete:
             return fogi_labels
