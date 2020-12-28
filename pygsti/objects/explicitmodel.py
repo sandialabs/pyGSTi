@@ -1473,6 +1473,7 @@ class ExplicitOpModel(_mdl.OpModel):
 
         ham_gauge_action_mxs = []
         other_gauge_action_mxs = []
+
         for op_label in primitive_op_labels:  # Note: "ga" stands for "gauge action" in variable names below
             op = self.operations[op_label]
             op_mx = op.unitary_postfactor.to_dense()
@@ -1481,6 +1482,9 @@ class ExplicitOpModel(_mdl.OpModel):
             other_ga = _gt.first_order_other_gauge_action_matrix(U, other_basis, other_mode)
             ham_gauge_action_mxs.append(ham_ga)
             other_gauge_action_mxs.append(other_ga)
+
+        ham_gauge_action_dict = {lbl: amx for lbl, amx in zip(primitive_op_labels, ham_gauge_action_mxs)}
+        other_gauge_action_dict = {lbl: amx for lbl, amx in zip(primitive_op_labels, other_gauge_action_mxs)}
 
         #Stack matrices to form "base" gauge action matrix for op_set
         ham_ga_mx = _np.concatenate(ham_gauge_action_mxs, axis=0)
@@ -1536,7 +1540,8 @@ class ExplicitOpModel(_mdl.OpModel):
         #        allowed_other_linear_combos = _np.delete(allowed_other_linear_combos, [_np.argmax(overlaps)], axis=1)
         #        print("Removed SPAM gauge direction")
 
-        return ham_ga_mx, other_ga_mx, allowed_ham_linear_combos, allowed_other_linear_combos
+        return ham_ga_mx, other_ga_mx, allowed_ham_linear_combos, allowed_other_linear_combos, \
+            ham_gauge_action_dict, other_gauge_action_dict
 
     def _compute_fogi_constructively(self, primitive_op_labels, basis, mode=None,
                                      gauge_linear_combos=None, op_label_abbrevs=None, reduce_to_model_space=True,
@@ -1579,6 +1584,8 @@ class ExplicitOpModel(_mdl.OpModel):
         gauge_action_for_op = {}
         fogi_vecs = _np.zeros((num_elem_errgens, 0), 'd')
         fogi_names = []
+        fogi_abbrev_names = []
+        fogi_gauge_dirs = []
         dependent_vec_indices = []
 
         for op_label in primitive_op_labels:
@@ -1599,14 +1606,20 @@ class ExplicitOpModel(_mdl.OpModel):
             #Get commutant and communtant-complement spaces
             commutant = _mt.nice_nullspace(ga)  # columns = *gauge* elem gen directions
             op_elemgen_labels = labels_for_op[op_label]
+
+            # Note: local/new_fogi_vecs are orthogonal but not necessarily normalized (so need to 
+            #  normalize to get inverse, but *don't* need pseudo-inverse).
             local_fogi_vecs = _mt.nice_nullspace(ga.T)  # "conjugate space" to gauge action
             new_fogi_vecs = _np.zeros((fogi_vecs.shape[0], local_fogi_vecs.shape[1]), 'd')
             new_fogi_vecs[op_errgen_indices[op_label], :] = local_fogi_vecs  # "juice" this op
             fogi_vecs = _np.concatenate((fogi_vecs, new_fogi_vecs), axis=1)
+            fogi_gauge_dirs.extend([None] * new_fogi_vecs.shape[1])  # local qtys don't have corresp. gauge directions
             errgen_names = _gauge_names(local_fogi_vecs, op_elemgen_labels)
+            errgen_names_abbrev = _gauge_names(local_fogi_vecs, op_elemgen_labels, abbrev=True)
             fogi_names.extend(["%s_%s" % ((("(%s)" % egname) if (' ' in egname) else egname),
                                           op_label_abbrevs.get(op_label, str(op_label)))
                                for egname in errgen_names])
+            fogi_abbrev_names.extend(errgen_names_abbrev)
 
             complement = _mt.nice_nullspace(commutant.T)  # complement of commutant - where op if faithful rep
             ccomms[(op_label,)] = complement
@@ -1696,9 +1709,14 @@ class ExplicitOpModel(_mdl.OpModel):
                             indep_intersection_space = _np.dot(gauge_linear_combos, indep_intersection_space) \
                                 if (gauge_linear_combos is not None) else indep_intersection_space
                             intersection_names = _gauge_names(indep_intersection_space, gauge_elemgen_labels)
+                            intersection_names_abbrev = _gauge_names(indep_intersection_space, gauge_elemgen_labels,
+                                                                     abbrev=True)
                             fogi_names.extend(["ga(%s)_%s - ga(%s)_%s" % (
                                 iname, "|".join([op_label_abbrevs.get(l, str(l)) for l in existing_set]),
                                 iname, op_label_abbrevs.get(op_label, str(op_label))) for iname in intersection_names])
+                            fogi_abbrev_names.extend(["ga(%s)" % iname for iname in intersection_names_abbrev])
+                            fogi_gauge_dirs.extend([intersection_space[:, j] for j in indep_cols])  # gauge directions
+
                             #print("Fogi vecs:\n"); _mt.print_mx(local_fogi_vecs)
                             #print("Ham Intersection names: ", intersection_names)
 
@@ -1720,7 +1738,8 @@ class ExplicitOpModel(_mdl.OpModel):
         #print("Rank = ", _np.linalg.matrix_rank(other_fogi_vecs))
         #import bpdb; bpdb.set_trace()  # DEBUG
 
-        return (fogi_vecs, fogi_names, labels_for_op, dependent_vec_indices)
+        return (fogi_vecs, fogi_names, fogi_abbrev_names, labels_for_op, dependent_vec_indices,
+                fogi_gauge_dirs, op_errgen_indices)
 
     def _compute_fogi_via_nullspaces(self, primitive_op_labels, ham_basis, other_basis, other_mode="all",
                                      ham_gauge_linear_combos=None, other_gauge_linear_combos=None,
@@ -1982,16 +2001,19 @@ class ExplicitOpModel(_mdl.OpModel):
         """
         primitive_op_labels = list(self.operations.keys())
 
-        ham_gauge_action, other_gauge_action, ham_gauge_linear_combos, other_gauge_linear_combos = \
+        (ham_gauge_action, other_gauge_action, ham_gauge_linear_combos, other_gauge_linear_combos,
+         ham_ga_dict, other_ga_dict) = \
             self._construct_gauge_space_for_model(primitive_op_labels, ham_basis, other_basis, other_mode,
                                                   reduce_to_model_space)
 
         if constructive:
-            ham_fogi_vecs, ham_fogi_labels, ham_elem_errgen_labels_for_op, ham_dependent_vec_indices = \
+            (ham_fogi_vecs, ham_fogi_labels, abbrev_ham_fogi_labels, ham_elem_errgen_labels_for_op,
+             ham_dependent_vec_indices, ham_fogi_gauge_dirs, ham_op_errgen_indices) = \
                 self._compute_fogi_constructively(primitive_op_labels, ham_basis, None,
                                                   ham_gauge_linear_combos, op_label_abbrevs, reduce_to_model_space,
                                                   dependent_fogi_action)
-            other_fogi_vecs, other_fogi_labels, other_elem_errgen_labels_for_op, other_dependent_vec_indices = \
+            (other_fogi_vecs, other_fogi_labels, abbrev_other_fogi_labels, other_elem_errgen_labels_for_op,
+             other_dependent_vec_indices, other_fogi_gauge_dirs, other_op_errgen_indices) = \
                 self._compute_fogi_constructively(primitive_op_labels, other_basis, other_mode,
                                                   other_gauge_linear_combos, op_label_abbrevs, reduce_to_model_space,
                                                   dependent_fogi_action)
@@ -2002,6 +2024,9 @@ class ExplicitOpModel(_mdl.OpModel):
                                                   ham_gauge_linear_combos, other_gauge_linear_combos, op_label_abbrevs,
                                                   reduce_to_model_space)
             ham_fogi_labels = other_fogi_labels = None  # nullspace method does not construct meaningful labels.
+            abbrev_ham_fogi_labels = abbrev_other_fogi_labels = None
+            ham_fogi_gauge_dirs = other_fogi_gauge_dirs = None  # nullspace method doesn't compute these
+            ham_op_errgen_indices = other_op_errgen_indices = None  # these ARE computed - we just don't return it now... TODO
 
         full_ham_space_labels = [(op_label, elem_lbl) for op_label in primitive_op_labels
                                  for elem_lbl in ham_elem_errgen_labels_for_op[op_label]]
@@ -2033,22 +2058,30 @@ class ExplicitOpModel(_mdl.OpModel):
         raw_other_fogi_labels = _fogi_names(other_fogi_vecs, full_other_space_labels, op_label_abbrevs)
 
         self.fogi_info = {'primitive_op_labels': primitive_op_labels,
+                          'ham_op_errgen_indices': ham_op_errgen_indices,
                           'ham_vecs': ham_fogi_vecs,
                           'ham_elgen_labels': full_ham_space_labels,
                           'ham_elgen_labels_by_op': ham_elem_errgen_labels_for_op,
                           'ham_fogi_labels': ham_fogi_labels,
                           'ham_fogi_labels_raw': raw_ham_fogi_labels,
+                          'ham_fogi_labels_abbrev': abbrev_ham_fogi_labels,
                           'ham_gauge_vecs': ham_gauge_vecs,
                           'ham_gauge_directions': ham_gauge_directions,
                           'ham_dependent_vec_indices': ham_dependent_vec_indices,
+                          'ham_gauge_action_mxs': ham_ga_dict,
+                          'ham_fogi_gauge_directions': ham_fogi_gauge_dirs,
+                          'other_op_errgen_indices': other_op_errgen_indices,
                           'other_vecs': other_fogi_vecs,
                           'other_elgen_labels': full_other_space_labels,
                           'other_elgen_labels_by_op': other_elem_errgen_labels_for_op,
                           'other_fogi_labels': other_fogi_labels,
                           'other_fogi_labels_raw': raw_other_fogi_labels,
+                          'other_fogi_labels_abbrev': abbrev_other_fogi_labels,
                           'other_gauge_vecs': other_gauge_vecs,
                           'other_gauge_directions': other_gauge_directions,
                           'other_dependent_vec_indices': other_dependent_vec_indices,
+                          'other_gauge_action_mxs': other_ga_dict,
+                          'other_fogi_gauge_directions': other_fogi_gauge_dirs,
                           'dependent_vec_indices': (ham_dependent_vec_indices + [i + ham_fogi_vecs.shape[1]
                                                                                  for i in other_dependent_vec_indices]),
                           }
@@ -2100,9 +2133,11 @@ class ExplicitOpModel(_mdl.OpModel):
         if not normalized_elem_gens:
             def rescale(coeffs):
                 """ HACK: rescales errorgen coefficients for normalized-Pauli-basis elementary error gens
-                         to be coefficients for the usual un-normalied-Pauli-basis elementary gens. """
-                d2 = self.dim; d = _np.sqrt(d2)
-                return {lbl: (val / d if lbl[0] == 'H' else val / d2) for lbl, val in coeffs.items()}
+                         to be coefficients for the usual un-normalied-Pauli-basis elementary gens.  This
+                         is only needed in the Hamiltonian case, as the non-ham "elementary" gen has a
+                         factor of d2 baked into it. """
+                d2 = _np.sqrt(self.dim); d = _np.sqrt(d2)
+                return {lbl: (val / d if lbl[0] == 'H' else val) for lbl, val in coeffs.items()}
 
             op_coeffs = {op_label: rescale(self.operations[op_label].errorgen_coefficients())
                          for op_label in self.fogi_info['primitive_op_labels']}
@@ -2184,8 +2219,8 @@ class ExplicitOpModel(_mdl.OpModel):
 
         if not normalized_elem_gens:
             def inv_rescale(coeffs):  # the inverse of the rescaling applied in fogi_errorgen_coefficients_array
-                d2 = self.dim; d = _np.sqrt(d2)
-                return {lbl: (val * d if lbl[0] == 'H' else val * d2) for lbl, val in coeffs.items()}
+                d2 = _np.sqrt(self.dim); d = _np.sqrt(d2)
+                return {lbl: (val * d if lbl[0] == 'H' else val) for lbl, val in coeffs.items()}
         else:
             def inv_rescale(coeffs): return coeffs
 
@@ -2268,7 +2303,7 @@ def _fogi_names(fogi_vecs, full_space_labels, op_label_abbrevs):
     return fogi_vec_names
 
 
-def _gauge_names(gauge_vecs, gauge_space_labels):
+def _gauge_names(gauge_vecs, gauge_space_labels, abbrev=False):
     gauge_vec_names = []
     for j in range(gauge_vecs.shape[1]):
         name = ""
@@ -2277,7 +2312,10 @@ def _gauge_names(gauge_vecs, gauge_space_labels):
             if abs(val) < 1e-6: continue
             sign = ' + ' if val > 0 else ' - '
             abs_val_str = '' if _np.isclose(abs(val), 1.0) else ("%g " % abs(val))  # was %.1g
-            name += sign + abs_val_str + "%s(%s)" % (elem_lbl[0], ','.join(elem_lbl[1:]))
+            if abbrev:
+                name += sign + abs_val_str + "%s" % (','.join(elem_lbl[1:]))  # 'H' or 'S'
+            else:
+                name += sign + abs_val_str + "%s(%s)" % (elem_lbl[0], ','.join(elem_lbl[1:]))
         if name.startswith(' + '): name = name[3:]  # strip leading +
         if name.startswith(' - '): name = '-' + name[3:]  # strip leading spaces
         gauge_vec_names.append(name)
