@@ -22,6 +22,7 @@ from ..tools import slicetools as _slct, mpitools as _mpit, sharedmemtools as _s
 from . import profiler as _profiler
 from .circuitlist import CircuitList as _CircuitList
 from .resourceallocation import ResourceAllocation as _ResourceAllocation
+from .distlayout import DistributableCOPALayout as _DistributableCOPALayout
 
 
 #REMOVE:
@@ -832,7 +833,6 @@ class ModelDatasetCircuitsStore(object):
                  precomp_layout=None, verbosity=0):
         self.dataset = dataset
         self.model = model
-        #self.nparams = mdl.num_params
         #self.opBasis = mdl.basis
         self.resource_alloc = _ResourceAllocation.cast(resource_alloc)
         # expand = ??? get from model based on fwdsim type?
@@ -851,6 +851,11 @@ class ModelDatasetCircuitsStore(object):
         else:
             self.layout = precomp_layout
         self.array_types = array_types
+
+        if isinstance(self.layout, _DistributableCOPALayout):  # then store global circuit liste separately
+            self.global_circuits = self.circuits
+            self.circuits = _CircuitList(self.layout.circuits, self.global_circuits.op_label_aliases,
+                                         self.global_circuits.circuit_weights, name=None)
 
         #self.circuits = bulk_circuit_list[:]
         #self.circuit_weights = bulk_circuit_list.circuit_weights
@@ -881,8 +886,21 @@ class ModelDatasetCircuitsStore(object):
         #self.wrt_block_size2 = self.cache.wrt_block_size2
 
         #convenience attributes (could make properties?)
-        self.nparams = self.model.num_params
-        self.nelements = len(self.layout)
+        if isinstance(self.layout, _DistributableCOPALayout):
+            self.global_nelements = self.layout.global_num_elements
+            self.global_nparams = self.layout.global_num_params
+            self.global_nparams2 = self.layout.global_num_params2
+            self.host_nelements = self.layout.host_num_elements
+            self.host_nparams = self.layout.host_num_params
+            self.host_nparams2 = self.layout.host_num_params2
+            self.nelements = _slct.length(self.layout.host_element_slice)  # just for *this* proc
+            self.nparams = _slct.length(self.layout.host_param_slice) if self.layout.host_param_slice else None 
+            self.nparams2 = _slct.length(self.layout.host_param2_slice) if self.layout.host_param2_slice else None
+            assert(self.global_nparams is None or self.global_nparams == self.model.num_params)
+        else:
+            self.global_nelements = self.host_nelements = self.nelements = len(self.layout)
+            self.global_nparams = self.host_nparams = self.nparams = self.model.num_params
+            self.global_nparams2 = self.host_nparams2 = self.nparams2 = self.model.num_params
 
     @property
     def opBasis(self):
@@ -905,18 +923,26 @@ class ModelDatasetCircuitsStore(object):
         """
         if self.firsts is None or force:
             # FUTURE: add any tracked memory? self.resource_alloc.add_tracked_memory(...)
+            #REMOVE
+            #my_index_slice = _slct.shift(self.layout.host_element_slice, self.layout.global_element_slice.start) \
+            #                 if isinstance(self.layout, _DistributableCOPALayout) \
+            #                 else slice(0, self.nelements)  # (all elements)
             self.firsts = []; self.indicesOfCircuitsWithOmittedData = []
             for i, c in enumerate(self.circuits):
+                indices = _slct.to_array(self.layout.indices_for_index(i))
+                #REMOVE if not (my_index_slice.start <= indices[0] < my_index_slice.end): continue
                 lklen = _slct.length(self.layout.indices_for_index(i))
                 if 0 < lklen < self.model.compute_num_outcomes(c):
-                    self.firsts.append(_slct.to_array(self.layout.indices_for_index(i))[0])
+                    self.firsts.append(indices[0]) #REMOVE - my_index_slice.start)  # convert to local element index
                     self.indicesOfCircuitsWithOmittedData.append(i)
             if len(self.firsts) > 0:
                 self.firsts = _np.array(self.firsts, 'i')
                 self.indicesOfCircuitsWithOmittedData = _np.array(self.indicesOfCircuitsWithOmittedData, 'i')
                 self.dprobs_omitted_rowsum = _np.empty((len(self.firsts), self.nparams), 'd')
-                if printer: printer.log("SPARSE DATA: %d of %d rows have sparse data" %
-                                        (len(self.firsts), len(self.circuits)))
+                #This won't work here anymore for distributed-layout cases - would need to get a resource-alloc
+                # and gather the len(self.firsts) for all processors. REMOVE?
+                #if printer: printer.log("SPARSE DATA: %d of %d rows have sparse data" %
+                #                        (len(self.firsts), len(self.circuits)))
             else:
                 self.firsts = None  # no omitted probs
 
@@ -930,6 +956,10 @@ class ModelDatasetCircuitsStore(object):
             if self.total_counts is None: self.resource_alloc.add_tracked_memory(self.nelements)
             if self.freqs is None: self.resource_alloc.add_tracked_memory(self.nelements)
 
+            # In the FUTURE we could have the layout only store local indices and not compute
+            # the global arrays here (wasteful) before taking local slices.  Maybe we wouldn't
+            # store self.ds_circuits, or if we did we'd store/get the circuits local to this
+            # processor (a distributed layout doesn't make this easy currently)
             counts = _np.empty(self.nelements, 'd')
             totals = _np.empty(self.nelements, 'd')
 
@@ -943,6 +973,13 @@ class ModelDatasetCircuitsStore(object):
                     counts[self.layout.indices_for_index(i)] *= self.circuits.circuit_weights[i]
                     totals[self.layout.indices_for_index(i)] *= self.circuits.circuit_weights[i]
 
+            #REMOVE
+            #if isinstance(self.layout, _DistributableCOPALayout):
+            #    #Take slices to get values local to this processor - a better way would be to get a
+            #    # subset of the layout's circuits and then do the processing above (FUTURE).
+            #    self.counts = counts[self.layout.global_element_slice][self.layout.host_element_slice]
+            #    self.total_counts = totals[self.layout.global_element_slice][self.layout.host_element_slice]
+            #else:
             self.counts = counts
             self.total_counts = totals
             self.freqs = counts / totals
@@ -1538,13 +1575,38 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         # so adding the additional ability to parallelize over
         # subtrees would just add unnecessary complication.
 
+        #REMOVE
         #get distribution across subtrees (groups if needed) -- assumes a DistributableCOPALayout
-        my_atom_indices, atom_owners, sub_resource_alloc = self.layout.distribute(self.resource_alloc)
+        #my_atom_indices, atom_owners, sub_resource_alloc = self.layout.distribute(self.resource_alloc)
 
         nparams = self.model.num_params
-        blk_size1, blk_size2 = self.layout.additional_dimension_blk_sizes
-        row_parts = int(round(nparams / blk_size1)) if (blk_size1 is not None) else 1
-        col_parts = int(round(nparams / blk_size2)) if (blk_size2 is not None) else 1
+        blk_size1, blk_size2 = self.layout.param_dimension_blk_sizes
+        atom_resource_alloc = resource_alloc.layout_allocs['atom-processing']
+        param_resource_alloc = resource_alloc.layout_allocs['param-processing']
+
+        host_param_slice = layout.host_param_slice
+        global_param_slice = layout.global_param_slice
+        host_param2_slice = layout.host_param2_slice
+        global_param2_slice = layout.global_param2_slice
+
+        my_nparams1 = _slct.length(host_param_slice)  # the number of params this processor is supposed to
+        my_nparams2 = _slct.length(host_param2_slice)  # compute (a subset of those its host computes)
+
+        row_parts = int(round(my_nparams1 / blk_size1)) if (blk_size1 is not None) else 1
+        col_parts = int(round(my_nparams2 / blk_size2)) if (blk_size2 is not None) else 1
+        row_parts = max(row_parts, 1)  # can't have 0 parts!
+        col_parts = max(col_parts, 1)
+
+        blocks1 = _mpit.slice_up_range(my_nparams1, row_parts)
+        blocks2 = _mpit.slice_up_range(my_nparams2, col_parts)
+        slicetup_list_all = list(_itertools.product(blocks1, blocks2))
+
+        #TODO: see if we can reimplement this 2x speedup - with layout-assigned portions of H the below code won't work
+        ##cull out lower triangle blocks, which have no overlap with
+        ## the upper triangle of the hessian
+        #slicetup_list = [(slc1, slc2) for slc1, slc2 in slicetup_list_all
+        #                 if slc1.start <= slc2.stop]  # these are the local "blocks" for this proc
+        slicetup_list = slicetup_list_all
 
         #UPDATE: use shared memory, so allocate within loop b/c need different shared memory chunks
         # when different processors on same node are give different atoms.
@@ -1553,101 +1615,126 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         # probs_mem = _np.empty(max_nelements, 'd')
 
         rank = self.resource_alloc.comm.Get_rank() if (self.resource_alloc.comm is not None) else 0
-        sub_rank = sub_resource_alloc.comm.Get_rank() if (sub_resource_alloc.comm is not None) else 0
+        sub_rank = atom_resource_alloc.comm.Get_rank() if (atom_resource_alloc.comm is not None) else 0
 
         with self.resource_alloc.temporarily_track_memory(self.nparams * self.nparams):  # 'PP' (final_hessian)
-            #  Allocate persistent memory
-            final_hessian = _np.zeros((nparams, nparams), 'd')
-
+            # Each atom-processor (atom_resource_alloc) contains processors assigned to *disjoint*
+            # sections of the Hessian, so these processors can all act simultaneously to fill out a
+            # full-size `atom_hessian`.  Then we'll need to add together the contributions from
+            # different atom processors at the end.
+            atomproc_host_hessian, atomproc_host_hessian_shm = \
+                _smt.create_shared_ndarray(atom_resource_alloc, (nparams, nparams), 'd',
+                                           zero_out=True, track_memory=False)
             tm = _time.time()
 
             #Loop over atoms
-            for atom_index in my_atom_indices:
-                atom = self.layout.atoms[atom_index]
-                sub_nelements = atom.num_elements
+            for iAtom, atom in enumeate(layout.atoms):  # iterates over *local* atoms
+                atom_nelements = atom.num_elements
 
                 if self.raw_objfn.printer.verbosity > 3 or (self.raw_objfn.printer.verbosity == 3 and sub_rank == 0):
-                    isub = my_atom_indices.index(atom_index)
-                    print("rank %d: %gs: beginning sub-layout %d/%d, sub-layout-size = %d"
-                          % (rank, _time.time() - tm, isub + 1, len(my_atom_indices), atom.num_elements))
+                    print("rank %d: %gs: beginning atom %d/%d, atom-size (#circuits) = %d"
+                          % (rank, _time.time() - tm, iAtom + 1, len(layout.atoms), atom_nelements))
                     _sys.stdout.flush()
 
                 # Create views into pre-allocated memory
                 #probs = probs_mem[0:sub_nelements]  (OLD, using global per-proc memory pool)
-                probs, probs_shm = _smt.create_shared_ndarray(sub_resource_alloc, (sub_nelements,), 'd',
+                probs, probs_shm = _smt.create_shared_ndarray(atom_resource_alloc, (atom_nelements,), 'd',
                                                               track_memory=False)
-                shared_mem_leader = sub_resource_alloc.is_host_leader
+                shared_mem_leader = atom_resource_alloc.is_host_leader
 
                 # Take portions of count arrays for this subtree
-                counts = counts_all[atom.element_slice]
-                total_counts = total_counts_all[atom.element_slice]
+                global_element_slice = _slct.list_to_slice(_slct.to_array(
+                    layout.global_element_slice)[atom.element_slice])  # global el slice for this atom
+                counts = counts_all[global_element_slice]
+                total_counts = total_counts_all[global_element_slice]
                 freqs = counts / total_counts
                 assert(len(counts) == len(probs))
 
                 #compute probs separately
                 #self.model.sim.bulk_fill_probs(probs, atom, sub_resource_alloc)
-                sub_resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory before reinit
-                self.model.sim._bulk_fill_probs_block(probs, atom, sub_resource_alloc)  # need to reach into internals!
+                atom_resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory before reinit
+                self.model.sim._bulk_fill_probs_block(probs, atom, atom_resource_alloc)  # need to reach into internals!
                 if prob_clip_interval is not None and shared_mem_leader:
                     _np.clip(probs, prob_clip_interval[0], prob_clip_interval[1], out=probs)
-                sub_resource_alloc.host_comm_barrier()  # shared memory barrier
+                atom_resource_alloc.host_comm_barrier()  # shared memory barrier
 
-                num_cols = self.model.num_params
-                blocks1 = _mpit.slice_up_range(num_cols, row_parts)
-                blocks2 = _mpit.slice_up_range(num_cols, col_parts)
-                slicetup_list_all = list(_itertools.product(blocks1, blocks2))
-                #cull out lower triangle blocks, which have no overlap with
-                # the upper triangle of the hessian
-                slicetup_list = [(slc1, slc2) for slc1, slc2 in slicetup_list_all
-                                 if slc1.start <= slc2.stop]
-
-                loc_iblks, blk_owners, blk_resource_alloc = \
-                    _mpit.distribute_indices(list(range(len(slicetup_list))), sub_resource_alloc)
-                my_slicetup_list = [slicetup_list[i] for i in loc_iblks]
-
-                subtree_hessian = _smt.create_shared_ndarray(blk_resource_alloc, (nparams, nparams), 'd',
-                                                             zero_out=True, track_memory=False)
-                blk_shared_mem_leader = blk_resource_alloc.is_host_leader
+                #REMOVE
+                #loc_iblks, blk_owners, blk_resource_alloc = \
+                #    _mpit.distribute_indices(list(range(len(slicetup_list))), sub_resource_alloc)
+                #my_slicetup_list = [slicetup_list[i] for i in loc_iblks]
+                
+                #atom_hessian = _smt.create_shared_ndarray(param2_resource_alloc, 
+                #                                          (layout.host_num_params, layout.host_num_params2), 'd',
+                #                                          zero_out=True, track_memory=False)  # hessian for host
+                blk_shared_mem_leader = param2_resource_alloc.is_host_leader
 
                 k, kmax = 0, len(my_slicetup_list)
                 for (slice1, slice2, hprobs, dprobs12) in self.model.sim._bulk_hprobs_by_block_singleatom(
-                        atom, my_slicetup_list, True, blk_resource_alloc, self.layout.gather_mem_limit):
-                    blk_rank = blk_resource_alloc.comm.Get_rank() if (blk_resource_alloc.comm is not None) else 0
+                        atom, my_slicetup_list, True, param2_resource_alloc):
+                    blk_rank = param2_resource_alloc.comm.Get_rank() if (param2_resource_alloc.comm is not None) else 0
+                    #host_slice1 = _slct.shift(slice1, host_param_slice.start)  # into host's memory
+                    #host_slice2 = _slct.shift(slice2, host_param2_slice.start)  # into host's memory
+                    global_slice1 = _slct.shift(slice1, global_param_slice.start)  # actual parameter indices
+                    global_slice2 = _slct.shift(slice2, global_param2_slice.start)  # actual parameter indices
 
                     if self.raw_objfn.printer.verbosity > 3 or \
                        (self.raw_objfn.printer.verbosity == 3 and blk_rank == 0):
-                        isub = my_atom_indices.index(atom_index)
-                        print("rank %d: %gs: block %d/%d, sub-layout %d/%d, sub-layout-size = %d"
-                              % (self.resource_alloc.comm.Get_rank(), _time.time() - tm, k + 1, kmax, isub,
-                                 len(my_atom_indices), atom.num_elements))
+                        print("rank %d: %gs: block %d/%d, atom %d/%d, atom-size (#circuits) = %d"
+                              % (self.resource_alloc.comm.Get_rank(), _time.time() - tm, k + 1, kmax, iAtom,
+                                 len(layout.atoms), atom.num_elements))
                         _sys.stdout.flush(); k += 1
 
-                    if blk_shared_mem_leader:
-                        subtree_hessian[slice1, slice2] = \
+                    #if blk_shared_mem_leader:
+                    if blk_rank == 0:  # if multiple procs computed this block, only 1 should put it in atom_hessian
+                        atomproc_host_hessian[global_slice1, global_slice2] += \
                             self._hessian_from_block(hprobs, dprobs12, probs, counts,
-                                                     total_counts, freqs, blk_resource_alloc)
-                    blk_resource_alloc.host_comm_barrier()  # shared memory barrier
+                                                     total_counts, freqs, param2_resource_alloc)
+                        # This blk_rank=0 proc "own" the (global_slice1, global_slice2) block within this atom
+                        # procesor, so it alone adds the contributions from each atom to atomproc_host_hessian.
+                    param2_resource_alloc.host_comm_barrier()  # shared memory barrier
                     #NOTE: _hessian_from_hprobs MAY modify hprobs and dprobs12
                     #NOTE2: we don't account for memory within _hessian_from_block - maybe we should?
 
-                #Gather columns from different procs and add to running final hessian
-                #_mpit.gather_slices_by_owner(slicesIOwn, subtree_hessian,[], (0,1), mySubComm)
-                _mpit.gather_slices(slicetup_list, blk_owners, subtree_hessian, [], (0, 1), sub_resource_alloc)
-                final_hessian += subtree_hessian
+                #REMOVE
+                ##Gather columns from different procs and add to running final hessian
+                ##_mpit.gather_slices_by_owner(slicesIOwn, atom_hessian,[], (0,1), mySubComm)
+                #_mpit.gather_slices(slicetup_list, blk_owners, atom_hessian, [], (0, 1), param2_resource_alloc)
 
-                _smt.cleanup(probs_shm)
+                #At this point, we've computed in 'atom_hessian' the portion of the total hessian assigned to
+                # this processor's host.  We have the host leader sum this into 
+                final_hessian += atom_hessian
 
-            #gather (add together) final_hessians from different processors
-            if self.resource_alloc.comm is not None and len(set(atom_owners.values())) > 1:
-                if self.resource_alloc.comm.Get_rank() not in atom_owners.values():
-                    # this proc is not the "owner" of its subtrees and should not send a contribution to the sum
-                    final_hessian[:, :] = 0.0  # zero out hessian so it won't contribute
-                final_hessian = self.resource_alloc.comm.allreduce(final_hessian)
+                _smt.cleanup_shared_ndarray(probs_shm)
 
-        #copy upper triangle to lower triangle (we only compute upper)
-        for i in range(final_hessian.shape[0]):
-            for j in range(i + 1, final_hessian.shape[1]):
-                final_hessian[j, i] = final_hessian[i, j]
+            #HERE - we need to decide how to compute distributed Hessians - other hessian routines (e.g. brute_hessian)
+            # just compute the part of the hessian local to (owned by) the current processor, but this doesn't allow
+            # procs on the same host to utilize shared memory when forming the final hessian later on.  This function
+            # (I think) forms the final hessian and utilizes shared memory, and this funtionality should be somewhere
+            # but maybe not in this function (?)
+
+            #gather (add together) hessians from different hosts within different atom-processors => root proc
+            if self.resource_alloc.host_comm is not None:
+                if self.resource_alloc.host_comm.rank == 0:  # select only 1 interhost comm to do reduction
+                    final_hessian = self.resource_alloc.interhost_comm.reduce(atomproc_host_hessian, root=0)
+                _smt.cleanup_shared_ndarray(atomproc_host_hessian_shm)
+            elif self.resource_alloc.comm is not None:  # every proc is it's own host - just reduce them all
+                final_hessian = self.resource_alloc.reduce(atomproc_host_hessian, root=0)
+                _smt.cleanup_shared_ndarray(atomproc_host_hessian_shm)
+            else:
+                final_hessian = atomproc_host_hessian  # single processor, no MPI
+
+            #REMOVE
+            #if self.resource_alloc.comm is not None and len(set(atom_owners.values())) > 1:
+            #    if self.resource_alloc.comm.Get_rank() not in atom_owners.values():
+            #        # this proc is not the "owner" of its atoms and should not send a contribution to the sum
+            #        final_hessian[:, :] = 0.0  # zero out hessian so it won't contribute
+            #    final_hessian = self.resource_alloc.comm.allreduce(final_hessian)
+
+        #This shouldn't be necessary:
+        ##copy upper triangle to lower triangle (we only compute upper)
+        #for i in range(final_hessian.shape[0]):
+        #    for j in range(i + 1, final_hessian.shape[1]):
+        #        final_hessian[j, i] = final_hessian[i, j]
 
         return final_hessian  # (N,N)
 
@@ -4122,7 +4209,8 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         super().__init__(raw_objfn, mdc_store, verbosity=0)
 
         if penalties is None: penalties = {}
-        self.ex = self.set_penalties(**penalties)  # "extra" (i.e. beyond the (circuit,spamlabel)) rows of jacobian
+        self.ex = self.set_penalties(**penalties)
+        # "extra" (i.e. beyond the (circuit,spamlabel)) rows of jacobian
 
         #Setup underlying EvaluatedModelDatasetCircuitsStore object
         #  Allocate peristent memory - (these are members of EvaluatedModelDatasetCircuitsStore)
@@ -4131,14 +4219,19 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         if _smt.shared_mem_is_enabled():
             self.resource_alloc.build_hostcomms()  # signals that we want to use shared intra-host memory
 
-        self.probs, self._probs_shm = _smt.create_shared_ndarray(self.resource_alloc, (self.nelements,), 'd')
+        #Note: allocate probs as a local array in case we want to gather it (though objfn routines don't need this)
+        self.probs, self._probs_shm = self.layout.allocate_local_array('e', 'd', self.resource_alloc, track_memory=True)
+        self.obj, self._obj_shm = self.layout.allocate_local_array('e', 'd', self.resource_alloc, track_memory=True,
+                                                                   extra_elements=self.ex)
 
-        self.jac = self._jac_shm = None
+        self.hos_jac = self._jac_shm = None
         if 'EP' in self.array_types:
-            self.jac, self._jac_shm = _smt.create_shared_ndarray(self.resource_alloc,
-                                                                 (self.nelements + self.ex, self.nparams), 'd')
+            self.jac, self._jac_shm = self.layout.allocate_local_array('ep', 'd', self.resource_alloc, track_memory=True,
+                                                                       extra_elements=self.ex)
 
-        self.maxCircuitLength = max([len(x) for x in self.circuits])
+        #self.maxCircuitLength = max([len(x) for x in self.circuits])
+        # If desired, we may need to make it local to this processor, which may not have data for all of self.circuits
+
         self.add_count_vectors()  # allocates 3x 'E' arrays
         self.add_omitted_freqs()  # sets self.first and more
 
@@ -4146,6 +4239,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         # Reset the allocated memory to the value it had in __init__, effectively releasing the allocations made there.
         self.resource_alloc.reset(allocated_memory=self.initial_allocated_memory)
         _smt.cleanup_shared_ndarray(self._probs_shm)
+        _smt.cleanup_shared_ndarray(self._obj_shm)
         _smt.cleanup_shared_ndarray(self._jac_shm)
 
     #Model-based regularization and penalty support functions
@@ -4205,6 +4299,10 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         self.prob_clip_interval = prob_clip_interval  # not really a "penalty" per se, but including it as one
         # gives the user the ability to easily set it if they ever need to (unlikely)
 
+        self._process_penalties = self.layout.part_of_final_atom_processor \
+                                  if isinstance(self.layout, _DistributableCOPALayout) else True
+        if not self._process_penalties: return 0  # don't compute penalty values except for final proc
+
         ex = 0  # Compute "extra" number of terms/lsvec-element/rows-of-jacobian beyond evaltree elements
 
         if forcefn_grad is not None:
@@ -4214,7 +4312,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             self.forceShift = ffg_norm * (ffg_norm + start_norm) * shift_fctr
             #used to keep forceShift - _np.dot(forcefn_grad,paramvec) positive (Note: not analytic, just a heuristic!)
 
-        if self.regularize_factor != 0: ex += self.nparams
+        if self.regularize_factor != 0: ex += self.global_nparams
         if self.cptp_penalty_factor != 0: ex += _cptp_penalty_size(self.model)
         if self.spam_penalty_factor != 0: ex += _spam_penalty_size(self.model)
 
@@ -4565,25 +4663,32 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             self.model.from_vector(paramvec)
         else:
             paramvec = self.model.to_vector()
+        lsvec = self.obj.view()
 
         # Whether this rank is the "leader" of all the processors accessing the same shared self.jac and self.probs mem.
         #  Only leader processors should modify the contents of the shared memory, so we only apply operations *once*
-        shared_mem_leader = self.resource_alloc.is_host_leader
+        #shared_mem_leader = self.resource_alloc.is_host_leader  # REMOVE - and refs to shared_mem_leader below
+
+        #REMOVE
+        #Note: when sending arrays to fill, this should be the processor-specific memory
+        #probs = self.probs[self.layout.host_element_slice]  # portion of host memory "owned" by this processor
 
         with self.resource_alloc.temporarily_track_memory(self.nelements):  # 'E' (lsvec)
-            self.resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory before we reinit
+            #self.resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory before we reinit
             self.model.sim.bulk_fill_probs(self.probs, self.layout, self.resource_alloc)
-            if self.prob_clip_interval is not None and shared_mem_leader:
+            
+            if self.prob_clip_interval is not None: # and shared_mem_leader:
                 _np.clip(self.probs, self.prob_clip_interval[0], self.prob_clip_interval[1], out=self.probs)
-            self.resource_alloc.host_comm_barrier()  # shared memory barrier
+            #self.resource_alloc.host_comm_barrier()  # shared memory barrier  REMOVE - and other host_comm_barrier calls below
 
             if oob_check:  # Only used for termgap cases
                 if not self.model.sim.bulk_test_if_paths_are_sufficient(self.layout, self.probs,
                                                                         self.resource_alloc, verbosity=1):
                     raise ValueError("Out of bounds!")  # signals LM optimizer
 
-            lsvec = self.raw_objfn.lsvec(self.probs, self.counts, self.total_counts, self.freqs)
-            lsvec = _np.concatenate((lsvec, self._lspenaltyvec(paramvec)))
+            lsvec_no_penalty = self.raw_objfn.lsvec(self.probs, self.counts, self.total_counts, self.freqs)            
+            lsvec[:] = _np.concatenate((lsvec_no_penalty, self._lspenaltyvec(paramvec))) \
+                          if self._process_penalties else lsvec_no_penalty
 
         if self.firsts is not None:
             self._update_lsvec_for_omitted_probs(lsvec, self.probs)
@@ -4614,19 +4719,22 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         tm = _time.time()
         if paramvec is not None: self.model.from_vector(paramvec)
         else: paramvec = self.model.to_vector()
+        terms = self.obj.view()
 
         # Whether this rank is the "leader" of all the processors accessing the same shared self.jac and self.probs mem.
         #  Only leader processors should modify the contents of the shared memory, so we only apply operations *once*
-        shared_mem_leader = self.resource_alloc.is_host_leader
+        #shared_mem_leader = self.resource_alloc.is_host_leader
 
         with self.resource_alloc.temporarily_track_memory(self.nelements):  # 'E' (terms)
-            self.resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory before we reinit
-            if self.prob_clip_interval is not None and shared_mem_leader:
+            #self.resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory before we reinit
+            self.model.sim.bulk_fill_probs(self.probs, self.layout, self.resource_alloc)
+            if self.prob_clip_interval is not None: # and shared_mem_leader:
                 _np.clip(self.probs, self.prob_clip_interval[0], self.prob_clip_interval[1], out=self.probs)
-            self.resource_alloc.host_comm_barrier()  # shared mem barrier
+            #self.resource_alloc.host_comm_barrier()  # shared mem barrier
 
-            terms = self.raw_objfn.terms(self.probs, self.counts, self.total_counts, self.freqs)
-            terms = _np.concatenate((terms, self._penaltyvec(paramvec)))
+            terms_no_penalty = self.raw_objfn.terms(self.probs, self.counts, self.total_counts, self.freqs)
+            terms[:] = _np.concatenate((terms_no_penalty, self._penaltyvec(paramvec))) \
+                       if self._process_penalties else terms_no_penalty
 
         if self.firsts is not None:
             self._update_terms_for_omitted_probs(terms, self.probs)
@@ -4664,15 +4772,27 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
         # Whether this rank is the "leader" of all the processors accessing the same shared self.jac and self.probs mem.
         #  Only leader processors should modify the contents of the shared memory, so we only apply operations *once*
-        shared_mem_leader = self.resource_alloc.is_host_leader
+        #shared_mem_leader = self.resource_alloc.is_host_leader
 
         with self.resource_alloc.temporarily_track_memory(2 * self.nelements):  # 'E' (dg_dprobs, lsvec)
-            self.resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory before we reinit
-            self.model.sim.bulk_fill_dprobs(dprobs, self.layout, self.probs, self.resource_alloc)
+            #self.resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory before we reinit
+
+            #OLD jac distribution method
+            # Usual: rootcomm -this_fn-> atom_comm (sub_comm) -> block_comm  
+            # New: rootcomm -> jac_slice_comm -this_fn-> atom_comm (sub_comm) -> block_comm  (??)
+            # it could be that the comm in resource_alloc is already split for jac distribution, but this
+            # would mean code that doesn't compute jacobians would be less efficient.
+            # maybe hold a jac_slice_comm that is different?
+            # break up:  N procs = Natom_eaters * Nprocs_per_atom_eater ;  Nprocs_per_atom_eater = Nparamblk_eaters * Nprocs_per_paramblk_eater
+            #wrtSlice = resource_alloc.jac_slice if (resource_alloc.jac_distribution_method == "columns") \
+            #           else slice(0, self.model.num_params)
+
+            self.model.sim.bulk_fill_dprobs(dprobs, self.layout, self.probs, self.resource_alloc)  # wrtSlice)
             #REMOVE print("%d: DLSVEC dprobs = %g, probs = %g" % (self.resource_alloc.comm.rank, _np.linalg.norm(dprobs), _np.linalg.norm(self.probs)))
-            if self.prob_clip_interval is not None and shared_mem_leader:
+            if self.prob_clip_interval is not None: # and shared_mem_leader:
                 _np.clip(self.probs, self.prob_clip_interval[0], self.prob_clip_interval[1], out=self.probs)
-            self.resource_alloc.host_comm_barrier()  # shared mem barrier
+            #self.resource_alloc.host_comm_barrier()  # shared mem barrier
+
             #REMOVE print("%d: DLSVEC probs post clip = %g" % (self.resource_alloc.comm.rank, _np.linalg.norm(self.probs)))
             # Note: barriers like the above must follow shared_mem_leader conditional blocks, as these the non-leader
             # processors must wait until the leader makes the given update to (their) shared memory before proceeding.
@@ -4699,21 +4819,23 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
                 for ii, i in enumerate(self.indicesOfCircuitsWithOmittedData):
                     self.dprobs_omitted_rowsum[ii, :] = _np.sum(dprobs[self.layout.indices_for_index(i), :], axis=0)
 
-            if shared_mem_leader:  # Note: no need for barrier directly below as barrier further down suffices
-                dg_dprobs, lsvec = self.raw_objfn.dlsvec_and_lsvec(self.probs, self.counts, self.total_counts,
-                                                                   self.freqs)
-                dprobs *= dg_dprobs[:, None]
+            #if shared_mem_leader:  # Note: no need for barrier directly below as barrier further down suffices
+            dg_dprobs, lsvec = self.raw_objfn.dlsvec_and_lsvec(self.probs, self.counts, self.total_counts,
+                                                               self.freqs)
+            dprobs *= dg_dprobs[:, None]
             # (nelements,N) * (nelements,1)   (N = dim of vectorized model)
             # this multiply also computes jac, which is just dprobs
             # with a different shape (jac.shape == [nelements,nparams])
 
-        if shared_mem_leader:  # only "leader" modifies shared mem (dprobs & self.jac)
-            if self.firsts is not None:
+        #if shared_mem_leader:  # only "leader" modifies shared mem (dprobs & self.jac)
+        if self.firsts is not None:
             #Note: lsvec is assumed to be *not* updated w/omitted probs contribution
-                self._update_dlsvec_for_omitted_probs(dprobs, lsvec, self.probs, self.dprobs_omitted_rowsum)
+            self._update_dlsvec_for_omitted_probs(dprobs, lsvec, self.probs, self.dprobs_omitted_rowsum)
 
+        if self._process_penalties:
             self._fill_lspenaltyvec_jac(paramvec, self.jac[self.nelements:, :])  # jac.shape == (nelements+N,N)
-        self.resource_alloc.host_comm_barrier()  # shared mem barrier
+        #self.resource_alloc.host_comm_barrier()  # shared mem barrier
+
         #REMOVE print("%d: DLSVEC jac = %g" % (self.resource_alloc.comm.rank, _np.linalg.norm(self.jac)))
 
         # REMOVE => unit tests?
@@ -4755,31 +4877,32 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
         # Whether this rank is the "leader" of all the processors accessing the same shared self.jac and self.probs mem.
         #  Only leader processors should modify the contents of the shared memory, so we only apply operations *once*
-        shared_mem_leader = self.resource_alloc.is_host_leader
+        #shared_mem_leader = self.resource_alloc.is_host_leader
 
         with self.resource_alloc.temporarily_track_memory(2 * self.nelements):  # 'E' (dg_dprobs, lsvec)
-            self.resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory before we reinit
+            #self.resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory before we reinit
             self.model.sim.bulk_fill_dprobs(dprobs, self.layout, self.probs, self.resource_alloc)
-            if self.prob_clip_interval is not None and shared_mem_leader:
+            if self.prob_clip_interval is not None: # and shared_mem_leader:
                 _np.clip(self.probs, self.prob_clip_interval[0], self.prob_clip_interval[1], out=self.probs)
-            self.resource_alloc.host_comm_barrier()  # shared mem barrier
+            #self.resource_alloc.host_comm_barrier()  # shared mem barrier
 
             if self.firsts is not None:
                 for ii, i in enumerate(self.indicesOfCircuitsWithOmittedData):
                     self.dprobs_omitted_rowsum[ii, :] = _np.sum(dprobs[self.layout.indices_for_index(i), :], axis=0)
 
-            if shared_mem_leader:  # Note: barrier below work suffices for this condition too
-                dprobs *= self.raw_objfn.dterms(self.probs, self.counts, self.total_counts, self.freqs)[:, None]
+            #if shared_mem_leader:  # Note: barrier below work suffices for this condition too
+            dprobs *= self.raw_objfn.dterms(self.probs, self.counts, self.total_counts, self.freqs)[:, None]
             # (nelements,N) * (nelements,1)   (N = dim of vectorized model)
             # this multiply also computes jac, which is just dprobs
             # with a different shape (jac.shape == [nelements,nparams])
 
-        if shared_mem_leader:
-            if self.firsts is not None:
-                self._update_dterms_for_omitted_probs(dprobs, self.probs, self.dprobs_omitted_rowsum)
+        #if shared_mem_leader:
+        if self.firsts is not None:
+            self._update_dterms_for_omitted_probs(dprobs, probs, self.dprobs_omitted_rowsum)
 
+        if self._process_penalties:
             self._fill_dterms_penalty(paramvec, self.jac[self.nelements:, :])  # jac.shape == (nelements+N,N)
-        self.resource_alloc.host_comm_barrier()  # shared mem barrier
+        #self.resource_alloc.host_comm_barrier()  # shared mem barrier
 
         # REMOVE => unit tests
         #if self.check_jacobian: _opt.check_jac(lambda v: self.lsvec(
@@ -4811,7 +4934,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
         # Whether this rank is the "leader" of all the processors accessing the same shared self.jac and self.probs mem.
         #  Only leader processors should modify the contents of the shared memory, so we only apply operations *once*
-        shared_mem_leader = self.resource_alloc.is_host_leader
+        #shared_mem_leader = self.resource_alloc.is_host_leader
 
         #General idea of what we're doing:
         # Let f(pv) = g(probs(pv)), and let there be nelements elements (i.e. probabilities) & len(pv) == N
@@ -4821,19 +4944,23 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         #                  =  (KM,)       * (KM,N2)       * (KM,N1)    + (KM,)     * (KM,N1,N2)
         # Note that we need to end up with an array with shape (KM,N1,N2), and so we need to swap axes of first term
 
+        assert(self.resource_alloc.jac_distribution_method is None), \
+            "Fancy jacobian distribution not supported for Hessian yet!"
+        #Note: this means self.nparams == self.global_nparams
+
         if paramvec is not None: self.model.from_vector(paramvec)
         dprobs = self.jac[0:self.nelements, :]  # avoid mem copying: use jac mem for dprobs
-        hprobs, hprobs_shm = _smt.create_shared_ndarray(self.resource_alloc,
-                                                        (self.nelements, self.nparams, self.nparams), 'd',
-                                                        track_memory=False)
+        hprobs, hprobs_shm = self.layout.allocate_local_array('epp', 'd', self.resource_alloc)
 
         # 'E', 'EPP' (dg_dprobs, d2g_dprobs2, temporary variable dprobs_dp2 * dprobs_dp1 )
         with self.resource_alloc.temporarily_track_memory(2 * self.nelements + self.nelements * self.nparams**2):
-            self.resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory before we reinit
+            #self.resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory before we reinit
             self.model.sim.bulk_fill_hprobs(hprobs, self.layout, self.probs, dprobs, None, self.resource_alloc)
-            if self.prob_clip_interval is not None and shared_mem_leader:
+            if self.prob_clip_interval is not None: # and shared_mem_leader:
                 _np.clip(self.probs, self.prob_clip_interval[0], self.prob_clip_interval[1], out=self.probs)
-            self.resource_alloc.host_comm_barrier()  # shared mem barrier
+            #self.resource_alloc.host_comm_barrier()  # shared mem barrier
+
+            #TODO: fix this function - self.probs and hprobs may only have *part* of their global array.
 
             dg_dprobs = self.raw_objfn.dterms(self.probs, self.counts, self.total_counts, self.freqs)[:, None, None]
             d2g_dprobs2 = self.raw_objfn.hterms(self.probs, self.counts, self.total_counts, self.freqs)[:, None, None]
@@ -4843,14 +4970,18 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             #hessian = d2g_dprobs2 * dprobs_dp2 * dprobs_dp1 + dg_dprobs * hprobs
             # do the above line in a more memory efficient way:
             hessian = hprobs
-            if shared_mem_leader:
-                hessian *= dg_dprobs
-                hessian += d2g_dprobs2 * dprobs_dp2 * dprobs_dp1
-            self.resource_alloc.host_comm_barrier()  # shared mem barrier
+            #if shared_mem_leader:
+            hessian *= dg_dprobs
+            hessian += d2g_dprobs2 * dprobs_dp2 * dprobs_dp1
+            #self.resource_alloc.host_comm_barrier()  # shared mem barrier
 
         ret = _np.sum(hessian, axis=0)  # sum over operation sequences and spam labels => (N)
         _smt.cleanup_shared_ndarray(hprobs_shm)
-        return ret
+        #NOTE: it doesn't seem like we need shared memory at all here - only if we were returning
+        # a portion of it... would need a fill_ function to make this useful/needed TODO - remove shared mem above?
+        #TODO - expand allocate_local_array to take hessian array shape and return this value?
+        
+        return ret  # returns just the part of the Hessian that this processor "owns"
 
     def approximate_hessian(self, paramvec=None):
         #Almost the same as function above but drops hprobs term
@@ -4880,18 +5011,23 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
         # Whether this rank is the "leader" of all the processors accessing the same shared self.jac and self.probs mem.
         #  Only leader processors should modify the contents of the shared memory, so we only apply operations *once*
-        shared_mem_leader = self.resource_alloc.is_host_leader
+        #shared_mem_leader = self.resource_alloc.is_host_leader
 
         if paramvec is not None: self.model.from_vector(paramvec)
         dprobs = self.jac[0:self.nelements, :]  # avoid mem copying: use jac mem for dprobs
 
+        #REMOVE
+        #assert(self.resource_alloc.jac_distribution_method is None), \
+        #    "Fancy jacobian distribution not supported for Hessian yet!"
+        ##Note: this means self.nparams == self.global_nparams
+
         # 'E', 'PP' (d2g_dprobs2, einsum result )
         with self.resource_alloc.temporarily_track_memory(self.nelements + self.nparams**2):
-            self.resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory before we reinit
+            #self.resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory before we reinit
             self.model.sim.bulk_fill_dprobs(dprobs, self.layout, self.probs, self.resource_alloc)
-            if self.prob_clip_interval is not None and shared_mem_leader:
+            if self.prob_clip_interval is not None: # and shared_mem_leader:
                 _np.clip(self.probs, self.prob_clip_interval[0], self.prob_clip_interval[1], out=self.probs)
-            self.resource_alloc.host_comm_barrier()  # shared mem barrier
+            #self.resource_alloc.host_comm_barrier()  # shared mem barrier
 
             d2g_dprobs2 = self.raw_objfn.hterms(self.probs, self.counts, self.total_counts, self.freqs)  # [:,None,None]
             #dprobs_dp1 = dprobs[:, :, None]  # (nelements,N,1)
@@ -4900,7 +5036,8 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             #hessian = d2g_dprobs2 * dprobs_dp2 * dprobs_dp1  # this creates a huge array - do this instead:
             hessian = _np.einsum('a,ab,ac->bc', d2g_dprobs2, dprobs, dprobs)
 
-        return hessian
+        #TODO - return an array allocated via layout.allocate_local_array?
+        return hessian  # returns just the part of the (approximate) Hessian that this processor "owns"
 
     def hessian(self, paramvec=None):
         """
@@ -4966,8 +5103,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         hessian = dprobs12; hessian += hprobs
 
         # hessian[iElement,iModelParam1,iModelParams2] contains all d2(logl)/d(modelParam1)d(modelParam2) contributions
-        # suming over element dimension (operation sequences in eval_subtree) gets current subtree contribution
-        # for (N,N')-sized block of Hessian
+        # suming over element dimension gets current subtree contribution for (N,N')-sized block of Hessian
         return _np.sum(hessian, axis=0)
 
 
@@ -5462,6 +5598,10 @@ class TimeDependentMDCObjectiveFunction(MDCObjectiveFunction):
         dummy = RawObjectiveFunction({}, mdc_store.resource_alloc, name, description, verbosity)
         super().__init__(dummy, mdc_store, verbosity)
 
+        assert(self.resource_alloc.jac_distribution_method is None), \
+            "Fancy jacobian distribution not supported for time-dependent objective fns yet!"
+        #Note: this means self.nparams == self.global_nparams
+
         self.time_dependent = True
         self._ds_cache = {}  # cache for dataset-derived quantities that can improve performance.
 
@@ -5482,7 +5622,9 @@ class TimeDependentMDCObjectiveFunction(MDCObjectiveFunction):
             self.resource_alloc.add_tracked_memory((self.nelements + self.ex) * self.nparams)  # ~ 'EP'
             self.jac = _np.empty((self.nelements + self.ex, self.nparams), 'd')
 
-        self.maxCircuitLength = max([len(x) for x in self.circuits])
+        #self.maxCircuitLength = max([len(x) for x in self.circuits])  #REMOVE?
+        # If desired, we may need to make it local to this processor, which may not have data for all of self.circuits
+
         self.num_total_outcomes = [self.model.compute_num_outcomes(c) for c in self.circuits]  # to detect sparse-data
 
     def __del__(self):

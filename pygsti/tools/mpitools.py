@@ -76,7 +76,7 @@ def distribute_indices(indices, comm, allow_split_comm=True):
         nprocs = comm.Get_size()
         rank = comm.Get_rank()
 
-    loc_indices, owners = distribute_indices_base(indices, nprocs, rank,
+    loc_indices, owners, _ = distribute_indices_base(indices, nprocs, rank,
                                                   allow_split_comm)
 
     #Split comm into sub-comms when there are more procs than
@@ -156,12 +156,16 @@ def distribute_indices_base(indices, nprocs, rank, allow_split_comm=True):
             nloc_std = nprocs // nIndices  # this many processors per index, w/out any "extra"
             extra = nprocs - nloc_std * nIndices  # extra procs
             # indices 0 to extra-1 get (nloc_std+1) processors each
-            # incides extra to nIndices-1 get nloc_std processors each
+            # indices extra to nIndices-1 get nloc_std processors each
             if rank < extra * (nloc_std + 1):
-                loc_indices = [indices[rank // (nloc_std + 1)]]
+                k = rank // (nloc_std + 1)
+                loc_indices = [indices[k]]
+                peer_ranks = tuple(range(k * (nloc_std + 1), (k + 1) * (nloc_std + 1)))
             else:
-                loc_indices = [indices[
-                    extra + (rank - extra * (nloc_std + 1)) // nloc_std]]
+                k = (rank - extra * (nloc_std + 1)) // nloc_std
+                loc_indices = [indices[extra + k]]
+                peer_ranks = tuple(range(extra * (nloc_std + 1) + k * nloc_std,
+                                         extra * (nloc_std + 1) + (k + 1) * nloc_std))
 
             # owners dict gives rank of first (chief) processor for each index
             # (the "owner" of a given index is responsible for communicating
@@ -178,10 +182,11 @@ def distribute_indices_base(indices, nprocs, rank, allow_split_comm=True):
             else:
                 loc_indices = []  # extra procs do nothing
             owners = {indices[i]: i for i in range(nIndices)}
+            peer_ranks = ()
 
     else:
         nloc_std = nIndices // nprocs
-        extra = nIndices - nloc_std * nprocs  # extra indices
+        extra = nIndices - nloc_std * nprocs  # extra indices        
         # so assign (nloc_std+1) indices to first extra procs
         if rank < extra:
             nloc = nloc_std + 1
@@ -200,8 +205,9 @@ def distribute_indices_base(indices, nprocs, rank, allow_split_comm=True):
             nstart = extra * (nloc_std + 1) + (r - extra) * nloc_std
             for i in range(nstart, nstart + nloc_std):
                 owners[indices[i]] = r
+        peer_ranks = ()
 
-    return loc_indices, owners
+    return loc_indices, owners, peer_ranks
 
 
 def slice_up_slice(slc, num_slices):
@@ -320,7 +326,7 @@ def distribute_slice(s, comm, allow_split_comm=True):
 
     slices = slice_up_slice(s, min(nprocs, _slct.length(s)))
     assert(len(slices) <= nprocs)
-    loc_iSlices, slcOwners = \
+    loc_iSlices, slcOwners, _ = \
         distribute_indices_base(list(range(len(slices))), nprocs, rank,
                                 allow_split_comm)
     assert(len(loc_iSlices) <= 1)  # should not assign more than one slice to

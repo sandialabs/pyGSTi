@@ -232,3 +232,43 @@ def divide(slc, max_len):
                                 slc.step))
         sub_start += max_len * step
     return sub_slices
+
+
+def slice_of_slice(slc, base_slc):
+    """
+    A slice that is the composition of `base_slc` and `slc`.
+
+    So that when indexing an array `a`,
+    `a[slice_of_slice(slc, base_slc)] == a[base_slc][slc]`
+
+    Parameters
+    ----------
+    slc : slice
+        the slice to take out of `base_slc`.
+
+    base_slc : slice
+        the original "base" slice to act upon.
+
+    Returns
+    -------
+    slice
+    """
+    #NOTE: this is very similar to shift(slc, base_slc.start) above - consolidate or remove this function?
+    assert(slc.step == base_slc.step == 1), "This function only works with step == 1 slices so far"
+    if slc.start is None and slc.stop is None: return base_slc
+    if base_slc.start is None and base_slc.stop is None: return slc
+
+    if base_slc.start is None and slc.start is None:
+        start = None
+    else:
+        start = (base_slc.start if (base_slc.start is not None) else 0) \
+                + (slc.start if (slc.start is not None) else 0)
+
+    if base_slc.stop is None and slc.stop is None:
+        stop = None
+    else:
+        stop = (base_slc.start if (base_slc.start is not None) else 0) \
+                + (slc.stop if (slc.stop is not None) else 0)
+        assert(base_slc.stop is None or stop <= base_slc.stop)
+    return slice(start, stop)
+    

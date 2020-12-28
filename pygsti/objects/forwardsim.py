@@ -20,11 +20,13 @@ from ..tools import slicetools as _slct
 from ..tools import basistools as _bt
 from ..tools import matrixtools as _mt
 from ..tools import mpitools as _mpit
+from ..tools import sharedmemtools as _smt
 from . import spamvec as _sv
 from . import operation as _op
 from . import labeldicts as _ld
 from .resourceallocation import ResourceAllocation as _ResourceAllocation
 from .copalayout import CircuitOutcomeProbabilityArrayLayout as _CircuitOutcomeProbabilityArrayLayout
+from .distlayout import DistributableCOPALayout as _DistributableCOPALayout
 from .cachedlayout import CachedCOPALayout as _CachedCOPALayout
 from .circuit import Circuit as _Circuit
 
@@ -334,29 +336,36 @@ class ForwardSimulator(object):
         if isinstance(circuits, _CircuitOutcomeProbabilityArrayLayout):
             copa_layout = circuits
         else:
-            circuits = [c if isinstance(c, _Circuit) else _Circuit(c) for c in circuits]  # cast to Circuits (needed?)
-            copa_layout = self.create_layout(circuits, resource_alloc=resource_alloc)
+            copa_layout = self.create_layout(circuits, resource_alloc=resource_alloc, verbosity=1)  # verbosity=1 DEBUG!!!
 
         resource_alloc = _ResourceAllocation.cast(resource_alloc)
         with resource_alloc.temporarily_track_memory(copa_layout.num_elements):  # 'E' (vp)
-            vp = _np.empty(copa_layout.num_elements, 'd')
+            vp, vp_shm = copa_layout.allocate_local_array('e', 'd', resource_alloc, track_memory=False)
             if smartc:
                 smartc.cached_compute(self.bulk_fill_probs, vp, copa_layout,
                                       resource_alloc, _filledarrays=(0,))
             else:
                 self.bulk_fill_probs(vp, copa_layout, resource_alloc)
+            vp = copa_layout.gather_local_array('e', vp, resource_alloc)  # gather data onto rank-0 processor
+            _smt.cleanup_shared_ndarray(vp_shm)
+            
+            #REMOVE
+            #resource_alloc.comm.barrier()
+            #if resource_alloc.comm.rank == 0:
+            #    print("DB: gathered data = ",vp)
 
-            if clip_to is not None:
-                vp = _np.clip(vp, clip_to[0], clip_to[1])
+        if resource_alloc.comm is None or resource_alloc.comm.rank == 0:
+            ret = _collections.OrderedDict()
+            layout = copa_layout.global_layout if isinstance(copa_layout, _DistributableCOPALayout) else copa_layout
+            for elInds, c, outcomes in layout.iter_unique_circuits():
+                #REMOVE print("Layout: ",c.str, outcomes, elInds)
+                if isinstance(elInds, slice): elInds = _slct.indices(elInds)
+                ret[c] = _ld.OutcomeLabelDict([(outLbl, vp[ei]) for ei, outLbl in zip(elInds, outcomes)])
+            return ret
+        else:
+            return None # on non-root ranks
 
-        ret = _collections.OrderedDict()
-        for elInds, c, outcomes in copa_layout.iter_unique_circuits():
-            if isinstance(elInds, slice): elInds = _slct.indices(elInds)
-            ret[c] = _ld.OutcomeLabelDict([(outLbl, vp[ei]) for ei, outLbl in zip(elInds, outcomes)])
-        return ret
-
-    def bulk_dprobs(self, circuits, resource_alloc=None, smartc=None,
-                    wrt_filter=None):
+    def bulk_dprobs(self, circuits, resource_alloc=None, smartc=None):
         """
         Construct a dictionary containing the probability derivatives for an entire list of circuits.
 
@@ -374,12 +383,6 @@ class ForwardSimulator(object):
             A cache object to cache & use previously cached values inside this
             function.
 
-        wrt_filter : list of ints, optional
-            If not None, a list of integers specifying which parameters
-            to include in the derivative dimension. This argument is used
-            internally for distributing calculations across multiple
-            processors and to control memory usage.
-
         Returns
         -------
         dprobs : dictionary
@@ -390,22 +393,27 @@ class ForwardSimulator(object):
         if isinstance(circuits, _CircuitOutcomeProbabilityArrayLayout):
             copa_layout = circuits
         else:
-            copa_layout = self.create_layout(circuits, resource_alloc=resource_alloc)
+            copa_layout = self.create_layout(circuits, array_types=('EP',), resource_alloc=resource_alloc)
 
         resource_alloc = _ResourceAllocation.cast(resource_alloc)
         with resource_alloc.temporarily_track_memory(copa_layout.num_elements * self.model.num_params):  # 'EP' (vdp)
             #Note: don't use smartc for now.
-            vdp = _np.empty((copa_layout.num_elements, self.model.num_params), 'd')
-            self.bulk_fill_dprobs(vdp, copa_layout, None, resource_alloc, wrt_filter)
+            vdp, vdp_shm = copa_layout.allocate_local_array('ep', 'd', resource_alloc, track_memory=False)
+            self.bulk_fill_dprobs(vdp, copa_layout, None, resource_alloc)
+            vdp = copa_layout.gather_local_array('ep', vdp, resource_alloc)  # gather data onto rank-0 processor
+            _smt.cleanup_shared_ndarray(vdp_shm)
 
-        ret = _collections.OrderedDict()
-        for elInds, c, outcomes in copa_layout.iter_unique_circuits():
-            if isinstance(elInds, slice): elInds = _slct.indices(elInds)
-            ret[c] = _ld.OutcomeLabelDict([(outLbl, vdp[ei]) for ei, outLbl in zip(elInds, outcomes)])
-        return ret
+        if resource_alloc.comm is None or resource_alloc.comm.rank == 0:
+            ret = _collections.OrderedDict()
+            layout = copa_layout.global_layout if isinstance(copa_layout, _DistributableCOPALayout) else copa_layout
+            for elInds, c, outcomes in layout.iter_unique_circuits():
+                if isinstance(elInds, slice): elInds = _slct.indices(elInds)
+                ret[c] = _ld.OutcomeLabelDict([(outLbl, vdp[ei]) for ei, outLbl in zip(elInds, outcomes)])
+            return ret
+        else:
+            return None # on non-root ranks
 
-    def bulk_hprobs(self, circuits, resource_alloc=None, smartc=None,
-                    wrt_filter1=None, wrt_filter2=None):
+    def bulk_hprobs(self, circuits, resource_alloc=None, smartc=None):
         """
         Construct a dictionary containing the probability Hessians for an entire list of circuits.
 
@@ -423,14 +431,6 @@ class ForwardSimulator(object):
             A cache object to cache & use previously cached values inside this
             function.
 
-        wrt_filter1 : list of ints, optional
-            If not None, a list of integers specifying which model parameters
-            to differentiate with respect to in the first (row) derivative operations.
-
-        wrt_filter2 : list of ints, optional
-            If not None, a list of integers specifying which model parameters
-            to differentiate with respect to in the second (col) derivative operations.
-
         Returns
         -------
         hprobs : dictionary
@@ -446,15 +446,21 @@ class ForwardSimulator(object):
         resource_alloc = _ResourceAllocation.cast(resource_alloc)
         with resource_alloc.temporarily_track_memory(copa_layout.num_elements * self.model.num_params**2):  # 'EPP'(vhp)
             #Note: don't use smartc for now.
-            vhp = _np.empty((copa_layout.num_elements, self.model.num_params, self.model.num_params), 'd')
-            self.bulk_fill_hprobs(vhp, copa_layout, None, None, None, resource_alloc,
-                                  wrt_filter1, wrt_filter1)
+            vhp, vhp_shm = copa_layout.allocate_local_array('epp', 'd', resource_alloc, track_memory=False)
+            self.bulk_fill_hprobs(vhp, copa_layout, None, None, None, resource_alloc)
+            vhp = copa_layout.gather_local_array('epp', vhp, resource_alloc)  # gather data onto rank-0 processor
+            _smt.cleanup_shared_ndarray(vhp_shm)
 
-        ret = _collections.OrderedDict()
-        for elInds, c, outcomes in copa_layout.iter_unique_circuits():
-            if isinstance(elInds, slice): elInds = _slct.indices(elInds)
-            ret[c] = _ld.OutcomeLabelDict([(outLbl, vhp[ei]) for ei, outLbl in zip(elInds, outcomes)])
-        return ret
+        if resource_alloc.comm is None or resource_alloc.comm.rank == 0:
+            ret = _collections.OrderedDict()
+            layout = copa_layout.global_layout if isinstance(copa_layout, _DistributableCOPALayout) else copa_layout
+            for elInds, c, outcomes in layout.iter_unique_circuits():
+                if isinstance(elInds, slice): elInds = _slct.indices(elInds)
+                ret[c] = _ld.OutcomeLabelDict([(outLbl, vhp[ei]) for ei, outLbl in zip(elInds, outcomes)])
+            return ret
+        else:
+            return None # on non-root ranks
+
 
     def bulk_fill_probs(self, array_to_fill, layout, resource_alloc=None):
         """
@@ -506,7 +512,7 @@ class ForwardSimulator(object):
                                                         outcomes, resource_alloc, time)
 
     def bulk_fill_dprobs(self, array_to_fill, layout,
-                         pr_array_to_fill=None, resource_alloc=None, wrt_filter=None):
+                         pr_array_to_fill=None, resource_alloc=None):
         """
         Compute the outcome probability-derivatives for an entire tree of circuits.
 
@@ -534,26 +540,18 @@ class ForwardSimulator(object):
         resource_alloc : ResourceAllocation, optional
             A resource allocation object describing the available resources and a strategy
             for partitioning them.
-o
-        wrt_filter : list of ints, optional
-            If not None, a list of integers specifying which parameters
-            to include in the derivative dimension. This argument is used
-            internally for distributing calculations across multiple
-            processors and to control memory usage.
 
         Returns
         -------
         None
         """
         resource_alloc = _ResourceAllocation.cast(resource_alloc)
-        return self._bulk_fill_dprobs(array_to_fill, layout, pr_array_to_fill, resource_alloc, wrt_filter)
+        return self._bulk_fill_dprobs(array_to_fill, layout, pr_array_to_fill, resource_alloc)
 
-    def _bulk_fill_dprobs(self, array_to_fill, layout, pr_array_to_fill, resource_alloc, wrt_filter):
-        if wrt_filter is not None:
-            wrt_filter = _slct.list_to_slice(wrt_filter)  # for now, require the filter specify a slice
+    def _bulk_fill_dprobs(self, array_to_fill, layout, pr_array_to_fill, resource_alloc):
         if pr_array_to_fill is not None:
             self._bulk_fill_probs_block(pr_array_to_fill, layout, resource_alloc)
-        return self._bulk_fill_dprobs_block(array_to_fill, None, layout, wrt_filter, resource_alloc)
+        return self._bulk_fill_dprobs_block(array_to_fill, None, layout, None, resource_alloc)
 
     def _bulk_fill_dprobs_block(self, array_to_fill, dest_param_slice, layout, param_slice, resource_alloc):
 
@@ -593,7 +591,7 @@ o
 
     def bulk_fill_hprobs(self, array_to_fill, layout,
                          pr_array_to_fill=None, deriv1_array_to_fill=None, deriv2_array_to_fill=None,
-                         resource_alloc=None, wrt_filter1=None, wrt_filter2=None):
+                         resource_alloc=None):
         """
         Compute the outcome probability-Hessians for an entire list of circuits.
 
@@ -629,14 +627,6 @@ o
             A resource allocation object describing the available resources and a strategy
             for partitioning them.
 
-        wrt_filter1 : list of ints, optional
-            If not None, a list of integers specifying which model parameters
-            to differentiate with respect to in the first (row) derivative operations.
-
-        wrt_filter2 : list of ints, optional
-            If not None, a list of integers specifying which model parameters
-            to differentiate with respect to in the second (col) derivative operations.
-
         Returns
         -------
         None
@@ -644,32 +634,22 @@ o
         resource_alloc = _ResourceAllocation.cast(resource_alloc)
         return self._bulk_fill_hprobs(array_to_fill, layout, pr_array_to_fill,
                                       deriv1_array_to_fill, deriv2_array_to_fill,
-                                      resource_alloc, wrt_filter1, wrt_filter2)
+                                      resource_alloc)
 
     def _bulk_fill_hprobs(self, array_to_fill, layout,
                           pr_array_to_fill, deriv1_array_to_fill, deriv2_array_to_fill,
-                          resource_alloc, wrt_filter1, wrt_filter2):
-        if wrt_filter1 is not None:
-            wrtSlice1 = _slct.list_to_slice(wrt_filter1)  # for now, require the filter specify a slice
-        else:
-            wrtSlice1 = None
-
-        if wrt_filter2 is not None:
-            wrtSlice2 = _slct.list_to_slice(wrt_filter2)  # for now, require the filter specify a slice
-        else:
-            wrtSlice2 = None
-
+                          resource_alloc):
         if pr_array_to_fill is not None:
             self._bulk_fill_probs_block(pr_array_to_fill, layout, resource_alloc)
         if deriv1_array_to_fill is not None:
-            self._bulk_fill_dprobs_block(deriv1_array_to_fill, None, layout, wrtSlice1, resource_alloc)
+            self._bulk_fill_dprobs_block(deriv1_array_to_fill, None, layout, None, resource_alloc)
         if deriv2_array_to_fill is not None:
             if wrtSlice1 == wrtSlice2:
                 deriv2_array_to_fill[:, :] = deriv1_array_to_fill[:, :]
             else:
-                self._bulk_fill_dprobs_block(deriv2_array_to_fill, None, layout, wrtSlice2, resource_alloc)
+                self._bulk_fill_dprobs_block(deriv2_array_to_fill, None, layout, None, resource_alloc)
 
-        return self._bulk_fill_hprobs_block(array_to_fill, None, None, layout, wrtSlice1, wrtSlice2, resource_alloc)
+        return self._bulk_fill_hprobs_block(array_to_fill, None, None, layout, None, None, resource_alloc)
 
     def _bulk_fill_hprobs_block(self, array_to_fill, dest_param_slice1, dest_param_slice2, layout,
                                 param_slice1, param_slice2, resource_alloc):
@@ -765,8 +745,16 @@ o
         yield from self._bulk_hprobs_by_block(layout, wrt_slices_list, return_dprobs_12, resource_alloc)
 
     def _bulk_hprobs_by_block(self, layout, wrt_slices_list, return_dprobs_12, resource_alloc):
+        # under distributed layout each proc already has a local set of parameter slices, and
+        # this routine could just compute parts of that piecemeal so we never compute an entire
+        # proc's hprobs (may be too large) - so I think this function signature may still be fine,
+        # but need to construct wrt_slices_list from global slices assigned to it by the layout.
+        # (note the values in the wrt_slices_list must be global param indices - just not all of them)
 
-        nElements = len(layout)
+        if isinstance(layout, _DistributableCOPALayout):  # gather data onto rank-0 processor
+            nElements = layout.host_num_elements
+        else:
+            nElements = len(layout)  # (global number of elements, though "global" isn't really defined)
 
         #NOTE: don't override this method in DistributableForwardSimulator
         # by a method that distributes wrt_slices_list across comm procs,
@@ -779,15 +767,18 @@ o
 
             if return_dprobs_12:
                 dprobs1 = _np.zeros((nElements, _slct.length(wrtSlice1)), 'd')
-                dprobs2 = _np.zeros((nElements, _slct.length(wrtSlice2)), 'd')
+                self._bulk_fill_dprobs_block(dprobs1, None, layout, wrtSlice1, resource_alloc)
+
+                if wrtSlice1 == wrtSlice2:
+                    dprobs2 = dprobs1
+                else:
+                    dprobs2 = _np.zeros((nElements, _slct.length(wrtSlice2)), 'd')
+                    self._bulk_fill_dprobs_block(dprobs2, None, layout, wrtSlice2, resource_alloc)
             else:
                 dprobs1 = dprobs2 = None
-            hprobs = _np.zeros((nElements, _slct.length(wrtSlice1),
-                                _slct.length(wrtSlice2)), 'd')
-
-            self.bulk_fill_hprobs(hprobs, layout, None, dprobs1, dprobs2, resource_alloc,
-                                  wrt_filter1=_slct.indices(wrtSlice1),
-                                  wrt_filter2=_slct.indices(wrtSlice2))
+            
+            hprobs = _np.zeros((nElements, _slct.length(wrtSlice1), _slct.length(wrtSlice2)), 'd')
+            self._bulk_fill_hprobs_block(hprobs, None, None, layout, wrtSlice1, wrtSlice2, resource_alloc)
 
             if return_dprobs_12:
                 dprobs12 = dprobs1[:, :, None] * dprobs2[:, None, :]  # (KM,N,1) * (KM,1,N') = (KM,N,N')

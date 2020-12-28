@@ -2088,15 +2088,14 @@ cdef vector[DMEffectCRep*] convert_ereps(ereps):
 def DM_mapfill_probs_block(fwdsim, np.ndarray[double, mode="c", ndim=1] array_to_fill,
                            dest_indices, layout_atom, resource_alloc):
 
-    if resource_alloc.comm is not None and resource_alloc.comm.rank != 0:
+    if resource_alloc.host_comm is not None and resource_alloc.host_comm.rank != 0:
         # we cannot utilize multiplie processors when computing a single block.  The required
-        # ending condition is that the *root* processor has its array_to_fill filled (the
-        # framework broadcasts the results of each "owner" processor (rank=0 in the sub-comm) to all
-        # other processors).  Before shared memory was utilized, it was fine to have all the
-        # processors just compute the same thing (wasteful, but fine) - but *if* array_to_fill is
-        # shared memory then having multiple processors write to the same indices could cause issues
-        # (corrupted data or slower performance).  Thus, it is better to just do nothing on all of
-        # the non-root processors.  We could also print a warning (?).
+        # ending condition is that array_to_fill on each processor has been filled.  But if memory
+        # is being shared and resource_alloc contains multiple processors on a single host, we only
+        # want *one* (the rank=0) processor to perform the computation, since array_to_fill will be
+        # shared memory that we don't want to have muliple procs using simultaneously to compute the
+        # same thing.  Thus, we just do nothing on all of the non-root host_comm processors.
+        # We could also print a warning (?).
         return
 
     dest_indices = _slct.to_array(dest_indices)  # make sure this is an array and not a slice
@@ -2127,6 +2126,7 @@ def DM_mapfill_probs_block(fwdsim, np.ndarray[double, mode="c", ndim=1] array_to
                      elabel_indices_per_circuit, final_indices_per_circuit, fwdsim.model.dim)
 
     free_rhocache(rho_cache)  #delete cache entries
+    #REMOVE if resource_alloc.comm is not None: resource_alloc.comm.barrier()  # ??
 
 
 cdef dm_mapfill_probs(double[:] array_to_fill,
@@ -2228,6 +2228,7 @@ def DM_mapfill_dprobs_block(fwdsim,
                             layout_atom, param_indices, resource_alloc):
 
     cdef double eps = 1e-7 #hardcoded?
+    #REMOVE if resource_alloc.comm is not None: resource_alloc.comm.barrier()  # ??
 
     if param_indices is None:
         param_indices = list(range(fwdsim.model.num_params))
@@ -2276,6 +2277,7 @@ def DM_mapfill_dprobs_block(fwdsim,
     iParamToFinal = {i: dest_param_indices[st + ii] for ii, i in enumerate(my_param_indices)}
 
     if sub_resource_alloc.comm is None or sub_resource_alloc.comm.rank == 0:  # only compute on 0th rank
+    #TO ADD: if resource_alloc.host_comm is not None and resource_alloc.host_comm.rank != 0:
         orig_vec = fwdsim.model.to_vector().copy()
         fwdsim.model.from_vector(orig_vec, close=False)  # ensure we call with close=False first
 
@@ -2299,6 +2301,11 @@ def DM_mapfill_dprobs_block(fwdsim,
 
     #Now each rank-0 sub_resource_alloc processor has filled the relavant parts of array_to_fill, so gather together:
     _mpit.gather_slices(all_slices, owners, array_to_fill, [], axes=1, comm=resource_alloc)
+    #REMOVE
+    #if resource_alloc.comm is not None:
+    #    print("DB: Rank%d of %d mapfill dprobs: %g" % (resource_alloc.comm.rank, resource_alloc.comm.size, np.linalg.norm(array_to_fill)))
+    #else:
+    #    print("DB: comm=None mapfill dprobs: %g" % (np.linalg.norm(array_to_fill)))
 
     free_rhocache(rho_cache)  #delete cache entries
 

@@ -15,6 +15,7 @@ import collections as _collections
 from contextlib import contextmanager as _contextmanager
 from pygsti.objects.profiler import DummyProfiler as _DummyProfiler
 from hashlib import blake2b as _blake2b
+from ..tools import sharedmemtools as _smt
 
 _dummy_profiler = _DummyProfiler()
 _GB = 1.0 / (1024.0)**3  # converts bytes to GB
@@ -73,34 +74,50 @@ class ResourceAllocation(object):
         self.comm = comm
         self.mem_limit = mem_limit
         self.host_comm = None  # comm of the processors local to each processor's host (distinct hostname)
+        self.host_ranks = None # tuple of the self.comm ranks that belong to self.host_comm
         self.interhost_comm = None  # comm used to spread results to other hosts; 1 proc on each host (node)
-        self.interhost_ranks = None  # tuple of the self.comm ranks that belong to self.interhostcomm
+        self.interhost_ranks = None  # tuple of the self.comm ranks that belong to self.interhost_comm
+        self.host_index = 0  # index of the host this proc belongs to (~= hostname)
+        self.host_index_for_rank  # a dict mapping self.comm.rank => host_index
+        self.layout_distribution = None
+        self.jac_distribution_method = None
+        self.jac_slice = None
         if profiler is not None:
             self.profiler = profiler
         else:
             self.profiler = _dummy_profiler
         self.distribute_method = distribute_method
         self.reset(allocated_memory)
+        self.layout_allocs = {}  # dict of sub-resource-allocations for use with layouts
 
     def build_hostcomms(self):
         if self.comm is None:
             self.host_comm = None
+            self.host_ranks = None
             self.interhost_comm = None
             self.interhost_ranks = None
+            self.host_index = 0
+            self.host_index_for_rank = None
             return
 
         my_rank = self.comm.rank
         my_color = None  # set to the index of my_rank within the ranks_by_hostname value that contains my_rank
-        my_hostname = _socket.gethostname()
+        from mpi4py import MPI  # DEBUG !!!
+        my_hostname = _socket.gethostname() + "_group%d" % (MPI.COMM_WORLD.rank % 4)  # DEBUG TO MIMIC MORE NODES
         my_hostid = int(_blake2b(my_hostname.encode('utf-8'), digest_size=4).hexdigest(), 16) % (1 << 31)
         self.host_comm = self.comm.Split(color=int(my_hostid), key=int(my_rank))  # Note: 32-bit ints only for mpi4py
-        #print("CREATED HOSTCOMM: ",my_hostname, my_hostid, self.host_comm.size, self.host_comm.rank)
+        self.interhost_ranks = tuple(self.host_comm.allgather(my_rank))  # store all the original ranks on our host
+        print("CREATED HOSTCOMM: ",my_hostname, my_hostid, self.host_comm.size, self.host_comm.rank)
 
         hostnames_by_rank = self.comm.allgather(my_hostname)  # ~"node id" of each processor in self.comm
-        ranks_by_hostname = _collections.defaultdict(list)
+        ranks_by_hostname = _collections.OrderedDict()
         for rank, hostname in enumerate(hostnames_by_rank):
+            if hostname not in ranks_by_hostname: ranks_by_hostname[hostname] = []
             if rank == my_rank: my_color = len(ranks_by_hostname[hostname])
             ranks_by_hostname[hostname].append(rank)
+        hostname_indices = {hostname: i for i, hostname in enumerate(ranks_by_hostname.keys())}
+        self.host_index = hostname_indices[my_hostname]
+        self.host_index_for_rank = {rank: hostname_indices[hostname] for rank, hostname in enumerate(hostnames_by_rank)}
 
         #check to make sure that each host id that is present occurs the same number of times
         assert(len(set(map(len, ranks_by_hostname.values()))) == 1), \
@@ -108,8 +125,9 @@ class ResourceAllocation(object):
              % str(ranks_by_hostname))
 
         #create sub-comm that groups disjoint sets of processors across all the (present) nodes
-        self.interhost_comm = self.comm.Split(color=my_color, key=my_rank)
+        self.interhost_comm = self.comm.Split(color=my_color, key=self.host_index)
         self.interhost_ranks = tuple(self.interhost_comm.allgather(my_rank))  # store all the original ranks by color
+        assert(self.interhost_comm.rank == self.host_index)  # because of key= in Split call above
 
     @property
     def is_host_leader(self):
@@ -233,6 +251,115 @@ class ResourceAllocation(object):
                               % (self.mem_limit / (1024.0**3)))
         yield
         self.allocated_memory -= nbytes
+
+    def layout_distribution(self, layout):
+        """
+        Cached `layout.distribute(self)` call.
+
+        Parameters
+        ----------
+        layout : DistributableCOPALayout
+            The layout to distributed.
+
+        Returns
+        -------
+        myAtomIndices : list
+            A list of integer indices specifying which atoms this
+            processor is responsible for.
+        atomOwners : dict
+            A dictionary whose keys are integer atom indices and
+            whose values are processor ranks, which indicates which
+            processor is responsible for communicating the final
+            results of each atom.
+        mySubResourceAlloc : ResourceAllocation
+            The communicator for the processor group that is responsible
+            for computing the same `myAtomIndices` list.  This
+            communicator is used for further processor division (e.g.
+            for parallelization across derivative columns).
+        """
+        if self._layout_distribution is None:
+            self._layout_distribution = layout.distribute(self)
+        return self._layout_distribution  # myAtomIndices, atomOwners, sub_resource_alloc
+
+    def gather(self, result, local, slice_of_global, unit_ralloc=None):
+        """
+        TODO: docstring -- notes:
+        result must be allocated as a shared array using *this* ralloc or a larger one
+        unit_alloc specifies a comm/ralloc of the group of processors that all compute
+           the same logical result -- so only the unit_ralloc.rank == 0 processors
+           will contribute to the sum (but all procs get the result)
+        """
+        if self.comm is None:
+            assert(result.shape == local.shape)
+            result[(slice(None, None),) * local.ndim] = local
+
+        participating = unit_ralloc is None or unit_ralloc.comm is None or unit_ralloc.comm.rank == 0
+        gather_comm = self.interhost_comm if (self.host_comm is not None) else self.comm
+        slices = gather_comm.gather(slices_of_global if participating else None, root=0)
+
+        gathered_data = gather_comm.gather(array_portion, root=0)  # could change this to Gather (?)
+
+        if gather_comm.rank == 0:
+            for slc, data in zip(slices, gathered_data):
+                if slc is None: continue  # signals a non-unit-leader proc that shouldn't do anything
+                result[slc] = data
+                
+        resource_alloc.comm.barrier()  # make sure result is completely filled before returning
+        return
+
+    def allreduce_sum(self, result, local, unit_ralloc=None):
+        """
+        TODO: docstring -- notes:
+        result must be allocated as a shared array using *this* ralloc or a larger one
+        unit_alloc specifies a comm/ralloc of the group of processors that all compute
+           the same logical result -- so only the unit_ralloc.rank == 0 processors
+           will contribute to the sum (but all procs get the result)
+        """
+        from mpi4py import MPI
+        participating_local = local if (unit_ralloc is None or unit_ralloc.comm is None or unit_ralloc.comm.rank == 0) \
+                              else _np.zeros(local.shape, local.dtype)
+        if self.host_comm is not None:
+            #Barrier-sum on host within shared mem
+            if self.host_comm.rank == 0: result.fill(0)  # zero out
+            self.host_comm.barrier()  #make sure all zero-outs above complete
+            for i in range(self.host_comm.size):
+                if i == self.host_comm.rank:
+                    result += participating_local  # adds *in place* (relies on numpy implementation)
+                self.host_comm.barrier()  #synchonize adding to shared mem
+            if self.host_comm == 0:
+                summed_across_hosts = self.interhost_comm.allreduce(result, op=MPI.SUM)
+                result[(slice(None,None),) * result.ndim] = summed_across_hosts
+            self.host_comm.barrier()  #wait for allreduce and assignment to complete on non-hostroot procs
+        elif self.comm is not None:
+            result[(slice(None,None),) * result.ndim] = self.comm.allreduce(participating_local, op=MPI.SUM)
+        else:
+            result[(slice(None,None),) * result.ndim] = participating_local
+
+    def bcast(self, value, root=0):
+        """
+        TODO: docstring
+        Broadcast `value` from root *host* to all other hosts in this resource allocation.
+
+        Note: `value` must be a numpy array.
+        """
+        if self.host_comm is not None:
+            bcast_shape, bcast_dtype = self.comm.bcast((value.shape, value.dtype) if self.comm.rank == root else None,
+                                                       root=root)
+            ar, ar_shm = _smt.create_shared_ndarray(self, bcast_shape, bcast_dtype, track_memory=False)
+            if self.comm.rank == root:
+                ar[(slice(None, None),) * value.ndim] = value  # put our value into the shared memory.
+
+            self.host_comm.barrier()  #wait until shared mem is written to on all root-host procs
+            interhost_root = self.host_index_for_rank[root]  # (b/c host_index == interhost.rank)
+            ret = self.interhost_comm.bcast(ar, root=interhost_root)
+            self.comm.barrier()  #wait until everyone's values are ready
+            _smt.cleanup_shared_ndarray(ar_shm)
+            return ret
+        elif self.comm is not None:
+            return self.comm.bcast(value, root=root)
+        else:
+            return value
+        
 
     def __getstate__(self):
         # Can't pickle comm objects

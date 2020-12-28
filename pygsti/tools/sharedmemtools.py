@@ -26,6 +26,29 @@ else:
     _resource_tracker = None
 
 
+class LocalNumpyArray(_np.ndarray):
+    """
+    Numpy array with metadata for referencing how this "local" array is part
+    of a larger shared memory array.
+    """
+    def __new__(subtype, shape, dtype=float, buffer=None, offset=0,
+                strides=None, order=None, host_array=None, slices_into_host_array=None,
+                shared_memory_handle=None):
+        obj = super(SharedNumpyArray, subtype).__new__(subtype, shape, dtype,
+                                                       buffer, offset, strides,
+                                                       order)
+        obj.host_array = host_array
+        obj.slices_into_host_array = slices_into_host_array
+        obj.shared_memory_handle = shared_memory_handle
+        return obj
+
+    def __array_finalize__(self, obj):
+        if obj is None: return
+        self.host_array = getattr(obj, 'host_array', None)
+        self.slices_into_host_array = getattr(obj, 'slices_into_host_array', None)
+        self.shared_memory_handle = getattr(obj, 'shared_memory_handle', None)
+
+
 def shared_mem_is_enabled():
     """
     Whether shared memory functionality is available (Python 3.8+)
@@ -77,7 +100,7 @@ def create_shared_ndarray(resource_alloc, shape, dtype, zero_out=False, track_me
     """
     hostcomm = resource_alloc.host_comm if shared_mem_is_enabled() else None
     nelements = _np.product(shape)
-    if hostcomm is None:
+    if hostcomm is None or nelements == 0:  # Note: shared memory must be for size > 0
         # every processor allocates its own memory
         if track_memory: resource_alloc.add_tracked_memory(nelements)
         ar = _np.zeros(shape, dtype) if zero_out else _np.empty(shape, dtype)
@@ -90,6 +113,8 @@ def create_shared_ndarray(resource_alloc, shape, dtype, zero_out=False, track_me
         else:
             shm_name = hostcomm.bcast(None, root=0)
             shm = _shared_memory.SharedMemory(name=shm_name)
+        hostcomm.barrier()  # needed to protect against root proc processing & freeing mem
+        # before non-root procs finish .SharedMemory call above.
         ar = _np.ndarray(shape, dtype=dtype, buffer=shm.buf)
         if zero_out: ar.fill(0)
     return ar, shm

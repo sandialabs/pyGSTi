@@ -66,7 +66,7 @@ class CircuitOutcomeProbabilityArrayLayout(object):
         return unique_circuits, to_unique
 
     @classmethod
-    def create_from(cls, circuits, model, dataset=None, additional_dimensions=()):
+    def create_from(cls, circuits, model, dataset=None, param_dimensions=()):
         """
         TODO: docstring
         Simplifies a list of :class:`Circuit`s.
@@ -114,10 +114,10 @@ class CircuitOutcomeProbabilityArrayLayout(object):
             k += num_outcomes
 
         return cls(circuits, unique_circuits, to_unique, elindex_outcome_tuples, unique_complete_circuits,
-                   additional_dimensions)
+                   param_dimensions)
 
     def __init__(self, circuits, unique_circuits, to_unique, elindex_outcome_tuples,
-                 unique_complete_circuits=None, additional_dimensions=()):
+                 unique_complete_circuits=None, param_dimensions=()):
         # to_unique : dict maping indices of `circuits` to indices of `unique_circuits`
         # elindex_outcome_tuples : dict w/keys == indices into `unique_circuits` (which is why `unique_circuits`
         #                          is needed) and values == lists of (element_index, outcome) pairs.
@@ -128,9 +128,10 @@ class CircuitOutcomeProbabilityArrayLayout(object):
             [(c, i) for i, c in enumerate(self._unique_circuits)])  # original circuits => unique circuit indices
         self._to_unique = to_unique  # original indices => unique circuit indices
         self._unique_complete_circuits = unique_complete_circuits  # Note: can be None
-        self._additional_dimensions = additional_dimensions
+        self._param_dimensions = param_dimensions
 
-        max_element_index = max(_it.chain(*[[ei for ei, _ in pairs] for pairs in elindex_outcome_tuples.values()]))
+        max_element_index = max(_it.chain(*[[ei for ei, _ in pairs] for pairs in elindex_outcome_tuples.values()])) \
+                            if len(elindex_outcome_tuples) > 0 else -1  # -1 makes _size = 0 below
         indices = set(i for tuples in elindex_outcome_tuples.values() for i, o in tuples)
         self._size = max_element_index + 1
         assert(len(indices) == self._size), \
@@ -155,14 +156,56 @@ class CircuitOutcomeProbabilityArrayLayout(object):
     def num_circuits(self):
         return len(self.circuits)
 
-    def allocate_array(self, array_type, zero_out=False, dtype='d'):
+    def allocate_local_array(self, ndims, dtype, resource_alloc=None, zero_out=False, track_memory=False,
+                             extra_elements=0):
+        """
+        Allocate an array that is distributed according to this layout.
+
+        TODO: docstring - returns the *local* memory and shared mem handle
+        """
         # type can be "p", "dp" or "hp"
+        nelements = self._size + extra_elements
         alloc_fn = _np.zeros if zero_out else _np.empty
-        if array_type == "p": return alloc_fn((self._size,), dtype=dtype)
-        if array_type == "dp": return alloc_fn((self._size, self._additional_dimensions[0]), dtype=dtype)
-        if array_type == "hp": return alloc_fn((self._size, self._additional_dimensions[0],
-                                                self._additional_dimensions[1]), dtype=dtype)
-        raise ValueError("Invalid `array_type`: %s" % array_type)
+        if ndims == 1: ret = alloc_fn((nelements,), dtype=dtype)
+        elif ndims == 2: ret = alloc_fn((nelements, self._param_dimensions[0]), dtype=dtype)
+        elif ndims == 3: ret = alloc_fn((nelements, self._param_dimensions[0],
+                                         self._param_dimensions[1]), dtype=dtype)
+        else:
+            raise ValueError("Invalid `ndimse`: %d" % ndims)
+
+        if track_memory: resource_alloc.add_tracked_memory(ret.size)
+        return ret, None  # (local_array, shared_mem_handle)
+
+    def gather_local_array(self, array_portion, resource_alloc=None):
+        """
+        Gathers an array onto the root processor.
+
+        Gathers the portions of an array that was distributed using this
+        layout (i.e. according to the host_element_slice, etc. slices in
+        this layout).  Arrays can be 1, 2, or 3-dimensional.  The dimensions
+        are understood to be along the "element", "parameter", and
+        "2nd parameter" directions in that order.
+
+        Parameters
+        ----------
+        array_portion : numpy.ndarray
+            The portion of the final array that is local to the calling
+            processor.  This should be a shared memory array when a
+            `resource_alloc` with shared memory enabled was used to construct
+            this layout.
+
+        resource_alloc : ResourceAllocation, optional
+            The resource allocation object that was used to construt this
+            layout, specifying the number and organization of processors
+            to distribute arrays among.
+
+        Returns
+        -------
+        numpy.ndarray or None
+            The full (global) output array on the root (rank=0) processor.
+            `None` on all other processors.
+        """
+        return array_portion  # no gathering is performed by this layout class
 
     def memory_estimate(self, array_type, dtype='d'):
         """
@@ -170,9 +213,9 @@ class CircuitOutcomeProbabilityArrayLayout(object):
         """
         bytes_per_element = _np.dtype(dtype).itemsize
         if array_type == "p": return self._size * bytes_per_element
-        if array_type == "dp": return self._size * self._additional_dimensions[0] * bytes_per_element
-        if array_type == "hp": return self._size * self._additional_dimensions[0] * \
-           self._additional_dimensions[1] * bytes_per_element
+        if array_type == "dp": return self._size * self._param_dimensions[0] * bytes_per_element
+        if array_type == "hp": return self._size * self._param_dimensions[0] * \
+           self._param_dimensions[1] * bytes_per_element
         raise ValueError("Invalid `array_type`: %s" % array_type)
 
     def indices(self, circuit):

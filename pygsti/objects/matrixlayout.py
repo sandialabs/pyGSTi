@@ -27,8 +27,11 @@ class _MatrixCOPALayoutAtom(_DistributableAtom):
     """
 
     def __init__(self, unique_complete_circuits, unique_nospam_circuits, circuits_by_unique_nospam_circuits,
-                 ds_circuits, group, helpful_scratch, model, dataset, offset, elindex_outcome_tuples):
+                 ds_circuits, group, helpful_scratch, model, dataset):
 
+        #Note: group gives unique_nospam_circuits indices, which circuits_by_unique_nospam_circuits
+        # turns into "unique complete circuit" indices, which the layout via it's to_unique can map
+        # to original circuit indices.
         def add_expanded_circuits(indices, add_to_this_dict):
             _expanded_nospam_circuit_outcomes = add_to_this_dict
             for i in indices:
@@ -110,15 +113,19 @@ class _MatrixCOPALayoutAtom(_DistributableAtom):
             local_offset += len(tree_indices)
             #TODO: allow tree_indices to be None or a slice?
 
-        element_slice = slice(offset, offset + local_offset)  # *global* (of parent layout) element-index slice
+        element_slice = None #slice(offset, offset + local_offset)  # *global* (of parent layout) element-index slice
         num_elements = local_offset
+
+        elindex_outcome_tuples = _collections.OrderedDict([
+            (orig_i, list()) for orig_i in range(len(unique_complete_circuits))])  # ??
 
         for spam_tuple, (element_indices, tree_indices) in self.indices_by_spamtuple.items():
             for elindex, tree_index in zip(_slct.indices(element_indices), _slct.to_array(tree_indices)):
                 outcome_by_spamtuple = expanded_nospam_circuit_outcomes[expanded_nospam_circuits[tree_index]]
                 outcome, unique_is = outcome_by_spamtuple[spam_tuple]
                 for unique_i in unique_is:
-                    elindex_outcome_tuples[unique_i].append((offset + elindex, outcome))  # *global* element indices
+                    elindex_outcome_tuples[unique_i].append((elindex, outcome))  # *global* element indices
+        self.elindex_outcome_tuples = elindex_outcome_tuples
 
         super().__init__(element_slice, num_elements)
 
@@ -191,8 +198,9 @@ class MatrixCOPALayout(_DistributableCOPALayout):
         set to (at least) the number of processors.
     """
 
-    def __init__(self, circuits, model, dataset=None, max_sub_tree_size=None,
-                 num_sub_trees=None, additional_dimensions=(), verbosity=0):
+    def __init__(self, circuits, model, dataset=None, num_sub_trees=None, num_tree_processors=1,
+                 num_param_dimension_processors=(), param_dimensions=(),
+                 param_dimension_blk_sizes=(), resource_alloc=None, verbosity=0):
 
         #OUTDATED: TODO - revise this:
         # 1. pre-process => get complete circuits => spam-tuples list for each no-spam circuit (no expanding yet)
@@ -220,31 +228,54 @@ class MatrixCOPALayout(_DistributableCOPALayout):
                 circuits_by_unique_nospam_circuits[nospam_c] = [i]
         unique_nospam_circuits = list(circuits_by_unique_nospam_circuits.keys())
 
-        #REMOVE: print("DEBUG: SETTING NUM_SUB_TREES = 2 to trigger behavior"); num_sub_trees = 2
+        #HERE - resource_alloc tells us how many nodes and procs
+        # divide circuits accordingly: num_trees
+        # and divide these among (a potentially smaller) num_tree_subcomms
+        # each subcomm may contain multiple processors - ideally all on the same node (?)
+        # each subcomm's trees (should be contiguous slices?) => subcomm slice (?)
+        # atoms should contain indexes into subcomm slice; only construct atoms assigned to this proc
+
+        # Split circuits into groups that will make good subtrees (all procs do this)
+        max_sub_tree_size=None  # removed from being an argument (unused)
         if (num_sub_trees is not None and num_sub_trees > 1) or max_sub_tree_size is not None:
             circuit_tree = _EvalTree.create(unique_nospam_circuits)
             groups, helpful_scratch = circuit_tree.find_splitting(len(unique_nospam_circuits),
-                                                                  max_sub_tree_size, num_sub_trees, verbosity)
+                                                                  max_sub_tree_size, num_sub_trees, verbosity - 1)
             #print("%d circuits => tree of size %d" % (len(unique_nospam_circuits), len(circuit_tree)))
         else:
             groups = [set(range(len(unique_nospam_circuits)))]
             helpful_scratch = [set()]
         # (elements of `groups` contain indices into `unique_nospam_circuits`)
 
-        atoms = []
-        elindex_outcome_tuples = _collections.OrderedDict([
-            (orig_i, list()) for orig_i in range(len(unique_circuits))])
+        # Divide `groups` into num_tree_processors roughly equal sets (each containing
+        # potentially multiple groups)
+        #my_group_indices, group_owners, grp_subcomm = self._distribute(num_tree_processors, len(groups), resource_alloc,
+        #                                                               verbosity)
+        #my_group_indices = set(my_group_indices)
 
-        offset = 0
-        for group, helpful_scratch_group in zip(groups, helpful_scratch):
-            atoms.append(_MatrixCOPALayoutAtom(unique_complete_circuits, unique_nospam_circuits,
-                                               circuits_by_unique_nospam_circuits, ds_circuits,
-                                               group, helpful_scratch_group, model, dataset, offset,
-                                               elindex_outcome_tuples))
-            offset += atoms[-1].num_elements
+        #my_atoms = []
+        #elindex_outcome_tuples = _collections.OrderedDict([
+        #    (orig_i, list()) for orig_i in range(len(unique_circuits))])
+        #
+        #offset = 0
+        #for i, (group, helpful_scratch_group) in enumerate(zip(groups, helpful_scratch)):
+        #    if i not in my_group_indices: continue
+        #    my_atoms.append(_MatrixCOPALayoutAtom(unique_complete_circuits, unique_nospam_circuits,
+        #                                       circuits_by_unique_nospam_circuits, ds_circuits,
+        #                                       group, helpful_scratch_group, model, dataset, offset,
+        #                                       elindex_outcome_tuples))
+        #    offset += my_atoms[-1].num_elements
 
-        super().__init__(circuits, unique_circuits, to_unique, elindex_outcome_tuples, unique_complete_circuits,
-                         atoms, additional_dimensions)
+        def _create_atom(args):
+            group, helpful_scratch_group = args
+            return _MatrixCOPALayoutAtom(unique_complete_circuits, unique_nospam_circuits,
+                                         circuits_by_unique_nospam_circuits, ds_circuits,
+                                         group, helpful_scratch_group, model, dataset)
+
+        super().__init__(circuits, unique_circuits, to_unique, unique_complete_circuits,
+                         _create_atom, list(zip(groups, helpful_scratch)), num_tree_processors, 
+                         num_param_dimension_processors, param_dimensions,
+                         param_dimension_blk_sizes, resource_alloc, verbosity)
 
 
 class _MatrixTimeDepCOPALayoutAtom(_MatrixCOPALayoutAtom):
@@ -289,8 +320,11 @@ class MatrixTimeDepCOPALayout(_DistributableCOPALayout):
         set to (at least) the number of processors.
     """
 
-    def __init__(self, circuits, model, dataset,
-                 additional_dimensions=(), verbosity=0):
+    def __init__(self, circuits, model, dataset, num_tree_processors=1, 
+                 num_param_dimension_processors=(), param_dimensions=(),
+                 param_dimension_blk_sizes=(), resource_alloc=None, verbosity=0):
+        #TODO: check that args from num_tree_processors forward actually work - maybe these
+        # have fixed values given the way we structure this layout?
 
         assert(all([c.duration == 0 for c in circuits])), \
             "Matrix layouts can only be used with time-free circuits"
@@ -317,15 +351,17 @@ class MatrixTimeDepCOPALayout(_DistributableCOPALayout):
 
         #Do the work that would be done in to setup an atom with all the circuits (common to all atoms)
         # then create atoms that are equivalent except for their times
-        elindex_outcome_tuples = _collections.OrderedDict([
-            (orig_i, list()) for orig_i in range(len(unique_circuits))])
         master_atom = _MatrixCOPALayoutAtom(unique_complete_circuits, unique_nospam_circuits,
                                             circuits_by_unique_nospam_circuits, ds_circuits,
-                                            group, set(), model, dataset, 0, elindex_outcome_tuples)
+                                            group, set(), model, dataset)
         #print("Master atom with tree size = ",len(master_atom.tree))
 
         timestamps = dataset.timestamps if dataset is not None else [0.0]
-        atoms = [_MatrixTimeDepCOPALayoutAtom(master_atom, t) for t in timestamps]
+        def _create_atom(t):
+            return _MatrixTimeDepCOPALayoutAtom(master_atom, t)
+        #OLD REMOVE: atoms = [_MatrixTimeDepCOPALayoutAtom(master_atom, t) for t in timestamps]
 
-        super().__init__(circuits, unique_circuits, to_unique, elindex_outcome_tuples, unique_complete_circuits,
-                         atoms, additional_dimensions)
+        super().__init__(circuits, unique_circuits, to_unique, unique_complete_circuits,
+                         _create_atom, timestamps, num_tree_processors, 
+                         num_param_dimension_processors, param_dimensions,
+                         param_dimension_blk_sizes, resource_alloc, verbosity)
