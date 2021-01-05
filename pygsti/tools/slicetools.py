@@ -254,7 +254,8 @@ def slice_of_slice(slc, base_slc):
     slice
     """
     #NOTE: this is very similar to shift(slc, base_slc.start) above - consolidate or remove this function?
-    assert(slc.step == base_slc.step == 1), "This function only works with step == 1 slices so far"
+    assert(slc.step in (1, None) and base_slc.step in (1, None)), \
+        "This function only works with step == 1 slices so far"
     if slc.start is None and slc.stop is None: return base_slc
     if base_slc.start is None and base_slc.stop is None: return slc
 

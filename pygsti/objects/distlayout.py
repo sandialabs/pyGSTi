@@ -95,13 +95,15 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
             nHosts = nprocs
             host_nprocs = 1
             host_index = rank
-            host_comm = comm
+            host_comm = None
 
         # Allocate nAtomComms "atom processing comms" to the nHosts.
         
         # each proc should have a host_index (~hostname), and a proc gets 
         myHostsAtomCommIndices, hostAtomCommOwners, peer_hosts = _mpit.distribute_indices_base(
             list(range(nAtomComms)), nHosts, host_index)
+
+        # REMOVE print("Rank %d: %d hosts, %d atom comms" % (comm.rank, nHosts, nAtomComms))
 
         if nHosts <= nAtomComms:  
             # then each atom processing comm occupies a single host, and likewise a host
@@ -285,7 +287,8 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
                 list(range(num_params)), num_param_processors, myParamCommIndex)
             _assert_sequential(myParamIndices)
 
-            paramCommIndex_by_atomproc_rank = atom_processing_subcomm.allgather(myParamCommIndex)
+            paramCommIndex_by_atomproc_rank = atom_processing_subcomm.allgather(myParamCommIndex) \
+                                              if (atom_processing_subcomm is not None) else [myParamCommIndex]
             self.param_slices = _mpit.slice_up_slice(slice(0,num_params), num_param_processors)  # matches param comm indices
             self.param_slice_owners = {ipc: atomproc_rank for atomproc_rank, ipc
                                        in enumerate(paramCommIndex_by_atomproc_rank)}
@@ -327,15 +330,73 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
             #  on the parameter dimension.  We call this the "param_fine" subcomm.
             if interatom_param_subcomm is not None and interatom_param_subcomm.size > 1:
                 myParamFineIndices, _, _ = _mpit.distribute_indices_base(
-                    list(range(myParamIndices)), interatom_param_subcomm.size, interatom_param_subcomm.rank)
+                    list(range(len(myParamIndices))), interatom_param_subcomm.size, interatom_param_subcomm.rank)
                 _assert_sequential(myParamFineIndices)
                 self.fine_param_subslice = _slct.list_to_slice(myParamFineIndices)
             else:
                 self.fine_param_subslice = slice(0, len(myParamIndices))
-            self.host_param_fine_slice = _slct.slice_of_slice(self.fine_param_subslice, self.host_param_slice)
+            
+            #self.host_param_fine_slice = _slct.slice_of_slice(self.fine_param_subslice, self.host_param_slice)
             self.global_param_fine_slice = _slct.slice_of_slice(self.fine_param_subslice, self.global_param_slice)
             param_fine_subcomm = comm.Split(color=self.global_param_fine_slice.start, key=rank) \
                                  if (comm is not None) else None
+            
+            if host_comm is not None:
+                fine_slices_on_host = host_comm.allgather(self.global_param_fine_slice) 
+                offset = 0
+                for iFine, slc in enumerate(fine_slices_on_host):
+                    n = _slct.length(slc)
+                    if iFine == host_comm.rank:
+                        self.host_param_fine_slice = slice(offset, offset + n)
+                    offset += n
+                self.host_num_params_fine = offset
+            else:
+                self.host_num_params_fine = _slct.length(self.global_param_fine_slice)
+                self.host_param_fine_slice = slice(0, self.host_num_params_fine)
+
+            # When param_fine_subcomm.size > 1 this means we have multiple processors computing the same "fine" param
+            # slice.  This can be tricky when needing to perform point-to-point IPC of fine-param data, and so we
+            # consider the subset of param_fine_subcomm.rank == 0 processors as the "owners" of their fine-param slices,
+            # and create the below lists and lookup dictionary so that it's easy to find the owner of a particular index.
+            # At the end of point-to-point communication, the results can be broadcast using param_fine_subcomm to give
+            # results to the rank > 0 processors.
+            gps = self.global_param_fine_slice if (param_fine_subcomm is None or param_fine_subcomm.rank == 0) else None
+            hps = self.host_param_fine_slice if (param_fine_subcomm is None or param_fine_subcomm.rank == 0) else None
+            if host_comm is not None:
+                owned_pslices_on_host = tuple(host_comm.allgather((gps, hps)))
+                slices = resource_alloc.interhost_comm.allgather(owned_pslices_on_host)
+                owners = resource_alloc.interhost_comm.allgather(resource_alloc.host_ranks)
+                self.param_fine_slices_by_host = tuple([tuple(zip(owners_for_host, slcs_for_host))
+                                                               for owners_for_host, slcs_for_host in zip(owners, slices)])
+            else:
+                gpss = comm.allgather((gps, hps))  # each host is a single proc, to this host the single slice per host
+                self.param_fine_slices_by_host = tuple([(rank_and_gps,) for rank_and_gps in enumerate(gpss)])
+
+            self.owner_host_and_rank_of_global_fine_param_index = {}
+            for host_index, ranks_and_pslices in enumerate(self.param_fine_slices_by_host):
+                for gbl_rank, (gpslice, _) in ranks_and_pslices:
+                    if gpslice is None: continue   # indicates a non-owner proc (param_fine_subcomm.rank > 0)
+                    for p in range(gpslice.start, gpslice.stop):
+                        self.owner_host_and_rank_of_global_fine_param_index[p] = (host_index, gbl_rank)
+
+            #REMOVE
+            # # When param_fine_subcomm.size > 1 this means we have multiple processors computing the same "fine" param
+            # # slice.  When this is the case, we divide all the processors into different "fine param channels" such that
+            # # within each "channel" there's a unique processor for a given fine-param slice.
+            # param_fine_channel_subcomm = comm if (param_fine_subcomm is None or param_fine_subcomm.size == 1) else \
+            #                              comm.Split(color=param_fine_subcomm.rank, key=rank)
+            # 
+            # # Compute and save which fine-partitioned param values are on my host (by intra-host rank), as well as which
+            # # are on each processor globally (but within each channel, ordered by channel rank)
+            # gps = self.global_param_fine_slice
+            # self.global_param_fine_slices_on_host = (gps,) if (host_comm is None) else \
+            #                                         tuple(host_comm.allgather(gps))
+            # self.global_param_fine_slices_on_channel = (gps,) if (param_fine_channel_subcomm is None) \
+            #                                            else tuple(param_fine_channel_subcomm.allgather(gps))
+            # self.owner_rank_on_channel = {}
+            # for channel_rank, gpslice in enumerate(self.global_param_fine_slices_on_channel):
+            #     for p in range(gpslice.start, gpslice.stop):
+            #         self.owner_rank_on_channel[p] = channel_rank
 
             # Similar for param2 distribution --------------------------------------------
             if len(param_dimensions) > 1:
@@ -452,7 +513,8 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
             self.global_num_params2 = self.global_param2_slice = None
             self.host_num_params = self.host_param_slice = None
             self.host_num_params2 = self.host_param2_slice = None
-            self.fine_param_subslice = self.host_param_fine_slice = None
+            self.host_num_params_fine = None
+            self.fine_param_subslice = self.host_param_fine_slice = self.global_param_fine_slice = None
             param_processing_subcomm = None
             param2_processing_subcomm = None
             interatom_param_subcomm = None
@@ -542,6 +604,10 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         resource_alloc.layout_allocs['param-fine'] = _ResourceAllocation(
             param_fine_subcomm, resource_alloc.mem_limit, resource_alloc.profiler,
             resource_alloc.distribute_method, resource_alloc.allocated_memory)
+        #REMOVE
+        #resource_alloc.layout_allocs['param-fine-channel'] = _ResourceAllocation(
+        #    param_fine_channel_subcomm, resource_alloc.mem_limit, resource_alloc.profiler,
+        #    resource_alloc.distribute_method, resource_alloc.allocated_memory)
 
         if resource_alloc.host_comm is not None:  # signals that we want to use shared intra-host memory
             resource_alloc.layout_allocs['atom-processing'].build_hostcomms()
@@ -550,22 +616,23 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
             resource_alloc.layout_allocs['param-interatom'].build_hostcomms()
             resource_alloc.layout_allocs['param2-interatom'].build_hostcomms()
             resource_alloc.layout_allocs['param-fine'].build_hostcomms()
+            #resource_alloc.layout_allocs['param-fine-channel'].build_hostcomms()  #REMOVE
 
-        #Each procesor is a part of a "gather group" - either the full world
-        # comm (when memory isn't shared) or the interhost_comm (when memory
-        # is shared).  These comms are held in the resource_alloc object, but
-        # within the layout we store the corresponding indices
-        resource_alloc.gather_comm = resource_alloc.interhost_comm if (resource_alloc.host_comm is not None) else comm
-        resource_alloc.element_gather_comm
-
-        if resource_alloc.gather_comm is not None:
-            self.gather_element_slices = resource_alloc.gather_comm.gather(self.global_element_slice, root=0)
-            self.gather_param_slices = resource_alloc.gather_comm.gather(self.global_param_slice, root=0) \
-                                       if (self.global_param_slice is not None) else None                                
-            self.gather_param2_slices = resource_alloc.gather_comm.gather(self.global_param2_slice, root=0) \
-                                        if (self.global_param2_slice is not None) else None
-        else:
-            self.gather_element_slices = self.gather_param_slices = self.gather_param2_slices = None
+        #OLD REMOVE
+        ##Each procesor is a part of a "gather group" - either the full world
+        ## comm (when memory isn't shared) or the interhost_comm (when memory
+        ## is shared).  These comms are held in the resource_alloc object, but
+        ## within the layout we store the corresponding indices
+        #resource_alloc.gather_comm = resource_alloc.interhost_comm if (resource_alloc.host_comm is not None) else comm
+        #
+        #if resource_alloc.gather_comm is not None:
+        #    self.gather_element_slices = resource_alloc.gather_comm.gather(self.global_element_slice, root=0)
+        #    self.gather_param_slices = resource_alloc.gather_comm.gather(self.global_param_slice, root=0) \
+        #                               if (self.global_param_slice is not None) else None                                
+        #    self.gather_param2_slices = resource_alloc.gather_comm.gather(self.global_param2_slice, root=0) \
+        #                                if (self.global_param2_slice is not None) else None
+        #else:
+        #    self.gather_element_slices = self.gather_param_slices = self.gather_param2_slices = None
 
         self.atoms = [atoms_dict[i] for i in myAtomIndices]
         self.param_dimension_blk_sizes = param_dimension_blk_sizes
@@ -596,9 +663,45 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
                          local_unique_complete_circuits, param_dimensions)
 
         #DEBUG LAYOUT PRINTING
+        #def cnt_str(cnt):
+        #    if cnt is None: return "%4s" % '-'
+        #    return "%4d" % cnt
         #def slc_str(slc):
-        #    return "%5d -> %5d (%4d)" % (slc.start, slc.stop, slc.stop - slc.start) \
-        #        if isinstance(slc, slice) else str(slc)
+        #    if slc is None: return "%14s" % '--'
+        #    return "%3d->%3d (%3d)" % (slc.start, slc.stop, slc.stop - slc.start) \
+        #        if isinstance(slc, slice) else "%14s" % str(slc)
+        #shm = bool(resource_alloc.host_comm is not None)  # shared mem?
+        #if rank == 0:
+        #    print("%11s %-14s %-14s %-14s   %-14s %-4s %-14s %-4s %-14s %-4s" % (
+        #        '#', 'g-elements', 'g-params', 'g-param2s',
+        #        'h-elements','tot', 'h-params','tot', 'h-params2','tot'),
+        #          flush=True)
+        #resource_alloc.comm.barrier()
+        #for r in range(resource_alloc.comm.size):
+        #    if r == rank:
+        #        my_desc = ("%3d (%2d.%2d)" % (rank, resource_alloc.host_index, resource_alloc.host_comm.rank)) \
+        #                  if shm else ("%11d" % rank)
+        #        print(my_desc, slc_str(self.global_element_slice), slc_str(self.global_param_slice),
+        #              slc_str(self.global_param2_slice), ' ',
+        #              slc_str(self.host_element_slice), cnt_str(self.host_num_elements),
+        #              slc_str(self.host_param_slice), cnt_str(self.host_num_params),
+        #              slc_str(self.host_param2_slice), cnt_str(self.host_num_params2),  flush=True)
+        #    resource_alloc.comm.barrier()
+        #
+        #if rank == 0:
+        #    print("%11s %-14s %-14s %-4s" % ('#', 'g-pfine', 'h-pfine', 'tot'), flush=True)
+        #resource_alloc.comm.barrier()
+        #for r in range(resource_alloc.comm.size):
+        #    if r == rank:
+        #        my_desc = ("%3d (%2d.%2d)" % (rank, resource_alloc.host_index, resource_alloc.host_comm.rank)) \
+        #                  if shm else ("%11d" % rank)
+        #        print(my_desc, slc_str(self.global_param_fine_slice), slc_str(self.host_param_fine_slice),
+        #              cnt_str(self.host_num_params_fine), flush=True)
+        #    resource_alloc.comm.barrier()
+
+
+
+        # (OLD) DEBUG LAYOUT PRINTING
         #if resource_alloc.host_comm is None:  # gather_comm == comm
         #    if rank == 0:
         #        print("DEBUG - layout root proc will gather:")
@@ -683,20 +786,26 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
             if 'p' in array_type: array_shape += (self.host_num_params,)
             if 'pp' in array_type: array_shape += (self.host_num_params2,)
             allocating_ralloc = resource_alloc  # share mem between these processors
+        elif array_type == 'p':
+            array_shape = (self.host_num_params,)
+            allocating_ralloc = resource_alloc  # share mem between these processors
+        elif array_type == 'pfine':
+            array_shape = (self.host_num_fine_params,)
+            allocating_ralloc = resource_alloc  # share mem between these processors
         elif array_type == 'hessian':
             array_shape = (self.host_num_params, self.host_num_params2)
             allocating_ralloc = resource_alloc.layout_allocs['atom-processing']  # don't share mem btwn atoms,
             # as each atom will have procs with the same (param1, param2) index block but we want separate mem
         elif array_type == 'jtj':
-            array_shape = (_slct.length(self.fine_param_subslice), self.global_num_params)
+            array_shape = (self.host_num_params_fine, self.global_num_params)
             allocating_ralloc = resource_alloc  #.layout_allocs['param-interatom']
         elif array_type == 'jtf':
-            array_shape = (_slct.length(self.fine_param_subslice),)
+            array_shape = (self.host_num_params_fine,)
             allocating_ralloc = resource_alloc  #.layout_allocs['param-interatom']
         else:
             raise ValueError("Invalid array_type: %s" % str(array_type))
 
-        host_array, host_array_shm = _smt.create_shared_ndarray(resource_alloc, array_shape, dtype,
+        host_array, host_array_shm = _smt.create_shared_ndarray(allocating_ralloc, array_shape, dtype,
                                                                 zero_out, track_memory)
 
         if array_type in ('e', 'ep', 'epp'):
@@ -705,21 +814,30 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
             tuple_of_slices = (elslice,)
             if 'p' in array_type: tuple_of_slices += (self.host_param_slice,)
             if 'pp' in array_type: tuple_of_slices += (self.host_param2_slice,)
+        elif array_type == 'p':
+            tuple_of_slices = (self.host_param_slice,)
         elif array_type == 'hessian':
             tuple_of_slices = (self.host_param_slice, self.host_param2_slice)
         elif array_type == 'jtj':
             # REMOVE tuple_of_slices = (self.host_param_slice, slice(0, self.global_num_params))
             tuple_of_slices = (self.host_param_fine_slice, slice(0, self.global_num_params))
-        elif array_type == 'jtf':
+        elif array_type == 'jtf':  # or 'x'
             # REMOVE tuple_of_slices = (self.host_param_slice,)
             tuple_of_slices = (self.host_param_fine_slice,)
 
         local_array = host_array[tuple_of_slices]
-        assert(local_array.data.contiguous) # make sure contiguous for buffer= to work below?
-        local_array = _smt.LocalNumpyArray(local_array.shape, buffer=local_array.dtype,
-                                           host_array=host_array,
-                                           slices_into_host_array=tuple_of_slices,
-                                           shared_memory_handle=host_array_shm)
+        local_array = local_array.view(_smt.LocalNumpyArray)
+        local_array.host_array = host_array
+        local_array.slices_into_host_array = tuple_of_slices,
+        local_array.shared_memory_handle = host_array_shm
+
+        #TODO REMOVE - this doesn't work becase local_array *isn't* always contiguous
+        #assert(local_array.data.contiguous) # make sure contiguous for buffer= to work below?
+        #local_array = _smt.LocalNumpyArray(local_array.shape, local_array.dtype,
+        #                                   buffer=local_array,
+        #                                   host_array=host_array,
+        #                                   slices_into_host_array=tuple_of_slices,
+        #                                   shared_memory_handle=host_array_shm)
 
         return local_array, host_array_shm
 
@@ -757,7 +875,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         """
         #TODO - need to gather the "extra_elements" when they are present,
         # by enlarging the element slice of all the procs in the final atom processor.
-        if resource_alloc is None or resource_alloc.gather_comm is None:
+        if resource_alloc is None or resource_alloc.comm is None:
             return array_portion
 
         # Set two resource allocs based on the array_type:
@@ -780,24 +898,29 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
             unit_ralloc = resource_alloc.layout_allocs['param2-processing']
             global_shape = (self.global_num_elements, self.global_num_params, self.global_num_params2)
             slice_of_global = (self.global_element_slice, self.global_param_slice, self.global_param2_slice)
+        elif array_type == 'p':
+            gather_ralloc = resource_alloc
+            unit_ralloc = resource_alloc.layout_allocs['param-processing']
+            global_shape = (self.global_num_params,)
+            slice_of_global = (self.global_param_slice,)
         elif array_type == 'jtj':
             gather_ralloc = resource_alloc
             unit_ralloc = resource_alloc.layout_allocs['param-fine']
             global_shape = (self.global_num_params, self.global_num_params)
-            slice_of_global = (self.fine_param_subslice, slice(0, self.global_num_params))
-        elif array_type == 'jtf':
+            slice_of_global = (self.global_param_fine_slice, slice(0, self.global_num_params))
+        elif array_type == 'jtf':  # or 'x'
             gather_ralloc = resource_alloc
             unit_ralloc = resource_alloc.layout_allocs['param-fine']
             global_shape = (self.global_num_params,)
-            slice_of_global = self.fine_param_subslice
+            slice_of_global = self.global_param_fine_slice
         else:
             raise ValueError("Invalid array type: %s" % str(array_type))
 
-        gather_comm = gather_alloc.interhost_comm if (gather_alloc.host_comm is not None) else gather_alloc.comm
+        gather_comm = gather_ralloc.interhost_comm if (gather_ralloc.host_comm is not None) else gather_ralloc.comm
         global_array, global_array_shm = _smt.create_shared_ndarray(
             resource_alloc, global_shape, 'd', track_memory=False) if gather_comm.rank == 0 else (None, None)
 
-        gather_alloc.gather(global_array, array_portion, slice_of_global, unit_ralloc)
+        gather_ralloc.gather(global_array, array_portion, slice_of_global, unit_ralloc)
 
         ret = global_array.copy() if resource_alloc.comm.rank == 0 else None # so no longer shared mem (needed?)
         resource_alloc.comm.barrier()  # make sure global_array is copied before we free it
@@ -806,36 +929,52 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         return ret
 
     # jtf, jtf_shm = self.allocate_local_array('jtf', 'd', resource_alloc, zero_out=False)
-    def compute_jtf(self, j, f, jtf, resource_alloc):
+    def fill_jtf(self, j, f, jtf, resource_alloc):
         """TODO: docstring  - assumes j, f are local arrays, allocated using 'ep' and 'e' types, respectively.
         Returns an array allocated using the 'jtf' type.
         """
         param_ralloc = resource_alloc.layout_allocs['param-processing']  # this group acts on (element, param) blocks
-        # local_jtf = _np.dot(j.T, f)  # need to sum this value across all atoms
-        # local_jtf = local_jtf[self.fine_param_subslice]  # take sub-portion to move to "fine" parameter distribution
-        local_jtf = _np.dot(j.T[self.fine_param_subslice, :], f)  #equivalent to two commented lines above
+        interatom_ralloc = resource_alloc.layout_allocs['param-interatom']  # procs with same param slice & diff atoms
+
+        if interatom_ralloc.comm is None:  # only 1 atom, so no need to sum below
+            jtf[:] = _np.dot(j.T[self.fine_param_subslice, :], f)
+            return
+
+        local_jtf = _np.dot(j.T, f)  # need to sum this value across all atoms
 
         # assume jtf is created from allocate_local_array('jtf', 'd', resource_alloc)
-        resource_alloc.layout_allocs['param-fine'].allreduce_sum(jtf, local_jtf, unit_ralloc=param_ralloc)
+        scratch, scratch_shm = _smt.create_shared_ndarray(
+            interatom_ralloc, (_slct.length(self.host_param_slice),), 'd', track_memory=False)
+        interatom_ralloc.comm.barrier()  # wait for scratch to be ready
+        interatom_ralloc.allreduce_sum(scratch, local_jtf, unit_ralloc=param_ralloc)
+        jtf[:] = scratch[self.fine_param_subslice] # takes sub-portion to move to "fine" parameter distribution
+        interatom_ralloc.comm.barrier()  # don't free scratch too early
+        _smt.cleanup_shared_ndarray(scratch_shm)
         
         #if param_comm.host_comm is not None and param_comm.host_comm.rank != 0: 
         #    return None  # this processor doesn't need to do any more - root host proc will fill returned shared mem
 
     # jtj, jtj_shm = self.allocate_local_array('jtj', 'd', resource_alloc, zero_out=False)
-    def compute_jtj(self, j, jtj, resource_alloc):
+    def fill_jtj(self, j, jtj, resource_alloc):
         """TODO: docstring  - assumes j is a local array, allocated using 'ep' and 'e' types, respectively. 
         Returns an array allocated using the 'jtj' type.
         """
-        jT = j.T[self.fine_param_subslice, :] # takes sub-portion to move to "fine" parameter distribution
+        jT = j.T
         param_ralloc = resource_alloc.layout_allocs['param-processing']  # this group acts on (element, param) blocks
         atom_ralloc = resource_alloc.layout_allocs['atom-processing']  # this group acts on (element,) blocks
-        atom_jtj = _np.empty((_slct.length(self.host_param_fine_slice), self.global_num_params), 'd')  # for my atomproc
+        interatom_ralloc = resource_alloc.layout_allocs['param-interatom']  # procs with same param slice & diff atoms
+        atom_jtj = _np.empty((_slct.length(self.host_param_slice), self.global_num_params), 'd')  # for my atomproc
+
         # REMOVE  atom_jtj, atom_jtj_shm = self.allocate_local_array('jtj', 'd', atom_alloc, zero_out=False)
+        # REMOVE print("Rank %d: %d of %s (%s)" % (resource_alloc.comm.rank, self.my_paramproc_index, str(self.param_slices), str(atom_ralloc.comm)))
         for i, param_slice in enumerate(self.param_slices):
             if i == self.my_paramproc_index:
                 assert(param_slice == self.global_param_slice)
-                assert(self.param_slice_owners[i] == atom_ralloc.comm.rank)
-                atom_ralloc.comm.bcast(j, root=atom_ralloc.comm.rank)
+                if atom_ralloc.comm is not None:
+                    assert(self.param_slice_owners[i] == atom_ralloc.comm.rank)  # This may not be true with lots of proc?  need to fix? - maybe unitalloc below does, and we just don't need this assert?
+                    atom_ralloc.comm.bcast(j, root=atom_ralloc.comm.rank)
+                else:
+                    assert(self.param_slice_owners[i] == 0) 
                 atom_jtj[:, param_slice] = _np.dot(jT, j)
             else:
                 other_j = atom_ralloc.comm.bcast(None, root=self.param_slice_owners[i])
@@ -843,8 +982,20 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
 
         #Now need to sum atom_jtj over atoms to get jtj:
         # assume jtj is created from allocate_local_array('jtj', 'd', resource_alloc)
-        resource_alloc.layout_allocs['param-fine'].allreduce_sum(jtj, atom_jtj, unit_ralloc=param_ralloc)
-        
+        if interatom_ralloc.comm is None:  # only 1 atom - nothing to sum!
+            #Note: in this case, we could have just done jT = j.T[self.fine_param_subslice, :] above...
+            jtj[:, :] = atom_jtj[self.fine_param_subslice, :] # takes sub-portion to move to "fine" parameter distribution
+            return
+            
+        # Note: could allocate scratch in advance?
+        scratch, scratch_shm = _smt.create_shared_ndarray(
+            interatom_ralloc, (_slct.length(self.host_param_slice), self.global_num_params), 'd', track_memory=False)
+        interatom_ralloc.comm.barrier()  # wait for scratch to be ready
+        interatom_ralloc.allreduce_sum(scratch, atom_jtj, unit_ralloc=param_ralloc)
+        jtj[:, :] = scratch[self.fine_param_subslice, :] # takes sub-portion to move to "fine" parameter distribution
+        interatom_ralloc.comm.barrier()  # don't free scratch too early
+        _smt.cleanup_shared_ndarray(scratch_shm)
+        # .layout_allocs['param-fine']
                 
 
     #UNUSED / OLD - REMOVE

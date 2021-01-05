@@ -57,7 +57,7 @@ class DistributableForwardSimulator(_ForwardSimulator):
         atom_resource_alloc = resource_alloc.layout_allocs['atom-processing']
 
         for atom in layout.atoms:  # layout only holds local atoms
-            print("DBB: processing atom: ",atom.element_slice, atom.num_elements, array_to_fill.shape)
+            #REMOVE print("DBB: processing atom: ",atom.element_slice, atom.num_elements, array_to_fill.shape)
             self._bulk_fill_probs_block(array_to_fill[atom.element_slice], atom, atom_resource_alloc)
 
         #REMOVE - don't gather until we need to now

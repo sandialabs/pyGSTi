@@ -281,10 +281,13 @@ def gaugeopt_custom(model, objective_fn, gauge_group=None,
         #solnX = minSol.x
         assert(_call_jacobian_fn is not None), "Cannot use 'ls' method unless jacobian is available"
         ralloc = _objs.ResourceAllocation(comm)  # FUTURE: plumb up a resource alloc object?
+        test_f = _call_objective_fn(x0)
         solnX, converged, msg, _, _, _, _, _ = _opt.custom_leastsq(
             _call_objective_fn, _call_jacobian_fn, x0, f_norm2_tol=tol,
             jac_norm_tol=tol, rel_ftol=tol, rel_xtol=tol,
-            max_iter=maxiter, resource_alloc=ralloc, oob_check_interval=oob_check_interval,
+            max_iter=maxiter, resource_alloc=ralloc, 
+            distributed_qty_calc=_opt.UndistributedQuantityCalc(len(test_f), len(x0)),
+            oob_check_interval=oob_check_interval,
             verbosity=printer.verbosity - 2)
         printer.log("Least squares message = %s" % msg, 2)
         assert(converged)

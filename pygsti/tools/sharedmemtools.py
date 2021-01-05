@@ -34,9 +34,9 @@ class LocalNumpyArray(_np.ndarray):
     def __new__(subtype, shape, dtype=float, buffer=None, offset=0,
                 strides=None, order=None, host_array=None, slices_into_host_array=None,
                 shared_memory_handle=None):
-        obj = super(SharedNumpyArray, subtype).__new__(subtype, shape, dtype,
-                                                       buffer, offset, strides,
-                                                       order)
+        obj = super(LocalNumpyArray, subtype).__new__(subtype, shape, dtype,
+                                                      buffer, offset, strides,
+                                                      order)
         obj.host_array = host_array
         obj.slices_into_host_array = slices_into_host_array
         obj.shared_memory_handle = shared_memory_handle
@@ -109,10 +109,12 @@ def create_shared_ndarray(resource_alloc, shape, dtype, zero_out=False, track_me
         if track_memory: resource_alloc.add_tracked_memory(nelements // hostcomm.size)
         if hostcomm.rank == 0:
             shm = _shared_memory.SharedMemory(create=True, size=nelements * _np.dtype(dtype).itemsize)
+            assert(shm.size == nelements * _np.dtype(dtype).itemsize)
             hostcomm.bcast(shm.name, root=0)
         else:
             shm_name = hostcomm.bcast(None, root=0)
             shm = _shared_memory.SharedMemory(name=shm_name)
+            assert(shm.size == nelements * _np.dtype(dtype).itemsize)
         hostcomm.barrier()  # needed to protect against root proc processing & freeing mem
         # before non-root procs finish .SharedMemory call above.
         ar = _np.ndarray(shape, dtype=dtype, buffer=shm.buf)

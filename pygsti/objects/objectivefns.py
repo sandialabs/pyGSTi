@@ -2865,7 +2865,7 @@ class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
         # using cubit rounding of function that smooths N*p for p>0:
         #  has minimum at p=0; matches value, 1st, & 2nd derivs at p=a.
 
-        if _np.min(terms) < 0.0:
+        if len(terms) > 0 and _np.min(terms) < 0.0:
             #Since we set terms = _np.maximum(terms, 0) above we know it was the regularization that caused this
             if self.regtype == 'minp':
                 raise ValueError(("Regularization => negative terms!  Is min_prob_clip (%g) too large? "
@@ -4206,7 +4206,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
     def __init__(self, raw_objfn, mdc_store, penalties=None, verbosity=0):
 
-        super().__init__(raw_objfn, mdc_store, verbosity=0)
+        super().__init__(raw_objfn, mdc_store, verbosity)
 
         if penalties is None: penalties = {}
         self.ex = self.set_penalties(**penalties)
@@ -4215,9 +4215,6 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         #Setup underlying EvaluatedModelDatasetCircuitsStore object
         #  Allocate peristent memory - (these are members of EvaluatedModelDatasetCircuitsStore)
         self.initial_allocated_memory = self.resource_alloc.allocated_memory
-
-        if _smt.shared_mem_is_enabled():
-            self.resource_alloc.build_hostcomms()  # signals that we want to use shared intra-host memory
 
         #Note: allocate probs as a local array in case we want to gather it (though objfn routines don't need this)
         self.probs, self._probs_shm = self.layout.allocate_local_array('e', 'd', self.resource_alloc, track_memory=True)

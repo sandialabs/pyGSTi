@@ -78,7 +78,7 @@ class ResourceAllocation(object):
         self.interhost_comm = None  # comm used to spread results to other hosts; 1 proc on each host (node)
         self.interhost_ranks = None  # tuple of the self.comm ranks that belong to self.interhost_comm
         self.host_index = 0  # index of the host this proc belongs to (~= hostname)
-        self.host_index_for_rank  # a dict mapping self.comm.rank => host_index
+        self.host_index_for_rank = None  # a dict mapping self.comm.rank => host_index
         self.layout_distribution = None
         self.jac_distribution_method = None
         self.jac_slice = None
@@ -106,8 +106,8 @@ class ResourceAllocation(object):
         my_hostname = _socket.gethostname() + "_group%d" % (MPI.COMM_WORLD.rank % 4)  # DEBUG TO MIMIC MORE NODES
         my_hostid = int(_blake2b(my_hostname.encode('utf-8'), digest_size=4).hexdigest(), 16) % (1 << 31)
         self.host_comm = self.comm.Split(color=int(my_hostid), key=int(my_rank))  # Note: 32-bit ints only for mpi4py
-        self.interhost_ranks = tuple(self.host_comm.allgather(my_rank))  # store all the original ranks on our host
-        print("CREATED HOSTCOMM: ",my_hostname, my_hostid, self.host_comm.size, self.host_comm.rank)
+        self.host_ranks = tuple(self.host_comm.allgather(my_rank))  # store all the original ranks on our host
+        #print("CREATED HOSTCOMM: ",my_hostname, my_hostid, self.host_comm.size, self.host_comm.rank)
 
         hostnames_by_rank = self.comm.allgather(my_hostname)  # ~"node id" of each processor in self.comm
         ranks_by_hostname = _collections.OrderedDict()
@@ -295,16 +295,16 @@ class ResourceAllocation(object):
 
         participating = unit_ralloc is None or unit_ralloc.comm is None or unit_ralloc.comm.rank == 0
         gather_comm = self.interhost_comm if (self.host_comm is not None) else self.comm
-        slices = gather_comm.gather(slices_of_global if participating else None, root=0)
+        slices = gather_comm.gather(slice_of_global if participating else None, root=0)
 
-        gathered_data = gather_comm.gather(array_portion, root=0)  # could change this to Gather (?)
+        gathered_data = gather_comm.gather(local, root=0)  # could change this to Gather (?)
 
         if gather_comm.rank == 0:
             for slc, data in zip(slices, gathered_data):
                 if slc is None: continue  # signals a non-unit-leader proc that shouldn't do anything
                 result[slc] = data
                 
-        resource_alloc.comm.barrier()  # make sure result is completely filled before returning
+        self.comm.barrier()  # make sure result is completely filled before returniing
         return
 
     def allreduce_sum(self, result, local, unit_ralloc=None):
@@ -326,7 +326,7 @@ class ResourceAllocation(object):
                 if i == self.host_comm.rank:
                     result += participating_local  # adds *in place* (relies on numpy implementation)
                 self.host_comm.barrier()  #synchonize adding to shared mem
-            if self.host_comm == 0:
+            if self.host_comm.rank == 0:
                 summed_across_hosts = self.interhost_comm.allreduce(result, op=MPI.SUM)
                 result[(slice(None,None),) * result.ndim] = summed_across_hosts
             self.host_comm.barrier()  #wait for allreduce and assignment to complete on non-hostroot procs
@@ -334,6 +334,35 @@ class ResourceAllocation(object):
             result[(slice(None,None),) * result.ndim] = self.comm.allreduce(participating_local, op=MPI.SUM)
         else:
             result[(slice(None,None),) * result.ndim] = participating_local
+
+    def allreduce_max(self, result, local, unit_ralloc=None):
+        """
+        TODO: docstring -- notes:
+        result must be allocated as a shared array using *this* ralloc or a larger one
+        unit_alloc specifies a comm/ralloc of the group of processors that all compute
+           the same logical result -- so only the unit_ralloc.rank == 0 processors
+           will contribute to the sum (but all procs get the result)
+        """
+        from mpi4py import MPI
+        participating = unit_ralloc is None or unit_ralloc.comm is None or unit_ralloc.comm.rank == 0
+
+        if self.host_comm is not None:
+            #Barrier-max on host within shared mem
+            if self.host_comm.rank == 0: result.fill(-1e100)  # sentinel
+            self.host_comm.barrier()  #make sure all zero-outs above complete
+            for i in range(self.host_comm.size):
+                if i == self.host_comm.rank and participating:
+                    _np.maximum(result, local, out=result)
+                self.host_comm.barrier()  #synchonize adding to shared mem
+            if self.host_comm == 0:
+                maxed_across_hosts = self.interhost_comm.allreduce(result, op=MPI.MAX)
+                result[(slice(None,None),) * result.ndim] = maxed_across_hosts
+            self.host_comm.barrier()  #wait for allreduce and assignment to complete on non-hostroot procs
+        elif self.comm is not None:
+            participating_local = local if participating else -1e100
+            result[(slice(None,None),) * result.ndim] = self.comm.allreduce(participating_local, op=MPI.MAX)
+        else:
+            result[(slice(None,None),) * result.ndim] = local
 
     def bcast(self, value, root=0):
         """

@@ -846,7 +846,7 @@ def _do_runopt(objective, optimizer, printer):
 
     #Perform actual optimization
     tm = _time.time()
-    opt_result = optimizer.run(objective, resource_alloc.comm, profiler, printer)
+    opt_result = optimizer.run(objective, profiler, printer)
     profiler.add_time("run_gst_fit: optimize", tm)
 
     if printer.verbosity > 0:

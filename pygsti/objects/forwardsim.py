@@ -336,7 +336,7 @@ class ForwardSimulator(object):
         if isinstance(circuits, _CircuitOutcomeProbabilityArrayLayout):
             copa_layout = circuits
         else:
-            copa_layout = self.create_layout(circuits, resource_alloc=resource_alloc, verbosity=1)  # verbosity=1 DEBUG!!!
+            copa_layout = self.create_layout(circuits, resource_alloc=resource_alloc)  # verbosity=1 DEBUG!!! REMOVE
 
         resource_alloc = _ResourceAllocation.cast(resource_alloc)
         with resource_alloc.temporarily_track_memory(copa_layout.num_elements):  # 'E' (vp)

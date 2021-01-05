@@ -744,6 +744,8 @@ class GateSetTomography(_proto.Protocol):
 
         resource_alloc = _ResourceAllocation(comm, memlimit, profiler,
                                              distribute_method=self.distribute_method)
+        if _tools.sharedmemtools.shared_mem_is_enabled():  # enable use of shared memory
+            resource_alloc.build_hostcomms()  # signals that we want to use shared intra-host memory
 
         circuit_lists = data.edesign.circuit_lists
         aliases = circuit_lists[-1].op_label_aliases if isinstance(circuit_lists[-1], _CircuitList) else None

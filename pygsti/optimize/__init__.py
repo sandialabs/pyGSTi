@@ -14,4 +14,6 @@ pyGSTi Optimization Python Package
 # the package namespace
 from .optimize import *
 from .customlm import *
+from .customsolve import *
 from .wildcardopt import *
+from .distributedqtycalc import *
