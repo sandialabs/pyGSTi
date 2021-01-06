@@ -117,14 +117,14 @@ class _MatrixCOPALayoutAtom(_DistributableAtom):
         num_elements = local_offset
 
         elindex_outcome_tuples = _collections.OrderedDict([
-            (orig_i, list()) for orig_i in range(len(unique_complete_circuits))])  # ??
+            (unique_i, list()) for unique_i in range(len(unique_complete_circuits))])
 
         for spam_tuple, (element_indices, tree_indices) in self.indices_by_spamtuple.items():
             for elindex, tree_index in zip(_slct.indices(element_indices), _slct.to_array(tree_indices)):
                 outcome_by_spamtuple = expanded_nospam_circuit_outcomes[expanded_nospam_circuits[tree_index]]
                 outcome, unique_is = outcome_by_spamtuple[spam_tuple]
                 for unique_i in unique_is:
-                    elindex_outcome_tuples[unique_i].append((elindex, outcome))  # *global* element indices
+                    elindex_outcome_tuples[unique_i].append((elindex, outcome))  # *local* element indices
         self.elindex_outcome_tuples = elindex_outcome_tuples
 
         super().__init__(element_slice, num_elements)
@@ -227,13 +227,6 @@ class MatrixCOPALayout(_DistributableCOPALayout):
             else:
                 circuits_by_unique_nospam_circuits[nospam_c] = [i]
         unique_nospam_circuits = list(circuits_by_unique_nospam_circuits.keys())
-
-        #HERE - resource_alloc tells us how many nodes and procs
-        # divide circuits accordingly: num_trees
-        # and divide these among (a potentially smaller) num_tree_subcomms
-        # each subcomm may contain multiple processors - ideally all on the same node (?)
-        # each subcomm's trees (should be contiguous slices?) => subcomm slice (?)
-        # atoms should contain indexes into subcomm slice; only construct atoms assigned to this proc
 
         # Split circuits into groups that will make good subtrees (all procs do this)
         max_sub_tree_size=None  # removed from being an argument (unused)

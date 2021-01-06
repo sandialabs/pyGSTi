@@ -27,8 +27,7 @@ class _TermCOPALayoutAtom(_DistributableAtom):
     Object that acts as "atomic unit" of instructions-for-applying a COPA strategy.
     """
 
-    def __init__(self, unique_complete_circuits, ds_circuits, group, model, dataset,
-                 offset, elindex_outcome_tuples):
+    def __init__(self, unique_complete_circuits, ds_circuits, group, model, dataset):
 
         expanded_circuit_outcomes_by_unique = _collections.OrderedDict()
         expanded_circuit_outcomes = _collections.OrderedDict()
@@ -60,6 +59,9 @@ class _TermCOPALayoutAtom(_DistributableAtom):
         self.elbl_indices_by_expcircuit = {}
         self.elindices_by_expcircuit = {}
 
+        elindex_outcome_tuples = _collections.OrderedDict([
+            (unique_i, list()) for unique_i in range(len(unique_complete_circuits))])
+
         #Assign element indices, "global" indices starting at `offset`
         local_offset = 0
         for unique_i, expanded_circuit_outcomes in expanded_circuit_outcomes_by_unique.items():
@@ -70,9 +72,12 @@ class _TermCOPALayoutAtom(_DistributableAtom):
                 self.elindices_by_expcircuit[i] = elindices  # *local* indices (0 is 1st element computed by this atom)
                 local_offset += len(outcomes)
 
-                # fill in running dict of per-circuit *global* element indices and outcomes:
-                elindex_outcome_tuples[unique_i].extend([(offset + eli, out) for eli, out in zip(elindices, outcomes)])
+                # fill in running dict of per-circuit *local* element indices and outcomes:
+                elindex_outcome_tuples[unique_i].extend([(eli, out) for eli, out in zip(elindices, outcomes)])
             table_offset += len(expanded_circuit_outcomes)
+
+        self.elindex_outcome_tuples = elindex_outcome_tuples
+        element_slice = None  # *global* (of parent layout) element-index slice - set by parent
 
         # cache of the high-magnitude terms (actually their represenations), which
         # together with the per-circuit threshold given in `percircuit_p_polys`,
@@ -83,7 +88,7 @@ class _TermCOPALayoutAtom(_DistributableAtom):
         self.merged_compact_polys = None
         self.merged_achievedsopm_compact_polys = None
 
-        super().__init__(slice(offset, offset + local_offset), local_offset)
+        super().__init__(element_slice, local_offset)
 
     @property
     def cache_size(self):
@@ -116,8 +121,10 @@ class TermCOPALayout(_DistributableCOPALayout):
         set to (at least) the number of processors.
     """
 
-    def __init__(self, circuits, model, dataset=None, max_sub_table_size=None, num_sub_tables=None,
-                 additional_dimensions=(), verbosity=0):
+    def __init__(self, circuits, model, dataset=None, 
+                 num_sub_tables=None, num_table_processors=1,
+                 num_param_dimension_processors=(), param_dimensions=(), param_dimension_blk_sizes=(),
+                 resource_alloc=None, verbosity=0):
 
         unique_circuits, to_unique = self._compute_unique_circuits(circuits)
         aliases = circuits.op_label_aliases if isinstance(circuits, _CircuitList) else None
@@ -125,21 +132,27 @@ class TermCOPALayout(_DistributableCOPALayout):
         unique_complete_circuits = [model.complete_circuit(c) for c in unique_circuits]
 
         #Create evenly divided groups of indices of unique_complete_circuits
+        max_sub_table_size=None # was an argument but never used; remove in future
         assert(max_sub_table_size is None), "No support for size-limited subtables yet!"
         ngroups = num_sub_tables
         groups = [set(sub_array) for sub_array in _np.array_split(range(len(unique_complete_circuits)), ngroups)]
 
-        atoms = []
-        elindex_outcome_tuples = {unique_i: list() for unique_i in range(len(unique_circuits))}
+        #atoms = []
+        #elindex_outcome_tuples = {unique_i: list() for unique_i in range(len(unique_circuits))}
+        #
+        #offset = 0
+        #for group in groups:
+        #    atoms.append(_TermCOPALayoutAtom(unique_complete_circuits, ds_circuits, group, model,
+        #                                     dataset, offset, elindex_outcome_tuples))
+        #    offset += atoms[-1].num_elements
 
-        offset = 0
-        for group in groups:
-            atoms.append(_TermCOPALayoutAtom(unique_complete_circuits, ds_circuits, group, model,
-                                             dataset, offset, elindex_outcome_tuples))
-            offset += atoms[-1].num_elements
+        def _create_atom(group):
+            return _TermCOPALayoutAtom(unique_complete_circuits, ds_circuits, group, model, dataset)
 
-        super().__init__(circuits, unique_circuits, to_unique, elindex_outcome_tuples, unique_complete_circuits,
-                         atoms, additional_dimensions)
+        super().__init__(circuits, unique_circuits, to_unique, unique_complete_circuits,
+                         _create_atom, groups, num_table_processors, 
+                         num_param_dimension_processors, param_dimensions,
+                         param_dimension_blk_sizes, resource_alloc, verbosity)
 
     def pathset(self, comm=None):
         """

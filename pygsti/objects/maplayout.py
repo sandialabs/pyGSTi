@@ -29,7 +29,7 @@ class _MapCOPALayoutAtom(_DistributableAtom):
     """
 
     def __init__(self, unique_complete_circuits, ds_circuits, unique_to_orig, group, model,
-                 dataset, offset, elindex_outcome_tuples, max_cache_size):
+                 dataset, max_cache_size):
 
         expanded_circuit_outcomes_by_unique = _collections.OrderedDict()
         expanded_circuit_outcomes = _collections.OrderedDict()
@@ -64,6 +64,9 @@ class _MapCOPALayoutAtom(_DistributableAtom):
         self.elindices_by_expcircuit = {}
         self.outcomes_by_expcircuit = {}
 
+        elindex_outcome_tuples = _collections.OrderedDict([
+            (unique_i, list()) for unique_i in range(len(unique_complete_circuits))])
+
         #Assign element indices, "global" indices starting at `offset`
         local_offset = 0
         for unique_i, expanded_circuit_outcomes in expanded_circuit_outcomes_by_unique.items():
@@ -76,11 +79,13 @@ class _MapCOPALayoutAtom(_DistributableAtom):
                 self.orig_indices_by_expcircuit[i] = unique_to_orig[unique_i]
                 local_offset += len(outcomes)
 
-                # fill in running dict of per-circuit *global* element indices and outcomes:
-                elindex_outcome_tuples[unique_i].extend([(offset + eli, out) for eli, out in zip(elindices, outcomes)])
+                # fill in running dict of per-circuit *local* element indices and outcomes:
+                elindex_outcome_tuples[unique_i].extend([(eli, out) for eli, out in zip(elindices, outcomes)])
             table_offset += len(expanded_circuit_outcomes)
+        self.elindex_outcome_tuples = elindex_outcome_tuples
+        element_slice = None  # *global* (of parent layout) element-index slice - set by parent
 
-        super().__init__(slice(offset, offset + local_offset), local_offset)
+        super().__init__(element_slice, local_offset)
 
     @property
     def cache_size(self):
@@ -117,29 +122,38 @@ class MapCOPALayout(_DistributableCOPALayout):
     """
 
     def __init__(self, circuits, model, dataset=None, max_cache_size=None,
-                 max_sub_table_size=None, num_sub_tables=None, additional_dimensions=(), verbosity=0):
+                 num_sub_tables=None, num_table_processors=1, num_param_dimension_processors=(),
+                 param_dimensions=(), param_dimension_blk_sizes=(), resource_alloc=None, verbosity=0):
 
         unique_circuits, to_unique = self._compute_unique_circuits(circuits)
         aliases = circuits.op_label_aliases if isinstance(circuits, _CircuitList) else None
         ds_circuits = _lt.apply_aliases_to_circuits(unique_circuits, aliases)
         unique_complete_circuits = [model.complete_circuit(c) for c in unique_circuits]
 
+        max_sub_table_size=None # was an argument but never used; remove in future
         if (num_sub_tables is not None and num_sub_tables > 1) or max_sub_table_size is not None:
             circuit_table = _PrefixTable(unique_complete_circuits, max_cache_size)
             groups = circuit_table.find_splitting(max_sub_table_size, num_sub_tables, verbosity)
         else:
             groups = [set(range(len(unique_complete_circuits)))]
 
-        atoms = []
-        elindex_outcome_tuples = _collections.OrderedDict(
-            [(unique_i, list()) for unique_i in range(len(unique_circuits))])
         to_orig = {unique_i: orig_i for orig_i, unique_i in to_unique.items()}  # unique => original indices
 
-        offset = 0
-        for group in groups:
-            atoms.append(_MapCOPALayoutAtom(unique_complete_circuits, ds_circuits, to_orig, group,
-                                            model, dataset, offset, elindex_outcome_tuples, max_cache_size))
-            offset += atoms[-1].num_elements
+        #atoms = []
+        #elindex_outcome_tuples = _collections.OrderedDict(
+        #    [(unique_i, list()) for unique_i in range(len(unique_circuits))])
 
-        super().__init__(circuits, unique_circuits, to_unique, elindex_outcome_tuples, unique_complete_circuits,
-                         atoms, additional_dimensions)
+        #offset = 0
+        #for group in groups:
+        #    atoms.append(_MapCOPALayoutAtom(unique_complete_circuits, ds_circuits, to_orig, group,
+        #                                    model, dataset, offset, elindex_outcome_tuples, max_cache_size))
+        #    offset += atoms[-1].num_elements
+
+        def _create_atom(group):
+            return _MapCOPALayoutAtom(unique_complete_circuits, ds_circuits, to_orig, group,
+                                      model, dataset, max_cache_size)
+
+        super().__init__(circuits, unique_circuits, to_unique, unique_complete_circuits,
+                         _create_atom, groups, num_table_processors, 
+                         num_param_dimension_processors, param_dimensions,
+                         param_dimension_blk_sizes, resource_alloc, verbosity)

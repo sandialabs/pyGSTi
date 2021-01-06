@@ -330,9 +330,25 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         else:
             gather_mem_limit = None
 
-        layout = _TermCOPALayout(circuits, self.model, dataset, None, nprocs, (num_params, num_params), printer)
-        layout.set_distribution_params(nprocs, (num_params, num_params), gather_mem_limit)  # *before* _prepare_layout!
+        natoms = na = nprocs
+        blk_sizes = (None, None)
 
+        bNp1Matters = bool("EP" in array_types or "EPP" in array_types or "ep" in array_types or "epp" in array_types)
+        bNp2Matters = bool("EPP" in array_types or "epp" in array_types)
+
+        if bNp2Matters:
+            param_dimensions = (num_params, num_params)
+            npp =  (nprocs // natoms, 1)
+        elif bNp1Matters:
+            param_dimensions = (num_params,)
+            npp =  (nprocs // natoms,)
+        else:
+            param_dimensions = ()
+            npp = ()
+
+        layout = _TermCOPALayout(circuits, self.model, dataset, natoms, na, npp, param_dimensions,
+                                 blk_sizes, resource_alloc, printer)
+        #REMOVE layout.set_distribution_params(nprocs, (num_params, num_params), gather_mem_limit)  # *before* _prepare_layout!
         #MEM debug_prof.print_memory("CreateLayout2 - nAtoms = %d" % len(layout.atoms), True)
         self._prepare_layout(layout, resource_alloc, polynomial_vindices_per_int)
         #MEM debug_prof.print_memory("CreateLayout3 - nEls = %d, nprocs=%d" % (layout.num_elements, nprocs), True)
@@ -341,15 +357,16 @@ class TermForwardSimulator(_DistributableForwardSimulator):
 
     def _bulk_fill_probs_block(self, array_to_fill, layout_atom, resource_alloc):
 
-        if resource_alloc.comm is not None and resource_alloc.comm.rank != 0:
-            # we cannot utilize multiplie processors when computing a single block.  The required
-            # ending condition is that the *root* processor has its array_to_fill filled (the
-            # framework broadcasts the results of each "owner" processor (rank=0 in the sub-comm) to all
-            # other processors).  Before shared memory was utilized, it was fine to have all the
-            # processors just compute the same thing (wasteful, but fine) - but *if* array_to_fill is
-            # shared memory then having multiple processors write to the same indices could cause issues
-            # (corrupted data or slower performance).  Thus, it is better to just do nothing on all of
-            # the non-root processors.  We could also print a warning (?).
+        if not resource_alloc.is_host_leader:
+            # (same as "if resource_alloc.host_comm is not None and resource_alloc.host_comm.rank != 0")
+            # we cannot further utilize multiplie processors when computing a single block.  The required
+            # ending condition is that array_to_fill on each processor has been filled.  But if memory
+            # is being shared and resource_alloc contains multiple processors on a single host, we only
+            # want *one* (the rank=0) processor to perform the computation, since array_to_fill will be
+            # shared memory that we don't want to have muliple procs using simultaneously to compute the
+            # same thing.  Thus, we just do nothing on all of the non-root host_comm processors.
+            # We could also print a warning (?), or we could carefully guard any shared mem updates
+            # using "if resource_alloc.is_host_leader" conditions (if we could use  multiple procs elsewhere).
             return
 
         nEls = layout_atom.num_elements
@@ -362,7 +379,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         _fas(array_to_fill, [slice(0, array_to_fill.shape[0])], probs)
 
     def _bulk_fill_dprobs_block(self, array_to_fill, dest_param_slice, layout_atom, param_slice, resource_alloc):
-        if resource_alloc.comm is not None and resource_alloc.comm.rank != 0:
+        if not resource_alloc.is_host_leader:
             return  # see above
 
         if param_slice is None: param_slice = slice(0, self.model.num_params)
@@ -386,7 +403,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
 
     def _bulk_fill_hprobs_block(self, array_to_fill, dest_param_slice1, dest_param_slice2, layout_atom,
                                 param_slice1, param_slice2, resource_alloc):
-        if resource_alloc.comm is not None and resource_alloc.comm.rank != 0:
+        if not resource_alloc.is_host_leader:
             return  # see above
 
         if param_slice1 is None or param_slice1.start is None: param_slice1 = slice(0, self.model.num_params)

@@ -845,7 +845,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         """
         return MatrixForwardSimulator(self.model)
 
-    def _compute_product_cache(self, layout_atom_tree):
+    def _compute_product_cache(self, layout_atom_tree, resource_alloc):
         """
         Computes an array of operation sequence products (process matrices).
 
@@ -854,11 +854,10 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         """
         dim = self.model.dim
 
-        #Note: previously, we tried to allow for parallelization of
-        # _compute_product_cache when the tree was split, but this is was
-        # incorrect (and luckily never used) - so it's been removed.
-
-        # ------------------------------------------------------------------
+        #Note: resource_alloc gives procs that could work together to perform
+        # computation, e.g. paralllel dot products but NOT to just partition
+        # futher (e.g. among the wrt_slices) as this is done in the layout.
+        # This function doesn't make use of resource_alloc - all procs compute the same thing.
 
         eval_tree = layout_atom_tree
         cacheSize = len(eval_tree)
@@ -915,46 +914,52 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         eval_tree = layout_atom_tree
         cacheSize = len(eval_tree)
 
-        # ------------------------------------------------------------------
+        #Note: resource_alloc gives procs that could work together to perform
+        # computation, e.g. paralllel dot products but NOT to just partition
+        # futher (e.g. among the wrt_slices) as this is done in the layout.
+        # This function doesn't make use of resource_alloc - all procs compute the same thing.
 
-        #print("MPI: _compute_dproduct_cache begin: %d deriv cols" % nDerivCols)
-        if resource_alloc is not None and resource_alloc.comm is not None and resource_alloc.comm.Get_size() > 1:
-            #print("MPI: _compute_dproduct_cache called w/comm size %d" % comm.Get_size())
-            # parallelize of deriv cols, then sub-trees (if available and necessary)
+        ## ------------------------------------------------------------------
+        #
+        ##print("MPI: _compute_dproduct_cache begin: %d deriv cols" % nDerivCols)
+        #if resource_alloc is not None and resource_alloc.comm is not None and resource_alloc.comm.Get_size() > 1:
+        #    #print("MPI: _compute_dproduct_cache called w/comm size %d" % comm.Get_size())
+        #    # parallelize of deriv cols, then sub-trees (if available and necessary)
+        #
+        #    if resource_alloc.comm.Get_size() > nDerivCols:
+        #
+        #        #If there are more processors than deriv cols, give a
+        #        # warning -- note that we *cannot* make use of a tree being
+        #        # split because there's no good way to reconstruct the
+        #        # *non-final* parent-tree elements from those of the sub-trees.
+        #        _warnings.warn("Increased speed could be obtained by giving dproduct cache computation"
+        #                       " *fewer* processors, as there are more cpus than derivative columns.")
+        #
+        #    # Use comm to distribute columns
+        #    allDerivColSlice = slice(0, nDerivCols) if (wrt_slice is None) else wrt_slice
+        #    _, myDerivColSlice, _, sub_resource_alloc = \
+        #        _mpit.distribute_slice(allDerivColSlice, resource_alloc.comm)
+        #    #print("MPI: _compute_dproduct_cache over %d cols (%s) (rank %d computing %s)" \
+        #    #    % (nDerivCols, str(allDerivColIndices), comm.Get_rank(), str(myDerivColIndices)))
+        #    if sub_resource_alloc is not None and sub_resource_alloc.comm is not None \
+        #       and sub_resource_alloc.comm.Get_size() > 1:
+        #        _warnings.warn("Too many processors to make use of in "
+        #                       " _compute_dproduct_cache.")
+        #        if sub_resource_alloc.comm.Get_rank() > 0: myDerivColSlice = slice(0, 0)
+        #        #don't compute anything on "extra", i.e. rank != 0, cpus
+        #
+        #    my_results = self._compute_dproduct_cache(
+        #        layout_atom_tree, prod_cache, scale_cache, None, myDerivColSlice, profiler)
+        #    # pass None as comm, *not* mySubComm, since we can't do any
+        #    #  further parallelization
+        #
+        #    tm = _time.time()
+        #    all_results = resource_alloc.comm.allgather(my_results)
+        #    profiler.add_time("MPI IPC", tm)
+        #    return _np.concatenate(all_results, axis=1)  # TODO: remove this concat w/better gather?
+        #
+        ## ------------------------------------------------------------------
 
-            if resource_alloc.comm.Get_size() > nDerivCols:
-
-                #If there are more processors than deriv cols, give a
-                # warning -- note that we *cannot* make use of a tree being
-                # split because there's no good way to reconstruct the
-                # *non-final* parent-tree elements from those of the sub-trees.
-                _warnings.warn("Increased speed could be obtained by giving dproduct cache computation"
-                               " *fewer* processors, as there are more cpus than derivative columns.")
-
-            # Use comm to distribute columns
-            allDerivColSlice = slice(0, nDerivCols) if (wrt_slice is None) else wrt_slice
-            _, myDerivColSlice, _, sub_resource_alloc = \
-                _mpit.distribute_slice(allDerivColSlice, resource_alloc.comm)
-            #print("MPI: _compute_dproduct_cache over %d cols (%s) (rank %d computing %s)" \
-            #    % (nDerivCols, str(allDerivColIndices), comm.Get_rank(), str(myDerivColIndices)))
-            if sub_resource_alloc is not None and sub_resource_alloc.comm is not None \
-               and sub_resource_alloc.comm.Get_size() > 1:
-                _warnings.warn("Too many processors to make use of in "
-                               " _compute_dproduct_cache.")
-                if sub_resource_alloc.comm.Get_rank() > 0: myDerivColSlice = slice(0, 0)
-                #don't compute anything on "extra", i.e. rank != 0, cpus
-
-            my_results = self._compute_dproduct_cache(
-                layout_atom_tree, prod_cache, scale_cache, None, myDerivColSlice, profiler)
-            # pass None as comm, *not* mySubComm, since we can't do any
-            #  further parallelization
-
-            tm = _time.time()
-            all_results = resource_alloc.comm.allgather(my_results)
-            profiler.add_time("MPI IPC", tm)
-            return _np.concatenate(all_results, axis=1)  # TODO: remove this concat w/better gather?
-
-        # ------------------------------------------------------------------
         tSerialStart = _time.time()
         dProdCache = _np.zeros((cacheSize,) + deriv_shape)
         wrtIndices = _slct.indices(wrt_slice) if (wrt_slice is not None) else None
@@ -1020,82 +1025,87 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         eval_tree = layout_atom_tree
         cacheSize = len(eval_tree)
 
-        # ------------------------------------------------------------------
+        #Note: resource_alloc gives procs that could work together to perform
+        # computation, e.g. paralllel dot products but NOT to just partition
+        # futher (e.g. among the wrt_slices) as this is done in the layout.
+        # This function doesn't make use of resource_alloc - all procs compute the same thing.
 
-        if resource_alloc is not None and resource_alloc.comm is not None and resource_alloc.comm.Get_size() > 1:
-            # parallelize of deriv cols, then sub-trees (if available and necessary)
-
-            if resource_alloc.comm.Get_size() > nDerivCols1 * nDerivCols2:
-                #If there are more processors than deriv cells, give a
-                # warning -- note that we *cannot* make use of a tree being
-                # split because there's no good way to reconstruct the
-                # *non-final* parent-tree elements from those of the sub-trees.
-                _warnings.warn("Increased speed could be obtained"
-                               " by giving hproduct cache computation"
-                               " *fewer* processors and *smaller* (sub-)tree"
-                               " (e.g. by splitting tree beforehand), as there"
-                               " are more cpus than hessian elements.")  # pragma: no cover
-
-            # allocate final result memory
-            hProdCache = _np.zeros((cacheSize,) + hessn_shape)
-
-            # Use comm to distribute columns
-            allDeriv1ColSlice = slice(0, nDerivCols1)
-            allDeriv2ColSlice = slice(0, nDerivCols2)
-            deriv1Slices, myDeriv1ColSlice, deriv1Owners, mySubComm = \
-                _mpit.distribute_slice(allDeriv1ColSlice, resource_alloc.comm)
-
-            # Get slice into entire range of model params so that
-            #  per-gate hessians can be computed properly
-            if wrt_slice1 is not None and wrt_slice1.start is not None:
-                myHessianSlice1 = _slct.shift(myDeriv1ColSlice, wrt_slice1.start)
-            else: myHessianSlice1 = myDeriv1ColSlice
-
-            #print("MPI: _compute_hproduct_cache over %d cols (rank %d computing %s)" \
-            #    % (nDerivCols2, comm.Get_rank(), str(myDerivColSlice)))
-
-            if mySubComm is not None and mySubComm.Get_size() > 1:
-                deriv2Slices, myDeriv2ColSlice, deriv2Owners, mySubSubComm = \
-                    _mpit.distribute_slice(allDeriv2ColSlice, mySubComm)
-
-                # Get slice into entire range of model params (see above)
-                if wrt_slice2 is not None and wrt_slice2.start is not None:
-                    myHessianSlice2 = _slct.shift(myDeriv2ColSlice, wrt_slice2.start)
-                else: myHessianSlice2 = myDeriv2ColSlice
-
-                if mySubSubComm is not None and mySubSubComm.Get_size() > 1:
-                    _warnings.warn("Too many processors to make use of in "
-                                   " _compute_hproduct_cache.")
-                    #TODO: remove: not needed now that we track owners
-                    #if mySubSubComm.Get_rank() > 0: myDeriv2ColSlice = slice(0,0)
-                    #  #don't compute anything on "extra", i.e. rank != 0, cpus
-
-                hProdCache[:, myDeriv1ColSlice, myDeriv2ColSlice] = self._compute_hproduct_cache(
-                    layout_atom_tree, prod_cache, d_prod_cache1[:, myDeriv1ColSlice],
-                    d_prod_cache2[:, myDeriv2ColSlice], scale_cache, None, myHessianSlice1, myHessianSlice2)
-                # pass None as comm, *not* mySubSubComm, since we can't do any further parallelization
-
-                #NOTE: we only need to gather to the root processor (TODO: update this)
-                _mpit.gather_slices(deriv2Slices, deriv2Owners, hProdCache, [None, myDeriv1ColSlice],
-                                    2, mySubComm)  # , gather_mem_limit) #gather over col-distribution (Deriv2)
-                #note: gathering axis 2 of hProdCache[:,myDeriv1ColSlice],
-                #      dim=(cacheSize,nDerivCols1,nDerivCols2,dim,dim)
-            else:
-                #compute "Deriv1" row-derivatives distribution only; don't use column distribution
-                hProdCache[:, myDeriv1ColSlice] = self._compute_hproduct_cache(
-                    layout_atom_tree, prod_cache, d_prod_cache1[:, myDeriv1ColSlice], d_prod_cache2,
-                    scale_cache, None, myHessianSlice1, wrt_slice2)
-                # pass None as comm, *not* mySubComm (this is ok, see "if" condition above)
-
-            #NOTE: we only need to gather to the root processor (TODO: update this)
-            _mpit.gather_slices(deriv1Slices, deriv1Owners, hProdCache, [], 1, resource_alloc.comm)
-            #, gather_mem_limit) #gather over row-distribution (Deriv1)
-            #note: gathering axis 1 of hProdCache,
-            #      dim=(cacheSize,nDerivCols1,nDerivCols2,dim,dim)
-
-            return hProdCache
-
-        # ------------------------------------------------------------------
+        ## ------------------------------------------------------------------
+        #
+        #if resource_alloc is not None and resource_alloc.comm is not None and resource_alloc.comm.Get_size() > 1:
+        #    # parallelize of deriv cols, then sub-trees (if available and necessary)
+        #
+        #    if resource_alloc.comm.Get_size() > nDerivCols1 * nDerivCols2:
+        #        #If there are more processors than deriv cells, give a
+        #        # warning -- note that we *cannot* make use of a tree being
+        #        # split because there's no good way to reconstruct the
+        #        # *non-final* parent-tree elements from those of the sub-trees.
+        #        _warnings.warn("Increased speed could be obtained"
+        #                       " by giving hproduct cache computation"
+        #                       " *fewer* processors and *smaller* (sub-)tree"
+        #                       " (e.g. by splitting tree beforehand), as there"
+        #                       " are more cpus than hessian elements.")  # pragma: no cover
+        #
+        #    # allocate final result memory
+        #    hProdCache = _np.zeros((cacheSize,) + hessn_shape)
+        #
+        #    # Use comm to distribute columns
+        #    allDeriv1ColSlice = slice(0, nDerivCols1)
+        #    allDeriv2ColSlice = slice(0, nDerivCols2)
+        #    deriv1Slices, myDeriv1ColSlice, deriv1Owners, mySubComm = \
+        #        _mpit.distribute_slice(allDeriv1ColSlice, resource_alloc.comm)
+        #
+        #    # Get slice into entire range of model params so that
+        #    #  per-gate hessians can be computed properly
+        #    if wrt_slice1 is not None and wrt_slice1.start is not None:
+        #        myHessianSlice1 = _slct.shift(myDeriv1ColSlice, wrt_slice1.start)
+        #    else: myHessianSlice1 = myDeriv1ColSlice
+        #
+        #    #print("MPI: _compute_hproduct_cache over %d cols (rank %d computing %s)" \
+        #    #    % (nDerivCols2, comm.Get_rank(), str(myDerivColSlice)))
+        #
+        #    if mySubComm is not None and mySubComm.Get_size() > 1:
+        #        deriv2Slices, myDeriv2ColSlice, deriv2Owners, mySubSubComm = \
+        #            _mpit.distribute_slice(allDeriv2ColSlice, mySubComm)
+        #
+        #        # Get slice into entire range of model params (see above)
+        #        if wrt_slice2 is not None and wrt_slice2.start is not None:
+        #            myHessianSlice2 = _slct.shift(myDeriv2ColSlice, wrt_slice2.start)
+        #        else: myHessianSlice2 = myDeriv2ColSlice
+        #
+        #        if mySubSubComm is not None and mySubSubComm.Get_size() > 1:
+        #            _warnings.warn("Too many processors to make use of in "
+        #                           " _compute_hproduct_cache.")
+        #            #TODO: remove: not needed now that we track owners
+        #            #if mySubSubComm.Get_rank() > 0: myDeriv2ColSlice = slice(0,0)
+        #            #  #don't compute anything on "extra", i.e. rank != 0, cpus
+        #
+        #        hProdCache[:, myDeriv1ColSlice, myDeriv2ColSlice] = self._compute_hproduct_cache(
+        #            layout_atom_tree, prod_cache, d_prod_cache1[:, myDeriv1ColSlice],
+        #            d_prod_cache2[:, myDeriv2ColSlice], scale_cache, None, myHessianSlice1, myHessianSlice2)
+        #        # pass None as comm, *not* mySubSubComm, since we can't do any further parallelization
+        #
+        #        #NOTE: we only need to gather to the root processor (TODO: update this)
+        #        _mpit.gather_slices(deriv2Slices, deriv2Owners, hProdCache, [None, myDeriv1ColSlice],
+        #                            2, mySubComm)  # , gather_mem_limit) #gather over col-distribution (Deriv2)
+        #        #note: gathering axis 2 of hProdCache[:,myDeriv1ColSlice],
+        #        #      dim=(cacheSize,nDerivCols1,nDerivCols2,dim,dim)
+        #    else:
+        #        #compute "Deriv1" row-derivatives distribution only; don't use column distribution
+        #        hProdCache[:, myDeriv1ColSlice] = self._compute_hproduct_cache(
+        #            layout_atom_tree, prod_cache, d_prod_cache1[:, myDeriv1ColSlice], d_prod_cache2,
+        #            scale_cache, None, myHessianSlice1, wrt_slice2)
+        #        # pass None as comm, *not* mySubComm (this is ok, see "if" condition above)
+        #
+        #    #NOTE: we only need to gather to the root processor (TODO: update this)
+        #    _mpit.gather_slices(deriv1Slices, deriv1Owners, hProdCache, [], 1, resource_alloc.comm)
+        #    #, gather_mem_limit) #gather over row-distribution (Deriv1)
+        #    #note: gathering axis 1 of hProdCache,
+        #    #      dim=(cacheSize,nDerivCols1,nDerivCols2,dim,dim)
+        #
+        #    return hProdCache
+        #
+        ## ------------------------------------------------------------------
 
         hProdCache = _np.zeros((cacheSize,) + hessn_shape)
         wrtIndices1 = _slct.indices(wrt_slice1) if (wrt_slice1 is not None) else None
@@ -1608,22 +1618,24 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         return ret
 
     def _bulk_fill_probs_block(self, array_to_fill, layout_atom, resource_alloc):
-        if resource_alloc.host_comm is not None and resource_alloc.host_comm.rank != 0:
-            # we cannot utilize multiplie processors when computing a single block.  The required
-            # ending condition is that array_to_fill on each processor has been filled.  But if memory
-            # is being shared and resource_alloc contains multiple processors on a single host, we only
-            # want *one* (the rank=0) processor to perform the computation, since array_to_fill will be
-            # shared memory that we don't want to have muliple procs using simultaneously to compute the
-            # same thing.  Thus, we just do nothing on all of the non-root host_comm processors.
-            # We could also print a warning (?).
-            return
-
         #Free memory from previous subtree iteration before computing caches
         scaleVals = Gs = prodCache = scaleCache = None
         resource_alloc.check_can_allocate_memory(layout_atom.cache_size * self.model.dim * self.model.dim)  # prod cache
 
         #Fill cache info
-        prodCache, scaleCache = self._compute_product_cache(layout_atom.tree)
+        prodCache, scaleCache = self._compute_product_cache(layout_atom.tree, resource_alloc)
+
+        if not resource_alloc.is_host_leader:
+            # (same as "if resource_alloc.host_comm is not None and resource_alloc.host_comm.rank != 0")
+            # we cannot further utilize multiplie processors when computing a single block.  The required
+            # ending condition is that array_to_fill on each processor has been filled.  But if memory
+            # is being shared and resource_alloc contains multiple processors on a single host, we only
+            # want *one* (the rank=0) processor to perform the computation, since array_to_fill will be
+            # shared memory that we don't want to have muliple procs using simultaneously to compute the
+            # same thing.  Thus, we just do nothing on all of the non-root host_comm processors.
+            # We could also print a warning (?), or we could carefully guard any shared mem updates
+            # using "if resource_alloc.is_host_leader" conditions (if we could use  multiple procs elsewhere).
+            return
 
         #use cached data to final values
         scaleVals = self._scale_exp(layout_atom.nonscratch_cache_view(scaleCache))
@@ -1646,10 +1658,10 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
     def _bulk_fill_dprobs_block(self, array_to_fill, dest_param_slice, layout_atom, param_slice, resource_alloc):
         dim = self.model.dim
         resource_alloc.check_can_allocate_memory(layout_atom.cache_size * dim * dim * _slct.length(param_slice))
-        prodCache, scaleCache = self._compute_product_cache(layout_atom.tree)
+        prodCache, scaleCache = self._compute_product_cache(layout_atom.tree, resource_alloc)
         dProdCache = self._compute_dproduct_cache(layout_atom.tree, prodCache, scaleCache,
-                                                  resource_alloc, param_slice)  # only computes cache on root processor
-        if resource_alloc.host_comm is not None and resource_alloc.host_comm.rank != 0:
+                                                  resource_alloc, param_slice)
+        if not resource_alloc.is_host_leader:
             return  # Non-root host processors aren't used anymore to compute the result on the root proc
 
         scaleVals = self._scale_exp(layout_atom.nonscratch_cache_view(scaleCache))
@@ -1668,7 +1680,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                                 param_slice1, param_slice2, resource_alloc):
         dim = self.model.dim
         resource_alloc.check_can_allocate_memory(layout_atom.cache_size * dim**2 * self.model.num_params**2)
-        prodCache, scaleCache = self._compute_product_cache(layout_atom.tree)
+        prodCache, scaleCache = self._compute_product_cache(layout_atom.tree, resource_alloc)
         dProdCache1 = self._compute_dproduct_cache(
             layout_atom.tree, prodCache, scaleCache, resource_alloc, param_slice1)  # computed on rank=0 only
         dProdCache2 = dProdCache1 if (param_slice1 == param_slice2) else \
@@ -1683,7 +1695,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                                                   dProdCache2, scaleCache, resource_alloc,
                                                   param_slice1, param_slice2)  # computed on rank=0 only
 
-        if resource_alloc.host_comm is not None and resource_alloc.host_comm.rank != 0:
+        if not resource_alloc.is_host_leader:
             return  # Non-root host processors aren't used anymore to compute the result on the root proc
 
         scaleVals = self._scale_exp(layout_atom.nonscratch_cache_view(scaleCache))
