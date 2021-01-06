@@ -15,3 +15,16 @@
 # F82*: Undefined names
 # This list may be expanded in the future
 select=E9,F63,F7,F82
+
+exclude=
+	# Known issues with rb tests. Currently skipped, but technically have F821 errors
+	test/unit/extras/rb/test_analysis.py
+	test/unit/extras/rb/test_group.py
+	test/unit/extras/rb/test_sample.py
+	test/unit/extras/rb/test_theory.py
+	test/unit/tools/test_internalgates.py
+	test/test_packages/extras/test_rb.py
+	# F821 error. Should nPossible be nLocal?
+	test/test_packages/drivers/nqubitconstruction.py
+	# F821 error. Likely results existed in a deleted cell
+	scripts/profiling/gaugeopt/3Q_example.py
