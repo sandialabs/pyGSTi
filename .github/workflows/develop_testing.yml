@@ -42,22 +42,21 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
     - name: Install package
-      # see https://github.com/cvxgrp/cvxpy/issues/968 for numpy version
-      # Cython must be pre-installed to build native extensions on pyGSTi install
-      # Adding wheel package to cut down on installation time
       run: |
         python -m pip install --upgrade pip
+        # see https://github.com/cvxgrp/cvxpy/issues/968 for numpy version
         python -m pip install "numpy>=1.16.0"
+        # Cython must be pre-installed to build native extensions on pyGSTi install
         python -m pip install cython
-        python -m pip install wheel
+        python -m pip install wheel flake8
         python -m pip install .[testing]
         python -m pip freeze
     - name: Lint with flake8
       run: |
-        # stop the build if there are Python syntax errors or undefined names
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+        # Critical errors, exit on failure
+        flake8 . --count --show-source --statistics --config=.flake8-critical
+        # Standard PEP8, allowed to fail since exit-zero treats all errors as warnings
+        flake8 . --exit-zero --statistics
     - name: Run unit tests
       run: |
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
