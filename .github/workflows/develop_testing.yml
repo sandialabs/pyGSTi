@@ -5,10 +5,8 @@ name: Python package
 
 on:
   push:
-    branches: ["*"]
     branches-ignore: [ master, beta ]
   pull_request:
-    branches: ["*"]
     branches-ignore: [ master, beta ]
   # Allow running manually from Actions tab
   workflow_dispatch:
