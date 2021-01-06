@@ -285,27 +285,29 @@ class DistributableForwardSimulator(_ForwardSimulator):
 
         #FUTURE could make a resource_alloc.check_can_allocate_memory call here for ('epp', 'epp')?
         nElements = atom.num_elements
-        param2_resource_alloc = resource_alloc.layout_allocs['param2-processing']
         for wrtSlice1, wrtSlice2 in wrt_slices_list:
 
             if return_dprobs_12:
-                dprobs1, dprobs1_shm = _smt.create_shared_ndarray(param2_resource_alloc, (nElements, _slct.length(wrtSlice1)),
+                dprobs1, dprobs1_shm = _smt.create_shared_ndarray(resource_alloc, (nElements, _slct.length(wrtSlice1)),
                                                                   'd', zero_out=True, track_memory=False)
-                dprobs2, dprobs2_shm = _smt.create_shared_ndarray(param2_resource_alloc, (nElements, _slct.length(wrtSlice2)),
+                dprobs2, dprobs2_shm = _smt.create_shared_ndarray(resource_alloc, (nElements, _slct.length(wrtSlice2)),
                                                                   'd', zero_out=True, track_memory=False)
             else:
                 dprobs1 = dprobs2 = dprobs1_shm = dprobs2_shm = None
 
             hprobs, hprobs_shm = _smt.create_shared_ndarray(
-                param2_resource_alloc, (nElements, _slct.length(wrtSlice1), _slct.length(wrtSlice2)),
+                resource_alloc, (nElements, _slct.length(wrtSlice1), _slct.length(wrtSlice2)),
                 'd', zero_out=True, track_memory=False)
 
             self._bulk_fill_hprobs_singleatom(hprobs, atom, None, dprobs1, dprobs2, 
                                               None, None, # slice(0, hprobs.shape[1]), slice(0, hprobs.shape[2]),
-                                              wrtSlice1, wrtSlice2, None, None, param2_resource_alloc, 
-                                              param2_resource_alloc, param2_resource_alloc)
-            #Note: we give all three resource_alloc's as `param2_resource_alloc` above because all the arrays
+                                              wrtSlice1, wrtSlice2, None, None, resource_alloc, 
+                                              resource_alloc, resource_alloc)
+            #Note: we give all three resource_alloc's as our local `resource_alloc` above because all the arrays
             # have been allocated based on just this subset of processors, unlike a call to bulk_fill_hprobs(...)
+            # where the probs & dprobs are memory allocated and filled by a larger group of processors.  (the main
+            # function of these args is to know which procs work together to fill the *same* values and which of
+            # these are on the *same* host so that only one per host actually writes to the assumed-shared memory.
 
             if return_dprobs_12:
                 dprobs12 = dprobs1[:, :, None] * dprobs2[:, None, :]  # (KM,N,1) * (KM,1,N') = (KM,N,N')

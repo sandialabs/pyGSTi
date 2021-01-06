@@ -1672,7 +1672,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
 
                 k, kmax = 0, len(slicetup_list)
                 for (slice1, slice2, hprobs, dprobs12) in self.model.sim._bulk_hprobs_by_block_singleatom(
-                        atom, slicetup_list, True, self.resource_alloc):
+                        atom, slicetup_list, True, param2_resource_alloc):
                     #blk_rank = param2_resource_alloc.comm.Get_rank() if (param2_resource_alloc.comm is not None) else 0
                     local_slice1 = _slct.shift(slice1, -global_param_slice.start)  # indices into atom_hessian
                     local_slice2 = _slct.shift(slice2, -global_param2_slice.start)  # indices into atom_hessian
