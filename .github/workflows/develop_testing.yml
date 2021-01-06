@@ -5,11 +5,24 @@ name: Testing develop branches
 
 on:
   push:
-    branches-ignore: [ master, beta ]
+    branches: [ "*" ]
   pull_request:
-    branches-ignore: [ master, beta ]
+    branches: [ "*" ]
   # Allow running manually from Actions tab
   workflow_dispatch:
+
+env:
+  SKIP_DEAP: 1
+  NOSE_VERBOSE: 2
+  NOSE_WITH_TIMER: 1
+  NOSE_WITH_ID: 1
+  NOSE_REDNOSE: 1
+  NOSE_WITH_COVERAGE: 1
+  NOSE_COVER_PACKAGE: "pygsti"
+  NOSE_PROCESSES: -1
+  NOSE_NOPATH: 1 # use installed package, not source tree under CWD
+  NOSE_PROCESS_TIMEOUT: 2400
+  NOSE_WHERE: "test/unit/"
 
 jobs:
   build:
@@ -18,19 +31,6 @@ jobs:
     strategy:
       matrix:
         python-version: [3.6, 3.7, 3.8]
-
-    env:
-      SKIP_DEAP: 1
-      NOSE_VERBOSE: 2
-      NOSE_WITH_TIMER: 1
-      NOSE_WITH_ID: 1
-      NOSE_REDNOSE: 1
-      NOSE_WITH_COVERAGE: 1
-      NOSE_COVER_PACKAGE: "pygsti"
-      NOSE_PROCESSES: -1
-      NOSE_NOPATH: 1 # use installed package, not source tree under CWD
-      NOSE_PROCESS_TIMEOUT: 2400
-      NOSE_WHERE: "test/unit/"
 
     steps:
     - uses: actions/checkout@v2
@@ -69,3 +69,12 @@ jobs:
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
         echo "nosetests $NOSETESTS"
         nosetests $NOSETESTS
+    - name: Push changes to feature-github-action-push branch
+      uses: ad-m/github-push-action@v0.6.0
+      if: github.ref == 'refs/heads/feature-github-actions'
+      with:
+        branch: 'refs/heads/feature-github-action-push'
+        github_token: ${{ secrets.PYGSTI_TOKEN }}
+
+
+
