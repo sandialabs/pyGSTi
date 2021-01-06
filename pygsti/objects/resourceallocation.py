@@ -354,7 +354,7 @@ class ResourceAllocation(object):
                 if i == self.host_comm.rank and participating:
                     _np.maximum(result, local, out=result)
                 self.host_comm.barrier()  #synchonize adding to shared mem
-            if self.host_comm == 0:
+            if self.host_comm.rank == 0:
                 maxed_across_hosts = self.interhost_comm.allreduce(result, op=MPI.MAX)
                 result[(slice(None,None),) * result.ndim] = maxed_across_hosts
             self.host_comm.barrier()  #wait for allreduce and assignment to complete on non-hostroot procs

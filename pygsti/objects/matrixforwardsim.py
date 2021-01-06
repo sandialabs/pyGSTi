@@ -918,7 +918,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         # ------------------------------------------------------------------
 
         #print("MPI: _compute_dproduct_cache begin: %d deriv cols" % nDerivCols)
-        if resource_alloc.comm is not None and resource_alloc.comm.Get_size() > 1:
+        if resource_alloc is not None and resource_alloc.comm is not None and resource_alloc.comm.Get_size() > 1:
             #print("MPI: _compute_dproduct_cache called w/comm size %d" % comm.Get_size())
             # parallelize of deriv cols, then sub-trees (if available and necessary)
 
@@ -937,7 +937,8 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                 _mpit.distribute_slice(allDerivColSlice, resource_alloc.comm)
             #print("MPI: _compute_dproduct_cache over %d cols (%s) (rank %d computing %s)" \
             #    % (nDerivCols, str(allDerivColIndices), comm.Get_rank(), str(myDerivColIndices)))
-            if sub_resource_alloc.comm is not None and sub_resource_alloc.comm.Get_size() > 1:
+            if sub_resource_alloc is not None and sub_resource_alloc.comm is not None \
+               and sub_resource_alloc.comm.Get_size() > 1:
                 _warnings.warn("Too many processors to make use of in "
                                " _compute_dproduct_cache.")
                 if sub_resource_alloc.comm.Get_rank() > 0: myDerivColSlice = slice(0, 0)
@@ -949,12 +950,9 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             #  further parallelization
 
             tm = _time.time()
-            all_results = resource_alloc.comm.gather(my_results)
+            all_results = resource_alloc.comm.allgather(my_results)
             profiler.add_time("MPI IPC", tm)
-            if resource_alloc.comm.Get_rank() == 0:
-                return _np.concatenate(all_results, axis=1)  # TODO: remove this concat w/better gather?
-            else:
-                return None  # non-root processor
+            return _np.concatenate(all_results, axis=1)  # TODO: remove this concat w/better gather?
 
         # ------------------------------------------------------------------
         tSerialStart = _time.time()
@@ -1024,7 +1022,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
         # ------------------------------------------------------------------
 
-        if resource_alloc.comm is not None and resource_alloc.comm.Get_size() > 1:
+        if resource_alloc is not None and resource_alloc.comm is not None and resource_alloc.comm.Get_size() > 1:
             # parallelize of deriv cols, then sub-trees (if available and necessary)
 
             if resource_alloc.comm.Get_size() > nDerivCols1 * nDerivCols2:
@@ -1676,11 +1674,13 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         dProdCache2 = dProdCache1 if (param_slice1 == param_slice2) else \
             self._compute_dproduct_cache(layout_atom.tree, prodCache, scaleCache,
                                          resource_alloc, param_slice2)  # computed on rank=0 only
-        dProdCache1 = resource_alloc.comm.bcast(dProdCache1, root=0)  # all procs need these caches for use
-        dProdCache2 = resource_alloc.comm.bcast(dProdCache2, root=0)  # in _compute_hproduct_cache below.
+        #REMOVE
+        #if resource_alloc.comm is not None:
+        #    dProdCache1 = resource_alloc.comm.bcast(dProdCache1, root=0)  # all procs need these caches for use
+        #    dProdCache2 = resource_alloc.comm.bcast(dProdCache2, root=0)  # in _compute_hproduct_cache below.
 
         hProdCache = self._compute_hproduct_cache(layout_atom.tree, prodCache, dProdCache1,
-                                                  dProdCache2, scaleCache, resource_alloc.comm,
+                                                  dProdCache2, scaleCache, resource_alloc,
                                                   param_slice1, param_slice2)  # computed on rank=0 only
 
         if resource_alloc.host_comm is not None and resource_alloc.host_comm.rank != 0:

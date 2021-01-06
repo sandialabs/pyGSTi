@@ -136,6 +136,11 @@ class DistributableForwardSimulator(_ForwardSimulator):
         blkSize1 = layout.param_dimension_blk_sizes[0]
         blkSize2 = layout.param_dimension_blk_sizes[1]
 
+        #Assume we're being called with a resource_alloc that's been setup by a distributed layout:
+        atom_resource_alloc = resource_alloc.layout_allocs['atom-processing']
+        param_resource_alloc = resource_alloc.layout_allocs['param-processing']
+        param2_resource_alloc = resource_alloc.layout_allocs['param2-processing']
+
         host_param_slice = None # layout.host_param_slice  # array_to_fill is already just this slice of the host mem
         host_param2_slice = None # layout.host_param2_slice  # array_to_fill is already just this slice of the host mem
         global_param_slice = layout.global_param_slice
@@ -155,7 +160,8 @@ class DistributableForwardSimulator(_ForwardSimulator):
                                               deriv1_array_to_fill, deriv2_array_to_fill,
                                               host_param_slice, host_param2_slice,
                                               global_param_slice, global_param2_slice,
-                                              blkSize1, blkSize2, resource_alloc)
+                                              blkSize1, blkSize2, atom_resource_alloc,
+                                              param_resource_alloc, param2_resource_alloc)
 
         #REMOVE
         ##collect/gather results
@@ -177,12 +183,8 @@ class DistributableForwardSimulator(_ForwardSimulator):
                                      deriv1_array_to_fill, deriv2_array_to_fill,
                                      dest_slice1, dest_slice2,
                                      wrt_slice1, wrt_slice2,
-                                     wrt_blksize1, wrt_blksize2, resource_alloc):
-
-        #Assume we're being called with a resource_alloc that's been setup by a distributed layout:
-        atom_resource_alloc = resource_alloc.layout_allocs['atom-processing']
-        param_resource_alloc = resource_alloc.layout_allocs['param-processing']
-        param2_resource_alloc = resource_alloc.layout_allocs['param2-processing']
+                                     wrt_blksize1, wrt_blksize2, atom_resource_alloc,
+                                     param_resource_alloc, param2_resource_alloc):
 
         if pr_array_to_fill is not None:
             self._bulk_fill_probs_block(pr_array_to_fill[atom.element_slice], atom, atom_resource_alloc)
@@ -198,7 +200,7 @@ class DistributableForwardSimulator(_ForwardSimulator):
                         deriv1_array_to_fill[atom.element_slice, dest_slice1]
                 else:
                     self._bulk_fill_dprobs_block(deriv2_array_to_fill[atom.element_slice, :], dest_slice2, atom,
-                                                 wrt_slice2, param_resource_alloc)
+                                                 wrt_slice2, param2_resource_alloc)
 
             self._bulk_fill_hprobs_block(array_to_fill[atom.element_slice, :, :], dest_slice1, dest_slice2, atom,
                                          wrt_slice1, wrt_slice2, param2_resource_alloc)
@@ -283,23 +285,27 @@ class DistributableForwardSimulator(_ForwardSimulator):
 
         #FUTURE could make a resource_alloc.check_can_allocate_memory call here for ('epp', 'epp')?
         nElements = atom.num_elements
+        param2_resource_alloc = resource_alloc.layout_allocs['param2-processing']
         for wrtSlice1, wrtSlice2 in wrt_slices_list:
 
             if return_dprobs_12:
-                dprobs1, dprobs1_shm = _smt.create_shared_ndarray(resource_alloc, (nElements, _slct.length(wrtSlice1)),
+                dprobs1, dprobs1_shm = _smt.create_shared_ndarray(param2_resource_alloc, (nElements, _slct.length(wrtSlice1)),
                                                                   'd', zero_out=True, track_memory=False)
-                dprobs2, dprobs2_shm = _smt.create_shared_ndarray(resource_alloc, (nElements, _slct.length(wrtSlice2)),
+                dprobs2, dprobs2_shm = _smt.create_shared_ndarray(param2_resource_alloc, (nElements, _slct.length(wrtSlice2)),
                                                                   'd', zero_out=True, track_memory=False)
             else:
                 dprobs1 = dprobs2 = dprobs1_shm = dprobs2_shm = None
 
             hprobs, hprobs_shm = _smt.create_shared_ndarray(
-                resource_alloc, (nElements, _slct.length(wrtSlice1), _slct.length(wrtSlice2)),
+                param2_resource_alloc, (nElements, _slct.length(wrtSlice1), _slct.length(wrtSlice2)),
                 'd', zero_out=True, track_memory=False)
 
             self._bulk_fill_hprobs_singleatom(hprobs, atom, None, dprobs1, dprobs2, 
                                               None, None, # slice(0, hprobs.shape[1]), slice(0, hprobs.shape[2]),
-                                              wrtSlice1, wrtSlice2, None, None, resource_alloc)
+                                              wrtSlice1, wrtSlice2, None, None, param2_resource_alloc, 
+                                              param2_resource_alloc, param2_resource_alloc)
+            #Note: we give all three resource_alloc's as `param2_resource_alloc` above because all the arrays
+            # have been allocated based on just this subset of processors, unlike a call to bulk_fill_hprobs(...)
 
             if return_dprobs_12:
                 dprobs12 = dprobs1[:, :, None] * dprobs2[:, None, :]  # (KM,N,1) * (KM,1,N') = (KM,N,N')
