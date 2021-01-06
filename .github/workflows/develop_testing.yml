@@ -14,10 +14,10 @@ on:
 jobs:
   build:
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-18.04
     strategy:
       matrix:
-        python-version: [3.5, 3.6, 3.7, 3.8]
+        python-version: [3.6, 3.7, 3.8]
 
     env:
       SKIP_DEAP: 1
@@ -44,10 +44,12 @@ jobs:
     - name: Install package
       # see https://github.com/cvxgrp/cvxpy/issues/968 for numpy version
       # Cython must be pre-installed to build native extensions on pyGSTi install
+      # Adding wheel package to cut down on installation time
       run: |
         python -m pip install --upgrade pip
         python -m pip install "numpy>=1.16.0"
         python -m pip install cython
+        python -m pip install wheel
         python -m pip install .[testing]
         python -m pip freeze
     - name: Lint with flake8
