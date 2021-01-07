@@ -34,37 +34,37 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - name: Set up installation environment
-      run: |
-        ./.github/ci-scripts/before_install.sh
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v2
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Cache pip packages
-      uses: actions/cache@v2
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
-    - name: Install package
-      run: |
-        python -m pip install --upgrade pip
-        # see https://github.com/cvxgrp/cvxpy/issues/968 for numpy version
-        python -m pip install "numpy>=1.16.0"
-        # Cython must be pre-installed to build native extensions on pyGSTi install
-        python -m pip install cython
-        python -m pip install wheel flake8
-        python -m pip install .[testing]
-        python -m pip freeze
-    - name: Lint with flake8
-      run: |
-        # Critical errors, exit on failure
-        flake8 . --count --show-source --statistics --config=.flake8-critical
-        # Standard PEP8, allowed to fail since exit-zero treats all errors as warnings
-        flake8 . --exit-zero --statistics
     # Temporarily skip for faster testing of other components
+    #- name: Set up installation environment
+    #  run: |
+    #    ./.github/ci-scripts/before_install.sh
+    #- name: Set up Python ${{ matrix.python-version }}
+    #  uses: actions/setup-python@v2
+    #  with:
+    #    python-version: ${{ matrix.python-version }}
+    #- name: Cache pip packages
+    #  uses: actions/cache@v2
+    #  with:
+    #    path: ~/.cache/pip
+    #    key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+    #    restore-keys: |
+    #      ${{ runner.os }}-pip-
+    #- name: Install package
+    #  run: |
+    #    python -m pip install --upgrade pip
+    #    # see https://github.com/cvxgrp/cvxpy/issues/968 for numpy version
+    #    python -m pip install "numpy>=1.16.0"
+    #    # Cython must be pre-installed to build native extensions on pyGSTi install
+    #    python -m pip install cython
+    #    python -m pip install wheel flake8
+    #    python -m pip install .[testing]
+    #    python -m pip freeze
+    #- name: Lint with flake8
+    #  run: |
+    #    # Critical errors, exit on failure
+    #    flake8 . --count --show-source --statistics --config=.flake8-critical
+    #    # Standard PEP8, allowed to fail since exit-zero treats all errors as warnings
+    #    flake8 . --exit-zero --statistics
     #- name: Run unit tests      
     #  run: |
     #    python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
@@ -96,10 +96,11 @@ jobs:
         branch: 'refs/heads/feature-github-action-push'
         github_token: ${{ secrets.PYGSTI_TOKEN }}
 
-  test_extras:
+  test_extras: # On stable branches, run extended tests
 
     runs-on: ubuntu-18.04
     strategy:
+      fail-fast: false # Debugging to see if all failures of test_extras
       matrix:
         python-version: [3.6, 3.7, 3.8]
         nose-tests:
@@ -117,7 +118,8 @@ jobs:
       NOSE_WHERE: 'test/test_packages'
 
     # TODO: Supposedly some composite actions could avoid this copy-paste
-    # Not super high priority though
+    # Or maybe we can use an artifact from build, or a container with all reqs installed
+    # Not super high priority though. It would only save ~3.5 min per worker
     steps:
     - uses: actions/checkout@v2
     - name: Set up installation environment
@@ -141,13 +143,14 @@ jobs:
         python -m pip install "numpy>=1.16.0"
         # Cython must be pre-installed to build native extensions on pyGSTi install
         python -m pip install cython
-        python -m pip install wheel flake8
-        python -m pip install .[testing]
+        python -m pip install wheel
+        # Installing with -e to keep installation local (for NOSE_NOPATH)
+        # but still compile Cython extensions
+        python -m pip install -e .[testing]
         python -m pip freeze
     - name: Run test_packages ${{ matrix.nose-tests }}
       env:
         NOSETESTS: ${{ matrix.nose-tests }}
-
       run: |
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
         echo "nosetests: $NOSETESTS"
