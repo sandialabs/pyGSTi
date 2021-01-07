@@ -106,7 +106,7 @@ jobs:
         - "algorithms algorithmsb"
         - "report reportb"
         - "drivers objects tools iotest optimize construction extras"
-        nose-nopath: 1
+        nose-nopath: [1]
         include:
           python-version: [3.6, 3.7, 3.8]
           nose-tests: "mpi"
