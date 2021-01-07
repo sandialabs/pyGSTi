@@ -80,12 +80,12 @@ jobs:
     if: github.ref == 'refs/heads/feature-github-actions' && github.event_name == 'push'
 
     steps:
+    - uses: actions/checkout@v2
     - name: Merge changes to feature-github-action-push branch
       env:
         TRIGGER_REF: refs/heads/feature-github-actions
         MERGE_BRANCH: feature-github-action-push
       run: |
-        ls ./.github/ci-scripts
         ./.github/ci-scripts/merge.sh
     - name: Push changes
       uses: ad-m/github-push-action@v0.6.0
