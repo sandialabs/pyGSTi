@@ -306,15 +306,15 @@ class DistributableForwardSimulator(_ForwardSimulator):
 
             if return_dprobs_12:
                 dprobs1, dprobs1_shm = _smt.create_shared_ndarray(resource_alloc, (nElements, _slct.length(wrtSlice1)),
-                                                                  'd', zero_out=True, track_memory=False)
+                                                                  'd', zero_out=True)
                 dprobs2, dprobs2_shm = _smt.create_shared_ndarray(resource_alloc, (nElements, _slct.length(wrtSlice2)),
-                                                                  'd', zero_out=True, track_memory=False)
+                                                                  'd', zero_out=True)
             else:
                 dprobs1 = dprobs2 = dprobs1_shm = dprobs2_shm = None
 
             hprobs, hprobs_shm = _smt.create_shared_ndarray(
                 resource_alloc, (nElements, _slct.length(wrtSlice1), _slct.length(wrtSlice2)),
-                'd', zero_out=True, track_memory=False)
+                'd', zero_out=True)
 
             self._bulk_fill_hprobs_singleatom(hprobs, atom, None, dprobs1, dprobs2, 
                                               None, None, # slice(0, hprobs.shape[1]), slice(0, hprobs.shape[2]),

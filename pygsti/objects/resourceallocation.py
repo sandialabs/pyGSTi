@@ -374,7 +374,7 @@ class ResourceAllocation(object):
         if self.host_comm is not None:
             bcast_shape, bcast_dtype = self.comm.bcast((value.shape, value.dtype) if self.comm.rank == root else None,
                                                        root=root)
-            ar, ar_shm = _smt.create_shared_ndarray(self, bcast_shape, bcast_dtype, track_memory=False)
+            ar, ar_shm = _smt.create_shared_ndarray(self, bcast_shape, bcast_dtype)
             if self.comm.rank == root:
                 ar[(slice(None, None),) * value.ndim] = value  # put our value into the shared memory.
 

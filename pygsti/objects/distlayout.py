@@ -936,7 +936,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
 
         gather_comm = gather_ralloc.interhost_comm if (gather_ralloc.host_comm is not None) else gather_ralloc.comm
         global_array, global_array_shm = _smt.create_shared_ndarray(
-            resource_alloc, global_shape, 'd', track_memory=False) if gather_comm.rank == 0 else (None, None)
+            resource_alloc, global_shape, 'd') if gather_comm.rank == 0 else (None, None)
 
         gather_ralloc.gather(global_array, array_portion, slice_of_global, unit_ralloc)
 
@@ -962,7 +962,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
 
         # assume jtf is created from allocate_local_array('jtf', 'd', resource_alloc)
         scratch, scratch_shm = _smt.create_shared_ndarray(
-            interatom_ralloc, (_slct.length(self.host_param_slice),), 'd', track_memory=False)
+            interatom_ralloc, (_slct.length(self.host_param_slice),), 'd')
         interatom_ralloc.comm.barrier()  # wait for scratch to be ready
         interatom_ralloc.allreduce_sum(scratch, local_jtf, unit_ralloc=param_ralloc)
         jtf[:] = scratch[self.fine_param_subslice] # takes sub-portion to move to "fine" parameter distribution
@@ -1007,7 +1007,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
             
         # Note: could allocate scratch in advance?
         scratch, scratch_shm = _smt.create_shared_ndarray(
-            interatom_ralloc, (_slct.length(self.host_param_slice), self.global_num_params), 'd', track_memory=False)
+            interatom_ralloc, (_slct.length(self.host_param_slice), self.global_num_params), 'd')
         interatom_ralloc.comm.barrier()  # wait for scratch to be ready
         interatom_ralloc.allreduce_sum(scratch, atom_jtj, unit_ralloc=param_ralloc)
         jtj[:, :] = scratch[self.fine_param_subslice, :] # takes sub-portion to move to "fine" parameter distribution

@@ -939,7 +939,7 @@ def mpidot(a, b, loc_row_slice, loc_col_slice, slice_tuples_by_rank, comm,
             result, result_shm = _np.zeros((a.shape[0], b.shape[1]), a.dtype), None
         else:
             result, result_shm = _smt.create_shared_ndarray(ralloc, (a.shape[0], b.shape[1]), a.dtype,
-                                                            track_memory=False, zero_out=True)
+                                                            zero_out=True)
     else:
         result = out
         result_shm = out_shm

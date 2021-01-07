@@ -827,8 +827,8 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                 + cls._array_types_for_method('_compute_hproduct_cache')
 
         if method_name == '_compute_product_cache': return ('zdd', 'z', 'z')  # cache of gates, scales, and scaleVals
-        if method_name == '_compute_dproduct_cache': return ('zddp',)  # cache x dim x dim x distributed_nparams
-        if method_name == '_compute_hproduct_cache': return ('zddpp',)  # cache x dim x dim x dist_np1 x dist_np2
+        if method_name == '_compute_dproduct_cache': return ('zddb',)  # cache x dim x dim x distributed_nparams
+        if method_name == '_compute_hproduct_cache': return ('zddbb',)  # cache x dim x dim x dist_np1 x dist_np2
         return super()._array_types_for_method(method_name)
 
     def __init__(self, model=None, distribute_by_timestamp=False, num_atoms=None, processor_grid=None, param_blk_sizes=None):
@@ -1234,14 +1234,27 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             layout = _MatrixCOPALayout(circuits, self.model, dataset, natoms,
                                        na, npp, param_dimensions, param_blk_sizes, resource_alloc, verbosity)
 
-        if mem_limit is not None:  # the hard case when there's a memory limit
-            # DIST TODO - need to update memory estimation, e.g. layout.num_elements is *local* now
+        if mem_limit is not None:
+            loc_nparams1 = num_params / npp[0] if len(npp) > 0 else 0
+            loc_nparams2 = num_params / npp[1] if len(npp) > 1 else 0
             blk1 = param_blk_sizes[0] if len(param_blk_sizes) > 0 else 0
             blk2 = param_blk_sizes[1] if len(param_blk_sizes) > 1 else 0
-            mem_estimate = _bytes_for_array_types(array_types, layout.num_elements, layout.max_atom_elements,
-                                                  layout.num_circuits, num_circuits / natoms,
-                                                  layout._param_dimensions, blk1, blk2,
-                                                  layout.max_atom_cachesize, self.model.dim)
+            global_layout = layout.global_layout if isinstance(copa_layout, _DistributableCOPALayout) else layout
+            if comm is not None:
+                from mpi4py import MPI
+                max_local_els = comm.allreduce(layout.num_elements, op=MPI.MAX)    # layout.max_atom_elements
+                max_atom_els = comm.allreduce(layout.max_atom_elements, op=MPI.MAX)
+                max_local_circuits = comm.allreduce(layout.num_circuits, op=MPI.MAX)
+                max_atom_cachesize = comm.allreduce(layout.max_atom_cachesize, op=MPI.MAX)
+            else:
+                max_local_els = layout.num_elements
+                max_atom_els = layout.max_atom_elements
+                max_local_circuits = layout.num_circuits
+                max_atom_cachesize = layout.max_atom_cachesize
+            mem_estimate = _bytes_for_array_types(array_types, global_layout.num_elements, max_local_els, max_atom_els,
+                                                  global_layout.num_circuits, max_local_num_circuits,
+                                                  layout._param_dimensions, (loc_nparams1, loc_nparams2),
+                                                  (blk1, blk2), max_atom_cachesize, self.model.dim)
 
             #def approx_mem_estimate(natoms, np1, np2):
             #    approx_cachesize = (num_circuits / natoms) * 1.3  # inflate expected # of circuits per atom => cache_size
@@ -1548,7 +1561,8 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
     def _bulk_fill_hprobs_block(self, array_to_fill, dest_param_slice1, dest_param_slice2, layout_atom,
                                 param_slice1, param_slice2, resource_alloc):
         dim = self.model.dim
-        resource_alloc.check_can_allocate_memory(layout_atom.cache_size * dim**2 * self.model.num_params**2)
+        resource_alloc.check_can_allocate_memory(layout_atom.cache_size * dim**2
+                                                 * _slct.length(param_slice1) * _slct.length(param_slice2))
         prodCache, scaleCache = self._compute_product_cache(layout_atom.tree, resource_alloc)
         dProdCache1 = self._compute_dproduct_cache(
             layout_atom.tree, prodCache, scaleCache, resource_alloc, param_slice1)  # computed on rank=0 only

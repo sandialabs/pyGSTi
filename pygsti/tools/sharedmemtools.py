@@ -60,7 +60,7 @@ def shared_mem_is_enabled():
     return bool(_shared_memory is not None)
 
 
-def create_shared_ndarray(resource_alloc, shape, dtype, zero_out=False, track_memory=True):
+def create_shared_ndarray(resource_alloc, shape, dtype, zero_out=False, track_memory=False):
     """
     Creates a `numpy.ndarray` that is potentially shared between processors.
 

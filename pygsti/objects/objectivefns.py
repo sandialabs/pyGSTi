@@ -952,9 +952,9 @@ class ModelDatasetCircuitsStore(object):
         """
         if self.counts is None or self.total_counts is None or force:
             #Assume if an item is not None the appropriate amt of memory has already been tracked
-            if self.counts is None: self.resource_alloc.add_tracked_memory(self.nelements)
-            if self.total_counts is None: self.resource_alloc.add_tracked_memory(self.nelements)
-            if self.freqs is None: self.resource_alloc.add_tracked_memory(self.nelements)
+            if self.counts is None: self.resource_alloc.add_tracked_memory(self.nelements)  # 'e'
+            if self.total_counts is None: self.resource_alloc.add_tracked_memory(self.nelements)  # 'e'
+            if self.freqs is None: self.resource_alloc.add_tracked_memory(self.nelements)  # 'e'
 
             # Note: in distributed case self.layout only holds *local* quantities (e.g. 
             # the .ds_circuits are a subset of all the circuits and .nelements is the local
@@ -1127,10 +1127,10 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
     def _array_types_for_method(cls, method_name, fsim):
         if method_name == 'fn': return cls._array_types_for_method('terms', fsim)
         if method_name == 'jacobian': return cls._array_types_for_method('dterms', fsim)
-        if method_name == 'terms': return cls._array_types_for_method('lsvec', fsim) + ('E',)  # extra 'E' for **2
-        if method_name == 'dterms': return cls._array_types_for_method('dlsvec', fsim) + ('EP',)
-        if method_name == 'percircuit': return cls._array_types_for_method('terms', fsim) + ('C',)
-        if method_name == 'dpercircuit': return cls._array_types_for_method('dterms', fsim) + ('CP',)
+        if method_name == 'terms': return cls._array_types_for_method('lsvec', fsim) + ('e',)  # extra 'E' for **2
+        if method_name == 'dterms': return cls._array_types_for_method('dlsvec', fsim) + ('ep',)
+        if method_name == 'percircuit': return cls._array_types_for_method('terms', fsim) + ('c',)
+        if method_name == 'dpercircuit': return cls._array_types_for_method('dterms', fsim) + ('cp',)
         return ()
 
     def __init__(self, raw_objfn, mdc_store, verbosity=0):
@@ -1299,7 +1299,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
             An array of shape `(nElements,)` where `nElements` is the number
             of circuit outcomes.
         """
-        with self.resource_alloc.temporarily_track_memory(self.nelements):  # 'E'
+        with self.resource_alloc.temporarily_track_memory(self.nelements):  # 'e'
             return self.lsvec(paramvec)**2
 
     def dterms(self, paramvec=None):
@@ -1322,7 +1322,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
             An array of shape `(nElements,nParams)` where `nElements` is the number
             of circuit outcomes and `nParams` is the number of model parameters.
         """
-        with self.resource_alloc.temporarily_track_memory(self.nelements * self.nparams):  # 'EP'
+        with self.resource_alloc.temporarily_track_memory(self.nelements * self.nparams):  # 'ep'
             lsvec = self.lsvec(paramvec)  # least-squares objective fn: v is a vector s.t. obj_fn = ||v||^2 (L2 norm)
             dlsvec = self.dlsvec(paramvec)  # jacobian of dim N x M where N = len(v) and M = len(pv)
             assert(dlsvec.shape == (len(lsvec), self.nparams)), "dlsvec returned a Jacobian with the wrong shape!"
@@ -1349,7 +1349,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         """
         num_circuits = len(self.circuits)
 
-        with self.resource_alloc.temporarily_track_memory(num_circuits):  # 'C'
+        with self.resource_alloc.temporarily_track_memory(num_circuits):  # 'c'
             terms = self.terms(paramvec)
 
             #Aggregate over outcomes:
@@ -1379,7 +1379,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         """
         num_circuits = len(self.circuits)
 
-        with self.resource_alloc.temporarily_track_memory(num_circuits * self.nparams):  # 'CP'
+        with self.resource_alloc.temporarily_track_memory(num_circuits * self.nparams):  # 'cp'
             dterms = self.dterms(paramvec)
 
             #Aggregate over outcomes:
@@ -1640,8 +1640,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
                 probs = _np.empty(atom_nelements, 'd')  # Note: this doesn't need to be shared as we never gather it
 
                 #REMOVE probs = probs_mem[0:sub_nelements]  (OLD, using global per-proc memory pool)
-                #REMOVE probs, probs_shm = _smt.create_shared_ndarray(atom_resource_alloc, (atom_nelements,), 'd',
-                #REMOVE                                               track_memory=False)
+                #REMOVE probs, probs_shm = _smt.create_shared_ndarray(atom_resource_alloc, (atom_nelements,), 'd')
                 #REMOVE atom_resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory init
                 #REMOVE shared_mem_leader = atom_resource_alloc.is_host_leader
 
@@ -1734,11 +1733,12 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         global_param_slice = self.layout.global_param_slice
         global_param2_slice = self.layout.global_param2_slice
 
+        # also could use self.resource_alloc.temporarily_track_memory(self.global_nelements**2): # 'PP'
         with self.resource_alloc.temporarily_track_memory(nparams * nparams):  # 'PP' (final_hessian)
             final_hessian_blk, final_hessian_blk_shm = _smt.create_shared_ndarray(
-                interatom_ralloc, (my_nparams1, my_nparams2), 'd', track_memory=False)
+                interatom_ralloc, (my_nparams1, my_nparams2), 'd')
             final_hessian, final_hessian_shm = _smt.create_shared_ndarray(
-                self.resource_alloc, (nparams, nparams), 'd', track_memory=False) \
+                self.resource_alloc, (nparams, nparams), 'd') \
                 if self.resource_alloc.host_index == 0 else None
         
             #We've computed 'local_hessian': the portion of the total hessian assigned to
@@ -4199,14 +4199,14 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
     @classmethod
     def _array_types_for_method(cls, method_name, fsim):
         #FUTURE: add more from with the raw_objfn calls within each of these fns, e.g. 'lsvec'?
-        if method_name == 'lsvec': return fsim._array_types_for_method('bulk_fill_probs') + ('E',)
-        if method_name == 'terms': return fsim._array_types_for_method('bulk_fill_probs') + ('E',)
-        if method_name == 'dlsvec': return fsim._array_types_for_method('bulk_fill_dprobs') + ('E', 'E')
+        if method_name == 'lsvec': return fsim._array_types_for_method('bulk_fill_probs') + ('e',)
+        if method_name == 'terms': return fsim._array_types_for_method('bulk_fill_probs') + ('e',)
+        if method_name == 'dlsvec': return fsim._array_types_for_method('bulk_fill_dprobs') + ('e', 'e')
         if method_name == 'dterms': return fsim._array_types_for_method('bulk_fill_dprobs')
-        if method_name == 'hessian_brute': return fsim._array_types_for_method('bulk_fill_hprobs') + ('E', 'E',
-                                                                                                      'EPP', 'EPP')
+        if method_name == 'hessian_brute': return fsim._array_types_for_method('bulk_fill_hprobs') \
+           + ('e', 'e', 'epp', 'epp', 'PP')
         if method_name == 'hessian': return fsim._array_types_for_method('_bulk_hprobs_by_block_singleatom') + ('PP',)
-        if method_name == 'approximate_hessian': return fsim._array_types_for_method('bulk_fill_dprobs') + ('E', 'PP')
+        if method_name == 'approximate_hessian': return fsim._array_types_for_method('bulk_fill_dprobs') + ('e', 'PP')
         return super()._array_types_for_method(method_name, fsim)
 
     @classmethod
@@ -4214,10 +4214,10 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         # array types for "persistent" arrays - those allocated as part of this object
         # (not-intermediate). These are filled in other routines and *not* included in
         # the output of _array_types_for_method since these are *not* allocated in methods.
-        array_types = ('E',) * 4  # self.probs + 3x add_count_vectors
+        array_types = ('e',) * 4  # self.probs + 3x add_count_vectors
         if any([x in ('dlsvec', 'dterms', 'dpercircuit', 'jacobian', 'approximate_hessian', 'hessian')
                 for x in method_names]):
-            array_types += ('EP',)
+            array_types += ('ep',)
 
         # array types for methods
         for method_name in method_names:
@@ -4244,7 +4244,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
                                                                    extra_elements=self.ex)
 
         self.hos_jac = self._jac_shm = None
-        if 'EP' in self.array_types:
+        if 'ep' in self.array_types:
             self.jac, self._jac_shm = self.layout.allocate_local_array('ep', 'd', self.resource_alloc, track_memory=True,
                                                                        extra_elements=self.ex)
 
@@ -4709,7 +4709,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         #Note: when sending arrays to fill, this should be the processor-specific memory
         #probs = self.probs[self.layout.host_element_slice]  # portion of host memory "owned" by this processor
 
-        with self.resource_alloc.temporarily_track_memory(self.nelements):  # 'E' (lsvec)
+        with self.resource_alloc.temporarily_track_memory(self.nelements):  # 'e' (lsvec)
             self.model.sim.bulk_fill_probs(self.probs, self.layout, self.resource_alloc)  # syncs shared mem
             self._clip_probs()  # clips self.probs in place w/shared mem sync
 
@@ -4762,7 +4762,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
                       if isinstance(self.layout, _DistributableCOPALayout) else self.resource_alloc
         shared_mem_leader = unit_ralloc.is_host_leader
 
-        with self.resource_alloc.temporarily_track_memory(self.nelements):  # 'E' (terms)
+        with self.resource_alloc.temporarily_track_memory(self.nelements):  # 'e' (terms)
             self.model.sim.bulk_fill_probs(self.probs, self.layout, self.resource_alloc)
             self._clip_probs()  # clips self.probs in place w/shared mem sync
 
@@ -4813,7 +4813,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
                       if isinstance(self.layout, _DistributableCOPALayout) else self.resource_alloc
         shared_mem_leader = unit_ralloc.is_host_leader
 
-        with self.resource_alloc.temporarily_track_memory(2 * self.nelements):  # 'E' (dg_dprobs, lsvec)
+        with self.resource_alloc.temporarily_track_memory(2 * self.nelements):  # 'e' (dg_dprobs, lsvec)
             #OLD jac distribution method
             # Usual: rootcomm -this_fn-> atom_comm (sub_comm) -> block_comm  
             # New: rootcomm -> jac_slice_comm -this_fn-> atom_comm (sub_comm) -> block_comm  (??)
@@ -4918,7 +4918,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
                       if isinstance(self.layout, _DistributableCOPALayout) else self.resource_alloc
         shared_mem_leader = unit_ralloc.is_host_leader
 
-        with self.resource_alloc.temporarily_track_memory(2 * self.nelements):  # 'E' (dg_dprobs, lsvec)
+        with self.resource_alloc.temporarily_track_memory(2 * self.nelements):  # 'e' (dg_dprobs, lsvec)
             self.model.sim.bulk_fill_dprobs(dprobs, self.layout, self.probs, self.resource_alloc)
             self._clip_probs()  # clips self.probs in place w/shared mem sync
 
@@ -4988,7 +4988,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         dprobs2, dprobs2_shm = self.layout.allocate_local_array('ep2', 'd', self.resource_alloc)  # in case param2 slice is different
         hprobs, hprobs_shm = self.layout.allocate_local_array('epp', 'd', self.resource_alloc)
 
-        # 'E', 'EPP' (dg_dprobs, d2g_dprobs2, temporary variable dprobs_dp2 * dprobs_dp1 )
+        # 'e', 'epp' (dg_dprobs, d2g_dprobs2, temporary variable dprobs_dp2 * dprobs_dp1 )
         with self.resource_alloc.temporarily_track_memory(2 * self.nelements + self.nelements * self.nparams**2):
             self.model.sim.bulk_fill_hprobs(hprobs, self.layout, self.probs, dprobs, dprobs2, self.resource_alloc)
             self._clip_probs()  # clips self.probs in place w/shared mem sync
@@ -5057,7 +5057,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         #    "Fancy jacobian distribution not supported for Hessian yet!"
         ##Note: this means self.nparams == self.global_nparams
 
-        # 'E', 'PP' (d2g_dprobs2, einsum result )
+        # 'e', 'pp' (d2g_dprobs2, einsum result )
         with self.resource_alloc.temporarily_track_memory(self.nelements + self.nparams**2):
             self.model.sim.bulk_fill_dprobs(dprobs, self.layout, self.probs, self.resource_alloc)
             self._clip_probs()  # clips self.probs in place w/shared mem sync
@@ -5068,7 +5068,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
             #hessian = d2g_dprobs2 * dprobs_dp2 * dprobs_dp1  # this creates a huge array - do this instead:
             hessian = _np.einsum('a,ab,ac->bc', d2g_dprobs2, dprobs, dprobs)
-
+                    
         return self._gather_hessian(hessian)  # `hessian` is just the part of the (approximate) Hessian this proc "owns"
 
     def hessian(self, paramvec=None):
@@ -5620,9 +5620,9 @@ class TimeDependentMDCObjectiveFunction(MDCObjectiveFunction):
     @classmethod
     def compute_array_types(cls, method_names, fsim):
         # array types for "persistent" arrays
-        array_types = ('E',)
+        array_types = ('e',)
         if any([x in ('dlsvec', 'dterms', 'hessian', 'approximate_hessian')
-                for x in method_names]): array_types += ('EP',)
+                for x in method_names]): array_types += ('ep',)
 
         # array types for methods
         for method_name in method_names:
@@ -5650,12 +5650,12 @@ class TimeDependentMDCObjectiveFunction(MDCObjectiveFunction):
         #Setup underlying EvaluatedModelDatasetCircuitsStore object
         #  Allocate peristent memory - (these are members of EvaluatedModelDatasetCircuitsStore)
         self.initial_allocated_memory = self.resource_alloc.allocated_memory
-        self.resource_alloc.add_tracked_memory(self.nelements)  # 'E' - see compute_array_types above
+        self.resource_alloc.add_tracked_memory(self.nelements)  # 'e' - see compute_array_types above
         self.v = _np.empty(self.nelements, 'd')
         self.jac = None
 
-        if 'EP' in self.array_types:
-            self.resource_alloc.add_tracked_memory((self.nelements + self.ex) * self.nparams)  # ~ 'EP'
+        if 'ep' in self.array_types:
+            self.resource_alloc.add_tracked_memory((self.nelements + self.ex) * self.nparams)  # ~ 'ep'
             self.jac = _np.empty((self.nelements + self.ex, self.nparams), 'd')
 
         #self.maxCircuitLength = max([len(x) for x in self.circuits])  #REMOVE?

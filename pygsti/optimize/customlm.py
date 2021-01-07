@@ -235,7 +235,7 @@ class CustomLMOptimizer(Optimizer):
 
         # Check memory limit can handle what custom_leastsq will "allocate"
         nExtra = objective.ex  # number of additional "extra" elements
-        nEls = objective.layout.num_elements + nExtra; nP = len(x0)
+        nEls = objective.layout.num_elements + nExtra; nP = len(x0)  # 'e' and 'p' for array types
         objective.resource_alloc.check_can_allocate_memory(3 * nP + nEls + nEls * nP + nP * nP)  # see array_types above
 
         from ..objects.distlayout import DistributableCOPALayout as _DL
