@@ -1979,6 +1979,8 @@ def _mx_fn_directlogl(plaq, x, y, extra):
 def _mx_fn_dscmp(plaq, x, y, dscomparator):
     return _ph.dscompare_llr_matrices(plaq, dscomparator)
 
+def _mx_fn_dict(plaq, x, y, genericdict):
+    return _ph.genericdict_matrices(plaq, genericdict)
 
 def _mx_fn_dict(plaq, x, y, genericdict):
     return _ph.genericdict_matrices(plaq, genericdict)
