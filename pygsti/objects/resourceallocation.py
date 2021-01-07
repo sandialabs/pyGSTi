@@ -9,6 +9,7 @@ Resource allocation manager
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
+import os as _os
 import numpy as _np
 import socket as _socket
 import collections as _collections
@@ -102,8 +103,7 @@ class ResourceAllocation(object):
 
         my_rank = self.comm.rank
         my_color = None  # set to the index of my_rank within the ranks_by_hostname value that contains my_rank
-        from mpi4py import MPI  # DEBUG !!!
-        my_hostname = _socket.gethostname() + "_group%d" % (MPI.COMM_WORLD.rank % 4)  # DEBUG TO MIMIC MORE NODES
+        my_hostname = _gethostname()
         my_hostid = int(_blake2b(my_hostname.encode('utf-8'), digest_size=4).hexdigest(), 16) % (1 << 31)
         self.host_comm = self.comm.Split(color=int(my_hostid), key=int(my_rank))  # Note: 32-bit ints only for mpi4py
         self.host_ranks = tuple(self.host_comm.allgather(my_rank))  # store all the original ranks on our host
@@ -395,3 +395,16 @@ class ResourceAllocation(object):
         to_pickle = self.__dict__.copy()
         to_pickle['comm'] = None  # will cause all unpickled ResourceAllocations comm=`None`
         return to_pickle
+
+
+def _gethostname():
+    """ Mimics multiple hosts on a single host, mostly for debugging"""
+    hostname = _socket.gethostname()
+    if _os.environ.get('PYGSTI_MAX_HOST_PROCS', None):
+        max_vhost_procs = int(_os.environ['PYGSTI_MAX_HOST_PROCS'])
+        try:
+            from mpi4py import MPI
+            hostname += "_vhost%d" % (MPI.COMM_WORLD.rank // max_vhost_procs)
+        except ImportError:
+            pass
+    return hostname
