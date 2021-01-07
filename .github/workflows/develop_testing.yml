@@ -81,6 +81,9 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        persist-credentials: false
+        fetch-depth: 0
     - name: Merge changes to feature-github-action-push branch
       env:
         TRIGGER_REF: refs/heads/feature-github-actions

@@ -27,7 +27,7 @@ fi
 
 echo "GITHUB_REPOSITORY = $GITHUB_REPOSITORY"
 echo "GITHUB_REF = $GITHUB_REF"
-echo "PUSH_BRANCH = $PUSH_BRANCH"
+echo "MERGE_BRANCH = $MERGE_BRANCH"
 
 # Following should only be set for pull requests
 PULL_REQUEST=false
