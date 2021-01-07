@@ -63,8 +63,8 @@ stages:
     if: branch IN (master, beta, ci-debug)
   #- name: push
   #  if: (branch = develop) AND (NOT (type = pull_request))
-  - name: deploy
-    if: tag IS present
+  #- name: deploy
+  #  if: tag IS present
 
 jobs:
   include:
