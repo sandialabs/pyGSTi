@@ -15,13 +15,11 @@ fi
 
 # trigger only on `develop' by default (configurable)
 if [ -z "$TRIGGER_REF" ]; then
-    exit 1 # For now, do not allow default while debugging
     TRIGGER_REF="/refs/heads/develop"
 fi
 
 # push to `beta' by default (configurable)
 if [ -z "$MERGE_BRANCH" ]; then
-    exit 1 # For now, do not allow default while debugging
     MERGE_BRANCH="beta"
 fi
 
