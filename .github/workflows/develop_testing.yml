@@ -25,7 +25,7 @@ env:
   NOSE_WHERE: "test/unit/"
 
 jobs:
-  build:
+  build: # Main build + unit test check
 
     runs-on: ubuntu-18.04
     strategy:
@@ -69,9 +69,24 @@ jobs:
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
         echo "nosetests $NOSETESTS"
         nosetests $NOSETESTS
-    - name: Push changes to feature-github-action-push branch
+  
+  push: # Push to stable "beta" branch on successful build
+
+    runs-on: ubuntu-18.04
+
+    # Only run on "develop" branch if tests pass
+    needs: build
+    if: github.ref == 'refs/heads/feature-github-actions'
+
+    steps:
+    - name: Merge changes to feature-github-action-push branch
+      env:
+        TRIGGER_REF: refs/heads/feature-github-actions
+        MERGE_BRANCH: feature-github-action-push
+      run: |
+        ./.github/ci-scripts/merge.sh
+    - name: Push changes
       uses: ad-m/github-push-action@v0.6.0
-      if: github.ref == 'refs/heads/feature-github-actions'
       with:
         branch: 'refs/heads/feature-github-action-push'
         github_token: ${{ secrets.PYGSTI_TOKEN }}
