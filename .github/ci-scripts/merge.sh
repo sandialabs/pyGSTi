@@ -27,6 +27,7 @@ fi
 
 echo "GITHUB_REPOSITORY = $GITHUB_REPOSITORY"
 echo "GITHUB_REF = $GITHUB_REF"
+echo "TRIGGER_REF = $TRIGGER_REF"
 echo "MERGE_BRANCH = $MERGE_BRANCH"
 
 # Following should only be set for pull requests
@@ -59,11 +60,6 @@ if [ "$GITHUB_REF" = "$TRIGGER_REF" ] && [ "$PULL_REQUEST" = "false" ]; then
             exit 2
         fi
     fi
-
-    # SS 2020-01-06: Should not need this part in this script
-
-    # push branch to remote repo
-    # this requires the Travis CI pubkey be added as a write-access
-    # deployment key to the repo
-    #git push "$UPSTREAM_URI" "$MERGE_BRANCH"
+else
+    echo "Not triggering pull: GITHUB_REF != TRIGGER_REF or PULL_REQUEST != false"
 fi
