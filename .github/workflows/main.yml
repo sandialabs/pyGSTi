@@ -92,7 +92,7 @@ jobs:
     - name: Push changes
       uses: ad-m/github-push-action@v0.6.0
       with:
-        branch: 'refs/heads/feature-github-action-push'
+        branch: 'refs/heads/beta'
         github_token: ${{ secrets.PYGSTI_TOKEN }}
 
   test_extras: # On stable branches, run extended tests
