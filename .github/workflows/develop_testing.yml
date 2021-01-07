@@ -64,11 +64,12 @@ jobs:
         flake8 . --count --show-source --statistics --config=.flake8-critical
         # Standard PEP8, allowed to fail since exit-zero treats all errors as warnings
         flake8 . --exit-zero --statistics
-    - name: Run unit tests
-      run: |
-        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-        echo "nosetests $NOSETESTS"
-        nosetests $NOSETESTS
+    # Temporarily skip for faster testing of other components
+    #- name: Run unit tests      
+    #  run: |
+    #    python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
+    #    echo "nosetests $NOSETESTS"  
+    #    nosetests $NOSETESTS
   
   push: # Push to stable "beta" branch on successful build
 
@@ -76,7 +77,7 @@ jobs:
 
     # Only run on "develop" branch if tests pass
     needs: build
-    if: github.ref == 'refs/heads/feature-github-actions'
+    if: github.ref == 'refs/heads/feature-github-actions' && github.event_name == 'push'
 
     steps:
     - name: Merge changes to feature-github-action-push branch
@@ -84,6 +85,7 @@ jobs:
         TRIGGER_REF: refs/heads/feature-github-actions
         MERGE_BRANCH: feature-github-action-push
       run: |
+        ls ./.github/ci-scripts
         ./.github/ci-scripts/merge.sh
     - name: Push changes
       uses: ad-m/github-push-action@v0.6.0
