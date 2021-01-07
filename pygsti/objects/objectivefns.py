@@ -4652,6 +4652,16 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         #                                    * self.omitted_prob_first_dterms(probs))))
         #    print(" |jac(post-sparse)| = ",_np.linalg.norm(dlsvec))
 
+    def _clip_probs(self):
+        """ Clips the potentially shared-mem self.probs according to self.prob_clip_interval """
+        if self.prob_clip_interval is not None:
+            if isinstance(self.layout, _DistributableCOPALayout):
+                if self.resource_alloc.layout_allocs['atom-processing'].is_host_leader:
+                    _np.clip(self.probs, self.prob_clip_interval[0], self.prob_clip_interval[1], out=self.probs)
+                self.resource_alloc.layout_allocs['atom-processing'].host_comm_barrier()
+            else:
+                _np.clip(self.probs, self.prob_clip_interval[0], self.prob_clip_interval[1], out=self.probs)
+
     #Objective Function
 
     def lsvec(self, paramvec=None, oob_check=False):
@@ -4700,12 +4710,8 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         #probs = self.probs[self.layout.host_element_slice]  # portion of host memory "owned" by this processor
 
         with self.resource_alloc.temporarily_track_memory(self.nelements):  # 'E' (lsvec)
-            #self.resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory before we reinit
-            self.model.sim.bulk_fill_probs(self.probs, self.layout, self.resource_alloc)
-            
-            if self.prob_clip_interval is not None: # and shared_mem_leader:
-                _np.clip(self.probs, self.prob_clip_interval[0], self.prob_clip_interval[1], out=self.probs)
-            #self.resource_alloc.host_comm_barrier()  # shared memory barrier  REMOVE - and other host_comm_barrier calls below
+            self.model.sim.bulk_fill_probs(self.probs, self.layout, self.resource_alloc)  # syncs shared mem
+            self._clip_probs()  # clips self.probs in place w/shared mem sync
 
             if oob_check:  # Only used for termgap cases
                 if not self.model.sim.bulk_test_if_paths_are_sufficient(self.layout, self.probs,
@@ -4757,11 +4763,8 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         shared_mem_leader = unit_ralloc.is_host_leader
 
         with self.resource_alloc.temporarily_track_memory(self.nelements):  # 'E' (terms)
-            #self.resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory before we reinit
             self.model.sim.bulk_fill_probs(self.probs, self.layout, self.resource_alloc)
-            if self.prob_clip_interval is not None: # and shared_mem_leader:
-                _np.clip(self.probs, self.prob_clip_interval[0], self.prob_clip_interval[1], out=self.probs)
-            #self.resource_alloc.host_comm_barrier()  # shared mem barrier
+            self._clip_probs()  # clips self.probs in place w/shared mem sync
 
             if shared_mem_leader:
                 terms_no_penalty = self.raw_objfn.terms(self.probs, self.counts, self.total_counts, self.freqs)
@@ -4811,8 +4814,6 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         shared_mem_leader = unit_ralloc.is_host_leader
 
         with self.resource_alloc.temporarily_track_memory(2 * self.nelements):  # 'E' (dg_dprobs, lsvec)
-            #self.resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory before we reinit
-
             #OLD jac distribution method
             # Usual: rootcomm -this_fn-> atom_comm (sub_comm) -> block_comm  
             # New: rootcomm -> jac_slice_comm -this_fn-> atom_comm (sub_comm) -> block_comm  (??)
@@ -4825,9 +4826,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
             self.model.sim.bulk_fill_dprobs(dprobs, self.layout, self.probs, self.resource_alloc)  # wrtSlice)
             #REMOVE print("%d: DLSVEC dprobs = %g, probs = %g" % (self.resource_alloc.comm.rank, _np.linalg.norm(dprobs), _np.linalg.norm(self.probs)))
-            if self.prob_clip_interval is not None: # and shared_mem_leader:
-                _np.clip(self.probs, self.prob_clip_interval[0], self.prob_clip_interval[1], out=self.probs)
-            #self.resource_alloc.host_comm_barrier()  # shared mem barrier
+            self._clip_probs()  # clips self.probs in place w/shared mem sync
 
             #REMOVE print("%d: DLSVEC probs post clip = %g" % (self.resource_alloc.comm.rank, _np.linalg.norm(self.probs)))
             # Note: barriers like the above must follow shared_mem_leader conditional blocks, as these the non-leader
@@ -4920,11 +4919,8 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         shared_mem_leader = unit_ralloc.is_host_leader
 
         with self.resource_alloc.temporarily_track_memory(2 * self.nelements):  # 'E' (dg_dprobs, lsvec)
-            #self.resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory before we reinit
             self.model.sim.bulk_fill_dprobs(dprobs, self.layout, self.probs, self.resource_alloc)
-            if self.prob_clip_interval is not None: # and shared_mem_leader:
-                _np.clip(self.probs, self.prob_clip_interval[0], self.prob_clip_interval[1], out=self.probs)
-            #self.resource_alloc.host_comm_barrier()  # shared mem barrier
+            self._clip_probs()  # clips self.probs in place w/shared mem sync
 
             if shared_mem_leader:
                 if self.firsts is not None:
@@ -4975,13 +4971,9 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
         # Whether this rank is the "leader" of all the processors accessing the same shared self.jac and self.probs mem.
         #  Only leader processors should modify the contents of the shared memory, so we only apply operations *once*
-        if isinstance(self.layout, _DistributableCOPALayout):
-            param2_ralloc = self.resource_alloc.layout_allocs['param2-processing']
-            #param_ralloc = self.resource_alloc.layout_allocs['param-processing']
-        else:
-            param2_ralloc = param_ralloc = self.resource_alloc  # all the procs targeting same destination
-        param2_mem_leader = param2_ralloc.is_host_leader  # whether this proc should update shared 'epp' memory (hprobs)
-        #param_mem_leader = param2_ralloc.is_host_leader  # whether this proc should update shared 'ep' memory (jac)
+        unit_ralloc = self.resource_alloc.layout_allocs['param2-processing'] \
+                      if isinstance(self.layout, _DistributableCOPALayout) else self.resource_alloc
+        shared_mem_leader = unit_ralloc.is_host_leader
 
         #General idea of what we're doing:
         # Let f(pv) = g(probs(pv)), and let there be nelements elements (i.e. probabilities) & len(pv) == N
@@ -4998,13 +4990,8 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
         # 'E', 'EPP' (dg_dprobs, d2g_dprobs2, temporary variable dprobs_dp2 * dprobs_dp1 )
         with self.resource_alloc.temporarily_track_memory(2 * self.nelements + self.nelements * self.nparams**2):
-            #self.resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory before we reinit
             self.model.sim.bulk_fill_hprobs(hprobs, self.layout, self.probs, dprobs, dprobs2, self.resource_alloc)
-            if self.prob_clip_interval is not None: # ok for non-leaders to do this
-                _np.clip(self.probs, self.prob_clip_interval[0], self.prob_clip_interval[1], out=self.probs)
-            #self.resource_alloc.host_comm_barrier()  # shared mem barrier
-
-            #TODO: fix this function - self.probs and hprobs may only have *part* of their global array.
+            self._clip_probs()  # clips self.probs in place w/shared mem sync
 
             dg_dprobs = self.raw_objfn.dterms(self.probs, self.counts, self.total_counts, self.freqs)[:, None, None]
             d2g_dprobs2 = self.raw_objfn.hterms(self.probs, self.counts, self.total_counts, self.freqs)[:, None, None]
@@ -5014,13 +5001,13 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             #hessian = d2g_dprobs2 * dprobs_dp2 * dprobs_dp1 + dg_dprobs * hprobs
             # do the above line in a more memory efficient way:
             hessian = hprobs
-            if param2_mem_leader:
+            if shared_mem_leader:
                 hessian *= dg_dprobs
                 hessian += d2g_dprobs2 * dprobs_dp2 * dprobs_dp1
-            param2_ralloc.host_comm_barrier()  # have non-leader procs wait for leaders to set shared mem
+            unit_ralloc.host_comm_barrier()  # have non-leader procs wait for leaders to set shared mem
 
         ret = _np.sum(hessian, axis=0)  # sum over operation sequences and spam labels => (N)
-        param2_ralloc.host_comm_barrier()  # ensure sum is performed before we free anything
+        unit_ralloc.host_comm_barrier()  # ensure sum is performed before we free anything
         _smt.cleanup_shared_ndarray(hprobs_shm)
         _smt.cleanup_shared_ndarray(dprobs2_shm)
         #NOTE: it doesn't seem like we need shared memory at all here - only if we were returning
@@ -5072,11 +5059,8 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
         # 'E', 'PP' (d2g_dprobs2, einsum result )
         with self.resource_alloc.temporarily_track_memory(self.nelements + self.nparams**2):
-            #self.resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory before we reinit
             self.model.sim.bulk_fill_dprobs(dprobs, self.layout, self.probs, self.resource_alloc)
-            if self.prob_clip_interval is not None: # and shared_mem_leader:
-                _np.clip(self.probs, self.prob_clip_interval[0], self.prob_clip_interval[1], out=self.probs)
-            #self.resource_alloc.host_comm_barrier()  # shared mem barrier
+            self._clip_probs()  # clips self.probs in place w/shared mem sync
 
             d2g_dprobs2 = self.raw_objfn.hterms(self.probs, self.counts, self.total_counts, self.freqs)  # [:,None,None]
             #dprobs_dp1 = dprobs[:, :, None]  # (nelements,N,1)

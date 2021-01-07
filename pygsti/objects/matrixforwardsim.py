@@ -831,8 +831,9 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         if method_name == '_compute_hproduct_cache': return ('zddpp',)  # cache x dim x dim x dist_np1 x dist_np2
         return super()._array_types_for_method(method_name)
 
-    def __init__(self, model=None, distribute_by_timestamp=False):
-        super().__init__(model)
+    def __init__(self, model=None, distribute_by_timestamp=False, num_atoms=None, processor_grid=None, param_blk_sizes=None):
+        """  TODO: docstring - at least need num_atoms, processor_grid, & param_blk_sizes docs"""
+        super().__init__(model, num_atoms, processor_grid, param_blk_sizes)
         self._mode = "distribute_by_timestamp" if distribute_by_timestamp else "time_independent"
 
     def copy(self):
@@ -1206,7 +1207,6 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         printer = _VerbosityPrinter.create_printer(verbosity, comm)
         nprocs = 1 if comm is None else comm.Get_size()
         num_params = derivative_dimension if (derivative_dimension is not None) else self.model.num_params
-        num_circuits = len(circuits)
         C = 1.0 / (1024.0**3)
 
         if mem_limit is not None:
@@ -1216,84 +1216,32 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
         if not hasattr(self, '_mode'): self._mode = 'time_independent'  # HACK for backward compatibility (REMOVE?)
 
-        bNp1Matters = bool("EP" in array_types or "EPP" in array_types or "ep" in array_types or "epp" in array_types)
-        bNp2Matters = bool("EPP" in array_types or "epp" in array_types)
-
-        # Start with the distribution of our nprocs: choose na, np, np2 so that nprocs ~= na * np * np2
-        na = 1  # TODO: make this an adjustable param - could be > 1
-        na = min(4, nprocs)  # DEBUG!!! TEST
-        nprocs_for_params = nprocs // na  # gives the minimal number of procs available to process all the params
-        if bNp2Matters:
-            param_dimensions = (num_params, num_params)
-            if nprocs_for_params in (4, 16):  #DEBUG!!! TEST  - test case to experiment
-                np1 = np2 = int(_np.sqrt(nprocs_for_params))  #DEBUG!!! TEST
-            elif nprocs_for_params > num_params**2:
-                np1 = np2 = max(num_params, 1)
-            elif nprocs_for_params > num_params:
-                np1 = max(num_params, 1)
-                np2 = int(_np.floor(nprocs_for_params / max(num_params, 1)))
-            else:
-                np1 = nprocs_for_params; np2 = 1
-            npp = (np1, np2)  # number of parameter-processors per parameter dimension
-        elif bNp1Matters:
-            param_dimensions = (num_params,)
-            if nprocs_for_params > num_params:
-                np1 = max(num_params, 1)
-            else:
-                np1 = nprocs_for_params
-            npp = (np1,)
-        else:
-            na = nprocs  # overrides user input?
-            param_dimensions = ()
-            npp = ()
-
-        printer.log(" %d processors divided into %s (= %d) grid along circuit and parameter directions." %
+        natoms, na, npp, param_dimensions, param_blk_sizes = self._compute_processor_distribution(
+            array_types, nprocs, num_params, len(circuits), default_natoms=1)
+        
+        printer.log("MatrixLayout: %d processors divided into %s (= %d) grid along circuit and parameter directions." %
                     (nprocs, ' x '.join(map(str, (na,) + npp)), _np.product((na,) + npp)))
+        printer.log("   %d atoms, parameter block size limits %s" % (natoms, str(param_blk_sizes)))
         assert(_np.product((na,) + npp) <= nprocs), "Processor grid size exceeds available processors!"
 
         if self._mode == "distribute_by_timestamp":
             #Special case: time dependent data that gets grouped & distributed by unique timestamp
             #TODO: check this works - it's been updated but not tested!
             # note: natoms == num_timestamps...
-            blk_sizes = (None,) * len(param_dimensions)  # only introduce block size if memory limit demands it
             return _MatrixTimeDepCOPALayout(circuits, self.model, dataset, na, npp,
-                                            param_dimensions, blk_sizes, resource_alloc, verbosity)
-
-        def create_layout_candidate(num_atoms, blk_sizes):
-            return _MatrixCOPALayout(circuits, self.model, dataset, num_atoms,
-                                     na, npp, param_dimensions, blk_sizes, resource_alloc, verbosity)
-
-        #Create initial layout, and get the "final memory" that is required to hold the final results
-        # for each array type.  This amount doesn't depend on how the layout is "split" into atoms.
-
-        # NOTE: This assumes "gather=True" mode, where all processors hold complete final arrays containing
-        # *all* derivative columns. In gather=False mode, this amount would change based on the
-        # memory of all the atoms and deriv columns assigned to a single processor. E.g. mayb code like:
-        #    dist_info = trial_layout.distribution_info(nprocs)
-        #    rank_total_els = [sum([trial_layout.atoms[i].num_elements for i in rank_info['atom_indices']])
-        #                      for rank_info in dist_info.values()]  # total elements per processor
-
-        layout_cache = {}  # cache of layout candidates indexed on # (minimal) atoms, to avoid re-computation
-
-        natoms = na  # start with one atoms per atom-processor (no further division)
-        param_blk_sizes = (None,) * len(param_dimensions)  # only introduce block size if memory limit demands it
-        print("DEBUG: creating layout with natoms,nblks = ",natoms, param_blk_sizes)
-        layout_cache[(natoms, param_blk_sizes)] = create_layout_candidate(natoms, param_blk_sizes)
-        num_elements = layout_cache[(natoms, param_blk_sizes)].num_elements  # should be fixed
+                                            param_dimensions, param_blk_sizes, resource_alloc, verbosity)
+        else:
+            layout = _MatrixCOPALayout(circuits, self.model, dataset, natoms,
+                                       na, npp, param_dimensions, param_blk_sizes, resource_alloc, verbosity)
 
         if mem_limit is not None:  # the hard case when there's a memory limit
-            gather_mem_limit = mem_limit * 0.01  # better?
-
-            def mem_estimate(natoms, blk_sizes):
-                if (natoms, blk_sizes) not in layout_cache:
-                    layout_cache[(natoms, blk_sizes)] = create_layout_candidate(natoms)
-                layout = layout_cache[(natoms, blk_sizes)]
-                blk1 = blk_sizes[0] if len(blk_sizes) > 0 else 0
-                blk2 = blk_sizes[1] if len(blk_sizes) > 1 else 0
-                return _bytes_for_array_types(array_types, layout.num_elements, layout.max_atom_elements,
-                                              layout.num_circuits, num_circuits / natoms,
-                                              layout._param_dimensions, blk1, blk2,
-                                              layout.max_atom_cachesize, self.model.dim)
+            # DIST TODO - need to update memory estimation, e.g. layout.num_elements is *local* now
+            blk1 = param_blk_sizes[0] if len(param_blk_sizes) > 0 else 0
+            blk2 = param_blk_sizes[1] if len(param_blk_sizes) > 1 else 0
+            mem_estimate = _bytes_for_array_types(array_types, layout.num_elements, layout.max_atom_elements,
+                                                  layout.num_circuits, num_circuits / natoms,
+                                                  layout._param_dimensions, blk1, blk2,
+                                                  layout.max_atom_cachesize, self.model.dim)
 
             #def approx_mem_estimate(natoms, np1, np2):
             #    approx_cachesize = (num_circuits / natoms) * 1.3  # inflate expected # of circuits per atom => cache_size
@@ -1302,88 +1250,9 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             #                                  (num_params, num_params), (num_params / np1, num_params / np2),
             #                                  approx_cachesize, self.model.dim)
 
-            mem = mem_estimate(natoms, param_blk_sizes)  # initial estimate (to screen)
-            #printer.log(f" mem({natoms} atoms, {np1},{np2} param-grps, {Ng} proc-grps) = {mem * C}GB")
-            printer.log(" mem(%d atoms, %d,%d param-grps, %d proc-grps) = %.2fGB" %
-                        (natoms, np1, np2, Ng, mem * C))
-            assert(mem < mem_limit), "TODO: adjust params to lower memory estimate!"
-
-            ##Now do (fast) memory checks that try to increase np1 and/or np2 if memory constraint is unmet.
-            #ok = False
-            #if (not ok) and bNp1Matters and np1 < num_params:
-            #    #First try to decrease mem consumption by increasing np1
-            #    for n in range(np1, num_params + 1, nprocs):
-            #        if mem_estimate(nc, n, np2) < mem_limit:
-            #            np1 = n; ok = True; break
-            #    else: np1 = num_params
-            #
-            #if (not ok) and bNp2Matters and np2 < num_params:
-            #    #Next try to decrease mem consumption by increasing np2
-            #    for n in range(np2, num_params + 1, nprocs):
-            #        if mem_estimate(nc, np1, n) < mem_limit:
-            #            np2 = n; ok = True; break
-            #    else: np2 = num_params
-            #
-            ##Finally, increase nc in amounts of Ng (so nc % Ng == 0).  Start
-            ## with fast cache_size computation then switch to slow
-            #if not ok:
-            #    mem = approx_mem_estimate(nc, np1, np2)
-            #    while mem > mem_limit:
-            #        nc += Ng; _next = mem_estimate(nc, np1, np2)
-            #        if _next >= mem: raise MemoryError("Not enough memory: increasing #atoms unproductive")
-            #        mem = _next
-            #
-            #    mem = mem_estimate(nc, np1, np2)
-            #    #printer.log(f" mem({nc} atoms, {np1},{np2} param-grps, {Ng} proc-grps) = {mem * C}GB")
-            #    printer.log(" mem(%d atoms, %d,%d param-grps, %d proc-grps) ~= %.2fGB" %
-            #                (nc, np1, np2, Ng, mem * C))
-            #
-            #    while mem > mem_limit:
-            #        nc += Ng; _next = mem_estimate(nc, np1, np2)
-            #        #printer.log((f" mem({nc} atoms, {np1},{np2} param-grps, {Ng} proc-grps) ="
-            #        #             f" {_next * C}GB"))
-            #        printer.log(" mem(%d atoms, %d,%d param-grps, %d proc-grps) = %.2fGB" %
-            #                    (nc, np1, np2, Ng, _next * C))
-            #
-            #        if _next >= mem: raise MemoryError("Not enough memory: increasing #atoms unproductive")
-            #        mem = _next
-        else:
-            gather_mem_limit = None
-
-        layout = layout_cache[(natoms, param_blk_sizes)]
-
-        #paramBlkSize1 = num_params / np1
-        #paramBlkSize2 = num_params / np2  # the *average* param block size
-        # (in general *not* an integer), which ensures that the intended # of
-        # param blocks is communicated to forwardsim routines (taking ceiling or
-        # floor can lead to inefficient MPI distribution)
-
-        #nparams = (num_params, num_params) if bNp2Matters else num_params
-        #np = (np1, np2) if bNp2Matters else np1
-        #paramBlkSizes = (paramBlkSize1, paramBlkSize2) if bNp2Matters else paramBlkSize1
-        ##printer.log((f"Created matrix-sim layout for {len(circuits)} circuits over {nprocs} processors:\n"
-        ##             f" Layout comprised of {nc} atoms, processed in {Ng} groups of ~{nprocs // Ng} processors each.\n"
-        ##             f" {nparams} parameters divided into {np} blocks of ~{paramBlkSizes} params."))
-        #printer.log(("Created matrix-sim layout for %d circuits over %d processors:\n"
-        #             " Layout comprised of %d atoms, processed in %d groups of ~%d processors each.\n"
-        #             " %s parameters divided into %s blocks of ~%s params.") %
-        #            (len(circuits), nprocs, nc, Ng, nprocs // Ng, str(nparams), str(np), str(paramBlkSizes)))
-
-        #if np1 == 1:  # (paramBlkSize == num_params)
-        #    paramBlkSize1 = None  # == all parameters, and may speed logic in dprobs, etc.
-        #else:
-        #    if comm is not None:  # check that all procs have *same* paramBlkSize1
-        #        blkSizeTest = comm.bcast(paramBlkSize1, root=0)
-        #        assert(abs(blkSizeTest - paramBlkSize1) < 1e-3)
-        #
-        #if np2 == 1:  # (paramBlkSize == num_params)
-        #    paramBlkSize2 = None  # == all parameters, and may speed logic in hprobs, etc.
-        #else:
-        #    if comm is not None:  # check that all procs have *same* paramBlkSize2
-        #        blkSizeTest = comm.bcast(paramBlkSize2, root=0)
-        #        assert(abs(blkSizeTest - paramBlkSize2) < 1e-3)
-        #
-        #layout.set_distribution_params(Ng, (paramBlkSize1, paramBlkSize2), gather_mem_limit)
+            if mem_estimate > mem_limit:
+                raise MemoryError("Not enough memory for desired layout!")
+                    
         return layout
 
     def _scale_exp(self, scale_exps):

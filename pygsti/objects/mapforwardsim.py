@@ -85,10 +85,10 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         if method_name == 'bulk_fill_timedep_dchi2': return ('p',)  # just an additional parameter vector
         return super()._array_types_for_method(method_name)
 
-    def __init__(self, model=None, max_cache_size=None, num_atoms=None):
-        super().__init__(model)
+    def __init__(self, model=None, max_cache_size=None, num_atoms=None, processor_grid=None, param_blk_sizes=None):
+        """  TODO: docstring - at least need num_atoms, processor_grid, & param_blk_sizes docs"""
+        super().__init__(model, num_atoms, processor_grid, param_blk_sizes)
         self._max_cache_size = max_cache_size
-        self._num_atoms = num_atoms
 
     def copy(self):
         """
@@ -110,28 +110,12 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         printer = _VerbosityPrinter.create_printer(verbosity, comm)
         nprocs = 1 if comm is None else comm.Get_size()
         num_params = derivative_dimension if (derivative_dimension is not None) else self.model.num_params
-        num_circuits = len(circuits)
         C = 1.0 / (1024.0**3)
-
-        bNp1Matters = bool("EP" in array_types or "EPP" in array_types or "ep" in array_types or "epp" in array_types)
-        bNp2Matters = bool("EPP" in array_types or "epp" in array_types)
-
-        if bNp2Matters:
-            param_dimensions = (num_params, num_params)
-        elif bNp1Matters:
-            param_dimensions = (num_params,)
-        else:
-            param_dimensions = ()
-        blk_sizes = (None, None)  # limiting param block sizes doesn't help us
 
         if mem_limit is not None:
             if mem_limit <= 0:
                 raise MemoryError("Attempted layout creation w/memory limit = %g <= 0!" % mem_limit)
             printer.log("Layout creation w/mem limit = %.2fGB" % (mem_limit * C))
-
-        def create_layout_candidate(num_atoms, na, npp):
-            return _MapCOPALayout(circuits, self.model, dataset, None, num_atoms, na, npp,
-                                  param_dimensions, blk_sizes, resource_alloc, verbosity)
 
         #Start with how we'd like to split processors up (without regard to memory limit):
 
@@ -140,39 +124,24 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         # call when using finite diffs) - so we want to choose nc = Ng < nprocs and np1 > 1 (so nc * np1 = nprocs).
         #work_per_proc = self.model.dim**2
 
-        initial_atoms = self._num_atoms if (self._num_atoms is not None) else 2 * self.model.dim  # heuristic
-        initial_atoms = min(initial_atoms, len(circuits))  # don't have more atoms than circuits
-        if initial_atoms >= nprocs:
-            np1 = 1; np2 = 1; nc = Ng = nprocs
-        else:
-            nproc_reduction_factor = 2**int(_np.log2(nprocs / initial_atoms))  # always a power of 2
-            initial_atoms = nprocs // nproc_reduction_factor  # nprocs / 2**pow ~= original initial_atoms
-            nc = Ng = initial_atoms
-            np1 = nproc_reduction_factor; np2 = 1  # so nc * np1 == nprocs
+        natoms, na, npp, param_dimensions, param_blk_sizes = self._compute_processor_distribution(
+            array_types, nprocs, num_params, len(circuits), default_natoms=2 * self.model.dim)  # heuristic?
 
-        if bNp2Matters:
-            npp = (np1, np2)
-        elif bNp1Matters:
-            npp = (np1,)
-        else:
-            npp = ()
+        printer.log("MapLayout: %d processors divided into %s (= %d) grid along circuit and parameter directions." %
+                    (nprocs, ' x '.join(map(str, (na,) + npp)), _np.product((na,) + npp)))
+        printer.log("   %d atoms, parameter block size limits %s" % (natoms, str(param_blk_sizes)))
+        assert(_np.product((na,) + npp) <= nprocs), "Processor grid size exceeds available processors!"
 
-        #Create initial layout, and get the "final memory" that is required to hold the final results
-        # for each array type.  This amount doesn't depend on how the layout is "split" into atoms.
-        layout_cache = {}  # cache of layout candidates indexed on # (minimal) atoms, to avoid re-computation
-        layout_cache[nc] = create_layout_candidate(nc, Ng, npp)
-        num_elements = layout_cache[nc].num_elements  # should be fixed
+        layout = _MapCOPALayout(circuits, self.model, dataset, None, natoms, na, npp,
+                                param_dimensions, param_blk_sizes, resource_alloc, verbosity)
 
         if mem_limit is not None:
-            gather_mem_limit = mem_limit * 0.01  # better?
-
-            def mem_estimate(nc, np1, np2):
-                if nc not in layout_cache: layout_cache[nc] = create_layout_candidate(nc)
-                layout = layout_cache[nc]
-                return _bytes_for_array_types(array_types, layout.num_elements, layout.max_atom_elements,
-                                              layout.num_circuits, num_circuits / nc,
-                                              layout._additional_dimensions, (num_params / np1, num_params / np2),
-                                              layout.max_atom_cachesize, self.model.dim)
+            blk1 = param_blk_sizes[0] if len(param_blk_sizes) > 0 else 0
+            blk2 = param_blk_sizes[1] if len(param_blk_sizes) > 1 else 0
+            mem_estimate = _bytes_for_array_types(array_types, layout.num_elements, layout.max_atom_elements,
+                                                  layout.num_circuits, num_circuits / natoms,
+                                                  layout._param_dimensions, blk1, blk2,
+                                                  layout.max_atom_cachesize, self.model.dim)
 
             #def approx_mem_estimate(nc, np1, np2):
             #    approx_cachesize = (num_circuits / nc) * 1.3  # inflate expected # of circuits per atom => cache_size
@@ -181,78 +150,8 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
             #                                  (num_params, num_params), (num_params / np1, num_params / np2),
             #                                  approx_cachesize, self.model.dim)
 
-            mem = mem_estimate(nc, np1, np2)  # initial estimate (to screen)
-            #printer.log(f" mem({nc} atoms, {np1},{np2} param-grps, {Ng} proc-grps) = {cmem * C}GB")
-            printer.log(" mem(%d atoms, %d,%d param-grps, %d proc-grps) = %.2fGB" %
-                        (nc, np1, np2, Ng, mem * C))
-            assert(mem < mem_limit), "TODO: adjust params to lower memory estimate!"
-
-            ##Increase nc in amounts of Ng (so nc % Ng == 0).  Start with approximation, then switch to slow mode.
-            #while approx_mem_estimate(nc, np1, np2) > mem_limit:
-            #    if nc == num_circuits:  # even "maximal" splitting doesn't work!
-            #        raise MemoryError("Cannot split or layout enough to achieve memory limit")
-            #    if np1 > 1:  # then nc < nprocs and np1 is a power of 2
-            #        np1 //= 2  # keep dividing by 2 until hits 1, then nc == nprocs
-            #        nc = Ng = nprocs // np1
-            #    else:
-            #        nc += Ng
-            #    if nc > num_circuits: nc = num_circuits
-            #
-            #mem = mem_estimate(nc, np1, np2)
-            ##printer.log(f" mem({nc} atoms, {np1},{np2} param-grps, {Ng} proc-grps) = {mem * C}GB")
-            #printer.log(" mem(%d atoms, %d,%d param-grps, %d proc-grps) = %.2fGB" %
-            #            (nc, np1, np2, Ng, mem * C))
-            #while mem > mem_limit:
-            #    if np1 > 1:
-            #        np1 //= 2;  nc = Ng = nprocs // np1
-            #    else:
-            #        nc += Ng
-            #    _next = mem_estimate(nc, np1, np2)
-            #    if(_next >= mem): raise MemoryError("Not enough memory: splitting unproductive")
-            #    mem = _next
-            #
-            #    #Note: could do these while loops smarter, e.g. binary search-like?
-            #    #  or assume mem_estimate scales linearly in ng? E.g:
-            #    #     if mem_limit < estimate:
-            #    #         reductionFactor = float(estimate) / float(mem_limit)
-            #    #         maxTreeSize = int(nstrs / reductionFactor)
-        else:
-            gather_mem_limit = None
-
-        layout = layout_cache[nc]
-
-        #paramBlkSize1 = num_params / np1
-        #paramBlkSize2 = num_params / np2  # the *average* param block size
-        ## (in general *not* an integer), which ensures that the intended # of
-        ## param blocks is communicated to forwardsim routines (taking ceiling or
-        ## floor can lead to inefficient MPI distribution)
-        #
-        #bNp2Matters = bool("EPP" in array_types)
-        #nparams = (num_params, num_params) if bNp2Matters else num_params
-        #np = (np1, np2) if bNp2Matters else np1
-        #paramBlkSizes = (paramBlkSize1, paramBlkSize2) if bNp2Matters else paramBlkSize1
-        ##printer.log((f"Created map-sim layout for {len(circuits)} circuits over {nprocs} processors:\n"
-        ##             f" Layout comprised of {nc} atoms, processed in {Ng} groups of ~{nprocs // Ng} processors each.\n"
-        ##             f" {nparams} parameters divided into {np} blocks of ~{paramBlkSizes} params."))
-        #printer.log(("Created map-sim layout for %d circuits over %d processors:\n"
-        #             " Layout comprised of %d atoms, processed in %d groups of ~%d processors each.\n"
-        #             " %s parameters divided into %s blocks of ~%s params.") %
-        #            (len(circuits), nprocs, nc, Ng, nprocs // Ng, str(nparams), str(np), str(paramBlkSizes)))
-        #
-        #if np1 == 1:  # (paramBlkSize == num_params)
-        #    paramBlkSize1 = None  # == all parameters, and may speed logic in dprobs, etc.
-        #else:
-        #    if comm is not None:  # check that all procs have *same* paramBlkSize1
-        #        blkSizeTest = comm.bcast(paramBlkSize1, root=0)
-        #        assert(abs(blkSizeTest - paramBlkSize1) < 1e-3)
-        #
-        #if np2 == 1:  # (paramBlkSize == num_params)
-        #    paramBlkSize2 = None  # == all parameters, and may speed logic in hprobs, etc.
-        #else:
-        #    if comm is not None:  # check that all procs have *same* paramBlkSize2
-        #        blkSizeTest = comm.bcast(paramBlkSize2, root=0)
-        #        assert(abs(blkSizeTest - paramBlkSize2) < 1e-3)
-        #layout.set_distribution_params(Ng, (paramBlkSize1, paramBlkSize2), gather_mem_limit)
+            if mem_estimate > mem_limit:
+                raise MemoryError("Not enough memory for desired layout!")
 
         return layout
 

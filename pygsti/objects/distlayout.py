@@ -151,7 +151,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         offset = 0
         #atom_element_slices = {}
         global_elindex_outcome_tuples = _collections.OrderedDict([
-            (orig_i, list()) for orig_i in range(len(unique_circuits))])
+            (unique_i, list()) for unique_i in range(len(unique_circuits))])
         local_elindex_outcome_tuples = _collections.OrderedDict()
 
         ##Create a subgroup that contains only the rank-0 processors of all the atom processing comms.
@@ -163,7 +163,8 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         #    atom_owners_subcomm = None
 
         start = stop = None
-        my_unique_is = set()
+        my_unique_is = []
+        my_unique_is_set = set()
         for i in range(nAtoms):
             to_send = 0  # default = contribute nothing to MPI.SUM below
 
@@ -179,11 +180,12 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
                     to_send = rank  # this rank claims to be the owner of this atom
 
                 for unique_i, eolist in atoms_dict[i].elindex_outcome_tuples.items():
-                    assert(unique_i not in my_unique_is)
                     if len(eolist) == 0: continue
-                    local_elindex_outcome_tuples[len(my_unique_is)] = [((offset - start) + elindex, outcome)
-                                                                       for (elindex, outcome) in eolist]
-                    my_unique_is.add(unique_i)
+                    assert(unique_i not in my_unique_is_set), "%d is already in my_unique_is" % unique_i
+                    local_elindex_outcome_tuples[len(my_unique_is_set)] = [((offset - start) + elindex, outcome)
+                                                                           for (elindex, outcome) in eolist]
+                    my_unique_is.append(unique_i)
+                    my_unique_is_set.add(unique_i)
 
                     
             if comm is not None:
@@ -227,6 +229,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
             offset += atom_sizes[i]
         self.host_num_elements = offset
         self.host_element_slice = slice(start, stop)
+        #REMOVE print("Atom element slices = ", [a.element_slice for a in atoms_dict.values()], self.host_element_slice, self.host_num_elements)
         #REMOVE print("Atom sizes = ",atom_sizes, comm.rank)
         #REMOVE print("Element slice = ",self.host_element_slice, self.host_num_elements, host_index, comm.rank)
         
@@ -525,7 +528,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
             interatom_param2_subcomm = None
             param_fine_subcomm = None
 
-
+        print("Rank%d: atoms dict keys = %s, pslc = %s" % (comm.rank, list(atoms_dict.keys()), str(self.global_param_slice)))
         #    #REMOVE
         #    #def _get_param_indices(paramCommIndex):
         #    #    if num_params > num_param_processors or len(additional_dimensions) == 1:
@@ -654,14 +657,17 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         rev_unique = _collections.defaultdict(list)
         for orig_i, unique_i in to_unique.items():
             rev_unique[unique_i].append(orig_i)
-        for i, (c, cc) in enumerate(zip(unique_circuits, unique_complete_circuits)):
-            if i in my_unique_is:
-                local_unique_index = len(local_unique_circuits)  # an index into local_unique_circuits
-                local_unique_complete_circuits.append(cc)
-                local_unique_circuits.append(c)
-                start = len(local_circuits)
-                local_to_unique.update({start + k: local_unique_index for k in range(len(rev_unique[i]))})
-                local_circuits.extend([circuits_dict[orig_i] for orig_i in rev_unique[i]])
+
+        #TODO: Could make this a bit faster using dict lookups?
+        for i in my_unique_is:
+            c = unique_circuits[i]
+            cc = unique_complete_circuits[i]
+            local_unique_index = len(local_unique_circuits)  # an index into local_unique_circuits
+            local_unique_complete_circuits.append(cc)
+            local_unique_circuits.append(c)
+            start = len(local_circuits)
+            local_to_unique.update({start + k: local_unique_index for k in range(len(rev_unique[i]))})
+            local_circuits.extend([circuits_dict[orig_i] for orig_i in rev_unique[i]])
 
         super().__init__(local_circuits, local_unique_circuits, local_to_unique, local_elindex_outcome_tuples,
                          local_unique_complete_circuits, param_dimensions)

@@ -551,16 +551,25 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                 # Jac only holds a subset of the derivative and element columns and rows, respectively.
                 #dqc.fill_x_for_jac(x, x_for_jac) REMOVE
                 f_fixed = f.copy()  # a static part of the distributed `f` resturned by obj_fn - MUST copy this.
-                pslice = dqc.jac_param_slice()
+                #if comm is not None: comm.barrier()  # ensure f.copy() finishes before any procs call obj_fn below
+
+                # REMOVE print("REF: Rank %d: %g %s %s" % (comm.rank, _np.linalg.norm(f_fixed), str(f_fixed.shape), str(f.slices_into_host_array)))
+                pslice = dqc.jac_param_slice(only_if_leader=True)
                 eps = 1e-7
                 #for ii, i in enumerate(range(pslice.start, pslice.stop)):
                 for i in range(len(global_x)):
                     x_plus_dx = global_x.copy()
                     x_plus_dx[i] += eps
+                    #fd = obj_fn(x_plus_dx) - f_fixed
+                    #if _np.linalg.norm(fd) > 350:
+                    #print("%d: Rank %d: %g" % (i, comm.rank, _np.linalg.norm(fd)))
+                    
                     fd = (obj_fn(x_plus_dx) - f_fixed) / eps
                     if pslice.start <= i < pslice.stop:
+                        #REMOVE print("%d: Rank %d: %g" % (i, comm.rank, _np.linalg.norm(fd)**2))
                         fdJac[:, i - pslice.start] = fd
-                    #if comm is not None: comm.barrier()
+                    #if comm is not None: comm.barrier()  # overkill for shared memory leader host barrier
+                #import sys; sys.exit(0)
                 Jac = fdJac
 
             #DEBUG shared mem REMOVE

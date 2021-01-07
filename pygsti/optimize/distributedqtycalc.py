@@ -58,7 +58,7 @@ class UndistributedQuantityCalc(object):
     def global_num_elements(self):
         return self.num_global_elements
 
-    def jac_param_slice(self):
+    def jac_param_slice(self, only_if_leader=False):
         return slice(0, self.num_global_params)
 
     def jtf_param_slice(self):
@@ -187,7 +187,9 @@ class DistributedQuantityCalc(object):
     def global_num_elements(self):
         return self.layout.global_num_elements + self.extra_elements
 
-    def jac_param_slice(self):
+    def jac_param_slice(self, only_if_leader=False):
+        if only_if_leader and not self.resource_alloc.layout_allocs['param-processing'].is_host_leader:
+            return slice(0, 0)  # not the leader of the group of procs computing this same jac portion
         return self.layout.global_param_slice
 
     def jtf_param_slice(self):

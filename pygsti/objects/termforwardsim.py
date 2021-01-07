@@ -149,10 +149,11 @@ class TermForwardSimulator(_DistributableForwardSimulator):
     def __init__(self, model=None,  # below here are simtype-specific args
                  mode="pruned", max_order=3, desired_perr=0.01, allowed_perr=0.1,
                  min_term_mag=None, max_paths_per_outcome=1000, perr_heuristic="none",
-                 max_term_stages=5, path_fraction_threshold=0.9, oob_check_interval=10, cache=None):
+                 max_term_stages=5, path_fraction_threshold=0.9, oob_check_interval=10, cache=None,
+                 num_atoms=None, processor_grid=None, param_blk_sizes=None):
         """
         Construct a new TermForwardSimulator object.
-        TODO: docstring
+        TODO: docstring - at least need num_atoms, processor_grid, & param_blk_sizes docs
 
         Parameters
         ----------
@@ -252,7 +253,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         #    allow unitary-evolution calcs to be term-based, which essentially
         #    eliminates the "pRight" portion of all the propagation calcs, and
         #    would require pLeft*pRight => |pLeft|^2
-        super().__init__(model)
+        super().__init__(model, num_atoms, processor_grid, param_blk_sizes)
 
         assert(mode in ("taylor-order", "pruned", "direct")), "Invalid term-fwdsim mode: %s" % mode
         assert(perr_heuristic in ("none", "scaled", "meanscaled")), "Invalid perr_heuristic: %s" % perr_heuristic
@@ -330,24 +331,16 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         else:
             gather_mem_limit = None
 
-        natoms = na = nprocs
-        blk_sizes = (None, None)
+        natoms, na, npp, param_dimensions, param_blk_sizes = self._compute_processor_distribution(
+            array_types, nprocs, num_params, len(circuits), default_natoms=nprocs)
 
-        bNp1Matters = bool("EP" in array_types or "EPP" in array_types or "ep" in array_types or "epp" in array_types)
-        bNp2Matters = bool("EPP" in array_types or "epp" in array_types)
-
-        if bNp2Matters:
-            param_dimensions = (num_params, num_params)
-            npp =  (nprocs // natoms, 1)
-        elif bNp1Matters:
-            param_dimensions = (num_params,)
-            npp =  (nprocs // natoms,)
-        else:
-            param_dimensions = ()
-            npp = ()
+        printer.log("TermLayout: %d processors divided into %s (= %d) grid along circuit and parameter directions." %
+                    (nprocs, ' x '.join(map(str, (na,) + npp)), _np.product((na,) + npp)))
+        printer.log("   %d atoms, parameter block size limits %s" % (natoms, str(param_blk_sizes)))
+        assert(_np.product((na,) + npp) <= nprocs), "Processor grid size exceeds available processors!"
 
         layout = _TermCOPALayout(circuits, self.model, dataset, natoms, na, npp, param_dimensions,
-                                 blk_sizes, resource_alloc, printer)
+                                 param_blk_sizes, resource_alloc, printer)
         #REMOVE layout.set_distribution_params(nprocs, (num_params, num_params), gather_mem_limit)  # *before* _prepare_layout!
         #MEM debug_prof.print_memory("CreateLayout2 - nAtoms = %d" % len(layout.atoms), True)
         self._prepare_layout(layout, resource_alloc, polynomial_vindices_per_int)

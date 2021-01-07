@@ -1125,3 +1125,21 @@ def sum_arrays(local_array, owners, comm):
     result = _np.empty(local_array.shape, local_array.dtype)
     comm.Allreduce(local_array, result, op=MPI.SUM)
     return result
+
+
+def closest_divisor(a, b):
+    """
+    Returns the divisor of `a` that is closest to `b`.
+
+    Parameters
+    ----------
+    a, b : int
+
+    Returns
+    -------
+    int
+    """
+    if b >= a: return a
+    for test in range(b, 0, -1):
+        if a % test == 0: return test
+    assert(False), "Should never get here - a % 1 == 0 always!"
