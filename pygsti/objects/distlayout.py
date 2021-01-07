@@ -946,7 +946,6 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
             _smt.cleanup_shared_ndarray(global_array_shm)
         return ret
 
-    # jtf, jtf_shm = self.allocate_local_array('jtf', 'd', resource_alloc, zero_out=False)
     def fill_jtf(self, j, f, jtf, resource_alloc):
         """TODO: docstring  - assumes j, f are local arrays, allocated using 'ep' and 'e' types, respectively.
         Returns an array allocated using the 'jtf' type.

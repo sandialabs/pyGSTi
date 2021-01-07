@@ -158,12 +158,15 @@ def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials,
                 "pp[0]+f0+expGerm+f1+pp[1]", f0=prep_fiducials, f1=meas_fiducials,
                 expGerm=expGerm, pp=prep_povm_tuples, order=('f0', 'f1', 'pp'))
 
-            layout = target_model.sim.create_layout(lst, resource_alloc={'mem_limit': mem_limit},
-                                                    array_types=('EP',), verbosity=0)
+            resource_alloc = _objs.ResourceAllocation(comm=None, mem_limit=mem_limit)
+            layout = target_model.sim.create_layout(lst, resource_alloc, array_types=('ep',), verbosity=0)
             #FUTURE: assert that no instruments are allowed?
 
-            dP = _np.empty((layout.num_elements, target_model.num_params), 'd')
-            target_model.sim.bulk_fill_dprobs(dP, layout)  # num_els x num_params
+            local_dP = layout.allocate_local_array('ep', 'd', resource_alloc)
+            target_model.sim.bulk_fill_dprobs(local_dP, layout, None, resource_alloc)  # num_els x num_params
+            dP = local_dP.copy()  # local == global (no layout.gather required) b/c we used comm=None above
+            _smt.cleanup_shared_ndarray(local_dP.shared_memory_handle)  # not needed - local_dP isn't shared (comm=None)
+            
             dPall.append(dP)
 
             #Add this germ's element indices for each fiducial pair (final circuit of evTree)
@@ -408,8 +411,8 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
                 germ=_objs.Circuit(("Ggerm",)), pp=pre_povm_tuples,
                 order=('f0', 'f1', 'pp'))
 
-            layout = gsGerm.sim.create_layout(lst, resource_alloc={'mem_limit': mem_limit},
-                                              array_types=('EP',), verbosity=0)
+            resource_alloc = _objs.ResourceAllocation(comm=None, mem_limit=mem_limit)
+            layout = gsGerm.sim.create_layout(lst, resource_alloc, array_types=('ep',), verbosity=0)
 
             elIndicesForPair = [[] for i in range(len(prep_fiducials) * len(meas_fiducials))]
             nPrepPOVM = len(pre_povm_tuples)
@@ -418,8 +421,10 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
                     # "original" indices into lst for k-th fiducial pair
                     elIndicesForPair[k].extend(_slct.to_array(layout.indices_for_index(o)))
 
-            dPall = _np.empty((layout.num_elements, gsGerm.num_params), 'd')
-            gsGerm.sim.bulk_fill_dprobs(dPall, layout)  # num_els x num_params
+            local_dPall = layout.allocate_local_array('ep', 'd', resource_alloc)
+            gsGerm.sim.bulk_fill_dprobs(local_dPall, layout, None, resource_alloc)  # num_els x num_params
+            dPall = local_dPall.copy()  # local == global (no layout.gather required) b/c we used comm=None above
+            _smt.cleanup_shared_ndarray(local_dPall.shared_memory_handle)  # not needed (comm=None)
 
             # Construct sum of projectors onto the directions (1D spaces)
             # corresponding to varying each parameter (~eigenvalue) of the
@@ -586,10 +591,14 @@ def test_fiducial_pairs(fid_pairs, target_model, prep_fiducials, meas_fiducials,
                                              pp=pre_povm_tuples, expGerm=expGerm, order=['p', 'pp'])
         circuits = _remove_duplicates(circuits)
 
-        layout = target_model.sim.create_layout(circuits, resource_alloc={'mem_limit': mem_limit},
-                                                array_types=('EP',), verbosity=0)
-        dP = _np.empty((layout.num_elements, nModelParams))
-        target_model.sim.bulk_fill_dprobs(dP, layout)
+        resource_alloc = _objs.ResourceAllocation(comm=None, mem_limit=mem_limit)
+        layout = target_model.sim.create_layout(circuits, resource_alloc, array_types=('ep',), verbosity=0)
+
+        local_dP = layout.allocate_local_array('ep', 'd', resource_alloc)
+        target_model.sim.bulk_fill_dprobs(local_dP, layout, None, resource_alloc)
+        dP = local_dP.copy()  # local == global (no layout.gather required) b/c we used comm=None above
+        _smt.cleanup_shared_ndarray(local_dP.shared_memory_handle)  # not needed - local_dP isn't shared (comm=None)
+
         return dP
 
     def get_number_amplified(m0, m1, len0, len1):
