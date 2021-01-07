@@ -106,14 +106,15 @@ jobs:
         - "algorithms algorithmsb"
         - "report reportb"
         - "drivers objects tools iotest optimize construction extras"
-        nose-nopath: [1]
-        include:
-          nose-tests: "mpi"
-          nose-nopath: "" # Special case, needs NOPATH off
+        - "mpi"
 
     # Only run on "beta" branch if tests pass
     needs: build
     if: github.ref == 'refs/heads/feature-github-action-push'
+
+    env:
+      NOSE_NOPATH: "" # Needs to be off for MPI
+      NOSE_WHERE: 'test/test_packages'
 
     # TODO: Supposedly some composite actions could avoid this copy-paste
     # Not super high priority though
@@ -146,13 +147,10 @@ jobs:
     - name: Run test_packages ${{ matrix.nose-tests }}
       env:
         NOSETESTS: ${{ matrix.nose-tests }}
-        NOSE_NOPATH: ${{ matrix.nose-nopath }}
-        NOSE_WHERE: 'test/test_packages'
+
       run: |
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
         echo "nosetests: $NOSETESTS"
-        echo "nose_nopath: $NOSE_NOPATH"
-        echo "nose_where: $NOSE_WHERE"
         nosetests $NOSETESTS
 
 
