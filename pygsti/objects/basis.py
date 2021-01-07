@@ -1429,7 +1429,8 @@ class TensorProdBasis(LazyBasis):
         #if builtin_basis_name == 'std':  # special case when we change classical components to 'clmx'
         #    equiv_components = []
         #    for c in self.component_bases:
-        #        if c.elndim == 1: equiv_components.append(BuiltinBasis('clmx', c.dim**2, sparse=self.sparse))    #c.create_simple_equivalent('clmx'))
+        #        if c.elndim == 1: equiv_components.append(BuiltinBasis('clmx', c.dim**2, sparse=self.sparse))
+        #        # c.create_simple_equivalent('clmx'))
         #        else: equiv_components.append(c.create_simple_equivalent('std'))
         #    expanded_basis = TensorProdBasis(equiv_components)
         #    return BuiltinBasis('std', expanded_basis.elsize, sparse=expanded_basis.sparse)

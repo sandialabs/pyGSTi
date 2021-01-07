@@ -2519,10 +2519,10 @@ def instrument_half_diamond_norm(a, b, mx_basis):
     # composite_top = _np.dot(T, _np.dot(composite_top, Tinv))
     # #composite_op = _np.dot(T, composite_op)
     # #composite_top = _np.dot(T,composite_top)
-    # 
+    #
     # #import bpdb; bpdb.set_trace()
-    # return half_diamond_norm(composite_op, composite_top, sumbasis0)  # doens't work with sumbasis b/c it's a tensorprod
-    # 
+    # return half_diamond_norm(composite_op, composite_top, sumbasis0)  # doens't work w/sumbasis b/c it's a tensorprod
+    #
     # #MANUAL2
     # sumbasis = _TensorProdBasis([_Basis.cast('std', nComps**2), _Basis.cast('std', a.dim)])
     # composite_op = _np.zeros((a.dim * nComps**2, a.dim * nComps**2), 'd')
@@ -2531,7 +2531,7 @@ def instrument_half_diamond_norm(a, b, mx_basis):
     #     aa, bb = (i * nComps + i) * a.dim, (i * nComps + i + 1) * a.dim
     #     composite_op[aa:bb, aa:bb] = _tools.change_basis(a[clbl].to_dense(), mx_basis, 'std')
     #     composite_top[aa:bb, aa:bb] = _tools.change_basis(b[clbl].to_dense(), mx_basis, 'std')
-    # 
+    #
     # # half_diamond_norm implementation *needs* a CPTP-like basis where first element is the identity:
     # stdbasis = _Basis.cast('std', sumbasis.dim)
     # #import bpdb; bpdb.set_trace()

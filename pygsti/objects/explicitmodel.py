@@ -1037,7 +1037,6 @@ class ExplicitOpModel(_mdl.OpModel):
             for label in self.factories:
                 newModel.factories[label].depolarize(op_noise)
 
-
         if max_spam_noise is not None:
             if spam_noise is not None:
                 raise ValueError("Must specify at most  one of 'noise' and 'max_noise' NOT both")

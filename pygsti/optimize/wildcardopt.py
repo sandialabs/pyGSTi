@@ -269,7 +269,7 @@ def _get_critical_circuit_budgets(objfn, layout, redbox_threshold):
 
 def _agg_dlogl(current_probs, objfn, two_dlogl_threshold):
     p, f, n, N = current_probs, objfn.freqs, objfn.counts, objfn.total_counts
-    dlogl_elements = objfn.raw_objfn.terms(current_probs, n, N, f)  # N * f * _np.log(f / p)
+    dlogl_elements = objfn.raw_objfn.terms(p, n, N, f)  # N * f * _np.log(f / p)
     return 2 * float(_np.sum(dlogl_elements)) - two_dlogl_threshold
 
 

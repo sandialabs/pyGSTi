@@ -1982,7 +1982,7 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
                 active_constraints = {}
                 strictly_smaller_wvec = wvec.copy()
                 negligable_budget = 1 / (100 * max_depth)
-                if abs(w_ele) > negligable_budget:  # Use absolute values everywhere, as wildcard vector is allowed to be negative.
+                if abs(w_ele) > negligable_budget:  # Use absolute values everywhere (wildcard vector can be negative).
                     strictly_smaller_wvec[w_ind] = 0.99 * abs(w_ele)  # Decrease the vector element by 1%.
                     printer.log(" - Trialing strictly smaller vector, with element %.3g reduced from %.3g to %.3g" %
                                 (w_ind, w_ele, strictly_smaller_wvec[w_ind]))
