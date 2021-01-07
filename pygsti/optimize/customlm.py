@@ -462,7 +462,6 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
         fdJac = dqc.allocate_jac()
     
     dqc.allscatter_x(global_x, x) 
-    #REMOVE print("x0 shape = ", x0.shape, "x shape = ",x.shape)
 
     if damping_basis == "singular_values":
         Jac_V = dqc.allocate_jtj()
@@ -497,7 +496,6 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
     # DB: print("DB F0 (%s)=" % str(f.shape)); _mt.print_mx(f,prec=0,width=4)
     #num_fd_iters = 1000000 # DEBUG: use finite difference iterations instead
     # print("DEBUG: setting num_fd_iters == 0!");  num_fd_iters = 0 # DEBUG
-    # dx = None  # REMOVE - now set above
     last_accepted_dx = None
     min_norm_f = 1e100  # sentinel
     best_x = dqc.allocate_jtf()
@@ -538,66 +536,29 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
             #printer.log("--- Outer Iter %d: norm_f = %g, mu=%g" % (k,norm_f,mu))
 
             if profiler: profiler.memory_check("custom_leastsq: begin outer iter *before de-alloc*")
-            Jac = None; #REMOVE JTf = None;  JTJ = None  # we re-use JTJ now via mpidot's `out` argument.
+            Jac = None
 
             if profiler: profiler.memory_check("custom_leastsq: begin outer iter")
 
             # unnecessary b/c global_x is already valid: dqc.allgather_x(x, global_x)
             if k >= num_fd_iters:
-                #dqc.fill_x_for_jac(x, x_for_jac) REMOVE
                 Jac = jac_fn(global_x)  # 'EP'-type, but doesn't actually allocate any more mem (!)
             else:
                 # Note: x holds only number of "fine"-division params - need to use global_x, and
                 # Jac only holds a subset of the derivative and element columns and rows, respectively.
-                #dqc.fill_x_for_jac(x, x_for_jac) REMOVE
                 f_fixed = f.copy()  # a static part of the distributed `f` resturned by obj_fn - MUST copy this.
-                #if comm is not None: comm.barrier()  # ensure f.copy() finishes before any procs call obj_fn below
 
-                # REMOVE print("REF: Rank %d: %g %s %s" % (comm.rank, _np.linalg.norm(f_fixed), str(f_fixed.shape), str(f.slices_into_host_array)))
                 pslice = dqc.jac_param_slice(only_if_leader=True)
                 eps = 1e-7
-                #for ii, i in enumerate(range(pslice.start, pslice.stop)):
+                #Don't do this: for ii, i in enumerate(range(pslice.start, pslice.stop)): (must keep procs in sync)
                 for i in range(len(global_x)):
                     x_plus_dx = global_x.copy()
                     x_plus_dx[i] += eps
-                    #fd = obj_fn(x_plus_dx) - f_fixed
-                    #if _np.linalg.norm(fd) > 350:
-                    #print("%d: Rank %d: %g" % (i, comm.rank, _np.linalg.norm(fd)))
-                    
                     fd = (obj_fn(x_plus_dx) - f_fixed) / eps
                     if pslice.start <= i < pslice.stop:
-                        #REMOVE print("%d: Rank %d: %g" % (i, comm.rank, _np.linalg.norm(fd)**2))
                         fdJac[:, i - pslice.start] = fd
                     #if comm is not None: comm.barrier()  # overkill for shared memory leader host barrier
-                #import sys; sys.exit(0)
                 Jac = fdJac
-
-            #DEBUG shared mem REMOVE
-            #printer.log("PT2: %.3fs" % (_time.time()-t0)) # REMOVE
-            #comm.barrier()
-            #print("DB(%d): Jnorm = " % comm.rank, _np.linalg.norm(Jac))
-            #comm.barrier()
-            #print("DB(%d): fnorm = " % comm.rank, _np.linalg.norm(f))
-            #comm.barrier()
-            #print("DB(%d): xnorm = " % comm.rank, _np.linalg.norm(x))
-            #comm.barrier()
-            #x_list = comm.gather(_np.linalg.norm(x), root=0)
-            #Jac_list = comm.gather(_np.linalg.norm(Jac), root=0)
-            ##f_list = comm.gather(_np.linalg.norm(f), root=0)
-            #if comm.rank == 0:
-            #    #if all([_np.isclose(x_list[0], _x) for _x in x_list]):
-            #    #    pass #print("x OK")
-            #    #else:
-            #    #    print("x BAD!!!"); assert(False)
-            #    if all([_np.isclose(Jac_list[0], _x) for _x in Jac_list]):
-            #        pass #print("Jac OK")
-            #    else:
-            #        print("Jac BAD!!!"); assert(False)
-            #    #if all([_np.isclose(f_list[0], _x) for _x in f_list]):
-            #    #    pass #print("f OK")
-            #    #else:
-            #    #    print("f BAD!!!"); assert(False)
-
 
             #DEBUG: compare with analytic jacobian (need to uncomment num_fd_iters DEBUG line above too)
             #Jac_analytic = jac_fn(x)
@@ -623,21 +584,10 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
             #OLD MPI-enabled JTJ computation
             ##if my_mpidot_qtys is None:
             ##    my_mpidot_qtys = _mpit.distribute_for_dot(Jac.T.shape, Jac.shape, resource_alloc)
-            ##printer.log("PT3: %.3fs" % (_time.time()-t0)) # REMOVE
             #JTJ, JTJ_shm = _mpit.mpidot(Jac.T, Jac, my_mpidot_qtys[0], my_mpidot_qtys[1],
             #                            my_mpidot_qtys[2], resource_alloc, JTJ, JTJ_shm)  # _np.dot(Jac.T,Jac) 'PP'-type
             
             dqc.fill_jtj(Jac, JTJ)
-
-            #DEBUG REMOVE
-            #JTJ_list = comm.gather(_np.linalg.norm(JTJ), root=0)
-            #if comm.rank == 0:
-            #    if all([_np.isclose(JTJ_list[0], _x) for _x in JTJ_list]):
-            #        pass #print("Jac OK")
-            #    else:
-            #        print("Jac BAD!!!"); assert(False)
-            #JTJ = JTJ.copy(); shared_mem_leader = True
-
             dqc.fill_jtf(Jac, f, JTf)  # 'P'-type
 
             if profiler: profiler.add_time("custom_leastsq: dotprods", tm)
@@ -682,12 +632,6 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                 #printer.log("JTJ (dim=%d) eval min/max=%g, %g; %d large svals (of %d)" % (
                 #    JTJ.shape[0], _np.min(_np.abs(JTJ_evals)), _np.max(_np.abs(JTJ_evals)),
                 #                          num_large_svals, len(Jac_s)))
-
-                #TODO REMOVE
-                #JTJ_U, JTJ_s, JTJ_Vh = _np.linalg.svd(JTJ)
-                #JTJ_s = _np.linalg.svd(JTJ, compute_uv=False)
-                # JTJ = U * diag(JTJ_s) * Vh
-                # (JTJ + mu*D) => U * (JTJ_s + mu*dvec) * Vh
 
             if norm_JTf < jac_norm_tol:
                 if oob_check_interval <= 1:
@@ -740,52 +684,34 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                         # dx = _np.dot(Jac_V, _np.diag(1 / reg_Jac_s**2), global_Jac_VT_mJTf
                         #But now we just compute reg_Jac_s here, and so the rest below.
                     else:
-                        #REMOVE if shared_mem_leader:  # JTJ may be shared mem
+                        # ok if assume fine-param-proc.size == 1 (otherwise need to sync setting local JTJ)
                         JTJ[idiag] = undamped_JTJ_diag + mu  # augment normal equations
-                        #REMOVE resource_alloc.host_comm_barrier()
 
                 elif damping_mode == 'JTJ':
                     if damping_basis == "singular_values":
                         reg_Jac_s = global_Jac_s + mu * dclip(global_Jac_s)
                     else:
-                        #REMOVE if shared_mem_leader:  # JTJ may be shared mem
                         add_to_diag = mu * dclip(undamped_JTJ_diag)
-                        JTJ[idiag] = undamped_JTJ_diag + add_to_diag
-                        #REMOVE resource_alloc.host_comm_barrier()
+                        JTJ[idiag] = undamped_JTJ_diag + add_to_diag  # ok if assume fine-param-proc.size == 1
 
                 elif damping_mode == 'invJTJ':
                     if damping_basis == "singular_values":
                         reg_Jac_s = global_Jac_s + mu * dclip(1.0 / global_Jac_s)
                     else:
-                        #REMOVE if shared_mem_leader:  # JTJ may be shared mem
                         add_to_diag = mu * dclip(1.0 / undamped_JTJ_diag)
-                        JTJ[idiag] = undamped_JTJ_diag + add_to_diag
-                        #REMOVE resource_alloc.host_comm_barrier()
+                        JTJ[idiag] = undamped_JTJ_diag + add_to_diag  # ok if assume fine-param-proc.size == 1
 
                 elif damping_mode == 'adaptive':
                     if damping_basis == "singular_values":
                         reg_Jac_s_lst = [global_Jac_s + mu * dclip(global_Jac_s**(spow + 0.1)),
                                          global_Jac_s + mu * dclip(global_Jac_s**spow),
                                          global_Jac_s + mu * dclip(global_Jac_s**(spow - 0.1))]
-
-                        #DEBUG TODO REMOVE
-                        #JTJ_lst = [_np.dot(Jac_V.T, _np.dot(_np.diag(s**2), Jac_V)) for s in reg_Jac_s_lst]
-                        #JTJ_evals2_lst = [_np.linalg.eigvals(jtj) for jtj in JTJ_lst]
-                        #for ii,jtje in enumerate(JTJ_evals2_lst):
-                        #    printer.log("%d: JTJ POST-damping (spow=%g) eval min/max=%g, %g"
-                        #                % (ii, spow, _np.min(_np.abs(jtje)), _np.max(_np.abs(jtje))))
                     else:
                         add_to_diag_lst = [mu * dclip(undamped_JTJ_diag**(spow + 0.1)),
                                            mu * dclip(undamped_JTJ_diag**spow),
                                            mu * dclip(undamped_JTJ_diag**(spow - 0.1))]
                 else:
                     raise ValueError("Invalid damping mode: %s" % damping_mode)
-
-                #TODO REMOVE (DEBUG)
-                #printer.log("JTJ (dim=%d, mu=%g) diag vals=" % (JTJ.shape[0], mu))
-                #for ii,(ud,atd,dd) in enumerate(zip(undamped_JTJ_diag, add_to_diag, JTJ[idiag])):
-                #    printer.log("%d: %g \t%g \t%g" % (ii,ud,atd,dd))
-                #print("DB: Post-damping JTJ diag = [",_np.min(_np.abs(JTJ[idiag])),_np.max(_np.abs(JTJ[idiag])),"]")
 
                 #assert(_np.isfinite(JTJ).all()), "Non-finite JTJ (inner)!" # NaNs tracking
                 #assert(_np.isfinite(JTf).all()), "Non-finite JTf (inner)!" # NaNs tracking
@@ -798,25 +724,13 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                     if damping_basis == 'diagonal_values':
                         if damping_mode == 'adaptive':
                             for ii, add_to_diag in enumerate(add_to_diag_lst):
-                                #REMOVE if shared_mem_leader:  # JTJ may be shared mem
-                                JTJ[idiag] = undamped_JTJ_diag + add_to_diag
-                                #REMOVE resource_alloc.host_comm_barrier()
+                                JTJ[idiag] = undamped_JTJ_diag + add_to_diag  # ok if assume fine-param-proc.size == 1
                                 #dx_lst.append(_scipy.linalg.solve(JTJ, -JTf, sym_pos=True))
                                 #dx_lst.append(custom_solve(JTJ, -JTf, resource_alloc))
                                 _custom_solve(JTJ, minus_JTf, dx_lst[ii], dqc, resource_alloc)
                         else:
-                            #dx = _np.linalg.solve(JTJ, -JTf)
-                            #NEW scipy: dx = _scipy.linalg.solve(JTJ, -JTf, assume_a='pos') #or 'sym'
-                            #REMOVE comm.barrier()
-                            #REMOVE debug= dqc.norm2_jtj(JTJ)
-                            #REMOVE if comm.rank == 0: print("DB: norm JTJ = ",debug)
-                            #REMOVE debug= dqc.norm2_x(minus_JTf)
-                            #REMOVE if comm.rank == 0: print("DB: norm minus_JTf = ",debug)
-                            _custom_solve(JTJ, minus_JTf, dx, dqc, resource_alloc)
-                            #REMOVE comm.barrier()
-                            #REMOVE debug= dqc.norm2_x(dx)
-                            #REMOVE if comm.rank == 0: print("DB: norm dx = ",debug)
                             #dx = _scipy.linalg.solve(JTJ, -JTf, sym_pos=True)
+                            _custom_solve(JTJ, minus_JTf, dx, dqc, resource_alloc)
 
                     elif damping_basis == 'singular_values':
                         #Note: above solves JTJ*x = -JTf => x = inv_JTJ * (-JTf)
@@ -1139,8 +1053,6 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                 nu = 2 * nu
                 printer.log("      Rejected%s!  mu => mu*nu = %g, nu => 2*nu = %g"
                             % (reject_msg, mu, nu), 2)
-
-                #JTJ[idiag] = undamped_JTJ_diag  # restore diagonal - not needed anymore TODO REMOVE
             #end of inner loop
 
         #end of outer loop
@@ -1186,14 +1098,6 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
 
     if num_fd_iters > 0:
         dqc.deallocate_jac(fdJac)
-
-
-    #DEBUG REMOVE
-    #x_list = comm.gather(_np.linalg.norm(best_x), root=0)
-    #if comm.rank == 0:
-    #    if all([_np.isclose(x_list[0], _x) for _x in x_list]):
-    #        print("bestx OK")
-    #    else: print("bestx BAD!!!")
 
     dqc.allgather_x(best_x, global_x)
     dqc.deallocate_jtf(best_x)

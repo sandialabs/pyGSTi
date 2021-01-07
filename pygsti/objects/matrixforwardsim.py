@@ -1170,36 +1170,6 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         #                      exist along each dimension of the physical processor "grid".  Thus, thees values are set
         #                      based on the total number of cores available and how many dimensions are being computed.
 
-        #OLD REMOVE:
-        # Let np = # param groups ("processors"), so 1 <= np <= num_params, size of each param group = num_params/np
-        # Let natoms = # circuit groups == # atoms, so 1 <= natoms <= max_split_num; size of each group = size of
-        #              corresponding atom
-        # With nprocs processors, split into na comms of ~nprocs/na procs each.  These comms are each assigned some
-        #  number of circuit groups (atoms), where their ~nprocs/Na processors are partitioned into np param
-        #  groups. Note that 1 <= na <= min(nc,nprocs).
-        # Notes:
-        #  - when there are 2 parameter directions, a second "np2" value is used just like np.
-        #  - making np or nc > nprocs can be useful for saving memory.  Raising np saves *Jacobian* and *Hessian*
-        #     function memory without layout overhead, and I think will typically be preferred over raising nc.
-        #     Raising nc will additionally save *Probability/Product* function memory, but will incur layout overhead.
-        #  - any given CPU will be running a *single* (nc-index,np-index) pair at any given time, and so memory
-        #     estimates only depend on nc and np, and not on Ng, *except* when an array is *gathered* from the
-        #     end results from a divided computation.
-        #  - "circuits" distribute_method: never distribute num_params (np == 1, Ng == nprocs always).
-        #     Choose nc such that nc >= nprocs, mem_estimate(nc,np=1) < mem_limit, and nc % nprocs == 0 (nc % Ng == 0).
-        #  - "deriv" distribute_method: if possible, set nc=1, nprocs <= np <= num_params, Ng = 1 (np % nprocs == 0?)
-        #     If memory constraints don't allow this, set np = num_params, Ng ~= nprocs/num_params (but Ng >= 1),
-        #     and nc set by mem_estimate and nc % Ng == 0 (so comms are kept busy)
-        #
-        # find nc, np, Ng such that:
-        # - mem_estimate(nc,np,Ng) < mem_limit
-        # - full cpu usage:
-        #   - np*nc >= nprocs (all procs used)
-        #   - nc % Ng == 0 (each proc has the same number of atoms, so they're kept busy)
-        # -nice, but not essential:
-        #   - num_params % np == 0 (each param group has same size)
-        #   - np % (nprocs/Ng) == 0 would be nice (all procs have same num of param groups to process)
-
         resource_alloc = _ResourceAllocation.cast(resource_alloc)
         comm = resource_alloc.comm
         mem_limit = resource_alloc.mem_limit - resource_alloc.allocated_memory \
@@ -1531,8 +1501,6 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             #  to the the element indices when `spamtuple` is used.
             # (Note: *don't* set dest_indices arg = layout.element_slice, as this is already done by caller)
             rho, E = self._rho_e_from_spam_tuple(spam_tuple)
-            #REMOVE: from mpi4py import MPI
-            #REMOVE: print("DBB: ", spam_tuple, element_indices, tree_indices, array_to_fill.shape, MPI.COMM_WORLD.rank)
             _fas(array_to_fill, [element_indices],
                  self._probs_from_rho_e(rho, E, Gs[tree_indices], scaleVals[tree_indices]))
         _np.seterr(**old_err)
@@ -1569,11 +1537,6 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         dProdCache2 = dProdCache1 if (param_slice1 == param_slice2) else \
             self._compute_dproduct_cache(layout_atom.tree, prodCache, scaleCache,
                                          resource_alloc, param_slice2)  # computed on rank=0 only
-        #REMOVE
-        #if resource_alloc.comm is not None:
-        #    dProdCache1 = resource_alloc.comm.bcast(dProdCache1, root=0)  # all procs need these caches for use
-        #    dProdCache2 = resource_alloc.comm.bcast(dProdCache2, root=0)  # in _compute_hproduct_cache below.
-
         hProdCache = self._compute_hproduct_cache(layout_atom.tree, prodCache, dProdCache1,
                                                   dProdCache2, scaleCache, resource_alloc,
                                                   param_slice1, param_slice2)  # computed on rank=0 only
@@ -1763,14 +1726,6 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             counts = _np.empty(layout.num_elements, 'd')
             totals = _np.empty(layout.num_elements, 'd')
             dataset_at_t = ds_cache['ds_for_time'][timestamp]  # trunc_dataset.time_slice(timestamp, timestamp+TIMETOL)
-
-            #DEBUG CHECK REMOVE
-            #tStart = _time.time()
-            #dataset_at_t_check = trunc_dataset.time_slice(timestamp, timestamp+TIMETOL)
-            #print("DB: Took time slice at t=%g in %.1fs" % (timestamp, _time.time() - tStart))
-            #for c in dataset_at_t:
-            #    if(dataset_at_t[c].counts != dataset_at_t_check[c].counts):
-            #        import bpdb; bpdb.set_trace()
 
             firsts = []; indicesOfCircuitsWithOmittedData = []
             for (i, circuit) in enumerate(layout.circuits):  # should be 'ds_circuits' really

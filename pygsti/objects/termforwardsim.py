@@ -341,7 +341,6 @@ class TermForwardSimulator(_DistributableForwardSimulator):
 
         layout = _TermCOPALayout(circuits, self.model, dataset, natoms, na, npp, param_dimensions,
                                  param_blk_sizes, resource_alloc, printer)
-        #REMOVE layout.set_distribution_params(nprocs, (num_params, num_params), gather_mem_limit)  # *before* _prepare_layout!
         #MEM debug_prof.print_memory("CreateLayout2 - nAtoms = %d" % len(layout.atoms), True)
         self._prepare_layout(layout, resource_alloc, polynomial_vindices_per_int)
         #MEM debug_prof.print_memory("CreateLayout3 - nEls = %d, nprocs=%d" % (layout.num_elements, nprocs), True)

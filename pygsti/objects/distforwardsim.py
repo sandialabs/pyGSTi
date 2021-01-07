@@ -56,7 +56,6 @@ class DistributableForwardSimulator(_ForwardSimulator):
     def _bulk_fill_probs(self, array_to_fill, layout, resource_alloc):
         """Note: we expect that array_to_fill points to the memory specifically for this processor
            (a subset of the memory for the host when memory is shared) """
-        #REMOVE myAtomIndices, atomOwners, sub_resource_alloc = resource_alloc.layout_distribution(layout)
         atom_resource_alloc = resource_alloc.layout_allocs['atom-processing']
         atom_resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory before we reinit
 
@@ -67,16 +66,9 @@ class DistributableForwardSimulator(_ForwardSimulator):
         # (may need to wait for the host leader to write to this proc's array_to_fill, as _block
         #  functions just ensure the lead proc eventually writes to the memory))
 
-        #REMOVE - don't gather until we need to now
-        ##collect/gather results
-        #all_atom_element_slices = [atom.element_slice for atom in layout.atoms]
-        #_mpit.gather_slices(all_atom_element_slices, atomOwners, array_to_fill, [], 0,
-        #                    resource_alloc, layout.gather_mem_limit)
-
     def _bulk_fill_dprobs(self, array_to_fill, layout, pr_array_to_fill, resource_alloc):
         """Note: we expect that array_to_fill points to the memory specifically for this processor
            (a subset of the memory for the host when memory is shared) """
-        #REMOVE myAtomIndices, atomOwners, sub_resource_alloc = resource_alloc.layout_distribution(layout)
         blkSize = layout.param_dimension_blk_sizes[0]
         atom_resource_alloc = resource_alloc.layout_allocs['atom-processing']
         param_resource_alloc = resource_alloc.layout_allocs['param-processing']
@@ -91,10 +83,6 @@ class DistributableForwardSimulator(_ForwardSimulator):
             if pr_array_to_fill is not None:
                 self._bulk_fill_probs_block(pr_array_to_fill[atom.element_slice], atom, atom_resource_alloc)
 
-            #REMOVE
-            #Set wrt_block_size to use available processors if it isn't specified
-            #blkSize = self._set_param_block_size(wrt_filter, wrt_block_size, sub_resource_alloc.comm)
-
             if blkSize is None:  # wrt_filter gives entire computed parameter block
                 #Compute all requested derivative columns at once
                 self._bulk_fill_dprobs_block(array_to_fill[atom.element_slice, :], host_param_slice, atom,
@@ -105,46 +93,19 @@ class DistributableForwardSimulator(_ForwardSimulator):
                 nBlks = int(_np.ceil(Np / blkSize))  # num blocks required to achieve desired average size == blkSize
                 blocks = _mpit.slice_up_range(Np, nBlks)  # blocks contain indices into final_array[host_param_slice]
 
-                #REMOVE
-                ##distribute derivative computation across blocks
-                #myBlkIndices, blkOwners, blk_resource_alloc = \
-                #    _mpit.distribute_indices(list(range(nBlks)), sub_resource_alloc)
-                #if blk_resource_alloc.comm is not None:
-                #    _warnings.warn("Note: more CPUs(%d)" % sub_resource_alloc.comm.Get_size()
-                #                   + " than local derivative columns(%d)!" % Np
-                #                   + " [blkSize = %.1f, nBlks=%d]" % (blkSize, nBlks))  # pragma: no cover
-
                 for block in blocks:
                     host_param_slice_part = block # _slct.shift(block, host_param_slice.start)  # into host's memory
                     global_param_slice_part = _slct.shift(block, global_wrtSlice.start)  # actual parameter indices
                     self._bulk_fill_dprobs_block(array_to_fill[atom.element_slice, :], host_param_slice_part, atom,
                                                  global_param_slice_part, param_resource_alloc)
 
-                ##gather results
-                #_mpit.gather_slices(blocks, blkOwners, array_to_fill, [atom.element_slice],
-                #                    1, sub_resource_alloc, layout.gather_mem_limit)
-                #note: gathering axis 1 of mx_to_fill[:,fslc], dim=(ks,M)
-
         atom_resource_alloc.host_comm_barrier()  # don't exit until all procs' array_to_fill is ready
-
-        #REMOVE
-        ##collect/gather results
-        #all_atom_element_slices = [atom.element_slice for atom in layout.atoms]
-        #_mpit.gather_slices(all_atom_element_slices, atomOwners, array_to_fill, [], 0,
-        #                    resource_alloc, layout.gather_mem_limit)
-        #REMOVE print("Rank%d of %d: Gathered dprobs slices = %g" % (resource_alloc.comm.rank, resource_alloc.comm.size, _np.linalg.norm(array_to_fill)))
-
-        #if pr_array_to_fill is not None:
-        #    _mpit.gather_slices(all_atom_element_slices, atomOwners, pr_array_to_fill, [], 0,
-        #                        resource_alloc, layout.gather_mem_limit)
-        #    #note: pass pr_mx_to_fill, dim=(KS,), so gather pr_mx_to_fill[felInds] (axis=0)
 
     def _bulk_fill_hprobs(self, array_to_fill, layout,
                           pr_array_to_fill, deriv1_array_to_fill, deriv2_array_to_fill,
                           resource_alloc):
         """Note: we expect that array_to_fill points to the memory specifically for this processor
            (a subset of the memory for the host when memory is shared) """
-        #REMOVE myAtomIndices, atomOwners, sub_resource_alloc = layout.distribute(resource_alloc)
         blkSize1 = layout.param_dimension_blk_sizes[0]
         blkSize2 = layout.param_dimension_blk_sizes[1]
 
@@ -162,15 +123,6 @@ class DistributableForwardSimulator(_ForwardSimulator):
         global_param2_slice = layout.global_param2_slice
 
         for atom in layout.atoms:
-            #REMOVE
-            ##Set wrt_block_size to use available processors if it isn't specified
-            #blkSize1 = self._set_param_block_size(wrt_filter1, layout.additional_dimension_blk_sizes[0],
-            #                                      sub_resource_alloc.comm)
-            #blkSize2 = self._set_param_block_size(wrt_filter2, layout.additional_dimension_blk_sizes[1],
-            #                                      sub_resource_alloc.comm)
-            #if wrt_filter1 is not None or wrt_filter2 is not None:
-            #    blkSize1 = blkSize2 = None  # if *either* filter is given, we don't use block sizes
-
             self._bulk_fill_hprobs_singleatom(array_to_fill, atom, pr_array_to_fill,
                                               deriv1_array_to_fill, deriv2_array_to_fill,
                                               host_param_slice, host_param2_slice,
@@ -179,22 +131,6 @@ class DistributableForwardSimulator(_ForwardSimulator):
                                               param_resource_alloc, param2_resource_alloc)
 
         atom_resource_alloc.host_comm_barrier()  # don't exit until all procs' array_to_fill is ready
-
-        #REMOVE
-        ##collect/gather results
-        #all_atom_element_slices = [atom.element_slice for atom in layout.atoms]
-        #_mpit.gather_slices(all_atom_element_slices, atomOwners, array_to_fill, [], 0,
-        #                    resource_alloc, layout.gather_mem_limit)
-        #
-        #if deriv1_array_to_fill is not None:
-        #    _mpit.gather_slices(all_atom_element_slices, atomOwners, deriv1_array_to_fill, [], 0,
-        #                        resource_alloc, layout.gather_mem_limit)
-        #if deriv2_array_to_fill is not None:
-        #    _mpit.gather_slices(all_atom_element_slices, atomOwners, deriv2_array_to_fill, [], 0,
-        #                        resource_alloc, layout.gather_mem_limit)
-        #if pr_array_to_fill is not None:
-        #    _mpit.gather_slices(all_atom_element_slices, atomOwners, pr_array_to_fill, [], 0,
-        #                        resource_alloc, layout.gather_mem_limit)
 
     def _bulk_fill_hprobs_singleatom(self, array_to_fill, atom, pr_array_to_fill,
                                      deriv1_array_to_fill, deriv2_array_to_fill,
@@ -232,18 +168,6 @@ class DistributableForwardSimulator(_ForwardSimulator):
             blocks1 = _mpit.slice_up_range(Np1, nBlks1)
             blocks2 = _mpit.slice_up_range(Np2, nBlks2)
 
-            #REMOVE
-            ##distribute derivative computation across blocks
-            #myBlk1Indices, blk1Owners, blk1_resource_alloc = \
-            #    _mpit.distribute_indices(list(range(nBlks1)), resource_alloc)
-            #
-            #myBlk2Indices, blk2Owners, blk2_resource_alloc = \
-            #    _mpit.distribute_indices(list(range(nBlks2)), blk1_resource_alloc)
-            #if blk2_resource_alloc.comm is not None:
-            #    _warnings.warn("Note: more CPUs(%d)" % resource_alloc.comm.Get_size()
-            #                   + " than hessian elements(%d)!" % (Np**2)
-            #                   + " [blkSize = {%.1f,%.1f}, nBlks={%d,%d}]" % (blkSize1, blkSize2, nBlks1, nBlks2))  # pragma: no cover # noqa
-
             #in this case, where we've just divided the entire range(Np) into blocks, the two deriv mxs
             # will always be the same whenever they're desired (they'll both cover the entire range of params)
             derivArToFill = deriv1_array_to_fill if (deriv1_array_to_fill is not None) else deriv2_array_to_fill
@@ -264,11 +188,6 @@ class DistributableForwardSimulator(_ForwardSimulator):
                                                  dest_slice1_part, dest_slice2_part, atom,
                                                  wrt_slice1_part, wrt_slice2_part, param2_resource_alloc)
 
-                #REMOVE
-                ##gather column results: gather axis 2 of mx_to_fill[felInds,blocks1[iBlk1]], dim=(ks,blk1,M)
-                #_mpit.gather_slices(blocks2, blk2Owners, array_to_fill, [atom.element_slice, blocks1[iBlk1]],
-                #                    2, blk1_resource_alloc, gather_mem_limit)
-            
             #Fill deriv2_array_to_fill if we need to.
             if deriv2_array_to_fill is not None:
                 if deriv1_array_to_fill is not None and wrt_slice1 == wrt_slice2:
@@ -280,23 +199,6 @@ class DistributableForwardSimulator(_ForwardSimulator):
                         wrt_slice2_part = _slct.shift(block2, wrt_slice2.start)  # actual parameter indices
                         self._bulk_fill_dprobs_block(deriv2_array_to_fill[atom.element_slice, :], dest_slice2_part,
                                                      atom, wrt_slice2_part, param_resource_alloc)
-
-            #REMOVE
-            ##gather row results; gather axis 1 of mx_to_fill[felInds], dim=(ks,M,M)
-            #_mpit.gather_slices(blocks1, blk1Owners, array_to_fill, [atom.element_slice],
-            #                    1, resource_alloc, gather_mem_limit)
-            #if derivArToFill is not None:
-            #    _mpit.gather_slices(blocks1, blk1Owners, derivArToFill, [atom.element_slice],
-            #                        1, resource_alloc, gather_mem_limit)
-
-            ##in this case, where we've just divided the entire range(Np) into blocks, the two deriv mxs
-            ## will always be the same whenever they're desired (they'll both cover the entire range of params)
-            #shared_mem_leader = bool(resource_alloc.host_comm is None or resource_alloc.host_comm.rank == 0)
-            #if shared_mem_leader:  # all resource_alloc procs computed this atom - only need leaders to do this:
-            #    if deriv1_array_to_fill is not None:
-            #        deriv1_array_to_fill[atom.element_slice, :] = derivArToFill[atom.element_slice, :]
-            #    if deriv2_array_to_fill is not None:
-            #        deriv2_array_to_fill[atom.element_slice, :] = derivArToFill[atom.element_slice, :]
 
     def _bulk_hprobs_by_block_singleatom(self, atom, wrt_slices_list, return_dprobs_12, resource_alloc):
 
@@ -396,22 +298,12 @@ class DistributableForwardSimulator(_ForwardSimulator):
         resource_alloc = _ResourceAllocation.cast(resource_alloc)
         assert(resource_alloc.host_comm is None), "Shared memory is not supported in time-dependent calculations (yet)"
 
-        #REMOVE myAtomIndices, atomOwners, mySubComm = layout.distribute(resource_alloc.comm)  # remove .comm w/shared mem
-        #sub_resource_alloc = _ResourceAllocation(comm=mySubComm)  # FUTURE: pass this to *_fn instead of mySubComm?
-
         blkSize = layout.additional_dimension_blk_sizes[0]
         atom_resource_alloc = resource_alloc.layout_allocs['atom-processing']
         param_resource_alloc = resource_alloc.layout_allocs['param-processing']
 
         host_param_slice = layout.host_param_slice
         global_param_slice = layout.global_param_slice
-
-        #REMOVE
-        #if wrt_filter is not None:
-        #    assert(wrt_block_size is None)  # Cannot specify both wrt_filter and wrt_block_size
-        #    wrtSlice = _slct.list_to_slice(wrt_filter)  # for now, require the filter specify a slice
-        #else:
-        #    wrtSlice = None
 
         for atom in layout.atoms:
             elInds = atom.element_slice
@@ -425,10 +317,6 @@ class DistributableForwardSimulator(_ForwardSimulator):
             if array_to_fill is not None:
                 fill_fn(array_to_fill, elInds, num_outcomes, atom, dataset_rows, atom_resource_alloc)
 
-            #REMOVE
-            #Set wrt_block_size to use available processors if it isn't specified
-            #blkSize = self._set_param_block_size(wrt_filter, wrt_block_size, mySubComm)
-
             if blkSize is None:  # wrt_filter gives entire computed parameter block
                 #Fill derivative cache info
                 deriv_fill_fn(deriv_array_to_fill, elInds, host_param_slice, num_outcomes, atom,
@@ -441,46 +329,12 @@ class DistributableForwardSimulator(_ForwardSimulator):
                 # num blocks required to achieve desired average size == blkSize
                 blocks = _mpit.slice_up_range(Np, nBlks)
 
-                #REMOVE
-                ##distribute derivative computation across blocks
-                #myBlkIndices, blkOwners, blkComm = \
-                #    _mpit.distribute_indices(list(range(nBlks)), mySubComm)
-                #if blkComm is not None:
-                #    _warnings.warn("Note: more CPUs(%d)" % mySubComm.Get_size()
-                #                   + " than derivative columns(%d)!" % Np
-                #                   + " [blkSize = %.1f, nBlks=%d]" % (blkSize, nBlks))  # pragma: no cover
-
                 for block in blocks:
                     host_param_slice_part = _slct.shift(block, host_param_slice.start)  # into host's memory
                     global_param_slice_part = _slct.shift(block, global_wrtSlice.start)  # actual parameter indices
                     deriv_fill_fn(deriv_array_to_fill, elInds, host_param_slice_part, num_outcomes, atom,
                                   dataset_rows, global_param_slice_part, param_resource_alloc)
                     #profiler.mem_check("bulk_fill_dprobs: post fill blk")
-
-                #REMOVE
-                ##gather results
-                #_mpit.gather_slices(blocks, blkOwners, deriv_array_to_fill, [elInds],
-                #                    1, mySubComm, layout.gather_mem_limit)
-                ##note: gathering axis 1 of deriv_mx_to_fill[:,fslc], dim=(ks,M)
-                ##profiler.mem_check("bulk_fill_dprobs: post gather blocks")
-
-        #REMOVE
-        ##collect/gather results
-        #all_atom_element_slices = [atom.element_slice for atom in layout.atoms]
-        #_mpit.gather_slices(all_atom_element_slices, atomOwners, deriv_array_to_fill, [], 0,
-        #                    resource_alloc.comm, layout.gather_mem_limit)
-        ##note: pass deriv_mx_to_fill, dim=(KS,M), so gather deriv_mx_to_fill[felInds] (axis=0)
-        #
-        #if array_to_fill is not None:
-        #    _mpit.gather_slices(all_atom_element_slices, atomOwners, array_to_fill, [], 0,
-        #                        resource_alloc.comm, layout.gather_mem_limit)
-        #    #note: pass mx_to_fill, dim=(KS,), so gather mx_to_fill[felInds] (axis=0)
-
-        #profiler.mem_check("bulk_fill_timedep_dchi2: post gather subtrees")
-        #
-        #profiler.add_time("bulk_fill_timedep_dchi2: total", tStart)
-        #profiler.add_count("bulk_fill_timedep_dchi2 count")
-        #profiler.mem_check("bulk_fill_timedep_dchi2: end")
 
     def _run_on_atoms(self, layout, fn, resource_alloc):
         """Runs `fn` on all the atoms of `layout`, returning a list of the local (current processor) return values."""

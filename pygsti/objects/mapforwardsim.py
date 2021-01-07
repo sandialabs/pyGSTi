@@ -213,15 +213,8 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         dest_param_indices1 = _slct.to_array(dest_param_indices1)
         #dest_param_indices2 = _slct.to_array(dest_param_indices2)  # OK if a slice
 
-        #REMOVE - don't do any distribution in _block fns
-        #all_slices, my_slice, owners, sub_resource_alloc = \
-        #    _mpit.distribute_slice(slice(0, len(param_indices1)), resource_alloc)
-        #my_param_indices = param_indices1[my_slice]
-        #st = my_slice.start
-
         #Get a map from global parameter indices to the desired
         # final index within mx_to_fill (fpoffset = final parameter offset)
-        #REMOVE iParamToFinal = {i: dest_param_indices1[st + ii] for ii, i in enumerate(my_param_indices)}
         iParamToFinal = {i: dest_index for i, dest_index in zip(param_indices1, dest_param_indices1)}
 
         nEls = layout_atom.num_elements
@@ -243,9 +236,6 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         self.model.from_vector(orig_vec)
         _smt.cleanup_shared_ndarray(shm)
         _smt.cleanup_shared_ndarray(shm2)
-
-        #Now each processor has filled the relavant parts of mx_to_fill, so gather together:
-        #REMOVE _mpit.gather_slices(all_slices, owners, array_to_fill, [], axes=1, comm=resource_alloc)
 
     ## ---------------------------------------------------------------------------------------------
     ## TIME DEPENDENT functionality ----------------------------------------------------------------

@@ -336,7 +336,7 @@ class ForwardSimulator(object):
         if isinstance(circuits, _CircuitOutcomeProbabilityArrayLayout):
             copa_layout = circuits
         else:
-            copa_layout = self.create_layout(circuits, resource_alloc=resource_alloc)  # verbosity=1 DEBUG!!! REMOVE
+            copa_layout = self.create_layout(circuits, resource_alloc=resource_alloc)
         global_layout = copa_layout.global_layout if isinstance(copa_layout, _DistributableCOPALayout) else copa_layout
 
         resource_alloc = _ResourceAllocation.cast(resource_alloc)
@@ -349,16 +349,10 @@ class ForwardSimulator(object):
                 self.bulk_fill_probs(vp, copa_layout, resource_alloc)
             vp = copa_layout.gather_local_array('e', vp, resource_alloc)  # gather data onto rank-0 processor
             _smt.cleanup_shared_ndarray(vp_shm)
-            
-            #REMOVE
-            #resource_alloc.comm.barrier()
-            #if resource_alloc.comm.rank == 0:
-            #    print("DB: gathered data = ",vp)
 
         if resource_alloc.comm is None or resource_alloc.comm.rank == 0:
             ret = _collections.OrderedDict()
             for elInds, c, outcomes in global_layout.iter_unique_circuits():
-                #REMOVE print("Layout: ",c.str, outcomes, elInds)
                 if isinstance(elInds, slice): elInds = _slct.indices(elInds)
                 ret[c] = _ld.OutcomeLabelDict([(outLbl, vp[ei]) for ei, outLbl in zip(elInds, outcomes)])
             return ret
