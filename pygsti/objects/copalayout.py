@@ -176,7 +176,7 @@ class CircuitOutcomeProbabilityArrayLayout(object):
         if track_memory: resource_alloc.add_tracked_memory(ret.size)
         return ret, None  # (local_array, shared_mem_handle)
 
-    def gather_local_array(self, array_portion, resource_alloc=None):
+    def gather_local_array(self, array_portion, resource_alloc=None, extra_elements=0):
         """
         Gathers an array onto the root processor.
 
@@ -206,6 +206,14 @@ class CircuitOutcomeProbabilityArrayLayout(object):
             `None` on all other processors.
         """
         return array_portion  # no gathering is performed by this layout class
+
+    def fill_jtf(self, j, f, jtf, resource_alloc):
+        """ TODO: docstring """
+        jtf[:] = _np.dot(j.T, f)
+
+    def fill_jtj(self, j, jtj, resource_alloc):
+        """ TODO: docstring """
+        jtj[:] = _np.dot(j.T, j)
 
     def memory_estimate(self, array_type, dtype='d'):
         """
