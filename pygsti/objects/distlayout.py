@@ -290,12 +290,18 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
                 list(range(num_params)), num_param_processors, myParamCommIndex)
             _assert_sequential(myParamIndices)
 
-            paramCommIndex_by_atomproc_rank = atom_processing_subcomm.allgather(myParamCommIndex) \
+            owned_paramCommIndex = myParamCommIndex if (param_processing_subcomm is None 
+                                                        or param_processing_subcomm.rank == 0) else -1
+            owned_paramCommIndex_by_atomproc_rank = atom_processing_subcomm.allgather(owned_paramCommIndex) \
                                               if (atom_processing_subcomm is not None) else [myParamCommIndex]
-            self.param_slices = _mpit.slice_up_slice(slice(0,num_params), num_param_processors)  # matches param comm indices
+            self.param_slices = _mpit.slice_up_slice(slice(0,num_params),
+                                                     num_param_processors)  # matches param comm indices
             self.param_slice_owners = {ipc: atomproc_rank for atomproc_rank, ipc
-                                       in enumerate(paramCommIndex_by_atomproc_rank)}
-            self.my_paramproc_index = myParamCommIndex
+                                       in enumerate(owned_paramCommIndex_by_atomproc_rank) if ipc >= 0}
+            self.my_owned_paramproc_index = owned_paramCommIndex
+            # Note: if muliple procs within atomproc com have the same myParamCommIndex (possible when
+            #  param_processing_subcomm.size > 1) then the "owner" of a param slice is the
+            #  param_processing_subcomm.rank == 0 processor.
 
             interatom_param_subcomm = comm.Split(color=myParamCommIndex, key=rank) if (comm is not None) else None
 
@@ -982,14 +988,14 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         interatom_ralloc = resource_alloc.layout_allocs['param-interatom']  # procs with same param slice & diff atoms
         atom_jtj = _np.empty((_slct.length(self.host_param_slice), self.global_num_params), 'd')  # for my atomproc
 
-        # REMOVE  atom_jtj, atom_jtj_shm = self.allocate_local_array('jtj', 'd', atom_alloc, zero_out=False)
-        # REMOVE print("Rank %d: %d of %s (%s)" % (resource_alloc.comm.rank, self.my_paramproc_index, str(self.param_slices), str(atom_ralloc.comm)))
         for i, param_slice in enumerate(self.param_slices):
-            if i == self.my_paramproc_index:
+            if i == self.my_owned_paramproc_index:
                 assert(param_slice == self.global_param_slice)
                 if atom_ralloc.comm is not None:
-                    assert(self.param_slice_owners[i] == atom_ralloc.comm.rank)  # This may not be true with lots of proc?  need to fix? - maybe unitalloc below does, and we just don't need this assert?
+                    assert(self.param_slice_owners[i] == atom_ralloc.comm.rank)
                     atom_ralloc.comm.bcast(j, root=atom_ralloc.comm.rank)
+                    #Note: we only really need to broadcast this to other param_ralloc.comm.rank == 0
+                    # procs as these are the only atom_jtj's that contribute in the allreduce_sum below.
                 else:
                     assert(self.param_slice_owners[i] == 0) 
                 atom_jtj[:, param_slice] = _np.dot(jT, j)
