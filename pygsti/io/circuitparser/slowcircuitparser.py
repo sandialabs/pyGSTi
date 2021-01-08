@@ -126,7 +126,7 @@ def _get_next_simple_lbl(s, start, end, integerize_sslbls, segment):
         last = i
         while i < end:
             c = s[i]
-            if 'a' <= c <= 'z' or '0' <= c <= '9' or c == '_' or c == 'Q' or c == '.' or c == '/':
+            if 'a' <= c <= 'z' or '0' <= c <= '9' or c == '_' or c == 'Q' or c == '.' or c == '/' or c == '-':
                 i += 1
             else:
                 break

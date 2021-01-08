@@ -281,7 +281,7 @@ class ImplicitOpModel(_mdl.OpModel):
 
         return s
 
-    def _default_privitive_povm_layer_lbl(self, sslbls):
+    def _default_primitive_povm_layer_lbl(self, sslbls):
         """
         Gets the default POVM label.
 
@@ -298,12 +298,12 @@ class ImplicitOpModel(_mdl.OpModel):
         Label or None
         """
         if len(self.primitive_povm_labels) == 1:
-            povmName = next(iter(self._primitive_povm_labels)).name
+            povm_name = next(iter(self.primitive_povm_labels)).name
             if len(self.state_space_labels.labels) == 1 and (self.state_space_labels.labels[0] == sslbls
                                                              or sslbls == ('*',)):
-                return _Label(povmName)  # because sslbls == all of model's sslbls
+                return _Label(povm_name)  # because sslbls == all of model's sslbls
             else:
-                return _Label(povmName, sslbls)
+                return _Label(povm_name, sslbls)
         else:
             return None
 

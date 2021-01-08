@@ -107,7 +107,8 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
     Experiment design for periodic mirror-circuit benchmarking.
 
     **THIS METHOD IS IN DEVELOPEMENT. DO NOT EXPECT THAT THIS FUNCTION WILL BEHAVE THE SAME IN FUTURE RELEASES
-    OF PYGSTI!**
+    OF PYGSTI! THE DOCSTRINGS SHOULD ALSO NOT BE TRUSTED -- MANY (MAYBE ALL) OF THEM ARE COPIED FROM THE
+    MIRRORBDESIGN OBJECT AND SO SOME BITS ARE WRONG OR NOT APPLICABLE.**
 
     Parameters
     ----------
@@ -266,7 +267,7 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
         for j in range(circuits_per_depth):
             circtemp, outtemp, junk = _rc.create_random_germpower_mirror_circuits(
                 pspec, depths, qubit_labels=qubit_labels, localclifford=localclifford,
-                paulirandomize=paulirandomize, interactingQs_density=samplerargs[0],
+                paulirandomize=paulirandomize, interacting_qs_density=samplerargs[0],
                 fixed_versus_depth=fixed_versus_depth)
             for ind in range(len(depths)):
                 circuit_lists[ind].append(circtemp[ind])

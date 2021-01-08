@@ -2,6 +2,7 @@ import numpy as np
 
 from ..util import BaseCase
 
+from pygsti.objects.circuit import Circuit
 from pygsti.objects.localnoisemodel import LocalNoiseModel
 
 
@@ -76,3 +77,27 @@ class LocalNoiseModelInstanceTester(BaseCase):
         self.assertAlmostEqual(sum(mdl_local.probabilities(test_circuit).values()), 1.0)
         self.assertAlmostEqual(mdl_local.probabilities(test_circuit)['00'], 0.414025)
         self.assertEqual(mdl_local.num_params, 144)
+
+    def test_marginalized_povm(self):
+        nQubits = 4
+        mdl_local = LocalNoiseModel.from_parameterization(
+            nQubits, ('Gx', 'Gy', 'Gcnot'), geometry="line",
+            qubit_labels=['qb{}'.format(i) for i in range(nQubits)],
+            parameterization='H+S', independent_gates=True,
+            ensure_composed_gates=False, global_idle=None)
+
+        c = Circuit( [('Gx','qb0'),('Gx','qb1'),('Gx','qb2'),('Gx','qb3')], num_lines=4)
+        prob = mdl_local.probabilities(c)
+        self.assertEqual(len(prob), 16) # Full 4 qubit space
+
+        c2 = Circuit( [('Gx','qb0'),('Gx','qb1')], num_lines=2)
+        prob2 = mdl_local.probabilities(c2)
+        self.assertEqual(len(prob2), 4) # Full 4 qubit space
+
+        c3 = Circuit( [('Gx','qb0'),('Gx','qb1')])
+        c3.insert_idling_lines_inplace(None, ['qb2', 'qb3'])
+        prob3 = mdl_local.probabilities(c3)
+        self.assertEqual(len(prob3), 16) # Full 16 qubit space
+
+
+
