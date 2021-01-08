@@ -130,7 +130,7 @@ class MapCOPALayout(_DistributableCOPALayout):
         ds_circuits = _lt.apply_aliases_to_circuits(unique_circuits, aliases)
         unique_complete_circuits = [model.complete_circuit(c) for c in unique_circuits]
 
-        max_sub_table_size=None # was an argument but never used; remove in future
+        max_sub_table_size = None  # was an argument but never used; remove in future
         if (num_sub_tables is not None and num_sub_tables > 1) or max_sub_table_size is not None:
             circuit_table = _PrefixTable(unique_complete_circuits, max_cache_size)
             groups = circuit_table.find_splitting(max_sub_table_size, num_sub_tables, verbosity)
@@ -154,6 +154,6 @@ class MapCOPALayout(_DistributableCOPALayout):
                                       model, dataset, max_cache_size)
 
         super().__init__(circuits, unique_circuits, to_unique, unique_complete_circuits,
-                         _create_atom, groups, num_table_processors, 
+                         _create_atom, groups, num_table_processors,
                          num_param_dimension_processors, param_dimensions,
                          param_dimension_blk_sizes, resource_alloc, verbosity)

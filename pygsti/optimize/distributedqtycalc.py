@@ -13,6 +13,7 @@ Implements the DistributedQuantityCalc object and supporting functionality.
 import numpy as _np
 from ..tools import sharedmemtools as _smt
 
+
 class UndistributedQuantityCalc(object):
     """
     A helper class for the custom LM method that encapsulates all the calculations involving
@@ -262,7 +263,7 @@ class DistributedQuantityCalc(object):
         result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (1,), 'd')
         self.resource_alloc.allreduce_sum(result, local_dot,
                                           unit_ralloc=self.resource_alloc.layout_allocs['param-fine'])
-        ret = result[0] # "copies" the single returned element
+        ret = result[0]  # "copies" the single returned element
         self.resource_alloc.host_comm_barrier()  # make sure we don't cleanup too quickly
         _smt.cleanup_shared_ndarray(result_shm)
         return ret
@@ -276,7 +277,7 @@ class DistributedQuantityCalc(object):
         result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (1,), 'd')
         self.resource_alloc.allreduce_max(result, local_infnorm,
                                           unit_ralloc=self.resource_alloc.layout_allocs['param-fine'])
-        ret = result[0] # "copies" the single returned element
+        ret = result[0]  # "copies" the single returned element
         self.resource_alloc.host_comm_barrier()  # make sure we don't cleanup too quickly
         _smt.cleanup_shared_ndarray(result_shm)
         return ret
@@ -287,7 +288,7 @@ class DistributedQuantityCalc(object):
         result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (1,), 'd')
         self.resource_alloc.allreduce_max(result, local_max,
                                           unit_ralloc=self.resource_alloc.layout_allocs['param-fine'])
-        ret = result[0] # "copies" the single returned element
+        ret = result[0]  # "copies" the single returned element
         self.resource_alloc.host_comm_barrier()  # make sure we don't cleanup too quickly
         _smt.cleanup_shared_ndarray(result_shm)
         return ret
@@ -297,7 +298,7 @@ class DistributedQuantityCalc(object):
         result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (1,), 'd')
         self.resource_alloc.allreduce_sum(result, local_dot,
                                           unit_ralloc=self.resource_alloc.layout_allocs['atom-processing'])
-        ret = result[0] # "copies" the single returned element
+        ret = result[0]  # "copies" the single returned element
         self.resource_alloc.host_comm_barrier()  # make sure we don't cleanup too quickly
         _smt.cleanup_shared_ndarray(result_shm)
         return ret
@@ -305,11 +306,9 @@ class DistributedQuantityCalc(object):
     def norm2_jac(self, j):
         local_norm2 = _np.linalg.norm(j)**2
         result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (1,), 'd')
-        #REMOVE pcomm = self.resource_alloc.layout_allocs['param-processing'].comm
-        #REMOVE print("JACNORM: Rank %d (%d): %g" % (self.resource_alloc.comm.rank, pcomm.rank if pcomm else -1, local_norm2))
         self.resource_alloc.allreduce_sum(result, local_norm2,
                                           unit_ralloc=self.resource_alloc.layout_allocs['param-processing'])
-        ret = result[0] # "copies" the single returned element
+        ret = result[0]  # "copies" the single returned element
         self.resource_alloc.host_comm_barrier()  # make sure we don't cleanup too quickly
         _smt.cleanup_shared_ndarray(result_shm)
         return ret
@@ -319,7 +318,7 @@ class DistributedQuantityCalc(object):
         result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (1,), 'd')
         self.resource_alloc.allreduce_sum(result, local_norm2,
                                           unit_ralloc=self.resource_alloc.layout_allocs['param-fine'])
-        ret = result[0] # "copies" the single returned element
+        ret = result[0]  # "copies" the single returned element
         self.resource_alloc.host_comm_barrier()  # make sure we don't cleanup too quickly
         _smt.cleanup_shared_ndarray(result_shm)
         return ret

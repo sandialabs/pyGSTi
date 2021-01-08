@@ -27,6 +27,7 @@ from .matrixlayout import MatrixTimeDepCOPALayout as _MatrixTimeDepCOPALayout
 from .forwardsim import ForwardSimulator as _ForwardSimulator
 from .forwardsim import _bytes_for_array_types
 from .distforwardsim import DistributableForwardSimulator as _DistributableForwardSimulator
+from .distlayout import DistributableCOPALayout as _DistributableCOPALayout
 from .resourceallocation import ResourceAllocation as _ResourceAllocation
 from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from .evaltree import EvalTree as _EvalTree
@@ -831,7 +832,8 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         if method_name == '_compute_hproduct_cache': return ('zddbb',)  # cache x dim x dim x dist_np1 x dist_np2
         return super()._array_types_for_method(method_name)
 
-    def __init__(self, model=None, distribute_by_timestamp=False, num_atoms=None, processor_grid=None, param_blk_sizes=None):
+    def __init__(self, model=None, distribute_by_timestamp=False, num_atoms=None, processor_grid=None,
+                 param_blk_sizes=None):
         """  TODO: docstring - at least need num_atoms, processor_grid, & param_blk_sizes docs"""
         super().__init__(model, num_atoms, processor_grid, param_blk_sizes)
         self._mode = "distribute_by_timestamp" if distribute_by_timestamp else "time_independent"
@@ -1188,7 +1190,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
         natoms, na, npp, param_dimensions, param_blk_sizes = self._compute_processor_distribution(
             array_types, nprocs, num_params, len(circuits), default_natoms=1)
-        
+
         printer.log("MatrixLayout: %d processors divided into %s (= %d) grid along circuit and parameter directions." %
                     (nprocs, ' x '.join(map(str, (na,) + npp)), _np.product((na,) + npp)))
         printer.log("   %d atoms, parameter block size limits %s" % (natoms, str(param_blk_sizes)))
@@ -1209,7 +1211,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             loc_nparams2 = num_params / npp[1] if len(npp) > 1 else 0
             blk1 = param_blk_sizes[0] if len(param_blk_sizes) > 0 else 0
             blk2 = param_blk_sizes[1] if len(param_blk_sizes) > 1 else 0
-            global_layout = layout.global_layout if isinstance(copa_layout, _DistributableCOPALayout) else layout
+            global_layout = layout.global_layout if isinstance(layout, _DistributableCOPALayout) else layout
             if comm is not None:
                 from mpi4py import MPI
                 max_local_els = comm.allreduce(layout.num_elements, op=MPI.MAX)    # layout.max_atom_elements
@@ -1222,12 +1224,12 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                 max_local_circuits = layout.num_circuits
                 max_atom_cachesize = layout.max_atom_cachesize
             mem_estimate = _bytes_for_array_types(array_types, global_layout.num_elements, max_local_els, max_atom_els,
-                                                  global_layout.num_circuits, max_local_num_circuits,
+                                                  global_layout.num_circuits, max_local_circuits,
                                                   layout._param_dimensions, (loc_nparams1, loc_nparams2),
                                                   (blk1, blk2), max_atom_cachesize, self.model.dim)
 
             #def approx_mem_estimate(natoms, np1, np2):
-            #    approx_cachesize = (num_circuits / natoms) * 1.3  # inflate expected # of circuits per atom => cache_size
+            #    approx_cachesize = (num_circuits / natoms) * 1.3  # inflate expected # circuits per atom => cache_size
             #    return _bytes_for_array_types(array_types, num_elements, num_elements / natoms,
             #                                  num_circuits, num_circuits / natoms,
             #                                  (num_params, num_params), (num_params / np1, num_params / np2),
@@ -1235,7 +1237,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
             if mem_estimate > mem_limit:
                 raise MemoryError("Not enough memory for desired layout!")
-                    
+
         return layout
 
     def _scale_exp(self, scale_exps):

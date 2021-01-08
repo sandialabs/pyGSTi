@@ -72,7 +72,7 @@ class DistributableForwardSimulator(_ForwardSimulator):
         blkSize = layout.param_dimension_blk_sizes[0]
         atom_resource_alloc = resource_alloc.layout_allocs['atom-processing']
         param_resource_alloc = resource_alloc.layout_allocs['param-processing']
-        
+
         atom_resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory before we reinit
         # Note: use *largest* host comm that we fill - so 'atom' comm, not 'param' comm
 
@@ -94,8 +94,8 @@ class DistributableForwardSimulator(_ForwardSimulator):
                 blocks = _mpit.slice_up_range(Np, nBlks)  # blocks contain indices into final_array[host_param_slice]
 
                 for block in blocks:
-                    host_param_slice_part = block # _slct.shift(block, host_param_slice.start)  # into host's memory
-                    global_param_slice_part = _slct.shift(block, global_wrtSlice.start)  # actual parameter indices
+                    host_param_slice_part = block  # _slct.shift(block, host_param_slice.start)  # into host's memory
+                    global_param_slice_part = _slct.shift(block, global_param_slice.start)  # actual parameter indices
                     self._bulk_fill_dprobs_block(array_to_fill[atom.element_slice, :], host_param_slice_part, atom,
                                                  global_param_slice_part, param_resource_alloc)
 
@@ -117,8 +117,8 @@ class DistributableForwardSimulator(_ForwardSimulator):
         atom_resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory before we reinit
         # Note: use *largest* host comm that we fill - so 'atom' comm, not 'param' comm
 
-        host_param_slice = None # layout.host_param_slice  # array_to_fill is already just this slice of the host mem
-        host_param2_slice = None # layout.host_param2_slice  # array_to_fill is already just this slice of the host mem
+        host_param_slice = None  # layout.host_param_slice  # array_to_fill is already just this slice of the host mem
+        host_param2_slice = None  # layout.host_param2_slice  # array_to_fill is already just this slice of the host mem
         global_param_slice = layout.global_param_slice
         global_param2_slice = layout.global_param2_slice
 
@@ -168,10 +168,6 @@ class DistributableForwardSimulator(_ForwardSimulator):
             blocks1 = _mpit.slice_up_range(Np1, nBlks1)
             blocks2 = _mpit.slice_up_range(Np2, nBlks2)
 
-            #in this case, where we've just divided the entire range(Np) into blocks, the two deriv mxs
-            # will always be the same whenever they're desired (they'll both cover the entire range of params)
-            derivArToFill = deriv1_array_to_fill if (deriv1_array_to_fill is not None) else deriv2_array_to_fill
-
             for block1 in blocks1:
                 dest_slice1_part = _slct.shift(block1, dest_slice1.start)  # into host's memory
                 wrt_slice1_part = _slct.shift(block1, wrt_slice1.start)  # actual parameter indices
@@ -218,9 +214,9 @@ class DistributableForwardSimulator(_ForwardSimulator):
                 resource_alloc, (nElements, _slct.length(wrtSlice1), _slct.length(wrtSlice2)),
                 'd', zero_out=True)
 
-            self._bulk_fill_hprobs_singleatom(hprobs, atom, None, dprobs1, dprobs2, 
-                                              None, None, # slice(0, hprobs.shape[1]), slice(0, hprobs.shape[2]),
-                                              wrtSlice1, wrtSlice2, None, None, resource_alloc, 
+            self._bulk_fill_hprobs_singleatom(hprobs, atom, None, dprobs1, dprobs2,
+                                              None, None,  # slice(0, hprobs.shape[1]), slice(0, hprobs.shape[2]),
+                                              wrtSlice1, wrtSlice2, None, None, resource_alloc,
                                               resource_alloc, resource_alloc)
             #Note: we give all three resource_alloc's as our local `resource_alloc` above because all the arrays
             # have been allocated based on just this subset of processors, unlike a call to bulk_fill_hprobs(...)
@@ -331,7 +327,7 @@ class DistributableForwardSimulator(_ForwardSimulator):
 
                 for block in blocks:
                     host_param_slice_part = _slct.shift(block, host_param_slice.start)  # into host's memory
-                    global_param_slice_part = _slct.shift(block, global_wrtSlice.start)  # actual parameter indices
+                    global_param_slice_part = _slct.shift(block, global_param_slice.start)  # actual parameter indices
                     deriv_fill_fn(deriv_array_to_fill, elInds, host_param_slice_part, num_outcomes, atom,
                                   dataset_rows, global_param_slice_part, param_resource_alloc)
                     #profiler.mem_check("bulk_fill_dprobs: post fill blk")
@@ -365,7 +361,7 @@ class DistributableForwardSimulator(_ForwardSimulator):
 
         param_dimensions = (num_params,) * (int(bNp1Matters) + int(bNp2Matters))
         param_blk_sizes = (None,) * len(param_dimensions) if (self._pblk_sizes is None) \
-                          else self._pblk_sizes[0:len(param_dimensions)]  # automatically set these?
+            else self._pblk_sizes[0:len(param_dimensions)]  # automatically set these?
 
         if self._processor_grid is not None:
             assert(_np.product(self._processor_grid) <= nprocs), "`processor_grid` must multiply to # of procs!"
@@ -382,17 +378,16 @@ class DistributableForwardSimulator(_ForwardSimulator):
             natoms = min(natoms, num_circuits)  # don't have more atoms than circuits
 
             pblk = nprocs
-            if bNp2Matters: 
+            if bNp2Matters:
                 na = _np.gcd(pblk, natoms); pblk //= na
                 np1 = _np.gcd(pblk, num_params); pblk //= np1
-                np2 = _mpit.closest_divisor(pblk, num_params); pblk //= np2  # last dim: don't demand we divide params evenly
+                np2 = _mpit.closest_divisor(pblk, num_params); pblk //= np2  # last dim: don't demand we divide evenly
                 npp = (np1, np2)
             elif bNp1Matters:
                 na = _np.gcd(pblk, natoms); pblk //= na
-                np1 = _mpit.closest_divisor(pblk, num_params); pblk //= np1  # last dim: don't demand we divide params evenly
+                np1 = _mpit.closest_divisor(pblk, num_params); pblk //= np1  # last dim: don't demand we divide evenly
                 npp = (np1,)
             else:
                 na = _mpit.closest_divisor(pblk, natoms); pblk //= na  # last dim: don't demand we divide atoms evenly
                 npp = ()
         return natoms, na, npp, param_dimensions, param_blk_sizes
-

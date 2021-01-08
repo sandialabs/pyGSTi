@@ -75,7 +75,7 @@ class ResourceAllocation(object):
         self.comm = comm
         self.mem_limit = mem_limit
         self.host_comm = None  # comm of the processors local to each processor's host (distinct hostname)
-        self.host_ranks = None # tuple of the self.comm ranks that belong to self.host_comm
+        self.host_ranks = None  # tuple of the self.comm ranks that belong to self.host_comm
         self.interhost_comm = None  # comm used to spread results to other hosts; 1 proc on each host (node)
         self.interhost_ranks = None  # tuple of the self.comm ranks that belong to self.interhost_comm
         self.host_index = 0  # index of the host this proc belongs to (~= hostname)
@@ -303,7 +303,7 @@ class ResourceAllocation(object):
             for slc, data in zip(slices, gathered_data):
                 if slc is None: continue  # signals a non-unit-leader proc that shouldn't do anything
                 result[slc] = data
-                
+
         self.comm.barrier()  # make sure result is completely filled before returniing
         return
 
@@ -317,23 +317,23 @@ class ResourceAllocation(object):
         """
         from mpi4py import MPI
         participating_local = local if (unit_ralloc is None or unit_ralloc.comm is None or unit_ralloc.comm.rank == 0) \
-                              else _np.zeros(local.shape, local.dtype)
+            else _np.zeros(local.shape, local.dtype)
         if self.host_comm is not None:
             #Barrier-sum on host within shared mem
             if self.host_comm.rank == 0: result.fill(0)  # zero out
-            self.host_comm.barrier()  #make sure all zero-outs above complete
+            self.host_comm.barrier()  # make sure all zero-outs above complete
             for i in range(self.host_comm.size):
                 if i == self.host_comm.rank:
                     result += participating_local  # adds *in place* (relies on numpy implementation)
-                self.host_comm.barrier()  #synchonize adding to shared mem
+                self.host_comm.barrier()  # synchonize adding to shared mem
             if self.host_comm.rank == 0:
                 summed_across_hosts = self.interhost_comm.allreduce(result, op=MPI.SUM)
-                result[(slice(None,None),) * result.ndim] = summed_across_hosts
-            self.host_comm.barrier()  #wait for allreduce and assignment to complete on non-hostroot procs
+                result[(slice(None, None),) * result.ndim] = summed_across_hosts
+            self.host_comm.barrier()  # wait for allreduce and assignment to complete on non-hostroot procs
         elif self.comm is not None:
-            result[(slice(None,None),) * result.ndim] = self.comm.allreduce(participating_local, op=MPI.SUM)
+            result[(slice(None, None),) * result.ndim] = self.comm.allreduce(participating_local, op=MPI.SUM)
         else:
-            result[(slice(None,None),) * result.ndim] = participating_local
+            result[(slice(None, None),) * result.ndim] = participating_local
 
     def allreduce_max(self, result, local, unit_ralloc=None):
         """
@@ -349,20 +349,20 @@ class ResourceAllocation(object):
         if self.host_comm is not None:
             #Barrier-max on host within shared mem
             if self.host_comm.rank == 0: result.fill(-1e100)  # sentinel
-            self.host_comm.barrier()  #make sure all zero-outs above complete
+            self.host_comm.barrier()  # make sure all zero-outs above complete
             for i in range(self.host_comm.size):
                 if i == self.host_comm.rank and participating:
                     _np.maximum(result, local, out=result)
-                self.host_comm.barrier()  #synchonize adding to shared mem
+                self.host_comm.barrier()  # synchonize adding to shared mem
             if self.host_comm.rank == 0:
                 maxed_across_hosts = self.interhost_comm.allreduce(result, op=MPI.MAX)
-                result[(slice(None,None),) * result.ndim] = maxed_across_hosts
-            self.host_comm.barrier()  #wait for allreduce and assignment to complete on non-hostroot procs
+                result[(slice(None, None),) * result.ndim] = maxed_across_hosts
+            self.host_comm.barrier()  # wait for allreduce and assignment to complete on non-hostroot procs
         elif self.comm is not None:
             participating_local = local if participating else -1e100
-            result[(slice(None,None),) * result.ndim] = self.comm.allreduce(participating_local, op=MPI.MAX)
+            result[(slice(None, None),) * result.ndim] = self.comm.allreduce(participating_local, op=MPI.MAX)
         else:
-            result[(slice(None,None),) * result.ndim] = local
+            result[(slice(None, None),) * result.ndim] = local
 
     def bcast(self, value, root=0):
         """
@@ -378,17 +378,16 @@ class ResourceAllocation(object):
             if self.comm.rank == root:
                 ar[(slice(None, None),) * value.ndim] = value  # put our value into the shared memory.
 
-            self.host_comm.barrier()  #wait until shared mem is written to on all root-host procs
+            self.host_comm.barrier()  # wait until shared mem is written to on all root-host procs
             interhost_root = self.host_index_for_rank[root]  # (b/c host_index == interhost.rank)
             ret = self.interhost_comm.bcast(ar, root=interhost_root)
-            self.comm.barrier()  #wait until everyone's values are ready
+            self.comm.barrier()  # wait until everyone's values are ready
             _smt.cleanup_shared_ndarray(ar_shm)
             return ret
         elif self.comm is not None:
             return self.comm.bcast(value, root=root)
         else:
             return value
-        
 
     def __getstate__(self):
         # Can't pickle comm objects

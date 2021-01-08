@@ -141,7 +141,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
             loc_nparams2 = num_params / npp[1] if len(npp) > 1 else 0
             blk1 = param_blk_sizes[0] if len(param_blk_sizes) > 0 else 0
             blk2 = param_blk_sizes[1] if len(param_blk_sizes) > 1 else 0
-            global_layout = layout.global_layout if isinstance(copa_layout, _DistributableCOPALayout) else layout
+            global_layout = layout.global_layout if isinstance(layout, _DistributableCOPALayout) else layout
             if comm is not None:
                 from mpi4py import MPI
                 max_local_els = comm.allreduce(layout.num_elements, op=MPI.MAX)    # layout.max_atom_elements
@@ -154,7 +154,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
                 max_local_circuits = layout.num_circuits
                 max_atom_cachesize = layout.max_atom_cachesize
             mem_estimate = _bytes_for_array_types(array_types, global_layout.num_elements, max_local_els, max_atom_els,
-                                                  global_layout.num_circuits, max_local_num_circuits,
+                                                  global_layout.num_circuits, max_local_circuits,
                                                   layout._param_dimensions, (loc_nparams1, loc_nparams2),
                                                   (blk1, blk2), max_atom_cachesize, self.model.dim)
 
@@ -185,7 +185,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
     def _bulk_fill_hprobs_block(self, array_to_fill, dest_param_slice1, dest_param_slice2, layout_atom,
                                 param_slice1, param_slice2, resource_alloc):
         # Note: *don't* set dest_indices arg = layout.element_slice, as this is already done by caller
-        resource_alloc.check_can_allocate_memory(layout_atom.cache_size * self.model.dim 
+        resource_alloc.check_can_allocate_memory(layout_atom.cache_size * self.model.dim
                                                  * _slct.length(param_slice1) * _slct.length(param_slice2))
         self._dm_mapfill_hprobs_block(array_to_fill, slice(0, array_to_fill.shape[0]), dest_param_slice1,
                                       dest_param_slice2, layout_atom, param_slice1, param_slice2, resource_alloc)

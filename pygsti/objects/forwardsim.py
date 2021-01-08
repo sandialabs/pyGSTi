@@ -357,7 +357,7 @@ class ForwardSimulator(object):
                 ret[c] = _ld.OutcomeLabelDict([(outLbl, vp[ei]) for ei, outLbl in zip(elInds, outcomes)])
             return ret
         else:
-            return None # on non-root ranks
+            return None  # on non-root ranks
 
     def bulk_dprobs(self, circuits, resource_alloc=None, smartc=None):
         """
@@ -405,7 +405,7 @@ class ForwardSimulator(object):
                 ret[c] = _ld.OutcomeLabelDict([(outLbl, vdp[ei]) for ei, outLbl in zip(elInds, outcomes)])
             return ret
         else:
-            return None # on non-root ranks
+            return None  # on non-root ranks
 
     def bulk_hprobs(self, circuits, resource_alloc=None, smartc=None):
         """
@@ -439,7 +439,7 @@ class ForwardSimulator(object):
         global_layout = copa_layout.global_layout if isinstance(copa_layout, _DistributableCOPALayout) else copa_layout
 
         resource_alloc = _ResourceAllocation.cast(resource_alloc)
-        with resource_alloc.temporarily_track_memory(global_layout.num_elements * self.model.num_params**2):  # 'EPP'(vhp)
+        with resource_alloc.temporarily_track_memory(global_layout.num_elements * self.model.num_params**2):  # 'EPP'
             #Note: don't use smartc for now.
             vhp, vhp_shm = copa_layout.allocate_local_array('epp', 'd', resource_alloc, track_memory=False)
             self.bulk_fill_hprobs(vhp, copa_layout, None, None, None, resource_alloc)
@@ -453,8 +453,7 @@ class ForwardSimulator(object):
                 ret[c] = _ld.OutcomeLabelDict([(outLbl, vhp[ei]) for ei, outLbl in zip(elInds, outcomes)])
             return ret
         else:
-            return None # on non-root ranks
-
+            return None  # on non-root ranks
 
     def bulk_fill_probs(self, array_to_fill, layout, resource_alloc=None):
         """
@@ -638,10 +637,10 @@ class ForwardSimulator(object):
         if deriv1_array_to_fill is not None:
             self._bulk_fill_dprobs_block(deriv1_array_to_fill, None, layout, None, resource_alloc)
         if deriv2_array_to_fill is not None:
-            if wrtSlice1 == wrtSlice2:
-                deriv2_array_to_fill[:, :] = deriv1_array_to_fill[:, :]
-            else:
-                self._bulk_fill_dprobs_block(deriv2_array_to_fill, None, layout, None, resource_alloc)
+            #if wrtSlice1 == wrtSlice2:
+            deriv2_array_to_fill[:, :] = deriv1_array_to_fill[:, :]
+            #else:
+            #    self._bulk_fill_dprobs_block(deriv2_array_to_fill, None, layout, None, resource_alloc)
 
         return self._bulk_fill_hprobs_block(array_to_fill, None, None, layout, None, None, resource_alloc)
 
@@ -770,7 +769,7 @@ class ForwardSimulator(object):
                     self._bulk_fill_dprobs_block(dprobs2, None, layout, wrtSlice2, resource_alloc)
             else:
                 dprobs1 = dprobs2 = None
-            
+
             hprobs = _np.zeros((nElements, _slct.length(wrtSlice1), _slct.length(wrtSlice2)), 'd')
             self._bulk_fill_hprobs_block(hprobs, None, None, layout, wrtSlice1, wrtSlice2, resource_alloc)
 
@@ -849,7 +848,7 @@ def _bytes_for_array_type(array_type, global_elements, max_local_elements, max_a
 
     size = 1; cur_deriv_dim = 0
     for letter in array_type:
-        if letter == 'E': size *= total_elements
+        if letter == 'E': size *= global_elements
         if letter == 'e': size *= max_local_elements
         if letter == 'a': size *= max_atom_size
         if letter == 'C': size *= total_circuits

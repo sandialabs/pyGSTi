@@ -18,6 +18,7 @@ import scipy.special as _spspecial
 from ..construction import circuitconstruction as _gsc
 from ..tools import remove_duplicates as _remove_duplicates
 from ..tools import slicetools as _slct
+from ..tools import sharedmemtools as _smt
 
 from .. import objects as _objs
 
@@ -166,7 +167,7 @@ def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials,
             target_model.sim.bulk_fill_dprobs(local_dP, layout, None, resource_alloc)  # num_els x num_params
             dP = local_dP.copy()  # local == global (no layout.gather required) b/c we used comm=None above
             _smt.cleanup_shared_ndarray(local_dP.shared_memory_handle)  # not needed - local_dP isn't shared (comm=None)
-            
+
             dPall.append(dP)
 
             #Add this germ's element indices for each fiducial pair (final circuit of evTree)
@@ -575,8 +576,6 @@ def test_fiducial_pairs(fid_pairs, target_model, prep_fiducials, meas_fiducials,
         pre_povm_tuples = [(firstRho, firstPOVM)]
     pre_povm_tuples = [(_objs.Circuit((prepLbl,)), _objs.Circuit((povmLbl,)))
                        for prepLbl, povmLbl in pre_povm_tuples]
-
-    nModelParams = target_model.num_params
 
     def get_derivs(length):
         """ Compute all derivative info: get derivative of each <E_i|germ^exp|rho_j>

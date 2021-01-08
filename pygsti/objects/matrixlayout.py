@@ -113,7 +113,7 @@ class _MatrixCOPALayoutAtom(_DistributableAtom):
             local_offset += len(tree_indices)
             #TODO: allow tree_indices to be None or a slice?
 
-        element_slice = None #slice(offset, offset + local_offset)  # *global* (of parent layout) element-index slice
+        element_slice = None  # slice(offset, offset + local_offset)  # *global* (of parent layout) element-index slice
         num_elements = local_offset
 
         elindex_outcome_tuples = _collections.OrderedDict([
@@ -229,7 +229,7 @@ class MatrixCOPALayout(_DistributableCOPALayout):
         unique_nospam_circuits = list(circuits_by_unique_nospam_circuits.keys())
 
         # Split circuits into groups that will make good subtrees (all procs do this)
-        max_sub_tree_size=None  # removed from being an argument (unused)
+        max_sub_tree_size = None  # removed from being an argument (unused)
         if (num_sub_trees is not None and num_sub_trees > 1) or max_sub_tree_size is not None:
             circuit_tree = _EvalTree.create(unique_nospam_circuits)
             groups, helpful_scratch = circuit_tree.find_splitting(len(unique_nospam_circuits),
@@ -242,8 +242,8 @@ class MatrixCOPALayout(_DistributableCOPALayout):
 
         # Divide `groups` into num_tree_processors roughly equal sets (each containing
         # potentially multiple groups)
-        #my_group_indices, group_owners, grp_subcomm = self._distribute(num_tree_processors, len(groups), resource_alloc,
-        #                                                               verbosity)
+        #my_group_indices, group_owners, grp_subcomm = self._distribute(num_tree_processors, len(groups),
+        #                                                                resource_alloc, verbosity)
         #my_group_indices = set(my_group_indices)
 
         #my_atoms = []
@@ -266,7 +266,7 @@ class MatrixCOPALayout(_DistributableCOPALayout):
                                          group, helpful_scratch_group, model, dataset)
 
         super().__init__(circuits, unique_circuits, to_unique, unique_complete_circuits,
-                         _create_atom, list(zip(groups, helpful_scratch)), num_tree_processors, 
+                         _create_atom, list(zip(groups, helpful_scratch)), num_tree_processors,
                          num_param_dimension_processors, param_dimensions,
                          param_dimension_blk_sizes, resource_alloc, verbosity)
 
@@ -313,7 +313,7 @@ class MatrixTimeDepCOPALayout(_DistributableCOPALayout):
         set to (at least) the number of processors.
     """
 
-    def __init__(self, circuits, model, dataset, num_tree_processors=1, 
+    def __init__(self, circuits, model, dataset, num_tree_processors=1,
                  num_param_dimension_processors=(), param_dimensions=(),
                  param_dimension_blk_sizes=(), resource_alloc=None, verbosity=0):
         #TODO: check that args from num_tree_processors forward actually work - maybe these
@@ -350,11 +350,12 @@ class MatrixTimeDepCOPALayout(_DistributableCOPALayout):
         #print("Master atom with tree size = ",len(master_atom.tree))
 
         timestamps = dataset.timestamps if dataset is not None else [0.0]
+
         def _create_atom(t):
             return _MatrixTimeDepCOPALayoutAtom(master_atom, t)
         #OLD REMOVE: atoms = [_MatrixTimeDepCOPALayoutAtom(master_atom, t) for t in timestamps]
 
         super().__init__(circuits, unique_circuits, to_unique, unique_complete_circuits,
-                         _create_atom, timestamps, num_tree_processors, 
+                         _create_atom, timestamps, num_tree_processors,
                          num_param_dimension_processors, param_dimensions,
                          param_dimension_blk_sizes, resource_alloc, verbosity)

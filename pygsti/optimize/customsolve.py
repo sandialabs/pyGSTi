@@ -15,12 +15,13 @@ import scipy as _scipy
 from ..tools import sharedmemtools as _smt
 from .distributedqtycalc import UndistributedQuantityCalc as _UndistributedQuantityCalc
 
+
 def custom_solve(a, b, x, dqc, resource_alloc):
     """
     Simple parallel Gaussian Elimination with pivoting.
 
     TODO: docstring
-    
+
     Expects `a` to be in "JTJ" format, where each proc holds rows according to
     the "fine" parameter partitioning and all the columns for each of those
     rows. The `b` and `x` arrays are expected to be in "JTf" format, where each proc
@@ -57,12 +58,12 @@ def custom_solve(a, b, x, dqc, resource_alloc):
     # for each column, find the best "pivot" row to use to eliminate other rows.
     # (note: column pivoting is not used)
     for icol in range(a.shape[1]):
-        
+
         # Step 1: find the index of the row that is the best pivot.
         # each proc looks for its best pivot (Note: it should not consider rows already pivoted on)
         abs_local_col = _np.abs(a[:, icol])
         abs_local_col[local_already_pivot_row_indices] = 0.0  # don't choose a row as the pivot twice
-        ibest_local = _np.argmax(abs_local_col) # a *local* row index
+        ibest_local = _np.argmax(abs_local_col)  # a *local* row index
         ibest_local_as_global = ibest_local + my_row_slice.start  # a *global* row index (but a local "best")
 
         if host_comm is not None:  # Shared memory case:
@@ -85,7 +86,7 @@ def custom_solve(a, b, x, dqc, resource_alloc):
                     resource_alloc.interhost_comm.bcast((ibest_global, h, k), root=0)
                 else:
                     ibest_global, h, k = resource_alloc.interhost_comm.bcast(None, root=0)
-                    
+
                 shared_ints[0] = ibest_global
                 shared_ints[1] = h
                 shared_ints[2] = k
@@ -119,11 +120,11 @@ def custom_solve(a, b, x, dqc, resource_alloc):
                     local_already_pivot_row_indices.append(ibest_local)
                 else:
                     local_pivot_rowb = None
-                shared_rowb[:] = resource_alloc.interhost_comm.bcast(local_pivot_rowb, root=h)  # pivot row -> shared mem
+                shared_rowb[:] = resource_alloc.interhost_comm.bcast(local_pivot_rowb, root=h)  # pivot row -> sh'd mem
             host_comm.barrier()  # wait (on each host) until shared_row is filled
             pivot_rowb = shared_rowb
         else:
-            if comm.rank == k:                     
+            if comm.rank == k:
                 pivot_rowb = comm.bcast(_np.append(a[ibest_local, :], b[ibest_local]), root=k)
                 local_already_pivot_row_indices.append(ibest_local)
             else:
@@ -140,7 +141,7 @@ def custom_solve(a, b, x, dqc, resource_alloc):
             continue
 
         pivot_row_indices.append(ibest_global)
-        
+
         # Step 3: all procs update their rows based on the pivot row (including `b`)
         #  - need to update non-pivot rows to eliminate iCol-th entry: row -= alpha * pivot_row
         #    where alpha = row[iCol] / pivot_row[iCol]
@@ -150,14 +151,13 @@ def custom_solve(a, b, x, dqc, resource_alloc):
         for i in range(a.shape[0]):
             if i == ipivot_local: continue  # don't update the pivot row!
             row = a[i, :]
-            orig_rowval = row[icol]
             alpha = row[icol] / pivot_row[icol]
-            debug=row[1]
             row[:] -= alpha * pivot_row
             b[i] = b[i] - alpha * pivot_b
-            #assert(abs(row[icol]) < 1e-6), " Pivot did not eliminate row %d: %g exrtra=%g, %g" % (i, row[icol], orig_rowval, alpha)
-            row[icol] = 0.0  # this sometimes isn't exactly true because of finite precision error, but we know it must be exactly 0
-        
+            #assert(abs(row[icol]) < 1e-6), " Pivot did not eliminate row %d: %g" % (i, row[icol])
+            row[icol] = 0.0  # this sometimes isn't exactly true because of finite precision error,
+            # but we know it must be exactly 0
+
     # Back substitution:
     # We've accumulated a list of (global) row indices of the rows containing a nonzero
     # element in a given column and zeros in prior columns.
@@ -166,7 +166,7 @@ def custom_solve(a, b, x, dqc, resource_alloc):
 
     # x_indices_host = XXX  # x values to send to other procs -- TODO: slice of SHARED host array
     # x_values_host
-    # x_indices = _np.empty(_slct.length(my_row_slice), int) 
+    # x_indices = _np.empty(_slct.length(my_row_slice), int)
     # x_valuess = _np.empty(_slct.length(my_row_slice), 'd')
 
     pivot_row_indices = _np.array(pivot_row_indices)
@@ -204,10 +204,10 @@ def custom_solve(a, b, x, dqc, resource_alloc):
                         assert(my_row_slice.start <= p < my_row_slice.stop)
                         x[p - my_row_slice.start] = 0
                     continue
-                    
+
                 row_host_index, row_rank = \
                     owner_host_and_rank_of_global_fine_param_index[irow]
-    
+
                 if my_rank == row_rank:  # then I'm the source (my_host_index == row_host_index is implied)
                     #Compute the x-value we need, since I own it
                     assert(my_row_slice.start <= irow < my_row_slice.stop)
@@ -234,7 +234,7 @@ def custom_solve(a, b, x, dqc, resource_alloc):
                     else:  # destination is on different host - need to use MPI
                         xval_buf[0] = xval
                         comm.Send(xval_buf, dest=col_rank, tag=1234)
-    
+
                 elif my_rank == col_rank:  # (my_host_index == col_host_index is implied)
                     assert(my_row_slice.start <= p < my_row_slice.stop)
                     if my_host_index != row_host_index:  # otherwise src did it for us (shared mem)
@@ -248,7 +248,6 @@ def custom_solve(a, b, x, dqc, resource_alloc):
     return
 
 
-
 #NOTE: this implementation is partly done, and was stopped after realizing
 # that the given reference had a row/col typo and really A should be split into
 # *rows* not columns, and this makes the algorithm not so useful for us.  Kept
@@ -257,9 +256,10 @@ def _tallskinny_custom_solve(a, b, resource_alloc):
     """
     Note
     ----
-    Based on "Parallel QR algorithm for data-driven decompositions" by Sayadi et al. 
+    Based on "Parallel QR algorithm for data-driven decompositions" by Sayadi et al.
     (Center for Turbulence Research 335 Proceedings of the Summer Program 2014)
     """
+    from mpy4py import MPI
     assert(a.shape[0] >= a.shape[1]), "This routine assumes tall-skinny matrices!"
     # Note: the assertion above is needed because we assume below that the R matrices
     # returned from scipy.qr have shape (N,N) where the input is shape (M,N), which is
@@ -270,7 +270,7 @@ def _tallskinny_custom_solve(a, b, resource_alloc):
     rank = comm.rank
     nColsPerProc = int(_np.ceil(a.shape[1] / comm.size))
     if rank < nColsPerProc * comm.size:
-        loc_col_slice = slice(rank * nColsPerproc, (rank + 1) * nColsPerProc)
+        loc_col_slice = slice(rank * nColsPerProc, (rank + 1) * nColsPerProc)
     else:
         loc_col_slice = None  # don't use this processor - we need a uniform distribution of rows
 
@@ -281,7 +281,7 @@ def _tallskinny_custom_solve(a, b, resource_alloc):
         Ri = _np.ascontiguousarray(Ri)
         assert(Ri.shape == (nColsPerProc, nColsPerProc))  # follows from M >= N assertion above
     else:
-        Q1i = Ri = _np.empty((0,0), 'd')
+        Q1i = Ri = _np.empty((0, 0), 'd')
 
     # Step 2: gather all Ri matrices onto root proc (or host),
     # perform a local QR decomp there, and scatter resulting Q2i matrices.
@@ -301,23 +301,24 @@ def _tallskinny_custom_solve(a, b, resource_alloc):
         comm.Gatherv(Ri, [None, None, None, MPI.DOUBLE], root=0)
         Q2i = _np.empty((Ri.shape[0], Ri.shape[0]), 'd')  # assume Q2.shape[1] == Ri.shape[0]
         comm.Scatterv([None, None, None, MPI.DOUBLE], Q2i, root=0)
-        
+
     # Step 3:  all processors performs a simple dot product to get
     # the pieces of the final Q matrix
     Qi = _np.dot(Q1i, Q2i)
-    
+
     # we could gather Qi => Q, but just need b' = Q.T * b, so compute:
-    bprime_i = _np.dot(Qi.T,b)
+    bprime_i = _np.dot(Qi.T, b)
 
     # Step 4: gather b'_i => b' on root proc (or host) then solve Rx = b'
     # (on root) via back-substitution.
     if comm.rank == 0:
-        nActiveProcs = a.shape[1] / nColsPerProc
+        #nActiveProcs = a.shape[1] / nColsPerProc
         sizes = Qi.shape[1]
-    comm.Gatherv(bprime_i, [bprime, sizes, displacements[0:-1], MPI.DOUBLE], root=0)
+    #TODO: finish with something like:
+    #comm.Gatherv(bprime_i, [bprime, sizes, displacements[0:-1], MPI.DOUBLE], root=0)
     bprime = comm.gather(bprime_i, root=0)
-    if comm.rank == 0:
-        x = back_substitute(R, bprime)
-    x = comm.bcast(x, root=0)
-    return x
-
+    bprime
+    #if comm.rank == 0:
+    #    x = back_substitute(R, bprime)
+    #x = comm.bcast(x, root=0)
+    #return x

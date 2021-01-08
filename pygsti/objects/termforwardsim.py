@@ -327,9 +327,6 @@ class TermForwardSimulator(_DistributableForwardSimulator):
             if mem_limit <= 0:
                 raise MemoryError("Attempted layout creation w/memory limit = %g <= 0!" % mem_limit)
             printer.log("Layout creation w/mem limit = %.2fGB" % (mem_limit * C))
-            gather_mem_limit = mem_limit * 0.01  # better?
-        else:
-            gather_mem_limit = None
 
         natoms, na, npp, param_dimensions, param_blk_sizes = self._compute_processor_distribution(
             array_types, nprocs, num_params, len(circuits), default_natoms=nprocs)

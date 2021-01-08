@@ -1695,7 +1695,7 @@ def DM_mapfill_dprobs_block(fwdsim, mx_to_fill, dest_indices, dest_param_indices
                             resource_alloc):
 
     eps = 1e-7  # hardcoded?
-    shared_mem_leader = resource_alloc.is_host_leader if (resource_alloc is not None) else True
+    #shared_mem_leader = resource_alloc.is_host_leader if (resource_alloc is not None) else True
 
     if param_indices is None:
         param_indices = list(range(fwdsim.model.num_params))

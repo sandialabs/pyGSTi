@@ -336,13 +336,12 @@ def slice_of_slice(slc, base_slc):
         start = None
     else:
         start = (base_slc.start if (base_slc.start is not None) else 0) \
-                + (slc.start if (slc.start is not None) else 0)
+            + (slc.start if (slc.start is not None) else 0)
 
     if base_slc.stop is None and slc.stop is None:
         stop = None
     else:
         stop = (base_slc.start if (base_slc.start is not None) else 0) \
-                + (slc.stop if (slc.stop is not None) else 0)
+            + (slc.stop if (slc.stop is not None) else 0)
         assert(base_slc.stop is None or stop <= base_slc.stop)
     return slice(start, stop)
-    

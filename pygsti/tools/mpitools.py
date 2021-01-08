@@ -77,7 +77,7 @@ def distribute_indices(indices, comm, allow_split_comm=True):
         rank = comm.Get_rank()
 
     loc_indices, owners, _ = distribute_indices_base(indices, nprocs, rank,
-                                                  allow_split_comm)
+                                                     allow_split_comm)
 
     #Split comm into sub-comms when there are more procs than
     # indices, resulting in all procs getting only a
@@ -186,7 +186,7 @@ def distribute_indices_base(indices, nprocs, rank, allow_split_comm=True):
 
     else:
         nloc_std = nIndices // nprocs
-        extra = nIndices - nloc_std * nprocs  # extra indices        
+        extra = nIndices - nloc_std * nprocs  # extra indices
         # so assign (nloc_std+1) indices to first extra procs
         if rank < extra:
             nloc = nloc_std + 1
@@ -515,7 +515,8 @@ def gather_slices(slices, slice_owners, ar_to_fill,
     #        #    print("Displacements = ", displacements)
     #        #    print("Gathered shape = ", gathered_shape)
     #        #    print("ar_to_fill shape = ", ar_to_fill.shape)
-    #        #print("Local result shape = ",local_result.shape, " result shape = ",result.shape, " tofill = ",ar_to_fill.shape)
+    #        #print("Local result shape = ",local_result.shape, " result shape = ",result.shape,
+    #        #      " tofill = ",ar_to_fill.shape)
     #        #import sys
     #        #sys.exit(0)
     #        return
@@ -853,16 +854,16 @@ def distribute_for_dot(a_shape, b_shape, comm):
     elif b_shape[1] > comm.size:  # then there are enough procs to just distribute B's cols
         loc_row_slice = slice(0, a_shape[0])
         _, loc_col_slice, _, _ = distribute_slice(
-            slice(0,b_shape[1]), comm, False)  # local B-column range as a slice
+            slice(0, b_shape[1]), comm, False)  # local B-column range as a slice
 
     else:  # below should work even when comm.size > a_shape[0] * b_shape[1]
         #distribute rows
         _, loc_row_slice, _, loc_row_comm = distribute_slice(
-            slice(0,a_shape[0]), comm, True)  # local A-row range as a slice
+            slice(0, a_shape[0]), comm, True)  # local A-row range as a slice
 
         #distribute columns among procs in sub-comm
         _, loc_col_slice, _, _ = distribute_slice(
-            slice(0,b_shape[1]), loc_row_comm, False)  # local B-column range as a slice
+            slice(0, b_shape[1]), loc_row_comm, False)  # local B-column range as a slice
 
     if ralloc is None:
         broadcast_comm = comm  # the comm used to communicate results within mpidot(...)
@@ -893,7 +894,7 @@ def mpidot(a, b, loc_row_slice, loc_col_slice, slice_tuples_by_rank, comm,
     loc_row_slice, loc_col_slice : slice
         Specify the row or column indices, respectively, of the
         resulting dot product that are computed by this processor (the
-        rows of `a` and columns of `b` that are used). Obtained from 
+        rows of `a` and columns of `b` that are used). Obtained from
         :func:`distribute_for_dot`.
 
     slice_tuples_by_rank : list
@@ -950,10 +951,12 @@ def mpidot(a, b, loc_row_slice, loc_col_slice, slice_tuples_by_rank, comm,
     loc_result = loc_result_flat.view(); loc_result.shape = rshape
     loc_result[:, :] = _np.dot(a[loc_row_slice, :], b[:, loc_col_slice])
     #if loc_result.size > 0:
-    #    assert(_np.linalg.norm( _np.dot(a,b)[loc_row_slice, loc_col_slice]-loc_result)/(_np.linalg.norm(loc_result) + 1.0)<1e-6),\
+    #    assert(_np.linalg.norm( _np.dot(a,b)[loc_row_slice, loc_col_slice]-loc_result) /
+    #           (_np.linalg.norm(loc_result) + 1.0)<1e-6),\
     #        "DIFFS with SAVE = %g, %g.  Other = %g, %g, %s, %s, %s" % (
     #            _np.linalg.norm(a - asave), _np.linalg.norm(b - bsave),
-    #            _np.linalg.norm( _np.dot(a,b)[loc_row_slice, loc_col_slice] - loc_result ), _np.linalg.norm(loc_result),
+    #            _np.linalg.norm( _np.dot(a,b)[loc_row_slice, loc_col_slice] - loc_result ),
+    #                             _np.linalg.norm(loc_result),
     #            str(loc_result.shape), str(a.shape), str(b.shape))
 
     # broadcast_com defines the group of processors this processor communicates with.
@@ -976,9 +979,9 @@ def mpidot(a, b, loc_row_slice, loc_col_slice, slice_tuples_by_rank, comm,
         #if buf.size > 0:
         #    assert(_np.linalg.norm( _np.dot(a,b)[cur_row_slice, cur_col_slice] - result[cur_row_slice, cur_col_slice] )
         #           / (_np.linalg.norm(result[cur_row_slice, cur_col_slice] + 1.0)) < 1e-6), \
-        #        "Rank %d: DIFF = %g, %g, %s, %s" % (comm.rank, 
-        #                                            _np.linalg.norm( _np.dot(a,b)[cur_row_slice, cur_col_slice] - result[cur_row_slice, cur_col_slice] ),
-        #                                            _np.linalg.norm(result[cur_row_slice, cur_col_slice]), str(cur_row_slice), str(cur_col_slice))
+        #        "Rank %d: DIFF = %g, %g, %s, %s" % (comm.rank,
+        #        _np.linalg.norm( _np.dot(a,b)[cur_row_slice, cur_col_slice] - result[cur_row_slice, cur_col_slice] ),
+        #        _np.linalg.norm(result[cur_row_slice, cur_col_slice]), str(cur_row_slice), str(cur_col_slice))
     comm.barrier()  # wait for all ranks to finish writing to result
 
     #assert(_np.linalg.norm(_np.dot(a,b) - result)/(_np.linalg.norm(result) + result.size) < 1e-6),\

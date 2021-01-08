@@ -121,7 +121,7 @@ class TermCOPALayout(_DistributableCOPALayout):
         set to (at least) the number of processors.
     """
 
-    def __init__(self, circuits, model, dataset=None, 
+    def __init__(self, circuits, model, dataset=None,
                  num_sub_tables=None, num_table_processors=1,
                  num_param_dimension_processors=(), param_dimensions=(), param_dimension_blk_sizes=(),
                  resource_alloc=None, verbosity=0):
@@ -132,7 +132,7 @@ class TermCOPALayout(_DistributableCOPALayout):
         unique_complete_circuits = [model.complete_circuit(c) for c in unique_circuits]
 
         #Create evenly divided groups of indices of unique_complete_circuits
-        max_sub_table_size=None # was an argument but never used; remove in future
+        max_sub_table_size = None  # was an argument but never used; remove in future
         assert(max_sub_table_size is None), "No support for size-limited subtables yet!"
         ngroups = num_sub_tables
         groups = [set(sub_array) for sub_array in _np.array_split(range(len(unique_complete_circuits)), ngroups)]
@@ -150,7 +150,7 @@ class TermCOPALayout(_DistributableCOPALayout):
             return _TermCOPALayoutAtom(unique_complete_circuits, ds_circuits, group, model, dataset)
 
         super().__init__(circuits, unique_circuits, to_unique, unique_complete_circuits,
-                         _create_atom, groups, num_table_processors, 
+                         _create_atom, groups, num_table_processors,
                          num_param_dimension_processors, param_dimensions,
                          param_dimension_blk_sizes, resource_alloc, verbosity)
 

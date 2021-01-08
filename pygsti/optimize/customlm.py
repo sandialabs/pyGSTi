@@ -240,7 +240,7 @@ class CustomLMOptimizer(Optimizer):
 
         from ..objects.distlayout import DistributableCOPALayout as _DL
         dqcalc = _dqc.DistributedQuantityCalc(objective.layout, objective.resource_alloc, nExtra) \
-                 if isinstance(objective.layout, _DL) else _dqc.UndistributedQuantityCalc(nEls, nP)
+            if isinstance(objective.layout, _DL) else _dqc.UndistributedQuantityCalc(nEls, nP)
 
         opt_x, converged, msg, mu, nu, norm_f, f, opt_jtj = custom_leastsq(
             objective_func, jacobian, x0,
@@ -434,7 +434,6 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
     """
     comm = resource_alloc.comm
     printer = _VerbosityPrinter.create_printer(verbosity, comm)
-    shared_mem_leader = resource_alloc.is_host_leader
     dqc = distributed_qty_calc  # shorthand
 
     # MEM from ..objects.profiler import Profiler
@@ -451,7 +450,6 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
     alpha = 0.5  # for acceleration
     nu = 2
     mu = 1  # just a guess - initialized on 1st iter and only used if rejected
-    my_mpidot_qtys = None
 
     #Allocate potentially shared memory used in loop
     JTJ = dqc.allocate_jtj()
@@ -460,8 +458,8 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
     #x_for_jac = dqc.allocate_x_for_jac()
     if num_fd_iters > 0:
         fdJac = dqc.allocate_jac()
-    
-    dqc.allscatter_x(global_x, x) 
+
+    dqc.allscatter_x(global_x, x)
 
     if damping_basis == "singular_values":
         Jac_V = dqc.allocate_jtj()
@@ -530,8 +528,8 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                                  "know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
                     oob_check_interval = 1
                     x[:] = best_x[:]
-                    mu, nu, norm_f, f[:], spow, _ = best_x_state  # can't make use of saved JTJ yet - recompute on nxt iter
-                    continue
+                    mu, nu, norm_f, f[:], spow, _ = best_x_state
+                    continue  # can't make use of saved JTJ yet - recompute on nxt iter
 
             #printer.log("--- Outer Iter %d: norm_f = %g, mu=%g" % (k,norm_f,mu))
 
@@ -585,8 +583,8 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
             ##if my_mpidot_qtys is None:
             ##    my_mpidot_qtys = _mpit.distribute_for_dot(Jac.T.shape, Jac.shape, resource_alloc)
             #JTJ, JTJ_shm = _mpit.mpidot(Jac.T, Jac, my_mpidot_qtys[0], my_mpidot_qtys[1],
-            #                            my_mpidot_qtys[2], resource_alloc, JTJ, JTJ_shm)  # _np.dot(Jac.T,Jac) 'PP'-type
-            
+            #                            my_mpidot_qtys[2], resource_alloc, JTJ, JTJ_shm)  # _np.dot(Jac.T,Jac) 'PP'
+
             dqc.fill_jtj(Jac, JTJ)
             dqc.fill_jtf(Jac, f, JTf)  # 'P'-type
 
@@ -602,7 +600,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
             undamped_JTJ_diag = JTJ[idiag].copy()  # 'P'-type
             #max_JTJ_diag = JTJ.diagonal().copy()
 
-            JTf *= -1.0; minus_JTf = JTf  # use the same memory for -JTf below (shouldn't use JTf anymore)            
+            JTf *= -1.0; minus_JTf = JTf  # use the same memory for -JTf below (shouldn't use JTf anymore)
             #Maybe just have a minus_JTf variable?
 
             # FUTURE TODO: keep tallying allocated memory, i.e. array_types (stopped here)
@@ -612,7 +610,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                 # Jac_U, Jac_s, Jac_Vh = _np.linalg.svd(Jac, full_matrices=False)
                 # Jac_V = _np.conjugate(Jac_Vh.T)
 
-                global_JTJ = dqc.gather_jtj(JTJ)                
+                global_JTJ = dqc.gather_jtj(JTJ)
                 if comm is None or comm.rank == 0:
                     global_Jac_s2, global_Jac_V = _np.linalg.eigh(global_JTJ)
                     dqc.scatter_jtj(global_Jac_V, Jac_V)
@@ -624,7 +622,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                 assert(min(global_Jac_s2) > -1e-6)
                 global_Jac_s = _np.sqrt(_np.clip(global_Jac_s2, 1e-12, None))  # eigvals of JTJ must be >= 0
                 global_Jac_VT_mJTf = dqc.global_svd_dot(Jac_V, minus_JTf)  # = dot(Jac_V.T, minus_JTf)
-                
+
                 #DEBUG
                 #num_large_svals = _np.count_nonzero(Jac_s > _np.max(Jac_s) / 1e2)
                 #Jac_Uproj = Jac_U[:,0:num_large_svals]
@@ -642,8 +640,8 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                                  "know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
                     oob_check_interval = 1
                     x[:] = best_x[:]
-                    mu, nu, norm_f, f[:], spow, _ = best_x_state  # can't make use of saved JTJ yet - recompute on nxt iter
-                    continue
+                    mu, nu, norm_f, f[:], spow, _ = best_x_state
+                    continue  # can't make use of saved JTJ yet - recompute on nxt iter
 
             if k == 0:
                 if init_munu == "auto":
@@ -658,7 +656,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                 else:
                     mu, nu = init_munu
                 rawJTJ_scratch = JTJ.copy()  # allocates the memory for a copy of JTJ so only update mem elsewhere
-                best_x_state = mu, nu, norm_f, f.copy(), spow, rawJTJ_scratch  # update mu,nu,JTJ of initial "best state"
+                best_x_state = mu, nu, norm_f, f.copy(), spow, rawJTJ_scratch  # update mu,nu,JTJ of initial best state
             else:
                 #on all other iterations, update JTJ of best_x_state if best_x == x, i.e. if we've just evaluated
                 # a previously accepted step that was deemed the best we've seen so far
@@ -736,14 +734,14 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                         #Note: above solves JTJ*x = -JTf => x = inv_JTJ * (-JTf)
                         # but: J = U*s*Vh => JTJ = (VhT*s*UT)(U*s*Vh) = VhT*s^2*Vh, and inv_Vh = V b/c V is unitary
                         # so inv_JTJ = inv_Vh * 1/s^2 * inv_VhT = V * 1/s^2 * VT  = (N,K)*(K,K)*(K,N) if use psuedoinv
-                        
+
                         if damping_mode == 'adaptive':
                             #dx_lst = [_np.dot(ijtj, minus_JTf) for ijtj in inv_JTJ_lst]  # special case
                             for ii, s in enumerate(reg_Jac_s_lst):
-                                dqc.fill_dx_svd(Jac_V,  (1 / s**2) * global_Jac_VT_mJTf, dx_lst[ii])
+                                dqc.fill_dx_svd(Jac_V, (1 / s**2) * global_Jac_VT_mJTf, dx_lst[ii])
                         else:
                             # dx = _np.dot(inv_JTJ, minus_JTf)
-                            dqc.fill_dx_svd(Jac_V,  (1 / reg_Jac_s**2) * global_Jac_VT_mJTf, dx)                            
+                            dqc.fill_dx_svd(Jac_V, (1 / reg_Jac_s**2) * global_Jac_VT_mJTf, dx)
                     else:
                         raise ValueError("Invalid damping_basis = '%s'" % damping_basis)
 
@@ -769,7 +767,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                         df2 += obj_fn(global_accel_x)
                         df2 /= df2_eps**2
                         f[:] = df2; df2 = f  # use `f` as an appropriate shared-mem object for fill_jtf below
-                        
+
                         dqc.fill_jtf(Jac, df2, JTdf2)
                         JTdf2 *= -0.5  # keep using JTdf2 memory in solve call below
                         #dx2 = _scipy.linalg.solve(JTJ, -0.5 * JTdf2, sym_pos=True)  # Note: JTJ not init w/'adaptive'
@@ -923,7 +921,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
 
                         if dF <= 0 and uphill_step_threshold > 0:
                             beta = 0 if last_accepted_dx is None else \
-                                   (dqc.dot_x(dx, last_accepted_dx)
+                                (dqc.dot_x(dx, last_accepted_dx)
                                     / _np.sqrt(dqc.norm2_x(dx) * dqc.norm2_x(last_accepted_dx)))
                             uphill_ok = (uphill_step_threshold - beta) * norm_new_f < min(min_norm_f, norm_f)
                         else:
@@ -964,7 +962,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                                     #print("DB: Trying |x| = ", _np.linalg.norm(new_x), " |x|^2=", _np.dot(new_x,new_x))
                                     # MEM if profiler:
                                     # MEM    profiler.memory_check("custom_leastsq: before oob_check obj_fn mode 1")
-                                    obj_fn(global_new_x, oob_check=True)  # don't actually need retrn val (same as new_f above)
+                                    obj_fn(global_new_x, oob_check=True)  # don't actually need return val (== new_f)
                                     new_f_is_allowed = True
                                     new_x_is_known_inbounds = True
                                 except ValueError:  # Use this to mean - "not allowed, but don't stop"
@@ -982,7 +980,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                                                 2)
                                             oob_check_interval = 1
                                             x[:] = best_x[:]
-                                            mu, nu, norm_f, f[:], spow, _ = best_x_state  # can't make use of saved JTJ yet
+                                            mu, nu, norm_f, f[:], spow, _ = best_x_state  # can't use of saved JTJ yet
                                             break  # restart next outer loop
                                     else:
                                         raise ValueError("Invalid `oob_action`: '%s'" % oob_action)

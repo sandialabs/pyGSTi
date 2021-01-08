@@ -131,7 +131,7 @@ class CircuitOutcomeProbabilityArrayLayout(object):
         self._param_dimensions = param_dimensions
 
         max_element_index = max(_it.chain(*[[ei for ei, _ in pairs] for pairs in elindex_outcome_tuples.values()])) \
-                            if len(elindex_outcome_tuples) > 0 else -1  # -1 makes _size = 0 below
+            if len(elindex_outcome_tuples) > 0 else -1  # -1 makes _size = 0 below
         indices = set(i for tuples in elindex_outcome_tuples.values() for i, o in tuples)
         self._size = max_element_index + 1
         assert(len(indices) == self._size), \
