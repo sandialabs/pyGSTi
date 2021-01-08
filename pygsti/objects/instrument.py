@@ -147,7 +147,7 @@ class Instrument(_gm.ModelMember, _collections.OrderedDict):
     def _build_paramvec(self):
         """ Resizes self._paramvec and updates gpindices & parent members as needed,
             and will initialize new elements of _paramvec, but does NOT change
-            existing elements of _paramvec (use _update_paramvec for this)"""
+            existing elements of _paramvec (use _clean_paramvec for this)"""
         v = _np.empty(0, 'd'); off = 0
 
         # Step 2: add parameters that don't exist yet
@@ -168,6 +168,52 @@ class Instrument(_gm.ModelMember, _collections.OrderedDict):
                         if i >= L: v[i] = w[ii]
                 off = M + 1
         return v
+
+    def _clean_paramvec(self):
+        """ Updates _paramvec corresponding to any "dirty" elements, which may
+            have been modified without out knowing, leaving _paramvec out of
+            sync with the element's internal data.  It *may* be necessary
+            to resolve conflicts where multiple dirty elements want different
+            values for a single parameter.  This method is used as a safety net
+            that tries to insure _paramvec & Instrument elements are consistent
+            before their use."""
+
+        #Currently there's not "need-to-rebuild" flag because we don't let the user change
+        # the elements of an Instrument after it's created.
+        #if self._need_to_rebuild:
+        #    self._build_paramvec()
+        #    self._need_to_rebuild = False
+
+        # This closely parallels the _clean_paramvec method of a Model (TODO: consolidate?)
+        if self.dirty:  # if any member object is dirty (ModelMember.dirty setter should set this value)
+            TOL = 1e-8
+
+            #Note: lbl args used *just* for potential debugging - could strip out once
+            # we're confident this code always works.
+            def clean_single_obj(obj, lbl):  # sync an object's to_vector result w/_paramvec
+                if obj.dirty:
+                    w = obj.to_vector()
+                    chk_norm = _np.linalg.norm(self._paramvec[obj.gpindices] - w)
+                    #print(lbl, " is dirty! vec = ", w, "  chk_norm = ",chk_norm)
+                    if (not _np.isfinite(chk_norm)) or chk_norm > TOL:
+                        self._paramvec[obj.gpindices] = w
+                    obj.dirty = False
+
+            def clean_obj(obj, lbl):  # recursive so works with objects that have sub-members
+                for i, subm in enumerate(obj.submembers()):
+                    clean_obj(subm, _Label(lbl.name + ":%d" % i, lbl.sslbls))
+                clean_single_obj(obj, lbl)
+
+            for lbl, obj in self.items():
+                clean_obj(obj, lbl)
+
+            #re-update everything to ensure consistency ~ self.from_vector(self._paramvec)
+            #print("DEBUG: non-trivially CLEANED paramvec due to dirty elements")
+            for obj in self.values():
+                obj.from_vector(self._paramvec[obj.gpindices], dirty_value=False)
+                #object is known to be consistent with _paramvec
+
+            self.dirty = False
 
     def __setitem__(self, key, value):
         if self._readonly: raise ValueError("Cannot alter Instrument elements")
@@ -257,6 +303,7 @@ class Instrument(_gm.ModelMember, _collections.OrderedDict):
         numpy array
             a 1D numpy array with length == num_params().
         """
+        self._clean_paramvec()
         return self._paramvec
 
     def from_vector(self, v, close=False, dirty_value=True):
@@ -283,7 +330,8 @@ class Instrument(_gm.ModelMember, _collections.OrderedDict):
         -------
         None
         """
-        assert(len(v) == self.num_params)
+        self._clean_paramvec()
+        assert(self.num_params == len(v))
         for gate in self.values():
             gate.from_vector(v[gate.gpindices], close, dirty_value)
         self._paramvec = v

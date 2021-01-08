@@ -1479,7 +1479,8 @@ class ColorBoxPlot(WorkspacePlot):
                  prec='compact', linlg_pcntle=.05, direct_gst_models=None,
                  dscomparator=None, stabilityanalyzer=None, mdc_store=None,
                  submatrices=None, typ="boxes", scale=1.0, comm=None,
-                 wildcard=None, colorbar=False, bgcolor="white", genericdict=None):
+                 wildcard=None, colorbar=False, bgcolor="white", genericdict=None,
+                 genericdict_threshold=None):
         """
         Create a plot displaying the value of per-circuit quantities.
         TODO: docstring
@@ -1589,11 +1590,11 @@ class ColorBoxPlot(WorkspacePlot):
                                            prec, sum_up, box_labels, hover_info, invert, linlg_pcntle,
                                            direct_gst_models, dscomparator, stabilityanalyzer, mdc_store,
                                            submatrices, typ, scale, comm, wildcard, colorbar, bgcolor,
-                                           genericdict)
+                                           genericdict, genericdict_threshold)
 
     def _create(self, plottypes, circuits, dataset, model, prec, sum_up, box_labels, hover_info,
                 invert, linlg_pcntle, direct_gst_models, dscomparator, stabilityanalyzer, mdc_store,
-                submatrices, typ, scale, comm, wildcard, colorbar, bgcolor, genericdict):
+                submatrices, typ, scale, comm, wildcard, colorbar, bgcolor, genericdict, genericdict_threshold):
 
         fig = None
         addl_hover_info_fns = _collections.OrderedDict()
@@ -1717,7 +1718,12 @@ class ColorBoxPlot(WorkspacePlot):
             elif ptyp == "dict":
                 assert(genericdict is not None), \
                     "Must specify `dscomparator` argument to create `dscmp` plot!"
-                colormapType = "blueseq"
+                if genericdict_threshold is None:
+                    colormapType = "blueseq"
+                else:
+                    colormapType = "manuallinlog"
+                    linlog_color = "green"
+                    linlog_trans = genericdict_threshold
                 ytitle = "."
                 mx_fn = _mx_fn_dict  # use a *global* function so cache can tell it's the same
                 extra_arg = genericdict
@@ -1973,8 +1979,6 @@ def _mx_fn_directlogl(plaq, x, y, extra):
 def _mx_fn_dscmp(plaq, x, y, dscomparator):
     return _ph.dscompare_llr_matrices(plaq, dscomparator)
 
-def _mx_fn_dict(plaq, x, y, genericdict):
-    return _ph.genericdict_matrices(plaq, genericdict)
 
 def _mx_fn_dict(plaq, x, y, genericdict):
     return _ph.genericdict_matrices(plaq, genericdict)

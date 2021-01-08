@@ -32,7 +32,7 @@ from .resourceallocation import ResourceAllocation as _ResourceAllocation
 def _objfn(objfn_cls, model, dataset, circuits=None,
            regularization=None, penalties=None, op_label_aliases=None,
            comm=None, mem_limit=None, method_names=None, array_types=None,
-           mdc_store=None, **addl_args):
+           mdc_store=None, verbosity=0, **addl_args):
     """
     A convenience function for creating an objective function.
 
@@ -81,6 +81,9 @@ def _objfn(objfn_cls, model, dataset, circuits=None,
         An object that bundles cached quantities along with a given model, dataset, and circuit
         list.  If given, `model` and `dataset` and `circuits` should be set to None.
 
+    verbosity : int or VerbosityPrinter, optional
+        Amount of information printed to stdout.
+
     Returns
     -------
     ObjectiveFunction
@@ -96,7 +99,7 @@ def _objfn(objfn_cls, model, dataset, circuits=None,
 
         resource_alloc = _ResourceAllocation(comm, mem_limit)
         ofn = objfn_cls.create_from(model, dataset, circuits, regularization, penalties,
-                                    resource_alloc, verbosity=0,
+                                    resource_alloc, verbosity=verbosity,
                                     method_names=method_names if (method_names is not None) else ('fn',),
                                     array_types=array_types if (array_types is not None) else (),
                                     **addl_args)
@@ -843,7 +846,7 @@ class ModelDatasetCircuitsStore(object):
         # because it understands how to make this layout amenable to fast computation.
         if precomp_layout is None:
             self.layout = model.sim.create_layout(bulk_circuit_list, dataset, self.resource_alloc,
-                                                  array_types)  # a CircuitProbabilityArrayLayout
+                                                  array_types, verbosity=verbosity)  # a CircuitProbabilityArrayLayout
         else:
             self.layout = precomp_layout
         self.array_types = array_types
@@ -976,7 +979,6 @@ class EvaluatedModelDatasetCircuitsStore(ModelDatasetCircuitsStore):
         #Note: don't add any tracked memory to self.resource_alloc, as none is used yet.
         self.probs = None
         self.dprobs = None
-        self.hprobs = None
         self.jac = None
         self.v = None  # for time dependence - rename to objfn_terms or objfn_lsvec?
 
@@ -1547,6 +1549,9 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         max_nelements = max([self.layout.atoms[i].num_elements for i in my_atom_indices])
         probs_mem = _np.empty(max_nelements, 'd')
 
+        rank = self.resource_alloc.comm.Get_rank() if (self.resource_alloc.comm is not None) else 0
+        sub_rank = my_subcomm.Get_rank() if (my_subcomm is not None) else 0
+
         with self.resource_alloc.temporarily_track_memory(self.nparams * self.nparams):  # 'PP' (final_hessian)
             #  Allocate persistent memory
             final_hessian = _np.zeros((nparams, nparams), 'd')
@@ -1557,6 +1562,12 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
             for atom_index in my_atom_indices:
                 atom = self.layout.atoms[atom_index]
                 sub_nelements = atom.num_elements
+
+                if self.raw_objfn.printer.verbosity > 3 or (self.raw_objfn.printer.verbosity == 3 and sub_rank == 0):
+                    isub = my_atom_indices.index(atom_index)
+                    print("rank %d: %gs: beginning sub-layout %d/%d, sub-layout-size = %d"
+                          % (rank, _time.time() - tm, isub + 1, len(my_atom_indices), atom.num_elements))
+                    _sys.stdout.flush()
 
                 # Create views into pre-allocated memory
                 probs = probs_mem[0:sub_nelements]
@@ -1593,12 +1604,13 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
                 k, kmax = 0, len(my_slicetup_list)
                 for (slice1, slice2, hprobs, dprobs12) in self.model.sim._bulk_hprobs_by_block_singleatom(
                         atom, my_slicetup_list, True, blk_resource_alloc, self.layout.gather_mem_limit):
-                    rank = self.resource_alloc.comm.Get_rank() if (self.resource_alloc.comm is not None) else 0
+                    blk_rank = blk_comm.Get_rank() if (blk_comm is not None) else 0
 
-                    if self.raw_objfn.printer.verbosity > 3 or (self.raw_objfn.printer.verbosity == 3 and rank == 0):
+                    if self.raw_objfn.printer.verbosity > 3 or \
+                       (self.raw_objfn.printer.verbosity == 3 and blk_rank == 0):
                         isub = my_atom_indices.index(atom_index)
                         print("rank %d: %gs: block %d/%d, sub-layout %d/%d, sub-layout-size = %d"
-                              % (rank, _time.time() - tm, k, kmax, isub,
+                              % (self.resource_alloc.comm.Get_rank(), _time.time() - tm, k + 1, kmax, isub,
                                  len(my_atom_indices), atom.num_elements))
                         _sys.stdout.flush(); k += 1
 
@@ -4044,7 +4056,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
     @classmethod
     def _create_mdc_store(cls, model, dataset, circuits, resource_alloc,
-                          method_names=('fn',), array_types=()):
+                          method_names=('fn',), array_types=(), verbosity=0):
         # Note: array_types should not include the types used by the created objective function (store) or by the
         # intermediate variables in `method_names` methods.  It is for *additional* arrays, usually the intermediates
         # used within an optimization or other computation that uses this objective function.
@@ -4055,12 +4067,13 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         #  2a) memory taken by (this) store itself - mirrors allocations in __init__ below.
         #  2b) intermediate memory allocated by methods of the created object (possibly an objective function)
         array_types += cls.compute_array_types(method_names, model.sim)
-        return ModelDatasetCircuitsStore(model, dataset, circuits, resource_alloc, array_types)
+        return ModelDatasetCircuitsStore(model, dataset, circuits, resource_alloc, array_types, None, verbosity)
 
     @classmethod
     def create_from(cls, raw_objfn, model, dataset, circuits, resource_alloc=None, penalties=None,
                     verbosity=0, method_names=('fn',), array_types=()):
-        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names, array_types)
+        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names,
+                                          array_types, verbosity)
         return cls(raw_objfn, mdc_store, penalties, verbosity)
 
     @classmethod
@@ -4070,9 +4083,10 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         if method_name == 'terms': return fsim._array_types_for_method('bulk_fill_probs') + ('E',)
         if method_name == 'dlsvec': return fsim._array_types_for_method('bulk_fill_dprobs') + ('E', 'E')
         if method_name == 'dterms': return fsim._array_types_for_method('bulk_fill_dprobs')
-        if method_name == 'hessian_brute': return fsim._array_types_for_method('bulk_fill_hprobs') + ('E', 'E', 'EPP')
+        if method_name == 'hessian_brute': return fsim._array_types_for_method('bulk_fill_hprobs') + ('E', 'E',
+                                                                                                      'EPP', 'EPP')
         if method_name == 'hessian': return fsim._array_types_for_method('_bulk_hprobs_by_block_singleatom') + ('PP',)
-        if method_name == 'approximate_hessian': return fsim._array_types_for_method('bulk_fill_dprobs') + ('E', 'EPP')
+        if method_name == 'approximate_hessian': return fsim._array_types_for_method('bulk_fill_dprobs') + ('E', 'PP')
         return super()._array_types_for_method(method_name, fsim)
 
     @classmethod
@@ -4081,10 +4095,9 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         # (not-intermediate). These are filled in other routines and *not* included in
         # the output of _array_types_for_method since these are *not* allocated in methods.
         array_types = ('E',) * 4  # self.probs + 3x add_count_vectors
-        if any([x in ('dlsvec', 'dterms', 'dpercircuit', 'jacobian', 'approximate_hessian') for x in method_names]):
+        if any([x in ('dlsvec', 'dterms', 'dpercircuit', 'jacobian', 'approximate_hessian', 'hessian')
+                for x in method_names]):
             array_types += ('EP',)
-        if any([x in ('hessian',) for x in method_names]):
-            array_types += ('EPP',)
 
         # array types for methods
         for method_name in method_names:
@@ -4105,15 +4118,10 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         self.resource_alloc.add_tracked_memory(self.nelements)  # 'E' - see compute_array_types above
         self.probs = _np.empty(self.nelements, 'd')
         self.jac = None
-        self.hprobs = None
 
         if 'EP' in self.array_types:
             self.resource_alloc.add_tracked_memory((self.nelements + self.ex) * self.nparams)  # ~ 'EP'
             self.jac = _np.empty((self.nelements + self.ex, self.nparams), 'd')
-
-        if 'EPP' in self.array_types:
-            self.resource_alloc.add_tracked_memory(self.nelements * self.nparams * self.nparams)
-            self.hprobs = _np.empty((self.nelements, self.nparams, self.nparams), 'd')
 
         self.maxCircuitLength = max([len(x) for x in self.circuits])
         self.add_count_vectors()  # allocates 3x 'E' arrays
@@ -4759,10 +4767,11 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
         if paramvec is not None: self.model.from_vector(paramvec)
         dprobs = self.jac[0:self.nelements, :]  # avoid mem copying: use jac mem for dprobs
+        hprobs = _np.empty((self.nelements, self.nparams, self.nparams), 'd')
 
         # 'E', 'EPP' (dg_dprobs, d2g_dprobs2, temporary variable dprobs_dp2 * dprobs_dp1 )
         with self.resource_alloc.temporarily_track_memory(2 * self.nelements + self.nelements * self.nparams**2):
-            self.model.sim.bulk_fill_hprobs(self.hprobs, self.layout, self.probs, dprobs, None, self.resource_alloc)
+            self.model.sim.bulk_fill_hprobs(hprobs, self.layout, self.probs, dprobs, None, self.resource_alloc)
             if self.prob_clip_interval is not None:
                 _np.clip(self.probs, self.prob_clip_interval[0], self.prob_clip_interval[1], out=self.probs)
 
@@ -4771,9 +4780,9 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             dprobs_dp1 = dprobs[:, :, None]  # (nelements,N,1)
             dprobs_dp2 = dprobs[:, None, :]  # (nelements,1,N)
 
-            #hessian = d2g_dprobs2 * dprobs_dp2 * dprobs_dp1 + dg_dprobs * self.hprobs
+            #hessian = d2g_dprobs2 * dprobs_dp2 * dprobs_dp1 + dg_dprobs * hprobs
             # do the above line in a more memory efficient way:
-            hessian = self.hprobs
+            hessian = hprobs
             hessian *= dg_dprobs
             hessian += d2g_dprobs2 * dprobs_dp2 * dprobs_dp1
 
@@ -4808,18 +4817,20 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         if paramvec is not None: self.model.from_vector(paramvec)
         dprobs = self.jac[0:self.nelements, :]  # avoid mem copying: use jac mem for dprobs
 
-        # 'E', 'EPP' (d2g_dprobs2, temporary variable dprobs_dp2 * dprobs_dp1 )
-        with self.resource_alloc.temporarily_track_memory(self.nelements + self.nelements * self.nparams**2):
+        # 'E', 'PP' (d2g_dprobs2, einsum result )
+        with self.resource_alloc.temporarily_track_memory(self.nelements + self.nparams**2):
             self.model.sim.bulk_fill_dprobs(dprobs, self.layout, self.probs, self.resource_alloc)
             if self.prob_clip_interval is not None:
                 _np.clip(self.probs, self.prob_clip_interval[0], self.prob_clip_interval[1], out=self.probs)
 
-            d2g_dprobs2 = self.raw_objfn.hterms(self.probs, self.counts, self.total_counts, self.freqs)[:, None, None]
-            dprobs_dp1 = dprobs[:, :, None]  # (nelements,N,1)
-            dprobs_dp2 = dprobs[:, None, :]  # (nelements,1,N)
+            d2g_dprobs2 = self.raw_objfn.hterms(self.probs, self.counts, self.total_counts, self.freqs)  # [:,None,None]
+            #dprobs_dp1 = dprobs[:, :, None]  # (nelements,N,1)
+            #dprobs_dp2 = dprobs[:, None, :]  # (nelements,1,N)
 
-            hessian = d2g_dprobs2 * dprobs_dp2 * dprobs_dp1
-        return _np.sum(hessian, axis=0)  # sum over operation sequences and spam labels => (N)
+            #hessian = d2g_dprobs2 * dprobs_dp2 * dprobs_dp1  # this creates a huge array - do this instead:
+            hessian = _np.einsum('a,ab,ac->bc', d2g_dprobs2, dprobs, dprobs)
+
+        return hessian
 
     def hessian(self, paramvec=None):
         """
@@ -4931,7 +4942,8 @@ class Chi2Function(TimeIndependentMDCObjectiveFunction):
     @classmethod
     def create_from(cls, model, dataset, circuits, regularization=None, penalties=None, resource_alloc=None,
                     name=None, description=None, verbosity=0, method_names=('fn',), array_types=()):
-        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names, array_types)
+        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names,
+                                          array_types, verbosity)
         return cls(mdc_store, regularization, penalties, name, description, verbosity)
 
     def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0):
@@ -4989,7 +5001,8 @@ class ChiAlphaFunction(TimeIndependentMDCObjectiveFunction):
     def create_from(cls, model, dataset, circuits, regularization=None, penalties=None,
                     resource_alloc=None, name=None, description=None, verbosity=0,
                     method_names=('fn',), array_types=(), alpha=1):
-        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names, array_types)
+        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names,
+                                          array_types, verbosity)
         return cls(mdc_store, regularization, penalties, name, description, verbosity, alpha)
 
     def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0,
@@ -5045,7 +5058,8 @@ class FreqWeightedChi2Function(TimeIndependentMDCObjectiveFunction):
     def create_from(cls, model, dataset, circuits, regularization=None, penalties=None,
                     resource_alloc=None, name=None, description=None, verbosity=0,
                     method_names=('fn',), array_types=()):
-        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names, array_types)
+        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names,
+                                          array_types, verbosity)
         return cls(mdc_store, regularization, penalties, name, description, verbosity)
 
     def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0):
@@ -5100,7 +5114,8 @@ class PoissonPicDeltaLogLFunction(TimeIndependentMDCObjectiveFunction):
     def create_from(cls, model, dataset, circuits, regularization=None, penalties=None,
                     resource_alloc=None, name=None, description=None, verbosity=0,
                     method_names=('fn',), array_types=()):
-        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names, array_types)
+        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names,
+                                          array_types, verbosity)
         return cls(mdc_store, regularization, penalties, name, description, verbosity)
 
     def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0):
@@ -5156,7 +5171,8 @@ class DeltaLogLFunction(TimeIndependentMDCObjectiveFunction):
     def create_from(cls, model, dataset, circuits, regularization=None, penalties=None,
                     resource_alloc=None, name=None, description=None, verbosity=0,
                     method_names=('fn',), array_types=()):
-        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names, array_types)
+        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names,
+                                          array_types, verbosity)
         return cls(mdc_store, regularization, penalties, name, description, verbosity)
 
     def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0):
@@ -5211,7 +5227,8 @@ class MaxLogLFunction(TimeIndependentMDCObjectiveFunction):
     def create_from(cls, model, dataset, circuits, regularization=None, penalties=None,
                     resource_alloc=None, name=None, description=None, verbosity=0,
                     method_names=('fn',), array_types=(), poisson_picture=True):
-        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names, array_types)
+        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names,
+                                          array_types, verbosity)
         return cls(mdc_store, regularization, penalties, name, description, verbosity, poisson_picture)
 
     def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0,
@@ -5268,7 +5285,8 @@ class TVDFunction(TimeIndependentMDCObjectiveFunction):
     def create_from(cls, model, dataset, circuits, regularization=None, penalties=None,
                     resource_alloc=None, name=None, description=None, verbosity=0,
                     method_names=('fn',), array_types=()):
-        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names, array_types)
+        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names,
+                                          array_types, verbosity)
         return cls(mdc_store, regularization, penalties, name, description, verbosity)
 
     def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0):
@@ -5357,8 +5375,8 @@ class TimeDependentMDCObjectiveFunction(MDCObjectiveFunction):
     def compute_array_types(cls, method_names, fsim):
         # array types for "persistent" arrays
         array_types = ('E',)
-        if any([x in ('dlsvec', 'dterms') for x in method_names]): array_types += ('EP',)
-        if any([x in ('hessian', 'approximate_hessian') for x in method_names]): array_types += ('EPP',)
+        if any([x in ('dlsvec', 'dterms', 'hessian', 'approximate_hessian')
+                for x in method_names]): array_types += ('EP',)
 
         # array types for methods
         for method_name in method_names:
