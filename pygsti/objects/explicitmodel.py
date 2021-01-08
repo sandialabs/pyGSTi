@@ -1641,7 +1641,7 @@ class ExplicitOpModel(_mdl.OpModel):
             commutant = _mt.nice_nullspace(ga)  # columns = *gauge* elem gen directions
             op_elemgen_labels = labels_for_op[op_label]
 
-            # Note: local/new_fogi_vecs are orthogonal but not necessarily normalized (so need to 
+            # Note: local/new_fogi_vecs are orthogonal but not necessarily normalized (so need to
             #  normalize to get inverse, but *don't* need pseudo-inverse).
             local_fogi_vecs = _mt.nice_nullspace(ga.T)  # "conjugate space" to gauge action
             new_fogi_vecs = _np.zeros((fogi_vecs.shape[0], local_fogi_vecs.shape[1]), 'd')
@@ -1704,7 +1704,7 @@ class ExplicitOpModel(_mdl.OpModel):
                                 n = len(labels_for_op[ol])
                                 new_fogi_vecs[op_errgen_indices[ol], :] = local_fogi_vecs[off:off + n, :]; off += n
 
-                            indep_cols = []; # debug = []
+                            indep_cols = []  # debug = []
                             if dependent_fogi_action == "drop":
                                 for j in range(new_fogi_vecs.shape[1]):
                                     test = _np.concatenate((fogi_vecs, new_fogi_vecs[:, j:j + 1]), axis=1)
@@ -1720,8 +1720,9 @@ class ExplicitOpModel(_mdl.OpModel):
                                     test = _np.concatenate((fogi_vecs[:, 0:num_vecs_from_smaller_sets],
                                                             new_fogi_vecs[:, j:j + 1]), axis=1)
                                     test2 = _np.concatenate((fogi_vecs, new_fogi_vecs[:, j:j + 1]), axis=1)
-                                    U,s,Vh = _np.linalg.svd(test2)
-                                    if _np.linalg.matrix_rank(test2, tol=1e-7) == num_indep_fogi_vecs + 1:  # new vec is indep w/everything
+                                    U, s, Vh = _np.linalg.svd(test2)
+                                    if _np.linalg.matrix_rank(test2, tol=1e-7) == num_indep_fogi_vecs + 1:
+                                        # new vec is indep w/everything
                                         indep_cols.append(j)
                                         fogi_vecs = test2
                                         num_indep_fogi_vecs += 1
@@ -2060,7 +2061,7 @@ class ExplicitOpModel(_mdl.OpModel):
             ham_fogi_labels = other_fogi_labels = None  # nullspace method does not construct meaningful labels.
             abbrev_ham_fogi_labels = abbrev_other_fogi_labels = None
             ham_fogi_gauge_dirs = other_fogi_gauge_dirs = None  # nullspace method doesn't compute these
-            ham_op_errgen_indices = other_op_errgen_indices = None  # these ARE computed - we just don't return it now... TODO
+            ham_op_errgen_indices = other_op_errgen_indices = None  # these ARE computed - TODO: return it
 
         full_ham_space_labels = [(op_label, elem_lbl) for op_label in primitive_op_labels
                                  for elem_lbl in ham_elem_errgen_labels_for_op[op_label]]
@@ -2133,7 +2134,8 @@ class ExplicitOpModel(_mdl.OpModel):
         if dependent_fogi_action == 'drop':
             assert(_np.linalg.norm(_np.dot(self.fogi_info['ham_vecs'].T, _np.linalg.pinv(self.fogi_info['ham_vecs'].T))
                                    - _np.identity(self.fogi_info['ham_vecs'].shape[1], 'd')) < 1e-6)
-            assert(_np.linalg.norm(_np.dot(self.fogi_info['other_vecs'].T, _np.linalg.pinv(self.fogi_info['other_vecs'].T))
+            assert(_np.linalg.norm(_np.dot(self.fogi_info['other_vecs'].T,
+                                           _np.linalg.pinv(self.fogi_info['other_vecs'].T))
                                    - _np.identity(self.fogi_info['other_vecs'].shape[1], 'd')) < 1e-6)
 
         assert(_np.linalg.norm(_np.dot(self.fogi_info['ham_gauge_vecs'].T,
@@ -2216,13 +2218,12 @@ class ExplicitOpModel(_mdl.OpModel):
         #    ham_vecs_pinv = _np.linalg.pinv(_np.concatenate((self.fogi_info['ham_vecs'],
         #                                                     self.fogi_info['ham_gauge_vecs']), axis=1), rcond=1e-7)
         #    other_vecs_pinv = _np.linalg.pinv(_np.concatenate((self.fogi_info['other_vecs'],
-        #                                                       self.fogi_info['other_gauge_vecs']), axis=1), rcond=1e-7)
+        #                                                       self.fogi_info['other_gauge_vecs']), axis=1),rcond=1e-7)
         #    # _np.concatenate((ham_vecs_pinv, self.fogi_info['ham_gauge_vecs_pinv']), axis=0)
         #    # _np.concatenate((other_vecs_pinv, self.fogi_info['other_gauge_vecs_pinv']), axis=0)
         #    assert(_np.linalg.matrix_rank(ham_vecs_pinv) == max(ham_vecs_pinv.shape))  # should be square & full rank!
         #    assert(_np.linalg.matrix_rank(other_vecs_pinv) == max(other_vecs_pinv.shape))  # ditto
 
-        
         # to set model's (Ham) linear combinations do:
         assert(self.fogi_info is not None)
         nHamVecs = self.fogi_info['ham_vecs'].shape[1]

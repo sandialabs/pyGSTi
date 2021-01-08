@@ -3609,6 +3609,6 @@ def first_order_other_gauge_action_matrix(clifford_superop, dmbasis_other, other
             val = _np.vdot(gen2.flat, gauge_action_deriv.flat)
             other_action_mx[i, j] = val
     #assert(_np.linalg.norm(other_action_mx.imag) < 1e-6)
-    other_action_mx = _np.real_if_close(other_action_mx) #.real
+    other_action_mx = _np.real_if_close(other_action_mx)  # .real
 
     return other_action_mx
