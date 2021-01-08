@@ -2491,6 +2491,7 @@ def instrument_half_diamond_norm(a, b, mx_basis):
     float
     """
     #Turn instrument into a CPTP map on qubit + classical space.
+    mx_basis = _Basis.cast(mx_basis, dim=a.dim)
     nComps = len(a.keys())
     sumbasis = _DirectSumBasis([mx_basis] * nComps)
     composite_op = _np.zeros((a.dim * nComps, a.dim * nComps), 'd')

@@ -29,6 +29,7 @@ from ..tools import symplectic as _symp
 from .basis import Basis as _Basis
 from .protectedarray import ProtectedArray as _ProtectedArray
 from . import modelmember as _modelmember
+from .errorgencontainer import ErrorMapContainer as _ErrorMapContainer
 
 from . import term as _term
 from . import stabilizer as _stabilizer
@@ -2825,7 +2826,7 @@ class PureStateSPAMVec(SPAMVec):
         return s
 
 
-class LindbladSPAMVec(SPAMVec):
+class LindbladSPAMVec(SPAMVec, _ErrorMapContainer):
     """
     A Lindblad-parameterized SPAMVec (that is also expandable into terms).
 
@@ -3236,6 +3237,7 @@ class LindbladSPAMVec(SPAMVec):
             rep = d2  # no representations for term-based evotypes
 
         SPAMVec.__init__(self, rep, evotype, typ)  # sets self.dim
+        _ErrorMapContainer.__init__(self, self.error_map)
 
     def _update_rep(self):
         if self._evotype == "densitymx":
