@@ -1474,6 +1474,38 @@ class DataSet(object):
                                  aux, update_ol, unsafe=True)
         #unsafe=True OK b/c outcome_label_list contains the keys of an OutcomeLabelDict
 
+    def add_cirq_trial_result(self, circuit, trial_result, key):
+        """
+        Add a single circuit's counts --- stored in a Cirq TrialResult --- to this DataSet
+
+        Parameters
+        ----------
+        circuit : tuple or Circuit
+            A tuple of operation labels specifying the circuit or a Circuit object.
+            Note that this must be a PyGSTi circuit --- not a Cirq circuit.
+
+        trial_result : cirq.TrialResult
+            The TrialResult to add
+
+        key : str
+            The string key of the measurement. Set by cirq.measure.
+
+        Returns
+        -------
+        None
+        """
+
+        try:
+            import cirq
+        except ImportError:
+            raise ImportError("Cirq is required for this operation, and it does not appear to be installed.")
+
+        # TrialResult.histogram returns a collections.Counter object, which is a subclass of dict.
+        histogram_counter = trial_result.histogram(key=key)
+        # The keys in histogram_counter are integers, but pyGSTi likes dictionary keys to be strings.
+        count_dict = {str(key): value for key, value in histogram_counter.items()}
+        self.add_count_dict(circuit, count_dict)
+
     def add_raw_series_data(self, circuit, outcome_label_list, time_stamp_list,
                             rep_count_list=None, overwrite_existing=True,
                             record_zero_counts=True, aux=None, update_ol=True,

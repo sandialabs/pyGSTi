@@ -149,8 +149,9 @@ class CircuitList(object):
         if dataset is None: return ret
 
         ret.circuit_weights = ret.name = None  # don't transfer weights or name
+        dataset_circuits = set(dataset.keys())
         circuits_in_dataset = [c for c, aliased_c in zip(self._circuits, self.apply_aliases())
-                               if aliased_c in dataset]
+                               if aliased_c in dataset_circuits]
         return ret.truncate(circuits_in_dataset)  # uses truncate method, potentially of derived class
 
     def __hash__(self):

@@ -1862,14 +1862,15 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
     two_dlogl_terms = fitqty
     two_dlogl = sum(two_dlogl_terms)
 
-    primitive_op_labels = badfit_options.wildcard_primitive_op_labels
-    if primitive_op_labels is None:
-        primitive_op_labels = model.primitive_op_labels + model.primitive_instrument_labels
-        if badfit_options.wildcard_budget_includes_spam:
-            primitive_op_labels += ('SPAM',)  # special op name
-
-    budget = _wild.PrimitiveOpsWildcardBudget(primitive_op_labels, start_budget=0.0) \
-        if badfit_options.wildcard_initial_budget is None else badfit_options.wildcard_initial_budget
+    if badfit_options.wildcard_initial_budget is None:
+        primitive_op_labels = badfit_options.wildcard_primitive_op_labels
+        if primitive_op_labels is None:
+            primitive_op_labels = model.primitive_op_labels + model.primitive_instrument_labels
+            if badfit_options.wildcard_budget_includes_spam:
+                primitive_op_labels += ('SPAM',)  # special op name
+        budget = _wild.PrimitiveOpsWildcardBudget(primitive_op_labels, start_budget=0.0)
+    else:
+        budget = badfit_options.wildcard_initial_budget
 
     ret = _collections.OrderedDict()
     if two_dlogl <= two_dlogl_threshold \
@@ -1983,7 +1984,7 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
                 active_constraints = {}
                 strictly_smaller_wvec = wvec.copy()
                 negligable_budget = 1 / (100 * max_depth)
-                if abs(w_ele) > negligable_budget:  # Use absolute values everywhere, as wildcard vector is allowed to be negative.
+                if abs(w_ele) > negligable_budget:  # Use absolute values everywhere (wildcard vector can be negative).
                     strictly_smaller_wvec[w_ind] = 0.99 * abs(w_ele)  # Decrease the vector element by 1%.
                     printer.log(" - Trialing strictly smaller vector, with element %.3g reduced from %.3g to %.3g" %
                                 (w_ind, w_ele, strictly_smaller_wvec[w_ind]))
