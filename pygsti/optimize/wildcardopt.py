@@ -269,7 +269,7 @@ def _get_critical_circuit_budgets(objfn, layout, redbox_threshold):
 
 def _agg_dlogl(current_probs, objfn, two_dlogl_threshold):
     p, f, n, N = current_probs, objfn.freqs, objfn.counts, objfn.total_counts
-    dlogl_elements = objfn.raw_objfn.terms(current_probs, n, N, f)  # N * f * _np.log(f / p)
+    dlogl_elements = objfn.raw_objfn.terms(p, n, N, f)  # N * f * _np.log(f / p)
     return 2 * float(_np.sum(dlogl_elements)) - two_dlogl_threshold
 
 
@@ -780,8 +780,8 @@ def NewtonSolve(initial_x, fn, fn_with_derivs=None, dx_tol=1e-6, max_iters=20, p
             Dobj, Hobj = _compute_fd(x, fn)
 
         evalsH, eigvecsH = _np.linalg.eig(Hobj)
-        assert(_np.all(evalsH >= -1e-8))
-        #print(" evalsH = ",evalsH)
+        assert(min(evalsH) >= 0 or abs(min(evalsH) / max(evalsH)) < 1e-8)
+        # Note: OK if evalsH has small negative elements, where "small" is relative to positive elements
 
         norm_Dobj = _np.linalg.norm(Dobj)
         #dx = - _np.dot(_np.linalg.inv(H), Df.T)

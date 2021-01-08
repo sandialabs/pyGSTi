@@ -23,6 +23,11 @@ def _columndict_to_dataframe(columns, seriestypes):
         elif seriestype == 'int':
             s = _np.array(lst, dtype=int)  # or pd.Series w/dtype?
         elif seriestype == 'category':
+            if len(lst) > 0 and isinstance(lst[0], tuple):
+                # special case when the values for a category are tuples.  Often they're different lengths
+                # (e.g. qubit labels) and we want the Categorical to use an object-type numpy array to
+                # avoid any "ragged nested sequences" warnings, so do this:
+                lst = _pandas.Series(lst, dtype=object)
             s = _pandas.Categorical(lst)
         elif seriestype == 'object':
             s = _pandas.Series(lst, dtype=object)

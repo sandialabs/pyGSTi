@@ -117,7 +117,7 @@ class OpFactory(_gm.ModelMember):
         **Note to developers**
         The difference beween this method and :method:`create_op` is that
         this method just creates the foundational object without needing
-        to setup it's parameter indices (a technical detail which connects
+        to setup its parameter indices (a technical detail which connects
         the created object with the originating factory's parameters).  The
         base-class `create_op` method calls `create_object` and then performs
         some additional setup on the returned object before returning it

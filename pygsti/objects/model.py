@@ -969,7 +969,9 @@ class OpModel(Model):
                 #raise ValueError(f"Missing state prep in {circuit.str} and there's no default!")
                 raise ValueError("Missing state prep in %s and there's no default!" % circuit.str)
         if len(circuit) == 0 or not self._is_primitive_povm_layer_lbl(circuit[-1]):
-            povm_lbl_to_append = self._default_primitive_povm_layer_lbl(None)
+            sslbls = circuit.line_labels if circuit.line_labels != ("*",) else None
+            povm_lbl_to_append = self._default_primitive_povm_layer_lbl(sslbls)
+
             if povm_lbl_to_append is None:
                 #raise ValueError(f"Missing POVM in {circuit.str} and there's no default!")
                 raise ValueError("Missing POVM in %s and there's no default!" % circuit.str)
@@ -1057,7 +1059,7 @@ class OpModel(Model):
         -------
         bool
         """
-        return lbl in self._primitive_povm_label_dict
+        return lbl in self._primitive_povm_label_dict or lbl.name in self._primitive_povm_label_dict
 
     def _is_primitive_op_layer_lbl(self, lbl):
         """

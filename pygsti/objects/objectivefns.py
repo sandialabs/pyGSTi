@@ -5900,17 +5900,17 @@ def _errorgen_penalty(mdl, prefactor):
     Note: error generator coefficients *can* be complex.
     """
     val = 0.0
-    for lbl in mdl.primitive_prep_labels:
-        op = mdl.circuit_layer_operator(lbl, 'prep')
-        val += _np.sum(_np.abs(op.errorgen_coefficients_array()))
+    #for lbl in mdl.primitive_prep_labels:
+    #    op = mdl.circuit_layer_operator(lbl, 'prep')
+    #    val += _np.sum(_np.abs(op.errorgen_coefficients_array()))
 
     for lbl in mdl.primitive_op_labels:
         op = mdl.circuit_layer_operator(lbl, 'op')
         val += _np.sum(_np.abs(op.errorgen_coefficients_array()))
 
-    for lbl in mdl.primitive_povm_labels:
-        op = mdl.circuit_layer_operator(lbl, 'povm')
-        val += _np.sum(_np.abs(op.errorgen_coefficients_array()))
+    #for lbl in mdl.primitive_povm_labels:
+    #    op = mdl.circuit_layer_operator(lbl, 'povm')
+    #    val += _np.sum(_np.abs(op.errorgen_coefficients_array()))
 
     return prefactor * _np.array([_np.sqrt(val)], 'd')
 
@@ -6087,17 +6087,17 @@ def _errorgen_penalty_jac_fill(errorgen_penalty_vec_grad_to_fill, mdl, prefactor
     val = _errorgen_penalty(mdl, prefactor)
     errorgen_penalty_vec_grad_to_fill[0, :] = 0.0
 
-    for lbl in mdl.primitive_prep_labels:
-        op = mdl.circuit_layer_operator(lbl, 'prep')
-        errorgen_penalty_vec_grad_to_fill[0, op.gpindices] += get_local_deriv(op)
+    #for lbl in mdl.primitive_prep_labels:
+    #    op = mdl.circuit_layer_operator(lbl, 'prep')
+    #    errorgen_penalty_vec_grad_to_fill[0, op.gpindices] += get_local_deriv(op)
 
     for lbl in mdl.primitive_op_labels:
         op = mdl.circuit_layer_operator(lbl, 'op')
         errorgen_penalty_vec_grad_to_fill[0, op.gpindices] += get_local_deriv(op)
 
-    for lbl in mdl.primitive_povm_labels:
-        op = mdl.circuit_layer_operator(lbl, 'povm')
-        errorgen_penalty_vec_grad_to_fill[0, op.gpindices] += get_local_deriv(op)
+    #for lbl in mdl.primitive_povm_labels:
+    #    op = mdl.circuit_layer_operator(lbl, 'povm')
+    #    errorgen_penalty_vec_grad_to_fill[0, op.gpindices] += get_local_deriv(op)
 
     #Above fills derivative of val**2 = sum(terms), but we want deriv of val = sqrt(sum(terms)):
     errorgen_penalty_vec_grad_to_fill[0, :] *= 0.5 / val  # final == 1/sqrt(sum(terms)) * dsumterms

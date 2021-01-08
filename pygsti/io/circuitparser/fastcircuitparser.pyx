@@ -186,7 +186,7 @@ cdef get_next_simple_lbl(unicode s, INT start, INT end, bool integerize_sslbls, 
         last = i
         while i < end:
             c = s[i]
-            if u'a' <= c <= u'z' or u'0' <= c <= u'9' or c == u'_' or c == u'Q' or c == u'.' or c == u'/':
+            if u'a' <= c <= u'z' or u'0' <= c <= u'9' or c == u'_' or c == u'Q' or c == u'.' or c == u'/' or c == u'-':
                 i += 1
             else:
                 break
