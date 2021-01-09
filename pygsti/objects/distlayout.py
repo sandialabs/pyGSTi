@@ -25,10 +25,11 @@ import warnings as _warnings
 
 
 def _assert_sequential(lst):
-    last = lst[0]
-    for x in lst[1:]:
-        assert(last + 1 == x)
-        last = x
+    if len(lst) > 0:
+        last = lst[0]
+        for x in lst[1:]:
+            assert(last + 1 == x)
+            last = x
 
 
 class _DistributableAtom(object):
@@ -368,10 +369,13 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
                 self.param_fine_slices_by_host = tuple([tuple(zip(owners_for_host, slcs_for_host))
                                                         for owners_for_host, slcs_for_host in zip(owners, slices)])
             else:
-                gpss = comm.allgather((gps, hps))  # each host is a single proc, to this host the single slice per host
+                if comm is not None:
+                    gpss = comm.allgather((gps, hps))  # each host is a single proc; gpss = the single slice per host
+                else:
+                    gpss = [(gps, hps)]
                 self.param_fine_slices_by_host = tuple([(rank_and_gps,) for rank_and_gps in enumerate(gpss)])
 
-            self.param_fine_slices_by_rank = tuple(comm.allgather(gps))
+            self.param_fine_slices_by_rank = tuple(comm.allgather(gps)) if (comm is not None) else [gps]
 
             self.owner_host_and_rank_of_global_fine_param_index = {}
             for host_index, ranks_and_pslices in enumerate(self.param_fine_slices_by_host):
@@ -498,32 +502,32 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
             param_fine_subcomm = None
 
         # save subcomms as sub-resource-allocations
-        resource_alloc.layout_allocs['atom-processing'] = _ResourceAllocation(
+        resource_alloc.sub_resource_allocs['atom-processing'] = _ResourceAllocation(
             atom_processing_subcomm, resource_alloc.mem_limit, resource_alloc.profiler,
             resource_alloc.distribute_method, resource_alloc.allocated_memory)
-        resource_alloc.layout_allocs['param-processing'] = _ResourceAllocation(
+        resource_alloc.sub_resource_allocs['param-processing'] = _ResourceAllocation(
             param_processing_subcomm, resource_alloc.mem_limit, resource_alloc.profiler,
             resource_alloc.distribute_method, resource_alloc.allocated_memory)
-        resource_alloc.layout_allocs['param2-processing'] = _ResourceAllocation(
+        resource_alloc.sub_resource_allocs['param2-processing'] = _ResourceAllocation(
             param2_processing_subcomm, resource_alloc.mem_limit, resource_alloc.profiler,
             resource_alloc.distribute_method, resource_alloc.allocated_memory)
-        resource_alloc.layout_allocs['param-interatom'] = _ResourceAllocation(
+        resource_alloc.sub_resource_allocs['param-interatom'] = _ResourceAllocation(
             interatom_param_subcomm, resource_alloc.mem_limit, resource_alloc.profiler,
             resource_alloc.distribute_method, resource_alloc.allocated_memory)
-        resource_alloc.layout_allocs['param2-interatom'] = _ResourceAllocation(
+        resource_alloc.sub_resource_allocs['param2-interatom'] = _ResourceAllocation(
             interatom_param2_subcomm, resource_alloc.mem_limit, resource_alloc.profiler,
             resource_alloc.distribute_method, resource_alloc.allocated_memory)
-        resource_alloc.layout_allocs['param-fine'] = _ResourceAllocation(
+        resource_alloc.sub_resource_allocs['param-fine'] = _ResourceAllocation(
             param_fine_subcomm, resource_alloc.mem_limit, resource_alloc.profiler,
             resource_alloc.distribute_method, resource_alloc.allocated_memory)
 
         if resource_alloc.host_comm is not None:  # signals that we want to use shared intra-host memory
-            resource_alloc.layout_allocs['atom-processing'].build_hostcomms()
-            resource_alloc.layout_allocs['param-processing'].build_hostcomms()
-            resource_alloc.layout_allocs['param2-processing'].build_hostcomms()
-            resource_alloc.layout_allocs['param-interatom'].build_hostcomms()
-            resource_alloc.layout_allocs['param2-interatom'].build_hostcomms()
-            resource_alloc.layout_allocs['param-fine'].build_hostcomms()
+            resource_alloc.sub_resource_allocs['atom-processing'].build_hostcomms()
+            resource_alloc.sub_resource_allocs['param-processing'].build_hostcomms()
+            resource_alloc.sub_resource_allocs['param2-processing'].build_hostcomms()
+            resource_alloc.sub_resource_allocs['param-interatom'].build_hostcomms()
+            resource_alloc.sub_resource_allocs['param2-interatom'].build_hostcomms()
+            resource_alloc.sub_resource_allocs['param-fine'].build_hostcomms()
 
         self.atoms = [atoms_dict[i] for i in myAtomIndices]
         self.param_dimension_blk_sizes = param_dimension_blk_sizes
@@ -625,14 +629,14 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
             allocating_ralloc = resource_alloc  # share mem between these processors
         #elif array_type == 'atom-hessian':
         #    array_shape = (self.host_num_params, self.host_num_params2)
-        #    allocating_ralloc = resource_alloc.layout_allocs['atom-processing']  # don't share mem btwn atoms,
+        #    allocating_ralloc = resource_alloc.sub_resource_alloc('atom-processing')  # don't share mem btwn atoms,
         #    # as each atom will have procs with the same (param1, param2) index block but we want separate mem
         elif array_type == 'jtj':
             array_shape = (self.host_num_params_fine, self.global_num_params)
-            allocating_ralloc = resource_alloc  # .layout_allocs['param-interatom']
+            allocating_ralloc = resource_alloc  # .sub_resource_alloc('param-interatom')
         elif array_type == 'jtf':  # or array_type == 'pfine':
             array_shape = (self.host_num_params_fine,)
-            allocating_ralloc = resource_alloc  # .layout_allocs['param-interatom']
+            allocating_ralloc = resource_alloc  # .sub_resource_alloc('param-interatom')
         else:
             raise ValueError("Invalid array_type: %s" % str(array_type))
 
@@ -712,37 +716,37 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         #  participate in the gathering (others would be redundant and set memory multiple times)
         if array_type == 'e':
             gather_ralloc = resource_alloc
-            unit_ralloc = resource_alloc.layout_allocs['atom-processing']
+            unit_ralloc = resource_alloc.sub_resource_alloc('atom-processing')
             global_shape = (global_num_els,)
             slice_of_global = global_el_slice
         elif array_type == 'ep':
             gather_ralloc = resource_alloc
-            unit_ralloc = resource_alloc.layout_allocs['param-processing']
+            unit_ralloc = resource_alloc.sub_resource_alloc('param-processing')
             global_shape = (global_num_els, self.global_num_params)
             slice_of_global = (global_el_slice, self.global_param_slice)
         elif array_type == 'ep2':
             gather_ralloc = resource_alloc
-            unit_ralloc = resource_alloc.layout_allocs['param2-processing']  # this may not be right...
+            unit_ralloc = resource_alloc.sub_resource_alloc('param2-processing')  # this may not be right...
             global_shape = (global_num_els, self.global_num_params2)
             slice_of_global = (global_el_slice, self.global_param2_slice)
         elif array_type == 'epp':
             gather_ralloc = resource_alloc
-            unit_ralloc = resource_alloc.layout_allocs['param2-processing']
+            unit_ralloc = resource_alloc.sub_resource_alloc('param2-processing')
             global_shape = (global_num_els, self.global_num_params, self.global_num_params2)
             slice_of_global = (global_el_slice, self.global_param_slice, self.global_param2_slice)
         elif array_type == 'p':
             gather_ralloc = resource_alloc
-            unit_ralloc = resource_alloc.layout_allocs['param-processing']
+            unit_ralloc = resource_alloc.sub_resource_alloc('param-processing')
             global_shape = (self.global_num_params,)
             slice_of_global = (self.global_param_slice,)
         elif array_type == 'jtj':
             gather_ralloc = resource_alloc
-            unit_ralloc = resource_alloc.layout_allocs['param-fine']
+            unit_ralloc = resource_alloc.sub_resource_alloc('param-fine')
             global_shape = (self.global_num_params, self.global_num_params)
             slice_of_global = (self.global_param_fine_slice, slice(0, self.global_num_params))
         elif array_type == 'jtf':  # or 'x'
             gather_ralloc = resource_alloc
-            unit_ralloc = resource_alloc.layout_allocs['param-fine']
+            unit_ralloc = resource_alloc.sub_resource_alloc('param-fine')
             global_shape = (self.global_num_params,)
             slice_of_global = self.global_param_fine_slice
         else:
@@ -764,8 +768,8 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         """TODO: docstring  - assumes j, f are local arrays, allocated using 'ep' and 'e' types, respectively.
         Returns an array allocated using the 'jtf' type.
         """
-        param_ralloc = resource_alloc.layout_allocs['param-processing']  # this group acts on (element, param) blocks
-        interatom_ralloc = resource_alloc.layout_allocs['param-interatom']  # procs with same param slice & diff atoms
+        param_ralloc = resource_alloc.sub_resource_alloc('param-processing')  # acts on (element, param) blocks
+        interatom_ralloc = resource_alloc.sub_resource_alloc('param-interatom')  # procs w/same param slice & diff atoms
 
         if interatom_ralloc.comm is None:  # only 1 atom, so no need to sum below
             jtf[:] = _np.dot(j.T[self.fine_param_subslice, :], f)
@@ -791,9 +795,9 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         Returns an array allocated using the 'jtj' type.
         """
         jT = j.T
-        param_ralloc = resource_alloc.layout_allocs['param-processing']  # this group acts on (element, param) blocks
-        atom_ralloc = resource_alloc.layout_allocs['atom-processing']  # this group acts on (element,) blocks
-        interatom_ralloc = resource_alloc.layout_allocs['param-interatom']  # procs with same param slice & diff atoms
+        param_ralloc = resource_alloc.sub_resource_alloc('param-processing')  # acts on (element, param) blocks
+        atom_ralloc = resource_alloc.sub_resource_alloc('atom-processing')  # acts on (element,) blocks
+        interatom_ralloc = resource_alloc.sub_resource_alloc('param-interatom')  # procs w/same param slice & diff atoms
         atom_jtj = _np.empty((_slct.length(self.host_param_slice), self.global_num_params), 'd')  # for my atomproc
 
         for i, param_slice in enumerate(self.param_slices):

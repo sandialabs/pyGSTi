@@ -1211,6 +1211,8 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             loc_nparams2 = num_params / npp[1] if len(npp) > 1 else 0
             blk1 = param_blk_sizes[0] if len(param_blk_sizes) > 0 else 0
             blk2 = param_blk_sizes[1] if len(param_blk_sizes) > 1 else 0
+            if blk1 is None: blk1 = loc_nparams1
+            if blk2 is None: blk1 = loc_nparams2
             global_layout = layout.global_layout if isinstance(layout, _DistributableCOPALayout) else layout
             if comm is not None:
                 from mpi4py import MPI

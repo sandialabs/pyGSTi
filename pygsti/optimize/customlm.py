@@ -210,7 +210,7 @@ class CustomLMOptimizer(Optimizer):
         self.oob_check_interval = oob_check_interval
         self.oob_action = oob_action
         self.oob_check_mode = oob_check_mode
-        self.array_types = 3 * ('P',) + ('E', 'PP', 'EP')  # see custom_leastsq fn "-type"s
+        self.array_types = 3 * ('p',) + ('e', 'ep')  # see custom_leastsq fn "-type"s  -need to add 'jtj' type
         self.called_objective_methods = ('lsvec', 'dlsvec')  # the objective function methods we use (for mem estimate)
 
     def run(self, objective, profiler, printer):
@@ -432,7 +432,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
     msg : str
         A message indicating why the solution converged (or didn't).
     """
-    comm = resource_alloc.comm
+    comm = resource_alloc.comm if (resource_alloc is not None) else None
     printer = _VerbosityPrinter.create_printer(verbosity, comm)
     dqc = distributed_qty_calc  # shorthand
 

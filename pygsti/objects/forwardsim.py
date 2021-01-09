@@ -207,7 +207,7 @@ class ForwardSimulator(object):
             A dictionary with keys equal to outcome labels and
             values equal to probabilities.
         """
-        copa_layout = self.create_layout([circuit])
+        copa_layout = self.create_layout([circuit], array_types=('e',))
         probs_array = _np.empty(copa_layout.num_elements, 'd')
         if time is None:
             self.bulk_fill_probs(probs_array, copa_layout)
@@ -226,7 +226,7 @@ class ForwardSimulator(object):
         return probs
 
     def dprobs(self, circuit):
-        copa_layout = self.create_layout([circuit])
+        copa_layout = self.create_layout([circuit], array_types=('ep',))
         dprobs_array = _np.empty((copa_layout.num_elements, self.model.num_params), 'd')
         self.bulk_fill_dprobs(dprobs_array, copa_layout)
 
@@ -237,7 +237,7 @@ class ForwardSimulator(object):
         return dprobs
 
     def hprobs(self, circuit):
-        copa_layout = self.create_layout([circuit])
+        copa_layout = self.create_layout([circuit], array_types=('epp',))
         hprobs_array = _np.empty((copa_layout.num_elements, self.model.num_params, self.model.num_params), 'd')
         self.bulk_fill_hprobs(hprobs_array, copa_layout)
 
@@ -336,7 +336,7 @@ class ForwardSimulator(object):
         if isinstance(circuits, _CircuitOutcomeProbabilityArrayLayout):
             copa_layout = circuits
         else:
-            copa_layout = self.create_layout(circuits, resource_alloc=resource_alloc)
+            copa_layout = self.create_layout(circuits, array_types=('e',), resource_alloc=resource_alloc)
         global_layout = copa_layout.global_layout if isinstance(copa_layout, _DistributableCOPALayout) else copa_layout
 
         resource_alloc = _ResourceAllocation.cast(resource_alloc)
@@ -387,7 +387,7 @@ class ForwardSimulator(object):
         if isinstance(circuits, _CircuitOutcomeProbabilityArrayLayout):
             copa_layout = circuits
         else:
-            copa_layout = self.create_layout(circuits, array_types=('EP',), resource_alloc=resource_alloc)
+            copa_layout = self.create_layout(circuits, array_types=('ep',), resource_alloc=resource_alloc)
         global_layout = copa_layout.global_layout if isinstance(copa_layout, _DistributableCOPALayout) else copa_layout
 
         resource_alloc = _ResourceAllocation.cast(resource_alloc)
@@ -435,7 +435,7 @@ class ForwardSimulator(object):
         if isinstance(circuits, _CircuitOutcomeProbabilityArrayLayout):
             copa_layout = circuits
         else:
-            copa_layout = self.create_layout(circuits, resource_alloc=resource_alloc)
+            copa_layout = self.create_layout(circuits, array_types=('epp',), resource_alloc=resource_alloc)
         global_layout = copa_layout.global_layout if isinstance(copa_layout, _DistributableCOPALayout) else copa_layout
 
         resource_alloc = _ResourceAllocation.cast(resource_alloc)
@@ -735,6 +735,7 @@ class ForwardSimulator(object):
             - `hprobs == mx[:,:,rowSlice,colSlice]`
             - `dprobs12 == dp1[:,:,rowSlice,None] * dp2[:,:,None,colSlice]`
         """
+        resource_alloc = _ResourceAllocation.cast(resource_alloc)
         yield from self._bulk_hprobs_by_block(layout, wrt_slices_list, return_dprobs_12, resource_alloc)
 
     def _bulk_hprobs_by_block(self, layout, wrt_slices_list, return_dprobs_12, resource_alloc):
@@ -744,10 +745,12 @@ class ForwardSimulator(object):
         # but need to construct wrt_slices_list from global slices assigned to it by the layout.
         # (note the values in the wrt_slices_list must be global param indices - just not all of them)
 
-        if isinstance(layout, _DistributableCOPALayout):  # gather data onto rank-0 processor
-            nElements = layout.host_num_elements
-        else:
-            nElements = len(layout)  # (global number of elements, though "global" isn't really defined)
+        #REMOVE  - a distributed layout should be using a DistributablsForwardSimulator that overrides this.
+        #if isinstance(layout, _DistributableCOPALayout):  # gather data onto rank-0 processor
+        #    nElements = layout.host_num_elements
+        #else:
+
+        nElements = len(layout)  # (global number of elements, though "global" isn't really defined)
 
         #NOTE: don't override this method in DistributableForwardSimulator
         # by a method that distributes wrt_slices_list across comm procs,
@@ -864,11 +867,11 @@ def _bytes_for_array_type(array_type, global_elements, max_local_elements, max_a
     return size * bytes_per_item
 
 
-def _bytes_for_array_types(array_types, total_elements, max_per_processor_elements,
-                           total_circuits, max_per_processor_circuits,
-                           derivative_dimensions, max_per_processor_derivative_dimensions,
+def _bytes_for_array_types(array_types, global_elements, max_local_elements, max_atom_size,
+                           total_circuits, max_local_circuits,
+                           global_num_params, max_local_num_params, max_param_block_size,
                            max_per_processor_cachesize, dim, dtype='d'):  # cache is only local to processors
-    return sum([_bytes_for_array_type(array_type, total_elements, max_per_processor_elements,
-                                      total_circuits, max_per_processor_circuits,
-                                      derivative_dimensions, max_per_processor_derivative_dimensions,
+    return sum([_bytes_for_array_type(array_type, global_elements, max_local_elements, max_atom_size,
+                                      total_circuits, max_local_circuits,
+                                      global_num_params, max_local_num_params, max_param_block_size,
                                       max_per_processor_cachesize, dim, dtype) for array_type in array_types])

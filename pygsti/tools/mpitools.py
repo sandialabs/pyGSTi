@@ -149,7 +149,7 @@ def distribute_indices_base(indices, nprocs, rank, allow_split_comm=True):
     """
     nIndices = len(indices)
     if nIndices == 0:  # special case when == 0
-        return [], {}
+        return [], {}, ()
 
     if nprocs >= nIndices:
         if allow_split_comm:
@@ -1142,7 +1142,7 @@ def closest_divisor(a, b):
     -------
     int
     """
-    if b >= a: return a
+    if b >= a or b == 0: return a  # b=0 is special case.
     for test in range(b, 0, -1):
         if a % test == 0: return test
-    assert(False), "Should never get here - a % 1 == 0 always!"
+    assert(False), "Should never get here - a %% 1 == 0 always! (a=%s, b=%s)" % (str(a), str(b))

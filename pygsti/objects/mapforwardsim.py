@@ -141,6 +141,8 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
             loc_nparams2 = num_params / npp[1] if len(npp) > 1 else 0
             blk1 = param_blk_sizes[0] if len(param_blk_sizes) > 0 else 0
             blk2 = param_blk_sizes[1] if len(param_blk_sizes) > 1 else 0
+            if blk1 is None: blk1 = loc_nparams1
+            if blk2 is None: blk1 = loc_nparams2
             global_layout = layout.global_layout if isinstance(layout, _DistributableCOPALayout) else layout
             if comm is not None:
                 from mpi4py import MPI
@@ -309,7 +311,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
 
     def bulk_fill_timedep_dchi2(self, array_to_fill, layout, ds_circuits, num_total_outcomes, dataset,
                                 min_prob_clip_for_weighting, prob_clip_interval, chi2_array_to_fill=None,
-                                wrt_filter=None, resource_alloc=None, ds_cache=None):
+                                resource_alloc=None, ds_cache=None):
         """
         Compute the chi2 jacobian contributions for an entire tree of circuits, allowing for time dependent operations.
 
@@ -356,12 +358,6 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
             with the per-circuit chi2 contributions, just like in
             bulk_fill_timedep_chi2(...).
 
-        wrt_filter : list of ints, optional
-            If not None, a list of integers specifying which parameters
-            to include in the derivative dimension. This argument is used
-            internally for distributing calculations across multiple
-            processors and to control memory usage.
-
         resource_alloc : ResourceAllocation, optional
             A resource allocation object describing the available resources and a strategy
             for partitioning them.
@@ -385,7 +381,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
 
         return self._bulk_fill_timedep_deriv(layout, dataset, ds_circuits, num_total_outcomes,
                                              array_to_fill, dchi2, chi2_array_to_fill, chi2,
-                                             wrt_filter, resource_alloc)
+                                             resource_alloc)
 
     def bulk_fill_timedep_loglpp(self, array_to_fill, layout, ds_circuits, num_total_outcomes, dataset,
                                  min_prob_clip, radius, prob_clip_interval, resource_alloc=None,
@@ -461,7 +457,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
 
     def bulk_fill_timedep_dloglpp(self, array_to_fill, layout, ds_circuits, num_total_outcomes, dataset,
                                   min_prob_clip, radius, prob_clip_interval, logl_array_to_fill=None,
-                                  wrt_filter=None, resource_alloc=None, ds_cache=None):
+                                  resource_alloc=None, ds_cache=None):
         """
         Compute the ("poisson picture")log-likelihood jacobian contributions for an entire tree of circuits.
 
@@ -509,12 +505,6 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
             with the per-circuit logl contributions, just like in
             bulk_fill_timedep_loglpp(...).
 
-        wrt_filter : list of ints, optional
-            If not None, a list of integers specifying which parameters
-            to include in the derivative dimension. This argument is used
-            internally for distributing calculations across multiple
-            processors and to control memory usage.
-
         resource_alloc : ResourceAllocation, optional
             A resource allocation object describing the available resources and a strategy
             for partitioning them.
@@ -538,4 +528,4 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
 
         return self._bulk_fill_timedep_deriv(layout, dataset, ds_circuits, num_total_outcomes,
                                              array_to_fill, dloglpp, logl_array_to_fill, loglpp,
-                                             wrt_filter, resource_alloc)
+                                             resource_alloc)

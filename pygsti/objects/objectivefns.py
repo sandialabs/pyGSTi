@@ -1445,9 +1445,9 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         # subtrees would just add unnecessary complication.
 
         blk_size1, blk_size2 = self.layout.param_dimension_blk_sizes
-        atom_resource_alloc = self.resource_alloc.layout_allocs['atom-processing']
-        #param_resource_alloc = self.resource_alloc.layout_allocs['param-processing']
-        param2_resource_alloc = self.resource_alloc.layout_allocs['param2-processing']
+        atom_resource_alloc = self.resource_alloc.sub_resource_alloc('atom-processing')
+        #param_resource_alloc = self.resource_alloc.sub_resource_alloc('param-processing')
+        param2_resource_alloc = self.resource_alloc.sub_resource_alloc('param2-processing')
 
         layout = self.layout
         global_param_slice = layout.global_param_slice
@@ -1550,8 +1550,8 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
 
     def _gather_hessian(self, local_hessian):
         nparams = self.model.num_params
-        interatom_ralloc = self.resource_alloc.layout_allocs['param2-interatom']
-        param2_ralloc = self.resource_alloc.layout_allocs['param2-processing']
+        interatom_ralloc = self.resource_alloc.sub_resource_alloc('param2-interatom')
+        param2_ralloc = self.resource_alloc.sub_resource_alloc('param2-processing')
         my_nparams1, my_nparams2 = local_hessian.shape
         global_param_slice = self.layout.global_param_slice
         global_param2_slice = self.layout.global_param2_slice
@@ -1571,16 +1571,20 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
             #Note: really we just need a reduce_sum here - getting the sum on the root procs is sufficient
             interatom_ralloc.allreduce_sum(final_hessian_blk, local_hessian, unit_ralloc=param2_ralloc)
 
-            self.resource_alloc.comm.barrier()  # make sure reduce call above finishes (needed?)
+            if self.resource_alloc.comm is not None:
+                self.resource_alloc.comm.barrier()  # make sure reduce call above finishes (needed?)
 
             #Finally, we need to gather the different pieces on each root param2-interatom proc into the final hessian
             self.resource_alloc.gather(final_hessian, final_hessian_blk, (global_param_slice, global_param2_slice),
                                        unit_ralloc=interatom_ralloc)
+
             if self.resource_alloc.comm is None or self.resource_alloc.comm.rank == 0:
                 final_hessian_cpy = final_hessian.copy()  # so we don't return shared mem...
             else:
                 final_hessian_cpy = None
-            self.resource_alloc.host_comm_barrier()  # make sure we don't deallocate too early
+
+            if self.resource_alloc.comm is not None:
+                self.resource_alloc.host_comm_barrier()  # make sure we don't deallocate too early
             _smt.cleanup_shared_ndarray(final_hessian_blk_shm)
             _smt.cleanup_shared_ndarray(final_hessian_shm)
         return final_hessian_cpy  # (N,N)
@@ -2709,7 +2713,7 @@ class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
         # using cubit rounding of function that smooths N*p for p>0:
         #  has minimum at p=0; matches value, 1st, & 2nd derivs at p=a.
 
-        if len(terms) > 0 and _np.min(terms) < 0.0:
+        if terms.size > 0 and _np.min(terms) < 0.0:
             #Since we set terms = _np.maximum(terms, 0) above we know it was the regularization that caused this
             if self.regtype == 'minp':
                 raise ValueError(("Regularization => negative terms!  Is min_prob_clip (%g) too large? "
@@ -4160,7 +4164,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             self.forceShift = ffg_norm * (ffg_norm + start_norm) * shift_fctr
             #used to keep forceShift - _np.dot(forcefn_grad,paramvec) positive (Note: not analytic, just a heuristic!)
 
-        if self.regularize_factor != 0: ex += self.global_nparams
+        if self.regularize_factor != 0: ex += self.model.num_params  # = self.global_nparams if layout divides params
         if self.cptp_penalty_factor != 0: ex += _cptp_penalty_size(self.model)
         if self.spam_penalty_factor != 0: ex += _spam_penalty_size(self.model)
         if self.errorgen_penalty_factor != 0: ex += _errorgen_penalty_size(self.model)
@@ -4496,9 +4500,9 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         """ Clips the potentially shared-mem self.probs according to self.prob_clip_interval """
         if self.prob_clip_interval is not None:
             if isinstance(self.layout, _DistributableCOPALayout):
-                if self.resource_alloc.layout_allocs['atom-processing'].is_host_leader:
+                if self.resource_alloc.sub_resource_alloc('atom-processing').is_host_leader:
                     _np.clip(self.probs, self.prob_clip_interval[0], self.prob_clip_interval[1], out=self.probs)
-                self.resource_alloc.layout_allocs['atom-processing'].host_comm_barrier()
+                self.resource_alloc.sub_resource_alloc('atom-processing').host_comm_barrier()
             else:
                 _np.clip(self.probs, self.prob_clip_interval[0], self.prob_clip_interval[1], out=self.probs)
 
@@ -4541,8 +4545,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         # Whether this rank is the "leader" of all the processors accessing the same shared self.jac and self.probs mem.
         #  Only leader processors should modify the contents of the shared memory, so we only apply operations *once*
         #  `unit_ralloc` is the group of all the procs targeting same destination into self.obj
-        unit_ralloc = self.resource_alloc.layout_allocs['atom-processing'] \
-            if isinstance(self.layout, _DistributableCOPALayout) else self.resource_alloc
+        unit_ralloc = self.resource_alloc.sub_resource_alloc('atom-processing')
         shared_mem_leader = unit_ralloc.is_host_leader
 
         with self.resource_alloc.temporarily_track_memory(self.nelements):  # 'e' (lsvec)
@@ -4594,8 +4597,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         # Whether this rank is the "leader" of all the processors accessing the same shared self.jac and self.probs mem.
         #  Only leader processors should modify the contents of the shared memory, so we only apply operations *once*
         #  `unit_ralloc` is the group of all the procs targeting same destination into self.obj
-        unit_ralloc = self.resource_alloc.layout_allocs['atom-processing'] \
-            if isinstance(self.layout, _DistributableCOPALayout) else self.resource_alloc
+        unit_ralloc = self.resource_alloc.sub_resource_alloc('atom-processing')
         shared_mem_leader = unit_ralloc.is_host_leader
 
         with self.resource_alloc.temporarily_track_memory(self.nelements):  # 'e' (terms)
@@ -4645,8 +4647,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         # Whether this rank is the "leader" of all the processors accessing the same shared self.jac and self.probs mem.
         #  Only leader processors should modify the contents of the shared memory, so we only apply operations *once*
         #  `unit_ralloc` is the group of all the procs targeting same destination into self.jac
-        unit_ralloc = self.resource_alloc.layout_allocs['param-processing'] \
-            if isinstance(self.layout, _DistributableCOPALayout) else self.resource_alloc
+        unit_ralloc = self.resource_alloc.sub_resource_alloc('param-processing')
         shared_mem_leader = unit_ralloc.is_host_leader
 
         with self.resource_alloc.temporarily_track_memory(2 * self.nelements):  # 'e' (dg_dprobs, lsvec)
@@ -4726,8 +4727,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         # Whether this rank is the "leader" of all the processors accessing the same shared self.jac and self.probs mem.
         #  Only leader processors should modify the contents of the shared memory, so we only apply operations *once*
         #  `unit_ralloc` is the group of all the procs targeting same destination into self.jac
-        unit_ralloc = self.resource_alloc.layout_allocs['param-processing'] \
-            if isinstance(self.layout, _DistributableCOPALayout) else self.resource_alloc
+        unit_ralloc = self.resource_alloc.sub_resource_alloc('param-processing')
         shared_mem_leader = unit_ralloc.is_host_leader
 
         with self.resource_alloc.temporarily_track_memory(2 * self.nelements):  # 'e' (dg_dprobs, lsvec)
@@ -4783,8 +4783,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
         # Whether this rank is the "leader" of all the processors accessing the same shared self.jac and self.probs mem.
         #  Only leader processors should modify the contents of the shared memory, so we only apply operations *once*
-        unit_ralloc = self.resource_alloc.layout_allocs['param2-processing'] \
-            if isinstance(self.layout, _DistributableCOPALayout) else self.resource_alloc
+        unit_ralloc = self.resource_alloc.sub_resource_alloc('param2-processing')
         shared_mem_leader = unit_ralloc.is_host_leader
 
         #General idea of what we're doing:
@@ -4858,8 +4857,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         # Whether this rank is the "leader" of all the processors accessing the same shared self.jac and self.probs mem.
         #  Only leader processors should modify the contents of the shared memory, so we only apply operations *once*
         #  `unit_ralloc` is the group of all the procs targeting same destination into self.jac
-        #unit_ralloc = self.resource_alloc.layout_allocs['param-processing'] \
-        #              if isinstance(self.layout, _DistributableCOPALayout) else self.resource_alloc
+        #unit_ralloc = self.resource_alloc.sub_resource_alloc('param-processing')
         #shared_mem_leader = unit_ralloc.is_host_leader
 
         if paramvec is not None: self.model.from_vector(paramvec)
@@ -5689,7 +5687,7 @@ class TimeDependentChi2Function(TimeDependentMDCObjectiveFunction):
         fsim = self.model.sim
         fsim.bulk_fill_timedep_dchi2(dprobs, self.layout, self.ds_circuits, self.num_total_outcomes,
                                      self.dataset, self.min_prob_clip_for_weighting, self.prob_clip_interval, None,
-                                     None, self.resource_alloc, self._ds_cache)
+                                     self.resource_alloc, self._ds_cache)
 
         self.raw_objfn.resource_alloc.profiler.add_time("Time-dep chi2: JACOBIAN", tm)
         return self.jac
@@ -5868,7 +5866,7 @@ class TimeDependentPoissonPicLogLFunction(TimeDependentMDCObjectiveFunction):
         fsim = self.model.sim
         fsim.bulk_fill_timedep_dloglpp(dlogl, self.layout, self.ds_circuits, self.num_total_outcomes,
                                        self.dataset, self.min_prob_clip, self.radius, self.prob_clip_interval, self.v,
-                                       None, self.resource_alloc, self._ds_cache)
+                                       self.resource_alloc, self._ds_cache)
 
         # want deriv( sqrt(logl) ) = 0.5/sqrt(logl) * deriv(logl)
         v = _np.sqrt(self.v)

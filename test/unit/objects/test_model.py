@@ -409,7 +409,7 @@ class SimMethodBase(object):
         # TODO assert correctness
 
     def test_bulk_fill_dprobs(self):
-        layout = self.model.sim.create_layout([self.gatestring1, self.gatestring2])
+        layout = self.model.sim.create_layout([self.gatestring1, self.gatestring2], array_types=('ep',))
         nElements = layout.num_elements
         nParams = self.model.num_params
         dprobs_to_fill = np.empty((nElements, nParams), 'd')
@@ -427,7 +427,7 @@ class SimMethodBase(object):
     def test_bulk_fill_dprobs_with_high_smallness_threshold(self):
         # TODO figure out better way to do this
         with smallness_threshold(10):
-            layout = self.model.sim.create_layout([self.gatestring1, self.gatestring2])
+            layout = self.model.sim.create_layout([self.gatestring1, self.gatestring2], array_types=('ep',))
             nElements = layout.num_elements
             nParams = self.model.num_params
             dprobs_to_fill = np.empty((nElements, nParams), 'd')
@@ -464,7 +464,7 @@ class SimMethodBase(object):
         ## TODO assert correctness
 
     def test_bulk_fill_hprobs(self):
-        layout = self.model.sim.create_layout([self.gatestring1, self.gatestring2])
+        layout = self.model.sim.create_layout([self.gatestring1, self.gatestring2], array_types=('epp',))
         nElements = layout.num_elements
         nParams = self.model.num_params
 
@@ -490,7 +490,7 @@ class SimMethodBase(object):
     def test_bulk_fill_hprobs_with_high_smallness_threshold(self):
         # TODO figure out better way to do this
         with smallness_threshold(10):
-            layout = self.model.sim.create_layout([self.gatestring1, self.gatestring2])
+            layout = self.model.sim.create_layout([self.gatestring1, self.gatestring2], array_types=('epp',))
             nElements = layout.num_elements
             nParams = self.model.num_params
             hprobs_to_fill = np.empty((nElements, nParams, nParams), 'd')
@@ -510,7 +510,7 @@ class SimMethodBase(object):
         # TODO assert correctness
 
     def test_bulk_hprobs_by_block(self):
-        layout = self.model.sim.create_layout([self.gatestring1, self.gatestring2])
+        layout = self.model.sim.create_layout([self.gatestring1, self.gatestring2], array_types=('epp',))
         nP = self.model.num_params
 
         hcols = []
