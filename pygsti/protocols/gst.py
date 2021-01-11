@@ -1871,176 +1871,179 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
         budget = badfit_options.wildcard_initial_budget
 
     ret = _collections.OrderedDict()
-    if two_dlogl <= two_dlogl_threshold \
-       and sum(_np.clip(two_dlogl_terms - redbox_threshold, 0, None)) < 1e-6:
+    zero_budget_is_ok = bool(two_dlogl <= two_dlogl_threshold
+                             and sum(_np.clip(two_dlogl_terms - redbox_threshold, 0, None)) < 1e-6)
+    if zero_budget_is_ok:
         printer.log("No need to add budget!")
-        wvec = _np.zeros(len(budget.to_vector()), 'd')
-    else:
 
-        L1weights = _np.ones(budget.num_params)
-        if badfit_options.wildcard_L1_weights:
-            for op_label, weight in badfit_options.wildcard_L1_weights.items():
-                L1weights[budget.primOpLookup[op_label]] = weight
-            printer.log("Using non-uniform L1 weights: " + str(list(L1weights)))
+    L1weights = _np.ones(budget.num_params)
+    if badfit_options.wildcard_L1_weights:
+        for op_label, weight in badfit_options.wildcard_L1_weights.items():
+            L1weights[budget.primOpLookup[op_label]] = weight
+        printer.log("Using non-uniform L1 weights: " + str(list(L1weights)))
 
-        objfn_builder = parameters.get('final_objfn_builder', _objfns.PoissonPicDeltaLogLFunction.builder())
-        objfn = objfn_builder.build_from_store(mdc_store)
-        # assert this is a logl function?
+    objfn_builder = parameters.get('final_objfn_builder', _objfns.PoissonPicDeltaLogLFunction.builder())
+    objfn = objfn_builder.build_from_store(mdc_store)
+    # assert this is a logl function?
 
-        # Note: evaluate objfn before passing to wildcard fn init so internal probs are init
-        dlogl_percircuit = objfn.percircuit(model.to_vector())
+    # Note: evaluate objfn before passing to wildcard fn init so internal probs are init
+    dlogl_percircuit = objfn.percircuit(model.to_vector())
+    assert(_np.allclose(two_dlogl_terms, 2 * dlogl_percircuit))  # should be equal: FUTURE: remove above call?
 
-        logl_wildcard_fn = _objfns.LogLWildcardFunction(objfn, model.to_vector(), budget)
-        wv_orig = budget.to_vector()
+    logl_wildcard_fn = _objfns.LogLWildcardFunction(objfn, model.to_vector(), budget)
+    wv_orig = budget.to_vector()
 
-        for method_or_methodchain in badfit_options.wildcard_methods:
-            methodchain = method_or_methodchain if isinstance(method_or_methodchain, (list, tuple)) \
-                else (method_or_methodchain,)
-            budget.from_vector(wv_orig)  # restore original budget to begin each chain
-            chain_name = None
-            budget_was_optimized = False
-            tStart = _time.time()
+    for method_or_methodchain in badfit_options.wildcard_methods:
+        methodchain = method_or_methodchain if isinstance(method_or_methodchain, (list, tuple)) \
+            else (method_or_methodchain,)
+        budget.from_vector(wv_orig)  # restore original budget to begin each chain
+        chain_name = None
+        budget_was_optimized = False
+        tStart = _time.time()
 
-            for method_name_or_dict in methodchain:
-                if isinstance(method_name_or_dict, dict):
-                    method_name = method_name_or_dict.pop('name')
-                    method_options = method_name_or_dict
-                else:
-                    method_name = method_name_or_dict
-                    method_options = {}
+        for method_name_or_dict in methodchain:
+            if isinstance(method_name_or_dict, dict):
+                method_name = method_name_or_dict.pop('name')
+                method_options = method_name_or_dict
+            else:
+                method_name = method_name_or_dict
+                method_options = {}
 
-                #Update the name for the entire chain
-                if 'chain_name' in method_options: chain_name = method_options.pop('chain_name')
-                if chain_name is None: chain_name = method_name
-                if method_name != "none": budget_was_optimized = True
+            #Update the name for the entire chain
+            if 'chain_name' in method_options: chain_name = method_options.pop('chain_name')
+            if chain_name is None: chain_name = method_name
+            if method_name != "none": budget_was_optimized = True
 
-                #Run the method
-                if method_name == "neldermead":
-                    _opt.optimize_wildcard_budget_neldermead(budget, L1weights, logl_wildcard_fn, layout,
+            #Run the method
+            if zero_budget_is_ok:  # no method needed - the zero budget meets constraints
+                budget.from_vector(_np.zeros(len(budget.to_vector()), 'd'))
+
+            elif method_name == "neldermead":
+                _opt.optimize_wildcard_budget_neldermead(budget, L1weights, logl_wildcard_fn, layout,
+                                                         two_dlogl_threshold, redbox_threshold, printer,
+                                                         **method_options)
+            elif method_name == "barrier":
+                _opt.optimize_wildcard_budget_barrier(budget, L1weights, objfn, layout, two_dlogl_threshold,
+                                                      redbox_threshold, printer, **method_options)
+            elif method_name == "cvxopt":
+                _opt.optimize_wildcard_budget_cvxopt(budget, L1weights, objfn, layout, two_dlogl_threshold,
+                                                     redbox_threshold, printer, **method_options)
+            elif method_name == "cvxopt_smoothed":
+                _opt.optimize_wildcard_budget_cvxopt_smoothed(budget, L1weights, objfn, layout,
+                                                              two_dlogl_threshold, redbox_threshold,
+                                                              printer, **method_options)
+            elif method_name == "cvxopt_small":
+                _opt.optimize_wildcard_budget_cvxopt_zeroreg(budget, L1weights, objfn, layout,
                                                              two_dlogl_threshold, redbox_threshold, printer,
                                                              **method_options)
-                elif method_name == "barrier":
-                    _opt.optimize_wildcard_budget_barrier(budget, L1weights, objfn, layout, two_dlogl_threshold,
-                                                          redbox_threshold, printer, **method_options)
-                elif method_name == "cvxopt":
-                    _opt.optimize_wildcard_budget_cvxopt(budget, L1weights, objfn, layout, two_dlogl_threshold,
-                                                         redbox_threshold, printer, **method_options)
-                elif method_name == "cvxopt_smoothed":
-                    _opt.optimize_wildcard_budget_cvxopt_smoothed(budget, L1weights, objfn, layout,
-                                                                  two_dlogl_threshold, redbox_threshold,
-                                                                  printer, **method_options)
-                elif method_name == "cvxopt_small":
-                    _opt.optimize_wildcard_budget_cvxopt_zeroreg(budget, L1weights, objfn, layout,
-                                                                 two_dlogl_threshold, redbox_threshold, printer,
-                                                                 **method_options)
-                elif method_name == "cvxpy_noagg":
-                    _opt.optimize_wildcard_budget_percircuit_only_cvxpy(budget, L1weights, objfn, layout,
-                                                                        redbox_threshold, printer,
-                                                                        **method_options)
-                elif method_name == "none":
-                    pass
+            elif method_name == "cvxpy_noagg":
+                _opt.optimize_wildcard_budget_percircuit_only_cvxpy(budget, L1weights, objfn, layout,
+                                                                    redbox_threshold, printer,
+                                                                    **method_options)
+            elif method_name == "none":
+                pass
+            else:
+                raise ValueError("Invalid wildcard method name: %s" % method_name)
+
+        #Done with chain: print result and check constraints
+        def _evaluate_constraints(wv):
+            dlogl_elements = logl_wildcard_fn.lsvec(wv)**2  # b/c WC fn only has sqrt of terms implemented now
+            for i in range(len(layout.circuits)):
+                dlogl_percircuit[i] = _np.sum(dlogl_elements[layout.indices_for_index(i)], axis=0)
+
+            two_dlogl_percircuit = 2 * dlogl_percircuit
+            two_dlogl = sum(two_dlogl_percircuit)
+            return (max(0, two_dlogl - two_dlogl_threshold),
+                    _np.clip(two_dlogl_percircuit - redbox_threshold, 0, None))
+
+        wvec = budget.to_vector()
+        wvec = _np.abs(wvec)
+        budget.from_vector(wvec)  # ensure all budget elements are positive
+        agg_constraint_violation, percircuit_constraint_violation = _evaluate_constraints(wvec)
+        L1term = float(_np.sum(_np.abs(wvec) * L1weights))
+        if chain_name is None: chain_name = "none"
+        printer.log("Final wildcard budget for '%s' chain gives: (elapsed time %.1fs)" %
+                    (chain_name, _time.time() - tStart))
+        printer.log("   aggregate logl constraint violation = %g" % agg_constraint_violation)
+        printer.log("   per-circuit logl constraint violation (totaled)= %g" % sum(percircuit_constraint_violation))
+        printer.log("   L1-like term = %g" % L1term)
+        printer.log("   " + str(budget))
+        printer.log("")
+
+        # Test that the found wildcard budget is admissable (there is not a strictly smaller wildcard budget
+        # that also satisfies the constraints), and while doing this find the active constraints.
+        printer.log("VERIFYING that the final wildcard budget vector is admissable")
+
+        # Used for deciding what counts as a negligable per-gate wildcard.
+        max_depth = 0
+        for circ in ds.keys():
+            if circ.depth > max_depth:
+                max_depth = circ.depth
+
+        active_constraints_list = []
+        for w_ind, w_ele in enumerate(wvec):
+            active_constraints = {}
+            strictly_smaller_wvec = wvec.copy()
+            negligable_budget = 1 / (100 * max_depth)
+            if abs(w_ele) > negligable_budget:  # Use absolute values everywhere (wildcard vector can be negative).
+                strictly_smaller_wvec[w_ind] = 0.99 * abs(w_ele)  # Decrease the vector element by 1%.
+                printer.log(" - Trialing strictly smaller vector, with element %.3g reduced from %.3g to %.3g" %
+                            (w_ind, w_ele, strictly_smaller_wvec[w_ind]))
+                glob_constraint, percircuit_constraint = _evaluate_constraints(strictly_smaller_wvec)
+                if glob_constraint + _np.sum(percircuit_constraint) < 1e-4:
+
+                    toprint = ("   - Constraints still satisfied, budget NOT ADMISSABLE! Global = %.3g,"
+                               " max per-circuit = %.3g ") % (glob_constraint, _np.max(percircuit_constraint))
+                    # Throw an error if we are optimizing since this shouldn't happen then, otherwise just notify
+                    if budget_was_optimized:
+                        raise ValueError(toprint)
+                    else:
+                        printer.log(toprint)
                 else:
-                    raise ValueError("Invalid wildcard method name: %s" % method_name)
+                    printer.log(("   - Constraints (correctly) no longer satisfied! Global = %.3g, "
+                                 "max per-circuit = %.3g ") % (glob_constraint, _np.max(percircuit_constraint)))
 
-            #Done with chain: print result and check constraints
-            def _evaluate_constraints(wv):
-                dlogl_elements = logl_wildcard_fn.lsvec(wv)**2  # b/c WC fn only has sqrt of terms implemented now
-                for i in range(len(layout.circuits)):
-                    dlogl_percircuit[i] = _np.sum(dlogl_elements[layout.indices_for_index(i)], axis=0)
-
-                two_dlogl_percircuit = 2 * dlogl_percircuit
-                two_dlogl = sum(two_dlogl_percircuit)
-                return (max(0, two_dlogl - two_dlogl_threshold),
-                        _np.clip(two_dlogl_percircuit - redbox_threshold, 0, None))
-
-            wvec = budget.to_vector()
-            wvec = _np.abs(wvec)
-            budget.from_vector(wvec)  # ensure all budget elements are positive
-            agg_constraint_violation, percircuit_constraint_violation = _evaluate_constraints(wvec)
-            L1term = float(_np.sum(_np.abs(wvec) * L1weights))
-            if chain_name is None: chain_name = "none"
-            printer.log("Final wildcard budget for '%s' chain gives: (elapsed time %.1fs)" %
-                        (chain_name, _time.time() - tStart))
-            printer.log("   aggregate logl constraint violation = %g" % agg_constraint_violation)
-            printer.log("   per-circuit logl constraint violation (totaled)= %g" % sum(percircuit_constraint_violation))
-            printer.log("   L1-like term = %g" % L1term)
-            printer.log("   " + str(budget))
-            printer.log("")
-
-            # Test that the found wildcard budget is admissable (there is not a strictly smaller wildcard budget
-            # that also satisfies the constraints), and while doing this find the active constraints.
-            printer.log("VERIFYING that the final wildcard budget vector is admissable")
-
-            # Used for deciding what counts as a negligable per-gate wildcard.
-            max_depth = 0
-            for circ in ds.keys():
-                if circ.depth > max_depth:
-                    max_depth = circ.depth
-
-            active_constraints_list = []
-            for w_ind, w_ele in enumerate(wvec):
-                active_constraints = {}
-                strictly_smaller_wvec = wvec.copy()
-                negligable_budget = 1 / (100 * max_depth)
-                if abs(w_ele) > negligable_budget:  # Use absolute values everywhere (wildcard vector can be negative).
-                    strictly_smaller_wvec[w_ind] = 0.99 * abs(w_ele)  # Decrease the vector element by 1%.
-                    printer.log(" - Trialing strictly smaller vector, with element %.3g reduced from %.3g to %.3g" %
-                                (w_ind, w_ele, strictly_smaller_wvec[w_ind]))
+                circ_ind_max = _np.argmax(percircuit_constraint)
+                if glob_constraint > 0:
+                    active_constraints['global'] = glob_constraint,
+                if percircuit_constraint[circ_ind_max] > 0:
+                    active_constraints['percircuit'] = (circ_ind_max, layout.circuits[circ_ind_max],
+                                                        percircuit_constraint[circ_ind_max])
+            else:
+                if budget_was_optimized:
+                    printer.log((" - Element %.3g is %.3g. This is below %.3g, so trialing snapping to zero"
+                                 " and updating.") % (w_ind, w_ele, negligable_budget))
+                    strictly_smaller_wvec[w_ind] = 0.
                     glob_constraint, percircuit_constraint = _evaluate_constraints(strictly_smaller_wvec)
                     if glob_constraint + _np.sum(percircuit_constraint) < 1e-4:
-
-                        toprint = ("   - Constraints still satisfied, budget NOT ADMISSABLE! Global = %.3g,"
-                                   " max per-circuit = %.3g ") % (glob_constraint, _np.max(percircuit_constraint))
-                        # Throw an error if we are optimizing since this shouldn't happen then, otherwise just notify
-                        if budget_was_optimized:
-                            raise ValueError(toprint)
-                        else:
-                            printer.log(toprint)
+                        printer.log("   - Snapping to zero accepted!")
+                        wvec = strictly_smaller_wvec.copy()
                     else:
-                        printer.log(("   - Constraints (correctly) no longer satisfied! Global = %.3g, "
-                                     "max per-circuit = %.3g ") % (glob_constraint, _np.max(percircuit_constraint)))
-
-                    circ_ind_max = _np.argmax(percircuit_constraint)
-                    if glob_constraint > 0:
-                        active_constraints['global'] = glob_constraint,
-                    if percircuit_constraint[circ_ind_max] > 0:
-                        active_constraints['percircuit'] = (circ_ind_max, layout.circuits[circ_ind_max],
-                                                            percircuit_constraint[circ_ind_max])
+                        printer.log("   - Snapping to zero NOT accepted! Global = %.3g, max per-circuit = %.3g " %
+                                    (glob_constraint, _np.max(percircuit_constraint)))
                 else:
-                    if budget_was_optimized:
-                        printer.log((" - Element %.3g is %.3g. This is below %.3g, so trialing snapping to zero"
-                                     " and updating.") % (w_ind, w_ele, negligable_budget))
-                        strictly_smaller_wvec[w_ind] = 0.
-                        glob_constraint, percircuit_constraint = _evaluate_constraints(strictly_smaller_wvec)
-                        if glob_constraint + _np.sum(percircuit_constraint) < 1e-4:
-                            printer.log("   - Snapping to zero accepted!")
-                            wvec = strictly_smaller_wvec.copy()
-                        else:
-                            printer.log("   - Snapping to zero NOT accepted! Global = %.3g, max per-circuit = %.3g " %
-                                        (glob_constraint, _np.max(percircuit_constraint)))
-                    else:
-                        # We do this instead when we're not optimizing the budget, as otherwise we'd change the budget.
-                        printer.log(" - Skipping trialing reducing element %.3g below %.3g, as it is less than %.3g" %
-                                    (w_ind, w_ele, negligable_budget))
-                active_constraints_list.append(active_constraints)
+                    # We do this instead when we're not optimizing the budget, as otherwise we'd change the budget.
+                    printer.log(" - Skipping trialing reducing element %.3g below %.3g, as it is less than %.3g" %
+                                (w_ind, w_ele, negligable_budget))
+            active_constraints_list.append(active_constraints)
 
-            # Note: active_constraints_list is typically stored in parameters['unmodeled_error active constraints']
-            # of the relevant Estimate object.
-            primOp_labels = _collections.defaultdict(list)
-            for lbl, i in budget.primOpLookup.items(): primOp_labels[i].append(str(lbl))
-            for i, active_constraints in enumerate(active_constraints_list):
-                if active_constraints:
-                    printer.log("** ACTIVE constraints for " + "--".join(primOp_labels[i]) + " **")
-                    if 'global' in active_constraints:
-                        printer.log("   global constraint:" + str(active_constraints['global']))
-                    if 'percircuit' in active_constraints:
-                        _, circuit, constraint_amt = active_constraints['percircuit']
-                        printer.log("   per-circuit constraint:" + circuit.str + " = " + str(constraint_amt))
-                else:
-                    printer.log("(no active constraints for " + "--".join(primOp_labels[i]) + ")")
-            printer.log("")
+        # Note: active_constraints_list is typically stored in parameters['unmodeled_error active constraints']
+        # of the relevant Estimate object.
+        primOp_labels = _collections.defaultdict(list)
+        for lbl, i in budget.primOpLookup.items(): primOp_labels[i].append(str(lbl))
+        for i, active_constraints in enumerate(active_constraints_list):
+            if active_constraints:
+                printer.log("** ACTIVE constraints for " + "--".join(primOp_labels[i]) + " **")
+                if 'global' in active_constraints:
+                    printer.log("   global constraint:" + str(active_constraints['global']))
+                if 'percircuit' in active_constraints:
+                    _, circuit, constraint_amt = active_constraints['percircuit']
+                    printer.log("   per-circuit constraint:" + circuit.str + " = " + str(constraint_amt))
+            else:
+                printer.log("(no active constraints for " + "--".join(primOp_labels[i]) + ")")
+        printer.log("")
 
-            ret[chain_name] = (budget, active_constraints_list)
+        ret[chain_name] = (budget, active_constraints_list)
 
     return ret
 
