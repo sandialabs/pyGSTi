@@ -11,6 +11,7 @@ Functions related to computation of the log-likelihood.
 #***************************************************************************************************
 
 import numpy as _np
+import warnings as _warnings
 from .. import tools as _tools
 
 #pos = lambda x: x**2
@@ -285,12 +286,12 @@ class WildcardBudget(object):
         C_precomp = (probs_in == freqs)
         D_precomp = _np.logical_and(probs_in != freqs, freqs == 0)
 
-        tol = 1e-8  # for instance, when W==0 and TVD_at_breakpt is 1e-17
-
         for i, (circ, W) in enumerate(zip(circuits, circuit_budgets)):
             elInds = layout.indices_for_index(i)
             fvec = freqs[elInds]
             qvec = probs_in[elInds]
+            tol = len(qvec) * MIN_FREQ  # for instance, when W==0 and TVD_at_breakpt is 1e-17.  Multiply by len(qvec)
+            # to ensure we tolerate cases where many of the freqs are zero and we've artificially set them to MIN_FREQ.
 
             if _np.min(qvec) < 0:
                 #Stopgap solution when a probability is negative: use wcbudget to move as
@@ -315,6 +316,15 @@ class WildcardBudget(object):
                     qvec[pos_inds] *= 1.0 - alpha
                     qvec[neg_inds] *= 1.0 - beta
                     W = 0
+
+                    #See if there's any negative probs left (their probably are):
+                    neg_inds = _np.where(qvec < 0)[0]; neg_sum = sum(qvec[neg_inds])
+                    pos_inds = _np.where(qvec > 0)[0]; pos_sum = sum(qvec[pos_inds])  # note: NOT >= (leave zeros alone)
+                    if -neg_sum > 1e-8:
+                        qvec[neg_inds] = 0.0
+                        qvec[pos_inds] /= pos_sum  # also ensure probs sum to 1
+                        _warnings.warn(("Wildcard optimization: model produced negative probabilities!  Artificially"
+                                        " snapping these to zero in order to continue."))
 
             initialTVD = sum(tvd_precomp[elInds])  # 0.5 * sum(_np.abs(qvec - fvec))
             if initialTVD <= W + tol:  # TVD is already "in-budget" for this circuit - can adjust to fvec exactly
@@ -380,7 +390,11 @@ class WildcardBudget(object):
 
                 nMovedToC += 1
             else:
-                assert(False), "TVD should eventually reach zero (I think)!"
+                try:
+                    assert(False), "TVD should eventually reach zero (I think)!"
+                except:
+                    import bpdb; bpdb.set_trace()
+                    print("Problem")
 
             #Now A,B,C are fixed to what they need to be for our given W
             # test if len(A) > 0, make tol here *smaller* than that assigned to zero freqs above
