@@ -40,7 +40,7 @@ class FOGIDiagram(object):
     def __init__(self, model, error_type="both", op_to_target_qubits=None, debug=False):
         assert(error_type in ('both', 'hamiltonian', 'stochastic'))
         self.error_type = error_type
-        self.fogi_info = model.fogi_info
+        self.fogi_info = model.fogi_info.copy()  # shallow copy
         self.fogi_coeffs = model.fogi_errorgen_coefficients_array(normalized_elem_gens=False)
         self.bins = self._create_binned_data()
         self.debug = debug
@@ -163,7 +163,7 @@ class FOGIDiagram(object):
                     table[acted_on][col] = total
             return table, tuple(sorted(table_rows, key=lambda t: (len(t),) + t)), tuple(sorted(table_cols))
 
-        def _compute_local_vs_crosstalk_magnitudes(op_set, infos_by_type):
+        def _compute_by_weight_magnitudes(op_set, infos_by_type):
             mags_by_xtalk_weight = {}  # "weight" of crosstalk is an int.  0 = local
             infos_by_xtalk_weight = {'H': _collections.defaultdict(list),
                                      'S': _collections.defaultdict(list)}
@@ -179,23 +179,67 @@ class FOGIDiagram(object):
                 for acted_on, infos in infos_by_actedon.items():
                     # if set(acted_on).issubset(target_qubits):
                     if all([set(acted_on).issubset(self.op_to_target_qubits[op]) for op in op_set]):
-                        infos_by_xtalk_weight[typ[0]][0].extend(infos)
+                        infos_by_xtalk_weight[typ[0]][0].extend(infos)  # local == weight 0
                     else:
-                        infos_by_xtalk_weight[typ[0]][len(acted_on)].extend(infos)
+                        infos_by_xtalk_weight[typ[0]][len(acted_on)].extend(infos)  # higher weight
 
             weights = sorted(set(list(infos_by_xtalk_weight['H'].keys())
                                  + list(infos_by_xtalk_weight['S'].keys())))
             for weight in weights:
                 totalH = totalS = 0.0
+                items_abbrev = []
                 if weight in infos_by_xtalk_weight['H']:
                     totalH = _total_contrib(('H',), op_set, infos_by_xtalk_weight['H'][weight])
                     totalH = min([v for k, v in totalH.items() if k != 'go_angle'])
+                    items_abbrev.extend([(info['label_abbrev'], info['coeff'],
+                                          _total_contrib(('H',), op_set, [info]))
+                                         for info in infos_by_xtalk_weight['H'][weight]])
                 if weight in infos_by_xtalk_weight['S']:
                     totalS = _total_contrib(('S',), op_set, infos_by_xtalk_weight['S'][weight])
+                    items_abbrev.extend([(info['label_abbrev'], info['coeff'], _total_contrib(('S',), op_set, [info]))
+                                         for info in infos_by_xtalk_weight['S'][weight]])
 
-                mags_by_xtalk_weight[weight] = totalH + totalS
+                mags_by_xtalk_weight[weight] = {'total': totalH + totalS,
+                                                'items': items_abbrev}  # = list of (abbrev-item-lbl, coeff, contrib)
 
             return mags_by_xtalk_weight
+
+        def _compute_by_target_magnitudes(op_set, infos_by_type):
+            mags_by_target = {}  # "weight" of crosstalk is an int.  0 = local
+            infos_by_target = {'H': _collections.defaultdict(list),
+                               'S': _collections.defaultdict(list)}
+            #target_qubits = set([qi for op in op_set for qi in self.op_to_target_qubits[op]])
+            for typ, infos_by_actedon in infos_by_type.items():
+                if typ == ('H',):
+                    if self.error_type == "stochastic": continue
+                elif typ == ('S',):
+                    if self.error_type == "hamiltonian": continue
+                else:
+                    raise ValueError("Invalid type: %s" % str(typ))
+
+                for acted_on, infos in infos_by_actedon.items():
+                    infos_by_target[typ[0]][acted_on].extend(infos)
+
+            targets = sorted(set(list(infos_by_target['H'].keys())
+                                 + list(infos_by_target['S'].keys())))
+            for target in targets:
+                totalH = totalS = 0.0
+                items_abbrev = []
+                if target in infos_by_target['H']:
+                    totalH = _total_contrib(('H',), op_set, infos_by_target['H'][target])
+                    totalH = min([v for k, v in totalH.items() if k != 'go_angle'])
+                    items_abbrev.extend([(info['label_abbrev'], info['coeff'],
+                                          _total_contrib(('H',), op_set, [info]))
+                                         for info in infos_by_target['H'][target]])
+                if target in infos_by_target['S']:
+                    totalS = _total_contrib(('S',), op_set, infos_by_target['S'][target])
+                    items_abbrev.extend([(info['label_abbrev'], info['coeff'], _total_contrib(('S',), op_set, [info]))
+                                         for info in infos_by_target['S'][target]])
+
+                mags_by_target[target] = {'total': totalH + totalS,
+                                          'items': items_abbrev}  # = list of (abbrev-item-lbl, coeff, contrib)
+
+            return mags_by_target
 
         def _make_long_table(op_set, infos_by_type):
             table = {}
@@ -244,7 +288,8 @@ class FOGIDiagram(object):
                 'table': _make_coherent_stochastic_by_support_table(op_set, op_fogis_by_type),
                 'longtable': _make_long_table(op_set, op_fogis_by_type),
                 'abbrevtable': _make_abbrev_table(op_set, op_fogis_by_type),
-                'crosstalk': _compute_local_vs_crosstalk_magnitudes(op_set, op_fogis_by_type),
+                'byweight': _compute_by_weight_magnitudes(op_set, op_fogis_by_type),
+                'bytarget': _compute_by_target_magnitudes(op_set, op_fogis_by_type),
                 'dependent': _is_dependent(op_fogis_by_type),
                 'children': None  # FUTURE?
             }
@@ -733,7 +778,8 @@ class FOGIDiagram(object):
             assert(_np.isnan(data[i, j]))
             data[i, j] = val
             if include_xtalk:
-                for weight, xtalk_val in info['crosstalk'].items():
+                for weight, xtalk_dict in info['byweight'].items():
+                    xtalk_val = xtalk_dict['total']
                     while len(xtalk_datas) < weight + 1:
                         xtalk_datas.append(_np.ones((len(op_labels), len(op_labels)), 'd') * _np.nan)
                     assert(_np.isnan(xtalk_datas[weight][i, j]))
@@ -841,6 +887,209 @@ class FOGIDiagram(object):
         _merge_latex_template(d, "standalone.tex", filename, {})
         print("Wrote latex file: %s" % filename)
         return table
+
+    def plot_multiscale_grid(self, detail_level=0, figsize=5, outfile=None, spacing=0.05, nudge=0.125,
+                             cell_fontsize=10, axes_fontsize=10, qty_key='bytarget'):
+        op_set_info = self.op_set_info
+        op_labels = self.fogi_info['primitive_op_labels']
+        nOps = len(op_labels)
+
+        op_label_lookup = {lbl: i for i, lbl in enumerate(op_labels)}
+        totals = _np.ones((len(op_labels), len(op_labels)), 'd') * _np.nan
+        by_qty_totals = {}
+        by_qty_items = {}
+
+        def _min_impact(coh_dict):
+            if 'min_impact' in coh_dict: return coh_dict['min_impact']
+            return min([v for k, v in coh_dict.items() if k != 'go_angle'])
+
+        additional = 0
+        for op_set, info in op_set_info.items():
+
+            if len(op_set) == 2:
+                i, j = op_label_lookup[op_set[0]], op_label_lookup[op_set[1]]
+                if i > j: i, j = j, i
+            else:
+                i = j = op_label_lookup[op_set[0]]
+
+            #Total value/contribution for entire "box"
+            if self.error_type == "hamiltonian": val = _min_impact(info['Coherent'])
+            elif self.error_type == "stochastic": val = info['Stochastic']
+            elif self.error_type == "both": val = info['Stochastic'] + _min_impact(info['Coherent'])
+            else: raise ValueError("Invalid error_type: %s" % self.error_type)
+
+            if len(op_set) > 2:
+                additional += val
+                continue
+
+            assert(_np.isnan(totals[i, j]))
+            totals[i, j] = val
+
+            for qty, qty_dict in info[qty_key].items():
+                #if weight > max_weight: continue  # with warning/accumulation?
+                if qty not in by_qty_totals:
+                    by_qty_totals[qty] = _np.ones((nOps, nOps), 'd') * _np.nan
+                    by_qty_items[qty] = {(i, j): [] for i in range(nOps) for j in range(i, nOps)}
+                assert(_np.isnan(by_qty_totals[qty][i, j]))
+                by_qty_totals[qty][i, j] = qty_dict['total']
+                by_qty_items[qty][i, j] = qty_dict['items']
+
+        if qty_key == "bytarget":
+            all_qtys = sorted(list(by_qty_totals.keys()), key=lambda k: (len(k),) + k)  # sort primarily by # targets
+        else:
+            all_qtys = sorted(list(by_qty_totals.keys()))
+        nQtys = len(all_qtys)
+
+        total_items = _np.zeros((nOps, nOps), 'i')
+        for i in range(nOps):
+            for j in range(i, nOps):
+                total_items[i, j] = sum([len(by_qty_items[qty][i, j]) for qty in all_qtys])
+                if total_items[i, j] == 0: totals[i, j] = _np.NaN
+
+        box_size_mode = "condensed"  # or "inflated"
+        if detail_level == 2:
+            #compute the number of rows needed for each row in the heatmap
+            max_items_by_qty = {qty: max([len(by_qty_items[qty][i, j]) for i in range(nOps) for j in range(i, nOps)])
+                                for qty in all_qtys}
+            max_total_items = _np.max(total_items)
+
+            if box_size_mode == "inflated":
+                box_size = sum(max_items_by_qty.values())
+            else:
+                box_size = max_total_items
+
+        else:
+            max_items_by_qty = None  # should be unused
+            box_size = 1.0
+
+        spacing *= box_size  # make spacing relative to box size
+        row_y = _np.arange(len(op_labels) - 1, -1, -1) * (box_size + spacing) + spacing
+        col_x = _np.arange(len(op_labels)) * (box_size + spacing) + spacing
+
+        import matplotlib
+        import matplotlib.pyplot as plt
+        import matplotlib.patches as patches
+
+        #min_color, max_color = 0, _np.nanmax(data)
+        fig, axes = plt.subplots(1, 1, figsize=(figsize, figsize))
+        axes.set_title("%s-type errors on gates and between gate pairs (missing %.3g)" % (self.error_type, additional))
+        axis_labels = [str(lbl) for lbl in op_labels]
+        axes.set_xlim(0, len(op_labels) * (box_size + spacing) + spacing)
+        axes.set_ylim(0, len(op_labels) * (box_size + spacing) + spacing)
+
+        #im = axes.imshow(plot_data, cmap="Reds")
+        #im.set_clim(min_color, max_color)
+
+        # We want to show all ticks...
+        axes.set_xticks(col_x + box_size / 2)
+        axes.set_yticks(row_y + box_size / 2)
+        # ... and label them with the respective list entries
+        axes.set_xticklabels(axis_labels, fontsize=axes_fontsize)
+        axes.set_yticklabels(axis_labels, fontsize=axes_fontsize)
+
+        # Rotate the tick labels and set their alignment.
+        plt.setp(axes.get_xticklabels(), rotation=45, ha="right",
+                 rotation_mode="anchor")
+
+        # Normalize the threshold to the images color range.
+        textcolors = ['black', 'white']
+        cmap = _matplotlibcm.get_cmap('Greys')
+        cmap_by_qty = [_matplotlibcm.get_cmap('Reds'),
+                       _matplotlibcm.get_cmap('Greens'),
+                       _matplotlibcm.get_cmap('Blues')]  # more?
+        val_max = _np.nanmax(totals)
+        val_threshold = val_max / 2.
+        nudge *= spacing  # how much to nudge borders into spacing area
+
+        def create_box(ax, x, y, side, val, val_by_qty, items_by_qty):
+            if detail_level == 0:
+                if not _np.isnan(val):
+                    val_color = cmap(val / val_max)[0:3]  # drop alpha
+                    rect = patches.Rectangle((x, y), side, side, linewidth=0, edgecolor='k', facecolor=val_color)
+                    ax.add_patch(rect)
+                    ax.text(x + side / 2, y + side / 2, "%.1f%%" % (val * 100), ha="center", va="center",
+                            color=textcolors[int(val > val_threshold)], fontsize=cell_fontsize)
+                border = patches.Rectangle((x - nudge, y - nudge), side + 2 * nudge, side + 2 * nudge,
+                                           linewidth=4, edgecolor='k', fill=False)
+                ax.add_patch(border)
+
+            elif detail_level == 1:
+                section_size = side / nQtys
+                y2 = y + section_size * (nQtys - 1)
+                for iqty, qty in enumerate(all_qtys):
+                    if qty_key == "byweight":
+                        if qty == 0: nm = "Local"
+                        elif qty == 1: nm = "Spectator"
+                        else: nm = "Weight-%d" % qty
+                    elif qty_key == "bytarget":
+                        nm = ", ".join(["Q%d" % (qlbl + 1) for qlbl in qty])
+                    else:
+                        nm = str(qty)
+
+                    v = val_by_qty[qty]
+                    if not _np.isnan(v):
+                        cm = cmap_by_qty[iqty]
+                        val_color = cm(v / val_max)[0:3]  # drop alpha
+                        rect = patches.Rectangle((x, y2), side, section_size, linewidth=1, edgecolor='k',
+                                                 facecolor=val_color)
+                        ax.add_patch(rect)
+                        ax.text(x + side / 2, y2 + section_size / 2, "%s = %.1f%%" % (nm, v * 100),
+                                ha="center", va="center", color=textcolors[int(v > val_threshold)],
+                                fontsize=cell_fontsize)
+                    y2 -= section_size
+                border = patches.Rectangle((x - nudge, y - nudge), side + 2 * nudge, side + 2 * nudge,
+                                           linewidth=4, edgecolor='k', fill=False)
+                ax.add_patch(border)
+
+            elif detail_level == 2:
+                y2 = y + side  # marks *top* of section here
+                for iqty, qty in enumerate(all_qtys):
+                    items = items_by_qty[qty]
+                    if box_size_mode == "inflated":
+                        section_size = max_items_by_qty[qty]
+                    else:
+                        section_size = len(items)
+                    cm = cmap_by_qty[iqty]
+
+                    y3 = y2
+                    for lbl, coeff, contrib in items:
+                        if isinstance(contrib, dict):
+                            assert(len(contrib) == 1)
+                            contrib = next(iter(contrib.values()))
+                        if abs(contrib) < 1e-6: contrib = 0.0
+
+                        y3 -= 1
+                        val_color = cm(contrib / val_max)[0:3]  # drop alpha
+                        rect = patches.Rectangle((x, y3), side, 1.0, linewidth=0, edgecolor='k',
+                                                 facecolor=val_color)
+                        ax.add_patch(rect)
+                        ax.text(x + side / 2, y3 + 1 / 2, "%s = %.1f%%" % (lbl, contrib * 100),
+                                ha="center", va="center", color=textcolors[int(contrib > val_threshold)],
+                                fontsize=cell_fontsize)
+                    y2 -= section_size
+                    border = patches.Rectangle((x, y2), side, section_size, linewidth=1, edgecolor='k', fill=False)
+                    ax.add_patch(border)
+                border = patches.Rectangle((x - nudge, y - nudge), side + 2 * nudge, side + 2 * nudge,
+                                           linewidth=4, edgecolor='k', fill=False)
+                ax.add_patch(border)
+
+            else:
+                raise ValueError("Invalid `detail_level`!")
+
+        # Loop over data dimensions and create text annotations.
+        for i in range(len(axis_labels)):
+            for j in range(len(axis_labels)):
+                if i > j: continue
+                create_box(axes, col_x[j], row_y[i], box_size, totals[i, j],
+                           {qty: by_qty_totals[qty][i, j] for qty in all_qtys},
+                           {qty: by_qty_items[qty][i, j] for qty in all_qtys})
+
+        fig.tight_layout()
+        if outfile:
+            plt.savefig(outfile)
+        else:
+            plt.show()
+        return fig
 
 
 _template = """<html>
