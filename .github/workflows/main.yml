@@ -81,19 +81,14 @@ jobs:
     steps:
     - uses: actions/checkout@v2
       with:
-        persist-credentials: false
         fetch-depth: 0
+        token: ${{ secrets.PYGSTI_TOKEN }}
     - name: Merge changes to beta branch
-      env:
-        TRIGGER_REF: refs/heads/develop
-        MERGE_BRANCH: beta
       run: |
-        ./.github/ci-scripts/merge.sh
-    - name: Push changes
-      uses: ad-m/github-push-action@v0.6.0
-      with:
-        branch: 'refs/heads/beta'
-        github_token: ${{ secrets.PYGSTI_TOKEN }}
+        git config --global user.name 'PyGSTi'
+        git config --global user.email 'pygsti@noreply.github.com'
+        git checkout beta
+        git merge --ff-only ${GITHUB_SHA} && git push origin beta
 
   test_extras: # On stable branches, run extended tests
 
