@@ -107,7 +107,7 @@ def create_processor_spec(device, one_qubit_gates, qubitsubset=None, removeedges
 
 
 def create_error_rates_model(caldata, device, one_qubit_gates, one_qubit_gates_to_native={}, calformat=None,
-                             model_type='TwirledLayers', idlename=None):
+                             model_type='TwirledLayers', idle_name=None):
     """
     calformat: 'ibmq-v2018', 'ibmq-v2019', 'rigetti', 'native'.
     """
@@ -116,10 +116,10 @@ def create_error_rates_model(caldata, device, one_qubit_gates, one_qubit_gates_t
     two_qubit_gate = specs.two_qubit_gate
     if 'Gc0' in one_qubit_gates:
         assert('Gi' not in one_qubit_gates), "Cannot ascertain idle gate name!"
-        idlename = 'Gc0'
+        idle_name = 'Gc0'
     elif 'Gi' in one_qubit_gates:
         assert('Gc0' not in one_qubit_gates), "Cannot ascertain idle gate name!"
-        idlename = 'Gi'
+        idle_name = 'Gi'
     else:
         if model_type == 'dict':
             pass
@@ -283,16 +283,16 @@ def create_error_rates_model(caldata, device, one_qubit_gates, one_qubit_gates_t
 
     elif model_type == 'TwirledLayers':
         model = _oplessmodel.TwirledLayersModel(error_rates, nQubits, state_space_labels=specs.qubits,
-                                                alias_dict=alias_dict, idlename=idlename)
+                                                alias_dict=alias_dict, idle_name=idle_name)
     elif model_type == 'TwirledGates':
         model = _oplessmodel.TwirledGatesModel(error_rates, nQubits, state_space_labels=specs.qubits,
-                                               alias_dict=alias_dict, idlename=idlename)
+                                               alias_dict=alias_dict, idle_name=idle_name)
     elif model_type == 'AnyErrorCausesFailure':
         model = _oplessmodel.AnyErrorCausesFailureModel(error_rates, nQubits, state_space_labels=specs.qubits,
-                                                        alias_dict=alias_dict, idlename=idlename)
+                                                        alias_dict=alias_dict, idle_name=idle_name)
     elif model_type == 'AnyErrorCausesRandomOutput':
         model = _oplessmodel.AnyErrorCausesRandomOutputModel(error_rates, nQubits, state_space_labels=specs.qubits,
-                                                             alias_dict=alias_dict, idlename=idlename)
+                                                             alias_dict=alias_dict, idle_name=idle_name)
     else:
         raise ValueError("Model type not understood!")
 
