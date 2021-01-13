@@ -82,13 +82,14 @@ jobs:
     - uses: actions/checkout@v2
       with:
         #persist-credentials: false
-        #fetch-depth: 0
+        fetch-depth: 0
         token: ${{ secrets.PYGSTI_TOKEN }}
     - name: Merge changes to beta branch
       run: |
         git config --global user.name 'PyGSTi'
         git config --global user.email 'pygsti@noreply.github.com'
-        git checkout -B bugfix-action-merge-push origin/bugfix-action-merge-push
+        git checkout bugfix-action-merge-push
+        echo "${GITHUB_SHA}"
         git merge --ff-only ${GITHUB_SHA} && git push origin bugfix-action-merge-push
 
   test_extras: # On stable branches, run extended tests
