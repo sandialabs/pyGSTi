@@ -9177,7 +9177,8 @@ class LindbladErrorgen(LinearOperator):
                 v = -_np.log(1 - d2 * v) / d2
 
             if k not in existing_Ltermdict:
-                raise KeyError("Invalid L-term descriptor (key) `%s`" % str(k))
+                if not _np.isclose(abs(v), 0):
+                    raise KeyError("Invalid L-term descriptor (key) `%s`" % str(k))
             elif action == "update" or action == "reset":
                 existing_Ltermdict[k] = v
             elif action == "add":

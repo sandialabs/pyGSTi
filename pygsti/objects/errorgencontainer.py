@@ -137,7 +137,7 @@ class ErrorGeneratorContainer(object):
         """
         return self.errorgen_coefficients(return_basis=False, logscale_nonham=True)
 
-    def set_errorgen_coefficients(self, lindblad_term_dict, action="update", logscale_nonham=False):
+    def set_errorgen_coefficients(self, lindblad_term_dict, action="update", logscale_nonham=False, truncate=False):
         """
         Sets the coefficients of terms in the error generator of this :class:`LindbladOp`.
 
@@ -169,11 +169,17 @@ class ErrorGeneratorContainer(object):
             the corresponding value given in `lindblad_term_dict`.  This is what is
             performed by the function :method:`set_error_rates`.
 
+        truncate : bool, optional
+            Whether to truncate the projections onto the Lindblad terms in
+            order to meet constraints (e.g. to preserve CPTP) when necessary.
+            If False, then an error is thrown when the given coefficients
+            cannot be parameterized as specified.
+
         Returns
         -------
         None
         """
-        self.errorgen.set_coefficients(lindblad_term_dict, action, logscale_nonham)
+        self.errorgen.set_coefficients(lindblad_term_dict, action, logscale_nonham, truncate)
         self._update_rep()
         self.dirty = True
 

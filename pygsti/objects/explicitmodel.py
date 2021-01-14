@@ -2207,7 +2207,8 @@ class ExplicitOpModel(_mdl.OpModel):
         else:  # just concat the two sets of FIGO coeffs.
             return _np.concatenate((fogi_ham_coeffs, fogi_other_coeffs))
 
-    def set_fogi_errorgen_coefficients_array(self, fogi_coefficients, complete=False, normalized_elem_gens=True):
+    def set_fogi_errorgen_coefficients_array(self, fogi_coefficients, complete=False, normalized_elem_gens=True,
+                                             truncate=False):
 
         #TODO REMOVE
         #ham_vecs_pinv = self.fogi_info['ham_vecs_pinv']
@@ -2260,7 +2261,7 @@ class ExplicitOpModel(_mdl.OpModel):
             def inv_rescale(coeffs): return coeffs
 
         for op_label, coeff_dict in op_coeffs.items():
-            self.operations[op_label].set_errorgen_coefficients(inv_rescale(coeff_dict))
+            self.operations[op_label].set_errorgen_coefficients(inv_rescale(coeff_dict), truncate=truncate)
 
 
 class ExplicitLayerRules(_LayerRules):
