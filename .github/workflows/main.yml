@@ -30,7 +30,7 @@ jobs:
     runs-on: ubuntu-18.04
     strategy:
       matrix:
-        python-version: [3.6, 3.7, 3.8]
+        python-version: [3.6, 3.7, 3.8, 3.9]
 
     steps:
     - uses: actions/checkout@v2
@@ -96,7 +96,7 @@ jobs:
     strategy:
       fail-fast: false # Finish all tests even if one fails
       matrix:
-        python-version: [3.6, 3.7, 3.8]
+        python-version: [3.6, 3.7, 3.8, 3.9]
         nose-tests:
         - "algorithms algorithmsb"
         - "report reportb"
