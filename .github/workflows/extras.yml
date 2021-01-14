@@ -1,12 +1,12 @@
 # This workflow will install Python dependencies, run tests and lint with a variety of Python versions
 # For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
 
-name: Build and run tests
+name: Build and run test extras
 
 on:
   push:
-    branches: [ "*" ]
-  #pull_request:
+    branches: [ "master", "beta" ]
+  #pull_requests
   #  branches: [ "master", "develop", "beta" ]
   # Allow running manually from Actions tab
   workflow_dispatch:
@@ -20,17 +20,23 @@ env:
   NOSE_WITH_COVERAGE: 1
   NOSE_COVER_PACKAGE: "pygsti"
   NOSE_PROCESSES: -1
-  NOSE_NOPATH: 1 # use installed package, not source tree under CWD
+  NOSE_NOPATH: ""
   NOSE_PROCESS_TIMEOUT: 2400
-  NOSE_WHERE: "test/unit/"
+  NOSE_WHERE: "test/test_packages/"
 
 jobs:
-  build: # Main build + unit test check
+  test_extras: # On stable branches, run extended tests
 
     runs-on: ubuntu-18.04
     strategy:
+      fail-fast: false # Finish all tests even if one fails
       matrix:
         python-version: [3.6, 3.7, 3.8, 3.9]
+        nose-tests:
+        - "algorithms algorithmsb"
+        - "report reportb"
+        - "drivers objects tools iotest optimize construction extras"
+        # - "mpi" # Fails in GitHub Actions, passes locally but doesn't terminate threads properly
 
     steps:
     - uses: actions/checkout@v2
@@ -53,40 +59,18 @@ jobs:
         python -m pip install "numpy>=1.16.0"
         # Cython must be pre-installed to build native extensions on pyGSTi install
         python -m pip install cython
-        python -m pip install wheel flake8
-        python -m pip install .[testing]
+        python -m pip install wheel
+        # Installing with -e to keep installation local (for NOSE_NOPATH)
+        # but still compile Cython extensions
+        python -m pip install -e .[testing]
         python -m pip freeze
-    - name: Lint with flake8
-      run: |
-        # Critical errors, exit on failure
-        flake8 . --count --show-source --statistics --config=.flake8-critical
-        # Standard PEP8, allowed to fail since exit-zero treats all errors as warnings
-        flake8 . --exit-zero --statistics
-    - name: Run unit tests      
+    - name: Run test_packages ${{ matrix.nose-tests }}
+      env:
+        NOSETESTS: ${{ matrix.nose-tests }}
       run: |
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-        echo "nosetests: $NOSETESTS"  
+        echo "nosetests: $NOSETESTS"
         nosetests $NOSETESTS
-  
-  push: # Push to stable "beta" branch on successful build
-
-    runs-on: ubuntu-18.04
-
-    # Only run on "develop" branch if tests pass
-    needs: build
-    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-        token: ${{ secrets.PYGSTI_TOKEN }}
-    - name: Merge changes to beta branch
-      run: |
-        git config --global user.name 'PyGSTi'
-        git config --global user.email 'pygsti@noreply.github.com'
-        git checkout beta
-        git merge --ff-only ${GITHUB_SHA} && git push origin beta
 
 
 
