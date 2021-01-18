@@ -156,7 +156,7 @@ class NQubitTestCase(BaseTestCase):
         #    for tup in expList_tups:
         #        if tup[1] == L: lst.append( tup[0] )
         #    lsgstLists.append(lst[:]) # append *running* list
-        lsgstLists = gss.truncate(maxLengths) # can just use gss as input to pygsti.run_long_sequence_gst_base
+        lsgstLists = gss.truncate(xs_to_keep=maxLengths) # can just use gss as input to pygsti.run_long_sequence_gst_base
 
         mdl_to_optimize = build_XYCNOT_cloudnoise_model(nQubits, "line", cnot_edges, maxIdleWeight=2, maxhops=1,
                                                          extraWeight1Hops=0, extraGateWeight=1, verbosity=1,

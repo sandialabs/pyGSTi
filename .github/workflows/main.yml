@@ -5,7 +5,7 @@ name: Build and run tests
 
 on:
   push:
-    branches: [ "*" ]
+    branches-ignore: [ "beta" ]
   #pull_request:
   #  branches: [ "master", "develop", "beta" ]
   # Allow running manually from Actions tab
