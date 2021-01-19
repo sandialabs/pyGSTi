@@ -504,7 +504,8 @@ class GSTBadFitOptions(object):
     def __init__(self, threshold=DEFAULT_BAD_FIT_THRESHOLD, actions=(),
                  wildcard_budget_includes_spam=True,
                  wildcard_L1_weights=None, wildcard_primitive_op_labels=None,
-                 wildcard_initial_budget=None, wildcard_methods=('neldermead',)):
+                 wildcard_initial_budget=None, wildcard_methods=('neldermead',),
+                 wildcard_inadmissable_action='raise'):
         valid_actions = ('wildcard', 'Robust+', 'Robust', 'robust+', 'robust', 'do nothing')
         if not all([(action in valid_actions) for action in actions]):
             raise ValueError("Invalid action in %s! Allowed actions are %s" % (str(actions), str(valid_actions)))
@@ -515,6 +516,7 @@ class GSTBadFitOptions(object):
         self.wildcard_primitive_op_labels = wildcard_primitive_op_labels
         self.wildcard_initial_budget = wildcard_initial_budget
         self.wildcard_methods = wildcard_methods
+        self.wildcard_inadmissable_action = wildcard_inadmissable_action  # can be 'raise' or 'print'
 
 
 class GSTObjFnBuilders(object):
@@ -1995,7 +1997,7 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
                     toprint = ("   - Constraints still satisfied, budget NOT ADMISSABLE! Global = %.3g,"
                                " max per-circuit = %.3g ") % (glob_constraint, _np.max(percircuit_constraint))
                     # Throw an error if we are optimizing since this shouldn't happen then, otherwise just notify
-                    if budget_was_optimized:
+                    if budget_was_optimized and badfit_options.wildcard_inadmissable_action == 'raise':
                         raise ValueError(toprint)
                     else:
                         printer.log(toprint)

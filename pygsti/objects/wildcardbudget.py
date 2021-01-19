@@ -743,8 +743,8 @@ def update_circuit_probs(probs, freqs, circuit_budget):
 
     A = _np.where(_np.logical_and(qvec > fvec, fvec > 0))[0]
     B = _np.where(_np.logical_and(qvec < fvec, fvec > 0))[0]
-    C = _np.where(qvec == fvec)[0]
-    D = _np.where(_np.logical_and(qvec != fvec, fvec == 0))[0]
+    C = _np.where(_np.isclose(qvec, fvec))[0]
+    D = _np.where(_np.logical_and(~_np.isclose(qvec, fvec), fvec == 0))[0]
 
     if debug:
         print(" budget = ", W, " A=", A, " B=", B, " C=", C, " D=", D)
@@ -767,7 +767,7 @@ def update_circuit_probs(probs, freqs, circuit_budget):
     #  proportionally balance out movements from set B
 
     while len(remaining_indices) > 0:
-        assert(len(A) > 0 or len(B) > 0)  # then we can step `alpha` up and preserve the overal probability:
+        assert(len(A) > 0 or len(B) > 0)  # then we can step `alpha` up and preserve the overall probability:
         j, alpha0, beta0, pushedSD0, AorBorC = _get_minalpha_breakpoint(remaining_indices, A, B, C,
                                                                         qvec, fvec, ratio_vec)
         remaining_indices.remove(j)
