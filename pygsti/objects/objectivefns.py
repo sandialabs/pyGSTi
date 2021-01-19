@@ -1610,7 +1610,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
                        (self.raw_objfn.printer.verbosity == 3 and blk_rank == 0):
                         isub = my_atom_indices.index(atom_index)
                         print("rank %d: %gs: block %d/%d, sub-layout %d/%d, sub-layout-size = %d"
-                              % (self.resource_alloc.comm.Get_rank(), _time.time() - tm, k + 1, kmax, isub,
+                              % (rank, _time.time() - tm, k + 1, kmax, isub,
                                  len(my_atom_indices), atom.num_elements))
                         _sys.stdout.flush(); k += 1
 
