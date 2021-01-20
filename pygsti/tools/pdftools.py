@@ -1,0 +1,50 @@
+"""
+Tools for manipulating classical probability distributions.
+"""
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
+import numpy as _np
+
+
+def tvd(p, q):
+
+    q_temp = q.copy()
+
+    tvd = 0
+    for (event, x) in p.items():
+        try:
+            y = q_temp[event]
+            del q_temp[event]
+        except:
+            y = 0.
+        tvd += 0.5 * _np.abs(x - y)
+
+    for (event, y) in q_temp.items():
+        tvd += 0.5 * abs(y)
+
+    return tvd
+
+
+def classical_fidelity(p, q):
+
+    #sqrt_fidelity = 0
+    #for (event, x) in x.items():
+    #    y = q.get(event, 0.)
+    #    sqrt_fidelity += _np.sqrt(x * y)
+
+    return _np.sum([_np.sqrt(x * q.get(event, 0.)) for (event, x) in p.items()]) ** 2
+
+    #return root_fidelity ** 2
+
+
+def pdf_sparsity(p, n):
+
+    plist = _np.array(list(p.values()))
+    minsparsity = _np.sqrt(1 / 2**n)
+    return (_np.sqrt(_np.sum(plist**2)) / _np.sum(_np.abs(plist)) - minsparsity) / (1 - minsparsity)
