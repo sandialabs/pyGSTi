@@ -13,7 +13,23 @@ import numpy as _np
 
 
 def tvd(p, q):
+    """
+    Calculates the total variational distance between two probability distributions.
 
+    The distributions must be dictionaries, where keys are events (e.g., bit strings) and values are the
+    probabilities. If an event in the keys of one dictionary isn't in the keys of the other
+    then that probability is assumed to be zero. There are no checks that the input probability
+    distributions are valid (i.e., that the probabilities sum up to one and are postiive).
+
+    Parameters
+    ----------
+    p, q : dicts
+        The distributions to calculate the TVD between.
+
+    Returns
+    -------
+    float
+    """
     q_temp = q.copy()
 
     tvd = 0
@@ -32,7 +48,23 @@ def tvd(p, q):
 
 
 def classical_fidelity(p, q):
+    """
+    Calculates the (classical) fidelity between two probability distributions.
 
+    The distributions must be dictionaries, where keys are events (e.g., bit strings) and values are the
+    probabilities. If an event in the keys of one dictionary isn't in the keys of the other
+    then that probability is assumed to be zero. There are no checks that the input probability
+    distributions are valid (i.e., that the probabilities sum up to one and are postiive).
+
+    Parameters
+    ----------
+    p, q : dicts
+        The distributions to calculate the TVD between.
+
+    Returns
+    -------
+    float
+    """
     #sqrt_fidelity = 0
     #for (event, x) in x.items():
     #    y = q.get(event, 0.)
@@ -44,7 +76,20 @@ def classical_fidelity(p, q):
 
 
 def pdf_sparsity(p, n):
+    """
+    Computes a measure of the sparsity ("spikyness") of a probability distribution.
 
+    Parameters
+    ----------
+    p : dict
+        The distribution
+
+    n : the number of possible events (zero probability events do not need to be included in `p`)
+
+    Returns
+    -------
+    float
+    """
     plist = _np.array(list(p.values()))
     minsparsity = _np.sqrt(1 / 2**n)
     return (_np.sqrt(_np.sum(plist**2)) / _np.sum(_np.abs(plist)) - minsparsity) / (1 - minsparsity)
