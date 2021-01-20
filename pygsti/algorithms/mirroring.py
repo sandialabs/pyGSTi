@@ -36,7 +36,16 @@ def _pvec_to_pauli_layer(pvec, pauli_labels, qubit_labels):
     return [(pl, q) for pl, q in zip(paulis, qubit_labels)]
 
 
-def create_mirror_circuit(circ, pspec, circtype='Clifford+Gz', pauli_labels=None):
+def _mod_2pi(theta):
+    if theta > _np.pi:
+        return theta - 2 * _np.pi
+    elif theta <= -1 * _np.pi:
+        return theta + 2 * _np.pi
+    else:
+        return theta
+
+
+def create_mirror_circuit(circ, pspec, circtype='Clifford+Gz', pauli_labels=None, pluspi_prob=0.):
     """
     *****************************************************************
     Function currently has the following limitations that need fixing:
@@ -48,6 +57,8 @@ def create_mirror_circuit(circ, pspec, circtype='Clifford+Gz', pauli_labels=None
        - There's no option for randomized prep/meas
        - There's no option for randomly adding +/-pi to the Z rotation angles.
        - There's no option for adding "barriers"
+       - There's no test that the 'Gz' gate has the "correct" convention for a rotation angle
+         (a rotation by pi must be a Z gate) or that it's a rotation around Z.
     *****************************************************************
     """
     assert(circtype == 'Clifford+Gz' or circtype == 'Clifford')
@@ -72,16 +83,27 @@ def create_mirror_circuit(circ, pspec, circtype='Clifford+Gz', pauli_labels=None
             for gate in layer:
 
                 q_int = qubits.index(gate.qubits[0])
-                if telp_p[n + q_int] == 0:  # If the Pauli is Z or I.
-                    ang = str(-float(gate.args[0]))
-                else:  # If the Pauli is X or Y.
-                    ang = str(+float(gate.args[0]))
-                quasi_inverse_gate = _lbl.Label("Gz", gate.qubits, args=(str(ang),))
+                angle = float(gate.args[0])
+
+                if telp_p[n + q_int] == 0: rotation_sign = -1.  # If the Pauli is Z or I.
+                else: rotation_sign = +1  # If the Pauli is X or Y.
+
+                # Sets the quasi inversion angle to + or - the original angle, depending on the Paul
+                quasi_inverse_angle = rotation_sign * angle
+                # Decides whether to add with to add +/- pi to the rotation angle.
+                if _np.random.binomial(1, pluspi_prob) == 1:
+                    quasi_inverse_angle += _np.pi * (-1)**_np.random.binomial(1, 0.5)
+                    quasi_inverse_angle = _mod_2pi(quasi_inverse_angle)
+                    # Updates the telescoping Pauli (in the symplectic rep_, to include this added pi-rotation,
+                    # as we need to include it as we keep collapsing the circuit down.
+                    telp_p[q_int] = (telp_p[q_int] + 2) % 4
+                # Constructs the quasi-inverse gate.
+                quasi_inverse_gate = _lbl.Label("Gz", gate.qubits, args=(str(quasi_inverse_angle),))
                 quasi_inverse_layer.append(quasi_inverse_gate)
 
             # We don't have to update the telescoping Pauli as it's unchanged, but when we update
             # this it'll need to change.
-            telp_p = telp_p
+            #telp_p = telp_p
 
         else:
             quasi_inverse_layer = [_lbl.Label(pspec.gate_inverse[gate.name], gate.qubits) for gate in layer]
