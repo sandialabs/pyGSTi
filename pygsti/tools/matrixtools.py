@@ -2118,3 +2118,32 @@ def union_space(space1, space2, tol=1e-7):
     """
     VW = _np.concatenate((space1, space2), axis=1)
     return remove_dependent_cols(VW, tol)
+
+
+#UNUSED
+#def spectral_radius(x):
+#    if hasattr(x, 'ndim') and x.ndim == 2:  # then interpret as a numpy array and take norm
+#        evals = _np.sort(_np.linalg.eigvals(x))
+#        return abs(evals[-1] - evals[0])
+#    else:
+#        return x
+
+
+def jamiolkowski_angle(hamiltonian_mx):
+    """
+    TODO: docstring
+    """
+    Hmx = hamiltonian_mx
+    d = Hmx.shape[0]
+    I = _np.identity(d)
+    errmap = _np.kron(I, _spl.expm(1j * Hmx))
+    psi = _np.zeros(d**2)  # will be a maximally entangled state
+    for i in range(d):
+        x = _np.zeros(d); x[i] = 1.0
+        xx = _np.kron(x, x)
+        psi += xx / _np.sqrt(d)
+    assert(_np.isclose(_np.dot(psi, psi), 1.0))
+    cos_theta = abs(_np.dot(psi.conj(), _np.dot(errmap, psi)))
+    return _np.arccos(cos_theta)
+    #cos_squared_theta = entanglement_infidelity(expm(1j * Hmx), identity)
+    #return _np.arccos(_np.sqrt(cos_squared_theta))

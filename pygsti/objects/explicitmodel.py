@@ -1500,6 +1500,26 @@ class ExplicitOpModel(_mdl.OpModel):
         self._opcaches['povm-layers'] = simplified_effects
         self._opcaches['op-layers'] = simplified_ops
 
+    def errorgen_coefficients(self, normalized_elem_gens=True):
+        """TODO: docstring - returns a nested dict containing all the error generator coefficients for all
+           the operations in this model. """
+        if not normalized_elem_gens:
+            def rescale(coeffs):
+                """ HACK: rescales errorgen coefficients for normalized-Pauli-basis elementary error gens
+                         to be coefficients for the usual un-normalied-Pauli-basis elementary gens.  This
+                         is only needed in the Hamiltonian case, as the non-ham "elementary" gen has a
+                         factor of d2 baked into it.
+                """
+                d2 = _np.sqrt(self.dim); d = _np.sqrt(d2)
+                return {lbl: (val / d if lbl[0] == 'H' else val) for lbl, val in coeffs.items()}
+
+            op_coeffs = {op_label: rescale(self.operations[op_label].errorgen_coefficients())
+                         for op_label in self.operations}
+        else:
+            op_coeffs = {op_label: self.operations[op_label].errorgen_coefficients()
+                         for op_label in self.operations}
+        return op_coeffs
+
     def _add_reparameterization(self, primitive_op_labels,
                                 full_ham_fogi_vecs, full_ham_space_labels,
                                 full_other_fogi_vecs, full_other_space_labels):
@@ -1605,22 +1625,7 @@ class ExplicitOpModel(_mdl.OpModel):
         return labels
 
     def fogi_errorgen_coefficients_array(self, include_fogv=False, normalized_elem_gens=True):
-
-        if not normalized_elem_gens:
-            def rescale(coeffs):
-                """ HACK: rescales errorgen coefficients for normalized-Pauli-basis elementary error gens
-                         to be coefficients for the usual un-normalied-Pauli-basis elementary gens.  This
-                         is only needed in the Hamiltonian case, as the non-ham "elementary" gen has a
-                         factor of d2 baked into it.
-                """
-                d2 = _np.sqrt(self.dim); d = _np.sqrt(d2)
-                return {lbl: (val / d if lbl[0] == 'H' else val) for lbl, val in coeffs.items()}
-
-            op_coeffs = {op_label: rescale(self.operations[op_label].errorgen_coefficients())
-                         for op_label in self.operations}
-        else:
-            op_coeffs = {op_label: self.operations[op_label].errorgen_coefficients()
-                         for op_label in self.operations}
+        op_coeffs = self.errorgen_coefficients(normalized_elem_gens)
 
         if include_fogv:
             ham_fogi_coeffs, ham_fogv_coeffs = self.ham_fogi_store.opcoeffs_to_fogiv_coefficients_array(op_coeffs)

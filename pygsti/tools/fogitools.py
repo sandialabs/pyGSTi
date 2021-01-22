@@ -199,6 +199,28 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                         gauge_action = _np.concatenate([gauge_action_matrices[ol] for ol in existing_set]
                                                        + [gauge_action_matrices[op_label]], axis=0)
                         n = sum([gauge_action_matrices[ol].shape[0] for ol in existing_set])  # boundary btwn A & B
+
+                        # we want fogi_dir s.t. dot(fogi_dir.T, gauge_action) == 0
+                        # let fogi_dir ~= ga_A(intersection_vec) - ga_B(intersection_vec) - but actually
+                        # let fogi_dir = pinv(ga_A).T * int_vec - pinv(ga_B).T * int_vec, so that:
+                        # dot(fogi_dir.T, gauge_action) = int_vec.T * (pinv(ga_A) - pinv(ga_B)) * gauge_action
+                        #                               = int_vec.T * (I - I) = 0  (A,B are faithful reps of gauge?)
+                        # Note that the errorgen-space vector v := dot(ga_A - ga_B, int_vec) has the property
+                        # that dot(fogi_dir.T, v) = int_vec.T * (I + I) * int_vec = 2 * norm2(int_vec)  (??)
+
+                        # gauge_action maps gauge_space => errorgen_space
+                        # pinv_gauge_action maps errorgen_space => gauge_space  (need pinv rather than just rescaling
+                        #      & transpose b/c gauge action can contain linear dependencies, but similar)
+                        # pinv_gauge_action.T maps gauge_
+
+                        # Almost by definition:
+                        # fogi_direction = nullspace(gauge_action.T) = vector s.g. dot(fogi_direction.T, gauge_action) = 0
+                        # what gauge direction generates fogi_direction? or actually fogi_vector = fogi_direction / norm2(fogi_direction)?
+                        # i.e. fogi_dir_A := pinv(ga_A).T * int_vec = dot(ga_A, X)  - what is X?
+                        #  fogi_dir_A.T * ga_A = int_vec.T * pinv(ga_A) * ga_A = int_vec.T
+                        # fogi_dir_A = renorm_cols(ga_A) * int_vec
+                        # fogi_vec_A = renorm_cols(ga_A) * int_vec / norm2(fogi_dir_A)
+
                         inv_diff_gauge_action = _np.concatenate((_np.linalg.pinv(gauge_action[0:n, :], rcond=1e-7),
                                                                  -_np.linalg.pinv(gauge_action[n:, :], rcond=1e-7)),
                                                                 axis=1).T

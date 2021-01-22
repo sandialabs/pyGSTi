@@ -208,3 +208,66 @@ class FirstOrderGaugeInvariantStore(object):
     def fogiv_coefficients_array_to_opcoeffs(self, fogi_coefficients, fogv_coefficients):
         return self.errorgen_vec_to_opcoeffs(self.fogiv_coefficients_array_to_errorgen_vec(
             fogi_coefficients, fogv_coefficients))
+
+    def create_binned_fogi_infos(self, tol=1e-5):
+        """
+        Creates an 'info' dictionary for each FOGI quantity and places it within a
+        nested dictionary structure by the operators involved, the types of error generators,
+        and the qubits acted upon (a.k.a. the "target" qubits).
+        TODO: docstring
+
+        Returns
+        -------
+        dict
+        """
+
+        # Construct a dict of information for each elementary error-gen basis element (the basis for error-gen space)
+        elemgen_info = {}
+        for k, (op_label, eglabel) in enumerate(self.errgen_space_op_elem_labels):
+            elemgen_info[k] = {
+                'type': eglabel[0],
+                'qubits': set([i for bel_lbl in eglabel[1:] for i, char in enumerate(bel_lbl) if char != 'I']),
+                'op_label': op_label,
+                'elemgen_label': eglabel,
+            }
+
+        bins = {}
+        dependent_indices = set(self.dependent_dir_indices)  # indices of one set of linearly dep. fogi dirs
+        for i in range(self.num_fogi_directions):
+            fogi_dir = self.fogi_directions[:, i]
+            label = self.fogi_labels[i]
+            label_raw = self.raw_fogi_labels[i]
+            label_abbrev = self.abbrev_fogi_labels[i]
+            gauge_dir = self.fogi_gaugespace_directions[i]
+
+            present_elgen_indices = _np.where(_np.abs(fogi_dir) > tol)[0]
+
+            #Aggregate elemgen_info data for all elemgens that contribute to this FOGI qty (as determined by `tol`)
+            ops_involved = set(); qubits_acted_upon = set(); types = set(); basismx = None
+            for k in present_elgen_indices:
+                k_info = elemgen_info[k]
+                ops_involved.add(k_info['op_label'])
+                qubits_acted_upon.update(k_info['qubits'])
+                types.add(k_info['type'])
+
+            #Create the "info" dictionary for this FOGI quantity
+            info = {'op_set': ops_involved,
+                    'types': types,
+                    'qubits': qubits_acted_upon,
+                    'fogi_index': i,
+                    'label': label,
+                    'label_raw': label_raw,
+                    'label_abbrev': label_abbrev,
+                    'dependent': bool(i in dependent_indices),
+                    'gauge_dir': gauge_dir,
+                    'fogi_dir': fogi_dir
+                    }
+            ops_involved = tuple(sorted(ops_involved))
+            types = tuple(sorted(types))
+            qubits_acted_upon = tuple(sorted(qubits_acted_upon))
+            if ops_involved not in bins: bins[ops_involved] = {}
+            if types not in bins[ops_involved]: bins[ops_involved][types] = {}
+            if qubits_acted_upon not in bins[ops_involved][types]: bins[ops_involved][types][qubits_acted_upon] = []
+            bins[ops_involved][types][qubits_acted_upon].append(info)
+
+        return bins

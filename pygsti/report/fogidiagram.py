@@ -14,6 +14,8 @@ import numpy as _np
 import scipy.linalg as _spl
 import collections as _collections
 from ..objects import Basis as _Basis
+from ..tools import matrixtools as _mt
+
 import matplotlib.cm as _matplotlibcm
 from matplotlib.colors import LinearSegmentedColormap as _LinearSegmentedColormap
 #_cmap = _matplotlibcm.get_cmap('Reds')
@@ -30,6 +32,19 @@ _cmap = _LinearSegmentedColormap('lightReds', segmentdata=_cdict, N=256)
 # - create table of all quantities to show structure
 
 
+def _create_errgen_op(vec, list_of_mxs):
+    return sum([c * mx for c, mx in zip(vec, list_of_mxs)])
+
+
+def _is_dependent(infos_by_type):
+    for typ, infos_by_actedon in infos_by_type.items():
+        for acted_on, infos in infos_by_actedon.items():
+            for info in infos:
+                if info['dependent'] is False:
+                    return False
+    return True
+
+
 class FOGIDiagram(object):
     """
     A diagram of the first-order-gauge-invariant (FOGI) quantities of a model.
@@ -37,491 +52,376 @@ class FOGIDiagram(object):
     This class encapsulates a way of visualizing a model's FOGI quantities.
     """
 
-    def __init__(self, model, error_type="both", op_to_target_qubits=None, debug=False):
-        assert(error_type in ('both', 'hamiltonian', 'stochastic'))
-        self.error_type = error_type
-        self.fogi_info = model.fogi_info.copy()  # shallow copy
-        self.fogi_coeffs = model.fogi_errorgen_coefficients_array(normalized_elem_gens=False)
-        self.bins = self._create_binned_data()
-        self.debug = debug
+    def __init__(self, fogi_store, op_coefficients, model_dim, op_to_target_qubits=None):
+        # Maybe allow fogi_store to be multiple in future?
+        self.fogi_store = fogi_store
+        self.fogi_coeffs = fogi_store.opcoeffs_to_fogi_coefficients_array(op_coefficients)
+        self.fogi_infos = self.fogi_store.create_binned_fogi_infos()
 
+        #Construct op_to_target_qubits if needed
         if op_to_target_qubits is None:
             all_qubits = set()
-            for op_label in self.fogi_info['primitive_op_labels']:
+            for op_label in self.fogi_store.primitive_op_labels:
                 if op_label.sslbls is not None:
                     all_qubits.update(op_label.sslbls)
             all_qubits = tuple(sorted(all_qubits))
             op_to_target_qubits = {op_label: op_label.sslbls if (op_label.sslbls is not None) else all_qubits
-                                   for op_label in self.fogi_info['primitive_op_labels']}
+                                   for op_label in self.fogi_store.primitive_op_labels}
         self.op_to_target_qubits = op_to_target_qubits
 
-        normalized_pauli_basis = _Basis.cast('pp', model.dim)
-        scale = model.dim**(0.25)  # to change to standard pauli-product matrices
-        gauge_basis_mxs = [mx * scale for mx in normalized_pauli_basis.elements[1:]]
+        #We need the gauge basis to construct actual gauge generators for computation of J-angle below.
+        # these are un-normalized when we construct the gauge action in, e.g. first_order_ham_gauge_action_matrix(...)
+        # and so they must be un-normalized (standard Pauli mxs) here.
+        normalized_pauli_basis = _Basis.cast('pp', model_dim)
+        scale = model_dim**(0.25)  # to change to standard pauli-product matrices
+        self.gauge_basis_mxs = [mx * scale for mx in normalized_pauli_basis.elements[1:]]
 
-        def _spectral_radius(x):
-            if hasattr(x, 'ndim') and x.ndim == 2:  # then interpret as a numpy array and take norm
-                evals = _np.sort(_np.linalg.eigvals(x))
-                return abs(evals[-1] - evals[0])
-            else:
-                return x
-
-        def _jamiolkowski_angle(Hmx):
-            d = Hmx.shape[0]
-            I = _np.identity(d)
-            errmap = _np.kron(I, _spl.expm(1j * Hmx))
-            psi = _np.zeros(d**2)  # will be a maximally entangled state
-            for i in range(d):
-                x = _np.zeros(d); x[i] = 1.0
-                xx = _np.kron(x, x)
-                psi += xx / _np.sqrt(d)
-            assert(_np.isclose(_np.dot(psi, psi), 1.0))
-            cos_theta = abs(_np.dot(psi.conj(), _np.dot(errmap, psi)))
-            return _np.arccos(cos_theta)
-            #cos_squared_theta = entanglement_infidelity(expm(1j * Hmx), identity)
-            #return _np.arccos(_np.sqrt(cos_squared_theta))
-
-        def _create_errgen_op(vec, list_of_mxs):
-            return sum([c * mx for c, mx in zip(vec, list_of_mxs)])
-
-        def _total_contrib(typ, op_set, flat_infos):
-            if typ == ('S',):
-                return _sto_total_contrib(flat_infos)
-            elif typ == ('H',):
-                if len(op_set) == 1:
-                    return _ham_total_local_contrib(op_set, flat_infos)
-                else:
-                    return _ham_total_relational_contrib(op_set, flat_infos)
-            else:
-                raise ValueError("Invalid type: " + str(typ))
-
-        def _sto_total_contrib(flat_infos):
-            return sum([abs(info['coeff']) for info in flat_infos])
-
-        def _ham_total_local_contrib(op_set, flat_infos):
-            assert(len(op_set) == 1)
-            if len(flat_infos) == 0: return {'errgen_angle': 0.0}
-            op_indices_slc = self.fogi_info['ham_op_errgen_indices'][op_set[0]]
-            errgen_vec = _np.zeros((op_indices_slc.stop - op_indices_slc.start), complex)
-            for info in flat_infos:
-                assert(set(op_set) == info['ops'])
-                coeff = info['coeff']
-                inv_fogi_vec = info['fogi_vec'] / _np.linalg.norm(info['fogi_vec'])**2
-                # "inverse" fogi vector because all local fogi vecs are orthonormal but not necessarily
-                # normalized - so dividing by the norm^2 here => dot(inv_fogi_vec, fogi_vec) = 1.0
-                errgen_vec += coeff * inv_fogi_vec[op_indices_slc]
-            Hmx = _create_errgen_op(errgen_vec, gauge_basis_mxs)  # NOTE: won't work for reduced models
-            angle = _jamiolkowski_angle(Hmx)
-            return {'errgen_angle': angle}
-
-        def _ham_total_relational_contrib(op_set, flat_infos):
-            if len(flat_infos) == 0:
-                if self.debug:
-                    ret = {'go_angle': 0.0}
-                    ret.update({op_label: 0.0 for op_label in op_set})
-                    return ret
-                else:
-                    return {'min_impact': 0.0}
-
-            gauge_vec = None
-            for info in flat_infos:
-                assert(set(op_set) == info['ops'])
-                assert(info['gauge_dir'] is not None)
-                if gauge_vec is None:
-                    gauge_vec = info['coeff'] * info['gauge_dir']
-                else:
-                    gauge_vec += info['coeff'] * info['gauge_dir']
-
-            # get "impact" for relational qtys
-            Hmx = _create_errgen_op(gauge_vec, gauge_basis_mxs)
-            ret = {'go_angle': _jamiolkowski_angle(Hmx)}
-            for op_label in op_set:
-                errgen_vec = _np.dot(self.fogi_info['ham_gauge_action_mxs'][op_label], gauge_vec)
-                Hmx = _create_errgen_op(errgen_vec, gauge_basis_mxs)  # NOTE: won't work for reduced models
-                ret[op_label] = _jamiolkowski_angle(Hmx)  # impact angle for op_label
-            if self.debug: return ret
-            else: return {'min_impact': min([v for k, v in ret.items() if k != 'go_angle'])}  # same as _min_impact()
-
-        def _make_coherent_stochastic_by_support_table(op_set, infos_by_type):
-            table = {}
-            table_rows = set()
-            table_cols = set()
-            for typ, infos_by_actedon in infos_by_type.items():
-                if typ == ('H',):
-                    col = "Coherent"
-                    if self.error_type == "stochastic": continue
-                elif typ == ('S',):
-                    col = "Stochastic"
-                    if self.error_type == "hamiltonian": continue
-                else: col = "Mixed"
-
-                table_cols.add(col)
-                for acted_on, infos in infos_by_actedon.items():
-                    total = _total_contrib(typ, op_set, infos)
-                    table_rows.add(acted_on)
-                    if acted_on not in table: table[acted_on] = {}
-                    table[acted_on][col] = total
-            return table, tuple(sorted(table_rows, key=lambda t: (len(t),) + t)), tuple(sorted(table_cols))
-
-        def _compute_by_weight_magnitudes(op_set, infos_by_type):
-            mags_by_xtalk_weight = {}  # "weight" of crosstalk is an int.  0 = local
-            infos_by_xtalk_weight = {'H': _collections.defaultdict(list),
-                                     'S': _collections.defaultdict(list)}
-            #target_qubits = set([qi for op in op_set for qi in self.op_to_target_qubits[op]])
-            for typ, infos_by_actedon in infos_by_type.items():
-                if typ == ('H',):
-                    if self.error_type == "stochastic": continue
-                elif typ == ('S',):
-                    if self.error_type == "hamiltonian": continue
-                else:
-                    raise ValueError("Invalid type: %s" % str(typ))
-
-                for acted_on, infos in infos_by_actedon.items():
-                    # if set(acted_on).issubset(target_qubits):
-                    if all([set(acted_on).issubset(self.op_to_target_qubits[op]) for op in op_set]):
-                        infos_by_xtalk_weight[typ[0]][0].extend(infos)  # local == weight 0
-                    else:
-                        infos_by_xtalk_weight[typ[0]][len(acted_on)].extend(infos)  # higher weight
-
-            weights = sorted(set(list(infos_by_xtalk_weight['H'].keys())
-                                 + list(infos_by_xtalk_weight['S'].keys())))
-            for weight in weights:
-                totalH = totalS = 0.0
-                items_abbrev = []
-                if weight in infos_by_xtalk_weight['H']:
-                    totalH = _total_contrib(('H',), op_set, infos_by_xtalk_weight['H'][weight])
-                    totalH = min([v for k, v in totalH.items() if k != 'go_angle'])
-                    items_abbrev.extend([(info['label_abbrev'], info['coeff'],
-                                          _total_contrib(('H',), op_set, [info]))
-                                         for info in infos_by_xtalk_weight['H'][weight]])
-                if weight in infos_by_xtalk_weight['S']:
-                    totalS = _total_contrib(('S',), op_set, infos_by_xtalk_weight['S'][weight])
-                    items_abbrev.extend([(info['label_abbrev'], info['coeff'], _total_contrib(('S',), op_set, [info]))
-                                         for info in infos_by_xtalk_weight['S'][weight]])
-
-                mags_by_xtalk_weight[weight] = {'total': totalH + totalS,
-                                                'items': items_abbrev}  # = list of (abbrev-item-lbl, coeff, contrib)
-
-            return mags_by_xtalk_weight
-
-        def _compute_by_target_magnitudes(op_set, infos_by_type):
-            mags_by_target = {}  # "weight" of crosstalk is an int.  0 = local
-            infos_by_target = {'H': _collections.defaultdict(list),
-                               'S': _collections.defaultdict(list)}
-            #target_qubits = set([qi for op in op_set for qi in self.op_to_target_qubits[op]])
-            for typ, infos_by_actedon in infos_by_type.items():
-                if typ == ('H',):
-                    if self.error_type == "stochastic": continue
-                elif typ == ('S',):
-                    if self.error_type == "hamiltonian": continue
-                else:
-                    raise ValueError("Invalid type: %s" % str(typ))
-
-                for acted_on, infos in infos_by_actedon.items():
-                    infos_by_target[typ[0]][acted_on].extend(infos)
-
-            targets = sorted(set(list(infos_by_target['H'].keys())
-                                 + list(infos_by_target['S'].keys())))
-            for target in targets:
-                totalH = totalS = 0.0
-                items_abbrev = []
-                if target in infos_by_target['H']:
-                    totalH = _total_contrib(('H',), op_set, infos_by_target['H'][target])
-                    totalH = min([v for k, v in totalH.items() if k != 'go_angle'])
-                    items_abbrev.extend([(info['label_abbrev'], info['coeff'],
-                                          _total_contrib(('H',), op_set, [info]))
-                                         for info in infos_by_target['H'][target]])
-                if target in infos_by_target['S']:
-                    totalS = _total_contrib(('S',), op_set, infos_by_target['S'][target])
-                    items_abbrev.extend([(info['label_abbrev'], info['coeff'], _total_contrib(('S',), op_set, [info]))
-                                         for info in infos_by_target['S'][target]])
-
-                mags_by_target[target] = {'total': totalH + totalS,
-                                          'items': items_abbrev}  # = list of (abbrev-item-lbl, coeff, contrib)
-
-            return mags_by_target
-
-        def _make_long_table(op_set, infos_by_type):
-            table = {}
-            table_rows = []
-            table_cols = ('Coefficient', 'Total', 'Raw Label')
-            for typ, infos_by_actedon in infos_by_type.items():
-                if typ == ('H',) and self.error_type == "stochastic": continue
-                if typ == ('S',) and self.error_type == "hamiltonian": continue
-                for acted_on, infos in infos_by_actedon.items():
-                    for info in infos:
-                        total = _total_contrib(typ, op_set, [info])
-                        table_rows.append(info['label'])
-                        table[info['label']] = {'Coefficient': info['coeff'],
-                                                'Raw Label': info['label_raw'],
-                                                'Total': total}
-            return table, tuple(table_rows), table_cols
-
-        def _make_abbrev_table(op_set, infos_by_type):
-            abbrev_label_coeff_list = []
-            for typ, infos_by_actedon in infos_by_type.items():
-                if typ == ('H',) and self.error_type == "stochastic": continue
-                if typ == ('S',) and self.error_type == "hamiltonian": continue
-                for acted_on, infos in infos_by_actedon.items():
-                    for info in infos:
-                        total = _total_contrib(typ, op_set, [info])
-                        abbrev_label_coeff_list.append((info['label_abbrev'], info['coeff'], total))
-            return abbrev_label_coeff_list
-
-        def _is_dependent(infos_by_type):
-            for typ, infos_by_actedon in infos_by_type.items():
-                for acted_on, infos in infos_by_actedon.items():
-                    for info in infos:
-                        if info['dependent'] is False:
-                            return False
-            return True
-
+        # op-sets (sets of operations) correspond to units/nodes on diagrams, so it's useful
+        # to have dictionaries of all the summarized information about all the fogi quantities
+        # living on a given set of operations.
         self.op_set_info = {}
-        for op_set, op_fogis_by_type in self.bins.items():
+        for op_set, op_fogi_infos_by_type in self.fogi_infos.items():
 
-            all_H_infos = [info for acted_on, infos in op_fogis_by_type.get(('H',), {}).items() for info in infos]
-            all_S_infos = [info for acted_on, infos in op_fogis_by_type.get(('S',), {}).items() for info in infos]
+            total = {}
+            flat_H_infos = [info for acted_on, infos in op_fogi_infos_by_type.get(('H',), {}).items() for info in infos]
+            flat_S_infos = [info for acted_on, infos in op_fogi_infos_by_type.get(('S',), {}).items() for info in infos]
+            if len(flat_H_infos) > 0: total['H'] = self._contrib(('H',), op_set, flat_H_infos)
+            if len(flat_S_infos) > 0: total['S'] = self._contrib(('S',), op_set, flat_S_infos)
+            total['mag'] = sum([self._extract_mag(contrib) for contrib in total.values()])
 
             self.op_set_info[op_set] = {
-                'Coherent': _total_contrib(('H',), op_set, all_H_infos),
-                'Stochastic': _total_contrib(('S',), op_set, all_S_infos),
-                'table': _make_coherent_stochastic_by_support_table(op_set, op_fogis_by_type),
-                'longtable': _make_long_table(op_set, op_fogis_by_type),
-                'abbrevtable': _make_abbrev_table(op_set, op_fogis_by_type),
-                'byweight': _compute_by_weight_magnitudes(op_set, op_fogis_by_type),
-                'bytarget': _compute_by_target_magnitudes(op_set, op_fogis_by_type),
-                'dependent': _is_dependent(op_fogis_by_type),
-                'children': None  # FUTURE?
+                'total': total,
+                'hs_support_table': self._make_coherent_stochastic_by_support_table(op_set, op_fogi_infos_by_type),
+                'individual_fogi_table': self._make_individual_fogi_table(op_set, op_fogi_infos_by_type),
+                'abbrev_individual_fogi_table': self._make_abbrev_table(op_set, op_fogi_infos_by_type),
+                'byweight': self._compute_by_weight_magnitudes(op_set, op_fogi_infos_by_type),
+                'bytarget': self._compute_by_target_magnitudes(op_set, op_fogi_infos_by_type),
+                'dependent': _is_dependent(op_fogi_infos_by_type),
             }
-            assert(('H', 'S') not in op_fogis_by_type)
+            assert(('H', 'S') not in op_fogi_infos_by_type)
 
-    def _create_binned_data(self):
+    def _contrib(self, typ, op_set, infos_to_aggregate):
+        def _sto_contrib(infos):
+            return {'error_rate': sum([abs(self.fogi_coeffs[info['fogi_index']]) for info in infos])}
 
-        op_labels = self.fogi_info['primitive_op_labels']
-        nHam = self.fogi_info['ham_vecs'].shape[1]
-        #op_to_target_qubits = {op_label: op_label.sslbls for op_label in op_labels}
-        pauli_bases = {}
+        def _ham_local_contrib(op_set, infos):
+            assert(len(op_set) == 1)
+            if len(infos) == 0: return {'errgen_angle': 0.0}
+            op_indices_slc = self.fogi_store.op_errorgen_indices[op_set[0]]
+            errgen_vec = _np.zeros((op_indices_slc.stop - op_indices_slc.start), complex)
+            for info in infos:
+                assert(set(op_set) == info['op_set'])
+                coeff = self.fogi_coeffs[info['fogi_index']]
+                fogi_vec = info['fogi_dir'] / _np.linalg.norm(info['fogi_dir'])**2
+                # fogi vec = "inverse" of fogi dir because all local fogi dirs are orthonormal but not necessarily
+                # normalized - so dividing by the norm^2 here => dot(fogi_dir, fogi_vec) = 1.0 as desired.
+                errgen_vec += coeff * fogi_vec[op_indices_slc]
+            Hmx = _create_errgen_op(errgen_vec, self.gauge_basis_mxs)  # NOTE: won't work for reduced models
+            angle = _mt.jamiolkowski_angle(Hmx)
+            return {'errgen_angle': angle}
 
-        def _create_elemgen_info(ordered_op_labels, elemgen_labels_by_op):
-            k = 0; info = {}
-            for op_label in ordered_op_labels:
-                for eglabel in elemgen_labels_by_op[op_label]:
-                    nq = len(eglabel[1])
-                    if nq not in pauli_bases: pauli_bases[nq] = _Basis.cast('pp', 4**nq)
+        def _ham_relational_contrib(op_set, infos):
+            if len(infos) == 0:
+                ret = {'go_angle': 0.0, 'min_impact': 0.0}
+                ret.update({op_label: 0.0 for op_label in op_set})
+                return ret
 
-                    info[k] = {
-                        'type': eglabel[0],
-                        'qubits': set([i for bel_lbl in eglabel[1:] for i, char in enumerate(bel_lbl) if char != 'I']),
-                        'op': op_label,
-                        'eglabel': eglabel,
-                        'basismx': pauli_bases[nq][eglabel[1]] if (len(eglabel[1:]) == 1) else None
-                    }
-                    k += 1
-            return info
-
-        ham_elemgen_info = _create_elemgen_info(op_labels, self.fogi_info['ham_elgen_labels_by_op'])
-        other_elemgen_info = _create_elemgen_info(op_labels, self.fogi_info['other_elgen_labels_by_op'])
-
-        bins = {}
-        dependent_indices = set(self.fogi_info['dependent_vec_indices'])
-        for i, coeff in enumerate(self.fogi_coeffs):
-            vec = self.fogi_info['ham_vecs'][:, i] if i < nHam else self.fogi_info['other_vecs'][:, i - nHam]
-            label = self.fogi_info['ham_fogi_labels'][i] if i < nHam else self.fogi_info['other_fogi_labels'][i - nHam]
-            label_raw = self.fogi_info['ham_fogi_labels_raw'][i] if i < nHam else \
-                self.fogi_info['other_fogi_labels_raw'][i - nHam]
-            label_abbrev = self.fogi_info['ham_fogi_labels_abbrev'][i] if i < nHam else \
-                self.fogi_info['other_fogi_labels_abbrev'][i - nHam]
-            gauge_dir = self.fogi_info['ham_fogi_gauge_directions'][i] if i < nHam else \
-                self.fogi_info['other_fogi_gauge_directions'][i - nHam]
-
-            elemgen_info = ham_elemgen_info if i < nHam else other_elemgen_info
-            present_elgen_indices = _np.where(_np.abs(vec) > 1e-5)[0]
-
-            ops_involved = set(); qubits_acted_upon = set(); types = set(); basismx = None
-            for k in present_elgen_indices:
-                k_info = elemgen_info[k]
-                ops_involved.add(k_info['op'])
-                qubits_acted_upon.update(k_info['qubits'])
-                types.add(k_info['type'])
-                basismx = k_info['basismx'] if (basismx is None) else basismx + k_info['basismx']  # ROBIN?
-
-            info = {'ops': ops_involved,
-                    'types': types,
-                    'qubits': qubits_acted_upon,
-                    'coeff': coeff,
-                    'to_add': abs(coeff) if ('S' in types) else abs(coeff) * basismx,
-                    'label': label,
-                    'label_raw': label_raw,
-                    'label_abbrev': label_abbrev,
-                    'dependent': bool(i in dependent_indices),
-                    'gauge_dir': gauge_dir,
-                    'fogi_vec': vec
-                    }
-            ops_involved = tuple(sorted(ops_involved))
-            types = tuple(sorted(types))
-            qubits_acted_upon = tuple(sorted(qubits_acted_upon))
-            if ops_involved not in bins: bins[ops_involved] = {}
-            if types not in bins[ops_involved]: bins[ops_involved][types] = {}
-            if qubits_acted_upon not in bins[ops_involved][types]: bins[ops_involved][types][qubits_acted_upon] = []
-            bins[ops_involved][types][qubits_acted_upon].append(info)
-
-        return bins
-
-    def render_grid(self, filename, all_edges=True, physics=False):
-        op_set_info = self.op_set_info
-        op_labels = self.fogi_info['primitive_op_labels']
-
-        #import bpdb; bpdb.set_trace()
-        target_qubit_groups = tuple(sorted(set(self.op_to_target_qubits.values())))
-        groupids = {op_label: target_qubit_groups.index(self.op_to_target_qubits[op_label])
-                    for op_label in op_labels}
-
-        y = 0
-        increment = 200  # HARDCODED!
-        group_yvals = {}
-        for grp in target_qubit_groups:
-            if len(grp) != 1: continue
-            group_yvals[grp] = y; y += increment
-        for grp in target_qubit_groups:
-            if len(grp) == 1: continue
-            group_yvals[grp] = _np.mean([group_yvals[(i,)] for i in grp])
-
-        group_member_counts = {size: _collections.defaultdict(lambda: 0) for size in set(map(len, target_qubit_groups))}
-        for op_label in op_labels:
-            target_qubits = self.op_to_target_qubits[op_label]
-            group_member_counts[len(target_qubits)][target_qubits] += 1
-        max_group_member_counts = {size: max(member_counts.values())
-                                   for size, member_counts in group_member_counts.items()}
-        cum_size = {}; x = 0
-        for size in sorted(max_group_member_counts.keys()):
-            cum_size[size] = x
-            x += max_group_member_counts[size]
-
-        #relational_node_groupid = len(target_qubit_groups)
-
-        node_js_lines = []
-        edge_js_lines = []
-        table_html = {}
-        long_table_html = {}
-        existing_pts = []
-
-        def _node_color(value):
-            if value < 1e-3: return "green"
-            if value < 1e-2: return "yellow"
-            if value < 1e-1: return "orange"
-            return "red"
-
-        def _make_table(table_info, rowlbl, title):
-            table_dict, table_rows, table_cols = table_info
-            html = "<table><thead><tr><th colspan=%d>%s</th></tr>\n" % (len(table_cols) + 1, title)
-            html += ("<tr><th>%s<th>" % rowlbl) + "</th><th>".join(table_cols) + "</th></tr></thead><tbody>\n"
-            for row in table_rows:
-                table_row_text = []
-                for col in table_cols:
-                    val = table_dict[row][col]
-                    if _np.iscomplex(val): val = _np.real_if_close(val)
-                    if _np.isreal(val) or _np.iscomplex(val):
-                        if abs(val) < 1e-6: val = 0.0
-                        if _np.isreal(val): table_row_text.append("%.3g" % val.real)
-                        else: table_row_text.append("%.3g + %.3gj" % (val.real, val.imag))
-                    else: table_row_text.append(str(val))
-                html += "<tr><th>" + str(row) + "</th><td>" + "</td><td>".join(table_row_text) + "</td></tr>\n"
-            return html + "</tbody></table>"
-
-        #process local quantities
-        node_ids = {}; node_locations = {}; next_node_id = 0
-        next_xval_by_group = {grp: cum_size[len(grp)] * increment for grp in target_qubit_groups}
-        for op_set, info in op_set_info.items():
-            if len(op_set) != 1: continue
-            # create a gate-node in the graph
-            target_qubits = self.op_to_target_qubits[op_set[0]]
-            node_js_lines.append('{ id: %d, label: "%s", group: %d, title: "%s", x: %d, y: %d, color: "%s"}' %
-                                 (next_node_id, str(op_set[0]), groupids[op_set[0]],
-                                  "Coherent: %.3g<br>Stochastic: %.3g" % (info['Coherent'], info['Stochastic']),
-                                  next_xval_by_group[target_qubits], group_yvals[target_qubits],
-                                  _node_color(info['Coherent'] + info['Stochastic'])))
-            table_html[next_node_id] = _make_table(info['table'], "Qubits", "Local errors on %s" % str(op_set[0]))
-            long_table_html[next_node_id] = _make_table(info['longtable'], "Label",
-                                                        "FOGI quantities for %s" % str(op_set[0]))
-
-            node_locations[op_set[0]] = (next_xval_by_group[target_qubits], group_yvals[target_qubits])
-            existing_pts.append(node_locations[op_set[0]])
-            next_xval_by_group[target_qubits] += increment
-            node_ids[op_set[0]] = next_node_id
-            next_node_id += 1
-
-        #process relational quantities
-        relational_values = [(op_set, info['Coherent'][0] + info['Stochastic'])
-                             for op_set, info in op_set_info.items() if len(op_set) != 1]
-        sorted_relational_opsets = sorted(relational_values, key=lambda x: x[1], reverse=True)  # in decreasing "value"
-
-        globs = {op_label: i for i, op_label in enumerate(op_labels)}  # each node is in it's own glob
-        for op_set, val in sorted_relational_opsets:
-            info = op_set_info[op_set]
-            if len(op_set) == 1: continue  # already processed
-            if abs(val) < 1e-6: continue  # prune edges that are small
-            if not all_edges:
-                if all([globs[op_label] == globs[op_set[0]] for op_label in op_set]): continue  # already connected!
-
-            # create a relational node in the graph
-            avg_x = int(_np.mean([node_locations[op_label][0] for op_label in op_set]))
-            avg_y = int(_np.mean([node_locations[op_label][1] for op_label in op_set]))
-            while True:
-                for x, y in existing_pts:
-                    if _np.sqrt((avg_x - x)**2 + (avg_y - y)**2) < increment / 10:
-                        if abs(avg_x - x) >= abs(avg_y - y): avg_y += increment / 3
-                        else: avg_x += increment / 3
-                        break
+            gauge_dir = None
+            for info in infos:
+                assert(set(op_set) == info['op_set'])
+                assert(info['gauge_dir'] is not None)
+                coeff = self.fogi_coeffs[info['fogi_index']]
+                #HERE - Note: may need to fix normalization of gauge_dir??
+                if gauge_dir is None:
+                    gauge_dir = coeff * info['gauge_dir']
                 else:
-                    break
+                    gauge_dir += coeff * info['gauge_dir']
 
-            #val = info['Coherent'] + info['Stochastic']  # computed above
-            node_js_lines.append('{ id: %d, group: "%s", title: "%s", x: %d, y: %d, color: "%s" }' %
-                                 (next_node_id, "relational",
-                                  "Coherent: %s<br>Stochastic: %.3g" % (str(info['Coherent']), info['Stochastic']),
-                                  avg_x, avg_y, _node_color(val)))
-            existing_pts.append((avg_x, avg_y))
-            table_html[next_node_id] = _make_table(info['table'], "Qubits",
-                                                   "Relational errors between " + ", ".join(map(str, op_set)))
-            long_table_html[next_node_id] = _make_table(info['longtable'], "Label",
-                                                        "FOGI quantities for " + ", ".join(map(str, op_set)))
-
-            #link to gate-nodes
+            # get "impact" for relational qtys
+            Hmx = _create_errgen_op(gauge_dir, self.gauge_basis_mxs)
+            ret = {'go_angle': _mt.jamiolkowski_angle(Hmx)}
             for op_label in op_set:
-                edge_js_lines.append('{ from: %d, to: %d, value: %.4f, dashes: %s}' % (
-                    next_node_id, node_ids[op_label], val, 'true' if info['dependent'] else 'false'))
-            next_node_id += 1
+                errgen_vec = _np.dot(self.fogi_store.gauge_action_for_op[op_label], gauge_dir)
+                Hmx = _create_errgen_op(errgen_vec, self.gauge_basis_mxs)  # NOTE: won't work for reduced models
+                ret[op_label] = _mt.jamiolkowski_angle(Hmx)  # impact angle for op_label
+            ret['min_impact'] = min([v for k, v in ret.items() if k != 'go_angle'])
+            return ret
 
-            globs_to_reassign = set([globs[op_label] for op_label in op_set])
-            new_glob_id = globs_to_reassign.pop()
-            for op_label in globs.keys():
-                if globs[op_label] in globs_to_reassign:
-                    globs[op_label] = new_glob_id
+        if typ == ('H',):
+            return _ham_local_contrib(op_set, infos_to_aggregate) if len(op_set) == 1 \
+                else _ham_relational_contrib(op_set, infos_to_aggregate)
+        elif typ == ('S',):
+            return _sto_contrib(infos_to_aggregate)
+        else:
+            raise ValueError("Unknown error types set: %s" % str(typ))
 
-        all_table_html = ""
-        for node_id, html in table_html.items():
-            all_table_html += ("<div class='infotable dataTable' id='%d'>\n" % node_id) + html + "</div>\n"
+    def _extract_mag(self, d):
+        """ Extract the singe most important magnitude from a dictionary of contribution values
+            such as those returned by _contrib(...) """
+        if 'error_rate' in d: return d['error_rate']  # where we know error rate already (stochastic terms)
+        elif 'errgen_angle' in d: return d['errgen_angle']  # next best (local ham terms)
+        else: return d['min_impact']  # final magnitude we're ok with (relational ham terms)
 
-        all_long_table_html = ""
-        for node_id, html in long_table_html.items():
-            all_long_table_html += ("<div class='infotable dataTable' id='long%d'>\n" % node_id) + html + "</div>\n"
+    def _make_coherent_stochastic_by_support_table(self, op_set, infos_by_type):
+        table = {}
+        table_rows = set()
+        table_cols = set()
+        for typ, infos_by_actedon in infos_by_type.items():
+            if typ == ('H',): col = "Coherent"
+            elif typ == ('S',): col = "Stochastic"
+            else: col = "Mixed"
 
-        s = _template.format(**{'node_js': ",\n".join(node_js_lines),
-                                'edge_js': ",\n".join(edge_js_lines),
-                                'table_html': all_table_html,
-                                'long_table_html': all_long_table_html,
-                                'physics': 'true' if physics else "false",
-                                'springlength': 100,
-                                'beforeDrawingCalls': ''
-                                })
-        with open(filename, 'w') as f:
-            f.write(s)
+            table_cols.add(col)
+            for acted_on, infos in infos_by_actedon.items():
+                contrib = self._contrib(typ, op_set, infos)
+                table_rows.add(acted_on)
+                if acted_on not in table: table[acted_on] = {}
+                table[acted_on][col] = contrib
+        ordered_rows = tuple(sorted(table_rows, key=lambda t: (len(t),) + t))
+        ordered_cols = tuple(sorted(table_cols))
+        return table, ordered_rows, ordered_cols
 
-    def render_circle(self, filename, physics=True,
-                      numerical_labels=False, edge_threshold=1e-6):
+    def _make_individual_fogi_table(self, op_set, infos_by_type):
+        table = {}
+        table_rows = []
+        table_cols = ('Coefficient', 'Contribution', 'Raw Label')
+        for typ, infos_by_actedon in infos_by_type.items():
+            for acted_on, infos in infos_by_actedon.items():
+                for info in infos:
+                    contrib = self._contrib(typ, op_set, [info])
+                    table_rows.append(info['label'])
+                    table[info['label']] = {'Coefficient': self.fogi_coeffs[info['fogi_index']],
+                                            'Raw Label': info['label_raw'],
+                                            'Contribution': contrib}
+        return table, tuple(table_rows), table_cols
+
+    def _make_abbrev_table(self, op_set, infos_by_type):
+        abbrev_label_coeff_list = []
+        for typ, infos_by_actedon in infos_by_type.items():
+            for acted_on, infos in infos_by_actedon.items():
+                for info in infos:
+                    contrib = self._contrib(typ, op_set, [info])
+                    abbrev_label_coeff_list.append((info['label_abbrev'],
+                                                    self.fogi_coeffs[info['fogi_index']], contrib))
+        return abbrev_label_coeff_list
+
+    def _compute_by_weight_magnitudes(self, op_set, infos_by_type):
+        infos_by_typ_weight = {}
+        for typ, infos_by_actedon in infos_by_type.items():
+            if typ not in infos_by_typ_weight:
+                infos_by_typ_weight[typ] = _collections.defaultdict(list)
+            for acted_on, infos in infos_by_actedon.items():
+                if all([set(acted_on).issubset(self.op_to_target_qubits[op]) for op in op_set]):
+                    infos_by_typ_weight[typ][0].extend(infos)  # local == weight 0
+                else:
+                    infos_by_typ_weight[typ][len(acted_on)].extend(infos)  # higher weight
+
+        mags_by_weight = {}  # "weight" of term is an int.  0 = local
+        weights = sorted(set([x for d in infos_by_typ_weight.values() for x in d.keys()]))
+
+        for weight in weights:
+            mag = 0
+            items_abbrev = []
+            for typ, infos_by_weight in infos_by_typ_weight.items():
+                if weight in infos_by_weight:
+                    total_dict = self._contrib(typ, op_set, infos_by_weight[weight])
+                    mag += self._extract_mag(total_dict)
+                    items_abbrev.extend([(info['label_abbrev'], self.fogi_coeffs[info['fogi_index']],
+                                          self._contrib(typ, op_set, [info])) for info in infos_by_weight[weight]])
+
+            mags_by_weight[weight] = {'total': mag,
+                                      'items': items_abbrev}  # = list of (abbrev-item-lbl, coeff, contrib)
+        return mags_by_weight
+
+    def _compute_by_target_magnitudes(self, op_set, infos_by_type):
+        infos_by_typ_target = {}
+        for typ, infos_by_actedon in infos_by_type.items():
+            if typ not in infos_by_typ_target:
+                infos_by_typ_target[typ] = _collections.defaultdict(list)
+            for acted_on, infos in infos_by_actedon.items():
+                infos_by_typ_target[typ][acted_on].extend(infos)
+
+        targets = sorted(set([x for d in infos_by_typ_target.values() for x in d.keys()]))
+
+        mags_by_target = {}
+        for target in targets:
+            mag = 0
+            items_abbrev = []
+            for typ, infos_by_target in infos_by_typ_target.items():
+                if target in infos_by_target:
+                    total_dict = self._contrib(typ, op_set, infos_by_target[target])
+                    mag += self._extract_mag(total_dict)
+                    items_abbrev.extend([(info['label_abbrev'], self.fogi_coeffs[info['fogi_index']],
+                                          self._contrib(typ, op_set, [info])) for info in infos_by_target[target]])
+
+            mags_by_target[target] = {'total': mag,
+                                      'items': items_abbrev}  # = list of (abbrev-item-lbl, coeff, contrib)
+        return mags_by_target
+
+
+class FOGIGraphDiagram(FOGIDiagram):
+    def __init__(self, fogi_store, op_coefficients, model_dim, op_to_target_qubits=None,
+                 physics=True, numerical_labels=False, edge_threshold=1e-6):
+        super().__init__(fogi_store, op_coefficients, model_dim, op_to_target_qubits)
+        self.physics = physics
+        self.numerical_labels = numerical_labels
+        self.edge_threshold = edge_threshold
+
+    #OLD, outdated REMOVE?
+    #def render_grid(self, filename, all_edges=True, physics=False):
+    #    op_set_info = self.op_set_info
+    #    op_labels = self.fogi_info['primitive_op_labels']
+    #
+    #    #import bpdb; bpdb.set_trace()
+    #    target_qubit_groups = tuple(sorted(set(self.op_to_target_qubits.values())))
+    #    groupids = {op_label: target_qubit_groups.index(self.op_to_target_qubits[op_label])
+    #                for op_label in op_labels}
+    #
+    #    y = 0
+    #    increment = 200  # HARDCODED!
+    #    group_yvals = {}
+    #    for grp in target_qubit_groups:
+    #        if len(grp) != 1: continue
+    #        group_yvals[grp] = y; y += increment
+    #    for grp in target_qubit_groups:
+    #        if len(grp) == 1: continue
+    #        group_yvals[grp] = _np.mean([group_yvals[(i,)] for i in grp])
+    #
+    #    group_member_counts = {size: _collections.defaultdict(lambda: 0) for size in set(map(len, target_qubit_groups))}
+    #    for op_label in op_labels:
+    #        target_qubits = self.op_to_target_qubits[op_label]
+    #        group_member_counts[len(target_qubits)][target_qubits] += 1
+    #    max_group_member_counts = {size: max(member_counts.values())
+    #                               for size, member_counts in group_member_counts.items()}
+    #    cum_size = {}; x = 0
+    #    for size in sorted(max_group_member_counts.keys()):
+    #        cum_size[size] = x
+    #        x += max_group_member_counts[size]
+    #
+    #    #relational_node_groupid = len(target_qubit_groups)
+    #
+    #    node_js_lines = []
+    #    edge_js_lines = []
+    #    table_html = {}
+    #    long_table_html = {}
+    #    existing_pts = []
+    #
+    #    def _node_color(value):
+    #        if value < 1e-3: return "green"
+    #        if value < 1e-2: return "yellow"
+    #        if value < 1e-1: return "orange"
+    #        return "red"
+    #
+    #    def _make_table(table_info, rowlbl, title):
+    #        table_dict, table_rows, table_cols = table_info
+    #        html = "<table><thead><tr><th colspan=%d>%s</th></tr>\n" % (len(table_cols) + 1, title)
+    #        html += ("<tr><th>%s<th>" % rowlbl) + "</th><th>".join(table_cols) + "</th></tr></thead><tbody>\n"
+    #        for row in table_rows:
+    #            table_row_text = []
+    #            for col in table_cols:
+    #                val = table_dict[row][col]
+    #                if _np.iscomplex(val): val = _np.real_if_close(val)
+    #                if _np.isreal(val) or _np.iscomplex(val):
+    #                    if abs(val) < 1e-6: val = 0.0
+    #                    if _np.isreal(val): table_row_text.append("%.3g" % val.real)
+    #                    else: table_row_text.append("%.3g + %.3gj" % (val.real, val.imag))
+    #                else: table_row_text.append(str(val))
+    #            html += "<tr><th>" + str(row) + "</th><td>" + "</td><td>".join(table_row_text) + "</td></tr>\n"
+    #        return html + "</tbody></table>"
+    #
+    #    #process local quantities
+    #    node_ids = {}; node_locations = {}; next_node_id = 0
+    #    next_xval_by_group = {grp: cum_size[len(grp)] * increment for grp in target_qubit_groups}
+    #    for op_set, info in op_set_info.items():
+    #        if len(op_set) != 1: continue
+    #        # create a gate-node in the graph
+    #        target_qubits = self.op_to_target_qubits[op_set[0]]
+    #        node_js_lines.append('{ id: %d, label: "%s", group: %d, title: "%s", x: %d, y: %d, color: "%s"}' %
+    #                             (next_node_id, str(op_set[0]), groupids[op_set[0]],
+    #                              "Coherent: %.3g<br>Stochastic: %.3g" % (info['Coherent'], info['Stochastic']),
+    #                              next_xval_by_group[target_qubits], group_yvals[target_qubits],
+    #                              _node_color(info['Coherent'] + info['Stochastic'])))
+    #        table_html[next_node_id] = _make_table(info['table'], "Qubits", "Local errors on %s" % str(op_set[0]))
+    #        long_table_html[next_node_id] = _make_table(info['longtable'], "Label",
+    #                                                    "FOGI quantities for %s" % str(op_set[0]))
+    #
+    #        node_locations[op_set[0]] = (next_xval_by_group[target_qubits], group_yvals[target_qubits])
+    #        existing_pts.append(node_locations[op_set[0]])
+    #        next_xval_by_group[target_qubits] += increment
+    #        node_ids[op_set[0]] = next_node_id
+    #        next_node_id += 1
+    #
+    #    #process relational quantities
+    #    relational_values = [(op_set, info['Coherent'][0] + info['Stochastic'])
+    #                         for op_set, info in op_set_info.items() if len(op_set) != 1]
+    #    sorted_relational_opsets = sorted(relational_values, key=lambda x: x[1], reverse=True)  # in decreasing "value"
+    #
+    #    globs = {op_label: i for i, op_label in enumerate(op_labels)}  # each node is in it's own glob
+    #    for op_set, val in sorted_relational_opsets:
+    #        info = op_set_info[op_set]
+    #        if len(op_set) == 1: continue  # already processed
+    #        if abs(val) < 1e-6: continue  # prune edges that are small
+    #        if not all_edges:
+    #            if all([globs[op_label] == globs[op_set[0]] for op_label in op_set]): continue  # already connected!
+    #
+    #        # create a relational node in the graph
+    #        avg_x = int(_np.mean([node_locations[op_label][0] for op_label in op_set]))
+    #        avg_y = int(_np.mean([node_locations[op_label][1] for op_label in op_set]))
+    #        while True:
+    #            for x, y in existing_pts:
+    #                if _np.sqrt((avg_x - x)**2 + (avg_y - y)**2) < increment / 10:
+    #                    if abs(avg_x - x) >= abs(avg_y - y): avg_y += increment / 3
+    #                    else: avg_x += increment / 3
+    #                    break
+    #            else:
+    #                break
+    #
+    #        #val = info['Coherent'] + info['Stochastic']  # computed above
+    #        node_js_lines.append('{ id: %d, group: "%s", title: "%s", x: %d, y: %d, color: "%s" }' %
+    #                             (next_node_id, "relational",
+    #                              "Coherent: %s<br>Stochastic: %.3g" % (str(info['Coherent']), info['Stochastic']),
+    #                              avg_x, avg_y, _node_color(val)))
+    #        existing_pts.append((avg_x, avg_y))
+    #        table_html[next_node_id] = _make_table(info['table'], "Qubits",
+    #                                               "Relational errors between " + ", ".join(map(str, op_set)))
+    #        long_table_html[next_node_id] = _make_table(info['longtable'], "Label",
+    #                                                    "FOGI quantities for " + ", ".join(map(str, op_set)))
+    #
+    #        #link to gate-nodes
+    #        for op_label in op_set:
+    #            edge_js_lines.append('{ from: %d, to: %d, value: %.4f, dashes: %s}' % (
+    #                next_node_id, node_ids[op_label], val, 'true' if info['dependent'] else 'false'))
+    #        next_node_id += 1
+    #
+    #        globs_to_reassign = set([globs[op_label] for op_label in op_set])
+    #        new_glob_id = globs_to_reassign.pop()
+    #        for op_label in globs.keys():
+    #            if globs[op_label] in globs_to_reassign:
+    #                globs[op_label] = new_glob_id
+    #
+    #    all_table_html = ""
+    #    for node_id, html in table_html.items():
+    #        all_table_html += ("<div class='infotable dataTable' id='%d'>\n" % node_id) + html + "</div>\n"
+    #
+    #    all_long_table_html = ""
+    #    for node_id, html in long_table_html.items():
+    #        all_long_table_html += ("<div class='infotable dataTable' id='long%d'>\n" % node_id) + html + "</div>\n"
+    #
+    #    s = _template.format(**{'node_js': ",\n".join(node_js_lines),
+    #                            'edge_js': ",\n".join(edge_js_lines),
+    #                            'table_html': all_table_html,
+    #                            'long_table_html': all_long_table_html,
+    #                            'physics': 'true' if physics else "false",
+    #                            'springlength': 100,
+    #                            'beforeDrawingCalls': ''
+    #                            })
+    #    with open(filename, 'w') as f:
+    #        f.write(s)
+
+    def render(self, filename):
 
         op_set_info = self.op_set_info
-        op_labels = self.fogi_info['primitive_op_labels']
+        op_labels = self.fogi_store.primitive_op_labels
 
         #Group ops based on target qubits
         target_qubit_groups = tuple(sorted(set(self.op_to_target_qubits.values())))
@@ -627,30 +527,34 @@ class FOGIDiagram(object):
             r, theta = polar_positions[op_set[0]]
 
             label = str(op_set[0])
-            if self.error_type == 'both':
-                title = "Coherent: %.3g<br>Stochastic: %.3g" % (info['Coherent']['errgen_angle'], info['Stochastic'])
-                back_color = _node_color(info['Stochastic'])
-                border_color = _node_color(info['Coherent']['errgen_angle'])
-                if numerical_labels: label += "\\n<i>H: %.3g S: %.3g</i>" \
-                   % (info['Coherent']['errgen_angle'], info['Stochastic'])
-            elif self.error_type == 'hamiltonian':
-                title = "%.3g" % info['Coherent']['errgen_angle']
-                back_color = border_color = _node_color(info['Coherent']['errgen_angle'])
-                if numerical_labels: label += "\\n<i>%.3g</i>" % info['Coherent']['errgen_angle']
-            elif self.error_type == 'stochastic':
-                title = "%.3g" % info['Stochastic']
-                back_color = border_color = _node_color(info['Stochastic'])
-                if numerical_labels: label += "\\n<i>%.3g</i>" % info['Stochastic']
+            total = info['total']
+            coh = total['H']['errgen_angle'] if ('H' in total) else None
+            sto = total['S']['error_rate'] if ('S' in total) else None
+
+            if 'H' in total and 'S' in total:
+                title = "Coherent: %.3g<br>Stochastic: %.3g" % (coh, sto)
+                back_color = _node_color(sto)
+                border_color = _node_color(coh)
+                if self.numerical_labels: label += "\\n<i>H: %.3g S: %.3g</i>" % (coh, sto)
+            elif 'H' in total:
+                title = "%.3g" % coh
+                back_color = border_color = _node_color(coh)
+                if self.numerical_labels: label += "\\n<i>%.3g</i>" % coh
+            elif 'S' in total:
+                title = "%.3g" % sto
+                back_color = border_color = _node_color(sto)
+                if self.numerical_labels: label += "\\n<i>%.3g</i>" % sto
             else:
-                raise ValueError("Invalid error_type: %s" % self.error_type)
+                raise ValueError("Invalid types in total dict: %s" % str(total.keys()))
 
             node_js_lines.append(('{id: %d, label: "%s", group: %d, title: "%s", x: %d, y: %d,'
                                   'color: {background: "%s", border: "%s"}, fixed: %s}') %
                                  (next_node_id, label, groupids[op_set[0]],
                                   title, int(r * _np.cos(theta)), int(r * _np.sin(theta)), back_color, border_color,
-                                  'true' if physics else 'false'))
-            table_html[next_node_id] = _make_table(info['table'], "Qubits", "Local errors on %s" % str(op_set[0]))
-            long_table_html[next_node_id] = _make_table(info['longtable'],
+                                  'true' if self.physics else 'false'))
+            table_html[next_node_id] = _make_table(info['hs_support_table'], "Qubits",
+                                                   "Local errors on %s" % str(op_set[0]))
+            long_table_html[next_node_id] = _make_table(info['individual_fogi_table'],
                                                         "Label", "FOGI quantities for %s" % str(op_set[0]))
             node_locations[op_set[0]] = int(r * _np.cos(theta)), int(r * _np.sin(theta))
             node_ids[op_set[0]] = next_node_id
@@ -669,17 +573,12 @@ class FOGIDiagram(object):
             relational_distances.append((op_set, max_dist))
         relational_opsets_by_distance = sorted(relational_distances, key=lambda x: x[1], reverse=True)
 
-        def _min_impact(coh_dict):
-            return min([v for k, v in coh_dict.items() if k != 'go_angle'])
-
         #place the longest nPositions linking nodes in the center; place the rest on the periphery
         for i, (op_set, _) in enumerate(relational_opsets_by_distance):
             info = op_set_info[op_set]
-
-            if self.error_type == 'both' and abs(_min_impact(info['Coherent'])) < 1e-6 \
-               and abs(info['Stochastic']) < edge_threshold: continue  # prune edges that are small
-            elif self.error_type == 'hamiltonian' and abs(_min_impact(info['Coherent'])) < edge_threshold: continue
-            elif self.error_type == 'stochastic' and abs(info['Stochastic']) < edge_threshold: continue
+            total = info['total']
+            mag = total['mag']
+            if mag < self.edge_threshold: continue
 
             # create a relational node in the graph
             if i < nPositions:  # place node in the middle (just average coords
@@ -692,40 +591,33 @@ class FOGIDiagram(object):
                 x, y = int(r * _np.cos(theta)), int(r * _np.sin(theta))
 
             label = ""
-            if self.error_type == 'both':
-                title = "Coherent: %s<br>Stochastic: %.3g" % (_dstr(info['Coherent']), info['Stochastic'])
-                back_color, border_color = _node_color(info['Stochastic']), _node_color(_min_impact(info['Coherent']))
-                if numerical_labels: label += "H: %s S: %.3g" % (_dstr(info['Coherent'], r'\n'), info['Stochastic'])
-            elif self.error_type == 'hamiltonian':
-                title = "%s" % _dstr(info['Coherent'])
-                back_color = border_color = _node_color(_min_impact(info['Coherent']))
-                if numerical_labels: label += "%s" % _dstr(info['Coherent'], r'\n')
-            elif self.error_type == 'stochastic':
-                title = "%.3g" % info['Stochastic']
-                back_color = border_color = _node_color(info['Stochastic'])
-                if numerical_labels: label += "%.3g" % info['Stochastic']
+            if 'H' in total and 'S' in total:
+                title = "Coherent: %s<br>Stochastic: %s" % (_dstr(total['H']), _dstr(total['S']))
+                back_color, border_color = _node_color(total['S']['error_rate']), _node_color(total['H']['min_impact'])
+                if self.numerical_labels: label += "H: %s S: %s" % (_dstr(total['H'], r'\n'), _dstr(total['S'], r'\n'))
+            elif 'H' in total:
+                title = "%s" % _dstr(total['H'])
+                back_color = border_color = _node_color(total['H']['min_impact'])
+                if self.numerical_labels: label += "%s" % _dstr(total['H'], r'\n')
+            elif 'S' in total:
+                title = "%.3g" % _dstr(total['S'])
+                back_color = border_color = _node_color(total['S']['error_rate'])
+                if self.numerical_labels: label += "%s" % _dstr(total['S'], r'\n')
             else:
-                raise ValueError("Invalid error_type: %s" % self.error_type)
+                raise ValueError("Invalid types in total dict: %s" % str(total.keys()))
 
             node_js_lines.append(('{ id: %d, label: "%s", group: "%s", title: "%s", x: %d, y: %d,'
                                   'color: {background: "%s", border: "%s"}, font: {size: %d, '
                                   'strokeWidth: 3, strokeColor: "white"} }') %
                                  (next_node_id, label, "relational", title, x, y, back_color, border_color, 12))
-            table_html[next_node_id] = _make_table(info['table'], "Qubits",
+            table_html[next_node_id] = _make_table(info['hs_support_table'], "Qubits",
                                                    "Relational errors between " + ", ".join(map(str, op_set)))
-            long_table_html[next_node_id] = _make_table(info['longtable'], "Label",
+            long_table_html[next_node_id] = _make_table(info['individual_fogi_table'], "Label",
                                                         "FOGI quantities for " + ", ".join(map(str, op_set)))
             #link to gate-nodes
             for op_label in op_set:
-                if self.error_type == 'both':
-                    val = info['Stochastic'] + _min_impact(info['Coherent'])
-                elif self.error_type == 'hamiltonian':
-                    val = _min_impact(info['Coherent'])
-                elif self.error_type == 'stochastic':
-                    val = info['Stochastic']
-
                 edge_js_lines.append('{ from: %d, to: %d, value: %.4f, dashes: %s }' % (
-                    next_node_id, node_ids[op_label], val, 'true' if info['dependent'] else 'false'))
+                    next_node_id, node_ids[op_label], mag, 'true' if info['dependent'] else 'false'))
             next_node_id += 1
 
         all_table_html = ""
@@ -740,126 +632,57 @@ class FOGIDiagram(object):
                                 'edge_js': ",\n".join(edge_js_lines),
                                 'table_html': all_table_html,
                                 'long_table_html': all_long_table_html,
-                                'physics': 'true' if physics else "false",
+                                'physics': 'true' if self.physics else "false",
                                 'springlength': springlength,
                                 'beforeDrawingCalls': beforeDrawingCalls})
         with open(filename, 'w') as f:
             f.write(s)
 
-    def plot_heatmap(self, include_xtalk=False, fig_base=5):
-        op_set_info = self.op_set_info
-        op_labels = self.fogi_info['primitive_op_labels']
 
-        data = _np.ones((len(op_labels), len(op_labels)), 'd') * _np.nan
-        op_label_lookup = {lbl: i for i, lbl in enumerate(op_labels)}
-        xtalk_datas = []
+class FOGIDetailTable(FOGIDiagram):
+    def __init__(self, fogi_store, op_coefficients, model_dim, op_to_target_qubits=None,
+                 mode='individual_terms'):
+        super().__init__(fogi_store, op_coefficients, model_dim, op_to_target_qubits)
+        assert(mode in ('individual_terms', 'by_support'))
+        self.mode = mode
 
-        def _min_impact(coh_dict):
-            if 'min_impact' in coh_dict: return coh_dict['min_impact']
-            return min([v for k, v in coh_dict.items() if k != 'go_angle'])
-
-        additional = 0
-        for op_set, info in op_set_info.items():
-            if self.error_type == "hamiltonian": val = _min_impact(info['Coherent'])
-            elif self.error_type == "stochastic": val = info['Stochastic']
-            elif self.error_type == "both": val = info['Stochastic'] + _min_impact(info['Coherent'])
-            else: raise ValueError("Invalid error_type: %s" % self.error_type)
-
-            if len(op_set) > 2:
-                additional += val
-                continue
-
-            if len(op_set) == 2:
-                i, j = op_label_lookup[op_set[0]], op_label_lookup[op_set[1]]
-                if i > j: i, j = j, i
-            else:
-                i = j = op_label_lookup[op_set[0]]
-
-            assert(_np.isnan(data[i, j]))
-            data[i, j] = val
-            if include_xtalk:
-                for weight, xtalk_dict in info['byweight'].items():
-                    xtalk_val = xtalk_dict['total']
-                    while len(xtalk_datas) < weight + 1:
-                        xtalk_datas.append(_np.ones((len(op_labels), len(op_labels)), 'd') * _np.nan)
-                    assert(_np.isnan(xtalk_datas[weight][i, j]))
-                    xtalk_datas[weight][i, j] = xtalk_val
-
-        import matplotlib
-        import matplotlib.pyplot as plt
-
-        min_color, max_color = 0, _np.nanmax(data)
-        fig, ax_tuple = plt.subplots(1, 1 + len(xtalk_datas), figsize=(fig_base * (1 + len(xtalk_datas)), fig_base))
-        if len(xtalk_datas) == 0: ax_tuple = (ax_tuple,)  # because matplotlib is too clever
-        fig.suptitle("%s-type errors on gates and between gate pairs (missing %.3g)" % (self.error_type, additional))
-        axis_labels = [str(lbl) for lbl in op_labels]
-
-        for plot_data, title, ax in zip([data] + xtalk_datas,
-                                        ["Total"] + [("Local" if i == 0 else "Weight-%d crosstalk" % i)
-                                                     for i in range(len(xtalk_datas))],
-                                        ax_tuple):
-            im = ax.imshow(plot_data, cmap="Reds")
-            im.set_clim(min_color, max_color)
-
-            # We want to show all ticks...
-            ax.set_xticks(_np.arange(len(axis_labels)))
-            ax.set_yticks(_np.arange(len(axis_labels)))
-            # ... and label them with the respective list entries
-            ax.set_xticklabels(axis_labels)
-            ax.set_yticklabels(axis_labels)
-
-            # Rotate the tick labels and set their alignment.
-            plt.setp(ax.get_xticklabels(), rotation=45, ha="right",
-                     rotation_mode="anchor")
-
-            # Normalize the threshold to the images color range.
-            threshold = im.norm(_np.nanmax(plot_data)) / 2.
-
-            # Loop over data dimensions and create text annotations.
-            textcolors = ['black', 'white']
-            for i in range(len(axis_labels)):
-                for j in range(len(axis_labels)):
-                    if not _np.isnan(plot_data[i, j]):
-                        ax.text(j, i, "%.1g" % plot_data[i, j],
-                                ha="center", va="center",
-                                color=textcolors[int(im.norm(plot_data[i, j]) > threshold)])
-
-            ax.set_title(title)
-
-        fig.tight_layout()
-        plt.show()
-        return fig
-
-    def create_detail_table(self, filename, mode='individual_terms'):
+    def render(self, filename):
         from .table import ReportTable as _ReportTable
 
-        assert(mode in ('individual_terms', 'by_support'))
-        assert(self.error_type in ('hamiltonian', 'stochastic')), \
-            "Detail tables must have error_type of 'hamiltonian' or 'stochastic'!"  # b/c abbrev. labels drop 'H' & 'S'
         op_set_info = self.op_set_info
-        op_labels = self.fogi_info['primitive_op_labels']
+        op_labels = self.fogi_store.primitive_op_labels
 
         op_label_lookup = {lbl: i for i, lbl in enumerate(op_labels)}
         cell_tabulars = {}
 
         def _dstr(d, op_set):  # dict-to-string formatting function
-            if not isinstance(d, dict):
-                if abs(d) < 1e-6: d = 0.0
-                return ("%.3g" % d) + " & " * len(op_set)
-            if len(d) == 1:
-                v = next(iter(d.values()))
-                if abs(v) < 1e-6: v = 0.0
-                return "%.3g" % v + " & " * len(op_set)
-            #if len(op_set) == 1: return "%.3g" % d['errgen_angle']  # covered by above case
-            return "%.3g & " % d['go_angle'] + " & ".join(["%.3g" % d[op] for op in op_set])
+            d = {k: (v if abs(v) > 1e-6 else 0.0) for k, v in d.items()}  # copy d w/snap to 0.0
+            if 'error_rate' in d:
+                return "%.3g" % d['error_rate'] + " & " * len(op_set)
+            elif 'errgen_angle' in d:
+                return "%.3g" % d['errgen_angle'] + " & " * len(op_set)
+            else:
+                return "%.3g & " % d['go_angle'] + " & ".join(["%.3g" % d[op] for op in op_set])
 
         additional = 0
         for op_set, info in op_set_info.items():
-            if mode == 'individual_terms':
-                tabular = "\\begin{tabular}{@{}%s@{}}" % ('c' * (3 + len(op_set)))  \
-                    + " \\\\ ".join(["%s & %.3g & %s" % (lbl, abs(coeff) if abs(coeff) > 1e-6 else 0.0,
-                                                         _dstr(total, op_set))
-                                     for lbl, coeff, total in info['abbrevtable']]) \
+            if self.mode == 'individual_terms':
+                rows = info['abbrev_individual_fogi_table']
+
+                if len(rows) > 0:
+                    if 'error_rate' in rows[0][2]:  # rows[0] == lbl, coeff, contrib and we want contrib
+                        header = " & \\emph{coeff} & \\emph{error rate}" + " & " * len(op_set) + " \\\\ "
+                    elif 'errgen_angle' in rows[0][2]:
+                        header = " & \\emph{coeff} & \\emph{errgen angle}" + " & " * len(op_set) + " \\\\ "
+                    else:
+                        header = " & \\emph{coeff} & \\emph{gauge angle} & " + " & ".join(map(str, op_set)) + " \\\\ "
+                else:
+                    header = ""
+
+                tabular = "\\begin{tabular}{@{}%s@{}}" % ('c' * (3 + len(op_set))) + header \
+                    + " \\\\ ".join(["%s & %.3g & %s" % (lbl, coeff if abs(coeff) > 1e-6 else 0.0,
+                                                         _dstr(contrib, op_set))
+                                     for lbl, coeff, contrib in info['abbrev_individual_fogi_table']]) \
                     + r"\end{tabular}"
             else:  # by-support
                 raise NotImplementedError()
@@ -888,20 +711,106 @@ class FOGIDiagram(object):
         print("Wrote latex file: %s" % filename)
         return table
 
-    def plot_multiscale_grid(self, detail_level=0, figsize=5, outfile=None, spacing=0.05, nudge=0.125,
-                             cell_fontsize=10, axes_fontsize=10, qty_key='bytarget'):
+
+class FOGIMultiscaleGridDiagram(FOGIDiagram):
+    def __init__(self, fogi_store, op_coefficients, model_dim, op_to_target_qubits=None):
+        super().__init__(fogi_store, op_coefficients, model_dim, op_to_target_qubits)
+
+    #OLD REMOVE
+    #def plot_heatmap(self, include_xtalk=False, fig_base=5):
+    #    op_set_info = self.op_set_info
+    #    op_labels = self.fogi_info['primitive_op_labels']
+    #
+    #    data = _np.ones((len(op_labels), len(op_labels)), 'd') * _np.nan
+    #    op_label_lookup = {lbl: i for i, lbl in enumerate(op_labels)}
+    #    xtalk_datas = []
+    #
+    #    def _min_impact(coh_dict):
+    #        if 'min_impact' in coh_dict: return coh_dict['min_impact']
+    #        return min([v for k, v in coh_dict.items() if k != 'go_angle'])
+    #
+    #    additional = 0
+    #    for op_set, info in op_set_info.items():
+    #        if self.error_type == "hamiltonian": val = _min_impact(info['Coherent'])
+    #        elif self.error_type == "stochastic": val = info['Stochastic']
+    #        elif self.error_type == "both": val = info['Stochastic'] + _min_impact(info['Coherent'])
+    #        else: raise ValueError("Invalid error_type: %s" % self.error_type)
+    #
+    #        if len(op_set) > 2:
+    #            additional += val
+    #            continue
+    #
+    #        if len(op_set) == 2:
+    #            i, j = op_label_lookup[op_set[0]], op_label_lookup[op_set[1]]
+    #            if i > j: i, j = j, i
+    #        else:
+    #            i = j = op_label_lookup[op_set[0]]
+    #
+    #        assert(_np.isnan(data[i, j]))
+    #        data[i, j] = val
+    #        if include_xtalk:
+    #            for weight, xtalk_dict in info['byweight'].items():
+    #                xtalk_val = xtalk_dict['total']
+    #                while len(xtalk_datas) < weight + 1:
+    #                    xtalk_datas.append(_np.ones((len(op_labels), len(op_labels)), 'd') * _np.nan)
+    #                assert(_np.isnan(xtalk_datas[weight][i, j]))
+    #                xtalk_datas[weight][i, j] = xtalk_val
+    #
+    #    import matplotlib
+    #    import matplotlib.pyplot as plt
+    #
+    #    min_color, max_color = 0, _np.nanmax(data)
+    #    fig, ax_tuple = plt.subplots(1, 1 + len(xtalk_datas), figsize=(fig_base * (1 + len(xtalk_datas)), fig_base))
+    #    if len(xtalk_datas) == 0: ax_tuple = (ax_tuple,)  # because matplotlib is too clever
+    #    fig.suptitle("%s-type errors on gates and between gate pairs (missing %.3g)" % (self.error_type, additional))
+    #    axis_labels = [str(lbl) for lbl in op_labels]
+    #
+    #    for plot_data, title, ax in zip([data] + xtalk_datas,
+    #                                    ["Total"] + [("Local" if i == 0 else "Weight-%d crosstalk" % i)
+    #                                                 for i in range(len(xtalk_datas))],
+    #                                    ax_tuple):
+    #        im = ax.imshow(plot_data, cmap="Reds")
+    #        im.set_clim(min_color, max_color)
+    #
+    #        # We want to show all ticks...
+    #        ax.set_xticks(_np.arange(len(axis_labels)))
+    #        ax.set_yticks(_np.arange(len(axis_labels)))
+    #        # ... and label them with the respective list entries
+    #        ax.set_xticklabels(axis_labels)
+    #        ax.set_yticklabels(axis_labels)
+    #
+    #        # Rotate the tick labels and set their alignment.
+    #        plt.setp(ax.get_xticklabels(), rotation=45, ha="right",
+    #                 rotation_mode="anchor")
+    #
+    #        # Normalize the threshold to the images color range.
+    #        threshold = im.norm(_np.nanmax(plot_data)) / 2.
+    #
+    #        # Loop over data dimensions and create text annotations.
+    #        textcolors = ['black', 'white']
+    #        for i in range(len(axis_labels)):
+    #            for j in range(len(axis_labels)):
+    #                if not _np.isnan(plot_data[i, j]):
+    #                    ax.text(j, i, "%.1g" % plot_data[i, j],
+    #                            ha="center", va="center",
+    #                            color=textcolors[int(im.norm(plot_data[i, j]) > threshold)])
+    #
+    #        ax.set_title(title)
+    #
+    #    fig.tight_layout()
+    #    plt.show()
+    #    return fig
+
+    def render(self, detail_level=0, figsize=5, outfile=None, spacing=0.05, nudge=0.125,
+               cell_fontsize=10, axes_fontsize=10, qty_key='bytarget'):
         op_set_info = self.op_set_info
-        op_labels = self.fogi_info['primitive_op_labels']
+        op_labels = self.fogi_store.primitive_op_labels
         nOps = len(op_labels)
 
         op_label_lookup = {lbl: i for i, lbl in enumerate(op_labels)}
         totals = _np.ones((len(op_labels), len(op_labels)), 'd') * _np.nan
         by_qty_totals = {}
         by_qty_items = {}
-
-        def _min_impact(coh_dict):
-            if 'min_impact' in coh_dict: return coh_dict['min_impact']
-            return min([v for k, v in coh_dict.items() if k != 'go_angle'])
 
         additional = 0
         for op_set, info in op_set_info.items():
@@ -912,11 +821,8 @@ class FOGIDiagram(object):
             else:
                 i = j = op_label_lookup[op_set[0]]
 
-            #Total value/contribution for entire "box"
-            if self.error_type == "hamiltonian": val = _min_impact(info['Coherent'])
-            elif self.error_type == "stochastic": val = info['Stochastic']
-            elif self.error_type == "both": val = info['Stochastic'] + _min_impact(info['Coherent'])
-            else: raise ValueError("Invalid error_type: %s" % self.error_type)
+            # Total value/contribution for entire "box"
+            val = info['total']['mag']
 
             if len(op_set) > 2:
                 additional += val
@@ -972,7 +878,7 @@ class FOGIDiagram(object):
 
         #min_color, max_color = 0, _np.nanmax(data)
         fig, axes = plt.subplots(1, 1, figsize=(figsize, figsize))
-        axes.set_title("%s-type errors on gates and between gate pairs (missing %.3g)" % (self.error_type, additional))
+        axes.set_title("Errors on gates and between gate pairs (missing %.3g)" % (additional))
         axis_labels = [str(lbl) for lbl in op_labels]
         axes.set_xlim(0, len(op_labels) * (box_size + spacing) + spacing)
         axes.set_ylim(0, len(op_labels) * (box_size + spacing) + spacing)
@@ -1053,18 +959,16 @@ class FOGIDiagram(object):
 
                     y3 = y2
                     for lbl, coeff, contrib in items:
-                        if isinstance(contrib, dict):
-                            assert(len(contrib) == 1)
-                            contrib = next(iter(contrib.values()))
-                        if abs(contrib) < 1e-6: contrib = 0.0
+                        contrib_mag = self._extract_mag(contrib)
+                        if abs(contrib_mag) < 1e-6: contrib_mag = 0.0
 
                         y3 -= 1
-                        val_color = cm(contrib / val_max)[0:3]  # drop alpha
+                        val_color = cm(contrib_mag / val_max)[0:3]  # drop alpha
                         rect = patches.Rectangle((x, y3), side, 1.0, linewidth=0, edgecolor='k',
                                                  facecolor=val_color)
                         ax.add_patch(rect)
-                        ax.text(x + side / 2, y3 + 1 / 2, "%s = %.1f%%" % (lbl, contrib * 100),
-                                ha="center", va="center", color=textcolors[int(contrib > val_threshold)],
+                        ax.text(x + side / 2, y3 + 1 / 2, "%s = %.1f%%" % (lbl, contrib_mag * 100),
+                                ha="center", va="center", color=textcolors[int(contrib_mag > val_threshold)],
                                 fontsize=cell_fontsize)
                     y2 -= section_size
                     border = patches.Rectangle((x, y2), side, section_size, linewidth=1, edgecolor='k', fill=False)
