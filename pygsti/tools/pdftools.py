@@ -75,21 +75,24 @@ def classical_fidelity(p, q):
     #return root_fidelity ** 2
 
 
-def pdf_sparsity(p, n):
-    """
-    Computes a measure of the sparsity ("spikyness") of a probability distribution.
+# def Hoyer_sparsity_measure(p, n):
+#     """
+#     Computes a measure of the sparsity ("spikyness") of a probability distribution (or a
+#     general real vector).
 
-    Parameters
-    ----------
-    p : dict
-        The distribution
+#     Parameters
+#     ----------
+#     p : dict
+#         The distribution
 
-    n : the number of possible events (zero probability events do not need to be included in `p`)
+#     n : the number of possible events (zero probability events do not need to be included in `p`)
 
-    Returns
-    -------
-    float
-    """
-    plist = _np.array(list(p.values()))
-    minsparsity = _np.sqrt(1 / 2**n)
-    return (_np.sqrt(_np.sum(plist**2)) / _np.sum(_np.abs(plist)) - minsparsity) / (1 - minsparsity)
+#     Returns
+#     -------
+#     float
+#     """
+#     plist = _np.array(list(p.values()))
+#     twonorm = _np.sqrt(_np.sum(plist**2))
+#     onenorm = _np.sum(_np.abs(plist))
+#     max_onenorm_over_twonorm = _np.sqrt(n)
+#     return (max_onenorm_over_twonorm - onenorm/twonorm) / (max_onenorm_over_twonorm - 1)

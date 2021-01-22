@@ -45,28 +45,29 @@ def _mod_2pi(theta):
         return theta
 
 
-def create_mirror_circuit(circ, pspec, circtype='Clifford+Gz', pauli_labels=None, pluspi_prob=0.):
+def create_mirror_circuit(circ, pspec, circtype='Clifford+Gzr', pauli_labels=None, pluspi_prob=0.):
     """
     *****************************************************************
     Function currently has the following limitations that need fixing:
 
-       - A layer contains only Clifford or Gz gates on ALL the qubits.
+       - A layer contains only Clifford or Gzr gates on ALL the qubits.
        - all of the Clifford gates are self inverse
        - The qubits are labelled "Q0" through "Qn-1" -- THIS SHOULD NOW BE FIXED!
-       - Pauli's are labelled by "Gi", "Gx", "Gy" and "Gz".
+       - Pauli's are labelled by "Gi", "Gxpi", "Gypi" and "Gzpi".
        - There's no option for randomized prep/meas
        - There's no option for randomly adding +/-pi to the Z rotation angles.
        - There's no option for adding "barriers"
-       - There's no test that the 'Gz' gate has the "correct" convention for a rotation angle
+       - There's no test that the 'Gzr' gate has the "correct" convention for a rotation angle
          (a rotation by pi must be a Z gate) or that it's a rotation around Z.
     *****************************************************************
     """
-    assert(circtype == 'Clifford+Gz' or circtype == 'Clifford')
+    assert(circtype == 'Clifford+Gzr' or circtype == 'Clifford')
     n = circ.width
     d = circ.depth
     if pauli_labels is None: pauli_labels = ['Gi', 'Gxpi', 'Gypi', 'Gzpi']
     qubits = circ.line_labels
     identity = _np.identity(2 * n, int)
+    zrotname = 'Gzr'
     # qubit_labels = ['G{}'.format(i) for i in range(n)]
 
     quasi_inverse_circ = []
@@ -78,7 +79,7 @@ def create_mirror_circuit(circ, pspec, circtype='Clifford+Gz', pauli_labels=None
 
     for d_ind in range(d):
         layer = circ.layer(d - d_ind - 1)
-        if layer[0].name == 'Gz':
+        if layer[0].name == zrotname:
             quasi_inverse_layer = []
             for gate in layer:
 
@@ -98,7 +99,7 @@ def create_mirror_circuit(circ, pspec, circtype='Clifford+Gz', pauli_labels=None
                     # as we need to include it as we keep collapsing the circuit down.
                     telp_p[q_int] = (telp_p[q_int] + 2) % 4
                 # Constructs the quasi-inverse gate.
-                quasi_inverse_gate = _lbl.Label("Gz", gate.qubits, args=(str(quasi_inverse_angle),))
+                quasi_inverse_gate = _lbl.Label(zrotname, gate.qubits, args=(str(quasi_inverse_angle),))
                 quasi_inverse_layer.append(quasi_inverse_gate)
 
             # We don't have to update the telescoping Pauli as it's unchanged, but when we update

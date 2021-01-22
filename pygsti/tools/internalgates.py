@@ -173,6 +173,7 @@ def standard_gatename_unitaries():
     - Non-Clifford gates:
 
       - 'Gt', 'Gtdag' : the T and inverse T gates (T is a Z rotation by pi/4).
+      - 'Gzr' : a parameterized gate that is a Z rotation by an angle, where when the angle = pi then it equals Z.
 
     Mostly, pyGSTi does not assume that a gate with one of these names is indeed
     the unitary specified here. Instead, these names are intended as short-hand
@@ -254,6 +255,12 @@ def standard_gatename_unitaries():
                                        0., 0., 0., 1.], [0., 0., 1., 0.]], complex)
     std_unitaries['Gswap'] = _np.array([[1., 0., 0., 0.], [0., 0., 1., 0.], [
                                        0., 1., 0., 0.], [0., 0., 0., 1.]], complex)
+
+    def Gzr(theta):
+        if theta is None: return _np.array([[1., 0.], [0., 1.]])
+        else: return _np.array([[1., 0.], [0., _np.exp(-1j * float(theta[0]))]])
+
+    std_unitaries['Gzr'] = Gzr
 
     return std_unitaries
 
