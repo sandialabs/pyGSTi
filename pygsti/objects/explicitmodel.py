@@ -226,7 +226,7 @@ class ExplicitOpModel(_mdl.OpModel):
         simplified_preps = self.preps
 
         return _explicitcalc.ExplicitOpModelCalc(self.dim, simplified_preps, simplified_ops,
-                                                 simplified_effects, self.num_params)
+                                                 simplified_effects, self.num_params, self._param_interposer)
 
     #Unneeded - just use string processing & rely on effect labels *not* having underscores in them
     #def simplify_spamtuple_to_outcome_label(self, simplified_spamTuple):
@@ -1521,20 +1521,24 @@ class ExplicitOpModel(_mdl.OpModel):
         return op_coeffs
 
     def _add_reparameterization(self, primitive_op_labels,
-                                full_ham_fogi_vecs, full_ham_space_labels,
-                                full_other_fogi_vecs, full_other_space_labels):
+                                ham_fogi_dirs, ham_space_labels,
+                                other_fogi_dirs, other_space_labels):
         # Create re-parameterization map from "fogi" parameters to old/existing model parameters
-        #  MX(fogi_coeffs -> op_coeffs)  e.g. full_ham_fogi_vecs
-        #  Deriv(op_params -> op_coeffs)
-        #  fogi_deriv(fogi_params -> fogi_coeffs)  - near I (these are nearly identical apart from some squaring?)
-        #  so:    d(op_params) = inv(deriv) * MX * fogi_deriv * d(fogi_params)
+        # Note: fogi_coeffs = dot(ham_fogi_dirs.T, errorgen_vec)
+        #       errorgen_vec = dot(pinv(ham_fogi_dirs.T), fogi_coeffs)
+        # Ingredients:
+        #  MX : fogi_coeffs -> op_coeffs  e.g. pinv(ham_fogi_dirs.T)
+        #  deriv =  op_params -> op_coeffs  e.g. d(op_coeffs)/d(op_params) implemented by ops
+        #  fogi_deriv = d(fogi_coeffs)/d(fogi_params) : fogi_params -> fogi_coeffs  - near I (these are nearly identical apart from some squaring?)
+        #
+        #  so:    d(op_params) = inv(Deriv) * MX * fogi_deriv * d(fogi_params)
         #         d(op_params)/d(fogi_params) = inv(Deriv) * MX * fogi_deriv
         #  To first order: op_params = (inv(Deriv) * MX * fogi_deriv) * fogi_params := F * fogi_params
         # (fogi_params == "model params")
 
         # To compute F,
         # -let fogi_deriv == I   (shape nFogi,nFogi)
-        # -MX is shape (nFullSpace, nFogi)
+        # -MX is shape (nFullSpace, nFogi) == pinv(fogi_dirs.T)
         # -deriv is shape (nOpCoeffs, nOpParams), inv(deriv) = (nOpParams, nOpCoeffs)
         #    - need Deriv of shape (nOpParams, nFullSpace) - build by placing deriv mxs in gpindices rows and
         #      correct cols).  We'll require that deriv be square (op has same #params as coeffs) and is *invertible*
@@ -1542,13 +1546,13 @@ class ExplicitOpModel(_mdl.OpModel):
         #      rows->gpindices and cols->elem_label-match.
 
         nOpParams = self.num_params  # the number of parameters *before* any reparameterization.  TODO: better way?
-        full_ham_space_labels_indx = _collections.OrderedDict(
-            [(lbl, i) for i, lbl in enumerate(full_ham_space_labels)])
-        full_other_space_labels_indx = _collections.OrderedDict(
-            [(lbl, i) for i, lbl in enumerate(full_other_space_labels)])
+        ham_space_labels_indx = _collections.OrderedDict(
+            [(lbl, i) for i, lbl in enumerate(ham_space_labels)])
+        other_space_labels_indx = _collections.OrderedDict(
+            [(lbl, i) for i, lbl in enumerate(other_space_labels)])
 
-        invDeriv_ham = _np.zeros((nOpParams, full_ham_fogi_vecs.shape[0]), 'd')
-        invDeriv_other = _np.zeros((nOpParams, full_other_fogi_vecs.shape[0]), 'd')
+        invDeriv_ham = _np.zeros((nOpParams, ham_fogi_dirs.shape[0]), 'd')
+        invDeriv_other = _np.zeros((nOpParams, other_fogi_dirs.shape[0]), 'd')
 
         used_param_indices = set()
         for op_label in primitive_op_labels:
@@ -1561,17 +1565,17 @@ class ExplicitOpModel(_mdl.OpModel):
 
             for i, lbl in enumerate(lbls):
                 if lbl[0] == 'H':
-                    invDeriv_ham[param_indices, full_ham_space_labels_indx[(op_label, lbl)]] = inv_deriv[:, i]
+                    invDeriv_ham[param_indices, ham_space_labels_indx[(op_label, lbl)]] = inv_deriv[:, i]
                 else:  # lbl[0] == 'S':
-                    invDeriv_other[param_indices, full_other_space_labels_indx[(op_label, lbl)]] = inv_deriv[:, i]
+                    invDeriv_other[param_indices, other_space_labels_indx[(op_label, lbl)]] = inv_deriv[:, i]
 
         unused_param_indices = sorted(list(set(range(nOpParams)) - used_param_indices))
         prefix_mx = _np.zeros((nOpParams, len(unused_param_indices)), 'd')
         for j, indx in enumerate(unused_param_indices):
             prefix_mx[indx, j] = 1.0
 
-        F_ham = _np.dot(invDeriv_ham, full_ham_fogi_vecs)
-        F_other = _np.dot(invDeriv_other, full_other_fogi_vecs)
+        F_ham = _np.dot(invDeriv_ham, _np.linalg.pinv(ham_fogi_dirs.T))
+        F_other = _np.dot(invDeriv_other, _np.linalg.pinv(other_fogi_dirs.T))
         F = _np.concatenate((prefix_mx, F_ham, F_other), axis=1)
 
         #Not sure if these are needed: "coefficients" have names, but maybe "parameters" shoudn't?
@@ -1609,10 +1613,11 @@ class ExplicitOpModel(_mdl.OpModel):
         self.other_fogi_store = _FOGIStore(other_ga_matrices, other_errorgen_coefficient_labels, other_elem_labels,
                                            op_label_abbrevs, reduce_to_model_space, dependent_fogi_action)
 
-        #if reparameterize:
-        #    self.param_interposer = self._add_reparameterization(primitive_op_labels,
-        #                                                         ham_fogi_vecs, full_ham_space_labels,
-        #                                                         other_fogi_vecs, full_other_space_labels)
+        if reparameterize:
+            self.param_interposer = self._add_reparameterization(
+                primitive_op_labels,
+                self.ham_fogi_store.fogi_directions, self.ham_fogi_store.errgen_space_op_elem_labels,
+                self.other_fogi_store.fogi_directions, self.other_fogi_store.errgen_space_op_elem_labels)
 
     def fogi_errorgen_coefficient_labels(self, include_fogv=False, typ='normal'):
         labels = self.ham_fogi_store.fogi_errorgen_direction_labels(typ) \

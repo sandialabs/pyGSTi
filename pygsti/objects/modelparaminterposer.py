@@ -17,12 +17,19 @@ class ModelParamsInterposer(object):
     """
     A function class that sits in between an :class:`OpModel`'s parameter vector and those of its operations.
     """
+    def __init__(self, num_params, num_op_params):
+        self.num_params = num_params
+        self.num_op_params = num_op_params
 
     def model_paramvec_to_ops_paramvec(self, v):
         return v
 
     def ops_paramvec_to_model_paramvec(self, w):
         return w
+
+    def deriv_op_params_wrt_model_params(self):
+        assert(self.num_params == self.num_op_params)
+        return _np.identity(self.num_params, 'd')
 
 
 class LinearInterposer(ModelParamsInterposer):
@@ -39,9 +46,13 @@ class LinearInterposer(ModelParamsInterposer):
     def __init__(self, transform_matrix):
         self.transform_matrix = transform_matrix  # cols specify a model parameter in terms of op params.
         self.inv_transform_matrix = _np.linalg.pinv(self.transform_matrix)
+        super().__init__(transform_matrix.shape[1], transform_matrix.shape[0])
 
     def model_paramvec_to_ops_paramvec(self, v):
         return _np.dot(self.transform_matrix, v)
 
     def ops_paramvec_to_model_paramvec(self, w):
         return _np.dot(self.inv_transform_matrix, w)
+
+    def deriv_op_params_wrt_model_params(self):
+        return self.transform_matrix

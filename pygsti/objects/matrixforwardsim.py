@@ -165,11 +165,10 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
         op_wrtFilter, gpindices = self._process_wrt_filter(wrt_filter, gate)
 
         # Allocate memory for the final result
-        num_deriv_cols = self.model.num_params if (wrt_filter is None) else len(wrt_filter)
+        num_op_params = self.model._param_interposer.num_op_params \
+            if (self.model._param_interposer is not None) else self.model.num_params
+        num_deriv_cols = num_op_params if (wrt_filter is None) else len(wrt_filter)  # num *op* params
         flattened_dprod = _np.zeros((dim**2, num_deriv_cols), 'd')
-
-        _fas(flattened_dprod, [None, gpindices],
-             gate.deriv_wrt_params(op_wrtFilter))  # (dim**2, n_params[op_label])
 
         if _slct.length(gpindices) > 0:  # works for arrays too
             # Compute the derivative of the entire circuit with respect to the
@@ -177,6 +176,14 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
             #gate = self.model.operation[op_label] UNNEEDED (I think)
             _fas(flattened_dprod, [None, gpindices],
                  gate.deriv_wrt_params(op_wrtFilter))  # (dim**2, n_params in wrt_filter for op_label)
+
+        #Note: deriv_wrt_params is more accurately deriv wrt *op* params when there is an interposer
+        # d(op)/d(params) = d(op)/d(op_params) * d(op_params)/d(params)
+        if self.model._param_interposer is not None:
+            assert(wrt_filter is None), "Interposers not compatible with wrt-filters yet"
+            flattened_dprod = _np.dot(flattened_dprod,
+                                      self.model._param_interposer.deriv_op_params_wrt_model_params())
+            num_deriv_cols = self.model._param_interposer.num_params  # num *model* params
 
         if flat:
             return flattened_dprod
@@ -195,8 +202,10 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
         op_wrtFilter2, gpindices2 = self._process_wrt_filter(wrt_filter2, gate)
 
         # Allocate memory for the final result
-        num_deriv_cols1 = self.model.num_params if (wrt_filter1 is None) else len(wrt_filter1)
-        num_deriv_cols2 = self.model.num_params if (wrt_filter2 is None) else len(wrt_filter2)
+        num_op_params = self.model._param_interposer.num_op_params \
+            if (self.model._param_interposer is not None) else self.model.num_params
+        num_deriv_cols1 = num_op_params if (wrt_filter1 is None) else len(wrt_filter1)
+        num_deriv_cols2 = num_op_params if (wrt_filter2 is None) else len(wrt_filter2)
         flattened_hprod = _np.zeros((dim**2, num_deriv_cols1, num_deriv_cols2), 'd')
 
         if _slct.length(gpindices1) > 0 and _slct.length(gpindices2) > 0:  # works for arrays too
@@ -204,6 +213,14 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
             # gate's parameters and fill appropriate columns of flattened_dprod.
             _fas(flattened_hprod, [None, gpindices1, gpindices2],
                  gate.hessian_wrt_params(op_wrtFilter1, op_wrtFilter2))
+
+        #Note: deriv_wrt_params is more accurately derive wrt *op* params when there is an interposer
+        # d2(op)/d(p1)d(p2) = d2(op)/d(op_p1)d(op_p2) * d(op_p1)/d(p1) d(op_p2)/d(p2)
+        if self.model._param_interposer is not None:
+            assert(wrt_filter1 is None and wrt_filter2 is None), "Interposers not compatible with wrt-filters yet"
+            d_opp_wrt_p = self.model._param_interposer.deriv_op_params_wrt_model_params()
+            flattened_hprod = _np.einsum('ijk,jl,km->ilm', flattened_hprod, d_opp_wrt_p, d_opp_wrt_p)
+            num_deriv_cols1 = num_deriv_cols2 = self.model._param_interposer.num_params  # num *model* params
 
         if flat:
             return flattened_hprod
