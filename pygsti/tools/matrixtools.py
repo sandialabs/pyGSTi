@@ -243,7 +243,7 @@ def nice_nullspace(m, tol=1e-7):
     An matrix of shape (M,K) whose columns contain nullspace basis vectors.
     """
     nullsp = nullspace(m, tol)
-    nullsp_projector = _np.dot(nullsp, nullsp.T)
+    nullsp_projector = _np.dot(nullsp, nullsp.conj().T)
     keepers = []; current_rank = 0
     for i in range(nullsp_projector.shape[1]):  # same as mx.shape[1]
         rank = _np.linalg.matrix_rank(nullsp_projector[:, 0:i + 1], tol=tol)

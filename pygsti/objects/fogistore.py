@@ -154,11 +154,13 @@ class FirstOrderGaugeInvariantStore(object):
 
     def errorgen_vec_to_fogi_coefficients_array(self, errorgen_vec):
         fogi_coeffs = _np.dot(self.fogi_directions.T, errorgen_vec)
-        return fogi_coeffs
+        assert(_np.linalg.norm(fogi_coeffs.imag) < 1e-8)
+        return fogi_coeffs.real
 
     def errorgen_vec_to_fogv_coefficients_array(self, errorgen_vec):
         fogv_coeffs = _np.dot(self.fogv_directions.T, errorgen_vec)
-        return fogv_coeffs
+        assert(_np.linalg.norm(fogv_coeffs.imag) < 1e-8)
+        return fogv_coeffs.real
 
     def opcoeffs_to_fogi_coefficients_array(self, op_coeffs):
         errorgen_vec = _np.zeros(self.errorgen_space_dim, 'd')

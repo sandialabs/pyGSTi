@@ -132,7 +132,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
 
     #Step 1: construct FOGI quantities and reference frame for each op
     ccomms = {}
-    fogi_dirs = _np.zeros((num_elem_errgens, 0), 'd')  # columns = dual vectors ("directions") in error-gen space
+    fogi_dirs = _np.zeros((num_elem_errgens, 0), complex)  # columns = dual vectors ("directions") in error-gen space
     fogi_names = []
     fogi_abbrev_names = []
     fogi_gaugespace_dirs = []  # columns
@@ -149,7 +149,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
         # Note: local/new_fogi_dirs are orthogonal but not necessarily normalized (so need to
         #  normalize to get inverse, but *don't* need pseudo-inverse).
         local_fogi_dirs = _mt.nice_nullspace(ga.T)  # "conjugate space" to gauge action
-        new_fogi_dirs = _np.zeros((fogi_dirs.shape[0], local_fogi_dirs.shape[1]), 'd')
+        new_fogi_dirs = _np.zeros((fogi_dirs.shape[0], local_fogi_dirs.shape[1]), local_fogi_dirs.dtype)
         new_fogi_dirs[op_errgen_indices[op_label], :] = local_fogi_dirs  # "juice" this op
         fogi_dirs = _np.concatenate((fogi_dirs, new_fogi_dirs), axis=1)
 
@@ -204,9 +204,15 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                         # let fogi_dir ~= ga_A(intersection_vec) - ga_B(intersection_vec) - but actually
                         # let fogi_dir = pinv(ga_A).T * int_vec - pinv(ga_B).T * int_vec, so that:
                         # dot(fogi_dir.T, gauge_action) = int_vec.T * (pinv(ga_A) - pinv(ga_B)) * gauge_action
-                        #                               = int_vec.T * (I - I) = 0  (A,B are faithful reps of gauge?)
+                        #                               = (I - I) = 0
+                        # (A,B are faithful reps of gauge on intersection space, so pinv(ga_A) * ga_A
+                        # restricted to intersection space is I:   int_spc.T * pinv(ga_A) * ga_A * int_spc == I
+                        # (when int_spc vecs are orthonormal) and so the above redues to I - I = 0
+
+                        # HERE WIP: trying to understand how int_vec relates to error magnitudes/metrics:
                         # Note that the errorgen-space vector v := dot(ga_A - ga_B, int_vec) has the property
-                        # that dot(fogi_dir.T, v) = int_vec.T * (I + I) * int_vec = 2 * norm2(int_vec)  (??)
+                        # that dot(fogi_dir.T, v) = int_vec.T * (pinv(ga_A) * gaA + pinv(ga_B) * gaB) * int_vec
+                        # = 2 * norm2(int_vec)  (??)
 
                         # gauge_action maps gauge_space => errorgen_space
                         # pinv_gauge_action maps errorgen_space => gauge_space  (need pinv rather than just rescaling
@@ -224,10 +230,54 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                         inv_diff_gauge_action = _np.concatenate((_np.linalg.pinv(gauge_action[0:n, :], rcond=1e-7),
                                                                  -_np.linalg.pinv(gauge_action[n:, :], rcond=1e-7)),
                                                                 axis=1).T
+                        #inv_diff_gauge_action = _np.concatenate((_np.linalg.pinv(gauge_action[0:n, :].T, rcond=1e-7),
+                        #                                         -_np.linalg.pinv(gauge_action[n:, :].T, rcond=1e-7)),
+                        #                                        axis=0)  # same as above, b/c T commutes w/pinv (?)
+
                         local_fogi_dirs = _np.dot(inv_diff_gauge_action, intersection_space)
                         assert(_np.linalg.norm(_np.dot(gauge_action.T, local_fogi_dirs)) < 1e-8)
+                        # transpose => dot(local_fogi_dirs.T, gauge_action) = 0
+                        # = int_spc.T * [ pinv_gA  -pinv_gB ] * [[ga] [gB]]
+                        # = int_spc.T * (pinv_gA * gA - pinv_gB * gB) = 0 b/c int_vec lies in "support" of A & B,
+                        #   i.e. int_spc.T * (pinv_gA * gA) * int_spc == I and similar with B, so get I - I = 0
 
-                        new_fogi_dirs = _np.zeros((fogi_dirs.shape[0], local_fogi_dirs.shape[1]), 'd'); off = 0
+                        #TODO REMOVE (DEBUG)
+                        #except:
+                        #    print(_np.linalg.norm(_np.dot(gauge_action.T, local_fogi_dirs)))
+                        #    print(_np.linalg.norm(_np.dot(gauge_action.conj().T, local_fogi_dirs)))
+                        #    print("Try conjugating intersection_space:")
+                        #    conj_local_fogi_dirs = _np.dot(inv_diff_gauge_action, intersection_space.conj())
+                        #    print(_np.linalg.norm(_np.dot(gauge_action.T, conj_local_fogi_dirs)))
+                        #    print(_np.linalg.norm(_np.dot(gauge_action.conj().T, conj_local_fogi_dirs)))
+                        #
+                        #    print("Test restricted to intersection space:")
+                        #    restricted_ga = _np.dot(gauge_action, intersection_space)
+                        #    restricted_inv_diff_gauge_action = _np.concatenate((_np.linalg.pinv(restricted_ga[0:n, :], rcond=1e-7),
+                        #                                                        -_np.linalg.pinv(restricted_ga[n:, :], rcond=1e-7)),
+                        #                                                       axis=1).T
+                        #    restricted_local_fogi_dirs = restricted_inv_diff_gauge_action
+                        #    print(_np.linalg.norm(_np.dot(gauge_action.T, restricted_local_fogi_dirs)))
+                        #    ga = restricted_ga[0:n, :]
+                        #    inv_ga = _np.linalg.pinv(ga, rcond=1e-7)
+                        #    print(_np.linalg.norm(_np.dot(inv_ga, ga) - _np.identity(ga.shape[1],'d')))
+                        #
+                        #    print("DEBUG")
+                        #    gaA = gauge_action[0:n,:]
+                        #    gaB = gauge_action[n:,:]
+                        #    pinvA = _np.linalg.pinv(gaA, rcond=1e-7)
+                        #    pinvB = _np.linalg.pinv(gaB, rcond=1e-7)
+                        #    iA = _np.dot(pinvA, gaA)
+                        #    iB = _np.dot(pinvB, gaB)
+                        #    tA = _np.dot(intersection_space.T, iA)
+                        #    tB = _np.dot(intersection_space.T, iB)
+                        #    print(_np.linalg.norm(tA))
+                        #    print(_np.linalg.norm(tB))
+                        #
+                        #    import bpdb; bpdb.set_trace()
+                        #    print("prob")
+
+                        new_fogi_dirs = _np.zeros((fogi_dirs.shape[0], local_fogi_dirs.shape[1]),
+                                                  local_fogi_dirs.dtype); off = 0
                         for ol in existing_set + (op_label,):  # NOT new_set here b/c concat order below
                             n = len(errorgen_coefficient_labels[ol])
                             new_fogi_dirs[op_errgen_indices[ol], :] = local_fogi_dirs[off:off + n, :]; off += n
