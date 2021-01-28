@@ -189,11 +189,18 @@ class CustomLMOptimizer(Optimizer):
         halted as soon as an *attempt* is made to evaluate the function out of bounds.
         If 1 then the optimization is halted only when a would-be *accepted* step
         is out of bounds.
+
+    serial_solve_proc_threshold : int optional
+        When there are fewer than this many processors, the optimizer will solve linear
+        systems serially, using SciPy on a single processor, rather than using a parallelized
+        Gaussian Elimination (with partial pivoting) algorithm coded in Python. Since SciPy's
+        implementation is more efficient, it's not worth using the parallel version until there
+        are many processors to spread the work among.
     """
     def __init__(self, maxiter=100, maxfev=100, tol=1e-6, fditer=0, first_fditer=0, damping_mode="identity",
                  damping_basis="diagonal_values", damping_clip=None, use_acceleration=False,
                  uphill_step_threshold=0.0, init_munu="auto", oob_check_interval=0,
-                 oob_action="reject", oob_check_mode=0):
+                 oob_action="reject", oob_check_mode=0, serial_solve_proc_threshold=100):
 
         if isinstance(tol, float): tol = {'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol, 'maxdx': 1.0}
         self.maxiter = maxiter
@@ -212,6 +219,7 @@ class CustomLMOptimizer(Optimizer):
         self.oob_check_mode = oob_check_mode
         self.array_types = 3 * ('p',) + ('e', 'ep')  # see custom_leastsq fn "-type"s  -need to add 'jtj' type
         self.called_objective_methods = ('lsvec', 'dlsvec')  # the objective function methods we use (for mem estimate)
+        self.serial_solve_proc_threshold = serial_solve_proc_threshold
 
     def run(self, objective, profiler, printer):
 
@@ -262,6 +270,7 @@ class CustomLMOptimizer(Optimizer):
             oob_check_mode=self.oob_check_mode,
             resource_alloc=objective.resource_alloc,
             distributed_qty_calc=dqcalc,
+            serial_solve_proc_threshold=self.serial_solve_proc_threshold,
             verbosity=printer - 1, profiler=profiler)
 
         printer.log("Least squares message = %s" % msg, 2)
@@ -301,7 +310,8 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                    max_dx_scale=1.0, damping_mode="identity", damping_basis="diagonal_values",
                    damping_clip=None, use_acceleration=False, uphill_step_threshold=0.0,
                    init_munu="auto", oob_check_interval=0, oob_action="reject", oob_check_mode=0,
-                   resource_alloc=None, distributed_qty_calc=None, verbosity=0, profiler=None):
+                   resource_alloc=None, distributed_qty_calc=None, serial_solve_proc_threshold=100,
+                   verbosity=0, profiler=None):
     """
     An implementation of the Levenberg-Marquardt least-squares optimization algorithm customized for use within pyGSTi.
 
@@ -725,10 +735,11 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                                 JTJ[idiag] = undamped_JTJ_diag + add_to_diag  # ok if assume fine-param-proc.size == 1
                                 #dx_lst.append(_scipy.linalg.solve(JTJ, -JTf, sym_pos=True))
                                 #dx_lst.append(custom_solve(JTJ, -JTf, resource_alloc))
-                                _custom_solve(JTJ, minus_JTf, dx_lst[ii], dqc, resource_alloc)
+                                _custom_solve(JTJ, minus_JTf, dx_lst[ii], dqc, resource_alloc,
+                                              serial_solve_proc_threshold)
                         else:
                             #dx = _scipy.linalg.solve(JTJ, -JTf, sym_pos=True)
-                            _custom_solve(JTJ, minus_JTf, dx, dqc, resource_alloc)
+                            _custom_solve(JTJ, minus_JTf, dx, dqc, resource_alloc, serial_solve_proc_threshold)
 
                     elif damping_basis == 'singular_values':
                         #Note: above solves JTJ*x = -JTf => x = inv_JTJ * (-JTf)
@@ -771,7 +782,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                         dqc.fill_jtf(Jac, df2, JTdf2)
                         JTdf2 *= -0.5  # keep using JTdf2 memory in solve call below
                         #dx2 = _scipy.linalg.solve(JTJ, -0.5 * JTdf2, sym_pos=True)  # Note: JTJ not init w/'adaptive'
-                        _custom_solve(JTJ, JTdf2, dx2, dqc, resource_alloc)
+                        _custom_solve(JTJ, JTdf2, dx2, dqc, resource_alloc, serial_solve_proc_threshold)
                         dx1[:] = dx[:]
                         dx += dx2  # add acceleration term to dx
                     except _scipy.linalg.LinAlgError:

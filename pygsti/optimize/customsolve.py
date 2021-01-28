@@ -15,12 +15,22 @@ import scipy as _scipy
 from ..tools import sharedmemtools as _smt
 from .distributedqtycalc import UndistributedQuantityCalc as _UndistributedQuantityCalc
 
+try:
+    from ..tools import fastcalc as _fastcalc
+except ImportError:
+    _fastcalc = None
 
-def custom_solve(a, b, x, dqc, resource_alloc):
+import time ##REMOVE DEBUG and refs below
+
+def custom_solve(a, b, x, dqc, resource_alloc, proc_threshold=100):
     """
     Simple parallel Gaussian Elimination with pivoting.
 
     TODO: docstring
+
+    proc_threshold : int
+        Below this number of processors this routine will simply call
+        SciPy's solve(...) method.
 
     Expects `a` to be in "JTJ" format, where each proc holds rows according to
     the "fine" parameter partitioning and all the columns for each of those
@@ -34,15 +44,32 @@ def custom_solve(a, b, x, dqc, resource_alloc):
     #assert(False), "STOP"
 
     pivot_row_indices = []
-    local_already_pivot_row_indices = []
+    #potential_pivot_indices = list(range(a.shape[0]))  # *local* row indices of rows not already chosen as pivot rows
+    potential_pivot_mask = _np.ones(a.shape[0], dtype=bool)  # *local* row indices of rows not already chosen as pivot rows
+    all_row_indices = _np.arange(a.shape[0])
     my_row_slice = dqc.jtf_param_slice()
 
     comm = resource_alloc.comm
     host_comm = resource_alloc.host_comm
-    xval_buf = _np.empty(1, 'd')  # for MPI Send/Recv to work
 
     if comm is None or isinstance(dqc, _UndistributedQuantityCalc):
-        x[:] = _scipy.linalg.solve(a, b, sym_pos=True)
+        x[:] = _scipy.linalg.solve(a, b, assume_a='pos')
+        return
+
+    #Just gather everything to one processor and compute there:
+    if comm.size < proc_threshold and a.shape[1] < 10000:
+        # We're not exactly sure where scipy is better, but until we speed up / change gaussian-elim
+        # alg the scipy alg is much faster for small numbers of procs and so should be used unless
+        # A is too large to be gathered to the root proc.
+        t0 = time.time()
+        global_a = dqc.gather_jtj(a)
+        global_b = dqc.gather_jtf(b)
+        global_x = _scipy.linalg.solve(global_a, global_b, assume_a='pos') if (comm.rank == 0) else None
+        dqc.scatter_x(global_x, x)
+        #REMOVE DEBUG
+        #if comm.rank == 0:
+        #    t1 = time.time()
+        #    print("PROFILE using scipy: %.3fs" % (t1-t0))
         return
 
     if host_comm is not None:
@@ -53,83 +80,47 @@ def custom_solve(a, b, x, dqc, resource_alloc):
         shared_rowb, shared_rowb_shm = _smt.create_shared_ndarray(
             resource_alloc, (a.shape[1] + 1,), 'd')
 
+        # Scratch buffers
+        host_index_buf = _np.empty((resource_alloc.interhost_comm.size, 2), int) \
+                         if resource_alloc.interhost_comm.rank == 0 else None
+        host_val_buf = _np.empty((resource_alloc.interhost_comm.size, 1), 'd') \
+                       if resource_alloc.interhost_comm.rank == 0 else None
+    else:
+        shared_floats = shared_ints = shared_rowb = None
+
+        host_index_buf = _np.empty((comm.size, 1), int) if comm.rank == 0 else None
+        host_val_buf = _np.empty((comm.size, 1), 'd') if comm.rank == 0 else None
+
     # Idea: bring a|b into RREF then back-substitute to get x.
 
     # for each column, find the best "pivot" row to use to eliminate other rows.
-    # (note: column pivoting is not used)
+    # (note: column pivoting is not used
+    tStart = time.time()
+    a_orig = a.copy()  # So we can restore original values of a and b
+    b_orig = b.copy()  #  (they're updated as we go)
+
+    #Scratch space
+    local_pivot_rowb = _np.empty(a.shape[1] + 1, 'd')
+    smbuf1 = _np.empty(1, 'd')
+    smbuf2 = _np.empty(2, int)
+    smbuf3 = _np.empty(3, int)
+
+    #debug_barrier_time = 0 #REMOVE DEBUG & refs
     for icol in range(a.shape[1]):
 
         # Step 1: find the index of the row that is the best pivot.
         # each proc looks for its best pivot (Note: it should not consider rows already pivoted on)
-        abs_local_col = _np.abs(a[:, icol])
-        abs_local_col[local_already_pivot_row_indices] = 0.0  # don't choose a row as the pivot twice
-        ibest_local = _np.argmax(abs_local_col)  # a *local* row index
-        ibest_local_as_global = ibest_local + my_row_slice.start  # a *global* row index (but a local "best")
-
-        if host_comm is not None:  # Shared memory case:
-
-            # procs send best element and row# to root
-            shared_floats[host_comm.rank] = abs_local_col[ibest_local]
-            shared_ints[host_comm.rank] = ibest_local_as_global
-            host_comm.barrier()
-            if host_comm.rank == 0:
-                k = _np.argmax(shared_floats[0: host_comm.size])  # winning rank within host_comm
-                ibest_host = shared_ints[k]
-                best_host_vals = resource_alloc.interhost_comm.gather(shared_floats[k], root=0)
-                best_host_indices = resource_alloc.interhost_comm.gather((ibest_host, k), root=0)
-
-                if comm.rank == 0:
-                    h = _np.argmax(best_host_vals)  # winning host index
-                    ibest_global, k = best_host_indices[h]  # chosen (global) pivot row index; updates k = winner on *h*
-
-                    assert(resource_alloc.interhost_comm.rank == 0)  # this should be the root proc
-                    resource_alloc.interhost_comm.bcast((ibest_global, h, k), root=0)
-                else:
-                    ibest_global, h, k = resource_alloc.interhost_comm.bcast(None, root=0)
-
-                shared_ints[0] = ibest_global
-                shared_ints[1] = h
-                shared_ints[2] = k
-                host_comm.barrier()
-            else:
-                host_comm.barrier()
-                ibest_global = shared_ints[0]
-                h = shared_ints[1]
-                k = shared_ints[2]
-
-        else:  # Simpler, no shared memory case:
-
-            # procs send best element and row# to root
-            best_local_vals = comm.gather(abs_local_col[ibest_local], root=0)
-            best_local_gindices = comm.gather(ibest_local_as_global, root=0)  # but *global* indices
-
-            # root proc determines best global pivot and broadcasts row# to others (& it's recorded for later)
-            if comm.rank == 0:
-                k = _np.argmax(best_local_vals)  # winning & by fiat "owning" rank within comm
-                ibest_global = best_local_gindices[k]  # chosen (global) pivot row index
-                comm.bcast((ibest_global, k), root=0)
-            else:
-                ibest_global, k = comm.bcast(None, root=0)
+        #t0 =  time.time()
+        potential_pivot_indices = all_row_indices[potential_pivot_mask]
+        ibest_global, ibest_local, h, k = _find_pivot(a, b, icol, potential_pivot_indices, my_row_slice,
+                                                      shared_floats, shared_ints, resource_alloc, comm, host_comm,
+                                                      smbuf1, smbuf2, smbuf3, host_index_buf, host_val_buf)
+        #debugT = time.time() - t0
+        #debug_barrier_time += debugT
 
         # Step 2: proc that owns best row (holds that row and is root of param-fine comm) broadcasts it
-        if host_comm is not None:
-            if host_comm.rank == k:  # the k-th processor on each host communicate the pivot row
-                # (one of these "k-th" processors, namely the one on host `h`, holds the pivot row)
-                if resource_alloc.interhost_comm.rank == h:
-                    local_pivot_rowb = _np.append(a[ibest_local, :], b[ibest_local])
-                    local_already_pivot_row_indices.append(ibest_local)
-                else:
-                    local_pivot_rowb = None
-                shared_rowb[:] = resource_alloc.interhost_comm.bcast(local_pivot_rowb, root=h)  # pivot row -> sh'd mem
-            host_comm.barrier()  # wait (on each host) until shared_row is filled
-            pivot_rowb = shared_rowb
-        else:
-            if comm.rank == k:
-                pivot_rowb = comm.bcast(_np.append(a[ibest_local, :], b[ibest_local]), root=k)
-                local_already_pivot_row_indices.append(ibest_local)
-            else:
-                pivot_rowb = comm.bcast(None, root=k)
-        pivot_row, pivot_b = pivot_rowb[0:a.shape[1]], pivot_rowb[a.shape[1]]
+        pivot_row, pivot_b = _broadcast_pivot_row(a, b, ibest_local, h, k, shared_rowb, local_pivot_rowb,
+                                                  potential_pivot_mask, resource_alloc, comm, host_comm)
 
         if abs(pivot_row[icol]) < 1e-6:
             # There's no non-zero element in this column to use as a pivot - the column is all zeros.
@@ -146,8 +137,149 @@ def custom_solve(a, b, x, dqc, resource_alloc):
         #  - need to update non-pivot rows to eliminate iCol-th entry: row -= alpha * pivot_row
         #    where alpha = row[iCol] / pivot_row[iCol]
         # (Note: don't do this when there isn't a nonzero pivot)
-
         ipivot_local = ibest_global - my_row_slice.start  # *local* row index of pivot row (ok if negative)
+        _update_rows(a, b, icol, ipivot_local, pivot_row, pivot_b)
+
+    # Back substitution:
+    # We've accumulated a list of (global) row indices of the rows containing a nonzero
+    # element in a given column and zeros in prior columns.
+    pivot_row_indices = _np.array(pivot_row_indices)
+    _back_substitution(a, b, x, pivot_row_indices, my_row_slice, dqc, resource_alloc, host_comm)
+
+    a[:,:] = a_orig  # restore original values of a and b
+    b[:] = b_orig    # so they're the same as when we were called.
+    # Note: maybe we could just use array copies in the algorithm, but we may need to use the
+    # real a and b because they can be shared mem (check?)
+
+    #DEBUG REMOVE
+    #t1 = time.time()
+    #if comm.rank == 0:
+    #    print("PROFILE custom_solve a.shape=",a.shape," time=%.4fs" % (t1-tStart))
+    #    #print("BARRIER time = ",debug_barrier_time)
+
+    if host_comm is not None:
+        _smt.cleanup_shared_ndarray(shared_floats_shm)
+        _smt.cleanup_shared_ndarray(shared_ints_shm)
+        _smt.cleanup_shared_ndarray(shared_rowb_shm)
+    return
+
+
+def _find_pivot(a, b, icol, potential_pivot_inds, my_row_slice, shared_floats, shared_ints,
+                resource_alloc, comm, host_comm, buf1, buf2, buf3, best_host_indices, best_host_vals):
+
+    if len(potential_pivot_inds) > 0:
+        best_abs_local_potential_pivot, ibest_local = _restricted_abs_argmax(a[:, icol], potential_pivot_inds)
+        #abs_local_potential_pivots = _np.abs(a[potential_pivot_inds, icol])
+        #ibest_local_pivot = _np.argmax(abs_local_potential_pivots)  # an index into abs_local_potential_pivots
+        #ibest_local = potential_pivot_inds[ibest_local_pivot]  # a *local* row index
+        #best_abs_local_potential_pivot = abs_local_potential_pivots[ibest_local_pivot]
+    else:
+        ibest_local = 0  # these don't matter since we should never be selected as the winner
+        best_abs_local_potential_pivot = -1  # dummy -1 value (so it won't be chosen as the max)
+
+    ibest_local_as_global = ibest_local + my_row_slice.start  # a *global* row index (but a local "best")
+
+    if host_comm is not None:  # Shared memory case:
+
+        # procs send best element and row# to root
+        shared_floats[host_comm.rank] = best_abs_local_potential_pivot
+        shared_ints[host_comm.rank] = ibest_local_as_global
+        host_comm.barrier()
+        if host_comm.rank == 0:
+            k = _np.argmax(shared_floats[0: host_comm.size])  # winning rank within host_comm
+            ibest_host = shared_ints[k]
+            #print("Host root rank",comm.rank, " in _find_pivot: inter_size=", resource_alloc.interhost_comm.size, "intra_size=",host_comm.size)
+            if resource_alloc.interhost_comm.size > 1:
+                #best_host_vals = resource_alloc.interhost_comm.gather(shared_floats[k], root=0)
+                #best_host_indices = resource_alloc.interhost_comm.gather((ibest_host, k), root=0)
+
+                buf1[0] = shared_floats[k]
+                resource_alloc.interhost_comm.Gather(buf1, best_host_vals, root=0)
+
+                buf2[0] = ibest_host; buf2[1] = k
+                resource_alloc.interhost_comm.Gather(buf2, best_host_indices, root=0)
+            else:
+                best_host_vals[0,:] = [shared_floats[k]]  # best *host* values
+                best_host_indices[0,:] = (ibest_host, k)  # and indices
+
+            if comm.rank == 0:
+                h = _np.argmax(best_host_vals)  # winning host index
+                ibest_global, k = best_host_indices[h]  # chosen (global) pivot row index; updates k = winner on *h*
+
+                assert(resource_alloc.interhost_comm.rank == 0)  # this should be the root proc
+                if resource_alloc.interhost_comm.size > 1:
+                    buf3[:] = (ibest_global, h, k)
+                    resource_alloc.interhost_comm.Bcast(buf3, root=0)
+            else:
+                resource_alloc.interhost_comm.Bcast(buf3, root=0)
+                ibest_global, h, k = buf3[:]
+
+            shared_ints[0] = ibest_global
+            shared_ints[1] = h
+            shared_ints[2] = k
+            host_comm.barrier()
+        else:
+            host_comm.barrier()
+            ibest_global = shared_ints[0]
+            h = shared_ints[1]
+            k = shared_ints[2]
+
+    else:  # Simpler, no shared memory case:
+
+        # procs send best element and row# to root
+        #best_local_vals = comm.gather(best_abs_local_potential_pivot, root=0)
+        #best_local_gindices = comm.gather(ibest_local_as_global, root=0)  # but *global* indices
+        buf1[0] = best_abs_local_potential_pivot
+        best_local_vals = best_host_vals  # each proc is a "host"
+        comm.Gather(buf1, best_local_vals, root=0)
+
+        buf1[0] = ibest_local_as_global
+        best_local_gindices = best_host_indices  # each proc is a "host"
+        comm.Gather(buf1, best_local_gindices, root=0)
+
+        # root proc determines best global pivot and broadcasts row# to others (& it's recorded for later)
+        if comm.rank == 0:
+            k = _np.argmax(best_local_vals)  # winning & by fiat "owning" rank within comm
+            ibest_global = best_local_gindices[k]  # chosen (global) pivot row index
+            buf2[0] = ibest_global; buf2[1] = k
+            comm.Bcast(buf2, root=0)
+        else:
+            comm.Bcast(buf2, root=0)
+            ibest_global, k = buf2[:]
+        h = None
+
+    return ibest_global, ibest_local, h, k
+
+
+def _broadcast_pivot_row(a, b, ibest_local, h, k, shared_rowb, local_pivot_rowb,
+                         potential_pivot_mask, resource_alloc, comm, host_comm):
+    if host_comm is not None:
+        if host_comm.rank == k:  # the k-th processor on each host communicate the pivot row
+            # (one of these "k-th" processors, namely the one on host `h`, holds the pivot row)
+            if resource_alloc.interhost_comm.rank == h:
+                local_pivot_rowb[0:a.shape[1]] = a[ibest_local, :]
+                local_pivot_rowb[a.shape[1]] = b[ibest_local]
+                potential_pivot_mask[ibest_local] = False
+            
+            if resource_alloc.interhost_comm.size > 1:
+                resource_alloc.interhost_comm.Bcast(local_pivot_rowb, root=h)  # pivot row -> sh'd mem
+            shared_rowb[:] = local_pivot_rowb
+        host_comm.barrier()  # wait (on each host) until shared_row is filled
+        pivot_rowb = shared_rowb
+    else:
+        if comm.rank == k:
+            local_pivot_rowb[0:a.shape[1]] = a[ibest_local, :]
+            local_pivot_rowb[a.shape[1]] = b[ibest_local]
+            potential_pivot_mask[ibest_local] = False
+        comm.Bcast(local_pivot_rowb, root=k)
+        pivot_rowb = local_pivot_rowb
+
+    pivot_row, pivot_b = pivot_rowb[0:a.shape[1]], pivot_rowb[a.shape[1]]
+    return pivot_row, pivot_b
+
+
+if _fastcalc is None:
+    def _update_rows(a, b, icol, ipivot_local, pivot_row, pivot_b):
         for i in range(a.shape[0]):
             if i == ipivot_local: continue  # don't update the pivot row!
             row = a[i, :]
@@ -157,19 +289,25 @@ def custom_solve(a, b, x, dqc, resource_alloc):
             #assert(abs(row[icol]) < 1e-6), " Pivot did not eliminate row %d: %g" % (i, row[icol])
             row[icol] = 0.0  # this sometimes isn't exactly true because of finite precision error,
             # but we know it must be exactly 0
+        
+    def _restricted_abs_argmax(ar, restrict_to):
+        i = _np.argmax(_np.abs(ar[restrict_to]))
+        indx = restrict_to[i]
+        return abs(ar[indx]), indx
+else:
+    _update_rows = _fastcalc.faster_update_rows
+    _restricted_abs_argmax = _fastcalc.restricted_abs_argmax
 
-    # Back substitution:
-    # We've accumulated a list of (global) row indices of the rows containing a nonzero
-    # element in a given column and zeros in prior columns.
 
+def _back_substitution(a, b, x, pivot_row_indices, my_row_slice, dqc, resource_alloc, host_comm):
     ##x[n-1] = b[pivot_row_indices[n-1]] / a[pivot_row[n-1], n-1]
 
     # x_indices_host = XXX  # x values to send to other procs -- TODO: slice of SHARED host array
     # x_values_host
     # x_indices = _np.empty(_slct.length(my_row_slice), int)
     # x_valuess = _np.empty(_slct.length(my_row_slice), 'd')
+    xval_buf = _np.empty(1, 'd')  # for MPI Send/Recv to work
 
-    pivot_row_indices = _np.array(pivot_row_indices)
     #pivot_row_col_dict = {row: col for col, row in enuerate(pivot_row_indices)}
     #for ii, i in enumerate(range(my_row_slice.start, my_row_slice.stop)):
     #    j = pivot_row_col_dict[i]
@@ -189,6 +327,7 @@ def custom_solve(a, b, x, dqc, resource_alloc):
     #    needs to send its value to the destination processor.
     #  If shared memory is used, first do this within the host, then do again for
     #    only inter-host transfers.
+    comm = resource_alloc.comm
     my_host_index = resource_alloc.host_index if (host_comm is not None) else 0
     my_rank = comm.rank
     param_fine_slices_by_host, owner_host_and_rank_of_global_fine_param_index = dqc.param_fine_info()
@@ -241,11 +380,7 @@ def custom_solve(a, b, x, dqc, resource_alloc):
                         comm.Recv(xval_buf, source=row_rank, tag=1234)
                         x[p - my_row_slice.start] = xval_buf[0]
 
-    if host_comm is not None:
-        _smt.cleanup_shared_ndarray(shared_floats_shm)
-        _smt.cleanup_shared_ndarray(shared_ints_shm)
-        _smt.cleanup_shared_ndarray(shared_rowb_shm)
-    return
+
 
 
 #NOTE: this implementation is partly done, and was stopped after realizing

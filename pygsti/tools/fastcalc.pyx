@@ -1059,3 +1059,137 @@ def fast_csr_sum_flat(np.ndarray[np.complex128_t, ndim=1, mode="c"] data,
         coeff = coeffs[iMx]
         for i in range(mx_nnz_indptr[iMx], mx_nnz_indptr[iMx+1]):
             data[flat_dest_index_array[i]] = data[flat_dest_index_array[i]] + coeff * flat_csr_mx_data[i]
+
+
+@cython.cdivision(True) # turn off divide-by-zero checking
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
+def faster_update_rows(np.ndarray[double, ndim=2, mode='c'] a,
+                     np.ndarray[double, ndim=1, mode='c'] b,
+                     int icol, int ipivot_local,
+                     np.ndarray[double, ndim=1, mode='c'] pivot_row,
+                     double pivot_b):
+    cdef int i
+    cdef int m = a.shape[0]
+    cdef int n = a.shape[1]
+    cdef double* a_ptr = <double*>a.data
+    cdef double* b_ptr = <double*>b.data
+    cdef double* pivot_row_ptr = <double*>pivot_row.data
+    cdef double* row
+    cdef double pivot_val = pivot_row_ptr[icol]
+    cdef double alpha
+    
+    if 0 <= ipivot_local and ipivot_local < m:  #split loop into 2 parts
+        for i in range(ipivot_local):
+            row = &a_ptr[i * n]
+            alpha = row[icol] / pivot_val
+            for j in range(icol):
+                row[j] = row[j] - alpha * pivot_row_ptr[j]
+            for j in range(icol+1, n):
+                row[j] = row[j] - alpha * pivot_row_ptr[j]
+            row[icol] = 0.0  # this sometimes isn't exactly true because of finite precision error
+            b_ptr[i] = b_ptr[i] - alpha * pivot_b
+
+        for i in range(ipivot_local + 1, m):
+            row = &a_ptr[i * n]
+            alpha = row[icol] / pivot_val
+            for j in range(icol):
+                row[j] = row[j] - alpha * pivot_row_ptr[j]
+            for j in range(icol+1, n):
+                row[j] = row[j] - alpha * pivot_row_ptr[j]
+            row[icol] = 0.0  # this sometimes isn't exactly true because of finite precision error
+            b_ptr[i] = b_ptr[i] - alpha * pivot_b
+
+    else:  # we don't own pivot - just use a single loop
+        for i in range(m):
+            row = &a_ptr[i * n]
+            alpha = row[icol] / pivot_val
+            for j in range(icol):
+                row[j] = row[j] - alpha * pivot_row_ptr[j]
+            for j in range(icol+1, n):
+                row[j] = row[j] - alpha * pivot_row_ptr[j]
+            row[icol] = 0.0  # this sometimes isn't exactly true because of finite precision error
+            b_ptr[i] = b_ptr[i] - alpha * pivot_b
+
+    #a[:, icol] = 0.0  # this sometimes isn't exactly true because of finite precision error
+
+    #alpha = a[:, icol] / pivot_row[icol]  # (k,)
+    #a[:, :] -= _np.kron(alpha, pivot_row)
+    #a[:, icol] = 0  # this sometimes isn't exactly true because of finite precision error
+    #b[:] -= alpha * pivot_b
+
+@cython.cdivision(True) # turn off divide-by-zero checking
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
+def fast_update_rows(np.ndarray[double, ndim=2] a,
+                     np.ndarray[double, ndim=1] b,
+                     int icol, int ipivot_local,
+                     np.ndarray[double, ndim=1] pivot_row,
+                     double pivot_b):
+    cdef int i
+    cdef int m = a.shape[0]
+    cdef double alpha
+    cdef double pivot_val = pivot_row[icol]
+
+    if 0 <= ipivot_local and ipivot_local < m:  #split loop into 2 parts
+        for i in range(ipivot_local):
+            alpha = a[i, icol] / pivot_val
+            a[i, :] -=  alpha * pivot_row
+            b[i] = b[i] - alpha * pivot_b
+
+        for i in range(ipivot_local + 1, m):
+            alpha = a[i, icol] / pivot_val
+            a[i, :] -=  alpha * pivot_row
+            b[i] = b[i] - alpha * pivot_b
+
+        a[0:ipivot_local, icol] = 0.0  # this sometimes isn't exactly true because of finite precision error
+        a[ipivot_local + 1:, icol] = 0.0
+
+    else:  # we don't own pivot - just use a single loop
+        for i in range(m):
+            alpha = a[i, icol] / pivot_val
+            a[i, :] -=  alpha * pivot_row
+            b[i] = b[i] - alpha * pivot_b
+
+        a[:, icol] = 0.0  # this sometimes isn't exactly true because of finite precision error
+
+
+@cython.cdivision(True) # turn off divide-by-zero checking
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
+def restricted_abs_argmax(np.ndarray[double, ndim=1] ar, np.ndarray[np.int64_t, ndim=1] restrict_to):
+
+    cdef int i
+    cdef int indx
+    cdef int n = restrict_to.shape[0]
+    cdef int max_indx
+    cdef double val
+    cdef double max_val
+    cdef double* ar_ptr = <double*>ar.data
+    cdef INT* to_ptr = <INT*>restrict_to.data
+    cdef INT ar_stride = ar.strides[0] // ar.itemsize
+    cdef INT to_stride = restrict_to.strides[0] // restrict_to.itemsize
+
+    #indx = restrict_to[0]
+    #max_val = abs(ar[indx])
+    #max_indx = indx
+    #
+    #for i in range(1, n):
+    #    indx = restrict_to[i]
+    #    val = abs(ar[indx])
+    #    if val > max_val:
+    #        max_val = val
+    #        max_indx = indx
+
+    indx = to_ptr[0]
+    max_val = abs(ar_ptr[indx * ar_stride])
+    max_indx = indx
+    
+    for i in range(1, n):
+        indx = to_ptr[i * to_stride]
+        val = abs(ar_ptr[indx * ar_stride])
+        if val > max_val:
+            max_val = val
+            max_indx = indx
+
+    return max_val, max_indx

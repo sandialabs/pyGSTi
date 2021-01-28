@@ -212,6 +212,9 @@ class DistributedQuantityCalc(object):
     def allscatter_x(self, global_x, x):
         x[:] = global_x[self.layout.global_param_fine_slice]
 
+    def scatter_x(self, global_x, x):
+        self.scatter_jtf(global_x, x)
+
     def allgather_f(self, f, global_f):
         #TODO: do this more efficiently in future:
         global_f_on_root = self.layout.gather_local_array('e', f, self.resource_alloc,
@@ -235,6 +238,20 @@ class DistributedQuantityCalc(object):
                                      if comm.rank == 0 else None, root=0)
         else:
             jtj[:, :] = global_jtj
+
+    def gather_jtf(self, jtf):
+        # gathers just onto the root proc
+        return self.layout.gather_local_array('jtf', jtf, self.resource_alloc)
+
+    def scatter_jtf(self, global_jtf, jtf):
+        # Don't bother trying to be fancy with shared mem here - we need to send the
+        # entire global_jtj from the (single) root proc anyway.
+        comm = self.resource_alloc.comm
+        if comm is not None:
+            jtf[:] = comm.scatter([global_jtf[pslc] for pslc in self.layout.param_fine_slices_by_rank]
+                                     if comm.rank == 0 else None, root=0)
+        else:
+            jtf[:] = global_jtf
 
     def global_svd_dot(self, jac_v, minus_jtf):
         # Assumes jac_v is 'jtj' type and minus_jtf is 'jtf' type.
