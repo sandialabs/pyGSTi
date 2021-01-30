@@ -251,10 +251,54 @@ def nice_nullspace(m, tol=1e-7):
             keepers.append(i)
             current_rank = rank
     ret = _np.take(nullsp_projector, keepers, axis=1)
+
     for j in range(ret.shape[1]):  # normalize columns so largest element is +1.0
         mx = abs(max(ret[:, j]))
         if mx > 1e-6: ret[:, j] /= mx
     return ret
+
+
+def columns_are_orthogonal(m, tol=1e-7, debug=True):
+    """
+    Checks whether a matrix contains orthogonal columns.
+
+    The columns do not need to be normalized.  In the
+    complex case, two vectors v and w are considered orthogonal
+    if `dot(v.conj(), w) == 0`.
+
+    Parameters
+    ----------
+    m : numpy.ndarray
+        The matrix to check.
+
+    tol : float, optional
+        Tolerance for checking whether dot products are zero.
+
+    Returns
+    -------
+    bool
+    """
+    if m.size == 0: return True  # boundary case
+    check = _np.dot(m.conj().T, m)
+    check[_np.diag_indices_from(check)] = 0.0
+
+    #DEBUG
+    if debug:
+        for i in range(check.shape[0]):
+            for j in range(i+1, check.shape[1]):
+                if abs(check[i,j]) > 1e-5:
+                    print("NON-ORTHOGONAL nice nullspace!")
+                    import bpdb; bpdb.set_trace()
+                    stop_here = True
+
+    return bool(_np.linalg.norm(check) / check.size < tol)
+
+
+def pinv_of_matrix_with_orthogonal_columns(m):
+    """ TODO: docstring """
+    col_scaling = _np.sum(_np.abs(m)**2, axis=0)
+    m_with_scaled_cols = m.conj() * col_scaling[None, :]
+    return m_with_scaled_cols.T
 
 
 def matrix_sign(m):
@@ -2103,12 +2147,12 @@ def remove_dependent_cols(mx, tol=1e-7):
     return _np.delete(mx, cols_to_remove, axis=1)
 
 
-def intersection_space(space1, space2, tol=1e-7):
+def intersection_space(space1, space2, tol=1e-7, use_nice_nullspace=False):
     """
     TODO: docstring
     """
     VW = _np.concatenate((space1, -space2), axis=1)
-    nullsp = nice_nullspace(VW, tol)
+    nullsp = nice_nullspace(VW, tol) if use_nice_nullspace else nullspace(VW, tol)
     return _np.dot(space1, nullsp[0:space1.shape[1], :])
 
 

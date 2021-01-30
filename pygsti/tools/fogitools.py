@@ -144,14 +144,23 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
 
         #Get commutant and communtant-complement spaces
         commutant = _mt.nice_nullspace(ga)  # columns = *gauge* elem gen directions
+        assert(_mt.columns_are_orthogonal(commutant))
         op_elemgen_labels = errorgen_coefficient_labels[op_label]
 
         # Note: local/new_fogi_dirs are orthogonal but not necessarily normalized (so need to
         #  normalize to get inverse, but *don't* need pseudo-inverse).
         local_fogi_dirs = _mt.nice_nullspace(ga.T)  # "conjugate space" to gauge action
+        assert(_mt.columns_are_orthogonal(fogi_dirs))
+
+        #NORMALIZE FOGI DIRS to have norm 1 -- is this useful?
+        for j in range(local_fogi_dirs.shape[1]):  # normalize columns so largest element is +1.0
+            mag = _np.linalg.norm(local_fogi_dirs[:, j])
+            if mag > 1e-6: local_fogi_dirs[:, j] /= mag
+
         new_fogi_dirs = _np.zeros((fogi_dirs.shape[0], local_fogi_dirs.shape[1]), local_fogi_dirs.dtype)
         new_fogi_dirs[op_errgen_indices[op_label], :] = local_fogi_dirs  # "juice" this op
         fogi_dirs = _np.concatenate((fogi_dirs, new_fogi_dirs), axis=1)
+        assert(_mt.columns_are_orthogonal(fogi_dirs))
 
         fogi_gaugespace_dirs.extend([None] * new_fogi_dirs.shape[1])  # local qtys don't have corresp. gauge dirs
         errgen_names = elem_vec_names(local_fogi_dirs, op_elemgen_labels)
@@ -162,6 +171,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
         fogi_abbrev_names.extend(errgen_names_abbrev)
 
         complement = _mt.nice_nullspace(commutant.T)  # complement of commutant - where op is faithful rep
+        assert(_mt.columns_are_orthogonal(complement))
         ccomms[(op_label,)] = complement
         #gauge_action_for_op[op_label] = ga
 
@@ -190,8 +200,9 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
 
                 if ccommA is not None and ccommA.shape[1] > 0 and ccommB.shape[1] > 0:
                     # merging with an empty complement does nothing (no intersection, same ccomm)
-                    intersection_space = _mt.intersection_space(ccommA, ccommB)
+                    intersection_space = _mt.intersection_space(ccommA, ccommB, use_nice_nullspace=True)
                     union_space = _mt.union_space(ccommA, ccommB)
+                    #assert(_mt.columns_are_orthogonal(intersection_space))  # Not always true
 
                     if intersection_space.shape[1] > 0:
                         # Then each basis vector of the intersection space defines a gauge-invariant ("fogi")
@@ -200,9 +211,33 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                                                        + [gauge_action_matrices[op_label]], axis=0)
                         n = sum([gauge_action_matrices[ol].shape[0] for ol in existing_set])  # boundary btwn A & B
 
-                        # we want fogi_dir s.t. dot(fogi_dir.T, gauge_action) == 0
-                        # let fogi_dir ~= ga_A(intersection_vec) - ga_B(intersection_vec) - but actually
-                        # let fogi_dir = pinv(ga_A).T * int_vec - pinv(ga_B).T * int_vec, so that:
+                        # gauge trans: e => e + delta_e = e + dot(gauge_action, delta);  e = "errorgen-set space" vector; delta = "gauge space" vector
+                        #   we want fogi_dir s.t. dot(fogi_dir.T, e) doesn't change when e transforms as above
+                        # ==> we want fogi_dir s.t. dot(fogi_dir.T, gauge_action) == 0   (we want dot(fogi_dir.T, gauge_action, delta) == 0 for all delta)
+
+                        # e = sum_i coeff_i * f_i   f_i are basis vecs, not nec. orthonormal, s.t. there exists
+                        #  a dual basis f'_i s.t. dot(f'_i.T, f_i) = dirac_ij
+                        #  => coeff_i = dot(f'_i.T, e)
+
+                        # exists subset & subspace of errgen-set space that = span({dot(gauge_action, delta) for all delta}) - call this "gauge-shift space"
+                        #  == gauge-orbit of target gateset, i.e. e=vec(0)  (within FOGI framework)
+                        # we will construct {f_i} so each f_i is in the gauge-shift space or its orthogonal complement.
+                        #  => each coeff_i is FOGI or "gauge", and f_i or f'_i can be labelled as a "FOGI direction" or "gauge direction"
+
+                        # colspace(gauge_action) = gauge-shift space, and we can construct its orthogonal complement
+                        # local_fogi_dir found by nullspace of gauge_action: dot(local_fogi.T, gauge_action) = 0
+                        # q in nullspace(gauge_action.T) - is q a valid f?  is q in orthog-complement?
+                        # is dot(q.T, every_vec_in_gauge_shift_space) = 0 = dot(q.T, delta_e) = dot(q.T, gauge_action, delta) for all delta
+                        # dot(gauge_action.T, q) = dot(q.T, gauge_action) = 0
+
+                        # Normalizations s.t H-coeffs == J-gauge-angle, S-coeffs == prob. the error occurs; e.g. f_i = (SX + SY) / 2
+                        # so need H-fogi vecs (f_i) to be normalized or ...
+
+                        #Relational qtys: want dot(q.T, gauge_action) = 0
+
+                        # xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxlet fogi_dir ~= ga_A(intersection_vec) - ga_B(intersection_vec) - but actually
+                        # xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx let fogi_dir = pinv(ga_A).T * int_vec - pinv(ga_B).T * int_vec, so that:
+                        # let fogi_dir.T = int_vec.T * pinv(ga_A) - int_vec.T * pinv(ga_B).T so that:
                         # dot(fogi_dir.T, gauge_action) = int_vec.T * (pinv(ga_A) - pinv(ga_B)) * gauge_action
                         #                               = (I - I) = 0
                         # (A,B are faithful reps of gauge on intersection space, so pinv(ga_A) * ga_A
@@ -234,7 +269,24 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                         #                                         -_np.linalg.pinv(gauge_action[n:, :].T, rcond=1e-7)),
                         #                                        axis=0)  # same as above, b/c T commutes w/pinv (?)
 
+                        #DEBUG REMOVE - this isn't always true - e.g. gauge action can be rank defficient
+                        #assert(_mt.columns_are_orthogonal(gauge_action[0:n, :]))
+                        #assert(_mt.columns_are_orthogonal(gauge_action[n:, :]))
+                        #invA = _mt.pinv_of_matrix_with_orthogonal_columns(gauge_action[0:n, :])
+                        #invB = _mt.pinv_of_matrix_with_orthogonal_columns(gauge_action[n:, :])
+                        #inv_diff_gauge_action2 = _np.concatenate((invA, -invB), axis=1).T
+                        #test = _mt.columns_are_orthogonal(inv_diff_gauge_action2)
+
                         local_fogi_dirs = _np.dot(inv_diff_gauge_action, intersection_space)
+                        #assert(_mt.columns_are_orthogonal(local_fogi_dirs))  # NOT always true...
+
+                        #NORMALIZE FOGI DIRS to have norm 1 -- is this useful? NO, this isn't what we want - let's REMOVE this...
+                        #for j in range(local_fogi_dirs.shape[1]):  # normalize columns so largest element is +1.0
+                        #    mag = _np.linalg.norm(local_fogi_dirs[:, j])
+                        #    if mag > 1e-6:
+                        #        local_fogi_dirs[:, j] /= mag
+                        #        intersection_space[:, j] /= mag
+
                         assert(_np.linalg.norm(_np.dot(gauge_action.T, local_fogi_dirs)) < 1e-8)
                         # transpose => dot(local_fogi_dirs.T, gauge_action) = 0
                         # = int_spc.T * [ pinv_gA  -pinv_gB ] * [[ga] [gB]]
@@ -287,6 +339,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                             for j in range(new_fogi_dirs.shape[1]):
                                 test = _np.concatenate((fogi_dirs, new_fogi_dirs[:, j:j + 1]), axis=1)
                                 if _np.linalg.matrix_rank(test, tol=1e-7) == num_indep_fogi_dirs + 1:
+                                    #assert(_mt.columns_are_orthogonal(test))  # there's no reason this needs to be true
                                     indep_cols.append(j)
                                     fogi_dirs = test
                                     num_indep_fogi_dirs += 1

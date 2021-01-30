@@ -14,11 +14,13 @@ import numpy as _np
 import scipy.linalg as _spl
 import collections as _collections
 from ..objects import Basis as _Basis
+from ..objects.fogistore import FirstOrderGaugeInvariantStore as _FOGIStore
 from ..tools import matrixtools as _mt
 
 import matplotlib.cm as _matplotlibcm
 from matplotlib.colors import LinearSegmentedColormap as _LinearSegmentedColormap
-#_cmap = _matplotlibcm.get_cmap('Reds')
+#_Hcmap = _matplotlibcm.get_cmap('Reds_r')
+#_Scmap = _matplotlibcm.get_cmap('Blues_r')
 
 _cdict = {'red': [[0.0, 1.0, 1.0],
                   [1.0, 1.0, 1.0]],
@@ -26,7 +28,15 @@ _cdict = {'red': [[0.0, 1.0, 1.0],
                     [1.0, 1.0, 1.0]],
           'blue': [[0.0, 0.0, 0.0],
                    [1.0, 1.0, 1.0]]}
-_cmap = _LinearSegmentedColormap('lightReds', segmentdata=_cdict, N=256)
+_Hcmap = _LinearSegmentedColormap('lightReds', segmentdata=_cdict, N=256)
+
+_cdict = {'red': [[0.0, 0.0, 0.0],
+                  [1.0, 1.0, 1.0]],
+          'blue': [[0.0, 1.0, 1.0],
+                   [1.0, 1.0, 1.0]],
+          'green': [[0.0, 0.0, 0.0],
+                    [1.0, 1.0, 1.0]]}
+_Scmap = _LinearSegmentedColormap('lightBlues', segmentdata=_cdict, N=256)
 
 ## - create table/heatmap of relational & gate-local strengths - also filter by ham/sto
 # - create table of all quantities to show structure
@@ -52,21 +62,29 @@ class FOGIDiagram(object):
     This class encapsulates a way of visualizing a model's FOGI quantities.
     """
 
-    def __init__(self, fogi_store, op_coefficients, model_dim, op_to_target_qubits=None):
-        # Maybe allow fogi_store to be multiple in future?
-        self.fogi_store = fogi_store
-        self.fogi_coeffs = fogi_store.opcoeffs_to_fogi_coefficients_array(op_coefficients)
-        self.fogi_infos = self.fogi_store.create_binned_fogi_infos()
+    def __init__(self, fogi_stores, op_coefficients, model_dim, op_to_target_qubits=None):
+        # Note: fogi_store can one or multiple (a list of) stores
+        self.fogi_stores = [fogi_stores] if isinstance(fogi_stores, _FOGIStore) else fogi_stores
+        self.fogi_coeffs_by_store = [fogi_store.opcoeffs_to_fogi_coefficients_array(op_coefficients)
+                                     for fogi_store in self.fogi_stores]
+        self.fogi_coeff_offsets = _np.cumsum([0] + [len(coeffs) for coeffs in self.fogi_coeffs_by_store])[0:-1]
+        self.fogi_coeffs = _np.concatenate(self.fogi_coeffs_by_store)
+
+        self.fogi_infos_by_store = [fogi_store.create_binned_fogi_infos()
+                                    for fogi_store in self.fogi_stores]
+        self.fogi_infos = _FOGIStore.merge_binned_fogi_infos(self.fogi_infos_by_store, self.fogi_coeff_offsets)
 
         #Construct op_to_target_qubits if needed
         if op_to_target_qubits is None:
             all_qubits = set()
-            for op_label in self.fogi_store.primitive_op_labels:
-                if op_label.sslbls is not None:
-                    all_qubits.update(op_label.sslbls)
+            for fogi_store in self.fogi_stores:
+                for op_label in fogi_store.primitive_op_labels:
+                    if op_label.sslbls is not None:
+                        all_qubits.update(op_label.sslbls)
             all_qubits = tuple(sorted(all_qubits))
             op_to_target_qubits = {op_label: op_label.sslbls if (op_label.sslbls is not None) else all_qubits
-                                   for op_label in self.fogi_store.primitive_op_labels}
+                                   for op_label in fogi_stores.primitive_op_labels
+                                   for fogi_store in self.fogi_stores}
         self.op_to_target_qubits = op_to_target_qubits
 
         #We need the gauge basis to construct actual gauge generators for computation of J-angle below.
@@ -102,12 +120,18 @@ class FOGIDiagram(object):
 
     def _contrib(self, typ, op_set, infos_to_aggregate):
         def _sto_contrib(infos):
-            return {'error_rate': sum([abs(self.fogi_coeffs[info['fogi_index']]) for info in infos])}
+            error_rate = 0
+            for info in infos:
+                vec_rate = sum(info['fogi_dir'])  # sum of elements gives error rate of vector
+                error_rate += self.fogi_coeffs[info['fogi_index']] * vec_rate
+            return {'error_rate': abs(error_rate)}  # maybe negative rates are ok (?) but we take abs here.
+            #OLD: return {'error_rate': sum([abs(self.fogi_coeffs[info['fogi_index']]) for info in infos])}
 
         def _ham_local_contrib(op_set, infos):
             assert(len(op_set) == 1)
             if len(infos) == 0: return {'errgen_angle': 0.0}
-            op_indices_slc = self.fogi_store.op_errorgen_indices[op_set[0]]
+            si = infos[0]['store_index']  # all infos must come from same *store*
+            op_indices_slc = self.fogi_stores[si].op_errorgen_indices[op_set[0]]
             errgen_vec = _np.zeros((op_indices_slc.stop - op_indices_slc.start), complex)
             for info in infos:
                 assert(set(op_set) == info['op_set'])
@@ -126,6 +150,7 @@ class FOGIDiagram(object):
                 ret.update({op_label: 0.0 for op_label in op_set})
                 return ret
 
+            si = infos[0]['store_index']  # all infos must come from same *store*
             gauge_dir = None
             for info in infos:
                 assert(set(op_set) == info['op_set'])
@@ -141,7 +166,7 @@ class FOGIDiagram(object):
             Hmx = _create_errgen_op(gauge_dir, self.gauge_basis_mxs)
             ret = {'go_angle': _mt.jamiolkowski_angle(Hmx)}
             for op_label in op_set:
-                errgen_vec = _np.dot(self.fogi_store.gauge_action_for_op[op_label], gauge_dir)
+                errgen_vec = _np.dot(self.fogi_stores[si].gauge_action_for_op[op_label], gauge_dir)
                 Hmx = _create_errgen_op(errgen_vec, self.gauge_basis_mxs)  # NOTE: won't work for reduced models
                 ret[op_label] = _mt.jamiolkowski_angle(Hmx)  # impact angle for op_label
             ret['min_impact'] = min([v for k, v in ret.items() if k != 'go_angle'])
@@ -260,17 +285,23 @@ class FOGIDiagram(object):
 
 
 class FOGIGraphDiagram(FOGIDiagram):
-    def __init__(self, fogi_store, op_coefficients, model_dim, op_to_target_qubits=None,
-                 physics=True, numerical_labels=False, edge_threshold=1e-6):
-        super().__init__(fogi_store, op_coefficients, model_dim, op_to_target_qubits)
+    def __init__(self, fogi_stores, op_coefficients, model_dim, op_to_target_qubits=None,
+                 physics=True, numerical_labels=False, edge_threshold=1e-6, color_mode="separate",
+                 node_fontsize=20, edgenode_fontsize=14, edge_fontsize=12):
+        # color_mode can also be "mix" and "mix_wborder"
+        super().__init__(fogi_stores, op_coefficients, model_dim, op_to_target_qubits)
         self.physics = physics
         self.numerical_labels = numerical_labels
         self.edge_threshold = edge_threshold
+        self.color_mode = color_mode
+        self.node_fontsize = node_fontsize
+        self.edgenode_fontsize = edgenode_fontsize
+        self.edge_fontsize = edge_fontsize
 
     def render(self, filename):
 
         op_set_info = self.op_set_info
-        op_labels = self.fogi_store.primitive_op_labels
+        op_labels = self.fogi_stores[0].primitive_op_labels  # take just from first store
 
         #Group ops based on target qubits
         target_qubit_groups = tuple(sorted(set(self.op_to_target_qubits.values())))
@@ -301,7 +332,9 @@ class FOGIGraphDiagram(FOGIDiagram):
             txt = ("Qubit %d" % target_qubits[0]) if len(target_qubits) == 1 \
                 else ("Qubits " + ", ".join(map(str, target_qubits)))
             txt_theta = (theta_begin + theta_end) / 2
-            x, y = (r0 + 50) * _np.cos(txt_theta), (r0 + 50) * _np.sin(txt_theta)  # text location
+            rpadding = 50
+            x = (r0 + rpadding + 20) * _np.cos(txt_theta)
+            y = (r0 + rpadding + 20) * _np.sin(txt_theta)  # text location
             txt_angle = (txt_theta + _np.pi) if (0 <= txt_theta <= _np.pi) else txt_theta
             beforeDrawingCalls += ('ctx.beginPath();\n'
                                    'ctx.arc(0, 0, %f, %f, %f, false);\n'
@@ -313,16 +346,35 @@ class FOGIGraphDiagram(FOGIDiagram):
                                    'ctx.rotate(Math.PI / 2 + %f);\n'
                                    'ctx.fillText("%s", 0, 0);\n'
                                    'ctx.restore();\n') % (
-                                       r0 + 30, theta_begin, theta_end, x, y, txt_angle, txt)
+                                       r0 + rpadding, theta_begin, theta_end, x, y, txt_angle, txt)
 
         node_js_lines = []
         edge_js_lines = []
         table_html = {}
         long_table_html = {}
+        MIN_POWER = 1  # 10^-MIN_POWER is the largest value end of the spectrum
+        MAX_POWER = 3  # 10^-MAX_POWER is the smallest value end of the spectrum
+        color_mode = self.color_mode
 
-        def _node_color(value):
-            MAX_POWER = 5
-            r, g, b, a = _cmap(-_np.log10(max(value, 10**(-MAX_POWER))) / MAX_POWER)  # or larger
+        def _normalize(v):
+            return -_np.log10(max(v, 10**(-MAX_POWER)) * 10**MIN_POWER) / (MAX_POWER - MIN_POWER)
+
+        #def _normalize(v):
+        #    v = min(max(v, 10**(-MAX_POWER)), 10**(-MIN_POWER))
+        #    return 1.0 - v / (10**(-MIN_POWER) - 10**(-MAX_POWER))
+
+        def _node_HScolor(Hvalue, Svalue):
+            r, g, b, a = _Hcmap(_normalize(Hvalue))
+            r2, g2, b2, a2 = _Scmap(_normalize(Svalue))
+            r = (r + r2) / 2; g = (g + g2) / 2; b = (b + b2) / 2
+            return "rgb(%d,%d,%d)" % (int(r * 255.9), int(g * 255.9), int(b * 255.9))
+
+        def _node_Hcolor(value):
+            r, g, b, a = _Hcmap(_normalize(value))
+            return "rgb(%d,%d,%d)" % (int(r * 255.9), int(g * 255.9), int(b * 255.9))
+
+        def _node_Scolor(value):
+            r, g, b, a = _Scmap(_normalize(value))
             return "rgb(%d,%d,%d)" % (int(r * 255.9), int(g * 255.9), int(b * 255.9))
             #if value < 1e-5: return "rgb(133,173,133)"  # unsaturaged green
             #if value < 3e-5: return "rgb(0,230,0)"  # green
@@ -370,6 +422,13 @@ class FOGIGraphDiagram(FOGIDiagram):
 
         #process local quantities
         node_ids = {}; node_locations = {}; next_node_id = 0
+        textcolors = ['black', 'white']
+
+        val_max = max([(abs(info['total'].get('H', {}).get('errgen_angle', 0))
+                        + info['total'].get('S', {}).get('error_rate', 0))
+                       for info in op_set_info.values()])
+        val_threshold = _normalize(val_max) / 3.0
+
         for op_set, info in op_set_info.items():
             if len(op_set) != 1: continue
             # create a gate-node in the graph
@@ -379,28 +438,36 @@ class FOGIGraphDiagram(FOGIDiagram):
             total = info['total']
             coh = total['H']['errgen_angle'] if ('H' in total) else None
             sto = total['S']['error_rate'] if ('S' in total) else None
+            tcolor = textcolors[int((abs(coh) + sto) > val_threshold)]
+            #print("VAL = ",(abs(coh) + sto),"Threshold = ",val_threshold)
 
             if 'H' in total and 'S' in total:
                 title = "Coherent: %.3g<br>Stochastic: %.3g" % (coh, sto)
-                back_color = _node_color(sto)
-                border_color = _node_color(coh)
-                if self.numerical_labels: label += "\\n<i>H: %.3g S: %.3g</i>" % (coh, sto)
+                if color_mode == "mix":
+                    back_color = border_color = _node_HScolor(coh, sto)
+                elif color_mode == "mix_wborder":
+                    back_color = _node_HScolor(coh, sto); border_color = "rgb(100, 100, 100)"
+                elif color_mode == "separate":
+                    back_color = _node_Scolor(sto); border_color = _node_Hcolor(coh)
+                if self.numerical_labels: label += "\\n<i>H: %.3g</i>\\n<i>S: %.3g</i>" % (coh, sto)
             elif 'H' in total:
                 title = "%.3g" % coh
-                back_color = border_color = _node_color(coh)
+                back_color = border_color = _node_Hcolor(coh)
+                if color_mode == "mix_wborder": border_color = "rgb(100, 100, 100)"
                 if self.numerical_labels: label += "\\n<i>%.3g</i>" % coh
             elif 'S' in total:
                 title = "%.3g" % sto
-                back_color = border_color = _node_color(sto)
+                back_color = border_color = _node_Scolor(sto)
+                if color_mode == "mix_wborder": border_color = "rgb(100, 100, 100)"
                 if self.numerical_labels: label += "\\n<i>%.3g</i>" % sto
             else:
                 raise ValueError("Invalid types in total dict: %s" % str(total.keys()))
 
             node_js_lines.append(('{id: %d, label: "%s", group: %d, title: "%s", x: %d, y: %d,'
-                                  'color: {background: "%s", border: "%s"}, fixed: %s}') %
+                                  'font: {color: "%s"}, color: {background: "%s", border: "%s"}, fixed: %s}') %
                                  (next_node_id, label, groupids[op_set[0]],
-                                  title, int(r * _np.cos(theta)), int(r * _np.sin(theta)), back_color, border_color,
-                                  'true' if self.physics else 'false'))
+                                  title, int(r * _np.cos(theta)), int(r * _np.sin(theta)), tcolor, back_color,
+                                  border_color, 'true' if self.physics else 'false'))
             table_html[next_node_id] = _make_table(info['hs_support_table'], "Qubits",
                                                    "Local errors on %s" % str(op_set[0]))
             long_table_html[next_node_id] = _make_table(info['individual_fogi_table'],
@@ -439,34 +506,69 @@ class FOGIGraphDiagram(FOGIDiagram):
                                     _np.sum([node_locations[op_label][0] for op_label in op_set]))
                 x, y = int(r * _np.cos(theta)), int(r * _np.sin(theta))
 
-            label = ""
+            label = ""; edge_labels = {}
             if 'H' in total and 'S' in total:
                 title = "Coherent: %s<br>Stochastic: %s" % (_dstr(total['H']), _dstr(total['S']))
-                back_color, border_color = _node_color(total['S']['error_rate']), _node_color(total['H']['min_impact'])
-                if self.numerical_labels: label += "H: %s S: %s" % (_dstr(total['H'], r'\n'), _dstr(total['S'], r'\n'))
+                mix_color = _node_HScolor(total['H']['go_angle'], total['S']['error_rate'])
+                if color_mode == "mix":
+                    back_color = border_color = _node_HScolor(total['H']['go_angle'], total['S']['error_rate'])
+                elif color_mode == "mix_wborder":
+                    back_color = _node_HScolor(total['H']['go_angle'], total['S']['error_rate'])
+                    border_color = "rgb(100, 100, 100)"
+                elif color_mode == "separate":
+                    back_color = _node_Scolor(total['S']['error_rate'])
+                    border_color = _node_Hcolor(total['H']['go_angle'])
+
+                if self.numerical_labels:
+                    #OLD: label += "H: %.3f S: %.3f" % (_dstr(total['H'], r'\n'), _dstr(total['S'], r'\n'))
+                    go_angle = total['H']['go_angle']
+                    err_rate = total['S']['error_rate']
+                    if abs(go_angle) > self.edge_threshold and err_rate > self.edge_threshold:
+                        label += "H: %.3f\\nS: %.3f" % (go_angle, err_rate)
+                    elif abs(go_angle) > self.edge_threshold:
+                        label += "%.3f" % go_angle
+                    elif err_rate > self.edge_threshold:
+                        label += "%.3f" % err_rate
+
+                    if abs(go_angle) > self.edge_threshold:
+                        edge_labels = {op_label: total['H'][op_label] for op_label in op_set}
+
             elif 'H' in total:
                 title = "%s" % _dstr(total['H'])
-                back_color = border_color = _node_color(total['H']['min_impact'])
-                if self.numerical_labels: label += "%s" % _dstr(total['H'], r'\n')
+                mix_color = _node_Hcolor(total['H']['go_angle'])
+                back_color = border_color = _node_Hcolor(total['H']['go_angle'])  # was 'min_impact' (?)
+                if color_mode == "mix_wborder": border_color = "rgb(100, 100, 100)"
+                #if self.numerical_labels: label += "%s" % _dstr(total['H'], r'\n')  # show entire dict
+                if self.numerical_labels:
+                    label += "%.3f" % total['H']['go_angle']
+                    edge_labels = {op_label: total['H'][op_label] for op_label in op_set}
             elif 'S' in total:
-                title = "%.3g" % _dstr(total['S'])
-                back_color = border_color = _node_color(total['S']['error_rate'])
-                if self.numerical_labels: label += "%s" % _dstr(total['S'], r'\n')
+                title = "%s" % _dstr(total['S'])
+                mix_color = _node_Scolor(total['S']['error_rate'])
+                back_color = border_color = _node_Scolor(total['S']['error_rate'])
+                if color_mode == "mix_wborder": border_color = "rgb(100, 100, 100)"
+                if self.numerical_labels: label += "%s" % _dstr(total['S'], r'\n')  # show entire dict
+                # Note: "entire" dict is just the single error rate in the S case
             else:
                 raise ValueError("Invalid types in total dict: %s" % str(total.keys()))
 
             node_js_lines.append(('{ id: %d, label: "%s", group: "%s", title: "%s", x: %d, y: %d,'
                                   'color: {background: "%s", border: "%s"}, font: {size: %d, '
                                   'strokeWidth: 3, strokeColor: "white"} }') %
-                                 (next_node_id, label, "relational", title, x, y, back_color, border_color, 12))
+                                 (next_node_id, label, "relational", title, x, y, back_color, border_color,
+                                  self.edgenode_fontsize))
             table_html[next_node_id] = _make_table(info['hs_support_table'], "Qubits",
                                                    "Relational errors between " + ", ".join(map(str, op_set)))
             long_table_html[next_node_id] = _make_table(info['individual_fogi_table'], "Label",
                                                         "FOGI quantities for " + ", ".join(map(str, op_set)))
             #link to gate-nodes
             for op_label in op_set:
-                edge_js_lines.append('{ from: %d, to: %d, value: %.4f, dashes: %s }' % (
-                    next_node_id, node_ids[op_label], mag, 'true' if info['dependent'] else 'false'))
+                label_str = (', label: "%.3f"' % edge_labels[op_label]) if edge_labels else ""
+                edge_js_lines.append('{ from: %d, to: %d, value: %.4f, color: {color: "%s"}, dashes: %s}' % (
+                    next_node_id, node_ids[op_label], mag, mix_color, 'true' if info['dependent'] else 'false'))
+                edge_js_lines.append('{ from: %d, to: %d, dashes: %s %s }' % (
+                    next_node_id, node_ids[op_label], 'true' if info['dependent'] else 'false', label_str))
+
             next_node_id += 1
 
         all_table_html = ""
@@ -483,15 +585,17 @@ class FOGIGraphDiagram(FOGIDiagram):
                                 'long_table_html': all_long_table_html,
                                 'physics': 'true' if self.physics else "false",
                                 'springlength': springlength,
-                                'beforeDrawingCalls': beforeDrawingCalls})
+                                'beforeDrawingCalls': beforeDrawingCalls,
+                                'node_fontsize': self.node_fontsize,
+                                'edge_fontsize': self.edge_fontsize})
         with open(filename, 'w') as f:
             f.write(s)
 
 
 class FOGIDetailTable(FOGIDiagram):
-    def __init__(self, fogi_store, op_coefficients, model_dim, op_to_target_qubits=None,
+    def __init__(self, fogi_stores, op_coefficients, model_dim, op_to_target_qubits=None,
                  mode='individual_terms'):
-        super().__init__(fogi_store, op_coefficients, model_dim, op_to_target_qubits)
+        super().__init__(fogi_stores, op_coefficients, model_dim, op_to_target_qubits)
         assert(mode in ('individual_terms', 'by_support'))
         self.mode = mode
 
@@ -499,7 +603,7 @@ class FOGIDetailTable(FOGIDiagram):
         from .table import ReportTable as _ReportTable
 
         op_set_info = self.op_set_info
-        op_labels = self.fogi_store.primitive_op_labels
+        op_labels = self.fogi_stores[0].primitive_op_labels  # take from first store only
 
         op_label_lookup = {lbl: i for i, lbl in enumerate(op_labels)}
         cell_tabulars = {}
@@ -562,13 +666,13 @@ class FOGIDetailTable(FOGIDiagram):
 
 
 class FOGIMultiscaleGridDiagram(FOGIDiagram):
-    def __init__(self, fogi_store, op_coefficients, model_dim, op_to_target_qubits=None):
-        super().__init__(fogi_store, op_coefficients, model_dim, op_to_target_qubits)
+    def __init__(self, fogi_stores, op_coefficients, model_dim, op_to_target_qubits=None):
+        super().__init__(fogi_stores, op_coefficients, model_dim, op_to_target_qubits)
 
     def render(self, detail_level=0, figsize=5, outfile=None, spacing=0.05, nudge=0.125,
                cell_fontsize=10, axes_fontsize=10, qty_key='bytarget'):
         op_set_info = self.op_set_info
-        op_labels = self.fogi_store.primitive_op_labels
+        op_labels = self.fogi_stores[0].primitive_op_labels  # take from first store only
         nOps = len(op_labels)
 
         op_label_lookup = {lbl: i for i, lbl in enumerate(op_labels)}
@@ -878,7 +982,7 @@ function draw() {{
           size: 30,
           font: {{
               multi: "html",
-              size: 20,
+              size: {node_fontsize},
           }},
           color: {{highlight: {{ background: "white", border: "black" }},
                    hover: {{ background: "white", border: "black" }} }},
@@ -887,12 +991,12 @@ function draw() {{
       edges: {{
           smooth: false,
           length: {springlength},
+          width: 2,
           color: {{color: "gray", highlight: "black"}},
-          scaling: {{min: 1, max: 6}},
-          //width: 2,
-          //font: {{
-          //    size: 8
-          //}},
+          scaling: {{min: 4, max: 10, label: {{enabled: false}} }},
+          font: {{
+              size: {edge_fontsize}
+          }},
       }},
       groups: {{
           "relational": {{

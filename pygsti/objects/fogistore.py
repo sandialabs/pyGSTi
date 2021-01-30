@@ -11,6 +11,8 @@ Defines the FirstOrderGaugeInvariantStore class and supporting functionality.
 #***************************************************************************************************
 
 import numpy as _np
+import copy as _copy
+import warnings as _warnings
 from ..tools import matrixtools as _mt
 from ..tools import fogitools as _fogit
 
@@ -58,40 +60,51 @@ class FirstOrderGaugeInvariantStore(object):
                                       for elem_lbl in self.elem_errorgen_labels_by_op[op_label]]
         assert(len(self.errorgen_space_labels) == self.fogi_directions.shape[0])
 
-        fogv_directions = _mt.nice_nullspace(self.fogi_directions.T)  # complement of fogi directions
+        #fogv_directions = _mt.nice_nullspace(self.fogi_directions.T)  # can be dependent!
+        fogv_directions = _mt.nullspace(self.fogi_directions.T)  # complement of fogi directions
 
-        pinv_allop_gauge_action = _np.linalg.pinv(self.allop_gauge_action, rcond=1e-7)  # maps error -> gauge-gen space
+        pinv_allop_gauge_action = _np.linalg.pinv(self.allop_gauge_action, rcond=1e-7)  # errgen-set -> gauge-gen space
         gauge_space_directions = _np.dot(pinv_allop_gauge_action, fogv_directions)  # in gauge-generator space
-        # like to find LCs mix s.t.  dot(gauge_space_directions, mix) ~= identity, so use pinv
-        # then propagate this mixing to fogv_directions = dot(allop_gauge_action, mixed_gauge_space_directions)
-        mix = _np.linalg.pinv(gauge_space_directions)[:, 0:fogv_directions.shape[1]]  # use "full-rank" part of pinv
-        mixed_gauge_space_dirs = _np.dot(gauge_space_directions, mix)
-
-        #TODO - better mix matrix?
-        #print("gauge_space_directions shape = ",gauge_space_directions.shape)
-        #print("mixed_gauge_space_dirs = ");  _mt.print_mx(gauge_space_directions, width=6, prec=2)
-        #U, s, Vh = _np.linalg.svd(gauge_space_directions, full_matrices=True)
-        #inv_s = _np.array([1/x if abs(x) > 1e-4 else 0 for x in s])
-        #print("shapes = ",U.shape, s.shape, Vh.shape)
-        #print("s = ",s)
-        #print(_np.linalg.norm(_np.dot(U,_np.conjugate(U.T)) - _np.identity(U.shape[0])))
-        #_mt.print_mx(U, width=6, prec=2)
-        #print("U * Udag = ")
-        #_mt.print_mx(_np.dot(U,_np.conjugate(U.T)), width=6, prec=2)
-        #print(_np.linalg.norm(_np.dot(Vh,Vh.T) - _np.identity(Vh.shape[0])))
-        #full_mix = _np.dot(Vh.T, _np.dot(_np.diag(inv_s), U.T))  # _np.linalg.pinv(gauge_space_directions)
-        #full_mixed_gauge_space_dirs = _np.dot(gauge_space_directions, full_mix)
-        #print("full_mixed_gauge_space_dirs = ");  _mt.print_mx(full_mixed_gauge_space_dirs, width=6, prec=2)
 
         self.fogv_labels = ["%s gauge action" % nm
-                            for nm in _fogit.elem_vec_names(mixed_gauge_space_dirs, gauge_elemgen_labels)]
-        self.fogv_directions = _np.dot(self.allop_gauge_action, mixed_gauge_space_dirs)
+                            for nm in _fogit.elem_vec_names(gauge_space_directions, gauge_elemgen_labels)]
+        self.fogv_directions = fogv_directions
         # - directions in errorgen space that correspond to gauge transformations (to first order)
+
+        # BELOW: an attempt to find nice FOGV directions - but we'd like all the vecs to be
+        #  orthogonal and this seems to interfere with that, so we'll just leave the fogv dirs messy for now.
+        #
+        # # like to find LCs mix s.t.  dot(gauge_space_directions, mix) ~= identity, so use pinv
+        # # then propagate this mixing to fogv_directions = dot(allop_gauge_action, mixed_gauge_space_directions)
+        # mix = _np.linalg.pinv(gauge_space_directions)[:, 0:fogv_directions.shape[1]]  # use "full-rank" part of pinv
+        # mixed_gauge_space_dirs = _np.dot(gauge_space_directions, mix)
+        # 
+        # #TODO - better mix matrix?
+        # #print("gauge_space_directions shape = ",gauge_space_directions.shape)
+        # #print("mixed_gauge_space_dirs = ");  _mt.print_mx(gauge_space_directions, width=6, prec=2)
+        # #U, s, Vh = _np.linalg.svd(gauge_space_directions, full_matrices=True)
+        # #inv_s = _np.array([1/x if abs(x) > 1e-4 else 0 for x in s])
+        # #print("shapes = ",U.shape, s.shape, Vh.shape)
+        # #print("s = ",s)
+        # #print(_np.linalg.norm(_np.dot(U,_np.conjugate(U.T)) - _np.identity(U.shape[0])))
+        # #_mt.print_mx(U, width=6, prec=2)
+        # #print("U * Udag = ")
+        # #_mt.print_mx(_np.dot(U,_np.conjugate(U.T)), width=6, prec=2)
+        # #print(_np.linalg.norm(_np.dot(Vh,Vh.T) - _np.identity(Vh.shape[0])))
+        # #full_mix = _np.dot(Vh.T, _np.dot(_np.diag(inv_s), U.T))  # _np.linalg.pinv(gauge_space_directions)
+        # #full_mixed_gauge_space_dirs = _np.dot(gauge_space_directions, full_mix)
+        # #print("full_mixed_gauge_space_dirs = ");  _mt.print_mx(full_mixed_gauge_space_dirs, width=6, prec=2)
+        # 
+        # self.fogv_labels = ["%s gauge action" % nm
+        #                     for nm in _fogit.elem_vec_names(mixed_gauge_space_dirs, gauge_elemgen_labels)]
+        # self.fogv_directions = _np.dot(self.allop_gauge_action, mixed_gauge_space_dirs)
+        # # - directions in errorgen space that correspond to gauge transformations (to first order)
 
         #UNUSED - maybe useful just as a check? otherwise REMOVE
         #pinv_allop_gauge_action = _np.linalg.pinv(self.allop_gauge_action, rcond=1e-7)  # maps error -> gauge-gen space
         #gauge_space_directions = _np.dot(pinv_allop_gauge_action, self.fogv_directions)  # in gauge-generator space
         #assert(_np.linalg.matrix_rank(gauge_space_directions) <= self._gauge_space_dim)  # should be nearly full rank
+
 
         #Notes on error-gen vs gauge-gen space:
         # self.fogi_directions and self.fogv_directions are dual vectors in error-generator space,
@@ -115,11 +128,13 @@ class FirstOrderGaugeInvariantStore(object):
         # (This will only be the case when fogi_vecs are linearly independent, so when dependent_indices == 'drop')
         self._dependent_fogi_action = dependent_fogi_action
         if dependent_fogi_action == 'drop':
+            #assert(_mt.columns_are_orthogonal(self.fogi_directions))  # not true unless we construct them so...
             assert(_np.linalg.norm(_np.dot(self.fogi_directions.T, _np.linalg.pinv(self.fogi_directions.T))
                                    - _np.identity(self.fogi_directions.shape[1], 'd')) < 1e-6)
 
         # A similar relationship should always hold for the gauge directions, except for these we never
         #  keep linear dependencies
+        assert(_mt.columns_are_orthogonal(self.fogv_directions))
         assert(_np.linalg.norm(_np.dot(self.fogv_directions.T, _np.linalg.pinv(self.fogv_directions.T))
                                - _np.identity(self.fogv_directions.shape[1], 'd')) < 1e-6)
 
@@ -272,4 +287,42 @@ class FirstOrderGaugeInvariantStore(object):
             if qubits_acted_upon not in bins[ops_involved][types]: bins[ops_involved][types][qubits_acted_upon] = []
             bins[ops_involved][types][qubits_acted_upon].append(info)
 
+        return bins
+
+    @classmethod
+    def merge_binned_fogi_infos(cls, binned_fogi_infos, index_offsets):
+        """
+        Merge together multiple FOGI-info dictionaries created by :method:`create_binned_fogi_infos`.
+
+        Parameters
+        ----------
+        binned_fogi_infos : list
+            A list of FOGI-info dictionaries.
+
+        index_offsets : list
+            A list of length `len(binned_fogi_infos)` that gives the offset
+            into an assumed-to-exist corresponding vector of coefficients for
+            all the FOGI infos.
+
+        Returns
+        -------
+        dict
+            The merged dictionary
+        """
+        def _merge_into(dest, src, offset, nlevels_to_merge, store_index):
+            if nlevels_to_merge == 0:  # special last-level case where src and dest are *lists*
+                for info in src:
+                    new_info = _copy.deepcopy(info)
+                    new_info['fogi_index'] += offset
+                    new_info['store_index'] = store_index
+                    dest.append(new_info)
+            else:
+                for k, d in src.items():
+                    if k not in dest: dest[k] = {} if (nlevels_to_merge > 1) else []  # last level = list
+                    _merge_into(dest[k], d, offset, nlevels_to_merge - 1, store_index)
+
+        bins = {}
+        nLevels = 3 # ops_involved, types, qubits_acted_upon
+        for i, (sub_bins, offset) in enumerate(zip(binned_fogi_infos, index_offsets)):
+            _merge_into(bins, sub_bins, offset, nLevels, i)
         return bins
