@@ -39,7 +39,7 @@ from ..objects.gaugegroup import TrivialGaugeGroup as _TrivialGaugeGroup
 from ..objects.gaugegroup import TrivialGaugeGroupElement as _TrivialGaugeGroupElement
 from ..objects.circuitlist import CircuitList as _CircuitList
 from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
-from ..objects.termforwardsim import TermForwardSimulator as _TermFSim
+from ..objects.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
 from ..objects.objectivefns import ModelDatasetCircuitsStore as _ModelDatasetCircuitStore
 
 
@@ -673,7 +673,7 @@ class GateSetTomography(_proto.Protocol):
             if optimizer is None: optimizer = {}
             if 'first_fditer' not in optimizer:  # then add default first_fditer value
                 mdl = self.initial_model.model
-                optimizer['first_fditer'] = 0 if mdl and isinstance(mdl.sim, _TermFSim) else 1
+                optimizer['first_fditer'] = 1 if mdl and isinstance(mdl.sim, _MatrixFSim) else 0
             self.optimizer = _opt.CustomLMOptimizer.cast(optimizer)
 
         objfn_builders = GSTObjFnBuilders.cast(objfn_builders)
