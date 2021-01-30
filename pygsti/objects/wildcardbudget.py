@@ -11,6 +11,7 @@ Functions related to computation of the log-likelihood.
 #***************************************************************************************************
 
 import numpy as _np
+import warnings as _warnings
 from .. import tools as _tools
 
 #pos = lambda x: x**2
@@ -285,36 +286,12 @@ class WildcardBudget(object):
         C_precomp = (probs_in == freqs)
         D_precomp = _np.logical_and(probs_in != freqs, freqs == 0)
 
-        tol = 1e-8  # for instance, when W==0 and TVD_at_breakpt is 1e-17
-
         for i, (circ, W) in enumerate(zip(circuits, circuit_budgets)):
             elInds = layout.indices_for_index(i)
             fvec = freqs[elInds]
             qvec = probs_in[elInds]
-
-            if _np.min(qvec) < 0:
-                #Stopgap solution when a probability is negative: use wcbudget to move as
-                # much negative prob to zero as possible, while reducing all the positive
-                # probs.  This seems reasonable but isn't provably the right thing to do!
-                qvec = qvec.copy()  # make sure we don't mess with memory we shouldn't
-                neg_inds = _np.where(qvec < 0)[0]; neg_sum = sum(qvec[neg_inds])
-                pos_inds = _np.where(qvec > 0)[0]; pos_sum = sum(qvec[pos_inds])  # note: NOT >= (leave zeros alone)
-                if -neg_sum > pos_sum:
-                    raise NotImplementedError(("Wildcard budget cannot be applied when the model predicts more "
-                                               "*negative* then positive probability! (%s predicts neg_sum=%.3g, "
-                                               "pos_sum=%.3g)") % (circ.str, neg_sum, pos_sum))
-
-                if -neg_sum < W:  # then there's enough budget to pay for all of negatives
-                    alpha = -neg_sum / len(neg_inds) * 1.0 / qvec[pos_inds]  # sum(qvec[pos])*alpha=-neg_sum*sum(ones/N)
-                    qvec[pos_inds] *= 1.0 - alpha
-                    qvec[neg_inds] = 0.0
-                    W -= (-neg_sum)
-                else:
-                    alpha = W / len(neg_inds) * 1.0 / qvec[pos_inds]  # sum(qvec[pos])*alpha = W * sum(ones/N)
-                    beta = -W / len(neg_inds) * 1.0 / qvec[neg_inds]  # sum(beta*qvec[neg]) = -W * sum(ones/N)
-                    qvec[pos_inds] *= 1.0 - alpha
-                    qvec[neg_inds] *= 1.0 - beta
-                    W = 0
+            tol = len(qvec) * MIN_FREQ  # for instance, when W==0 and TVD_at_breakpt is 1e-17.  Multiply by len(qvec)
+            # to ensure we tolerate cases where many of the freqs are zero and we've artificially set them to MIN_FREQ.
 
             initialTVD = sum(tvd_precomp[elInds])  # 0.5 * sum(_np.abs(qvec - fvec))
             if initialTVD <= W + tol:  # TVD is already "in-budget" for this circuit - can adjust to fvec exactly
@@ -331,6 +308,31 @@ class WildcardBudget(object):
             sum_qB = sum(qvec[B])
             sum_qC = sum(qvec[C])
             sum_qD = sum(qvec[D])
+
+            if _np.min(qvec) < 0:
+                #Stopgap solution when a probability is negative: use wcbudget to move as
+                # much negative prob to zero as possible, while reducing all the positive
+                # probs.  This seems reasonable but isn't provably the right thing to do!
+                qvec = qvec.copy()  # make sure we don't mess with memory we shouldn't
+                neg_inds = _np.where(qvec < 0)[0]; neg_sum = sum(qvec[neg_inds])
+                pos_inds = _np.where(qvec > 0)[0]; pos_sum = sum(qvec[pos_inds])  # note: NOT >= (leave zeros alone)
+                if -neg_sum > pos_sum:
+                    raise NotImplementedError(("Wildcard budget cannot be applied when the model predicts more "
+                                               "*negative* then positive probability! (%s predicts neg_sum=%.3g, "
+                                               "pos_sum=%.3g)") % (circ.str, neg_sum, pos_sum))
+                while _np.min(qvec) < 0 and not _np.isclose(W, 0):
+                    add_to = _np.argmin(qvec)
+                    subtract_from = _np.argmax(qvec)
+                    amount = _np.min([qvec[subtract_from], -qvec[add_to], W])
+                    qvec[add_to] += amount
+                    qvec[subtract_from] -= amount
+                    W -= amount
+
+                #recompute A-D b/c we've updated qvec
+                A = _np.logical_and(qvec > fvec, fvec > 0); sum_fA = sum(fvec[A]); sum_qA = sum(qvec[A])
+                B = _np.logical_and(qvec < fvec, fvec > 0); sum_fB = sum(fvec[B]); sum_qB = sum(qvec[B])
+                C = (qvec == fvec); sum_qC = sum(qvec[C])
+                D = _np.logical_and(qvec != fvec, fvec == 0); sum_qD = sum(qvec[D])
 
             #Note: need special case for fvec == 0
             ratio_vec = qvec / fvec
@@ -380,7 +382,11 @@ class WildcardBudget(object):
 
                 nMovedToC += 1
             else:
-                assert(False), "TVD should eventually reach zero (I think)!"
+                try:
+                    assert(False), "TVD should eventually reach zero (I think)!"
+                except:
+                    import bpdb; bpdb.set_trace()
+                    print("Problem")
 
             #Now A,B,C are fixed to what they need to be for our given W
             # test if len(A) > 0, make tol here *smaller* than that assigned to zero freqs above
@@ -737,8 +743,8 @@ def update_circuit_probs(probs, freqs, circuit_budget):
 
     A = _np.where(_np.logical_and(qvec > fvec, fvec > 0))[0]
     B = _np.where(_np.logical_and(qvec < fvec, fvec > 0))[0]
-    C = _np.where(qvec == fvec)[0]
-    D = _np.where(_np.logical_and(qvec != fvec, fvec == 0))[0]
+    C = _np.where(_np.isclose(qvec, fvec))[0]
+    D = _np.where(_np.logical_and(~_np.isclose(qvec, fvec), fvec == 0))[0]
 
     if debug:
         print(" budget = ", W, " A=", A, " B=", B, " C=", C, " D=", D)
@@ -761,7 +767,7 @@ def update_circuit_probs(probs, freqs, circuit_budget):
     #  proportionally balance out movements from set B
 
     while len(remaining_indices) > 0:
-        assert(len(A) > 0 or len(B) > 0)  # then we can step `alpha` up and preserve the overal probability:
+        assert(len(A) > 0 or len(B) > 0)  # then we can step `alpha` up and preserve the overall probability:
         j, alpha0, beta0, pushedSD0, AorBorC = _get_minalpha_breakpoint(remaining_indices, A, B, C,
                                                                         qvec, fvec, ratio_vec)
         remaining_indices.remove(j)
