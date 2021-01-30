@@ -23,6 +23,7 @@ from ..objects.circuit import Circuit as _Circuit
 from ..objects.explicitmodel import ExplicitOpModel as _ExplicitOpModel
 from ..objects.circuitlist import CircuitList as _CircuitList
 from ..objects.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
+from ..objects.objectivefns import TimeIndependentMDCObjectiveFunction as _TIMDCObjFn
 
 #Class for holding confidence region factory keys
 CRFkey = _collections.namedtuple('CRFkey', ['model', 'circuit_list'])
@@ -553,12 +554,34 @@ class Estimate(object):
         """
         p = self.parent
 
-        mdl = self.models['final iteration estimate']  # FUTURE: overrideable?
-        circuit_list = p.circuit_lists['final']  # FUTURE: overrideable?
+        mdl_label = 'final iteration estimate'    # FUTURE: overrideable?
+        circuits_label = 'final'    # FUTURE: overrideable?
+        mdl = self.models[mdl_label]
+        circuit_list = p.circuit_lists[circuits_label]
+
         ds = self.create_effective_dataset()
-        objfn_builder = self.parameters.get('final_objfn_builder', _objfns.PoissonPicDeltaLogLFunction.builder())
-        objfn = objfn_builder.build(mdl, ds, circuit_list, {'comm': comm}, verbosity=0)
-        fitqty = objfn.chi2k_distributed_qty(objfn.fn())
+
+        cached_fitqty = None
+        if mdl_label == 'final iteration estimate' and circuits_label == 'final' \
+           and ds == self.parent.dataset and 'final_objfn_store' in self.parameters \
+           and isinstance(self.parameters['final_objfn_store'], _TIMDCObjFn):
+            #Then we can use the already-computed objetive function (at the final point) instead of recomputing it
+            cached_objfn =  self.parameters['final_objfn_store']  # actually an objective fn
+            lsvec = cached_objfn.layout.gather_local_array('e', cached_objfn.obj, cached_objfn.resource_alloc)
+            if cached_objfn.resource_alloc.comm is None or cached_objfn.resource_alloc.comm.rank == 0:
+                cached_fitqty = cached_objfn.chi2k_distributed_qty(_np.sum(lsvec**2))
+            if cached_objfn.resource_alloc.comm is not None:
+                cached_fitqty = cached_objfn.resource_alloc.comm.bcast(cached_fitqty, root=0)
+
+        force_check = False  # for debugging: set to true to ensure cached fitqty is correct
+        if cached_fitqty is None or force_check:
+            objfn_builder = self.parameters.get('final_objfn_builder', _objfns.PoissonPicDeltaLogLFunction.builder())
+            objfn = objfn_builder.build(mdl, ds, circuit_list, {'comm': comm}, verbosity=0)
+            fitqty = objfn.chi2k_distributed_qty(objfn.fn())
+            assert(cached_fitqty is None or abs(fitqty - cached_fitqty) < 1e-6), "MISMATCH in fitqty!!"
+        else:
+            fitqty = cached_fitqty
+
         aliases = circuit_list.op_label_aliases if isinstance(circuit_list, _CircuitList) else None
 
         ds_allstrs = _tools.apply_aliases_to_circuits(circuit_list, aliases)

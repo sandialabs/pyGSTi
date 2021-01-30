@@ -275,7 +275,10 @@ class CustomLMOptimizer(Optimizer):
 
         printer.log("Least squares message = %s" % msg, 2)
         assert(converged), "Failed to converge: %s" % msg
-        objective.model.from_vector(opt_x)  # needed apparently
+        current_v = objective.model.to_vector()
+        if not _np.allclose(current_v, opt_x):  # ensure the last model evaluation was at opt_x
+            objective_func(opt_x)
+            #objective.model.from_vector(opt_x)  # performed within line above
 
         #REMOVE DEBUG TO CHECK SYNC (especially for shared mem)
         if objective.resource_alloc.comm is not None:

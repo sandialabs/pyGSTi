@@ -1260,9 +1260,14 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
                 dpercircuit[i] = _np.sum(dterms[self.layout.indices_for_index(i)], axis=0)
             return dpercircuit
 
-    def fn(self, paramvec=None):
+    def fn_local(self, paramvec=None):
         """
-        Evaluate this objective function.
+        Evaluate the *local* value of this objective function.
+
+        When the objective function's layout is distributed, each processor only holds a
+        portion of the objective function terms, and this function returns only the
+        sum of these local terms.  See :method:`fn` for the global objective function value.
+
 
         Parameters
         ----------
@@ -1275,6 +1280,28 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         float
         """
         return _np.sum(self.terms(paramvec))
+
+    def fn(self, paramvec=None):
+        """
+        Evaluate the value of this objective function.
+
+        Parameters
+        ----------
+        paramvec : numpy.ndarray, optional
+            The vector of (model) parameters to evaluate the objective function at.
+            If `None`, then the model's current parameter vector is used (held internally).
+
+        Returns
+        -------
+        float
+        """
+        result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (1,), 'd')
+        local = _np.array([self.fn_local(paramvec)], 'd')
+        unit_ralloc = self.resource_alloc.sub_resource_alloc('atom-processing')  # proc group that computes same els
+        self.resource_alloc.allreduce_sum(result, local, unit_ralloc)
+        global_fnval = result[0]
+        _smt.cleanup_shared_ndarray(result_shm)
+        return global_fnval
 
     def jacobian(self, paramvec=None):
         """
