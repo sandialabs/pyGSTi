@@ -795,7 +795,7 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
                 for j, obj_fn_builder in enumerate(final_objfn_builders):
                     tNxt = _time.time()
                     mdl.basis = start_model.basis
-                    opt_result, mdl = run_gst_fit(mdc_store, optimizer, obj_fn_builder, printer - 1)
+                    opt_result, mdc_store = run_gst_fit(mdc_store, optimizer, obj_fn_builder, printer - 1)
                     profiler.add_time('run_iterative_gst: final %s opt' % obj_fn_builder.name, tNxt)
 
                 tNxt = _time.time()
