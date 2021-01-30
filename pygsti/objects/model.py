@@ -867,7 +867,7 @@ class OpModel(Model):
         outcomes = circuit.expand_instruments_and_separate_povm(self)  # dict w/keys=sep-povm-circuits, vals=outcomes
         return tuple(_itertools.chain(*outcomes.values()))  # concatenate outputs from all sep-povm-circuits
 
-    def split_circuit(self, circuit, erroron=('prep', 'povm')):
+    def split_circuit(self, circuit, erroron=('prep', 'povm'), split_prep=True, split_povm=True):
         """
         Splits a circuit into prep_layer + op_layers + povm_layer components.
 
@@ -889,31 +889,47 @@ class OpModel(Model):
             case one usually doesn't expect to use the Model to compute
             probabilities (e.g. in germ selection).
 
+        split_prep : bool, optional
+            Whether to split off the state prep and return it as `prep_label`.  If
+            `False`, then the returned preparation label is always `None`, and is
+            not removed from `ops_only_circuit`.
+
+        split_povm : bool, optional
+            Whether to split off the POVM and return it as `povm_label`.  If
+            `False`, then the returned POVM label is always `None`, and is
+            not removed from `ops_only_circuit`.
+
         Returns
         -------
-        prepLabel : str or None
-        opsOnlyString : Circuit
-        povmLabel : str or None
+        prep_label : str or None
+        ops_only_circuit : Circuit
+        povm_label : str or None
         """
-        if len(circuit) > 0 and self._is_primitive_prep_layer_lbl(circuit[0]):
-            prep_lbl = circuit[0]
-            circuit = circuit[1:]
-        elif self._default_primitive_prep_layer_lbl() is not None:
-            prep_lbl = self._default_primitive_prep_layer_lbl()
+        if split_prep:
+            if len(circuit) > 0 and self._is_primitive_prep_layer_lbl(circuit[0]):
+                prep_lbl = circuit[0]
+                circuit = circuit[1:]
+            elif self._default_primitive_prep_layer_lbl() is not None:
+                prep_lbl = self._default_primitive_prep_layer_lbl()
+            else:
+                if 'prep' in erroron and self._has_primitive_preps():
+                    raise ValueError("Cannot resolve state prep in %s" % circuit)
+                else: prep_lbl = None
         else:
-            if 'prep' in erroron and self._has_primitive_preps():
-                raise ValueError("Cannot resolve state prep in %s" % circuit)
-            else: prep_lbl = None
+            prep_lbl = None
 
-        if len(circuit) > 0 and self._is_primitive_povm_layer_lbl(circuit[-1]):
-            povm_lbl = circuit[-1]
-            circuit = circuit[:-1]
-        elif self._default_primitive_povm_layer_lbl(circuit.line_labels) is not None:
-            povm_lbl = self._default_primitive_povm_layer_lbl(circuit.line_labels)
+        if split_povm:
+            if len(circuit) > 0 and self._is_primitive_povm_layer_lbl(circuit[-1]):
+                povm_lbl = circuit[-1]
+                circuit = circuit[:-1]
+            elif self._default_primitive_povm_layer_lbl(circuit.line_labels) is not None:
+                povm_lbl = self._default_primitive_povm_layer_lbl(circuit.line_labels)
+            else:
+                if 'povm' in erroron and self._has_primitive_povms():
+                    raise ValueError("Cannot resolve POVM in %s" % str(circuit))
+                else: povm_lbl = None
         else:
-            if 'povm' in erroron and self._has_primitive_povms():
-                raise ValueError("Cannot resolve POVM in %s" % str(circuit))
-            else: povm_lbl = None
+            povm_lbl = None
 
         return prep_lbl, circuit, povm_lbl
 

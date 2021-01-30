@@ -133,7 +133,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         printer.log("   %d atoms, parameter block size limits %s" % (natoms, str(param_blk_sizes)))
         assert(_np.product((na,) + npp) <= nprocs), "Processor grid size exceeds available processors!"
 
-        layout = _MapCOPALayout(circuits, self.model, dataset, None, natoms, na, npp,
+        layout = _MapCOPALayout(circuits, self.model, dataset, self._max_cache_size, natoms, na, npp,
                                 param_dimensions, param_blk_sizes, resource_alloc, verbosity)
 
         if mem_limit is not None:
