@@ -2242,8 +2242,9 @@ def DM_mapfill_dprobs_block(fwdsim,
     param_indices = _slct.to_array(param_indices)
     dest_param_indices = _slct.to_array(dest_param_indices)
 
-    dest_indices = _slct.to_array(dest_indices)  # make sure this is an array and not a slice
-    dest_indices = np.ascontiguousarray(dest_indices)
+    #TODO REMOVE: it seems fine, and even beneficial, that dest_indices is a slice
+    #dest_indices = _slct.to_array(dest_indices)  # make sure this is an array and not a slice
+    #dest_indices = np.ascontiguousarray(dest_indices)
 
     #Get (extension-type) representation objects
     # NOTE: the circuit_layer_operator(lbl) functions cache the returned operation
@@ -2303,7 +2304,8 @@ def DM_mapfill_dprobs_block(fwdsim,
             if shared_mem_leader:  # don't fill assumed-shared array-to_fill on non-mem-leaders
                 dm_mapfill_probs(probs2, c_layout_atom, c_opreps, c_rhos, c_ereps, &rho_cache,
                              elabel_indices_per_circuit, final_indices_per_circuit, fwdsim.model.dim)
-                _fas(array_to_fill, [dest_indices, iFinal], (probs2 - probs) / eps)
+                #_fas(array_to_fill, [dest_indices, iFinal], (probs2 - probs) / eps)  # I don't think this is needed
+                array_to_fill[dest_indices, iFinal] = (probs2 - probs) / eps
     fwdsim.model.from_vector(orig_vec, close=True)
 
     #REMOVE
