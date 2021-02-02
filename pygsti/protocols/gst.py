@@ -1680,10 +1680,6 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options,
                     gauge_opt_params.copy(), go_gs_final, gokey, comm, printer - 1)
 
 
-def _get_fit_qty(objfn_cache):
-    # Get by-circuit goodness of fit
-    return objfn_cache.chi2k_distributed_percircuit
-
 def _compute_robust_scaling(scale_typ, objfn_cache, mdc_objfn):
     """
     Get the per-circuit data scaling ("weights") for a given type of robust-data-scaling.
@@ -1730,7 +1726,7 @@ def _compute_robust_scaling(scale_typ, objfn_cache, mdc_objfn):
     global_circuit_list = mdc_objfn.global_circuits  # *global* circuit list
     ds = mdc_objfn.dataset
 
-    fitqty = _get_fit_qty(objfn_cache)  # *global* fit qty values (only for local circuits)
+    fitqty = objfn_cache.chi2k_distributed_percircuit  # *global* fit qty values (only for local circuits)
     #Note: fitqty[iCircuit] gives fit quantity for a single circuit, aggregated over outcomes.
 
     expected = (len(ds.outcome_labels) - 1)  # == "k"
@@ -1832,7 +1828,7 @@ def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options,
     assert(isinstance(mdc_objfn, _objfns.PoissonPicDeltaLogLFunction)), \
         "Can only use wildcard scaling with 'logl' objective!"
 
-    two_dlogl_terms = _get_fit_qty(objfn_cache)  # *global* per-circuit 2*dlogl values
+    two_dlogl_terms = objfn_cache.chi2k_distributed_percircuit  # *global* per-circuit 2*dlogl values
     two_dlogl = sum(two_dlogl_terms)
 
     if badfit_options.wildcard_initial_budget is None:
