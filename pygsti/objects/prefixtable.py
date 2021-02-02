@@ -207,7 +207,6 @@ class PrefixTable(object):
                     j = istart  # index into cache
                     while j is not None:
                         j_circuit = cacheIndices[j]  # cacheIndices[ istart ]
-                        assert(j_circuit < idest)
                         if j_circuit not in used_indices: inds.add(j_circuit)
                         _, jStart, jrem, _ = contents_by_idest[j_circuit]
                         cost += cost_fn(jrem)  # remainder
