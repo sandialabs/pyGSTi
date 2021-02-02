@@ -1607,7 +1607,7 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options,
 
     ralloc = mdc_objfn.resource_alloc
     comm = ralloc.comm if ralloc else None
-    printer = _objs.VerbosityPrinter.create_printer(verbosity, comm)
+    printer = _objs.VerbosityPrinter.create_printer(verbosity, ralloc)
 
     if badfit_options.threshold is not None and \
        base_estimate.misfit_sigma(ralloc) <= badfit_options.threshold:
@@ -1799,8 +1799,7 @@ def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options,
     -------
     PrimitiveOpsWildcardBudget
     """
-    comm = mdc_objfn.resource_alloc.comm
-    printer = _objs.VerbosityPrinter.create_printer(verbosity, comm)
+    printer = _objs.VerbosityPrinter.create_printer(verbosity, mdc_objfn.resource_alloc)
     badfit_options = GSTBadFitOptions.cast(badfit_options)
     model = mdc_objfn.model
     ds = mdc_objfn.dataset

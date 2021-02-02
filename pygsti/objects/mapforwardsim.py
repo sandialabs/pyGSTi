@@ -105,11 +105,11 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
                       derivative_dimension=None, verbosity=0):
 
         resource_alloc = _ResourceAllocation.cast(resource_alloc)
-        comm = resource_alloc.comm
+        printer = _VerbosityPrinter.create_printer(verbosity, resource_alloc)
         mem_limit = resource_alloc.mem_limit - resource_alloc.allocated_memory \
             if (resource_alloc.mem_limit is not None) else None  # *per-processor* memory limit
-        printer = _VerbosityPrinter.create_printer(verbosity, comm)
         nprocs = resource_alloc.comm_size
+        comm = resource_alloc.comm
         num_params = derivative_dimension if (derivative_dimension is not None) else self.model.num_params
         C = 1.0 / (1024.0**3)
 

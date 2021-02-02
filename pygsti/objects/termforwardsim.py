@@ -311,13 +311,12 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         # output array (until we get gather=False mode) - so for now, just create a layout with
         # numAtoms == numProcs.
         resource_alloc = _ResourceAllocation.cast(resource_alloc)
-        comm = resource_alloc.comm
         mem_limit = resource_alloc.mem_limit  # *per-processor* memory limit
 
         #MEM debug_prof = Profiler(comm)
         #MEM debug_prof.print_memory("CreateLayout1", True)
 
-        printer = _VerbosityPrinter.create_printer(verbosity, comm)
+        printer = _VerbosityPrinter.create_printer(verbosity, resource_alloc)
         nprocs = resource_alloc.comm_size
         num_params = derivative_dimension if (derivative_dimension is not None) else self.model.num_params
         polynomial_vindices_per_int = _Polynomial._vindices_per_int(num_params)
