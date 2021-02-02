@@ -546,7 +546,7 @@ class Estimate(object):
             mdl = self.models['final iteration estimate']
             ds = self.parent.dataset
             mdc_store = _ModelDatasetCircuitStore(mdl, ds, circuit_list, resource_alloc)
-        return self.parameters['final_objfn_store']        
+        return self.parameters['final_objfn_store']
 
     def final_objective_fn(self, resource_alloc=None):
         if self.parameters.get('final_objfn', None) is None:
@@ -690,6 +690,12 @@ class Estimate(object):
                         goparams_dict['comm'] = None
                     new_goparams.append(goparams_dict)
                 to_pickle['goparameters'][lbl] = new_goparams
+
+        # don't pickle MDC objective function or store objects b/c they might contain
+        #  comm objects (in their layouts)
+        to_pickle['parameters'] = self.parameters.copy()  # shallow copy
+        del to_pickle['parameters']['final_objfn_store']
+        del to_pickle['parameters']['final_objfn']
 
         # don't pickle parent (will create circular reference)
         del to_pickle['parent']
