@@ -196,8 +196,8 @@ class VerbosityPrinter(object):
         warnings : bool, optional
             Whether or not to print warnings
         '''
+        if isinstance(comm, _ResourceAllocation): comm = comm.comm
         if comm:
-            if isinstance(comm, _ResourceAllocation): comm = comm.comm
             if comm.Get_rank() != 0 and not filename:  # A filename will override the default comm behavior
                 filename = self._get_comm_file(comm.Get_rank())
         self.verbosity = verbosity
