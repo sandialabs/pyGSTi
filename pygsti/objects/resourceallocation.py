@@ -304,11 +304,12 @@ class ResourceAllocation(object):
 
         participating = unit_ralloc is None or unit_ralloc.comm is None or unit_ralloc.comm.rank == 0
         gather_comm = self.interhost_comm if (self.host_comm is not None) else self.comm
-        slices = gather_comm.gather(slice_of_global if participating else None, root=0)
 
         if all_gather:
+            slices = gather_comm.allgather(slice_of_global if participating else None)
             gathered_data = gather_comm.allgather(local)  # could change this to Allgather (?)
         else:
+            slices = gather_comm.gather(slice_of_global if participating else None, root=0)
             gathered_data = gather_comm.gather(local, root=0)  # could change this to Gather (?)
 
         if gather_comm.rank == 0 or all_gather:
