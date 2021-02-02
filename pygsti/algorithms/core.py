@@ -624,7 +624,8 @@ def run_gst_fit(mdc_store, optimizer, objective_function_builder, verbosity=0):
 
     objective_function_builder : ObjectiveFunctionBuilder
         Defines the objective function that is optimized.  Can also be anything
-        readily converted to an objective function builder, e.g. `"logl"`.
+        readily converted to an objective function builder, e.g. `"logl"`.  If
+        `None`, then `mdc_store` must itself be an already-built objective function.
 
     verbosity : int, optional
         How much detail to send to stdout.
@@ -654,14 +655,20 @@ def run_gst_fit(mdc_store, optimizer, objective_function_builder, verbosity=0):
     #MEM debug_prof = Profiler(comm)
     #MEM debug_prof.print_memory("run_gst_fit1", True)
 
-    objective_function_builder = _objs.ObjectiveFunctionBuilder.cast(objective_function_builder)
-    #MEM debug_prof.print_memory("run_gst_fit2", True)
-    objective = objective_function_builder.build_from_store(mdc_store, printer)  # (objective is *also* a store)
-    #MEM debug_prof.print_memory("run_gst_fit3", True)
+    if objective_function_builder is not None:
+        objective_function_builder = _objs.ObjectiveFunctionBuilder.cast(objective_function_builder)
+        #MEM debug_prof.print_memory("run_gst_fit2", True)
+        objective = objective_function_builder.build_from_store(mdc_store, printer)  # (objective is *also* a store)
+        #MEM debug_prof.print_memory("run_gst_fit3", True)
+    else:
+        assert(isinstance(mdc_store, _objfns.ObjectiveFunction)), \
+            "When `objective_function_builder` is None, `mdc_store` must be an objective fn!"
+        objective = mdc_store
+
     profiler.add_time("run_gst_fit: pre-opt", tStart)
     printer.log("--- %s GST ---" % objective.name, 1)
 
-    #Step 3: solve least squares minimization problem
+    # Solve least squares minimization problem
     if isinstance(objective.model.sim, _TermFSim):  # could have used mdc_store.model (it's the same model)
         opt_result = _do_term_runopt(objective, optimizer, printer)
     else:
@@ -730,7 +737,7 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
         of the i-th iteration.
     optimums : list of OptimizerResults
         list whose i-th element is the final optimizer result from that iteration.
-    final_store : MDSObjectiveFunction
+    final_objfn : MDSObjectiveFunction
         The final iteration's objective function / store, which encapsulated the final objective
         function evaluated at the best-fit point (an "evaluated" model-dataSet-circuits store).
     """
@@ -760,6 +767,7 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
         for artype, cnt in max_cnts.items(): ret += (artype,) * cnt
         return ret
 
+    final_objfn = None
     with printer.progress_logging(1):
         for (i, circuitsToEstimate) in enumerate(circuit_lists):
             extraMessages = []
@@ -776,8 +784,9 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
             array_types = optimizer.array_types + \
                 _max_array_types([builder.compute_array_types(method_names, mdl.sim)
                                   for builder in iteration_objfn_builders + final_objfn_builders])
-            mdc_store = _objs.ModelDatasetCircuitsStore(mdl, dataset, circuitsToEstimate, resource_alloc,
-                                                        array_types=array_types, verbosity=printer - 1)
+            initial_mdc_store = _objs.ModelDatasetCircuitsStore(mdl, dataset, circuitsToEstimate, resource_alloc,
+                                                                array_types=array_types, verbosity=printer - 1)
+            mdc_store = initial_mdc_store
 
             for j, obj_fn_builder in enumerate(iteration_objfn_builders):
                 tNxt = _time.time()
@@ -802,9 +811,12 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
                 printer.log("Final optimization took %.1fs\n" % (tNxt - tRef), 2)
                 tRef = tNxt
 
-                #send final cache back to caller to facilitate more operations on the final (model, circuits, dataset)
-                final_store = mdc_store
                 models.append(mdc_store.model)  # don't copy so `mdc_store.model` *is* the final model, `models[-1]`
+                
+                # send final objfn object back to caller to facilitate postproc  on the final (model, circuits, dataset)
+                # Note: initial_mdc_store is *not* an objective fn (it's just a store) so don't send it back.
+                if mdc_store is not initial_mdc_store:  
+                    final_objfn = mdc_store
             else:
                 models.append(mdc_store.model.copy())
 
@@ -812,7 +824,7 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
 
     printer.log('Iterative GST Total Time: %.1fs' % (_time.time() - tStart))
     profiler.add_time('run_iterative_gst: total time', tStart)
-    return models, optimums, final_store
+    return models, optimums, final_objfn
 
 
 def _do_runopt(objective, optimizer, printer):

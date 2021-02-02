@@ -306,13 +306,14 @@ class ResourceAllocation(object):
             self._layout_distribution = layout.distribute(self)
         return self._layout_distribution  # myAtomIndices, atomOwners, sub_resource_alloc
 
-    def gather(self, result, local, slice_of_global, unit_ralloc=None):
+    def gather_base(self, result, local, slice_of_global, unit_ralloc=None, all_gather=False):
         """
         TODO: docstring -- notes:
         result must be allocated as a shared array using *this* ralloc or a larger one
         unit_alloc specifies a comm/ralloc of the group of processors that all compute
            the same logical result -- so only the unit_ralloc.rank == 0 processors
            will contribute to the sum (but all procs get the result)
+        NOTE2: slice_of_global may also be an *index array*
         """
         if self.comm is None:
             assert(result.shape == local.shape)
@@ -323,15 +324,26 @@ class ResourceAllocation(object):
         gather_comm = self.interhost_comm if (self.host_comm is not None) else self.comm
         slices = gather_comm.gather(slice_of_global if participating else None, root=0)
 
-        gathered_data = gather_comm.gather(local, root=0)  # could change this to Gather (?)
+        if all_gather:
+            gathered_data = gather_comm.allgather(local)  # could change this to Allgather (?)
+        else:
+            gathered_data = gather_comm.gather(local, root=0)  # could change this to Gather (?)
 
-        if gather_comm.rank == 0:
-            for slc, data in zip(slices, gathered_data):
-                if slc is None: continue  # signals a non-unit-leader proc that shouldn't do anything
-                result[slc] = data
+        if gather_comm.rank == 0 or all_gather:
+            for slc_or_indx_array, data in zip(slices, gathered_data):
+                if slc_or_indx_array is None: continue  # signals a non-unit-leader proc that shouldn't do anything
+                result[slc_or_indx_array] = data
 
         self.comm.barrier()  # make sure result is completely filled before returniing
         return
+
+    def gather(self, result, local, slice_of_global, unit_ralloc=None):
+        """ TODO: docstring """
+        return self.gather_base(result, local, slice_of_global, unit_ralloc, False)
+
+    def allgather(self, result, local, slice_of_global, unit_ralloc=None):
+        """ TODO: docstring """
+        return self.gather_base(result, local, slice_of_global, unit_ralloc, True)
 
     def allreduce_sum(self, result, local, unit_ralloc=None):
         """
@@ -360,6 +372,25 @@ class ResourceAllocation(object):
             result[(slice(None, None),) * result.ndim] = self.comm.allreduce(participating_local, op=MPI.SUM)
         else:
             result[(slice(None, None),) * result.ndim] = participating_local
+
+    def allreduce_sum_simple(self, local, unit_ralloc=None):
+        """
+        TODO: docstring -- notes:
+        "simple" b/c no shared memory is used, and result is *returned*
+        local is just a scalar float or array
+        unit_alloc specifies a comm/ralloc of the group of processors that all compute
+           the same logical result -- so only the unit_ralloc.rank == 0 processors
+           will contribute to the sum (but all procs get the result returned)
+        """
+        from mpi4py import MPI
+        if self.comm is None: return local
+
+        participating = bool(unit_ralloc is None or unit_ralloc.comm is None or unit_ralloc.comm.rank == 0)
+        if hasattr(local, 'shape'):
+            participating_local = local if participating else _np.zeros(local.shape, 'd')
+        else:
+            participating_local = local if participating else 0.0
+        return self.comm.allreduce(participating_local, op=MPI.SUM)
 
     def allreduce_max(self, result, local, unit_ralloc=None):
         """

@@ -148,7 +148,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
             atom_sizes = {}
             for sizes in all_atom_sizes: atom_sizes.update(sizes)
 
-        # Get global element indices & so some setup for global elindex_outcome_tuples (TODO - do we want this?)
+        # Get global element indices & so some setup for global elindex_outcome_tuples
         offset = 0
         #atom_element_slices = {}
         global_elindex_outcome_tuples = _collections.OrderedDict([
@@ -536,6 +536,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
                                                                    global_elindex_outcome_tuples,
                                                                    unique_complete_circuits,
                                                                    param_dimensions)
+
         #Select the local portions of the global arrays to create *this* layout.
         local_unique_complete_circuits = []
         local_unique_circuits = []
@@ -556,6 +557,29 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
             start = len(local_circuits)
             local_to_unique.update({start + k: local_unique_index for k in range(len(rev_unique[i]))})
             local_circuits.extend([circuits_dict[orig_i] for orig_i in rev_unique[i]])
+
+        #Communicate (local) number of circuits to other procs on same host so we can
+        # compute the total number of circuits on this host and our offset into it.
+        circuit_counts = {myAtomCommIndex: len(local_circuits)}  # keys = atom-processor (atomComm) index
+        if comm is not None:
+            all_circuit_counts = comm.allgather(circuit_counts if (atom_processing_subcomm is None
+                                                                   or atom_processing_subcomm.rank == 0) else {})
+            circuit_counts = {}  # replace local qty above with dict containg *all* atom comm indices
+            for counts in all_circuit_counts: circuit_counts.update(counts)
+
+        offset = 0
+        for iAtomComm in myHostsAtomCommIndices:
+            if iAtomComm == myAtomCommIndex:
+                self.host_circuit_slice = slice(offset, offset + circuit_counts[iAtomComm])
+            offset += circuit_counts[iAtomComm]
+        self.host_num_circuits = offset
+            
+        #Store the global-circuit-index of each of this processor's circuits (local_circuits)
+        # Note: unlike other quantities (elements, params, etc.), a proc's local circuits are not guaranteed to be
+        #  contiguous portions of the global circuit list, so we must use an index array rather than a slice:
+        self.global_circuit_indices = _np.concatenate([rev_unique[unique_i] for unique_i in my_unique_is])
+        self.global_num_circuits = len(circuits)
+        assert(len(self.global_circuit_indices) == _slct.length(self.host_circuit_slice) == len(local_circuits))
 
         super().__init__(local_circuits, local_unique_circuits, local_to_unique, local_elindex_outcome_tuples,
                          local_unique_complete_circuits, param_dimensions)
@@ -612,7 +636,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         """
         Allocate an array that is distributed according to this layout.
 
-        array_type : {'e', 'ep', 'epp', 'hessian', 'jtj', 'jtf'}
+        array_type : {'e', 'ep', 'epp', 'hessian', 'jtj', 'jtf', 'c'}
             The type of array being gathered.  TODO: docstring - more description
 
         TODO: docstring - returns the *local* memory and shared mem handle
@@ -637,6 +661,9 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         elif array_type == 'jtf':  # or array_type == 'pfine':
             array_shape = (self.host_num_params_fine,)
             allocating_ralloc = resource_alloc  # .sub_resource_alloc('param-interatom')
+        elif array_type == 'c':
+            array_shape = (self.host_num_circuits,)
+            allocating_ralloc = resource_alloc  # share mem between these processors
         else:
             raise ValueError("Invalid array_type: %s" % str(array_type))
 
@@ -657,6 +684,8 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
             tuple_of_slices = (self.host_param_fine_slice, slice(0, self.global_num_params))
         elif array_type == 'jtf':  # or 'x'
             tuple_of_slices = (self.host_param_fine_slice,)
+        elif array_type == 'c':
+            tuple_of_slices = (self.host_circuit_slice,)
 
         local_array = host_array[tuple_of_slices]
         local_array = local_array.view(_smt.LocalNumpyArray)
@@ -666,7 +695,8 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
 
         return local_array, host_array_shm
 
-    def gather_local_array(self, array_type, array_portion, resource_alloc=None, extra_elements=0):
+    def gather_local_array_base(self, array_type, array_portion, resource_alloc=None, extra_elements=0,
+                                all_gather=False):
         """
         Gathers an array onto the root processor.
 
@@ -678,7 +708,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
 
         Parameters
         ----------
-        array_type : {'e', 'ep', 'epp', 'hessian', 'jtj', 'jtf'}
+        array_type : {'e', 'ep', 'epp', 'hessian', 'jtj', 'jtf', 'c'}
             The type of array being gathered.  TODO: docstring - more description
 
         array_portion : numpy.ndarray
@@ -691,6 +721,14 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
             The resource allocation object that was used to construt this
             layout, specifying the number and organization of processors
             to distribute arrays among.
+
+        extra_elements : int, optional
+            The final atom-processor groups own an additional `extra_elements` elements, usually
+            used by objective functions to hold penalty terms.
+
+        all_gather : bool, optional
+            Whether the result should be returned on all the processors (when `all_gather=True`)
+            or just the rank-0 processor (when `all_gather=False`).
 
         Returns
         -------
@@ -749,20 +787,60 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
             unit_ralloc = resource_alloc.sub_resource_alloc('param-fine')
             global_shape = (self.global_num_params,)
             slice_of_global = self.global_param_fine_slice
+        elif array_type == 'c':
+            gather_ralloc = resource_alloc
+            unit_ralloc = resource_alloc.sub_resource_alloc('atom-processing')
+            global_shape = (self.global_num_circuits,)
+            slice_of_global = self.global_circuit_indices  # NOTE: this is not a slice!! (but works as an index, so ok)
         else:
             raise ValueError("Invalid array type: %s" % str(array_type))
 
         gather_comm = gather_ralloc.interhost_comm if (gather_ralloc.host_comm is not None) else gather_ralloc.comm
         global_array, global_array_shm = _smt.create_shared_ndarray(
-            resource_alloc, global_shape, 'd') if gather_comm.rank == 0 else (None, None)
+            resource_alloc, global_shape, 'd') if gather_comm.rank == 0 or all_gather else (None, None)
 
-        gather_ralloc.gather(global_array, array_portion, slice_of_global, unit_ralloc)
+        gather_ralloc.gather_base(global_array, array_portion, slice_of_global, unit_ralloc, all_gather)
 
-        ret = global_array.copy() if resource_alloc.comm.rank == 0 else None  # so no longer shared mem (needed?)
+        ret = global_array.copy() if (resource_alloc.comm.rank == 0 or all_gather) else None  # so no longer shared mem
         resource_alloc.comm.barrier()  # make sure global_array is copied before we free it
-        if gather_comm.rank == 0:
+        if gather_comm.rank == 0 or all_gather:
             _smt.cleanup_shared_ndarray(global_array_shm)
         return ret
+
+    def gather_local_array(self, array_type, array_portion, resource_alloc=None, extra_elements=0):
+        """ TODO: docstring """
+        return self.gather_local_array_base(array_type, array_portion, resource_alloc, extra_elements, False)
+
+    def allgather_local_array(self, array_type, array_portion, resource_alloc=None, extra_elements=0):
+        """ TODO: docstring """
+        return self.gather_local_array_base(array_type, array_portion, resource_alloc, extra_elements, True)
+
+    def allsum_local_quantity(self, typ, value, resource_alloc, use_shared_mem="auto"):
+        """
+        TODO: docstring - a local array (or scalar) across some portion of the processors.
+        Note: can only set use_shared_mem=True when value is a numpy array
+        """
+        if typ in ('c','e'):  # value depends only on the "circuits" or "elements" of this layout
+            sum_ralloc = resource_alloc
+            unit_ralloc = resource_alloc.sub_resource_alloc('atom-processing')
+        else:
+            raise ValueError("Invalid `typ` argument: %s" % str(typ))
+
+        if use_shared_mem == "auto":            
+            use_shared_mem = hasattr(value, 'shape')  # test if this is a numpy array
+        else:
+            assert(not use_shared_mem or hasattr(value, 'shape')), "Only arrays can be summed using shared mem!"
+
+        if use_shared_mem:  # create a temporary shared array to sum into
+            result, result_shm = _smt.create_shared_ndarray(sum_ralloc, value.shape, 'd')
+            sum_ralloc.comm.barrier()  # wait for result to be ready
+            sum_ralloc.allreduce_sum(result, value, unit_ralloc=unit_ralloc)
+            result = result.copy()  # so it isn't shared memory anymore
+            sum_ralloc.comm.barrier()  # don't free result too early
+            _smt.cleanup_shared_ndarray(result_shm)
+            return result
+        else:
+            return sum_ralloc.allreduce_sum_simple(value, unit_ralloc=unit_ralloc)
 
     def fill_jtf(self, j, f, jtf, resource_alloc):
         """TODO: docstring  - assumes j, f are local arrays, allocated using 'ep' and 'e' types, respectively.

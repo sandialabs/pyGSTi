@@ -847,9 +847,12 @@ class ModelDatasetCircuitsStore(object):
         self.array_types = array_types
 
         if isinstance(self.layout, _DistributableCOPALayout):  # then store global circuit liste separately
+            init = len(self.circuits)
             self.global_circuits = self.circuits
             self.circuits = _CircuitList(self.layout.circuits, self.global_circuits.op_label_aliases,
                                          self.global_circuits.circuit_weights, name=None)
+        else:
+            self.global_circuits = self.circuits
 
         #self.circuits = bulk_circuit_list[:]
         #self.circuit_weights = bulk_circuit_list.circuit_weights
@@ -970,7 +973,7 @@ class EvaluatedModelDatasetCircuitsStore(ModelDatasetCircuitsStore):
     """
 
     def __init__(self, mdc_store, verbosity):
-        super().__init__(mdc_store.model, mdc_store.dataset, mdc_store.circuits, mdc_store.resource_alloc,
+        super().__init__(mdc_store.model, mdc_store.dataset, mdc_store.global_circuits, mdc_store.resource_alloc,
                          mdc_store.array_types, mdc_store.layout, verbosity)
 
         # Memory check - see if there's enough memory to hold all the evaluated quantities
@@ -6340,3 +6343,51 @@ class LogLWildcardFunction(ObjectiveFunction):
             of circuit outcomes and `nParams` is the number of wildcard budget parameters.
         """
         raise NotImplementedError("No jacobian yet")
+
+
+class CachedObjectiveFunction(object):
+    """
+    Holds various values of an objective function at a particular point.
+
+    This object is meant to be serializable, and not to facilitate computing the
+    objective function anywhere else.  It doesn't contain or rely on comm objects.
+    It does contain a *serial* or "global" layout that allows us to make sense of
+    the elements of various probability vectors, etc., but we demand that this
+    layout not depend on comm objects.
+
+    The cache may only have values on the rank-0 proc (??)
+    """
+
+    def __init__(self, objective_function):
+
+        if isinstance(objective_function.layout, _DistributableCOPALayout):
+            self.layout = objective_function.layout.global_layout
+        else:
+            self.layout = objective_function.layout
+        self.model_paramvec = objective_function.model.to_vector().copy()
+
+        ra = objective_function.resource_alloc
+        objfn_layout = objective_function.layout
+        self.fn = objective_function.fn()  # internally gathers to all ranks
+        self.chi2k_distributed_fn = objective_function.chi2k_distributed_qty(self.fn)
+
+        local_terms = objective_function.terms()
+        self.terms = objfn_layout.allgather_local_array('e', local_terms, ra)
+        self.chi2k_distributed_terms = objective_function.chi2k_distributed_qty(self.terms)
+        self.num_elements = len(self.terms)
+
+        #local_percircuit = objective_function.percircuit()
+        #self.percircuit = objfn_layout.allgather_local_array('c', local_percircuit, ra)
+        self.num_circuits = len(self.layout.circuits)
+        self.percircuit = _np.empty(self.num_circuits, 'd')
+        for i in range(self.num_circuits):
+            self.percircuit[i] = _np.sum(self.terms[self.layout.indices_for_index(i)], axis=0)
+        self.chi2k_distributed_percircuit = objective_function.chi2k_distributed_qty(self.percircuit)
+
+        if isinstance(objective_function, TimeIndependentMDCObjectiveFunction):
+            self.probs = objfn_layout.allgather_local_array('e', objective_function.probs, ra)
+            self.freqs = objfn_layout.allgather_local_array('e', objective_function.freqs, ra)
+            self.counts = objfn_layout.allgather_local_array('e', objective_function.counts, ra)
+            self.total_counts = objfn_layout.allgather_local_array('e', objective_function.total_counts, ra)
+        else:
+            self.probs = self.freqs = self.counts = self.total_counts = None

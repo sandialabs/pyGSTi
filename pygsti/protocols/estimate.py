@@ -24,6 +24,7 @@ from ..objects.explicitmodel import ExplicitOpModel as _ExplicitOpModel
 from ..objects.circuitlist import CircuitList as _CircuitList
 from ..objects.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
 from ..objects.objectivefns import TimeIndependentMDCObjectiveFunction as _TIMDCObjFn
+from ..objects.objectivefns import CachedObjectiveFunction as _CachedObjectiveFunction
 
 #Class for holding confidence region factory keys
 CRFkey = _collections.namedtuple('CRFkey', ['model', 'circuit_list'])
@@ -538,49 +539,55 @@ class Estimate(object):
             else:
                 return p.dataset
 
-    def misfit_sigma(self, comm=None):
+    def final_mdc_store(self, resource_alloc=None):
+        if self.parameters.get('final_objfn_store', None) is None:
+            assert(self.parent is not None), "Estimate must be linked with parent before objectivefn can be created"
+            circuit_list = self.parent.circuit_lists['final']
+            mdl = self.models['final iteration estimate']
+            ds = self.parent.dataset
+            mdc_store = _ModelDatasetCircuitStore(mdl, ds, circuit_list, resource_alloc)
+        return self.parameters['final_objfn_store']        
+
+    def final_objective_fn(self, resource_alloc=None):
+        if self.parameters.get('final_objfn', None) is None:
+            mdc_store = self.final_objfn_store(resource_alloc)
+            objfn_builder = self.parameters['final_objfn_builder']
+            #objfn_builder = self.parameters.get('final_objfn_builder', _objfns.PoissonPicDeltaLogLFunction.builder())
+            objfn = objfn_builder.build_from_store(mdc_store)
+            self.parameters['final_objfn'] = objfn
+        return self.parameters['final_objfn']
+
+    def final_objective_fn_cache(self, resource_alloc=None):
+        if self.parameters.get('final_objfn_cache', None) is None:
+            objfn = self.final_objective_fn(resource_alloc)
+            self.parameters['final_objfn_cache'] = _CachedObjectiveFunction(objfn)
+        return self.parameters['final_objfn_cache']
+
+    def misfit_sigma(self, resource_alloc=None):
         """
         Returns the number of standard deviations (sigma) of model violation.
 
         Parameters
         ----------
-        comm : mpi4py.MPI.Comm, optional
-            When not None, an MPI communicator for distributing the computation
-            across multiple processors.
+        resource_alloc : ResourceAllocation, optional
+            What resources are available for this computation.
 
         Returns
         -------
         float
         """
         p = self.parent
-
-        mdl_label = 'final iteration estimate'    # FUTURE: overrideable?
-        circuits_label = 'final'    # FUTURE: overrideable?
-        mdl = self.models[mdl_label]
-        circuit_list = p.circuit_lists[circuits_label]
-
         ds = self.create_effective_dataset()
+        mdl = self.models['final iteration estimate']
+        circuit_list = p.circuit_lists['final']
 
-        cached_fitqty = None
-        if mdl_label == 'final iteration estimate' and circuits_label == 'final' \
-           and ds == self.parent.dataset and 'final_objfn_store' in self.parameters \
-           and isinstance(self.parameters['final_objfn_store'], _TIMDCObjFn):
-            #Then we can use the already-computed objetive function (at the final point) instead of recomputing it
-            cached_objfn =  self.parameters['final_objfn_store']  # actually an objective fn
-            lsvec = cached_objfn.layout.gather_local_array('e', cached_objfn.obj, cached_objfn.resource_alloc)
-            if cached_objfn.resource_alloc.comm is None or cached_objfn.resource_alloc.comm.rank == 0:
-                cached_fitqty = cached_objfn.chi2k_distributed_qty(_np.sum(lsvec**2))
-            if cached_objfn.resource_alloc.comm is not None:
-                cached_fitqty = cached_objfn.resource_alloc.comm.bcast(cached_fitqty, root=0)
-
-        force_check = False  # for debugging: set to true to ensure cached fitqty is correct
-        if cached_fitqty is None or force_check:
-            objfn_builder = self.parameters.get('final_objfn_builder', _objfns.PoissonPicDeltaLogLFunction.builder())
-            objfn = objfn_builder.build(mdl, ds, circuit_list, {'comm': comm}, verbosity=0)
-            fitqty = objfn.chi2k_distributed_qty(objfn.fn())
-            assert(cached_fitqty is None or abs(fitqty - cached_fitqty) < 1e-6), "MISMATCH in fitqty!!"
+        if ds == self.parent.dataset:  # no effective ds => we can use cached quantities
+            objfn_cache = self.final_objective_fn_cache(resource_alloc)  # creates cache if needed
+            fitqty = objfn_cache.chi2k_distributed_fn
         else:
-            fitqty = cached_fitqty
+            objfn_builder = self.parameters.get('final_objfn_builder', _objfns.PoissonPicDeltaLogLFunction.builder())
+            objfn = objfn_builder.build(mdl, ds, circuit_list, resource_alloc, verbosity=0)
+            fitqty = objfn.chi2k_distributed_qty(objfn.fn())
 
         aliases = circuit_list.op_label_aliases if isinstance(circuit_list, _CircuitList) else None
 

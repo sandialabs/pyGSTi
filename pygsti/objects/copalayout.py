@@ -146,7 +146,7 @@ class CircuitOutcomeProbabilityArrayLayout(object):
             self._element_indices[i_unique] = _slct.list_to_slice(elindices, array_ok=True)
 
     def __len__(self):
-        return self._size
+        return self._size  # the number of computed *elements* (!= number of circuits)
 
     @property
     def num_elements(self):
