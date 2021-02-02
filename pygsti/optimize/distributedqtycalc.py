@@ -141,26 +141,19 @@ class DistributedQuantityCalc(object):
         self.extra_elements = extra_elements
 
     def allocate_jtf(self):
-        local_array, redundant_shm = self.layout.allocate_local_array('jtf', 'd', self.resource_alloc,
-                                                                      track_memory=False,
-                                                                      extra_elements=self.extra_elements)
+        local_array, redundant_shm = self.layout.allocate_local_array('jtf', 'd', extra_elements=self.extra_elements)
         return local_array
 
     def allocate_jtj(self):
-        local_array, redundant_shm = self.layout.allocate_local_array('jtj', 'd', self.resource_alloc,
-                                                                      track_memory=False,
-                                                                      extra_elements=self.extra_elements)
+        local_array, redundant_shm = self.layout.allocate_local_array('jtj', 'd', extra_elements=self.extra_elements)
         return local_array
 
     #def allocate_x_for_jac(self):
-    #    local_array, redundant_shm = self.layout.allocate_local_array('p', 'd', self.resource_alloc,
-    #                                                                  track_memory=False, extra_elements=0)
+    #    local_array, redundant_shm = self.layout.allocate_local_array('p', 'd', extra_elements=0)
     #    return local_array
 
     def allocate_jac(self):
-        local_array, redundant_shm = self.layout.allocate_local_array('ep', 'd', self.resource_alloc,
-                                                                      track_memory=False,
-                                                                      extra_elements=self.extra_elements)
+        local_array, redundant_shm = self.layout.allocate_local_array('ep', 'd', extra_elements=self.extra_elements)
         return local_array
 
     def deallocate_jtf(self, jtf):
@@ -177,8 +170,8 @@ class DistributedQuantityCalc(object):
 
     #def fill_x_for_jac(self, x, x_for_jac):
     #    # need to gather fine-param-slices => param_slice
-    #    interatom_param_ralloc = self.resource_alloc.sub_resource_alloc('param-interatom')
-    #    fine_param_ralloc = self.resource_alloc.sub_resource_alloc('param-fine')
+    #    interatom_param_ralloc = self.layout.resource_alloc('param-interatom')
+    #    fine_param_ralloc = self.layout.resource_alloc('param-fine')
     #    interatom_param_ralloc.gather(x_for_jac, x, self.layout.fine_param_subslice,
     #                                  unit_ralloc=fine_param_ralloc)
 
@@ -189,7 +182,7 @@ class DistributedQuantityCalc(object):
         return self.layout.global_num_elements + self.extra_elements
 
     def jac_param_slice(self, only_if_leader=False):
-        if only_if_leader and not self.resource_alloc.sub_resource_alloc('param-processing').is_host_leader:
+        if only_if_leader and not self.layout.resource_alloc('param-processing').is_host_leader:
             return slice(0, 0)  # not the leader of the group of procs computing this same jac portion
         return self.layout.global_param_slice
 
@@ -202,7 +195,7 @@ class DistributedQuantityCalc(object):
 
     def allgather_x(self, x, global_x):
         #TODO: do this more efficiently in future:
-        global_x_on_root = self.layout.gather_local_array('jtf', x, self.resource_alloc)
+        global_x_on_root = self.layout.gather_local_array('jtf', x)
         if self.resource_alloc.comm is not None:
             global_x[:] = self.resource_alloc.comm.bcast(
                 global_x_on_root if self.resource_alloc.comm.rank == 0 else None, root=0)
@@ -217,8 +210,7 @@ class DistributedQuantityCalc(object):
 
     def allgather_f(self, f, global_f):
         #TODO: do this more efficiently in future:
-        global_f_on_root = self.layout.gather_local_array('e', f, self.resource_alloc,
-                                                          extra_elements=self.extra_elements)
+        global_f_on_root = self.layout.gather_local_array('e', f, extra_elements=self.extra_elements)
         if self.resource_alloc.comm is not None:
             global_f[:] = self.resource_alloc.comm.bcast(
                 global_f_on_root if self.resource_alloc.comm.rank == 0 else None, root=0)
@@ -227,7 +219,7 @@ class DistributedQuantityCalc(object):
 
     def gather_jtj(self, jtj):
         # gathers just onto the root proc
-        return self.layout.gather_local_array('jtj', jtj, self.resource_alloc)
+        return self.layout.gather_local_array('jtj', jtj)
 
     def scatter_jtj(self, global_jtj, jtj):
         # Don't bother trying to be fancy with shared mem here - we need to send the
@@ -241,7 +233,7 @@ class DistributedQuantityCalc(object):
 
     def gather_jtf(self, jtf):
         # gathers just onto the root proc
-        return self.layout.gather_local_array('jtf', jtf, self.resource_alloc)
+        return self.layout.gather_local_array('jtf', jtf)
 
     def scatter_jtf(self, global_jtf, jtf):
         # Don't bother trying to be fancy with shared mem here - we need to send the
@@ -261,7 +253,7 @@ class DistributedQuantityCalc(object):
         #Note: Could make this more efficient by being given a shared array like this as the destination
         result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (jac_v.shape[1],), 'd')
         self.resource_alloc.allreduce_sum(result, local_dot,
-                                          unit_ralloc=self.resource_alloc.sub_resource_alloc('param-fine'))
+                                          unit_ralloc=self.layout.resource_alloc('param-fine'))
         ret = result.copy()
         self.resource_alloc.host_comm_barrier()  # make sure we don't cleanup too quickly
         _smt.cleanup_shared_ndarray(result_shm)
@@ -279,7 +271,7 @@ class DistributedQuantityCalc(object):
         local_dot = _np.dot(x1, x2)
         result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (1,), 'd')
         self.resource_alloc.allreduce_sum(result, local_dot,
-                                          unit_ralloc=self.resource_alloc.sub_resource_alloc('param-fine'))
+                                          unit_ralloc=self.layout.resource_alloc('param-fine'))
         ret = result[0]  # "copies" the single returned element
         self.resource_alloc.host_comm_barrier()  # make sure we don't cleanup too quickly
         _smt.cleanup_shared_ndarray(result_shm)
@@ -293,7 +285,7 @@ class DistributedQuantityCalc(object):
         local_infnorm = _np.linalg.norm(x, ord=_np.inf)
         result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (1,), 'd')
         self.resource_alloc.allreduce_max(result, local_infnorm,
-                                          unit_ralloc=self.resource_alloc.sub_resource_alloc('param-fine'))
+                                          unit_ralloc=self.layout.resource_alloc('param-fine'))
         ret = result[0]  # "copies" the single returned element
         self.resource_alloc.host_comm_barrier()  # make sure we don't cleanup too quickly
         _smt.cleanup_shared_ndarray(result_shm)
@@ -304,7 +296,7 @@ class DistributedQuantityCalc(object):
         local_max = _np.max(x)
         result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (1,), 'd')
         self.resource_alloc.allreduce_max(result, local_max,
-                                          unit_ralloc=self.resource_alloc.sub_resource_alloc('param-fine'))
+                                          unit_ralloc=self.layout.resource_alloc('param-fine'))
         ret = result[0]  # "copies" the single returned element
         self.resource_alloc.host_comm_barrier()  # make sure we don't cleanup too quickly
         _smt.cleanup_shared_ndarray(result_shm)
@@ -314,7 +306,7 @@ class DistributedQuantityCalc(object):
         local_dot = _np.dot(f, f)
         result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (1,), 'd')
         self.resource_alloc.allreduce_sum(result, local_dot,
-                                          unit_ralloc=self.resource_alloc.sub_resource_alloc('atom-processing'))
+                                          unit_ralloc=self.layout.resource_alloc('atom-processing'))
         ret = result[0]  # "copies" the single returned element
         self.resource_alloc.host_comm_barrier()  # make sure we don't cleanup too quickly
         _smt.cleanup_shared_ndarray(result_shm)
@@ -324,7 +316,7 @@ class DistributedQuantityCalc(object):
         local_norm2 = _np.linalg.norm(j)**2
         result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (1,), 'd')
         self.resource_alloc.allreduce_sum(result, local_norm2,
-                                          unit_ralloc=self.resource_alloc.sub_resource_alloc('param-processing'))
+                                          unit_ralloc=self.layout.resource_alloc('param-processing'))
         ret = result[0]  # "copies" the single returned element
         self.resource_alloc.host_comm_barrier()  # make sure we don't cleanup too quickly
         _smt.cleanup_shared_ndarray(result_shm)
@@ -334,17 +326,17 @@ class DistributedQuantityCalc(object):
         local_norm2 = _np.linalg.norm(jtj)**2
         result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (1,), 'd')
         self.resource_alloc.allreduce_sum(result, local_norm2,
-                                          unit_ralloc=self.resource_alloc.sub_resource_alloc('param-fine'))
+                                          unit_ralloc=self.layout.resource_alloc('param-fine'))
         ret = result[0]  # "copies" the single returned element
         self.resource_alloc.host_comm_barrier()  # make sure we don't cleanup too quickly
         _smt.cleanup_shared_ndarray(result_shm)
         return ret
 
     def fill_jtf(self, j, f, jtf):
-        self.layout.fill_jtf(j, f, jtf, self.resource_alloc)
+        self.layout.fill_jtf(j, f, jtf)
 
     def fill_jtj(self, j, jtj):
-        self.layout.fill_jtj(j, jtj, self.resource_alloc)
+        self.layout.fill_jtj(j, jtj)
 
     def jtj_diag_indices(self, jtj):
         global_param_indices = self.layout.global_param_fine_slice

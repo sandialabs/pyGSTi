@@ -337,17 +337,17 @@ class ForwardSimulator(object):
             copa_layout = circuits
         else:
             copa_layout = self.create_layout(circuits, array_types=('e',), resource_alloc=resource_alloc)
-        global_layout = copa_layout.global_layout if isinstance(copa_layout, _DistributableCOPALayout) else copa_layout
+        global_layout = copa_layout.global_layout
 
         resource_alloc = _ResourceAllocation.cast(resource_alloc)
         with resource_alloc.temporarily_track_memory(global_layout.num_elements):  # 'E' (vp)
-            vp, vp_shm = copa_layout.allocate_local_array('e', 'd', resource_alloc, track_memory=False)
+            vp, vp_shm = copa_layout.allocate_local_array('e', 'd')
             if smartc:
                 smartc.cached_compute(self.bulk_fill_probs, vp, copa_layout,
                                       resource_alloc, _filledarrays=(0,))
             else:
                 self.bulk_fill_probs(vp, copa_layout, resource_alloc)
-            vp = copa_layout.gather_local_array('e', vp, resource_alloc)  # gather data onto rank-0 processor
+            vp = copa_layout.gather_local_array('e', vp)  # gather data onto rank-0 processor
             _smt.cleanup_shared_ndarray(vp_shm)
 
         if resource_alloc.comm is None or resource_alloc.comm.rank == 0:
@@ -388,14 +388,14 @@ class ForwardSimulator(object):
             copa_layout = circuits
         else:
             copa_layout = self.create_layout(circuits, array_types=('ep',), resource_alloc=resource_alloc)
-        global_layout = copa_layout.global_layout if isinstance(copa_layout, _DistributableCOPALayout) else copa_layout
+        global_layout = copa_layout.global_layout
 
         resource_alloc = _ResourceAllocation.cast(resource_alloc)
         with resource_alloc.temporarily_track_memory(global_layout.num_elements * self.model.num_params):  # 'EP' (vdp)
             #Note: don't use smartc for now.
-            vdp, vdp_shm = copa_layout.allocate_local_array('ep', 'd', resource_alloc, track_memory=False)
+            vdp, vdp_shm = copa_layout.allocate_local_array('ep', 'd')
             self.bulk_fill_dprobs(vdp, copa_layout, None, resource_alloc)
-            vdp = copa_layout.gather_local_array('ep', vdp, resource_alloc)  # gather data onto rank-0 processor
+            vdp = copa_layout.gather_local_array('ep', vdp)  # gather data onto rank-0 processor
             _smt.cleanup_shared_ndarray(vdp_shm)
 
         if resource_alloc.comm is None or resource_alloc.comm.rank == 0:
@@ -436,14 +436,14 @@ class ForwardSimulator(object):
             copa_layout = circuits
         else:
             copa_layout = self.create_layout(circuits, array_types=('epp',), resource_alloc=resource_alloc)
-        global_layout = copa_layout.global_layout if isinstance(copa_layout, _DistributableCOPALayout) else copa_layout
+        global_layout = copa_layout.global_layout
 
         resource_alloc = _ResourceAllocation.cast(resource_alloc)
         with resource_alloc.temporarily_track_memory(global_layout.num_elements * self.model.num_params**2):  # 'EPP'
             #Note: don't use smartc for now.
-            vhp, vhp_shm = copa_layout.allocate_local_array('epp', 'd', resource_alloc, track_memory=False)
+            vhp, vhp_shm = copa_layout.allocate_local_array('epp', 'd')
             self.bulk_fill_hprobs(vhp, copa_layout, None, None, None, resource_alloc)
-            vhp = copa_layout.gather_local_array('epp', vhp, resource_alloc)  # gather data onto rank-0 processor
+            vhp = copa_layout.gather_local_array('epp', vhp)  # gather data onto rank-0 processor
             _smt.cleanup_shared_ndarray(vhp_shm)
 
         if resource_alloc.comm is None or resource_alloc.comm.rank == 0:

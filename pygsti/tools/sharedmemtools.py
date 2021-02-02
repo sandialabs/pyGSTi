@@ -60,7 +60,7 @@ def shared_mem_is_enabled():
     return bool(_shared_memory is not None)
 
 
-def create_shared_ndarray(resource_alloc, shape, dtype, zero_out=False, track_memory=False):
+def create_shared_ndarray(resource_alloc, shape, dtype, zero_out=False, memory_tracker=None):
     """
     Creates a `numpy.ndarray` that is potentially shared between processors.
 
@@ -84,8 +84,8 @@ def create_shared_ndarray(resource_alloc, shape, dtype, zero_out=False, track_me
         Whether to initialize the array to all zeros.  When `True`,
         this function behaves as `numpy.zeros`; when `False` as `numpy.empty`.
 
-    track_memory : bool, optional
-        If `True`, call `resource_alloc.add_tracked_memory` to track the
+    memory_tracker : ResourceAllocation, optional
+        If not none, callc `memory_tracker.add_tracked_memory` to track the
         size of the allocated array.
 
     Returns
@@ -102,11 +102,11 @@ def create_shared_ndarray(resource_alloc, shape, dtype, zero_out=False, track_me
     nelements = _np.product(shape)
     if hostcomm is None or nelements == 0:  # Note: shared memory must be for size > 0
         # every processor allocates its own memory
-        if track_memory: resource_alloc.add_tracked_memory(nelements)
+        if memory_tracker is not None: memory_tracker.add_tracked_memory(nelements)
         ar = _np.zeros(shape, dtype) if zero_out else _np.empty(shape, dtype)
         shm = None
     else:
-        if track_memory: resource_alloc.add_tracked_memory(nelements // hostcomm.size)
+        if memory_tracker: memory_tracker.add_tracked_memory(nelements // hostcomm.size)
         if hostcomm.rank == 0:
             shm = _shared_memory.SharedMemory(create=True, size=nelements * _np.dtype(dtype).itemsize)
             assert(shm.size == nelements * _np.dtype(dtype).itemsize)

@@ -1300,7 +1300,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         """
         result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (1,), 'd')
         local = _np.array([self.fn_local(paramvec)], 'd')
-        unit_ralloc = self.resource_alloc.sub_resource_alloc('atom-processing')  # proc group that computes same els
+        unit_ralloc = self.layout.resource_alloc('atom-processing')  # proc group that computes same els
         self.resource_alloc.allreduce_sum(result, local, unit_ralloc)
         global_fnval = result[0]
         _smt.cleanup_shared_ndarray(result_shm)
@@ -1475,9 +1475,9 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         # subtrees would just add unnecessary complication.
 
         blk_size1, blk_size2 = self.layout.param_dimension_blk_sizes
-        atom_resource_alloc = self.resource_alloc.sub_resource_alloc('atom-processing')
-        #param_resource_alloc = self.resource_alloc.sub_resource_alloc('param-processing')
-        param2_resource_alloc = self.resource_alloc.sub_resource_alloc('param2-processing')
+        atom_resource_alloc = self.layout.resource_alloc('atom-processing')
+        #param_resource_alloc = self.layout.resource_alloc('param-processing')
+        param2_resource_alloc = self.layout.resource_alloc('param2-processing')
 
         layout = self.layout
         global_param_slice = layout.global_param_slice
@@ -1580,8 +1580,8 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
 
     def _gather_hessian(self, local_hessian):
         nparams = self.model.num_params
-        interatom_ralloc = self.resource_alloc.sub_resource_alloc('param2-interatom')
-        param2_ralloc = self.resource_alloc.sub_resource_alloc('param2-processing')
+        interatom_ralloc = self.layout.resource_alloc('param2-interatom')
+        param2_ralloc = self.layout.resource_alloc('param2-processing')
         my_nparams1, my_nparams2 = local_hessian.shape
         global_param_slice = self.layout.global_param_slice
         global_param2_slice = self.layout.global_param2_slice
@@ -4096,14 +4096,14 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         self.initial_allocated_memory = self.resource_alloc.allocated_memory
 
         #Note: allocate probs as a local array in case we want to gather it (though objfn routines don't need this)
-        self.probs, self._probs_shm = self.layout.allocate_local_array('e', 'd', self.resource_alloc, track_memory=True)
-        self.obj, self._obj_shm = self.layout.allocate_local_array('e', 'd', self.resource_alloc, track_memory=True,
+        self.probs, self._probs_shm = self.layout.allocate_local_array('e', 'd', memory_tracker=self.resource_alloc)
+        self.obj, self._obj_shm = self.layout.allocate_local_array('e', 'd', memory_tracker=self.resource_alloc,
                                                                    extra_elements=self.ex)
 
         self.hos_jac = self._jac_shm = None
         if 'ep' in self.array_types:
-            self.jac, self._jac_shm = self.layout.allocate_local_array('ep', 'd', self.resource_alloc,
-                                                                       track_memory=True, extra_elements=self.ex)
+            self.jac, self._jac_shm = self.layout.allocate_local_array('ep', 'd', memory_tracker=self.resource_alloc,
+                                                                       extra_elements=self.ex)
 
         #self.maxCircuitLength = max([len(x) for x in self.circuits])
         # If desired, we may need to make it local to this processor, which may not have data for all of self.circuits
@@ -4530,9 +4530,9 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         """ Clips the potentially shared-mem self.probs according to self.prob_clip_interval """
         if self.prob_clip_interval is not None:
             if isinstance(self.layout, _DistributableCOPALayout):
-                if self.resource_alloc.sub_resource_alloc('atom-processing').is_host_leader:
+                if self.layout.resource_alloc('atom-processing').is_host_leader:
                     _np.clip(self.probs, self.prob_clip_interval[0], self.prob_clip_interval[1], out=self.probs)
-                self.resource_alloc.sub_resource_alloc('atom-processing').host_comm_barrier()
+                self.layout.resource_alloc('atom-processing').host_comm_barrier()
             else:
                 _np.clip(self.probs, self.prob_clip_interval[0], self.prob_clip_interval[1], out=self.probs)
 
@@ -4575,7 +4575,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         # Whether this rank is the "leader" of all the processors accessing the same shared self.jac and self.probs mem.
         #  Only leader processors should modify the contents of the shared memory, so we only apply operations *once*
         #  `unit_ralloc` is the group of all the procs targeting same destination into self.obj
-        unit_ralloc = self.resource_alloc.sub_resource_alloc('atom-processing')
+        unit_ralloc = self.layout.resource_alloc('atom-processing')
         shared_mem_leader = unit_ralloc.is_host_leader
 
         with self.resource_alloc.temporarily_track_memory(self.nelements):  # 'e' (lsvec)
@@ -4627,7 +4627,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         # Whether this rank is the "leader" of all the processors accessing the same shared self.jac and self.probs mem.
         #  Only leader processors should modify the contents of the shared memory, so we only apply operations *once*
         #  `unit_ralloc` is the group of all the procs targeting same destination into self.obj
-        unit_ralloc = self.resource_alloc.sub_resource_alloc('atom-processing')
+        unit_ralloc = self.layout.resource_alloc('atom-processing')
         shared_mem_leader = unit_ralloc.is_host_leader
 
         with self.resource_alloc.temporarily_track_memory(self.nelements):  # 'e' (terms)
@@ -4677,7 +4677,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         # Whether this rank is the "leader" of all the processors accessing the same shared self.jac and self.probs mem.
         #  Only leader processors should modify the contents of the shared memory, so we only apply operations *once*
         #  `unit_ralloc` is the group of all the procs targeting same destination into self.jac
-        unit_ralloc = self.resource_alloc.sub_resource_alloc('param-processing')
+        unit_ralloc = self.layout.resource_alloc('param-processing')
         shared_mem_leader = unit_ralloc.is_host_leader
 
         with self.resource_alloc.temporarily_track_memory(2 * self.nelements):  # 'e' (dg_dprobs, lsvec)
@@ -4757,7 +4757,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         # Whether this rank is the "leader" of all the processors accessing the same shared self.jac and self.probs mem.
         #  Only leader processors should modify the contents of the shared memory, so we only apply operations *once*
         #  `unit_ralloc` is the group of all the procs targeting same destination into self.jac
-        unit_ralloc = self.resource_alloc.sub_resource_alloc('param-processing')
+        unit_ralloc = self.layout.resource_alloc('param-processing')
         shared_mem_leader = unit_ralloc.is_host_leader
 
         with self.resource_alloc.temporarily_track_memory(2 * self.nelements):  # 'e' (dg_dprobs, lsvec)
@@ -4813,7 +4813,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
         # Whether this rank is the "leader" of all the processors accessing the same shared self.jac and self.probs mem.
         #  Only leader processors should modify the contents of the shared memory, so we only apply operations *once*
-        unit_ralloc = self.resource_alloc.sub_resource_alloc('param2-processing')
+        unit_ralloc = self.layout.resource_alloc('param2-processing')
         shared_mem_leader = unit_ralloc.is_host_leader
 
         #General idea of what we're doing:
@@ -4826,8 +4826,8 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
         if paramvec is not None: self.model.from_vector(paramvec)
         dprobs = self.jac[0:self.nelements, :]  # avoid mem copying: use jac mem for dprobs
-        dprobs2, dprobs2_shm = self.layout.allocate_local_array('ep2', 'd', self.resource_alloc)
-        hprobs, hprobs_shm = self.layout.allocate_local_array('epp', 'd', self.resource_alloc)
+        dprobs2, dprobs2_shm = self.layout.allocate_local_array('ep2', 'd')
+        hprobs, hprobs_shm = self.layout.allocate_local_array('epp', 'd')
         # Note: dprobs2 is needed because param2 slice may be different
 
         # 'e', 'epp' (dg_dprobs, d2g_dprobs2, temporary variable dprobs_dp2 * dprobs_dp1 )
@@ -4854,7 +4854,6 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         _smt.cleanup_shared_ndarray(dprobs2_shm)
         #NOTE: it doesn't seem like we need shared memory at all here - only if we were returning
         # a portion of it... would need a fill_ function to make this useful/needed TODO - remove shared mem above?
-        #TODO - expand allocate_local_array to take hessian array shape and return this value?
 
         return self._gather_hessian(ret)  # ret is just the part of the Hessian that this processor "owns"
 
@@ -4887,7 +4886,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         # Whether this rank is the "leader" of all the processors accessing the same shared self.jac and self.probs mem.
         #  Only leader processors should modify the contents of the shared memory, so we only apply operations *once*
         #  `unit_ralloc` is the group of all the procs targeting same destination into self.jac
-        #unit_ralloc = self.resource_alloc.sub_resource_alloc('param-processing')
+        #unit_ralloc = self.layout.resource_alloc('param-processing')
         #shared_mem_leader = unit_ralloc.is_host_leader
 
         if paramvec is not None: self.model.from_vector(paramvec)
@@ -6360,10 +6359,7 @@ class CachedObjectiveFunction(object):
 
     def __init__(self, objective_function):
 
-        if isinstance(objective_function.layout, _DistributableCOPALayout):
-            self.layout = objective_function.layout.global_layout
-        else:
-            self.layout = objective_function.layout
+        self.layout = objective_function.layout.global_layout
         self.model_paramvec = objective_function.model.to_vector().copy()
 
         ra = objective_function.resource_alloc
@@ -6372,12 +6368,12 @@ class CachedObjectiveFunction(object):
         self.chi2k_distributed_fn = objective_function.chi2k_distributed_qty(self.fn)
 
         local_terms = objective_function.terms()
-        self.terms = objfn_layout.allgather_local_array('e', local_terms, ra)
+        self.terms = objfn_layout.allgather_local_array('e', local_terms)
         self.chi2k_distributed_terms = objective_function.chi2k_distributed_qty(self.terms)
         self.num_elements = len(self.terms)
 
         #local_percircuit = objective_function.percircuit()
-        #self.percircuit = objfn_layout.allgather_local_array('c', local_percircuit, ra)
+        #self.percircuit = objfn_layout.allgather_local_array('c', local_percircuit)
         self.num_circuits = len(self.layout.circuits)
         self.percircuit = _np.empty(self.num_circuits, 'd')
         for i in range(self.num_circuits):
@@ -6385,9 +6381,9 @@ class CachedObjectiveFunction(object):
         self.chi2k_distributed_percircuit = objective_function.chi2k_distributed_qty(self.percircuit)
 
         if isinstance(objective_function, TimeIndependentMDCObjectiveFunction):
-            self.probs = objfn_layout.allgather_local_array('e', objective_function.probs, ra)
-            self.freqs = objfn_layout.allgather_local_array('e', objective_function.freqs, ra)
-            self.counts = objfn_layout.allgather_local_array('e', objective_function.counts, ra)
-            self.total_counts = objfn_layout.allgather_local_array('e', objective_function.total_counts, ra)
+            self.probs = objfn_layout.allgather_local_array('e', objective_function.probs)
+            self.freqs = objfn_layout.allgather_local_array('e', objective_function.freqs)
+            self.counts = objfn_layout.allgather_local_array('e', objective_function.counts)
+            self.total_counts = objfn_layout.allgather_local_array('e', objective_function.total_counts)
         else:
             self.probs = self.freqs = self.counts = self.total_counts = None

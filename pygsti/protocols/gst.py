@@ -1921,8 +1921,8 @@ def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options,
 
             two_dlogl_percircuit = 2 * dlogl_percircuit
             two_dlogl = sum(two_dlogl_percircuit)
-            global_two_dlogl_sum = layout.allsum_local_quantity('c', two_dlogl, mdc_objfn.resource_alloc)
-            global_two_dlogl_percircuit = layout.allgather_local_array('c', two_dlogl_percircuit, mdc_objfn.resource_alloc)
+            global_two_dlogl_sum = layout.allsum_local_quantity('c', two_dlogl)
+            global_two_dlogl_percircuit = layout.allgather_local_array('c', two_dlogl_percircuit)
             return (max(0, global_two_dlogl_sum - two_dlogl_threshold),
                     _np.clip(global_two_dlogl_percircuit - redbox_threshold, 0, None))
 

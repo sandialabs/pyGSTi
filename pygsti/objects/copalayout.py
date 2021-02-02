@@ -156,7 +156,12 @@ class CircuitOutcomeProbabilityArrayLayout(object):
     def num_circuits(self):
         return len(self.circuits)
 
-    def allocate_local_array(self, ndims, dtype, resource_alloc=None, zero_out=False, track_memory=False,
+    @property
+    def global_layout(self):
+        """ The global layout that this layout is or is a part of.  Cannot be comm-dependent. """
+        return self  # default is that this object *is* a global layout
+
+    def allocate_local_array(self, array_type, dtype, zero_out=False, memory_tracker=None,
                              extra_elements=0):
         """
         Allocate an array that is distributed according to this layout.
@@ -166,17 +171,24 @@ class CircuitOutcomeProbabilityArrayLayout(object):
         # type can be "p", "dp" or "hp"
         nelements = self._size + extra_elements
         alloc_fn = _np.zeros if zero_out else _np.empty
-        if ndims == 1: ret = alloc_fn((nelements,), dtype=dtype)
-        elif ndims == 2: ret = alloc_fn((nelements, self._param_dimensions[0]), dtype=dtype)
-        elif ndims == 3: ret = alloc_fn((nelements, self._param_dimensions[0],
-                                         self._param_dimensions[1]), dtype=dtype)
+        if array_type == 'e': shape = (nelements,)
+        elif array_type == 'ep': shape = (nelements, self._param_dimensions[0])
+        elif array_type == 'ep2': shape = (nelements, self._param_dimensions[1])
+        elif array_type == 'epp': 
+            shape = (nelements, self._param_dimensions[0], self._param_dimensions[1])
+        elif array_type == 'p': shape = (self._param_dimensions[0],)
+        elif array_type == 'jtj': shape = (self._param_dimensions[0], self._param_dimensions[0])
+        elif array_type == 'jtf': shape = (self._param_dimensions[0],)
+        elif array_type == 'c': shape = (self.num_circuits,)
         else:
             raise ValueError("Invalid `ndimse`: %d" % ndims)
 
-        if track_memory: resource_alloc.add_tracked_memory(ret.size)
+        ret = alloc_fn(shape, dtype=dtype)
+
+        if memory_tracker: memory_tracker.add_tracked_memory(ret.size)
         return ret, None  # (local_array, shared_mem_handle)
 
-    def gather_local_array(self, array_portion, resource_alloc=None, extra_elements=0):
+    def gather_local_array_base(self, array_portion, extra_elements=0, all_gather=False):
         """
         Gathers an array onto the root processor.
 
@@ -207,11 +219,22 @@ class CircuitOutcomeProbabilityArrayLayout(object):
         """
         return array_portion  # no gathering is performed by this layout class
 
-    def fill_jtf(self, j, f, jtf, resource_alloc):
+    def gather_local_array(self, array_type, array_portion, extra_elements=0):
+        """ TODO: docstring """
+        return self.gather_local_array_base(array_type, array_portion, extra_elements, False)
+
+    def allgather_local_array(self, array_type, array_portion, extra_elements=0):
+        """ TODO: docstring """
+        return self.gather_local_array_base(array_type, array_portion, extra_elements, True)
+
+    def allsum_local_quantity(self, typ, value, use_shared_mem="auto"):
+        return value
+
+    def fill_jtf(self, j, f, jtf):
         """ TODO: docstring """
         jtf[:] = _np.dot(j.T, f)
 
-    def fill_jtj(self, j, jtj, resource_alloc):
+    def fill_jtj(self, j, jtj):
         """ TODO: docstring """
         jtj[:] = _np.dot(j.T, j)
 

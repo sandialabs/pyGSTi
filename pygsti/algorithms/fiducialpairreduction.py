@@ -163,7 +163,7 @@ def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials,
             layout = target_model.sim.create_layout(lst, None, resource_alloc, array_types=('ep',), verbosity=0)
             #FUTURE: assert that no instruments are allowed?
 
-            local_dP, local_dP_shm = layout.allocate_local_array('ep', 'd', resource_alloc)
+            local_dP, local_dP_shm = layout.allocate_local_array('ep', 'd')
             target_model.sim.bulk_fill_dprobs(local_dP, layout, None, resource_alloc)  # num_els x num_params
             dP = local_dP.copy()  # local == global (no layout.gather required) b/c we used comm=None above
             _smt.cleanup_shared_ndarray(local_dP_shm)  # not needed - local_dP isn't shared (comm=None)
@@ -422,7 +422,7 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
                     # "original" indices into lst for k-th fiducial pair
                     elIndicesForPair[k].extend(_slct.to_array(layout.indices_for_index(o)))
 
-            local_dPall, local_dPall_shm = layout.allocate_local_array('ep', 'd', resource_alloc)
+            local_dPall, local_dPall_shm = layout.allocate_local_array('ep', 'd')
             gsGerm.sim.bulk_fill_dprobs(local_dPall, layout, None, resource_alloc)  # num_els x num_params
             dPall = local_dPall.copy()  # local == global (no layout.gather required) b/c we used comm=None above
             _smt.cleanup_shared_ndarray(local_dPall_shm)  # not needed (comm=None)
@@ -593,7 +593,7 @@ def test_fiducial_pairs(fid_pairs, target_model, prep_fiducials, meas_fiducials,
         resource_alloc = _objs.ResourceAllocation(comm=None, mem_limit=mem_limit)
         layout = target_model.sim.create_layout(circuits, None, resource_alloc, array_types=('ep',), verbosity=0)
 
-        local_dP, local_dP_shm = layout.allocate_local_array('ep', 'd', resource_alloc)
+        local_dP, local_dP_shm = layout.allocate_local_array('ep', 'd')
         target_model.sim.bulk_fill_dprobs(local_dP, layout, None, resource_alloc)
         dP = local_dP.copy()  # local == global (no layout.gather required) b/c we used comm=None above
         _smt.cleanup_shared_ndarray(local_dP_shm)  # not needed - local_dP isn't shared (comm=None)

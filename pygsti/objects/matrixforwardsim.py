@@ -1213,7 +1213,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             blk2 = param_blk_sizes[1] if len(param_blk_sizes) > 1 else 0
             if blk1 is None: blk1 = loc_nparams1
             if blk2 is None: blk1 = loc_nparams2
-            global_layout = layout.global_layout if isinstance(layout, _DistributableCOPALayout) else layout
+            global_layout = layout.global_layout
             if comm is not None:
                 from mpi4py import MPI
                 max_local_els = comm.allreduce(layout.num_elements, op=MPI.MAX)    # layout.max_atom_elements

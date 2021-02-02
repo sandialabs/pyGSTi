@@ -56,7 +56,7 @@ class DistributableForwardSimulator(_ForwardSimulator):
     def _bulk_fill_probs(self, array_to_fill, layout, resource_alloc):
         """Note: we expect that array_to_fill points to the memory specifically for this processor
            (a subset of the memory for the host when memory is shared) """
-        atom_resource_alloc = resource_alloc.sub_resource_alloc('atom-processing')
+        atom_resource_alloc = layout.resource_alloc('atom-processing')
         atom_resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory before we reinit
 
         for atom in layout.atoms:  # layout only holds local atoms
@@ -70,8 +70,8 @@ class DistributableForwardSimulator(_ForwardSimulator):
         """Note: we expect that array_to_fill points to the memory specifically for this processor
            (a subset of the memory for the host when memory is shared) """
         blkSize = layout.param_dimension_blk_sizes[0]
-        atom_resource_alloc = resource_alloc.sub_resource_alloc('atom-processing')
-        param_resource_alloc = resource_alloc.sub_resource_alloc('param-processing')
+        atom_resource_alloc = layout.resource_alloc('atom-processing')
+        param_resource_alloc = layout.resource_alloc('param-processing')
 
         atom_resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory before we reinit
         # Note: use *largest* host comm that we fill - so 'atom' comm, not 'param' comm
@@ -80,6 +80,7 @@ class DistributableForwardSimulator(_ForwardSimulator):
         global_param_slice = layout.global_param_slice
 
         for atom in layout.atoms:
+            assert(_slct.length(atom.element_slice) == atom.num_elements)
             if pr_array_to_fill is not None:
                 self._bulk_fill_probs_block(pr_array_to_fill[atom.element_slice], atom, atom_resource_alloc)
 
@@ -110,9 +111,9 @@ class DistributableForwardSimulator(_ForwardSimulator):
         blkSize2 = layout.param_dimension_blk_sizes[1]
 
         #Assume we're being called with a resource_alloc that's been setup by a distributed layout:
-        atom_resource_alloc = resource_alloc.sub_resource_alloc('atom-processing')
-        param_resource_alloc = resource_alloc.sub_resource_alloc('param-processing')
-        param2_resource_alloc = resource_alloc.sub_resource_alloc('param2-processing')
+        atom_resource_alloc = layout.resource_alloc('atom-processing')
+        param_resource_alloc = layout.resource_alloc('param-processing')
+        param2_resource_alloc = layout.resource_alloc('param2-processing')
 
         atom_resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory before we reinit
         # Note: use *largest* host comm that we fill - so 'atom' comm, not 'param' comm
@@ -334,8 +335,8 @@ class DistributableForwardSimulator(_ForwardSimulator):
         assert(resource_alloc.host_comm is None), "Shared memory is not supported in time-dependent calculations (yet)"
 
         blkSize = layout.param_dimension_blk_sizes[0]
-        atom_resource_alloc = resource_alloc.sub_resource_alloc('atom-processing')
-        param_resource_alloc = resource_alloc.sub_resource_alloc('param-processing')
+        atom_resource_alloc = layout.resource_alloc('atom-processing')
+        param_resource_alloc = layout.resource_alloc('param-processing')
 
         host_param_slice = layout.host_param_slice
         global_param_slice = layout.global_param_slice

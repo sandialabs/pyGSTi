@@ -40,10 +40,10 @@ def optimize_wildcard_budget_neldermead(budget, L1weights, wildcard_objfn, two_d
 
         two_dlogl_percircuit = 2 * dlogl_percircuit
         two_dlogl = sum(two_dlogl_percircuit)
-        two_dlogl = layout.allsum_local_quantity('c', two_dlogl, objfn.resource_alloc)
+        two_dlogl = layout.allsum_local_quantity('c', two_dlogl)
 
         percircuit_penalty = sum(_np.clip(two_dlogl_percircuit - redbox_threshold, 0, None))
-        percircuit_penalty = layout.allsum_local_quantity('c', percircuit_penalty, objfn.resource_alloc)
+        percircuit_penalty = layout.allsum_local_quantity('c', percircuit_penalty)
 
         return max(0, two_dlogl - two_dlogl_threshold) + percircuit_penalty
 
@@ -184,7 +184,7 @@ def _get_critical_circuit_budgets(objfn, redbox_threshold):
 
     layout = objfn.layout
     num_circuits = len(layout.circuits)  # *local* circuits
-    critical_percircuit_budgets, shm = layout.allocate_local_array('c', 'd', objfn.resource_alloc, zero_out=True)
+    critical_percircuit_budgets, shm = layout.allocate_local_array('c', 'd', zero_out=True)
     raw_objfn = objfn.raw_objfn
 
     for i in range(num_circuits):
@@ -238,8 +238,7 @@ def _get_critical_circuit_budgets(objfn, redbox_threshold):
 
         critical_percircuit_budgets[i] = percircuit_budget
 
-    global_critical_percircuit_budgets = layout.allgather_local_array('c', critical_percircuit_budgets,
-                                                                      objfn.resource_alloc)
+    global_critical_percircuit_budgets = layout.allgather_local_array('c', critical_percircuit_budgets)
     _smt.cleanup_shared_ndarray(shm)
     return global_critical_percircuit_budgets
 
@@ -286,7 +285,7 @@ def _agg_dlogl(current_probs, objfn, two_dlogl_threshold):
     #Note: current_probs is a *local* quantity
     p, f, n, N = current_probs, objfn.freqs, objfn.counts, objfn.total_counts
     dlogl_elements = objfn.raw_objfn.terms(p, n, N, f)  # N * f * _np.log(f / p)
-    global_dlogl_sum = objfn.layout.allsum_local_quantity('c', float(_np.sum(dlogl_elements)), objfn.resource_alloc)
+    global_dlogl_sum = objfn.layout.allsum_local_quantity('c', float(_np.sum(dlogl_elements)))
     return 2 * global_dlogl_sum - two_dlogl_threshold
 
 
@@ -317,7 +316,7 @@ def _agg_dlogl_deriv(current_probs, objfn, percircuit_budget_deriv):
     assert(_np.all(agg_dlogl_deriv_wrt_percircuit_budgets <= 0)), \
         "Derivative of aggregate LLR wrt any circuit budget should be negative"
     local_deriv = _np.dot(agg_dlogl_deriv_wrt_percircuit_budgets, percircuit_budget_deriv)
-    return objfn.layout.allsum_local_quantity('c', local_deriv, objfn.resource_alloc, use_shared_mem=False)
+    return objfn.layout.allsum_local_quantity('c', local_deriv, use_shared_mem=False)
 
 
 def _agg_dlogl_hessian(current_probs, objfn, percircuit_budget_deriv):
@@ -389,7 +388,7 @@ def _agg_dlogl_hessian(current_probs, objfn, percircuit_budget_deriv):
                               percircuit_budget_deriv))   # (nW, nC)(nC)(nC, nW)
     #local_evals = _np.linalg.eigvals(local_H)
     #assert(_np.all(local_evals >= -1e-8))
-    return objfn.layout.allsum_local_quantity('c', local_H, objfn.resource_alloc, use_shared_mem=False)
+    return objfn.layout.allsum_local_quantity('c', local_H, use_shared_mem=False)
 
 
 def _proxy_agg_dlogl(x, tvds, fn0s, percircuit_budget_deriv, two_dlogl_threshold):
@@ -468,7 +467,7 @@ def optimize_wildcard_budget_cvxopt(budget, L1weights, objfn, two_dlogl_threshol
     global_percircuit_budget_deriv_cols = []
     for i in range(percircuit_budget_deriv.shape[1]):
         global_percircuit_budget_deriv_cols.append(
-            layout.allgather_local_array('c', percircuit_budget_deriv[:, i], objfn.resource_alloc))
+            layout.allgather_local_array('c', percircuit_budget_deriv[:, i]))
     global_percircuit_budget_deriv = _np.column_stack(global_percircuit_budget_deriv_cols)
 
     critical_percircuit_budgets = _get_critical_circuit_budgets(objfn, redbox_threshold)  # for *global* circuits
@@ -563,7 +562,7 @@ def optimize_wildcard_budget_cvxopt_zeroreg(budget, L1weights, objfn, two_dlogl_
     global_percircuit_budget_deriv_cols = []
     for i in range(percircuit_budget_deriv.shape[1]):
         global_percircuit_budget_deriv_cols.append(
-            layout.allgather_local_array('c', percircuit_budget_deriv[:, i], objfn.resource_alloc))
+            layout.allgather_local_array('c', percircuit_budget_deriv[:, i]))
     global_percircuit_budget_deriv = _np.column_stack(global_percircuit_budget_deriv_cols)
 
     critical_percircuit_budgets = _get_critical_circuit_budgets(objfn, redbox_threshold)
@@ -654,7 +653,7 @@ def optimize_wildcard_budget_barrier(budget, L1weights, objfn, two_dlogl_thresho
     global_percircuit_budget_deriv_cols = []
     for i in range(percircuit_budget_deriv.shape[1]):
         global_percircuit_budget_deriv_cols.append(
-            layout.allgather_local_array('c', percircuit_budget_deriv[:, i], objfn.resource_alloc))
+            layout.allgather_local_array('c', percircuit_budget_deriv[:, i]))
     global_percircuit_budget_deriv = _np.column_stack(global_percircuit_budget_deriv_cols)
 
     x0 = budget.to_vector()
@@ -926,7 +925,7 @@ def optimize_wildcard_budget_cvxopt_smoothed(budget, L1weights, objfn, two_dlogl
     global_percircuit_budget_deriv_cols = []
     for i in range(percircuit_budget_deriv.shape[1]):
         global_percircuit_budget_deriv_cols.append(
-            layout.allgather_local_array('c', percircuit_budget_deriv[:, i], objfn.resource_alloc))
+            layout.allgather_local_array('c', percircuit_budget_deriv[:, i]))
     global_percircuit_budget_deriv = _np.column_stack(global_percircuit_budget_deriv_cols)
 
     critical_percircuit_budgets = _get_critical_circuit_budgets(objfn, redbox_threshold)
@@ -948,8 +947,8 @@ def optimize_wildcard_budget_cvxopt_smoothed(budget, L1weights, objfn, two_dlogl
         dlogl_elements = objfn.raw_objfn.terms(p, nn, N, f)  # N * f * _np.log(f / p)
         local_fn0s[i] = 2 * _np.sum(dlogl_elements)
         local_tvds[i] = 0.5 * _np.sum(_np.abs(p - f))
-    tvds = layout.allgather_local_array('c', local_tvds, objfn.resource_alloc)
-    fn0s = layout.allgather_local_array('c', local_fn0s, objfn.resource_alloc)
+    tvds = layout.allgather_local_array('c', local_tvds)
+    fn0s = layout.allgather_local_array('c', local_fn0s)
 
     def F(x=None, z=None, debug=True):
         if z is None and x is None:

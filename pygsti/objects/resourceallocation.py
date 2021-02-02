@@ -89,7 +89,6 @@ class ResourceAllocation(object):
             self.profiler = _dummy_profiler
         self.distribute_method = distribute_method
         self.reset(allocated_memory)
-        self.sub_resource_allocs = {}  # dict of sub-resource-allocations for use with layouts
 
     def build_hostcomms(self):
         if self.comm is None:
@@ -150,31 +149,6 @@ class ResourceAllocation(object):
         """
         if self.host_comm is not None:
             self.host_comm.barrier()
-
-    def sub_resource_alloc(self, sub_alloc_name, empty_if_missing=True):
-        """
-        Retrieves the sub-resource-allocation object with the given name.
-
-        Sub-resource-allocations must be set manually by assigning values to
-        this resource allocation's `sub_resource_allocs` attribute (a dict).
-
-        Parameters
-        ----------
-        sub_alloc_name : str
-            The name to retrieve
-
-        empty_if_missing : bool
-            When `True`, an empty resource allocation object is returned when
-            `sub_alloc_name` doesn't exist within `self.sub_resource_allocs`.
-            Otherwise a `KeyError` is raised when this occurs.
-
-        Returns
-        -------
-        ResourceAllocation
-        """
-        if empty_if_missing and sub_alloc_name not in self.sub_resource_allocs:
-            return ResourceAllocation(None, self.mem_limit, self.profiler, self.distribute_method)
-        return self.sub_resource_allocs[sub_alloc_name]
 
     def copy(self):
         """
