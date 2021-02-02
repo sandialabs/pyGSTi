@@ -349,13 +349,14 @@ def depolarizing_errors_circuit_simulator(circuitlist, shots, errormodel, gate_t
                     percentdone += 1
                     print("  - Simulation {} percent complete.".format(percentdone))
 
+        # SS 2021-02-02: Checking whether this is still needed
         # Todo : this is a temp hack to get around a bug in Circuit.
-        if circuit[-1].name[0] == '#':
-            circuit = circuit.copy(editable=True)
-            circuit.delete_layers(-1)
-            circuit.delete_lines('*')
+        #if circuit[-1].name[0] == '#':
+        #    circuit = circuit.copy(editable=True)
+        #    circuit.delete_layers(-1)
+        #    circuit.delete_lines('*')
 
-        n = circuit.number_of_lines
+        n = circuit.num_lines
         depth = circuit.depth
 
         # Set up the CHP qubit labels: could be different CHP labels for each circuit.
