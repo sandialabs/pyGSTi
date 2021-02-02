@@ -129,6 +129,14 @@ class ResourceAllocation(object):
         assert(self.interhost_comm.rank == self.host_index)  # because of key= in Split call above
 
     @property
+    def comm_rank(self):
+        return self.comm.rank if (self.comm is not None) else 0
+
+    @property
+    def comm_size(self):
+        return self.comm.size if (self.comm is not None) else 1
+
+    @property
     def is_host_leader(self):
         """True if this processors is the rank-0 "leader" of its host (node).  False otherwise. """
         return bool(self.host_comm is None or self.host_comm.rank == 0)

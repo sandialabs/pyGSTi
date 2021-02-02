@@ -80,7 +80,8 @@ class DistributableForwardSimulator(_ForwardSimulator):
         global_param_slice = layout.global_param_slice
 
         for atom in layout.atoms:
-            assert(_slct.length(atom.element_slice) == atom.num_elements)
+            #assert(_slct.length(atom.element_slice) == atom.num_elements)  # for debugging
+
             if pr_array_to_fill is not None:
                 self._bulk_fill_probs_block(pr_array_to_fill[atom.element_slice], atom, atom_resource_alloc)
 

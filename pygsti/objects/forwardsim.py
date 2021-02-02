@@ -398,7 +398,7 @@ class ForwardSimulator(object):
             vdp = copa_layout.gather_local_array('ep', vdp)  # gather data onto rank-0 processor
             _smt.cleanup_shared_ndarray(vdp_shm)
 
-        if resource_alloc.comm is None or resource_alloc.comm.rank == 0:
+        if resource_alloc.comm_rank == 0:
             ret = _collections.OrderedDict()
             for elInds, c, outcomes in global_layout.iter_unique_circuits():
                 if isinstance(elInds, slice): elInds = _slct.indices(elInds)
@@ -446,7 +446,7 @@ class ForwardSimulator(object):
             vhp = copa_layout.gather_local_array('epp', vhp)  # gather data onto rank-0 processor
             _smt.cleanup_shared_ndarray(vhp_shm)
 
-        if resource_alloc.comm is None or resource_alloc.comm.rank == 0:
+        if resource_alloc.comm_rank == 0:
             ret = _collections.OrderedDict()
             for elInds, c, outcomes in global_layout.iter_unique_circuits():
                 if isinstance(elInds, slice): elInds = _slct.indices(elInds)

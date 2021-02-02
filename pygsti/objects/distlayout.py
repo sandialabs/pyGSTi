@@ -72,11 +72,12 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         #self.gather_mem_limit = None
         from mpi4py import MPI
 
-        comm = resource_alloc.comm if (resource_alloc is not None) else None
+        resource_alloc = _ResourceAllocation.cast(resource_alloc)
+        comm = resource_alloc.comm
         printer = _VerbosityPrinter.create_printer(verbosity, comm)
 
-        rank = 0 if (comm is None) else comm.Get_rank()
-        nprocs = 1 if (comm is None) else comm.Get_size()
+        rank = resource_alloc.comm_rank
+        nprocs = resource_alloc.comm_size
         nAtomComms = num_atom_processors
         nAtoms = len(create_atom_args)
         printer.log("*** Distributing %d atoms to %d atom-processing groups (%s cores) ***" %
@@ -86,7 +87,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
                                        % (nAtomComms, nAtoms))
         assert(nAtomComms <= nprocs), "Not enough processors (%d) to make nAtomComms=%d" % (nprocs, nAtomComms)
 
-        if (resource_alloc is not None) and (resource_alloc.host_comm is not None):
+        if resource_alloc.host_comm is not None:
             nHosts = len(resource_alloc.interhost_ranks)
             host_nprocs = resource_alloc.host_comm.Get_size()
             host_index = resource_alloc.host_index
@@ -502,7 +503,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
             param_fine_subcomm = None
 
         # save sub-resource-allocations
-        self._resource_alloc = _ResourceAllocation.cast(resource_alloc)
+        self._resource_alloc = resource_alloc
         self._sub_resource_allocs = {}  # dict of sub-resource-allocations for use with this layout
         self._sub_resource_allocs['atom-processing'] = _ResourceAllocation(
             atom_processing_subcomm, resource_alloc.mem_limit, resource_alloc.profiler,

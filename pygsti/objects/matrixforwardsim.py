@@ -1177,7 +1177,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         mem_limit = resource_alloc.mem_limit - resource_alloc.allocated_memory \
             if (resource_alloc.mem_limit is not None) else None  # *per-processor* memory limit
         printer = _VerbosityPrinter.create_printer(verbosity, comm)
-        nprocs = 1 if comm is None else comm.Get_size()
+        nprocs = resource_alloc.comm_size
         num_params = derivative_dimension if (derivative_dimension is not None) else self.model.num_params
         C = 1.0 / (1024.0**3)
 

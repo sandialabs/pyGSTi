@@ -1510,8 +1510,8 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         # max_nelements = max([self.layout.atoms[i].num_elements for i in my_atom_indices])
         # probs_mem = _np.empty(max_nelements, 'd')
 
-        rank = self.resource_alloc.comm.Get_rank() if (self.resource_alloc.comm is not None) else 0
-        sub_rank = atom_resource_alloc.comm.Get_rank() if (atom_resource_alloc.comm is not None) else 0
+        rank = self.resource_alloc.comm_rank
+        sub_rank = atom_resource_alloc.comm_rank
 
         with self.resource_alloc.temporarily_track_memory(my_nparams1 * my_nparams2):  # (atom_hessian)
             # Each atom-processor (atom_resource_alloc) contains processors assigned to *disjoint*
@@ -1547,7 +1547,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
                     _np.clip(probs, prob_clip_interval[0], prob_clip_interval[1], out=probs)
 
                 k, kmax = 0, len(slicetup_list)
-                blk_rank = param2_resource_alloc.comm.rank if (param2_resource_alloc.comm is not None) else 0
+                blk_rank = param2_resource_alloc.comm_rank
                 for (slice1, slice2, hprobs, dprobs12) in self.model.sim._bulk_hprobs_by_block_singleatom(
                         atom, slicetup_list, True, param2_resource_alloc):
                     local_slice1 = _slct.shift(slice1, -global_param_slice.start)  # indices into atom_hessian
@@ -1608,7 +1608,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
             self.resource_alloc.gather(final_hessian, final_hessian_blk, (global_param_slice, global_param2_slice),
                                        unit_ralloc=interatom_ralloc)
 
-            if self.resource_alloc.comm is None or self.resource_alloc.comm.rank == 0:
+            if self.resource_alloc.comm_rank == 0:
                 final_hessian_cpy = final_hessian.copy()  # so we don't return shared mem...
             else:
                 final_hessian_cpy = None

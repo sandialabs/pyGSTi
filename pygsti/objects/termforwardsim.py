@@ -318,7 +318,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         #MEM debug_prof.print_memory("CreateLayout1", True)
 
         printer = _VerbosityPrinter.create_printer(verbosity, comm)
-        nprocs = 1 if comm is None else comm.Get_size()
+        nprocs = resource_alloc.comm_size
         num_params = derivative_dimension if (derivative_dimension is not None) else self.model.num_params
         polynomial_vindices_per_int = _Polynomial._vindices_per_int(num_params)
         C = 1.0 / (1024.0**3)
@@ -647,12 +647,12 @@ class TermForwardSimulator(_DistributableForwardSimulator):
 
         #if comm is None or comm.Get_rank() == 0:
         comm = resource_alloc.comm
-        rank = comm.Get_rank() if comm is not None else 0
+        rank = resource_alloc.comm_rank
         nC = len(layout_atom.expanded_circuits)
         max_npaths = self.max_paths_per_outcome * layout_atom.num_elements
 
         if rank == 0:
-            rankStr = "Rank%d: " % comm.Get_rank() if comm is not None else ""
+            rankStr = "Rank%d: " % rank if comm is not None else ""
             print(("%sPruned path-integral: kept %d paths (%.1f%%) w/magnitude %.4g "
                    "(target=%.4g, #circuits=%d, #failed=%d)") %
                   (rankStr, tot_npaths, 100 * tot_npaths / max_npaths, tot_achieved_sopm, tot_target_sopm,
