@@ -352,8 +352,8 @@ class FOGIGraphDiagram(FOGIDiagram):
         edge_js_lines = []
         table_html = {}
         long_table_html = {}
-        MIN_POWER = 1  # 10^-MIN_POWER is the largest value end of the spectrum
-        MAX_POWER = 3  # 10^-MAX_POWER is the smallest value end of the spectrum
+        MIN_POWER = 1.5  # 10^-MIN_POWER is the largest value end of the spectrum
+        MAX_POWER = 3.5  # 10^-MAX_POWER is the smallest value end of the spectrum
         color_mode = self.color_mode
 
         def _normalize(v):
@@ -436,8 +436,8 @@ class FOGIGraphDiagram(FOGIDiagram):
 
             label = str(op_set[0])
             total = info['total']
-            coh = total['H']['errgen_angle'] if ('H' in total) else None
-            sto = total['S']['error_rate'] if ('S' in total) else None
+            coh = total['H']['errgen_angle'] if ('H' in total) else 0.0
+            sto = total['S']['error_rate'] if ('S' in total) else 0.0
             tcolor = textcolors[int((abs(coh) + sto) > val_threshold)]
             #print("VAL = ",(abs(coh) + sto),"Threshold = ",val_threshold)
 
@@ -449,17 +449,17 @@ class FOGIGraphDiagram(FOGIDiagram):
                     back_color = _node_HScolor(coh, sto); border_color = "rgb(100, 100, 100)"
                 elif color_mode == "separate":
                     back_color = _node_Scolor(sto); border_color = _node_Hcolor(coh)
-                if self.numerical_labels: label += "\\n<i>H: %.3g</i>\\n<i>S: %.3g</i>" % (coh, sto)
+                if self.numerical_labels: label += "\\n<i>H: %.1f%%</i>\\n<i>S: %.1f%%</i>" % (100 * coh, 100 * sto)
             elif 'H' in total:
                 title = "%.3g" % coh
                 back_color = border_color = _node_Hcolor(coh)
                 if color_mode == "mix_wborder": border_color = "rgb(100, 100, 100)"
-                if self.numerical_labels: label += "\\n<i>%.3g</i>" % coh
+                if self.numerical_labels: label += "\\n<i>%.1f%%</i>" % (100 * coh)
             elif 'S' in total:
                 title = "%.3g" % sto
                 back_color = border_color = _node_Scolor(sto)
                 if color_mode == "mix_wborder": border_color = "rgb(100, 100, 100)"
-                if self.numerical_labels: label += "\\n<i>%.3g</i>" % sto
+                if self.numerical_labels: label += "\\n<i>%.1f%%</i>" % (100 * sto)
             else:
                 raise ValueError("Invalid types in total dict: %s" % str(total.keys()))
 
@@ -524,11 +524,11 @@ class FOGIGraphDiagram(FOGIDiagram):
                     go_angle = total['H']['go_angle']
                     err_rate = total['S']['error_rate']
                     if abs(go_angle) > self.edge_threshold and err_rate > self.edge_threshold:
-                        label += "H: %.3f\\nS: %.3f" % (go_angle, err_rate)
+                        label += "H: %.1f%%\\nS: %.1f%%" % (100 * go_angle, 100 * err_rate)
                     elif abs(go_angle) > self.edge_threshold:
-                        label += "%.3f" % go_angle
+                        label += "%.1f%%" % (100 * go_angle)
                     elif err_rate > self.edge_threshold:
-                        label += "%.3f" % err_rate
+                        label += "%.1f%%" % (100 * err_rate)
 
                     if abs(go_angle) > self.edge_threshold:
                         edge_labels = {op_label: total['H'][op_label] for op_label in op_set}
@@ -540,7 +540,7 @@ class FOGIGraphDiagram(FOGIDiagram):
                 if color_mode == "mix_wborder": border_color = "rgb(100, 100, 100)"
                 #if self.numerical_labels: label += "%s" % _dstr(total['H'], r'\n')  # show entire dict
                 if self.numerical_labels:
-                    label += "%.3f" % total['H']['go_angle']
+                    label += "%.1f%%" % (100 * total['H']['go_angle'])
                     edge_labels = {op_label: total['H'][op_label] for op_label in op_set}
             elif 'S' in total:
                 title = "%s" % _dstr(total['S'])
@@ -554,7 +554,7 @@ class FOGIGraphDiagram(FOGIDiagram):
 
             node_js_lines.append(('{ id: %d, label: "%s", group: "%s", title: "%s", x: %d, y: %d,'
                                   'color: {background: "%s", border: "%s"}, font: {size: %d, '
-                                  'strokeWidth: 3, strokeColor: "white"} }') %
+                                  'strokeWidth: 5, strokeColor: "white"} }') %
                                  (next_node_id, label, "relational", title, x, y, back_color, border_color,
                                   self.edgenode_fontsize))
             table_html[next_node_id] = _make_table(info['hs_support_table'], "Qubits",
@@ -563,7 +563,7 @@ class FOGIGraphDiagram(FOGIDiagram):
                                                         "FOGI quantities for " + ", ".join(map(str, op_set)))
             #link to gate-nodes
             for op_label in op_set:
-                label_str = (', label: "%.3f"' % edge_labels[op_label]) if edge_labels else ""
+                label_str = (', label: "%.1f%%"' % (100 * edge_labels[op_label])) if edge_labels else ""
                 edge_js_lines.append('{ from: %d, to: %d, value: %.4f, color: {color: "%s"}, dashes: %s}' % (
                     next_node_id, node_ids[op_label], mag, mix_color, 'true' if info['dependent'] else 'false'))
                 edge_js_lines.append('{ from: %d, to: %d, dashes: %s %s }' % (
@@ -993,9 +993,10 @@ function draw() {{
           length: {springlength},
           width: 2,
           color: {{color: "gray", highlight: "black"}},
-          scaling: {{min: 4, max: 10, label: {{enabled: false}} }},
+          scaling: {{min: 6, max: 14, label: {{enabled: false}} }}, // was  4 -> 10
           font: {{
-              size: {edge_fontsize}
+              size: {edge_fontsize},
+              color: "rgb(100, 100, 100)",
           }},
       }},
       groups: {{
