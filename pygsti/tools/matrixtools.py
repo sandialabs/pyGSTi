@@ -285,13 +285,38 @@ def columns_are_orthogonal(m, tol=1e-7, debug=True):
     #DEBUG
     if debug:
         for i in range(check.shape[0]):
-            for j in range(i+1, check.shape[1]):
-                if abs(check[i,j]) > 1e-5:
+            for j in range(i + 1, check.shape[1]):
+                if abs(check[i, j]) > 1e-5:
                     print("NON-ORTHOGONAL nice nullspace!")
                     import bpdb; bpdb.set_trace()
                     stop_here = True
 
     return bool(_np.linalg.norm(check) / check.size < tol)
+
+
+def columns_are_orthonormal(m, tol=1e-7):
+    """
+    Checks whether a matrix contains orthogonal columns.
+
+    The columns do not need to be normalized.  In the
+    complex case, two vectors v and w are considered orthogonal
+    if `dot(v.conj(), w) == 0`.
+
+    Parameters
+    ----------
+    m : numpy.ndarray
+        The matrix to check.
+
+    tol : float, optional
+        Tolerance for checking whether dot products are zero.
+
+    Returns
+    -------
+    bool
+    """
+    if m.size == 0: return True  # boundary case
+    check = _np.dot(m.conj().T, m)
+    return bool(_np.allclose(check, _np.identity(check.shape[0], 'd'), atol=tol))
 
 
 def pinv_of_matrix_with_orthogonal_columns(m):

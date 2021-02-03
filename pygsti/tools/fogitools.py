@@ -12,6 +12,7 @@ Utility functions for computing and working with first-order-gauge-invariant (FO
 
 import numpy as _np
 
+
 from . import matrixtools as _mt
 from . import optools as _ot
 
@@ -277,6 +278,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                         #inv_diff_gauge_action2 = _np.concatenate((invA, -invB), axis=1).T
                         #test = _mt.columns_are_orthogonal(inv_diff_gauge_action2)
 
+                        intersection_space /= _np.sqrt(2)  # HACK - factor of two seems to be lurking in here
                         local_fogi_dirs = _np.dot(inv_diff_gauge_action, intersection_space)
                         #assert(_mt.columns_are_orthogonal(local_fogi_dirs))  # NOT always true...
 
@@ -402,6 +404,104 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
 
     return (fogi_dirs, fogi_names, fogi_abbrev_names, dependent_vec_indices,
             fogi_gaugespace_dirs, op_errgen_indices)
+
+
+def compute_maximum_relational_errors(primitive_op_labels, errorgen_coefficients, gauge_action_matrices,
+                                      errorgen_coefficient_labels, gauge_elemgen_labels, model_dim):
+    """ TODO: docstring """
+
+    gaugeSpaceDim = len(gauge_elemgen_labels)
+    errorgen_vec = {}
+    for op_label in primitive_op_labels:
+        errgen_dict = errorgen_coefficients[op_label]
+        errorgen_vec[op_label] = _np.array([errgen_dict.get(eglbl, 0) for eglbl in errorgen_coefficient_labels])
+
+    def fix_gauge_using_op(op_label, allowed_gauge_directions, available_op_labels, running_best_gauge_vec,
+                           best_gauge_vecs, debug, op_label_to_compute_max_for):
+        if op_label is not None:  # initial iteration gives 'None' as op_label to kick things off
+            ga = gauge_action_matrices[op_label]
+
+            # get gauge directions that commute with gate:
+            commutant = _mt.nullspace(ga)  # columns = *gauge* elem gen directions - these can't be fixed by this op
+            assert(_mt.columns_are_orthonormal(commutant))
+            #complement = _mt.nullspace(commutant.T)  # complement of commutant - where op is faithful rep
+
+            # take intersection btwn allowed_gauge_directions and complement
+            best_gauge_dir = - _np.dot(_np.linalg.pinv(ga), errorgen_vec[op_label])
+            coeffs = _np.dot(_np.linalg.pinv(allowed_gauge_directions), best_gauge_dir)  # project onto Q (allowed dirs)
+            projected_best_gauge_dir = _np.dot(allowed_gauge_directions, coeffs)
+
+            # add projected vec to running "best_gauge_vector"
+            running_best_gauge_vec = running_best_gauge_vec.copy()
+            running_best_gauge_vec += projected_best_gauge_dir
+
+            #update allowed gauge directions by taking intersection with commutant
+            allowed_gauge_directions = _mt.intersection_space(allowed_gauge_directions, commutant,
+                                                              use_nice_nullspace=False)
+            assert(_mt.columns_are_orthogonal(allowed_gauge_directions))
+            for i in range(allowed_gauge_directions.shape[1]):
+                allowed_gauge_directions[:, i] /= _np.linalg.norm(allowed_gauge_directions[:, i])
+            assert(_mt.columns_are_orthonormal(allowed_gauge_directions))
+
+            available_op_labels.remove(op_label)
+
+        if allowed_gauge_directions.shape[1] > 0:  # if there are still directions to fix, recurse
+            assert(len(available_op_labels) > 0), "There are still unfixed gauge directions but we've run out of gates!"
+            for oplbl in available_op_labels:
+                fix_gauge_using_op(oplbl, allowed_gauge_directions, available_op_labels.copy(),
+                                   running_best_gauge_vec, best_gauge_vecs, debug + [oplbl],
+                                   op_label_to_compute_max_for)
+        else:
+            # we've entirely fixed the gauge - running_best_gauge_vec is actually a best gauge vector now.
+            errgen_shift = _np.dot(gauge_action_matrices[op_label_to_compute_max_for], running_best_gauge_vec)
+            #commutant = _mt.nullspace(ga)  # columns = *gauge* elem gen directions - these can't be fixed by this op
+            #assert(_mt.columns_are_orthonormal(commutant))
+            #complement = _mt.nullspace(commutant.T)  # complement of commutant - where op is faithful rep
+
+            ga = gauge_action_matrices[op_label_to_compute_max_for]
+            errgen_vec = errorgen_vec[op_label_to_compute_max_for] + errgen_shift
+            errgen_vec = _np.dot(_np.dot(ga, _np.linalg.pinv(ga)), errgen_vec)
+
+            jangle = _mt.jamiolkowski_angle(_create_errgen_op(errgen_vec, gauge_basis_mxs))
+            print("From ", debug, " jangle = ", jangle)
+            best_gauge_vecs.append(running_best_gauge_vec)
+
+    def _create_errgen_op(vec, list_of_mxs):
+        return sum([c * mx for c, mx in zip(vec, list_of_mxs)])
+
+    from ..objects import Basis as _Basis
+    ret = {}
+    normalized_pauli_basis = _Basis.cast('pp', model_dim)
+    scale = model_dim**(0.25)  # to change to standard pauli-product matrices
+    gauge_basis_mxs = [mx * scale for mx in normalized_pauli_basis.elements[1:]]
+
+    for op_label_to_compute_max_for in primitive_op_labels:
+
+        print("Computing for", op_label_to_compute_max_for)
+        running_gauge_vec = _np.zeros(gaugeSpaceDim, 'd')
+        initial_allowed_gauge_directions = _np.identity(gaugeSpaceDim, 'd')
+        resulting_best_gauge_vecs = []
+
+        available_labels = set(primitive_op_labels)
+        #available_labels.remove(op_label_to_compute_max_for)
+        fix_gauge_using_op(None, initial_allowed_gauge_directions, available_labels,
+                           running_gauge_vec, resulting_best_gauge_vecs, debug=[],
+                           op_label_to_compute_max_for=op_label_to_compute_max_for)
+
+        jamiol_angles = []
+        ga = gauge_action_matrices[op_label_to_compute_max_for]
+        projector = _np.dot(ga, _np.linalg.pinv(ga))
+        for gauge_vec in resulting_best_gauge_vecs:
+            errgen_shift = _np.dot(gauge_action_matrices[op_label_to_compute_max_for], gauge_vec)
+            errgen_vec = errorgen_vec[op_label_to_compute_max_for] + errgen_shift
+            errgen_vec = _np.dot(projector, errgen_vec)  # project onto non-local space
+            jamiol_angles.append(_mt.jamiolkowski_angle(_create_errgen_op(errgen_vec, gauge_basis_mxs)))
+
+        max_relational_jangle = max(jamiol_angles)
+        print(max_relational_jangle)
+        ret[op_label_to_compute_max_for] = max_relational_jangle
+    return ret
+
 
 #An alternative but inferior algorithm for constructing FOGI quantities: Keep around for checking/reference or REMOVE?
 #def _compute_fogi_via_nullspaces(self, primitive_op_labels, ham_basis, other_basis, other_mode="all",
