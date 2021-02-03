@@ -2,7 +2,9 @@
   pyGSTi 0.9
 ********************************************************************************
 
-[![Build Status](https://travis-ci.org/pyGSTio/pyGSTi.svg?branch=master)](https://travis-ci.org/pyGSTio/pyGSTi)
+![master build](https://github.com/pyGSTio/pyGSTi/workflows/Build%20and%20run%20tests/badge.svg?branch=master)
+![develop build](https://github.com/pyGSTio/pyGSTi/workflows/Build%20and%20run%20tests/badge.svg?branch=develop)
+![beta build](https://github.com/pyGSTio/pyGSTi/workflows/Build%20and%20run%20tests/badge.svg?branch=develop)
 
 pyGSTi
 ------

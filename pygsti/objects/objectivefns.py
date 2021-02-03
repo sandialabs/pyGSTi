@@ -32,7 +32,7 @@ from .resourceallocation import ResourceAllocation as _ResourceAllocation
 def _objfn(objfn_cls, model, dataset, circuits=None,
            regularization=None, penalties=None, op_label_aliases=None,
            comm=None, mem_limit=None, method_names=None, array_types=None,
-           mdc_store=None, **addl_args):
+           mdc_store=None, verbosity=0, **addl_args):
     """
     A convenience function for creating an objective function.
 
@@ -81,6 +81,9 @@ def _objfn(objfn_cls, model, dataset, circuits=None,
         An object that bundles cached quantities along with a given model, dataset, and circuit
         list.  If given, `model` and `dataset` and `circuits` should be set to None.
 
+    verbosity : int or VerbosityPrinter, optional
+        Amount of information printed to stdout.
+
     Returns
     -------
     ObjectiveFunction
@@ -96,7 +99,7 @@ def _objfn(objfn_cls, model, dataset, circuits=None,
 
         resource_alloc = _ResourceAllocation(comm, mem_limit)
         ofn = objfn_cls.create_from(model, dataset, circuits, regularization, penalties,
-                                    resource_alloc, verbosity=0,
+                                    resource_alloc, verbosity=verbosity,
                                     method_names=method_names if (method_names is not None) else ('fn',),
                                     array_types=array_types if (array_types is not None) else (),
                                     **addl_args)
@@ -843,7 +846,7 @@ class ModelDatasetCircuitsStore(object):
         # because it understands how to make this layout amenable to fast computation.
         if precomp_layout is None:
             self.layout = model.sim.create_layout(bulk_circuit_list, dataset, self.resource_alloc,
-                                                  array_types)  # a CircuitProbabilityArrayLayout
+                                                  array_types, verbosity=verbosity)  # a CircuitProbabilityArrayLayout
         else:
             self.layout = precomp_layout
         self.array_types = array_types
@@ -976,7 +979,6 @@ class EvaluatedModelDatasetCircuitsStore(ModelDatasetCircuitsStore):
         #Note: don't add any tracked memory to self.resource_alloc, as none is used yet.
         self.probs = None
         self.dprobs = None
-        self.hprobs = None
         self.jac = None
         self.v = None  # for time dependence - rename to objfn_terms or objfn_lsvec?
 
@@ -1547,6 +1549,9 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         max_nelements = max([self.layout.atoms[i].num_elements for i in my_atom_indices])
         probs_mem = _np.empty(max_nelements, 'd')
 
+        rank = self.resource_alloc.comm.Get_rank() if (self.resource_alloc.comm is not None) else 0
+        sub_rank = my_subcomm.Get_rank() if (my_subcomm is not None) else 0
+
         with self.resource_alloc.temporarily_track_memory(self.nparams * self.nparams):  # 'PP' (final_hessian)
             #  Allocate persistent memory
             final_hessian = _np.zeros((nparams, nparams), 'd')
@@ -1557,6 +1562,12 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
             for atom_index in my_atom_indices:
                 atom = self.layout.atoms[atom_index]
                 sub_nelements = atom.num_elements
+
+                if self.raw_objfn.printer.verbosity > 3 or (self.raw_objfn.printer.verbosity == 3 and sub_rank == 0):
+                    isub = my_atom_indices.index(atom_index)
+                    print("rank %d: %gs: beginning sub-layout %d/%d, sub-layout-size = %d"
+                          % (rank, _time.time() - tm, isub + 1, len(my_atom_indices), atom.num_elements))
+                    _sys.stdout.flush()
 
                 # Create views into pre-allocated memory
                 probs = probs_mem[0:sub_nelements]
@@ -1593,12 +1604,13 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
                 k, kmax = 0, len(my_slicetup_list)
                 for (slice1, slice2, hprobs, dprobs12) in self.model.sim._bulk_hprobs_by_block_singleatom(
                         atom, my_slicetup_list, True, blk_resource_alloc, self.layout.gather_mem_limit):
-                    rank = self.resource_alloc.comm.Get_rank() if (self.resource_alloc.comm is not None) else 0
+                    blk_rank = blk_comm.Get_rank() if (blk_comm is not None) else 0
 
-                    if self.raw_objfn.printer.verbosity > 3 or (self.raw_objfn.printer.verbosity == 3 and rank == 0):
+                    if self.raw_objfn.printer.verbosity > 3 or \
+                       (self.raw_objfn.printer.verbosity == 3 and blk_rank == 0):
                         isub = my_atom_indices.index(atom_index)
                         print("rank %d: %gs: block %d/%d, sub-layout %d/%d, sub-layout-size = %d"
-                              % (rank, _time.time() - tm, k, kmax, isub,
+                              % (rank, _time.time() - tm, k + 1, kmax, isub,
                                  len(my_atom_indices), atom.num_elements))
                         _sys.stdout.flush(); k += 1
 
@@ -4044,7 +4056,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
     @classmethod
     def _create_mdc_store(cls, model, dataset, circuits, resource_alloc,
-                          method_names=('fn',), array_types=()):
+                          method_names=('fn',), array_types=(), verbosity=0):
         # Note: array_types should not include the types used by the created objective function (store) or by the
         # intermediate variables in `method_names` methods.  It is for *additional* arrays, usually the intermediates
         # used within an optimization or other computation that uses this objective function.
@@ -4055,12 +4067,13 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         #  2a) memory taken by (this) store itself - mirrors allocations in __init__ below.
         #  2b) intermediate memory allocated by methods of the created object (possibly an objective function)
         array_types += cls.compute_array_types(method_names, model.sim)
-        return ModelDatasetCircuitsStore(model, dataset, circuits, resource_alloc, array_types)
+        return ModelDatasetCircuitsStore(model, dataset, circuits, resource_alloc, array_types, None, verbosity)
 
     @classmethod
     def create_from(cls, raw_objfn, model, dataset, circuits, resource_alloc=None, penalties=None,
                     verbosity=0, method_names=('fn',), array_types=()):
-        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names, array_types)
+        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names,
+                                          array_types, verbosity)
         return cls(raw_objfn, mdc_store, penalties, verbosity)
 
     @classmethod
@@ -4070,9 +4083,10 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         if method_name == 'terms': return fsim._array_types_for_method('bulk_fill_probs') + ('E',)
         if method_name == 'dlsvec': return fsim._array_types_for_method('bulk_fill_dprobs') + ('E', 'E')
         if method_name == 'dterms': return fsim._array_types_for_method('bulk_fill_dprobs')
-        if method_name == 'hessian_brute': return fsim._array_types_for_method('bulk_fill_hprobs') + ('E', 'E', 'EPP')
+        if method_name == 'hessian_brute': return fsim._array_types_for_method('bulk_fill_hprobs') + ('E', 'E',
+                                                                                                      'EPP', 'EPP')
         if method_name == 'hessian': return fsim._array_types_for_method('_bulk_hprobs_by_block_singleatom') + ('PP',)
-        if method_name == 'approximate_hessian': return fsim._array_types_for_method('bulk_fill_dprobs') + ('E', 'EPP')
+        if method_name == 'approximate_hessian': return fsim._array_types_for_method('bulk_fill_dprobs') + ('E', 'PP')
         return super()._array_types_for_method(method_name, fsim)
 
     @classmethod
@@ -4081,10 +4095,9 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         # (not-intermediate). These are filled in other routines and *not* included in
         # the output of _array_types_for_method since these are *not* allocated in methods.
         array_types = ('E',) * 4  # self.probs + 3x add_count_vectors
-        if any([x in ('dlsvec', 'dterms', 'dpercircuit', 'jacobian', 'approximate_hessian') for x in method_names]):
+        if any([x in ('dlsvec', 'dterms', 'dpercircuit', 'jacobian', 'approximate_hessian', 'hessian')
+                for x in method_names]):
             array_types += ('EP',)
-        if any([x in ('hessian',) for x in method_names]):
-            array_types += ('EPP',)
 
         # array types for methods
         for method_name in method_names:
@@ -4105,15 +4118,10 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         self.resource_alloc.add_tracked_memory(self.nelements)  # 'E' - see compute_array_types above
         self.probs = _np.empty(self.nelements, 'd')
         self.jac = None
-        self.hprobs = None
 
         if 'EP' in self.array_types:
             self.resource_alloc.add_tracked_memory((self.nelements + self.ex) * self.nparams)  # ~ 'EP'
             self.jac = _np.empty((self.nelements + self.ex, self.nparams), 'd')
-
-        if 'EPP' in self.array_types:
-            self.resource_alloc.add_tracked_memory(self.nelements * self.nparams * self.nparams)
-            self.hprobs = _np.empty((self.nelements, self.nparams, self.nparams), 'd')
 
         self.maxCircuitLength = max([len(x) for x in self.circuits])
         self.add_count_vectors()  # allocates 3x 'E' arrays
@@ -4125,7 +4133,8 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
     #Model-based regularization and penalty support functions
     def set_penalties(self, regularize_factor=0, cptp_penalty_factor=0, spam_penalty_factor=0,
-                      forcefn_grad=None, shift_fctr=100, prob_clip_interval=(-10000, 1000)):
+                      errorgen_penalty_factor=0, forcefn_grad=None, shift_fctr=100,
+                      prob_clip_interval=(-10000, 1000)):
 
         """
         Set penalty terms.
@@ -4146,6 +4155,11 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             The prefactor of a term that penalizes invalid SPAM operations.  Specifically, adds a
             `spam_penalty_factor * sqrt(tracenorm(spam_op))` penalty where `spam_op` runs over
             each state preparation's density matrix and each effect vector's matrix.
+
+        errorgen_penalty_factor : float, optional
+            The prefactor of a term that penalizes nonzero error generators.  Specifically, adds a
+            `errorgen_penalty_factor * sqrt(sum_i(|errorgen_coeff_i|))` penalty where the sum ranges
+            over all the error generator coefficients of each model operation.
 
         forcefn_grad : numpy.ndarray, optional
             The gradient of a "forcing function" that is added to the objective function.  This is
@@ -4175,6 +4189,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         self.regularize_factor = regularize_factor
         self.cptp_penalty_factor = cptp_penalty_factor
         self.spam_penalty_factor = spam_penalty_factor
+        self.errorgen_penalty_factor = errorgen_penalty_factor
         self.forcefn_grad = forcefn_grad
 
         self.prob_clip_interval = prob_clip_interval  # not really a "penalty" per se, but including it as one
@@ -4192,6 +4207,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         if self.regularize_factor != 0: ex += self.nparams
         if self.cptp_penalty_factor != 0: ex += _cptp_penalty_size(self.model)
         if self.spam_penalty_factor != 0: ex += _spam_penalty_size(self.model)
+        if self.errorgen_penalty_factor != 0: ex += _errorgen_penalty_size(self.model)
 
         return ex
 
@@ -4226,7 +4242,12 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             spam_penalty_vec = _spam_penalty(self.model, self.spam_penalty_factor, self.opBasis)
         else: spam_penalty_vec = []  # so concatenate ignores
 
-        return _np.concatenate((forcefn_penalty, paramvec_norm, cp_penalty_vec, spam_penalty_vec))
+        if self.errorgen_penalty_factor > 0:
+            errorgen_penalty_vec = _errorgen_penalty(self.model, self.errorgen_penalty_factor)
+        else:
+            errorgen_penalty_vec = []
+
+        return _np.concatenate((forcefn_penalty, paramvec_norm, cp_penalty_vec, spam_penalty_vec, errorgen_penalty_vec))
 
     def _penaltyvec(self, paramvec):
         """
@@ -4279,6 +4300,10 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         if self.spam_penalty_factor > 0:
             off += _spam_penalty_jac_fill(
                 lspenaltyvec_jac[off:, :], self.model, self.spam_penalty_factor, self.opBasis)
+
+        if self.errorgen_penalty_factor > 0:
+            off += _errorgen_penalty_jac_fill(
+                lspenaltyvec_jac[off:, :], self.model, self.errorgen_penalty_factor)
 
         assert(off == self.ex)
 
@@ -4759,10 +4784,11 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
         if paramvec is not None: self.model.from_vector(paramvec)
         dprobs = self.jac[0:self.nelements, :]  # avoid mem copying: use jac mem for dprobs
+        hprobs = _np.empty((self.nelements, self.nparams, self.nparams), 'd')
 
         # 'E', 'EPP' (dg_dprobs, d2g_dprobs2, temporary variable dprobs_dp2 * dprobs_dp1 )
         with self.resource_alloc.temporarily_track_memory(2 * self.nelements + self.nelements * self.nparams**2):
-            self.model.sim.bulk_fill_hprobs(self.hprobs, self.layout, self.probs, dprobs, None, self.resource_alloc)
+            self.model.sim.bulk_fill_hprobs(hprobs, self.layout, self.probs, dprobs, None, self.resource_alloc)
             if self.prob_clip_interval is not None:
                 _np.clip(self.probs, self.prob_clip_interval[0], self.prob_clip_interval[1], out=self.probs)
 
@@ -4771,9 +4797,9 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             dprobs_dp1 = dprobs[:, :, None]  # (nelements,N,1)
             dprobs_dp2 = dprobs[:, None, :]  # (nelements,1,N)
 
-            #hessian = d2g_dprobs2 * dprobs_dp2 * dprobs_dp1 + dg_dprobs * self.hprobs
+            #hessian = d2g_dprobs2 * dprobs_dp2 * dprobs_dp1 + dg_dprobs * hprobs
             # do the above line in a more memory efficient way:
-            hessian = self.hprobs
+            hessian = hprobs
             hessian *= dg_dprobs
             hessian += d2g_dprobs2 * dprobs_dp2 * dprobs_dp1
 
@@ -4808,18 +4834,20 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         if paramvec is not None: self.model.from_vector(paramvec)
         dprobs = self.jac[0:self.nelements, :]  # avoid mem copying: use jac mem for dprobs
 
-        # 'E', 'EPP' (d2g_dprobs2, temporary variable dprobs_dp2 * dprobs_dp1 )
-        with self.resource_alloc.temporarily_track_memory(self.nelements + self.nelements * self.nparams**2):
+        # 'E', 'PP' (d2g_dprobs2, einsum result )
+        with self.resource_alloc.temporarily_track_memory(self.nelements + self.nparams**2):
             self.model.sim.bulk_fill_dprobs(dprobs, self.layout, self.probs, self.resource_alloc)
             if self.prob_clip_interval is not None:
                 _np.clip(self.probs, self.prob_clip_interval[0], self.prob_clip_interval[1], out=self.probs)
 
-            d2g_dprobs2 = self.raw_objfn.hterms(self.probs, self.counts, self.total_counts, self.freqs)[:, None, None]
-            dprobs_dp1 = dprobs[:, :, None]  # (nelements,N,1)
-            dprobs_dp2 = dprobs[:, None, :]  # (nelements,1,N)
+            d2g_dprobs2 = self.raw_objfn.hterms(self.probs, self.counts, self.total_counts, self.freqs)  # [:,None,None]
+            #dprobs_dp1 = dprobs[:, :, None]  # (nelements,N,1)
+            #dprobs_dp2 = dprobs[:, None, :]  # (nelements,1,N)
 
-            hessian = d2g_dprobs2 * dprobs_dp2 * dprobs_dp1
-        return _np.sum(hessian, axis=0)  # sum over operation sequences and spam labels => (N)
+            #hessian = d2g_dprobs2 * dprobs_dp2 * dprobs_dp1  # this creates a huge array - do this instead:
+            hessian = _np.einsum('a,ab,ac->bc', d2g_dprobs2, dprobs, dprobs)
+
+        return hessian
 
     def hessian(self, paramvec=None):
         """
@@ -4931,7 +4959,8 @@ class Chi2Function(TimeIndependentMDCObjectiveFunction):
     @classmethod
     def create_from(cls, model, dataset, circuits, regularization=None, penalties=None, resource_alloc=None,
                     name=None, description=None, verbosity=0, method_names=('fn',), array_types=()):
-        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names, array_types)
+        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names,
+                                          array_types, verbosity)
         return cls(mdc_store, regularization, penalties, name, description, verbosity)
 
     def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0):
@@ -4989,7 +5018,8 @@ class ChiAlphaFunction(TimeIndependentMDCObjectiveFunction):
     def create_from(cls, model, dataset, circuits, regularization=None, penalties=None,
                     resource_alloc=None, name=None, description=None, verbosity=0,
                     method_names=('fn',), array_types=(), alpha=1):
-        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names, array_types)
+        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names,
+                                          array_types, verbosity)
         return cls(mdc_store, regularization, penalties, name, description, verbosity, alpha)
 
     def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0,
@@ -5045,7 +5075,8 @@ class FreqWeightedChi2Function(TimeIndependentMDCObjectiveFunction):
     def create_from(cls, model, dataset, circuits, regularization=None, penalties=None,
                     resource_alloc=None, name=None, description=None, verbosity=0,
                     method_names=('fn',), array_types=()):
-        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names, array_types)
+        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names,
+                                          array_types, verbosity)
         return cls(mdc_store, regularization, penalties, name, description, verbosity)
 
     def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0):
@@ -5100,7 +5131,8 @@ class PoissonPicDeltaLogLFunction(TimeIndependentMDCObjectiveFunction):
     def create_from(cls, model, dataset, circuits, regularization=None, penalties=None,
                     resource_alloc=None, name=None, description=None, verbosity=0,
                     method_names=('fn',), array_types=()):
-        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names, array_types)
+        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names,
+                                          array_types, verbosity)
         return cls(mdc_store, regularization, penalties, name, description, verbosity)
 
     def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0):
@@ -5156,7 +5188,8 @@ class DeltaLogLFunction(TimeIndependentMDCObjectiveFunction):
     def create_from(cls, model, dataset, circuits, regularization=None, penalties=None,
                     resource_alloc=None, name=None, description=None, verbosity=0,
                     method_names=('fn',), array_types=()):
-        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names, array_types)
+        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names,
+                                          array_types, verbosity)
         return cls(mdc_store, regularization, penalties, name, description, verbosity)
 
     def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0):
@@ -5211,7 +5244,8 @@ class MaxLogLFunction(TimeIndependentMDCObjectiveFunction):
     def create_from(cls, model, dataset, circuits, regularization=None, penalties=None,
                     resource_alloc=None, name=None, description=None, verbosity=0,
                     method_names=('fn',), array_types=(), poisson_picture=True):
-        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names, array_types)
+        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names,
+                                          array_types, verbosity)
         return cls(mdc_store, regularization, penalties, name, description, verbosity, poisson_picture)
 
     def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0,
@@ -5268,7 +5302,8 @@ class TVDFunction(TimeIndependentMDCObjectiveFunction):
     def create_from(cls, model, dataset, circuits, regularization=None, penalties=None,
                     resource_alloc=None, name=None, description=None, verbosity=0,
                     method_names=('fn',), array_types=()):
-        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names, array_types)
+        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names,
+                                          array_types, verbosity)
         return cls(mdc_store, regularization, penalties, name, description, verbosity)
 
     def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0):
@@ -5357,8 +5392,8 @@ class TimeDependentMDCObjectiveFunction(MDCObjectiveFunction):
     def compute_array_types(cls, method_names, fsim):
         # array types for "persistent" arrays
         array_types = ('E',)
-        if any([x in ('dlsvec', 'dterms') for x in method_names]): array_types += ('EP',)
-        if any([x in ('hessian', 'approximate_hessian') for x in method_names]): array_types += ('EPP',)
+        if any([x in ('dlsvec', 'dterms', 'hessian', 'approximate_hessian')
+                for x in method_names]): array_types += ('EP',)
 
         # array types for methods
         for method_name in method_names:
@@ -5494,7 +5529,7 @@ class TimeDependentChi2Function(TimeDependentMDCObjectiveFunction):
         self.radius = radius  # parameterizes "roundness" of f == 0 terms
 
     def set_penalties(self, regularize_factor=0, cptp_penalty_factor=0, spam_penalty_factor=0,
-                      prob_clip_interval=(-10000, 10000)):
+                      errorgen_penalty_factor=0, prob_clip_interval=(-10000, 10000)):
         """
         Set penalty terms.
 
@@ -5515,6 +5550,11 @@ class TimeDependentChi2Function(TimeDependentMDCObjectiveFunction):
             `spam_penalty_factor * sqrt(tracenorm(spam_op))` penalty where `spam_op` runs over
             each state preparation's density matrix and each effect vector's matrix.
 
+        errorgen_penalty_factor : float, optional
+            The prefactor of a term that penalizes nonzero error generators.  Specifically, adds a
+            `errorgen_penalty_factor * sqrt(sum_i(|errorgen_coeff_i|))` penalty where the sum ranges
+            over all the error generator coefficients of each model operation.
+
         prob_clip_interval : tuple, optional
             A `(min, max)` tuple that specifies the minium (possibly negative) and maximum values
             allowed for probabilities generated by the model.  If the model gives probabilities
@@ -5526,7 +5566,8 @@ class TimeDependentChi2Function(TimeDependentMDCObjectiveFunction):
         int
             The number of penalty terms.
         """
-        assert(regularize_factor == 0 and cptp_penalty_factor == 0 and spam_penalty_factor == 0), \
+        assert(regularize_factor == 0 and cptp_penalty_factor == 0 and spam_penalty_factor == 0
+               and errorgen_penalty_factor == 0), \
             "Cannot apply regularization or penalization in time-dependent chi2 case (yet)"
         self.prob_clip_interval = prob_clip_interval
         return 0
@@ -5646,8 +5687,8 @@ class TimeDependentPoissonPicLogLFunction(TimeDependentMDCObjectiveFunction):
         self.min_prob_clip = min_prob_clip
         self.radius = radius  # parameterizes "roundness" of f == 0 terms
 
-    def set_penalties(self, cptp_penalty_factor=0, spam_penalty_factor=0, forcefn_grad=None, shift_fctr=100,
-                      prob_clip_interval=(-10000, 10000)):
+    def set_penalties(self, cptp_penalty_factor=0, spam_penalty_factor=0, errorgen_penalty_factor=0,
+                      forcefn_grad=None, shift_fctr=100, prob_clip_interval=(-10000, 10000)):
         """
         Set penalties.
 
@@ -5662,6 +5703,11 @@ class TimeDependentPoissonPicLogLFunction(TimeDependentMDCObjectiveFunction):
             The prefactor of a term that penalizes invalid SPAM operations.  Specifically, adds a
             `spam_penalty_factor * sqrt(tracenorm(spam_op))` penalty where `spam_op` runs over
             each state preparation's density matrix and each effect vector's matrix.
+
+        errorgen_penalty_factor : float, optional
+            The prefactor of a term that penalizes nonzero error generators.  Specifically, adds a
+            `errorgen_penalty_factor * sqrt(sum_i(|errorgen_coeff_i|))` penalty where the sum ranges
+            over all the error generator coefficients of each model operation.
 
         forcefn_grad : numpy.ndarray, optional
             The gradient of a "forcing function" that is added to the objective function.  This is
@@ -5688,8 +5734,8 @@ class TimeDependentPoissonPicLogLFunction(TimeDependentMDCObjectiveFunction):
         int
             The number of penalty terms.
         """
-        assert(cptp_penalty_factor == 0 and spam_penalty_factor == 0), \
-            "Cannot apply CPTP or SPAM penalization in time-dependent logl case (yet)"
+        assert(cptp_penalty_factor == 0 and spam_penalty_factor == 0 and errorgen_penalty_factor == 0), \
+            "Cannot apply CPTP, SPAM, or errorgen penalization in time-dependent logl case (yet)"
         assert(forcefn_grad is None), "forcing functions not supported with time-dependent logl function yet"
         self.prob_clip_interval = prob_clip_interval
         return 0
@@ -5802,6 +5848,10 @@ def _spam_penalty_size(mdl):
     return len(mdl.preps) + sum([len(povm) for povm in mdl.povms.values()])
 
 
+def _errorgen_penalty_size(mdl):
+    return 1
+
+
 def _cptp_penalty(mdl, prefactor, op_basis):
     """
     Helper function - CPTP penalty: (sum of tracenorms of gates),
@@ -5839,6 +5889,30 @@ def _spam_penalty(mdl, prefactor, op_basis):
                 _tools.vec_to_stdmx(mdl.povms[plbl][elbl].to_dense(), op_basis)
             ) for plbl in mdl.povms for elbl in mdl.povms[plbl]], 'd')
     ))
+
+
+def _errorgen_penalty(mdl, prefactor):
+    """
+    Helper function - errorgen penalty: sum_i |errorgen_coeff_i|
+    which in least squares optimization means returning an array
+    of the sqrt(sum_i |errorgen_coeff_i|) of each gate.
+
+    Note: error generator coefficients *can* be complex.
+    """
+    val = 0.0
+    #for lbl in mdl.primitive_prep_labels:
+    #    op = mdl.circuit_layer_operator(lbl, 'prep')
+    #    val += _np.sum(_np.abs(op.errorgen_coefficients_array()))
+
+    for lbl in mdl.primitive_op_labels:
+        op = mdl.circuit_layer_operator(lbl, 'op')
+        val += _np.sum(_np.abs(op.errorgen_coefficients_array()))
+
+    #for lbl in mdl.primitive_povm_labels:
+    #    op = mdl.circuit_layer_operator(lbl, 'povm')
+    #    val += _np.sum(_np.abs(op.errorgen_coefficients_array()))
+
+    return prefactor * _np.array([_np.sqrt(val)], 'd')
 
 
 def _cptp_penalty_jac_fill(cp_penalty_vec_grad_to_fill, mdl, prefactor, op_basis):
@@ -5992,6 +6066,60 @@ def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl, prefactor, op_bas
 
     #return the number of leading-dim indicies we filled in
     return len(mdl.preps) + sum([len(povm) for povm in mdl.povms.values()])
+
+
+def _errorgen_penalty_jac_fill(errorgen_penalty_vec_grad_to_fill, mdl, prefactor):
+
+    def get_local_deriv(op):
+        z = op.errorgen_coefficients_array()  # val**2 term is abs(z) = sqrt(z*z.conj)
+        dz = op.errorgen_coefficients_array_deriv_wrt_params()
+        dterms = 0.5 * (z.conjugate()[:, None] * dz + z[:, None] * dz.conjugate()) / _np.abs(z)[:, None]
+        # dterms = 0.5/sqrt(z*z.conj) * (dz * z.conj + z * dz.conj)  -- shape (nCoeffs, nOpParams)
+        dsumterms = _np.sum(dterms, axis=0)  # sum over coefficients -- shape (nOpParams,)
+        assert(_np.linalg.norm(dsumterms.imag) < 1e-8)
+        return prefactor**2 * dsumterms.real  # (2 `prefactor` factors since deriv of val**2)
+        #Add these lines if we treat different ops as different LS terms.
+        # terms = _np.abs(z)
+        # val = _np.sqrt(sum(_np.abs(z)))
+        # dval = 0.5 * dsumterms / val[:, None]  # 0.5/sqrt(sum(terms)) * dsumterms
+        # return dval
+
+    val = _errorgen_penalty(mdl, prefactor)
+    errorgen_penalty_vec_grad_to_fill[0, :] = 0.0
+
+    #for lbl in mdl.primitive_prep_labels:
+    #    op = mdl.circuit_layer_operator(lbl, 'prep')
+    #    errorgen_penalty_vec_grad_to_fill[0, op.gpindices] += get_local_deriv(op)
+
+    for lbl in mdl.primitive_op_labels:
+        op = mdl.circuit_layer_operator(lbl, 'op')
+        errorgen_penalty_vec_grad_to_fill[0, op.gpindices] += get_local_deriv(op)
+
+    #for lbl in mdl.primitive_povm_labels:
+    #    op = mdl.circuit_layer_operator(lbl, 'povm')
+    #    errorgen_penalty_vec_grad_to_fill[0, op.gpindices] += get_local_deriv(op)
+
+    #Above fills derivative of val**2 = sum(terms), but we want deriv of val = sqrt(sum(terms)):
+    errorgen_penalty_vec_grad_to_fill[0, :] *= 0.5 / val  # final == 1/sqrt(sum(terms)) * dsumterms
+
+    # DEBUG REMOVE: check with finite difference
+    # orig = mdl.to_vector()
+    # fd_deriv = _np.zeros(len(orig), 'd')
+    # val_orig = val
+    # eps = 1e-7
+    # for i in range(len(orig)):
+    #     w = orig.copy(); w[i] += eps
+    #     mdl.from_vector(w)
+    #     fd_deriv[i] = (_errorgen_penalty(mdl, prefactor) - val_orig) / eps
+    # diffvec = fd_deriv - errorgen_penalty_vec_grad_to_fill[0, :]
+    # diffvec[_np.abs(orig) < 2*eps] = 0.0  # we can't accurately assess derivs near zero
+    # diff = _np.linalg.norm(diffvec) / _np.linalg.norm(fd_deriv)
+    # mdl.from_vector(orig)
+    # if diff > 1e-3:
+    #     import bpdb; bpdb.set_trace()
+
+    #return the number of leading-dim indicies we filled in
+    return 1
 
 
 class LogLWildcardFunction(ObjectiveFunction):

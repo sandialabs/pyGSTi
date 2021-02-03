@@ -165,14 +165,18 @@ class CircuitPlaquette(object):
 
         return CircuitPlaquette(new_elements, self.num_rows, self.num_cols)
 
-    def truncate(self, circuits_to_keep):
+    def truncate(self, circuits_to_keep, keep_rows_cols=False):
         """
         Remove any circuits from this plaquette that aren't in `circuits_to_keep`.
 
         Parameters
         ----------
-        circuits_to_keep : list
+        circuits_to_keep : list or set
             List of circuits to keep.  If None, then a copy of this object is returned.
+
+        keep_rows_cols : bool
+            Whether to retain the same number of rows as columns (even if entire rows
+            and/or columns are empty).
 
         Returns
         -------
@@ -181,8 +185,10 @@ class CircuitPlaquette(object):
         if circuits_to_keep is None:
             return self.copy()
 
+        if not isinstance(circuits_to_keep, set): circuits_to_keep = set(circuits_to_keep)
+        num_rows, num_cols = (self.num_rows, self.num_cols) if keep_rows_cols else (None, None)
         elements = {(i, j): c for (i, j), c in self.elements.items() if c in circuits_to_keep}
-        return CircuitPlaquette(elements, None, None, self.op_label_aliases)
+        return CircuitPlaquette(elements, num_rows, num_cols, self.op_label_aliases)
 
     def copy(self):
         """
@@ -300,14 +306,18 @@ class FiducialPairPlaquette(CircuitPlaquette):
                 new_fidpairs[coords] = (prep2, meas2)
         return FiducialPairPlaquette(new_base, new_fidpairs, self.num_rows, self.num_cols, op_label_aliases=None)
 
-    def truncate(self, circuits_to_keep):
+    def truncate(self, circuits_to_keep, keep_rows_cols=False):
         """
         Remove any circuits from this plaquette that aren't in `circuits_to_keep`.
 
         Parameters
         ----------
-        circuits_to_keep : list
+        circuits_to_keep : list or set
             List of circuits to keep.  If None, then a copy of this object is returned.
+
+        keep_rows_cols : bool
+            Whether to retain the same number of rows as columns (even if entire rows
+            and/or columns are empty).
 
         Returns
         -------
@@ -316,11 +326,13 @@ class FiducialPairPlaquette(CircuitPlaquette):
         if circuits_to_keep is None:
             return self.copy()
 
+        if not isinstance(circuits_to_keep, set): circuits_to_keep = set(circuits_to_keep)
         fidpairs = _collections.OrderedDict()
         for (i, j), c in self.elements.items():
             if c in circuits_to_keep:
                 fidpairs[(i, j)] = self.fidpairs[(i, j)]
-        return FiducialPairPlaquette(self.base, fidpairs, None, None, self.op_label_aliases)
+        num_rows, num_cols = (self.num_rows, self.num_cols) if keep_rows_cols else (None, None)
+        return FiducialPairPlaquette(self.base, fidpairs, num_rows, num_cols, self.op_label_aliases)
 
     def copy(self):
         """
@@ -440,14 +452,18 @@ class GermFiducialPairPlaquette(FiducialPairPlaquette):
         return GermFiducialPairPlaquette(new_germ, self.power, new_fidpairs, self.num_rows, self.num_cols,
                                          op_label_aliases=None)
 
-    def truncate(self, circuits_to_keep):
+    def truncate(self, circuits_to_keep, keep_rows_cols=False):
         """
         Remove any circuits from this plaquette that aren't in `circuits_to_keep`.
 
         Parameters
         ----------
-        circuits_to_keep : list
+        circuits_to_keep : list or set
             List of circuits to keep.  If None, then a copy of this object is returned.
+
+        keep_rows_cols : bool
+            Whether to retain the same number of rows as columns (even if entire rows
+            and/or columns are empty).
 
         Returns
         -------
@@ -456,11 +472,13 @@ class GermFiducialPairPlaquette(FiducialPairPlaquette):
         if circuits_to_keep is None:
             return self.copy()
 
+        if not isinstance(circuits_to_keep, set): circuits_to_keep = set(circuits_to_keep)
         fidpairs = _collections.OrderedDict()
         for (i, j), c in self.elements.items():
             if c in circuits_to_keep:
                 fidpairs[(i, j)] = self.fidpairs[(i, j)]
-        return GermFiducialPairPlaquette(self.germ, self.power, fidpairs, None, None, self.op_label_aliases)
+        num_rows, num_cols = (self.num_rows, self.num_cols) if keep_rows_cols else (None, None)
+        return GermFiducialPairPlaquette(self.germ, self.power, fidpairs, num_rows, num_cols, self.op_label_aliases)
 
     def copy(self):
         """
@@ -542,14 +560,17 @@ class PlaquetteGridCircuitStructure(_CircuitList):
         if additional_circuits_location == 'start':
             circuits.update([(c, None) for c in additional_circuits])
 
+        circuits_in_plaquettes = _collections.OrderedDict()
         for plaq in plaquettes.values():
-            circuits.update([(c, None) for c in plaq.circuits])
+            circuits_in_plaquettes.update([(c, None) for c in plaq.circuits])
+        circuits.update(circuits_in_plaquettes)
 
         if additional_circuits_location == 'end':
             circuits.update([(c, None) for c in additional_circuits])
 
         # ordered-sets => tuples
-        additional = _collections.OrderedDict([(c, None) for c in additional_circuits if (c not in circuits)])
+        additional = _collections.OrderedDict([(c, None) for c in additional_circuits
+                                               if (c not in circuits_in_plaquettes)])
         self._additional_circuits = tuple(additional.keys())  # only those circuits *not* in plaquettes
         circuits = tuple(circuits.keys())
 
@@ -618,20 +639,26 @@ class PlaquetteGridCircuitStructure(_CircuitList):
         return [y for y in self.ys if any([len(self.plaquette(x, y, True)) > 0
                                            for x in self.xs])]
 
-    def truncate(self, xs_to_keep=None, ys_to_keep=None, circuits_to_keep=None):
+    def truncate(self, circuits_to_keep=None, xs_to_keep=None, ys_to_keep=None, keep_rows_cols=True):
         """
-        Truncate this circuit structure to a subset of its current strings.
+        Truncate this circuit structure to a subset of its current circuits.
 
         Parameters
         ----------
+        circuits_to_keep : list
+            Keep only the circuits present in this list (of Circuit objects).
+
         xs_to_keep : list, optional
             The x-values to keep.  If None, then all are kept.
 
         ys_to_keep : list, optional
             The y-values to keep.  If None, then all are kept.
 
-        circuits_to_keep : list
-            Keep only the circuits present in this list (of Circuit objects).
+        keep_rows_cols : bool
+            Whether to retain the same number of rows as columns (even if entire rows
+            and/or columns are empty).  By default, this is `True` because we usually
+            want all the plaquettes of a :class:`PlaquetteGridCircuitStructure` to have
+            the same number of rows and columns.
 
         Returns
         -------
@@ -643,7 +670,7 @@ class PlaquetteGridCircuitStructure(_CircuitList):
         plaquettes = _collections.OrderedDict()
         for (x, y), plaq in self._plaquettes.items():
             if not ((x in xs) and (y in ys)): continue
-            plaquettes[(x, y)] = plaq.truncate(circuits_to_keep)
+            plaquettes[(x, y)] = plaq.truncate(circuits_to_keep, keep_rows_cols)
 
         circuit_weights_dict = {c: weight for c, weight in zip(self, self.circuit_weights)} \
             if (self.circuit_weights is not None) else None
@@ -653,7 +680,7 @@ class PlaquetteGridCircuitStructure(_CircuitList):
                                              self.op_label_aliases, circuit_weights_dict,
                                              self._addl_location, self.name)
 
-    def nested_truncations(self, axis='x'):
+    def nested_truncations(self, axis='x', keep_rows_cols=False):
         """
         Get the nested truncations of this circuit structure along an axis.
 
@@ -670,6 +697,10 @@ class PlaquetteGridCircuitStructure(_CircuitList):
         axis : {'x', 'y'}
             Which axis to truncate along (see above).
 
+        keep_rows_cols : bool
+            Whether to retain the same number of rows as columns (even if entire rows
+            and/or columns are empty).
+
         Returns
         -------
         list
@@ -677,9 +708,11 @@ class PlaquetteGridCircuitStructure(_CircuitList):
             (truncations of this object).
         """
         if axis == 'x':
-            return [self.truncate(xs_to_keep=self.xs[0:i + 1]) for i in range(len(self.xs))]
+            return [self.truncate(xs_to_keep=self.xs[0:i + 1], keep_rows_cols=keep_rows_cols)
+                    for i in range(len(self.xs))]
         elif axis == 'y':
-            return [self.truncate(ys_to_keep=self.ys[0:i + 1]) for i in range(len(self.ys))]
+            return [self.truncate(ys_to_keep=self.ys[0:i + 1], keep_rows_cols=keep_rows_cols)
+                    for i in range(len(self.ys))]
         else:
             #raise ValueError(f"Invalid `axis` argument: {axis} - must be 'x' or 'y'!")
             raise ValueError("Invalid `axis` argument: %s - must be 'x' or 'y'!" % str(axis))

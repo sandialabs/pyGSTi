@@ -817,9 +817,18 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
     @classmethod
     def _array_types_for_method(cls, method_name):
         # The array types of *intermediate* or *returned* values within various class methods (for memory estimates)
-        if method_name == 'bulk_fill_probs': return ('zdd', 'z', 'z')  # cache of gates, scales, and scaleVals
-        if method_name == 'bulk_fill_dprobs': return ('zddp',)  # cache x dim x dim x distributed_nparams
-        if method_name == 'bulk_fill_hprobs': return ('zddpp',)  # cache x dim x dim x dist_nparams1 x dist_nparams2
+        if method_name == '_bulk_fill_probs_block': return cls._array_types_for_method('_compute_product_cache')
+        if method_name == '_bulk_fill_dprobs_block':
+            return cls._array_types_for_method('_compute_product_cache') \
+                + cls._array_types_for_method('_compute_dproduct_cache')
+        if method_name == '_bulk_fill_hprobs_block':
+            return cls._array_types_for_method('_compute_product_cache') \
+                + cls._array_types_for_method('_compute_dproduct_cache') \
+                + cls._array_types_for_method('_compute_hproduct_cache')
+
+        if method_name == '_compute_product_cache': return ('zdd', 'z', 'z')  # cache of gates, scales, and scaleVals
+        if method_name == '_compute_dproduct_cache': return ('zddp',)  # cache x dim x dim x distributed_nparams
+        if method_name == '_compute_hproduct_cache': return ('zddpp',)  # cache x dim x dim x dist_np1 x dist_np2
         return super()._array_types_for_method(method_name)
 
     def __init__(self, model=None, distribute_by_timestamp=False):
@@ -1198,8 +1207,8 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             return _MatrixCOPALayout(circuits, self.model, dataset, None, num_atoms,
                                      (num_params, num_params), verbosity)
 
-        bNp1Matters = bool("EP" in array_types or "EPP" in array_types)
-        bNp2Matters = bool("EPP" in array_types)
+        bNp1Matters = bool("EP" in array_types or "EPP" in array_types or "ep" in array_types or "epp" in array_types)
+        bNp2Matters = bool("EPP" in array_types or "epp" in array_types)
 
         #Start with how we'd like to split processors up (without regard to memory limit):
         nc = Ng = 1

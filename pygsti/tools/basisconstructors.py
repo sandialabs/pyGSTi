@@ -217,6 +217,72 @@ class MatrixBasisConstructor(object):
         return nElements, basisDim, elshape
 
 
+class DiagonalMatrixBasisConstructor(MatrixBasisConstructor):
+    """
+    A factory class for constructing builtin basis types whose elements are diagonal matrices.
+
+    The size of these bases is equal to their matrix dimension (so dim == matrix_dim, similar to
+    a VectorBasisConstructor, but element are diagonal matrices rather than vectors)
+    """
+
+    def constructor(self, dim, sparse):
+        """
+        Get the elements of a basis to be constructed.
+
+        Parameters
+        ----------
+        dim : int
+            The *vector-space* dimension of the basis.
+
+        sparse : bool
+            Whether the basis is sparse or not.
+
+        Returns
+        -------
+        list of basis elements
+        """
+        dtype = 'd' if self.real else 'complex'
+        d = self.matrix_dim(dim)
+        vectorgen_fn = self.matrixgen_fn  # matrixgen really just construct vectors
+        els = [_np.array(_np.diag(v), dtype) for v in vectorgen_fn(d)]
+        if sparse: els = [_sps.csr_matrix(el) for el in els]
+        return els
+
+    def sizes(self, dim, sparse):
+        """
+        Get some relevant sizes/dimensions for constructing a basis.
+
+        This function is needed for constructing Basis objects
+        because these objects want to know the size & dimension of
+        a basis without having to construct the (potentially
+        large) set of elements.
+
+        Parameters
+        ----------
+        dim : int
+            The *vector-space* dimension of the basis.
+            e.g. 4 for a basis of 2x2 matrices and 2 for
+            a basis of length=2 vectors.
+
+        sparse : bool
+            Whether the basis is sparse or not.
+
+        Returns
+        -------
+        nElements : int
+            The number of elements in the basis.
+        dim : int
+            The vector-space dimension of the basis.
+        elshape : tuple
+            The shape of the elements that might be
+            constructed (if `constructor` was called).
+        """
+        d = self.matrix_dim(dim); elshape = (d, d)
+        nElements = d  # the number of matrices in the basis
+        basisDim = dim  # the dimension of the vector space this basis
+        return nElements, basisDim, elshape
+
+
 class SingleElementMatrixBasisConstructor(MatrixBasisConstructor):
     """
     A constructor for a basis containing just a single element (e.g. the identity).
@@ -277,7 +343,7 @@ class VectorBasisConstructor(object):
 
     def __init__(self, longname, vectorgen_fn, labelgen_fn, real):
         """
-        Create a new MatrixBasisConstructor:
+        Create a new VectorBasisConstructor:
 
         Parameters
         ----------
@@ -993,6 +1059,123 @@ def cl_labels(dim):
     return ["%d" % i for i in range(dim)]
 
 
+def clgm_vectors(dim):
+    """
+    Get the elements (vectors) of the classical Gell-Mann basis with dimension `dim`
+
+    The elements of this basis are the *diagonals* of the un-normalized Gell-Mann
+    basis (of the matching dimension) elements with non-zero diagonal.
+
+    Parameters
+    ----------
+    dim : int
+        dimension of the vector space.
+
+    Returns
+    -------
+    list
+        A list of `dim` numpy arrays each of shape (dim,).
+    """
+    if dim == 0: return []
+    vecList = [_np.ones(dim, 'd')]
+    for diag_mx in _get_gell_mann_non_identity_diag_mxs(dim):
+        vecList.append(_np.diag(diag_mx).copy())
+    return vecList
+
+
+def clgm_labels(dim):
+    """
+    Return the classical Gell-Mann basis labels based on a vector dimension.
+
+    Parameters
+    ----------
+    dim : int
+        The dimension of the basis to generate labels for (e.g.
+        2 for a single classical bit).
+
+    Returns
+    -------
+    list of strs
+    """
+    if dim == 0: return []
+    if dim == 1: return ['']  # special case - use empty label instead of "I"
+    return ["I"] + ["Z_{%d}" % i for i in range(1, dim)]
+
+
+def clpp_vectors(dim):
+    """
+    Get the elements (vectors) of the classical Pauli-product basis with dimension `dim`
+
+    The elements of this basis are the *diagonals* of the un-normalized Pauli-product
+    basis (of the matching dimension) elements with non-zero diagonal (those using I and Z).
+
+    Parameters
+    ----------
+    dim : int
+        dimension of the vector space.
+
+    Returns
+    -------
+    list
+        A list of `dim` numpy arrays each of shape (dim,).
+    """
+    if dim == 0: return []
+    sigmaVec = (_np.ones(2, 'd'), _np.array([1, -1], 'd'))
+
+    def _is_integer(x):
+        return bool(abs(x - round(x)) < 1e-6)
+
+    nBits = _np.log2(dim)
+    if not _is_integer(nBits):
+        raise ValueError(
+            "Dimension for classical Pauli basis must be an integer *power of 2* (not %d)" % dim)
+    nBits = int(round(nBits))
+
+    if nBits == 0: return [_np.ones(1, 'd')]
+
+    vecList = [_np.ones(dim, 'd')]
+    basisIndList = [[0, 1]] * nBits
+    for sigmaInds in _itertools.product(*basisIndList):
+        V = _np.ones(1, 'd')
+        for i in sigmaInds:
+            V = _np.kron(V, sigmaVec[i])
+        vecList.append(V)
+
+    return vecList
+
+
+def clpp_labels(dim):
+    """
+    Return the classical Pauli-product basis labels based on a vector dimension.
+
+    Parameters
+    ----------
+    dim : int
+        The dimension of the basis to generate labels for (e.g.
+        2 for a single classical bit).
+
+    Returns
+    -------
+    list of strs
+    """
+    def _is_integer(x):
+        return bool(abs(x - round(x)) < 1e-6)
+
+    if dim == 0: return []
+    if dim == 1: return ['']  # special case - use empty label instead of "I"
+
+    nBits = _np.log2(dim)
+    if not _is_integer(nBits):
+        raise ValueError("Dimension for classical Pauli basis must be an integer *power of 2*")
+    nBits = int(round(nBits))
+
+    lblList = []
+    basisLblList = [['I', 'Z']] * nBits
+    for sigmaLbls in _itertools.product(*basisLblList):
+        lblList.append(''.join(sigmaLbls))
+    return lblList
+
+
 def sv_vectors(dim):
     """
     Get the elements (vectors) of the complex state-vector basis with dimension `dim`.
@@ -1080,6 +1263,15 @@ _basis_constructor_dict['qsim'] = MatrixBasisConstructor('QuantumSim basis', qsi
 _basis_constructor_dict['qt'] = MatrixBasisConstructor('Qutrit basis', qt_matrices, qt_labels, True)
 _basis_constructor_dict['id'] = SingleElementMatrixBasisConstructor('Identity-only subbasis', identity_matrices,
                                                                     identity_labels, True)
+_basis_constructor_dict['clmx'] = DiagonalMatrixBasisConstructor('Diagonal Matrix-unit basis', cl_vectors,
+                                                                 cl_labels, True)
+_basis_constructor_dict['clgmmx'] = DiagonalMatrixBasisConstructor('Diagonal Gell-Mann basis', clgm_vectors,
+                                                                   clgm_labels, True)
+_basis_constructor_dict['clppmx'] = DiagonalMatrixBasisConstructor('Diagonal Pauli-Product basis', clpp_vectors,
+                                                                   clpp_labels, True)
 _basis_constructor_dict['cl'] = VectorBasisConstructor('Classical basis', cl_vectors, cl_labels, True)
+_basis_constructor_dict['clgm'] = VectorBasisConstructor('Classical Gell-Mann basis', clgm_vectors, clgm_labels, True)
+_basis_constructor_dict['clpp'] = VectorBasisConstructor('Classical Pauli-Product basis', clpp_vectors,
+                                                         clpp_labels, True)
 _basis_constructor_dict['sv'] = VectorBasisConstructor('State-vector basis', sv_vectors, sv_labels, False)
 _basis_constructor_dict['unknown'] = VectorBasisConstructor('Unknown (0-dim) basis', unknown_els, unknown_labels, False)

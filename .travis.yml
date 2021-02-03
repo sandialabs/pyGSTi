@@ -35,7 +35,7 @@ before_install:
 install:
   # see https://github.com/cvxgrp/cvxpy/issues/968
   - pip install "numpy>=1.16.0"
-  # Cython must be pre-installed to build native extensions on pyGSTi install
+  
   - pip install cython
 
   - pip install .[testing]
@@ -61,10 +61,10 @@ stages:
   # Run extra tests, but only on master/beta
   - name: test-extra
     if: branch IN (master, beta, ci-debug)
-  - name: push
-    if: (branch = develop) AND (NOT (type = pull_request))
-  - name: deploy
-    if: tag IS present
+  #- name: push
+  #  if: (branch = develop) AND (NOT (type = pull_request))
+  #- name: deploy
+  #  if: tag IS present
 
 jobs:
   include:
@@ -99,44 +99,44 @@ jobs:
       # MPI nose utils needs sys.path
       env: NOSE_WHERE="test/test_packages/" NOSE_NOPATH="" NOSETESTS="mpi"
 
-    - stage: push
-      env: PUSH_BRANCH="beta"
-      install: skip
-      before_install:
-        - >-
-          openssl aes-256-cbc
-          -K $encrypted_8f2a7a9a4246_key
-          -iv $encrypted_8f2a7a9a4246_iv
-          -in CI/github_deploy_key.enc
-          -out CI/github_deploy_key
-          -d
-        - chmod 600 CI/github_deploy_key
-        - eval $(ssh-agent -s)
-        - ssh-add CI/github_deploy_key
-      script:
-        - CI/push.sh
+    #- stage: push
+    #  env: PUSH_BRANCH="beta"
+    #  install: skip
+    #  before_install:
+    #    - >-
+    #      openssl aes-256-cbc
+    #      -K $encrypted_8f2a7a9a4246_key
+    #      -iv $encrypted_8f2a7a9a4246_iv
+    #      -in CI/github_deploy_key.enc
+    #      -out CI/github_deploy_key
+    #      -d
+    #    - chmod 600 CI/github_deploy_key
+    #    - eval $(ssh-agent -s)
+    #    - ssh-add CI/github_deploy_key
+    #  script:
+    #    - CI/push.sh
 
-    - stage: deploy
-      env: PYPI_DEPLOY=1
-      install:
-        - pip install -e .[extension_modules]
-      script:
-        - echo "Pushing $TRAVIS_TAG to PyPI"
+    #- stage: deploy
+    #  env: PYPI_DEPLOY=1
+    #  install:
+    #    - pip install -e .[extension_modules]
+    #  script:
+    #    - echo "Pushing $TRAVIS_TAG to PyPI"
 
   allow_failures:
     - stage: lint
       name: "PEP8"
 
-deploy:
-  provider: pypi
-  user: pygsti-ci
-  password:
-    secure: vK9Lm939ZRMgQ/UdpCRSrbiWSN5h0e0/vKV+ZCtUL63KHMaK9AShSJhNOWZ2RUIi3c/ZKTlllCgj9O/r0MjP2qE5N3DLhm0t+QNjgMM4Iz4bsMJx4nPYTrAeiShyffPFJWSVSP9l6054mBGZow6aeZEzDGsF2Y3LzISzE47c8xFxJI2TSM1AJ+j1feRsayTDepBq5+di2z3GgBXT8qDWMS4EY+ljdgsHBQ5xRh3HmT5AcecltwRmNaWprLSukjpmTuX+HKgMazSKCsqvTXSuhKive+7OxONu0JGva14GGk9baO3mGVaYA0+9R72QIQxD2hKdLwzHzYeo1Rue1AAggKdlSUDZ5InrqXx2ASkdqyqw7p6GUyxEQGErSvbqyPqgyCs0wNkxZR9xAGeUX9SztZxhgQyFlZRdq0gahSQB6vuwlbg8NlV/hMW94n/wk+NrARf7fCSw9rglIaTECGjcxaijc4r+EAVwyiEwtoT7wsei1A2sNfxHBJaZfjy7VXPhE5oSswPQV4B5uS9pxuiEWFfFor4e+iHtwQTR/KkKDrm0OOmWSemHgO4MLubupPrTzyViGfHM7BGHNe8D9FpY+IgMV/7Je+WwbDfccY4PZgjKZq1HYHnbQIhIyO7nckU6LXh1YPC/32NxOCThB+0H484B5dvPYjprIXQ+xIDRcKc=
-  distributions: "sdist"
-  skip_existing: true
-  on:
-    tags: true
-    condition: $PYPI_DEPLOY = 1
+#deploy:
+#  provider: pypi
+#  user: pygsti-ci
+#  password:
+#    secure: vK9Lm939ZRMgQ/UdpCRSrbiWSN5h0e0/vKV+ZCtUL63KHMaK9AShSJhNOWZ2RUIi3c/ZKTlllCgj9O/r0MjP2qE5N3DLhm0t+QNjgMM4Iz4bsMJx4nPYTrAeiShyffPFJWSVSP9l6054mBGZow6aeZEzDGsF2Y3LzISzE47c8xFxJI2TSM1AJ+j1feRsayTDepBq5+di2z3GgBXT8qDWMS4EY+ljdgsHBQ5xRh3HmT5AcecltwRmNaWprLSukjpmTuX+HKgMazSKCsqvTXSuhKive+7OxONu0JGva14GGk9baO3mGVaYA0+9R72QIQxD2hKdLwzHzYeo1Rue1AAggKdlSUDZ5InrqXx2ASkdqyqw7p6GUyxEQGErSvbqyPqgyCs0wNkxZR9xAGeUX9SztZxhgQyFlZRdq0gahSQB6vuwlbg8NlV/hMW94n/wk+NrARf7fCSw9rglIaTECGjcxaijc4r+EAVwyiEwtoT7wsei1A2sNfxHBJaZfjy7VXPhE5oSswPQV4B5uS9pxuiEWFfFor4e+iHtwQTR/KkKDrm0OOmWSemHgO4MLubupPrTzyViGfHM7BGHNe8D9FpY+IgMV/7Je+WwbDfccY4PZgjKZq1HYHnbQIhIyO7nckU6LXh1YPC/32NxOCThB+0H484B5dvPYjprIXQ+xIDRcKc=
+#  distributions: "sdist"
+#  skip_existing: true
+#  on:
+#    tags: true
+#    condition: $PYPI_DEPLOY = 1
 
 notifications:
   email:

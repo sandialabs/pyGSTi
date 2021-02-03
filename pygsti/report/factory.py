@@ -41,6 +41,7 @@ from ..objects.label import Label as _Lbl
 from ..modelpacks import RBModelPack as _RBModelPack
 from ..objects.circuitlist import CircuitList as _CircuitList
 from ..objects.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
+from ..objects.labeldicts import StateSpaceLabels as _StateSpaceLabels
 
 #maybe import these from drivers.longsequence so they stay synced?
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]  # ".wildcard" (not a separate estimate anymore)
@@ -1103,6 +1104,7 @@ def find_std_clifford_compilation(model, verbosity=0):
         mod = importlib.import_module("pygsti.modelpacks." + module_name)
         qubit_labels = model.state_space_labels.labels[0]  # this usually gets the qubit labels
         if len(mod._sslbls) != len(qubit_labels): continue  # wrong number of qubits!
+        if _StateSpaceLabels.cast(mod._sslbls).dim != _StateSpaceLabels.cast(qubit_labels).dim: continue
 
         target_model = mod.target_model(qubit_labels=qubit_labels)
         if target_model.dim == model.dim and \

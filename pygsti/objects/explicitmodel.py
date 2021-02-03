@@ -42,6 +42,7 @@ from . import matrixforwardsim as _matrixfwdsim
 from . import mapforwardsim as _mapfwdsim
 from . import termforwardsim as _termfwdsim
 from . import explicitcalc as _explicitcalc
+from . import opfactory as _opfactory
 
 from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from .basis import BuiltinBasis as _BuiltinBasis, DirectSumBasis as _DirectSumBasis
@@ -168,8 +169,8 @@ class ExplicitOpModel(_mdl.OpModel):
         self.povms = _ld.OrderedMemberDict(self, default_param, povm_prefix, flagfn("povm"))
         self.operations = _ld.OrderedMemberDict(self, default_param, gate_prefix, flagfn("operation"))
         self.instruments = _ld.OrderedMemberDict(self, default_param, instrument_prefix, flagfn("instrument"))
+        self.factories = _ld.OrderedMemberDict(self, default_param, gate_prefix, flagfn("factory"))
         self.effects_prefix = effect_prefix
-
         self._default_gauge_group = None
 
         if basis == "auto":
@@ -200,7 +201,8 @@ class ExplicitOpModel(_mdl.OpModel):
         for lbl, obj in _itertools.chain(self.preps.items(),
                                          self.povms.items(),
                                          self.operations.items(),
-                                         self.instruments.items()):
+                                         self.instruments.items(),
+                                         self.factories.items()):
             yield (lbl, obj)
 
     def _excalc(self):
@@ -516,6 +518,9 @@ class ExplicitOpModel(_mdl.OpModel):
             state_dict['_basis'] = state_dict['basis']; del state_dict['basis']
         if 'state_space_labels' in state_dict:
             state_dict['_state_space_labels'] = state_dict['state_space_labels']; del state_dict['_state_space_labels']
+        if 'factories' not in state_dict:
+            ops = state_dict['operations']
+            state_dict['factories'] = _ld.OrderedMemberDict(self, ops.default_param, ops._prefix, ops.flags)
 
         super().__setstate__(state_dict)  # ~ self.__dict__.update(state_dict)
 
@@ -531,11 +536,13 @@ class ExplicitOpModel(_mdl.OpModel):
         #self.effects.parent = self
         self.operations.parent = self
         self.instruments.parent = self
+        self.factories.parent = self
         for o in self.preps.values(): o.relink_parent(self)
         for o in self.povms.values(): o.relink_parent(self)
         #for o in self.effects.values(): o.relink_parent(self)
         for o in self.operations.values(): o.relink_parent(self)
         for o in self.instruments.values(): o.relink_parent(self)
+        for o in self.factories.values(): o.relink_parent(self)
 
     @property
     def num_elements(self):
@@ -555,6 +562,7 @@ class ExplicitOpModel(_mdl.OpModel):
         povmSize = [povm.num_elements for povm in self.povms.values()]
         opSize = [gate.size for gate in self.operations.values()]
         instSize = [i.num_elements for i in self.instruments.values()]
+        #Don't count self.factories?
         return sum(rhoSize) + sum(povmSize) + sum(opSize) + sum(instSize)
 
     @property
@@ -673,6 +681,9 @@ class ExplicitOpModel(_mdl.OpModel):
 
         for instrument in self.instruments.values():
             instrument.transform_inplace(s)
+
+        for factory in self.factories.values():
+            factory.transform_inplace(s)
 
         self._clean_paramvec()  # transform may leave dirty members
 
@@ -900,6 +911,8 @@ class ExplicitOpModel(_mdl.OpModel):
                     s += "    %s = %g\n" % (str(lbl), dist(
                         inst[lbl].to_dense(), other_model.instruments[inst_lbl][lbl].to_dense()))
 
+        #Note: no way to different factories easily
+
         return s
 
     def _init_copy(self, copy_into, memo):
@@ -916,6 +929,7 @@ class ExplicitOpModel(_mdl.OpModel):
         copy_into.povms = self.povms.copy(copy_into, memo)
         copy_into.operations = self.operations.copy(copy_into, memo)
         copy_into.instruments = self.instruments.copy(copy_into, memo)
+        copy_into.factories = self.factories.copy(copy_into, memo)
         copy_into._default_gauge_group = self._default_gauge_group  # Note: SHALLOW copy
 
     def __str__(self):
@@ -930,6 +944,8 @@ class ExplicitOpModel(_mdl.OpModel):
             s += "%s = \n" % str(lbl) + str(gate) + "\n\n"
         for lbl, inst in self.instruments.items():
             s += "%s = " % str(lbl) + str(inst) + "\n"
+        for lbl, factory in self.factories.items():
+            s += "%s = (factory)" % lbl + '\n'
         s += "\n"
 
         return s
@@ -944,7 +960,8 @@ class ExplicitOpModel(_mdl.OpModel):
         for lbl, obj in _itertools.chain(self.preps.items(),
                                          self.povms.items(),
                                          self.operations.items(),
-                                         self.instruments.items()):
+                                         self.instruments.items(),
+                                         self.factories.items()):
             yield (lbl, obj)
 
 #TODO: how to handle these given possibility of different parameterizations...
@@ -1007,6 +1024,9 @@ class ExplicitOpModel(_mdl.OpModel):
             r = max_op_noise * rndm.random_sample(len(self.instruments))
             for i, label in enumerate(self.instruments):
                 newModel.instruments[label].depolarize(r[i])
+            r = max_op_noise * rndm.random_sample(len(self.factories))
+            for i, label in enumerate(self.factories):
+                newModel.factories[label].depolarize(r[i])
 
         elif op_noise is not None:
             #Apply the same depolarization to each gate
@@ -1014,6 +1034,8 @@ class ExplicitOpModel(_mdl.OpModel):
                 newModel.operations[label].depolarize(op_noise)
             for label in self.instruments:
                 newModel.instruments[label].depolarize(op_noise)
+            for label in self.factories:
+                newModel.factories[label].depolarize(op_noise)
 
         if max_spam_noise is not None:
             if spam_noise is not None:
@@ -1095,6 +1117,10 @@ class ExplicitOpModel(_mdl.OpModel):
             for i, label in enumerate(self.instruments):
                 rot = _np.array(r[(dim - 1) * i:(dim - 1) * (i + 1)])
                 newModel.instruments[label].rotate(rot, myBasis)
+            r = max_rotate * rndm.random_sample(len(self.factories) * (dim - 1))
+            for i, label in enumerate(self.factories):
+                rot = _np.array(r[(dim - 1) * i:(dim - 1) * (i + 1)])
+                newModel.factories[label].rotate(rot, myBasis)
 
         elif rotate is not None:
             assert(len(rotate) == dim - 1), \
@@ -1103,6 +1129,8 @@ class ExplicitOpModel(_mdl.OpModel):
                 newModel.operations[label].rotate(rotate, myBasis)
             for label in self.instruments:
                 newModel.instruments[label].rotate(rotate, myBasis)
+            for label in self.factories:
+                newModel.factories[label].rotate(rotate, myBasis)
 
         else: raise ValueError("Must specify either 'rotate' or 'max_rotate' "
                                + "-- neither was non-None")
@@ -1240,6 +1268,9 @@ class ExplicitOpModel(_mdl.OpModel):
                 inst_ops.append((outcomeLbl, _op.FullDenseOp(newOp)))
             new_model.instruments[instLabel] = _instrument.Instrument(inst_ops)
 
+        if len(self.factories) > 0:
+            raise NotImplementedError("Changing dimension of models with factories is not supported yet!")
+
         return new_model
 
     def _decrease_dimension(self, new_dimension):
@@ -1304,6 +1335,9 @@ class ExplicitOpModel(_mdl.OpModel):
                 newOp[:, :] = gate[0:new_dimension, 0:new_dimension]
                 inst_ops.append((outcomeLbl, _op.FullDenseOp(newOp)))
             new_model.instruments[instLabel] = _instrument.Instrument(inst_ops)
+
+        if len(self.factories) > 0:
+            raise NotImplementedError("Changing dimension of models with factories is not supported yet!")
 
         return new_model
 
@@ -1516,5 +1550,7 @@ class ExplicitLayerRules(_LayerRules):
             op = self._create_op_for_circuitlabel(model, layerlbl, dense)
             caches['op-layers'][layerlbl] = op
             return op
-        else:
+        elif layerlbl in model.operations:
             return model.operations[layerlbl]
+        else:
+            return _opfactory.op_from_factories(model.factories, layerlbl)
