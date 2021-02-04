@@ -60,6 +60,7 @@ jobs:
         # Cython must be pre-installed to build native extensions on pyGSTi install
         python -m pip install cython
         python -m pip install wheel
+        python -m pip install "cvxpy<=1.1.7" # TEMPORARY: 1.1.8 messed up numpy version, see https://github.com/cvxgrp/cvxpy/issues/1236
         # Installing with -e to keep installation local (for NOSE_NOPATH)
         # but still compile Cython extensions
         python -m pip install -e .[testing]
