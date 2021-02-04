@@ -549,7 +549,7 @@ class Estimate(object):
             mdl = self.models['final iteration estimate']
             ds = self.parent.dataset
             self.parameters['final_mdc_store'] = _ModelDatasetCircuitStore(mdl, ds, circuit_list, resource_alloc,
-                                                                             array_types)
+                                                                           array_types)
         return self.parameters['final_mdc_store']
 
     def final_objective_fn(self, resource_alloc=None):

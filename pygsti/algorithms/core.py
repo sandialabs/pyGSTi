@@ -751,7 +751,7 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
     mdl = start_model.copy(); nIters = len(circuit_lists)
     tStart = _time.time()
     tRef = tStart
-    final_store = None
+    final_objfn = None
 
     iteration_objfn_builders = [_objs.ObjectiveFunctionBuilder.cast(ofb) for ofb in iteration_objfn_builders]
     final_objfn_builders = [_objs.ObjectiveFunctionBuilder.cast(ofb) for ofb in final_objfn_builders]
@@ -767,7 +767,6 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
         for artype, cnt in max_cnts.items(): ret += (artype,) * cnt
         return ret
 
-    final_objfn = None
     with printer.progress_logging(1):
         for (i, circuitsToEstimate) in enumerate(circuit_lists):
             extraMessages = []
@@ -812,10 +811,10 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
                 tRef = tNxt
 
                 models.append(mdc_store.model)  # don't copy so `mdc_store.model` *is* the final model, `models[-1]`
-                
+
                 # send final objfn object back to caller to facilitate postproc  on the final (model, circuits, dataset)
                 # Note: initial_mdc_store is *not* an objective fn (it's just a store) so don't send it back.
-                if mdc_store is not initial_mdc_store:  
+                if mdc_store is not initial_mdc_store:
                     final_objfn = mdc_store
             else:
                 models.append(mdc_store.model.copy())

@@ -877,7 +877,6 @@ def two_delta_logl_per_circuit(model, dataset, circuits=None,
         obj = _objfns.LogLWildcardFunction(obj, model.to_vector(), wildcard)
 
     two_dlogl_percircuit = 2 * obj.layout.allgather_local_array('c', obj.percircuit())
-    
 
     if dof_calc_method is None: return two_dlogl_percircuit
     elif dof_calc_method == "all": mdl_dof = model.num_params

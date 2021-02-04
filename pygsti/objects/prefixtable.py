@@ -53,7 +53,7 @@ class PrefixTable(object):
 
         distinct_line_labels = set([cir.line_labels for cir in circuits_to_sort_by])
         if len(distinct_line_labels) == 1:  # if all circuits have the *same* line labels, we can just compare tuples
-            circuit_reps_to_compare_and_lengths = {i: (cir.layertup, len(cir)) 
+            circuit_reps_to_compare_and_lengths = {i: (cir.layertup, len(cir))
                                                    for i, cir in enumerate(circuits_to_sort_by)}
         else:
             circuit_reps_to_compare_and_lengths = {i: (cir, len(cir)) for i, cir in enumerate(circuits_to_sort_by)}

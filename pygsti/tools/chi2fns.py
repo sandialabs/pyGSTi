@@ -137,11 +137,11 @@ def chi2_per_circuit(model, dataset, circuits=None,
         aggregated over outcomes.
     """
     obj = _objfns._objfn(_objfns.Chi2Function, model, dataset, circuits,
-                           {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
-                           {'prob_clip_interval': prob_clip_interval},
-                           op_label_aliases, comm, mem_limit, ('percircuit',), (), mdc_store)
+                         {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
+                         {'prob_clip_interval': prob_clip_interval},
+                         op_label_aliases, comm, mem_limit, ('percircuit',), (), mdc_store)
     return obj.layout.allgather_local_array('c', obj.percircuit())
-    
+
 
 def chi2_jacobian(model, dataset, circuits=None,
                   min_prob_clip_for_weighting=1e-4, prob_clip_interval=(-10000, 10000),

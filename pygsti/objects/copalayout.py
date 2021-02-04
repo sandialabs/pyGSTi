@@ -174,14 +174,14 @@ class CircuitOutcomeProbabilityArrayLayout(object):
         if array_type == 'e': shape = (nelements,)
         elif array_type == 'ep': shape = (nelements, self._param_dimensions[0])
         elif array_type == 'ep2': shape = (nelements, self._param_dimensions[1])
-        elif array_type == 'epp': 
+        elif array_type == 'epp':
             shape = (nelements, self._param_dimensions[0], self._param_dimensions[1])
         elif array_type == 'p': shape = (self._param_dimensions[0],)
         elif array_type == 'jtj': shape = (self._param_dimensions[0], self._param_dimensions[0])
         elif array_type == 'jtf': shape = (self._param_dimensions[0],)
         elif array_type == 'c': shape = (self.num_circuits,)
         else:
-            raise ValueError("Invalid `ndimse`: %d" % ndims)
+            raise ValueError("Invalid `array_type`: %s" % array_type)
 
         ret = alloc_fn(shape, dtype=dtype)
 

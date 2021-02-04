@@ -1722,7 +1722,7 @@ def _compute_robust_scaling(scale_typ, objfn_cache, mdc_objfn):
         scaling factors that should be applied to the data counts for that circuit.
         Omitted circuits should not be scaled.
     """
-    circuit_list = mdc_objfn.circuits  # *local* circuit list
+    #circuit_list = mdc_objfn.circuits  # *local* circuit list
     global_circuit_list = mdc_objfn.global_circuits  # *global* circuit list
     ds = mdc_objfn.dataset
 
@@ -1914,7 +1914,7 @@ def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options,
         def _evaluate_constraints(wv):
             layout = mdc_objfn.layout
             dlogl_elements = logl_wildcard_fn.lsvec(wv)**2  # b/c WC fn only has sqrt of terms implemented now
-            dlogl_percircuit = _np.empty(len(layout.circuits), 'd') # *local* circuits
+            dlogl_percircuit = _np.empty(len(layout.circuits), 'd')  # *local* circuits
             for i in range(len(layout.circuits)):
                 dlogl_percircuit[i] = _np.sum(dlogl_elements[layout.indices_for_index(i)], axis=0)
 

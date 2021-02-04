@@ -847,7 +847,6 @@ class ModelDatasetCircuitsStore(object):
         self.array_types = array_types
 
         if isinstance(self.layout, _DistributableCOPALayout):  # then store global circuit liste separately
-            init = len(self.circuits)
             self.global_circuits = self.circuits
             self.circuits = _CircuitList(self.layout.circuits, self.global_circuits.op_label_aliases,
                                          self.global_circuits.circuit_weights, name=None)
@@ -6362,7 +6361,6 @@ class CachedObjectiveFunction(object):
         self.layout = objective_function.layout.global_layout
         self.model_paramvec = objective_function.model.to_vector().copy()
 
-        ra = objective_function.resource_alloc
         objfn_layout = objective_function.layout
         self.fn = objective_function.fn()  # internally gathers to all ranks
         self.chi2k_distributed_fn = objective_function.chi2k_distributed_qty(self.fn)

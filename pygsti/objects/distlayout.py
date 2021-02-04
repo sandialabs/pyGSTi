@@ -227,7 +227,8 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
                     start = stop = offset
                 assert(stop == offset)
                 stop += atom_sizes[i]
-                atoms_dict[i].element_slice = slice(offset - start, stop - start)  # atom's slice to index into *local* array
+                atoms_dict[i].element_slice = slice(offset - start, stop - start)
+                # .element_slice is atom's slice to index into it's *local* array
             offset += atom_sizes[i]
         self.host_num_elements = offset
         self.host_element_slice = slice(start, stop)
@@ -346,8 +347,8 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
                 host_param_slices_by_intrahost_rank = atom_processing_ralloc.host_comm.allgather(self.host_param_slice)
                 owned_paramCommIndex_by_intrahost_rank = \
                     atom_processing_ralloc.host_comm.allgather(owned_paramCommIndex)
-                self.my_hosts_param_slices = {ipc: hpc for ipc, hpc  in zip(owned_paramCommIndex_by_intrahost_rank,
-                                                                            host_param_slices_by_intrahost_rank)
+                self.my_hosts_param_slices = {ipc: hpc for ipc, hpc in zip(owned_paramCommIndex_by_intrahost_rank,
+                                                                           host_param_slices_by_intrahost_rank)
                                               if ipc >= 0}
             else:
                 self.my_hosts_param_slices = {owned_paramCommIndex: self.host_param_slice}
@@ -600,7 +601,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
                 self.host_circuit_slice = slice(offset, offset + circuit_counts[iAtomComm])
             offset += circuit_counts[iAtomComm]
         self.host_num_circuits = offset
-            
+
         #Store the global-circuit-index of each of this processor's circuits (local_circuits)
         # Note: unlike other quantities (elements, params, etc.), a proc's local circuits are not guaranteed to be
         #  contiguous portions of the global circuit list, so we must use an index array rather than a slice:
@@ -684,7 +685,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         -------
         ResourceAllocation
         """
-        if sub_alloc_name is None: 
+        if sub_alloc_name is None:
             return self._resource_alloc
         if empty_if_missing and sub_alloc_name not in self._sub_resource_allocs:
             if self._resource_alloc:
@@ -875,13 +876,13 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         Note: can only set use_shared_mem=True when value is a numpy array
         """
         resource_alloc = self._resource_alloc
-        if typ in ('c','e'):  # value depends only on the "circuits" or "elements" of this layout
+        if typ in ('c', 'e'):  # value depends only on the "circuits" or "elements" of this layout
             sum_ralloc = resource_alloc
             unit_ralloc = self.resource_alloc('atom-processing')
         else:
             raise ValueError("Invalid `typ` argument: %s" % str(typ))
 
-        if use_shared_mem == "auto":            
+        if use_shared_mem == "auto":
             use_shared_mem = hasattr(value, 'shape')  # test if this is a numpy array
         else:
             assert(not use_shared_mem or hasattr(value, 'shape')), "Only arrays can be summed using shared mem!"
@@ -901,7 +902,6 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         """TODO: docstring  - assumes j, f are local arrays, allocated using 'ep' and 'e' types, respectively.
         Returns an array allocated using the 'jtf' type.
         """
-        resource_alloc = self._resource_alloc
         param_ralloc = self.resource_alloc('param-processing')  # acts on (element, param) blocks
         interatom_ralloc = self.resource_alloc('param-interatom')  # procs w/same param slice & diff atoms
 
@@ -935,13 +935,12 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         """TODO: docstring  - assumes j is a local array, allocated using 'ep' and 'e' types, respectively.
         Assumes jtj is an array allocated using the 'jtj' type.
         """
-        resource_alloc = self._resource_alloc
         param_ralloc = self.resource_alloc('param-processing')  # acts on (element, param) blocks
         atom_ralloc = self.resource_alloc('atom-processing')  # acts on (element,) blocks
         interatom_ralloc = self.resource_alloc('param-interatom')  # procs w/same param slice & diff atoms
         atom_jtj = _np.empty((_slct.length(self.host_param_slice), self.global_num_params), 'd')  # for my atomproc
         buf = _np.empty((self.max_param_slice_length, j.shape[0]), 'd')
-        
+
         if atom_ralloc.host_comm is not None:
             jT = j.copy().T  # copy so jT is *not* shared mem, which speeds up dot() calls
             # Note: also doing j_i.copy() in the dot call below could speed the dot up even more, but empirically only
@@ -977,7 +976,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
                 else:
                     ncols = _slct.length(param_slice)
                     atom_ralloc.comm.Bcast(buf[0:ncols, :], root=self.param_slice_owners[i])
-                    other_j = bufbuf[0:ncols, :].T
+                    other_j = buf[0:ncols, :].T
                     atom_jtj[:, param_slice] = _np.dot(jT, other_j)
 
         #Now need to sum atom_jtj over atoms to get jtj:
@@ -990,7 +989,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         scratch, scratch_shm = self.allocate_jtj_shared_mem_buf() if shared_mem_buf is None else shared_mem_buf
         interatom_ralloc.allreduce_sum(scratch, atom_jtj, unit_ralloc=param_ralloc)
         jtj[:, :] = scratch[self.fine_param_subslice, :]  # takes sub-portion to move to "fine" parameter distribution
-        if shared_mem_buf is None: 
+        if shared_mem_buf is None:
             interatom_ralloc.comm.barrier()  # don't free scratch too early
             _smt.cleanup_shared_ndarray(scratch_shm)
 

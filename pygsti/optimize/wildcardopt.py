@@ -461,7 +461,7 @@ def optimize_wildcard_budget_cvxopt(budget, L1weights, objfn, two_dlogl_threshol
 
     initial_probs = objfn.probs.copy()  # *local*
     current_probs = initial_probs.copy()
-    percircuit_budget_deriv = budget.precompute_for_same_circuits(layout.circuits) # for *local* circuits
+    percircuit_budget_deriv = budget.precompute_for_same_circuits(layout.circuits)  # for *local* circuits
 
     #Note: maybe we could do this gather in 1 call (?), but we play it safe and do it col-by-col
     global_percircuit_budget_deriv_cols = []
@@ -647,7 +647,7 @@ def optimize_wildcard_budget_barrier(budget, L1weights, objfn, two_dlogl_thresho
     printer.log("Beginning wildcard budget optimization using a barrier method.")
     layout = objfn.layout
     percircuit_budget_deriv = budget.precompute_for_same_circuits(layout.circuits)  # for *local* circuits
-    critical_percircuit_budgets = _get_critical_circuit_budgets(objfn, redbox_threshold) # for *global* circuits
+    critical_percircuit_budgets = _get_critical_circuit_budgets(objfn, redbox_threshold)  # for *global* circuits
 
     #Note: maybe we could do this gather in 1 call (?), but we play it safe and do it col-by-col
     global_percircuit_budget_deriv_cols = []
