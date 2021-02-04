@@ -360,7 +360,7 @@ class WildcardBudget(object):
                     sum_qA -= qvec[j]; sum_qC += qvec[j]; sum_fA -= fvec[j]
                 elif ratio < 1.0:  # j in B
                     beta_break = ratio
-                    if sum_fA >= 0:
+                    if sum_fA > 0:
                         alpha_break = (1.0 - beta_break * sum_fB - sum_qC) / sum_fA  # alpha_fn
                         pushedSD = 0.0
                     else:
@@ -382,11 +382,11 @@ class WildcardBudget(object):
 
                 nMovedToC += 1
             else:
-                try:
-                    assert(False), "TVD should eventually reach zero (I think)!"
-                except:
-                    import bpdb; bpdb.set_trace()
-                    print("Problem")
+                #try:
+                assert(False), "TVD should eventually reach zero (I think)!"
+                #except:
+                #    import bpdb; bpdb.set_trace()
+                #    print("Problem")
 
             #Now A,B,C are fixed to what they need to be for our given W
             # test if len(A) > 0, make tol here *smaller* than that assigned to zero freqs above
