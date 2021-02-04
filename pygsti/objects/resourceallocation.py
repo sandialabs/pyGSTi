@@ -12,11 +12,15 @@ Resource allocation manager
 import os as _os
 import numpy as _np
 import socket as _socket
+import fcntl as _fcntl
+
 import collections as _collections
+import itertools as _itertools
 from contextlib import contextmanager as _contextmanager
 from pygsti.objects.profiler import DummyProfiler as _DummyProfiler
 from hashlib import blake2b as _blake2b
 from ..tools import sharedmemtools as _smt
+from ..tools import mpitools as _mpit
 
 _dummy_profiler = _DummyProfiler()
 _GB = 1.0 / (1024.0)**3  # converts bytes to GB
@@ -339,20 +343,29 @@ class ResourceAllocation(object):
         from mpi4py import MPI
         participating_local = local if (unit_ralloc is None or unit_ralloc.comm is None or unit_ralloc.comm.rank == 0) \
             else _np.zeros(local.shape, local.dtype)
-        if self.host_comm is not None:
-            #Barrier-sum on host within shared mem
-            if self.host_comm.rank == 0: result.fill(0)  # zero out
+        if self.host_comm is not None and self.host_comm.size > 1:
+            #Divide up result among "workers", i.e., procs on same host
+            slices = _mpit.slice_up_slice(slice(0, result.shape[0]), self.host_comm.size)
+
+            # Zero out result
+            intrahost_rank = self.host_comm.rank; my_slice = slices[intrahost_rank]
+            result[my_slice].fill(0)
             self.host_comm.barrier()  # make sure all zero-outs above complete
-            for i in range(self.host_comm.size):
-                if i == self.host_comm.rank:
-                    result += participating_local  # adds *in place* (relies on numpy implementation)
+
+            # Round robin additions of contributions to result (to load balance all the host procs)
+            for slc in _itertools.chain(slices[intrahost_rank:], slices[0:intrahost_rank]):
+                result[slc] += participating_local[slc]  # adds *in place* (relies on numpy implementation)
                 self.host_comm.barrier()  # synchonize adding to shared mem
-            if self.host_comm.rank == 0:
-                summed_across_hosts = self.interhost_comm.allreduce(result, op=MPI.SUM)
-                result[(slice(None, None),) * result.ndim] = summed_across_hosts
-            self.host_comm.barrier()  # wait for allreduce and assignment to complete on non-hostroot procs
+
+            # Sum contributions across hosts
+            my_size = my_slice.stop - my_slice.start
+            summed_across_hosts = _np.empty((my_size,) + result.shape[1:], 'd')
+            self.interhost_comm.Allreduce(result[my_slice], summed_across_hosts, op=MPI.SUM)
+            result[my_slice] = summed_across_hosts
+            self.host_comm.barrier()  # wait for all Allreduce and assignments to complete
         elif self.comm is not None:
-            result[(slice(None, None),) * result.ndim] = self.comm.allreduce(participating_local, op=MPI.SUM)
+            #result[(slice(None, None),) * result.ndim] = self.comm.allreduce(participating_local, op=MPI.SUM)
+            self.comm.Allreduce(participating_local, result, op=MPI.SUM)
         else:
             result[(slice(None, None),) * result.ndim] = participating_local
 

@@ -132,6 +132,11 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         # this group will add "extra" penalty term elements to their objective function arrays.
         self.part_of_final_atom_processor = bool(myAtomCommIndex == nAtomComms - 1)
 
+        #Create this resource alloc now, as logic below needs to know its host structure
+        atom_processing_ralloc = _ResourceAllocation(
+            atom_processing_subcomm, resource_alloc.mem_limit, resource_alloc.profiler,
+            resource_alloc.distribute_method, resource_alloc.allocated_memory)
+
         #Get atom indices for this processor (the ones for this proc's atomComm)
         myAtomIndices, atomOwners, _ = _mpit.distribute_indices_base(
             list(range(nAtoms)), nAtomComms, myAtomCommIndex)
@@ -286,10 +291,17 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
                                                         or param_processing_subcomm.rank == 0) else -1
             owned_paramCommIndex_by_atomproc_rank = atom_processing_subcomm.allgather(owned_paramCommIndex) \
                 if (atom_processing_subcomm is not None) else [myParamCommIndex]
+            hostindex_by_atomproc_rank = atom_processing_subcomm.allgather(atom_processing_ralloc.host_index) \
+                if (atom_processing_subcomm is not None) else [resource_alloc.host_index]
+
             self.param_slices = _mpit.slice_up_slice(slice(0, num_params),
                                                      num_param_processors)  # matches param comm indices
+            self.max_param_slice_length = max([_slct.length(s) for s in self.param_slices])  # useful for buffer sizing
             self.param_slice_owners = {ipc: atomproc_rank for atomproc_rank, ipc
                                        in enumerate(owned_paramCommIndex_by_atomproc_rank) if ipc >= 0}
+            self.param_slice_owner_hostindices = {owned_paramCommIndex_by_atomproc_rank[atomproc_rank]: hi
+                                                  for atomproc_rank, hi in enumerate(hostindex_by_atomproc_rank)
+                                                  if owned_paramCommIndex_by_atomproc_rank[atomproc_rank] >= 0}
             self.my_owned_paramproc_index = owned_paramCommIndex
             # Note: if muliple procs within atomproc com have the same myParamCommIndex (possible when
             #  param_processing_subcomm.size > 1) then the "owner" of a param slice is the
@@ -325,6 +337,18 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
                     offset += len(pinds)
                 self.host_num_params = offset
                 self.host_param_slice = host_param_slice
+
+            #Each processor needs to know the host_param_slice of the "owner" of each param slice
+            # (i.e. parameter comm/processor) for owners thater are other processors on the same host.
+            if atom_processing_ralloc.host_comm is not None:
+                host_param_slices_by_intrahost_rank = atom_processing_ralloc.host_comm.allgather(self.host_param_slice)
+                owned_paramCommIndex_by_intrahost_rank = \
+                    atom_processing_ralloc.host_comm.allgather(owned_paramCommIndex)
+                self.my_hosts_param_slices = { ipc: hpc for ipc, hpc  in zip(owned_paramCommIndex_by_intrahost_rank,
+                                                                             host_param_slices_by_intrahost_rank)
+                                               if ipc >= 0}
+            else:
+                self.my_hosts_param_slices = None
 
             # split up myParamIndices into interatom_param_subcomm.size (~nAtomComms * param_processing_subcomm.size)
             #  groups for processing quantities that don't have any 'element' dimension, where we want all procs working
@@ -505,9 +529,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         # save sub-resource-allocations
         self._resource_alloc = resource_alloc
         self._sub_resource_allocs = {}  # dict of sub-resource-allocations for use with this layout
-        self._sub_resource_allocs['atom-processing'] = _ResourceAllocation(
-            atom_processing_subcomm, resource_alloc.mem_limit, resource_alloc.profiler,
-            resource_alloc.distribute_method, resource_alloc.allocated_memory)
+        self._sub_resource_allocs['atom-processing'] = atom_processing_ralloc  # created above b/c needed earlier
         self._sub_resource_allocs['param-processing'] = _ResourceAllocation(
             param_processing_subcomm, resource_alloc.mem_limit, resource_alloc.profiler,
             resource_alloc.distribute_method, resource_alloc.allocated_memory)
@@ -899,48 +921,75 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         #if param_comm.host_comm is not None and param_comm.host_comm.rank != 0:
         #    return None  # this processor doesn't need to do any more - root host proc will fill returned shared mem
 
-    def fill_jtj(self, j, jtj):
+    def allocate_jtj_shared_mem_buf(self):
+        interatom_ralloc = self.resource_alloc('param-interatom')  # procs w/same param slice & diff atoms
+        buf, buf_shm = _smt.create_shared_ndarray(
+            interatom_ralloc, (_slct.length(self.host_param_slice), self.global_num_params), 'd')
+        interatom_ralloc.comm.barrier()  # wait for scratch to be ready
+        return buf, buf_shm
+
+    def fill_jtj(self, j, jtj, shared_mem_buf=None):
         """TODO: docstring  - assumes j is a local array, allocated using 'ep' and 'e' types, respectively.
-        Returns an array allocated using the 'jtj' type.
+        Assumes jtj is an array allocated using the 'jtj' type.
         """
-        jT = j.T
         resource_alloc = self._resource_alloc
         param_ralloc = self.resource_alloc('param-processing')  # acts on (element, param) blocks
         atom_ralloc = self.resource_alloc('atom-processing')  # acts on (element,) blocks
         interatom_ralloc = self.resource_alloc('param-interatom')  # procs w/same param slice & diff atoms
         atom_jtj = _np.empty((_slct.length(self.host_param_slice), self.global_num_params), 'd')  # for my atomproc
-
-        for i, param_slice in enumerate(self.param_slices):
-            if i == self.my_owned_paramproc_index:
-                assert(param_slice == self.global_param_slice)
-                if atom_ralloc.comm is not None:
-                    assert(self.param_slice_owners[i] == atom_ralloc.comm.rank)
-                    atom_ralloc.comm.bcast(j, root=atom_ralloc.comm.rank)
-                    #Note: we only really need to broadcast this to other param_ralloc.comm.rank == 0
-                    # procs as these are the only atom_jtj's that contribute in the allreduce_sum below.
+        buf = _np.empty((self.max_param_slice_length, j.shape[0]), 'd')
+        
+        if atom_ralloc.host_comm is not None:
+            jT = j.copy().T  # copy so jT is *not* shared mem, which speeds up dot() calls
+            # Note: also doing j_i.copy() in the dot call below could speed the dot up even more, but empirically only
+            #  slightly, and so it's not worth doing.
+            for i, param_slice in enumerate(self.param_slices):  # for each parameter slice <=> param "processor"
+                owning_host_index = self.param_slice_owner_hostindices[i]
+                if atom_ralloc.host_index == owning_host_index:
+                    # then my host contains the i-th parameter slice (= row block of jT)
+                    j_i = j if i == self.my_owned_paramproc_index else j.host_array[:, self.my_hosts_param_slices[i]]
+                    if atom_ralloc.interhost_comm.size > 1:
+                        ncols = _slct.length(param_slice)
+                        buf[0:ncols, :] = j_i.T  # broadcast *transpose* so buf slice is contiguous
+                        atom_ralloc.interhost_comm.Bcast(buf[0:ncols, :], root=owning_host_index)
+                    atom_jtj[:, param_slice] = _np.dot(jT, j_i)
                 else:
-                    assert(self.param_slice_owners[i] == 0)
-                atom_jtj[:, param_slice] = _np.dot(jT, j)
-            else:
-                other_j = atom_ralloc.comm.bcast(None, root=self.param_slice_owners[i])
-                atom_jtj[:, param_slice] = _np.dot(jT, other_j)
+                    ncols = _slct.length(param_slice)
+                    atom_ralloc.interhost_comm.Bcast(buf[0:ncols, :], root=owning_host_index)
+                    j_i = buf[0:ncols, :].T
+                    atom_jtj[:, param_slice] = _np.dot(jT, j_i)
+        else:
+            jT = j.T
+            for i, param_slice in enumerate(self.param_slices):  # for each parameter slice <=> param "processor"
+                if i == self.my_owned_paramproc_index:
+                    assert(param_slice == self.global_param_slice)
+                    if atom_ralloc.comm is not None:
+                        assert(self.param_slice_owners[i] == atom_ralloc.comm.rank)
+                        atom_ralloc.comm.Bcast(jT, root=atom_ralloc.comm.rank)  # *transpose* so receiving buf is cont.
+                        #Note: we only really need to broadcast this to other param_ralloc.comm.rank == 0
+                        # procs as these are the only atom_jtj's that contribute in the allreduce_sum below.
+                    else:
+                        assert(self.param_slice_owners[i] == 0)
+                    atom_jtj[:, param_slice] = _np.dot(jT, j)
+                else:
+                    ncols = _slct.length(param_slice)
+                    atom_ralloc.comm.Bcast(buf[0:ncols, :], root=self.param_slice_owners[i])
+                    other_j = bufbuf[0:ncols, :].T
+                    atom_jtj[:, param_slice] = _np.dot(jT, other_j)
 
         #Now need to sum atom_jtj over atoms to get jtj:
         # assume jtj is created from allocate_local_array('jtj', 'd')
-        if interatom_ralloc.comm is None:  # only 1 atom - nothing to sum!
+        if interatom_ralloc.comm is None or interatom_ralloc.comm.size == 1:  # only 1 atom - nothing to sum!
             #Note: in this case, we could have just done jT = j.T[self.fine_param_subslice, :] above...
             jtj[:, :] = atom_jtj[self.fine_param_subslice, :]  # takes sub-portion to move to "fine" param distribution
             return
 
-        # Note: could allocate scratch in advance?
-        scratch, scratch_shm = _smt.create_shared_ndarray(
-            interatom_ralloc, (_slct.length(self.host_param_slice), self.global_num_params), 'd')
-        interatom_ralloc.comm.barrier()  # wait for scratch to be ready
+        scratch, scratch_shm = self.allocate_jtj_shared_mem_buf() if shared_mem_buf is None else shared_mem_buf
         interatom_ralloc.allreduce_sum(scratch, atom_jtj, unit_ralloc=param_ralloc)
         jtj[:, :] = scratch[self.fine_param_subslice, :]  # takes sub-portion to move to "fine" parameter distribution
-        interatom_ralloc.comm.barrier()  # don't free scratch too early
-
-        _smt.cleanup_shared_ndarray(scratch_shm)
+        if shared_mem_buf is None: 
+            interatom_ralloc.comm.barrier()  # don't free scratch too early
+            _smt.cleanup_shared_ndarray(scratch_shm)
 
     def distribution_info(self, nprocs):
         """

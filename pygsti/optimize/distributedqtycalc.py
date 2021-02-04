@@ -115,8 +115,14 @@ class UndistributedQuantityCalc(object):
     def fill_jtf(self, j, f, jtf):
         jtf[:] = _np.dot(j.T, f)
 
-    def fill_jtj(self, j, jtj):
+    def fill_jtj(self, j, jtj, shared_mem_buf=None):
         jtj[:, :] = _np.dot(j.T, j)
+
+    def allocate_jtj_shared_mem_buf(self):
+        return None, None
+
+    def deallocate_jtj_shared_mem_buf(self, jtj_buf):
+        pass
 
     def jtj_diag_indices(self, jtj):
         return _np.diag_indices_from(jtj)
@@ -268,7 +274,8 @@ class DistributedQuantityCalc(object):
 
     def dot_x(self, x1, x2):
         # assumes x's are in "fine" mode
-        local_dot = _np.dot(x1, x2)
+        local_dot = _np.array(_np.dot(x1, x2))
+        local_dot.shape = (1,)  # for compatibility with allreduce_sum
         result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (1,), 'd')
         self.resource_alloc.allreduce_sum(result, local_dot,
                                           unit_ralloc=self.layout.resource_alloc('param-fine'))
@@ -282,7 +289,8 @@ class DistributedQuantityCalc(object):
 
     def infnorm_x(self, x):  # (max(sum(abs(x), axis=1))) = max(abs(x))
         # assumes x's are in "fine" mode
-        local_infnorm = _np.linalg.norm(x, ord=_np.inf)
+        local_infnorm = _np.array(_np.linalg.norm(x, ord=_np.inf))
+        local_infnorm.shape = (1,)  # for compatibility with allreduce_sum
         result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (1,), 'd')
         self.resource_alloc.allreduce_max(result, local_infnorm,
                                           unit_ralloc=self.layout.resource_alloc('param-fine'))
@@ -293,7 +301,8 @@ class DistributedQuantityCalc(object):
 
     def max_x(self, x):
         # assumes x's are in "fine" mode
-        local_max = _np.max(x)
+        local_max = _np.array(_np.max(x))
+        local_max.shape = (1,)  # for compatibility with allreduce_sum
         result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (1,), 'd')
         self.resource_alloc.allreduce_max(result, local_max,
                                           unit_ralloc=self.layout.resource_alloc('param-fine'))
@@ -303,7 +312,8 @@ class DistributedQuantityCalc(object):
         return ret
 
     def norm2_f(self, f):
-        local_dot = _np.dot(f, f)
+        local_dot = _np.array(_np.dot(f, f))
+        local_dot.shape = (1,)  # for compatibility with allreduce_sum
         result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (1,), 'd')
         self.resource_alloc.allreduce_sum(result, local_dot,
                                           unit_ralloc=self.layout.resource_alloc('atom-processing'))
@@ -313,7 +323,8 @@ class DistributedQuantityCalc(object):
         return ret
 
     def norm2_jac(self, j):
-        local_norm2 = _np.linalg.norm(j)**2
+        local_norm2 = _np.array(_np.linalg.norm(j)**2)
+        local_norm2.shape = (1,)  # for compatibility with allreduce_sum
         result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (1,), 'd')
         self.resource_alloc.allreduce_sum(result, local_norm2,
                                           unit_ralloc=self.layout.resource_alloc('param-processing'))
@@ -323,7 +334,8 @@ class DistributedQuantityCalc(object):
         return ret
 
     def norm2_jtj(self, jtj):
-        local_norm2 = _np.linalg.norm(jtj)**2
+        local_norm2 = _np.array(_np.linalg.norm(jtj)**2)
+        local_norm2.shape = (1,)  # for compatibility with allreduce_sum
         result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (1,), 'd')
         self.resource_alloc.allreduce_sum(result, local_norm2,
                                           unit_ralloc=self.layout.resource_alloc('param-fine'))
@@ -335,8 +347,15 @@ class DistributedQuantityCalc(object):
     def fill_jtf(self, j, f, jtf):
         self.layout.fill_jtf(j, f, jtf)
 
-    def fill_jtj(self, j, jtj):
-        self.layout.fill_jtj(j, jtj)
+    def fill_jtj(self, j, jtj, shared_mem_buf=None):
+        self.layout.fill_jtj(j, jtj, shared_mem_buf)
+
+    def allocate_jtj_shared_mem_buf(self):
+        return self.layout.allocate_jtj_shared_mem_buf()
+
+    def deallocate_jtj_shared_mem_buf(self, jtj_buf):
+        buf, buf_shm = jtj_buf
+        _smt.cleanup_shared_ndarray(buf_shm)
 
     def jtj_diag_indices(self, jtj):
         global_param_indices = self.layout.global_param_fine_slice

@@ -522,6 +522,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
         mu, nu = init_munu
     best_x_state = (mu, nu, norm_f, f.copy(), spow, None)  # need f.copy() b/c f is objfn mem
     rawJTJ_scratch = None
+    jtj_buf = dqc.allocate_jtj_shared_mem_buf()
 
     try:
 
@@ -598,7 +599,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
             #JTJ, JTJ_shm = _mpit.mpidot(Jac.T, Jac, my_mpidot_qtys[0], my_mpidot_qtys[1],
             #                            my_mpidot_qtys[2], resource_alloc, JTJ, JTJ_shm)  # _np.dot(Jac.T,Jac) 'PP'
 
-            dqc.fill_jtj(Jac, JTJ)
+            dqc.fill_jtj(Jac, JTJ, jtj_buf)
             dqc.fill_jtf(Jac, f, JTf)  # 'P'-type
 
             if profiler: profiler.add_time("custom_leastsq: dotprods", tm)
@@ -1086,11 +1087,12 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
         converged = True
 
     if comm is not None:
-        comm.barrier()  # Just to be safe, so procs stay synchronized
+        comm.barrier()  # Just to be safe, so procs stay synchronized and we don't free anything too soon
 
     dqc.deallocate_jtj(JTJ)
     dqc.deallocate_jtf(JTf)
     dqc.deallocate_jtf(x)
+    dqc.deallocate_jtj_shared_mem_buf(jtj_buf)
     #dqc.deallocate_x_for_jac(x_for_jac)
 
     if damping_basis == "singular_values":
