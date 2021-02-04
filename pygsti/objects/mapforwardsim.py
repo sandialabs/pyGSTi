@@ -221,8 +221,8 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
 
         nEls = layout_atom.num_elements
         nP2 = _slct.length(param_indices2) if isinstance(param_indices2, slice) else len(param_indices2)
-        dprobs, shm = _smt.create_shared_ndarray(resource_alloc, (nEls, nP2), 'd', track_memory=False)
-        dprobs2, shm2 = _smt.create_shared_ndarray(resource_alloc, (nEls, nP2), 'd', track_memory=False)
+        dprobs, shm = _smt.create_shared_ndarray(resource_alloc, (nEls, nP2), 'd')
+        dprobs2, shm2 = _smt.create_shared_ndarray(resource_alloc, (nEls, nP2), 'd')
         replib.DM_mapfill_dprobs_block(self, dprobs, slice(0, nEls), None, layout_atom, param_indices2, resource_alloc)
 
         orig_vec = self.model.to_vector().copy()

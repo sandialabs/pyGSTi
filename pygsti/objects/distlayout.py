@@ -886,7 +886,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         else:
             assert(not use_shared_mem or hasattr(value, 'shape')), "Only arrays can be summed using shared mem!"
 
-        if use_shared_mem:  # create a temporary shared array to sum into
+        if use_shared_mem and sum_ralloc.comm is not None:  # create a temporary shared array to sum into
             result, result_shm = _smt.create_shared_ndarray(sum_ralloc, value.shape, 'd')
             sum_ralloc.comm.barrier()  # wait for result to be ready
             sum_ralloc.allreduce_sum(result, value, unit_ralloc=unit_ralloc)
@@ -927,7 +927,8 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         interatom_ralloc = self.resource_alloc('param-interatom')  # procs w/same param slice & diff atoms
         buf, buf_shm = _smt.create_shared_ndarray(
             interatom_ralloc, (_slct.length(self.host_param_slice), self.global_num_params), 'd')
-        interatom_ralloc.comm.barrier()  # wait for scratch to be ready
+        if interatom_ralloc.comm is not None:
+            interatom_ralloc.comm.barrier()  # wait for scratch to be ready
         return buf, buf_shm
 
     def fill_jtj(self, j, jtj, shared_mem_buf=None):

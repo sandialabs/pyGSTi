@@ -25,6 +25,7 @@ from ..objects.circuitlist import CircuitList as _CircuitList
 from ..objects.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
 from ..objects.objectivefns import TimeIndependentMDCObjectiveFunction as _TIMDCObjFn
 from ..objects.objectivefns import CachedObjectiveFunction as _CachedObjectiveFunction
+from ..objects.objectivefns import ModelDatasetCircuitsStore as _ModelDatasetCircuitStore
 
 #Class for holding confidence region factory keys
 CRFkey = _collections.namedtuple('CRFkey', ['model', 'circuit_list'])
@@ -539,18 +540,22 @@ class Estimate(object):
             else:
                 return p.dataset
 
-    def final_mdc_store(self, resource_alloc=None):
+    def final_mdc_store(self, resource_alloc=None, array_types=('e', 'ep')):
+        """ TODO: docstring """
+        #Note: default array_types include 'ep' so, e.g. robust-stat re-optimization is possible.
         if self.parameters.get('final_objfn_store', None) is None:
             assert(self.parent is not None), "Estimate must be linked with parent before objectivefn can be created"
             circuit_list = self.parent.circuit_lists['final']
             mdl = self.models['final iteration estimate']
             ds = self.parent.dataset
-            mdc_store = _ModelDatasetCircuitStore(mdl, ds, circuit_list, resource_alloc)
+            self.parameters['final_objfn_store'] = _ModelDatasetCircuitStore(mdl, ds, circuit_list, resource_alloc,
+                                                                             array_types)
         return self.parameters['final_objfn_store']
 
     def final_objective_fn(self, resource_alloc=None):
+        """ TODO: docstring """
         if self.parameters.get('final_objfn', None) is None:
-            mdc_store = self.final_objfn_store(resource_alloc)
+            mdc_store = self.final_mdc_store(resource_alloc)
             objfn_builder = self.parameters['final_objfn_builder']
             #objfn_builder = self.parameters.get('final_objfn_builder', _objfns.PoissonPicDeltaLogLFunction.builder())
             objfn = objfn_builder.build_from_store(mdc_store)
@@ -558,6 +563,7 @@ class Estimate(object):
         return self.parameters['final_objfn']
 
     def final_objective_fn_cache(self, resource_alloc=None):
+        """ TODO: docstring """
         if self.parameters.get('final_objfn_cache', None) is None:
             objfn = self.final_objective_fn(resource_alloc)
             self.parameters['final_objfn_cache'] = _CachedObjectiveFunction(objfn)
@@ -694,8 +700,10 @@ class Estimate(object):
         # don't pickle MDC objective function or store objects b/c they might contain
         #  comm objects (in their layouts)
         to_pickle['parameters'] = self.parameters.copy()  # shallow copy
-        del to_pickle['parameters']['final_objfn_store']
-        del to_pickle['parameters']['final_objfn']
+        if 'final_objfn_store' in self.parameters:
+            del to_pickle['parameters']['final_objfn_store']
+        if 'final_objfn' in self.parameters:
+            del to_pickle['parameters']['final_objfn']
 
         # don't pickle parent (will create circular reference)
         del to_pickle['parent']
