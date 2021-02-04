@@ -2222,8 +2222,8 @@ cdef dm_mapfill_probs(double[:] array_to_fill,
     del prop2
     del shelved
 
-def debug_fill1(np.ndarray[double, ndim=2] dest, np.ndarray[double, ndim=2] src):
-    dest[:,:] = src
+def debug_fill1(np.ndarray[double, ndim=1] dest, np.ndarray[double, ndim=1] src):
+    dest[:] = src
 
 def debug_fill2(np.ndarray[double, ndim=2] dest, np.ndarray[double, ndim=2] src):
     dest[:,:] = src
