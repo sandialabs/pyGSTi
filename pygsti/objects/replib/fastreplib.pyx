@@ -2222,6 +2222,11 @@ cdef dm_mapfill_probs(double[:] array_to_fill,
     del prop2
     del shelved
 
+def debug_fill1(np.ndarray[double, ndim=2] dest, np.ndarray[double, ndim=2] src):
+    dest[:,:] = src
+
+def debug_fill2(np.ndarray[double, ndim=2] dest, np.ndarray[double, ndim=2] src):
+    dest[:,:] = src
 
 def DM_mapfill_dprobs_block(fwdsim,
                             np.ndarray[double, ndim=2] array_to_fill,
@@ -2305,9 +2310,11 @@ def DM_mapfill_dprobs_block(fwdsim,
                 # it were the host leader.
                 if shared_mem_leader:  # don't fill assumed-shared array-to_fill on non-mem-leaders
                     dm_mapfill_probs(probs2, c_layout_atom, c_opreps, c_rhos, c_ereps, &rho_cache,
-                                 elabel_indices_per_circuit, final_indices_per_circuit, fwdsim.model.dim)
-                    buf[:, iBuf] = (probs2 - probs) / eps
-        array_to_fill[dest_indices, dest_param_indices] = buf  # single write to shared mem (faster?)
+                                     elabel_indices_per_circuit, final_indices_per_circuit, fwdsim.model.dim)
+                    debug_fill1(buf[:, iBuf], (probs2 - probs) / eps)
+                    #buf[:, iBuf] = (probs2 - probs) / eps
+        debug_fill2(array_to_fill[dest_indices, dest_param_indices], buf)
+        #array_to_fill[dest_indices, dest_param_indices] = buf  # single write to shared mem (faster?)
     else:
         #Get a map from global parameter indices to the desired
         # final index within array_to_fill
@@ -2322,7 +2329,8 @@ def DM_mapfill_dprobs_block(fwdsim,
                 dm_mapfill_probs(probs2, c_layout_atom, c_opreps, c_rhos, c_ereps, &rho_cache,
                                  elabel_indices_per_circuit, final_indices_per_circuit, fwdsim.model.dim)
                 #_fas(array_to_fill, [dest_indices, iFinal], (probs2 - probs) / eps)  # I don't think this is needed
-                array_to_fill[dest_indices, iFinal] = (probs2 - probs) / eps
+                debug_fill1(array_to_fill[dest_indices, iFinal], (probs2 - probs) / eps)
+                #array_to_fill[dest_indices, iFinal] = (probs2 - probs) / eps
     fwdsim.model.from_vector(orig_vec, close=True)
 
     #REMOVE
