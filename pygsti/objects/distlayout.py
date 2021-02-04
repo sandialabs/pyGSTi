@@ -136,6 +136,8 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         atom_processing_ralloc = _ResourceAllocation(
             atom_processing_subcomm, resource_alloc.mem_limit, resource_alloc.profiler,
             resource_alloc.distribute_method, resource_alloc.allocated_memory)
+        if resource_alloc.host_comm is not None:  # signals that we want to use shared intra-host memory
+            atom_processing_ralloc.build_hostcomms()
 
         #Get atom indices for this processor (the ones for this proc's atomComm)
         myAtomIndices, atomOwners, _ = _mpit.distribute_indices_base(
@@ -344,11 +346,11 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
                 host_param_slices_by_intrahost_rank = atom_processing_ralloc.host_comm.allgather(self.host_param_slice)
                 owned_paramCommIndex_by_intrahost_rank = \
                     atom_processing_ralloc.host_comm.allgather(owned_paramCommIndex)
-                self.my_hosts_param_slices = { ipc: hpc for ipc, hpc  in zip(owned_paramCommIndex_by_intrahost_rank,
-                                                                             host_param_slices_by_intrahost_rank)
-                                               if ipc >= 0}
+                self.my_hosts_param_slices = {ipc: hpc for ipc, hpc  in zip(owned_paramCommIndex_by_intrahost_rank,
+                                                                            host_param_slices_by_intrahost_rank)
+                                              if ipc >= 0}
             else:
-                self.my_hosts_param_slices = None
+                self.my_hosts_param_slices = {owned_paramCommIndex: self.host_param_slice}
 
             # split up myParamIndices into interatom_param_subcomm.size (~nAtomComms * param_processing_subcomm.size)
             #  groups for processing quantities that don't have any 'element' dimension, where we want all procs working
@@ -547,7 +549,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
             resource_alloc.distribute_method, resource_alloc.allocated_memory)
 
         if resource_alloc.host_comm is not None:  # signals that we want to use shared intra-host memory
-            self._sub_resource_allocs['atom-processing'].build_hostcomms()
+            #self._sub_resource_allocs['atom-processing'].build_hostcomms()  # done above
             self._sub_resource_allocs['param-processing'].build_hostcomms()
             self._sub_resource_allocs['param2-processing'].build_hostcomms()
             self._sub_resource_allocs['param-interatom'].build_hostcomms()
