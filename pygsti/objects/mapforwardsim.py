@@ -182,7 +182,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         # Note: *don't* set dest_indices arg = layout.element_slice, as this is already done by caller
         resource_alloc.check_can_allocate_memory(layout_atom.cache_size * self.model.dim * _slct.length(param_slice))
         #firewall_array_to_fill = _np.empty(array_to_fill.shape, array_to_fill.dtype)
-        firewall_array_to_fill, shm = _smt.create_shared_ndarray(resource_alloc, (array_to_fill.shape, array_to_fill.dtype), 'd')
+        firewall_array_to_fill, shm = _smt.create_shared_ndarray(resource_alloc, array_to_fill.shape, array_to_fill.dtype)
         replib.DM_mapfill_dprobs_block(self, firewall_array_to_fill, slice(0, array_to_fill.shape[0]), dest_param_slice,
                                        layout_atom, param_slice, resource_alloc)
         
