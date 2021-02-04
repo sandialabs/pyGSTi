@@ -779,7 +779,7 @@ class GateSetTomography(_proto.Protocol):
         parameters['final_objfn_builder'] = self.final_builders[-1] if len(self.final_builders) > 0 \
             else self.iteration_builders[-1]
         parameters['final_objfn'] = final_objfn  # Final obj. function evaluated at best-fit point (cache too)
-        parameters['final_objfn_store'] = final_objfn  # Final obj. function is also a "MDC store"
+        parameters['final_mdc_store'] = final_objfn  # Final obj. function is also a "MDC store"
         parameters['profiler'] = profiler
         # Note: we associate 'final_cache' with the Estimate, which means we assume that *all*
         # of the models in the estimate can use same evaltree, have the same default prep/POVMs, etc.
@@ -947,7 +947,7 @@ class LinearGateSetTomography(_proto.Protocol):
         parameters = _collections.OrderedDict()
         parameters['protocol'] = self  # Estimates can hold sub-Protocols <=> sub-results
         parameters['profiler'] = profiler
-        parameters['final_objfn_store'] = final_store
+        parameters['final_mdc_store'] = final_store
         parameters['final_objfn_builder'] = _objfns.PoissonPicDeltaLogLFunction.builder()
         # just set final objective function as default logl objective (for ease of later comparison)
 

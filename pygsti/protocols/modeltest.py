@@ -208,7 +208,7 @@ class ModelTest(_proto.Protocol):
         parameters['raw_objective_values'] = objfn_vals
         parameters['model_test_values'] = chi2k_distributed_vals
         parameters['final_objfn_builder'] = self.objfn_builders[-1]
-        parameters['final_objfn_store'] = mdc_store
+        parameters['final_mdc_store'] = mdc_store
         parameters['profiler'] = profiler
 
         from .gst import _add_gaugeopt_and_badfit
