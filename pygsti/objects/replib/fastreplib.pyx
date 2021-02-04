@@ -2232,8 +2232,6 @@ def DM_mapfill_dprobs_block(fwdsim,
     cdef double eps = 1e-7 #hardcoded?
     #REMOVE if resource_alloc.comm is not None: resource_alloc.comm.barrier()  # ??
 
-    shared_mem_leader = resource_alloc.is_host_leader if (resource_alloc is not None) else True
-
     if param_indices is None:
         param_indices = list(range(fwdsim.model.num_params))
     if dest_param_indices is None:
@@ -2277,10 +2275,6 @@ def DM_mapfill_dprobs_block(fwdsim,
     #my_param_indices = param_indices[my_slice]
     #st = my_slice.start  # beginning of where my_param_indices results get placed into dpr_cache
 
-    #Get a map from global parameter indices to the desired
-    # final index within array_to_fill
-    iParamToFinal = {i: dest_index for i, dest_index in zip(param_indices, dest_param_indices)}
-
     #REMOVE if sub_resource_alloc.comm is None or sub_resource_alloc.comm.rank == 0:  # only compute on 0th rank
     orig_vec = fwdsim.model.to_vector().copy()
     fwdsim.model.from_vector(orig_vec, close=False)  # ensure we call with close=False first
@@ -2292,18 +2286,41 @@ def DM_mapfill_dprobs_block(fwdsim,
     dm_mapfill_probs(probs, c_layout_atom, c_opreps, c_rhos, c_ereps, &rho_cache,
                      elabel_indices_per_circuit, final_indices_per_circuit, fwdsim.model.dim)
 
-    for i in range(fwdsim.model.num_params):
-        #print("dprobs cache %d of %d" % (i,self.Np))
-        if i in iParamToFinal:
-            iFinal = iParamToFinal[i]
-            vec = orig_vec.copy(); vec[i] += eps
-            fwdsim.model.from_vector(vec, close=True)
-            #Note: dm_mapfill_probs could have taken a resource_alloc to employ multiple cpus to do computation.
-            # If probs2 were shared mem (seems not benefit to this?) it would need to only update `probs2` *if*
-            # it were the host leader.
-            if shared_mem_leader:  # don't fill assumed-shared array-to_fill on non-mem-leaders
+    if resource_alloc is not None and resource_alloc.host_comm is not None:  # (if using shared memory)
+        shared_mem_leader = resource_alloc.is_host_leader
+        buf = np.empty((_slct.length(dest_param_indices), len(dest_param_indices)), 'd')
+        # fill buffer instead of array_to_fill directly b/c writes to shared mem can be slower
+
+        #Get a map from global parameter indices to the desired
+        # final index within array_to_fill
+        iParamToBuf = {i: buf_i for buf_i, i in enumerate(param_indices)}
+
+        for i in range(fwdsim.model.num_params):
+            if i in iParamToBuf:
+                iBuf = iParamToBuf[i]
+                vec = orig_vec.copy(); vec[i] += eps
+                fwdsim.model.from_vector(vec, close=True)
+                #Note: dm_mapfill_probs could have taken a resource_alloc to employ multiple cpus to do computation.
+                # If probs2 were shared mem (seems not benefit to this?) it would need to only update `probs2` *if*
+                # it were the host leader.
+                if shared_mem_leader:  # don't fill assumed-shared array-to_fill on non-mem-leaders
+                    dm_mapfill_probs(probs2, c_layout_atom, c_opreps, c_rhos, c_ereps, &rho_cache,
+                                 elabel_indices_per_circuit, final_indices_per_circuit, fwdsim.model.dim)
+                    buf[:, iBuf] = (probs2 - probs) / eps
+        array_to_fill[dest_indices, dest_param_indices] = buf  # single write to shared mem (faster?)
+    else:
+        #Get a map from global parameter indices to the desired
+        # final index within array_to_fill
+        iParamToFinal = {i: dest_index for i, dest_index in zip(param_indices, dest_param_indices)}
+    
+        for i in range(fwdsim.model.num_params):
+            #print("dprobs cache %d of %d" % (i,self.Np))
+            if i in iParamToFinal:
+                iFinal = iParamToFinal[i]
+                vec = orig_vec.copy(); vec[i] += eps
+                fwdsim.model.from_vector(vec, close=True)
                 dm_mapfill_probs(probs2, c_layout_atom, c_opreps, c_rhos, c_ereps, &rho_cache,
-                             elabel_indices_per_circuit, final_indices_per_circuit, fwdsim.model.dim)
+                                 elabel_indices_per_circuit, final_indices_per_circuit, fwdsim.model.dim)
                 #_fas(array_to_fill, [dest_indices, iFinal], (probs2 - probs) / eps)  # I don't think this is needed
                 array_to_fill[dest_indices, iFinal] = (probs2 - probs) / eps
     fwdsim.model.from_vector(orig_vec, close=True)
