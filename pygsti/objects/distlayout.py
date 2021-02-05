@@ -22,8 +22,7 @@ from .resourceallocation import ResourceAllocation as _ResourceAllocation
 import numpy as _np
 import warnings as _warnings
 
-import time as _time #DEBUG TIMERS
-from ..tools import fastcalc as _fastcalc
+#import time as _time #DEBUG TIMERS
 
 
 def _assert_sequential(lst):
@@ -942,9 +941,6 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         interatom_ralloc = self.resource_alloc('param-interatom')  # procs w/same param slice & diff atoms
         atom_jtj = _np.empty((_slct.length(self.host_param_slice), self.global_num_params), 'd')  # for my atomproc
         buf = _np.empty((self.max_param_slice_length, j.shape[0]), 'd')
-        rank = self.resource_alloc().comm_rank
-        if rank == 0: print("Fill JTJ: %d slices.  jT shape %s" % (len(self.param_slices), str(j.T.shape)))
-        t0 = _time.time()
 
         if atom_ralloc.host_comm is not None:
             jT = j.copy().T  # copy so jT is *not* shared mem, which speeds up dot() calls
@@ -959,19 +955,12 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
                         ncols = _slct.length(param_slice)
                         buf[0:ncols, :] = j_i.T  # broadcast *transpose* so buf slice is contiguous
                         atom_ralloc.interhost_comm.Bcast(buf[0:ncols, :], root=owning_host_index)
-                    #t1 = _time.time()
-                    #res = _np.dot(jT, j_i)
-                    ##_fastcalc.fast_dot2(atom_jtj[:, param_slice], jT, j_i)
-                    #if rank == 0: print("  dot(jT, %s) for %s (%.4fs)" % (str(j_i.shape), str(param_slice), _time.time()-t1))
-                    #atom_jtj[:, param_slice] = res
-                    atom_jtj[:, param_slice] = _np.dot(jT, j_i)
                     atom_jtj[:, param_slice] = _np.dot(jT, j_i)
                 else:
                     ncols = _slct.length(param_slice)
                     atom_ralloc.interhost_comm.Bcast(buf[0:ncols, :], root=owning_host_index)
                     j_i = buf[0:ncols, :].T
                     atom_jtj[:, param_slice] = _np.dot(jT, j_i)
-                    #if rank == 0: print("  bcast + dot(jT, %s) for %s" % (str(j_i.shape), str(param_slice)))
         else:
             jT = j.T
             for i, param_slice in enumerate(self.param_slices):  # for each parameter slice <=> param "processor"
@@ -985,25 +974,18 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
                     else:
                         assert(self.param_slice_owners[i] == 0)
                     
-                    #t1 = _time.time()
-                    #res = _np.dot(jT, j)
-                    ##_fastcalc.fast_dot2(atom_jtj[:, param_slice].copy(), jT.copy(), j.copy())
-                    #if rank == 0: print("  dot2(jT, %s) for %s (%.4fs)" % (str(j.shape), str(param_slice), _time.time()-t1))
-                    #atom_jtj[:, param_slice] = res
                     atom_jtj[:, param_slice] = _np.dot(jT, j)
                 else:
                     ncols = _slct.length(param_slice)
                     atom_ralloc.comm.Bcast(buf[0:ncols, :], root=self.param_slice_owners[i])
                     other_j = buf[0:ncols, :].T
                     atom_jtj[:, param_slice] = _np.dot(jT, other_j)
-                    #if rank == 0: print("  bcast + dot2(jT, %s) for %s" % (str(other_j.shape), str(param_slice)))
 
         #Now need to sum atom_jtj over atoms to get jtj:
         # assume jtj is created from allocate_local_array('jtj', 'd')
         if interatom_ralloc.comm is None or interatom_ralloc.comm.size == 1:  # only 1 atom - nothing to sum!
             #Note: in this case, we could have just done jT = j.T[self.fine_param_subslice, :] above...
             jtj[:, :] = atom_jtj[self.fine_param_subslice, :]  # takes sub-portion to move to "fine" param distribution
-            if rank == 0: print("  Done in %.4fs" % (_time.time() - t0))
             return
 
         scratch, scratch_shm = self.allocate_jtj_shared_mem_buf() if shared_mem_buf is None else shared_mem_buf
@@ -1012,7 +994,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         if shared_mem_buf is None:
             interatom_ralloc.comm.barrier()  # don't free scratch too early
             _smt.cleanup_shared_ndarray(scratch_shm)
-        #if rank == 0: print("  Reduced Done in %.4fs" % (_time.time() - t0))
+
 
     def distribution_info(self, nprocs):
         """
