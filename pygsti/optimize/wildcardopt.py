@@ -184,7 +184,7 @@ def _get_critical_circuit_budgets(objfn, redbox_threshold):
 
     layout = objfn.layout
     num_circuits = len(layout.circuits)  # *local* circuits
-    critical_percircuit_budgets, shm = layout.allocate_local_array('c', 'd', zero_out=True)
+    critical_percircuit_budgets = layout.allocate_local_array('c', 'd', zero_out=True)
     raw_objfn = objfn.raw_objfn
 
     for i in range(num_circuits):
@@ -239,7 +239,7 @@ def _get_critical_circuit_budgets(objfn, redbox_threshold):
         critical_percircuit_budgets[i] = percircuit_budget
 
     global_critical_percircuit_budgets = layout.allgather_local_array('c', critical_percircuit_budgets)
-    _smt.cleanup_shared_ndarray(shm)
+    layout.free_local_array(critical_percircuit_budgets)
     return global_critical_percircuit_budgets
 
 

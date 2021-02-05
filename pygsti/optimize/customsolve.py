@@ -13,6 +13,7 @@ A custom MPI-enabled linear solver.
 import numpy as _np
 import scipy as _scipy
 from ..tools import sharedmemtools as _smt
+from ..tools import slicetools as _slct
 from .distributedqtycalc import UndistributedQuantityCalc as _UndistributedQuantityCalc
 
 try:
@@ -351,7 +352,7 @@ def _back_substitution(a, b, x, pivot_row_indices, my_row_slice, dqc, resource_a
                             # use shared mem to place x directly into destination
                             host_x = x.host_array  # the larger shared array that x is a portion of
                             plocal = p - gpslice.start  # local to the destination proc
-                            host_x[hpslice.start + plocal] = xval
+                            host_x[_slct.slice_hash(hpslice)][plocal] = xval
 
                     else:  # destination is on different host - need to use MPI
                         xval_buf[0] = xval

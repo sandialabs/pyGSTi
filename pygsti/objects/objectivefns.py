@@ -4095,14 +4095,14 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         self.initial_allocated_memory = self.resource_alloc.allocated_memory
 
         #Note: allocate probs as a local array in case we want to gather it (though objfn routines don't need this)
-        self.probs, self._probs_shm = self.layout.allocate_local_array('e', 'd', memory_tracker=self.resource_alloc)
-        self.obj, self._obj_shm = self.layout.allocate_local_array('e', 'd', memory_tracker=self.resource_alloc,
-                                                                   extra_elements=self.ex)
+        self.probs = self.layout.allocate_local_array('e', 'd', memory_tracker=self.resource_alloc)
+        self.obj = self.layout.allocate_local_array('e', 'd', memory_tracker=self.resource_alloc,
+                                                    extra_elements=self.ex)
 
-        self.hos_jac = self._jac_shm = None
+        self.jac = None
         if 'ep' in self.array_types:
-            self.jac, self._jac_shm = self.layout.allocate_local_array('ep', 'd', memory_tracker=self.resource_alloc,
-                                                                       extra_elements=self.ex)
+            self.jac = self.layout.allocate_local_array('ep', 'd', memory_tracker=self.resource_alloc,
+                                                        extra_elements=self.ex)
 
         #self.maxCircuitLength = max([len(x) for x in self.circuits])
         # If desired, we may need to make it local to this processor, which may not have data for all of self.circuits
@@ -4113,9 +4113,9 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
     def __del__(self):
         # Reset the allocated memory to the value it had in __init__, effectively releasing the allocations made there.
         self.resource_alloc.reset(allocated_memory=self.initial_allocated_memory)
-        _smt.cleanup_shared_ndarray(self._probs_shm)
-        _smt.cleanup_shared_ndarray(self._obj_shm)
-        _smt.cleanup_shared_ndarray(self._jac_shm)
+        self.layout.free_local_array(self.probs)
+        self.layout.free_local_array(self.obj)
+        self.layout.free_local_array(self.jac)
 
     #Model-based regularization and penalty support functions
     def set_penalties(self, regularize_factor=0, cptp_penalty_factor=0, spam_penalty_factor=0,
@@ -4825,8 +4825,8 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
         if paramvec is not None: self.model.from_vector(paramvec)
         dprobs = self.jac[0:self.nelements, :]  # avoid mem copying: use jac mem for dprobs
-        dprobs2, dprobs2_shm = self.layout.allocate_local_array('ep2', 'd')
-        hprobs, hprobs_shm = self.layout.allocate_local_array('epp', 'd')
+        dprobs2 = self.layout.allocate_local_array('ep2', 'd')
+        hprobs = self.layout.allocate_local_array('epp', 'd')
         # Note: dprobs2 is needed because param2 slice may be different
 
         # 'e', 'epp' (dg_dprobs, d2g_dprobs2, temporary variable dprobs_dp2 * dprobs_dp1 )
@@ -4849,8 +4849,8 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
         ret = _np.sum(hessian, axis=0)  # sum over operation sequences and spam labels => (N)
         unit_ralloc.host_comm_barrier()  # ensure sum is performed before we free anything
-        _smt.cleanup_shared_ndarray(hprobs_shm)
-        _smt.cleanup_shared_ndarray(dprobs2_shm)
+        self.layout.free_local_array(hprobs)
+        self.layout.free_local_array(dprobs2)
         #NOTE: it doesn't seem like we need shared memory at all here - only if we were returning
         # a portion of it... would need a fill_ function to make this useful/needed TODO - remove shared mem above?
 

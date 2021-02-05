@@ -231,8 +231,14 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
                 atoms_dict[i].element_slice = slice(offset - start, stop - start)
                 # .element_slice is atom's slice to index into it's *local* array
             offset += atom_sizes[i]
-        self.host_num_elements = offset
+        self.host_num_elements = offset  # total number of elements on this host (useful?)
         self.host_element_slice = slice(start, stop)
+        
+        #FUTURE: if we wanted to hold an *index* instead of a host_slice:
+        # each atom comm on the same host will hold a unique index giving it's ordering
+        # on it's host, indexing its shared_mem_array (~it's slice into a big shared array)
+        #self.host_shared_array_index = myHostsAtomCommIndices.index(myAtomCommIndex)
+        #self.host_shared_array_size = stop - start
 
         # Similar for param distribution --------------------------------------------
         if len(param_dimensions) > 0:
@@ -707,12 +713,19 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         """
         resource_alloc = self._resource_alloc
         if array_type in ('e', 'ep', 'ep2', 'epp'):
+            my_slices = (slice(self.host_element_slice.start, self.host_element_slice.stop + extra_elements),) \
+                        if self.part_of_final_atom_processor else (self.host_element_slice,)
             array_shape = (self.host_num_elements + extra_elements,) if self.part_of_final_atom_processor \
-                else (self.host_num_elements,)
-            if array_type in ('ep', 'epp'): array_shape += (self.host_num_params,)
-            if array_type in ('ep2', 'epp'): array_shape += (self.host_num_params2,)
+                          else (self.host_num_elements,)
+            if array_type in ('ep', 'epp'): 
+                my_slices += (self.host_param_slice,)
+                array_shape += (self.host_num_params,)
+            if array_type in ('ep2', 'epp'):
+                my_slices += (self.host_param2_slice,)
+                array_shape += (self.host_num_params2,)
             allocating_ralloc = resource_alloc  # share mem between these processors
         elif array_type == 'p':
+            my_slices = (self.host_param_slice,)
             array_shape = (self.host_num_params,)
             allocating_ralloc = resource_alloc  # share mem between these processors
         #elif array_type == 'atom-hessian':
@@ -720,44 +733,68 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         #    allocating_ralloc = self.resource_alloc('atom-processing')  # don't share mem btwn atoms,
         #    # as each atom will have procs with the same (param1, param2) index block but we want separate mem
         elif array_type == 'jtj':
+            my_slices = (self.host_param_fine_slice, slice(0,self.global_num_params))
             array_shape = (self.host_num_params_fine, self.global_num_params)
             allocating_ralloc = resource_alloc  # self.resource_alloc('param-interatom')
         elif array_type == 'jtf':  # or array_type == 'pfine':
+            my_slices = (self.host_param_fine_slice,)
             array_shape = (self.host_num_params_fine,)
             allocating_ralloc = resource_alloc  # self.resource_alloc('param-interatom')
         elif array_type == 'c':
+            my_slices = (self.host_circuit_slice,)
             array_shape = (self.host_num_circuits,)
             allocating_ralloc = resource_alloc  # share mem between these processors
         else:
             raise ValueError("Invalid array_type: %s" % str(array_type))
 
-        host_array, host_array_shm = _smt.create_shared_ndarray(allocating_ralloc, array_shape, dtype,
-                                                                zero_out, memory_tracker)
+        #OLD: create a single array - this is fine, but suffers from slow write speeds when many
+        # procs need to write to the memory, even when different regions are written to  REMOVE?
+        #host_array, host_array_shm = _smt.create_shared_ndarray(allocating_ralloc, array_shape, dtype,
+        #                                                        zero_out, memory_tracker)
+        
+        #Instead, allocate separate shared arrays for each segment, so they can be written
+        # to independently:
+        host_array = {}; host_array_shm = {}
+        all_slice_tups = [my_slices] if allocating_ralloc.comm is None \
+                         else allocating_ralloc.comm.allgather(my_slices)
+        for slices in all_slice_tups:
+            hashed_slices = tuple([_slct.slice_hash(s) for s in slices])
+            array_shape = [_slct.length(s) for s in slices]
+            if hashed_slices in host_array: continue  # a slice we've already created (some procs target *same* slice)
+            host_array[hashed_slices], host_array_shm[hashed_slices] = _smt.create_shared_ndarray(
+                allocating_ralloc, array_shape, dtype, zero_out, memory_tracker)
 
-        if array_type in ('e', 'ep', 'ep2', 'epp'):
-            elslice = slice(self.host_element_slice.start, self.host_element_slice.stop + extra_elements) \
-                if self.part_of_final_atom_processor else self.host_element_slice
-            tuple_of_slices = (elslice,)
-            if array_type in ('ep', 'epp'): tuple_of_slices += (self.host_param_slice,)
-            if array_type in ('ep2', 'epp'): tuple_of_slices += (self.host_param2_slice,)
-        elif array_type == 'p':
-            tuple_of_slices = (self.host_param_slice,)
-        #elif array_type == 'atom-hessian':
-        #    tuple_of_slices = (self.host_param_slice, self.host_param2_slice)
-        elif array_type == 'jtj':
-            tuple_of_slices = (self.host_param_fine_slice, slice(0, self.global_num_params))
-        elif array_type == 'jtf':  # or 'x'
-            tuple_of_slices = (self.host_param_fine_slice,)
-        elif array_type == 'c':
-            tuple_of_slices = (self.host_circuit_slice,)
+        #OLD (single shared array) construction REMOVE?
+        #if array_type in ('e', 'ep', 'ep2', 'epp'):
+        #    elslice = slice(self.host_element_slice.start, self.host_element_slice.stop + extra_elements) \
+        #        if self.part_of_final_atom_processor else self.host_element_slice
+        #    my_slices = (elslice,)
+        #    if array_type in ('ep', 'epp'): my_slices += (self.host_param_slice,)
+        #    if array_type in ('ep2', 'epp'): my_slices += (self.host_param2_slice,)
+        #elif array_type == 'p':
+        #    my_slices = (self.host_param_slice,)
+        ##elif array_type == 'atom-hessian':
+        ##    my_slices = (self.host_param_slice, self.host_param2_slice)
+        #elif array_type == 'jtj':
+        #    my_slices = (self.host_param_fine_slice, slice(0, self.global_num_params))
+        #elif array_type == 'jtf':  # or 'x'
+        #    my_slices = (self.host_param_fine_slice,)
+        #elif array_type == 'c':
+        #    my_slices = (self.host_circuit_slice,)
 
-        local_array = host_array[tuple_of_slices]
+        my_hashed_slices = tuple([_slct.slice_hash(s) for s in my_slices])
+        local_array = host_array[my_hashed_slices]
         local_array = local_array.view(_smt.LocalNumpyArray)
         local_array.host_array = host_array
-        local_array.slices_into_host_array = tuple_of_slices,
+        local_array.slices_into_host_array = my_slices
         local_array.shared_memory_handle = host_array_shm
 
-        return local_array, host_array_shm
+        return local_array
+
+    def free_local_array(self, local_array):
+        if local_array is not None:
+            for shm_handle in local_array.shared_memory_handle.values():
+                _smt.cleanup_shared_ndarray(shm_handle)
 
     def gather_local_array_base(self, array_type, array_portion, extra_elements=0, all_gather=False):
         """
@@ -950,7 +987,9 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
                 owning_host_index = self.param_slice_owner_hostindices[i]
                 if atom_ralloc.host_index == owning_host_index:
                     # then my host contains the i-th parameter slice (= row block of jT)
-                    j_i = j if i == self.my_owned_paramproc_index else j.host_array[:, self.my_hosts_param_slices[i]]
+                    j_i = j if i == self.my_owned_paramproc_index \
+                          else j.host_array[_slct.slice_hash(self.host_element_slice),
+                                            _slct.slice_hash(self.my_hosts_param_slices[i])]
                     if atom_ralloc.interhost_comm.size > 1:
                         ncols = _slct.length(param_slice)
                         buf[0:ncols, :] = j_i.T  # broadcast *transpose* so buf slice is contiguous

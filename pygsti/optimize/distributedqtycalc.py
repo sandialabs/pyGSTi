@@ -147,32 +147,29 @@ class DistributedQuantityCalc(object):
         self.extra_elements = extra_elements
 
     def allocate_jtf(self):
-        local_array, redundant_shm = self.layout.allocate_local_array('jtf', 'd', extra_elements=self.extra_elements)
-        return local_array
+        return self.layout.allocate_local_array('jtf', 'd', extra_elements=self.extra_elements)
 
     def allocate_jtj(self):
-        local_array, redundant_shm = self.layout.allocate_local_array('jtj', 'd', extra_elements=self.extra_elements)
-        return local_array
+        return self.layout.allocate_local_array('jtj', 'd', extra_elements=self.extra_elements)
 
     #def allocate_x_for_jac(self):
     #    local_array, redundant_shm = self.layout.allocate_local_array('p', 'd', extra_elements=0)
     #    return local_array
 
     def allocate_jac(self):
-        local_array, redundant_shm = self.layout.allocate_local_array('ep', 'd', extra_elements=self.extra_elements)
-        return local_array
+        return self.layout.allocate_local_array('ep', 'd', extra_elements=self.extra_elements)
 
     def deallocate_jtf(self, jtf):
-        _smt.cleanup_shared_ndarray(jtf.shared_memory_handle)  # cleaup shared memory, if it was used
+        self.layout.free_local_array(jtf)  # cleaup shared memory, if it was used
 
     def deallocate_jtj(self, jtj):
-        _smt.cleanup_shared_ndarray(jtj.shared_memory_handle)  # cleaup shared memory, if it was used
+        self.layout.free_local_array(jtj)  # cleaup shared memory, if it was used
 
     #def deallocate_x_for_jac(self, x_for_jac):
     #    _smt.cleanup_shared_ndarray(x_for_jac.shared_memory_handle)  # cleaup shared memory, if it was used
 
     def deallocate_jac(self, jac):
-        _smt.cleanup_shared_ndarray(jac.shared_memory_handle)  # cleaup shared memory, if it was used
+        self.layout.free_local_array(jac)  # cleaup shared memory, if it was used
 
     #def fill_x_for_jac(self, x, x_for_jac):
     #    # need to gather fine-param-slices => param_slice

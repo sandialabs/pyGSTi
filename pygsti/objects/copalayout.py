@@ -186,7 +186,10 @@ class CircuitOutcomeProbabilityArrayLayout(object):
         ret = alloc_fn(shape, dtype=dtype)
 
         if memory_tracker: memory_tracker.add_tracked_memory(ret.size)
-        return ret, None  # (local_array, shared_mem_handle)
+        return ret  # local_array
+
+    def free_local_array(self, local_array):
+        pass
 
     def gather_local_array_base(self, array_portion, extra_elements=0, all_gather=False):
         """

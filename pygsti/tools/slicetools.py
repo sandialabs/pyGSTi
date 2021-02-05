@@ -345,3 +345,7 @@ def slice_of_slice(slc, base_slc):
             + (slc.stop if (slc.stop is not None) else 0)
         assert(base_slc.stop is None or stop <= base_slc.stop)
     return slice(start, stop)
+
+
+def slice_hash(slc):
+    return (slc.start, slc.stop, slc.step)
