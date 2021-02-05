@@ -1005,12 +1005,12 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
                         ncols = _slct.length(param_slice)
                         buf[0:ncols, :] = j_i.T  # broadcast *transpose* so buf slice is contiguous
                         atom_ralloc.interhost_comm.Bcast(buf[0:ncols, :], root=owning_host_index)
-                    atom_jtj[:, param_slice] = _np.dot(jT, j_i)
+                    atom_jtj[:, param_slice] = jT @ j_i #_np.dot(jT, j_i)
                 else:
                     ncols = _slct.length(param_slice)
                     atom_ralloc.interhost_comm.Bcast(buf[0:ncols, :], root=owning_host_index)
                     j_i = buf[0:ncols, :].T
-                    atom_jtj[:, param_slice] = _np.dot(jT, j_i)
+                    atom_jtj[:, param_slice] = jT @ j_i  #_np.dot(jT, j_i)
         else:
             jT = j.T
             for i, param_slice in enumerate(self.param_slices):  # for each parameter slice <=> param "processor"
@@ -1024,12 +1024,12 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
                     else:
                         assert(self.param_slice_owners[i] == 0)
                     
-                    atom_jtj[:, param_slice] = _np.dot(jT, j)
+                    atom_jtj[:, param_slice] = jT @ j # _np.dot(jT, j)
                 else:
                     ncols = _slct.length(param_slice)
                     atom_ralloc.comm.Bcast(buf[0:ncols, :], root=self.param_slice_owners[i])
                     other_j = buf[0:ncols, :].T
-                    atom_jtj[:, param_slice] = _np.dot(jT, other_j)
+                    atom_jtj[:, param_slice] = jT @ other_j  # _np.dot(jT, other_j)
 
         #Now need to sum atom_jtj over atoms to get jtj:
         # assume jtj is created from allocate_local_array('jtj', 'd')
