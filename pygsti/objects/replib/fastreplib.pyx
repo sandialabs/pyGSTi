@@ -2222,11 +2222,6 @@ cdef dm_mapfill_probs(double[:] array_to_fill,
     del prop2
     del shelved
 
-def debug_fill1(np.ndarray[double, ndim=1] dest, np.ndarray[double, ndim=1] src):
-    dest[:] = src
-
-def debug_fill2(np.ndarray[double, ndim=2] dest, np.ndarray[double, ndim=2] src):
-    dest[:,:] = src
 
 def DM_mapfill_dprobs_block(fwdsim,
                             np.ndarray[double, ndim=2] array_to_fill,
@@ -2293,33 +2288,6 @@ def DM_mapfill_dprobs_block(fwdsim,
 
     shared_mem_leader = resource_alloc.is_host_leader
 
-    #TODO REMOVE
-    #if resource_alloc is not None and resource_alloc.host_comm is not None:  # (if using shared memory)
-    #
-    #    buf = np.empty((_slct.length(dest_param_indices), len(dest_param_indices)), 'd')
-    #    # fill buffer instead of array_to_fill directly b/c writes to shared mem can be slower
-    #
-    #    #Get a map from global parameter indices to the desired
-    #    # final index within array_to_fill
-    #    #iParamToBuf = {i: buf_i for buf_i, i in enumerate(param_indices)}
-    #
-    #    for i in range(fwdsim.model.num_params):
-    #        if i in iParamToBuf:
-    #            iBuf = iParamToBuf[i]
-    #            vec = orig_vec.copy(); vec[i] += eps
-    #            fwdsim.model.from_vector(vec, close=True)
-    #            #Note: dm_mapfill_probs could have taken a resource_alloc to employ multiple cpus to do computation.
-    #            # If probs2 were shared mem (seems not benefit to this?) it would need to only update `probs2` *if*
-    #            # it were the host leader.
-    #            if shared_mem_leader:  # don't fill assumed-shared array-to_fill on non-mem-leaders
-    #                dm_mapfill_probs(probs2, c_layout_atom, c_opreps, c_rhos, c_ereps, &rho_cache,
-    #                                 elabel_indices_per_circuit, final_indices_per_circuit, fwdsim.model.dim)
-    #                debug_fill1(buf[:, iBuf], (probs2 - probs) / eps)
-    #                #buf[:, iBuf] = (probs2 - probs) / eps
-    #    debug_fill2(array_to_fill[dest_indices, dest_param_indices], buf)
-    #    #array_to_fill[dest_indices, dest_param_indices] = buf  # single write to shared mem (faster?)
-    #else:
-
     #Get a map from global parameter indices to the desired
     # final index within array_to_fill
     iParamToFinal = {i: dest_index for i, dest_index in zip(param_indices, dest_param_indices)}
@@ -2337,19 +2305,9 @@ def DM_mapfill_dprobs_block(fwdsim,
                 dm_mapfill_probs(probs2, c_layout_atom, c_opreps, c_rhos, c_ereps, &rho_cache,
                                  elabel_indices_per_circuit, final_indices_per_circuit, fwdsim.model.dim)
                 #_fas(array_to_fill, [dest_indices, iFinal], (probs2 - probs) / eps)  # I don't think this is needed
-                debug_fill1(array_to_fill[dest_indices, iFinal], (probs2 - probs) / eps)
-                #array_to_fill[dest_indices, iFinal] = (probs2 - probs) / eps
+                array_to_fill[dest_indices, iFinal] = (probs2 - probs) / eps
 
     fwdsim.model.from_vector(orig_vec, close=True)
-
-    #REMOVE
-    #Now each rank-0 sub_resource_alloc processor has filled the relavant parts of array_to_fill, so gather together:
-    #_mpit.gather_slices(all_slices, owners, array_to_fill, [], axes=1, comm=resource_alloc)
-    #if resource_alloc.comm is not None:
-    #    print("DB: Rank%d of %d mapfill dprobs: %g" % (resource_alloc.comm.rank, resource_alloc.comm.size, np.linalg.norm(array_to_fill)))
-    #else:
-    #    print("DB: comm=None mapfill dprobs: %g" % (np.linalg.norm(array_to_fill)))
-
     free_rhocache(rho_cache)  #delete cache entries
 
 
