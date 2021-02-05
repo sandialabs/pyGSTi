@@ -2107,7 +2107,7 @@ def DM_mapfill_probs_block(fwdsim, np.ndarray[double, mode="c", ndim=1] array_to
     ereps = [fwdsim.model._circuit_layer_operator(elbl, 'povm')._rep for elbl in layout_atom.full_effect_labels]  # cache these in future
 
     # convert to C-mode:  evaltree, operation_lookup, operationreps
-    cdef c_layout_atom = convert_maplayout(layout_atom, operation_lookup, rho_lookup)
+    cdef vector[vector[INT]] c_layout_atom = convert_maplayout(layout_atom, operation_lookup, rho_lookup)
     cdef vector[DMStateCRep*] c_rhos = convert_rhoreps(rhoreps)
     cdef vector[DMEffectCRep*] c_ereps = convert_ereps(ereps)
     cdef vector[DMOpCRep*] c_opreps = convert_opreps(operationreps)
@@ -2261,7 +2261,7 @@ def DM_mapfill_dprobs_block(fwdsim,
     ereps = [fwdsim.model._circuit_layer_operator(elbl, 'povm')._rep for elbl in layout_atom.full_effect_labels]  # cache these in future
 
     # convert to C-mode:  evaltree, operation_lookup, operationreps
-    cdef c_layout_atom = convert_maplayout(layout_atom, operation_lookup, rho_lookup)
+    cdef vector[vector[INT]] c_layout_atom = convert_maplayout(layout_atom, operation_lookup, rho_lookup)
     cdef vector[DMStateCRep*] c_rhos = convert_rhoreps(rhoreps)
     cdef vector[DMEffectCRep*] c_ereps = convert_ereps(ereps)
     cdef vector[DMOpCRep*] c_opreps = convert_opreps(operationreps)
