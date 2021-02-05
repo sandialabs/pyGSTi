@@ -82,11 +82,17 @@ class UndistributedQuantityCalc(object):
     def allgather_f(self, f, global_f):
         global_f[:] = f
 
-    def gather_jtj(self, jtj):
+    def gather_jtj(self, jtj, return_shared=False):
         return jtj  # gathers just onto the root proc
 
     def scatter_jtj(self, global_jtj, jtj):
         jtj[:, :] = global_jtj
+
+    def gather_jtf(self, jtf, return_shared=False):
+        return jtf
+
+    def scatter_jtf(self, global_jtf, jtf):
+        jtf[:] = global_jtf
 
     def global_svd_dot(self, jac_v, minus_jtf):
         return _np.dot(jac_v.T, minus_jtf)
@@ -220,9 +226,9 @@ class DistributedQuantityCalc(object):
         else:
             global_f[:] = global_f_on_root
 
-    def gather_jtj(self, jtj):
+    def gather_jtj(self, jtj, return_shared=False):
         # gathers just onto the root proc
-        return self.layout.gather_local_array('jtj', jtj)
+        return self.layout.gather_local_array('jtj', jtj, return_shared=return_shared)
 
     def scatter_jtj(self, global_jtj, jtj):
         # Don't bother trying to be fancy with shared mem here - we need to send the
@@ -234,9 +240,9 @@ class DistributedQuantityCalc(object):
         else:
             jtj[:, :] = global_jtj
 
-    def gather_jtf(self, jtf):
+    def gather_jtf(self, jtf, return_shared=False):
         # gathers just onto the root proc
-        return self.layout.gather_local_array('jtf', jtf)
+        return self.layout.gather_local_array('jtf', jtf, return_shared=return_shared)
 
     def scatter_jtf(self, global_jtf, jtf):
         # Don't bother trying to be fancy with shared mem here - we need to send the

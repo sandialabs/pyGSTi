@@ -61,10 +61,14 @@ def custom_solve(a, b, x, dqc, resource_alloc, proc_threshold=100):
         # We're not exactly sure where scipy is better, but until we speed up / change gaussian-elim
         # alg the scipy alg is much faster for small numbers of procs and so should be used unless
         # A is too large to be gathered to the root proc.
-        global_a = dqc.gather_jtj(a)
-        global_b = dqc.gather_jtf(b)
+        global_a, a_shm = dqc.gather_jtj(a, return_shared=True)
+        global_b, b_shm = dqc.gather_jtf(b, return_shared=True)
+        #global_a = dqc.gather_jtj(a)
+        #global_b = dqc.gather_jtf(b)
         global_x = _scipy.linalg.solve(global_a, global_b, assume_a='pos') if (comm.rank == 0) else None
         dqc.scatter_x(global_x, x)
+        _smt.cleanup_shared_ndarray(a_shm)
+        _smt.cleanup_shared_ndarray(b_shm)
         return
 
     if host_comm is not None:

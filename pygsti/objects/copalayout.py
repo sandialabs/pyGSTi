@@ -191,9 +191,10 @@ class CircuitOutcomeProbabilityArrayLayout(object):
     def free_local_array(self, local_array):
         pass
 
-    def gather_local_array_base(self, array_portion, extra_elements=0, all_gather=False):
+    def gather_local_array_base(self, array_portion, extra_elements=0, all_gather=False, return_shared=False):
         """
         Gathers an array onto the root processor.
+        TODO: docstring (update)
 
         Gathers the portions of an array that was distributed using this
         layout (i.e. according to the host_element_slice, etc. slices in
@@ -220,15 +221,18 @@ class CircuitOutcomeProbabilityArrayLayout(object):
             The full (global) output array on the root (rank=0) processor.
             `None` on all other processors.
         """
-        return array_portion  # no gathering is performed by this layout class
+        if return_shared:
+            return array_portion, None  # no shared memory handle
+        else:
+            return array_portion  # no gathering is performed by this layout class
 
-    def gather_local_array(self, array_type, array_portion, extra_elements=0):
+    def gather_local_array(self, array_type, array_portion, extra_elements=0, return_shared=False):
         """ TODO: docstring """
-        return self.gather_local_array_base(array_type, array_portion, extra_elements, False)
+        return self.gather_local_array_base(array_type, array_portion, extra_elements, False, return_shared)
 
-    def allgather_local_array(self, array_type, array_portion, extra_elements=0):
+    def allgather_local_array(self, array_type, array_portion, extra_elements=0, return_shared=False):
         """ TODO: docstring """
-        return self.gather_local_array_base(array_type, array_portion, extra_elements, True)
+        return self.gather_local_array_base(array_type, array_portion, extra_elements, True, return_shared)
 
     def allsum_local_quantity(self, typ, value, use_shared_mem="auto"):
         return value

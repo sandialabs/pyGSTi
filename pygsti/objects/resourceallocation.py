@@ -309,17 +309,20 @@ class ResourceAllocation(object):
         participating = unit_ralloc is None or unit_ralloc.comm is None or unit_ralloc.comm.rank == 0
         gather_comm = self.interhost_comm if (self.host_comm is not None) else self.comm
 
-        if all_gather:
-            slices = gather_comm.allgather(slice_of_global if participating else None)
-            gathered_data = gather_comm.allgather(local)  # could change this to Allgather (?)
+        if gather_comm is None or gather_comm.size == 1:
+            result[slice_of_global] = local
         else:
-            slices = gather_comm.gather(slice_of_global if participating else None, root=0)
-            gathered_data = gather_comm.gather(local, root=0)  # could change this to Gather (?)
-
-        if gather_comm.rank == 0 or all_gather:
-            for slc_or_indx_array, data in zip(slices, gathered_data):
-                if slc_or_indx_array is None: continue  # signals a non-unit-leader proc that shouldn't do anything
-                result[slc_or_indx_array] = data
+            if all_gather:
+                slices = gather_comm.allgather(slice_of_global if participating else None)
+                gathered_data = gather_comm.allgather(local)  # could change this to Allgather (?)
+            else:
+                slices = gather_comm.gather(slice_of_global if participating else None, root=0)
+                gathered_data = gather_comm.gather(local, root=0)  # could change this to Gather (?)
+    
+            if gather_comm.rank == 0 or all_gather:
+                for slc_or_indx_array, data in zip(slices, gathered_data):
+                    if slc_or_indx_array is None: continue  # signals a non-unit-leader proc that shouldn't do anything
+                    result[slc_or_indx_array] = data
 
         self.comm.barrier()  # make sure result is completely filled before returniing
         return

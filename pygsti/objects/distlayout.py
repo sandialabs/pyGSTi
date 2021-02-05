@@ -796,7 +796,8 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
             for shm_handle in local_array.shared_memory_handle.values():
                 _smt.cleanup_shared_ndarray(shm_handle)
 
-    def gather_local_array_base(self, array_type, array_portion, extra_elements=0, all_gather=False):
+    def gather_local_array_base(self, array_type, array_portion, extra_elements=0, all_gather=False,
+                                return_shared=False):
         """
         Gathers an array onto the root processor.
 
@@ -830,11 +831,18 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
             Whether the result should be returned on all the processors (when `all_gather=True`)
             or just the rank-0 processor (when `all_gather=False`).
 
+        return_shared : bool, optional
+            Whether the returned array is allowed to be a shared-memory array that the caller assumes
+            responsibilty for freeing via :function:`pygsti.tools.sharedmemtools.cleanup_shared_ndarray`.
+            When `True` the shared memory handle is also returned.
+
         Returns
         -------
-        numpy.ndarray or None
+        gathered_array : numpy.ndarray or None
             The full (global) output array on the root (rank=0) processor.
             `None` on all other processors.
+        shared_mem_handle : multiprocessing.shared_memory.SharedMemory
+            A shared-memory handle.  Only returned when `return_shared=True`.
         """
         resource_alloc = self._resource_alloc
         if resource_alloc.comm is None:
@@ -902,10 +910,13 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
 
         gather_ralloc.gather_base(global_array, array_portion, slice_of_global, unit_ralloc, all_gather)
 
+        if return_shared:
+            resource_alloc.comm.barrier()  # needed for sync (above gather_base call doesn't always gather)
+            return global_array, global_array_shm
+
         ret = global_array.copy() if (resource_alloc.comm.rank == 0 or all_gather) else None  # so no longer shared mem
         resource_alloc.comm.barrier()  # make sure global_array is copied before we free it
-        if gather_comm.rank == 0 or all_gather:
-            _smt.cleanup_shared_ndarray(global_array_shm)
+        _smt.cleanup_shared_ndarray(global_array_shm)  # ok if _shm is None
         return ret
 
     def allsum_local_quantity(self, typ, value, use_shared_mem="auto"):
