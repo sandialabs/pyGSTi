@@ -150,7 +150,7 @@ v
 
         if self._num_modeltest_params is not None:
             return self._num_modeltest_params
-        elif hasattr(self, 'num_nongauge_params'):
+        elif 'num_nongauge_params' in dir(self):  # better than hasattr, which *runs* the @property method
             if MEMLIMIT_FOR_NONGAUGE_PARAMS is not None:
                 if hasattr(self, 'num_elements'):
                     memForNumGaugeParams = self.num_elements * (self.num_params + self.dim**2) \
