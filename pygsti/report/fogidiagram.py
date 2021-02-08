@@ -65,10 +65,10 @@ class FOGIDiagram(object):
     def __init__(self, fogi_stores, op_coefficients, model_dim, op_to_target_qubits=None):
         # Note: fogi_store can one or multiple (a list of) stores
         self.fogi_stores = [fogi_stores] if isinstance(fogi_stores, _FOGIStore) else fogi_stores
-        self.fogi_coeffs_by_store = [fogi_store.opcoeffs_to_fogi_coefficients_array(op_coefficients)
+        self.fogi_comps_by_store = [fogi_store.opcoeffs_to_fogi_components_array(op_coefficients)
                                      for fogi_store in self.fogi_stores]
-        self.fogi_coeff_offsets = _np.cumsum([0] + [len(coeffs) for coeffs in self.fogi_coeffs_by_store])[0:-1]
-        self.fogi_coeffs = _np.concatenate(self.fogi_coeffs_by_store)
+        self.fogi_coeff_offsets = _np.cumsum([0] + [len(coeffs) for coeffs in self.fogi_comps_by_store])[0:-1]
+        self.fogi_comps = _np.concatenate(self.fogi_comps_by_store)
 
         self.fogi_infos_by_store = [fogi_store.create_binned_fogi_infos()
                                     for fogi_store in self.fogi_stores]
@@ -119,34 +119,48 @@ class FOGIDiagram(object):
             assert(('H', 'S') not in op_fogi_infos_by_type)
 
     def _contrib(self, typ, op_set, infos_to_aggregate):
-        def _sto_contrib(infos):
+        def _sto_local_contrib(opt_set, infos):
             error_rate = 0
             for info in infos:
-                vec_rate = sum(info['fogi_dir'])  # sum of elements gives error rate of vector
-                error_rate += self.fogi_coeffs[info['fogi_index']] * vec_rate
-            return {'error_rate': abs(error_rate)}  # maybe negative rates are ok (?) but we take abs here.
-            #OLD: return {'error_rate': sum([abs(self.fogi_coeffs[info['fogi_index']]) for info in infos])}
+                fogi_vec = info['fogi_dir'] / _np.linalg.norm(info['fogi_dir'])**2
+                vec_rate = sum(_np.abs(fogi_vec))  # L1 norm gives error rate of vector
+                #sto rates should all have normalized fogi_dirs so rate = 1 == L1 norm of *vec* = *dir* / L2(*dir*)^2
+                assert(_np.isclose(vec_rate, 1.0))  # if we've normalized correctly, this should be true
+                error_rate += self.fogi_comps[info['fogi_index']] * vec_rate
+            return {'error_rate': error_rate}
 
+        def _sto_relational_contrib(opt_set, infos):
+            error_rate = 0
+            for info in infos:
+                fogi_vec = info['fogi_dir'] / _np.linalg.norm(info['fogi_dir'])**2
+                vec_rate = sum(fogi_vec)  # sum of elements gives error rate of vector
+                # HERE - intrinsic relational rate addition is still a bit mysterious -- we should allow for
+                # negative rates to balance positive ones to get an overall error rate, but maybe it's more
+                # complicated than just adding teh elements up as we do above...
+                error_rate += self.fogi_comps[info['fogi_index']] * vec_rate
+            return {'error_rate': error_rate}  # maybe negative rates are ok (?) -- we could take abs here.
+            
         def _ham_local_contrib(op_set, infos):
             assert(len(op_set) == 1)
-            if len(infos) == 0: return {'errgen_angle': 0.0}
+            if len(infos) == 0: return {'errgen_jangle': 0.0}
             si = infos[0]['store_index']  # all infos must come from same *store*
             op_indices_slc = self.fogi_stores[si].op_errorgen_indices[op_set[0]]
             errgen_vec = _np.zeros((op_indices_slc.stop - op_indices_slc.start), complex)
             for info in infos:
                 assert(set(op_set) == info['op_set'])
-                coeff = self.fogi_coeffs[info['fogi_index']]
+                comp = self.fogi_comps[info['fogi_index']]
                 fogi_vec = info['fogi_dir'] / _np.linalg.norm(info['fogi_dir'])**2
                 # fogi vec = "inverse" of fogi dir because all local fogi dirs are orthonormal but not necessarily
                 # normalized - so dividing by the norm^2 here => dot(fogi_dir, fogi_vec) = 1.0 as desired.
-                errgen_vec += coeff * fogi_vec[op_indices_slc]
-            Hmx = _create_errgen_op(errgen_vec, self.gauge_basis_mxs)  # NOTE: won't work for reduced models
-            angle = _mt.jamiolkowski_angle(Hmx)
-            return {'errgen_angle': angle}
+                # (we treat fogi_dir as if it were a member of an orthogonal basis when adding contributions)
+                errgen_vec += comp * fogi_vec[op_indices_slc]
+            errgen_op = _create_errgen_op(errgen_vec, self.gauge_basis_mxs)  # NOTE: won't work for reduced models
+            angle = _mt.jamiolkowski_angle(errgen_op)
+            return {'errgen_jangle': angle}
 
         def _ham_relational_contrib(op_set, infos):
             if len(infos) == 0:
-                ret = {'go_angle': 0.0, 'min_impact': 0.0}
+                ret = {'go_jangle': 0.0, 'min_impact': 0.0}
                 ret.update({op_label: 0.0 for op_label in op_set})
                 return ret
 
@@ -155,20 +169,22 @@ class FOGIDiagram(object):
             for info in infos:
                 assert(set(op_set) == info['op_set'])
                 assert(info['gauge_dir'] is not None)
-                coeff = self.fogi_coeffs[info['fogi_index']]
-                #HERE - Note: may need to fix normalization of gauge_dir??
+                comp = self.fogi_comps[info['fogi_index']]
+                gauge_comp = comp / info['r_factor']  # "theta" -- component = r * theta
+                gauge_vec = info['gauge_dir']
+
                 if gauge_dir is None:
-                    gauge_dir = coeff * info['gauge_dir']
+                    gauge_dir = gauge_comp * gauge_vec
                 else:
-                    gauge_dir += coeff * info['gauge_dir']
+                    gauge_dir += gauge_comp * gauge_vec
 
             # get "impact" for relational qtys
-            Hmx = _create_errgen_op(gauge_dir, self.gauge_basis_mxs)
-            ret = {'go_angle': _mt.jamiolkowski_angle(Hmx)}
+            gauge_op = _create_errgen_op(gauge_dir, self.gauge_basis_mxs)  # gauge transform as a gauge-errorgen vec
+            ret = {'go_angle': _mt.jamiolkowski_angle(gauge_op)}
             for op_label in op_set:
                 errgen_vec = _np.dot(self.fogi_stores[si].gauge_action_for_op[op_label], gauge_dir)
-                Hmx = _create_errgen_op(errgen_vec, self.gauge_basis_mxs)  # NOTE: won't work for reduced models
-                ret[op_label] = _mt.jamiolkowski_angle(Hmx)  # impact angle for op_label
+                errgen_op = _create_errgen_op(errgen_vec, self.gauge_basis_mxs)  # NOTE: won't work for reduced models
+                ret[op_label] = _mt.jamiolkowski_angle(errgen_op)  # impact angle for op_label
             ret['min_impact'] = min([v for k, v in ret.items() if k != 'go_angle'])
             return ret
 
@@ -176,7 +192,8 @@ class FOGIDiagram(object):
             return _ham_local_contrib(op_set, infos_to_aggregate) if len(op_set) == 1 \
                 else _ham_relational_contrib(op_set, infos_to_aggregate)
         elif typ == ('S',):
-            return _sto_contrib(infos_to_aggregate)
+            return _sto_local_contrib(op_set, infos_to_aggregate) if len(op_set) == 1 \
+                else _sto_relational_contrib(op_set, infos_to_aggregate)
         else:
             raise ValueError("Unknown error types set: %s" % str(typ))
 
@@ -209,13 +226,13 @@ class FOGIDiagram(object):
     def _make_individual_fogi_table(self, op_set, infos_by_type):
         table = {}
         table_rows = []
-        table_cols = ('Coefficient', 'Contribution', 'Raw Label')
+        table_cols = ('Component', 'Contribution', 'Raw Label')
         for typ, infos_by_actedon in infos_by_type.items():
             for acted_on, infos in infos_by_actedon.items():
                 for info in infos:
                     contrib = self._contrib(typ, op_set, [info])
                     table_rows.append(info['label'])
-                    table[info['label']] = {'Coefficient': self.fogi_coeffs[info['fogi_index']],
+                    table[info['label']] = {'Component': self.fogi_comps[info['fogi_index']],
                                             'Raw Label': info['label_raw'],
                                             'Contribution': contrib}
         return table, tuple(table_rows), table_cols
@@ -227,7 +244,7 @@ class FOGIDiagram(object):
                 for info in infos:
                     contrib = self._contrib(typ, op_set, [info])
                     abbrev_label_coeff_list.append((info['label_abbrev'],
-                                                    self.fogi_coeffs[info['fogi_index']], contrib))
+                                                    self.fogi_comps[info['fogi_index']], contrib))
         return abbrev_label_coeff_list
 
     def _compute_by_weight_magnitudes(self, op_set, infos_by_type):
@@ -251,7 +268,7 @@ class FOGIDiagram(object):
                 if weight in infos_by_weight:
                     total_dict = self._contrib(typ, op_set, infos_by_weight[weight])
                     mag += self._extract_mag(total_dict)
-                    items_abbrev.extend([(info['label_abbrev'], self.fogi_coeffs[info['fogi_index']],
+                    items_abbrev.extend([(info['label_abbrev'], self.fogi_comps[info['fogi_index']],
                                           self._contrib(typ, op_set, [info])) for info in infos_by_weight[weight]])
 
             mags_by_weight[weight] = {'total': mag,
@@ -276,7 +293,7 @@ class FOGIDiagram(object):
                 if target in infos_by_target:
                     total_dict = self._contrib(typ, op_set, infos_by_target[target])
                     mag += self._extract_mag(total_dict)
-                    items_abbrev.extend([(info['label_abbrev'], self.fogi_coeffs[info['fogi_index']],
+                    items_abbrev.extend([(info['label_abbrev'], self.fogi_comps[info['fogi_index']],
                                           self._contrib(typ, op_set, [info])) for info in infos_by_target[target]])
 
             mags_by_target[target] = {'total': mag,

@@ -111,9 +111,11 @@ def construct_gauge_space_for_model(primitive_op_labels, gauge_action_matrices,
 
 def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                               errorgen_coefficient_labels, gauge_elemgen_labels,
-                              op_label_abbrevs=None, dependent_fogi_action='drop'):
+                              op_label_abbrevs=None, dependent_fogi_action='drop', norm_order=None):
     """ TODO: docstring """
     assert(dependent_fogi_action in ('drop', 'mark'))
+    orthogonalize_relationals = True
+
     #typ = 'H' if (mode is None) else 'S'
     #if typ == 'H':
     #    elem_labels = [('H', bel) for bel in basis.labels[1:]]
@@ -124,7 +126,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
     #Get lists of the present (existing within the model) labels for each operation
     if op_label_abbrevs is None: op_label_abbrevs = {}
 
-    op_errgen_indices = {}; off = 0
+    op_errgen_indices = {}; off = 0  # tells us which indices of errgen-set space map to which ops
     for op_label in primitive_op_labels:
         num_coeffs = len(errorgen_coefficient_labels[op_label])
         op_errgen_indices[op_label] = slice(off, off + num_coeffs)
@@ -133,7 +135,9 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
 
     #Step 1: construct FOGI quantities and reference frame for each op
     ccomms = {}
+    fogi_opsets = []
     fogi_dirs = _np.zeros((num_elem_errgens, 0), complex)  # columns = dual vectors ("directions") in error-gen space
+    fogi_rs = _np.zeros(0, 'd')
     fogi_names = []
     fogi_abbrev_names = []
     fogi_gaugespace_dirs = []  # columns
@@ -146,26 +150,34 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
         #Get commutant and communtant-complement spaces
         commutant = _mt.nice_nullspace(ga)  # columns = *gauge* elem gen directions
         assert(_mt.columns_are_orthogonal(commutant))
-        op_elemgen_labels = errorgen_coefficient_labels[op_label]
 
         # Note: local/new_fogi_dirs are orthogonal but not necessarily normalized (so need to
         #  normalize to get inverse, but *don't* need pseudo-inverse).
         local_fogi_dirs = _mt.nice_nullspace(ga.T)  # "conjugate space" to gauge action
-        assert(_mt.columns_are_orthogonal(fogi_dirs))
 
-        #NORMALIZE FOGI DIRS to have norm 1 -- is this useful?
-        for j in range(local_fogi_dirs.shape[1]):  # normalize columns so largest element is +1.0
-            mag = _np.linalg.norm(local_fogi_dirs[:, j])
-            if mag > 1e-6: local_fogi_dirs[:, j] /= mag
+        #NORMALIZE FOGI DIRS to have norm 1 - based on mapping between unit-variance
+        # gaussian distribution of target-gateset perturbations in the usual errorgen-set-space
+        # to the FOGI space.  The basis of the fogi directions is understood to be the basis
+        # of errorgen-superops arising from *un-normalized* (traditional) Pauli matrices.
+        local_fogi_vecs = _mt.normalize_columns(local_fogi_dirs, ord=norm_order)  # this gives us *vec*-norm we want
+        vector_L2_norm2s = [_np.linalg.norm(local_fogi_vecs[:, j])**2 for j in range(local_fogi_vecs.shape[1])]
+        local_fogi_dirs = local_fogi_vecs / _np.array(vector_L2_norm2s)[None, :]  # gives us *dir*-norm we want
+        
+        assert(_mt.columns_are_orthogonal(local_fogi_dirs))  # Note for Cnot in 2Q_XYICNOT (check?)
 
         new_fogi_dirs = _np.zeros((fogi_dirs.shape[0], local_fogi_dirs.shape[1]), local_fogi_dirs.dtype)
         new_fogi_dirs[op_errgen_indices[op_label], :] = local_fogi_dirs  # "juice" this op
         fogi_dirs = _np.concatenate((fogi_dirs, new_fogi_dirs), axis=1)
+        fogi_rs = _np.concatenate((fogi_rs, _np.zeros(new_fogi_dirs.shape[1],'d')))
         assert(_mt.columns_are_orthogonal(fogi_dirs))
 
         fogi_gaugespace_dirs.extend([None] * new_fogi_dirs.shape[1])  # local qtys don't have corresp. gauge dirs
-        errgen_names = elem_vec_names(local_fogi_dirs, op_elemgen_labels)
-        errgen_names_abbrev = elem_vec_names(local_fogi_dirs, op_elemgen_labels, include_type=False)
+        fogi_opsets.extend([(op_label,)] * new_fogi_dirs.shape[1])
+
+        #LABELS
+        op_elemgen_labels = errorgen_coefficient_labels[op_label]
+        errgen_names = elem_vec_names(local_fogi_vecs, op_elemgen_labels)
+        errgen_names_abbrev = elem_vec_names(local_fogi_vecs, op_elemgen_labels, include_type=False)
         fogi_names.extend(["%s_%s" % ((("(%s)" % egname) if (' ' in egname) else egname),
                                       op_label_abbrevs.get(op_label, str(op_label)))
                            for egname in errgen_names])
@@ -203,6 +215,9 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                     # merging with an empty complement does nothing (no intersection, same ccomm)
                     intersection_space = _mt.intersection_space(ccommA, ccommB, use_nice_nullspace=True)
                     union_space = _mt.union_space(ccommA, ccommB)
+
+                    #Don't orthogonalize these - instead orthogonalize fogi_dirs and find what these should be (below)
+                    #intersection_space, _ = _np.linalg.qr(intersection_space)  # gram-schmidt orthogonalize cols
                     #assert(_mt.columns_are_orthogonal(intersection_space))  # Not always true
 
                     if intersection_space.shape[1] > 0:
@@ -212,32 +227,41 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                                                        + [gauge_action_matrices[op_label]], axis=0)
                         n = sum([gauge_action_matrices[ol].shape[0] for ol in existing_set])  # boundary btwn A & B
 
-                        # gauge trans: e => e + delta_e = e + dot(gauge_action, delta);  e = "errorgen-set space" vector; delta = "gauge space" vector
+                        # gauge trans: e => e + delta_e = e + dot(gauge_action, delta)
+                        #   e = "errorgen-set space" vector; delta = "gauge space" vector
                         #   we want fogi_dir s.t. dot(fogi_dir.T, e) doesn't change when e transforms as above
-                        # ==> we want fogi_dir s.t. dot(fogi_dir.T, gauge_action) == 0   (we want dot(fogi_dir.T, gauge_action, delta) == 0 for all delta)
+                        # ==> we want fogi_dir s.t. dot(fogi_dir.T, gauge_action) == 0
+                        #     (we want dot(fogi_dir.T, gauge_action, delta) == 0 for all delta)
 
+                        # There exists subspace of errgen-set space = span({dot(gauge_action, delta) for all delta}).
+                        # We call it "gauge-shift space" == gauge-orbit of target gateset, i.e. e=vec(0)  (within FOGI)
+                        # We will construct {v_i} so each v_i is in the gauge-shift space or its orthogonal complement.
+                        # We call components/coeffs of each v_i as FOGI or "gauge" based on where v_i lies, and
+                        # call v_i a "FOGI direction" or "gauge direction"
+
+                        # We find a set of fogi directions {f'_i} in the code that are potentially linearly dependent
+                        # and non-orthogonal.  This is ok, as we can take the entire set and just define dot(f'_i.T, e)
+                        # to be the *component* of e along f':
+                        # => component_i := dot(f'_i.T, e)
+
+                        # If we write e as as linear combination of fogi vectors:
                         # e = sum_i coeff_i * f_i   f_i are basis vecs, not nec. orthonormal, s.t. there exists
                         #  a dual basis f'_i s.t. dot(f'_i.T, f_i) = dirac_ij
-                        #  => coeff_i = dot(f'_i.T, e)
+                        # so if we take a subset of the {f'_i} that are linearly dependent we can define coefficients:
+                        #  => coeff_i = dot(f'_i.T, e)  # for f' in a *basis* for the complement of gauge-shift space
 
-                        # exists subset & subspace of errgen-set space that = span({dot(gauge_action, delta) for all delta}) - call this "gauge-shift space"
-                        #  == gauge-orbit of target gateset, i.e. e=vec(0)  (within FOGI framework)
-                        # we will construct {f_i} so each f_i is in the gauge-shift space or its orthogonal complement.
-                        #  => each coeff_i is FOGI or "gauge", and f_i or f'_i can be labelled as a "FOGI direction" or "gauge direction"
-
+                        #Note: construction method yields FOGI-space vectors - whether these vectors are "primal"
+                        # or "dual" is a statement about *bases* for this FOGI space, i.e. a given basis has a dual
+                        # basis.  The space is just the space - it's isomorphic to it's dual (it's a vector space).
+                        # Observe:
                         # colspace(gauge_action) = gauge-shift space, and we can construct its orthogonal complement
                         # local_fogi_dir found by nullspace of gauge_action: dot(local_fogi.T, gauge_action) = 0
-                        # q in nullspace(gauge_action.T) - is q a valid f?  is q in orthog-complement?
-                        # is dot(q.T, every_vec_in_gauge_shift_space) = 0 = dot(q.T, delta_e) = dot(q.T, gauge_action, delta) for all delta
-                        # dot(gauge_action.T, q) = dot(q.T, gauge_action) = 0
+                        # Note: q in nullspace(gauge_action.T) => is q a valid fogi vector, i.e.
+                        # dot(q.T, every_vec_in_gauge_shift_space) = 0 = dot(q.T, delta_e)
+                        #                                              = dot(q.T, gauge_action, delta) for all delta
+                        # So dot(gauge_action.T, q) = dot(q.T, gauge_action) = 0.  Thus
 
-                        # Normalizations s.t H-coeffs == J-gauge-angle, S-coeffs == prob. the error occurs; e.g. f_i = (SX + SY) / 2
-                        # so need H-fogi vecs (f_i) to be normalized or ...
-
-                        #Relational qtys: want dot(q.T, gauge_action) = 0
-
-                        # xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxlet fogi_dir ~= ga_A(intersection_vec) - ga_B(intersection_vec) - but actually
-                        # xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx let fogi_dir = pinv(ga_A).T * int_vec - pinv(ga_B).T * int_vec, so that:
+                        #Mathematically:
                         # let fogi_dir.T = int_vec.T * pinv(ga_A) - int_vec.T * pinv(ga_B).T so that:
                         # dot(fogi_dir.T, gauge_action) = int_vec.T * (pinv(ga_A) - pinv(ga_B)) * gauge_action
                         #                               = (I - I) = 0
@@ -245,49 +269,53 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                         # restricted to intersection space is I:   int_spc.T * pinv(ga_A) * ga_A * int_spc == I
                         # (when int_spc vecs are orthonormal) and so the above redues to I - I = 0
 
-                        # HERE WIP: trying to understand how int_vec relates to error magnitudes/metrics:
-                        # Note that the errorgen-space vector v := dot(ga_A - ga_B, int_vec) has the property
-                        # that dot(fogi_dir.T, v) = int_vec.T * (pinv(ga_A) * gaA + pinv(ga_B) * gaB) * int_vec
-                        # = 2 * norm2(int_vec)  (??)
-
-                        # gauge_action maps gauge_space => errorgen_space
-                        # pinv_gauge_action maps errorgen_space => gauge_space  (need pinv rather than just rescaling
-                        #      & transpose b/c gauge action can contain linear dependencies, but similar)
-                        # pinv_gauge_action.T maps gauge_
-
-                        # Almost by definition:
-                        # fogi_direction = nullspace(gauge_action.T) = vector s.g. dot(fogi_direction.T, gauge_action) = 0
-                        # what gauge direction generates fogi_direction? or actually fogi_vector = fogi_direction / norm2(fogi_direction)?
-                        # i.e. fogi_dir_A := pinv(ga_A).T * int_vec = dot(ga_A, X)  - what is X?
-                        #  fogi_dir_A.T * ga_A = int_vec.T * pinv(ga_A) * ga_A = int_vec.T
-                        # fogi_dir_A = renorm_cols(ga_A) * int_vec
-                        # fogi_vec_A = renorm_cols(ga_A) * int_vec / norm2(fogi_dir_A)
-
                         inv_diff_gauge_action = _np.concatenate((_np.linalg.pinv(gauge_action[0:n, :], rcond=1e-7),
                                                                  -_np.linalg.pinv(gauge_action[n:, :], rcond=1e-7)),
                                                                 axis=1).T
+                        #Equivalent:
                         #inv_diff_gauge_action = _np.concatenate((_np.linalg.pinv(gauge_action[0:n, :].T, rcond=1e-7),
                         #                                         -_np.linalg.pinv(gauge_action[n:, :].T, rcond=1e-7)),
                         #                                        axis=0)  # same as above, b/c T commutes w/pinv (?)
 
-                        #DEBUG REMOVE - this isn't always true - e.g. gauge action can be rank defficient
-                        #assert(_mt.columns_are_orthogonal(gauge_action[0:n, :]))
-                        #assert(_mt.columns_are_orthogonal(gauge_action[n:, :]))
-                        #invA = _mt.pinv_of_matrix_with_orthogonal_columns(gauge_action[0:n, :])
-                        #invB = _mt.pinv_of_matrix_with_orthogonal_columns(gauge_action[n:, :])
-                        #inv_diff_gauge_action2 = _np.concatenate((invA, -invB), axis=1).T
-                        #test = _mt.columns_are_orthogonal(inv_diff_gauge_action2)
+                        if orthogonalize_relationals:
+                            # First, lets get a "good" basis for the intersection space - one that produces
+                            # an orthogonal set of fogi directions.  Don't worry about normalization yet.
+                            test_fogi_dirs = _np.dot(inv_diff_gauge_action, intersection_space)  # dot("M", epsilons)
+                            Q, R = _np.linalg.qr(test_fogi_dirs)  # gram-schmidt orthogonalize cols
+                            # test_fogi_dirs = M * epsilons = Q * R
+                            # => want orthogonalized dirs "Q" as new dirs: Q = M * epsilons * inv(R) = M * epsilons'
+                            intersection_space = _np.dot(intersection_space, _np.linalg.inv(R))  # a "good" basis
 
-                        intersection_space /= _np.sqrt(2)  # HACK - factor of two seems to be lurking in here
-                        local_fogi_dirs = _np.dot(inv_diff_gauge_action, intersection_space)
-                        #assert(_mt.columns_are_orthogonal(local_fogi_dirs))  # NOT always true...
+                        # start w/normalizd epsilon vecs (normalize according to norm_order, then divide by L2-norm^2
+                        # so that the resulting intersection-space vector, after action by "M", projects the component
+                        # of the norm_order-normalized gauge-space vector)
+                        int_vecs = _mt.normalize_columns(intersection_space, ord=norm_order)
+                        vector_L2_norm2s = [_np.linalg.norm(int_vecs[:, j])**2 for j in range(int_vecs.shape[1])]
+                        intersection_space = int_vecs / _np.array(vector_L2_norm2s)[None, :]
+                        
+                        local_fogi_dirs = _np.dot(inv_diff_gauge_action, intersection_space)  # dot("M", epsilons)
+                        #Note: at this point `local_fogi_dirs` vectors are gauge-space-normalized, not numpy-norm-1
+                        if orthogonalize_relationals:
+                            assert(_mt.columns_are_orthogonal(local_fogi_dirs))  # true if we orthogonalize above
 
-                        #NORMALIZE FOGI DIRS to have norm 1 -- is this useful? NO, this isn't what we want - let's REMOVE this...
-                        #for j in range(local_fogi_dirs.shape[1]):  # normalize columns so largest element is +1.0
-                        #    mag = _np.linalg.norm(local_fogi_dirs[:, j])
-                        #    if mag > 1e-6:
-                        #        local_fogi_dirs[:, j] /= mag
-                        #        intersection_space[:, j] /= mag
+                        #NORMALIZATION:
+                        # There are two normalizations relevant to relational fogi directions:
+                        # 1) we normalize the would-be fogi vectors (those that would be prefixed by components in
+                        #    a linear expansion if the fogi directions were an ortogonal basis) to 1 using
+                        #    the `norm_order` norm.  The fogi directions are then normalized so
+                        #    numpy.dot(dir, vec) = 1.0, i.e. so their L2 norm = 1/L2-norm2-of-norm_order-normalized-vec.
+                        #    => set dir = vec / L2(vec)**2 so, if L2(vec)=x, then L2(dir)=1/x and dot(dir,vec) = 1.0
+                        #    (Recall: The fogi component is defined as dot(fogi_dir.T, e)).
+                        # 2) gauge vectors epsilon are also chosen to be normalized to 1 within gauge space.
+                        #    Each epsilon in the intersection space gives rise via the "M" action
+                        #    (inv_diff_gauge_action) to a fogi vector of norm 1/r so that
+                        #    fogi_dir = r * dot(M, epsilon) = r * dot(inv_diff_gauge_action, int_vec)
+                        #    We keep track of this 'r' value as a way of converting between the gauge-space-normalized
+                        #    FOGI direction to the errgen-space-normalized version of it.
+                        # The errgen-space-normalized fogi vector (in fogi_dirs) defines the "FOGI component",
+                        # whereas the gauge-space-normalized version defines the "FOGI gauge angle"
+                        # theta = dot(gauge_normd_fogi_dir.T, e) = dot( dot(M, epsilon).T, e) = dot(fogi_dir.T / r, e)
+                        #       = component / r
 
                         assert(_np.linalg.norm(_np.dot(gauge_action.T, local_fogi_dirs)) < 1e-8)
                         # transpose => dot(local_fogi_dirs.T, gauge_action) = 0
@@ -336,54 +364,91 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                             n = len(errorgen_coefficient_labels[ol])
                             new_fogi_dirs[op_errgen_indices[ol], :] = local_fogi_dirs[off:off + n, :]; off += n
 
-                        indep_cols = []  # debug = []
+                        indep_cols = _mt.independent_columns(_np.concatenate((fogi_dirs, new_fogi_dirs), axis=1),
+                                                             start_col=fogi_dirs.shape[1],
+                                                             start_independent=num_indep_fogi_dirs)
+                        rel_indep_cols = [c - fogi_dirs.shape[1] for c in indep_cols]
                         if dependent_fogi_action == "drop":
-                            for j in range(new_fogi_dirs.shape[1]):
-                                test = _np.concatenate((fogi_dirs, new_fogi_dirs[:, j:j + 1]), axis=1)
-                                if _np.linalg.matrix_rank(test, tol=1e-7) == num_indep_fogi_dirs + 1:
-                                    #assert(_mt.columns_are_orthogonal(test))  # there's no reason this needs to be true
-                                    indep_cols.append(j)
-                                    fogi_dirs = test
-                                    num_indep_fogi_dirs += 1
-                                    #debug.append("IND")
-                                #else:
-                                #    debug.append('-')
+                            rel_cols_to_add = rel_indep_cols
+                            rel_cols_to_mark = []
                         elif dependent_fogi_action == "mark":
-                            for j in range(new_fogi_dirs.shape[1]):
-                                test = _np.concatenate((fogi_dirs[:, 0:num_vecs_from_smaller_sets],
-                                                        new_fogi_dirs[:, j:j + 1]), axis=1)
-                                test2 = _np.concatenate((fogi_dirs, new_fogi_dirs[:, j:j + 1]), axis=1)
-                                #U, s, Vh = _np.linalg.svd(test2)
-                                if _np.linalg.matrix_rank(test2, tol=1e-7) == num_indep_fogi_dirs + 1:
-                                    # new vec is indep w/everything
-                                    indep_cols.append(j)
-                                    fogi_dirs = test2
-                                    num_indep_fogi_dirs += 1
-                                    #debug.append("IND")
-                                elif _np.linalg.matrix_rank(test, tol=1e-7) == num_indep_vecs_from_smaller_sets + 1:
-                                    # new vec is indep w/fogi vecs from smaller sets, so dependency must just be
-                                    # among other vecs for this same size.  Which vecs we keep is arbitrary here,
-                                    # so keep this vec and "mark" it as a linearly dependent vec.
-                                    indep_cols.append(j)  # keep this vec
-                                    fogi_dirs = test2
-                                    dependent_vec_indices.append(fogi_dirs.shape[1] - 1)  # but mark it
-                                    #debug.append("DEP")
-                                #else:
-                                #    debug.append('-')
-                                # else new vec is dependent on *smaller* size fogi vecs - omit it then
+                            smallset_indep_cols = _mt.independent_columns(
+                                _np.concatenate((fogi_dirs[:, 0:num_vecs_from_smaller_sets], new_fogi_dirs), axis=1),
+                                start_col=num_vecs_from_smaller_sets,
+                                start_independent=num_indep_vecs_from_smaller_sets)
+                            rel_indep_cols_set = set(rel_indep_cols)  # just for lookup speed
+                            rel_cols_to_add = [c - num_vecs_from_smaller_sets for c in smallset_indep_cols]
+                            rel_cols_to_mark = [c for c in rel_cols_to_add if c not in rel_indep_cols_set]
+
+                        dependent_vec_indices.extend([c + fogi_dirs.shape[1] for c in rel_cols_to_mark])
+                        num_indep_fogi_dirs += len(indep_cols)  # the total number of independent columns
+
+                        vecs_to_add, nrms = _mt.normalize_columns(new_fogi_dirs[:, rel_cols_to_add], ord=norm_order,
+                                                                  return_norms=True)  # f_hat_vec = f / nrm
+                        vector_L2_norm2s = [_np.linalg.norm(vecs_to_add[:, j])**2 for j in range(vecs_to_add.shape[1])]
+                        dirs_to_add = vecs_to_add / _np.array(vector_L2_norm2s)[None, :]  # gives us *dir*-norm we want
+                        # f_hat = f_hat_vec / L2^2 = f / (nrm * L2^2) = (1 / (nrm * L2^2)) * f
+
+                        fogi_dirs = _np.concatenate((fogi_dirs, dirs_to_add), axis=1)  # errgen-space NORMALIZED
+                        fogi_rs = _np.concatenate((fogi_rs, 1 / (nrms * _np.array(vector_L2_norm2s))))
+
+                        fogi_opsets.extend([new_set] * dirs_to_add.shape[1])
+
+                        #if dependent_fogi_action == "drop":  # we could construct these, but would make fogi qtys messy
+                        #    assert(_mt.columns_are_orthogonal(fogi_dirs))
+
+                        #OLD -REMOVE
+                        #indep_cols = []  # debug = []
+                        #if dependent_fogi_action == "drop":
+                        #    for j in range(new_fogi_dirs.shape[1]):
+                        #        test = _np.concatenate((fogi_dirs, new_fogi_dirs[:, j:j + 1]), axis=1)
+                        #        if _np.linalg.matrix_rank(test, tol=1e-7) == num_indep_fogi_dirs + 1:
+                        #            #assert(_mt.columns_are_orthogonal(test))  # there's no reason this needs to be true
+                        #            indep_cols.append(j)
+                        #            fogi_dirs = test
+                        #            num_indep_fogi_dirs += 1
+                        #            #debug.append("IND")
+                        #        #else:
+                        #        #    debug.append('-')
+                        #elif dependent_fogi_action == "mark":
+                        #    for j in range(new_fogi_dirs.shape[1]):
+                        #        test = _np.concatenate((fogi_dirs[:, 0:num_vecs_from_smaller_sets],
+                        #                                new_fogi_dirs[:, j:j + 1]), axis=1)
+                        #        test2 = _np.concatenate((fogi_dirs, new_fogi_dirs[:, j:j + 1]), axis=1)
+                        #        #U, s, Vh = _np.linalg.svd(test2)
+                        #        if _np.linalg.matrix_rank(test2, tol=1e-7) == num_indep_fogi_dirs + 1:
+                        #            # new vec is indep w/everything
+                        #            indep_cols.append(j)
+                        #            fogi_dirs = test2
+                        #            num_indep_fogi_dirs += 1
+                        #            #debug.append("IND")
+                        #        elif _np.linalg.matrix_rank(test, tol=1e-7) == num_indep_vecs_from_smaller_sets + 1:
+                        #            # new vec is indep w/fogi vecs from smaller sets, so dependency must just be
+                        #            # among other vecs for this same size.  Which vecs we keep is arbitrary here,
+                        #            # so keep this vec and "mark" it as a linearly dependent vec.
+                        #            indep_cols.append(j)  # keep this vec
+                        #            fogi_dirs = test2
+                        #            dependent_vec_indices.append(fogi_dirs.shape[1] - 1)  # but mark it
+                        #            #debug.append("DEP")
+                        #        #else:
+                        #        #    debug.append('-')
+                        #        # else new vec is dependent on *smaller* size fogi vecs - omit it then
                         #print("DEBUG: ",debug)  # TODO: REMOVE this and 'debug' uses above
 
-                        indep_intersection_space = _np.take(intersection_space, indep_cols, axis=1)
-                        #indep_intersection_space = _np.dot(gauge_linear_combos, indep_intersection_space) \
-                        #    if (gauge_linear_combos is not None) else indep_intersection_space
-                        intersection_names = elem_vec_names(indep_intersection_space, gauge_elemgen_labels)
-                        intersection_names_abbrev = elem_vec_names(indep_intersection_space, gauge_elemgen_labels,
+                        #intersection_space_to_add = _np.take(intersection_space, rel_cols_to_add, axis=1)
+                        #intersection_space_to_add = _np.dot(gauge_linear_combos, indep_intersection_space) \
+                        #    if (gauge_linear_combos is not None) else intersection_space_to_add
+
+                        int_vecs_to_add = _np.take(int_vecs, rel_cols_to_add, axis=1)  # make labels from *vectors*
+                        intersection_names = elem_vec_names(int_vecs_to_add, gauge_elemgen_labels)
+                        intersection_names_abbrev = elem_vec_names(int_vecs_to_add, gauge_elemgen_labels,
                                                                    include_type=False)
                         fogi_names.extend(["ga(%s)_%s - ga(%s)_%s" % (
                             iname, "|".join([op_label_abbrevs.get(l, str(l)) for l in existing_set]),
                             iname, op_label_abbrevs.get(op_label, str(op_label))) for iname in intersection_names])
                         fogi_abbrev_names.extend(["ga(%s)" % iname for iname in intersection_names_abbrev])
-                        fogi_gaugespace_dirs.extend([intersection_space[:, j] for j in indep_cols])
+                        
+                        fogi_gaugespace_dirs.extend([intersection_space[:, j] for j in rel_cols_to_add])
                         # Note intersection_space is a subset of the *gauge-space*, and so its basis,
                         # placed in fogi_gaugespace_dirs, is for gauge-space, not errorgen-space.
 
@@ -402,8 +467,45 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
     #print("Names = \n", '\n'.join(["%d: %s" % (i, v) for i, v in enumerate(fogi_names)]))
     #print("Rank = ", _np.linalg.matrix_rank(fogi_dirs))
 
-    return (fogi_dirs, fogi_names, fogi_abbrev_names, dependent_vec_indices,
-            fogi_gaugespace_dirs, op_errgen_indices)
+    return (fogi_opsets, fogi_dirs, fogi_rs, fogi_gaugespace_dirs, dependent_vec_indices, op_errgen_indices,
+            fogi_names, fogi_abbrev_names)
+
+
+#def create_fogi_dir_labels(fogi_opsets, fogi_dirs, fogi_rs, fogi_gaugespace_dirs, errorgen_coefficients):
+#
+#    fogi_names = []
+#    fogi_abbrev_names = []
+#
+#    # Note: fogi_dirs is a 2D array, so .T to iterate over cols, whereas fogi_gaugespace_dirs
+#    #  is a list of vectors, so just iterating is fine.
+#    for opset, fogi_dir, fogi_epsilon in zip(fogi_opsets, fogi_dirs.T, fogi_gaugespace_dirs):
+#
+#        if len(opset) == 1:  # Intrinsic quantity
+#            assert(fogi_epsilon is None)
+#            op_elemgen_labels = errorgen_coefficient_labels[op_label]
+#            errgen_name = elem_vec_name(fogi_dir, op_elemgen_labels)
+#            errgen_names_abbrev = elem_vec_names(local_fogi_dirs, op_elemgen_labels, include_type=False)
+#            fogi_names.extend(["%s_%s" % ((("(%s)" % egname) if (' ' in egname) else egname),
+#                                          op_label_abbrevs.get(op_label, str(op_label)))
+#                               for egname in errgen_names])
+#            fogi_abbrev_names.extend(errgen_names_abbrev)
+#
+#                                    intersection_space_to_add = _np.take(intersection_space, rel_cols_to_add, axis=1)
+#                        #intersection_space_to_add = _np.dot(gauge_linear_combos, indep_intersection_space) \
+#                        #    if (gauge_linear_combos is not None) else intersection_space_to_add
+#
+#                        
+#
+#                        
+#                        intersection_names = elem_vec_names(intersection_space_to_add, gauge_elemgen_labels)
+#                        intersection_names_abbrev = elem_vec_names(intersection_space_to_add, gauge_elemgen_labels,
+#                                                                   include_type=False)
+#                        fogi_names.extend(["ga(%s)_%s - ga(%s)_%s" % (
+#                            iname, "|".join([op_label_abbrevs.get(l, str(l)) for l in existing_set]),
+#                            iname, op_label_abbrevs.get(op_label, str(op_label))) for iname in intersection_names])
+#                        fogi_abbrev_names.extend(["ga(%s)" % iname for iname in intersection_names_abbrev])
+
+
 
 
 def compute_maximum_relational_errors(primitive_op_labels, errorgen_coefficients, gauge_action_matrices,
@@ -687,41 +789,44 @@ def compute_maximum_relational_errors(primitive_op_labels, errorgen_coefficients
 #    return (full_ham_fogi_vecs, ham_labels_for_op), (full_other_fogi_vecs, other_labels_for_op)
 
 
+def op_elem_vec_name(vec, elem_op_labels, op_label_abbrevs):
+    name = ""
+    for i, (op_lbl, elem_lbl) in enumerate(elem_op_labels):
+        val = vec[i]
+        if abs(val) < 1e-6: continue
+        sign = ' + ' if val > 0 else ' - '
+        abs_val_str = '' if _np.isclose(abs(val), 1.0) else ("%g " % abs(val))  # was %.1g
+        name += sign + abs_val_str + "%s(%s)_%s" % (elem_lbl[0], ','.join(elem_lbl[1:]),
+                                                    op_label_abbrevs.get(op_lbl, str(op_lbl)))
+    if name.startswith(' + '): name = name[3:]  # strip leading +
+    if name.startswith(' - '): name = '-' + name[3:]  # strip leading spaces
+    return name
+
+
 def op_elem_vec_names(vecs, elem_op_labels, op_label_abbrevs):
     """ TODO: docstring """
     if op_label_abbrevs is None: op_label_abbrevs = {}
-    vec_names = []
-    for j in range(vecs.shape[1]):
-        name = ""
-        for i, (op_lbl, elem_lbl) in enumerate(elem_op_labels):
-            val = vecs[i, j]
-            if abs(val) < 1e-6: continue
-            sign = ' + ' if val > 0 else ' - '
-            abs_val_str = '' if _np.isclose(abs(val), 1.0) else ("%g " % abs(val))  # was %.1g
-            name += sign + abs_val_str + "%s(%s)_%s" % (elem_lbl[0], ','.join(elem_lbl[1:]),
-                                                        op_label_abbrevs.get(op_lbl, str(op_lbl)))
-        if name.startswith(' + '): name = name[3:]  # strip leading +
-        if name.startswith(' - '): name = '-' + name[3:]  # strip leading spaces
-        vec_names.append(name)
-    return vec_names
+    return [op_elem_vec_name(vecs[:, j], elem_op_labels, op_label_abbrevs) for j in range(vecs.shape[1])]
+
+
+def elem_vec_name(vec, elem_labels, include_type=True):
+    """ TODO: docstring """
+    name = ""
+    for i, elem_lbl in enumerate(elem_labels):
+        val = vec[i]
+        if abs(val) < 1e-6: continue
+        sign = ' + ' if val > 0 else ' - '
+        abs_val_str = '' if _np.isclose(abs(val), 1.0) else ("%g " % abs(val))  # was %.1g
+        if include_type:
+            name += sign + abs_val_str + "%s(%s)" % (elem_lbl[0], ','.join(elem_lbl[1:]))
+        else:
+            name += sign + abs_val_str + "%s" % (','.join(elem_lbl[1:]))  # 'H' or 'S'
+
+    if name.startswith(' + '): name = name[3:]  # strip leading +
+    if name.startswith(' - '): name = '-' + name[3:]  # strip leading spaces
+    return name
 
 
 def elem_vec_names(vecs, elem_labels, include_type=True):
     """ TODO: docstring """
-    vec_names = []
-    for j in range(vecs.shape[1]):
-        name = ""
-        for i, elem_lbl in enumerate(elem_labels):
-            val = vecs[i, j]
-            if abs(val) < 1e-6: continue
-            sign = ' + ' if val > 0 else ' - '
-            abs_val_str = '' if _np.isclose(abs(val), 1.0) else ("%g " % abs(val))  # was %.1g
-            if include_type:
-                name += sign + abs_val_str + "%s(%s)" % (elem_lbl[0], ','.join(elem_lbl[1:]))
-            else:
-                name += sign + abs_val_str + "%s" % (','.join(elem_lbl[1:]))  # 'H' or 'S'
-
-        if name.startswith(' + '): name = name[3:]  # strip leading +
-        if name.startswith(' - '): name = '-' + name[3:]  # strip leading spaces
-        vec_names.append(name)
-    return vec_names
+    return [elem_vec_name(vecs[:, j], elem_labels, include_type) for j in range(vecs.shape[1])]

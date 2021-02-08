@@ -258,6 +258,39 @@ def nice_nullspace(m, tol=1e-7):
     return ret
 
 
+def normalize_columns(m, return_norms=False, ord=None):
+    """
+    Normalizes the columns of a matrix.
+
+    Parameters
+    ----------
+    m : numpy.ndarray
+        The matrix.
+
+    return_norms : bool, optional
+        If `True`, also return a 1D array containing the norms
+        of the columns (before they were normalized).
+
+    ord : int, optional
+        The order of the norm.  See :function:`numpy.linal.norm`.
+
+    Returns
+    -------
+    normalized_m : numpy.ndarray
+        The matrix after columns are normalized
+
+    column_norms : numpy.ndarray
+        Only returned when `return_norms=True`, a 1-dimensional array
+        of the pre-normalization norm of each column.
+    """
+    norms = _np.array([_np.linalg.norm(m[:, j], ord=ord) for j in range(m.shape[1])])
+    norms[norms == 0.0] = 1.0  # avoid division of zero-column by zero
+    if return_norms:
+        return m / norms[None, :], norms
+    else:
+        return m / norms[None, :]
+
+
 def columns_are_orthogonal(m, tol=1e-7, debug=True):
     """
     Checks whether a matrix contains orthogonal columns.
@@ -317,6 +350,48 @@ def columns_are_orthonormal(m, tol=1e-7):
     if m.size == 0: return True  # boundary case
     check = _np.dot(m.conj().T, m)
     return bool(_np.allclose(check, _np.identity(check.shape[0], 'd'), atol=tol))
+
+
+def independent_columns(m, start_col=0, start_independent=None):
+    """
+    Computes the indices of the linealrly-independent columns in a matrix.
+
+    Optionally starts at given column offset, for use when some number of
+    columns are already known to be linearly independent.
+
+    Parameters
+    ----------
+    m : numpy.ndarray
+        The matrix.
+
+    start_col : int, optional
+        An offset giving the first column to consider for independence.
+
+    start_independent : int, optional
+        The number of independent columns in the first `start_col` cols.
+        If `None`, then taken to equal `start_col`, i.e. the first
+        `start_col` columns (not considered for independend) are all
+        assumed to be linearly independent.
+
+
+    Returns
+    -------
+    list
+        A list of the independent-column indices of `m` (starting from `start_col`).
+    """
+    col_mask = _np.zeros(m.shape[1], dtype=bool)
+    col_mask[0:start_col] = True
+
+    num_indep_cols = start_col if (start_independent is None) else start_independent
+    indep_cols = []
+    for j in range(start_col, m.shape[1]):
+        col_mask[j] = True
+        if _np.linalg.matrix_rank(m[:, col_mask], tol=1e-7) == num_indep_cols + 1:
+            indep_cols.append(j)
+            num_indep_cols += 1
+        else:
+            col_mask[j] = False
+    return indep_cols
 
 
 def pinv_of_matrix_with_orthogonal_columns(m):
@@ -2178,6 +2253,7 @@ def intersection_space(space1, space2, tol=1e-7, use_nice_nullspace=False):
     """
     VW = _np.concatenate((space1, -space2), axis=1)
     nullsp = nice_nullspace(VW, tol) if use_nice_nullspace else nullspace(VW, tol)
+    #nullsp = _spl.null_space(VW, rcond=1e-3)  # alternative
     return _np.dot(space1, nullsp[0:space1.shape[1], :])
 
 

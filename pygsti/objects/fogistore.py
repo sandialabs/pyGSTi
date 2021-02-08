@@ -26,7 +26,7 @@ class FirstOrderGaugeInvariantStore(object):
 
     def __init__(self, gauge_action_matrices_by_op, errorgen_coefficient_labels_by_op,
                  elem_errorgen_labels, op_label_abbrevs=None, reduce_to_model_space=True,
-                 dependent_fogi_action='drop'):
+                 dependent_fogi_action='drop', norm_order=None):
         """
         TODO: docstring
         """
@@ -50,11 +50,12 @@ class FirstOrderGaugeInvariantStore(object):
             self._gauge_space_dim = len(elem_errorgen_labels)
             gauge_elemgen_labels = elem_errorgen_labels
 
-        (self.fogi_directions, self.fogi_labels, self.abbrev_fogi_labels,
-         self.dependent_dir_indices, self.fogi_gaugespace_directions, self.op_errorgen_indices) = \
+        (self.fogi_opsets, self.fogi_directions, self.fogi_r_factors, self.fogi_gaugespace_directions,
+         self.dependent_dir_indices, self.op_errorgen_indices, self.fogi_labels, self.abbrev_fogi_labels) = \
             _fogit.construct_fogi_quantities(self.primitive_op_labels, self.gauge_action_for_op,
                                              self.elem_errorgen_labels_by_op, gauge_elemgen_labels,
-                                             op_label_abbrevs, dependent_fogi_action)
+                                             op_label_abbrevs, dependent_fogi_action, norm_order)
+        self.norm_order = norm_order
 
         self.errorgen_space_labels = [(op_label, elem_lbl) for op_label in self.primitive_op_labels
                                       for elem_lbl in self.elem_errorgen_labels_by_op[op_label]]
@@ -66,8 +67,9 @@ class FirstOrderGaugeInvariantStore(object):
         pinv_allop_gauge_action = _np.linalg.pinv(self.allop_gauge_action, rcond=1e-7)  # errgen-set -> gauge-gen space
         gauge_space_directions = _np.dot(pinv_allop_gauge_action, fogv_directions)  # in gauge-generator space
 
-        self.fogv_labels = ["%s gauge action" % nm
-                            for nm in _fogit.elem_vec_names(gauge_space_directions, gauge_elemgen_labels)]
+        self.fogv_labels = ["%d gauge action" % i for i in range(gauge_space_directions.shape[1])]
+        #self.fogv_labels = ["%s gauge action" % nm
+        #                    for nm in _fogit.elem_vec_names(gauge_space_directions, gauge_elemgen_labels)]
         self.fogv_directions = fogv_directions
         # - directions in errorgen space that correspond to gauge transformations (to first order)
 
@@ -167,48 +169,54 @@ class FirstOrderGaugeInvariantStore(object):
         else: labels = [''] * len(self.fogv_labels)
         return tuple(labels)
 
-    def errorgen_vec_to_fogi_coefficients_array(self, errorgen_vec):
+    def errorgen_vec_to_fogi_components_array(self, errorgen_vec):
         fogi_coeffs = _np.dot(self.fogi_directions.T, errorgen_vec)
         assert(_np.linalg.norm(fogi_coeffs.imag) < 1e-8)
         return fogi_coeffs.real
 
-    def errorgen_vec_to_fogv_coefficients_array(self, errorgen_vec):
+    def errorgen_vec_to_fogv_components_array(self, errorgen_vec):
         fogv_coeffs = _np.dot(self.fogv_directions.T, errorgen_vec)
         assert(_np.linalg.norm(fogv_coeffs.imag) < 1e-8)
         return fogv_coeffs.real
 
-    def opcoeffs_to_fogi_coefficients_array(self, op_coeffs):
+    def opcoeffs_to_fogi_components_array(self, op_coeffs):
         errorgen_vec = _np.zeros(self.errorgen_space_dim, 'd')
         for i, (op_label, elem_lbl) in enumerate(self.errgen_space_op_elem_labels):
             errorgen_vec[i] += op_coeffs[op_label].get(elem_lbl, 0.0)
-        return self.errorgen_vec_to_fogi_coefficients_array(errorgen_vec)
+        return self.errorgen_vec_to_fogi_components_array(errorgen_vec)
 
-    def opcoeffs_to_fogv_coefficients_array(self, op_coeffs):
+    def opcoeffs_to_fogv_components_array(self, op_coeffs):
         errorgen_vec = _np.zeros(self.errorgen_space_dim, 'd')
         for i, (op_label, elem_lbl) in enumerate(self.errgen_space_op_elem_labels):
             errorgen_vec[i] += op_coeffs[op_label].get(elem_lbl, 0.0)
-        return self.errorgen_vec_to_fogv_coefficients_array(errorgen_vec)
+        return self.errorgen_vec_to_fogv_components_array(errorgen_vec)
 
-    def opcoeffs_to_fogiv_coefficients_array(self, op_coeffs):
+    def opcoeffs_to_fogiv_components_array(self, op_coeffs):
         errorgen_vec = _np.zeros(self.errorgen_space_dim, 'd')
         for i, (op_label, elem_lbl) in enumerate(self.errgen_space_op_elem_labels):
             errorgen_vec[i] += op_coeffs[op_label].get(elem_lbl, 0.0)
-        return self.errorgen_vec_to_fogi_coefficients_array(errorgen_vec), \
-            self.errorgen_vec_to_fogv_coefficients_array(errorgen_vec)
+        return self.errorgen_vec_to_fogi_components_array(errorgen_vec), \
+            self.errorgen_vec_to_fogv_components_array(errorgen_vec)
 
-    def fogi_coefficients_array_to_errorgen_vec(self, fogi_coefficients):
-        assert(self._dependent_fogi_action == 'drop'), "Cannot convert *from* linearly dependent fogi coeffs!"
-        return _np.dot(_np.linalg.pinv(self.fogi_directions.T, rcond=1e-7), fogi_coefficients)
+    def fogi_components_array_to_errorgen_vec(self, fogi_components):
+        assert(self._dependent_fogi_action == 'drop'), \
+            ("Cannot convert *from* fogi components to an errorgen-set vec when fogi directions are linearly-dependent!"
+             "  (Set `dependent_fogi_action='drop'` to ensure directions are independent.)")
+        return _np.dot(_np.linalg.pinv(self.fogi_directions.T, rcond=1e-7), fogi_components)
 
-    def fogv_coefficients_array_to_errorgen_vec(self, fogv_coefficients):
-        assert(self._dependent_fogi_action == 'drop'), "Cannot convert *from* linearly dependent fogi coeffs!"
-        return _np.dot(_np.linalg.pinv(self.fogv_directions.T, rcond=1e-7), fogv_coefficients)
+    def fogv_components_array_to_errorgen_vec(self, fogv_components):
+        assert(self._dependent_fogi_action == 'drop'), \
+            ("Cannot convert *from* fogv components to an errorgen-set vec when fogi directions are linearly-dependent!"
+             "  (Set `dependent_fogi_action='drop'` to ensure directions are independent.)")
+        return _np.dot(_np.linalg.pinv(self.fogv_directions.T, rcond=1e-7), fogv_components)
 
-    def fogiv_coefficients_array_to_errorgen_vec(self, fogi_coefficients, fogv_coefficients):
-        assert(self._dependent_fogi_action == 'drop'), "Cannot convert *from* linearly dependent fogi coeffs!"
+    def fogiv_components_array_to_errorgen_vec(self, fogi_components, fogv_components):
+        assert(self._dependent_fogi_action == 'drop'), \
+            ("Cannot convert *from* fogiv components to an errorgen-set vec when fogi directions are "
+             "linearly-dependent!  (Set `dependent_fogi_action='drop'` to ensure directions are independent.)")
         return _np.dot(_np.linalg.pinv(
             _np.concatenate((self.fogi_directions, self.fogv_directions), axis=1).T,
-            rcond=1e-7), _np.concatenate((fogi_coefficients, fogv_coefficients)))
+            rcond=1e-7), _np.concatenate((fogi_components, fogv_components)))
 
     def errorgen_vec_to_opcoeffs(self, errorgen_vec):
         op_coeffs = {op_label: {} for op_label in self.primitive_op_labels}
@@ -216,15 +224,15 @@ class FirstOrderGaugeInvariantStore(object):
             op_coeffs[op_label][elem_lbl] = coeff_value
         return op_coeffs
 
-    def fogi_coefficients_array_to_opcoeffs(self, fogi_coefficients):
-        return self.errorgen_vec_to_opcoeffs(self.fogi_coefficients_array_to_errorgen_vec(fogi_coefficients))
+    def fogi_components_array_to_opcoeffs(self, fogi_components):
+        return self.errorgen_vec_to_opcoeffs(self.fogi_components_array_to_errorgen_vec(fogi_components))
 
-    def fogv_coefficients_array_to_opcoeffs(self, fogv_coefficients):
-        return self.errorgen_vec_to_opcoeffs(self.fogv_coefficients_array_to_errorgen_vec(fogv_coefficients))
+    def fogv_components_array_to_opcoeffs(self, fogv_components):
+        return self.errorgen_vec_to_opcoeffs(self.fogv_components_array_to_errorgen_vec(fogv_components))
 
-    def fogiv_coefficients_array_to_opcoeffs(self, fogi_coefficients, fogv_coefficients):
-        return self.errorgen_vec_to_opcoeffs(self.fogiv_coefficients_array_to_errorgen_vec(
-            fogi_coefficients, fogv_coefficients))
+    def fogiv_components_array_to_opcoeffs(self, fogi_components, fogv_components):
+        return self.errorgen_vec_to_opcoeffs(self.fogiv_components_array_to_errorgen_vec(
+            fogi_components, fogv_components))
 
     def create_binned_fogi_infos(self, tol=1e-5):
         """
@@ -256,6 +264,7 @@ class FirstOrderGaugeInvariantStore(object):
             label_raw = self.raw_fogi_labels[i]
             label_abbrev = self.abbrev_fogi_labels[i]
             gauge_dir = self.fogi_gaugespace_directions[i]
+            r_factor = self.fogi_r_factors[i]
 
             present_elgen_indices = _np.where(_np.abs(fogi_dir) > tol)[0]
 
@@ -277,7 +286,8 @@ class FirstOrderGaugeInvariantStore(object):
                     'label_abbrev': label_abbrev,
                     'dependent': bool(i in dependent_indices),
                     'gauge_dir': gauge_dir,
-                    'fogi_dir': fogi_dir
+                    'fogi_dir': fogi_dir,
+                    'r_factor': r_factor
                     }
             ops_involved = tuple(sorted(ops_involved))
             types = tuple(sorted(types))
@@ -301,7 +311,7 @@ class FirstOrderGaugeInvariantStore(object):
 
         index_offsets : list
             A list of length `len(binned_fogi_infos)` that gives the offset
-            into an assumed-to-exist corresponding vector of coefficients for
+            into an assumed-to-exist corresponding vector of components for
             all the FOGI infos.
 
         Returns

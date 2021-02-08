@@ -1603,15 +1603,22 @@ class ExplicitOpModel(_mdl.OpModel):
             errgen_labels = op.errorgen_coefficient_labels()
             ham_errorgen_coefficient_labels[op_label] = list(filter(lambda lbl: lbl[0] == 'H', errgen_labels))
             other_errorgen_coefficient_labels[op_label] = list(filter(lambda lbl: lbl[0] == 'S', errgen_labels))
+            #Note: the *_ga_matrices are built by constructing normalized elem-error-gen-superoperators,
+            # acting on them, and using the same superoperators to project the result.  This works fine when
+            # the superops are orthogonal (H+S gens) but may not give the right gauge action matrix when they're
+            # just linearly independent (CPTP gens - the O_ij in ptic).  The resulting gauge-action matrices
+            # work to map from a basis of gauge-elem-errgens => *same* basis of gate-elem-errgens (i.e. the
+            # bases have the same normalization).  We view them as taking the superops corresponding to
+            # un-normalized Paulis to each other.
 
         ham_elem_labels = [('H', bel) for bel in ham_basis.labels[1:]]
         other_elem_labels = [('S', bel) for bel in other_basis.labels[1:]] if other_mode != "all" else \
             [('S', bel1, bel2) for bel1 in other_basis.labels[1:] for bel2 in other_basis.labels[1:]]
 
         self.ham_fogi_store = _FOGIStore(ham_ga_matrices, ham_errorgen_coefficient_labels, ham_elem_labels,
-                                         op_label_abbrevs, reduce_to_model_space, dependent_fogi_action)
+                                         op_label_abbrevs, reduce_to_model_space, dependent_fogi_action, norm_order=2)
         self.other_fogi_store = _FOGIStore(other_ga_matrices, other_errorgen_coefficient_labels, other_elem_labels,
-                                           op_label_abbrevs, reduce_to_model_space, dependent_fogi_action)
+                                           op_label_abbrevs, reduce_to_model_space, dependent_fogi_action, norm_order=1)
 
         if reparameterize:
             self.param_interposer = self._add_reparameterization(
@@ -1619,7 +1626,7 @@ class ExplicitOpModel(_mdl.OpModel):
                 self.ham_fogi_store.fogi_directions, self.ham_fogi_store.errgen_space_op_elem_labels,
                 self.other_fogi_store.fogi_directions, self.other_fogi_store.errgen_space_op_elem_labels)
 
-    def fogi_errorgen_coefficient_labels(self, include_fogv=False, typ='normal'):
+    def fogi_errorgen_component_labels(self, include_fogv=False, typ='normal'):
         labels = self.ham_fogi_store.fogi_errorgen_direction_labels(typ) \
             + self.other_fogi_store.fogi_errorgen_direction_labels(typ)
 
@@ -1629,43 +1636,43 @@ class ExplicitOpModel(_mdl.OpModel):
 
         return labels
 
-    def fogi_errorgen_coefficients_array(self, include_fogv=False, normalized_elem_gens=True):
+    def fogi_errorgen_components_array(self, include_fogv=False, normalized_elem_gens=True):
         op_coeffs = self.errorgen_coefficients(normalized_elem_gens)
 
         if include_fogv:
-            ham_fogi_coeffs, ham_fogv_coeffs = self.ham_fogi_store.opcoeffs_to_fogiv_coefficients_array(op_coeffs)
-            other_fogi_coeffs, other_fogv_coeffs = self.other_fogi_store.opcoeffs_to_fogiv_coefficients_array(op_coeffs)
+            ham_fogi_coeffs, ham_fogv_coeffs = self.ham_fogi_store.opcoeffs_to_fogiv_components_array(op_coeffs)
+            other_fogi_coeffs, other_fogv_coeffs = self.other_fogi_store.opcoeffs_to_fogiv_components_array(op_coeffs)
             return _np.concatenate((ham_fogi_coeffs, other_fogi_coeffs, ham_fogv_coeffs, other_fogv_coeffs))
         else:
-            ham_fogi_coeffs = self.ham_fogi_store.opcoeffs_to_fogi_coefficients_array(op_coeffs)
-            other_fogi_coeffs = self.other_fogi_store.opcoeffs_to_fogi_coefficients_array(op_coeffs)
+            ham_fogi_coeffs = self.ham_fogi_store.opcoeffs_to_fogi_components_array(op_coeffs)
+            other_fogi_coeffs = self.other_fogi_store.opcoeffs_to_fogi_components_array(op_coeffs)
             return _np.concatenate((ham_fogi_coeffs, other_fogi_coeffs))
 
-    def set_fogi_errorgen_coefficients_array(self, coefficients, include_fogv=False, normalized_elem_gens=True,
+    def set_fogi_errorgen_components_array(self, components, include_fogv=False, normalized_elem_gens=True,
                                              truncate=False):
         hfogi, hfogv = self.ham_fogi_store.num_fogi_directions, self.ham_fogi_store.num_fogv_directions
         ofogi = self.other_fogi_store.num_fogi_directions
 
         if include_fogv:
             n = hfogi + ofogi
-            ham_fogi_coeffs, ham_fogv_coeffs = coefficients[0:hfogi], coefficients[n: n + hfogv]
-            other_fogi_coeffs, other_fogv_coeffs = coefficients[hfogi:n], coefficients[n + hfogv:]
-            op_coeffs = self.ham_fogi_store.fogiv_coefficients_array_to_opcoeffs(ham_fogi_coeffs, ham_fogv_coeffs)
-            for op_label, coeff_dict in self.other_fogi_store.fogiv_coefficients_array_to_opcoeffs(
+            ham_fogi_coeffs, ham_fogv_coeffs = components[0:hfogi], components[n: n + hfogv]
+            other_fogi_coeffs, other_fogv_coeffs = components[hfogi:n], components[n + hfogv:]
+            op_coeffs = self.ham_fogi_store.fogiv_components_array_to_opcoeffs(ham_fogi_coeffs, ham_fogv_coeffs)
+            for op_label, coeff_dict in self.other_fogi_store.fogiv_components_array_to_opcoeffs(
                     other_fogi_coeffs, other_fogv_coeffs).items():
                 if op_label in op_coeffs: op_coeffs[op_label].update(coeff_dict)
                 else: op_coeffs[op_label] = coeff_dict.copy()
         else:
-            ham_fogi_coeffs = coefficients[0:hfogi]
-            other_fogi_coeffs = coefficients[hfogi:]
-            op_coeffs = self.ham_fogi_store.fogi_coefficients_array_to_opcoeffs(ham_fogi_coeffs)
-            for op_label, coeff_dict in self.other_fogi_store.fogi_coefficients_array_to_opcoeffs(
+            ham_fogi_coeffs = components[0:hfogi]
+            other_fogi_coeffs = components[hfogi:]
+            op_coeffs = self.ham_fogi_store.fogi_components_array_to_opcoeffs(ham_fogi_coeffs)
+            for op_label, coeff_dict in self.other_fogi_store.fogi_components_array_to_opcoeffs(
                     other_fogi_coeffs).items():
                 if op_label in op_coeffs: op_coeffs[op_label].update(coeff_dict)
                 else: op_coeffs[op_label] = coeff_dict.copy()
 
         if not normalized_elem_gens:
-            def inv_rescale(coeffs):  # the inverse of the rescaling applied in fogi_errorgen_coefficients_array
+            def inv_rescale(coeffs):  # the inverse of the rescaling applied in fogi_errorgen_components_array
                 d2 = _np.sqrt(self.dim); d = _np.sqrt(d2)
                 return {lbl: (val * d if lbl[0] == 'H' else val) for lbl, val in coeffs.items()}
         else:
