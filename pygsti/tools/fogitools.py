@@ -162,13 +162,13 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
         local_fogi_vecs = _mt.normalize_columns(local_fogi_dirs, ord=norm_order)  # this gives us *vec*-norm we want
         vector_L2_norm2s = [_np.linalg.norm(local_fogi_vecs[:, j])**2 for j in range(local_fogi_vecs.shape[1])]
         local_fogi_dirs = local_fogi_vecs / _np.array(vector_L2_norm2s)[None, :]  # gives us *dir*-norm we want
-        
+
         assert(_mt.columns_are_orthogonal(local_fogi_dirs))  # Note for Cnot in 2Q_XYICNOT (check?)
 
         new_fogi_dirs = _np.zeros((fogi_dirs.shape[0], local_fogi_dirs.shape[1]), local_fogi_dirs.dtype)
         new_fogi_dirs[op_errgen_indices[op_label], :] = local_fogi_dirs  # "juice" this op
         fogi_dirs = _np.concatenate((fogi_dirs, new_fogi_dirs), axis=1)
-        fogi_rs = _np.concatenate((fogi_rs, _np.zeros(new_fogi_dirs.shape[1],'d')))
+        fogi_rs = _np.concatenate((fogi_rs, _np.zeros(new_fogi_dirs.shape[1], 'd')))
         assert(_mt.columns_are_orthogonal(fogi_dirs))
 
         fogi_gaugespace_dirs.extend([None] * new_fogi_dirs.shape[1])  # local qtys don't have corresp. gauge dirs
@@ -292,7 +292,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                         int_vecs = _mt.normalize_columns(intersection_space, ord=norm_order)
                         vector_L2_norm2s = [_np.linalg.norm(int_vecs[:, j])**2 for j in range(int_vecs.shape[1])]
                         intersection_space = int_vecs / _np.array(vector_L2_norm2s)[None, :]
-                        
+
                         local_fogi_dirs = _np.dot(inv_diff_gauge_action, intersection_space)  # dot("M", epsilons)
                         #Note: at this point `local_fogi_dirs` vectors are gauge-space-normalized, not numpy-norm-1
                         if orthogonalize_relationals:
@@ -447,7 +447,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                             iname, "|".join([op_label_abbrevs.get(l, str(l)) for l in existing_set]),
                             iname, op_label_abbrevs.get(op_label, str(op_label))) for iname in intersection_names])
                         fogi_abbrev_names.extend(["ga(%s)" % iname for iname in intersection_names_abbrev])
-                        
+
                         fogi_gaugespace_dirs.extend([intersection_space[:, j] for j in rel_cols_to_add])
                         # Note intersection_space is a subset of the *gauge-space*, and so its basis,
                         # placed in fogi_gaugespace_dirs, is for gauge-space, not errorgen-space.
@@ -494,9 +494,9 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
 #                        #intersection_space_to_add = _np.dot(gauge_linear_combos, indep_intersection_space) \
 #                        #    if (gauge_linear_combos is not None) else intersection_space_to_add
 #
-#                        
 #
-#                        
+#
+#
 #                        intersection_names = elem_vec_names(intersection_space_to_add, gauge_elemgen_labels)
 #                        intersection_names_abbrev = elem_vec_names(intersection_space_to_add, gauge_elemgen_labels,
 #                                                                   include_type=False)
@@ -504,8 +504,6 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
 #                            iname, "|".join([op_label_abbrevs.get(l, str(l)) for l in existing_set]),
 #                            iname, op_label_abbrevs.get(op_label, str(op_label))) for iname in intersection_names])
 #                        fogi_abbrev_names.extend(["ga(%s)" % iname for iname in intersection_names_abbrev])
-
-
 
 
 def compute_maximum_relational_errors(primitive_op_labels, errorgen_coefficients, gauge_action_matrices,

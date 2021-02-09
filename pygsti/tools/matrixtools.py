@@ -2289,6 +2289,6 @@ def jamiolkowski_angle(hamiltonian_mx):
         psi += xx / _np.sqrt(d)
     assert(_np.isclose(_np.dot(psi, psi), 1.0))
     cos_theta = abs(_np.dot(psi.conj(), _np.dot(errmap, psi)))
-    return _np.arccos(cos_theta)
+    return _np.real_if_close(_np.arccos(cos_theta))
     #cos_squared_theta = entanglement_infidelity(expm(1j * Hmx), identity)
     #return _np.arccos(_np.sqrt(cos_squared_theta))
