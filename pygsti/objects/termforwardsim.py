@@ -343,7 +343,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
 
         return layout
 
-    def _bulk_fill_probs_block(self, array_to_fill, layout_atom, resource_alloc):
+    def _bulk_fill_probs_atom(self, array_to_fill, layout_atom, resource_alloc):
 
         if not resource_alloc.is_host_leader:
             # (same as "if resource_alloc.host_comm is not None and resource_alloc.host_comm.rank != 0")
@@ -366,7 +366,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
                 polys[0], polys[1], self.model.to_vector(), (nEls,))  # shape (nElements,) -- could make this a *fill*
         _fas(array_to_fill, [slice(0, array_to_fill.shape[0])], probs)
 
-    def _bulk_fill_dprobs_block(self, array_to_fill, dest_param_slice, layout_atom, param_slice, resource_alloc):
+    def _bulk_fill_dprobs_atom(self, array_to_fill, dest_param_slice, layout_atom, param_slice, resource_alloc):
         if not resource_alloc.is_host_leader:
             return  # see above
 
@@ -389,8 +389,8 @@ class TermForwardSimulator(_DistributableForwardSimulator):
 
         _fas(array_to_fill, [slice(0, array_to_fill.shape[0]), dest_param_slice], dprobs)
 
-    def _bulk_fill_hprobs_block(self, array_to_fill, dest_param_slice1, dest_param_slice2, layout_atom,
-                                param_slice1, param_slice2, resource_alloc):
+    def _bulk_fill_hprobs_atom(self, array_to_fill, dest_param_slice1, dest_param_slice2, layout_atom,
+                               param_slice1, param_slice2, resource_alloc):
         if not resource_alloc.is_host_leader:
             return  # see above
 

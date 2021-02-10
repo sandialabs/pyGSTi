@@ -1646,7 +1646,7 @@ def propagate_staterep(staterep, operationreps):
     return ret
 
 
-def DM_mapfill_probs_block(fwdsim, mx_to_fill, dest_indices, layout_atom, resource_alloc):
+def DM_mapfill_probs_atom(fwdsim, mx_to_fill, dest_indices, layout_atom, resource_alloc):
 
     # The required ending condition is that array_to_fill on each processor has been filled.  But if
     # memory is being shared and resource_alloc contains multiple processors on a single host, we only
@@ -1691,8 +1691,8 @@ def DM_mapfill_probs_block(fwdsim, mx_to_fill, dest_indices, layout_atom, resour
                 mx_to_fill[j] = erep.probability(final_state)  # outcome probability
 
 
-def DM_mapfill_dprobs_block(fwdsim, mx_to_fill, dest_indices, dest_param_indices, layout_atom, param_indices,
-                            resource_alloc):
+def DM_mapfill_dprobs_atom(fwdsim, mx_to_fill, dest_indices, dest_param_indices, layout_atom, param_indices,
+                           resource_alloc):
 
     eps = 1e-7  # hardcoded?
     #shared_mem_leader = resource_alloc.is_host_leader if (resource_alloc is not None) else True
@@ -1725,7 +1725,7 @@ def DM_mapfill_dprobs_block(fwdsim, mx_to_fill, dest_indices, dest_param_indices
     nEls = layout_atom.num_elements
     probs, shm = _smt.create_shared_ndarray(resource_alloc, (nEls,), 'd', track_memory=False)
     probs2, shm2 = _smt.create_shared_ndarray(resource_alloc, (nEls,), 'd', track_memory=False)
-    DM_mapfill_probs_block(fwdsim, probs, slice(0, nEls), layout_atom, resource_alloc)  # probs != shared
+    DM_mapfill_probs_atom(fwdsim, probs, slice(0, nEls), layout_atom, resource_alloc)  # probs != shared
 
     for i in range(fwdsim.model.num_params):
         #print("dprobs cache %d of %d" % (i,self.Np))
@@ -1733,7 +1733,7 @@ def DM_mapfill_dprobs_block(fwdsim, mx_to_fill, dest_indices, dest_param_indices
             iFinal = iParamToFinal[i]
             vec = orig_vec.copy(); vec[i] += eps
             fwdsim.model.from_vector(vec, close=True)
-            DM_mapfill_probs_block(fwdsim, probs2, slice(0, nEls), layout_atom, resource_alloc)
+            DM_mapfill_probs_atom(fwdsim, probs2, slice(0, nEls), layout_atom, resource_alloc)
             _fas(mx_to_fill, [dest_indices, iFinal], (probs2 - probs) / eps)
     fwdsim.model.from_vector(orig_vec, close=True)
     _smt.cleanup_shared_ndarray(shm)

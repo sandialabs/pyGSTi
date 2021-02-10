@@ -1473,7 +1473,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
         return ret
 
-    def _bulk_fill_probs_block(self, array_to_fill, layout_atom, resource_alloc):
+    def _bulk_fill_probs_atom(self, array_to_fill, layout_atom, resource_alloc):
         #Free memory from previous subtree iteration before computing caches
         scaleVals = Gs = prodCache = scaleCache = None
         resource_alloc.check_can_allocate_memory(layout_atom.cache_size * self.model.dim * self.model.dim)  # prod cache
@@ -1509,7 +1509,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                  self._probs_from_rho_e(rho, E, Gs[tree_indices], scaleVals[tree_indices]))
         _np.seterr(**old_err)
 
-    def _bulk_fill_dprobs_block(self, array_to_fill, dest_param_slice, layout_atom, param_slice, resource_alloc):
+    def _bulk_fill_dprobs_atom(self, array_to_fill, dest_param_slice, layout_atom, param_slice, resource_alloc):
         dim = self.model.dim
         resource_alloc.check_can_allocate_memory(layout_atom.cache_size * dim * dim * _slct.length(param_slice))
         prodCache, scaleCache = self._compute_product_cache(layout_atom.tree, resource_alloc)
@@ -1530,8 +1530,8 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
         _np.seterr(**old_err)
 
-    def _bulk_fill_hprobs_block(self, array_to_fill, dest_param_slice1, dest_param_slice2, layout_atom,
-                                param_slice1, param_slice2, resource_alloc):
+    def _bulk_fill_hprobs_atom(self, array_to_fill, dest_param_slice1, dest_param_slice2, layout_atom,
+                               param_slice1, param_slice2, resource_alloc):
         dim = self.model.dim
         resource_alloc.check_can_allocate_memory(layout_atom.cache_size * dim**2
                                                  * _slct.length(param_slice1) * _slct.length(param_slice2))
@@ -1762,7 +1762,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         return ds_cache[timestamp]
 
     def _bulk_fill_timedep_objfn(self, raw_objective, array_to_fill, layout, ds_circuits,
-                                 num_total_outcomes, dataset, resource_alloc=None, ds_cache=None):
+                                 num_total_outcomes, dataset, ds_cache=None):
 
         assert(self._mode == "distribute_by_timestamp"), \
             ("Must set `distribute_by_timestamp=True` to use a "
@@ -1779,7 +1779,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                 for obj in opcache.values():
                     obj.set_time(layout_atom.timestamp)
 
-            self._bulk_fill_probs_block(probs_array, layout_atom, sub_resource_alloc)
+            self._bulk_fill_probs_atom(probs_array, layout_atom, sub_resource_alloc)
             counts, totals, freqs, firsts, indicesOfCircuitsWithOmittedData = \
                 self._ds_quantities(layout_atom.timestamp, ds_cache, layout, dataset)
             if counts is None: return  # no data at this time => no contribution
@@ -1792,14 +1792,14 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
             array_to_fill[layout_atom.element_slice] += terms
 
-        atomOwners = self._compute_on_atoms(layout, compute_timedep, resource_alloc)
+        atomOwners = self._compute_on_atoms(layout, compute_timedep, layout.resource_alloc())
 
         #collect/gather results (SUM local arrays together)
-        summed = _mpit.sum_arrays(array_to_fill, set(atomOwners.values()), resource_alloc.comm)
+        summed = _mpit.sum_arrays(array_to_fill, set(atomOwners.values()), layout.resource_alloc().comm)
         array_to_fill[:] = summed  # this could probably be done more efficiently
 
     def _bulk_fill_timedep_dobjfn(self, raw_objective, array_to_fill, layout, ds_circuits,
-                                  num_total_outcomes, dataset, resource_alloc=None, ds_cache=None):
+                                  num_total_outcomes, dataset, ds_cache=None):
 
         assert(self._mode == "distribute_by_timestamp"), \
             ("Must set `distribute_by_timestamp=True` to use a "
@@ -1819,9 +1819,9 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                 for obj in opcache.values():
                     obj.set_time(layout_atom.timestamp)
 
-            self._bulk_fill_probs_block(probs_array, layout_atom, sub_resource_alloc)
-            self._bulk_fill_dprobs_block(dprobs_array, all_param_slice, layout_atom,
-                                         all_param_slice, sub_resource_alloc)
+            self._bulk_fill_probs_atom(probs_array, layout_atom, sub_resource_alloc)
+            self._bulk_fill_dprobs_atom(dprobs_array, all_param_slice, layout_atom,
+                                        all_param_slice, sub_resource_alloc)
 
             #import bpdb; bpdb.set_trace()
             counts, totals, freqs, firsts, indicesOfCircuitsWithOmittedData = \
@@ -1852,15 +1852,14 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             #print("array_to_fill[:,29] = ",array_to_fill[:,29], " sum = ",_np.sum(array_to_fill[:,29]))
             #print()
 
-        atomOwners = self._compute_on_atoms(layout, compute_timedep, resource_alloc)
+        atomOwners = self._compute_on_atoms(layout, compute_timedep, layout.resource_alloc())
 
         #collect/gather results (SUM local arrays together)
-        summed = _mpit.sum_arrays(array_to_fill, set(atomOwners.values()), resource_alloc.comm)
+        summed = _mpit.sum_arrays(array_to_fill, set(atomOwners.values()), layout.resource_alloc().comm)
         array_to_fill[:] = summed  # this could probably be done more efficiently
 
     def bulk_fill_timedep_chi2(self, array_to_fill, layout, ds_circuits, num_total_outcomes, dataset,
-                               min_prob_clip_for_weighting, prob_clip_interval, resource_alloc=None,
-                               ds_cache=None):
+                               min_prob_clip_for_weighting, prob_clip_interval, ds_cache=None):
         """
         Compute the chi2 contributions for an entire tree of circuits, allowing for time dependent operations.
 
@@ -1900,22 +1899,18 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             (min,max) values used to clip the predicted probabilities to.
             If None, no clipping is performed.
 
-        resource_alloc : ResourceAllocation, optional
-            A resource allocation object describing the available resources and a strategy
-            for partitioning them.
-
         Returns
         -------
         None
         """
         raw_obj = _RawChi2Function({'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
-                                   resource_alloc)
+                                   layout.resource_alloc())
         return self._bulk_fill_timedep_objfn(raw_obj, array_to_fill, layout, ds_circuits, num_total_outcomes,
-                                             dataset, resource_alloc, ds_cache)
+                                             dataset, ds_cache)
 
     def bulk_fill_timedep_dchi2(self, array_to_fill, layout, ds_circuits, num_total_outcomes, dataset,
                                 min_prob_clip_for_weighting, prob_clip_interval, chi2_array_to_fill=None,
-                                wrt_filter=None, resource_alloc=None, ds_cache=None):
+                                wrt_filter=None, ds_cache=None):
         """
         Compute the chi2 jacobian contributions for an entire tree of circuits, allowing for time dependent operations.
 
@@ -1968,22 +1963,17 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             internally for distributing calculations across multiple
             processors and to control memory usage.
 
-        resource_alloc : ResourceAllocation, optional
-            A resource allocation object describing the available resources and a strategy
-            for partitioning them.
-
         Returns
         -------
         None
         """
         raw_obj = _RawChi2Function({'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
-                                   resource_alloc)
+                                   layout.resource_alloc())
         return self._bulk_fill_timedep_dobjfn(raw_obj, array_to_fill, layout, ds_circuits, num_total_outcomes,
-                                              dataset, resource_alloc, ds_cache)
+                                              dataset, ds_cache)
 
     def bulk_fill_timedep_loglpp(self, array_to_fill, layout, ds_circuits, num_total_outcomes, dataset,
-                                 min_prob_clip, radius, prob_clip_interval, resource_alloc=None,
-                                 ds_cache=None):
+                                 min_prob_clip, radius, prob_clip_interval, ds_cache=None):
         """
         Compute the log-likelihood contributions (within the "poisson picture") for an entire tree of circuits.
 
@@ -2029,22 +2019,18 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             (min,max) values used to clip the predicted probabilities to.
             If None, no clipping is performed.
 
-        resource_alloc : ResourceAllocation, optional
-            A resource allocation object describing the available resources and a strategy
-            for partitioning them.
-
         Returns
         -------
         None
         """
         raw_obj = _RawPoissonPicDeltaLogLFunction({'min_prob_clip': min_prob_clip, 'radius': radius},
-                                                  resource_alloc)
+                                                  layout.resource_alloc())
         return self._bulk_fill_timedep_objfn(raw_obj, array_to_fill, layout, ds_circuits, num_total_outcomes,
-                                             dataset, resource_alloc, ds_cache)
+                                             dataset, ds_cache)
 
     def bulk_fill_timedep_dloglpp(self, array_to_fill, layout, ds_circuits, num_total_outcomes, dataset,
                                   min_prob_clip, radius, prob_clip_interval, logl_array_to_fill=None,
-                                  wrt_filter=None, resource_alloc=None, ds_cache=None):
+                                  wrt_filter=None, ds_cache=None):
         """
         Compute the ("poisson picture")log-likelihood jacobian contributions for an entire tree of circuits.
 
@@ -2098,15 +2084,11 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             internally for distributing calculations across multiple
             processors and to control memory usage.
 
-        resource_alloc : ResourceAllocation, optional
-            A resource allocation object describing the available resources and a strategy
-            for partitioning them.
-
         Returns
         -------
         None
         """
         raw_obj = _RawPoissonPicDeltaLogLFunction({'min_prob_clip': min_prob_clip, 'radius': radius},
-                                                  resource_alloc)
+                                                  layout.resource_alloc())
         return self._bulk_fill_timedep_dobjfn(raw_obj, array_to_fill, layout, ds_circuits, num_total_outcomes,
-                                              dataset, resource_alloc, ds_cache)
+                                              dataset, ds_cache)

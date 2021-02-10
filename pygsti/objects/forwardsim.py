@@ -343,10 +343,9 @@ class ForwardSimulator(object):
         with resource_alloc.temporarily_track_memory(global_layout.num_elements):  # 'E' (vp)
             local_vp = copa_layout.allocate_local_array('e', 'd')
             if smartc:
-                smartc.cached_compute(self.bulk_fill_probs, local_vp, copa_layout,
-                                      resource_alloc, _filledarrays=(0,))
+                smartc.cached_compute(self.bulk_fill_probs, local_vp, copa_layout, _filledarrays=(0,))
             else:
-                self.bulk_fill_probs(local_vp, copa_layout, resource_alloc)
+                self.bulk_fill_probs(local_vp, copa_layout)
             vp = copa_layout.gather_local_array('e', local_vp)  # gather data onto rank-0 processor
             copa_layout.free_local_array(local_vp)
 
@@ -394,7 +393,7 @@ class ForwardSimulator(object):
         with resource_alloc.temporarily_track_memory(global_layout.num_elements * self.model.num_params):  # 'EP' (vdp)
             #Note: don't use smartc for now.
             local_vdp = copa_layout.allocate_local_array('ep', 'd')
-            self.bulk_fill_dprobs(local_vdp, copa_layout, None, resource_alloc)
+            self.bulk_fill_dprobs(local_vdp, copa_layout, None)
             vdp = copa_layout.gather_local_array('ep', local_vdp)  # gather data onto rank-0 processor
             copa_layout.free_local_array(local_vdp)
 
@@ -442,7 +441,7 @@ class ForwardSimulator(object):
         with resource_alloc.temporarily_track_memory(global_layout.num_elements * self.model.num_params**2):  # 'EPP'
             #Note: don't use smartc for now.
             local_vhp = copa_layout.allocate_local_array('epp', 'd')
-            self.bulk_fill_hprobs(local_vhp, copa_layout, None, None, None, resource_alloc)
+            self.bulk_fill_hprobs(local_vhp, copa_layout, None, None, None)
             vhp = copa_layout.gather_local_array('epp', local_vhp)  # gather data onto rank-0 processor
             copa_layout.free_local_array(local_vhp)
 
@@ -455,7 +454,7 @@ class ForwardSimulator(object):
         else:
             return None  # on non-root ranks
 
-    def bulk_fill_probs(self, array_to_fill, layout, resource_alloc=None):
+    def bulk_fill_probs(self, array_to_fill, layout):
         """
         Compute the outcome probabilities for a list circuits.
 
@@ -476,36 +475,30 @@ class ForwardSimulator(object):
             A layout for `array_to_fill`, describing what circuit outcome each
             element corresponds to.  Usually given by a prior call to :method:`create_layout`.
 
-        resource_alloc : ResourceAllocation, optional
-            A resource allocation object describing the available resources and a strategy
-            for partitioning them.
-
         Returns
         -------
         None
         """
-        resource_alloc = _ResourceAllocation.cast(resource_alloc)
-        return self._bulk_fill_probs(array_to_fill, layout, resource_alloc)
+        return self._bulk_fill_probs(array_to_fill, layout)
 
-    def _bulk_fill_probs(self, array_to_fill, layout, resource_alloc):
-        return self._bulk_fill_probs_block(array_to_fill, layout, resource_alloc)
+    def _bulk_fill_probs(self, array_to_fill, layout):
+        return self._bulk_fill_probs_block(array_to_fill, layout)
 
-    def _bulk_fill_probs_block(self, array_to_fill, layout, resource_alloc):
+    def _bulk_fill_probs_block(self, array_to_fill, layout):
         for element_indices, circuit, outcomes in layout.iter_unique_circuits():
             self._compute_circuit_outcome_probabilities(array_to_fill[element_indices], circuit,
-                                                        outcomes, resource_alloc, time=None)
+                                                        outcomes, layout.resource_alloc(), time=None)
 
-    def _bulk_fill_probs_at_times(self, array_to_fill, layout, times, resource_alloc):
+    def _bulk_fill_probs_at_times(self, array_to_fill, layout, times):
         # A separate function because computation with time-dependence is often approached differently
-        return self._bulk_fill_probs_block_at_times(array_to_fill, layout, times, resource_alloc)
+        return self._bulk_fill_probs_block_at_times(array_to_fill, layout, times)
 
-    def _bulk_fill_probs_block_at_times(self, array_to_fill, layout, times, resource_alloc):
+    def _bulk_fill_probs_block_at_times(self, array_to_fill, layout, times):
         for (element_indices, circuit, outcomes), time in zip(layout.iter_unique_circuits(), times):
             self._compute_circuit_outcome_probabilities(array_to_fill[element_indices], circuit,
-                                                        outcomes, resource_alloc, time)
+                                                        outcomes, layout.resource_alloc(), time)
 
-    def bulk_fill_dprobs(self, array_to_fill, layout,
-                         pr_array_to_fill=None, resource_alloc=None):
+    def bulk_fill_dprobs(self, array_to_fill, layout, pr_array_to_fill=None):
         """
         Compute the outcome probability-derivatives for an entire tree of circuits.
 
@@ -530,25 +523,21 @@ class ForwardSimulator(object):
             when not None, an already-allocated length-`len(layout)` numpy array that is
             filled with probabilities, just as in :method:`bulk_fill_probs`.
 
-        resource_alloc : ResourceAllocation, optional
-            A resource allocation object describing the available resources and a strategy
-            for partitioning them.
-
         Returns
         -------
         None
         """
-        resource_alloc = _ResourceAllocation.cast(resource_alloc)
-        return self._bulk_fill_dprobs(array_to_fill, layout, pr_array_to_fill, resource_alloc)
+        return self._bulk_fill_dprobs(array_to_fill, layout, pr_array_to_fill)
 
-    def _bulk_fill_dprobs(self, array_to_fill, layout, pr_array_to_fill, resource_alloc):
+    def _bulk_fill_dprobs(self, array_to_fill, layout, pr_array_to_fill):
         if pr_array_to_fill is not None:
-            self._bulk_fill_probs_block(pr_array_to_fill, layout, resource_alloc)
-        return self._bulk_fill_dprobs_block(array_to_fill, None, layout, None, resource_alloc)
+            self._bulk_fill_probs_block(pr_array_to_fill, layout)
+        return self._bulk_fill_dprobs_block(array_to_fill, None, layout, None)
 
-    def _bulk_fill_dprobs_block(self, array_to_fill, dest_param_slice, layout, param_slice, resource_alloc):
+    def _bulk_fill_dprobs_block(self, array_to_fill, dest_param_slice, layout, param_slice):
 
         #If _compute_circuit_outcome_probability_derivatives is implemented, use it!
+        resource_alloc = layout.resource_alloc()
         try:
             for element_indices, circuit, outcomes in layout.iter_unique_circuits():
                 self._compute_circuit_outcome_probability_derivatives(
@@ -569,7 +558,7 @@ class ForwardSimulator(object):
         iParamToFinal = {i: dest_param_indices[ii] for ii, i in enumerate(param_indices)}
 
         probs = _np.empty(len(layout), 'd')
-        self._bulk_fill_probs_block(probs, layout, resource_alloc)
+        self._bulk_fill_probs_block(probs, layout)
 
         probs2 = _np.empty(len(layout), 'd')
         orig_vec = self.model.to_vector().copy()
@@ -583,8 +572,7 @@ class ForwardSimulator(object):
         self.model.from_vector(orig_vec, close=True)
 
     def bulk_fill_hprobs(self, array_to_fill, layout,
-                         pr_array_to_fill=None, deriv1_array_to_fill=None, deriv2_array_to_fill=None,
-                         resource_alloc=None):
+                         pr_array_to_fill=None, deriv1_array_to_fill=None, deriv2_array_to_fill=None):
         """
         Compute the outcome probability-Hessians for an entire list of circuits.
 
@@ -616,36 +604,29 @@ class ForwardSimulator(object):
             that is filled with probability derivatives, similar to
             :method:`bulk_fill_dprobs` (see `array_to_fill` for a definition of `M2`).
 
-        resource_alloc : ResourceAllocation, optional
-            A resource allocation object describing the available resources and a strategy
-            for partitioning them.
-
         Returns
         -------
         None
         """
-        resource_alloc = _ResourceAllocation.cast(resource_alloc)
         return self._bulk_fill_hprobs(array_to_fill, layout, pr_array_to_fill,
-                                      deriv1_array_to_fill, deriv2_array_to_fill,
-                                      resource_alloc)
+                                      deriv1_array_to_fill, deriv2_array_to_fill)
 
     def _bulk_fill_hprobs(self, array_to_fill, layout,
-                          pr_array_to_fill, deriv1_array_to_fill, deriv2_array_to_fill,
-                          resource_alloc):
+                          pr_array_to_fill, deriv1_array_to_fill, deriv2_array_to_fill):
         if pr_array_to_fill is not None:
-            self._bulk_fill_probs_block(pr_array_to_fill, layout, resource_alloc)
+            self._bulk_fill_probs_block(pr_array_to_fill, layout)
         if deriv1_array_to_fill is not None:
-            self._bulk_fill_dprobs_block(deriv1_array_to_fill, None, layout, None, resource_alloc)
+            self._bulk_fill_dprobs_block(deriv1_array_to_fill, None, layout, None)
         if deriv2_array_to_fill is not None:
             #if wrtSlice1 == wrtSlice2:
             deriv2_array_to_fill[:, :] = deriv1_array_to_fill[:, :]
             #else:
-            #    self._bulk_fill_dprobs_block(deriv2_array_to_fill, None, layout, None, resource_alloc)
+            #    self._bulk_fill_dprobs_block(deriv2_array_to_fill, None, layout, None)
 
-        return self._bulk_fill_hprobs_block(array_to_fill, None, None, layout, None, None, resource_alloc)
+        return self._bulk_fill_hprobs_block(array_to_fill, None, None, layout, None, None)
 
     def _bulk_fill_hprobs_block(self, array_to_fill, dest_param_slice1, dest_param_slice2, layout,
-                                param_slice1, param_slice2, resource_alloc):
+                                param_slice1, param_slice2):
         eps = 1e-4  # hardcoded?
         if param_slice1 is None: param_slice1 = slice(0, self.model.num_params)
         if param_slice2 is None: param_slice2 = slice(0, self.model.num_params)
@@ -663,7 +644,7 @@ class ForwardSimulator(object):
 
         nP2 = len(param_indices2)
         dprobs = _np.empty((len(layout), nP2), 'd')
-        self._bulk_fill_dprobs_block(dprobs, None, layout, param_slice2, resource_alloc)
+        self._bulk_fill_dprobs_block(dprobs, None, layout, param_slice2)
 
         dprobs2 = _np.empty((len(layout), nP2), 'd')
         orig_vec = self.model.to_vector().copy()
@@ -672,12 +653,12 @@ class ForwardSimulator(object):
                 iFinal = iParamToFinal[i]
                 vec = orig_vec.copy(); vec[i] += eps
                 self.model.from_vector(vec, close=True)
-                self._bulk_fill_dprobs_block(dprobs2, None, layout, param_slice2, resource_alloc)
+                self._bulk_fill_dprobs_block(dprobs2, None, layout, param_slice2)
                 array_to_fill[:, iFinal, dest_param_slice2] = (dprobs2 - dprobs) / eps
         self.model.from_vector(orig_vec, close=True)
 
     def bulk_hprobs_by_block(self, layout, wrt_slices_list,
-                             return_dprobs_12=False, resource_alloc=None):
+                             return_dprobs_12=False):
         """
         An iterator that computes 2nd derivatives of the `eval_tree`'s circuit probabilities column-by-column.
 
@@ -710,10 +691,6 @@ class ForwardSimulator(object):
             Hessian, and turns out to be useful when computing the Hessian
             of functions of the probabilities.
 
-        resource_alloc : ResourceAllocation, optional
-            A resource allocation object describing the available resources and a strategy
-            for partitioning them.
-
         Returns
         -------
         TODO: docstring - this is outdated!
@@ -735,10 +712,9 @@ class ForwardSimulator(object):
             - `hprobs == mx[:,:,rowSlice,colSlice]`
             - `dprobs12 == dp1[:,:,rowSlice,None] * dp2[:,:,None,colSlice]`
         """
-        resource_alloc = _ResourceAllocation.cast(resource_alloc)
-        yield from self._bulk_hprobs_by_block(layout, wrt_slices_list, return_dprobs_12, resource_alloc)
+        yield from self._bulk_hprobs_by_block(layout, wrt_slices_list, return_dprobs_12)
 
-    def _bulk_hprobs_by_block(self, layout, wrt_slices_list, return_dprobs_12, resource_alloc):
+    def _bulk_hprobs_by_block(self, layout, wrt_slices_list, return_dprobs_12):
         # under distributed layout each proc already has a local set of parameter slices, and
         # this routine could just compute parts of that piecemeal so we never compute an entire
         # proc's hprobs (may be too large) - so I think this function signature may still be fine,
@@ -763,18 +739,18 @@ class ForwardSimulator(object):
 
             if return_dprobs_12:
                 dprobs1 = _np.zeros((nElements, _slct.length(wrtSlice1)), 'd')
-                self._bulk_fill_dprobs_block(dprobs1, None, layout, wrtSlice1, resource_alloc)
+                self._bulk_fill_dprobs_block(dprobs1, None, layout, wrtSlice1)
 
                 if wrtSlice1 == wrtSlice2:
                     dprobs2 = dprobs1
                 else:
                     dprobs2 = _np.zeros((nElements, _slct.length(wrtSlice2)), 'd')
-                    self._bulk_fill_dprobs_block(dprobs2, None, layout, wrtSlice2, resource_alloc)
+                    self._bulk_fill_dprobs_block(dprobs2, None, layout, wrtSlice2)
             else:
                 dprobs1 = dprobs2 = None
 
             hprobs = _np.zeros((nElements, _slct.length(wrtSlice1), _slct.length(wrtSlice2)), 'd')
-            self._bulk_fill_hprobs_block(hprobs, None, None, layout, wrtSlice1, wrtSlice2, resource_alloc)
+            self._bulk_fill_hprobs_block(hprobs, None, None, layout, wrtSlice1, wrtSlice2)
 
             if return_dprobs_12:
                 dprobs12 = dprobs1[:, :, None] * dprobs2[:, None, :]  # (KM,N,1) * (KM,1,N') = (KM,N,N')
@@ -822,15 +798,16 @@ class CacheForwardSimulator(ForwardSimulator):
         return _CachedCOPALayout.create_from(circuits, self.model, dataset, derivative_dimensions, cache)
 
     # Override these two functions to plumb `cache` down to _compute* methods
-    def _bulk_fill_probs_block(self, array_to_fill, layout, resource_alloc):
+    def _bulk_fill_probs_block(self, array_to_fill, layout):
         for element_indices, circuit, outcomes, cache in layout.iter_unique_circuits_with_cache():
             self._compute_circuit_outcome_probabilities_with_cache(array_to_fill[element_indices], circuit,
-                                                                   outcomes, resource_alloc, cache, time=None)
+                                                                   outcomes, layout.resource_alloc(), cache, time=None)
 
-    def _bulk_fill_dprobs_block(self, array_to_fill, dest_param_slice, layout, param_slice, resource_alloc):
+    def _bulk_fill_dprobs_block(self, array_to_fill, dest_param_slice, layout, param_slice):
         for element_indices, circuit, outcomes, cache in layout.iter_unique_circuits_with_cache():
             self._compute_circuit_outcome_probability_derivatives_with_cache(
-                array_to_fill[element_indices, dest_param_slice], circuit, outcomes, param_slice, resource_alloc, cache)
+                array_to_fill[element_indices, dest_param_slice], circuit, outcomes, param_slice,
+                layout.resource_alloc(), cache)
 
     def _compute_circuit_outcome_probabilities_with_cache(self, array_to_fill, circuit, outcomes, resource_alloc,
                                                           cache, time=None):

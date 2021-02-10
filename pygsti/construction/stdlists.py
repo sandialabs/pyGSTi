@@ -709,7 +709,7 @@ def create_lsgst_circuits(op_label_src, prep_strs, effect_strs, germ_list,
 
     Returns
     -------
-    list of Circuits
+    PlaquetteGridCircuitStructure
     """
     nest = True  # => the final list contains all of the strings
     return create_lsgst_circuit_lists(op_label_src, prep_strs, effect_strs, germ_list,

@@ -2085,8 +2085,8 @@ cdef vector[DMEffectCRep*] convert_ereps(ereps):
     return c_ereps
 
 
-def DM_mapfill_probs_block(fwdsim, np.ndarray[double, mode="c", ndim=1] array_to_fill,
-                           dest_indices, layout_atom, resource_alloc):
+def DM_mapfill_probs_atom(fwdsim, np.ndarray[double, mode="c", ndim=1] array_to_fill,
+                          dest_indices, layout_atom, resource_alloc):
 
     # The required ending condition is that array_to_fill on each processor has been filled.  But if
     # memory is being shared and resource_alloc contains multiple processors on a single host, we only
@@ -2223,11 +2223,11 @@ cdef dm_mapfill_probs(double[:] array_to_fill,
     del shelved
 
 
-def DM_mapfill_dprobs_block(fwdsim,
-                            np.ndarray[double, ndim=2] array_to_fill,
-                            dest_indices,
-                            dest_param_indices,
-                            layout_atom, param_indices, resource_alloc):
+def DM_mapfill_dprobs_atom(fwdsim,
+                           np.ndarray[double, ndim=2] array_to_fill,
+                           dest_indices,
+                           dest_param_indices,
+                           layout_atom, param_indices, resource_alloc):
 
     cdef double eps = 1e-7 #hardcoded?
     #REMOVE if resource_alloc.comm is not None: resource_alloc.comm.barrier()  # ??

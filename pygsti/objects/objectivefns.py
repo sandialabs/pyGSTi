@@ -1540,8 +1540,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
                 assert(len(atom_counts) == len(probs))
 
                 #compute probs separately
-                #self.model.sim.bulk_fill_probs(probs, atom, sub_resource_alloc)
-                self.model.sim._bulk_fill_probs_block(probs, atom, atom_resource_alloc)  # need to reach into internals!
+                self.model.sim._bulk_fill_probs_atom(probs, atom, atom_resource_alloc)  # need to reach into internals!
                 if prob_clip_interval is not None:
                     _np.clip(probs, prob_clip_interval[0], prob_clip_interval[1], out=probs)
 
@@ -4100,7 +4099,8 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
                                                     extra_elements=self.ex)
 
         self.jac = None
-        if 'ep' in self.array_types:
+        if ('ep' in self.array_types or 'EP' in self.array_types
+            or 'epp' in self.array_types or 'EPP' in self.array_types):
             self.jac = self.layout.allocate_local_array('ep', 'd', memory_tracker=self.resource_alloc,
                                                         extra_elements=self.ex)
 
@@ -4578,7 +4578,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         shared_mem_leader = unit_ralloc.is_host_leader
 
         with self.resource_alloc.temporarily_track_memory(self.nelements):  # 'e' (lsvec)
-            self.model.sim.bulk_fill_probs(self.probs, self.layout, self.resource_alloc)  # syncs shared mem
+            self.model.sim.bulk_fill_probs(self.probs, self.layout)  # syncs shared mem
             self._clip_probs()  # clips self.probs in place w/shared mem sync
 
             if oob_check:  # Only used for termgap cases
@@ -4630,7 +4630,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         shared_mem_leader = unit_ralloc.is_host_leader
 
         with self.resource_alloc.temporarily_track_memory(self.nelements):  # 'e' (terms)
-            self.model.sim.bulk_fill_probs(self.probs, self.layout, self.resource_alloc)
+            self.model.sim.bulk_fill_probs(self.probs, self.layout)
             self._clip_probs()  # clips self.probs in place w/shared mem sync
 
             if shared_mem_leader:
@@ -4691,7 +4691,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             #wrtSlice = resource_alloc.jac_slice if (resource_alloc.jac_distribution_method == "columns") \
             #           else slice(0, self.model.num_params)
 
-            self.model.sim.bulk_fill_dprobs(dprobs, self.layout, self.probs, self.resource_alloc)  # wrtSlice)
+            self.model.sim.bulk_fill_dprobs(dprobs, self.layout, self.probs)  # wrtSlice)
             self._clip_probs()  # clips self.probs in place w/shared mem sync
 
             if shared_mem_leader:
@@ -4760,7 +4760,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         shared_mem_leader = unit_ralloc.is_host_leader
 
         with self.resource_alloc.temporarily_track_memory(2 * self.nelements):  # 'e' (dg_dprobs, lsvec)
-            self.model.sim.bulk_fill_dprobs(dprobs, self.layout, self.probs, self.resource_alloc)
+            self.model.sim.bulk_fill_dprobs(dprobs, self.layout, self.probs)
             self._clip_probs()  # clips self.probs in place w/shared mem sync
 
             if shared_mem_leader:
@@ -4831,7 +4831,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
         # 'e', 'epp' (dg_dprobs, d2g_dprobs2, temporary variable dprobs_dp2 * dprobs_dp1 )
         with self.resource_alloc.temporarily_track_memory(2 * self.nelements + self.nelements * self.nparams**2):
-            self.model.sim.bulk_fill_hprobs(hprobs, self.layout, self.probs, dprobs, dprobs2, self.resource_alloc)
+            self.model.sim.bulk_fill_hprobs(hprobs, self.layout, self.probs, dprobs, dprobs2)
             self._clip_probs()  # clips self.probs in place w/shared mem sync
 
             dg_dprobs = self.raw_objfn.dterms(self.probs, self.counts, self.total_counts, self.freqs)[:, None, None]
@@ -4893,7 +4893,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
         # 'e', 'pp' (d2g_dprobs2, einsum result )
         with self.resource_alloc.temporarily_track_memory(self.nelements + self.nparams**2):
-            self.model.sim.bulk_fill_dprobs(dprobs, self.layout, self.probs, self.resource_alloc)
+            self.model.sim.bulk_fill_dprobs(dprobs, self.layout, self.probs)
             self._clip_probs()  # clips self.probs in place w/shared mem sync
 
             d2g_dprobs2 = self.raw_objfn.hterms(self.probs, self.counts, self.total_counts, self.freqs)  # [:,None,None]
@@ -5684,7 +5684,7 @@ class TimeDependentChi2Function(TimeDependentMDCObjectiveFunction):
         v = self.v
         fsim.bulk_fill_timedep_chi2(v, self.layout, self.ds_circuits, self.num_total_outcomes,
                                     self.dataset, self.min_prob_clip_for_weighting, self.prob_clip_interval,
-                                    self.resource_alloc, self._ds_cache)
+                                    self._ds_cache)
         self.raw_objfn.resource_alloc.profiler.add_time("Time-dep chi2: OBJECTIVE", tm)
         assert(v.shape == (self.nelements,))  # reshape ensuring no copy is needed
         return v.copy()  # copy() needed for FD deriv, and we don't need to be stingy w/memory at objective fn level
@@ -5715,7 +5715,7 @@ class TimeDependentChi2Function(TimeDependentMDCObjectiveFunction):
         fsim = self.model.sim
         fsim.bulk_fill_timedep_dchi2(dprobs, self.layout, self.ds_circuits, self.num_total_outcomes,
                                      self.dataset, self.min_prob_clip_for_weighting, self.prob_clip_interval, None,
-                                     self.resource_alloc, self._ds_cache)
+                                     self._ds_cache)
 
         self.raw_objfn.resource_alloc.profiler.add_time("Time-dep chi2: JACOBIAN", tm)
         return self.jac
@@ -5852,7 +5852,7 @@ class TimeDependentPoissonPicLogLFunction(TimeDependentMDCObjectiveFunction):
         v = self.v
         fsim.bulk_fill_timedep_loglpp(v, self.layout, self.ds_circuits, self.num_total_outcomes,
                                       self.dataset, self.min_prob_clip, self.radius, self.prob_clip_interval,
-                                      self.resource_alloc, self._ds_cache)
+                                      self._ds_cache)
         v = _np.sqrt(v)
         v.shape = [self.nelements]  # reshape ensuring no copy is needed
 
@@ -5894,7 +5894,7 @@ class TimeDependentPoissonPicLogLFunction(TimeDependentMDCObjectiveFunction):
         fsim = self.model.sim
         fsim.bulk_fill_timedep_dloglpp(dlogl, self.layout, self.ds_circuits, self.num_total_outcomes,
                                        self.dataset, self.min_prob_clip, self.radius, self.prob_clip_interval, self.v,
-                                       self.resource_alloc, self._ds_cache)
+                                       self._ds_cache)
 
         # want deriv( sqrt(logl) ) = 0.5/sqrt(logl) * deriv(logl)
         v = _np.sqrt(self.v)

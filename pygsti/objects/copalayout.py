@@ -20,6 +20,7 @@ from operator import add as _add
 from .circuitlist import CircuitList as _CircuitList
 from .label import Label as _Label
 from .circuit import Circuit as _Circuit
+from .resourceallocation import ResourceAllocation as _ResourceAllocation
 from ..tools import listtools as _lt
 from ..tools import slicetools as _slct
 
@@ -117,7 +118,7 @@ class CircuitOutcomeProbabilityArrayLayout(object):
                    param_dimensions)
 
     def __init__(self, circuits, unique_circuits, to_unique, elindex_outcome_tuples,
-                 unique_complete_circuits=None, param_dimensions=()):
+                 unique_complete_circuits=None, param_dimensions=(), resource_alloc=None):
         # to_unique : dict maping indices of `circuits` to indices of `unique_circuits`
         # elindex_outcome_tuples : dict w/keys == indices into `unique_circuits` (which is why `unique_circuits`
         #                          is needed) and values == lists of (element_index, outcome) pairs.
@@ -129,6 +130,7 @@ class CircuitOutcomeProbabilityArrayLayout(object):
         self._to_unique = to_unique  # original indices => unique circuit indices
         self._unique_complete_circuits = unique_complete_circuits  # Note: can be None
         self._param_dimensions = param_dimensions
+        self._resource_alloc = _ResourceAllocation.cast(resource_alloc)
 
         max_element_index = max(_it.chain(*[[ei for ei, _ in pairs] for pairs in elindex_outcome_tuples.values()])) \
             if len(elindex_outcome_tuples) > 0 else -1  # -1 makes _size = 0 below
@@ -294,3 +296,30 @@ class CircuitOutcomeProbabilityArrayLayout(object):
         MatrixCOPALayout
         """
         return _copy.deepcopy(self)  # in the future maybe we need to do something more complicated?
+
+    def resource_alloc(self, sub_alloc_name=None, empty_if_missing=True):
+        """
+        Retrieves the resource-allocation objectfor this layout.
+
+        Sub-resource-allocations can also be obtained by passing a non-None
+        `sub_alloc_name`.
+
+        Parameters
+        ----------
+        sub_alloc_name : str
+            The name to retrieve
+
+        empty_if_missing : bool
+            When `True`, an empty resource allocation object is returned when
+            `sub_alloc_name` doesn't exist for this layout.  Otherwise a
+            `KeyError` is raised when this occurs.
+
+        Returns
+        -------
+        ResourceAllocation
+        """
+        if sub_alloc_name is None:
+            return self._resource_alloc
+        if empty_if_missing:
+            return _ResourceAllocation(None)
+        raise KeyError("COPA layout has no '%s' resource alloc" % str(sub_alloc_name))

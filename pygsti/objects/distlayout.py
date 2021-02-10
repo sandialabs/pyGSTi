@@ -321,6 +321,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
 
             self.global_num_params = num_params
             self.global_param_slice = _slct.list_to_slice(myParamIndices)
+            self.num_params = _slct.length(self.global_param_slice)
 
             ##Create a subgroup that contains only the rank-0 processors of all the param processing comms.
             #if param_processing_subcomm is not None:
@@ -496,6 +497,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
                 # Now myParam2Indices and param2_processing_subcomm have been computed, and we can set slices:
                 self.global_num_params2 = num_params2
                 self.global_param2_slice = _slct.list_to_slice(myParam2Indices)
+                self.num_params2 = _slct.length(self.global_param2_slice)
 
                 # Get total parameter range on this host
                 # (concat param slices of all the param-processing comms on this host)
@@ -518,6 +520,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
             else:
                 self.global_num_params2 = self.global_param2_slice = None
                 self.host_num_params2 = self.host_param2_slice = None
+                self.num_params2 = None
                 param2_processing_subcomm = None
                 interatom_param2_subcomm = None
 
@@ -527,6 +530,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
             self.host_num_params = self.host_param_slice = None
             self.host_num_params2 = self.host_param2_slice = None
             self.host_num_params_fine = None
+            self.num_params = self.num_params2 = None
             self.fine_param_subslice = self.host_param_fine_slice = self.global_param_fine_slice = None
             self.param_fine_slices_by_rank = self.param_fine_slices_by_host = None
             self.owner_host_and_rank_of_global_fine_param_index = None
@@ -537,7 +541,6 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
             param_fine_subcomm = None
 
         # save sub-resource-allocations
-        self._resource_alloc = resource_alloc
         self._sub_resource_allocs = {}  # dict of sub-resource-allocations for use with this layout
         self._sub_resource_allocs['atom-processing'] = atom_processing_ralloc  # created above b/c needed earlier
         self._sub_resource_allocs['param-processing'] = _ResourceAllocation(
@@ -617,7 +620,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         assert(len(self.global_circuit_indices) == _slct.length(self.host_circuit_slice) == len(local_circuits))
 
         super().__init__(local_circuits, local_unique_circuits, local_to_unique, local_elindex_outcome_tuples,
-                         local_unique_complete_circuits, param_dimensions)
+                         local_unique_complete_circuits, param_dimensions, resource_alloc)
 
         #DEBUG LAYOUT PRINTING
         #def cnt_str(cnt):

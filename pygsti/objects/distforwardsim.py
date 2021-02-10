@@ -53,20 +53,31 @@ class DistributableForwardSimulator(_ForwardSimulator):
             blkSize = None  # wrt_filter dictates block
         return blkSize
 
-    def _bulk_fill_probs(self, array_to_fill, layout, resource_alloc):
+    def _bulk_fill_probs(self, array_to_fill, layout):
         """Note: we expect that array_to_fill points to the memory specifically for this processor
            (a subset of the memory for the host when memory is shared) """
         atom_resource_alloc = layout.resource_alloc('atom-processing')
         atom_resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory before we reinit
 
         for atom in layout.atoms:  # layout only holds local atoms
-            self._bulk_fill_probs_block(array_to_fill[atom.element_slice], atom, atom_resource_alloc)
+            self._bulk_fill_probs_atom(array_to_fill[atom.element_slice], atom, atom_resource_alloc)
 
         atom_resource_alloc.host_comm_barrier()  # don't exit until all procs' array_to_fill is ready
         # (may need to wait for the host leader to write to this proc's array_to_fill, as _block
         #  functions just ensure the lead proc eventually writes to the memory))
 
-    def _bulk_fill_dprobs(self, array_to_fill, layout, pr_array_to_fill, resource_alloc):
+    def _bulk_fill_probs_atom(self, array_to_fill, layout_atom, resource_alloc):
+        # if atom can be converted to a (sub)-layout, then we can just use machinery of base
+        # class (note: layouts hold their own resource-alloc, atom's don't)
+        self._bulk_fill_probs_block(array_to_fill, layout_atom.as_layout(resource_alloc))
+
+    #UNUSED
+    #def _bulk_fill_probs_block_at_times(self, array_to_fill, layout, times):
+    #    for (element_indices, circuit, outcomes), time in zip(layout.iter_unique_circuits(), times):
+    #        self._compute_circuit_outcome_probabilities(array_to_fill[element_indices], circuit,
+    #                                                    outcomes, resource_alloc, time)  #HERE - get resource_alloc from layout?
+
+    def _bulk_fill_dprobs(self, array_to_fill, layout, pr_array_to_fill):
         """Note: we expect that array_to_fill points to the memory specifically for this processor
            (a subset of the memory for the host when memory is shared) """
         blkSize = layout.param_dimension_blk_sizes[0]
@@ -83,12 +94,12 @@ class DistributableForwardSimulator(_ForwardSimulator):
             #assert(_slct.length(atom.element_slice) == atom.num_elements)  # for debugging
 
             if pr_array_to_fill is not None:
-                self._bulk_fill_probs_block(pr_array_to_fill[atom.element_slice], atom, atom_resource_alloc)
+                self._bulk_fill_probs_atom(pr_array_to_fill[atom.element_slice], atom, atom_resource_alloc)
 
             if blkSize is None:  # wrt_filter gives entire computed parameter block
                 #Compute all requested derivative columns at once
-                self._bulk_fill_dprobs_block(array_to_fill[atom.element_slice, :], host_param_slice, atom,
-                                             global_param_slice, param_resource_alloc)
+                self._bulk_fill_dprobs_atom(array_to_fill[atom.element_slice, :], host_param_slice, atom,
+                                            global_param_slice, param_resource_alloc)
 
             else:  # Divide columns into blocks of at most blkSize
                 Np = _slct.length(global_param_slice)  # total number of parameters we're computing
@@ -98,14 +109,19 @@ class DistributableForwardSimulator(_ForwardSimulator):
                 for block in blocks:
                     host_param_slice_part = block  # _slct.shift(block, host_param_slice.start)  # into host's memory
                     global_param_slice_part = _slct.shift(block, global_param_slice.start)  # actual parameter indices
-                    self._bulk_fill_dprobs_block(array_to_fill[atom.element_slice, :], host_param_slice_part, atom,
-                                                 global_param_slice_part, param_resource_alloc)
+                    self._bulk_fill_dprobs_atom(array_to_fill[atom.element_slice, :], host_param_slice_part, atom,
+                                                global_param_slice_part, param_resource_alloc)
 
         atom_resource_alloc.host_comm_barrier()  # don't exit until all procs' array_to_fill is ready
 
+    def _bulk_fill_dprobs_atom(self, array_to_fill, dest_param_slice, layout_atom, param_slice, resource_alloc):
+        # if atom can be converted to a (sub)-layout, then we can just use machinery of base
+        # class (note: layouts hold their own resource-alloc, atom's don't)
+        self._bulk_fill_dprobs_block(array_to_fill, dest_param_slice,
+                                     layout_atom.as_layout(resource_alloc), param_slice)
+
     def _bulk_fill_hprobs(self, array_to_fill, layout,
-                          pr_array_to_fill, deriv1_array_to_fill, deriv2_array_to_fill,
-                          resource_alloc):
+                          pr_array_to_fill, deriv1_array_to_fill, deriv2_array_to_fill):
         """Note: we expect that array_to_fill points to the memory specifically for this processor
            (a subset of the memory for the host when memory is shared) """
         blkSize1 = layout.param_dimension_blk_sizes[0]
@@ -142,23 +158,23 @@ class DistributableForwardSimulator(_ForwardSimulator):
                                      param_resource_alloc, param2_resource_alloc):
 
         if pr_array_to_fill is not None:
-            self._bulk_fill_probs_block(pr_array_to_fill[atom.element_slice], atom, atom_resource_alloc)
+            self._bulk_fill_probs_atom(pr_array_to_fill[atom.element_slice], atom, atom_resource_alloc)
 
         if wrt_blksize1 is None and wrt_blksize2 is None:  # wrt_filter1 & wrt_filter2 dictate block
             #Compute all requested derivative columns at once
             if deriv1_array_to_fill is not None:
-                self._bulk_fill_dprobs_block(deriv1_array_to_fill[atom.element_slice, :], dest_slice1, atom,
-                                             wrt_slice1, param_resource_alloc)
+                self._bulk_fill_dprobs_atom(deriv1_array_to_fill[atom.element_slice, :], dest_slice1, atom,
+                                            wrt_slice1, param_resource_alloc)
             if deriv2_array_to_fill is not None:
                 if deriv1_array_to_fill is not None and wrt_slice1 == wrt_slice2:
                     deriv2_array_to_fill[atom.element_slice, dest_slice2] = \
                         deriv1_array_to_fill[atom.element_slice, dest_slice1]
                 else:
-                    self._bulk_fill_dprobs_block(deriv2_array_to_fill[atom.element_slice, :], dest_slice2, atom,
-                                                 wrt_slice2, param2_resource_alloc)
+                    self._bulk_fill_dprobs_atom(deriv2_array_to_fill[atom.element_slice, :], dest_slice2, atom,
+                                                wrt_slice2, param2_resource_alloc)
 
-            self._bulk_fill_hprobs_block(array_to_fill[atom.element_slice, :, :], dest_slice1, dest_slice2, atom,
-                                         wrt_slice1, wrt_slice2, param2_resource_alloc)
+            self._bulk_fill_hprobs_atom(array_to_fill[atom.element_slice, :, :], dest_slice1, dest_slice2, atom,
+                                        wrt_slice1, wrt_slice2, param2_resource_alloc)
 
         else:  # Divide columns into blocks of at most blkSize
             assert(wrt_slice1 is None and wrt_slice2 is None)  # cannot specify both wrt_slice and wrt_blksize
@@ -175,16 +191,16 @@ class DistributableForwardSimulator(_ForwardSimulator):
                 wrt_slice1_part = _slct.shift(block1, wrt_slice1.start)  # actual parameter indices
 
                 if deriv1_array_to_fill is not None:
-                    self._bulk_fill_dprobs_block(deriv1_array_to_fill[atom.element_slice, :], dest_slice1_part, atom,
-                                                 wrt_slice1_part, param_resource_alloc)
+                    self._bulk_fill_dprobs_atom(deriv1_array_to_fill[atom.element_slice, :], dest_slice1_part, atom,
+                                                wrt_slice1_part, param_resource_alloc)
 
                 for block2 in blocks2:
                     dest_slice2_part = _slct.shift(block2, dest_slice2.start)  # into host's memory
                     wrt_slice2_part = _slct.shift(block2, wrt_slice2.start)  # actual parameter indices
 
-                    self._bulk_fill_hprobs_block(array_to_fill[atom.element_slice, :],
-                                                 dest_slice1_part, dest_slice2_part, atom,
-                                                 wrt_slice1_part, wrt_slice2_part, param2_resource_alloc)
+                    self._bulk_fill_hprobs_atom(array_to_fill[atom.element_slice, :],
+                                                dest_slice1_part, dest_slice2_part, atom,
+                                                wrt_slice1_part, wrt_slice2_part, param2_resource_alloc)
 
             #Fill deriv2_array_to_fill if we need to.
             if deriv2_array_to_fill is not None:
@@ -195,14 +211,15 @@ class DistributableForwardSimulator(_ForwardSimulator):
                     for block2 in blocks2:
                         dest_slice2_part = _slct.shift(block2, dest_slice2.start)  # into host's memory
                         wrt_slice2_part = _slct.shift(block2, wrt_slice2.start)  # actual parameter indices
-                        self._bulk_fill_dprobs_block(deriv2_array_to_fill[atom.element_slice, :], dest_slice2_part,
-                                                     atom, wrt_slice2_part, param_resource_alloc)
+                        self._bulk_fill_dprobs_atom(deriv2_array_to_fill[atom.element_slice, :], dest_slice2_part,
+                                                    atom, wrt_slice2_part, param_resource_alloc)
 
-    def _bulk_hprobs_by_block(self, layout, wrt_slices_list, return_dprobs_12, resource_alloc):
+    def _bulk_hprobs_by_block(self, layout, wrt_slices_list, return_dprobs_12):
         # Just needed for compatibility - so base `bulk_hprobs_by_block` knows to loop over atoms
         # Similar to _bulk_hprobs_by_block_singleatom but runs over all atoms before yielding and
         #  yielded array has leading dim == # of local elements instead of just 1 atom's # elements.
         nElements = layout.num_elements
+        resource_alloc = layout.resource_alloc()
         for wrtSlice1, wrtSlice2 in wrt_slices_list:
 
             if return_dprobs_12:
@@ -277,7 +294,7 @@ class DistributableForwardSimulator(_ForwardSimulator):
 
     def _bulk_fill_timedep_deriv(self, layout, dataset, ds_circuits, num_total_outcomes,
                                  deriv_array_to_fill, deriv_fill_fn, array_to_fill=None,
-                                 fill_fn=None, resource_alloc=None):
+                                 fill_fn=None):
         """
         A helper method for computing (filling) the derivative of a time-dependent quantity.
 
@@ -322,22 +339,18 @@ class DistributableForwardSimulator(_ForwardSimulator):
         fill_fn : function, optional
             a function used to compute the objective function.
 
-        resource_alloc : ResourceAllocation
-            Available resources for this computation. Includes the number of processors
-            (MPI comm) and memory limit.
-
         Returns
         -------
         None
         """
         #Note: this function is similar to _bulk_fill_dprobs, and may be able to consolidated in the FUTURE.
 
-        resource_alloc = _ResourceAllocation.cast(resource_alloc)
-        assert(resource_alloc.host_comm is None), "Shared memory is not supported in time-dependent calculations (yet)"
-
         blkSize = layout.param_dimension_blk_sizes[0]
         atom_resource_alloc = layout.resource_alloc('atom-processing')
         param_resource_alloc = layout.resource_alloc('param-processing')
+
+        assert(atom_resource_alloc.host_comm is None), \
+            "Shared memory is not supported in time-dependent calculations (yet)"
 
         host_param_slice = layout.host_param_slice
         global_param_slice = layout.global_param_slice

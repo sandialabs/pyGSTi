@@ -172,29 +172,29 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
 
         return layout
 
-    def _bulk_fill_probs_block(self, array_to_fill, layout_atom, resource_alloc):
+    def _bulk_fill_probs_atom(self, array_to_fill, layout_atom, resource_alloc):
         # Note: *don't* set dest_indices arg = layout.element_slice, as this is already done by caller
         resource_alloc.check_can_allocate_memory(layout_atom.cache_size * self.model.dim)
-        replib.DM_mapfill_probs_block(self, array_to_fill, slice(0, array_to_fill.shape[0]),  # all indices
-                                      layout_atom, resource_alloc)
+        replib.DM_mapfill_probs_atom(self, array_to_fill, slice(0, array_to_fill.shape[0]),  # all indices
+                                     layout_atom, resource_alloc)
 
-    def _bulk_fill_dprobs_block(self, array_to_fill, dest_param_slice, layout_atom, param_slice, resource_alloc):
+    def _bulk_fill_dprobs_atom(self, array_to_fill, dest_param_slice, layout_atom, param_slice, resource_alloc):
         # Note: *don't* set dest_indices arg = layout.element_slice, as this is already done by caller
         resource_alloc.check_can_allocate_memory(layout_atom.cache_size * self.model.dim * _slct.length(param_slice))
-        replib.DM_mapfill_dprobs_block(self, array_to_fill, slice(0, array_to_fill.shape[0]), dest_param_slice,
-                                       layout_atom, param_slice, resource_alloc)
+        replib.DM_mapfill_dprobs_atom(self, array_to_fill, slice(0, array_to_fill.shape[0]), dest_param_slice,
+                                      layout_atom, param_slice, resource_alloc)
 
-    def _bulk_fill_hprobs_block(self, array_to_fill, dest_param_slice1, dest_param_slice2, layout_atom,
-                                param_slice1, param_slice2, resource_alloc):
+    def _bulk_fill_hprobs_atom(self, array_to_fill, dest_param_slice1, dest_param_slice2, layout_atom,
+                               param_slice1, param_slice2, resource_alloc):
         # Note: *don't* set dest_indices arg = layout.element_slice, as this is already done by caller
         resource_alloc.check_can_allocate_memory(layout_atom.cache_size * self.model.dim
                                                  * _slct.length(param_slice1) * _slct.length(param_slice2))
-        self._dm_mapfill_hprobs_block(array_to_fill, slice(0, array_to_fill.shape[0]), dest_param_slice1,
-                                      dest_param_slice2, layout_atom, param_slice1, param_slice2, resource_alloc)
+        self._dm_mapfill_hprobs_atom(array_to_fill, slice(0, array_to_fill.shape[0]), dest_param_slice1,
+                                     dest_param_slice2, layout_atom, param_slice1, param_slice2, resource_alloc)
 
     #Not used enough to warrant pushing to replibs yet... just keep a slow version
-    def _dm_mapfill_hprobs_block(self, array_to_fill, dest_indices, dest_param_indices1, dest_param_indices2,
-                                 layout_atom, param_indices1, param_indices2, resource_alloc):
+    def _dm_mapfill_hprobs_atom(self, array_to_fill, dest_indices, dest_param_indices1, dest_param_indices2,
+                                layout_atom, param_indices1, param_indices2, resource_alloc):
 
         """
         Helper function for populating hessian values by block.
@@ -223,7 +223,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         nP2 = _slct.length(param_indices2) if isinstance(param_indices2, slice) else len(param_indices2)
         dprobs, shm = _smt.create_shared_ndarray(resource_alloc, (nEls, nP2), 'd')
         dprobs2, shm2 = _smt.create_shared_ndarray(resource_alloc, (nEls, nP2), 'd')
-        replib.DM_mapfill_dprobs_block(self, dprobs, slice(0, nEls), None, layout_atom, param_indices2, resource_alloc)
+        replib.DM_mapfill_dprobs_atom(self, dprobs, slice(0, nEls), None, layout_atom, param_indices2, resource_alloc)
 
         orig_vec = self.model.to_vector().copy()
         for i in range(self.model.num_params):
@@ -231,8 +231,8 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
                 iFinal = iParamToFinal[i]
                 vec = orig_vec.copy(); vec[i] += eps
                 self.model.from_vector(vec, close=True)
-                replib.DM_mapfill_dprobs_block(self, dprobs2, slice(0, nEls), None, layout_atom,
-                                               param_indices2, resource_alloc)
+                replib.DM_mapfill_dprobs_atom(self, dprobs2, slice(0, nEls), None, layout_atom,
+                                              param_indices2, resource_alloc)
                 if shared_mem_leader:
                     _fas(array_to_fill, [dest_indices, iFinal, dest_param_indices2], (dprobs2 - dprobs) / eps)
         self.model.from_vector(orig_vec)
@@ -244,8 +244,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
     ## ---------------------------------------------------------------------------------------------
 
     def bulk_fill_timedep_chi2(self, array_to_fill, layout, ds_circuits, num_total_outcomes, dataset,
-                               min_prob_clip_for_weighting, prob_clip_interval, resource_alloc=None,
-                               ds_cache=None):
+                               min_prob_clip_for_weighting, prob_clip_interval, ds_cache=None):
         """
         Compute the chi2 contributions for an entire tree of circuits, allowing for time dependent operations.
 
@@ -285,10 +284,6 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
             (min,max) values used to clip the predicted probabilities to.
             If None, no clipping is performed.
 
-        resource_alloc : ResourceAllocation, optional
-            A resource allocation object describing the available resources and a strategy
-            for partitioning them.
-
         Returns
         -------
         None
@@ -302,16 +297,16 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
                                            layout_atom, dataset_rows, min_prob_clip_for_weighting,
                                            prob_clip_interval, sub_resource_alloc, outcomes_cache=None)
 
-        atomOwners = self._compute_on_atoms(layout, compute_timedep, resource_alloc)
+        atomOwners = self._compute_on_atoms(layout, compute_timedep, layout.resource_alloc())
 
         #collect/gather results
         all_atom_element_slices = [atom.element_slice for atom in layout.atoms]
-        _mpit.gather_slices(all_atom_element_slices, atomOwners, array_to_fill, [], 0, resource_alloc.comm)
+        _mpit.gather_slices(all_atom_element_slices, atomOwners, array_to_fill, [], 0, layout.resource_alloc().comm)
         #note: pass mx_to_fill, dim=(KS,), so gather mx_to_fill[felInds] (axis=0)
 
     def bulk_fill_timedep_dchi2(self, array_to_fill, layout, ds_circuits, num_total_outcomes, dataset,
                                 min_prob_clip_for_weighting, prob_clip_interval, chi2_array_to_fill=None,
-                                resource_alloc=None, ds_cache=None):
+                                ds_cache=None):
         """
         Compute the chi2 jacobian contributions for an entire tree of circuits, allowing for time dependent operations.
 
@@ -358,10 +353,6 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
             with the per-circuit chi2 contributions, just like in
             bulk_fill_timedep_chi2(...).
 
-        resource_alloc : ResourceAllocation, optional
-            A resource allocation object describing the available resources and a strategy
-            for partitioning them.
-
         Returns
         -------
         None
@@ -380,12 +371,10 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
                                                   fill_comm, outcomes_cache)
 
         return self._bulk_fill_timedep_deriv(layout, dataset, ds_circuits, num_total_outcomes,
-                                             array_to_fill, dchi2, chi2_array_to_fill, chi2,
-                                             resource_alloc)
+                                             array_to_fill, dchi2, chi2_array_to_fill, chi2)
 
     def bulk_fill_timedep_loglpp(self, array_to_fill, layout, ds_circuits, num_total_outcomes, dataset,
-                                 min_prob_clip, radius, prob_clip_interval, resource_alloc=None,
-                                 ds_cache=None):
+                                 min_prob_clip, radius, prob_clip_interval, ds_cache=None):
         """
         Compute the log-likelihood contributions (within the "poisson picture") for an entire tree of circuits.
 
@@ -431,10 +420,6 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
             (min,max) values used to clip the predicted probabilities to.
             If None, no clipping is performed.
 
-        resource_alloc : ResourceAllocation, optional
-            A resource allocation object describing the available resources and a strategy
-            for partitioning them.
-
         Returns
         -------
         None
@@ -448,16 +433,16 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
                                              layout_atom, dataset_rows, min_prob_clip,
                                              radius, prob_clip_interval, sub_resource_alloc, outcomes_cache=None)
 
-        atomOwners = self._compute_on_atoms(layout, compute_timedep, resource_alloc)
+        atomOwners = self._compute_on_atoms(layout, compute_timedep, layout.resource_alloc())
 
         #collect/gather results
         all_atom_element_slices = [atom.element_slice for atom in layout.atoms]
-        _mpit.gather_slices(all_atom_element_slices, atomOwners, array_to_fill, [], 0, resource_alloc.comm)
+        _mpit.gather_slices(all_atom_element_slices, atomOwners, array_to_fill, [], 0, layout.resource_alloc().comm)
         #note: pass mx_to_fill, dim=(KS,), so gather mx_to_fill[felInds] (axis=0)
 
     def bulk_fill_timedep_dloglpp(self, array_to_fill, layout, ds_circuits, num_total_outcomes, dataset,
                                   min_prob_clip, radius, prob_clip_interval, logl_array_to_fill=None,
-                                  resource_alloc=None, ds_cache=None):
+                                  ds_cache=None):
         """
         Compute the ("poisson picture")log-likelihood jacobian contributions for an entire tree of circuits.
 
@@ -505,10 +490,6 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
             with the per-circuit logl contributions, just like in
             bulk_fill_timedep_loglpp(...).
 
-        resource_alloc : ResourceAllocation, optional
-            A resource allocation object describing the available resources and a strategy
-            for partitioning them.
-
         Returns
         -------
         None
@@ -527,5 +508,4 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
                                                     fill_comm, outcomes_cache)
 
         return self._bulk_fill_timedep_deriv(layout, dataset, ds_circuits, num_total_outcomes,
-                                             array_to_fill, dloglpp, logl_array_to_fill, loglpp,
-                                             resource_alloc)
+                                             array_to_fill, dloglpp, logl_array_to_fill, loglpp)

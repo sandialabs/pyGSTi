@@ -164,7 +164,7 @@ def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials,
             #FUTURE: assert that no instruments are allowed?
 
             local_dP = layout.allocate_local_array('ep', 'd')
-            target_model.sim.bulk_fill_dprobs(local_dP, layout, None, resource_alloc)  # num_els x num_params
+            target_model.sim.bulk_fill_dprobs(local_dP, layout, None)  # num_els x num_params
             dP = local_dP.copy()  # local == global (no layout.gather required) b/c we used comm=None above
             layout.free_local_array(local_dP)  # not needed - local_dP isn't shared (comm=None)
 
@@ -423,7 +423,7 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
                     elIndicesForPair[k].extend(_slct.to_array(layout.indices_for_index(o)))
 
             local_dPall = layout.allocate_local_array('ep', 'd')
-            gsGerm.sim.bulk_fill_dprobs(local_dPall, layout, None, resource_alloc)  # num_els x num_params
+            gsGerm.sim.bulk_fill_dprobs(local_dPall, layout, None)  # num_els x num_params
             dPall = local_dPall.copy()  # local == global (no layout.gather required) b/c we used comm=None above
             layout.free_local_array(local_dPall)  # not needed - local_dPall isn't shared (comm=None)
 
@@ -594,7 +594,7 @@ def test_fiducial_pairs(fid_pairs, target_model, prep_fiducials, meas_fiducials,
         layout = target_model.sim.create_layout(circuits, None, resource_alloc, array_types=('ep',), verbosity=0)
 
         local_dP = layout.allocate_local_array('ep', 'd')
-        target_model.sim.bulk_fill_dprobs(local_dP, layout, None, resource_alloc)
+        target_model.sim.bulk_fill_dprobs(local_dP, layout, None)
         dP = local_dP.copy()  # local == global (no layout.gather required) b/c we used comm=None above
         layout.free_local_array(local_dP)  # not needed - local_dP isn't shared (comm=None)
 
