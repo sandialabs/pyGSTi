@@ -4100,7 +4100,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
         self.jac = None
         if ('ep' in self.array_types or 'EP' in self.array_types
-            or 'epp' in self.array_types or 'EPP' in self.array_types):
+           or 'epp' in self.array_types or 'EPP' in self.array_types):
             self.jac = self.layout.allocate_local_array('ep', 'd', memory_tracker=self.resource_alloc,
                                                         extra_elements=self.ex)
 

@@ -318,7 +318,7 @@ class ResourceAllocation(object):
             else:
                 slices = gather_comm.gather(slice_of_global if participating else None, root=0)
                 gathered_data = gather_comm.gather(local, root=0)  # could change this to Gather (?)
-    
+
             if gather_comm.rank == 0 or all_gather:
                 for slc_or_indx_array, data in zip(slices, gathered_data):
                     if slc_or_indx_array is None: continue  # signals a non-unit-leader proc that shouldn't do anything

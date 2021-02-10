@@ -71,12 +71,6 @@ class DistributableForwardSimulator(_ForwardSimulator):
         # class (note: layouts hold their own resource-alloc, atom's don't)
         self._bulk_fill_probs_block(array_to_fill, layout_atom.as_layout(resource_alloc))
 
-    #UNUSED
-    #def _bulk_fill_probs_block_at_times(self, array_to_fill, layout, times):
-    #    for (element_indices, circuit, outcomes), time in zip(layout.iter_unique_circuits(), times):
-    #        self._compute_circuit_outcome_probabilities(array_to_fill[element_indices], circuit,
-    #                                                    outcomes, resource_alloc, time)  #HERE - get resource_alloc from layout?
-
     def _bulk_fill_dprobs(self, array_to_fill, layout, pr_array_to_fill):
         """Note: we expect that array_to_fill points to the memory specifically for this processor
            (a subset of the memory for the host when memory is shared) """

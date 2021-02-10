@@ -233,7 +233,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
             offset += atom_sizes[i]
         self.host_num_elements = offset  # total number of elements on this host (useful?)
         self.host_element_slice = slice(start, stop)
-        
+
         #FUTURE: if we wanted to hold an *index* instead of a host_slice:
         # each atom comm on the same host will hold a unique index giving it's ordering
         # on it's host, indexing its shared_mem_array (~it's slice into a big shared array)
@@ -717,10 +717,10 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         resource_alloc = self._resource_alloc
         if array_type in ('e', 'ep', 'ep2', 'epp'):
             my_slices = (slice(self.host_element_slice.start, self.host_element_slice.stop + extra_elements),) \
-                        if self.part_of_final_atom_processor else (self.host_element_slice,)
+                if self.part_of_final_atom_processor else (self.host_element_slice,)
             array_shape = (self.host_num_elements + extra_elements,) if self.part_of_final_atom_processor \
-                          else (self.host_num_elements,)
-            if array_type in ('ep', 'epp'): 
+                else (self.host_num_elements,)
+            if array_type in ('ep', 'epp'):
                 my_slices += (self.host_param_slice,)
                 array_shape += (self.host_num_params,)
             if array_type in ('ep2', 'epp'):
@@ -736,7 +736,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         #    allocating_ralloc = self.resource_alloc('atom-processing')  # don't share mem btwn atoms,
         #    # as each atom will have procs with the same (param1, param2) index block but we want separate mem
         elif array_type == 'jtj':
-            my_slices = (self.host_param_fine_slice, slice(0,self.global_num_params))
+            my_slices = (self.host_param_fine_slice, slice(0, self.global_num_params))
             array_shape = (self.host_num_params_fine, self.global_num_params)
             allocating_ralloc = resource_alloc  # self.resource_alloc('param-interatom')
         elif array_type == 'jtf':  # or array_type == 'pfine':
@@ -754,12 +754,12 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         # procs need to write to the memory, even when different regions are written to  REMOVE?
         #host_array, host_array_shm = _smt.create_shared_ndarray(allocating_ralloc, array_shape, dtype,
         #                                                        zero_out, memory_tracker)
-        
+
         #Instead, allocate separate shared arrays for each segment, so they can be written
         # to independently:
         host_array = {}; host_array_shm = {}
         all_slice_tups = [my_slices] if allocating_ralloc.comm is None \
-                         else allocating_ralloc.comm.allgather(my_slices)
+            else allocating_ralloc.comm.allgather(my_slices)
         for slices in all_slice_tups:
             hashed_slices = tuple([_slct.slice_hash(s) for s in slices])
             array_shape = [_slct.length(s) for s in slices]
@@ -1002,18 +1002,18 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
                 if atom_ralloc.host_index == owning_host_index:
                     # then my host contains the i-th parameter slice (= row block of jT)
                     j_i = j if i == self.my_owned_paramproc_index \
-                          else j.host_array[_slct.slice_hash(self.host_element_slice),
-                                            _slct.slice_hash(self.my_hosts_param_slices[i])]
+                        else j.host_array[_slct.slice_hash(self.host_element_slice),
+                                          _slct.slice_hash(self.my_hosts_param_slices[i])]
                     if atom_ralloc.interhost_comm.size > 1:
                         ncols = _slct.length(param_slice)
                         buf[0:ncols, :] = j_i.T  # broadcast *transpose* so buf slice is contiguous
                         atom_ralloc.interhost_comm.Bcast(buf[0:ncols, :], root=owning_host_index)
-                    atom_jtj[:, param_slice] = jT @ j_i #_np.dot(jT, j_i)
+                    atom_jtj[:, param_slice] = jT @ j_i  # _np.dot(jT, j_i)
                 else:
                     ncols = _slct.length(param_slice)
                     atom_ralloc.interhost_comm.Bcast(buf[0:ncols, :], root=owning_host_index)
                     j_i = buf[0:ncols, :].T
-                    atom_jtj[:, param_slice] = jT @ j_i  #_np.dot(jT, j_i)
+                    atom_jtj[:, param_slice] = jT @ j_i  # _np.dot(jT, j_i)
         else:
             jT = j.T
             for i, param_slice in enumerate(self.param_slices):  # for each parameter slice <=> param "processor"
@@ -1026,8 +1026,8 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
                         # procs as these are the only atom_jtj's that contribute in the allreduce_sum below.
                     else:
                         assert(self.param_slice_owners[i] == 0)
-                    
-                    atom_jtj[:, param_slice] = jT @ j # _np.dot(jT, j)
+
+                    atom_jtj[:, param_slice] = jT @ j  # _np.dot(jT, j)
                 else:
                     ncols = _slct.length(param_slice)
                     atom_ralloc.comm.Bcast(buf[0:ncols, :], root=self.param_slice_owners[i])
@@ -1047,7 +1047,6 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         if shared_mem_buf is None:
             interatom_ralloc.comm.barrier()  # don't free scratch too early
             _smt.cleanup_shared_ndarray(scratch_shm)
-
 
     def distribution_info(self, nprocs):
         """
