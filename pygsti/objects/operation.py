@@ -22,6 +22,7 @@ import collections as _collections
 import numbers as _numbers
 
 from .. import optimize as _opt
+from ..tools import internalgates as _igts
 from ..tools import matrixtools as _mt
 from ..tools import optools as _gt
 from ..tools import jamiolkowski as _jt
@@ -6733,6 +6734,69 @@ class CliffordOp(LinearOperator):
         s += " and vector " + _mt.mx_to_string(self.svector, width=2, prec=0)
         return s
 
+
+## SS TODO: This should be in replib, but it probably makes the most sense
+## that the replib should just be the QProg struct from chp.c
+## That starts to get into the simulator side of things,
+## which I don't want to do right this second, so this is a stopgag
+class CHPOpRep(object):
+    def __init__(self, chp_list):
+        self.chp_list = chp_list
+        self.dim = len(chp_list)
+
+    def acton(self, state):
+        raise NotImplementedError()
+
+    def adjoint_acton(self, state):
+        raise NotImplementedError()
+
+class CHPOp(LinearOperator):
+    """
+    A Clifford operation represented by a list of CHP operations.
+    """
+    def __init__(self, chp_rep=None):
+        """
+        Creates a new CliffordOp from a list of CHP operations.
+
+        Parameters
+        ----------
+        chp_rep : str or list of str
+            If str, must be a name that matches one of the standard gatenames
+            from pygsti.tools.internalgates
+            If list, elements must be one of ['h', 'p', 'c']
+
+        """
+
+        # Set chp_list with sanity checking
+        if isinstance(chp_rep, str): # Look up chp_list from standard gatenames
+            std_chpreps = _igts.standard_gatenames_chp_conversions()
+            # Add "native" CHP gates in case single element passed in
+            std_chpreps['h'] = ['h']
+            std_chpreps['p'] = ['p']
+            std_chpreps['c'] = ['c']
+
+            if chp_rep in std_chpreps.keys():
+                self.chp_list = std_chpreps[chp_rep]
+            else:
+                raise SyntaxError(f'CHP rep given as str "{chp_rep}", but must be one of: {std_chpreps.keys()}')
+        elif isinstance(chp_rep, list) or isinstance(chp_rep, tuple): # Passed in raw chp_list
+            allowed_entries = ['h', 'p', 'c']
+
+            for entry in chp_rep:
+                if entry not in allowed_entries:
+                    raise SyntaxError(f"Entries of `chp_list` must be one of: {allowed_entries}")
+            self.chp_list = list(chp_rep)
+        else:
+            raise SyntaxError('CHP rep needs to be given as str (standard gate name) or list of ["h", "p", "c"] gates')
+
+        rep = CHPOpRep(self.chp_list)
+        LinearOperator.__init__(self, rep, "chp")
+
+    def __str__(self):
+        """Return string representation"""
+        s = "CHP operation with labels: "
+        s += ",".join(self.chp_list)
+        return s
 
 # STRATEGY:
 # - maybe create an abstract base TermOperation class w/taylor_order_terms(...) function?

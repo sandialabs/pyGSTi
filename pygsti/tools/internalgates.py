@@ -373,6 +373,71 @@ def standard_gatenames_quil_conversions():
 
     return std_gatenames_to_quil
 
+def standard_gatenames_chp_conversions():
+    """
+    A dictionary converting the gates with standard names to CHPOp objects.
+
+    See :function:`standard_gatename_unitaries`.
+
+    Note that throughout pyGSTi the standard gatenames (e.g., 'Gh' for Hadamard)
+    are not enforced to correspond to the expected unitaries. So, if the user
+    as, say, defined 'Gh' to be something other than the Hadamard gate this
+    conversion dictionary will be incorrect.
+
+    Returns
+    -------
+    dict mapping strings to string
+    """
+    std_gatenames_to_chp = {}
+
+    std_gatenames_to_chp['Gc0']  = []
+    std_gatenames_to_chp['Gc1']  = ['h', 'p', 'h', 'p']
+    std_gatenames_to_chp['Gc2']  = ['h', 'p']
+    std_gatenames_to_chp['Gc3']  = ['h', 'p', 'p', 'h']
+    std_gatenames_to_chp['Gc4']  = ['p', 'h', 'p', 'p']
+    std_gatenames_to_chp['Gc5']  = ['h', 'p', 'p', 'p']
+    std_gatenames_to_chp['Gc6']  = ['h', 'p', 'p', 'h', 'p', 'p']
+    std_gatenames_to_chp['Gc7']  = ['h', 'p', 'h', 'p', 'p', 'p']
+    std_gatenames_to_chp['Gc8']  = ['h', 'p', 'h', 'p', 'p', 'h']
+    std_gatenames_to_chp['Gc9']  = ['p', 'p']
+    std_gatenames_to_chp['Gc10'] = ['p', 'h']
+    std_gatenames_to_chp['Gc11'] = ['p', 'p', 'h', 'p']
+    std_gatenames_to_chp['Gc12'] = ['h']
+    std_gatenames_to_chp['Gc13'] = ['p', 'h', 'p']
+    std_gatenames_to_chp['Gc14'] = ['p']
+    std_gatenames_to_chp['Gc15'] = ['h', 'p', 'p']
+    std_gatenames_to_chp['Gc16'] = ['h', 'p', 'h']
+    std_gatenames_to_chp['Gc17'] = ['h', 'p', 'p', 'h', 'p']
+    std_gatenames_to_chp['Gc18'] = ['p', 'p', 'h', 'p', 'p']
+    std_gatenames_to_chp['Gc19'] = ['p', 'h', 'p', 'p', 'p']
+    std_gatenames_to_chp['Gc20'] = ['p', 'h', 'p', 'p', 'h']
+    std_gatenames_to_chp['Gc21'] = ['p', 'p', 'h']
+    std_gatenames_to_chp['Gc22'] = ['h', 'p', 'h', 'p', 'p']
+    std_gatenames_to_chp['Gc23'] = ['p', 'p', 'p']
+
+    std_gatenames_to_chp['Gcnot'] = ['c']
+    std_gatenames_to_chp['Gcphase'] = ['h', 'c', 'h']
+
+    std_gatenames_to_chp['Gi'] = []
+
+    std_gatenames_to_chp['Gxpi'] = ['h', 'p', 'p', 'h']
+    std_gatenames_to_chp['Gypi'] = ['p', 'p', 'h', 'p', 'p', 'h']
+    std_gatenames_to_chp['Gzpi'] = ['p', 'p']
+
+    std_gatenames_to_chp['Gxpi2'] = ['h', 'p', 'h']
+    #std_gatenames_to_chp['Gypi2'] =  TODO
+    std_gatenames_to_chp['Gzpi2'] = ['p']
+
+    std_gatenames_to_chp['Gxmpi2'] = ['h', 'p', 'p', 'p', 'h']
+    #std_gatenames_to_chp['Gympi2'] =  TODO
+    std_gatenames_to_chp['Gzmpi2'] = ['p', 'p', 'p']
+
+    std_gatenames_to_chp['Gh'] = ['h']
+    std_gatenames_to_chp['Gp'] = ['p']
+    std_gatenames_to_chp['Gpdag'] = ['p', 'p', 'p']
+
+    return std_gatenames_to_chp
+
 
 def standard_gatenames_openqasm_conversions():
     """
