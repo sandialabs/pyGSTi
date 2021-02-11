@@ -278,13 +278,14 @@ class WildcardBudget(object):
             freqs[zero_inds] = MIN_FREQ
             #freqs[zero_inds] = probs_in[zero_inds]  # OLD (use this if f_k=0 terms don't enter likelihood)
 
+        base_tol = MIN_FREQ  # for checking equality
         circuits = layout.circuits
         circuit_budgets = self.circuit_budgets(circuits, precomp)
         tvd_precomp = 0.5 * _np.abs(probs_in - freqs)
-        A_precomp = _np.logical_and(probs_in > freqs, freqs > 0)
-        B_precomp = _np.logical_and(probs_in < freqs, freqs > 0)
-        C_precomp = (probs_in == freqs)
-        D_precomp = _np.logical_and(probs_in != freqs, freqs == 0)
+        A_precomp = _np.logical_and(probs_in > freqs + base_tol, freqs > 0)
+        B_precomp = _np.logical_and(probs_in < freqs - base_tol, freqs > 0)
+        C_precomp = _np.logical_and(freqs - base_tol <= probs_in, probs_in <= freqs + base_tol)  # freqs == probs
+        D_precomp = _np.logical_and(~C_precomp, freqs == 0)  # probs_in != freqs and freqs == 0
 
         for i, (circ, W) in enumerate(zip(circuits, circuit_budgets)):
             elInds = layout.indices_for_index(i)
@@ -382,11 +383,7 @@ class WildcardBudget(object):
 
                 nMovedToC += 1
             else:
-                #try:
-                assert(False), "TVD should eventually reach zero (I think)!"
-                #except:
-                #    import bpdb; bpdb.set_trace()
-                #    print("Problem")
+                assert(False), "TVD should eventually reach zero: qvec=%s, fvec=%s, W=%g" % (str(qvec), str(fvec), W)
 
             #Now A,B,C are fixed to what they need to be for our given W
             # test if len(A) > 0, make tol here *smaller* than that assigned to zero freqs above
@@ -736,15 +733,18 @@ def update_circuit_probs(probs, freqs, circuit_budget):
     W = circuit_budget
     debug = False
 
-    tol = 1e-6  # for instance, when W==0 and TVD_at_breakpt is 1e-17
+    base_tol = 1e-8  # for checking for equality of qvec and fvec
+    tol = len(qvec) * base_tol  # for checking if TVD is zero (e.g. when W==0 and TVD_at_breakpt is 1e-17)
     initialTVD = 0.5 * sum(_np.abs(qvec - fvec))
     if initialTVD <= W + tol:  # TVD is already "in-budget" for this circuit - can adjust to fvec exactly
         return fvec
 
-    A = _np.where(_np.logical_and(qvec > fvec, fvec > 0))[0]
-    B = _np.where(_np.logical_and(qvec < fvec, fvec > 0))[0]
-    C = _np.where(_np.isclose(qvec, fvec))[0]
-    D = _np.where(_np.logical_and(~_np.isclose(qvec, fvec), fvec == 0))[0]
+    #Note: must ensure that A,B,C,D are *disjoint*
+    fvec_equals_qvec = _np.logical_and(fvec - base_tol <= qvec, qvec <= fvec + base_tol)  # fvec == qvec
+    A = _np.where(_np.logical_and(qvec > fvec + base_tol, fvec > 0))[0]
+    B = _np.where(_np.logical_and(qvec < fvec - base_tol, fvec > 0))[0]
+    C = _np.where(fvec_equals_qvec)[0]
+    D = _np.where(_np.logical_and(~fvec_equals_qvec, fvec == 0))[0]
 
     if debug:
         print(" budget = ", W, " A=", A, " B=", B, " C=", C, " D=", D)
@@ -808,7 +808,7 @@ def update_circuit_probs(probs, freqs, circuit_budget):
         if debug: print(" --> A=", A, " B=", B, " C=", C, " chk = ", TVD_at_breakpt_chk)
 
     else:
-        assert(False), "TVD should eventually reach zero (I think)!"
+        assert(False), "TVD should eventually reach zero: qvec=%s, fvec=%s, W=%g" % (str(qvec), str(fvec), W)
 
     #Now A,B,C are fixed to what they need to be for our given W
     pushedSD = 0.0
