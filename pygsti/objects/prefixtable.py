@@ -170,7 +170,7 @@ class PrefixTable(object):
             totalCost = N
             return subTables, totalCost
 
-        def create_subtables(max_cost, max_cost_rate=0):
+        def create_subtables(max_cost, max_cost_rate=0, max_num=None):
             """
             Find a set of subtables by iterating through the table
             and placing "break" points when the cost of evaluating the
@@ -221,7 +221,7 @@ class PrefixTable(object):
                 # adding this element (idest) to the current sub-table.
                 inds, cost = traverse_index(idest, istart, remainder, curSubTable)
 
-                if curTableCost + cost < max_cost:
+                if curTableCost + cost < max_cost or (max_num is not None and len(subTables) == max_num - 1):
                     #Just add current string to current table
                     curTableCost += cost
                     curSubTable.update(inds)
@@ -267,18 +267,20 @@ class PrefixTable(object):
             else: maxCost = len(table_contents) / num_sub_tables
             maxCostLowerBound, maxCostUpperBound = maxCost, None
             maxCostRate, rateLowerBound, rateUpperBound = 0, -1.0, +1.0
+            failsafe_maxcost_and_rate = None
             #OLD (& incorrect) vals were 0, -1.0/len(self), +1.0/len(self),
             #   though current -1,1 vals are probably overly conservative...
             resultingSubtables = num_sub_tables + 1  # just to prime the loop
             iteration = 0
+            #print("DEBUG: targeting %d sub-tables" % num_sub_tables)
 
             #Iterate until the desired number of subtables have been found.
             while resultingSubtables != num_sub_tables:
                 subTableSetList, totalCost = create_subtables(maxCost, maxCostRate)
                 resultingSubtables = len(subTableSetList)
-                #print("DEBUG: resulting numTables = %d (cost %g) w/maxCost = %g [%s,%s] & rate = %g [%g,%g]" % \
-                #     (resultingSubtables, totalCost, maxCost, str(maxCostLowerBound), str(maxCostUpperBound),
-                #      maxCostRate, rateLowerBound, rateUpperBound))
+                #print("DEBUG: resulting sub-tables = %d (cost %g) w/maxCost = %g [%s,%s] & rate = %g [%g,%g]" %
+                #      (resultingSubtables, totalCost, maxCost, str(maxCostLowerBound), str(maxCostUpperBound),
+                #       maxCostRate, rateLowerBound, rateUpperBound))
 
                 #DEBUG
                 #totalSet = set()
@@ -296,6 +298,7 @@ class PrefixTable(object):
                         maxCost = (maxCost + maxCostLowerBound) / 2.0
                         maxCostUpperBound = last_maxCost
                     else:  # too many tables: raise maxCost
+                        failsafe_maxcost_and_rate = (maxCost, maxCostRate)  # just in case
                         if maxCostUpperBound is None:
                             maxCost = totalCost  # / num_sub_tables
                         else:
@@ -308,11 +311,19 @@ class PrefixTable(object):
                         maxCostRate = (maxCostRate + rateLowerBound) / 2.0
                         rateUpperBound = last_maxRate
                     else:  # too many tables: increase maxCostRate
+                        failsafe_maxcost_and_rate = (maxCost, maxCostRate)  # just in case
                         maxCostRate = (maxCostRate + rateUpperBound) / 2.0
                         rateLowerBound = last_maxRate
 
                 iteration += 1
-                assert(iteration < 100), "Unsuccessful splitting for 100 iterations!"
+                if iteration >= 100:
+                    #Force the correct number of tables using the max_cost & rate that produced the smallest number of
+                    # sub-tables greater than the target number.
+                    print("WARNING: Forcing splitting into %d tables after 100 iterations (achieved %d)!"
+                          % (num_sub_tables, resultingSubtables))
+                    subTableSetList, totalCost = create_subtables(failsafe_maxcost_and_rate[0],
+                                                                  failsafe_maxcost_and_rate[1], max_num=num_sub_tables)
+                    assert(len(subTableSetList) == num_sub_tables)  # ensure the loop exits now (~= break)
 
         else:  # max_sub_table_size is not None
             subTableSetList, totalCost = create_subtables(
