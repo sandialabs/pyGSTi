@@ -114,7 +114,7 @@ def create_shared_ndarray(resource_alloc, shape, dtype, zero_out=False, memory_t
         else:
             shm_name = hostcomm.bcast(None, root=0)
             shm = _shared_memory.SharedMemory(name=shm_name)
-            assert(shm.size == nelements * _np.dtype(dtype).itemsize)
+            assert(shm.size >= nelements * _np.dtype(dtype).itemsize)
         hostcomm.barrier()  # needed to protect against root proc processing & freeing mem
         # before non-root procs finish .SharedMemory call above.
         ar = _np.ndarray(shape, dtype=dtype, buffer=shm.buf)
