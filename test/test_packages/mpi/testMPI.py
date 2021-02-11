@@ -1,0 +1,261 @@
+# This file is designed to be run via: mpiexec -np 4 python testMPI.py
+# This does not use nosetests because I want to set verbosity differently based on rank (quiet if not rank 0)
+# By wrapping asserts in comm.rank == 0, only rank 0 should fail (should help with output)
+# Can run with different number of procs, but 4 is minimum to test all modes (pure MPI, pure shared mem, and mixed)
+
+import nose
+import numpy as np
+from mpi4py import MPI
+import os
+
+import pygsti
+from pygsti.modelpacks import smq1Q_XYI as std
+
+wcomm = MPI.COMM_WORLD
+
+class ParallelTestWrapper:
+    # Blank base class to not be run by unittest
+    # Based on https://stackoverflow.com/a/25695512
+
+    class ParallelTest(object):
+        # No setup here, must be defined in the derived classes
+
+        def test_simulate_data(self):
+            comm = self.ralloc.comm
+
+            exp_design = std.get_gst_experiment_design(4)
+            mdl_datagen = std.target_model().depolarize(op_noise=0.1, spam_noise=0.01)
+
+            ds_serial = pygsti.construction.simulate_data(mdl_datagen, exp_design, 1000, seed=1234, comm=None)
+            ds_parallel = pygsti.construction.simulate_data(mdl_datagen, exp_design, 1000, seed=1234, comm=comm)
+
+            if comm is None or comm.rank == 0:
+                assert (set(ds_serial.keys()) == set(ds_parallel.keys()))
+                for key in ds_serial.keys():
+                    assert (ds_serial[key].to_dict() == ds_parallel[key].to_dict())
+
+        def test_gst(self):
+            comm = self.ralloc.comm
+
+            exp_design = std.get_gst_experiment_design(4)
+            mdl_datagen = std.target_model().depolarize(op_noise=0.1, spam_noise=0.01)
+            ds = pygsti.construction.simulate_data(mdl_datagen, exp_design, 1000, seed=1234, comm=comm)
+            data = pygsti.protocols.ProtocolData(exp_design, ds)
+
+            initial_model = std.target_model("TP")
+            proto = pygsti.protocols.GateSetTomography(initial_model, verbosity=1,
+                                                       optimizer={'maxiter': 100, 'serial_solve_proc_threshold': 100})
+
+            results_serial = proto.run(data, comm=None)            
+            results_parallel = proto.run(data, comm=comm)
+            
+            # compare resulting models
+            if comm is None or comm.rank == 0:
+                best_params_serial = results_serial.estimates["GateSetTomography"].models['stdgaugeopt'].to_vector()
+                best_params_parallel = results_parallel.estimates["GateSetTomography"].models['stdgaugeopt'].to_vector()
+
+                assert np.allclose(best_params_serial, best_params_parallel)
+
+        def test_MPI_probs(self):
+            comm = self.ralloc.comm
+
+            #Create some model
+            mdl = std.target_model()
+            mdl.kick(0.1,seed=1234)
+        
+            #Get some operation sequences
+            maxLengths = [1, 2, 4]
+            circuits = pygsti.construction.create_lsgst_circuits(
+                list(std.target_model().operations.keys()), std.prep_fiducials(),
+                std.meas_fiducials(), std.germs(), maxLengths)
+        
+            #Check all-spam-label bulk probabilities
+            def compare_prob_dicts(a,b,indices=None):
+                for opstr in circuits:
+                    for outcome in a[opstr].keys():
+                        if indices is None:
+                            assert (np.linalg.norm(a[opstr][outcome] - b[opstr][outcome]) < 1e-6)
+                        else:
+                            for i in indices:
+                                assert (np.linalg.norm(a[opstr][outcome][i] - b[opstr][outcome][i]) < 1e-6)
+        
+            # non-split tree => automatically adjusts wrt_block_size to accomodate
+            #                    the number of processors
+            serial = mdl.sim.bulk_probs(circuits, clip_to=(-1e6,1e6))
+            parallel = mdl.sim.bulk_probs(circuits, clip_to=(-1e6,1e6), resource_alloc=self.ralloc)
+            if comm is None or comm.rank == 0:  # output is only given on root proc
+                compare_prob_dicts(serial, parallel)
+        
+            serial = mdl.sim.bulk_dprobs(circuits)
+            parallel = mdl.sim.bulk_dprobs(circuits, resource_alloc=self.ralloc)
+            if comm is None or comm.rank == 0:  # output is only given on root proc
+                compare_prob_dicts(serial, parallel)
+        
+            serial = mdl.sim.bulk_hprobs(circuits)
+            parallel = mdl.sim.bulk_hprobs(circuits, resource_alloc=self.ralloc)
+            if comm is None or comm.rank == 0:  # output is only given on root proc
+                compare_prob_dicts(serial, parallel, (0, 1, 2))
+        
+        def test_objfn_generator(self):
+            params = [
+                #("map", "logl"), ("map", "chi2"), # TODO: Map fails in hessian
+                ("matrix", "logl"), ("matrix", "chi2")]
+            for sim, objfn in params:
+                yield self.run_objfn_values, sim, objfn
+
+        def run_objfn_values(self, sim_param, obj_param):
+            comm = self.ralloc.comm
+
+            mdl = std.target_model()
+            exp_design = std.get_gst_experiment_design(1)
+            mdl_datagen = mdl.depolarize(op_noise=0.01, spam_noise=0.01)
+            ds = pygsti.construction.simulate_data(mdl_datagen, exp_design, 1000, seed=1234, comm=comm)
+        
+            builder = pygsti.obj.ObjectiveFunctionBuilder.create_from(obj_param)
+            builder.additional_args['array_types'] = ('EP', 'EPP')  # HACK - todo this better
+
+            #TODO: do for a different objective function, e.g. 'logl' => 'chi2' above
+        
+            mdl.sim = sim_param  #Try for different forward simulators & layouts
+            circuits = exp_design.all_circuits_needing_data[0:10]
+            objfn_parallel = builder.build(mdl, ds, circuits, self.ralloc, verbosity=0)
+            objfn_serial = builder.build(mdl, ds, circuits, None, verbosity=0)
+        
+            #LSVEC TEST
+            v_ref = objfn_serial.lsvec()
+            v = objfn_parallel.lsvec()
+            globalv = objfn_parallel.layout.gather_local_array('e', v)
+        
+            if comm is None or comm.rank == 0:
+                finalv = np.empty_like(globalv); off = 0
+                for c in circuits:
+                    indices, outcomes = objfn_parallel.layout.global_layout.indices_and_outcomes(c)
+                    assert(outcomes == (('0',), ('1',)))  # I think this should always be the ordering (?)
+                    finalv[off:off + len(outcomes)] = globalv[indices]
+                    off += len(outcomes)
+        
+                finalv_ref = np.empty_like(v_ref); off = 0
+                for c in circuits:
+                    indices, outcomes = objfn_serial.layout.indices_and_outcomes(c)
+                    assert(outcomes == (('0',), ('1',)))  # I think this should always be the ordering (?)
+                    finalv_ref[off:off + len(outcomes)] = v_ref[indices]
+                    off += len(outcomes)
+        
+                    # TODO: Why does this fail and make things hang?
+                    #assert np.allclose(finalv, finalv_ref)
+        
+            #TODO: DLSVEC?
+        
+            #HESSIAN TEST
+            hessian_ref = objfn_serial.hessian()
+            hessian = objfn_parallel.hessian()  # already a global qty, just on root proc
+            bhessian_ref = objfn_serial.hessian_brute()
+            bhessian = objfn_parallel.hessian_brute()
+        
+            if comm is None or comm.rank == 0:
+                assert np.allclose(bhessian_ref, hessian_ref)
+                assert np.allclose(hessian, hessian_ref)
+                assert np.allclose(bhessian, bhessian_ref)
+
+        def test_fills(self):
+            comm = self.ralloc.comm
+
+            #Create some model
+            mdl = std.target_model()
+            mdl.kick(0.1,seed=1234)
+        
+            #Get some operation sequences
+            maxLengths = [1]
+            circuits = pygsti.construction.create_lsgst_circuits(
+                list(std.target_model().operations.keys()), std.prep_fiducials(),
+                std.meas_fiducials(), std.germs(), maxLengths)
+            nP = mdl.num_params
+        
+            #Serial mode to compute a baseline
+            serial_layout = mdl.sim.create_layout(circuits, array_types=('E','EP','EPP'), derivative_dimension=nP)
+        
+            nE = serial_layout.num_elements
+            nC = len(circuits)
+        
+            vp_serial  = np.empty(  nE, 'd')
+            vdp_serial = np.empty( (nE,nP), 'd')
+            vhp_serial = np.empty( (nE,nP,nP), 'd')
+        
+            mdl.sim.bulk_fill_probs(vp_serial, serial_layout)
+        
+            #TODO: add computations and comparisons of vdp and vhp, and compare to multiple
+            # parallel layouts (change num_atoms and param_blk_sizes) for multiple fwdsim types.
+        
+            #Use a parallel layout to compute the same probabilities & their derivatives
+            mdl.sim = pygsti.obj.MatrixForwardSimulator(num_atoms=1)  #Test with different fwdsims and different distributions (num_atoms, param_blk_sizes)
+            local_layout = mdl.sim.create_layout(circuits, array_types=('E','EP','EPP'), derivative_dimension=nP,
+                                                 resource_alloc=self.ralloc)
+        
+            vp_local = local_layout.allocate_local_array('e', 'd')
+            vdp_local = local_layout.allocate_local_array('ep', 'd')
+            vhp_local = local_layout.allocate_local_array('epp', 'd')
+        
+            mdl.sim.bulk_fill_probs(vp_local, local_layout)
+        
+        
+            #Gather data to produce arrays for the "global" layout (global_parallel_layout should be the same on all procs)
+            # but only on proc 0
+            global_parallel_layout = local_layout.global_layout
+            vp_global_parallel = local_layout.gather_local_array('e', vp_local)
+        
+            #Free the local arrays when we're done with them (they could be shared mem)
+            local_layout.free_local_array(vp_local)
+            local_layout.free_local_array(vdp_local)
+            local_layout.free_local_array(vhp_local)
+        
+            #Compare the two, but note that different layouts may order the elements differently,
+            # so we can't just compare the arrays directly - we have to use the layout to map
+            # circuit index -> element indices:
+            if comm is None or comm.rank == 0:
+                for i,opstr in enumerate(circuits):
+                    assert(np.linalg.norm(vp_global_parallel[ global_parallel_layout.indices_for_index(i) ] -
+                                          vp_serial[ serial_layout.indices_for_index(i) ]) < 1e-6)
+        #
+        #
+        #    #Note: no need to test "wrtFilter" business - that was removed
+        #
+        #
+        ## There are other tests within testmpiMain.py that don't need much/any alteration and would be
+        ## good to transfer to the new MPI unit tests, but:
+        ## - test_MPI_mlgst_forcefn(comm) -- this is never used anymore, you can ignore this test
+        ## - test_MPI_derivcols(comm) -- this is essentially tested by varying the layout types
+
+
+class PureMPIParallel_Test(ParallelTestWrapper.ParallelTest):
+    @classmethod
+    def setup_class(cls):
+        # Turn off all shared memory usage
+        os.environ['PYGSTI_USE_SHARED_MEMORY'] = "0"
+        cls.ralloc = pygsti.obj.ResourceAllocation(wcomm)
+
+class OnePerHostShmemParallel_Test(ParallelTestWrapper.ParallelTest):
+    @classmethod
+    def setup_class(cls):
+        # Use 1 host per shared memory group (i.e. no shared mem communication)
+        os.environ['PYGSTI_MAX_HOST_PROCS'] = "1"
+        cls.ralloc = pygsti.obj.ResourceAllocation(wcomm)
+
+class TwoPerHostShmemParallel_Test(ParallelTestWrapper.ParallelTest):
+    @classmethod
+    def setup_class(cls):
+        # Use 2 hosts per shared memory group (i.e. mixed MPI + shared mem if more than 2 procs)
+        os.environ['PYGSTI_MAX_HOST_PROCS'] = "2"
+        cls.ralloc = pygsti.obj.ResourceAllocation(wcomm)
+
+class AllShmemParallel_Test(ParallelTestWrapper.ParallelTest):
+    @classmethod
+    def setup_class(cls):
+        # Set as many procs per host as possible to use shared memory
+        os.environ['PYGSTI_MAX_HOST_PROCS'] = str(wcomm.size)
+        cls.ralloc = pygsti.obj.ResourceAllocation(wcomm)
+
+if __name__ == '__main__':
+    config = nose.config.Config()
+    config.verbosity = 2 if wcomm.rank == 0 else 0
+
+    nose.main(config=config)
