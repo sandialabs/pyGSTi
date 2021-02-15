@@ -890,8 +890,10 @@ class ModelDatasetCircuitsStore(object):
             self.host_nparams = self.layout.host_num_params
             self.host_nparams2 = self.layout.host_num_params2
             self.nelements = _slct.length(self.layout.host_element_slice)  # just for *this* proc
-            self.nparams = _slct.length(self.layout.host_param_slice) if self.layout.host_param_slice else None
-            self.nparams2 = _slct.length(self.layout.host_param2_slice) if self.layout.host_param2_slice else None
+            self.nparams = _slct.length(self.layout.host_param_slice) \
+                           if self.layout.host_param_slice else self.model.num_params
+            self.nparams2 = _slct.length(self.layout.host_param2_slice) \
+                            if self.layout.host_param2_slice else self.model.num_params
             assert(self.global_nparams is None or self.global_nparams == self.model.num_params)
         else:
             self.global_nelements = self.host_nelements = self.nelements = len(self.layout)
