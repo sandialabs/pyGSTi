@@ -27,9 +27,9 @@ class DistributableForwardSimulator(_ForwardSimulator):
     @classmethod
     def _array_types_for_method(cls, method_name):
         # give array types for this method because it's currently used publically in objective function's hessian
-        if method_name == '_bulk_hprobs_by_block_singleatom':
-            return ('epp', 'epp') + cls._array_types_for_method('_bulk_fill_hprobs_singleatom')
-        if method_name == '_bulk_fill_hprobs_singleatom':
+        if method_name == '_iter_atom_hprobs_by_rectangle':
+            return ('epp', 'epp') + cls._array_types_for_method('_bulk_fill_hprobs_dprobs_atom')
+        if method_name == '_bulk_fill_hprobs_dprobs_atom':
             return cls._array_types_for_method('_bulk_fill_probs_block') \
                 + cls._array_types_for_method('_bulk_fill_dprobs_block') \
                 + cls._array_types_for_method('_bulk_fill_hprobs_block')
@@ -90,8 +90,8 @@ class DistributableForwardSimulator(_ForwardSimulator):
             if pr_array_to_fill is not None:
                 self._bulk_fill_probs_atom(pr_array_to_fill[atom.element_slice], atom, atom_resource_alloc)
 
-            if blkSize is None:  # wrt_filter gives entire computed parameter block
-                #Compute all requested derivative columns at once
+            if blkSize is None:  # avoid unnecessary slice_up_range and block loop logic in 'else' block
+                #Compute all of our derivative columns at once
                 self._bulk_fill_dprobs_atom(array_to_fill[atom.element_slice, :], host_param_slice, atom,
                                             global_param_slice, param_resource_alloc)
 
@@ -135,82 +135,98 @@ class DistributableForwardSimulator(_ForwardSimulator):
         global_param2_slice = layout.global_param2_slice
 
         for atom in layout.atoms:
-            self._bulk_fill_hprobs_singleatom(array_to_fill, atom, pr_array_to_fill,
-                                              deriv1_array_to_fill, deriv2_array_to_fill,
-                                              host_param_slice, host_param2_slice,
-                                              global_param_slice, global_param2_slice,
-                                              blkSize1, blkSize2, atom_resource_alloc,
-                                              param_resource_alloc, param2_resource_alloc)
+
+            if pr_array_to_fill is not None:
+                self._bulk_fill_probs_atom(pr_array_to_fill[atom.element_slice], atom, atom_resource_alloc)
+
+            if blkSize1 is None and blkSize2 is None:  # run 'else' block without unnecessary logic
+                #Compute all our derivative columns at once
+                if deriv1_array_to_fill is not None:
+                    self._bulk_fill_dprobs_atom(deriv1_array_to_fill[atom.element_slice, :], host_param_slice,
+                                                atom, global_param_slice, param_resource_alloc)
+                if deriv2_array_to_fill is not None:
+                    if deriv1_array_to_fill is not None and global_param_slice == global_param2_slice:
+                        deriv2_array_to_fill[atom.element_slice, :] = deriv1_array_to_fill[atom.element_slice, :]
+                    else:
+                        self._bulk_fill_dprobs_atom(deriv2_array_to_fill[atom.element_slice, :], host_param2_slice,
+                                                    atom, global_param2_slice, param2_resource_alloc)
+
+                self._bulk_fill_hprobs_atom(array_to_fill[atom.element_slice, :, :], host_param_slice,
+                                            host_param2_slice, atom, global_param_slice, global_param2_slice,
+                                            param2_resource_alloc)
+
+            else:  # Divide columns into blocks of at most shape (blkSize1, blkSize2)
+                assert(blkSize1 is not None and blkSize2 is not None), \
+                    "Both (or neither) of the Hessian block sizes must be specified!"
+                Np1 = _slct.length(global_param_slice)
+                Np2 = _slct.length(global_param2_slice)
+                nBlks1 = int(_np.ceil(Np1 / blkSize1))
+                nBlks2 = int(_np.ceil(Np2 / blkSize2))
+                # num blocks required to achieve desired average size == blkSize1 or blkSize2
+                blocks1 = _mpit.slice_up_range(Np1, nBlks1)
+                blocks2 = _mpit.slice_up_range(Np2, nBlks2)
+
+                for block1 in blocks1:
+                    host_param_slice_part = block1  # _slct.shift(block1, host_param_slice.start)  # into host's memory
+                    global_param_slice_part = _slct.shift(block1, global_param_slice.start)  # actual parameter indices
+
+                    if deriv1_array_to_fill is not None:
+                        self._bulk_fill_dprobs_atom(deriv1_array_to_fill[atom.element_slice, :], host_param_slice_part,
+                                                    atom, global_param_slice_part, param_resource_alloc)
+
+                    for block2 in blocks2:
+                        host_param2_slice_part = block2  # into host's memory
+                        global_param2_slice_part = _slct.shift(block2, global_param2_slice.start)  # parameter indices
+                        self._bulk_fill_hprobs_atom(array_to_fill[atom.element_slice, :],
+                                                    host_param_slice_part, host_param2_slice_part, atom,
+                                                    global_param_slice_part, global_param2_slice_part,
+                                                    param2_resource_alloc)
+
+                #Fill deriv2_array_to_fill if we need to.
+                if deriv2_array_to_fill is not None:
+                    if deriv1_array_to_fill is not None and global_param_slice == global_param2_slice:
+                        deriv2_array_to_fill[atom.element_slice, :] = deriv1_array_to_fill[atom.element_slice, :]
+                    else:
+                        for block2 in blocks2:
+                            host_param2_slice_part = block2  # into host's memory
+                            global_param2_slice_part = _slct.shift(block2, global_param2_slice.start)  # parameter indices
+                            self._bulk_fill_dprobs_atom(deriv2_array_to_fill[atom.element_slice, :],
+                                                        host_param2_slice_part, atom,
+                                                        global_param2_slice_part, param_resource_alloc)
 
         atom_resource_alloc.host_comm_barrier()  # don't exit until all procs' array_to_fill is ready
 
-    def _bulk_fill_hprobs_singleatom(self, array_to_fill, atom, pr_array_to_fill,
-                                     deriv1_array_to_fill, deriv2_array_to_fill,
-                                     dest_slice1, dest_slice2,
-                                     wrt_slice1, wrt_slice2,
-                                     wrt_blksize1, wrt_blksize2, atom_resource_alloc,
-                                     param_resource_alloc, param2_resource_alloc):
+    def _bulk_fill_hprobs_atom(self, array_to_fill, dest_param_slice1, dest_param_slice2, layout_atom,
+                               param_slice1, param_slice2, resource_alloc):
+        # if atom can be converted to a (sub)-layout, then we can just use machinery of base
+        # class (note: layouts hold their own resource-alloc, atom's don't)
+        self._bulk_fill_hprobs_block(array_to_fill, dest_param_slice1, dest_param_slice2,
+                                     layout_atom.as_layout(resource_alloc), param_slice1, param_slice2)
 
-        if pr_array_to_fill is not None:
-            self._bulk_fill_probs_atom(pr_array_to_fill[atom.element_slice], atom, atom_resource_alloc)
+    def _bulk_fill_hprobs_dprobs_atom(self, array_to_fill, deriv1_array_to_fill, deriv2_array_to_fill, atom,
+                                      param_slice1, param_slice2, resource_alloc):
+        #Note: this function can be called similarly to _bulk_fill_hprobs_atom or _bulk_fill_dprobs_atom
+        # in that array_to_fill is assumed to already be sized to the atom's elements, i.e.
+        # we provide array_to_fill and not array_to_fill[atom.alement_slice,...] when calling subroutines.
 
-        if wrt_blksize1 is None and wrt_blksize2 is None:  # wrt_filter1 & wrt_filter2 dictate block
-            #Compute all requested derivative columns at once
-            if deriv1_array_to_fill is not None:
-                self._bulk_fill_dprobs_atom(deriv1_array_to_fill[atom.element_slice, :], dest_slice1, atom,
-                                            wrt_slice1, param_resource_alloc)
-            if deriv2_array_to_fill is not None:
-                if deriv1_array_to_fill is not None and wrt_slice1 == wrt_slice2:
-                    deriv2_array_to_fill[atom.element_slice, dest_slice2] = \
-                        deriv1_array_to_fill[atom.element_slice, dest_slice1]
-                else:
-                    self._bulk_fill_dprobs_atom(deriv2_array_to_fill[atom.element_slice, :], dest_slice2, atom,
-                                                wrt_slice2, param2_resource_alloc)
+        host_param_slice1 = host_param_slice2 = None # array_to_fill is already just this slice of the host mem
+        if deriv1_array_to_fill is not None:
+            self._bulk_fill_dprobs_atom(deriv1_array_to_fill, host_param_slice1, atom,
+                                        param_slice1, resource_alloc)
+        if deriv2_array_to_fill is not None:
+            if deriv1_array_to_fill is not None and param_slice1 == param_slice2:
+                deriv2_array_to_fill[:, :] = deriv1_array_to_fill[:, :]
+            else:
+                self._bulk_fill_dprobs_atom(deriv2_array_to_fill, host_param_slice2, atom,
+                                            param_slice2, resource_alloc)
 
-            self._bulk_fill_hprobs_atom(array_to_fill[atom.element_slice, :, :], dest_slice1, dest_slice2, atom,
-                                        wrt_slice1, wrt_slice2, param2_resource_alloc)
+        self._bulk_fill_hprobs_atom(array_to_fill, host_param_slice1, host_param_slice2, atom,
+                                    param_slice1, param_slice2, resource_alloc)
 
-        else:  # Divide columns into blocks of at most blkSize
-            assert(wrt_slice1 is None and wrt_slice2 is None)  # cannot specify both wrt_slice and wrt_blksize
-            Np1 = _slct.length(dest_slice1)
-            Np2 = _slct.length(dest_slice2)
-            nBlks1 = int(_np.ceil(Np1 / wrt_blksize1))
-            nBlks2 = int(_np.ceil(Np2 / wrt_blksize2))
-            # num blocks required to achieve desired average size == blkSize1 or blkSize2
-            blocks1 = _mpit.slice_up_range(Np1, nBlks1)
-            blocks2 = _mpit.slice_up_range(Np2, nBlks2)
 
-            for block1 in blocks1:
-                dest_slice1_part = _slct.shift(block1, dest_slice1.start)  # into host's memory
-                wrt_slice1_part = _slct.shift(block1, wrt_slice1.start)  # actual parameter indices
-
-                if deriv1_array_to_fill is not None:
-                    self._bulk_fill_dprobs_atom(deriv1_array_to_fill[atom.element_slice, :], dest_slice1_part, atom,
-                                                wrt_slice1_part, param_resource_alloc)
-
-                for block2 in blocks2:
-                    dest_slice2_part = _slct.shift(block2, dest_slice2.start)  # into host's memory
-                    wrt_slice2_part = _slct.shift(block2, wrt_slice2.start)  # actual parameter indices
-
-                    self._bulk_fill_hprobs_atom(array_to_fill[atom.element_slice, :],
-                                                dest_slice1_part, dest_slice2_part, atom,
-                                                wrt_slice1_part, wrt_slice2_part, param2_resource_alloc)
-
-            #Fill deriv2_array_to_fill if we need to.
-            if deriv2_array_to_fill is not None:
-                if deriv1_array_to_fill is not None and wrt_slice1 == wrt_slice2:
-                    deriv2_array_to_fill[atom.element_slice, dest_slice2] = \
-                        deriv1_array_to_fill[atom.element_slice, dest_slice1]
-                else:
-                    for block2 in blocks2:
-                        dest_slice2_part = _slct.shift(block2, dest_slice2.start)  # into host's memory
-                        wrt_slice2_part = _slct.shift(block2, wrt_slice2.start)  # actual parameter indices
-                        self._bulk_fill_dprobs_atom(deriv2_array_to_fill[atom.element_slice, :], dest_slice2_part,
-                                                    atom, wrt_slice2_part, param_resource_alloc)
-
-    def _bulk_hprobs_by_block(self, layout, wrt_slices_list, return_dprobs_12):
-        # Just needed for compatibility - so base `bulk_hprobs_by_block` knows to loop over atoms
-        # Similar to _bulk_hprobs_by_block_singleatom but runs over all atoms before yielding and
+    def _iter_hprobs_by_rectangle(self, layout, wrt_slices_list, return_dprobs_12):
+        # Just needed for compatibility - so base `iter_hprobs_by_rectangle` knows to loop over atoms
+        # Similar to _iter_atom_hprobs_by_rectangle but runs over all atoms before yielding and
         #  yielded array has leading dim == # of local elements instead of just 1 atom's # elements.
         nElements = layout.num_elements
         resource_alloc = layout.resource_alloc()
@@ -229,10 +245,11 @@ class DistributableForwardSimulator(_ForwardSimulator):
                 'd', zero_out=True)
 
             for atom in layout.atoms:
-                self._bulk_fill_hprobs_singleatom(hprobs, atom, None, dprobs1, dprobs2, None, None,
-                                                  wrtSlice1, wrtSlice2, None, None,
-                                                  resource_alloc, resource_alloc, resource_alloc)
-            #Note: we give all three resource_alloc's as our local `resource_alloc` above because all the arrays
+                self._bulk_fill_hprobs_dprobs_atom(hprobs[atom.element_slice, :, :],
+                                                   dprobs1[atom.element_slice, :] if (dprobs1 is not None) else None,
+                                                   dprobs2[atom.element_slice, :] if (dprobs2 is not None) else None,
+                                                   atom, wrtSlice1, wrtSlice2, resource_alloc)
+            #Note: we give resource_alloc as our local `resource_alloc` above because all the arrays
             # have been allocated based on just this subset of processors, unlike a call to bulk_fill_hprobs(...)
             # where the probs & dprobs are memory allocated and filled by a larger group of processors.  (the main
             # function of these args is to know which procs work together to fill the *same* values and which of
@@ -248,7 +265,7 @@ class DistributableForwardSimulator(_ForwardSimulator):
             _smt.cleanup_shared_ndarray(dprobs2_shm)
             _smt.cleanup_shared_ndarray(hprobs_shm)
 
-    def _bulk_hprobs_by_block_singleatom(self, atom, wrt_slices_list, return_dprobs_12, resource_alloc):
+    def _iter_atom_hprobs_by_rectangle(self, atom, wrt_slices_list, return_dprobs_12, resource_alloc):
 
         #FUTURE could make a resource_alloc.check_can_allocate_memory call here for ('epp', 'epp')?
         nElements = atom.num_elements
@@ -266,11 +283,11 @@ class DistributableForwardSimulator(_ForwardSimulator):
                 resource_alloc, (nElements, _slct.length(wrtSlice1), _slct.length(wrtSlice2)),
                 'd', zero_out=True)
 
-            self._bulk_fill_hprobs_singleatom(hprobs, atom, None, dprobs1, dprobs2,
-                                              None, None,  # slice(0, hprobs.shape[1]), slice(0, hprobs.shape[2]),
-                                              wrtSlice1, wrtSlice2, None, None, resource_alloc,
-                                              resource_alloc, resource_alloc)
-            #Note: we give all three resource_alloc's as our local `resource_alloc` above because all the arrays
+            # Note: no need to index w/ [atom.element_slice,...] (compare with _iter_hprobs_by_rectangles)
+            # since these arrays are already sized to this particular atom (not to all the host's atoms)
+            self._bulk_fill_hprobs_dprobs_atom(hprobs, dprobs1, dprobs2, atom,
+                                               wrtSlice1, wrtSlice2, resource_alloc)
+            #Note: we give resource_alloc as our local `resource_alloc` above because all the arrays
             # have been allocated based on just this subset of processors, unlike a call to bulk_fill_hprobs(...)
             # where the probs & dprobs are memory allocated and filled by a larger group of processors.  (the main
             # function of these args is to know which procs work together to fill the *same* values and which of

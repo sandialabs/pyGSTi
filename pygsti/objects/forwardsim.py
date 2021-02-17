@@ -60,8 +60,8 @@ class ForwardSimulator(object):
         if method_name == 'bulk_probs': return ('E',) + cls._array_types_for_method('bulk_fill_probs')
         if method_name == 'bulk_dprobs': return ('EP',) + cls._array_types_for_method('bulk_fill_dprobs')
         if method_name == 'bulk_hprobs': return ('EPP',) + cls._array_types_for_method('bulk_fill_hprobs')
-        if method_name == 'bulk_hprobs_by_block': return cls._array_types_for_method('_bulk_hprobs_by_block')
-        if method_name == '_bulk_hprobs_by_block': return ('epp',) + cls._array_types_for_method('bulk_fill_hprobs')
+        if method_name == 'iter_hprobs_by_rectangle': return cls._array_types_for_method('_iter_hprobs_by_rectangle')
+        if method_name == '_iter_hprobs_by_rectangle': return ('epp',) + cls._array_types_for_method('bulk_fill_hprobs')
         if method_name == 'bulk_fill_probs': return cls._array_types_for_method('_bulk_fill_probs_block')
         if method_name == 'bulk_fill_dprobs': return cls._array_types_for_method('_bulk_fill_dprobs_block')
         if method_name == 'bulk_fill_hprobs': return cls._array_types_for_method('_bulk_fill_hprobs_block')
@@ -657,9 +657,10 @@ class ForwardSimulator(object):
                 array_to_fill[:, iFinal, dest_param_slice2] = (dprobs2 - dprobs) / eps
         self.model.from_vector(orig_vec, close=True)
 
-    def bulk_hprobs_by_block(self, layout, wrt_slices_list,
-                             return_dprobs_12=False):
+    def iter_hprobs_by_rectangle(self, layout, wrt_slices_list,
+                                 return_dprobs_12=False):
         """
+        TODO: docstring -- more general now - by *rectangle* not just column
         An iterator that computes 2nd derivatives of the `eval_tree`'s circuit probabilities column-by-column.
 
         This routine can be useful when memory constraints make constructing
@@ -712,9 +713,9 @@ class ForwardSimulator(object):
             - `hprobs == mx[:,:,rowSlice,colSlice]`
             - `dprobs12 == dp1[:,:,rowSlice,None] * dp2[:,:,None,colSlice]`
         """
-        yield from self._bulk_hprobs_by_block(layout, wrt_slices_list, return_dprobs_12)
+        yield from self._iter_hprobs_by_rectangle(layout, wrt_slices_list, return_dprobs_12)
 
-    def _bulk_hprobs_by_block(self, layout, wrt_slices_list, return_dprobs_12):
+    def _iter_hprobs_by_rectangle(self, layout, wrt_slices_list, return_dprobs_12):
         # under distributed layout each proc already has a local set of parameter slices, and
         # this routine could just compute parts of that piecemeal so we never compute an entire
         # proc's hprobs (may be too large) - so I think this function signature may still be fine,
