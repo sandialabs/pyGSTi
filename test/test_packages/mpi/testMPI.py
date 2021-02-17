@@ -96,8 +96,8 @@ class ParallelTest(object):
     def test_objfn_generator(self):
         params = [
             ("map", "logl", 1), #("map", "logl", 4), ("map", "chi2", 1),
-            ("matrix", "logl", 1), #("matrix", "logl", 4), # TODO: 4 atoms fails in hessian
-            ("matrix", "chi2", 1), # ("matrix", "chi2", 4)
+            ("matrix", "logl", 1), ("matrix", "logl", 4),
+            ("matrix", "chi2", 1), ("matrix", "chi2", 4)
         ]
         for sim, objfn, natoms in params:
             yield self.run_objfn_values, sim, objfn, natoms
@@ -162,9 +162,9 @@ class ParallelTest(object):
     def test_fills_generator(self):
         sims = ["map", "matrix"]
         # XYI model with maxL = 1 has 92 circuits and 60 parameters
-        layout_params = [(1, None),
-            #(1, 15), #(4, 15) # TODO: Setting param_blk_size hits an assert in hprobs
-            ]
+        layout_params = [(1, None), (4, None),
+                         (1, 15), (4, 15)
+                     ]
         for s in sims:
             for natoms, nparams in layout_params:
                 yield self.run_fills, s, natoms, nparams
@@ -202,6 +202,12 @@ class ParallelTest(object):
         mdl.sim.bulk_fill_probs(vp_serial, serial_layout)
         mdl.sim.bulk_fill_dprobs(vdp_serial, serial_layout)
         mdl.sim.bulk_fill_hprobs(vhp_serial, serial_layout)
+
+        #Note: when there are multiple atoms, the serial_layout returned above may not preserve
+        # the original circuit ordering, i.e., serial_layout.circuits != circuits.  The global
+        # layout does have this property, and so we use it to avoid having to lookup which circuit
+        # is which index in serial_layout.  No gathering is needed, since there only 1 processor.
+        global_serial_layout = serial_layout.global_layout
     
         #Use a parallel layout to compute the same probabilities & their derivatives
         local_layout = mdl.sim.create_layout(circuits, array_types=('E','EP','EPP'), derivative_dimension=nP,
@@ -234,11 +240,11 @@ class ParallelTest(object):
         if comm is None or comm.rank == 0:
             for i,opstr in enumerate(circuits):
                 assert(np.linalg.norm(vp_global_parallel[ global_parallel_layout.indices_for_index(i) ] -
-                                      vp_serial[ serial_layout.indices_for_index(i) ]) < 1e-6)
+                                      vp_serial[ global_serial_layout.indices_for_index(i) ]) < 1e-6)
                 assert(np.linalg.norm(vdp_global_parallel[ global_parallel_layout.indices_for_index(i) ] -
-                                      vdp_serial[ serial_layout.indices_for_index(i) ]) < 1e-6)
+                                      vdp_serial[ global_serial_layout.indices_for_index(i) ]) < 1e-6)
                 assert(np.linalg.norm(vhp_global_parallel[ global_parallel_layout.indices_for_index(i) ] -
-                                      vhp_serial[ serial_layout.indices_for_index(i) ]) < 1e-6)
+                                      vhp_serial[ global_serial_layout.indices_for_index(i) ]) < 1e-6)
     #
     #
     #    #Note: no need to test "wrtFilter" business - that was removed
@@ -282,5 +288,14 @@ class PureMPIParallel_Test(ParallelTest):
 if __name__ == '__main__':
     config = nose.config.Config()
     config.verbosity = 2 if wcomm.rank == 0 else 0
-
+    
     nose.main(config=config)
+    
+    #Eriks manual runs so that debugger can start (I couldn't figure out how to set options to nose)
+    #tester = PureMPIParallel_Test()
+    #tester.setup_class()
+    #tester.ralloc = pygsti.obj.ResourceAllocation(wcomm)
+    ##tester.run_objfn_values('matrix','logl',4)
+    #tester.run_fills('map',1, None)
+    #tester.run_fills('map',4, None)
+    #tester.run_fills('matrix',4, 15)
