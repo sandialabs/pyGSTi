@@ -144,7 +144,6 @@ def simulate_data(model_or_dataset, circuit_list, num_samples,
         else:
             trans_circuit_list = circuit_list
         all_probs = gsGen.bulk_probabilities(trans_circuit_list, comm=comm, mem_limit=mem_limit)
-        #all_dprobs = gsGen.bulk_dprobs(circuit_list) #DEBUG - not needed here!!!
     else:
         trans_circuit_list = circuit_list
 
