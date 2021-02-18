@@ -72,15 +72,16 @@ def custom_solve(a, b, x, dqc, resource_alloc, proc_threshold=100):
                 ok_buf[0] = 1  # ok
             except _scipy.linalg.LinAlgError as e:
                 ok_buf[0] = 0  # failure!
+                err = e
         else:
             global_x = None
-            e = _scipy.linalg.LinAlgError("Linear solver fail on root proc!")  # just in case...
+            err = _scipy.linalg.LinAlgError("Linear solver fail on root proc!")  # just in case...
 
         comm.Bcast(ok_buf, root=0)
         if ok_buf[0] == 0:
             _smt.cleanup_shared_ndarray(a_shm)
             _smt.cleanup_shared_ndarray(b_shm)
-            raise e  # all procs must raise in sync
+            raise err  # all procs must raise in sync
 
         dqc.scatter_x(global_x, x)
         _smt.cleanup_shared_ndarray(a_shm)
