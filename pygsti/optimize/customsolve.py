@@ -51,6 +51,7 @@ def custom_solve(a, b, x, dqc, resource_alloc, proc_threshold=100):
 
     comm = resource_alloc.comm
     host_comm = resource_alloc.host_comm
+    ok_buf = _np.empty(1,int)
 
     if comm is None or isinstance(dqc, _UndistributedQuantityCalc):
         x[:] = _scipy.linalg.solve(a, b, assume_a='pos')
@@ -65,7 +66,23 @@ def custom_solve(a, b, x, dqc, resource_alloc, proc_threshold=100):
         global_b, b_shm = dqc.gather_jtf(b, return_shared=True)
         #global_a = dqc.gather_jtj(a)
         #global_b = dqc.gather_jtf(b)
-        global_x = _scipy.linalg.solve(global_a, global_b, assume_a='pos') if (comm.rank == 0) else None
+        if comm.rank == 0:
+            try:
+                global_x = _scipy.linalg.solve(global_a, global_b, assume_a='pos')
+                ok_buf[0] = 1  # ok
+            except _scipy.linalg.LinAlgError as e:
+                ok_buf[0] = 0  # failure!
+                err = e
+        else:
+            global_x = None
+            err = _scipy.linalg.LinAlgError("Linear solver fail on root proc!")  # just in case...
+
+        comm.Bcast(ok_buf, root=0)
+        if ok_buf[0] == 0:
+            _smt.cleanup_shared_ndarray(a_shm)
+            _smt.cleanup_shared_ndarray(b_shm)
+            raise err  # all procs must raise in sync
+
         dqc.scatter_x(global_x, x)
         _smt.cleanup_shared_ndarray(a_shm)
         _smt.cleanup_shared_ndarray(b_shm)

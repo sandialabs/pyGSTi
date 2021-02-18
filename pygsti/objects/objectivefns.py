@@ -890,8 +890,10 @@ class ModelDatasetCircuitsStore(object):
             self.host_nparams = self.layout.host_num_params
             self.host_nparams2 = self.layout.host_num_params2
             self.nelements = _slct.length(self.layout.host_element_slice)  # just for *this* proc
-            self.nparams = _slct.length(self.layout.host_param_slice) if self.layout.host_param_slice else None
-            self.nparams2 = _slct.length(self.layout.host_param2_slice) if self.layout.host_param2_slice else None
+            self.nparams = _slct.length(self.layout.host_param_slice) \
+                           if self.layout.host_param_slice else self.model.num_params
+            self.nparams2 = _slct.length(self.layout.host_param2_slice) \
+                            if self.layout.host_param2_slice else self.model.num_params
             assert(self.global_nparams is None or self.global_nparams == self.model.num_params)
         else:
             self.global_nelements = self.host_nelements = self.nelements = len(self.layout)
@@ -1473,6 +1475,11 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         # so adding the additional ability to parallelize over
         # subtrees would just add unnecessary complication.
 
+        #Note2: this function follows a similar pattern to DistributableForwardSimulator's
+        # _bulk_fill_hprobs method, which will also uses the layout's param_dimension_blk_sizes
+        # to divide up the computation of the Hessian of each circuit outcome probability
+        # individually.
+
         blk_size1, blk_size2 = self.layout.param_dimension_blk_sizes
         atom_resource_alloc = self.layout.resource_alloc('atom-processing')
         #param_resource_alloc = self.layout.resource_alloc('param-processing')
@@ -1546,7 +1553,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
 
                 k, kmax = 0, len(slicetup_list)
                 blk_rank = param2_resource_alloc.comm_rank
-                for (slice1, slice2, hprobs, dprobs12) in self.model.sim._bulk_hprobs_by_block_singleatom(
+                for (slice1, slice2, hprobs, dprobs12) in self.model.sim._iter_atom_hprobs_by_rectangle(
                         atom, slicetup_list, True, param2_resource_alloc):
                     local_slice1 = _slct.shift(slice1, -global_param_slice.start)  # indices into atom_hessian
                     local_slice2 = _slct.shift(slice2, -global_param2_slice.start)  # indices into atom_hessian
@@ -1558,8 +1565,8 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
                                  len(layout.atoms), atom.num_elements))
                         _sys.stdout.flush(); k += 1
 
-                    hessian_blk = self._hessian_from_block(hprobs, dprobs12, probs, counts,
-                                                           total_counts, freqs, param2_resource_alloc)
+                    hessian_blk = self._hessian_from_block(hprobs, dprobs12, probs, atom_counts,
+                                                           atom_total_counts, freqs, param2_resource_alloc)
                     #NOTE: _hessian_from_hprobs MAY modify hprobs and dprobs12
                     #NOTE2: we don't account for memory within _hessian_from_block - maybe we should?
 
@@ -4060,7 +4067,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         if method_name == 'dterms': return fsim._array_types_for_method('bulk_fill_dprobs')
         if method_name == 'hessian_brute': return fsim._array_types_for_method('bulk_fill_hprobs') \
            + ('e', 'e', 'epp', 'epp', 'PP')
-        if method_name == 'hessian': return fsim._array_types_for_method('_bulk_hprobs_by_block_singleatom') + ('PP',)
+        if method_name == 'hessian': return fsim._array_types_for_method('_iter_atom_hprobs_by_rectangle') + ('PP',)
         if method_name == 'approximate_hessian': return fsim._array_types_for_method('bulk_fill_dprobs') + ('e', 'PP')
         return super()._array_types_for_method(method_name, fsim)
 

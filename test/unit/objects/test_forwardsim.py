@@ -45,7 +45,7 @@ class AbstractForwardSimTester(BaseCase):
         with self.assertRaises(NotImplementedError):
             self.fwdsim.bulk_fill_hprobs(np.zeros((1,0,0)), layout)
 
-#    def test_bulk_hprobs_by_block(self):
+#    def test_iter_hprobs_by_rectangle(self):
 #        with self.assertRaises(NotImplementedError):
 #            self.fwdsim.bulk_fill_hprobs(None, None)
 
@@ -97,7 +97,7 @@ class ForwardSimBase(object):
                                      pr_array_to_fill=pmx, deriv1_array_to_fill=dmx1, deriv2_array_to_fill=dmx2)
         # TODO assert correctness
 
-    def test_bulk_hprobs_by_block(self):
+    def test_iter_hprobs_by_rectangle(self):
         # TODO optimize
         mx = np.zeros((self.nEls, self.nP, self.nP), 'd')
         dmx1 = np.zeros((self.nEls, self.nP), 'd')

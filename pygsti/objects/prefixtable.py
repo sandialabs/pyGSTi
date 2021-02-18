@@ -324,6 +324,7 @@ class PrefixTable(object):
                     subTableSetList, totalCost = create_subtables(failsafe_maxcost_and_rate[0],
                                                                   failsafe_maxcost_and_rate[1], max_num=num_sub_tables)
                     assert(len(subTableSetList) == num_sub_tables)  # ensure the loop exits now (~= break)
+                    break  # or could set resultingSubtables = len(subTableSetList)
 
         else:  # max_sub_table_size is not None
             subTableSetList, totalCost = create_subtables(
