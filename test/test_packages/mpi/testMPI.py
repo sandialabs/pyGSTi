@@ -3,6 +3,7 @@
 # By wrapping asserts in comm.rank == 0, only rank 0 should fail (should help with output)
 # Can run with different number of procs, but 4 is minimum to test all modes (pure MPI, pure shared mem, and mixed)
 
+from io import StringIO
 import nose
 import numpy as np
 from mpi4py import MPI
@@ -92,6 +93,41 @@ class ParallelTest(object):
         parallel = mdl.sim.bulk_hprobs(circuits, resource_alloc=self.ralloc)
         if comm is None or comm.rank == 0:  # output is only given on root proc
             compare_prob_dicts(serial, parallel, (0, 1, 2))
+
+    def test_MPI_products(self):
+        comm = self.ralloc.comm
+        
+        #Create some model
+        mdl = std.target_model()
+
+        mdl.kick(0.1, seed=1234)
+
+        #Get some operation sequences
+        maxLengths = [1,2,4,8]
+        gstrs = pygsti.construction.create_lsgst_circuits(
+            std.target_model(), std.fiducials(), std.fiducials(), std.germs(), maxLengths)
+
+        #Check bulk products
+
+        #bulk_product - no parallelization unless layout is split
+        serial = mdl.sim.bulk_product(gstrs, scale=False)
+        parallel = mdl.sim.bulk_product(gstrs, scale=False, resource_alloc=self.ralloc)
+        assert(np.linalg.norm(serial-parallel) < 1e-6)
+
+        serial_scl, sscale = mdl.sim.bulk_product(gstrs, scale=True)
+        parallel, pscale = mdl.sim.bulk_product(gstrs, scale=True, resource_alloc=self.ralloc)
+        assert(np.linalg.norm(serial_scl*sscale[:,None,None] -
+                              parallel*pscale[:,None,None]) < 1e-6)
+
+        #bulk_dproduct - no split tree => parallel by col
+        serial = mdl.sim.bulk_dproduct(gstrs, scale=False)
+        parallel = mdl.sim.bulk_dproduct(gstrs, scale=False, resource_alloc=self.ralloc)
+        assert(np.linalg.norm(serial-parallel) < 1e-6)
+
+        serial_scl, sscale = mdl.sim.bulk_dproduct(gstrs, scale=True)
+        parallel, pscale = mdl.sim.bulk_dproduct(gstrs, scale=True, resource_alloc=self.ralloc)
+        assert(np.linalg.norm(serial_scl*sscale[:,None,None,None] -
+                              parallel*pscale[:,None,None,None]) < 1e-6)
     
     def test_objfn_generator(self):
         params = [
@@ -239,6 +275,15 @@ class ParallelTest(object):
                                       vdp_serial[ serial_layout.indices_for_index(i) ]) < 1e-6)
                 assert(np.linalg.norm(vhp_global_parallel[ global_parallel_layout.indices_for_index(i) ] -
                                       vhp_serial[ serial_layout.indices_for_index(i) ]) < 1e-6)
+
+    def test_MPI_printer(self):
+        comm = self.ralloc.comm
+
+        #Test output of each rank to separate file:
+        pygsti.obj.VerbosityPrinter._comm_path = "./"
+        pygsti.obj.VerbosityPrinter._comm_file_name = "mpi_test_output"
+        printer = pygsti.obj.VerbosityPrinter(verbosity=2, comm=comm)
+        printer.log("HELLO!")
     #
     #
     #    #Note: no need to test "wrtFilter" business - that was removed
