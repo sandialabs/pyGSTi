@@ -188,8 +188,8 @@ class PrefixTable(object):
             else: raise ValueError("Uknown cost metric: %s" % cost_metric)
 
             subTables = []
-            curSubTable = set([table_contents[0][0]])  # destination index of 0th evaluant
-            curTableCost = cost_fn(table_contents[0][2])  # remainder length of 0th evaluant
+            curSubTable = set()  # destination index of 0th evaluant
+            curTableCost = 0  # remainder length of 0th evaluant
             totalCost = 0
             cacheIndices = [None] * self.cache_size
             contents_by_idest = {tup[0]: tup for tup in table_contents}  # for fast lookup by a circuit index
