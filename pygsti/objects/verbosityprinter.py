@@ -258,6 +258,7 @@ class VerbosityPrinter(object):
         if _compat.isint(verbosity):
             printer = VerbosityPrinter(verbosity, comm=comm)
         else:
+            if isinstance(comm, _ResourceAllocation): comm = comm.comm
             printer = verbosity.clone()  # deepcopy the printer object if it has been passed as a verbosity
             printer._comm = comm  # override happens here
         return printer
