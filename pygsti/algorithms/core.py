@@ -920,14 +920,12 @@ def _do_term_runopt(objective, optimizer, printer):
     #assume a path set has already been chosen, (one should have been chosen when layout was created)
     layout = objective.layout
 
-    resource_alloc = objective.resource_alloc
-    pathSet = layout.pathset(resource_alloc.comm)
+    pathSet = layout.pathset
     if pathSet:  # only some types of term "modes" (see fwdsim.mode) use path-sets
         pathFraction = pathSet.allowed_path_fraction
 
         objective.lsvec()  # ensure objective.probs initialized
-        bSufficient = fwdsim.bulk_test_if_paths_are_sufficient(layout, objective.probs,
-                                                               objective.resource_alloc, verbosity=0)
+        bSufficient = fwdsim.bulk_test_if_paths_are_sufficient(layout, objective.probs, verbosity=0)
 
         printer.log("Initial Term-stage model has %d failures and uses %.1f%% of allowed paths (ok=%s)." %
                     (pathSet.num_failures, 100 * pathFraction, str(bSufficient)))
@@ -938,15 +936,14 @@ def _do_term_runopt(objective, optimizer, printer):
             mdl.from_vector(0.9 * mdl.to_vector())  # contract paramvector toward zero
 
             #Adapting the path set doesn't seem necessary (and takes time), but we could do this:
-            #new_pathSet = mdl.sim.find_minimal_paths_set(layout, resource_alloc)  # `mdl.sim` instead of `fwdsim` to
+            #new_pathSet = mdl.sim.find_minimal_paths_set(layout)  # `mdl.sim` instead of `fwdsim` to
             #mdl.sim.select_paths_set(layout, new_pathSet, resource_alloc)  # ensure paramvec is updated
             #pathFraction = pathSet.allowed_path_fraction
             #printer.log("  After adapting paths, num failures = %d, %.1f%% of allowed paths used." %
             #            (pathSet.num_failures, 100 * pathFraction))
 
             obj_val = objective.fn()  # ensure objective.probs initialized
-            bSufficient = fwdsim.bulk_test_if_paths_are_sufficient(layout, objective.probs,
-                                                                   objective.resource_alloc, verbosity=0)
+            bSufficient = fwdsim.bulk_test_if_paths_are_sufficient(layout, objective.probs, verbosity=0)
             printer.log("Looking for initial model where paths are sufficient: |paramvec| = %g, obj=%g (ok=%s)"
                         % (_np.linalg.norm(mdl.to_vector()), obj_val, str(bSufficient)))
     else:
@@ -975,9 +972,9 @@ def _do_term_runopt(objective, optimizer, printer):
         else:
             # Try to get more paths if we can and use those regardless of whether there are failures
             #MEM debug_prof.print_memory("do_term_runopt3", True)
-            pathSet = mdl.sim.find_minimal_paths_set(layout, resource_alloc)  # `mdl.sim` instead of `fwdsim` to
+            pathSet = mdl.sim.find_minimal_paths_set(layout)  # `mdl.sim` instead of `fwdsim` to
             #MEM debug_prof.print_memory("do_term_runopt4", True)
-            mdl.sim.select_paths_set(layout, pathSet, resource_alloc)  # ensure paramvec is updated
+            mdl.sim.select_paths_set(layout, pathSet)  # ensure paramvec is updated
             #MEM debug_prof.print_memory("do_term_runopt5", True)
             pathFraction = pathSet.allowed_path_fraction
             optimizer.init_munu = opt_result.optimizer_specific_qtys['mu'], opt_result.optimizer_specific_qtys['nu']

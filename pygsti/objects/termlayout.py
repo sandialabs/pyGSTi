@@ -154,27 +154,18 @@ class TermCOPALayout(_DistributableCOPALayout):
                          num_param_dimension_processors, param_dimensions,
                          param_dimension_blk_sizes, resource_alloc, verbosity)
 
-    def pathset(self, comm=None):
+    @property
+    def pathset(self):
         """
         This layout's current path set.
-
-        Parameters
-        ----------
-        layout : TermCOPALayout
-            The layout specifiying the quantities (circuit outcome probabilities) to be
-            computed, and related information.
-
-        comm : mpi4py.MPI.Comm, optional
-            The comm used for distributing this layout among multiple processors.
 
         Returns
         -------
         TermPathSet or None
         """
         from .termforwardsim import TermPathSet as _TermPathSet
-        myAtomIndices, atomOwners, mySubComm = self.distribute(comm)
-        local_atom_pathsets = [self.atoms[i].pathset for i in myAtomIndices]
+        local_atom_pathsets = [atom.pathset for atom in self.atoms]
         if None in local_atom_pathsets:  # None signifies that we're not using path-sets (not "pruned" term-fwdsim mode)
             return None  # None behaves a bit like NaN - if there's a None, just return None.
         else:
-            return _TermPathSet(local_atom_pathsets, comm)
+            return _TermPathSet(local_atom_pathsets, self.resource_alloc().comm)

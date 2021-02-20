@@ -4589,8 +4589,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             self._clip_probs()  # clips self.probs in place w/shared mem sync
 
             if oob_check:  # Only used for termgap cases
-                if not self.model.sim.bulk_test_if_paths_are_sufficient(self.layout, self.probs,
-                                                                        self.resource_alloc, verbosity=1):
+                if not self.model.sim.bulk_test_if_paths_are_sufficient(self.layout, self.probs, verbosity=1):
                     raise ValueError("Out of bounds!")  # signals LM optimizer
 
             if shared_mem_leader:
