@@ -284,7 +284,7 @@ class CustomLMOptimizer(Optimizer):
         if objective.resource_alloc.comm is not None:
             comm = objective.resource_alloc.comm
             v_cmp = comm.bcast(objective.model.to_vector() if (comm.Get_rank() == 0) else None, root=0)
-            v_matches_x = _np.isclose(_np.linalg.norm(objective.model.to_vector() - opt_x), 0.0)
+            v_matches_x = _np.allclose(objective.model.to_vector(), opt_x)
             same_as_root = _np.isclose(_np.linalg.norm(objective.model.to_vector() - v_cmp), 0.0)
             if not (v_matches_x and same_as_root):
                 raise ValueError("Rank %d CUSTOMLM ERROR: END model vector-matches-x=%s and vector-is-same-as-root=%s"
@@ -633,7 +633,10 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                     dqc.scatter_jtj(None, Jac_V)
                     global_Jac_s2 = comm.bcast(None, root=0)
 
-                assert(min(global_Jac_s2) > -1e-6)
+                #print("Rank %d: min s2 = %g" % (comm.rank, min(global_Jac_s2)))
+                #if min(global_Jac_s2) < -1e-4 and (comm is None or comm.rank == 0):
+                #    print("WARNING: min Jac s^2 = %g (max = %g)" % (min(global_Jac_s2), max(global_Jac_s2)))
+                assert(min(global_Jac_s2) / abs(max(global_Jac_s2)) > -1e-6), "JTJ should be positive!"
                 global_Jac_s = _np.sqrt(_np.clip(global_Jac_s2, 1e-12, None))  # eigvals of JTJ must be >= 0
                 global_Jac_VT_mJTf = dqc.global_svd_dot(Jac_V, minus_JTf)  # = dot(Jac_V.T, minus_JTf)
 
@@ -820,7 +823,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                             for i, norm_dx in enumerate(norm_dx_lst):
                                 if norm_dx > max_norm_dx:
                                     dx_lst[i] *= _np.sqrt(max_norm_dx / norm_dx)
-                                    new_x_lst[i] = x + dx_lst[i]
+                                    new_x_lst[i][:] = x + dx_lst[i]
                                     norm_dx_lst[i] = dqc.norm2_x(dx_lst[i])
 
                     printer.log("  - Inner Loop: mu=%g, norm_dx=%g" % (mu, norm_dx), 2)
@@ -843,17 +846,37 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                         msg = "(near-)singular linear system"; break
 
                     if oob_check_interval > 0 and oob_check_mode == 0:
-                        assert(damping_mode != 'adaptive'), "Cannot use adaptive mode 0 with OOB support yet"
                         if k % oob_check_interval == 0:
                             #Check to see if objective function is out of bounds
-                            try:
+
+                            in_bounds = []
+                            if damping_mode == 'adaptive':
+                                new_f_lst = []
+                                for new_x, global_new_x in zip(new_x_lst, global_new_x_lst):
+                                    dqc.allgather_x(new_x, global_new_x)
+                                    try:
+                                        new_f = obj_fn(global_new_x, oob_check=True)
+                                    except ValueError:  # Use this to mean - "not allowed, but don't stop"
+                                        in_bounds.append(False)
+                                        new_f_lst.append(None)  # marks OOB attempts that shouldn't be considered
+                                    else:  # no exception raised
+                                        in_bounds.append(True)
+                                        new_f_lst.append(new_f.copy())
+                            else:
                                 #print("DB: Trying |x| = ", _np.linalg.norm(new_x), " |x|^2=", _np.dot(new_x,new_x))
                                 # MEM if profiler: profiler.memory_check("custom_leastsq: before oob_check obj_fn")
                                 dqc.allgather_x(new_x, global_new_x)
-                                new_f = obj_fn(global_new_x, oob_check=True)
+                                try:
+                                    new_f = obj_fn(global_new_x, oob_check=True)
+                                except ValueError:  # Use this to mean - "not allowed, but don't stop"
+                                    in_bounds.append(False)
+                                else:
+                                    in_bounds.append(True)
+
+                            if any(in_bounds):  # In adaptive mode, proceed if *any* cases are in-bounds
                                 new_x_is_allowed = True
                                 new_x_is_known_inbounds = True
-                            except ValueError:  # Use this to mean - "not allowed, but don't stop"
+                            else:
                                 MIN_STOP_ITER = 1  # the minimum iteration where an OOB objective stops the optimization
                                 if oob_action == "reject" or k < MIN_STOP_ITER:
                                     new_x_is_allowed = False  # (and also not in bounds)
@@ -872,8 +895,16 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                                 else:
                                     raise ValueError("Invalid `oob_action`: '%s'" % oob_action)
                         else:  # don't check this time
-                            dqc.allgather_x(new_x, global_new_x)
-                            new_f = obj_fn(global_new_x, oob_check=False)
+
+                            if damping_mode == 'adaptive':
+                                new_f_lst = []
+                                for new_x, global_new_x in zip(new_x_lst, global_new_x_lst):
+                                    dqc.allgather_x(new_x, global_new_x)
+                                    new_f_lst.append(obj_fn(global_new_x).copy())
+                            else:
+                                dqc.allgather_x(new_x, global_new_x)
+                                new_f = obj_fn(global_new_x, oob_check=False)
+
                             new_x_is_allowed = True
                             new_x_is_known_inbounds = False
                     else:
@@ -894,7 +925,8 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
 
                         # MEM if profiler: profiler.memory_check("custom_leastsq: after obj_fn")
                         if damping_mode == 'adaptive':
-                            norm_new_f_lst = [dqc.norm2_f(new_f) for new_f in new_f_lst]
+                            norm_new_f_lst = [dqc.norm2_f(new_f) if (new_f is not None) else 1e100
+                                              for new_f in new_f_lst]  # 1e100 so we don't choose OOB adaptive cases
                             if any([not _np.isfinite(norm_new_f) for norm_new_f in norm_new_f_lst]):  # avoid inf loop
                                 msg = "Infinite norm of objective function!"; break
 
@@ -912,8 +944,9 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                             dx = dx_lst[iMin]
                             if iMin == 0: spow = min(1.0, spow + 0.1)
                             elif iMin == 2: spow = max(-1.0, spow - 0.1)
-                            printer.log("ADAPTIVE damping => i=%d b/c fs=%s gains=%s => spow=%g" % (
-                                iMin, str(norm_new_f_lst), str(gain_ratio_lst), spow))
+                            printer.log("ADAPTIVE damping => i=%d b/c fs=[%s] gains=[%s] => spow=%g" % (
+                                iMin, ", ".join(["%.3g" % v for v in norm_new_f_lst]),
+                                ", ".join(["%.3g" % v for v in gain_ratio_lst]), spow))
 
                         else:
                             norm_new_f = dqc.norm2_f(new_f)  # _np.linalg.norm(new_f)**2
