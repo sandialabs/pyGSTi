@@ -2028,6 +2028,7 @@ def _compute_wildcard_budget(mdc_store, parameters, badfit_options, verbosity):
                     printer.log(" - Skipping trialing reducing element %.3g below %.3g, as it is less than %.3g" %
                                 (w_ind, w_ele, negligable_budget))
             active_constraints_list.append(active_constraints)
+        budget.from_vector(wvec)
 
         # Note: active_constraints_list is typically stored in parameters['unmodeled_error active constraints']
         # of the relevant Estimate object.
