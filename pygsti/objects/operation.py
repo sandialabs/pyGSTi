@@ -48,6 +48,7 @@ from .opcalc import compact_deriv as _compact_deriv, \
 
 TOL = 1e-12
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
+MAX_EXPONENT = _np.log(_np.finfo('d').max) - 10.0  # so that exp(.) doesn't overflow
 
 
 def optimize_operation(op_to_optimize, target_op):
@@ -3991,7 +3992,8 @@ class LindbladOp(LinearOperator, _ErrorGeneratorContainer):
         #egttm = self.errorgen.total_term_magnitude
         #print("  DB: exp(", egttm, ") = ",_np.exp(egttm))
         #return _np.exp(egttm)
-        return _np.exp(self.errorgen.total_term_magnitude)
+        return _np.exp(min(self.errorgen.total_term_magnitude, MAX_EXPONENT))
+        #return _np.exp(self.errorgen.total_term_magnitude)  # overflows sometimes
 
     @property
     def total_term_magnitude_deriv(self):
