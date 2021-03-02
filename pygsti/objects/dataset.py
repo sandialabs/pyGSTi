@@ -1336,9 +1336,12 @@ class DataSet(object):
         def compute_tuned_expected_llr(cur_outcomes):
             contribs = []  # LLR_expectation = 0.0
             for cnt in cur_outcomes.values():
-                if cnt >= 3: contribs.append(1)  # LLR_expectation += 1
-                elif cnt == 2: contribs.append(0.6)  # LLR_expectation += 0.6 #1.05
-                elif cnt == 1: contribs.append(2.4)  # LLR_expectation += 2.4 #1.1
+                if cnt >= 6: contribs.append(1)  # LLR_expectation += 1
+                elif cnt == 5: contribs.append(1.1)
+                elif cnt == 4: contribs.append(1.2)
+                elif cnt == 3: contribs.append(0.8)
+                elif cnt == 2: contribs.append(0.65)  # LLR_expectation += 0.6 #1.05
+                elif cnt == 1: contribs.append(2.5)  # LLR_expectation += 2.4 #1.1
                 elif cnt == 0: contribs.append(0)  # LLR_expectation += 0.0 #0.18
             LLR_expectation = sum(contribs)
             nZeros = Nout - len(cur_outcomes)  # number of (implied) zero-counts
