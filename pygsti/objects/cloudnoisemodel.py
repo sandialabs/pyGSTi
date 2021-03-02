@@ -940,8 +940,13 @@ def _get_lindblad_factory(simulator, parameterization, errcomp_type, sparse_lind
                 if parameterization == "CPTP": p = "GLND"
                 elif "S" in parameterization: p = parameterization.replace("S", "s")
                 elif "D" in parameterization: p = parameterization.replace("D", "d")
-            _, evotype, nonham_mode, param_mode = _op.LindbladOp.decomp_paramtype(p)
-            return _op.LindbladErrorgen.from_error_generator(error_gen, proj_basis, proj_basis,
+            bTyp, evotype, nonham_mode, param_mode = _op.LindbladOp.decomp_paramtype(p)
+
+            #Same logic as in LindbladOp.from_operation_obj -- TODO consolidate?
+            ham_basis = proj_basis if (("H" == bTyp) or ("H+" in bTyp) or bTyp in ("CPTP", "GLND")) else None
+            nonham_basis = None if bTyp == "H" else proj_basis
+
+            return _op.LindbladErrorgen.from_error_generator(error_gen, ham_basis, nonham_basis,
                                                              param_mode, nonham_mode, mx_basis,
                                                              truncate=True, evotype=evotype)
         return _f
