@@ -3741,7 +3741,8 @@ class Circuit(object):
     def convert_to_openqasm(self, num_qubits=None,
                             gatename_conversion=None, qubit_conversion=None,
                             block_between_layers=True,
-                            block_between_gates=False):  # TODO
+                            block_between_gates=False,
+                            gateargs_map=None):  # TODO
         """
         Converts this circuit to an openqasm string.
 
@@ -3778,7 +3779,7 @@ class Circuit(object):
 
         # create standard conversations.
         if gatename_conversion is None:
-            gatename_conversion = _itgs.standard_gatenames_openqasm_conversions()
+            gatename_conversion, gateargs_map = _itgs.standard_gatenames_openqasm_conversions()
         if qubit_conversion is None:
             # To tell us whether we have found a standard qubit labelling type.
             standardtype = False
@@ -3796,6 +3797,9 @@ class Circuit(object):
 
         if num_qubits is None:
             num_qubits = len(self.line_labels)
+
+        # if gateargs_map is None:
+        #     gateargs_map = {}
 
         #Currently only using 'Iz' as valid intermediate measurement ('IM') label.
         #Todo:  Expand to all intermediate measurements.
@@ -3817,6 +3821,9 @@ class Circuit(object):
 
         depth = self.num_layers
 
+        def trivial_arg_map(gatearg):
+            return ''
+
         # Go through the layers, and add the openqasm for each layer in turn.
         for l in range(depth):
 
@@ -3832,7 +3839,8 @@ class Circuit(object):
 
                 # Find the openqasm for the gate.
                 if gate.name.__str__() != 'Iz':
-                    openqasm_for_gate = gatename_conversion[gate.name]
+                    gatearg_str = gateargs_map.get(gate.name, trivial_arg_map)(gate.args)
+                    openqasm_for_gate = gatename_conversion[gate.name] + gatearg_str
 
                     #If gate.qubits is None, gate is assumed to be single-qubit gate
                     #acting in parallel on all qubits.

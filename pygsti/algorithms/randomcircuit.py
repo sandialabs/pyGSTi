@@ -1,5 +1,5 @@
 """
-RB circuit sampling functions
+Random circuit sampling functions.
 """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).

@@ -415,7 +415,6 @@ def standard_gatenames_openqasm_conversions():
     std_gatenames_to_qasm['Gcphase'] = 'cz'
     std_gatenames_to_qasm['Gcnot'] = 'cx'
     std_gatenames_to_qasm['Gswap'] = 'swap'
-
     std_gatenames_to_qasm['Gc0'] = 'u3(0, 0, 0)'  # [0, 0, 0] * pi/2 (thi is Gi)
     std_gatenames_to_qasm['Gc1'] = 'u3(1.570796326794897, 0, 1.570796326794897)'  # [1, 0, 1] * pi/2
     std_gatenames_to_qasm['Gc2'] = 'u3(1.570796326794897, 1.570796326794897, 3.141592653589793)'  # [1, 1, 2] * pi/2
@@ -444,7 +443,17 @@ def standard_gatenames_openqasm_conversions():
     std_gatenames_to_qasm['Gc22'] = 'u3(1.570796326794897, 1.570796326794897, 1.570796326794897)'  # [1, 1, 1] * pi/2
     std_gatenames_to_qasm['Gc23'] = 'u3(0, 0, 4.71238898038469)'  # [0, 0, 3] * pi/2 (this is Gzmpi2 / Gpdag)
 
-    return std_gatenames_to_qasm
+    std_gatenames_to_qasm['Gzr'] = 'u3'
+    std_gatenames_to_qasm['Gz'] = 'u3'
+
+    def Gz_theta_map(gatearg):
+        return '(0, 0, ' + gatearg[0] + ')'
+
+    std_gatenames_to_argmap = {}
+    std_gatenames_to_argmap['Gzr'] = Gz_theta_map
+    std_gatenames_to_argmap['Gz'] = Gz_theta_map
+
+    return std_gatenames_to_qasm, std_gatenames_to_argmap
 
 
 def qasm_u3(theta, phi, lamb, output='unitary'):
