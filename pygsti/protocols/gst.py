@@ -505,7 +505,7 @@ class GSTBadFitOptions(object):
                  wildcard_budget_includes_spam=True,
                  wildcard_L1_weights=None, wildcard_primitive_op_labels=None,
                  wildcard_initial_budget=None, wildcard_methods=('neldermead',),
-                 wildcard_inadmissable_action='raise'):
+                 wildcard_inadmissable_action='print'):
         valid_actions = ('wildcard', 'Robust+', 'Robust', 'robust+', 'robust', 'do nothing')
         if not all([(action in valid_actions) for action in actions]):
             raise ValueError("Invalid action in %s! Allowed actions are %s" % (str(actions), str(valid_actions)))
