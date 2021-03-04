@@ -227,7 +227,7 @@ class WildcardBudget(object):
 
         return
 
-    def update_probs(self, probs_in, probs_out, freqs, layout, precomp=None):
+    def update_probs(self, probs_in, probs_out, freqs, layout, precomp=None, return_deriv=False):
         """
         Updates `probs_in` to `probs_out` by applying this wildcard budget.
 
@@ -286,9 +286,9 @@ class WildcardBudget(object):
         B_precomp = _np.logical_and(probs_in < freqs - base_tol, freqs > 0)
         C_precomp = _np.logical_and(freqs - base_tol <= probs_in, probs_in <= freqs + base_tol)  # freqs == probs
         D_precomp = _np.logical_and(~C_precomp, freqs == 0)  # probs_in != freqs and freqs == 0
+        p_deriv = _np.empty(len(tvd_precomp), 'd')
 
         for i, (circ, W) in enumerate(zip(circuits, circuit_budgets)):
-            debug=False  #DEBUG -- REMOVE later?
             elInds = layout.indices_for_index(i)
             fvec = freqs[elInds]
             qvec = probs_in[elInds]
@@ -354,16 +354,8 @@ class WildcardBudget(object):
             for j in iB:
                 ratios[j] = {'beta': ratio_vec[j],
                              'alpha': None if sum_fA == 0.0 else (1.0 - ratio_vec[j] * sum_fB - sum_qC) / sum_fA,
-                             'typ': 'B'} # alpha_fn
+                             'typ': 'B'}  # alpha_fn
 
-            if debug:
-                print("A = ",A)
-                print("B = ",B)
-                print("C = ",C)
-                print("D = ",D)
-                print("qvec = ",qvec)
-                print("fvec = ",fvec)
-                print("Ratios = ",ratios)
             while len(ratios) > 0:
                 # find best next element
 
@@ -377,7 +369,6 @@ class WildcardBudget(object):
                 best_dct = ratios[j]
                 alpha_break = best_dct['alpha'] if (best_dct['alpha'] is not None) else 1.0
                 beta_break = best_dct['beta'] if (best_dct['beta'] is not None) else 1.0
-                if debug: print("Selected: ",j,best_dct)
 
                 if sum_fA == 0:
                     pushedSD = 1.0 - beta_break * sum_fB - sum_qC  # just used for TVD calc below
@@ -387,7 +378,6 @@ class WildcardBudget(object):
                 TVD_at_breakpt = 0.5 * (sum_qA - alpha_break * sum_fA
                                         + beta_break * sum_fB - sum_qB
                                         + sum_qD - pushedSD)  # compute_tvd
-                if debug: print("TVD: ", TVD_at_breakpt, "  pushedSD=",pushedSD)
 
                 if TVD_at_breakpt <= W + tol: break  # exit loop
 
@@ -403,11 +393,10 @@ class WildcardBudget(object):
                 for dct in ratios.values():
                     if dct['typ'] == 'A':
                         dct['beta'] = None if sum_fB == 0.0 else (1.0 - dct['alpha'] * sum_fA - sum_qC) / sum_fB
-                    else: # dct['typ'] == 'B':
+                    else:  # dct['typ'] == 'B':
                         dct['alpha'] = None if sum_fA == 0.0 else (1.0 - dct['beta'] * sum_fB - sum_qC) / sum_fA
-                if debug: print("Refreshed: ",ratios)
 
-            #OLD method, which doesn't always order indices correctly
+            #OLD method, which doesn't always order indices correctly (REMOVE)
             ## remaining_indices = list(range(len(ratio_vec)))
             #sorted_indices_and_ratios = sorted(
             #    [(kx, rx) for kx, rx in enumerate(ratio_vec)], key=lambda x: abs(1.0 - x[1]))
@@ -421,7 +410,7 @@ class WildcardBudget(object):
             #        alpha_break = ratio
             #        beta_break = 0 if sum_fB == 0.0 else (1.0 - alpha_break * sum_fA - sum_qC) / sum_fB  # beta_fn
             #
-            #        TVD_at_breakpt = 0.5 * (sum_qA - alpha_break * sum_fA + beta_break * sum_fB - sum_qB)  # compute_tvd
+            #        TVD_at_breakpt = 0.5 * (sum_qA - alpha_break * sum_fA + beta_break * sum_fB - sum_qB)  #compute_tvd
             #        #print("A TVD at ",alpha_break,beta_break,"=",TVD_at_breakpt, "(ratio = ",ratio,")")
             #        if TVD_at_breakpt <= W + tol: break  # exit loop
             #
@@ -462,38 +451,26 @@ class WildcardBudget(object):
 
             #Now A,B,C are fixed to what they need to be for our given W
             # test if len(A) > 0, make tol here *smaller* than that assigned to zero freqs above
-
-            #Review of the math in general - but we start supposing pushedSD=0 and only add it at the end... REMOVE?
-            # want TVD == W so 2*W = (sum_qA - alpha * sum_fA) + (beta * sum_fB - sum_qB) + (sum_qD - pushedSD)
-            #  and contrain:  alpha * sum_fA + beta * sum_fB + sum_qC + pushedSD == 1.0
-            # if sum_fA > 0 and sum_fB > 0
-            #   beta = (1.0 - alpha * sum_fA - sum_qC - pushedSD) / sum_fB
-            #   alpha * sum_fA = sum_qA + (1.0 - alpha * sum_fA - sum_qC - pushedSD) - sum_qB + (sum_qD - pushedSD) - 2W
-            #   2 * alpha * sum_fA = sum_qA + (1.0 - sum_qC - pushedSD) - sum_qB + (sum_qD - pushedSD) - 2W
-            #   alpha = (sum_qA + (1.0 - sum_qC - pushedSD) - sum_qB + (sum_qD - pushedSD) - 2W) / (2 * sum_fA)
-            # elif sum_fA > 0 and sum_fB == 0
-            #   beta irrelevant
-            #   alpha * sum_fA = sum_qA - sum_qB + sum_qD - pushedSD - 2W
-            #   alpha = (sum_qA - sum_qB + sum_qD - pushedSD - 2W) / sum_fA
-            # elif sum_fA == 0 and sum_fB > 0
-            #   alpha irrelevant
-            #   -beta * sum_fB = sum_qA  - sum_qB + (sum_qD - pushedSD) - 2W
-            #   beta = -(sum_qA  - sum_qB + sum_qD - pushedSD - 2W) / sum_fB
-            # else (sum_fA == 0 and sum_fB == 0)
-            #  alpha and beta irrelevant
-            #  2*W = (sum_qA - sum_qB) + (sum_qD - pushedSD)
-
             if sum_fA > MIN_FREQ_OVER_2:
                 alpha = (sum_qA - sum_qB + sum_qD - 2 * W) / sum_fA if sum_fB == 0 else \
                     (sum_qA - sum_qB + sum_qD + 1.0 - sum_qC - 2 * W) / (2 * sum_fA)  # compute_alpha
                 beta = _np.nan if sum_fB == 0 else (1.0 - alpha * sum_fA - sum_qC) / sum_fB  # beta_fn
                 pushedSD = 0.0  # assume initially that we don't need to push any TVD into the "D" set
+
+                dalpha_dW = -2 / sum_fA if sum_fB == 0 else -1 / sum_fA
+                dbeta_dW = 0.0 if sum_fB == 0 else (- dalpha_dW * sum_fA) / sum_fB
+                dpushedSD_dW = 0.0
             else:  # fall back to this when len(A) == 0
                 beta = -(sum_qA - sum_qB + sum_qD + sum_qC - 1 - 2 * W) / (2 * sum_fB) if sum_fA == 0 else \
-                    -(sum_qA - sum_qB + sum_qD - 1.0 + sum_qC - 2 * W) / (2 * sum_fB)  # compute_beta (assumes pushedSD can be >0)
+                    -(sum_qA - sum_qB + sum_qD - 1.0 + sum_qC - 2 * W) / (2 * sum_fB)
+                # compute_beta (assumes pushedSD can be >0)
                 #beta = -(sum_qA - sum_qB + sum_qD - 2 * W) / sum_fB  # assumes pushedSD == 0
                 alpha = 0.0  # doesn't matter OLD: _alpha_fn(beta, A, B, C, qvec, fvec)
                 pushedSD = 1 - beta * sum_fB - sum_qC
+
+                dalpha_dW = 0.0
+                dbeta_dW = 2 / sum_fB if sum_fA == 0 else 1 / sum_fB
+                dpushedSD_dW = -dbeta_dW * sum_fB
 
             #compute_pvec
             pvec = fvec.copy()
@@ -503,28 +480,27 @@ class WildcardBudget(object):
             #indices_moved_to_C = [x[0] for x in sorted_indices_and_ratios[0:nMovedToC]]
             pvec[indices_moved_to_C] = qvec[indices_moved_to_C]
 
-            #REMOVE:
-            ## push any "overshoot TVD" into set D
-            #overA = [i for i in A.nonzero()[0] if pvec[i] > qvec[i]]
-            #overB = [i for i in B.nonzero()[0] if pvec[i] < qvec[i]]
-            #pushedSD = sum(pvec[overA] - qvec[overA])
-            #pushedSD += sum(qvec[overB] - pvec[overB])
-            #pvec[overA] = qvec[overA]
-            #pvec[overB] = qvec[overB]
-
             pvec[D] = pushedSD * qvec[D] / sum(qvec[D])
             probs_out[elInds] = pvec  # _tools.matrixtools._fas(probs_out, (elInds,), pvec)
 
-            #DEBUG checks
-            #if W == 0 and _np.linalg.norm(qvec-pvec) > 1e-7:
-            #    import bpdb; bpdb.set_trace()
-            #    print("problem: ",i, _np.linalg.norm(qvec-pvec), circ, W)
-            #check_pvec = update_circuit_probs(qvec.copy(), fvec.copy(), W)
-            #if _np.linalg.norm(check_pvec - pvec) > 1e-6:
-            #    import bpdb; bpdb.set_trace()
-            #    print("PROB")
+            assert(W > 0 or _np.linalg.norm(qvec - pvec) < 1e-6), "Probability shouldn't be updated when W=0!"
 
-        return
+            #Check with other version (for debugging)
+            #check_pvec = update_circuit_probs(qvec.copy(), fvec.copy(), W)
+            #assert(_np.linalg.norm(check_pvec - pvec) < 1e-6)
+
+            if return_deriv:
+                p_deriv_wrt_W = _np.zeros(len(pvec), 'd')
+                p_deriv_wrt_W[A] = dalpha_dW * fvec[A]
+                p_deriv_wrt_W[B] = dbeta_dW * fvec[B]
+                p_deriv_wrt_W[indices_moved_to_C] = 0.0
+                p_deriv_wrt_W[D] = dpushedSD_dW * qvec[D] / sum(qvec[D])
+                p_deriv[elInds] = p_deriv_wrt_W
+
+        if return_deriv:
+            return p_deriv
+        else:
+            return None
 
 
 class PrimitiveOpsWildcardBudget(WildcardBudget):
@@ -854,7 +830,7 @@ def _get_nextalpha_breakpoint(remaining_ratios):
     #            # push sum_fA right to sum_qA and dump the rest into pushedSD
     #            alpha_break = sum(qvec[a]) / sum(fvec[a])
     #            pushedSD = 1.0 - (alpha_break * sum(fvec[a]) + beta_break * sum(fvec[b]) + sum(qvec[c]))
-    #        
+    #
     #        #print("beta-break = %g -> alpha-break = %g" % (beta_break,alpha_break))
     #    else:  # need to push set D to compensate
     #        alpha_break = 0.0  # value doesn't matter
@@ -954,7 +930,10 @@ def update_circuit_probs(probs, freqs, circuit_budget):
                 dct['beta'] = _beta_fn(dct['alpha'], A, B, C, qvec, fvec, None)
             else:  # dct['typ'] == 'B':
                 dct['alpha'] = _alpha_fn(dct['beta'], A, B, C, qvec, fvec, None)
+    else:
+        assert(False), "TVD should eventually reach zero: qvec=%s, fvec=%s, W=%g" % (str(qvec), str(fvec), W)
 
+    #OLD REMOVE
     #while len(remaining_indices) > 0:
     #    assert(len(A) > 0 or len(B) > 0)  # then we can step `alpha` up and preserve the overall probability:
     #    j, alpha0, beta0, pushedSD0, AorBorC = _get_minalpha_breakpoint(remaining_indices, A, B, C,
