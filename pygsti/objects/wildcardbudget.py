@@ -272,11 +272,11 @@ class WildcardBudget(object):
         # so set freqs very small so ratio is large (and probably not chosen)
         MIN_FREQ = 1e-8
         MIN_FREQ_OVER_2 = MIN_FREQ / 2
-        zero_inds = _np.where(freqs == 0.0)[0]
-        if len(zero_inds) > 0:
-            freqs = freqs.copy()  # copy for now instead of doing something more clever
-            freqs[zero_inds] = MIN_FREQ
-            #freqs[zero_inds] = probs_in[zero_inds]  # OLD (use this if f_k=0 terms don't enter likelihood)
+        #zero_inds = _np.where(freqs == 0.0)[0]
+        #if len(zero_inds) > 0:
+        #    freqs = freqs.copy()  # copy for now instead of doing something more clever
+        #    freqs[zero_inds] = MIN_FREQ
+        #    #freqs[zero_inds] = probs_in[zero_inds]  # OLD (use this if f_k=0 terms don't enter likelihood)
 
         base_tol = MIN_FREQ  # for checking equality
         circuits = layout.circuits
@@ -288,6 +288,7 @@ class WildcardBudget(object):
         D_precomp = _np.logical_and(~C_precomp, freqs == 0)  # probs_in != freqs and freqs == 0
 
         for i, (circ, W) in enumerate(zip(circuits, circuit_budgets)):
+            debug=False  #DEBUG -- REMOVE later?
             elInds = layout.indices_for_index(i)
             fvec = freqs[elInds]
             qvec = probs_in[elInds]
@@ -335,66 +336,162 @@ class WildcardBudget(object):
                 C = (qvec == fvec); sum_qC = sum(qvec[C])
                 D = _np.logical_and(qvec != fvec, fvec == 0); sum_qD = sum(qvec[D])
 
-            #Note: need special case for fvec == 0
-            ratio_vec = qvec / fvec
+            AB = _np.logical_or(A, B)  # the elements where we care about the ratio
+            ratio_vec = _np.empty(len(qvec), 'd')
+            ratio_vec[AB] = qvec[AB] / fvec[AB]
             ratio_vec[C] = _np.inf  # below we work in order of ratios distance
             ratio_vec[D] = _np.inf  # from 1.0 - and we don't want exactly-1.0 ratios.
 
-            # remaining_indices = list(range(len(ratio_vec)))
-            sorted_indices_and_ratios = sorted(
-                [(kx, rx) for kx, rx in enumerate(ratio_vec)], key=lambda x: abs(1.0 - x[1]))
-            nMovedToC = 0
+            iA = _np.nonzero(A)[0]
+            iB = _np.nonzero(B)[0]
+            indices_moved_to_C = []
 
-            #print("Circuit ",i, " indices_and_ratios = ",sorted_indices_and_ratios)
+            ratios = {}
+            for j in iA:
+                ratios[j] = {'alpha': ratio_vec[j],
+                             'beta': None if sum_fB == 0.0 else (1.0 - ratio_vec[j] * sum_fA - sum_qC) / sum_fB,
+                             'typ': 'A'}  # beta_fn
+            for j in iB:
+                ratios[j] = {'beta': ratio_vec[j],
+                             'alpha': None if sum_fA == 0.0 else (1.0 - ratio_vec[j] * sum_fB - sum_qC) / sum_fA,
+                             'typ': 'B'} # alpha_fn
 
-            for j, ratio in sorted_indices_and_ratios:
+            if debug:
+                print("A = ",A)
+                print("B = ",B)
+                print("C = ",C)
+                print("D = ",D)
+                print("qvec = ",qvec)
+                print("fvec = ",fvec)
+                print("Ratios = ",ratios)
+            while len(ratios) > 0:
+                # find best next element
 
-                if ratio > 1.0:  # j in A
-                    alpha_break = ratio
-                    beta_break = 0 if sum_fB == 0.0 else (1.0 - alpha_break * sum_fA - sum_qC) / sum_fB  # beta_fn
+                j = None; best_test = 1e10  # sentinel
+                for jj, dct in ratios.items():
+                    test = min(dct['alpha'] - 1.0 if (dct['alpha'] is not None) else 1e10,
+                               1.0 - dct['beta'] if (dct['beta'] is not None) else 1e10)
+                    if test < best_test:
+                        best_test, j = test, jj
 
-                    TVD_at_breakpt = 0.5 * (sum_qA - alpha_break * sum_fA + beta_break * sum_fB - sum_qB)  # compute_tvd
-                    #print("A TVD at ",alpha_break,beta_break,"=",TVD_at_breakpt, "(ratio = ",ratio,")")
-                    if TVD_at_breakpt <= W + tol: break  # exit loop
+                best_dct = ratios[j]
+                alpha_break = best_dct['alpha'] if (best_dct['alpha'] is not None) else 1.0
+                beta_break = best_dct['beta'] if (best_dct['beta'] is not None) else 1.0
+                if debug: print("Selected: ",j,best_dct)
 
-                    # move j from A -> C
+                if sum_fA == 0:
+                    pushedSD = 1.0 - beta_break * sum_fB - sum_qC  # just used for TVD calc below
+                else:
+                    pushedSD = 0.0
+
+                TVD_at_breakpt = 0.5 * (sum_qA - alpha_break * sum_fA
+                                        + beta_break * sum_fB - sum_qB
+                                        + sum_qD - pushedSD)  # compute_tvd
+                if debug: print("TVD: ", TVD_at_breakpt, "  pushedSD=",pushedSD)
+
+                if TVD_at_breakpt <= W + tol: break  # exit loop
+
+                # move j from A/B -> C
+                if best_dct['typ'] == 'A':
                     sum_qA -= qvec[j]; sum_qC += qvec[j]; sum_fA -= fvec[j]
-                elif ratio < 1.0:  # j in B
-                    beta_break = ratio
-                    if sum_fA >= 0:
-                        alpha_break = (1.0 - beta_break * sum_fB - sum_qC) / sum_fA  # alpha_fn
-                        pushedSD = 0.0
-                    else:
-                        alpha_break = 0.0
-                        pushedSD = 1.0 - beta_break * sum_fB - sum_qC
-
-                    TVD_at_breakpt = 0.5 * (sum_qA - alpha_break * sum_fA
-                                            + beta_break * sum_fB - sum_qB
-                                            + sum_qD - pushedSD)  # compute_tvd
-                    #print("B TVD at ",alpha_break,beta_break,"=",TVD_at_breakpt, "(ratio = ",ratio,")")
-                    if TVD_at_breakpt <= W + tol: break  # exit loop
-
-                    # move j from B -> C
+                else:
                     sum_qB -= qvec[j]; sum_qC += qvec[j]; sum_fB -= fvec[j]
+                indices_moved_to_C.append(j)
 
-                else:  # j in C
-                    #print("C TVD at ",alpha_break,beta_break,"=",TVD_at_breakpt, "(ratio = ",ratio,")")
-                    pass  # (no movement, nothing happens)
+                #update ratios
+                del ratios[j]
+                for dct in ratios.values():
+                    if dct['typ'] == 'A':
+                        dct['beta'] = None if sum_fB == 0.0 else (1.0 - dct['alpha'] * sum_fA - sum_qC) / sum_fB
+                    else: # dct['typ'] == 'B':
+                        dct['alpha'] = None if sum_fA == 0.0 else (1.0 - dct['beta'] * sum_fB - sum_qC) / sum_fA
+                if debug: print("Refreshed: ",ratios)
 
-                nMovedToC += 1
-            else:
-                assert(False), "TVD should eventually reach zero: qvec=%s, fvec=%s, W=%g" % (str(qvec), str(fvec), W)
+            #OLD method, which doesn't always order indices correctly
+            ## remaining_indices = list(range(len(ratio_vec)))
+            #sorted_indices_and_ratios = sorted(
+            #    [(kx, rx) for kx, rx in enumerate(ratio_vec)], key=lambda x: abs(1.0 - x[1]))
+            #nMovedToC = 0
+            #
+            ##print("Circuit ",i, " indices_and_ratios = ",sorted_indices_and_ratios)
+            #
+            #for j, ratio in sorted_indices_and_ratios:
+            #
+            #    if ratio > 1.0:  # j in A
+            #        alpha_break = ratio
+            #        beta_break = 0 if sum_fB == 0.0 else (1.0 - alpha_break * sum_fA - sum_qC) / sum_fB  # beta_fn
+            #
+            #        TVD_at_breakpt = 0.5 * (sum_qA - alpha_break * sum_fA + beta_break * sum_fB - sum_qB)  # compute_tvd
+            #        #print("A TVD at ",alpha_break,beta_break,"=",TVD_at_breakpt, "(ratio = ",ratio,")")
+            #        if TVD_at_breakpt <= W + tol: break  # exit loop
+            #
+            #        # move j from A -> C
+            #        sum_qA -= qvec[j]; sum_qC += qvec[j]; sum_fA -= fvec[j]
+            #    elif ratio < 1.0:  # j in B
+            #        beta_break = ratio
+            #        if sum_fA > 0:
+            #            alpha_break = (1.0 - beta_break * sum_fB - sum_qC) / sum_fA  # alpha_fn
+            #            if sum_fA * alpha_break <= sum_qA:  # check if alpha_break gets set too large
+            #                pushedSD = 0.0  # ok - alpha_break doesn't push sum_fA beyond its "target", sum_qA
+            #            else:
+            #                # because there must be some weight in set-D (zero-freq but nonzero prob)
+            #                # the alpha as computed above will push sum_fA too much - we instead just
+            #                # push sum_fA right to sum_qA and dump the rest into pushedSD
+            #                alpha_break = sum_qA / sum_fA
+            #                pushedSD = 1.0 - (alpha_break * sum_fA + beta_break * sum_fB + sum_qC)  # for TVD below
+            #        else:
+            #            alpha_break = 0.0
+            #            pushedSD = 1.0 - beta_break * sum_fB - sum_qC  # just used for TVD calc below
+            #
+            #        TVD_at_breakpt = 0.5 * (sum_qA - alpha_break * sum_fA
+            #                                + beta_break * sum_fB - sum_qB
+            #                                + sum_qD - pushedSD)  # compute_tvd
+            #        #print("B TVD at ",alpha_break,beta_break,"=",TVD_at_breakpt, "(ratio = ",ratio,")")
+            #        if TVD_at_breakpt <= W + tol: break  # exit loop
+            #
+            #        # move j from B -> C
+            #        sum_qB -= qvec[j]; sum_qC += qvec[j]; sum_fB -= fvec[j]
+            #
+            #    else:  # j in C
+            #        #print("C TVD at ",alpha_break,beta_break,"=",TVD_at_breakpt, "(ratio = ",ratio,")")
+            #        pass  # (no movement, nothing happens)
+            #
+            #    nMovedToC += 1
+            #else:
+            #    assert(False), "TVD should eventually reach zero: qvec=%s, fvec=%s, W=%g" % (str(qvec), str(fvec), W)
 
             #Now A,B,C are fixed to what they need to be for our given W
             # test if len(A) > 0, make tol here *smaller* than that assigned to zero freqs above
+
+            #Review of the math in general - but we start supposing pushedSD=0 and only add it at the end... REMOVE?
+            # want TVD == W so 2*W = (sum_qA - alpha * sum_fA) + (beta * sum_fB - sum_qB) + (sum_qD - pushedSD)
+            #  and contrain:  alpha * sum_fA + beta * sum_fB + sum_qC + pushedSD == 1.0
+            # if sum_fA > 0 and sum_fB > 0
+            #   beta = (1.0 - alpha * sum_fA - sum_qC - pushedSD) / sum_fB
+            #   alpha * sum_fA = sum_qA + (1.0 - alpha * sum_fA - sum_qC - pushedSD) - sum_qB + (sum_qD - pushedSD) - 2W
+            #   2 * alpha * sum_fA = sum_qA + (1.0 - sum_qC - pushedSD) - sum_qB + (sum_qD - pushedSD) - 2W
+            #   alpha = (sum_qA + (1.0 - sum_qC - pushedSD) - sum_qB + (sum_qD - pushedSD) - 2W) / (2 * sum_fA)
+            # elif sum_fA > 0 and sum_fB == 0
+            #   beta irrelevant
+            #   alpha * sum_fA = sum_qA - sum_qB + sum_qD - pushedSD - 2W
+            #   alpha = (sum_qA - sum_qB + sum_qD - pushedSD - 2W) / sum_fA
+            # elif sum_fA == 0 and sum_fB > 0
+            #   alpha irrelevant
+            #   -beta * sum_fB = sum_qA  - sum_qB + (sum_qD - pushedSD) - 2W
+            #   beta = -(sum_qA  - sum_qB + sum_qD - pushedSD - 2W) / sum_fB
+            # else (sum_fA == 0 and sum_fB == 0)
+            #  alpha and beta irrelevant
+            #  2*W = (sum_qA - sum_qB) + (sum_qD - pushedSD)
+
             if sum_fA > MIN_FREQ_OVER_2:
                 alpha = (sum_qA - sum_qB + sum_qD - 2 * W) / sum_fA if sum_fB == 0 else \
                     (sum_qA - sum_qB + sum_qD + 1.0 - sum_qC - 2 * W) / (2 * sum_fA)  # compute_alpha
                 beta = _np.nan if sum_fB == 0 else (1.0 - alpha * sum_fA - sum_qC) / sum_fB  # beta_fn
-                pushedSD = 0.0
+                pushedSD = 0.0  # assume initially that we don't need to push any TVD into the "D" set
             else:  # fall back to this when len(A) == 0
                 beta = -(sum_qA - sum_qB + sum_qD + sum_qC - 1 - 2 * W) / (2 * sum_fB) if sum_fA == 0 else \
-                    -(sum_qA - sum_qB + sum_qD - 1.0 + sum_qC - 2 * W) / (2 * sum_fB)  # compute_beta
+                    -(sum_qA - sum_qB + sum_qD - 1.0 + sum_qC - 2 * W) / (2 * sum_fB)  # compute_beta (assumes pushedSD can be >0)
+                #beta = -(sum_qA - sum_qB + sum_qD - 2 * W) / sum_fB  # assumes pushedSD == 0
                 alpha = 0.0  # doesn't matter OLD: _alpha_fn(beta, A, B, C, qvec, fvec)
                 pushedSD = 1 - beta * sum_fB - sum_qC
 
@@ -403,10 +500,29 @@ class WildcardBudget(object):
             pvec[A] = alpha * fvec[A]
             pvec[B] = beta * fvec[B]
             pvec[C] = qvec[C]
-            pvec[D] = pushedSD * qvec[D] / sum(qvec[D])
-            indices_moved_to_C = [x[0] for x in sorted_indices_and_ratios[0:nMovedToC]]
+            #indices_moved_to_C = [x[0] for x in sorted_indices_and_ratios[0:nMovedToC]]
             pvec[indices_moved_to_C] = qvec[indices_moved_to_C]
+
+            #REMOVE:
+            ## push any "overshoot TVD" into set D
+            #overA = [i for i in A.nonzero()[0] if pvec[i] > qvec[i]]
+            #overB = [i for i in B.nonzero()[0] if pvec[i] < qvec[i]]
+            #pushedSD = sum(pvec[overA] - qvec[overA])
+            #pushedSD += sum(qvec[overB] - pvec[overB])
+            #pvec[overA] = qvec[overA]
+            #pvec[overB] = qvec[overB]
+
+            pvec[D] = pushedSD * qvec[D] / sum(qvec[D])
             probs_out[elInds] = pvec  # _tools.matrixtools._fas(probs_out, (elInds,), pvec)
+
+            #DEBUG checks
+            #if W == 0 and _np.linalg.norm(qvec-pvec) > 1e-7:
+            #    import bpdb; bpdb.set_trace()
+            #    print("problem: ",i, _np.linalg.norm(qvec-pvec), circ, W)
+            #check_pvec = update_circuit_probs(qvec.copy(), fvec.copy(), W)
+            #if _np.linalg.norm(check_pvec - pvec) > 1e-6:
+            #    import bpdb; bpdb.set_trace()
+            #    print("PROB")
 
         return
 
@@ -680,15 +796,17 @@ def _compute_pvec(alpha, beta, pushedD, a, b, c, d, q, f):
     return p
 
 
-def _alpha_fn(beta, a, b, c, q, f):
+def _alpha_fn(beta, a, b, c, q, f, empty_val=1.0):
     # Note: this function is for use before we shift "D" set of f == 0 probs, and assumes all probs in set D are 0
+    if len(a) == 0: return empty_val
     return (1.0 - beta * sum(f[b]) - sum(q[c])) / sum(f[a])
 
 
-def _beta_fn(alpha, a, b, c, q, f):
+def _beta_fn(alpha, a, b, c, q, f, empty_val=1.0):
     # Note: this function is for use before we shift "D" set of f == 0 probs, and assumes all probs in set D are 0
     # beta * SB = 1 - alpha * SA - qC   => 1 = alpha*SA + beta*SB + qC (probs sum to 1)
     # also though, beta must be > 0 so (alpha*SA + qC) < 1.0
+    if len(b) == 0: return empty_val
     return (1.0 - alpha * sum(f[a]) - sum(q[c])) / sum(f[b])
 
 
@@ -697,30 +815,56 @@ def _pushedD_fn(beta, b, c, q, f):  # The sum of additional TVD that gets "pushe
     return 1 - beta * sum(f[b]) - sum(q[c])
 
 
-def _get_minalpha_breakpoint(remaining_indices, a, b, c, qvec, fvec, ratio_vec):
-    k, r = sorted([(kx, rx) for kx, rx in enumerate(ratio_vec)
-                   if kx in remaining_indices], key=lambda x: abs(1.0 - x[1]))[0]
-    pushedSD = 0.0
+def _get_nextalpha_breakpoint(remaining_ratios):
 
-    if k in a:
-        alpha_break = r
-        beta_break = _beta_fn(alpha_break, a, b, c, qvec, fvec)
-        #print("alpha-break = %g -> beta-break = %g" % (alpha_break,beta_break))
-        AorBorC = "A"
-    elif k in b:
-        beta_break = r
-        if len(a) > 0:
-            alpha_break = _alpha_fn(beta_break, a, b, c, qvec, fvec)
-            #print("beta-break = %g -> alpha-break = %g" % (beta_break,alpha_break))
-        else:  # need to push set D to compensate
-            alpha_break = 0.0  # value doesn't matter
-            pushedSD = _pushedD_fn(beta_break, b, c, qvec, fvec)
-        AorBorC = "B"
-    else:
-        alpha_break = beta_break = 1e100  # sentinel so it gets sorted at end
-        AorBorC = "C"
-    #print("chksum = ", _chk_sum(alpha_break, beta_break))
-    return (k, alpha_break, beta_break, pushedSD, AorBorC)
+    j = None; best_test = 1e10  # sentinel
+    for jj, dct in remaining_ratios.items():
+        test = min(dct['alpha'] - 1.0 if (dct['alpha'] is not None) else 1e10,
+                   1.0 - dct['beta'] if (dct['beta'] is not None) else 1e10)
+        if test < best_test:
+            best_test, j = test, jj
+
+    best_dct = remaining_ratios[j]
+    alpha = best_dct['alpha'] if (best_dct['alpha'] is not None) else 1.0
+    beta = best_dct['beta'] if (best_dct['beta'] is not None) else 1.0
+
+    return j, alpha, beta, best_dct['typ']
+
+#OLD REMOVE
+#def _get_minalpha_breakpoint(remaining_ratios, a, b, c, qvec, fvec, ratio_vec):
+    #k, r = sorted([(kx, rx) for kx, rx in enumerate(ratio_vec)
+    #               if kx in remaining_indices], key=lambda x: abs(1.0 - x[1]))[0]
+    #pushedSD = 0.0
+    #
+    #if k in a:
+    #    alpha_break = r
+    #    beta_break = _beta_fn(alpha_break, a, b, c, qvec, fvec)
+    #    #print("alpha-break = %g -> beta-break = %g" % (alpha_break,beta_break))
+    #    AorBorC = "A"
+    #elif k in b:
+    #    beta_break = r
+    #    if len(a) > 0:
+    #        alpha_break = _alpha_fn(beta_break, a, b, c, qvec, fvec)
+    #
+    #        if sum(fvec[a]) * alpha_break <= sum(qvec[a]):  # check if alpha_break gets set too large
+    #            pushedSD = 0.0  # ok - alpha_break doesn't push sum_fA beyond its "target", sum_qA
+    #        else:
+    #            # because there must be some weight in set-D (zero-freq but nonzero prob)
+    #            # the alpha as computed above will push sum_fA too much - we instead just
+    #            # push sum_fA right to sum_qA and dump the rest into pushedSD
+    #            alpha_break = sum(qvec[a]) / sum(fvec[a])
+    #            pushedSD = 1.0 - (alpha_break * sum(fvec[a]) + beta_break * sum(fvec[b]) + sum(qvec[c]))
+    #        
+    #        #print("beta-break = %g -> alpha-break = %g" % (beta_break,alpha_break))
+    #    else:  # need to push set D to compensate
+    #        alpha_break = 0.0  # value doesn't matter
+    #        pushedSD = _pushedD_fn(beta_break, b, c, qvec, fvec)
+    #    AorBorC = "B"
+    #else:
+    #    alpha_break = beta_break = 1e100  # sentinel so it gets sorted at end
+    #    AorBorC = "C"
+    ##print("chksum = ", _chk_sum(alpha_break, beta_break))
+    #return (k, alpha_break, beta_break, pushedSD, AorBorC)
 
 
 def _chk_sum(alpha, beta, fvec, A, B, C):
@@ -755,7 +899,7 @@ def update_circuit_probs(probs, freqs, circuit_budget):
 
     if debug: print("  Ratio vec = ", ratio_vec)
 
-    remaining_indices = list(range(len(ratio_vec)))
+    #OLD: remaining_indices = list(range(len(ratio_vec)))
 
     # Set A: q > f != 0 alpha > 1.0 => p = alpha*f gets closer to q and p increases => logl increases
     # Set B: q < f  beta < 1.0 => p = beta*f gets closer to q and p decreases => logl decreases
@@ -766,11 +910,24 @@ def update_circuit_probs(probs, freqs, circuit_budget):
     #  stays the same in the latter.  Once set A is exhausted, however, we should increase set D
     #  proportionally balance out movements from set B
 
-    while len(remaining_indices) > 0:
-        assert(len(A) > 0 or len(B) > 0)  # then we can step `alpha` up and preserve the overall probability:
-        j, alpha0, beta0, pushedSD0, AorBorC = _get_minalpha_breakpoint(remaining_indices, A, B, C,
-                                                                        qvec, fvec, ratio_vec)
-        remaining_indices.remove(j)
+    ratios = {}
+    for j in A:
+        ratios[j] = {'alpha': ratio_vec[j],
+                     'beta': _beta_fn(ratio_vec[j], A, B, C, qvec, fvec, None),
+                     'typ': 'A'}
+    for j in B:
+        ratios[j] = {'beta': ratio_vec[j],
+                     'alpha': _alpha_fn(ratio_vec[j], A, B, C, qvec, fvec, None),
+                     'typ': 'B'}
+
+    while len(ratios) > 0:
+        # find best next element
+        j, alpha0, beta0, typ = _get_nextalpha_breakpoint(ratios)
+
+        if len(A) == 0:  # no frequencies left to increase => qvec via alpha, so dump into pushedSD0
+            pushedSD0 = 1.0 - beta0 * sum(fvec[B]) - sum(qvec[C])
+        else:
+            pushedSD0 = 0.0
 
         # will keep getting smaller with each iteration
         TVD_at_breakpt = _compute_tvd(A, B, D, alpha0, beta0, pushedSD0, qvec, fvec)
@@ -778,48 +935,76 @@ def update_circuit_probs(probs, freqs, circuit_budget):
         #the same
 
         if debug: print("break: j=", j, " alpha=", alpha0, " beta=",
-                        beta0, " A?=", AorBorC, " TVD = ", TVD_at_breakpt)
+                        beta0, " typ=", typ, " TVD = ", TVD_at_breakpt)
         if TVD_at_breakpt <= W + tol:
             break  # exit loop
 
-        #Move
-        if AorBorC == "A":
-            if debug:
-                beta_chk1 = _beta_fn(alpha0, A, B, C, qvec, fvec)
+        # move j from A/B -> C
+        if typ == 'A':
             Alst = list(A); del Alst[Alst.index(j)]; A = _np.array(Alst, int)
             Clst = list(C); Clst.append(j); C = _np.array(Clst, int)  # move A -> C
-            if debug:
-                beta_chk2 = _beta_fn(alpha0, A, B, C, qvec, fvec)
-                print("CHKA: ", alpha0, beta0, beta_chk1, beta_chk2)
-
-        elif AorBorC == "B":
-            if debug:
-                alpha_chk1 = _alpha_fn(beta0, A, B, C, qvec, fvec)
+        else:  # typ == 'B'
             Blst = list(B); del Blst[Blst.index(j)]; B = _np.array(Blst, int)
             Clst = list(C); Clst.append(j); C = _np.array(Clst, int)  # move B -> C
-            if debug:
-                alpha_chk2 = _alpha_fn(beta0, A, B, C, qvec, fvec)
-                print("CHKB: ", alpha0, beta0, alpha_chk1, alpha_chk2)
 
-        else:
-            pass
+        #update ratios
+        del ratios[j]
+        for dct in ratios.values():
+            if dct['typ'] == 'A':
+                dct['beta'] = _beta_fn(dct['alpha'], A, B, C, qvec, fvec, None)
+            else:  # dct['typ'] == 'B':
+                dct['alpha'] = _alpha_fn(dct['beta'], A, B, C, qvec, fvec, None)
 
-        if debug: TVD_at_breakpt_chk = _compute_tvd(A, B, D, alpha0, beta0, pushedSD0, qvec, fvec)
-        if debug: print(" --> A=", A, " B=", B, " C=", C, " chk = ", TVD_at_breakpt_chk)
-
-    else:
-        assert(False), "TVD should eventually reach zero: qvec=%s, fvec=%s, W=%g" % (str(qvec), str(fvec), W)
+    #while len(remaining_indices) > 0:
+    #    assert(len(A) > 0 or len(B) > 0)  # then we can step `alpha` up and preserve the overall probability:
+    #    j, alpha0, beta0, pushedSD0, AorBorC = _get_minalpha_breakpoint(remaining_indices, A, B, C,
+    #                                                                    qvec, fvec, ratio_vec)
+    #    remaining_indices.remove(j)
+    #
+    #    # will keep getting smaller with each iteration
+    #    TVD_at_breakpt = _compute_tvd(A, B, D, alpha0, beta0, pushedSD0, qvec, fvec)
+    #    #Note: does't matter if we move j from A or B -> C before calling this, as alpha0 is set so results is
+    #    #the same
+    #
+    #    if debug: print("break: j=", j, " alpha=", alpha0, " beta=",
+    #                    beta0, " A?=", AorBorC, " TVD = ", TVD_at_breakpt)
+    #    if TVD_at_breakpt <= W + tol:
+    #        break  # exit loop
+    #
+    #    #Move
+    #    if AorBorC == "A":
+    #        if debug:
+    #            beta_chk1 = _beta_fn(alpha0, A, B, C, qvec, fvec)
+    #        Alst = list(A); del Alst[Alst.index(j)]; A = _np.array(Alst, int)
+    #        Clst = list(C); Clst.append(j); C = _np.array(Clst, int)  # move A -> C
+    #        if debug:
+    #            beta_chk2 = _beta_fn(alpha0, A, B, C, qvec, fvec)
+    #            print("CHKA: ", alpha0, beta0, beta_chk1, beta_chk2)
+    #
+    #    elif AorBorC == "B":
+    #        if debug:
+    #            alpha_chk1 = _alpha_fn(beta0, A, B, C, qvec, fvec)
+    #        Blst = list(B); del Blst[Blst.index(j)]; B = _np.array(Blst, int)
+    #        Clst = list(C); Clst.append(j); C = _np.array(Clst, int)  # move B -> C
+    #        if debug:
+    #            alpha_chk2 = _alpha_fn(beta0, A, B, C, qvec, fvec)
+    #            print("CHKB: ", alpha0, beta0, alpha_chk1, alpha_chk2)
+    #
+    #    else:
+    #        pass
+    #
+    #    if debug: TVD_at_breakpt_chk = _compute_tvd(A, B, D, alpha0, beta0, pushedSD0, qvec, fvec)
+    #    if debug: print(" --> A=", A, " B=", B, " C=", C, " chk = ", TVD_at_breakpt_chk)
+    #
+    #else:
+    #    assert(False), "TVD should eventually reach zero: qvec=%s, fvec=%s, W=%g" % (str(qvec), str(fvec), W)
 
     #Now A,B,C are fixed to what they need to be for our given W
-    pushedSD = 0.0
     if debug: print("Final A=", A, "B=", B, "C=", C, "W=", W, "qvec=", qvec, 'fvec=', fvec)
     if len(A) > 0:
         alpha = _compute_alpha(A, B, C, D, W, qvec, fvec)
-        beta = _beta_fn(alpha, A, B, C, qvec, fvec)
-        #if debug and len(B) > 0:
-        #    abeta = _compute_beta(A, B, C, W, qvec, fvec)
-        #    aalpha = _alpha_fn(beta, A, B, C, qvec, fvec)
-        #    print("ALT final alpha,beta = ", aalpha, abeta)
+        beta = _beta_fn(alpha, A, B, C, qvec, fvec, _np.nan)
+        pushedSD = 0.0
     else:  # fall back to this when len(A) == 0
         beta = _compute_beta(A, B, C, D, W, qvec, fvec)
         alpha = 0.0  # doesn't matter OLD: _alpha_fn(beta, A, B, C, qvec, fvec)
