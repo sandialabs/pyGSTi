@@ -3739,6 +3739,7 @@ class Circuit(object):
         return quil
 
     def convert_to_openqasm(self, num_qubits=None,
+                            standard_gates_version='u3',
                             gatename_conversion=None, qubit_conversion=None,
                             block_between_layers=True,
                             block_between_gates=False,
@@ -3779,7 +3780,7 @@ class Circuit(object):
 
         # create standard conversations.
         if gatename_conversion is None:
-            gatename_conversion, gateargs_map = _itgs.standard_gatenames_openqasm_conversions()
+            gatename_conversion, gateargs_map = _itgs.standard_gatenames_openqasm_conversions(standard_gates_version)
         if qubit_conversion is None:
             # To tell us whether we have found a standard qubit labelling type.
             standardtype = False
@@ -3839,31 +3840,40 @@ class Circuit(object):
 
                 # Find the openqasm for the gate.
                 if gate.name.__str__() != 'Iz':
-                    gatearg_str = gateargs_map.get(gate.name, trivial_arg_map)(gate.args)
-                    openqasm_for_gate = gatename_conversion[gate.name] + gatearg_str
+                    openqasmlist_for_gate = gatename_conversion[gate.name]  # + gatearg_str
 
-                    #If gate.qubits is None, gate is assumed to be single-qubit gate
-                    #acting in parallel on all qubits.
-                    if gate.qubits is None:
-                        for q in gate_qubits:
-                            openqasm += openqasm_for_gate + ' q[' + str(qubit_conversion[q]) + '];\n'
-                        if block_between_gates:
-                            openqasm_for_gate += 'barrier '
-                            for q in self.line_labels[:-1]:
-                                openqasm_for_gate += 'q[{0}], '.format(str(qubit_conversion[q]))
-                            openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[self.line_labels[-1]]))
-
+                    if isinstance(openqasmlist_for_gate, str):
+                        gatearg_str = gateargs_map.get(gate.name, trivial_arg_map)(gate.args)
+                        openqasmlist_for_gate = [openqasmlist_for_gate + gatearg_str, ]
                     else:
-                        for q in gate_qubits:
-                            openqasm_for_gate += ' q[' + str(qubit_conversion[q]) + ']'
-                            if q != gate_qubits[-1]:
-                                openqasm_for_gate += ', '
-                        openqasm_for_gate += ';\n'
-                        if block_between_gates:
-                            openqasm_for_gate += 'barrier '
-                            for q in self.line_labels[:-1]:
-                                openqasm_for_gate += 'q[{0}], '.format(str(qubit_conversion[q]))
-                            openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[self.line_labels[-1]]))
+                        assert(gate.name not in gateargs_map.keys())
+
+                    openqasm_for_gate = ''
+                    for subopenqasm_for_gate in openqasmlist_for_gate:
+
+                        #If gate.qubits is None, gate is assumed to be single-qubit gate
+                        #acting in parallel on all qubits.
+                        if gate.qubits is None:
+                            for q in gate_qubits:
+                                openqasm_for_gate += subopenqasm_for_gate + ' q[' + str(qubit_conversion[q]) + '];\n'
+                            if block_between_gates:
+                                openqasm_for_gate += 'barrier '
+                                for q in self.line_labels[:-1]:
+                                    openqasm_for_gate += 'q[{0}], '.format(str(qubit_conversion[q]))
+                                openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[self.line_labels[-1]]))
+
+                        else:
+                            openqasm_for_gate += subopenqasm_for_gate
+                            for q in gate_qubits:
+                                openqasm_for_gate += ' q[' + str(qubit_conversion[q]) + ']'
+                                if q != gate_qubits[-1]:
+                                    openqasm_for_gate += ', '
+                            openqasm_for_gate += ';\n'
+                            if block_between_gates:
+                                openqasm_for_gate += 'barrier '
+                                for q in self.line_labels[:-1]:
+                                    openqasm_for_gate += 'q[{0}], '.format(str(qubit_conversion[q]))
+                                openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[self.line_labels[-1]]))
 
                 else:
                     assert len(gate.qubits) == 1

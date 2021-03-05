@@ -23,6 +23,7 @@ from . import ibmq_essex
 from . import ibmq_burlington
 from . import ibmq_london
 from . import ibmq_yorktown
+from . import ibmq_manhattan
 from . import rigetti_agave
 from . import rigetti_aspen4
 from . import rigetti_aspen6
@@ -50,6 +51,7 @@ def _get_dev_specs(devname):
     elif devname == 'rigetti_aspen4': dev = rigetti_aspen4
     elif devname == 'rigetti_aspen6': dev = rigetti_aspen6
     elif devname == 'rigetti_aspen7': dev = rigetti_aspen7
+    elif devname == 'ibmq_manhattan': dev = ibmq_manhattan
     else:
         raise ValueError("This device name is not known!")
 
