@@ -207,11 +207,6 @@ class WildcardBudget(object):
         # p_k doesn't enter the likelihood. ( => treat these components as if f_k == q_k (ratio = 1))
         # BUT they *do* enter in poisson-picture logl...
         # so set freqs very small so ratio is large (and probably not chosen)
-        zero_inds = _np.where(freqs == 0.0)[0]
-        if len(zero_inds) > 0:
-            freqs = freqs.copy()  # copy for now instead of doing something more clever
-            freqs[zero_inds] = 1e-8
-            #freqs[zero_inds] = probs_in[zero_inds]  # OLD (use this if f_k=0 terms don't enter likelihood)
 
         for i, circ in enumerate(layout.circuits):
             elInds = layout.indices_for_index(i)
@@ -227,7 +222,50 @@ class WildcardBudget(object):
 
         return
 
-    def update_probs(self, probs_in, probs_out, freqs, layout, precomp=None, return_deriv=False):
+    def precompute_for_same_probs_freqs(self, probs_in, freqs, layout):
+        tol = 1e-8  # for checking equality - same as in update_probs
+        tvd_precomp = 0.5 * _np.abs(probs_in - freqs)
+        A_precomp = _np.logical_and(probs_in > freqs + tol, freqs > 0)
+        B_precomp = _np.logical_and(probs_in < freqs - tol, freqs > 0)
+        C_precomp = _np.logical_and(freqs - tol <= probs_in, probs_in <= freqs + tol)  # freqs == probs
+        D_precomp = _np.logical_and(~C_precomp, freqs == 0)  # probs_in != freqs and freqs == 0
+        circuits = layout.circuits
+
+        precomp_info = []
+
+        for i, circ in enumerate(circuits):
+            elInds = layout.indices_for_index(i)
+            fvec = freqs[elInds]
+            qvec = probs_in[elInds]
+
+            initialTVD = sum(tvd_precomp[elInds])  # 0.5 * sum(_np.abs(qvec - fvec))
+
+            A = A_precomp[elInds]
+            B = B_precomp[elInds]
+            C = C_precomp[elInds]
+            D = D_precomp[elInds]
+            sum_fA = _np.sum(fvec[A])
+            sum_fB = _np.sum(fvec[B])
+            sum_qA = _np.sum(qvec[A])
+            sum_qB = _np.sum(qvec[B])
+            sum_qC = _np.sum(qvec[C])
+            sum_qD = _np.sum(qvec[D])
+
+            min_qvec = _np.min(qvec)
+
+            # sort(abs(qvec[A] / fvec[A] - 1.0)) but abs and 1.0 irrelevant since ratio is always > 1
+            iA = sorted(zip(_np.nonzero(A)[0], qvec[A] / fvec[A]), key=lambda x: x[1])
+
+            # sort(abs(1.0 - qvec[B] / fvec[B])) but abs and 1.0 irrelevant since ratio is always < 1
+            iB = sorted(zip(_np.nonzero(B)[0], qvec[B] / fvec[B]), key=lambda x: -x[1])
+
+            precomp_info.append((A, B, C, D, sum_fA, sum_fB, sum_qA, sum_qB, sum_qC, sum_qD,
+                                 initialTVD, fvec, qvec, min_qvec, iA, iB))
+
+        return precomp_info
+
+    def update_probs(self, probs_in, probs_out, freqs, layout, precomp=None, probs_freqs_precomp=None,
+                     return_deriv=False):
         """
         Updates `probs_in` to `probs_out` by applying this wildcard budget.
 
@@ -258,60 +296,46 @@ class WildcardBudget(object):
             indices correspond to circuit outcomes, as well as the list of circuits.
 
         precomp : numpy.ndarray, optional
-            A precmputed quantity for speeding up this calculation.
+            A precomputed quantity for speeding up this calculation.
+
+        probs_freqs_precomp : list, optional
+            A precomputed list of quantities re-used when calling `update_probs`
+            using the same `probs_in`, `freqs`, and `layout`.  Generate by calling
+            :method:`precompute_for_same_probs_freqs`.
+
+        return_deriv : bool, optional
+            When True, returns the derivative of each updated probability with
+            respect to its circuit budget as a numpy array.  Useful for internal
+            methods.
 
         Returns
         -------
         None
         """
 
-        #Special case where f_k=0, since ratio is ill-defined. One might think
+        #Note: special case where f_k=0, since ratio is ill-defined. One might think
         # we shouldn't don't bother wasting any TVD on these since the corresponding
         # p_k doesn't enter the likelihood. ( => treat these components as if f_k == q_k (ratio = 1))
         # BUT they *do* enter in poisson-picture logl...
         # so set freqs very small so ratio is large (and probably not chosen)
-        MIN_FREQ = 1e-8
-        MIN_FREQ_OVER_2 = MIN_FREQ / 2
-        #zero_inds = _np.where(freqs == 0.0)[0]
-        #if len(zero_inds) > 0:
-        #    freqs = freqs.copy()  # copy for now instead of doing something more clever
-        #    freqs[zero_inds] = MIN_FREQ
-        #    #freqs[zero_inds] = probs_in[zero_inds]  # OLD (use this if f_k=0 terms don't enter likelihood)
-
-        base_tol = MIN_FREQ  # for checking equality
+        tol = 1e-8  # for checking equality
         circuits = layout.circuits
         circuit_budgets = self.circuit_budgets(circuits, precomp)
-        tvd_precomp = 0.5 * _np.abs(probs_in - freqs)
-        A_precomp = _np.logical_and(probs_in > freqs + base_tol, freqs > 0)
-        B_precomp = _np.logical_and(probs_in < freqs - base_tol, freqs > 0)
-        C_precomp = _np.logical_and(freqs - base_tol <= probs_in, probs_in <= freqs + base_tol)  # freqs == probs
-        D_precomp = _np.logical_and(~C_precomp, freqs == 0)  # probs_in != freqs and freqs == 0
-        p_deriv = _np.empty(len(tvd_precomp), 'd')
+        p_deriv = _np.empty(layout.num_elements, 'd')
 
-        for i, (circ, W) in enumerate(zip(circuits, circuit_budgets)):
+        if probs_freqs_precomp is None:
+            probs_freqs_precomp = self.precompute_for_same_probs_freqs(probs_in, freqs, layout)
+
+        for i, (circ, W, info) in enumerate(zip(circuits, circuit_budgets, probs_freqs_precomp)):
+            A, B, C, D, sum_fA, sum_fB, sum_qA, sum_qB, sum_qC, sum_qD, initialTVD, fvec, qvec, min_qvec, iA, iB = info
+
             elInds = layout.indices_for_index(i)
-            fvec = freqs[elInds]
-            qvec = probs_in[elInds]
-            tol = len(qvec) * MIN_FREQ  # for instance, when W==0 and TVD_at_breakpt is 1e-17.  Multiply by len(qvec)
-            # to ensure we tolerate cases where many of the freqs are zero and we've artificially set them to MIN_FREQ.
 
-            initialTVD = sum(tvd_precomp[elInds])  # 0.5 * sum(_np.abs(qvec - fvec))
             if initialTVD <= W + tol:  # TVD is already "in-budget" for this circuit - can adjust to fvec exactly
                 probs_out[elInds] = fvec  # _tools.matrixtools._fas(probs_out, (elInds,), fvec)
                 continue
 
-            A = A_precomp[elInds]
-            B = B_precomp[elInds]
-            C = C_precomp[elInds]
-            D = D_precomp[elInds]
-            sum_fA = sum(fvec[A])
-            sum_fB = sum(fvec[B])
-            sum_qA = sum(qvec[A])
-            sum_qB = sum(qvec[B])
-            sum_qC = sum(qvec[C])
-            sum_qD = sum(qvec[D])
-
-            if _np.min(qvec) < 0:
+            if min_qvec < 0:
                 #Stopgap solution when a probability is negative: use wcbudget to move as
                 # much negative prob to zero as possible, while reducing all the positive
                 # probs.  This seems reasonable but isn't provably the right thing to do!
@@ -336,122 +360,65 @@ class WildcardBudget(object):
                 C = (qvec == fvec); sum_qC = sum(qvec[C])
                 D = _np.logical_and(qvec != fvec, fvec == 0); sum_qD = sum(qvec[D])
 
-            AB = _np.logical_or(A, B)  # the elements where we care about the ratio
-            ratio_vec = _np.empty(len(qvec), 'd')
-            ratio_vec[AB] = qvec[AB] / fvec[AB]
-            ratio_vec[C] = _np.inf  # below we work in order of ratios distance
-            ratio_vec[D] = _np.inf  # from 1.0 - and we don't want exactly-1.0 ratios.
+            indices_moved_to_C = []; alist_ptr = blist_ptr = 0
 
-            iA = _np.nonzero(A)[0]
-            iB = _np.nonzero(B)[0]
-            indices_moved_to_C = []
+            while alist_ptr < len(iA):  # and sum_fA > 0
+                # if alist_ptr < len(iA):  # always true when sum_fA > 0
+                jA, alphaA = iA[alist_ptr]
+                betaA = (1.0 - alphaA * sum_fA - sum_qC) / sum_fB
+                testA = min(alphaA - 1.0, 1.0 - betaA)
 
-            ratios = {}
-            for j in iA:
-                ratios[j] = {'alpha': ratio_vec[j],
-                             'beta': None if sum_fB == 0.0 else (1.0 - ratio_vec[j] * sum_fA - sum_qC) / sum_fB,
-                             'typ': 'A'}  # beta_fn
-            for j in iB:
-                ratios[j] = {'beta': ratio_vec[j],
-                             'alpha': None if sum_fA == 0.0 else (1.0 - ratio_vec[j] * sum_fB - sum_qC) / sum_fA,
-                             'typ': 'B'}  # alpha_fn
+                #if blist_ptr < len(iB):  # also always true
+                assert(sum_fB > 0)  # sum_fB should always be > 0 - otherwise there's nowhere to take probability from
+                jB, betaB = iB[blist_ptr]
+                alphaB = (1.0 - betaB * sum_fB - sum_qC) / sum_fA
+                testB = min(alphaB - 1.0, 1.0 - betaB)
 
-            while len(ratios) > 0:
-                # find best next element
+                #Note: pushedSD = 0.0
+                if testA < testB:
+                    j, alpha_break, beta_break = jA, alphaA, betaA
+                    TVD_at_breakpt = 0.5 * (sum_qA - alpha_break * sum_fA
+                                            + beta_break * sum_fB - sum_qB
+                                            + sum_qD)  # - pushedSD)  # compute_tvd
+                    if TVD_at_breakpt <= W + tol: break  # exit loop
 
-                j = None; best_test = 1e10  # sentinel
-                for jj, dct in ratios.items():
-                    test = min(dct['alpha'] - 1.0 if (dct['alpha'] is not None) else 1e10,
-                               1.0 - dct['beta'] if (dct['beta'] is not None) else 1e10)
-                    if test < best_test:
-                        best_test, j = test, jj
-
-                best_dct = ratios[j]
-                alpha_break = best_dct['alpha'] if (best_dct['alpha'] is not None) else 1.0
-                beta_break = best_dct['beta'] if (best_dct['beta'] is not None) else 1.0
-
-                if sum_fA == 0:
-                    pushedSD = 1.0 - beta_break * sum_fB - sum_qC  # just used for TVD calc below
-                else:
-                    pushedSD = 0.0
-
-                TVD_at_breakpt = 0.5 * (sum_qA - alpha_break * sum_fA
-                                        + beta_break * sum_fB - sum_qB
-                                        + sum_qD - pushedSD)  # compute_tvd
-
-                if TVD_at_breakpt <= W + tol: break  # exit loop
-
-                # move j from A/B -> C
-                if best_dct['typ'] == 'A':
+                    # move j from A -> C
                     sum_qA -= qvec[j]; sum_qC += qvec[j]; sum_fA -= fvec[j]
+                    alist_ptr += 1
                 else:
+                    j, alpha_break, beta_break = jB, alphaB, betaB
+                    TVD_at_breakpt = 0.5 * (sum_qA - alpha_break * sum_fA
+                                            + beta_break * sum_fB - sum_qB
+                                            + sum_qD)  # - pushedSD)  # compute_tvd
+                    if TVD_at_breakpt <= W + tol: break  # exit loop
+
+                    # move j from B -> C
                     sum_qB -= qvec[j]; sum_qC += qvec[j]; sum_fB -= fvec[j]
+                    blist_ptr += 1
                 indices_moved_to_C.append(j)
 
-                #update ratios
-                del ratios[j]
-                for dct in ratios.values():
-                    if dct['typ'] == 'A':
-                        dct['beta'] = None if sum_fB == 0.0 else (1.0 - dct['alpha'] * sum_fA - sum_qC) / sum_fB
-                    else:  # dct['typ'] == 'B':
-                        dct['alpha'] = None if sum_fA == 0.0 else (1.0 - dct['beta'] * sum_fB - sum_qC) / sum_fA
+            else:  # if we didn't break due to TVD being small enough, continue to process with empty A-list:
 
-            #OLD method, which doesn't always order indices correctly (REMOVE)
-            ## remaining_indices = list(range(len(ratio_vec)))
-            #sorted_indices_and_ratios = sorted(
-            #    [(kx, rx) for kx, rx in enumerate(ratio_vec)], key=lambda x: abs(1.0 - x[1]))
-            #nMovedToC = 0
-            #
-            ##print("Circuit ",i, " indices_and_ratios = ",sorted_indices_and_ratios)
-            #
-            #for j, ratio in sorted_indices_and_ratios:
-            #
-            #    if ratio > 1.0:  # j in A
-            #        alpha_break = ratio
-            #        beta_break = 0 if sum_fB == 0.0 else (1.0 - alpha_break * sum_fA - sum_qC) / sum_fB  # beta_fn
-            #
-            #        TVD_at_breakpt = 0.5 * (sum_qA - alpha_break * sum_fA + beta_break * sum_fB - sum_qB)  #compute_tvd
-            #        #print("A TVD at ",alpha_break,beta_break,"=",TVD_at_breakpt, "(ratio = ",ratio,")")
-            #        if TVD_at_breakpt <= W + tol: break  # exit loop
-            #
-            #        # move j from A -> C
-            #        sum_qA -= qvec[j]; sum_qC += qvec[j]; sum_fA -= fvec[j]
-            #    elif ratio < 1.0:  # j in B
-            #        beta_break = ratio
-            #        if sum_fA > 0:
-            #            alpha_break = (1.0 - beta_break * sum_fB - sum_qC) / sum_fA  # alpha_fn
-            #            if sum_fA * alpha_break <= sum_qA:  # check if alpha_break gets set too large
-            #                pushedSD = 0.0  # ok - alpha_break doesn't push sum_fA beyond its "target", sum_qA
-            #            else:
-            #                # because there must be some weight in set-D (zero-freq but nonzero prob)
-            #                # the alpha as computed above will push sum_fA too much - we instead just
-            #                # push sum_fA right to sum_qA and dump the rest into pushedSD
-            #                alpha_break = sum_qA / sum_fA
-            #                pushedSD = 1.0 - (alpha_break * sum_fA + beta_break * sum_fB + sum_qC)  # for TVD below
-            #        else:
-            #            alpha_break = 0.0
-            #            pushedSD = 1.0 - beta_break * sum_fB - sum_qC  # just used for TVD calc below
-            #
-            #        TVD_at_breakpt = 0.5 * (sum_qA - alpha_break * sum_fA
-            #                                + beta_break * sum_fB - sum_qB
-            #                                + sum_qD - pushedSD)  # compute_tvd
-            #        #print("B TVD at ",alpha_break,beta_break,"=",TVD_at_breakpt, "(ratio = ",ratio,")")
-            #        if TVD_at_breakpt <= W + tol: break  # exit loop
-            #
-            #        # move j from B -> C
-            #        sum_qB -= qvec[j]; sum_qC += qvec[j]; sum_fB -= fvec[j]
-            #
-            #    else:  # j in C
-            #        #print("C TVD at ",alpha_break,beta_break,"=",TVD_at_breakpt, "(ratio = ",ratio,")")
-            #        pass  # (no movement, nothing happens)
-            #
-            #    nMovedToC += 1
-            #else:
-            #    assert(False), "TVD should eventually reach zero: qvec=%s, fvec=%s, W=%g" % (str(qvec), str(fvec), W)
+                while blist_ptr < len(iB):  # now sum_fA == 0 => alist_ptr is maxed out
+                    assert(sum_fB > 0)  # otherwise there's nowhere to take probability from
+                    j, beta_break = iB[blist_ptr]
+                    pushedSD = 1.0 - beta_break * sum_fB - sum_qC  # just used for TVD calc below
+
+                    TVD_at_breakpt = 0.5 * (sum_qA + beta_break * sum_fB - sum_qB
+                                            + sum_qD - pushedSD)  # compute_tvd
+
+                    if TVD_at_breakpt <= W + tol: break  # exit loop
+
+                    # move j from B -> C
+                    sum_qB -= qvec[j]; sum_qC += qvec[j]; sum_fB -= fvec[j]
+                    blist_ptr += 1
+                    indices_moved_to_C.append(j)
+                else:
+                    assert(False), "TVD should reach zero: qvec=%s, fvec=%s, W=%g" % (str(qvec), str(fvec), W)
 
             #Now A,B,C are fixed to what they need to be for our given W
             # test if len(A) > 0, make tol here *smaller* than that assigned to zero freqs above
-            if sum_fA > MIN_FREQ_OVER_2:
+            if sum_fA > tol:
                 alpha = (sum_qA - sum_qB + sum_qD - 2 * W) / sum_fA if sum_fB == 0 else \
                     (sum_qA - sum_qB + sum_qD + 1.0 - sum_qC - 2 * W) / (2 * sum_fA)  # compute_alpha
                 beta = _np.nan if sum_fB == 0 else (1.0 - alpha * sum_fA - sum_qC) / sum_fB  # beta_fn
@@ -480,7 +447,7 @@ class WildcardBudget(object):
             #indices_moved_to_C = [x[0] for x in sorted_indices_and_ratios[0:nMovedToC]]
             pvec[indices_moved_to_C] = qvec[indices_moved_to_C]
 
-            pvec[D] = pushedSD * qvec[D] / sum(qvec[D])
+            pvec[D] = pushedSD * qvec[D] / sum_qD
             probs_out[elInds] = pvec  # _tools.matrixtools._fas(probs_out, (elInds,), pvec)
 
             assert(W > 0 or _np.linalg.norm(qvec - pvec) < 1e-6), "Probability shouldn't be updated when W=0!"
@@ -494,13 +461,10 @@ class WildcardBudget(object):
                 p_deriv_wrt_W[A] = dalpha_dW * fvec[A]
                 p_deriv_wrt_W[B] = dbeta_dW * fvec[B]
                 p_deriv_wrt_W[indices_moved_to_C] = 0.0
-                p_deriv_wrt_W[D] = dpushedSD_dW * qvec[D] / sum(qvec[D])
+                p_deriv_wrt_W[D] = dpushedSD_dW * qvec[D] / sum_qD
                 p_deriv[elInds] = p_deriv_wrt_W
 
-        if return_deriv:
-            return p_deriv
-        else:
-            return None
+        return p_deriv if return_deriv else None
 
 
 class PrimitiveOpsWildcardBudget(WildcardBudget):

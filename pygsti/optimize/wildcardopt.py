@@ -630,6 +630,7 @@ def optimize_wildcard_budget_barrier(budget, L1weights, objfn, layout, two_dlogl
     x0 = budget.to_vector()
     initial_probs = objfn.probs.copy()
     current_probs = initial_probs.copy()
+    probs_freqs_precomp = budget.precompute_for_same_probs_freqs(initial_probs, objfn.freqs, layout)
 
     # f0 = 2DLogL - threshold <= 0
     # fi = critical_budget_i - circuit_budget_i <= 0
@@ -638,7 +639,8 @@ def optimize_wildcard_budget_barrier(budget, L1weights, objfn, layout, two_dlogl
 
     def penalty_vec(x):
         budget.from_vector(x)
-        budget.update_probs(initial_probs, current_probs, objfn.freqs, layout, percircuit_budget_deriv)
+        budget.update_probs(initial_probs, current_probs, objfn.freqs, layout, percircuit_budget_deriv,
+                            probs_freqs_precomp)
         f0 = _np.array([_agg_dlogl(current_probs, objfn, two_dlogl_threshold)])
         fi = critical_percircuit_budgets - _np.dot(percircuit_budget_deriv, x)
         return _np.concatenate((f0, fi))
@@ -648,7 +650,7 @@ def optimize_wildcard_budget_barrier(budget, L1weights, objfn, layout, two_dlogl
 
         budget.from_vector(_np.array(x))
         p_deriv = budget.update_probs(initial_probs, current_probs, objfn.freqs, layout,
-                                      percircuit_budget_deriv, return_deriv=True)
+                                      percircuit_budget_deriv, probs_freqs_precomp, return_deriv=True)
         f0 = _np.array([_agg_dlogl(current_probs, objfn, two_dlogl_threshold)])
         fi = critical_percircuit_budgets - _np.dot(percircuit_budget_deriv, x)
         f = _np.concatenate((f0, fi, -x))  # adds -x for x >= 0 constraint
