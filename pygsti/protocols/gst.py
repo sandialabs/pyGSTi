@@ -506,7 +506,7 @@ class GSTBadFitOptions(object):
                  wildcard_budget_includes_spam=True,
                  wildcard_L1_weights=None, wildcard_primitive_op_labels=None,
                  wildcard_initial_budget=None, wildcard_methods=('neldermead',),
-                 wildcard_inadmissable_action='raise'):
+                 wildcard_inadmissable_action='print'):
         valid_actions = ('wildcard', 'Robust+', 'Robust', 'robust+', 'robust', 'do nothing')
         if not all([(action in valid_actions) for action in actions]):
             raise ValueError("Invalid action in %s! Allowed actions are %s" % (str(actions), str(valid_actions)))
@@ -1995,6 +1995,7 @@ def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options,
                     printer.log(" - Skipping trialing reducing element %.3g below %.3g, as it is less than %.3g" %
                                 (w_ind, w_ele, negligable_budget))
             active_constraints_list.append(active_constraints)
+        budget.from_vector(wvec)
 
         # Note: active_constraints_list is typically stored in parameters['unmodeled_error active constraints']
         # of the relevant Estimate object.
