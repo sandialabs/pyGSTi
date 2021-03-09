@@ -45,15 +45,15 @@ class FirstOrderGaugeInvariantStore(object):
 
         if self.gauge_linear_combos is not None:
             self._gauge_space_dim = self.gauge_linear_combos.shape[1]
-            gauge_elemgen_labels = [('G', str(i)) for i in range(self._gauge_space_dim)]
+            self.gauge_elemgen_labels = [('G', str(i)) for i in range(self._gauge_space_dim)]
         else:
             self._gauge_space_dim = len(elem_errorgen_labels)
-            gauge_elemgen_labels = elem_errorgen_labels
+            self.gauge_elemgen_labels = elem_errorgen_labels
 
         (self.fogi_opsets, self.fogi_directions, self.fogi_r_factors, self.fogi_gaugespace_directions,
          self.dependent_dir_indices, self.op_errorgen_indices, self.fogi_labels, self.abbrev_fogi_labels) = \
             _fogit.construct_fogi_quantities(self.primitive_op_labels, self.gauge_action_for_op,
-                                             self.elem_errorgen_labels_by_op, gauge_elemgen_labels,
+                                             self.elem_errorgen_labels_by_op, self.gauge_elemgen_labels,
                                              op_label_abbrevs, dependent_fogi_action, norm_order)
         self.norm_order = norm_order
 
@@ -66,6 +66,7 @@ class FirstOrderGaugeInvariantStore(object):
 
         pinv_allop_gauge_action = _np.linalg.pinv(self.allop_gauge_action, rcond=1e-7)  # errgen-set -> gauge-gen space
         gauge_space_directions = _np.dot(pinv_allop_gauge_action, fogv_directions)  # in gauge-generator space
+        self.gauge_space_directions = gauge_space_directions
 
         self.fogv_labels = ["%d gauge action" % i for i in range(gauge_space_directions.shape[1])]
         #self.fogv_labels = ["%s gauge action" % nm

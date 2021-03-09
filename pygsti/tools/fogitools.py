@@ -161,7 +161,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
         # of errorgen-superops arising from *un-normalized* (traditional) Pauli matrices.
         local_fogi_vecs = _mt.normalize_columns(local_fogi_dirs, ord=norm_order)  # this gives us *vec*-norm we want
         vector_L2_norm2s = [_np.linalg.norm(local_fogi_vecs[:, j])**2 for j in range(local_fogi_vecs.shape[1])]
-        local_fogi_dirs = local_fogi_vecs / _np.array(vector_L2_norm2s)[None, :]  # gives us *dir*-norm we want
+        local_fogi_dirs = local_fogi_vecs / _np.array(vector_L2_norm2s)[None, :]  # gives us *dir*-norm we want  # DUAL NORM
 
         assert(_mt.columns_are_orthogonal(local_fogi_dirs))  # Note for Cnot in 2Q_XYICNOT (check?)
 
@@ -291,7 +291,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                         # of the norm_order-normalized gauge-space vector)
                         int_vecs = _mt.normalize_columns(intersection_space, ord=norm_order)
                         vector_L2_norm2s = [_np.linalg.norm(int_vecs[:, j])**2 for j in range(int_vecs.shape[1])]
-                        intersection_space = int_vecs / _np.array(vector_L2_norm2s)[None, :]
+                        intersection_space = int_vecs / _np.array(vector_L2_norm2s)[None, :]  # DUAL NORM
 
                         local_fogi_dirs = _np.dot(inv_diff_gauge_action, intersection_space)  # dot("M", epsilons)
                         #Note: at this point `local_fogi_dirs` vectors are gauge-space-normalized, not numpy-norm-1
@@ -386,7 +386,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                         vecs_to_add, nrms = _mt.normalize_columns(new_fogi_dirs[:, rel_cols_to_add], ord=norm_order,
                                                                   return_norms=True)  # f_hat_vec = f / nrm
                         vector_L2_norm2s = [_np.linalg.norm(vecs_to_add[:, j])**2 for j in range(vecs_to_add.shape[1])]
-                        dirs_to_add = vecs_to_add / _np.array(vector_L2_norm2s)[None, :]  # gives us *dir*-norm we want
+                        dirs_to_add = vecs_to_add / _np.array(vector_L2_norm2s)[None, :]  # gives us *dir*-norm we want  # DUAL NORM
                         # f_hat = f_hat_vec / L2^2 = f / (nrm * L2^2) = (1 / (nrm * L2^2)) * f
 
                         fogi_dirs = _np.concatenate((fogi_dirs, dirs_to_add), axis=1)  # errgen-space NORMALIZED
