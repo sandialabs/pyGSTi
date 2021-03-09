@@ -321,7 +321,7 @@ def _agg_dlogl_deriv(current_probs, objfn, percircuit_budget_deriv, probs_deriv_
         #mins = _np.array(_np.abs(chis - _np.min(chis)) < 1.e-4, dtype=int)
         #agg_dlogl_deriv_wrt_percircuit_budgets[i] = -_np.sum(chis * ((mins * wts) / sum(mins * wts) \
         #    - (maxes * wts) / sum(maxes * wts)))
-    assert(_np.all(agg_dlogl_deriv_wrt_percircuit_budgets <= 0)), \
+    assert(_np.all(agg_dlogl_deriv_wrt_percircuit_budgets <= 1e-6)), \
         "Derivative of aggregate LLR wrt any circuit budget should be negative"
     local_deriv = _np.dot(agg_dlogl_deriv_wrt_percircuit_budgets, percircuit_budget_deriv)
     return objfn.layout.allsum_local_quantity('c', local_deriv, use_shared_mem=False)
@@ -374,7 +374,13 @@ def _agg_dlogl_hessian(current_probs, objfn, percircuit_budget_deriv, probs_deri
         # d2(agg_dlogl)/dW = dp_dW * hagg_dlogl(p(W)) * dp_dW   ("directional" Hessian of agg_dlogl)
         hlogl_dp = dlogl_helements[elInds]
         dp_dW = probs_deriv_wrt_percircuit_budget[elInds]
-        agg_dlogl_hessian_wrt_percircuit_budgets[i] = 2 * _np.sum(hlogl_dp * dp_dW**2)
+
+        old_err = _np.seterr(over='ignore')
+        agg_dlogl_hessian_wrt_percircuit_budgets[i] = 2 * _np.sum(hlogl_dp * dp_dW**2)  # check for overflow
+        _np.seterr(**old_err)
+
+        if not _np.isfinite(agg_dlogl_hessian_wrt_percircuit_budgets[i]):  # deal with potential overflow
+            agg_dlogl_hessian_wrt_percircuit_budgets[i] = 1e100  # something huge
 
         #TODO: see if there's anything useful here, and then REMOVE
         #NOTE - starting to think about alternate objectives with softened "Hessian jump" at dlogl == 0 point.

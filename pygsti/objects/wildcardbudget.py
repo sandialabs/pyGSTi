@@ -244,12 +244,12 @@ class WildcardBudget(object):
             B = B_precomp[elInds]
             C = C_precomp[elInds]
             D = D_precomp[elInds]
-            sum_fA = _np.sum(fvec[A])
-            sum_fB = _np.sum(fvec[B])
-            sum_qA = _np.sum(qvec[A])
-            sum_qB = _np.sum(qvec[B])
-            sum_qC = _np.sum(qvec[C])
-            sum_qD = _np.sum(qvec[D])
+            sum_fA = float(_np.sum(fvec[A]))
+            sum_fB = float(_np.sum(fvec[B]))
+            sum_qA = float(_np.sum(qvec[A]))
+            sum_qB = float(_np.sum(qvec[B]))
+            sum_qC = float(_np.sum(qvec[C]))
+            sum_qD = float(_np.sum(qvec[D]))
 
             min_qvec = _np.min(qvec)
 
@@ -333,6 +333,7 @@ class WildcardBudget(object):
 
             if initialTVD <= W + tol:  # TVD is already "in-budget" for this circuit - can adjust to fvec exactly
                 probs_out[elInds] = fvec  # _tools.matrixtools._fas(probs_out, (elInds,), fvec)
+                if return_deriv: p_deriv[elInds] = 0.0
                 continue
 
             if min_qvec < 0:
@@ -450,7 +451,8 @@ class WildcardBudget(object):
             pvec[D] = pushedSD * qvec[D] / sum_qD
             probs_out[elInds] = pvec  # _tools.matrixtools._fas(probs_out, (elInds,), pvec)
 
-            assert(W > 0 or _np.linalg.norm(qvec - pvec) < 1e-6), "Probability shouldn't be updated when W=0!"
+            assert(W > 0 or min_qvec < 0 or _np.linalg.norm(qvec - pvec) < 1e-6), \
+                "Probability shouldn't be updated when W=0!"  # don't check this when there are negative probs
 
             #Check with other version (for debugging)
             #check_pvec = update_circuit_probs(qvec.copy(), fvec.copy(), W)
