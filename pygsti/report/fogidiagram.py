@@ -173,18 +173,25 @@ class FOGIDiagram(object):
             #  for each OP in op_set, where gauge_vec_i is the (normalized) gauge directions
             #  corresponding to the i-th fogi quantity (info).
             si = infos[0]['store_index']  # all infos must come from same *store*
-            gauge_dir = None
-            for info in infos:
-                assert(set(op_set) == info['op_set'])
-                assert(info['gauge_dir'] is not None)
-                comp = self.fogi_comps[info['fogi_index']]
-                gauge_comp = comp / info['r_factor']  # "theta" -- component = r * theta
-                gauge_vec = info['gauge_dir']
 
-                if gauge_dir is None:
-                    gauge_dir = gauge_comp * gauge_vec
-                else:
-                    gauge_dir += gauge_comp * gauge_vec
+            E = _np.column_stack([info['gauge_dir'] for info in infos])
+            theta = _np.array([self.fogi_comps[info['fogi_index']] / info['r_factor'] for info in infos])
+            gauge_dir = _np.dot(_np.linalg.pinv(E).T, theta)
+
+            #OLD - doesn't deal with non-orthogonal gauge vecs properly,
+            #      and I think forgets to renorm gauge_dir => gauge_vec
+            #gauge_dir = None
+            #for info in infos:
+            #    assert(set(op_set) == info['op_set'])
+            #    assert(info['gauge_dir'] is not None)
+            #    comp = self.fogi_comps[info['fogi_index']]
+            #    gauge_comp = comp / info['r_factor']  # "theta" -- component = r * theta
+            #    gauge_vec = info['gauge_dir']
+            #
+            #    if gauge_dir is None:
+            #        gauge_dir = gauge_comp * gauge_vec
+            #    else:
+            #        gauge_dir += gauge_comp * gauge_vec
 
             # get "impact", i.e., j-angle, for relational qtys
 
