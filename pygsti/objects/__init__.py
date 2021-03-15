@@ -84,6 +84,8 @@ from .forwardsim import ForwardSimulator
 from .matrixforwardsim import SimpleMatrixForwardSimulator, MatrixForwardSimulator
 from .mapforwardsim import SimpleMapForwardSimulator, MapForwardSimulator
 from .termforwardsim import TermForwardSimulator
+from .weakforwardsim import WeakForwardSimulator
+from .chpforwardsim import CHPForwardSimulator
 
 from .gaugegroup import FullGaugeGroup, FullGaugeGroupElement
 from .gaugegroup import TPGaugeGroup, TPGaugeGroupElement

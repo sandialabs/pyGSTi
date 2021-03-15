@@ -6735,21 +6735,6 @@ class CliffordOp(LinearOperator):
         return s
 
 
-## SS TODO: This should be in replib, but it probably makes the most sense
-## that the replib should just be the QProg struct from chp.c
-## That starts to get into the simulator side of things,
-## which I don't want to do right this second, so this is a stopgag
-class CHPOpRep(object):
-    def __init__(self, chp_list):
-        self.chp_list = chp_list
-        self.dim = len(chp_list)
-
-    def acton(self, state):
-        raise NotImplementedError()
-
-    def adjoint_acton(self, state):
-        raise NotImplementedError()
-
 class CHPOp(LinearOperator):
     """
     A Clifford operation represented by a list of CHP operations.
@@ -6789,7 +6774,7 @@ class CHPOp(LinearOperator):
         else:
             raise SyntaxError('CHP rep needs to be given as str (standard gate name) or list of ["h", "p", "c"] gates')
 
-        rep = CHPOpRep(self.chp_list)
+        rep = replib.CHPOpRep(self.chp_list)
         LinearOperator.__init__(self, rep, "chp")
 
     def __str__(self):

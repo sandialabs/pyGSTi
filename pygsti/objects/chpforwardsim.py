@@ -9,35 +9,45 @@ Defines the CHPForwardSimulator calculator class
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
+import os as _os
+from pathlib import Path as _Path
+import re as _re
+import subprocess as _sp
+import tempfile as _tf
 
-import warnings as _warnings
-import numpy as _np
-import numpy.linalg as _nla
-import time as _time
-import itertools as _itertools
-import collections as _collections
-
-from ..tools import mpitools as _mpit
-from ..tools import slicetools as _slct
-from ..tools.matrixtools import _fas
 from .profiler import DummyProfiler as _DummyProfiler
 from .label import Label as _Label
+from .labeldicts import OutcomeLabelDict as _OutcomeLabelDict
 from .weakforwardsim import WeakForwardSimulator as _WeakForwardSimulator
-from .forwardsim import _bytes_for_array_types
 from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from .objectivefns import RawChi2Function as _RawChi2Function
-from .objectivefns import RawPoissonPicDeltaLogLFunction as _RawPoissonPicDeltaLogLFunction
 _dummy_profiler = _DummyProfiler()
 
 
-class SimpleCHPWeakForwardSimulator(_WeakForwardSimulator):
-
-    def _compute_circuit_outcome_frequencies(self, array_to_fill, circuit, outcomes, resource_alloc, time=None):
+class CHPForwardSimulator(_WeakForwardSimulator):
+    """
+    A WeakForwardSimulator returning probabilities with Scott Aaronson's CHP code
+    """
+    def __init__(self, chpexe, shots, model=None):
         """
-        Compute probabilities of a multiple "outcomes" for a single circuit.
+        Construct a new CHPForwardSimulator.
 
-        The outcomes correspond to `circuit` sandwiched between `rholabel` (a state preparation)
-        and the multiple effect labels in `elabels`.
+        Parameters
+        ----------
+        chpexe: str or Path
+            Path to CHP executable
+        shots: int
+            Number of times to run each circuit to obtain an approximate probability
+        model : Model
+            Optional parent Model to be stored with the Simulator
+        """
+        self.chpexe = _Path(chpexe)
+        assert self.chpexe.is_file(), "A valid CHP executable must be passed to CHPForwardSimulator"
+
+        super().__init__(shots, model)
+
+    def _compute_circuit_outcome_for_shot(self, array_to_fill, circuit, outcomes, resource_alloc, time=None):
+        """
+        Compute probabilities of a multiple "outcomes" for a single circuit for a single shot.
 
         Parameters
         ----------
@@ -46,30 +56,32 @@ class SimpleCHPWeakForwardSimulator(_WeakForwardSimulator):
             A tuple-like object of *simplified* gates (e.g. may include
             instrument elements like 'Imyinst_0')
 
-        use_scaling : bool, optional
-            Whether to use a post-scaled product internally.  If False, this
-            routine will run slightly faster, but with a chance that the
-            product will overflow and the subsequent trace operation will
-            yield nan as the returned probability.
-
         time : float, optional
             The *start* time at which `circuit` is evaluated.
         """
-        assert(time is None), "CHPForwardSimulator cannot be used to simulate time-dependent circuits"
+        assert(time is None), "CHPForwardSimulator cannot be used to simulate time-dependent circuits yet"
+        
+        # Use temporary file as per https://stackoverflow.com/a/8577225
+        fd, path = _tf.mkstemp()
+        try:
+            # TODO: Write actual circuit to file
+            with _os.fdopen(fd, 'w') as tmp:
+                tmp.write('#\nh 0\nm 0\nm 1\n')
 
-        expanded_circuit_outcomes = circuit.expand_instruments_and_separate_povm(self.model, outcomes)
-        outcome_to_index = {outc: i for i, outc in enumerate(outcomes)}
-        for spc, spc_outcomes in expanded_circuit_outcomes.items():  # spc is a SeparatePOVMCircuit
-            indices = [outcome_to_index[o] for o in spc_outcomes]
-            rholabel = spc.circuit_without_povm[0]
-            circuit_ops = spc.circuit_without_povm[1:]
-            rho, Es = self._rho_es_from_spam_tuples(rholabel, spc.full_effect_labels)
-            #shapes: rho = (N,1), Es = (len(elabels),N)
+            # Run CHP
+            process = _sp.Popen([f'{self.chpexe.resolve()}', f'{path}'], stdout=_sp.PIPE, stderr=_sp.PIPE)
+            out, err = process.communicate()
+        finally:
+            _os.remove(path)
 
-            G = self.product(circuit_ops, False)
-            if self.model.evotype == "statevec":
-                ps = _np.real(_np.abs(_np.dot(Es, _np.dot(G, rho)))**2)
-            else:  # evotype == "densitymx"
-                ps = _np.real(_np.dot(Es, _np.dot(G, rho)))
-            array_to_fill[indices] = ps.flat
+        # Extract outputs
+        pattern = _re.compile('Outcome of measuring qubit (\d): (\d)')
+        qubit_outcomes = []
+        for match in pattern.finditer(out.decode('utf-8')):
+            qubit_outcomes.append((int(match.group(1)), match.group(2)))
 
+        outcome = ''.join([qo[1] for qo in sorted(qubit_outcomes)])
+        outcome_label = _OutcomeLabelDict.to_outcome(outcome)
+        index = outcomes.index(outcome_label)
+
+        array_to_fill[index] += 1.0
