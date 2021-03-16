@@ -273,11 +273,11 @@ def _agg_dlogl(current_probs, objfn, two_dlogl_threshold):
     return 2 * float(_np.sum(dlogl_elements)) - two_dlogl_threshold
 
 
-def _agg_dlogl_deriv(current_probs, objfn, layout, percircuit_budget_deriv):
+def _agg_dlogl_deriv(current_probs, objfn, layout, percircuit_budget_deriv, probs_deriv_wrt_percircuit_budget):
     #dlogl_delements = objfn.raw_objfn.dterms(current_probs, objfn.counts, objfn.total_counts, objfn.freqs)
     p, f, n, N = current_probs, objfn.freqs, objfn.counts, objfn.total_counts
     dlogl_delements = objfn.raw_objfn.dterms(p, n, N, f)  # -N*f/p
-    chi_elements = -dlogl_delements / N  # f/p = -dlogl_delements / N
+    #chi_elements = -dlogl_delements / N  # f/p = -dlogl_delements / N
     num_circuits = len(layout.circuits)
 
     # derivative of firstterms wrt per-circuit wilcard budgets - namely if that budget goes up how to most efficiently
@@ -285,9 +285,17 @@ def _agg_dlogl_deriv(current_probs, objfn, layout, percircuit_budget_deriv):
     # (i.e. how probs should be updated) to achieve this decrease in firstterms
     agg_dlogl_deriv_wrt_percircuit_budgets = _np.zeros(num_circuits, 'd')
     for i in range(num_circuits):
-        chis = chi_elements[layout.indices_for_index(i)]  # ~ f/p
-        Nloc = N[layout.indices_for_index(i)]
-        agg_dlogl_deriv_wrt_percircuit_budgets[i] = -2 * Nloc[0] * (_np.max(chis) - _np.min(chis))
+        elInds = layout.indices_for_index(i)
+
+        #OLD
+        #chis = chi_elements[elInds]  # ~ f/p
+        #Nloc = N[elInds]
+        #agg_dlogl_deriv_wrt_percircuit_budgets[i] = -2 * Nloc[0] * (_np.max(chis) - _np.min(chis))
+
+        dlogl_dp = dlogl_delements[elInds]
+        dp_dW = probs_deriv_wrt_percircuit_budget[elInds]
+        agg_dlogl_deriv_wrt_percircuit_budgets[i] = 2 * _np.sum(dlogl_dp * dp_dW)
+
         #agg_dlogl_deriv_wrt_percircuit_budgets[i] = -2 * Nloc[0] * (_softmax(chis) - _softmin(chis)) # SOFT MAX/MIN
 
         #wts = _np.abs(dlogl_helements[layout.indices_for_index(i)])
@@ -295,48 +303,64 @@ def _agg_dlogl_deriv(current_probs, objfn, layout, percircuit_budget_deriv):
         #mins = _np.array(_np.abs(chis - _np.min(chis)) < 1.e-4, dtype=int)
         #agg_dlogl_deriv_wrt_percircuit_budgets[i] = -_np.sum(chis * ((mins * wts) / sum(mins * wts) \
         #    - (maxes * wts) / sum(maxes * wts)))
-    assert(_np.all(agg_dlogl_deriv_wrt_percircuit_budgets <= 0)), \
+    assert(_np.all(agg_dlogl_deriv_wrt_percircuit_budgets <= 1e-6)), \
         "Derivative of aggregate LLR wrt any circuit budget should be negative"
     return _np.dot(agg_dlogl_deriv_wrt_percircuit_budgets, percircuit_budget_deriv)
 
 
-def _agg_dlogl_hessian(current_probs, objfn, layout, percircuit_budget_deriv):
+def _agg_dlogl_hessian(current_probs, objfn, layout, percircuit_budget_deriv, probs_deriv_wrt_percircuit_budget):
     #dlogl_delements = objfn.raw_objfn.dterms(current_probs, objfn.counts, objfn.total_counts, objfn.freqs)
     #dlogl_helements = objfn.raw_objfn.hterms(current_probs, objfn.counts, objfn.total_counts, objfn.freqs)
     p, f, n, N = current_probs, objfn.freqs, objfn.counts, objfn.total_counts
-    dlogl_delements = objfn.raw_objfn.dterms(p, n, N, f)  # -N*f/p  < 0
+    #dlogl_delements = objfn.raw_objfn.dterms(p, n, N, f)  # -N*f/p  < 0
     dlogl_helements = objfn.raw_objfn.hterms(p, n, N, f)  # N*f/p**2 > 0
-    chi_elements = -dlogl_delements / N  # f / p
-    dchi_elements = dlogl_helements / N  # f / p**2
+    #chi_elements = -dlogl_delements / N  # f / p
+    #dchi_elements = dlogl_helements / N  # f / p**2
     num_circuits = len(layout.circuits)
 
     # derivative of firstterms wrt per-circuit wilcard budgets - namely if that budget goes up how to most efficiently
     # reduce firstterms. In doing so, this computes how the per-circuit budget should be allocated to probabilities
     # (i.e. how probs should be updated) to achieve this decrease in firstterms
-    TOL = 1e-6
+    #TOL = 1e-6
     agg_dlogl_hessian_wrt_percircuit_budgets = _np.zeros(num_circuits)
     for i in range(num_circuits):
-        chis = chi_elements[layout.indices_for_index(i)]  # ~ f/p
-        Nloc = N[layout.indices_for_index(i)]
-        max_chi = _np.max(chis)
-        min_chi = _np.min(chis)
-        if (max_chi - min_chi) < TOL:  # Special case when all f==p - nothing more to change
-            agg_dlogl_hessian_wrt_percircuit_budgets[i] = 0
-            continue
+        elInds = layout.indices_for_index(i)
 
-        max_mask = _np.abs(chis - max_chi) < TOL
-        min_mask = _np.abs(chis - min_chi) < TOL
-        # maxes = _np.array(max_mask, dtype=int)
-        # mins = _np.array(min_mask, dtype=int)
+        #OLD REMOVE
+        #chis = chi_elements[elInds]  # ~ f/p
+        #Nloc = N[elInds]
+        #max_chi = _np.max(chis)
+        #min_chi = _np.min(chis)
+        #if (max_chi - min_chi) < TOL:  # Special case when all f==p - nothing more to change
+        #    agg_dlogl_hessian_wrt_percircuit_budgets[i] = 0
+        #    continue
+        #
+        #max_mask = _np.abs(chis - max_chi) < TOL
+        #min_mask = _np.abs(chis - min_chi) < TOL
+        ## maxes = _np.array(max_mask, dtype=int)
+        ## mins = _np.array(min_mask, dtype=int)
+        #
+        #freqs = f[layout.indices_for_index(i)]
+        #lambdas_max = freqs[max_mask] / (sum(freqs[max_mask]) + 1e-100)  # 1e-100 handles when all(freqs[mask] == 0)
+        #lambdas_min = freqs[min_mask] / (sum(freqs[min_mask]) + 1e-100)
+        #
+        #dchi = dchi_elements[layout.indices_for_index(i)]  # ~ f/p**2
+        #agg_dlogl_hessian_wrt_percircuit_budgets[i] = \
+        #    2 * Nloc[0] * (sum(dchi[max_mask] * lambdas_max**2)
+        #                   + sum(dchi[min_mask] * lambdas_min**2))
 
-        freqs = f[layout.indices_for_index(i)]
-        lambdas_max = freqs[max_mask] / (sum(freqs[max_mask]) + 1e-100)  # 1e-100 handles when all(freqs[mask] == 0)
-        lambdas_min = freqs[min_mask] / (sum(freqs[min_mask]) + 1e-100)
+        # agg_dlogl(p(W))
+        # d(agg_dlogl)/dW = dagg_dlogl(p(W)) * dp_dW  (directional derivative of agg_dlogl)
+        # d2(agg_dlogl)/dW = dp_dW * hagg_dlogl(p(W)) * dp_dW   ("directional" Hessian of agg_dlogl)
+        hlogl_dp = dlogl_helements[elInds]
+        dp_dW = probs_deriv_wrt_percircuit_budget[elInds]
 
-        dchi = dchi_elements[layout.indices_for_index(i)]  # ~ f/p**2
-        agg_dlogl_hessian_wrt_percircuit_budgets[i] = \
-            2 * Nloc[0] * (sum(dchi[max_mask] * lambdas_max**2)
-                           + sum(dchi[min_mask] * lambdas_min**2))
+        old_err = _np.seterr(over='ignore')
+        agg_dlogl_hessian_wrt_percircuit_budgets[i] = 2 * _np.sum(hlogl_dp * dp_dW**2)  # check for overflow
+        _np.seterr(**old_err)
+
+        if not _np.isfinite(agg_dlogl_hessian_wrt_percircuit_budgets[i]):  # deal with potential overflow
+            agg_dlogl_hessian_wrt_percircuit_budgets[i] = 1e100  # something huge
 
         #TODO: see if there's anything useful here, and then REMOVE
         #NOTE - starting to think about alternate objectives with softened "Hessian jump" at dlogl == 0 point.
@@ -363,6 +387,7 @@ def _agg_dlogl_hessian(current_probs, objfn, layout, percircuit_budget_deriv):
 
     assert(_np.all(agg_dlogl_hessian_wrt_percircuit_budgets >= 0)), \
         "Hessian of aggregate LLR wrt any circuit budget should be positive"
+
     H = _np.dot(percircuit_budget_deriv.T,
                 _np.dot(_np.diag(agg_dlogl_hessian_wrt_percircuit_budgets),
                         percircuit_budget_deriv))   # (nW, nC)(nC)(nC, nW)
@@ -453,13 +478,14 @@ def optimize_wildcard_budget_cvxopt(budget, L1weights, objfn, layout, two_dlogl_
             return None  # don't allow negative wildcard vector components
 
         budget.from_vector(_np.array(x))
-        budget.update_probs(initial_probs, current_probs, objfn.freqs, layout, percircuit_budget_deriv)
+        p_deriv = budget.update_probs(initial_probs, current_probs, objfn.freqs, layout, percircuit_budget_deriv,
+                                      return_deriv=True)
 
         #Evaluate F(x) => return (f, Df)
         f = _cvxopt.matrix(_np.array([_agg_dlogl(current_probs, objfn,
                                                  two_dlogl_threshold)]).reshape((1, 1)))  # shape (m,1)
         Df = _cvxopt.matrix(_np.empty((1, n), 'd'))  # shape (m, n)
-        Df[0, :] = _agg_dlogl_deriv(current_probs, objfn, layout, percircuit_budget_deriv)
+        Df[0, :] = _agg_dlogl_deriv(current_probs, objfn, layout, percircuit_budget_deriv, p_deriv)
         #print("DB: rank Df=", _np.linalg.matrix_rank(Df))  # REMOVE
 
         if z is None:
@@ -468,7 +494,7 @@ def optimize_wildcard_budget_cvxopt(budget, L1weights, objfn, layout, two_dlogl_
             return f, Df
 
         # additionally, compute H = z_0 * Hessian(f_0)(wv)
-        H = _cvxopt.matrix(z[0] * _agg_dlogl_hessian(current_probs, objfn, layout, percircuit_budget_deriv))
+        H = _cvxopt.matrix(z[0] * _agg_dlogl_hessian(current_probs, objfn, layout, percircuit_budget_deriv, p_deriv))
         #DEBUG REMOVE
         #print("rank Hf=", _np.linalg.matrix_rank(H), " z[0]=",z[0])
         #print(H)
@@ -541,7 +567,8 @@ def optimize_wildcard_budget_cvxopt_zeroreg(budget, L1weights, objfn, layout, tw
             return None  # don't allow negative wildcard vector components
 
         budget.from_vector(x)
-        budget.update_probs(initial_probs, current_probs, objfn.freqs, layout, percircuit_budget_deriv)
+        p_deriv = budget.update_probs(initial_probs, current_probs, objfn.freqs, layout, percircuit_budget_deriv,
+                                      return_deriv=True)
 
         #Evaluate F(x) => return (f, Df)
         sqrtVec = _np.sqrt((c * x)**2 + SMALL2)
@@ -552,7 +579,7 @@ def optimize_wildcard_budget_cvxopt_zeroreg(budget, L1weights, objfn, layout, tw
         L1term_grad = c if SMALL2 == 0.0 else c**2 * x / sqrtVec
         Df = _cvxopt.matrix(_np.empty((2, n), 'd'))  # shape (m+1, n)
         Df[0, :] = L1term_grad[:, 0]
-        Df[1, :] = _agg_dlogl_deriv(current_probs, objfn, layout, percircuit_budget_deriv)
+        Df[1, :] = _agg_dlogl_deriv(current_probs, objfn, layout, percircuit_budget_deriv, p_deriv)
         #print("rank Df=", _np.linalg.matrix_rank(Df))
         if z is None:
             return f, Df
@@ -561,7 +588,7 @@ def optimize_wildcard_budget_cvxopt_zeroreg(budget, L1weights, objfn, layout, tw
         L1_term_hess = _np.zeros((n, n), 'd') if SMALL2 == 0.0 else \
             _np.diag(-1.0 / (sqrtVec**3) * (c**2 * x)**2 + c**2 / sqrtVec)
         Hf = _cvxopt.matrix(z[0] * L1_term_hess + z[1] * _agg_dlogl_hessian(current_probs, objfn,
-                                                                            layout, percircuit_budget_deriv))
+                                                                            layout, percircuit_budget_deriv, p_deriv))
         #print("rank Hf=", _np.linalg.matrix_rank(Hf), " z[1]=",z[1])
         return f, Df, Hf
 
@@ -609,6 +636,7 @@ def optimize_wildcard_budget_barrier(budget, L1weights, objfn, layout, two_dlogl
     x0 = budget.to_vector()
     initial_probs = objfn.probs.copy()
     current_probs = initial_probs.copy()
+    probs_freqs_precomp = budget.precompute_for_same_probs_freqs(initial_probs, objfn.freqs, layout)
 
     # f0 = 2DLogL - threshold <= 0
     # fi = critical_budget_i - circuit_budget_i <= 0
@@ -617,7 +645,8 @@ def optimize_wildcard_budget_barrier(budget, L1weights, objfn, layout, two_dlogl
 
     def penalty_vec(x):
         budget.from_vector(x)
-        budget.update_probs(initial_probs, current_probs, objfn.freqs, layout, percircuit_budget_deriv)
+        budget.update_probs(initial_probs, current_probs, objfn.freqs, layout, percircuit_budget_deriv,
+                            probs_freqs_precomp)
         f0 = _np.array([_agg_dlogl(current_probs, objfn, two_dlogl_threshold)])
         fi = critical_percircuit_budgets - _np.dot(percircuit_budget_deriv, x)
         return _np.concatenate((f0, fi))
@@ -626,17 +655,18 @@ def optimize_wildcard_budget_barrier(budget, L1weights, objfn, layout, two_dlogl
         assert(min(x) >= 0)  # don't allow negative wildcard vector components
 
         budget.from_vector(_np.array(x))
-        budget.update_probs(initial_probs, current_probs, objfn.freqs, layout, percircuit_budget_deriv)
+        p_deriv = budget.update_probs(initial_probs, current_probs, objfn.freqs, layout,
+                                      percircuit_budget_deriv, probs_freqs_precomp, return_deriv=True)
         f0 = _np.array([_agg_dlogl(current_probs, objfn, two_dlogl_threshold)])
         fi = critical_percircuit_budgets - _np.dot(percircuit_budget_deriv, x)
         f = _np.concatenate((f0, fi, -x))  # adds -x for x >= 0 constraint
         val = -_np.sum(_np.log(-f))
         if not compute_deriv: return val
 
-        Df0 = _agg_dlogl_deriv(current_probs, objfn, layout, percircuit_budget_deriv)
+        Df0 = _agg_dlogl_deriv(current_probs, objfn, layout, percircuit_budget_deriv, p_deriv)
         deriv = -1 / f0 * Df0 - _np.dot(1 / fi, percircuit_budget_deriv) - 1 / x
 
-        Hf0 = _agg_dlogl_hessian(current_probs, objfn, layout, percircuit_budget_deriv)
+        Hf0 = _agg_dlogl_hessian(current_probs, objfn, layout, percircuit_budget_deriv, p_deriv)
         hess = 1 / f0**2 * Df0[:, None] * Df0[None, :] - 1 / f0 * Hf0 \
             + _np.einsum('i,ij,ik->jk', 1 / fi**2, percircuit_budget_deriv, percircuit_budget_deriv) \
             + _np.diag(1 / x**2)
@@ -832,10 +862,11 @@ def NewtonSolve(initial_x, fn, fn_with_derivs=None, dx_tol=1e-6, max_iters=20, p
             break
 
         _np.seterr(**orig_err)
+        norm_x = _np.linalg.norm(x)
         norm_dx = _np.linalg.norm(dx)
         if printer:
-            printer.log(" newton iter %d: f=%g, |Df|=%g, |dx|=%g |Hf|=%g" %
-                        (i, obj, norm_Dobj, norm_dx, _np.linalg.norm(Hobj)))
+            printer.log(" newton iter %d: f=%g, |x|=%g |Df|=%g, |dx|=%g |Hf|=%g" %
+                        (i, obj, norm_x, norm_Dobj, norm_dx, _np.linalg.norm(Hobj)))
             #print("   downhill = ", list(downhill_direction.flat))
             #print("   dx_before_backtrack = ", list(dx_before_backtrack.flat))
             #print("   dx = ", list(dx.flat))
