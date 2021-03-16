@@ -67,7 +67,7 @@ class FOGIDiagram(object):
         self.impact_mode = impact_mode
         self.fogi_stores = [fogi_stores] if isinstance(fogi_stores, _FOGIStore) else fogi_stores
         self.fogi_comps_by_store = [fogi_store.opcoeffs_to_fogi_components_array(op_coefficients)
-                                     for fogi_store in self.fogi_stores]
+                                    for fogi_store in self.fogi_stores]
         self.fogi_coeff_offsets = _np.cumsum([0] + [len(coeffs) for coeffs in self.fogi_comps_by_store])[0:-1]
         self.fogi_comps = _np.concatenate(self.fogi_comps_by_store)
 
@@ -141,7 +141,7 @@ class FOGIDiagram(object):
                 error_rate += self.fogi_comps[info['fogi_index']] * vec_rate
             assert(abs(error_rate.imag) < 1e-6)
             return {'error_rate': error_rate.real}  # maybe negative rates are ok (?) -- we could take abs here.
-            
+
         def _ham_local_contrib(op_set, infos):
             assert(len(op_set) == 1)
             op_label = tuple(op_set)[0]
@@ -216,7 +216,7 @@ class FOGIDiagram(object):
                     errgen_vec = projected_e[self.fogi_stores[si].op_errorgen_indices[op_label]]
                     errgen_op = _create_errgen_op(errgen_vec, self.gauge_basis_mxs)  # NOTE: won't work for reduced models
                     ret[op_label] = _mt.jamiolkowski_angle(errgen_op)  # impact angle for op_label
-                
+
             ret['min_jangle'] = min([v for k, v in ret.items() if k != 'go_jangle'])
             return ret
 
@@ -643,10 +643,10 @@ class FOGIGraphDiagram(FOGIDiagram):
         with open(filename, 'w') as f:
             f.write(s)
 
-    def render_svg(self, filename):
+    def render_svg(self, filename, initial_theta=0, custom_polar_positions=None, custom_polar_ranges=None):
 
         import drawSvg as draw
-        d = draw.Drawing(600, 600, origin='center', displayInline=False)
+        d = draw.Drawing(750, 750, origin='center', displayInline=False)
 
         op_set_info = self.op_set_info
         op_labels = self.fogi_stores[0].primitive_op_labels  # take just from first store
@@ -662,16 +662,31 @@ class FOGIGraphDiagram(FOGIDiagram):
         # Position ops around a circle with more space between groups)
         nPositions = len(op_labels) + len(groups)  # includes gaps between groups
         r0 = 270
-        theta = 0; dtheta = 2 * _np.pi / nPositions
-        springlength = r0 * dtheta / 3.0  # heuristic
+
         polar_positions = {}; group_theta_ranges = {}
-        for group_id, ops_in_group in groups.items():
-            theta_begin = theta
-            for op_label in ops_in_group:
-                polar_positions[op_label] = (r0, theta)
+        if custom_polar_positions is None:
+            theta = initial_theta; dtheta = 2 * _np.pi / nPositions
+            for group_id, ops_in_group in groups.items():
+                theta_begin = theta
+                for op_label in ops_in_group:
+                    polar_positions[op_label] = (r0, theta)
+                    theta += dtheta
+                group_theta_ranges[group_id] = (theta_begin - dtheta / 3, theta - dtheta + dtheta / 3)
                 theta += dtheta
-            group_theta_ranges[group_id] = (theta_begin - dtheta / 3, theta - dtheta + dtheta / 3)
-            theta += dtheta
+        else:
+            for group_id, ops_in_group in groups.items():
+                thetas = [custom_polar_positions[op_label] for op_label in ops_in_group]
+                for op_label in ops_in_group:
+                    polar_positions[op_label] = (r0, custom_polar_positions[op_label])
+                if custom_polar_ranges:
+                    for op_label in ops_in_group:
+                        if op_label in custom_polar_ranges:
+                            group_theta_ranges[group_id] = custom_polar_ranges[op_label]
+                            break
+                    else:
+                        raise ValueError("Missing polar range for group with %s" % str(ops_in_group))
+                else:
+                    group_theta_ranges[group_id] = (min(thetas) - _np.pi / 10, max(thetas) + _np.pi / 10)
 
         # Background wedges
         to_degrees = 360.0 / (2 * _np.pi)
@@ -680,26 +695,38 @@ class FOGIGraphDiagram(FOGIDiagram):
             txt = ("Qubit %d" % target_qubits[0]) if len(target_qubits) == 1 \
                 else ("Qubits " + ", ".join(map(str, target_qubits)))
             txt_theta = (theta_begin + theta_end) / 2
-            rpadding = r0 * 0.1
+            txt_fontsize = 15
+            #print(txt, "at theta = ", txt_theta)  # DEBUG
+
+            rpadding = r0 * 0.15
             x = (r0 + rpadding + 20) * _np.cos(txt_theta)
             y = (r0 + rpadding + 20) * _np.sin(txt_theta)  # text location
-            txt_angle = (txt_theta + _np.pi) if (0 <= txt_theta <= _np.pi) else txt_theta
+            #txt_angle = (txt_theta + _np.pi) if (0 <= txt_theta <= _np.pi) else txt_theta
 
-            p = draw.Path(fill='#AAAAAA', stroke='none')
+            p = draw.Path(fill='#CCCCCC', stroke='none')
             p.arc(0, 0, r0 + rpadding, theta_begin * to_degrees, theta_end * to_degrees, cw=False)
             p.arc(0, 0, 0, theta_end * to_degrees, theta_begin * to_degrees, cw=True, includeL=True)
             p.Z()  # closepath
             d.append(p)
 
+            if _np.cos(theta_begin) < _np.cos(theta_end):
+                arc = draw.Arc(0, 0, r0 + 50, theta_begin * to_degrees, theta_end * to_degrees, stroke='none',
+                               fill='none', cw=False)
+            else:
+                arc = draw.Arc(0, 0, r0 + 50, theta_end * to_degrees, theta_begin * to_degrees, stroke='none',
+                               fill='none', cw=True)
+            d.append(arc)
+            d.append(draw.Text(txt, txt_fontsize, path=arc, fill="#CCCCCC",
+                               text_anchor="middle", valign='middle', font_family='Times'))
+
         #node_js_lines = []
         #edge_js_lines = []
         #table_html = {}
         #long_table_html = {}
-        
+
         MIN_POWER = 1.5  # 10^-MIN_POWER is the largest value end of the spectrum
         MAX_POWER = 3.5  # 10^-MAX_POWER is the smallest value end of the spectrum
-        color_mode = self.color_mode
-        
+
         def _normalize(v):
             return -_np.log10(max(v, 10**(-MAX_POWER)) * 10**MIN_POWER) / (MAX_POWER - MIN_POWER)
 
@@ -724,8 +751,103 @@ class FOGIGraphDiagram(FOGIDiagram):
         def _color_to_textcolor(color_str):
             textcolors = ['black', 'white']
             r, g, b = tuple(map(int, color_str[len('rgb('):-1].split(',')))
-            lightness = sum([r,g,b]) / (3*256)
+            lightness = sum([r, g, b]) / (3 * 256)
             return textcolors[int(lightness < 0.5)]
+
+        def _get_node_colors(coh, sto, total, compact=False):
+            color_mode = self.color_mode
+            labels = []
+
+            if compact and 'H' in total and 'S' in total:  # eliminate 'H' or 'S' if they're zero
+                total = total.copy()
+                if coh <= self.edge_threshold: del total['H']
+                elif sto <= self.edge_threshold: del total['S']
+
+            if 'H' in total and 'S' in total:
+                #title = "Coherent: %.3g<br>Stochastic: %.3g" % (coh, sto)
+                if color_mode == "mix" or "fixed":
+                    back_color = border_color = _node_HScolor(coh, sto)
+                elif color_mode == "mix_wborder":
+                    back_color = _node_HScolor(coh, sto); border_color = "rgb(100, 100, 100)"
+                elif color_mode == "separate":
+                    back_color = _node_Scolor(sto); border_color = _node_Hcolor(coh)
+                if self.numerical_labels:
+                    labels.extend(["H: %.1f%%" % (100 * coh), "S: %.1f%%" % (100 * sto)])
+                edge_color = _node_HScolor(coh, sto)  # edges coming from this node are always of the "mix" color
+
+            elif 'H' in total:
+                #title = "%.3g" % coh
+                back_color = border_color = edge_color = _node_Hcolor(coh)
+                if color_mode == "mix_wborder": border_color = "rgb(100, 100, 100)"
+                if self.numerical_labels: labels.append("%.1f%%" % (100 * coh))
+            elif 'S' in total:
+                #title = "%.3g" % sto
+                back_color = border_color = edge_color = _node_Scolor(sto)
+                if color_mode == "mix_wborder": border_color = "rgb(100, 100, 100)"
+                if self.numerical_labels: labels.append("%.1f%%" % (100 * sto))
+            else:
+                raise ValueError("Invalid types in total dict: %s" % str(total.keys()))
+            tcolor = _color_to_textcolor(back_color)
+            return back_color, border_color, tcolor, edge_color, labels
+
+        def _draw_node_old(r, theta, coh, sto, op_label, total):
+            back_color, border_color, tcolor, _, labels = _get_node_colors(coh, sto, total)
+            x, y = r * _np.cos(theta), r * _np.sin(theta)
+            scale = (coh + sto) / val_max
+            node_width = 20 + 40 * scale
+            node_height = 20 + 40 * scale
+            nodes.append(draw.Rectangle(x - node_width / 2, y - node_height / 2, node_width, node_height, rx=3,
+                                        fill=back_color, stroke=border_color, stroke_width=2))
+            nodes.append(draw.Text(labels, self.node_fontsize * (0.5 + scale), x, y, fill=tcolor,
+                                   text_anchor="middle", valign='middle', font_family='Times'))
+
+        def _draw_node(r, theta, coh, sto, op_label, total):
+            back_color, border_color, tcolor, _, labels = _get_node_colors(coh, sto, total)
+            if self.color_mode == "fixed":
+                back_color = 'blue'
+                border_color = 'red'
+                tcolor = 'white'
+
+            x, y = r * _np.cos(theta), r * _np.sin(theta)
+            scale = (coh + sto) / val_max
+            node_width = 30 + 30 * scale
+            sto_rect_height = 10 + 40 * sto / val_max
+            ham_rect_height = 10 + 40 * coh / val_max
+            node_height = sto_rect_height + ham_rect_height
+            ham_lbl, sto_lbl = labels
+            r_op_lbl = r + 80
+
+            nodes.append(draw.Rectangle(x - node_width / 2, y - node_height / 2, node_width, sto_rect_height, rx=3,
+                                        fill=back_color, stroke='none'))
+            nodes.append(draw.Rectangle(x - node_width / 2, y - node_height / 2 + sto_rect_height, node_width,
+                                        ham_rect_height, rx=3, fill=border_color, stroke='none'))
+            nodes.append(draw.Rectangle(x - node_width / 2, y - node_height / 2, node_width, node_height, rx=3,
+                                        fill='none', stroke='black', stroke_width=1))
+
+            nodes.append(draw.Text(ham_lbl, self.node_fontsize * (0.7 + 0.8 * coh / val_max), x,
+                                   y - node_height / 2 + sto_rect_height + ham_rect_height / 2, fill=tcolor,
+                                   text_anchor="middle", valign='middle', font_family='Times'))
+            nodes.append(draw.Text(sto_lbl, self.node_fontsize * (0.7 + 0.8 * sto / val_max), x,
+                                   y - node_height / 2 + sto_rect_height / 2, fill=tcolor,
+                                   text_anchor="middle", valign='middle', font_family='Times'))
+            nodes.append(draw.Text(str(op_label), 2 * self.node_fontsize,
+                                   r_op_lbl * _np.cos(theta), r_op_lbl * _np.sin(theta),
+                                   fill='black', text_anchor="middle", valign='middle', font_family='Times'))
+
+        def _draw_edge_node(x, y, coh, sto, total):
+            back_color, border_color, tcolor, edge_color, labels = _get_node_colors(coh, sto, total, compact=True)
+            if self.color_mode == "fixed":
+                back_color = border_color = edge_color = '#FF9090'
+                tcolor = 'black'
+            if coh is None: coh = 0
+            if sto is None: sto = 0
+            scale = (coh + sto) / val_max
+            node_radius = 10 + 10 * scale
+            nodes.append(draw.Circle(x, y, node_radius,
+                                     fill=back_color, stroke_width=1, stroke="black"))  # border_color
+            nodes.append(draw.Text(labels, self.edgenode_fontsize * (0.5 + scale), x, y, fill=tcolor,
+                                   text_anchor="middle", valign='middle', font_family='Times'))
+            return edge_color
 
         #process local quantities
         node_locations = {}
@@ -734,50 +856,19 @@ class FOGIGraphDiagram(FOGIDiagram):
         val_max = max([(abs(info['total'].get('H', {}).get('min_jangle', 0))
                         + info['total'].get('S', {}).get('error_rate', 0))
                        for info in op_set_info.values()])
-        val_threshold = _normalize(val_max) / 3.0
+        #val_threshold = _normalize(val_max) / 3.0
 
         for op_set, info in op_set_info.items():
             if len(op_set) != 1: continue
             # create a gate-node in the graph
             r, theta = polar_positions[op_set[0]]
 
-            label = str(op_set[0])
             total = info['total']
             coh = total['H']['min_jangle'] if ('H' in total) else 0.0
             sto = total['S']['error_rate'] if ('S' in total) else 0.0
             #print("VAL = ",(abs(coh) + sto),"Threshold = ",val_threshold)
-
-            if 'H' in total and 'S' in total:
-                title = "Coherent: %.3g<br>Stochastic: %.3g" % (coh, sto)
-                if color_mode == "mix":
-                    back_color = border_color = _node_HScolor(coh, sto)
-                elif color_mode == "mix_wborder":
-                    back_color = _node_HScolor(coh, sto); border_color = "rgb(100, 100, 100)"
-                elif color_mode == "separate":
-                    back_color = _node_Scolor(sto); border_color = _node_Hcolor(coh)
-                if self.numerical_labels: label += "\\nH: %.1f%%\\nS: %.1f%%" % (100 * coh, 100 * sto)
-            elif 'H' in total:
-                title = "%.3g" % coh
-                back_color = border_color = _node_Hcolor(coh)
-                if color_mode == "mix_wborder": border_color = "rgb(100, 100, 100)"
-                if self.numerical_labels: label += "\\n%.1f%%" % (100 * coh)
-            elif 'S' in total:
-                title = "%.3g" % sto
-                back_color = border_color = _node_Scolor(sto)
-                if color_mode == "mix_wborder": border_color = "rgb(100, 100, 100)"
-                if self.numerical_labels: label += "\\n%.1f%%" % (100 * sto)
-            else:
-                raise ValueError("Invalid types in total dict: %s" % str(total.keys()))
-            tcolor = _color_to_textcolor(back_color)
-
-            x, y = r * _np.cos(theta), r * _np.sin(theta)
-            node_width = 60
-            node_height = 60
-            nodes.append(draw.Rectangle(x - node_width / 2, y - node_height / 2, node_width, node_height, rx=3,
-                                        fill=back_color, stroke=border_color, stroke_width=2))
-            nodes.append(draw.Text(label.split('\\n'), self.node_fontsize, x, y, fill=tcolor,
-                                   text_anchor="middle", valign='middle', font_family='Times'))
-            node_locations[op_set[0]] = x, y
+            _draw_node(r, theta, coh, sto, op_set[0], total)
+            node_locations[op_set[0]] = r * _np.cos(theta), r * _np.sin(theta)
 
         #process relational quantities
         relational_distances = []
@@ -809,67 +900,29 @@ class FOGIGraphDiagram(FOGIDiagram):
                                     _np.sum([node_locations[op_label][0] for op_label in op_set]))
                 x, y = int(r * _np.cos(theta)), int(r * _np.sin(theta))
 
-            label = ""; edge_labels = {}
-            if 'H' in total and 'S' in total:
-                title = "Coherent: %s<br>Stochastic: %s" % (_dstr(total['H']), _dstr(total['S']))
-                mix_color = _node_HScolor(total['H']['go_jangle'], total['S']['error_rate'])
-                if color_mode == "mix":
-                    back_color = border_color = _node_HScolor(total['H']['go_jangle'], total['S']['error_rate'])
-                elif color_mode == "mix_wborder":
-                    back_color = _node_HScolor(total['H']['go_jangle'], total['S']['error_rate'])
-                    border_color = "rgb(100, 100, 100)"
-                elif color_mode == "separate":
-                    back_color = _node_Scolor(total['S']['error_rate'])
-                    border_color = _node_Hcolor(total['H']['go_jangle'])
+            coh = total['H']['go_jangle'] if ('H' in total) else None
+            sto = total['S']['error_rate'] if ('S' in total) else None
+            edge_color = _draw_edge_node(x, y, coh, sto, total)
 
-                if self.numerical_labels:
-                    #OLD: label += "H: %.3f S: %.3f" % (_dstr(total['H'], r'\n'), _dstr(total['S'], r'\n'))
-                    go_jangle = total['H']['go_jangle']
-                    err_rate = total['S']['error_rate']
-                    if abs(go_jangle) > self.edge_threshold and err_rate > self.edge_threshold:
-                        label += "H: %.1f%%\\nS: %.1f%%" % (100 * go_jangle, 100 * err_rate)
-                    elif abs(go_jangle) > self.edge_threshold:
-                        label += "%.1f%%" % (100 * go_jangle)
-                    elif err_rate > self.edge_threshold:
-                        label += "%.1f%%" % (100 * err_rate)
-
-                    if abs(go_jangle) > self.edge_threshold:
-                        edge_labels = {op_label: total['H'][op_label] for op_label in op_set}
-
-            elif 'H' in total:
-                title = "%s" % _dstr(total['H'])
-                mix_color = _node_Hcolor(total['H']['go_jangle'])
-                back_color = border_color = _node_Hcolor(total['H']['go_jangle'])  # was 'min_impact' (?)
-                if color_mode == "mix_wborder": border_color = "rgb(100, 100, 100)"
-                #if self.numerical_labels: label += "%s" % _dstr(total['H'], r'\n')  # show entire dict
-                if self.numerical_labels:
-                    label += "%.1f%%" % (100 * total['H']['go_jangle'])
-                    edge_labels = {op_label: total['H'][op_label] for op_label in op_set}
-            elif 'S' in total:
-                title = "%s" % _dstr(total['S'])
-                mix_color = _node_Scolor(total['S']['error_rate'], return_textcolor=True)
-                back_color = border_color = _node_Scolor(total['S']['error_rate'])
-                if color_mode == "mix_wborder": border_color = "rgb(100, 100, 100)"
-                if self.numerical_labels: label += "%s" % _dstr(total['S'], r'\n')  # show entire dict
-                # Note: "entire" dict is just the single error rate in the S case
-            else:
-                raise ValueError("Invalid types in total dict: %s" % str(total.keys()))
-            tcolor = _color_to_textcolor(back_color)
-
-            node_radius = 20
-            nodes.append(draw.Circle(x, y, node_radius,
-                                     fill=back_color, stroke_width=2, stroke=border_color))
-            nodes.append(draw.Text(label, self.edgenode_fontsize, x, y, fill=tcolor,
-                                   text_anchor="middle", valign='middle', font_family='Times'))
+            edge_labels = {}
+            if self.numerical_labels and abs(coh) > self.edge_threshold:
+                #Only Hamiltonian edge labels so far (TODO)
+                edge_labels = {op_label: total['H'][op_label] for op_label in op_set}
 
             for op_label in op_set:
                 node_x, node_y = node_locations[op_label]
-                main_edge = draw.Path(stroke=mix_color, stroke_width=mag * 100, fill='none')
+                edge_width = 0.5 + mag * 200
+                main_edge = draw.Path(stroke=edge_color, stroke_width=edge_width, fill='none')
                 main_edge.M(x, y).L(node_x, node_y)  # moveTo, lineTo
                 edges.append(main_edge)
-                
+
+                line_edge = draw.Path(stroke="black", stroke_width=min(edge_width / 2, 0.5), fill='none',
+                                      stroke_dasharray="4" if info['dependent'] else 'none')
+                line_edge.M(x, y).L(node_x, node_y)  # moveTo, lineTo
+                edges.append(line_edge)
                 #edges.append(draw.Lines(x, y, node_x, node_y, close=False,
                 #                        fill='none', stroke='gray', stroke_width=1))
+
                 if edge_labels:
                     txt_edge = draw.Path(stroke='none', stroke_width=0, fill='none')
                     if x <= node_x: txt_edge.M(x, y).L(node_x, node_y)  # moveTo, lineTo
@@ -1195,7 +1248,6 @@ class FOGIStackedBarDiagram(FOGIDiagram):
         # and have result be a list of ?
         for op_set, op_fogi_infos_by_type in self.fogi_infos.items():
             pass
-
 
 
 _template = """<html>
