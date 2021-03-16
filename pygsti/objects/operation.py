@@ -11,6 +11,7 @@ Defines classes which represent gates, as well as supporting functions
 #***************************************************************************************************
 
 import numpy as _np
+from numpy.random import RandomState as _RandomState
 import scipy.linalg as _spl
 import scipy.sparse as _sps
 import scipy.sparse.linalg as _spsl
@@ -2666,10 +2667,11 @@ class StochasticNoiseOp(LinearOperator):
 
     def _update_rep(self):
         # Create dense error superoperator from paramvec
-        errormap = _np.identity(self.dim)
-        for rate, ss in zip(self._params_to_rates(self.params), self.stochastic_superops):
-            errormap += rate * ss
-        self._rep.base[:, :] = errormap
+        if self._evotype == "densitymx":
+            errormap = _np.identity(self.dim)
+            for rate, ss in zip(self._params_to_rates(self.params), self.stochastic_superops):
+                errormap += rate * ss
+            self._rep.base[:, :] = errormap
 
     def _rates_to_params(self, rates):
         return _np.sqrt(_np.array(rates))
@@ -2980,7 +2982,7 @@ class DepolarizeOp(StochasticNoiseOp):
             A copy of this object.
         """
         if memo is not None and id(self) in memo: return memo[id(self)]
-        copyOfMe = DepolarizeOp(self.dim, self.basis, self.evotype, self._params_to_rates(self.to_vector())[0])
+        copyOfMe = DepolarizeOp(self.dim, self.basis, self._evotype, self._params_to_rates(self.to_vector())[0])
         return self._copy_gpindices(copyOfMe, parent, memo)
 
 
@@ -6735,24 +6737,68 @@ class CliffordOp(LinearOperator):
         return s
 
 
-class CHPOp(LinearOperator):
+class StochasticCHPOp(LinearOperator):
     """
-    A Clifford operation represented by a list of CHP operations.
+    A probabilistic Clifford operation represented by lists of CHP operations.
     """
-    def __init__(self, chp_rep=None):
+    def __init__(self, chp_reps, seed_or_state=None):
         """
-        Creates a new CliffordOp from a list of CHP operations.
+        Creates a new StochasticCHPOp from a list of (CHP operation, probability) tuples.
+
+        Parameters
+        ----------
+        chp_reps : list of tuples of (str or list of str, float)
+            If first entry in tuple is str, must be a name
+            that matches one of the standard gatenames from pygsti.tools.internalgates
+            If first entry in tuple is a list, elements must be one of ['h', 'p', 'c']
+            Second entry in the tuple is the probability of the operation
+        seed_or_state : float or numpy.random.RandomState
+            RandomState or seed for RandomState to use for stochastic choice of operation
+        """
+        if isinstance(seed_or_state, _RandomState):
+            self.rand_state = seed_or_state
+        else:
+            self.rand_state = _RandomState(seed_or_state)
+
+        chp_lists = []
+        probs = []
+        for chp_rep, prob in chp_reps:
+            chp_lists.append(self._get_chp_list(chp_rep))
+            probs.append(prob)
+
+        rep = replib.CHPOpRep(chp_lists, probs)
+        LinearOperator.__init__(self, rep, "chp")
+    
+    def get_chp_str(self, q0, q1=None):
+        """Stochastically pick an operation and return a string suitable for printing to a CHP input file
+        """
+        index = self.rand_state.choice(len(self._rep.probs), p=self._rep.probs)
+        chosen_rep = self._rep.chp_reps[index]
+
+        if 'c' in chosen_rep and q1 is None:
+            raise SyntaxError("CNOT gate in chosen CHP operation but second qubit not provided")
+        
+        s = ""
+        for label in chosen_rep:
+            s += f'{label} {q0}\n' if label in ['h', 'p'] else f'{label} {q0} {q1}\n'
+        
+        return s
+
+
+    def _get_chp_list(self, chp_rep):
+        """Parse/sanitize a single CHP rep.
 
         Parameters
         ----------
         chp_rep : str or list of str
-            If str, must be a name that matches one of the standard gatenames
-            from pygsti.tools.internalgates
+            If str, must be a name that matches one of the standard gatenames from pygsti.tools.internalgates
             If list, elements must be one of ['h', 'p', 'c']
 
+        Returns
+        -------
+        chp_list: list of str
+            Sanitizied list of CHP strings
         """
-
-        # Set chp_list with sanity checking
         if isinstance(chp_rep, str): # Look up chp_list from standard gatenames
             std_chpreps = _igts.standard_gatenames_chp_conversions()
             # Add "native" CHP gates in case single element passed in
@@ -6761,27 +6807,67 @@ class CHPOp(LinearOperator):
             std_chpreps['c'] = ['c']
 
             if chp_rep in std_chpreps.keys():
-                self.chp_list = std_chpreps[chp_rep]
+                chp_list = std_chpreps[chp_rep]
             else:
                 raise SyntaxError(f'CHP rep given as str "{chp_rep}", but must be one of: {std_chpreps.keys()}')
-        elif isinstance(chp_rep, list) or isinstance(chp_rep, tuple): # Passed in raw chp_list
+        elif isinstance(chp_rep, list) or isinstance(chp_rep, tuple):
             allowed_entries = ['h', 'p', 'c']
 
             for entry in chp_rep:
                 if entry not in allowed_entries:
-                    raise SyntaxError(f"Entries of `chp_list` must be one of: {allowed_entries}")
-            self.chp_list = list(chp_rep)
-        else:
-            raise SyntaxError('CHP rep needs to be given as str (standard gate name) or list of ["h", "p", "c"] gates')
+                    raise SyntaxError(f"Entries of `chp_rep` must be one of: {allowed_entries}")
 
-        rep = replib.CHPOpRep(self.chp_list)
-        LinearOperator.__init__(self, rep, "chp")
+            chp_list = list(chp_rep)
+        else:
+            raise TypeError("Type of `chp_rep` must be str, list, or tuple")
+
+        return chp_list
+
+    def __str__(self):
+        """Return string representation"""
+        s = "Stochastic CHP operation with labels and probabilities:\n"
+        max_label_len = 2*max([len(rep) for rep in self._rep.chp_reps])
+        for chp_rep, probs in zip(self._rep.chp_reps, self._rep.probs):
+            label = ",".join(chp_rep)
+            s += f"{label:{max_label_len}s}: {probs}\n"
+        return s
+
+class CHPOp(StochasticCHPOp):
+    """A Clifford operation represented by a list of CHP operations.
+
+    Mostly for convenience to simplify running a single CHP circuit with no stochastic noise.
+    """
+    def __init__(self, chp_rep):
+        """
+        Creates a new CHPOp as a StochasticCHPOp with one operation.
+
+        Parameters
+        ----------
+        chp_rep : str or list of str
+            If str, must be a name that matches one of the standard gatenames from pygsti.tools.internalgates
+            If list, elements must be one of ['h', 'p', 'c']
+        """
+        super().__init__([(chp_rep, 1.0)])
+    
+    def get_chp_str(self, q0, q1=None):
+        """Return a string suitable for printing to a CHP input file
+        """
+        chosen_rep = self._rep.chp_reps[0]
+        if 'c' in chosen_rep and q1 is None:
+            raise SyntaxError("CNOT gate in chosen CHP operation but second qubit not provided")
+        
+        s = ""
+        for label in chosen_rep:
+            s += f'{label} {q0}\n' if label in ['h', 'p'] else f'{label} {q0} {q1}\n'
+        
+        return s
 
     def __str__(self):
         """Return string representation"""
         s = "CHP operation with labels: "
-        s += ",".join(self.chp_list)
+        s += ",".join(self._rep.chp_reps[0])
         return s
+
 
 # STRATEGY:
 # - maybe create an abstract base TermOperation class w/taylor_order_terms(...) function?

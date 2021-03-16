@@ -273,6 +273,7 @@ class ForwardSimulator(object):
         CircuitOutcomeProbabilityArrayLayout
         """
         #Note: resource_alloc not even used -- make a slightly more complex "default" strategy?
+        # SS 2021-03-16: This needs ralloc passed in to make parallelization work out for WeakForwardSim
         return _CircuitOutcomeProbabilityArrayLayout.create_from(circuits, self.model, dataset, derivative_dimensions)
 
     #TODO UPDATE

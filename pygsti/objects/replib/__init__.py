@@ -32,4 +32,4 @@ except ImportError:
     from .slowreplib import *
 
 # Import representations for external simulators
-from .extreplib import *
+from .externalreplib import *

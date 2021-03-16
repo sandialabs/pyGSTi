@@ -12,6 +12,7 @@ import sys
 import time as _time
 import math as _math
 import numpy as _np
+from numpy.random import RandomState as _RandomState
 import scipy.sparse as _sps
 import itertools as _itertools
 import functools as _functools
@@ -25,18 +26,21 @@ from ...tools.matrixtools import _fas
 
 from scipy.sparse.linalg import LinearOperator
 
-
-## SS TODO: Finish flushing this out
-class CHPOpRep(object):
-    def __init__(self, chp_list):
-        self.chp_list = chp_list
-        self.dim = len(chp_list)
-
-    # Representations for external simulators do not need to have acton methods
-    # as we do not always have access to the internal state of simulator
-
+# TODO: Shift to base class (either ExternalOpRep or pushed up for all OpReps)
+# Also maybe check we don't see a performance hit with the inheritance
+# Representations for external simulators do not need to have acton methods
+# as we do not always have access to the internal state of simulator
+class ExternalOpRep(object):
     def acton(self, state):
         raise NotImplementedError()
 
     def adjoint_acton(self, state):
         raise NotImplementedError()
+
+class CHPOpRep(ExternalOpRep):
+    def __init__(self, chp_reps, probs):
+        self.chp_reps = chp_reps
+        self.probs = probs
+        self.dim = len(chp_reps)
+
+
