@@ -432,8 +432,8 @@ class FOGIGraphDiagram(FOGIDiagram):
     def _get_node_colors(self, coh, sto, total, compact=False, edge_node=False):
         color_mode = self.color_mode
         labels = []
-        make_labels = bool(self.numerical_labels is True or
-                           (isinstance(self.numerical_labels, (tuple, list)) and 'node' in self.numerical_labels))
+        make_labels = bool(self.numerical_labels is True
+                           or (isinstance(self.numerical_labels, (tuple, list)) and 'node' in self.numerical_labels))
 
         if compact and 'H' in total and 'S' in total:  # eliminate 'H' or 'S' if they're zero
             total = total.copy()
@@ -577,8 +577,9 @@ class FOGIGraphDiagram(FOGIDiagram):
             edge_color = self._draw_edge_node(drawing, x, y, coh, sto, total, val_max, op_set, info)
 
             edge_labels = {}
-            make_labels = bool(self.numerical_labels is True or
-                               (isinstance(self.numerical_labels, (tuple, list)) and 'edge' in self.numerical_labels))
+            make_labels = bool(self.numerical_labels is True
+                               or (isinstance(self.numerical_labels, (tuple, list))
+                                   and 'edge' in self.numerical_labels))
             if make_labels and abs(coh) > self.edge_threshold:
                 #Only Hamiltonian edge labels so far (TODO)
                 edge_labels = {op_label: total['H'][op_label] for op_label in op_set}
@@ -593,12 +594,34 @@ class FOGIGraphDiagram(FOGIDiagram):
 
 class FOGISvgGraphDiagram(FOGIGraphDiagram):
 
+    def __init__(self, fogi_stores, op_coefficients, model_dim, op_to_target_qubits=None,
+                 physics=True, numerical_labels=False, edge_threshold=1e-6, color_mode="separate",
+                 node_fontsize=20, edgenode_fontsize=14, edge_fontsize=12, impact_mode='current'):
+        super().__init__(fogi_stores, op_coefficients, model_dim, op_to_target_qubits, physics, numerical_labels,
+                         edge_threshold, color_mode, node_fontsize, edgenode_fontsize, edge_fontsize, impact_mode)
+        self.tweaks = {'node_width_ab': (30, 30),
+                       'node_height_ab': (40, 10),
+                       'node_rounded_rect_radius': 3,
+                       'op_lbl_roffset': 80,
+                       'node_fontsize_ab': (0.8, 0.7),
+                       'edgenode_size_ab': (10, 10),
+                       'edgenode_fontsize_ab': (1.0, 0.5),
+                       'edge_width_ab': (200, 0.5),
+                       'edge_label_offset': 0.6,
+                       'wedge_fontsize': 15,
+                       'wedge_padding_factor': 0.15,
+                       'wedge_width': 90,
+                       'wedge_control_mag': 100.0,
+                       'wedge_label_offset': 50,
+                       'svg_size': (750, 750)}
+
     def _create_drawing(self):
         SVGDrawing = _collections.namedtuple('SVGDrawing', ['nodes', 'edges'])
         return SVGDrawing([], [])
 
     def _render_drawing(self, drawing, filename):
-        d = _draw.Drawing(750, 750, origin='center', displayInline=False)
+        sizex, sizey = self.tweaks['svg_size']
+        d = _draw.Drawing(sizex, sizey, origin='center', displayInline=False)
         for x in drawing.edges: d.append(x)
         for x in drawing.nodes: d.append(x)
         if filename: d.saveSvg(filename)
@@ -625,27 +648,35 @@ class FOGISvgGraphDiagram(FOGIGraphDiagram):
             border_color = 'red'
             tcolor = 'white'
 
+        wa, wb = self.tweaks['node_width_ab']
+        ha, hb = self.tweaks['node_height_ab']
         x, y = r * _np.cos(theta), r * _np.sin(theta)
         scale = (coh + sto) / val_max
-        node_width = 30 + 30 * scale
-        sto_rect_height = 10 + 40 * sto / val_max
-        ham_rect_height = 10 + 40 * coh / val_max
+        node_width = wb + wa * scale
+        sto_rect_height = hb + ha * sto / val_max
+        ham_rect_height = hb + ha * coh / val_max
         node_height = sto_rect_height + ham_rect_height
-        r_op_lbl = r + 80
+        r_op_lbl = r + self.tweaks['op_lbl_roffset']
+        rx = self.tweaks['node_rounded_rect_radius']
 
-        nodes.append(_draw.Rectangle(x - node_width / 2, y - node_height / 2, node_width, sto_rect_height, rx=3,
+        nodes.append(_draw.Rectangle(x - node_width / 2, y - node_height / 2, node_width, sto_rect_height, rx=rx,
                                      fill=back_color, stroke='none'))
+        nodes.append(_draw.Rectangle(x - node_width / 2, y - node_height / 2 + sto_rect_height / 2, node_width,
+                                     sto_rect_height / 2, fill=back_color, stroke='none'))  # non-rounded rect
         nodes.append(_draw.Rectangle(x - node_width / 2, y - node_height / 2 + sto_rect_height, node_width,
-                                     ham_rect_height, rx=3, fill=border_color, stroke='none'))
-        nodes.append(_draw.Rectangle(x - node_width / 2, y - node_height / 2, node_width, node_height, rx=3,
+                                     ham_rect_height, rx=rx, fill=border_color, stroke='none'))
+        nodes.append(_draw.Rectangle(x - node_width / 2, y - node_height / 2 + sto_rect_height, node_width,
+                                     ham_rect_height / 2, fill=border_color, stroke='none'))  # non-rounded rect
+        nodes.append(_draw.Rectangle(x - node_width / 2, y - node_height / 2, node_width, node_height, rx=rx,
                                      fill='none', stroke='black', stroke_width=1))
 
         if len(labels) > 0:
             ham_lbl, sto_lbl = labels
-            nodes.append(_draw.Text(ham_lbl, self.node_fontsize * (0.7 + 0.8 * coh / val_max), x,
+            fa, fb = self.tweaks['node_fontsize_ab']
+            nodes.append(_draw.Text(ham_lbl, self.node_fontsize * (fb + fa * coh / val_max), x,
                                     y - node_height / 2 + sto_rect_height + ham_rect_height / 2, fill=tcolor,
                                     text_anchor="middle", valign='middle', font_family='Times'))
-            nodes.append(_draw.Text(sto_lbl, self.node_fontsize * (0.7 + 0.8 * sto / val_max), x,
+            nodes.append(_draw.Text(sto_lbl, self.node_fontsize * (fb + fa * sto / val_max), x,
                                     y - node_height / 2 + sto_rect_height / 2, fill=tcolor,
                                     text_anchor="middle", valign='middle', font_family='Times'))
             nodes.append(_draw.Text(str(op_label), 2 * self.node_fontsize,
@@ -658,21 +689,25 @@ class FOGISvgGraphDiagram(FOGIGraphDiagram):
         if coh is None: coh = 0
         if sto is None: sto = 0
         scale = (coh + sto) / val_max
-        node_radius = 10 + 10 * scale
+        ra, rb = self.tweaks['edgenode_size_ab']
+        node_radius = rb + ra * scale
         nodes.append(_draw.Circle(x, y, node_radius,
                                   fill=back_color, stroke_width=1, stroke="black"))  # border_color
         if len(labels) > 0:
-            nodes.append(_draw.Text(labels, self.edgenode_fontsize * (0.5 + scale), x, y, fill=tcolor,
+            fa, fb = self.tweaks['edgenode_fontsize_ab']
+            nodes.append(_draw.Text(labels, self.edgenode_fontsize * (fb + fa * scale), x, y, fill=tcolor,
                                     text_anchor="middle", valign='middle', font_family='Times'))
         return edge_color
 
     def _draw_edge(self, drawing, x1, y1, x2, y2, edge_color, mag, edge_label, op_label, is_dependent):
         edges = drawing.edges
-        edge_width = 0.5 + mag * 200
+        wa, wb = self.tweaks['edge_width_ab']
+        edge_width = wb + wa * mag
         main_edge = _draw.Path(stroke=edge_color, stroke_width=edge_width, fill='none')
         main_edge.M(x1, y1).L(x2, y2)  # moveTo, lineTo
         edges.append(main_edge)
 
+        is_dependent = False  # HACK for paper - disable dashed lines
         line_edge = _draw.Path(stroke="black", stroke_width=min(edge_width / 2, 0.5), fill='none',
                                stroke_dasharray="4" if is_dependent else 'none')
         line_edge.M(x1, y1).L(x2, y2)  # moveTo, lineTo
@@ -687,14 +722,14 @@ class FOGISvgGraphDiagram(FOGIGraphDiagram):
             prefix = "max " if self.impact_mode == 'max' else ""
             edges.append(_draw.Text("%s%.1f%%" % (prefix, 100 * edge_label),
                                     self.edge_fontsize, path=txt_edge, center=True, fill='black',
-                                    font_family='Times', lineOffset=0.6))
+                                    font_family='Times', lineOffset=self.tweaks['edge_label_offset']))
 
     def _draw_wedge(self, drawing, r, theta_begin, theta_end, txt):
 
         to_degrees = 360.0 / (2 * _np.pi)
-        txt_fontsize = 15
+        txt_fontsize = self.tweaks['wedge_fontsize']
 
-        rpadding = r * 0.15
+        rpadding = r * self.tweaks['wedge_padding_factor']
         #txt_theta = (theta_begin + theta_end) / 2
         #x = (r0 + rpadding + 20) * _np.cos(txt_theta)
         #y = (r0 + rpadding + 20) * _np.sin(txt_theta)  # text location
@@ -702,16 +737,49 @@ class FOGISvgGraphDiagram(FOGIGraphDiagram):
 
         edges = drawing.edges
         p = _draw.Path(fill='#CCCCCC', stroke='none')
-        p.arc(0, 0, r + rpadding, theta_begin * to_degrees, theta_end * to_degrees, cw=False)
-        p.arc(0, 0, 0, theta_end * to_degrees, theta_begin * to_degrees, cw=True, includeL=True)
-        p.Z()  # closepath
-        edges.append(p)
 
+        typ = "bananna"  # "pie_slice"
+        if typ == "pie_slice":
+            p.arc(0, 0, r + rpadding, theta_begin * to_degrees, theta_end * to_degrees, cw=False)
+            p.arc(0, 0, 0, theta_end * to_degrees, theta_begin * to_degrees, cw=True, includeL=True)
+            p.Z()  # closepath
+            edges.append(p)
+
+        elif typ == "bananna":
+            bananna_width = self.tweaks['wedge_width']
+            r_high = r + rpadding
+            r_low = r_high - bananna_width
+            #r_mid = (r_high + r_low) / 2.0
+            #dtheta = _np.pi / 10
+            ctrl_mag = self.tweaks['wedge_control_mag']
+
+            p.arc(0, 0, r_high, theta_begin * to_degrees, theta_end * to_degrees, cw=False)
+            bx, by = r_high * _np.cos(theta_end), r_high * _np.sin(theta_end)  # begin point
+            cx1, cy1 = bx - ctrl_mag * _np.sin(theta_end), by + ctrl_mag * _np.cos(theta_end)  # control pt for begin
+            ex, ey = r_low * _np.cos(theta_end), r_low * _np.sin(theta_end)  # end point
+            cx2, cy2 = ex - ctrl_mag * _np.sin(theta_end), ey + ctrl_mag * _np.cos(theta_end)  # control pt for begin
+            p.C(cx1, cy1, cx2, cy2, ex, ey)
+
+            p.arc(0, 0, r_low, theta_end * to_degrees, theta_begin * to_degrees, cw=True, includeL=True)
+            bx, by = r_low * _np.cos(theta_begin), r_low * _np.sin(theta_begin)  # begin point
+            cx1, cy1 = bx + ctrl_mag * _np.sin(theta_begin), by - ctrl_mag * _np.cos(theta_begin)  # ctrl pt for begin
+            ex, ey = r_high * _np.cos(theta_begin), r_high * _np.sin(theta_begin)  # end point
+            cx2, cy2 = ex + ctrl_mag * _np.sin(theta_begin), ey - ctrl_mag * _np.cos(theta_begin)  # ctrl pt for end
+            p.C(cx1, cy1, cx2, cy2, ex, ey)
+
+            p.Z()  # closepath
+            edges.append(p)
+
+        #Draw text along arc
+        roffset = self.tweaks['wedge_label_offset']
+        dtheta = _np.pi / 6  # make path extra large so we ensure there's enough path to fit entire label
+        theta_begin -= dtheta
+        theta_end += dtheta
         if _np.cos(theta_begin) < _np.cos(theta_end):
-            arc = _draw.Arc(0, 0, r + 50, theta_begin * to_degrees, theta_end * to_degrees, stroke='none',
+            arc = _draw.Arc(0, 0, r + roffset, theta_begin * to_degrees, theta_end * to_degrees, stroke='none',
                             fill='none', cw=False)
         else:
-            arc = _draw.Arc(0, 0, r + 50, theta_end * to_degrees, theta_begin * to_degrees, stroke='none',
+            arc = _draw.Arc(0, 0, r + roffset, theta_end * to_degrees, theta_begin * to_degrees, stroke='none',
                             fill='none', cw=True)
         edges.append(arc)
         edges.append(_draw.Text(txt, txt_fontsize, path=arc, fill="#CCCCCC",
