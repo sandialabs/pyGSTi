@@ -19,6 +19,11 @@ from ..tools import matrixtools as _mt
 
 import matplotlib.cm as _matplotlibcm
 from matplotlib.colors import LinearSegmentedColormap as _LinearSegmentedColormap
+
+try:
+    import drawSvg as _draw
+except ImportError:
+    _draw = None
 #_Hcmap = _matplotlibcm.get_cmap('Reds_r')
 #_Scmap = _matplotlibcm.get_cmap('Blues_r')
 
@@ -53,6 +58,36 @@ def _is_dependent(infos_by_type):
                 if info['dependent'] is False:
                     return False
     return True
+
+
+def _dstr(d, joinstr="<br>"):  # dict-to-string formatting function
+    if len(d) == 1: return "%.3g" % _np.real_if_close(next(iter(d.values())))
+    return joinstr.join(["%s: %.3g" % (k, _np.real_if_close(v)) for k, v in d.items()])
+
+
+def _fmt_tableval(val):
+    if isinstance(val, dict):
+        if len(val) == 1: return _fmt_tableval(next(iter(val.values())))
+        return " <br> ".join(["%s: %s" % (k, _fmt_tableval(v)) for k, v in val.items()])
+    if _np.iscomplex(val): val = _np.real_if_close(val)
+    if _np.isreal(val) or _np.iscomplex(val):
+        if abs(val) < 1e-6: val = 0.0
+        if _np.isreal(val): return "%.3g" % val.real
+        else: return "%.3g + %.3gj" % (val.real, val.imag)
+    return str(val)
+
+
+def _make_table(table_info, rowlbl, title):
+    table_dict, table_rows, table_cols = table_info
+    html = "<table><thead><tr><th colspan=%d>%s</th></tr>\n" % (len(table_cols) + 1, title)
+    html += ("<tr><th>%s<th>" % rowlbl) + "</th><th>".join(table_cols) + "</th></tr></thead><tbody>\n"
+    for row in table_rows:
+        table_row_text = []
+        for col in table_cols:
+            val = table_dict[row][col]
+            table_row_text.append(_fmt_tableval(val))
+        html += "<tr><th>" + str(row) + "</th><td>" + "</td><td>".join(table_row_text) + "</td></tr>\n"
+    return html + "</tbody></table>"
 
 
 class FOGIDiagram(object):
@@ -348,305 +383,97 @@ class FOGIGraphDiagram(FOGIDiagram):
         self.node_fontsize = node_fontsize
         self.edgenode_fontsize = edgenode_fontsize
         self.edge_fontsize = edge_fontsize
+        self.MIN_POWER = 1.5  # 10^-MIN_POWER is the largest value end of the spectrum
+        self.MAX_POWER = 3.5  # 10^-MAX_POWER is the smallest value end of the spectrum
 
-    def render(self, filename):
+    def _normalize(self, v):
+        return -_np.log10(max(v, 10**(-self.MAX_POWER)) * 10**self.MIN_POWER) / (self.MAX_POWER - self.MIN_POWER)
 
-        op_set_info = self.op_set_info
-        op_labels = self.fogi_stores[0].primitive_op_labels  # take just from first store
+    #def _normalize(v):
+    #    v = min(max(v, 10**(-MAX_POWER)), 10**(-MIN_POWER))
+    #    return 1.0 - v / (10**(-MIN_POWER) - 10**(-MAX_POWER))
 
-        #Group ops based on target qubits
-        target_qubit_groups = tuple(sorted(set(self.op_to_target_qubits.values())))
-        groupids = {op_label: target_qubit_groups.index(self.op_to_target_qubits[op_label])
-                    for op_label in op_labels}
-        groups = {group_id: [] for group_id in range(len(target_qubit_groups))}
-        for op_label in op_labels:
-            groups[groupids[op_label]].append(op_label)
+    def _node_HScolor(self, Hvalue, Svalue):
+        r, g, b, a = _Hcmap(self._normalize(Hvalue))
+        r2, g2, b2, a2 = _Scmap(self._normalize(Svalue))
+        r = (r + r2) / 2; g = (g + g2) / 2; b = (b + b2) / 2
+        return "rgb(%d,%d,%d)" % (int(r * 255.9), int(g * 255.9), int(b * 255.9))
 
-        # Position ops around a circle with more space between groups)
-        nPositions = len(op_labels) + len(groups)  # includes gaps between groups
-        r0 = 40 * nPositions  # heuristic
-        theta = 0; dtheta = 2 * _np.pi / nPositions
-        springlength = r0 * dtheta / 3.0  # heuristic
-        polar_positions = {}; group_theta_ranges = {}
-        for group_id, ops_in_group in groups.items():
-            theta_begin = theta
-            for op_label in ops_in_group:
-                polar_positions[op_label] = (r0, theta)
-                theta += dtheta
-            group_theta_ranges[group_id] = (theta_begin - dtheta / 3, theta - dtheta + dtheta / 3)
-            theta += dtheta
+    def _node_Hcolor(self, value):
+        r, g, b, a = _Hcmap(self._normalize(value))
+        return "rgb(%d,%d,%d)" % (int(r * 255.9), int(g * 255.9), int(b * 255.9))
 
-        # Background wedges
-        beforeDrawingCalls = ""
-        for group_id, (theta_begin, theta_end) in group_theta_ranges.items():
-            target_qubits = target_qubit_groups[group_id]
-            txt = ("Qubit %d" % target_qubits[0]) if len(target_qubits) == 1 \
-                else ("Qubits " + ", ".join(map(str, target_qubits)))
-            txt_theta = (theta_begin + theta_end) / 2
-            rpadding = 50
-            x = (r0 + rpadding + 20) * _np.cos(txt_theta)
-            y = (r0 + rpadding + 20) * _np.sin(txt_theta)  # text location
-            txt_angle = (txt_theta + _np.pi) if (0 <= txt_theta <= _np.pi) else txt_theta
-            beforeDrawingCalls += ('ctx.beginPath();\n'
-                                   'ctx.arc(0, 0, %f, %f, %f, false);\n'
-                                   'ctx.lineTo(0, 0);\n'
-                                   'ctx.closePath();\n'
-                                   'ctx.fill();\n'
-                                   'ctx.save();\n'
-                                   'ctx.translate(%f, %f);\n'
-                                   'ctx.rotate(Math.PI / 2 + %f);\n'
-                                   'ctx.fillText("%s", 0, 0);\n'
-                                   'ctx.restore();\n') % (
-                                       r0 + rpadding, theta_begin, theta_end, x, y, txt_angle, txt)
+    def _node_Scolor(self, value):
+        r, g, b, a = _Scmap(self._normalize(value))
+        return "rgb(%d,%d,%d)" % (int(r * 255.9), int(g * 255.9), int(b * 255.9))
+        #if value < 1e-5: return "rgb(133,173,133)"  # unsaturaged green
+        #if value < 3e-5: return "rgb(0,230,0)"  # green
+        #if value < 1e-4: return "rgb(115,230,0)"  # light green
+        #if value < 3e-4: return "rgb(172,230,0)"  # lime green
+        #if value < 1e-3: return "rgb(250,250,0)"  # yellow
+        #if value < 3e-3: return "rgb(255,204,0)"  # yellow-orange
+        #if value < 1e-2: return "rgb(255,153,0)"  # orange
+        #if value < 3e-2: return "rgb(255,140,26)"  # dark orange
+        #if value < 1e-1: return "rgb(255,102,0)"  # orange-red
+        #if value < 3e-1: return "rgb(255,102,51)"  # red-orange
+        #return "rgb(255,0,0)"  # red
 
-        node_js_lines = []
-        edge_js_lines = []
-        table_html = {}
-        long_table_html = {}
-        MIN_POWER = 1.5  # 10^-MIN_POWER is the largest value end of the spectrum
-        MAX_POWER = 3.5  # 10^-MAX_POWER is the smallest value end of the spectrum
-        color_mode = self.color_mode
+        #if value < 1e-3: return "green"
+        #if value < 1e-2: return "yellow"
+        #if value < 1e-1: return "orange"
+        #return "red"
 
-        def _normalize(v):
-            return -_np.log10(max(v, 10**(-MAX_POWER)) * 10**MIN_POWER) / (MAX_POWER - MIN_POWER)
-
-        #def _normalize(v):
-        #    v = min(max(v, 10**(-MAX_POWER)), 10**(-MIN_POWER))
-        #    return 1.0 - v / (10**(-MIN_POWER) - 10**(-MAX_POWER))
-
-        def _node_HScolor(Hvalue, Svalue):
-            r, g, b, a = _Hcmap(_normalize(Hvalue))
-            r2, g2, b2, a2 = _Scmap(_normalize(Svalue))
-            r = (r + r2) / 2; g = (g + g2) / 2; b = (b + b2) / 2
-            return "rgb(%d,%d,%d)" % (int(r * 255.9), int(g * 255.9), int(b * 255.9))
-
-        def _node_Hcolor(value):
-            r, g, b, a = _Hcmap(_normalize(value))
-            return "rgb(%d,%d,%d)" % (int(r * 255.9), int(g * 255.9), int(b * 255.9))
-
-        def _node_Scolor(value):
-            r, g, b, a = _Scmap(_normalize(value))
-            return "rgb(%d,%d,%d)" % (int(r * 255.9), int(g * 255.9), int(b * 255.9))
-            #if value < 1e-5: return "rgb(133,173,133)"  # unsaturaged green
-            #if value < 3e-5: return "rgb(0,230,0)"  # green
-            #if value < 1e-4: return "rgb(115,230,0)"  # light green
-            #if value < 3e-4: return "rgb(172,230,0)"  # lime green
-            #if value < 1e-3: return "rgb(250,250,0)"  # yellow
-            #if value < 3e-3: return "rgb(255,204,0)"  # yellow-orange
-            #if value < 1e-2: return "rgb(255,153,0)"  # orange
-            #if value < 3e-2: return "rgb(255,140,26)"  # dark orange
-            #if value < 1e-1: return "rgb(255,102,0)"  # orange-red
-            #if value < 3e-1: return "rgb(255,102,51)"  # red-orange
-            #return "rgb(255,0,0)"  # red
-
-            #if value < 1e-3: return "green"
-            #if value < 1e-2: return "yellow"
-            #if value < 1e-1: return "orange"
-            #return "red"
-
-        def _dstr(d, joinstr="<br>"):  # dict-to-string formatting function
-            if len(d) == 1: return "%.3g" % _np.real_if_close(next(iter(d.values())))
-            return joinstr.join(["%s: %.3g" % (k, _np.real_if_close(v)) for k, v in d.items()])
-
-        def _fmt_tableval(val):
-            if isinstance(val, dict):
-                if len(val) == 1: return _fmt_tableval(next(iter(val.values())))
-                return " <br> ".join(["%s: %s" % (k, _fmt_tableval(v)) for k, v in val.items()])
-            if _np.iscomplex(val): val = _np.real_if_close(val)
-            if _np.isreal(val) or _np.iscomplex(val):
-                if abs(val) < 1e-6: val = 0.0
-                if _np.isreal(val): return "%.3g" % val.real
-                else: return "%.3g + %.3gj" % (val.real, val.imag)
-            return str(val)
-
-        def _make_table(table_info, rowlbl, title):
-            table_dict, table_rows, table_cols = table_info
-            html = "<table><thead><tr><th colspan=%d>%s</th></tr>\n" % (len(table_cols) + 1, title)
-            html += ("<tr><th>%s<th>" % rowlbl) + "</th><th>".join(table_cols) + "</th></tr></thead><tbody>\n"
-            for row in table_rows:
-                table_row_text = []
-                for col in table_cols:
-                    val = table_dict[row][col]
-                    table_row_text.append(_fmt_tableval(val))
-                html += "<tr><th>" + str(row) + "</th><td>" + "</td><td>".join(table_row_text) + "</td></tr>\n"
-            return html + "</tbody></table>"
-
-        #process local quantities
-        node_ids = {}; node_locations = {}; next_node_id = 0
+    def _color_to_textcolor(self, color_str):
         textcolors = ['black', 'white']
+        r, g, b = tuple(map(int, color_str[len('rgb('):-1].split(',')))
+        lightness = sum([r, g, b]) / (3 * 256)
+        return textcolors[int(lightness < 0.5)]
 
-        val_max = max([(abs(info['total'].get('H', {}).get('min_jangle', 0))
-                        + info['total'].get('S', {}).get('error_rate', 0))
-                       for info in op_set_info.values()])
-        val_threshold = _normalize(val_max) / 3.0
+    def _get_node_colors(self, coh, sto, total, compact=False, edge_node=False):
+        color_mode = self.color_mode
+        labels = []
+        make_labels = bool(self.numerical_labels is True or
+                           (isinstance(self.numerical_labels, (tuple, list)) and 'node' in self.numerical_labels))
 
-        for op_set, info in op_set_info.items():
-            if len(op_set) != 1: continue
-            # create a gate-node in the graph
-            r, theta = polar_positions[op_set[0]]
+        if compact and 'H' in total and 'S' in total:  # eliminate 'H' or 'S' if they're zero
+            total = total.copy()
+            if coh <= self.edge_threshold: del total['H']
+            elif sto <= self.edge_threshold: del total['S']
 
-            label = str(op_set[0])
-            total = info['total']
-            coh = total['H']['min_jangle'] if ('H' in total) else 0.0
-            sto = total['S']['error_rate'] if ('S' in total) else 0.0
-            tcolor = textcolors[int((abs(coh) + sto) > val_threshold)]
-            #print("VAL = ",(abs(coh) + sto),"Threshold = ",val_threshold)
+        if 'H' in total and 'S' in total:
+            title = "Coherent: %.3g<br>Stochastic: %.3g" % (coh, sto)
+            if color_mode == "mix" or color_mode == "fixed":
+                back_color = border_color = self._node_HScolor(coh, sto)
+            elif color_mode == "mix_wborder":
+                back_color = self._node_HScolor(coh, sto); border_color = "rgb(100, 100, 100)"
+            elif color_mode == "separate":
+                back_color = self._node_Scolor(sto); border_color = self._node_Hcolor(coh)
+            if make_labels:
+                labels.extend(["H: %.1f%%" % (100 * coh), "S: %.1f%%" % (100 * sto)])
+            edge_color = self._node_HScolor(coh, sto)  # edges coming from this node are always of the "mix" color
 
-            if 'H' in total and 'S' in total:
-                title = "Coherent: %.3g<br>Stochastic: %.3g" % (coh, sto)
-                if color_mode == "mix":
-                    back_color = border_color = _node_HScolor(coh, sto)
-                elif color_mode == "mix_wborder":
-                    back_color = _node_HScolor(coh, sto); border_color = "rgb(100, 100, 100)"
-                elif color_mode == "separate":
-                    back_color = _node_Scolor(sto); border_color = _node_Hcolor(coh)
-                if self.numerical_labels: label += "\\n<i>H: %.1f%%</i>\\n<i>S: %.1f%%</i>" % (100 * coh, 100 * sto)
-            elif 'H' in total:
-                title = "%.3g" % coh
-                back_color = border_color = _node_Hcolor(coh)
-                if color_mode == "mix_wborder": border_color = "rgb(100, 100, 100)"
-                if self.numerical_labels: label += "\\n<i>%.1f%%</i>" % (100 * coh)
-            elif 'S' in total:
-                title = "%.3g" % sto
-                back_color = border_color = _node_Scolor(sto)
-                if color_mode == "mix_wborder": border_color = "rgb(100, 100, 100)"
-                if self.numerical_labels: label += "\\n<i>%.1f%%</i>" % (100 * sto)
-            else:
-                raise ValueError("Invalid types in total dict: %s" % str(total.keys()))
+        elif 'H' in total:
+            title = "%.3g" % coh
+            back_color = border_color = edge_color = self._node_Hcolor(coh)
+            if color_mode == "mix_wborder": border_color = "rgb(100, 100, 100)"
+            if make_labels: labels.append("%.1f%%" % (100 * coh))
+        elif 'S' in total:
+            title = "%.3g" % sto
+            back_color = border_color = edge_color = self._node_Scolor(sto)
+            if color_mode == "mix_wborder": border_color = "rgb(100, 100, 100)"
+            if make_labels: labels.append("%.1f%%" % (100 * sto))
+        else:
+            raise ValueError("Invalid types in total dict: %s" % str(total.keys()))
+        tcolor = self._color_to_textcolor(back_color)
 
-            node_js_lines.append(('{id: %d, label: "%s", group: %d, title: "%s", x: %d, y: %d,'
-                                  'font: {color: "%s"}, color: {background: "%s", border: "%s"}, fixed: %s}') %
-                                 (next_node_id, label, groupids[op_set[0]],
-                                  title, int(r * _np.cos(theta)), int(r * _np.sin(theta)), tcolor, back_color,
-                                  border_color, 'true' if self.physics else 'false'))
-            table_html[next_node_id] = _make_table(info['hs_support_table'], "Qubits",
-                                                   "Local errors on %s" % str(op_set[0]))
-            long_table_html[next_node_id] = _make_table(info['individual_fogi_table'],
-                                                        "Label", "FOGI quantities for %s" % str(op_set[0]))
-            node_locations[op_set[0]] = int(r * _np.cos(theta)), int(r * _np.sin(theta))
-            node_ids[op_set[0]] = next_node_id
-            next_node_id += 1
+        if self.color_mode == "fixed":  # special case that overrides automatic colors
+            back_color = border_color = edge_color = '#FF9090'
+            tcolor = 'black'
 
-        #process relational quantities
-        relational_distances = []
-        for op_set, info in op_set_info.items():
-            if len(op_set) == 1: continue
-            max_dist = 0
-            for i in range(len(op_set)):
-                x1, y1 = node_locations[op_set[i]]
-                for j in range(i + 1, len(op_set)):
-                    x2, y2 = node_locations[op_set[j]]
-                    max_dist = max(max_dist, (x1 - x2)**2 + (y1 - y2)**2)
-            relational_distances.append((op_set, max_dist))
-        relational_opsets_by_distance = sorted(relational_distances, key=lambda x: x[1], reverse=True)
+        return back_color, border_color, tcolor, edge_color, labels, title
 
-        #place the longest nPositions linking nodes in the center; place the rest on the periphery
-        for i, (op_set, _) in enumerate(relational_opsets_by_distance):
-            info = op_set_info[op_set]
-            total = info['total']
-            mag = total['mag']
-            if mag < self.edge_threshold: continue
-
-            # create a relational node in the graph
-            if i < nPositions:  # place node in the middle (just average coords
-                x = int(_np.mean([node_locations[op_label][0] for op_label in op_set]))
-                y = int(_np.mean([node_locations[op_label][1] for op_label in op_set]))
-            else:  # place node along periphery
-                r = r0 * 1.1  # push outward from ring of operations
-                theta = _np.arctan2(_np.sum([node_locations[op_label][1] for op_label in op_set]),
-                                    _np.sum([node_locations[op_label][0] for op_label in op_set]))
-                x, y = int(r * _np.cos(theta)), int(r * _np.sin(theta))
-
-            label = ""; edge_labels = {}
-            if 'H' in total and 'S' in total:
-                title = "Coherent: %s<br>Stochastic: %s" % (_dstr(total['H']), _dstr(total['S']))
-                mix_color = _node_HScolor(total['H']['go_jangle'], total['S']['error_rate'])
-                if color_mode == "mix":
-                    back_color = border_color = _node_HScolor(total['H']['go_jangle'], total['S']['error_rate'])
-                elif color_mode == "mix_wborder":
-                    back_color = _node_HScolor(total['H']['go_jangle'], total['S']['error_rate'])
-                    border_color = "rgb(100, 100, 100)"
-                elif color_mode == "separate":
-                    back_color = _node_Scolor(total['S']['error_rate'])
-                    border_color = _node_Hcolor(total['H']['go_jangle'])
-
-                if self.numerical_labels:
-                    #OLD: label += "H: %.3f S: %.3f" % (_dstr(total['H'], r'\n'), _dstr(total['S'], r'\n'))
-                    go_jangle = total['H']['go_jangle']
-                    err_rate = total['S']['error_rate']
-                    if abs(go_jangle) > self.edge_threshold and err_rate > self.edge_threshold:
-                        label += "H: %.1f%%\\nS: %.1f%%" % (100 * go_jangle, 100 * err_rate)
-                    elif abs(go_jangle) > self.edge_threshold:
-                        label += "%.1f%%" % (100 * go_jangle)
-                    elif err_rate > self.edge_threshold:
-                        label += "%.1f%%" % (100 * err_rate)
-
-                    if abs(go_jangle) > self.edge_threshold:
-                        edge_labels = {op_label: total['H'][op_label] for op_label in op_set}
-
-            elif 'H' in total:
-                title = "%s" % _dstr(total['H'])
-                mix_color = _node_Hcolor(total['H']['go_jangle'])
-                back_color = border_color = _node_Hcolor(total['H']['go_jangle'])  # was 'min_impact' (?)
-                if color_mode == "mix_wborder": border_color = "rgb(100, 100, 100)"
-                #if self.numerical_labels: label += "%s" % _dstr(total['H'], r'\n')  # show entire dict
-                if self.numerical_labels:
-                    label += "%.1f%%" % (100 * total['H']['go_jangle'])
-                    edge_labels = {op_label: total['H'][op_label] for op_label in op_set}
-            elif 'S' in total:
-                title = "%s" % _dstr(total['S'])
-                mix_color = _node_Scolor(total['S']['error_rate'])
-                back_color = border_color = _node_Scolor(total['S']['error_rate'])
-                if color_mode == "mix_wborder": border_color = "rgb(100, 100, 100)"
-                if self.numerical_labels: label += "%s" % _dstr(total['S'], r'\n')  # show entire dict
-                # Note: "entire" dict is just the single error rate in the S case
-            else:
-                raise ValueError("Invalid types in total dict: %s" % str(total.keys()))
-
-            node_js_lines.append(('{ id: %d, label: "%s", group: "%s", title: "%s", x: %d, y: %d,'
-                                  'color: {background: "%s", border: "%s"}, font: {size: %d, '
-                                  'strokeWidth: 5, strokeColor: "white"} }') %
-                                 (next_node_id, label, "relational", title, x, y, back_color, border_color,
-                                  self.edgenode_fontsize))
-            table_html[next_node_id] = _make_table(info['hs_support_table'], "Qubits",
-                                                   "Relational errors between " + ", ".join(map(str, op_set)))
-            long_table_html[next_node_id] = _make_table(info['individual_fogi_table'], "Label",
-                                                        "FOGI quantities for " + ", ".join(map(str, op_set)))
-            #link to gate-nodes
-            prefix = "max " if self.impact_mode == 'max' else ""
-            for op_label in op_set:
-                label_str = (', label: "%s%.1f%%"' % (prefix, 100 * edge_labels[op_label])) if edge_labels else ""
-                edge_js_lines.append('{ from: %d, to: %d, value: %.4f, color: {color: "%s"}, dashes: %s}' % (
-                    next_node_id, node_ids[op_label], mag, mix_color, 'true' if info['dependent'] else 'false'))
-                edge_js_lines.append('{ from: %d, to: %d, dashes: %s %s }' % (
-                    next_node_id, node_ids[op_label], 'true' if info['dependent'] else 'false', label_str))
-
-            next_node_id += 1
-
-        all_table_html = ""
-        for node_id, html in table_html.items():
-            all_table_html += ("<div class='infotable dataTable' id='%d'>\n" % node_id) + html + "</div>\n"
-
-        all_long_table_html = ""
-        for node_id, html in long_table_html.items():
-            all_long_table_html += ("<div class='infotable dataTable' id='long%d'>\n" % node_id) + html + "</div>\n"
-
-        s = _template.format(**{'node_js': ",\n".join(node_js_lines),
-                                'edge_js': ",\n".join(edge_js_lines),
-                                'table_html': all_table_html,
-                                'long_table_html': all_long_table_html,
-                                'physics': 'true' if self.physics else "false",
-                                'springlength': springlength,
-                                'beforeDrawingCalls': beforeDrawingCalls,
-                                'node_fontsize': self.node_fontsize,
-                                'edge_fontsize': self.edge_fontsize})
-        with open(filename, 'w') as f:
-            f.write(s)
-
-    def render_svg(self, filename, initial_theta=0, custom_polar_positions=None, custom_polar_ranges=None):
-
-        import drawSvg as draw
-        d = draw.Drawing(750, 750, origin='center', displayInline=False)
+    def render(self, filename, initial_theta=0, custom_polar_positions=None, custom_polar_ranges=None):
+        drawing = self._create_drawing()
 
         op_set_info = self.op_set_info
         op_labels = self.fogi_stores[0].primitive_op_labels  # take just from first store
@@ -689,170 +516,15 @@ class FOGIGraphDiagram(FOGIDiagram):
                     group_theta_ranges[group_id] = (min(thetas) - _np.pi / 10, max(thetas) + _np.pi / 10)
 
         # Background wedges
-        to_degrees = 360.0 / (2 * _np.pi)
         for group_id, (theta_begin, theta_end) in group_theta_ranges.items():
             target_qubits = target_qubit_groups[group_id]
             txt = ("Qubit %d" % target_qubits[0]) if len(target_qubits) == 1 \
                 else ("Qubits " + ", ".join(map(str, target_qubits)))
-            txt_theta = (theta_begin + theta_end) / 2
-            txt_fontsize = 15
             #print(txt, "at theta = ", txt_theta)  # DEBUG
-
-            rpadding = r0 * 0.15
-            x = (r0 + rpadding + 20) * _np.cos(txt_theta)
-            y = (r0 + rpadding + 20) * _np.sin(txt_theta)  # text location
-            #txt_angle = (txt_theta + _np.pi) if (0 <= txt_theta <= _np.pi) else txt_theta
-
-            p = draw.Path(fill='#CCCCCC', stroke='none')
-            p.arc(0, 0, r0 + rpadding, theta_begin * to_degrees, theta_end * to_degrees, cw=False)
-            p.arc(0, 0, 0, theta_end * to_degrees, theta_begin * to_degrees, cw=True, includeL=True)
-            p.Z()  # closepath
-            d.append(p)
-
-            if _np.cos(theta_begin) < _np.cos(theta_end):
-                arc = draw.Arc(0, 0, r0 + 50, theta_begin * to_degrees, theta_end * to_degrees, stroke='none',
-                               fill='none', cw=False)
-            else:
-                arc = draw.Arc(0, 0, r0 + 50, theta_end * to_degrees, theta_begin * to_degrees, stroke='none',
-                               fill='none', cw=True)
-            d.append(arc)
-            d.append(draw.Text(txt, txt_fontsize, path=arc, fill="#CCCCCC",
-                               text_anchor="middle", valign='middle', font_family='Times'))
-
-        #node_js_lines = []
-        #edge_js_lines = []
-        #table_html = {}
-        #long_table_html = {}
-
-        MIN_POWER = 1.5  # 10^-MIN_POWER is the largest value end of the spectrum
-        MAX_POWER = 3.5  # 10^-MAX_POWER is the smallest value end of the spectrum
-
-        def _normalize(v):
-            return -_np.log10(max(v, 10**(-MAX_POWER)) * 10**MIN_POWER) / (MAX_POWER - MIN_POWER)
-
-        def _node_HScolor(Hvalue, Svalue):
-            r, g, b, a = _Hcmap(_normalize(Hvalue))
-            r2, g2, b2, a2 = _Scmap(_normalize(Svalue))
-            r = (r + r2) / 2; g = (g + g2) / 2; b = (b + b2) / 2
-            return "rgb(%d,%d,%d)" % (int(r * 255.9), int(g * 255.9), int(b * 255.9))
-
-        def _node_Hcolor(value):
-            r, g, b, a = _Hcmap(_normalize(value))
-            return "rgb(%d,%d,%d)" % (int(r * 255.9), int(g * 255.9), int(b * 255.9))
-
-        def _node_Scolor(value):
-            r, g, b, a = _Scmap(_normalize(value))
-            return "rgb(%d,%d,%d)" % (int(r * 255.9), int(g * 255.9), int(b * 255.9))
-
-        def _dstr(d, joinstr="<br>"):  # dict-to-string formatting function
-            if len(d) == 1: return "%.3g" % _np.real_if_close(next(iter(d.values())))
-            return joinstr.join(["%s: %.3g" % (k, _np.real_if_close(v)) for k, v in d.items()])
-
-        def _color_to_textcolor(color_str):
-            textcolors = ['black', 'white']
-            r, g, b = tuple(map(int, color_str[len('rgb('):-1].split(',')))
-            lightness = sum([r, g, b]) / (3 * 256)
-            return textcolors[int(lightness < 0.5)]
-
-        def _get_node_colors(coh, sto, total, compact=False):
-            color_mode = self.color_mode
-            labels = []
-
-            if compact and 'H' in total and 'S' in total:  # eliminate 'H' or 'S' if they're zero
-                total = total.copy()
-                if coh <= self.edge_threshold: del total['H']
-                elif sto <= self.edge_threshold: del total['S']
-
-            if 'H' in total and 'S' in total:
-                #title = "Coherent: %.3g<br>Stochastic: %.3g" % (coh, sto)
-                if color_mode == "mix" or "fixed":
-                    back_color = border_color = _node_HScolor(coh, sto)
-                elif color_mode == "mix_wborder":
-                    back_color = _node_HScolor(coh, sto); border_color = "rgb(100, 100, 100)"
-                elif color_mode == "separate":
-                    back_color = _node_Scolor(sto); border_color = _node_Hcolor(coh)
-                if self.numerical_labels:
-                    labels.extend(["H: %.1f%%" % (100 * coh), "S: %.1f%%" % (100 * sto)])
-                edge_color = _node_HScolor(coh, sto)  # edges coming from this node are always of the "mix" color
-
-            elif 'H' in total:
-                #title = "%.3g" % coh
-                back_color = border_color = edge_color = _node_Hcolor(coh)
-                if color_mode == "mix_wborder": border_color = "rgb(100, 100, 100)"
-                if self.numerical_labels: labels.append("%.1f%%" % (100 * coh))
-            elif 'S' in total:
-                #title = "%.3g" % sto
-                back_color = border_color = edge_color = _node_Scolor(sto)
-                if color_mode == "mix_wborder": border_color = "rgb(100, 100, 100)"
-                if self.numerical_labels: labels.append("%.1f%%" % (100 * sto))
-            else:
-                raise ValueError("Invalid types in total dict: %s" % str(total.keys()))
-            tcolor = _color_to_textcolor(back_color)
-            return back_color, border_color, tcolor, edge_color, labels
-
-        def _draw_node_old(r, theta, coh, sto, op_label, total):
-            back_color, border_color, tcolor, _, labels = _get_node_colors(coh, sto, total)
-            x, y = r * _np.cos(theta), r * _np.sin(theta)
-            scale = (coh + sto) / val_max
-            node_width = 20 + 40 * scale
-            node_height = 20 + 40 * scale
-            nodes.append(draw.Rectangle(x - node_width / 2, y - node_height / 2, node_width, node_height, rx=3,
-                                        fill=back_color, stroke=border_color, stroke_width=2))
-            nodes.append(draw.Text(labels, self.node_fontsize * (0.5 + scale), x, y, fill=tcolor,
-                                   text_anchor="middle", valign='middle', font_family='Times'))
-
-        def _draw_node(r, theta, coh, sto, op_label, total):
-            back_color, border_color, tcolor, _, labels = _get_node_colors(coh, sto, total)
-            if self.color_mode == "fixed":
-                back_color = 'blue'
-                border_color = 'red'
-                tcolor = 'white'
-
-            x, y = r * _np.cos(theta), r * _np.sin(theta)
-            scale = (coh + sto) / val_max
-            node_width = 30 + 30 * scale
-            sto_rect_height = 10 + 40 * sto / val_max
-            ham_rect_height = 10 + 40 * coh / val_max
-            node_height = sto_rect_height + ham_rect_height
-            ham_lbl, sto_lbl = labels
-            r_op_lbl = r + 80
-
-            nodes.append(draw.Rectangle(x - node_width / 2, y - node_height / 2, node_width, sto_rect_height, rx=3,
-                                        fill=back_color, stroke='none'))
-            nodes.append(draw.Rectangle(x - node_width / 2, y - node_height / 2 + sto_rect_height, node_width,
-                                        ham_rect_height, rx=3, fill=border_color, stroke='none'))
-            nodes.append(draw.Rectangle(x - node_width / 2, y - node_height / 2, node_width, node_height, rx=3,
-                                        fill='none', stroke='black', stroke_width=1))
-
-            nodes.append(draw.Text(ham_lbl, self.node_fontsize * (0.7 + 0.8 * coh / val_max), x,
-                                   y - node_height / 2 + sto_rect_height + ham_rect_height / 2, fill=tcolor,
-                                   text_anchor="middle", valign='middle', font_family='Times'))
-            nodes.append(draw.Text(sto_lbl, self.node_fontsize * (0.7 + 0.8 * sto / val_max), x,
-                                   y - node_height / 2 + sto_rect_height / 2, fill=tcolor,
-                                   text_anchor="middle", valign='middle', font_family='Times'))
-            nodes.append(draw.Text(str(op_label), 2 * self.node_fontsize,
-                                   r_op_lbl * _np.cos(theta), r_op_lbl * _np.sin(theta),
-                                   fill='black', text_anchor="middle", valign='middle', font_family='Times'))
-
-        def _draw_edge_node(x, y, coh, sto, total):
-            back_color, border_color, tcolor, edge_color, labels = _get_node_colors(coh, sto, total, compact=True)
-            if self.color_mode == "fixed":
-                back_color = border_color = edge_color = '#FF9090'
-                tcolor = 'black'
-            if coh is None: coh = 0
-            if sto is None: sto = 0
-            scale = (coh + sto) / val_max
-            node_radius = 10 + 10 * scale
-            nodes.append(draw.Circle(x, y, node_radius,
-                                     fill=back_color, stroke_width=1, stroke="black"))  # border_color
-            nodes.append(draw.Text(labels, self.edgenode_fontsize * (0.5 + scale), x, y, fill=tcolor,
-                                   text_anchor="middle", valign='middle', font_family='Times'))
-            return edge_color
+            self._draw_wedge(drawing, r0, theta_begin, theta_end, txt)
 
         #process local quantities
         node_locations = {}
-        nodes = []; edges = []
-
         val_max = max([(abs(info['total'].get('H', {}).get('min_jangle', 0))
                         + info['total'].get('S', {}).get('error_rate', 0))
                        for info in op_set_info.values()])
@@ -867,7 +539,7 @@ class FOGIGraphDiagram(FOGIDiagram):
             coh = total['H']['min_jangle'] if ('H' in total) else 0.0
             sto = total['S']['error_rate'] if ('S' in total) else 0.0
             #print("VAL = ",(abs(coh) + sto),"Threshold = ",val_threshold)
-            _draw_node(r, theta, coh, sto, op_set[0], total)
+            self._draw_node(drawing, r, theta, coh, sto, op_set[0], total, val_max, groupids[op_label], info)
             node_locations[op_set[0]] = r * _np.cos(theta), r * _np.sin(theta)
 
         #process relational quantities
@@ -892,65 +564,263 @@ class FOGIGraphDiagram(FOGIDiagram):
 
             # create a relational node in the graph
             if True or i < nPositions:  # place node in the middle (just average coords
-                x = int(_np.mean([node_locations[op_label][0] for op_label in op_set]))
-                y = int(_np.mean([node_locations[op_label][1] for op_label in op_set]))
+                x = _np.mean([node_locations[op_label][0] for op_label in op_set])
+                y = _np.mean([node_locations[op_label][1] for op_label in op_set])
             else:  # place node along periphery
                 r = r0 * 1.1  # push outward from ring of operations
                 theta = _np.arctan2(_np.sum([node_locations[op_label][1] for op_label in op_set]),
                                     _np.sum([node_locations[op_label][0] for op_label in op_set]))
-                x, y = int(r * _np.cos(theta)), int(r * _np.sin(theta))
+                x, y = r * _np.cos(theta), r * _np.sin(theta)
 
             coh = total['H']['go_jangle'] if ('H' in total) else None
             sto = total['S']['error_rate'] if ('S' in total) else None
-            edge_color = _draw_edge_node(x, y, coh, sto, total)
+            edge_color = self._draw_edge_node(drawing, x, y, coh, sto, total, val_max, op_set, info)
 
             edge_labels = {}
-            if self.numerical_labels and abs(coh) > self.edge_threshold:
+            make_labels = bool(self.numerical_labels is True or
+                               (isinstance(self.numerical_labels, (tuple, list)) and 'edge' in self.numerical_labels))
+            if make_labels and abs(coh) > self.edge_threshold:
                 #Only Hamiltonian edge labels so far (TODO)
                 edge_labels = {op_label: total['H'][op_label] for op_label in op_set}
 
             for op_label in op_set:
                 node_x, node_y = node_locations[op_label]
-                edge_width = 0.5 + mag * 200
-                main_edge = draw.Path(stroke=edge_color, stroke_width=edge_width, fill='none')
-                main_edge.M(x, y).L(node_x, node_y)  # moveTo, lineTo
-                edges.append(main_edge)
+                self._draw_edge(drawing, x, y, node_x, node_y, edge_color, mag,
+                                edge_labels.get(op_label, None), op_label, info['dependent'])
 
-                line_edge = draw.Path(stroke="black", stroke_width=min(edge_width / 2, 0.5), fill='none',
-                                      stroke_dasharray="4" if info['dependent'] else 'none')
-                line_edge.M(x, y).L(node_x, node_y)  # moveTo, lineTo
-                edges.append(line_edge)
-                #edges.append(draw.Lines(x, y, node_x, node_y, close=False,
-                #                        fill='none', stroke='gray', stroke_width=1))
+        return self._render_drawing(drawing, filename)
 
-                if edge_labels:
-                    txt_edge = draw.Path(stroke='none', stroke_width=0, fill='none')
-                    if x <= node_x: txt_edge.M(x, y).L(node_x, node_y)  # moveTo, lineTo
-                    else: txt_edge.M(node_x, node_y).L(x, y)  # Swap ordering so text gets drawn rightside-up
-                    prefix = "max " if self.impact_mode == 'max' else ""
-                    edges.append(draw.Text("%s%.1f%%" % (prefix, 100 * edge_labels[op_label]),
-                                           self.edge_fontsize, path=txt_edge, center=True, fill='black',
-                                           font_family='Times', lineOffset=0.6))
 
-            #node_js_lines.append(('{ id: %d, label: "%s", group: "%s", title: "%s", x: %d, y: %d,'
-            #                      'color: {background: "%s", border: "%s"}, font: {size: %d, '
-            #                      'strokeWidth: 5, strokeColor: "white"} }') %
-            #                     (next_node_id, label, "relational", title, x, y, back_color, border_color,
-            #                      self.edgenode_fontsize))
-            ##link to gate-nodes
-            #for op_label in op_set:
-            #    label_str = (', label: "%.1f%%"' % (100 * edge_labels[op_label])) if edge_labels else ""
-            #    edge_js_lines.append('{ from: %d, to: %d, value: %.4f, color: {color: "%s"}, dashes: %s}' % (
-            #        next_node_id, node_ids[op_label], mag, mix_color, 'true' if info['dependent'] else 'false'))
-            #    edge_js_lines.append('{ from: %d, to: %d, dashes: %s %s }' % (
-            #        next_node_id, node_ids[op_label], 'true' if info['dependent'] else 'false', label_str))
+class FOGISvgGraphDiagram(FOGIGraphDiagram):
 
-        for x in edges:
-            d.append(x)
-        for x in nodes:
-            d.append(x)
+    def _create_drawing(self):
+        SVGDrawing = _collections.namedtuple('SVGDrawing', ['nodes', 'edges'])
+        return SVGDrawing([], [])
 
+    def _render_drawing(self, drawing, filename):
+        d = _draw.Drawing(750, 750, origin='center', displayInline=False)
+        for x in drawing.edges: d.append(x)
+        for x in drawing.nodes: d.append(x)
+        if filename: d.saveSvg(filename)
         return d
+
+    #def _draw_node_simple(self, drawing, r, theta, coh, sto, op_label, total, val_max):
+    #    nodes = drawing.nodes
+    #    back_color, border_color, tcolor, _, labels, _ = self._get_node_colors(coh, sto, total)
+    #    x, y = r * _np.cos(theta), r * _np.sin(theta)
+    #    scale = (coh + sto) / val_max
+    #    node_width = 20 + 40 * scale
+    #    node_height = 20 + 40 * scale
+    #    nodes.append(_draw.Rectangle(x - node_width / 2, y - node_height / 2, node_width, node_height, rx=3,
+    #                                 fill=back_color, stroke=border_color, stroke_width=2))
+    #    nodes.append(_draw.Text(labels, self.node_fontsize * (0.5 + scale), x, y, fill=tcolor,
+    #                            text_anchor="middle", valign='middle', font_family='Times'))
+
+    def _draw_node(self, drawing, r, theta, coh, sto, op_label, total, val_max, groupid, info):
+        nodes = drawing.nodes
+        back_color, border_color, tcolor, _, labels, _ = self._get_node_colors(coh, sto, total)
+
+        if self.color_mode == "fixed":
+            back_color = 'blue'
+            border_color = 'red'
+            tcolor = 'white'
+
+        x, y = r * _np.cos(theta), r * _np.sin(theta)
+        scale = (coh + sto) / val_max
+        node_width = 30 + 30 * scale
+        sto_rect_height = 10 + 40 * sto / val_max
+        ham_rect_height = 10 + 40 * coh / val_max
+        node_height = sto_rect_height + ham_rect_height
+        r_op_lbl = r + 80
+
+        nodes.append(_draw.Rectangle(x - node_width / 2, y - node_height / 2, node_width, sto_rect_height, rx=3,
+                                     fill=back_color, stroke='none'))
+        nodes.append(_draw.Rectangle(x - node_width / 2, y - node_height / 2 + sto_rect_height, node_width,
+                                     ham_rect_height, rx=3, fill=border_color, stroke='none'))
+        nodes.append(_draw.Rectangle(x - node_width / 2, y - node_height / 2, node_width, node_height, rx=3,
+                                     fill='none', stroke='black', stroke_width=1))
+
+        if len(labels) > 0:
+            ham_lbl, sto_lbl = labels
+            nodes.append(_draw.Text(ham_lbl, self.node_fontsize * (0.7 + 0.8 * coh / val_max), x,
+                                    y - node_height / 2 + sto_rect_height + ham_rect_height / 2, fill=tcolor,
+                                    text_anchor="middle", valign='middle', font_family='Times'))
+            nodes.append(_draw.Text(sto_lbl, self.node_fontsize * (0.7 + 0.8 * sto / val_max), x,
+                                    y - node_height / 2 + sto_rect_height / 2, fill=tcolor,
+                                    text_anchor="middle", valign='middle', font_family='Times'))
+            nodes.append(_draw.Text(str(op_label), 2 * self.node_fontsize,
+                                    r_op_lbl * _np.cos(theta), r_op_lbl * _np.sin(theta),
+                                    fill='black', text_anchor="middle", valign='middle', font_family='Times'))
+
+    def _draw_edge_node(self, drawing, x, y, coh, sto, total, val_max, op_set, info):
+        nodes = drawing.nodes
+        back_color, border_color, tcolor, edge_color, labels, _ = self._get_node_colors(coh, sto, total, compact=True)
+        if coh is None: coh = 0
+        if sto is None: sto = 0
+        scale = (coh + sto) / val_max
+        node_radius = 10 + 10 * scale
+        nodes.append(_draw.Circle(x, y, node_radius,
+                                  fill=back_color, stroke_width=1, stroke="black"))  # border_color
+        if len(labels) > 0:
+            nodes.append(_draw.Text(labels, self.edgenode_fontsize * (0.5 + scale), x, y, fill=tcolor,
+                                    text_anchor="middle", valign='middle', font_family='Times'))
+        return edge_color
+
+    def _draw_edge(self, drawing, x1, y1, x2, y2, edge_color, mag, edge_label, op_label, is_dependent):
+        edges = drawing.edges
+        edge_width = 0.5 + mag * 200
+        main_edge = _draw.Path(stroke=edge_color, stroke_width=edge_width, fill='none')
+        main_edge.M(x1, y1).L(x2, y2)  # moveTo, lineTo
+        edges.append(main_edge)
+
+        line_edge = _draw.Path(stroke="black", stroke_width=min(edge_width / 2, 0.5), fill='none',
+                               stroke_dasharray="4" if is_dependent else 'none')
+        line_edge.M(x1, y1).L(x2, y2)  # moveTo, lineTo
+        edges.append(line_edge)
+        #edges.append(_draw.Lines(x, y, node_x, node_y, close=False,
+        #                        fill='none', stroke='gray', stroke_width=1))
+
+        if edge_label is not None:
+            txt_edge = _draw.Path(stroke='none', stroke_width=0, fill='none')
+            if x1 <= x2: txt_edge.M(x1, y1).L(x2, y2)  # moveTo, lineTo
+            else: txt_edge.M(x2, y2).L(x1, y1)  # Swap ordering so text gets drawn rightside-up
+            prefix = "max " if self.impact_mode == 'max' else ""
+            edges.append(_draw.Text("%s%.1f%%" % (prefix, 100 * edge_label),
+                                    self.edge_fontsize, path=txt_edge, center=True, fill='black',
+                                    font_family='Times', lineOffset=0.6))
+
+    def _draw_wedge(self, drawing, r, theta_begin, theta_end, txt):
+
+        to_degrees = 360.0 / (2 * _np.pi)
+        txt_fontsize = 15
+
+        rpadding = r * 0.15
+        #txt_theta = (theta_begin + theta_end) / 2
+        #x = (r0 + rpadding + 20) * _np.cos(txt_theta)
+        #y = (r0 + rpadding + 20) * _np.sin(txt_theta)  # text location
+        #txt_angle = (txt_theta + _np.pi) if (0 <= txt_theta <= _np.pi) else txt_theta
+
+        edges = drawing.edges
+        p = _draw.Path(fill='#CCCCCC', stroke='none')
+        p.arc(0, 0, r + rpadding, theta_begin * to_degrees, theta_end * to_degrees, cw=False)
+        p.arc(0, 0, 0, theta_end * to_degrees, theta_begin * to_degrees, cw=True, includeL=True)
+        p.Z()  # closepath
+        edges.append(p)
+
+        if _np.cos(theta_begin) < _np.cos(theta_end):
+            arc = _draw.Arc(0, 0, r + 50, theta_begin * to_degrees, theta_end * to_degrees, stroke='none',
+                            fill='none', cw=False)
+        else:
+            arc = _draw.Arc(0, 0, r + 50, theta_end * to_degrees, theta_begin * to_degrees, stroke='none',
+                            fill='none', cw=True)
+        edges.append(arc)
+        edges.append(_draw.Text(txt, txt_fontsize, path=arc, fill="#CCCCCC",
+                                text_anchor="middle", valign='middle', font_family='Times'))
+
+
+class FOGIVisNetworkGraphDiagram(FOGIGraphDiagram):
+
+    def _create_drawing(self):
+        VisDrawing = _collections.namedtuple('VisNetworkDrawing',
+                                             ['beforeDrawingCalls', 'node_js_lines', 'edge_js_lines',
+                                              'table_html', 'long_table_html', 'node_ids',
+                                              'next_node_id'])
+        return VisDrawing([], [], [], {}, {}, {}, [0])
+
+    def _render_drawing(self, drawing, filename):
+        all_table_html = ""
+        for node_id, html in drawing.table_html.items():
+            all_table_html += ("<div class='infotable dataTable' id='%d'>\n" % node_id) + html + "</div>\n"
+
+        all_long_table_html = ""
+        for node_id, html in drawing.long_table_html.items():
+            all_long_table_html += ("<div class='infotable dataTable' id='long%d'>\n" % node_id) + html + "</div>\n"
+
+        springlength = 1.0  # r0 * dtheta / 3.0  # heuristic
+        s = _template.format(**{'node_js': ",\n".join(drawing.node_js_lines),
+                                'edge_js': ",\n".join(drawing.edge_js_lines),
+                                'table_html': all_table_html,
+                                'long_table_html': all_long_table_html,
+                                'physics': 'true' if self.physics else "false",
+                                'springlength': springlength,
+                                'beforeDrawingCalls': "".join(drawing.beforeDrawingCalls),
+                                'node_fontsize': self.node_fontsize,
+                                'edge_fontsize': self.edge_fontsize})
+        if filename:
+            with open(filename, 'w') as f:
+                f.write(s)
+
+    def _draw_node(self, drawing, r, theta, coh, sto, op_label, total, val_max, groupid, info):
+        back_color, border_color, tcolor, _, labels, title = self._get_node_colors(coh, sto, total)
+
+        label = "\\n".join([str(op_label)] + labels)
+        next_node_id = drawing.next_node_id[0]
+        drawing.node_js_lines.append(('{id: %d, label: "%s", group: %d, title: "%s", x: %d, y: %d,'
+                                      'font: {color: "%s"}, color: {background: "%s", border: "%s"}, fixed: %s}') %
+                                     (next_node_id, label, groupid,
+                                      title, int(r * _np.cos(theta)), int(r * _np.sin(theta)), tcolor, back_color,
+                                      border_color, 'true' if self.physics else 'false'))
+        drawing.table_html[next_node_id] = _make_table(info['hs_support_table'], "Qubits",
+                                                       "Local errors on %s" % str(op_label))
+        drawing.long_table_html[next_node_id] = _make_table(info['individual_fogi_table'],
+                                                            "Label", "FOGI quantities for %s" % str(op_label))
+        drawing.node_ids[op_label] = next_node_id
+        drawing.next_node_id[0] += 1
+
+    def _draw_edge_node(self, drawing, x, y, coh, sto, total, val_max, op_set, info):
+        back_color, border_color, tcolor, edge_color, labels, title = self._get_node_colors(coh, sto, total,
+                                                                                            compact=True)
+        if coh is None: coh = 0
+        if sto is None: sto = 0
+        x = int(x)  # I think vis.network needs integer positions
+        y = int(y)
+
+        next_node_id = drawing.next_node_id[0]
+        label = "\\n".join(labels)
+        drawing.node_js_lines.append(('{ id: %d, label: "%s", group: "%s", title: "%s", x: %d, y: %d,'
+                                      'color: {background: "%s", border: "%s"}, font: {size: %d, '
+                                      'strokeWidth: 5, strokeColor: "white"} }') %
+                                     (next_node_id, label, "relational", title, x, y, back_color, border_color,
+                                      self.edgenode_fontsize))
+        drawing.table_html[next_node_id] = _make_table(info['hs_support_table'], "Qubits",
+                                                       "Relational errors between " + ", ".join(map(str, op_set)))
+        drawing.long_table_html[next_node_id] = _make_table(info['individual_fogi_table'], "Label",
+                                                            "FOGI quantities for " + ", ".join(map(str, op_set)))
+        drawing.next_node_id[0] += 1
+        return edge_color
+
+    def _draw_edge(self, drawing, x1, y1, x2, y2, edge_color, mag, edge_label, op_label, is_dependent):
+        if edge_label is not None:
+            prefix = "max " if self.impact_mode == 'max' else ""
+            label_str = ', label: "%s%.1f%%"' % (prefix, 100 * edge_label)
+        else:
+            label_str = ""
+
+        edge_node_id = drawing.next_node_id[0] - 1  # Note: assumes that the last added node was this edge's node
+        drawing.edge_js_lines.append('{ from: %d, to: %d, value: %.4f, color: {color: "%s"}, dashes: %s}' % (
+            edge_node_id, drawing.node_ids[op_label], mag, edge_color, 'true' if is_dependent else 'false'))
+        drawing.edge_js_lines.append('{ from: %d, to: %d, dashes: %s %s }' % (
+            edge_node_id, drawing.node_ids[op_label], 'true' if is_dependent else 'false', label_str))
+
+    def _draw_wedge(self, drawing, r, theta_begin, theta_end, txt):
+
+        rpadding = 50
+        txt_theta = (theta_begin + theta_end) / 2
+        x = (r + rpadding + 20) * _np.cos(txt_theta)
+        y = (r + rpadding + 20) * _np.sin(txt_theta)  # text location
+        txt_angle = (txt_theta + _np.pi) if (0 <= txt_theta <= _np.pi) else txt_theta
+
+        drawing.beforeDrawingCalls.append(('ctx.beginPath();\n'
+                                           'ctx.arc(0, 0, %f, %f, %f, false);\n'
+                                           'ctx.lineTo(0, 0);\n'
+                                           'ctx.closePath();\n'
+                                           'ctx.fill();\n'
+                                           'ctx.save();\n'
+                                           'ctx.translate(%f, %f);\n'
+                                           'ctx.rotate(Math.PI / 2 + %f);\n'
+                                           'ctx.fillText("%s", 0, 0);\n'
+                                           'ctx.restore();\n') % (
+                                               r + rpadding, theta_begin, theta_end, x, y, txt_angle, txt))
 
 
 class FOGIDetailTable(FOGIDiagram):
@@ -1241,8 +1111,7 @@ class FOGIStackedBarDiagram(FOGIDiagram):
         super().__init__(fogi_stores, op_coefficients, model_dim, op_to_target_qubits, impact_mode)
 
     def render_svg(self, outfile=None, cell_fontsize=10, axes_fontsize=10, qty_key='bytarget'):
-        import drawSvg as draw
-        d = draw.Drawing(600, 600, origin='center', displayInline=False)
+        d = _draw.Drawing(600, 600, origin='center', displayInline=False)
 
         barplot_infos = {}  # want to index this dict by [op_label][err_type][intrinsic_or_relative][support][Species]
         # and have result be a list of ?
