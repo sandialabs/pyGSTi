@@ -586,7 +586,7 @@ class FOGIGraphDiagram(FOGIDiagram):
 
             for op_label in op_set:
                 node_x, node_y = node_locations[op_label]
-                self._draw_edge(drawing, x, y, node_x, node_y, edge_color, mag,
+                self._draw_edge(drawing, x, y, node_x, node_y, edge_color, mag, val_max,
                                 edge_labels.get(op_label, None), op_label, info['dependent'])
 
         return self._render_drawing(drawing, filename)
@@ -599,30 +599,35 @@ class FOGISvgGraphDiagram(FOGIGraphDiagram):
                  node_fontsize=20, edgenode_fontsize=14, edge_fontsize=12, impact_mode='current'):
         super().__init__(fogi_stores, op_coefficients, model_dim, op_to_target_qubits, physics, numerical_labels,
                          edge_threshold, color_mode, node_fontsize, edgenode_fontsize, edge_fontsize, impact_mode)
-        self.tweaks = {'node_width_ab': (30, 30),
-                       'node_height_ab': (40, 10),
-                       'node_rounded_rect_radius': 3,
-                       'op_lbl_roffset': 80,
-                       'node_fontsize_ab': (0.8, 0.7),
-                       'edgenode_size_ab': (10, 10),
-                       'edgenode_fontsize_ab': (1.0, 0.5),
-                       'edge_width_ab': (200, 0.5),
-                       'edge_label_offset': 0.6,
-                       'wedge_fontsize': 15,
-                       'wedge_padding_factor': 0.15,
-                       'wedge_width': 90,
-                       'wedge_control_mag': 100.0,
-                       'wedge_label_offset': 50,
-                       'svg_size': (750, 750)}
+
+        self.tweaks = {
+            # 'node_width_ab': (20, 80),  # (a,b) => a*x + b
+            # 'node_height_ab': (100, 10),
+            'node_size_ab': (10000, 0),  # scales *area*
+            'node_rounded_rect_radius': 10,
+            'op_lbl_roffset': 120,
+            'node_fontsize_ab': (1.3, 0.5),
+            'edgenode_size_ab': (5000, 0),  # scales *area*
+            'edgenode_fontsize_ab': (1.3, 0.5),
+            'edge_width_ab': (40, 3.0),
+            'edge_label_offset': 0.6,
+            'wedge_fontsize': 15,
+            'wedge_padding_factor': 0.2,
+            'wedge_width': 100,
+            'wedge_control_mag': 150.0,  # adjusts control points for banana curves
+            'wedge_label_offset': 80,
+            'svg_size': (800, 800)
+        }
 
     def _create_drawing(self):
-        SVGDrawing = _collections.namedtuple('SVGDrawing', ['nodes', 'edges'])
-        return SVGDrawing([], [])
+        SVGDrawing = _collections.namedtuple('SVGDrawing', ['nodes', 'edges', 'edgelines'])
+        return SVGDrawing([], [], [])
 
     def _render_drawing(self, drawing, filename):
         sizex, sizey = self.tweaks['svg_size']
         d = _draw.Drawing(sizex, sizey, origin='center', displayInline=False)
         for x in drawing.edges: d.append(x)
+        for x in drawing.edgelines: d.append(x)
         for x in drawing.nodes: d.append(x)
         if filename: d.saveSvg(filename)
         return d
@@ -648,14 +653,25 @@ class FOGISvgGraphDiagram(FOGIGraphDiagram):
             border_color = 'red'
             tcolor = 'white'
 
-        wa, wb = self.tweaks['node_width_ab']
-        ha, hb = self.tweaks['node_height_ab']
+        #wa, wb = self.tweaks['node_width_ab']
+        #ha, hb = self.tweaks['node_height_ab']
+        sa, sb = self.tweaks['node_size_ab']
         x, y = r * _np.cos(theta), r * _np.sin(theta)
         scale = (coh + sto) / val_max
-        node_width = wb + wa * scale
-        sto_rect_height = hb + ha * sto / val_max
-        ham_rect_height = hb + ha * coh / val_max
-        node_height = sto_rect_height + ham_rect_height
+
+        # `scale` scales the *length* of nodes
+        #node_width = wb + wa * scale
+        #sto_rect_height = hb + ha * sto / val_max
+        #ham_rect_height = hb + ha * coh / val_max
+        #node_height = sto_rect_height + ham_rect_height
+
+        # `scale` scales the *area*
+        area = sb + sa * scale
+        node_width = node_height = _np.sqrt(area)
+        sto_rect_height = (area * sto / (coh + sto)) / node_width
+        ham_rect_height = (area * coh / (coh + sto)) / node_width
+        # sum = (A1 + A2) / node_width = area * 1 / node_width = node_height (good!)
+
         r_op_lbl = r + self.tweaks['op_lbl_roffset']
         rx = self.tweaks['node_rounded_rect_radius']
 
@@ -689,8 +705,11 @@ class FOGISvgGraphDiagram(FOGIGraphDiagram):
         if coh is None: coh = 0
         if sto is None: sto = 0
         scale = (coh + sto) / val_max
-        ra, rb = self.tweaks['edgenode_size_ab']
-        node_radius = rb + ra * scale
+        sa, sb = self.tweaks['edgenode_size_ab']
+
+        #node_radius = sb + sa * scale  # `scale` scales radius
+        node_radius = _np.sqrt((sb + sa * scale) / _np.pi)  # `scale` scales area
+
         nodes.append(_draw.Circle(x, y, node_radius,
                                   fill=back_color, stroke_width=1, stroke="black"))  # border_color
         if len(labels) > 0:
@@ -699,10 +718,11 @@ class FOGISvgGraphDiagram(FOGIGraphDiagram):
                                     text_anchor="middle", valign='middle', font_family='Times'))
         return edge_color
 
-    def _draw_edge(self, drawing, x1, y1, x2, y2, edge_color, mag, edge_label, op_label, is_dependent):
+    def _draw_edge(self, drawing, x1, y1, x2, y2, edge_color, mag, val_max, edge_label, op_label, is_dependent):
         edges = drawing.edges
+        edgelines = drawing.edgelines
         wa, wb = self.tweaks['edge_width_ab']
-        edge_width = wb + wa * mag
+        edge_width = wb + wa * (mag / val_max)
         main_edge = _draw.Path(stroke=edge_color, stroke_width=edge_width, fill='none')
         main_edge.M(x1, y1).L(x2, y2)  # moveTo, lineTo
         edges.append(main_edge)
@@ -711,7 +731,7 @@ class FOGISvgGraphDiagram(FOGIGraphDiagram):
         line_edge = _draw.Path(stroke="black", stroke_width=min(edge_width / 2, 0.5), fill='none',
                                stroke_dasharray="4" if is_dependent else 'none')
         line_edge.M(x1, y1).L(x2, y2)  # moveTo, lineTo
-        edges.append(line_edge)
+        edgelines.append(line_edge)
         #edges.append(_draw.Lines(x, y, node_x, node_y, close=False,
         #                        fill='none', stroke='gray', stroke_width=1))
 
@@ -720,9 +740,9 @@ class FOGISvgGraphDiagram(FOGIGraphDiagram):
             if x1 <= x2: txt_edge.M(x1, y1).L(x2, y2)  # moveTo, lineTo
             else: txt_edge.M(x2, y2).L(x1, y1)  # Swap ordering so text gets drawn rightside-up
             prefix = "max " if self.impact_mode == 'max' else ""
-            edges.append(_draw.Text("%s%.1f%%" % (prefix, 100 * edge_label),
-                                    self.edge_fontsize, path=txt_edge, center=True, fill='black',
-                                    font_family='Times', lineOffset=self.tweaks['edge_label_offset']))
+            edgelines.append(_draw.Text("%s%.1f%%" % (prefix, 100 * edge_label),
+                                        self.edge_fontsize, path=txt_edge, center=True, fill='black',
+                                        font_family='Times', lineOffset=self.tweaks['edge_label_offset']))
 
     def _draw_wedge(self, drawing, r, theta_begin, theta_end, txt):
 
@@ -857,7 +877,7 @@ class FOGIVisNetworkGraphDiagram(FOGIGraphDiagram):
         drawing.next_node_id[0] += 1
         return edge_color
 
-    def _draw_edge(self, drawing, x1, y1, x2, y2, edge_color, mag, edge_label, op_label, is_dependent):
+    def _draw_edge(self, drawing, x1, y1, x2, y2, edge_color, mag, val_max, edge_label, op_label, is_dependent):
         if edge_label is not None:
             prefix = "max " if self.impact_mode == 'max' else ""
             label_str = ', label: "%s%.1f%%"' % (prefix, 100 * edge_label)
