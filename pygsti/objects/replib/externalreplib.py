@@ -37,10 +37,19 @@ class ExternalOpRep(object):
     def adjoint_acton(self, state):
         raise NotImplementedError()
 
-class CHPOpRep(ExternalOpRep):
-    def __init__(self, chp_reps, probs):
-        self.chp_reps = chp_reps
-        self.probs = probs
-        self.dim = len(chp_reps)
 
+class StochasticCHPOpRep(ExternalOpRep):
+    class CHPOpRep(object):
+        def __init__(self, ops, qubit_templates):
+            self.ops = ops
+            self.qubit_templates = qubit_templates
+            self.dim = 4**len(self.qubit_templates)
+
+    def __init__(self, ops_list, qubit_templates, probs):
+        self.chp_ops = [self.CHPOpRep(ops, qubit_templates) for ops in ops_list]
+        self.qubit_templates = qubit_templates
+        self.probs = probs
+        self.dim = 4**len(self.qubit_templates)
+
+    
 

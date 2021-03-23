@@ -390,6 +390,13 @@ def standard_gatenames_chp_conversions():
     """
     std_gatenames_to_chp = {}
 
+    # Native gates for CHP
+    std_gatenames_to_chp['h']  = ['h']
+    std_gatenames_to_chp['p']  = ['p']
+    std_gatenames_to_chp['c']  = ['c']
+    std_gatenames_to_chp['m']  = ['m']
+
+    # Cliffords
     std_gatenames_to_chp['Gc0']  = []
     std_gatenames_to_chp['Gc1']  = ['h', 'p', 'h', 'p']
     std_gatenames_to_chp['Gc2']  = ['h', 'p']
@@ -418,6 +425,7 @@ def standard_gatenames_chp_conversions():
     std_gatenames_to_chp['Gcnot'] = ['c']
     std_gatenames_to_chp['Gcphase'] = ['h', 'c', 'h']
 
+    # Standard names
     std_gatenames_to_chp['Gi'] = []
 
     std_gatenames_to_chp['Gxpi'] = ['h', 'p', 'p', 'h']

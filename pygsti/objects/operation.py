@@ -6740,18 +6740,28 @@ class CliffordOp(LinearOperator):
 class StochasticCHPOp(LinearOperator):
     """
     A probabilistic Clifford operation represented by lists of CHP operations.
+
+    Each CHP operation is stored as an f-string where the qubit label will be substituted
+    later as a kwarg in get_chp_str.
+    As an example: chp_reps = ['h q0', 'Gcnot q0 q1'] will result in a Hadamard and
+    CNOT gate being applied on qubits templated with the labels ['q0', 'q1'].
+    These labels must then be provided as kwargs when calling get_chp_str(), e.g. get_chp_str(q0=0, q1=1).
     """
-    def __init__(self, chp_reps, seed_or_state=None):
+    def __init__(self, chp_ops_list, probs, custom_chp_gates=None, seed_or_state=None):
         """
         Creates a new StochasticCHPOp from a list of (CHP operation, probability) tuples.
 
         Parameters
         ----------
-        chp_reps : list of tuples of (str or list of str, float)
-            If first entry in tuple is str, must be a name
-            that matches one of the standard gatenames from pygsti.tools.internalgates
-            If first entry in tuple is a list, elements must be one of ['h', 'p', 'c']
-            Second entry in the tuple is the probability of the operation
+        chp_ops_list : list of str or list of str
+            Strings with a CHP gatename (either from pygsti.tools.internalgates or provided in custom_chp_gates)
+            and labels for qubit templates to be used when generating CHP code
+        probs: list of float
+            Probabilities for each CHP operation
+        custom_chp_gates : dict of str: list of str
+            Dictionary mapping custom chp_op names to lists of native CHP operations used to augment
+            the dictionary from pygsti.tools.internalgates.standard_gatenames_chp_conversions().
+            Entries will override those available provided by standard gatenames.
         seed_or_state : float or numpy.random.RandomState
             RandomState or seed for RandomState to use for stochastic choice of operation
         """
@@ -6760,112 +6770,144 @@ class StochasticCHPOp(LinearOperator):
         else:
             self.rand_state = _RandomState(seed_or_state)
 
-        chp_lists = []
-        probs = []
-        for chp_rep, prob in chp_reps:
-            chp_lists.append(self._get_chp_list(chp_rep))
-            probs.append(prob)
+        native_ops_list = []
+        qubit_templates = set()
+        for chp_ops in chp_ops_list:
+            ops, qt = self._get_native_ops(chp_ops, custom_chp_gates)
 
-        rep = replib.CHPOpRep(chp_lists, probs)
+            native_ops_list.append(ops)
+            qubit_templates.update(qt)
+
+        rep = replib.StochasticCHPOpRep(native_ops_list, list(qubit_templates), probs)
         LinearOperator.__init__(self, rep, "chp")
-    
-    def get_chp_str(self, q0, q1=None):
-        """Stochastically pick an operation and return a string suitable for printing to a CHP input file
-        """
-        index = self.rand_state.choice(len(self._rep.probs), p=self._rep.probs)
-        chosen_rep = self._rep.chp_reps[index]
 
-        if 'c' in chosen_rep and q1 is None:
-            raise SyntaxError("CNOT gate in chosen CHP operation but second qubit not provided")
-        
-        s = ""
-        for label in chosen_rep:
-            s += f'{label} {q0}\n' if label in ['h', 'p'] else f'{label} {q0} {q1}\n'
-        
-        return s
-
-
-    def _get_chp_list(self, chp_rep):
-        """Parse/sanitize a single CHP rep.
+    def get_chp_str(self, **kwargs):
+        """Return a string suitable for printing to a CHP input file after stochastically selecting operation.
 
         Parameters
         ----------
-        chp_rep : str or list of str
-            If str, must be a name that matches one of the standard gatenames from pygsti.tools.internalgates
-            If list, elements must be one of ['h', 'p', 'c']
+        **kwargs:
+            Kwargs mapping qubit_templates in the CHP string to actual qubit indices
+        
+        Returns
+        -------
+        s : str
+            String of CHP code
+        """
+        chosen_rep = self._choose_op()
+
+        # Check all qubit labels available
+        qubit_templates = chosen_rep.qubit_templates
+        if any([q not in kwargs for q in qubit_templates]):
+            raise SyntaxError(f'All qubit templates must be provided. Expected {qubit_templates}, got {kwargs.keys()}')
+        
+        # Substitute labels
+        s = ""
+        for op in chosen_rep.ops:
+            s += f'{op.format(**kwargs)}\n'
+        
+        return s
+
+    def _choose_op(self):
+        """Helper function to stochastically select operation
+        """
+        index = self.rand_state.choice(len(self._rep.probs), p=self._rep.probs)
+        return self._rep.chp_ops[index]
+
+    def _get_native_ops(self, chp_ops, custom_chp_gates):
+        """Parse/sanitize a single CHP operation.
+
+        Parameters
+        ----------
+        chp_ops : str or list of str
+            Strings with a CHP gatename (either from pygsti.tools.internalgates or provided in custom_chp_gates)
+            and labels for qubit templates to be used when generating CHP code
+        custom_chp_gates : dict of str: list of str
+            Dictionary mapping custom chp_op names to lists of native CHP operations used to augment
+            the dictionary from pygsti.tools.internalgates.standard_gatenames_chp_conversions().
+            Entries will override those available provided by standard gatenames.
 
         Returns
         -------
-        chp_list: list of str
-            Sanitizied list of CHP strings
+        sanitized_ops: list of str
+            Sanitizied list of native CHP strings
+        qubit_templates: set of str
+            List of qubit templates
         """
-        if isinstance(chp_rep, str): # Look up chp_list from standard gatenames
-            std_chpreps = _igts.standard_gatenames_chp_conversions()
-            # Add "native" CHP gates in case single element passed in
-            std_chpreps['h'] = ['h']
-            std_chpreps['p'] = ['p']
-            std_chpreps['c'] = ['c']
+        # Get full dict mapping gate names to list of 1/2-qubit CHP operations
+        chp_gates = _igts.standard_gatenames_chp_conversions()
+        if custom_chp_gates is not None:
+            chp_gates.update(custom_chp_gates)
+        
+        # Cast one string to list of strings for sanitizing logic
+        if isinstance(chp_ops, str):
+            chp_ops = [chp_ops]
 
-            if chp_rep in std_chpreps.keys():
-                chp_list = std_chpreps[chp_rep]
-            else:
-                raise SyntaxError(f'CHP rep given as str "{chp_rep}", but must be one of: {std_chpreps.keys()}')
-        elif isinstance(chp_rep, list) or isinstance(chp_rep, tuple):
-            allowed_entries = ['h', 'p', 'c']
+        # Parse ops into native CHP strings
+        sanitized_ops = []
+        qubit_templates = set()
+        for op in chp_ops:
+            entries = op.split()
+            
+            # Keep track of how many qubits are touched by this CHPOp
+            qubit_templates.update(entries[1:3])
+            
+            # Expand to native gates and distributes
+            native_ops = chp_gates[entries[0]]
+            for nat_op in native_ops:
+                if nat_op == 'c':
+                    try:
+                        sanitized_ops.append(nat_op + ' {' + entries[1] + '}' + ' {' + entries[2] + '}')
+                        qubit_templates.update(entries[1:3])
+                    except IndexError as e:
+                        raise Exception('CHP native gate "c" requires two qubit templates to be provided') from e
+                else:
+                    try:
+                        sanitized_ops.append(nat_op + ' {' + entries[1] + '}')
+                        qubit_templates.add(entries[1])
+                    except IndexError as e:
+                        raise Exception(f'CHP native gate "{nat_op}" requires one qubit template to be provided') from e
 
-            for entry in chp_rep:
-                if entry not in allowed_entries:
-                    raise SyntaxError(f"Entries of `chp_rep` must be one of: {allowed_entries}")
-
-            chp_list = list(chp_rep)
-        else:
-            raise TypeError("Type of `chp_rep` must be str, list, or tuple")
-
-        return chp_list
+        return sanitized_ops, qubit_templates
 
     def __str__(self):
         """Return string representation"""
-        s = "Stochastic CHP operation with labels and probabilities:\n"
-        max_label_len = 2*max([len(rep) for rep in self._rep.chp_reps])
-        for chp_rep, probs in zip(self._rep.chp_reps, self._rep.probs):
-            label = ",".join(chp_rep)
-            s += f"{label:{max_label_len}s}: {probs}\n"
+        s = "Stochastic CHP operation with probabilities and labels:\n"
+        for chp_op, probs in zip(self._rep.chp_ops, self._rep.probs):
+            label = ", ".join(chp_op.ops)
+            s += f"{probs}: {label}\n"
         return s
 
 class CHPOp(StochasticCHPOp):
     """A Clifford operation represented by a list of CHP operations.
 
-    Mostly for convenience to simplify running a single CHP circuit with no stochastic noise.
+    Convenience class for StochasticCHPOp when only a single operation is needed.
     """
-    def __init__(self, chp_rep):
+    def __init__(self, chp_ops, custom_chp_gates=None):
         """
-        Creates a new CHPOp as a StochasticCHPOp with one operation.
+        Creates a new CHPOp as a StochasticCHPOp with only one possible operation.
 
         Parameters
         ----------
-        chp_rep : str or list of str
-            If str, must be a name that matches one of the standard gatenames from pygsti.tools.internalgates
-            If list, elements must be one of ['h', 'p', 'c']
+        chp_ops : str or list of str
+            Strings with a CHP gatename (either from pygsti.tools.internalgates or provided in custom_chp_gates)
+            and labels for qubit templates to be used when generating CHP code
+        custom_chp_gates : dict of str: list of str
+            Dictionary mapping custom chp_op names to lists of native CHP operations used to augment
+            the dictionary from pygsti.tools.internalgates.standard_gatenames_chp_conversions().
+            Entries will override those available provided by standard gatenames.
         """
-        super().__init__([(chp_rep, 1.0)])
-    
-    def get_chp_str(self, q0, q1=None):
-        """Return a string suitable for printing to a CHP input file
+        super().__init__([chp_ops], [1.0], custom_chp_gates=custom_chp_gates)
+
+    def _choose_op(self):
+        """Override for single operation to avoid RNG usage
         """
-        chosen_rep = self._rep.chp_reps[0]
-        if 'c' in chosen_rep and q1 is None:
-            raise SyntaxError("CNOT gate in chosen CHP operation but second qubit not provided")
-        
-        s = ""
-        for label in chosen_rep:
-            s += f'{label} {q0}\n' if label in ['h', 'p'] else f'{label} {q0} {q1}\n'
-        
-        return s
+        return self._rep.chp_ops[0]
 
     def __str__(self):
         """Return string representation"""
         s = "CHP operation with labels: "
-        s += ",".join(self._rep.chp_reps[0])
+        s += ", ".join(self._rep.chp_ops[0].ops)
         return s
 
 
