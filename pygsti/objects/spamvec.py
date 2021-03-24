@@ -3988,7 +3988,7 @@ class ComputationalSPAMVec(SPAMVec):
         nqubits = len(self._zvals)
         if evotype in ("densitymx", "svterm", "cterm"):
             dim = 4**nqubits
-        elif evotype in ("statevec", "stabilizer"):
+        elif evotype in ("statevec", "stabilizer", "chp"):
             dim = 2**nqubits
         else: raise ValueError("Invalid `evotype`: %s" % evotype)
         self._evotype = evotype  # set this before call to SPAMVec.__init__ so self.to_dense() can work...

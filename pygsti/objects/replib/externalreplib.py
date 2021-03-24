@@ -49,7 +49,7 @@ class StochasticCHPOpRep(ExternalOpRep):
         self.chp_ops = [self.CHPOpRep(ops, qubit_templates) for ops in ops_list]
         self.qubit_templates = qubit_templates
         self.probs = probs
-        self.dim = 4**len(self.qubit_templates)
+        self.dim = 2**len(self.qubit_templates)
 
     
 

@@ -987,7 +987,7 @@ class ComputationalBasisPOVM(POVM):
 
         items = []  # init as empty (lazy creation of members)
 
-        assert(evotype in ("statevec", "densitymx", "stabilizer", "svterm", "cterm"))
+        assert(evotype in ("statevec", "densitymx", "stabilizer", "svterm", "cterm", "chp"))
         dim = 4**nqubits if (evotype in ("densitymx", "svterm", "cterm")) else 2**nqubits
         super(ComputationalBasisPOVM, self).__init__(dim, evotype, items)
 
