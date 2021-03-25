@@ -2413,11 +2413,13 @@ def DM_mapfill_TDterms(fwdsim, objective, array_to_fill, dest_indices, num_outco
         N = 0; nOutcomes = 0
 
         if outcomes_cache is not None:  # calling dataset.outcomes can be a bottleneck
-            if iDest in outcomes_cache:
-                outcomes = outcomes_cache[iDest]
+            # need to base cache on this b/c same iDest for different atoms corresponds to different circuits!
+            iOrig = layout_atom.orig_indices_by_expcircuit[iDest]
+            if iOrig in outcomes_cache:
+                outcomes = outcomes_cache[iOrig]
             else:
                 outcomes = datarow.outcomes
-                outcomes_cache[iDest] = outcomes
+                outcomes_cache[iOrig] = outcomes
         else:
             outcomes = datarow.outcomes
 

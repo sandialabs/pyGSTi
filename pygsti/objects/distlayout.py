@@ -46,6 +46,9 @@ class _DistributableAtom(object):
         self.element_slice = element_slice
         self.num_elements = _slct.length(element_slice) if (num_elements is None) else num_elements
 
+    def update_indices(self, old_unique_indices_in_order):
+        pass  # nothing to be done.
+
     @property
     def cache_size(self):
         return 0
@@ -411,7 +414,8 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
                     gpss = [(gps, hps)]
                 self.param_fine_slices_by_host = tuple([(rank_and_gps,) for rank_and_gps in enumerate(gpss)])
 
-            self.param_fine_slices_by_rank = tuple(comm.allgather(gps)) if (comm is not None) else [gps]
+            self.param_fine_slices_by_rank = tuple(comm.allgather(self.global_param_fine_slice)) \
+                                             if (comm is not None) else [self.global_param_fine_slice]
 
             self.owner_host_and_rank_of_global_fine_param_index = {}
             for host_index, ranks_and_pslices in enumerate(self.param_fine_slices_by_host):
@@ -612,6 +616,12 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
             offset += circuit_counts[iAtomComm]
         self.host_num_circuits = offset
 
+        # Give atoms a chance to update any indices they have to the *old* unique indices
+        # or "original" (full circuit list) indices, as this layout may hold a subset or
+        # a different circuit ordering from the "global" layout.
+        for atom in self.atoms:
+            atom.update_indices(my_unique_is)
+
         #Store the global-circuit-index of each of this processor's circuits (local_circuits)
         # Note: unlike other quantities (elements, params, etc.), a proc's local circuits are not guaranteed to be
         #  contiguous portions of the global circuit list, so we must use an index array rather than a slice:
@@ -795,7 +805,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         return local_array
 
     def free_local_array(self, local_array):
-        if local_array is not None:
+        if local_array is not None and hasattr(local_array, 'shared_memory_handle'):
             for shm_handle in local_array.shared_memory_handle.values():
                 _smt.cleanup_shared_ndarray(shm_handle)
 

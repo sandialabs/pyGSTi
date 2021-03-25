@@ -288,21 +288,22 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         -------
         None
         """
-        def compute_timedep(layout_atom, sub_resource_alloc):
+        def compute_timedep(layout_atom, resource_alloc):
             dataset_rows = {i_expanded: dataset[ds_circuits[i]]
                             for i_expanded, i in layout_atom.orig_indices_by_expcircuit.items()}
             num_outcomes = {i_expanded: num_total_outcomes[i]
                             for i_expanded, i in layout_atom.orig_indices_by_expcircuit.items()}
             replib.DM_mapfill_TDchi2_terms(self, array_to_fill, layout_atom.element_slice, num_outcomes,
                                            layout_atom, dataset_rows, min_prob_clip_for_weighting,
-                                           prob_clip_interval, sub_resource_alloc, outcomes_cache=None)
+                                           prob_clip_interval, resource_alloc, outcomes_cache=None)
 
-        atomOwners = self._compute_on_atoms(layout, compute_timedep, layout.resource_alloc())
+        atom_resource_alloc = layout.resource_alloc('atom-processing')
+        atom_resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory before we begin
 
-        #collect/gather results
-        all_atom_element_slices = [atom.element_slice for atom in layout.atoms]
-        _mpit.gather_slices(all_atom_element_slices, atomOwners, array_to_fill, [], 0, layout.resource_alloc().comm)
-        #note: pass mx_to_fill, dim=(KS,), so gather mx_to_fill[felInds] (axis=0)
+        for atom in layout.atoms:  # layout only holds local atoms
+            compute_timedep(atom, atom_resource_alloc)
+
+        atom_resource_alloc.host_comm_barrier()  # don't exit until all procs' array_to_fill is ready
 
     def bulk_fill_timedep_dchi2(self, array_to_fill, layout, ds_circuits, num_total_outcomes, dataset,
                                 min_prob_clip_for_weighting, prob_clip_interval, chi2_array_to_fill=None,
@@ -424,21 +425,22 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         -------
         None
         """
-        def compute_timedep(layout_atom, sub_resource_alloc):
+        def compute_timedep(layout_atom, resource_alloc):
             dataset_rows = {i_expanded: dataset[ds_circuits[i]]
                             for i_expanded, i in layout_atom.orig_indices_by_expcircuit.items()}
             num_outcomes = {i_expanded: num_total_outcomes[i]
                             for i_expanded, i in layout_atom.orig_indices_by_expcircuit.items()}
             replib.DM_mapfill_TDloglpp_terms(self, array_to_fill, layout_atom.element_slice, num_outcomes,
                                              layout_atom, dataset_rows, min_prob_clip,
-                                             radius, prob_clip_interval, sub_resource_alloc, outcomes_cache=None)
+                                             radius, prob_clip_interval, resource_alloc, outcomes_cache=None)
 
-        atomOwners = self._compute_on_atoms(layout, compute_timedep, layout.resource_alloc())
+        atom_resource_alloc = layout.resource_alloc('atom-processing')
+        atom_resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory before we begin
 
-        #collect/gather results
-        all_atom_element_slices = [atom.element_slice for atom in layout.atoms]
-        _mpit.gather_slices(all_atom_element_slices, atomOwners, array_to_fill, [], 0, layout.resource_alloc().comm)
-        #note: pass mx_to_fill, dim=(KS,), so gather mx_to_fill[felInds] (axis=0)
+        for atom in layout.atoms:  # layout only holds local atoms
+            compute_timedep(atom, atom_resource_alloc)
+
+        atom_resource_alloc.host_comm_barrier()  # don't exit until all procs' array_to_fill is ready
 
     def bulk_fill_timedep_dloglpp(self, array_to_fill, layout, ds_circuits, num_total_outcomes, dataset,
                                   min_prob_clip, radius, prob_clip_interval, logl_array_to_fill=None,

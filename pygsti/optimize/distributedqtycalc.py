@@ -249,8 +249,9 @@ class DistributedQuantityCalc(object):
         # entire global_jtj from the (single) root proc anyway.
         comm = self.resource_alloc.comm
         if comm is not None:
-            jtf[:] = comm.scatter([global_jtf[pslc] for pslc in self.layout.param_fine_slices_by_rank]
-                                  if comm.rank == 0 else None, root=0)
+            to_scatter = [global_jtf[pslc] for pslc in self.layout.param_fine_slices_by_rank] \
+                         if (comm.rank == 0) else None
+            jtf[:] = comm.scatter(to_scatter, root=0)
         else:
             jtf[:] = global_jtf
 

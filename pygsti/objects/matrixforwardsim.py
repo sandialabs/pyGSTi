@@ -1191,20 +1191,19 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         natoms, na, npp, param_dimensions, param_blk_sizes = self._compute_processor_distribution(
             array_types, nprocs, num_params, len(circuits), default_natoms=1)
 
+        if self._mode == "distribute_by_timestamp":
+            #Special case: time dependent data that gets grouped & distributed by unique timestamp
+            # To to this, we override above values of natoms, na, and npp:
+            natoms = 1  # save all processor division for within the (single) atom, for different timestamps
+            na, npp = 1, (1, 1) # save all processor division for within the (single) atom, for different timestamps
+
         printer.log("MatrixLayout: %d processors divided into %s (= %d) grid along circuit and parameter directions." %
                     (nprocs, ' x '.join(map(str, (na,) + npp)), _np.product((na,) + npp)))
         printer.log("   %d atoms, parameter block size limits %s" % (natoms, str(param_blk_sizes)))
         assert(_np.product((na,) + npp) <= nprocs), "Processor grid size exceeds available processors!"
 
-        if self._mode == "distribute_by_timestamp":
-            #Special case: time dependent data that gets grouped & distributed by unique timestamp
-            #TODO: check this works - it's been updated but not tested!
-            # note: natoms == num_timestamps...
-            return _MatrixTimeDepCOPALayout(circuits, self.model, dataset, na, npp,
-                                            param_dimensions, param_blk_sizes, resource_alloc, verbosity)
-        else:
-            layout = _MatrixCOPALayout(circuits, self.model, dataset, natoms,
-                                       na, npp, param_dimensions, param_blk_sizes, resource_alloc, verbosity)
+        layout = _MatrixCOPALayout(circuits, self.model, dataset, natoms,
+                                   na, npp, param_dimensions, param_blk_sizes, resource_alloc, verbosity)
 
         if mem_limit is not None:
             loc_nparams1 = num_params / npp[0] if len(npp) > 0 else 0
@@ -1768,35 +1767,47 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             ("Must set `distribute_by_timestamp=True` to use a "
              "time-dependent objective function with MatrixForwardSimulator!")
 
+        resource_alloc = layout.resource_alloc()
+        atom_resource_alloc = layout.resource_alloc('atom-processing')
+        atom_resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory before we begin
+
         probs_array = _np.empty(layout.num_elements, 'd')
         array_to_fill[:] = 0.0
 
-        def compute_timedep(layout_atom, sub_resource_alloc):
-            # compute objective at time layout_atom.time
+        def compute_at_timestamp(timestamp, sub_resource_alloc):
+            # compute objective at time timestamp
+            counts, totals, freqs, firsts, indicesOfCircuitsWithOmittedData = \
+                self._ds_quantities(timestamp, ds_cache, layout, dataset)
+            if counts is None: return  # no data at this time => no contribution
+
             for _, obj in self.model._iter_parameterized_objs():
-                obj.set_time(layout_atom.timestamp)
+                obj.set_time(timestamp)
             for opcache in self.model._opcaches.values():
                 for obj in opcache.values():
-                    obj.set_time(layout_atom.timestamp)
+                    obj.set_time(timestamp)
 
-            self._bulk_fill_probs_atom(probs_array, layout_atom, sub_resource_alloc)
-            counts, totals, freqs, firsts, indicesOfCircuitsWithOmittedData = \
-                self._ds_quantities(layout_atom.timestamp, ds_cache, layout, dataset)
-            if counts is None: return  # no data at this time => no contribution
+            for atom in layout.atoms:  # layout only holds local atoms
+                self._bulk_fill_probs_atom(probs_array[atom.element_slice], atom, sub_resource_alloc)
 
             terms = raw_objective.terms(probs_array, counts, totals, freqs)
             if firsts is not None:  # consolidate with `_update_terms_for_omitted_probs`
                 omitted_probs = 1.0 - _np.array([_np.sum(probs_array[layout.indices_for_index(i)])
                                                  for i in indicesOfCircuitsWithOmittedData])
                 terms[firsts] += raw_objective.zero_freq_terms(totals[firsts], omitted_probs)
+            return terms
 
-            array_to_fill[layout_atom.element_slice] += terms
+        #Split timestamps up between processors - maybe do this in a time-dep layout?
+        my_timestamps, timestampOwners, timestamp_processing_ralloc = \
+            _mpit.distribute_indices(dataset.timestamps, atom_resource_alloc)
+        #assert(timestamp_processing_subcomm is None), "Untested support for multple cores computing same timestamp"
+        my_array_to_fill = _np.zeros(array_to_fill.shape, 'd')  # purely local array to accumulate results
+        assert(my_array_to_fill.shape == (layout.num_elements,))
 
-        atomOwners = self._compute_on_atoms(layout, compute_timedep, layout.resource_alloc())
+        for t in my_timestamps:
+            my_array_to_fill += compute_at_timestamp(t, timestamp_processing_ralloc)
 
         #collect/gather results (SUM local arrays together)
-        summed = _mpit.sum_arrays(array_to_fill, set(atomOwners.values()), layout.resource_alloc().comm)
-        array_to_fill[:] = summed  # this could probably be done more efficiently
+        resource_alloc.allreduce_sum(array_to_fill, my_array_to_fill, unit_ralloc=timestamp_processing_ralloc)
 
     def _bulk_fill_timedep_dobjfn(self, raw_objective, array_to_fill, layout, ds_circuits,
                                   num_total_outcomes, dataset, ds_cache=None):
@@ -1805,27 +1816,30 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             ("Must set `distribute_by_timestamp=True` to use a "
              "time-dependent objective function with MatrixForwardSimulator!")
 
-        probs_array = _np.empty(layout.num_elements, 'd')
+        resource_alloc = layout.resource_alloc()
+        param_resource_alloc = layout.resource_alloc('param-processing')
+        param_resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory before we begin
+
+        probs_array = _np.empty(layout.num_elements, 'd')  # local arrays - never shared
         dprobs_array = _np.empty((layout.num_elements, self.model.num_params), 'd')
         all_param_slice = slice(0, self.model.num_params)  # All params computed at once for now
         array_to_fill[:] = 0.0
 
-        def compute_timedep(layout_atom, sub_resource_alloc):
+        def compute_at_timestamp(layout_atom, timestamp, sub_resource_alloc):
             # compute objective at time layout_atom.time
             #print("DB: Rank %d : layout atom for t=" % resource_alloc.comm.rank, layout_atom.timestamp)
             for _, obj in self.model._iter_parameterized_objs():
-                obj.set_time(layout_atom.timestamp)
+                obj.set_time(timestamp)
             for opcache in self.model._opcaches.values():
                 for obj in opcache.values():
-                    obj.set_time(layout_atom.timestamp)
+                    obj.set_time(timestamp)
 
             self._bulk_fill_probs_atom(probs_array, layout_atom, sub_resource_alloc)
             self._bulk_fill_dprobs_atom(dprobs_array, all_param_slice, layout_atom,
                                         all_param_slice, sub_resource_alloc)
 
-            #import bpdb; bpdb.set_trace()
             counts, totals, freqs, firsts, indicesOfCircuitsWithOmittedData = \
-                self._ds_quantities(layout_atom.timestamp, ds_cache, layout, dataset)
+                self._ds_quantities(timestamp, ds_cache, layout, dataset)
 
             #Note: computing jacobian of objective here doesn't support sparse data yet!!! TODO
             if firsts is not None:  # consolidate with TimeIndependentMDCObjectiveFunction.dterms?
@@ -1833,30 +1847,27 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                 for ii, i in enumerate(indicesOfCircuitsWithOmittedData):
                     dprobs_omitted_rowsum[ii, :] = _np.sum(dprobs_array[layout.indices_for_index(i), :], axis=0)
 
-            #print("Layout atom t=",layout_atom.timestamp)
-            #print("p = ",probs_array)
-            #print("dp[29] = ",dprobs_array[:,29])
-            #print("cnts = ",counts)
             dprobs_array[:, :] = dprobs_array * raw_objective.dterms(probs_array, counts, totals, freqs)[:, None]
-            #print("raw dterms = ",raw_objective.dterms(probs_array, counts, totals, freqs))
-            #print("jac_contrib[:,29] = ",dprobs_array[:,29])
 
             if firsts is not None:  # consolidate with _update_dterms_for_omitted_probs?
                 omitted_probs = 1.0 - _np.array([_np.sum(probs_array[layout.indices_for_index(i)])
                                                  for i in indicesOfCircuitsWithOmittedData])
                 dprobs_array[firsts] -= raw_objective.zero_freq_dterms(totals[firsts], omitted_probs)[:, None] \
                     * dprobs_omitted_rowsum
-            #print("jac_contrib[:,29] post = ",dprobs_array[:,29])
+            return dprobs_array
 
-            array_to_fill[layout_atom.element_slice] += dprobs_array
-            #print("array_to_fill[:,29] = ",array_to_fill[:,29], " sum = ",_np.sum(array_to_fill[:,29]))
-            #print()
+        #Split timestamps up between processors - maybe do this in a time-dep layout?
+        my_timestamps, timestampOwners, timestamp_processing_ralloc = \
+            _mpit.distribute_indices(dataset.timestamps, param_resource_alloc)
+        my_array_to_fill = _np.zeros(array_to_fill.shape, 'd')  # purely local array to accumulate results
+        assert(my_array_to_fill.shape == (layout.num_elements, self.model.num_params))
 
-        atomOwners = self._compute_on_atoms(layout, compute_timedep, layout.resource_alloc())
+        for atom in layout.atoms:  # layout only holds local atoms
+            for t in my_timestamps:
+                my_array_to_fill[atom.element_slice] += compute_at_timestamp(atom, t, timestamp_processing_ralloc)
 
         #collect/gather results (SUM local arrays together)
-        summed = _mpit.sum_arrays(array_to_fill, set(atomOwners.values()), layout.resource_alloc().comm)
-        array_to_fill[:] = summed  # this could probably be done more efficiently
+        resource_alloc.allreduce_sum(array_to_fill, my_array_to_fill, unit_ralloc=timestamp_processing_ralloc)
 
     def bulk_fill_timedep_chi2(self, array_to_fill, layout, ds_circuits, num_total_outcomes, dataset,
                                min_prob_clip_for_weighting, prob_clip_interval, ds_cache=None):
@@ -1910,7 +1921,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
     def bulk_fill_timedep_dchi2(self, array_to_fill, layout, ds_circuits, num_total_outcomes, dataset,
                                 min_prob_clip_for_weighting, prob_clip_interval, chi2_array_to_fill=None,
-                                wrt_filter=None, ds_cache=None):
+                                ds_cache=None):
         """
         Compute the chi2 jacobian contributions for an entire tree of circuits, allowing for time dependent operations.
 
@@ -1956,12 +1967,6 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             when not None, an already-allocated length-E numpy array that is filled
             with the per-circuit chi2 contributions, just like in
             bulk_fill_timedep_chi2(...).
-
-        wrt_filter : list of ints, optional
-            If not None, a list of integers specifying which parameters
-            to include in the derivative dimension. This argument is used
-            internally for distributing calculations across multiple
-            processors and to control memory usage.
 
         Returns
         -------
@@ -2029,8 +2034,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                                              dataset, ds_cache)
 
     def bulk_fill_timedep_dloglpp(self, array_to_fill, layout, ds_circuits, num_total_outcomes, dataset,
-                                  min_prob_clip, radius, prob_clip_interval, logl_array_to_fill=None,
-                                  wrt_filter=None, ds_cache=None):
+                                  min_prob_clip, radius, prob_clip_interval, logl_array_to_fill=None, ds_cache=None):
         """
         Compute the ("poisson picture")log-likelihood jacobian contributions for an entire tree of circuits.
 
@@ -2077,12 +2081,6 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             when not None, an already-allocated length-E numpy array that is filled
             with the per-circuit logl contributions, just like in
             bulk_fill_timedep_loglpp(...).
-
-        wrt_filter : list of ints, optional
-            If not None, a list of integers specifying which parameters
-            to include in the derivative dimension. This argument is used
-            internally for distributing calculations across multiple
-            processors and to control memory usage.
 
         Returns
         -------

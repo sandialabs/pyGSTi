@@ -283,6 +283,7 @@ class _MatrixTimeDepCOPALayoutAtom(_MatrixCOPALayoutAtom):
         self.tree = master_atom.tree
         self._num_nonscratch_tree_items = master_atom._num_nonscratch_tree_items
         self.indices_by_spamtuple = master_atom.indices_by_spamtuple
+        self.elindex_outcome_tuples = master_atom.elindex_outcome_tuples
         _DistributableAtom.__init__(self, master_atom.element_slice, master_atom.num_elements)
 
 

@@ -583,7 +583,6 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
             if profiler: profiler.memory_check("custom_leastsq: after jacobian:"
                                                + "shape=%s, GB=%.2f" % (str(Jac.shape),
                                                                         Jac.nbytes / (1024.0**3)))
-
             Jnorm = _np.sqrt(dqc.norm2_jac(Jac))
             xnorm = _np.sqrt(dqc.norm2_x(x))
             printer.log("--- Outer Iter %d: norm_f = %g, mu=%g, |x|=%g, |J|=%g" % (k, norm_f, mu, xnorm, Jnorm))

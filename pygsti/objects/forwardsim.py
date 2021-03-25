@@ -212,8 +212,7 @@ class ForwardSimulator(object):
         if time is None:
             self.bulk_fill_probs(probs_array, copa_layout)
         else:
-            resource_alloc = _ResourceAllocation.cast(None)
-            self._bulk_fill_probs_at_times(probs_array, copa_layout, [time], resource_alloc)
+            self._bulk_fill_probs_at_times(probs_array, copa_layout, [time])
 
         if _np.any(_np.isnan(probs_array)):
             to_print = str(circuit) if len(circuit) < 10 else str(circuit[0:10]) + " ... (len %d)" % len(circuit)

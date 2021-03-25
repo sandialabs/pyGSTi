@@ -2738,8 +2738,12 @@ class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
             # remove small negative elements due to roundoff error (above expression *cannot* really be negative)
             terms = _np.maximum(terms, 0)
             # quadratic extrapolation of logl at min_p for probabilities < min_p
-            terms = _np.where(probs < self.min_p,
-                              terms + c0 * (probs - self.min_p) + c1 * (probs - self.min_p)**2, terms)
+            try:
+                terms = _np.where(probs < self.min_p,
+                                  terms + c0 * (probs - self.min_p) + c1 * (probs - self.min_p)**2, terms)
+            except FloatingPointError as e:
+                print("RANGES: ",(min(terms),max(terms)), (min(probs), max(probs)), " -- ", self.min_p, c0, c1)
+                raise e
         else:
             raise ValueError("Invalid regularization type: %s" % self.regtype)
 
@@ -5490,13 +5494,12 @@ class TimeDependentMDCObjectiveFunction(MDCObjectiveFunction):
         #Setup underlying EvaluatedModelDatasetCircuitsStore object
         #  Allocate peristent memory - (these are members of EvaluatedModelDatasetCircuitsStore)
         self.initial_allocated_memory = self.resource_alloc.allocated_memory
-        self.resource_alloc.add_tracked_memory(self.nelements)  # 'e' - see compute_array_types above
-        self.v = _np.empty(self.nelements, 'd')
+        self.v = self.layout.allocate_local_array('e', 'd', memory_tracker=self.resource_alloc)
         self.jac = None
 
         if 'ep' in self.array_types:
-            self.resource_alloc.add_tracked_memory((self.nelements + self.ex) * self.nparams)  # ~ 'ep'
-            self.jac = _np.empty((self.nelements + self.ex, self.nparams), 'd')
+            self.jac = self.layout.allocate_local_array('ep', 'd', memory_tracker=self.resource_alloc,
+                                                        extra_elements=self.ex)
 
         #self.maxCircuitLength = max([len(x) for x in self.circuits])  #REMOVE?
         # If desired, we may need to make it local to this processor, which may not have data for all of self.circuits
@@ -5506,6 +5509,8 @@ class TimeDependentMDCObjectiveFunction(MDCObjectiveFunction):
     def __del__(self):
         # Reset the allocated memory to the value it had in __init__, effectively releasing the allocations made there.
         self.resource_alloc.reset(allocated_memory=self.initial_allocated_memory)
+        self.layout.free_local_array(self.v)
+        self.layout.free_local_array(self.jac)
 
     def set_regularization(self):
         """
@@ -5896,6 +5901,8 @@ class TimeDependentPoissonPicLogLFunction(TimeDependentMDCObjectiveFunction):
         dlogl = self.jac[0:self.nelements, :]  # avoid mem copying: use jac mem for dlogl
         dlogl.shape = (self.nelements, self.nparams)
         if paramvec is not None: self.model.from_vector(paramvec)
+        unit_ralloc = self.layout.resource_alloc('param-processing')
+        shared_mem_leader = unit_ralloc.is_host_leader
 
         fsim = self.model.sim
         fsim.bulk_fill_timedep_dloglpp(dlogl, self.layout, self.ds_circuits, self.num_total_outcomes,
@@ -5909,7 +5916,8 @@ class TimeDependentPoissonPicLogLFunction(TimeDependentMDCObjectiveFunction):
         # limiting whereby v == 0 but the derivative is > 0 (but small, e.g. 1e-7).
         pt5_over_v = _np.where(v < 1e-100, 0.0, 0.5 / _np.maximum(v, 1e-100))  # v=0 is *min* w/0 deriv
         dlogl_factor = pt5_over_v
-        dlogl *= dlogl_factor[:, None]  # (nelements,N) * (nelements,1)   (N = dim of vectorized model)
+        if shared_mem_leader:
+            dlogl *= dlogl_factor[:, None]  # (nelements,N) * (nelements,1)   (N = dim of vectorized model)
 
         self.raw_objfn.resource_alloc.profiler.add_time("do_mlgst: JACOBIAN", tm)
         return self.jac

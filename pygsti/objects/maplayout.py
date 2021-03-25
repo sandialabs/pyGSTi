@@ -28,26 +28,26 @@ class _MapCOPALayoutAtom(_DistributableAtom):
     Object that acts as "atomic unit" of instructions-for-applying a COPA strategy.
     """
 
-    def __init__(self, unique_complete_circuits, ds_circuits, unique_to_orig, group, model,
+    def __init__(self, unique_complete_circuits, ds_circuits, group, model,
                  dataset, max_cache_size):
 
-        expanded_circuit_outcomes_by_unique = _collections.OrderedDict()
-        expanded_circuit_outcomes = _collections.OrderedDict()
+        expanded_circuit_info_by_unique = _collections.OrderedDict()
+        expanded_circuit_set = _collections.OrderedDict()  # only use SeparatePOVMCircuit keys as ordered set
         for i in group:
             observed_outcomes = None if (dataset is None) else dataset[ds_circuits[i]].outcomes
             d = unique_complete_circuits[i].expand_instruments_and_separate_povm(model, observed_outcomes)
-            expanded_circuit_outcomes_by_unique[i] = d
-            expanded_circuit_outcomes.update(d)
+            expanded_circuit_info_by_unique[i] = d  # a dict of SeparatePOVMCircuits => tuples of outcome labels
+            expanded_circuit_set.update(d)
 
-        expanded_circuits = list(expanded_circuit_outcomes.keys())
+        expanded_circuits = list(expanded_circuit_set.keys())
         self.table = _PrefixTable(expanded_circuits, max_cache_size)
 
         #Create circuit element <=> integer index lookups for speed
         all_rholabels = set()
         all_oplabels = set()
         all_elabels = set()
-        for expanded_circuit_outcomes in expanded_circuit_outcomes_by_unique.values():
-            for sep_povm_c in expanded_circuit_outcomes:
+        for expanded_circuit_infos in expanded_circuit_info_by_unique.values():
+            for sep_povm_c in expanded_circuit_infos:
                 all_rholabels.add(sep_povm_c.circuit_without_povm[0])
                 all_oplabels.update(sep_povm_c.circuit_without_povm[1:])
                 all_elabels.update(sep_povm_c.full_effect_labels)
@@ -60,6 +60,7 @@ class _MapCOPALayoutAtom(_DistributableAtom):
         #Lookup arrays for faster replib computation.
         table_offset = 0
         self.orig_indices_by_expcircuit = {}  # record original circuit index so dataset row can be retrieved
+        self.unique_indices_by_expcircuit = {}
         self.elbl_indices_by_expcircuit = {}
         self.elindices_by_expcircuit = {}
         self.outcomes_by_expcircuit = {}
@@ -69,23 +70,49 @@ class _MapCOPALayoutAtom(_DistributableAtom):
 
         #Assign element indices, "global" indices starting at `offset`
         local_offset = 0
-        for unique_i, expanded_circuit_outcomes in expanded_circuit_outcomes_by_unique.items():
-            for table_relindex, (sep_povm_c, outcomes) in enumerate(expanded_circuit_outcomes.items()):
+        for unique_i, expanded_circuit_infos in expanded_circuit_info_by_unique.items():
+            for table_relindex, (sep_povm_c, outcomes) in enumerate(expanded_circuit_infos.items()):
                 i = table_offset + table_relindex  # index of expanded circuit (table item)
                 elindices = list(range(local_offset, local_offset + len(outcomes)))
                 self.elbl_indices_by_expcircuit[i] = [self.elabel_lookup[lbl] for lbl in sep_povm_c.full_effect_labels]
                 self.elindices_by_expcircuit[i] = elindices  # *local* indices (0 is 1st element computed by this atom)
                 self.outcomes_by_expcircuit[i] = outcomes
-                self.orig_indices_by_expcircuit[i] = unique_to_orig[unique_i]
+                self.unique_indices_by_expcircuit[i] = unique_i
                 local_offset += len(outcomes)
 
                 # fill in running dict of per-circuit *local* element indices and outcomes:
                 elindex_outcome_tuples[unique_i].extend([(eli, out) for eli, out in zip(elindices, outcomes)])
-            table_offset += len(expanded_circuit_outcomes)
+            table_offset += len(expanded_circuit_infos)
         self.elindex_outcome_tuples = elindex_outcome_tuples
         element_slice = None  # *global* (of parent layout) element-index slice - set by parent
 
         super().__init__(element_slice, local_offset)
+
+    def update_indices(self, old_unique_is_by_new_unique_is):
+        """
+        Updates any internal indices held to the 'unique-circuit indices' of the layout.
+
+        This function is called during layout construction to alert the atom that the layout
+        being created will only hold a subset of the `unique_complete_circuits` provided to
+        to the atom's `__init__` method.  Thus, if the atom keeps indices to unique circuits
+        within the layout, it should update these indices accordingly.
+
+        Parameters
+        ----------
+        old_unique_is_by_new_unique_is : list
+            The indices within the `unique_complete_circuits` given to `__init__` that index the
+            unique circuits of the created layout - thus, these  that will become (in order) all of
+            the unique circuits of the created layout.
+
+        Returns
+        -------
+        None
+        """
+        new_unique_indices_by_expcircuit = {}
+        old_to_new = {old_i: new_i for new_i, old_i in enumerate(old_unique_is_by_new_unique_is)}
+        for i, unique_i in self.unique_indices_by_expcircuit.items():
+            new_unique_indices_by_expcircuit[i] = old_to_new[unique_i]
+        self.unique_indices_by_expcircuit = new_unique_indices_by_expcircuit
 
     @property
     def cache_size(self):
@@ -138,8 +165,6 @@ class MapCOPALayout(_DistributableCOPALayout):
         else:
             groups = [set(range(len(unique_complete_circuits)))]
 
-        to_orig = {unique_i: orig_i for orig_i, unique_i in to_unique.items()}  # unique => original indices
-
         #atoms = []
         #elindex_outcome_tuples = _collections.OrderedDict(
         #    [(unique_i, list()) for unique_i in range(len(unique_circuits))])
@@ -151,10 +176,19 @@ class MapCOPALayout(_DistributableCOPALayout):
         #    offset += atoms[-1].num_elements
 
         def _create_atom(group):
-            return _MapCOPALayoutAtom(unique_complete_circuits, ds_circuits, to_orig, group,
+            return _MapCOPALayoutAtom(unique_complete_circuits, ds_circuits, group,
                                       model, dataset, max_cache_size)
 
         super().__init__(circuits, unique_circuits, to_unique, unique_complete_circuits,
                          _create_atom, groups, num_table_processors,
                          num_param_dimension_processors, param_dimensions,
                          param_dimension_blk_sizes, resource_alloc, verbosity)
+
+        # For time dependent calcs:
+        # connect unique -> orig indices of final layout now that base class has created it
+        # (don't do this before because the .circuits of this local layout may not be *all* the circuits,
+        # or in the same order - this is only true in the *global* layout.
+        unique_to_orig = {unique_i: orig_i for orig_i, unique_i in self._to_unique.items()}  # unique => original indices
+        for atom in self.atoms:
+            for expanded_circuit_i, unique_i in atom.unique_indices_by_expcircuit.items():
+                atom.orig_indices_by_expcircuit[expanded_circuit_i] = unique_to_orig[unique_i]
