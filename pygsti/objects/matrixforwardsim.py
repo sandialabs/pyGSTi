@@ -19,6 +19,7 @@ import collections as _collections
 
 from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
+from ..tools import sharedmemtools as _smt
 from ..tools.matrixtools import _fas
 from .profiler import DummyProfiler as _DummyProfiler
 from .label import Label as _Label
@@ -1771,10 +1772,25 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         atom_resource_alloc = layout.resource_alloc('atom-processing')
         atom_resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory before we begin
 
-        probs_array = _np.empty(layout.num_elements, 'd')
-        array_to_fill[:] = 0.0
+        #Split timestamps up between processors - maybe do this in a time-dep layout?
+        all_timestamps = {i: t for i,t in enumerate(dataset.timestamps)}
+        my_timestamp_inds, timestampOwners, timestamp_processing_ralloc = \
+            _mpit.distribute_indices(list(range(len(all_timestamps))), atom_resource_alloc)
+        shared_mem_leader = timestamp_processing_ralloc.is_host_leader
 
-        def compute_at_timestamp(timestamp, sub_resource_alloc):
+        probs_array, probs_array_shm = _smt.create_shared_ndarray(timestamp_processing_ralloc,
+                                                                  (layout.num_elements,), 'd')
+        # Allocated this way b/c, e.g.,  say we have 4 procs on a single node and 2 timestamps: then
+        # timestamp_processing_ralloc will have 2 procs and only the first will fill probs_array below since
+        #_bulk_fill_probs_atom assumes it's given shared mem allocated using the resource alloc object it's given.
+
+        array_to_fill[:] = 0.0
+        my_array_to_fill = _np.zeros(array_to_fill.shape, 'd')  # purely local array to accumulate results
+        assert(my_array_to_fill.shape == (layout.num_elements,))
+
+        for timestamp_index in my_timestamp_inds:
+            timestamp = all_timestamps[timestamp_index]
+
             # compute objective at time timestamp
             counts, totals, freqs, firsts, indicesOfCircuitsWithOmittedData = \
                 self._ds_quantities(timestamp, ds_cache, layout, dataset)
@@ -1787,27 +1803,24 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                     obj.set_time(timestamp)
 
             for atom in layout.atoms:  # layout only holds local atoms
-                self._bulk_fill_probs_atom(probs_array[atom.element_slice], atom, sub_resource_alloc)
+                self._bulk_fill_probs_atom(probs_array[atom.element_slice], atom, timestamp_processing_ralloc)
+
+            timestamp_processing_ralloc.host_comm_barrier()  # don't exit until all proc's array_to_fill is ready
+            # (similar to DistributableForwardSimulator._bulk_fill_probs)
 
             terms = raw_objective.terms(probs_array, counts, totals, freqs)
-            if firsts is not None:  # consolidate with `_update_terms_for_omitted_probs`
+            if firsts is not None and shared_mem_leader:  # consolidate with `_update_terms_for_omitted_probs`
                 omitted_probs = 1.0 - _np.array([_np.sum(probs_array[layout.indices_for_index(i)])
                                                  for i in indicesOfCircuitsWithOmittedData])
                 terms[firsts] += raw_objective.zero_freq_terms(totals[firsts], omitted_probs)
-            return terms
+            timestamp_processing_ralloc.host_comm_barrier()  # have non-leader procs wait for leaders to set shared mem
 
-        #Split timestamps up between processors - maybe do this in a time-dep layout?
-        my_timestamps, timestampOwners, timestamp_processing_ralloc = \
-            _mpit.distribute_indices(dataset.timestamps, atom_resource_alloc)
-        #assert(timestamp_processing_subcomm is None), "Untested support for multple cores computing same timestamp"
-        my_array_to_fill = _np.zeros(array_to_fill.shape, 'd')  # purely local array to accumulate results
-        assert(my_array_to_fill.shape == (layout.num_elements,))
-
-        for t in my_timestamps:
-            my_array_to_fill += compute_at_timestamp(t, timestamp_processing_ralloc)
+            my_array_to_fill += terms
 
         #collect/gather results (SUM local arrays together)
         resource_alloc.allreduce_sum(array_to_fill, my_array_to_fill, unit_ralloc=timestamp_processing_ralloc)
+
+        _smt.cleanup_shared_ndarray(probs_array_shm)
 
     def _bulk_fill_timedep_dobjfn(self, raw_objective, array_to_fill, layout, ds_circuits,
                                   num_total_outcomes, dataset, ds_cache=None):
@@ -1820,54 +1833,69 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         param_resource_alloc = layout.resource_alloc('param-processing')
         param_resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory before we begin
 
-        probs_array = _np.empty(layout.num_elements, 'd')  # local arrays - never shared
-        dprobs_array = _np.empty((layout.num_elements, self.model.num_params), 'd')
-        all_param_slice = slice(0, self.model.num_params)  # All params computed at once for now
-        array_to_fill[:] = 0.0
+        #Split timestamps up between processors - maybe do this in a time-dep layout?
+        all_timestamps = {i: t for i,t in enumerate(dataset.timestamps)}
+        my_timestamp_inds, timestampOwners, timestamp_processing_ralloc = \
+            _mpit.distribute_indices(list(range(len(all_timestamps))), param_resource_alloc)
+        shared_mem_leader = timestamp_processing_ralloc.is_host_leader
 
-        def compute_at_timestamp(layout_atom, timestamp, sub_resource_alloc):
+        probs_array, probs_array_shm = _smt.create_shared_ndarray(timestamp_processing_ralloc,
+                                                                  (layout.num_elements,), 'd')
+        dprobs_array, dprobs_array_shm = _smt.create_shared_ndarray(timestamp_processing_ralloc,
+                                                                  (layout.num_elements, self.model.num_params), 'd')
+        # Allocated this way b/c, e.g.,  say we have 4 procs on a single node and 2 timestamps: then
+        # timestamp_processing_ralloc will have 2 procs and only the first will fill probs_array below since
+        #_bulk_fill_probs_atom assumes it's given shared mem allocated using the resource alloc object it's given.
+
+        array_to_fill[:] = 0.0
+        my_array_to_fill = _np.zeros(array_to_fill.shape, 'd')  # purely local array to accumulate results
+        all_param_slice = slice(0, self.model.num_params)  # All params computed at once for now
+        assert(my_array_to_fill.shape == (layout.num_elements, self.model.num_params))
+
+        for timestamp_index in my_timestamp_inds:
+            timestamp = all_timestamps[timestamp_index]
             # compute objective at time layout_atom.time
             #print("DB: Rank %d : layout atom for t=" % resource_alloc.comm.rank, layout_atom.timestamp)
+
+            counts, totals, freqs, firsts, indicesOfCircuitsWithOmittedData = \
+                self._ds_quantities(timestamp, ds_cache, layout, dataset)
+
             for _, obj in self.model._iter_parameterized_objs():
                 obj.set_time(timestamp)
             for opcache in self.model._opcaches.values():
                 for obj in opcache.values():
                     obj.set_time(timestamp)
 
-            self._bulk_fill_probs_atom(probs_array, layout_atom, sub_resource_alloc)
-            self._bulk_fill_dprobs_atom(dprobs_array, all_param_slice, layout_atom,
-                                        all_param_slice, sub_resource_alloc)
+            for atom in layout.atoms:  # layout only holds local atoms
+                self._bulk_fill_probs_atom(probs_array, atom, timestamp_processing_ralloc)
+                self._bulk_fill_dprobs_atom(dprobs_array, all_param_slice, atom,
+                                            all_param_slice, timestamp_processing_ralloc)
 
-            counts, totals, freqs, firsts, indicesOfCircuitsWithOmittedData = \
-                self._ds_quantities(timestamp, ds_cache, layout, dataset)
+            timestamp_processing_ralloc.host_comm_barrier()  # don't exit until all proc's array_to_fill is ready
+            # (similar to DistributableForwardSimulator._bulk_fill_probs)
 
-            #Note: computing jacobian of objective here doesn't support sparse data yet!!! TODO
-            if firsts is not None:  # consolidate with TimeIndependentMDCObjectiveFunction.dterms?
-                dprobs_omitted_rowsum = _np.empty((len(firsts), self.model.num_params), 'd')
-                for ii, i in enumerate(indicesOfCircuitsWithOmittedData):
-                    dprobs_omitted_rowsum[ii, :] = _np.sum(dprobs_array[layout.indices_for_index(i), :], axis=0)
+            if shared_mem_leader:
+                if firsts is not None:  # consolidate with TimeIndependentMDCObjectiveFunction.dterms?
+                    dprobs_omitted_rowsum = _np.empty((len(firsts), self.model.num_params), 'd')
+                    for ii, i in enumerate(indicesOfCircuitsWithOmittedData):
+                        dprobs_omitted_rowsum[ii, :] = _np.sum(dprobs_array[layout.indices_for_index(i), :], axis=0)
 
-            dprobs_array[:, :] = dprobs_array * raw_objective.dterms(probs_array, counts, totals, freqs)[:, None]
+                dprobs_array *= raw_objective.dterms(probs_array, counts, totals, freqs)[:, None]
 
-            if firsts is not None:  # consolidate with _update_dterms_for_omitted_probs?
-                omitted_probs = 1.0 - _np.array([_np.sum(probs_array[layout.indices_for_index(i)])
-                                                 for i in indicesOfCircuitsWithOmittedData])
-                dprobs_array[firsts] -= raw_objective.zero_freq_dterms(totals[firsts], omitted_probs)[:, None] \
-                    * dprobs_omitted_rowsum
-            return dprobs_array
+                if firsts is not None:  # consolidate with _update_dterms_for_omitted_probs?
+                    omitted_probs = 1.0 - _np.array([_np.sum(probs_array[layout.indices_for_index(i)])
+                                                     for i in indicesOfCircuitsWithOmittedData])
+                    dprobs_array[firsts] -= raw_objective.zero_freq_dterms(totals[firsts], omitted_probs)[:, None] \
+                        * dprobs_omitted_rowsum
+            timestamp_processing_ralloc.host_comm_barrier()  # have non-leader procs wait for leaders to set shared mem
 
-        #Split timestamps up between processors - maybe do this in a time-dep layout?
-        my_timestamps, timestampOwners, timestamp_processing_ralloc = \
-            _mpit.distribute_indices(dataset.timestamps, param_resource_alloc)
-        my_array_to_fill = _np.zeros(array_to_fill.shape, 'd')  # purely local array to accumulate results
-        assert(my_array_to_fill.shape == (layout.num_elements, self.model.num_params))
-
-        for atom in layout.atoms:  # layout only holds local atoms
-            for t in my_timestamps:
-                my_array_to_fill[atom.element_slice] += compute_at_timestamp(atom, t, timestamp_processing_ralloc)
+            my_array_to_fill += dprobs_array
 
         #collect/gather results (SUM local arrays together)
         resource_alloc.allreduce_sum(array_to_fill, my_array_to_fill, unit_ralloc=timestamp_processing_ralloc)
+
+        _smt.cleanup_shared_ndarray(probs_array_shm)
+        _smt.cleanup_shared_ndarray(dprobs_array_shm)
 
     def bulk_fill_timedep_chi2(self, array_to_fill, layout, ds_circuits, num_total_outcomes, dataset,
                                min_prob_clip_for_weighting, prob_clip_interval, ds_cache=None):
