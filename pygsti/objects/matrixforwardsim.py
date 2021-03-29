@@ -24,7 +24,6 @@ from ..tools.matrixtools import _fas
 from .profiler import DummyProfiler as _DummyProfiler
 from .label import Label as _Label
 from .matrixlayout import MatrixCOPALayout as _MatrixCOPALayout
-from .matrixlayout import MatrixTimeDepCOPALayout as _MatrixTimeDepCOPALayout
 from .forwardsim import ForwardSimulator as _ForwardSimulator
 from .forwardsim import _bytes_for_array_types
 from .distforwardsim import DistributableForwardSimulator as _DistributableForwardSimulator
