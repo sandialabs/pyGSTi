@@ -5403,6 +5403,25 @@ class ComposedOp(LinearOperator):
         """
         return self.errorgen_coefficients(return_basis=False, logscale_nonham=True)
 
+    def get_chp_str(self, targets=None):
+        """Return a string suitable for printing to a CHP input file from all underlying operations.
+
+        Parameters
+        ----------
+        targets: list of int
+            Qubits to be applied to (if None, uses stored CHP strings directly)
+        
+        Returns
+        -------
+        s : str
+            String of CHP code
+        """
+        s = ""
+        for op in self.factorops:
+            s += op.get_chp_str(targets)
+        return s
+
+
     def __str__(self):
         """ Return string representation """
         s = "Composed operation of %d factors:\n" % len(self.factorops)
@@ -5813,6 +5832,29 @@ class EmbeddedOp(LinearOperator):
             assert(nQubits is not None), "State space does not contain a definite number of qubits!"
             rep = replib.SBOpRepEmbedded(self.embedded_op._rep,
                                          nQubits, qubit_indices)
+        elif evotype == "chp":
+            # assert that all state space labels == qubits, since we only know
+            # how to embed cliffords on qubits...
+            assert(len(self.state_space_labels.labels) == 1
+                   and all([ld == 2 for ld in self.state_space_labels.labeldims.values()])), \
+                "All state space labels must correspond to *qubits*"
+            if isinstance(self.embedded_op, StochasticCHPOp):
+                assert(len(target_labels) == self.embedded_op.nqubits), \
+                    "Inconsistent number of qubits in `target_labels` ({0}) and CHP `embedded_op` ({1})".format(
+                        len(target_labels), self.embedded_op.nqubits)
+            assert(not self.dense_rep), "`dense_rep` can only be set to True for densitymx and statevec evotypes"
+
+            qubitLabels = self.state_space_labels.labels[0]
+            qubit_indices = _np.array([qubitLabels.index(targetLbl)
+                                       for targetLbl in target_labels], _np.int64)
+
+            nQubits = self.state_space_labels.nqubits
+            assert(nQubits is not None), "State space does not contain a definite number of qubits!"
+            
+            # Store qubit indices as targets for later use
+            self.target_indices = qubit_indices
+
+            rep = opDim # Don't set representation again, just use embedded_op calls later
 
         elif evotype in ("statevec", "densitymx"):
 
@@ -6564,6 +6606,31 @@ class EmbeddedOp(LinearOperator):
         """
         return self.embedded_op.has_nonzero_hessian()
 
+    def get_chp_str(self, targets=None):
+        """Return a string suitable for printing to a CHP input file from the embedded operations.
+
+        Just calls underlying get_chp_str but with an extra layer of target redirection.
+
+        Parameters
+        ----------
+        targets: list of int
+            Qubits to be applied to (if None, uses stored CHP strings directly).
+        
+        Returns
+        -------
+        s : str
+            String of CHP code
+        """
+        target_indices = self.target_indices
+
+        # Targets are for the full embedded operation so we need to map these to the actual targets of the CHP operation
+        if targets is not None:
+            assert len(targets) == self.state_space_labels.nqubits, \
+                "Got {0} targets instead of required {1}".format(len(targets), self.state_space_labels.nqubits)
+            target_indices = [targets[ti] for ti in self.target_indices]
+
+        return self.embedded_op.get_chp_str(target_indices)
+
     def __str__(self):
         """ Return string representation """
         s = "Embedded operation with full dimension %d and state space %s\n" % (self.dim, self.state_space_labels)
@@ -6740,16 +6807,12 @@ class CliffordOp(LinearOperator):
 class StochasticCHPOp(LinearOperator):
     """
     A probabilistic Clifford operation represented by lists of CHP operations.
-
-    Each CHP operation is stored as an f-string where the qubit label will be substituted
-    later as a kwarg in get_chp_str.
-    As an example: chp_reps = ['h q0', 'Gcnot q0 q1'] will result in a Hadamard and
-    CNOT gate being applied on qubits templated with the labels ['q0', 'q1'].
-    These labels must then be provided as kwargs when calling get_chp_str(), e.g. get_chp_str(q0=0, q1=1).
     """
-    def __init__(self, chp_ops_list, probs, custom_chp_gates=None, seed_or_state=None):
+    def __init__(self, chp_ops_list, probs, nqubits, custom_chp_gates=None, seed_or_state=None):
         """
         Creates a new StochasticCHPOp from a list of (CHP operation, probability) tuples.
+
+        Each CHP operation is stored as a string with qubit labels 0 through nqubits - 1.
 
         Parameters
         ----------
@@ -6758,6 +6821,8 @@ class StochasticCHPOp(LinearOperator):
             and labels for qubit templates to be used when generating CHP code
         probs: list of float
             Probabilities for each CHP operation
+        nqubits: int
+            Number of qubits acted on by the operation
         custom_chp_gates : dict of str: list of str
             Dictionary mapping custom chp_op names to lists of native CHP operations used to augment
             the dictionary from pygsti.tools.internalgates.standard_gatenames_chp_conversions().
@@ -6771,40 +6836,47 @@ class StochasticCHPOp(LinearOperator):
             self.rand_state = _RandomState(seed_or_state)
 
         native_ops_list = []
-        qubit_templates = set()
         for chp_ops in chp_ops_list:
-            ops, qt = self._get_native_ops(chp_ops, custom_chp_gates)
+            ops = self._get_native_ops(chp_ops, nqubits, custom_chp_gates)
 
             native_ops_list.append(ops)
-            qubit_templates.update(qt)
 
-        rep = replib.StochasticCHPOpRep(native_ops_list, list(qubit_templates), probs)
+        rep = replib.StochasticCHPOpRep(native_ops_list, probs, nqubits)
         LinearOperator.__init__(self, rep, "chp")
+    
+    @property
+    def nqubits(self):
+        return self._rep.nqubits
 
-    def get_chp_str(self, **kwargs):
+    def get_chp_str(self, targets=None):
         """Return a string suitable for printing to a CHP input file after stochastically selecting operation.
 
         Parameters
         ----------
-        **kwargs:
-            Kwargs mapping qubit_templates in the CHP string to actual qubit indices
+        targets: list of int
+            Qubits to be applied to (if None, uses stored CHP strings directly)
         
         Returns
         -------
         s : str
             String of CHP code
         """
-        chosen_rep = self._choose_op()
+        ops = self._choose_op()
+        nqubits = self._rep.nqubits
 
-        # Check all qubit labels available
-        qubit_templates = chosen_rep.qubit_templates
-        if any([q not in kwargs for q in qubit_templates]):
-            raise SyntaxError(f'All qubit templates must be provided. Expected {qubit_templates}, got {kwargs.keys()}')
-        
-        # Substitute labels
+        if targets is not None:
+            assert len(targets) == nqubits, "Got {0} targets instead of required {1}".format(len(targets, nqubits))
+            target_map = {str(i): str(t) for i,t in enumerate(targets)}
+
         s = ""
-        for op in chosen_rep.ops:
-            s += f'{op.format(**kwargs)}\n'
+        for op in ops:
+            # Substitute if alternate targets provided
+            if targets is not None:
+                op_str = ''.join([target_map[c] if c in target_map else c for c in op])
+            else:
+                op_str = op
+            
+            s += op_str + '\n'
         
         return s
 
@@ -6812,9 +6884,9 @@ class StochasticCHPOp(LinearOperator):
         """Helper function to stochastically select operation
         """
         index = self.rand_state.choice(len(self._rep.probs), p=self._rep.probs)
-        return self._rep.chp_ops[index]
+        return self._rep.ops_list[index]
 
-    def _get_native_ops(self, chp_ops, custom_chp_gates):
+    def _get_native_ops(self, chp_ops, nqubits, custom_chp_gates=None):
         """Parse/sanitize a single CHP operation.
 
         Parameters
@@ -6822,6 +6894,8 @@ class StochasticCHPOp(LinearOperator):
         chp_ops : str or list of str
             Strings with a CHP gatename (either from pygsti.tools.internalgates or provided in custom_chp_gates)
             and labels for qubit templates to be used when generating CHP code
+        nqubits: int
+            Number of qubits acted on by the operation
         custom_chp_gates : dict of str: list of str
             Dictionary mapping custom chp_op names to lists of native CHP operations used to augment
             the dictionary from pygsti.tools.internalgates.standard_gatenames_chp_conversions().
@@ -6845,36 +6919,32 @@ class StochasticCHPOp(LinearOperator):
 
         # Parse ops into native CHP strings
         sanitized_ops = []
-        qubit_templates = set()
         for op in chp_ops:
             entries = op.split()
+            op_label = entries[0]
+            op_targets = entries[1:]
             
-            # Keep track of how many qubits are touched by this CHPOp
-            qubit_templates.update(entries[1:3])
-            
-            # Expand to native gates and distributes
-            native_ops = chp_gates[entries[0]]
+            # Expand to native gates and distribute targets
+            assert op_label in chp_gates.keys(), "No known compilation for {0}, please specify a standard gatename or provide custom_chp_gates".format(op_label)
+            native_ops = chp_gates[op_label]
+
             for nat_op in native_ops:
                 if nat_op == 'c':
-                    try:
-                        sanitized_ops.append(nat_op + ' {' + entries[1] + '}' + ' {' + entries[2] + '}')
-                        qubit_templates.update(entries[1:3])
-                    except IndexError as e:
-                        raise Exception('CHP native gate "c" requires two qubit templates to be provided') from e
+                    assert len(op_targets) == 2, "CHP native gate 'c' requires two targets"
+                    assert all([int(t) < nqubits for t in op_targets]), "CHP targets must be less than specified number of qubits"
                 else:
-                    try:
-                        sanitized_ops.append(nat_op + ' {' + entries[1] + '}')
-                        qubit_templates.add(entries[1])
-                    except IndexError as e:
-                        raise Exception(f'CHP native gate "{nat_op}" requires one qubit template to be provided') from e
+                    assert len(op_targets) == 1, "CHP native gate '{0}' requires one target".format(nat_op)
+                    assert all([int(t) < nqubits for t in op_targets]), "CHP targets must be less than specified number of qubits"
+                
+                sanitized_ops.append(' '.join([nat_op] + op_targets))
 
-        return sanitized_ops, qubit_templates
+        return sanitized_ops
 
     def __str__(self):
         """Return string representation"""
         s = "Stochastic CHP operation with probabilities and labels:\n"
-        for chp_op, probs in zip(self._rep.chp_ops, self._rep.probs):
-            label = ", ".join(chp_op.ops)
+        for chp_op, probs in zip(self._rep.ops_list, self._rep.probs):
+            label = ", ".join(chp_op)
             s += f"{probs}: {label}\n"
         return s
 
@@ -6883,7 +6953,7 @@ class CHPOp(StochasticCHPOp):
 
     Convenience class for StochasticCHPOp when only a single operation is needed.
     """
-    def __init__(self, chp_ops, custom_chp_gates=None):
+    def __init__(self, chp_ops, nqubits, custom_chp_gates=None):
         """
         Creates a new CHPOp as a StochasticCHPOp with only one possible operation.
 
@@ -6892,22 +6962,24 @@ class CHPOp(StochasticCHPOp):
         chp_ops : str or list of str
             Strings with a CHP gatename (either from pygsti.tools.internalgates or provided in custom_chp_gates)
             and labels for qubit templates to be used when generating CHP code
+        nqubits: int
+            Number of qubits acted on by the operation
         custom_chp_gates : dict of str: list of str
             Dictionary mapping custom chp_op names to lists of native CHP operations used to augment
             the dictionary from pygsti.tools.internalgates.standard_gatenames_chp_conversions().
             Entries will override those available provided by standard gatenames.
         """
-        super().__init__([chp_ops], [1.0], custom_chp_gates=custom_chp_gates)
+        super().__init__([chp_ops], [1.0], nqubits, custom_chp_gates=custom_chp_gates)
 
     def _choose_op(self):
         """Override for single operation to avoid RNG usage
         """
-        return self._rep.chp_ops[0]
+        return self._rep.ops_list[0]
 
     def __str__(self):
         """Return string representation"""
         s = "CHP operation with labels: "
-        s += ", ".join(self._rep.chp_ops[0].ops)
+        s += ", ".join(self._rep.ops_list[0]) + '\n'
         return s
 
 

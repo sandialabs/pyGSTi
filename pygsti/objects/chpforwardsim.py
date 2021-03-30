@@ -64,24 +64,23 @@ class CHPForwardSimulator(_WeakForwardSimulator):
         # Use temporary file as per https://stackoverflow.com/a/8577225
         fd, path = _tf.mkstemp()
         try:
-            # TODO: Handle prep/povm properly? Not that there's a lot we can do...
-            # Also the expand_instruments bit can probably be pulled into base class
-
-            # Substitute sslbls for names in gates
-            # TODO: Don't like this coupling... how to avoid?
-            labels = self.model.state_space_labels.labels[0]
-            label_dict = {l:i for i,l in enumerate(labels)}
+            # TODO: Handle prep/povm properly? Also need to handle Instruments
+            complete_circuit = self.model.complete_circuit(circuit)
 
             with _os.fdopen(fd, 'w') as tmp:
-                # Prep placeholder...
                 tmp.write('#\n')
 
-                for op_label in circuit:
+                # Prep
+                rho = self.model.circuit_layer_operator(complete_circuit[0], 'prep')
+                tmp.write(rho.get_chp_str())
+
+                for op_label in complete_circuit[1:-1]:
                     op = self.model.circuit_layer_operator(op_label, 'op')
-                    tmp.write(op.get_chp_str(**label_dict))
+                    tmp.write(op.get_chp_str())
                 
-                # PVM placeholder...
-                for i in range(len(labels)):
+                # POVM (sort of, actually using it more like a straight PVM)
+                povm = self.model.circuit_layer_operator(complete_circuit[-1], 'povm')
+                for i in range(povm.nqubits):
                     tmp.write(f'm {i}\n')
 
             # Run CHP

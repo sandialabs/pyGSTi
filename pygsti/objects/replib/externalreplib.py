@@ -39,17 +39,11 @@ class ExternalOpRep(object):
 
 
 class StochasticCHPOpRep(ExternalOpRep):
-    class CHPOpRep(object):
-        def __init__(self, ops, qubit_templates):
-            self.ops = ops
-            self.qubit_templates = qubit_templates
-            self.dim = 4**len(self.qubit_templates)
-
-    def __init__(self, ops_list, qubit_templates, probs):
-        self.chp_ops = [self.CHPOpRep(ops, qubit_templates) for ops in ops_list]
-        self.qubit_templates = qubit_templates
+    def __init__(self, ops_list, probs, nqubits):
+        self.ops_list = ops_list
         self.probs = probs
-        self.dim = 2**len(self.qubit_templates)
+        self.nqubits = nqubits
+        self.dim = 2**nqubits
 
     
 

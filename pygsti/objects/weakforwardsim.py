@@ -41,13 +41,12 @@ class WeakForwardSimulator(_ForwardSimulator):
         work_array = _np.zeros_like(array_to_fill)
 
         # TODO: For parallelization, block over this for loop
-        for shot in range(self.shots):
+        for _ in range(self.shots):
             self._compute_circuit_outcome_for_shot(work_array, circuit, outcomes, resource_alloc, time)
 
         array_to_fill[:] = work_array / self.shots
     
     # If _compute_circuit_outcome_probability_derivatives is not defined, ForwardSimulator will do it by finite difference
-    # TODO: Will probably want to override that to allow parallelization over shots
 
 
 
