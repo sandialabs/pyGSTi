@@ -684,7 +684,7 @@ class LocalNoiseModel(_ImplicitOpModel):
             basis1Q = _BuiltinBasis("sv", 2)
         else:
             basis1Q = _BuiltinBasis("sv", 2)
-            assert(evotype == "stabilizer"), "Invalid evolution type: %s" % evotype
+            assert(evotype in ("stabilizer", "chp")), "Invalid evolution type: %s" % evotype
 
         if simulator == "auto":
             if evotype == "densitymx":
@@ -695,7 +695,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                 simulator = _MapFSim()  # use map as default for stabilizer-type evolutions
             else: assert(False)  # should be unreachable
 
-        qubit_dim = 2 if evotype in ('statevec', 'stabilizer') else 4
+        qubit_dim = 2 if evotype in ('statevec', 'stabilizer', 'chp') else 4
         if not isinstance(qubit_labels, _ld.StateSpaceLabels):  # allow user to specify a StateSpaceLabels object
             qubit_sslbls = _ld.StateSpaceLabels(qubit_labels, (qubit_dim,) * len(qubit_labels), evotype=evotype)
         else:
