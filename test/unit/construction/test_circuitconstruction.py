@@ -1,9 +1,10 @@
 from ..util import BaseCase
-from ..algorithms import fixtures
 
 from pygsti.objects import Circuit, Label
+from pygsti.modelpacks.legacy import std1Q_XYI as std
 
 import pygsti.construction.circuitconstruction as cc
+import pygsti.construction.datasetconstruction as dc
 
 
 class CircuitConstructionTester(BaseCase):
@@ -211,9 +212,43 @@ class CircuitConstructionTester(BaseCase):
         self.assertEqual(result, ("A", "B", "C", "B", "C", "B", "C"))
 
         results = cc.manipulate_circuits([tuple('ABC'), tuple('GHI')], sequenceRules)
+        self.assertEqual(results, [("A", "B'", "C'"), tuple('GHI')])
         results_trivial = cc.manipulate_circuits([tuple('ABC'), tuple('GHI')], None)  # special case
-        # TODO assert correctness
+        self.assertEqual(results_trivial, [tuple('ABC'), tuple('GHI')])
 
     def test_list_strings_lgst_can_estimate(self):
-        strs = cc.list_circuits_lgst_can_estimate(fixtures.ds, fixtures.fiducials, fixtures.fiducials)
-        # TODO assert correctness
+        model = std.target_model()
+        fids = std.fiducials[:3]
+        germs = std.germs[:3]
+
+        # Construct full set
+        circuit_list = []
+        for f1 in fids:
+            for f2 in fids:
+                for g in germs:
+                    circuit_list.append(f1 + g + f2)
+        
+        ds = dc.simulate_data(model, circuit_list, 1)
+        estimatable_germs = cc.list_circuits_lgst_can_estimate(ds, fids, fids)
+        self.assertEqual(set(germs), set(estimatable_germs))
+    
+        # Add germ with incomplete fiducials
+        circuit_list.append(fids[0] + germs[1] + germs[2] + fids[1])
+
+        ds = dc.simulate_data(model, circuit_list, 1)
+        estimatable_germs = cc.list_circuits_lgst_can_estimate(ds, fids, fids)
+        self.assertEqual(set(germs), set(estimatable_germs))
+
+        # Asymmetric fiducials
+        fids2 = fids[:2]
+        circuit_list = []
+        for f1 in fids:
+            for f2 in fids2:
+                for g in germs:
+                    circuit_list.append(f1 + g + f2)
+        
+        ds = dc.simulate_data(model, circuit_list, 1)
+        estimatable_germs = cc.list_circuits_lgst_can_estimate(ds, fids, fids2)
+        self.assertEqual(set(germs), set(estimatable_germs))
+    
+        

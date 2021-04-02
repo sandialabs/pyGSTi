@@ -245,6 +245,8 @@ def create_qutrit_model(error_scale, x_angle=_np.pi / 2, y_angle=_np.pi / 2,
 
     #Now introduce unitary noise.
 
+    ## SS: Why is seed only passed in to first call?
+    # Also seems like RandState would be better built here and passed to get different RNG for each call (but overall deterministic still)
     scale = error_scale
     Xrand = _random_rot(scale, seed=seed)
     Yrand = _random_rot(scale)
@@ -255,13 +257,13 @@ def create_qutrit_model(error_scale, x_angle=_np.pi / 2, y_angle=_np.pi / 2,
         gateXmx = _np.dot(_np.dot(_np.conj(Xrand).T, gateXmx), Xrand)
         gateYmx = _np.dot(_np.dot(_np.conj(Yrand).T, gateYmx), Yrand)
         gateMmx = _np.dot(_np.dot(_np.conj(Mrand).T, gateMmx), Mrand)
-        gateImx = _np.dot(_np.dot(_np.conj(Irand).T, gateMmx), Irand)
+        gateImx = _np.dot(_np.dot(_np.conj(Irand).T, gateImx), Irand)
 
     else:
         gateXmx = _np.dot(gateXmx, Xrand)
         gateYmx = _np.dot(gateYmx, Yrand)
         gateMmx = _np.dot(gateMmx, Mrand)
-        gateImx = _np.dot(gateImx, Mrand)
+        gateImx = _np.dot(gateImx, Irand)
 
     #Change gate representation to superoperator in Gell-Mann basis
     gateISO = unitary_to_process_mx(gateImx)
