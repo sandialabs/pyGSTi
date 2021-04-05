@@ -128,7 +128,7 @@ class ModelTest(_proto.Protocol):
         self.auxfile_types['target_model'] = 'pickle'
         self.auxfile_types['gaugeopt_suite'] = 'pickle'  # TODO - better later? - json?
         self.auxfile_types['gaugeopt_target'] = 'pickle'  # TODO - better later? - json?
-        self.auxfile_types['badfit_options'] = 'pickle' # SS: Had issues using json, unclear what was not serializable
+        self.auxfile_types['badfit_options'] = 'pickle'  # SS: Had issues using json, unclear what was not serializable
         self.auxfile_types['objfn_builders'] = 'pickle'
 
         #Advanced options that could be changed by users who know what they're doing
