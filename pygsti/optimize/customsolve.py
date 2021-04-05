@@ -14,7 +14,7 @@ import numpy as _np
 import scipy as _scipy
 from ..tools import sharedmemtools as _smt
 from ..tools import slicetools as _slct
-from .distributedqtycalc import UndistributedQuantityCalc as _UndistributedQuantityCalc
+from .arraysinterface import UndistributedArraysInterface as _UndistributedArraysInterface
 
 try:
     from ..tools import fastcalc as _fastcalc
@@ -22,20 +22,56 @@ except ImportError:
     _fastcalc = None
 
 
-def custom_solve(a, b, x, dqc, resource_alloc, proc_threshold=100):
+def custom_solve(a, b, x, ari, resource_alloc, proc_threshold=100):
     """
     Simple parallel Gaussian Elimination with pivoting.
 
-    TODO: docstring
+    This function was built to provide a parallel alternative to
+    `scipy.linalg.solve`, and can achieve faster runtimes compared
+    with the serial SciPy routine when the number of available processors
+    and problem size are large enough.  
 
-    proc_threshold : int
-        Below this number of processors this routine will simply call
-        SciPy's solve(...) method.
+    When the number of processors is greater than `proc_threshold` (below
+    this number the routine just calls `scipy.linalg.solve` on the root
+    processor) the method works as follows:
 
-    Expects `a` to be in "JTJ" format, where each proc holds rows according to
-    the "fine" parameter partitioning and all the columns for each of those
-    rows. The `b` and `x` arrays are expected to be in "JTf" format, where each proc
-    owns elements corresponding to the "fine" parameter partitioning of the layout.
+    - each processor "owns" some subset of the rows of `a` and `b`.
+    - iteratively (over pivot columns), the best pivot row is found, and this row is used to
+      eliminate all other elements in the current pivot column.  This procedure operations on
+      the joined matrix `a|b`, and when it completes the matrix `a` is in reduced row echelon
+      form (RREF).
+    - back substitution (trivial because `a` is in *reduced* REF) is performed to find
+      the solution `x` such that `a @ x = b`.
+
+    Parameters
+    ----------
+    a : LocalNumpyArray
+        A 2D array with the `'jtj'` distribution, holding the rows of the `a` matrix belonging
+        to the current processor.  (This belonging is dictated by the "fine" distribution in
+        a distributed layout.)
+
+    b : LocalNumpyArray
+        A 1D array with the `'jtf'` distribution, holding the rows of the `b` vector belonging
+        to the current processor.
+
+    x : LocalNumpyArray
+        A 1D array with the `'jtf'` distribution, holding the rows of the `x` vector belonging
+        to the current processor.  This vector is filled by this function.
+
+    ari : ArraysInterface
+        An object that provides an interface for creating and manipulating data arrays.
+
+    resource_alloc : ResourceAllocation
+        Gives the resources (e.g., processors and memory) available for use.
+
+    proc_threshold : int, optional
+        Below this number of processors this routine will simply gather `a` and `b` to a single
+        (the rank 0) processor, call SciPy's serial linear solver, `scipy.linalg.solve`, and
+        scatter the results back onto all the processors.
+
+    Returns
+    -------
+    None
     """
 
     #DEBUG
@@ -47,13 +83,13 @@ def custom_solve(a, b, x, dqc, resource_alloc, proc_threshold=100):
     #potential_pivot_indices = list(range(a.shape[0]))  # *local* row indices of rows not already chosen as pivot rows
     potential_pivot_mask = _np.ones(a.shape[0], dtype=bool)  # *local* row indices of rows not already chosen pivot rows
     all_row_indices = _np.arange(a.shape[0])
-    my_row_slice = dqc.jtf_param_slice()
+    my_row_slice = ari.jtf_param_slice()
 
     comm = resource_alloc.comm
     host_comm = resource_alloc.host_comm
     ok_buf = _np.empty(1,int)
 
-    if comm is None or isinstance(dqc, _UndistributedQuantityCalc):
+    if comm is None or isinstance(ari, _UndistributedArraysInterface):
         x[:] = _scipy.linalg.solve(a, b, assume_a='pos')
         return
 
@@ -62,10 +98,10 @@ def custom_solve(a, b, x, dqc, resource_alloc, proc_threshold=100):
         # We're not exactly sure where scipy is better, but until we speed up / change gaussian-elim
         # alg the scipy alg is much faster for small numbers of procs and so should be used unless
         # A is too large to be gathered to the root proc.
-        global_a, a_shm = dqc.gather_jtj(a, return_shared=True)
-        global_b, b_shm = dqc.gather_jtf(b, return_shared=True)
-        #global_a = dqc.gather_jtj(a)
-        #global_b = dqc.gather_jtf(b)
+        global_a, a_shm = ari.gather_jtj(a, return_shared=True)
+        global_b, b_shm = ari.gather_jtf(b, return_shared=True)
+        #global_a = ari.gather_jtj(a)
+        #global_b = ari.gather_jtf(b)
         if comm.rank == 0:
             try:
                 global_x = _scipy.linalg.solve(global_a, global_b, assume_a='pos')
@@ -83,7 +119,7 @@ def custom_solve(a, b, x, dqc, resource_alloc, proc_threshold=100):
             _smt.cleanup_shared_ndarray(b_shm)
             raise err  # all procs must raise in sync
 
-        dqc.scatter_x(global_x, x)
+        ari.scatter_x(global_x, x)
         _smt.cleanup_shared_ndarray(a_shm)
         _smt.cleanup_shared_ndarray(b_shm)
         return
@@ -155,7 +191,7 @@ def custom_solve(a, b, x, dqc, resource_alloc, proc_threshold=100):
     # We've accumulated a list of (global) row indices of the rows containing a nonzero
     # element in a given column and zeros in prior columns.
     pivot_row_indices = _np.array(pivot_row_indices)
-    _back_substitution(a, b, x, pivot_row_indices, my_row_slice, dqc, resource_alloc, host_comm)
+    _back_substitution(a, b, x, pivot_row_indices, my_row_slice, ari, resource_alloc, host_comm)
 
     a[:, :] = a_orig  # restore original values of a and b
     b[:] = b_orig    # so they're the same as when we were called.
@@ -304,7 +340,7 @@ else:
     _restricted_abs_argmax = _fastcalc.restricted_abs_argmax
 
 
-def _back_substitution(a, b, x, pivot_row_indices, my_row_slice, dqc, resource_alloc, host_comm):
+def _back_substitution(a, b, x, pivot_row_indices, my_row_slice, ari, resource_alloc, host_comm):
     ##x[n-1] = b[pivot_row_indices[n-1]] / a[pivot_row[n-1], n-1]
 
     # x_indices_host = XXX  # x values to send to other procs -- TODO: slice of SHARED host array
@@ -335,7 +371,7 @@ def _back_substitution(a, b, x, pivot_row_indices, my_row_slice, dqc, resource_a
     comm = resource_alloc.comm
     my_host_index = resource_alloc.host_index if (host_comm is not None) else 0
     my_rank = comm.rank
-    param_fine_slices_by_host, owner_host_and_rank_of_global_fine_param_index = dqc.param_fine_info()
+    param_fine_slices_by_host, owner_host_and_rank_of_global_fine_param_index = ari.param_fine_info()
     for col_host_index, ranks_and_pslices in enumerate(param_fine_slices_by_host):
         for col_rank, (gpslice, hpslice) in ranks_and_pslices:
             if gpslice is None: continue

@@ -35,45 +35,222 @@ def _assert_sequential(lst):
 
 class _DistributableAtom(object):
     """
-    Behaves as a sub-layout for general purposes...
-    needs .element_slice to indicate "final"/"global" indices.
-    needs .wrt_block_size[1,2] to indicate how to distribute derivative calculations in arrays
-      with derivative dimensions.
-    needs __len__ and .iter_unique_circuits like a COPA layout (so functions as a sub-layout)
+    A component of a :class:`DistributableCOPALayout` corresponding to a segment of the element dimension.
+
+    When a distributed layout divides up the work of computing circuit outcome probabilities to
+    multiple processors, it divides the element-dimension of this computation (as opposed to the
+    0, 1, or 2 parameter-dimensions) into "atoms", which this class encapsulates.  The purpose of
+    this class is to house all of the information necessary for computing a slice (the atom's
+    `self.element_slice`) of the entire range of elements. In many ways, an atom behaves as a sub-layout.
+
+    Paramters
+    ---------
+    element_slice : slice
+        The "global" indices into the parent layout's element array.
+
+    num_elements : int
+        The number of global indices.  If `None`, then the length of `element_slice` is
+        computed internally.
     """
 
     def __init__(self, element_slice, num_elements=None):
         self.element_slice = element_slice
         self.num_elements = _slct.length(element_slice) if (num_elements is None) else num_elements
 
-    def update_indices(self, old_unique_indices_in_order):
+    def _update_indices(self, old_unique_indices_in_order):
+        """
+        Updates any internal indices held as a result of the unique-circuit indices of the layout changing.
+
+        This function is called during layout construction to alert the atom that the layout
+        being created will only hold a subset of the `unique_complete_circuits` provided to
+        to the atom's `__init__` method.  Thus, if the atom keeps indices to unique circuits
+        within the layout, it should update these indices accordingly.
+
+        Parameters
+        ----------
+        old_unique_is_by_new_unique_is : list
+            The indices within the `unique_complete_circuits` given to `__init__` that index the
+            unique circuits of the created layout - thus, these  that will become (in order) all of
+            the unique circuits of the created layout.
+
+        Returns
+        -------
+        None
+        """
         pass  # nothing to be done.
 
     @property
     def cache_size(self):
         return 0
 
+    def as_layout(self, resource_alloc):
+        """
+        Convert this atom into a fully-fledged layout.
+
+        This allows the same computation methods that operate on layouts
+        to be used on atoms, so that an even more minimal forward-simulator
+        implemenation is needed.  This is only needed when a forward simulator
+        is used that doesn't implement the `_bulk_fill_*probs_atom` functions
+        (e.g. a plain `DistributableForwardSimulator`).
+
+        Parameters
+        ----------
+        resource_alloc : ResourceAllocation
+            The resource allocation object that the created layout should "own".  Atoms
+            don't own resource allocation objects like layouts do, so this is needed to
+            build an atom into a layout object.
+        
+        Returns
+        -------
+        CircuitOutcomeProbabilityArrayLayout
+        """
+        raise NotImplementedError("This probably should be implemented, but isn't yet: TODO!")
+
 
 class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
+    """
+    A circuit-outcome-probability-array (COPA) layout that is distributed among many processors.
+
+    This layout divides the work of computing arrays with one dimension corresponding to the
+    layout's "elements" (circuit outcomes) and 0, 1, or 2 parameter dimensions corresponding
+    to first or second derivatives of a by-element quantity with respect to a model's parameters.
+
+    The size of element dimension is given by the number of unique circuits and the outcomes
+    retained for each circuit.  Computation along the element dimension is broken into "atoms",
+    which hold a slice that indexes the element dimension along with the necessary information
+    (used by a forward simulator) to compute those elements.  This often includes the circuits
+    and outcomes an atom's elements correspond to, and perhaps precomputed structures for speeding
+    up the circuit computation.  An atom-creating function is used to initialize a 
+    :class:`DistributableCOPALayout`.
+
+    Technical note: the atoms themselves determine which outcomes for each circuit are included in
+    the layout, so the layout doesn't know how many elements it contains until the atoms are created.
+    This makes for an awkward `_update_indices` callback that adjusts an atom's indices based on the
+    selected circuits of the (local) layout, since this selection can only be performed after the
+    atoms are created.
+
+    The size of the parameter dimensions is given directly via the `param_dimensions` argument. These
+    dimensions are divided into "blocks" (slices of the entire dimension) but there is no analogous
+    atom-like object for the blocks, as there isn't any need to hold meta-data specific to a block.
+    The size of the parameter-blocks is essentially constant along each parameter dimension, and specified
+    by the `param_dimension_blk_sizes` argument.
+    
+    Along each of the (possible) array dimensions, we also assign a number of atom (for the element
+    dimension) or block (for the parameter dimensions) "processors".  These are *not* physical CPUs
+    but are logical objects act by processing atoms or blocks, respectively.  A single atom processor
+    is assigned one or *more* atoms to process, and similarly with block processors.
+
+    The total number of physical processors, N, is arranged in a grid so that:
+    
+    N = num_atom_processors x num_param1_processors x num_param2_processors
+
+    This may restricts the allowed values of N is the number of atom/block processors is
+    fixed or constrained.  The reason there are 2 levels of "breaking up" the computation
+    are so that intermediate memory may be controlled.  If we merged the notion of atoms
+    and atom-processors, for instance, so that each atom processor always had exactly 1
+    atom to process, then the only way to divide up a compuation would be to use more
+    processors.  Since computations can involve intermediate memory usage that far exceeds
+    the memory required to hold the results, it is useful to be able to break up a computation
+    into chunks even when there is, e.g., just a single processor.  Separating atom/blocks from
+    atom-processors and param-block-processors allow us to divide a computation into chunks
+    that use manageable amounts of intermediate memory regardless of the number of processors
+    available.  When intermediate memory is not a concern, then there is no reason to assign
+    more than one atom/block to it's corresponding processor type.
+
+    When creating a :class:`DistributableCOPALayout` the caller can separately specify the
+    number of atoms (length of `create_atom_args`) or the size of parameter blocks and the
+    number of atom-processors or the number of param-block-processors.
+
+    Furthermore, a :class:`ResourceAllocation` object can be given that specifies a
+    shared-memory structure to the physical processors, where the total number of cores
+    is divided into node-groups that are able to share memory.  The total number of
+    cores is divided like this:
+    - first, we divide the cores into atom-processing groups, i.e. "atom-processors".
+      An atom-processor is most accurately seen as a comm (group of processors).  If
+      shared memory is being used, either the entire atom-processor must be contained
+      within a single node OR the atom-processor must contain an integer number of
+      nodes (it *cannot* contain a mixed fractional number of nodes, e.g. 1+1/2).
+    - each atom processor is divided into param1-processors, which process sections
+      arrays within that atom processor's element slice and within the param1-processors
+      parameter slice.  Similarly, each param1-processor cannot contain a mixed
+      fraction number of nodes - it must be a fraction < 1 or an integer number of nodes.
+    - each param1-processor is divided into param2-processors, with exactly the same
+      rules as for the param1-processors.
+
+    These nested MPI communicators neatly divide up the entries of arrays that have
+    shape (nElements, nParams1, nParams2) or arrays with fewer dimensions, in which
+    case processors that would have computed different entries of a missing dimension
+    just duplicate the computation of array entries in the existing dimensions.
+
+    Arrays will also be used that do not have a leading `nElements` dimension
+    (e.g. when element-contributions have been summed over), with shapes involving
+    just the parameter dimensions.  For these arrays, we also construct a "fine"
+    processor grouping where all the cores are divided among the (first) parameter
+    dimension.  The array types `"jtf"` and `"jtj"` are distributed according to
+    this "fine" grouping.
+
+    Parameters
+    ----------
+    circuits : list of Circuits
+        The circuits whose outcome probabilities are to be computed.  This list may
+        contain duplicates.
+
+    unique_circuits : list of Circuits
+        The same as `circuits`, except duplicates are removed.  Often this value is obtained
+        by a derived class calling the class method :method:`_compute_unique_circuits`.
+
+    to_unique : dict
+        A mapping that translates an index into `circuits` to one into `unique_circuits`.
+        Keys are the integers 0 to `len(circuits)` and values are indices into `unique_circuits`.
+
+    unique_complete_circuits : list, optional
+        A list, parallel to `unique_circuits`, that contains the "complete" version of these
+        circuits.  This information is currently unused, and is included for potential future
+        expansion and flexibility.
+
+    create_atom_fn: function
+        A function that creates an atom when given one of the elements of `create_atom_args`.
+
+    create_atom_args : list
+        A list of tuples such that each element is a tuple of arguments for `create_atom_fn`.
+        The length of this list specifies the number of atoms, and the caller must provide
+        the same list on all processors.  When the layout is created, `create_atom_fn` will
+        be used to create some subset of the atoms on each processor.
+
+    num_atom_processors : int
+        The number of "atom processors".  An atom processor is not a physical processor, but
+        a group of physical processors that is assigned one or more of the atoms (see above).
+        
+    num_param_dimension_processors : tuple, optional
+        A 1- or 2-tuple of integers specifying how many parameter-block processors (again,
+        not physical processors, but groups of processors that are assigned to parameter
+        blocks) are used when dividing the physical processors into a grid.  The first and
+        second elements correspond to counts for the first and second parameter dimensions,
+        respecively.
+
+    param_dimensions : tuple, optional
+        The full (global) number of parameters along each parameter dimension.  Can be an
+        empty, 1-, or 2-tuple of integers which dictates how many parameter dimensions this
+        layout supports.
+
+    param_dimension_blk_sizes : tuple, optional
+        The parameter block sizes along each present parameter dimension, so this should
+        be the same shape as `param_dimensions`.  A block size of `None` means that there
+        should be no division into blocks, and that each block processor computes all of
+        its parameter indices at once.
+
+    resource_alloc : ResourceAllocation, optional
+        The resources available for computing circuit outcome probabilities.
+
+    verbosity : int or VerbosityPrinter
+        Determines how much output to send to stdout.  0 means no output, higher
+        integers mean more output.
+    """
 
     def __init__(self, circuits, unique_circuits, to_unique, unique_complete_circuits,
                  create_atom_fn, create_atom_args, num_atom_processors,
                  num_param_dimension_processors=(), param_dimensions=(), param_dimension_blk_sizes=(),
                  resource_alloc=None, verbosity=0):
-        """
-        TODO: docstring
-        num_strategy_subcomms : int, optional
-            The number of processor groups (communicators) to divide the "atomic" portions
-            of this strategy (a circuit probability array layout) among when calling `distribute`.
-            By default, the communicator is not divided.  This default behavior is fine for cases
-            when derivatives are being taken, as multiple processors are used to process differentiations
-            with respect to different variables.  If no derivaties are needed, however, this should be
-            set to (at least) the number of processors.
-        """
-        #self.atoms = atoms
-        #self.num_atom_processing_subcomms = 1
-        #self.param_dimension_blk_sizes = (None,) * len(self._param_dimensions)
-        #self.gather_mem_limit = None
         from mpi4py import MPI
 
         resource_alloc = _ResourceAllocation.cast(resource_alloc)
@@ -620,7 +797,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         # or "original" (full circuit list) indices, as this layout may hold a subset or
         # a different circuit ordering from the "global" layout.
         for atom in self.atoms:
-            atom.update_indices(my_unique_is)
+            atom._update_indices(my_unique_is)
 
         #Store the global-circuit-index of each of this processor's circuits (local_circuits)
         # Note: unlike other quantities (elements, params, etc.), a proc's local circuits are not guaranteed to be
@@ -671,11 +848,13 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
 
     @property
     def max_atom_elements(self):
+        """ The most elements owned by a single atom. """
         if len(self.atoms) == 0: return 0
         return max([atom.num_elements for atom in self.atoms])
 
     @property
     def max_atom_cachesize(self):
+        """ The largest cache size among all this layout's atoms """
         if len(self.atoms) == 0: return 0
         return max([atom.cache_size for atom in self.atoms])
 
@@ -719,10 +898,53 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         """
         Allocate an array that is distributed according to this layout.
 
-        array_type : {'e', 'ep', 'epp', 'hessian', 'jtj', 'jtf', 'c'}
-            The type of array being gathered.  TODO: docstring - more description
+        Creates an array for holding elements and/or derivatives with respect
+        to model parameters, possibly distributed among multiple processors
+        as dictated by this layout.
 
-        TODO: docstring - returns the *local* memory and shared mem handle
+        Parameters
+        ----------
+        array_type : ("e", "ep", "ep2", "epp", "p", "jtj", "jtf", "c")
+            The type of array to allocate, often corresponding to the array shape.  Let
+            `nE` be the layout's number of elements, `nP1` and `nP2` be the number of
+            parameters we differentiate with respect to (for first and second derivatives),
+            and `nC` be the number of circuits.  Then the array types designate the
+            following array shapes:
+            - `"e"`: (nE,)
+            - `"ep"`: (nE, nP1)
+            - `"ep2"`: (nE, nP2)
+            - `"epp"`: (nE, nP1, nP2)
+            - `"p"`: (nP1,)
+            - `"jtj"`: (nP1, nP2)
+            - `"jtf"`: (nP1,)
+            - `"c"`: (nC,)
+            Note that, even though the `"p"` and `"jtf"` types are the same shape
+            they are used for different purposes and are distributed differently
+            when there are multiple processors.  The `"p"` type is for use with
+            other element-dimentions-containing arrays, whereas the `"jtf"` type
+            assumes that the element dimension has already been summed over.
+
+        dtype : numpy.dtype
+            The NumPy data type for the array.
+
+        zero_out : bool, optional
+            Whether the array should be zeroed out initially.
+
+        memory_tracker : ResourceAllocation, optional
+            If not None, the amount of memory being allocated is added, using
+            :method:`add_tracked_memory` to this resource allocation object.
+
+        extra_elements : int, optional
+            The number of additional "extra" elements to append to the element
+            dimension, beyond those called for by this layout.  Such additional
+            elements are used to store penalty terms that are treated by the
+            objective function just like usual outcome-probability-type terms.
+
+        Returns
+        -------
+        LocalNumpyArray
+            An array that looks and acts just like a normal NumPy array, but potentially
+            with internal handles to utilize shared memory.
         """
         resource_alloc = self._resource_alloc
         if array_type in ('e', 'ep', 'ep2', 'epp'):
@@ -805,6 +1027,22 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         return local_array
 
     def free_local_array(self, local_array):
+        """
+        Frees an array allocated by :method:`allocate_local_array`.
+
+        This method should always be paired with a call to 
+        :method:`allocate_local_array`, since the allocated array
+        may utilize shared memory, which must be explicitly de-allocated.
+
+        Parameters
+        ----------
+        local_array : numpy.ndarray or LocalNumpyArray
+            The array to free, as returned from `allocate_local_array`.
+
+        Returns
+        -------
+        None
+        """
         if local_array is not None and hasattr(local_array, 'shared_memory_handle'):
             for shm_handle in local_array.shared_memory_handle.values():
                 _smt.cleanup_shared_ndarray(shm_handle)
@@ -812,18 +1050,21 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
     def gather_local_array_base(self, array_type, array_portion, extra_elements=0, all_gather=False,
                                 return_shared=False):
         """
-        Gathers an array onto the root processor.
+        Gathers an array onto the root processor or all the processors..
 
         Gathers the portions of an array that was distributed using this
         layout (i.e. according to the host_element_slice, etc. slices in
-        this layout).  Arrays can be 1, 2, or 3-dimensional.  The dimensions
+        this layout).  This could be an array allocated by :method:`allocate_local_array`
+        but need not be, as this routine does not require that `array_portion` be
+        shared.  Arrays can be 1, 2, or 3-dimensional.  The dimensions
         are understood to be along the "element", "parameter", and
         "2nd parameter" directions in that order.
 
         Parameters
         ----------
-        array_type : {'e', 'ep', 'epp', 'hessian', 'jtj', 'jtf', 'c'}
-            The type of array being gathered.  TODO: docstring - more description
+        array_type : ("e", "ep", "ep2", "epp", "p", "jtj", "jtf", "c")
+            The type of array to allocate, often corresponding to the array shape.  See
+            :method:`allocate_local_array` for a more detailed description.
 
         array_portion : numpy.ndarray
             The portion of the final array that is local to the calling
@@ -831,31 +1072,31 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
             `resource_alloc` with shared memory enabled was used to construct
             this layout.
 
-        resource_alloc : ResourceAllocation, optional
-            The resource allocation object that was used to construt this
-            layout, specifying the number and organization of processors
-            to distribute arrays among.
-
         extra_elements : int, optional
-            The final atom-processor groups own an additional `extra_elements` elements, usually
-            used by objective functions to hold penalty terms.
+            The number of additional "extra" elements to append to the element
+            dimension, beyond those called for by this layout.  Should match
+            usage in :method:`allocate_local_array`.
 
         all_gather : bool, optional
             Whether the result should be returned on all the processors (when `all_gather=True`)
             or just the rank-0 processor (when `all_gather=False`).
 
         return_shared : bool, optional
-            Whether the returned array is allowed to be a shared-memory array that the caller assumes
-            responsibilty for freeing via :function:`pygsti.tools.sharedmemtools.cleanup_shared_ndarray`.
-            When `True` the shared memory handle is also returned.
+            Whether the returned array is allowed to be a shared-memory array, which results
+            in a small performance gain because the array used internally to gather the results
+            can be returned directly. When `True` a shared memory handle is also returned, and
+            the caller assumes responsibilty for freeing the memory via 
+            :function:`pygsti.tools.sharedmemtools.cleanup_shared_ndarray`.
 
         Returns
         -------
         gathered_array : numpy.ndarray or None
-            The full (global) output array on the root (rank=0) processor.
-            `None` on all other processors.
-        shared_mem_handle : multiprocessing.shared_memory.SharedMemory
-            A shared-memory handle.  Only returned when `return_shared=True`.
+            The full (global) output array on the root (rank=0) processor and
+            `None` on all other processors, unless `all_gather == True`, in which
+            case the array is returned on all the processors.
+        shared_memory_handle : multiprocessing.shared_memory.SharedMemory or None
+            Returned only when `return_shared == True`.  The shared memory handle
+            associated with `gathered_array`, which is needed to free the memory.
         """
         resource_alloc = self._resource_alloc
         if resource_alloc.comm is None:
@@ -934,8 +1175,42 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
 
     def allsum_local_quantity(self, typ, value, use_shared_mem="auto"):
         """
-        TODO: docstring - a local array (or scalar) across some portion of the processors.
-        Note: can only set use_shared_mem=True when value is a numpy array
+        Gathers an array onto all the processors.
+
+        Gathers the portions of an array that was distributed using this
+        layout (i.e. according to the host_element_slice, etc. slices in
+        this layout).  This could be an array allocated by :method:`allocate_local_array`
+        but need not be, as this routine does not require that `array_portion` be
+        shared.  Arrays can be 1, 2, or 3-dimensional.  The dimensions
+        are understood to be along the "element", "parameter", and
+        "2nd parameter" directions in that order.
+
+        Parameters
+        ----------
+        array_portion : numpy.ndarray
+            The portion of the final array that is local to the calling
+            processor.  This could be a shared memory array, but just needs
+            to be of the correct size.
+
+        extra_elements : int, optional
+            The number of additional "extra" elements to append to the element
+            dimension, beyond those called for by this layout.  Should match
+            usage in :method:`allocate_local_array`.
+
+        return_shared : bool, optional
+            If `True` then, when shared memory is being used, the shared array used
+            to accumulate the gathered results is returned directly along with its
+            shared-memory handle (`None` if shared memory isn't used).  This results
+            in a small performance gain.
+
+        Returns
+        -------
+        result : numpy.ndarray or None
+            The full (global) output array.
+
+        shared_memory_handle : multiprocessing.shared_memory.SharedMemory or None
+            Returned only when `return_shared == True`.  The shared memory handle
+            associated with `result`, which is needed to free the memory.
         """
         resource_alloc = self._resource_alloc
         if typ in ('c', 'e'):  # value depends only on the "circuits" or "elements" of this layout
@@ -961,8 +1236,30 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
             return sum_ralloc.allreduce_sum_simple(value, unit_ralloc=unit_ralloc)
 
     def fill_jtf(self, j, f, jtf):
-        """TODO: docstring  - assumes j, f are local arrays, allocated using 'ep' and 'e' types, respectively.
-        Returns an array allocated using the 'jtf' type.
+        """
+        Calculate the matrix-vector product `j.T @ f`.
+
+        Here `j` is often a jacobian matrix, and `f` a vector of objective function term
+        values.  `j` and `f` must be local arrays, created with :method:`allocate_local_array`.
+        This function performs any necessary MPI/shared-memory communication when the
+        arrays are distributed over multiple processors.
+
+        Parameters
+        ----------
+        j : LocalNumpyArray
+            A local 2D array (matrix) allocated using `allocate_local_array` with the `"ep"`
+            (jacobian) type.
+
+        f : LocalNumpyArray
+            A local array allocated using `allocate_local_array` with the `"e"` (element array)
+            type.
+
+        jtf : LocalNumpyArray
+            The result.  This must be a pre-allocated local array of type `"jtf"`.
+
+        Returns
+        -------
+        None
         """
         param_ralloc = self.resource_alloc('param-processing')  # acts on (element, param) blocks
         interatom_ralloc = self.resource_alloc('param-interatom')  # procs w/same param slice & diff atoms
@@ -985,7 +1282,10 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         #if param_comm.host_comm is not None and param_comm.host_comm.rank != 0:
         #    return None  # this processor doesn't need to do any more - root host proc will fill returned shared mem
 
-    def allocate_jtj_shared_mem_buf(self):
+    def _allocate_jtj_shared_mem_buf(self):
+        """
+        Used internally by the DistributedQuantityCalc class.
+        """
         interatom_ralloc = self.resource_alloc('param-interatom')  # procs w/same param slice & diff atoms
         buf, buf_shm = _smt.create_shared_ndarray(
             interatom_ralloc, (_slct.length(self.host_param_slice), self.global_num_params), 'd')
@@ -994,8 +1294,25 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         return buf, buf_shm
 
     def fill_jtj(self, j, jtj, shared_mem_buf=None):
-        """TODO: docstring  - assumes j is a local array, allocated using 'ep' and 'e' types, respectively.
-        Assumes jtj is an array allocated using the 'jtj' type.
+        """
+        Calculate the matrix-matrix product `j.T @ j`.
+
+        Here `j` is often a jacobian matrix, so the result is an approximate Hessian.
+        This function performs any necessary MPI/shared-memory communication when the
+        arrays are distributed over multiple processors.
+
+        Parameters
+        ----------
+        j : LocalNumpyArray
+            A local 2D array (matrix) allocated using `allocate_local_array` with the `"ep"`
+            (jacobian) type.
+
+        jtj : LocalNumpyArray
+            The result.  This must be a pre-allocated local array of type `"jtj"`.
+
+        Returns
+        -------
+        None
         """
         param_ralloc = self.resource_alloc('param-processing')  # acts on (element, param) blocks
         atom_ralloc = self.resource_alloc('atom-processing')  # acts on (element,) blocks

@@ -21,7 +21,44 @@ from ..tools import sharedmemtools as _smt
 
 class DistributableForwardSimulator(_ForwardSimulator):
     """
-    Assumes layout is a :class:`DistributableCOPALayout`
+    A base class for forward simulators that use distributed COPA layouts.
+
+    This class contains implements the methods of :class:`ForwardSimulator` assuming that the
+    layout is a :class:`DistributableCOPALayout` object, and leaves a set of a simpler methods
+    for derived classes to implement.
+
+    In particular, because a distributed layout divides computations by assigning segments of
+    the full element- and parameter-dimensions to individual processors, derived classes just
+    implement the `_bulk_fill_*probs_atom` methods which compute a single section of the entire
+    output array, and don't need to worry about dealing with the distribution in element and
+    parameter directions.
+
+    Parameters
+    ----------
+    model : Model, optional
+        The parent model of this simulator.  It's fine if this is `None` at first,
+        but it will need to be set (by assigning `self.model` before using this simulator.
+
+    num_atoms : int, optional
+        The number of atoms to use when creating a layout (i.e. when calling :method:`create_layout`).
+        This determines how many units the element (circuit outcome probability) dimension is divided
+        into, and doesn't have to correclate with the number of processors.  When multiple processors
+        are used, if `num_atoms` is less than the number of processors it should divide the number of
+        processors evenly, so that `num_atoms // num_procs` groups of processors can be used to divide
+        the computation over parameter dimensions.
+
+    processor_grid : tuple optional
+        Specifies how the total number of processors should be divided into a number of
+        atom-processors, 1st-parameter-deriv-processors, and 2nd-parameter-deriv-processors.
+        Each level of specification is optional, so this can be a 1-, 2-, or 3- tuple of
+        integers (or None).  Multiplying the elements of `processor_grid` together should give
+        at most the total number of processors.
+        
+    param_blk_sizes : tuple, optional 
+        The parameter block sizes along the first or first & second parameter dimensions - so
+        this can be a 0-, 1- or 2-tuple of integers or `None` values.  A block size of `None`
+        means that there should be no division into blocks, and that each block processor
+        computes all of its parameter indices at once.
     """
 
     @classmethod
@@ -405,12 +442,6 @@ class DistributableForwardSimulator(_ForwardSimulator):
             local_results.append(fn(atom, resource_alloc))
 
         return local_results
-
-    def _compute_on_atoms(self, layout, fn, resource_alloc):
-        """Similar to _run_on_atoms, but returns a dict mapping atom indices (within layout.atoms) to
-           owning-processor ranks (the "owners" dict).  Assumes `fn` returns None.  """
-        for atom in layout.atoms:
-            fn(atom, resource_alloc)
 
     def _compute_processor_distribution(self, array_types, nprocs, num_params, num_circuits, default_natoms):
         """ Computes commonly needed processor-grid info for distributed layout creation (a helper function)"""

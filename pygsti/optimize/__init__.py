@@ -16,4 +16,4 @@ from .optimize import *
 from .customlm import *
 from .customsolve import *
 from .wildcardopt import *
-from .distributedqtycalc import *
+from .arraysinterface import *

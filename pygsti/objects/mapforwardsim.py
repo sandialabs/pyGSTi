@@ -41,6 +41,17 @@ CLIFFORD = 2
 
 
 class SimpleMapForwardSimulator(_ForwardSimulator):
+    """
+    A forward simulator that uses matrix-vector products to compute circuit outcome probabilities.
+
+    This is "simple" in that it adds a minimal implementation to its :class:`ForwardSimulator`
+    base class.  Because of this, it lacks some of the efficiency of a :class:`MapForwardSimulator`
+    object, and is mainly useful as a reference implementation and check for other simulators.
+    """
+    # NOTE: It is currently not a *distributed* forward simulator, but after the addition of
+    # the `as_layout` method to distributed atoms, this class could instead derive from
+    # DistributableForwardSimulator and (I think) not need any more implementation.
+    # If this is done, then MapForwardSimulator wouldn't need to separately subclass DistributableForwardSimulator
 
     def _compute_circuit_outcome_probabilities(self, array_to_fill, circuit, outcomes, resource_alloc, time=None):
         expanded_circuit_outcomes = circuit.expand_instruments_and_separate_povm(self.model, outcomes)
@@ -72,6 +83,46 @@ class SimpleMapForwardSimulator(_ForwardSimulator):
 
 
 class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimulator):
+    """
+    Computes circuit outcome probabilities using circuit layer maps that act on a state.
+
+    Interfaces with a model via its `circuit_layer_operator` method and applies the resulting
+    operators in order to propagate states and finally compute outcome probabilities.  Derivatives
+    are computed using finite-differences, and the prefix tables construbed by :class:`MapCOPALayout`
+    layout object are used to avoid duplicating (some) computation.
+
+    Parameters
+    ----------
+    model : Model, optional
+        The parent model of this simulator.  It's fine if this is `None` at first,
+        but it will need to be set (by assigning `self.model` before using this simulator.
+
+    max_cache_size : int, optional
+        The maximum number of "prefix" quantum states that may be cached for performance
+        (within the layout).  If `None`, there is no limit to how large the cache may be.
+
+    num_atoms : int, optional
+        The number of atoms (sub-prefix-tables) to use when creating the layout (i.e. when calling
+        :method:`create_layout`).  This determines how many units the element (circuit outcome
+        probability) dimension is divided into, and doesn't have to correclate with the number of
+        processors.  When multiple processors are used, if `num_atoms` is less than the number of
+        processors then `num_atoms` should divide the number of processors evenly, so that
+        `num_atoms // num_procs` groups of processors can be used to divide the computation
+        over parameter dimensions.
+
+    processor_grid : tuple optional
+        Specifies how the total number of processors should be divided into a number of
+        atom-processors, 1st-parameter-deriv-processors, and 2nd-parameter-deriv-processors.
+        Each level of specification is optional, so this can be a 1-, 2-, or 3- tuple of
+        integers (or None).  Multiplying the elements of `processor_grid` together should give
+        at most the total number of processors.
+        
+    param_blk_sizes : tuple, optional 
+        The parameter block sizes along the first or first & second parameter dimensions - so
+        this can be a 0-, 1- or 2-tuple of integers or `None` values.  A block size of `None`
+        means that there should be no division into blocks, and that each block processor
+        computes all of its parameter indices at once.
+    """
 
     @classmethod
     def _array_types_for_method(cls, method_name):
@@ -87,7 +138,6 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         return super()._array_types_for_method(method_name)
 
     def __init__(self, model=None, max_cache_size=None, num_atoms=None, processor_grid=None, param_blk_sizes=None):
-        """  TODO: docstring - at least need num_atoms, processor_grid, & param_blk_sizes docs"""
         super().__init__(model, num_atoms, processor_grid, param_blk_sizes)
         self._max_cache_size = max_cache_size
 
@@ -103,7 +153,40 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
 
     def create_layout(self, circuits, dataset=None, resource_alloc=None, array_types=('E',),
                       derivative_dimension=None, verbosity=0):
+        """
+        Constructs an circuit-outcome-probability-array (COPA) layout for a list of circuits.
 
+        Parameters
+        ----------
+        circuits : list
+            The circuits whose outcome probabilities should be included in the layout.
+
+        dataset : DataSet
+            The source of data counts that will be compared to the circuit outcome
+            probabilities.  The computed outcome probabilities are limited to those
+            with counts present in `dataset`.
+
+        resource_alloc : ResourceAllocation
+            A available resources and allocation information.  These factors influence how
+            the layout (evaluation strategy) is constructed.
+
+        array_types : tuple, optional
+            A tuple of string-valued array types.  See :method:`ForwardSimulator.create_layout`.
+
+        derivative_dimensions : tuple, optional
+            A tuple containing, optionally, the parameter-space dimension used when taking first
+            and second derivatives with respect to the cirucit outcome probabilities.  This must be
+            have minimally 1 or 2 elements when `array_types` contains `'ep'` or `'epp'` types,
+            respectively.
+
+        verbosity : int or VerbosityPrinter
+            Determines how much output to send to stdout.  0 means no output, higher
+            integers mean more output.
+
+        Returns
+        -------
+        MapCOPALayout
+        """
         resource_alloc = _ResourceAllocation.cast(resource_alloc)
         printer = _VerbosityPrinter.create_printer(verbosity, resource_alloc)
         mem_limit = resource_alloc.mem_limit - resource_alloc.allocated_memory \

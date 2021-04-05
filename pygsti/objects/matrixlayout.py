@@ -23,7 +23,47 @@ import collections as _collections
 
 class _MatrixCOPALayoutAtom(_DistributableAtom):
     """
-    Object that acts as "atomic unit" of instructions-for-applying a COPA strategy.
+    The atom ("atomic unit") for dividing up the element dimension in a :class:`MatrixCOPALayout`.
+
+    Parameters
+    ----------
+    unique_complete_circuits : list
+        A list that contains *all* the "complete" circuits for the parent layout.  This
+        atom only owns a subset of these, as given by `group` below.
+
+    unique_nospam_circuits : list
+        A list that contains the unique circuits within `unique_complete_circuits` once
+        their state preparations and measurements are removed.  A subset of these circuits
+        (see `group` below) are what fundamentally define the circuit outcomes that this atom
+        includes: it includes *all* the circuit outcomes of those circuits.
+
+    circuits_by_unique_nospam_circuits : dict
+       A dictionary with keys equal to the elements of `unique_nospam_circuits` and values
+       that are lists of indices into `unique_complete_circuits`.  Thus, this dictionary 
+       maps each distinct circuit-without-SPAM circuit to the list of complete circuits
+       within `unique_complete_circuits` that correspond to it.
+
+    ds_circuits : list
+        A list of circuits parallel to `unique_complete_circuits` of these circuits
+        as they should be accessed from `dataset`.  This applies any aliases and
+        removes implied SPAM elements relative to `unique_complete_circuits`.
+
+    group : set
+        The set of indices into `unique_nospam_circuits` that define the circuit
+        outcomes owned by this atom.
+
+    helpful_scratch : set
+        A set of indices into `unique_nospam_circuits` that specify circuits that
+        aren't owned by this atom but are helpful in building up an efficient evaluation
+        tree.
+
+    model : Model
+        The model being used to construct this layout.  Used for expanding instruments
+        within the circuits.
+
+    dataset : DataSet
+        The dataset, used to include only observed circuit outcomes in this atom
+        and therefore the parent layout.
     """
 
     def __init__(self, unique_complete_circuits, unique_nospam_circuits, circuits_by_unique_nospam_circuits,
@@ -168,16 +208,20 @@ class _MatrixCOPALayoutAtom(_DistributableAtom):
 
     @property
     def cache_size(self):
+        """The cache size of this atom."""
         return len(self.tree)
 
 
 class MatrixCOPALayout(_DistributableCOPALayout):
     """
-    TODO: update docstring
+    A circuit outcome probability array (COPA) layout for circuit simulation by process matrix multiplication.
 
-    An Evaluation Tree that structures circuits for efficient multiplication of process matrices.
+    A distributed layout that divides a list of circuits into several "evaluation trees"
+    that compute subsets of the circuit outcomes by multiplying together process matrices.
+    Often these evaluation trees correspond to available processors, but it can be useful
+    to divide computations in order to lessen the amount of intermediate memory required.
 
-    MatrixEvalTree instances create and store the decomposition of a list of circuits into
+    MatrixCOPALayout instances create and store the decomposition of a list of circuits into
     a sequence of 2-term products of smaller strings.  Ideally, this sequence would
     prescribe the way to obtain the entire list of circuits, starting with just the single
     gates, using the fewest number of multiplications, but this optimality is not
@@ -185,17 +229,47 @@ class MatrixCOPALayout(_DistributableCOPALayout):
 
     Parameters
     ----------
-    items : list, optional
-        Initial items.  This argument should only be used internally
-        in the course of serialization.
+    circuits : list
+        A list of:class:`Circuit` objects representing the circuits this layout will include.
 
-    num_strategy_subcomms : int, optional
-        The number of processor groups (communicators) to divide the "atomic" portions
-        of this strategy (a circuit probability array layout) among when calling `distribute`.
-        By default, the communicator is not divided.  This default behavior is fine for cases
-        when derivatives are being taken, as multiple processors are used to process differentiations
-        with respect to different variables.  If no derivaties are needed, however, this should be
-        set to (at least) the number of processors.
+    model : Model
+        The model that will be used to compute circuit outcome probabilities using this layout.
+        This model is used to complete and expand the circuits in `circuits`.
+
+    dataset : DataSet, optional
+        If not None, restrict the circuit outcomes stored by this layout to only the
+        outcomes observed in this data set.
+
+    num_sub_trees : int, optional
+        The number of groups ("sub-trees") to divide the circuits into.  This is the
+        number of *atoms* for this layout.
+
+    num_tree_processors : int, optional
+        The number of atom-processors, i.e. groups of processors that process sub-trees.
+
+    num_param_dimension_processors : tuple, optional
+        A 1- or 2-tuple of integers specifying how many parameter-block processors are
+        used when dividing the physical processors into a grid.  The first and second
+        elements correspond to counts for the first and second parameter dimensions,
+        respecively.
+        
+    param_dimensions : tuple, optional
+        The number of parameters along each parameter dimension.  Can be an
+        empty, 1-, or 2-tuple of integers which dictates how many parameter dimensions this
+        layout supports.
+
+    param_dimension_blk_sizes : tuple, optional
+        The parameter block sizes along each present parameter dimension, so this should
+        be the same shape as `param_dimensions`.  A block size of `None` means that there
+        should be no division into blocks, and that each block processor computes all of
+        its parameter indices at once.
+
+    resource_alloc : ResourceAllocation, optional
+        The resources available for computing circuit outcome probabilities.
+
+    verbosity : int or VerbosityPrinter
+        Determines how much output to send to stdout.  0 means no output, higher
+        integers mean more output.
     """
 
     def __init__(self, circuits, model, dataset=None, num_sub_trees=None, num_tree_processors=1,

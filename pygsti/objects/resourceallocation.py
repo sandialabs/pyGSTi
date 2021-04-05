@@ -84,7 +84,6 @@ class ResourceAllocation(object):
         self.interhost_ranks = None  # tuple of the self.comm ranks that belong to self.interhost_comm
         self.host_index = 0  # index of the host this proc belongs to (~= hostname)
         self.host_index_for_rank = None  # a dict mapping self.comm.rank => host_index
-        self.layout_distribution = None
         self.jac_distribution_method = None
         self.jac_slice = None
         if profiler is not None:
@@ -134,10 +133,12 @@ class ResourceAllocation(object):
 
     @property
     def comm_rank(self):
+        """ A safe way to get `self.comm.rank` (0 if `self.comm` is None) """
         return self.comm.rank if (self.comm is not None) else 0
 
     @property
     def comm_size(self):
+        """ A safe way to get `self.comm.size` (1 if `self.comm` is None) """
         return self.comm.size if (self.comm is not None) else 1
 
     @property
@@ -263,43 +264,49 @@ class ResourceAllocation(object):
         yield
         self.allocated_memory -= nbytes
 
-    def layout_distribution(self, layout):
+    def gather_base(self, result, local, slice_of_global, unit_ralloc=None, all_gather=False):
         """
-        Cached `layout.distribute(self)` call.
+        Gather or all-gather operation using local arrays and a *unit* resource allocation.
+
+        Similar to a normal MPI gather call, but more easily integrates with a
+        hierarchy of processor divisions, or nested comms, by taking a `unit_ralloc`
+        argument.  This is essentially another comm that specifies the groups of processors
+        that have all computed the same local array, i.e., slice of the final to-be gathered
+        array.  So, when gathering the result, only processors with `unit_ralloc.rank == 0`
+        need to contribute to the gather operation.
 
         Parameters
         ----------
-        layout : DistributableCOPALayout
-            The layout to distributed.
+        result : numpy.ndarray, possibly shared
+            The destination "global" array.  When shared memory is being used, i.e.
+            when this :class:`ResourceAllocation` object has a nontrivial inter-host comm,
+            this array must be allocated as a shared array using *this* ralloc or a larger
+            so that `result` is shared between all the processors for this resource allocation's
+            intra-host communicator.  This allows a speedup when shared memory is used by
+            having multiple smaller gather operations in parallel instead of one large gather.
+
+        local : numpy.ndarray
+            The locally computed quantity.  This can be a shared-memory array, but need
+            not be.
+
+        slice_of_global : slice or numpy.ndarray
+            The slice of `result` that `local` constitutes, i.e., in the end
+            `result[slice_of_global] = local`.  This may be a Python `slice` or
+            a NumPy array of indices.
+
+        unit_ralloc : ResourceAllocation, optional
+            A resource allocation (essentially a comm) for the group of processors that
+            all compute the same local result, so that only the `unit_ralloc.rank == 0`
+            processors will contribute to the gather operation.  If `None`, then it is
+            assumed that all processors compute different local results.
+
+        all_gather : bool, optional
+            Whether the final result should be gathered on all the processors of this
+            :class:`ResourceAllocation` or just the root (rank 0) processor.
 
         Returns
         -------
-        myAtomIndices : list
-            A list of integer indices specifying which atoms this
-            processor is responsible for.
-        atomOwners : dict
-            A dictionary whose keys are integer atom indices and
-            whose values are processor ranks, which indicates which
-            processor is responsible for communicating the final
-            results of each atom.
-        mySubResourceAlloc : ResourceAllocation
-            The communicator for the processor group that is responsible
-            for computing the same `myAtomIndices` list.  This
-            communicator is used for further processor division (e.g.
-            for parallelization across derivative columns).
-        """
-        if self._layout_distribution is None:
-            self._layout_distribution = layout.distribute(self)
-        return self._layout_distribution  # myAtomIndices, atomOwners, sub_resource_alloc
-
-    def gather_base(self, result, local, slice_of_global, unit_ralloc=None, all_gather=False):
-        """
-        TODO: docstring -- notes:
-        result must be allocated as a shared array using *this* ralloc or a larger one
-        unit_alloc specifies a comm/ralloc of the group of processors that all compute
-           the same logical result -- so only the unit_ralloc.rank == 0 processors
-           will contribute to the sum (but all procs get the result)
-        NOTE2: slice_of_global may also be an *index array*
+        None
         """
         if self.comm is None:
             assert(result.shape == local.shape)
@@ -328,20 +335,130 @@ class ResourceAllocation(object):
         return
 
     def gather(self, result, local, slice_of_global, unit_ralloc=None):
-        """ TODO: docstring """
+        """
+        Gather local arrays into a global result array potentially with a *unit* resource allocation.
+
+        Similar to a normal MPI gather call, but more easily integrates with a
+        hierarchy of processor divisions, or nested comms, by taking a `unit_ralloc`
+        argument.  This is essentially another comm that specifies the groups of processors
+        that have all computed the same local array, i.e., slice of the final to-be gathered
+        array.  So, when gathering the result, only processors with `unit_ralloc.rank == 0`
+        need to contribute to the gather operation.
+
+        The global array is only gathered on the root (rank 0) processor of this
+        resource allocation.
+
+        Parameters
+        ----------
+        result : numpy.ndarray, possibly shared
+            The destination "global" array, only needed on the root (rank 0) processor.
+            When shared memory is being used, i.e.  when this :class:`ResourceAllocation`
+            object has a nontrivial inter-host comm, this array must be allocated as a
+            shared array using *this* ralloc or a larger so that `result` is shared
+            between all the processors for this resource allocation's intra-host
+            communicator.  This allows a speedup when shared memory is used by having
+            multiple smaller gather operations in parallel instead of one large gather.
+
+        local : numpy.ndarray
+            The locally computed quantity.  This can be a shared-memory array, but need
+            not be.
+
+        slice_of_global : slice or numpy.ndarray
+            The slice of `result` that `local` constitutes, i.e., in the end
+            `result[slice_of_global] = local`.  This may be a Python `slice` or
+            a NumPy array of indices.
+
+        unit_ralloc : ResourceAllocation, optional
+            A resource allocation (essentially a comm) for the group of processors that
+            all compute the same local result, so that only the `unit_ralloc.rank == 0`
+            processors will contribute to the gather operation.  If `None`, then it is
+            assumed that all processors compute different local results.
+
+        Returns
+        -------
+        None
+        """
         return self.gather_base(result, local, slice_of_global, unit_ralloc, False)
 
     def allgather(self, result, local, slice_of_global, unit_ralloc=None):
-        """ TODO: docstring """
+        """
+        All-gather local arrays into global arrays on each processor, potentially using a *unit* resource allocation.
+
+        Similar to a normal MPI gather call, but more easily integrates with a
+        hierarchy of processor divisions, or nested comms, by taking a `unit_ralloc`
+        argument.  This is essentially another comm that specifies the groups of processors
+        that have all computed the same local array, i.e., slice of the final to-be gathered
+        array.  So, when gathering the result, only processors with `unit_ralloc.rank == 0`
+        need to contribute to the gather operation.
+
+        Parameters
+        ----------
+        result : numpy.ndarray, possibly shared
+            The destination "global" array.  When shared memory is being used, i.e.
+            when this :class:`ResourceAllocation` object has a nontrivial inter-host comm,
+            this array must be allocated as a shared array using *this* ralloc or a larger
+            so that `result` is shared between all the processors for this resource allocation's
+            intra-host communicator.  This allows a speedup when shared memory is used by
+            having multiple smaller gather operations in parallel instead of one large gather.
+
+        local : numpy.ndarray
+            The locally computed quantity.  This can be a shared-memory array, but need
+            not be.
+
+        slice_of_global : slice or numpy.ndarray
+            The slice of `result` that `local` constitutes, i.e., in the end
+            `result[slice_of_global] = local`.  This may be a Python `slice` or
+            a NumPy array of indices.
+
+        unit_ralloc : ResourceAllocation, optional
+            A resource allocation (essentially a comm) for the group of processors that
+            all compute the same local result, so that only the `unit_ralloc.rank == 0`
+            processors will contribute to the gather operation.  If `None`, then it is
+            assumed that all processors compute different local results.
+
+        Returns
+        -------
+        None
+        """
         return self.gather_base(result, local, slice_of_global, unit_ralloc, True)
 
     def allreduce_sum(self, result, local, unit_ralloc=None):
         """
-        TODO: docstring -- notes:
-        result must be allocated as a shared array using *this* ralloc or a larger one
-        unit_alloc specifies a comm/ralloc of the group of processors that all compute
-           the same logical result -- so only the unit_ralloc.rank == 0 processors
-           will contribute to the sum (but all procs get the result)
+        Sum local arrays on different processors, potentially using a *unit* resource allocation.
+
+        Similar to a normal MPI reduce call (with MPI.SUM type), but more easily integrates
+        with a hierarchy of processor divisions, or nested comms, by taking a `unit_ralloc`
+        argument.  This is essentially another comm that specifies the groups of processors
+        that have all computed the same local array.  So, when performing the sum, only
+        processors with `unit_ralloc.rank == 0` contribute to the sum.  This handles the
+        case where simply summing the local contributions from all processors would result
+        in over-counting because of multiple processors hold the same logical result (summand).
+
+        Parameters
+        ----------
+        result : numpy.ndarray, possibly shared
+            The destination "global" array, with the same shape as all the local arrays
+            being summed.  This can be any shape (including any number of dimensions).  When
+            shared memory is being used, i.e. when this :class:`ResourceAllocation` object
+            has a nontrivial inter-host comm, this array must be allocated as a shared array
+            using *this* ralloc or a larger so that `result` is shared between all the processors
+            for this resource allocation's intra-host communicator.  This allows a speedup when
+            shared memory is used by distributing computation of `result` over each host's
+            processors and performing these sums in parallel.
+
+        local : numpy.ndarray
+            The locally computed quantity.  This can be a shared-memory array, but need
+            not be.
+
+        unit_ralloc : ResourceAllocation, optional
+            A resource allocation (essentially a comm) for the group of processors that
+            all compute the same local result, so that only the `unit_ralloc.rank == 0`
+            processors will contribute to the sum operation.  If `None`, then it is
+            assumed that all processors compute different local results.
+
+        Returns
+        -------
+        None
         """
         from mpi4py import MPI
         participating_local = local if (unit_ralloc is None or unit_ralloc.comm is None or unit_ralloc.comm.rank == 0) \
@@ -374,12 +491,27 @@ class ResourceAllocation(object):
 
     def allreduce_sum_simple(self, local, unit_ralloc=None):
         """
-        TODO: docstring -- notes:
-        "simple" b/c no shared memory is used, and result is *returned*
-        local is just a scalar float or array
-        unit_alloc specifies a comm/ralloc of the group of processors that all compute
-           the same logical result -- so only the unit_ralloc.rank == 0 processors
-           will contribute to the sum (but all procs get the result returned)
+        A simplified sum over quantities on different processors that doesn't use shared memory.
+
+        The shared memory usage of :method:`allreduce_sum` can be overkill when just summing a single
+        scalar quantity.  This method provides a way to easily sum a quantity across all the processors
+        in this :class:`ResourceAllocation` object using a unit resource allocation.
+
+        Parameters
+        ----------
+        local : int or float
+            The local (per-processor) value to sum.
+        
+        unit_ralloc : ResourceAllocation, optional
+            A resource allocation (essentially a comm) for the group of processors that
+            all compute the same local value, so that only the `unit_ralloc.rank == 0`
+            processors will contribute to the sum.  If `None`, then it is assumed that each
+            processor computes a logically different local value.
+
+        Returns
+        -------
+        float or int
+            The sum of all `local` quantities, returned on all the processors.
         """
         from mpi4py import MPI
         if self.comm is None: return local
@@ -393,11 +525,39 @@ class ResourceAllocation(object):
 
     def allreduce_max(self, result, local, unit_ralloc=None):
         """
-        TODO: docstring -- notes:
-        result must be allocated as a shared array using *this* ralloc or a larger one
-        unit_alloc specifies a comm/ralloc of the group of processors that all compute
-           the same logical result -- so only the unit_ralloc.rank == 0 processors
-           will contribute to the sum (but all procs get the result)
+        Take elementwise max of local arrays on different processors, potentially using a *unit* resource allocation.
+
+        Similar to a normal MPI reduce call (with MPI.MAX type), but more easily integrates
+        with a hierarchy of processor divisions, or nested comms, by taking a `unit_ralloc`
+        argument.  This is essentially another comm that specifies the groups of processors
+        that have all computed the same local array.  So, when performing the max operation, only
+        processors with `unit_ralloc.rank == 0` contribute.
+
+        Parameters
+        ----------
+        result : numpy.ndarray, possibly shared
+            The destination "global" array, with the same shape as all the local arrays
+            being operated on.  This can be any shape (including any number of dimensions).  When
+            shared memory is being used, i.e. when this :class:`ResourceAllocation` object
+            has a nontrivial inter-host comm, this array must be allocated as a shared array
+            using *this* ralloc or a larger so that `result` is shared between all the processors
+            for this resource allocation's intra-host communicator.  This allows a speedup when
+            shared memory is used by distributing computation of `result` over each host's
+            processors and performing these sums in parallel.
+
+        local : numpy.ndarray
+            The locally computed quantity.  This can be a shared-memory array, but need
+            not be.
+
+        unit_ralloc : ResourceAllocation, optional
+            A resource allocation (essentially a comm) for the group of processors that
+            all compute the same local result, so that only the `unit_ralloc.rank == 0`
+            processors will contribute to the sum operation.  If `None`, then it is
+            assumed that all processors compute different local results.
+
+        Returns
+        -------
+        None
         """
         from mpi4py import MPI
         participating = unit_ralloc is None or unit_ralloc.comm is None or unit_ralloc.comm.rank == 0
@@ -422,14 +582,34 @@ class ResourceAllocation(object):
 
     def bcast(self, value, root=0):
         """
-        TODO: docstring
-        Broadcast `value` from root *host* to all other hosts in this resource allocation.
+        Broadcasts a value from the root processor/host to the others in this resource allocation.
 
-        Note: `value` must be a numpy array.
+        This is similar to a usual MPI broadcast, except it takes advantage of shared memory when
+        it is available.  When shared memory is being used, i.e. when this :class:`ResourceAllocation`
+        object has a nontrivial inter-host comm, then this routine places `value` in a shared memory
+        buffer and uses the resource allocation's inter-host communicator to broadcast the result
+        from the root *host* to all the other hosts using all the processor on the root host in
+        parallel (all processors with the same intra-host rank participate in a MPI broadcast).
+
+        Parameters
+        ----------
+        value : numpy.ndarray
+            The value to broadcast.  May be shared memory but doesn't need to be.  Only
+            need to specify this on the rank `root` processor, other processors can provide
+            any value for this argument (it's unused).
+
+        root : int
+            The rank of the processor whose `value` will be to broadcast.
+
+        Returns
+        -------
+        numpy.ndarray
+            The broadcast value, in a new, non-shared-memory array.
         """
         if self.host_comm is not None:
             bcast_shape, bcast_dtype = self.comm.bcast((value.shape, value.dtype) if self.comm.rank == root else None,
                                                        root=root)
+            #FUTURE: check whether `value` is already shared memory  (or add flag?) and if so don't allocate/free `ar`
             ar, ar_shm = _smt.create_shared_ndarray(self, bcast_shape, bcast_dtype)
             if self.comm.rank == root:
                 ar[(slice(None, None),) * value.ndim] = value  # put our value into the shared memory.

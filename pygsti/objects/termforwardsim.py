@@ -48,14 +48,9 @@ class TermForwardSimulator(_DistributableForwardSimulator):
 
     Parameters
     ----------
-    dim : int
-        The model-dimension.  All operations act on a `dim`-dimensional Hilbert-Schmidt space.
-
-    layer_op_server : LayerLizard
-        An object that can be queried for circuit-layer operations.
-
-    paramvec : numpy.ndarray
-        The current parameter vector of the Model.
+    model : Model, optional
+        The parent model of this simulator.  It's fine if this is `None` at first,
+        but it will need to be set (by assigning `self.model` before using this simulator.
 
     mode : {"taylor-order", "pruned", "direct"}
         Overall method used to compute (approximate) circuit probabilities.
@@ -139,6 +134,28 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         Computed values are added to any dictionary that is supplied, so
         supplying an empty dictionary and using this calculator will cause
         the dictionary to be filled with values.
+
+    num_atoms : int, optional
+        The number of atoms (sub-tables) to use when creating the layout (i.e. when calling
+        :method:`create_layout`).  This determines how many units the element (circuit outcome
+        probability) dimension is divided into, and doesn't have to correclate with the number of
+        processors.  When multiple processors are used, if `num_atoms` is less than the number of
+        processors then `num_atoms` should divide the number of processors evenly, so that
+        `num_atoms // num_procs` groups of processors can be used to divide the computation
+        over parameter dimensions.
+
+    processor_grid : tuple optional
+        Specifies how the total number of processors should be divided into a number of
+        atom-processors, 1st-parameter-deriv-processors, and 2nd-parameter-deriv-processors.
+        Each level of specification is optional, so this can be a 1-, 2-, or 3- tuple of
+        integers (or None).  Multiplying the elements of `processor_grid` together should give
+        at most the total number of processors.
+        
+    param_blk_sizes : tuple, optional 
+        The parameter block sizes along the first or first & second parameter dimensions - so
+        this can be a 0-, 1- or 2-tuple of integers or `None` values.  A block size of `None`
+        means that there should be no division into blocks, and that each block processor
+        computes all of its parameter indices at once.
     """
 
     @classmethod
@@ -151,104 +168,6 @@ class TermForwardSimulator(_DistributableForwardSimulator):
                  min_term_mag=None, max_paths_per_outcome=1000, perr_heuristic="none",
                  max_term_stages=5, path_fraction_threshold=0.9, oob_check_interval=10, cache=None,
                  num_atoms=None, processor_grid=None, param_blk_sizes=None):
-        """
-        Construct a new TermForwardSimulator object.
-        TODO: docstring - at least need num_atoms, processor_grid, & param_blk_sizes docs
-
-        Parameters
-        ----------
-        dim : int
-            The model-dimension.  All operations act on a `dim`-dimensional Hilbert-Schmidt space.
-
-        layer_op_server : LayerLizard
-            An object that can be queried for circuit-layer operations.
-
-        paramvec : numpy.ndarray
-            The current parameter vector of the Model.
-
-        mode : {"taylor-order", "pruned", "direct"}
-            Overall method used to compute (approximate) circuit probabilities.
-            The `"taylor-order"` mode includes all taylor-expansion terms up to a
-            fixed and pre-defined order, fixing a single "path set" at the outset.
-            The `"pruned"` mode selects a path set based on a heuristic (sometimes a
-            true upper bound) calculation of the error in the approximate probabilities.
-            This method effectively "prunes" the paths to meet a fixed desired accuracy.
-            The `"direct"` method is still under development.  Its intention is to perform
-            path integrals directly without the use of polynomial computation and caching.
-            Initial testing showed the direct method to be much slower for common QCVV tasks,
-            making it less urgent to complete.
-
-        max_order : int
-            The maximum order of error-rate terms to include in probability
-            computations.  When polynomials are computed, the maximum Taylor
-            order to compute polynomials to.
-
-        desired_perr : float, optional
-            The desired maximum-error when computing probabilities..
-            Path sets are selected (heuristically) to target this error, within the
-            bounds set by `max_order`, etc.
-
-        allowed_perr : float, optional
-            The allowed maximum-error when computing probabilities.
-            When rigorous bounds cannot guarantee that probabilities are correct to
-            within this error, additional paths are added to the path set.
-
-        min_term_mag : float, optional
-            Terms with magnitudes less than this value will be ignored, i.e. not
-            considered candidates for inclusion in paths.  If this number is too
-            low, the number of possible paths to consder may be very large, impacting
-            performance.  If too high, then not enough paths will be considered to
-            achieve an accurate result.  By default this value is set automatically
-            based on the desired error and `max_paths_per_outcome`.  Only adjust this
-            if you know what you're doing.
-
-        max_paths_per_outcome : int, optional
-            The maximum number of paths that can be used (summed) to compute a
-            single outcome probability.
-
-        perr_heuristic : {"none", "scaled", "meanscaled"}
-            Which heuristic (if any) to use when deciding whether a given path set is
-            sufficient given the allowed error (`allowed_perr`).
-            - `"none"`:  This is the strictest setting, and is absence of any heuristic.
-            if the path-magnitude gap (the maximum - achieved sum-of-path-magnitudes,
-            a rigorous upper bound on the approximation error for a circuit
-            outcome probability) is greater than `allowed_perr` for any circuit, the
-            path set is deemed insufficient.
-            - `"scaled"`: a path set is deemed insufficient when, for any circuit, the
-            path-magnitude gap multiplied by a scaling factor is greater than `allowed_perr`.
-            This scaling factor is equal to the computed probability divided by the
-            achieved sum-of-path-magnitudes and is always less than 1.  This scaling
-            is essentially the ratio of the sum of the path amplitudes without and with
-            an absolute value, and tries to quantify and offset the degree of pessimism
-            in the computed path-magnitude gap.
-            - `"meanscaled"` : a path set is deemed insufficient when, the *mean* of all
-            the scaled (as above) path-magnitude gaps is greater than `allowed_perr`.  The
-            mean here is thus over the circuit outcomes.  This heuristic is even more
-            permissive of potentially bad path sets than `"scaled"`, as it allows badly
-            approximated circuits to be offset by well approximated ones.
-
-        max_term_stages : int, optional
-            The maximum number of "stage", i.e. re-computations of a path set, are
-            allowed before giving up.
-
-        path_fraction_threshold : float, optional
-            When greater than this fraction of the total available paths (set by
-            other constraints) are considered, no further re-compuation of the
-            path set will occur, as it is expected to give little improvement.
-
-        oob_check_interval : int, optional
-            The optimizer will check whether the computed probabilities have sufficiently
-            small error every `oob_check_interval` (outer) optimizer iteration.
-
-        cache : dict, optional
-            A dictionary of pre-computed compact polynomial objects.  Keys are
-            `(max_order, rholabel, elabel, circuit)` tuples, where
-            `max_order` is an integer, `rholabel` and `elabel` are
-            :class:`Label` objects, and `circuit` is a :class:`Circuit`.
-            Computed values are added to any dictionary that is supplied, so
-            supplying an empty dictionary and using this calculator will cause
-            the dictionary to be filled with values.
-        """
         # self.unitary_evolution = False # Unused - idea was to have this flag
         #    allow unitary-evolution calcs to be term-based, which essentially
         #    eliminates the "pRight" portion of all the propagation calcs, and
@@ -305,7 +224,40 @@ class TermForwardSimulator(_DistributableForwardSimulator):
 
     def create_layout(self, circuits, dataset=None, resource_alloc=None, array_types=('E',),
                       derivative_dimension=None, verbosity=0):
+        """
+        Constructs an circuit-outcome-probability-array (COPA) layout for a list of circuits.
 
+        Parameters
+        ----------
+        circuits : list
+            The circuits whose outcome probabilities should be included in the layout.
+
+        dataset : DataSet
+            The source of data counts that will be compared to the circuit outcome
+            probabilities.  The computed outcome probabilities are limited to those
+            with counts present in `dataset`.
+
+        resource_alloc : ResourceAllocation
+            A available resources and allocation information.  These factors influence how
+            the layout (evaluation strategy) is constructed.
+
+        array_types : tuple, optional
+            A tuple of string-valued array types.  See :method:`ForwardSimulator.create_layout`.
+
+        derivative_dimensions : tuple, optional
+            A tuple containing, optionally, the parameter-space dimension used when taking first
+            and second derivatives with respect to the cirucit outcome probabilities.  This must be
+            have minimally 1 or 2 elements when `array_types` contains `'ep'` or `'epp'` types,
+            respectively.
+
+        verbosity : int or VerbosityPrinter
+            Determines how much output to send to stdout.  0 means no output, higher
+            integers mean more output.
+
+        Returns
+        -------
+        TermCOPALayout
+        """
         #Since there's never any "cache" associated with Term-layouts, there's no way to reduce the
         # memory consumption by using more atoms - every processor still needs to hold the entire
         # output array (until we get gather=False mode) - so for now, just create a layout with
@@ -1165,7 +1117,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         None
         """
 
-        #TODO: update this outdated docstring
+        # **This may be out of date**
         # We're finding and "locking in" a set of paths to use in subsequent evaluations.  This
         # means we're going to re-compute the high-magnitude terms for each operation (in
         # self.pathset.highmag_termrep_cache) and re-compute the thresholds (in self.percircuit_p_polys)

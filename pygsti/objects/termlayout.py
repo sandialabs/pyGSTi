@@ -24,7 +24,33 @@ from .distlayout import DistributableCOPALayout as _DistributableCOPALayout
 
 class _TermCOPALayoutAtom(_DistributableAtom):
     """
-    Object that acts as "atomic unit" of instructions-for-applying a COPA strategy.
+    The atom ("atomic unit") for dividing up the element dimension in a :class:`TermCOPALayout`.
+
+    This class noteably holds the current "path-set" used to evaluate circuit probabilites,
+    as well as compact representations of the polynomials for evaluating these probabilities.
+
+    Parameters
+    ----------
+    unique_complete_circuits : list
+        A list that contains *all* the "complete" circuits for the parent layout.  This
+        atom only owns a subset of these, as given by `group` below.
+
+    ds_circuits : list
+        A parallel list of circuits as they should be accessed from `dataset`.
+        This applies any aliases and removes implied SPAM elements relative to
+        `unique_complete_circuits`.
+
+    group : set
+        The set of unique-circuit indices (i.e. indices into `unique_complete_circuits`)
+        that this atom owns.
+
+    model : Model
+        The model being used to construct this layout.  Used for expanding instruments
+        within the circuits.
+
+    dataset : DataSet
+        The dataset, used to include only observed circuit outcomes in this atom
+        and therefore the parent layout.
     """
 
     def __init__(self, unique_complete_circuits, ds_circuits, group, model, dataset):
@@ -92,33 +118,64 @@ class _TermCOPALayoutAtom(_DistributableAtom):
 
     @property
     def cache_size(self):
+        """The cache size of this atom."""
         return 0
 
 
 class TermCOPALayout(_DistributableCOPALayout):
     """
-    TODO: docstring (update)
-    An Evaluation Tree that structures a circuit list for map-based calculations.
+    A circuit outcome probability array (COPA) layout for circuit simulation by taylor-term path integration.
+
+    A simple distributed layout that divides a list of circuits among available
+    processors.  This layout is designed for Taylor-term based calculations for which
+    there is no straightforward caching/performance-enhancement mechanism.  The
+    path-integral specific implementation is present in the atoms, which hold current
+    path sets and compact polynomials for speeding the evaluation of circuit outcome
+    probabilities.
 
     Parameters
     ----------
-    simplified_circuit_elabels : dict
-        A dictionary of `(circuit, elabels)` tuples specifying
-        the circuits that should be present in the evaluation tree.
-        `circuit` is a *simplified* circuit whose first layer is a
-        preparation label. `elabels` is a list of all the POVM
-        effect labels (corresponding to outcomes) for the
-        circuit (only a single label is needed rather than a
-        POVM-label, effect-label pair because these are *simplified*
-        effect labels).
+    circuits : list
+        A list of:class:`Circuit` objects representing the circuits this layout will include.
 
-    num_strategy_subcomms : int, optional
-        The number of processor groups (communicators) to divide the "atomic" portions
-        of this strategy (a circuit probability array layout) among when calling `distribute`.
-        By default, the communicator is not divided.  This default behavior is fine for cases
-        when derivatives are being taken, as multiple processors are used to process differentiations
-        with respect to different variables.  If no derivaties are needed, however, this should be
-        set to (at least) the number of processors.
+    model : Model
+        The model that will be used to compute circuit outcome probabilities using this layout.
+        This model is used to complete and expand the circuits in `circuits`.
+
+    dataset : DataSet, optional
+        If not None, restrict the circuit outcomes stored by this layout to only the
+        outcomes observed in this data set.
+
+    num_sub_tables : int, optional
+        The number of groups ("sub-tables") to divide the circuits into.  This is the
+        number of *atoms* for this layout.
+
+    num_table_processors : int, optional
+        The number of atom-processors, i.e. groups of processors that process sub-tables.
+
+    num_param_dimension_processors : tuple, optional
+        A 1- or 2-tuple of integers specifying how many parameter-block processors are
+        used when dividing the physical processors into a grid.  The first and second
+        elements correspond to counts for the first and second parameter dimensions,
+        respecively.
+        
+    param_dimensions : tuple, optional
+        The number of parameters along each parameter dimension.  Can be an
+        empty, 1-, or 2-tuple of integers which dictates how many parameter dimensions this
+        layout supports.
+
+    param_dimension_blk_sizes : tuple, optional
+        The parameter block sizes along each present parameter dimension, so this should
+        be the same shape as `param_dimensions`.  A block size of `None` means that there
+        should be no division into blocks, and that each block processor computes all of
+        its parameter indices at once.
+
+    resource_alloc : ResourceAllocation, optional
+        The resources available for computing circuit outcome probabilities.
+
+    verbosity : int or VerbosityPrinter
+        Determines how much output to send to stdout.  0 means no output, higher
+        integers mean more output.
     """
 
     def __init__(self, circuits, model, dataset=None,

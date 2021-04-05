@@ -25,7 +25,33 @@ from .prefixtable import PrefixTable as _PrefixTable
 
 class _MapCOPALayoutAtom(_DistributableAtom):
     """
-    Object that acts as "atomic unit" of instructions-for-applying a COPA strategy.
+    The atom ("atomic unit") for dividing up the element dimension in a :class:`MapCOPALayout`.
+
+    Parameters
+    ----------
+    unique_complete_circuits : list
+        A list that contains *all* the "complete" circuits for the parent layout.  This
+        atom only owns a subset of these, as given by `group` below.
+
+    ds_circuits : list
+        A parallel list of circuits as they should be accessed from `dataset`.
+        This applies any aliases and removes implied SPAM elements relative to
+        `unique_complete_circuits`.
+
+    group : set
+        The set of unique-circuit indices (i.e. indices into `unique_complete_circuits`)
+        that this atom owns.
+
+    model : Model
+        The model being used to construct this layout.  Used for expanding instruments
+        within the circuits.
+
+    dataset : DataSet
+        The dataset, used to include only observed circuit outcomes in this atom
+        and therefore the parent layout.
+
+    max_cache_size : int
+        The maximum allowed cache size, given as number of quantum states.
     """
 
     def __init__(self, unique_complete_circuits, ds_circuits, group, model,
@@ -88,9 +114,9 @@ class _MapCOPALayoutAtom(_DistributableAtom):
 
         super().__init__(element_slice, local_offset)
 
-    def update_indices(self, old_unique_is_by_new_unique_is):
+    def _update_indices(self, old_unique_is_by_new_unique_is):
         """
-        Updates any internal indices held to the 'unique-circuit indices' of the layout.
+        Updates any internal indices held as a result of the unique-circuit indices of the layout changing.
 
         This function is called during layout construction to alert the atom that the layout
         being created will only hold a subset of the `unique_complete_circuits` provided to
@@ -116,36 +142,65 @@ class _MapCOPALayoutAtom(_DistributableAtom):
 
     @property
     def cache_size(self):
+        """The cache size of this atom."""
         return self.table.cache_size
 
 
 class MapCOPALayout(_DistributableCOPALayout):
     """
-    TODO: docstring (update)
-    An Evaluation Tree that structures a circuit list for map-based calculations.
+    A circuit outcome probability array (COPA) layout for circuit simulation by state vector maps.
+
+    A simple distributed layout that divides a list of circuits among available
+    processors and optionally supports caching "prefix" states that result from
+    common prefixes found in the circuits.
 
     Parameters
     ----------
-    simplified_circuit_elabels : dict
-        A dictionary of `(circuit, elabels)` tuples specifying
-        the circuits that should be present in the evaluation tree.
-        `circuit` is a *simplified* circuit whose first layer is a
-        preparation label. `elabels` is a list of all the POVM
-        effect labels (corresponding to outcomes) for the
-        circuit (only a single label is needed rather than a
-        POVM-label, effect-label pair because these are *simplified*
-        effect labels).
+    circuits : list
+        A list of:class:`Circuit` objects representing the circuits this layout will include.
 
-    num_strategy_subcomms : int, optional
-        The number of processor groups (communicators) to divide the "atomic" portions
-        of this strategy (a circuit probability array layout) among when calling `distribute`.
-        By default, the communicator is not divided.  This default behavior is fine for cases
-        when derivatives are being taken, as multiple processors are used to process differentiations
-        with respect to different variables.  If no derivaties are needed, however, this should be
-        set to (at least) the number of processors.
+    model : Model
+        The model that will be used to compute circuit outcome probabilities using this layout.
+        This model is used to complete and expand the circuits in `circuits`.
+
+    dataset : DataSet, optional
+        If not None, restrict the circuit outcomes stored by this layout to only the
+        outcomes observed in this data set.
 
     max_cache_size : int, optional
-        Maximum cache size, used for holding common circuit prefixes.
+        The maximum number of "prefix" quantum states that may be cached for performance.
+        If `None`, there is no limit to how large the cache may be.
+
+    num_sub_tables : int, optional
+        The number of groups ("sub-tables") to divide the circuits into.  This is the
+        number of *atoms* for this layout.
+
+    num_table_processors : int, optional
+        The number of atom-processors, i.e. groups of processors that process sub-tables.
+
+    num_param_dimension_processors : tuple, optional
+        A 1- or 2-tuple of integers specifying how many parameter-block processors are
+        used when dividing the physical processors into a grid.  The first and second
+        elements correspond to counts for the first and second parameter dimensions,
+        respecively.
+        
+    param_dimensions : tuple, optional
+        The number of parameters along each parameter dimension.  Can be an
+        empty, 1-, or 2-tuple of integers which dictates how many parameter dimensions this
+        layout supports.
+
+    param_dimension_blk_sizes : tuple, optional
+        The parameter block sizes along each present parameter dimension, so this should
+        be the same shape as `param_dimensions`.  A block size of `None` means that there
+        should be no division into blocks, and that each block processor computes all of
+        its parameter indices at once.
+
+    resource_alloc : ResourceAllocation, optional
+        The resources available for computing circuit outcome probabilities.
+
+    verbosity : int or VerbosityPrinter
+        Determines how much output to send to stdout.  0 means no output, higher
+        integers mean more output.
     """
 
     def __init__(self, circuits, model, dataset=None, max_cache_size=None,

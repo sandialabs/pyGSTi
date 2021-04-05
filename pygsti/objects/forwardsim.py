@@ -42,16 +42,14 @@ class ForwardSimulator(object):
     -- parameterizations of operation matrices and SPAM vectors) access to these
     fundamental operations.  It also allows for the easier addition of new forward simulators.
 
+    Note: a model holds or "contains" a forward simulator instance to perform its computations,
+    and a forward simulator holds a reference to its parent model, so we need to make sure the
+    forward simulator doesn't serialize the model or we have a circular reference.
+    
     Parameters
     ----------
-    dim : int
-        The model-dimension.  All operations act on a `dim`-dimensional Hilbert-Schmidt space.
-
-    layer_op_server : LayerLizard
-        An object that can be queried for circuit-layer operations.
-
-    paramvec : numpy.ndarray
-        The current parameter vector of the Model.
+    model : Model, optional
+        The model this forward simulator will use to compute circuit outcome probabilities.
     """
 
     @classmethod
@@ -73,21 +71,6 @@ class ForwardSimulator(object):
         return ()
 
     def __init__(self, model=None):
-        """
-        TODO: docstring
-        Construct a new ForwardSimulator object.
-
-        Parameters
-        ----------
-        dim : int
-            The model-dimension.  All operations act on a `dim`-dimensional Hilbert-Schmidt space.
-
-        layer_op_server : LayerLizard
-            An object that can be queried for circuit-layer operations.
-
-        paramvec : numpy.ndarray
-            The current parameter vector of the Model.
-        """
         #self.dim = model.dim
         self._model = model
 
@@ -186,8 +169,7 @@ class ForwardSimulator(object):
 
     def probs(self, circuit, outcomes=None, time=None):
         """
-        Construct a dictionary containing the outcome probabilities of `simplified_circuit`
-        #TODO: docstrings: simplified_circuit => circuit in routines **below**, similar to this one.
+        Construct a dictionary containing the outcome probabilities for a single circuit.
 
         Parameters
         ----------
@@ -225,6 +207,21 @@ class ForwardSimulator(object):
         return probs
 
     def dprobs(self, circuit):
+        """
+        Construct a dictionary containing outcome probability derivatives for a single circuit.
+
+        Parameters
+        ----------
+        circuit : Circuit or tuple of operation labels
+            The sequence of operation labels specifying the circuit.
+
+        Returns
+        -------
+        dprobs : OutcomeLabelDict
+            A dictionary with keys equal to outcome labels and
+            values equal to an array containing the (partial) derivatives
+            of the outcome probability with respect to all model parameters.
+        """
         copa_layout = self.create_layout([circuit], array_types=('ep',))
         dprobs_array = _np.empty((copa_layout.num_elements, self.model.num_params), 'd')
         self.bulk_fill_dprobs(dprobs_array, copa_layout)
@@ -236,6 +233,21 @@ class ForwardSimulator(object):
         return dprobs
 
     def hprobs(self, circuit):
+        """
+        Construct a dictionary containing outcome probability Hessians for a single circuit.
+
+        Parameters
+        ----------
+        circuit : Circuit or tuple of operation labels
+            The sequence of operation labels specifying the circuit.
+
+        Returns
+        -------
+        hprobs : OutcomeLabelDict
+            A dictionary with keys equal to outcome labels and
+            values equal to a 2D array that is the Hessian matrix for
+            the corresponding outcome probability (with respect to all model parameters).
+        """
         copa_layout = self.create_layout([circuit], array_types=('epp',))
         hprobs_array = _np.empty((copa_layout.num_elements, self.model.num_params, self.model.num_params), 'd')
         self.bulk_fill_hprobs(hprobs_array, copa_layout)
@@ -268,6 +280,29 @@ class ForwardSimulator(object):
         resource_alloc : ResourceAllocation
             A available resources and allocation information.  These factors influence how
             the layout (evaluation strategy) is constructed.
+
+        array_types : tuple, optional
+            A tuple of string-valued array types, as given by 
+            :method:`CircuitOutcomeProbabilityArrayLayout.allocate_local_array`.  These types determine
+            what types of arrays we anticipate computing using this layout (and forward simulator).  These
+            are used to check available memory against the limit (if it exists) within `resource_alloc`.
+            The array types also determine the number of derivatives that this layout is able to compute.
+            So, for example, if you ever want to compute derivatives or Hessians of element arrays then
+            `array_types` must contain at least one `'ep'` or `'epp'` type, respectively or the layout
+            will not allocate needed intermediate storage for derivative-containing types.  If you don't
+            care about accurate memory limits, use `('e',)` when you only ever compute probabilities and
+            never their derivatives, and `('e','ep')` or `('e','ep','epp')` if you need to compute
+            Jacobians or Hessians too.
+
+        derivative_dimensions : tuple, optional
+            A tuple containing, optionally, the parameter-space dimension used when taking first
+            and second derivatives with respect to the cirucit outcome probabilities.  This must be
+            have minimally 1 or 2 elements when `array_types` contains `'ep'` or `'epp'` types,
+            respectively.
+
+        verbosity : int or VerbosityPrinter
+            Determines how much output to send to stdout.  0 means no output, higher
+            integers mean more output.
 
         Returns
         -------
@@ -659,15 +694,13 @@ class ForwardSimulator(object):
     def iter_hprobs_by_rectangle(self, layout, wrt_slices_list,
                                  return_dprobs_12=False):
         """
-        TODO: docstring -- more general now - by *rectangle* not just column
-        An iterator that computes 2nd derivatives of the `eval_tree`'s circuit probabilities column-by-column.
+        Iterates over the 2nd derivatives of a layout's circuit probabilities one rectangle at a time.
 
         This routine can be useful when memory constraints make constructing
-        the entire Hessian at once impractical, and one is able to compute
-        reduce results from a single column of the Hessian at a time.  For
-        example, the Hessian of a function of many gate sequence probabilities
-        can often be computed column-by-column from the using the columns of
-        the circuits.
+        the entire Hessian at once impractical, and as it only computes a subset of
+        the Hessian's rows and colums (a "rectangle") at once.  For example, the
+        Hessian of a function of many circuit probabilities can often be computed
+        rectangle-by-rectangle and without the need to ever store the entire Hessian at once.
 
         Parameters
         ----------
@@ -677,8 +710,8 @@ class ForwardSimulator(object):
 
         wrt_slices_list : list
             A list of `(rowSlice,colSlice)` 2-tuples, each of which specify
-            a "block" of the Hessian to compute.  Iterating over the output
-            of this function iterates over these computed blocks, in the order
+            a "rectangle" of the Hessian to compute.  Iterating over the output
+            of this function iterates over these computed rectangles, in the order
             given by `wrt_slices_list`.  `rowSlice` and `colSlice` must by Python
             `slice` objects.
 
@@ -693,24 +726,22 @@ class ForwardSimulator(object):
 
         Returns
         -------
-        TODO: docstring - this is outdated!
-        block_generator
+        rectangle_generator
             A generator which, when iterated, yields the 3-tuple
-            `(rowSlice, colSlice, hprobs)` or `(rowSlice, colSlice, dprobs12)`
+            `(rowSlice, colSlice, hprobs)` or `(rowSlice, colSlice, hprobs, dprobs12)`
             (the latter if `return_dprobs_12 == True`).  `rowSlice` and `colSlice`
             are slices directly from `wrt_slices_list`. `hprobs` and `dprobs12` are
-            arrays of shape K x S x B x B', where:
+            arrays of shape E x B x B', where:
 
-            - K is the length of spam_label_rows,
-            - S is the number of circuits (i.e. eval_tree.num_final_circuits()),
+            - E is the length of layout elements
             - B is the number of parameter rows (the length of rowSlice)
             - B' is the number of parameter columns (the length of colSlice)
 
             If `mx`, `dp1`, and `dp2` are the outputs of :func:`bulk_fill_hprobs`
             (i.e. args `mx_to_fill`, `deriv1_mx_to_fill`, and `deriv2_mx_to_fill`), then:
 
-            - `hprobs == mx[:,:,rowSlice,colSlice]`
-            - `dprobs12 == dp1[:,:,rowSlice,None] * dp2[:,:,None,colSlice]`
+            - `hprobs == mx[:,rowSlice,colSlice]`
+            - `dprobs12 == dp1[:,rowSlice,None] * dp2[:,None,colSlice]`
         """
         yield from self._iter_hprobs_by_rectangle(layout, wrt_slices_list, return_dprobs_12)
 
@@ -761,7 +792,7 @@ class ForwardSimulator(object):
 
 class CacheForwardSimulator(ForwardSimulator):
     """
-    A forward simulator that works with :class:`CachedCOPALayout` layouts.
+    A forward simulator that works with non-distributed :class:`CachedCOPALayout` layouts.
 
     This is just a small addition to :class:`ForwardSimulator`, adding a
     persistent cache passed to new derived-class-overridable compute routines.
@@ -770,12 +801,12 @@ class CacheForwardSimulator(ForwardSimulator):
     def create_layout(self, circuits, dataset=None, resource_alloc=None,
                       array_types=(), derivative_dimensions=None, verbosity=0):
         """
-        Constructs an circuit-outcome-probability-array (COPA) layout for `circuits` and `dataset`.
+        Constructs an circuit-outcome-probability-array (COPA) layout for a list of circuits.
 
         Parameters
         ----------
         circuits : list
-            The circuits whose outcome probabilities should be computed.
+            The circuits whose outcome probabilities should be included in the layout.
 
         dataset : DataSet
             The source of data counts that will be compared to the circuit outcome
@@ -785,6 +816,19 @@ class CacheForwardSimulator(ForwardSimulator):
         resource_alloc : ResourceAllocation
             A available resources and allocation information.  These factors influence how
             the layout (evaluation strategy) is constructed.
+
+        array_types : tuple, optional
+            A tuple of string-valued array types.  See :method:`ForwardSimulator.create_layout`.
+
+        derivative_dimensions : tuple, optional
+            A tuple containing, optionally, the parameter-space dimension used when taking first
+            and second derivatives with respect to the cirucit outcome probabilities.  This must be
+            have minimally 1 or 2 elements when `array_types` contains `'ep'` or `'epp'` types,
+            respectively.
+
+        verbosity : int or VerbosityPrinter
+            Determines how much output to send to stdout.  0 means no output, higher
+            integers mean more output.
 
         Returns
         -------
