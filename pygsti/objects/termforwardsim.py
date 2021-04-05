@@ -150,8 +150,8 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         Each level of specification is optional, so this can be a 1-, 2-, or 3- tuple of
         integers (or None).  Multiplying the elements of `processor_grid` together should give
         at most the total number of processors.
-        
-    param_blk_sizes : tuple, optional 
+
+    param_blk_sizes : tuple, optional
         The parameter block sizes along the first or first & second parameter dimensions - so
         this can be a 0-, 1- or 2-tuple of integers or `None` values.  A block size of `None`
         means that there should be no division into blocks, and that each block processor
@@ -740,9 +740,9 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         None
         """
         assert(self.mode == "pruned")
-        atom_resource_alloc = layout.resource_alloc('atom-processing')
+        #atom_resource_alloc = layout.resource_alloc('atom-processing')
         #MEM debug_prof = Profiler(resource_alloc.comm)
-        
+
         for layout_atom in layout.atoms:
             # compute SOPM for layout_atom
             elInds = layout_atom.element_slice
@@ -976,10 +976,11 @@ class TermForwardSimulator(_DistributableForwardSimulator):
             of the sum-of-path-magnitude gaps.
         """
         assert(self.mode == "pruned")
-        termgap_penalty_jac = layout.allocate_local_array('ep', 'd')  #_np.empty((layout.num_elements, self.model.num_params), 'd')
+        termgap_penalty_jac = layout.allocate_local_array('ep', 'd')
+        # OLD: _np.empty((layout.num_elements, self.model.num_params), 'd')
 
         #TODO: need to update this function for distributed mem if it's ever used (currently it's not)
-        # -> _sopm_gaps_jacobian_atom(layout_atom) needs to compute derivs wrt just the *local* params (used to do for *all*)
+        # -> _sopm_gaps_jacobian_atom(layout_atom) needs to compute derivs wrt just the *local* params (previously all)
         # -> this routine used to gather the jac, but it shouldn't need to do this in a dist. mem framework -- make sure
         #    upstream callers know what to expect, and if we return an allocated local array they'll need to free it (we
         #    should probably just *fill* an already allocated jac array)
@@ -1317,7 +1318,6 @@ class TermForwardSimulator(_DistributableForwardSimulator):
                 #This computes (&caches) polys for this path set as well
             else:
                 self._cache_p_polynomials(layout_atom, atom_resource_alloc, polynomial_vindices_per_int)
-
 
     ## ----- Other functions -----
     def _prepare_layout(self, layout, polynomial_vindices_per_int):

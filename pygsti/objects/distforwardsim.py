@@ -53,8 +53,8 @@ class DistributableForwardSimulator(_ForwardSimulator):
         Each level of specification is optional, so this can be a 1-, 2-, or 3- tuple of
         integers (or None).  Multiplying the elements of `processor_grid` together should give
         at most the total number of processors.
-        
-    param_blk_sizes : tuple, optional 
+
+    param_blk_sizes : tuple, optional
         The parameter block sizes along the first or first & second parameter dimensions - so
         this can be a 0-, 1- or 2-tuple of integers or `None` values.  A block size of `None`
         means that there should be no division into blocks, and that each block processor
@@ -226,7 +226,7 @@ class DistributableForwardSimulator(_ForwardSimulator):
                     else:
                         for block2 in blocks2:
                             host_param2_slice_part = block2  # into host's memory
-                            global_param2_slice_part = _slct.shift(block2, global_param2_slice.start)  # parameter indices
+                            global_param2_slice_part = _slct.shift(block2, global_param2_slice.start)  # param indices
                             self._bulk_fill_dprobs_atom(deriv2_array_to_fill[atom.element_slice, :],
                                                         host_param2_slice_part, atom,
                                                         global_param2_slice_part, param_resource_alloc)
@@ -246,7 +246,7 @@ class DistributableForwardSimulator(_ForwardSimulator):
         # in that array_to_fill is assumed to already be sized to the atom's elements, i.e.
         # we provide array_to_fill and not array_to_fill[atom.alement_slice,...] when calling subroutines.
 
-        host_param_slice1 = host_param_slice2 = None # array_to_fill is already just this slice of the host mem
+        host_param_slice1 = host_param_slice2 = None  # array_to_fill is already just this slice of the host mem
         if deriv1_array_to_fill is not None:
             self._bulk_fill_dprobs_atom(deriv1_array_to_fill, host_param_slice1, atom,
                                         param_slice1, resource_alloc)
@@ -259,7 +259,6 @@ class DistributableForwardSimulator(_ForwardSimulator):
 
         self._bulk_fill_hprobs_atom(array_to_fill, host_param_slice1, host_param_slice2, atom,
                                     param_slice1, param_slice2, resource_alloc)
-
 
     def _iter_hprobs_by_rectangle(self, layout, wrt_slices_list, return_dprobs_12):
         # Just needed for compatibility - so base `iter_hprobs_by_rectangle` knows to loop over atoms

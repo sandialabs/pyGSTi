@@ -45,7 +45,7 @@ class ForwardSimulator(object):
     Note: a model holds or "contains" a forward simulator instance to perform its computations,
     and a forward simulator holds a reference to its parent model, so we need to make sure the
     forward simulator doesn't serialize the model or we have a circular reference.
-    
+
     Parameters
     ----------
     model : Model, optional
@@ -282,7 +282,7 @@ class ForwardSimulator(object):
             the layout (evaluation strategy) is constructed.
 
         array_types : tuple, optional
-            A tuple of string-valued array types, as given by 
+            A tuple of string-valued array types, as given by
             :method:`CircuitOutcomeProbabilityArrayLayout.allocate_local_array`.  These types determine
             what types of arrays we anticipate computing using this layout (and forward simulator).  These
             are used to check available memory against the limit (if it exists) within `resource_alloc`.

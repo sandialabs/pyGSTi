@@ -13,6 +13,7 @@ Implements the ArraysInterface object and supporting functionality.
 import numpy as _np
 from ..tools import sharedmemtools as _smt
 
+
 class ArraysInterface(object):
     """
     An interface between pyGSTi's optimization methods and data storage arrays.
@@ -24,7 +25,7 @@ class ArraysInterface(object):
     that the algorithm doesn't need to worry about how the arrays are actually stored in memory,
     e.g. whether shared memory is used or not.
     """
-    pass # just a base class - maybe make an abc abtract class in FUTURE?
+    pass  # just a base class - maybe make an abc abtract class in FUTURE?
 
 
 class UndistributedArraysInterface(ArraysInterface):
@@ -156,7 +157,7 @@ class UndistributedArraysInterface(ArraysInterface):
         Returns
         -------
         param_fine_slices_by_host : list
-            A list with one entry per host.  Each entry is itself a list of 
+            A list with one entry per host.  Each entry is itself a list of
             `(rank, (global_param_slice, host_param_slice))` elements where `rank` is the top-level
             overall rank of a processor, `global_param_slice` is the parameter slice that processor owns
             and `host_param_slice` is the same slice relative to the parameters owned by the host.
@@ -224,7 +225,7 @@ class UndistributedArraysInterface(ArraysInterface):
         Returns
         -------
         None
-        """        
+        """
         x[:] = global_x
 
     def allgather_f(self, f, global_f):
@@ -253,12 +254,12 @@ class UndistributedArraysInterface(ArraysInterface):
         ----------
         jtj : numpy.array or LocalNumpyArray
             The (local) input matrix to gather.
-        
+
         return_shared : bool, optional
             Whether the returned array is allowed to be a shared-memory array, which results
             in a small performance gain because the array used internally to gather the results
             can be returned directly. When `True` a shared memory handle is also returned, and
-            the caller assumes responsibilty for freeing the memory via 
+            the caller assumes responsibilty for freeing the memory via
             :function:`pygsti.tools.sharedmemtools.cleanup_shared_ndarray`.
 
         Returns
@@ -298,12 +299,12 @@ class UndistributedArraysInterface(ArraysInterface):
         ----------
         jtf : numpy.array or LocalNumpyArray
             The local input vector to gather.
-        
+
         return_shared : bool, optional
             Whether the returned array is allowed to be a shared-memory array, which results
             in a small performance gain because the array used internally to gather the results
             can be returned directly. When `True` a shared memory handle is also returned, and
-            the caller assumes responsibilty for freeing the memory via 
+            the caller assumes responsibilty for freeing the memory via
             :function:`pygsti.tools.sharedmemtools.cleanup_shared_ndarray`.
 
         Returns
@@ -341,7 +342,7 @@ class UndistributedArraysInterface(ArraysInterface):
 
         This is typically used within SVD-defined basis calculations, where `jac_v` is the "V"
         matrix of the SVD of a jacobian, and `minus_jtf` is the negative dot product between the Jacobian
-        matrix and objective function vector.  
+        matrix and objective function vector.
 
         Parameters
         ----------
@@ -457,7 +458,6 @@ class UndistributedArraysInterface(ArraysInterface):
         float
         """
         return _np.dot(f, f)
-
 
     def norm2_jtj(self, jtj):
         """
@@ -713,7 +713,7 @@ class DistributedArraysInterface(ArraysInterface):
         Returns
         -------
         param_fine_slices_by_host : list
-            A list with one entry per host.  Each entry is itself a list of 
+            A list with one entry per host.  Each entry is itself a list of
             `(rank, (global_param_slice, host_param_slice))` elements where `rank` is the top-level
             overall rank of a processor, `global_param_slice` is the parameter slice that processor owns
             and `host_param_slice` is the same slice relative to the parameters owned by the host.
@@ -783,7 +783,7 @@ class DistributedArraysInterface(ArraysInterface):
         Returns
         -------
         None
-        """        
+        """
         self.scatter_jtf(global_x, x)
 
     def allgather_f(self, f, global_f):
@@ -818,12 +818,12 @@ class DistributedArraysInterface(ArraysInterface):
         ----------
         jtj : numpy.array or LocalNumpyArray
             The (local) input matrix to gather.
-        
+
         return_shared : bool, optional
             Whether the returned array is allowed to be a shared-memory array, which results
             in a small performance gain because the array used internally to gather the results
             can be returned directly. When `True` a shared memory handle is also returned, and
-            the caller assumes responsibilty for freeing the memory via 
+            the caller assumes responsibilty for freeing the memory via
             :function:`pygsti.tools.sharedmemtools.cleanup_shared_ndarray`.
 
         Returns
@@ -871,12 +871,12 @@ class DistributedArraysInterface(ArraysInterface):
         ----------
         jtf : numpy.array or LocalNumpyArray
             The local input vector to gather.
-        
+
         return_shared : bool, optional
             Whether the returned array is allowed to be a shared-memory array, which results
             in a small performance gain because the array used internally to gather the results
             can be returned directly. When `True` a shared memory handle is also returned, and
-            the caller assumes responsibilty for freeing the memory via 
+            the caller assumes responsibilty for freeing the memory via
             :function:`pygsti.tools.sharedmemtools.cleanup_shared_ndarray`.
 
         Returns
@@ -912,7 +912,7 @@ class DistributedArraysInterface(ArraysInterface):
         comm = self.resource_alloc.comm
         if comm is not None:
             to_scatter = [global_jtf[pslc] for pslc in self.layout.param_fine_slices_by_rank] \
-                         if (comm.rank == 0) else None
+                if (comm.rank == 0) else None
             jtf[:] = comm.scatter(to_scatter, root=0)
         else:
             jtf[:] = global_jtf
@@ -923,7 +923,7 @@ class DistributedArraysInterface(ArraysInterface):
 
         This is typically used within SVD-defined basis calculations, where `jac_v` is the "V"
         matrix of the SVD of a jacobian, and `minus_jtf` is the negative dot product between the Jacobian
-        matrix and objective function vector.  
+        matrix and objective function vector.
 
         Parameters
         ----------

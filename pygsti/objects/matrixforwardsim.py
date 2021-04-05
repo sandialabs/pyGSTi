@@ -866,8 +866,8 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         Each level of specification is optional, so this can be a 1-, 2-, or 3- tuple of
         integers (or None).  Multiplying the elements of `processor_grid` together should give
         at most the total number of processors.
-        
-    param_blk_sizes : tuple, optional 
+
+    param_blk_sizes : tuple, optional
         The parameter block sizes along the first or first & second parameter dimensions - so
         this can be a 0-, 1- or 2-tuple of integers or `None` values.  A block size of `None`
         means that there should be no division into blocks, and that each block processor
@@ -1286,7 +1286,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             #Special case: time dependent data that gets grouped & distributed by unique timestamp
             # To to this, we override above values of natoms, na, and npp:
             natoms = 1  # save all processor division for within the (single) atom, for different timestamps
-            na, npp = 1, (1, 1) # save all processor division for within the (single) atom, for different timestamps
+            na, npp = 1, (1, 1)  # save all processor division for within the (single) atom, for different timestamps
 
         printer.log("MatrixLayout: %d processors divided into %s (= %d) grid along circuit and parameter directions." %
                     (nprocs, ' x '.join(map(str, (na,) + npp)), _np.product((na,) + npp)))
@@ -1863,7 +1863,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         atom_resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory before we begin
 
         #Split timestamps up between processors - maybe do this in a time-dep layout?
-        all_timestamps = {i: t for i,t in enumerate(dataset.timestamps)}
+        all_timestamps = {i: t for i, t in enumerate(dataset.timestamps)}
         my_timestamp_inds, timestampOwners, timestamp_processing_ralloc = \
             _mpit.distribute_indices(list(range(len(all_timestamps))), atom_resource_alloc)
         shared_mem_leader = timestamp_processing_ralloc.is_host_leader
@@ -1924,7 +1924,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         param_resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory before we begin
 
         #Split timestamps up between processors - maybe do this in a time-dep layout?
-        all_timestamps = {i: t for i,t in enumerate(dataset.timestamps)}
+        all_timestamps = {i: t for i, t in enumerate(dataset.timestamps)}
         my_timestamp_inds, timestampOwners, timestamp_processing_ralloc = \
             _mpit.distribute_indices(list(range(len(all_timestamps))), param_resource_alloc)
         shared_mem_leader = timestamp_processing_ralloc.is_host_leader
@@ -1932,7 +1932,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         probs_array, probs_array_shm = _smt.create_shared_ndarray(timestamp_processing_ralloc,
                                                                   (layout.num_elements,), 'd')
         dprobs_array, dprobs_array_shm = _smt.create_shared_ndarray(timestamp_processing_ralloc,
-                                                                  (layout.num_elements, self.model.num_params), 'd')
+                                                                    (layout.num_elements, self.model.num_params), 'd')
         # Allocated this way b/c, e.g.,  say we have 4 procs on a single node and 2 timestamps: then
         # timestamp_processing_ralloc will have 2 procs and only the first will fill probs_array below since
         #_bulk_fill_probs_atom assumes it's given shared mem allocated using the resource alloc object it's given.

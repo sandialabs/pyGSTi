@@ -891,9 +891,9 @@ class ModelDatasetCircuitsStore(object):
             self.host_nparams2 = self.layout.host_num_params2
             self.nelements = _slct.length(self.layout.host_element_slice)  # just for *this* proc
             self.nparams = _slct.length(self.layout.host_param_slice) \
-                           if self.layout.host_param_slice else self.model.num_params
+                if self.layout.host_param_slice else self.model.num_params
             self.nparams2 = _slct.length(self.layout.host_param2_slice) \
-                            if self.layout.host_param2_slice else self.model.num_params
+                if self.layout.host_param2_slice else self.model.num_params
             assert(self.global_nparams is None or self.global_nparams == self.model.num_params)
         else:
             self.global_nelements = self.host_nelements = self.nelements = len(self.layout)
@@ -2738,12 +2738,8 @@ class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
             # remove small negative elements due to roundoff error (above expression *cannot* really be negative)
             terms = _np.maximum(terms, 0)
             # quadratic extrapolation of logl at min_p for probabilities < min_p
-            try:
-                terms = _np.where(probs < self.min_p,
-                                  terms + c0 * (probs - self.min_p) + c1 * (probs - self.min_p)**2, terms)
-            except FloatingPointError as e:
-                print("RANGES: ",(min(terms),max(terms)), (min(probs), max(probs)), " -- ", self.min_p, c0, c1)
-                raise e
+            terms = _np.where(probs < self.min_p,
+                              terms + c0 * (probs - self.min_p) + c1 * (probs - self.min_p)**2, terms)
         else:
             raise ValueError("Invalid regularization type: %s" % self.regtype)
 

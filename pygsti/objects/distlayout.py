@@ -99,7 +99,7 @@ class _DistributableAtom(object):
             The resource allocation object that the created layout should "own".  Atoms
             don't own resource allocation objects like layouts do, so this is needed to
             build an atom into a layout object.
-        
+
         Returns
         -------
         CircuitOutcomeProbabilityArrayLayout
@@ -120,7 +120,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
     which hold a slice that indexes the element dimension along with the necessary information
     (used by a forward simulator) to compute those elements.  This often includes the circuits
     and outcomes an atom's elements correspond to, and perhaps precomputed structures for speeding
-    up the circuit computation.  An atom-creating function is used to initialize a 
+    up the circuit computation.  An atom-creating function is used to initialize a
     :class:`DistributableCOPALayout`.
 
     Technical note: the atoms themselves determine which outcomes for each circuit are included in
@@ -134,14 +134,14 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
     atom-like object for the blocks, as there isn't any need to hold meta-data specific to a block.
     The size of the parameter-blocks is essentially constant along each parameter dimension, and specified
     by the `param_dimension_blk_sizes` argument.
-    
+
     Along each of the (possible) array dimensions, we also assign a number of atom (for the element
     dimension) or block (for the parameter dimensions) "processors".  These are *not* physical CPUs
     but are logical objects act by processing atoms or blocks, respectively.  A single atom processor
     is assigned one or *more* atoms to process, and similarly with block processors.
 
     The total number of physical processors, N, is arranged in a grid so that:
-    
+
     N = num_atom_processors x num_param1_processors x num_param2_processors
 
     This may restricts the allowed values of N is the number of atom/block processors is
@@ -220,7 +220,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
     num_atom_processors : int
         The number of "atom processors".  An atom processor is not a physical processor, but
         a group of physical processors that is assigned one or more of the atoms (see above).
-        
+
     num_param_dimension_processors : tuple, optional
         A 1- or 2-tuple of integers specifying how many parameter-block processors (again,
         not physical processors, but groups of processors that are assigned to parameter
@@ -592,7 +592,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
                 self.param_fine_slices_by_host = tuple([(rank_and_gps,) for rank_and_gps in enumerate(gpss)])
 
             self.param_fine_slices_by_rank = tuple(comm.allgather(self.global_param_fine_slice)) \
-                                             if (comm is not None) else [self.global_param_fine_slice]
+                if (comm is not None) else [self.global_param_fine_slice]
 
             self.owner_host_and_rank_of_global_fine_param_index = {}
             for host_index, ranks_and_pslices in enumerate(self.param_fine_slices_by_host):
@@ -1030,7 +1030,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         """
         Frees an array allocated by :method:`allocate_local_array`.
 
-        This method should always be paired with a call to 
+        This method should always be paired with a call to
         :method:`allocate_local_array`, since the allocated array
         may utilize shared memory, which must be explicitly de-allocated.
 
@@ -1085,7 +1085,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
             Whether the returned array is allowed to be a shared-memory array, which results
             in a small performance gain because the array used internally to gather the results
             can be returned directly. When `True` a shared memory handle is also returned, and
-            the caller assumes responsibilty for freeing the memory via 
+            the caller assumes responsibilty for freeing the memory via
             :function:`pygsti.tools.sharedmemtools.cleanup_shared_ndarray`.
 
         Returns

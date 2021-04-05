@@ -148,12 +148,12 @@ class CircuitOutcomeProbabilityArrayLayout(object):
 
         Returns
         -------
-        CircuitOutcomeProbabilityArrayLayout        
+        CircuitOutcomeProbabilityArrayLayout
         """
         circuits = circuits if isinstance(circuits, _CircuitList) else _CircuitList(circuits)
         unique_circuits, to_unique = cls._compute_unique_circuits(circuits)
         unique_complete_circuits = [model.complete_circuit(c) for c in unique_circuits] \
-                                   if (model is not None) else unique_circuits[:]
+            if (model is not None) else unique_circuits[:]
         ds_circuits = _lt.apply_aliases_to_circuits(unique_circuits, circuits.op_label_aliases)
 
         # Create a dict of the "present outcomes" of each circuit, defined as those outcomes
@@ -189,7 +189,7 @@ class CircuitOutcomeProbabilityArrayLayout(object):
         self.circuits = circuits if isinstance(circuits, _CircuitList) else _CircuitList(circuits)
         if unique_circuits is None and to_unique is None:
             unique_circuits, to_unique = self._compute_unique_circuits(circuits)
-        self._unique_circuits = unique_circuits 
+        self._unique_circuits = unique_circuits
         self._unique_circuit_index = _collections.OrderedDict(
             [(c, i) for i, c in enumerate(self._unique_circuits)])  # original circuits => unique circuit indices
         self._to_unique = to_unique  # original indices => unique circuit indices
@@ -235,7 +235,7 @@ class CircuitOutcomeProbabilityArrayLayout(object):
     def global_layout(self):
         """
         A layout containing all the circuits in their original order, that is the
-        same on all processors and doesn't depend on a specific resource allocation.        
+        same on all processors and doesn't depend on a specific resource allocation.
         This is either the layout itself or a larger layout that this layout is a part of.
         """
         return self  # default is that this object *is* a global layout
@@ -315,7 +315,7 @@ class CircuitOutcomeProbabilityArrayLayout(object):
         """
         Frees an array allocated by :method:`allocate_local_array`.
 
-        This method should always be paired with a call to 
+        This method should always be paired with a call to
         :method:`allocate_local_array`, since the allocated array
         may utilize shared memory, which must be explicitly de-allocated.
 
@@ -330,7 +330,8 @@ class CircuitOutcomeProbabilityArrayLayout(object):
         """
         pass
 
-    def gather_local_array_base(self, array_type, array_portion, extra_elements=0, all_gather=False, return_shared=False):
+    def gather_local_array_base(self, array_type, array_portion, extra_elements=0,
+                                all_gather=False, return_shared=False):
         """
         Gathers an array onto the root processor or all the processors..
 
@@ -366,7 +367,7 @@ class CircuitOutcomeProbabilityArrayLayout(object):
             Whether the returned array is allowed to be a shared-memory array, which results
             in a small performance gain because the array used internally to gather the results
             can be returned directly. When `True` a shared memory handle is also returned, and
-            the caller assumes responsibilty for freeing the memory via 
+            the caller assumes responsibilty for freeing the memory via
             :function:`pygsti.tools.sharedmemtools.cleanup_shared_ndarray`.
 
         Returns
@@ -564,7 +565,7 @@ class CircuitOutcomeProbabilityArrayLayout(object):
 
         dtype : numpy.dtype
             The NumPy data type for the array.
-        
+
         Returns
         -------
         int
@@ -647,7 +648,6 @@ class CircuitOutcomeProbabilityArrayLayout(object):
         index : int
             The index of a circuit within this layout, i.e., within `self.circuits`.
 
-        
         Returns
         -------
         slice
@@ -667,7 +667,6 @@ class CircuitOutcomeProbabilityArrayLayout(object):
         index : int
             The index of a circuit within this layout, i.e., within `self.circuits`.
 
-        
         Returns
         -------
         tuple
@@ -687,7 +686,6 @@ class CircuitOutcomeProbabilityArrayLayout(object):
         index : int
             The index of a circuit within this layout, i.e., within `self.circuits`.
 
-        
         Returns
         -------
         element_indices : slice

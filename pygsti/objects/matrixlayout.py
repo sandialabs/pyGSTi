@@ -39,7 +39,7 @@ class _MatrixCOPALayoutAtom(_DistributableAtom):
 
     circuits_by_unique_nospam_circuits : dict
        A dictionary with keys equal to the elements of `unique_nospam_circuits` and values
-       that are lists of indices into `unique_complete_circuits`.  Thus, this dictionary 
+       that are lists of indices into `unique_complete_circuits`.  Thus, this dictionary
        maps each distinct circuit-without-SPAM circuit to the list of complete circuits
        within `unique_complete_circuits` that correspond to it.
 
@@ -252,7 +252,7 @@ class MatrixCOPALayout(_DistributableCOPALayout):
         used when dividing the physical processors into a grid.  The first and second
         elements correspond to counts for the first and second parameter dimensions,
         respecively.
-        
+
     param_dimensions : tuple, optional
         The number of parameters along each parameter dimension.  Can be an
         empty, 1-, or 2-tuple of integers which dictates how many parameter dimensions this

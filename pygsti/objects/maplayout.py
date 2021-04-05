@@ -183,7 +183,7 @@ class MapCOPALayout(_DistributableCOPALayout):
         used when dividing the physical processors into a grid.  The first and second
         elements correspond to counts for the first and second parameter dimensions,
         respecively.
-        
+
     param_dimensions : tuple, optional
         The number of parameters along each parameter dimension.  Can be an
         empty, 1-, or 2-tuple of integers which dictates how many parameter dimensions this
@@ -243,7 +243,7 @@ class MapCOPALayout(_DistributableCOPALayout):
         # connect unique -> orig indices of final layout now that base class has created it
         # (don't do this before because the .circuits of this local layout may not be *all* the circuits,
         # or in the same order - this is only true in the *global* layout.
-        unique_to_orig = {unique_i: orig_i for orig_i, unique_i in self._to_unique.items()}  # unique => original indices
+        unique_to_orig = {unique_i: orig_i for orig_i, unique_i in self._to_unique.items()}  # unique => orig. indices
         for atom in self.atoms:
             for expanded_circuit_i, unique_i in atom.unique_indices_by_expcircuit.items():
                 atom.orig_indices_by_expcircuit[expanded_circuit_i] = unique_to_orig[unique_i]

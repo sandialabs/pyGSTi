@@ -29,7 +29,7 @@ def custom_solve(a, b, x, ari, resource_alloc, proc_threshold=100):
     This function was built to provide a parallel alternative to
     `scipy.linalg.solve`, and can achieve faster runtimes compared
     with the serial SciPy routine when the number of available processors
-    and problem size are large enough.  
+    and problem size are large enough.
 
     When the number of processors is greater than `proc_threshold` (below
     this number the routine just calls `scipy.linalg.solve` on the root
@@ -87,7 +87,7 @@ def custom_solve(a, b, x, ari, resource_alloc, proc_threshold=100):
 
     comm = resource_alloc.comm
     host_comm = resource_alloc.host_comm
-    ok_buf = _np.empty(1,int)
+    ok_buf = _np.empty(1, int)
 
     if comm is None or isinstance(ari, _UndistributedArraysInterface):
         x[:] = _scipy.linalg.solve(a, b, assume_a='pos')

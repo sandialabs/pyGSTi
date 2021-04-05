@@ -116,8 +116,8 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         Each level of specification is optional, so this can be a 1-, 2-, or 3- tuple of
         integers (or None).  Multiplying the elements of `processor_grid` together should give
         at most the total number of processors.
-        
-    param_blk_sizes : tuple, optional 
+
+    param_blk_sizes : tuple, optional
         The parameter block sizes along the first or first & second parameter dimensions - so
         this can be a 0-, 1- or 2-tuple of integers or `None` values.  A block size of `None`
         means that there should be no division into blocks, and that each block processor

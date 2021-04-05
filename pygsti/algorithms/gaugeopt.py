@@ -286,7 +286,7 @@ def gaugeopt_custom(model, objective_fn, gauge_group=None,
             _call_objective_fn, _call_jacobian_fn, x0, f_norm2_tol=tol,
             jac_norm_tol=tol, rel_ftol=tol, rel_xtol=tol,
             max_iter=maxiter, resource_alloc=ralloc,
-            distributed_qty_calc=_opt.UndistributedQuantityCalc(len(test_f), len(x0)),
+            arrays_interface=_opt.UndistributedArraysInterface(len(test_f), len(x0)),
             oob_check_interval=oob_check_interval,
             verbosity=printer.verbosity - 2)
         printer.log("Least squares message = %s" % msg, 2)

@@ -501,7 +501,7 @@ class ResourceAllocation(object):
         ----------
         local : int or float
             The local (per-processor) value to sum.
-        
+
         unit_ralloc : ResourceAllocation, optional
             A resource allocation (essentially a comm) for the group of processors that
             all compute the same local value, so that only the `unit_ralloc.rank == 0`
