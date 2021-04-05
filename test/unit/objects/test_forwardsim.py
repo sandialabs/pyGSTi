@@ -45,7 +45,7 @@ class AbstractForwardSimTester(BaseCase):
         with self.assertRaises(NotImplementedError):
             self.fwdsim.bulk_fill_hprobs(np.zeros((1,0,0)), layout)
 
-#    def test_bulk_hprobs_by_block(self):
+#    def test_iter_hprobs_by_rectangle(self):
 #        with self.assertRaises(NotImplementedError):
 #            self.fwdsim.bulk_fill_hprobs(None, None)
 
@@ -61,7 +61,7 @@ class ForwardSimBase(object):
 
     def setUp(self):
         self.fwdsim = self.model.sim
-        self.layout = self.fwdsim.create_layout([('Gx',), ('Gx', 'Gx')])
+        self.layout = self.fwdsim.create_layout([('Gx',), ('Gx', 'Gx')], array_types=('e', 'ep', 'epp'))
         self.nP = self.model.num_params
         self.nEls = self.layout.num_elements
 
@@ -71,9 +71,9 @@ class ForwardSimBase(object):
         # TODO assert correctness
 
     def test_bulk_fill_dprobs(self):
-        dmx = np.empty((self.nEls, 3), 'd')
+        dmx = np.empty((self.nEls, self.nP), 'd')
         pmx = np.empty(self.nEls, 'd')
-        self.fwdsim.bulk_fill_dprobs(dmx, self.layout, pr_array_to_fill=pmx, wrt_filter=[0, 1, 2])
+        self.fwdsim.bulk_fill_dprobs(dmx, self.layout, pr_array_to_fill=pmx)
         # TODO assert correctness
 
     def test_bulk_fill_dprobs_with_block_size(self):
@@ -82,24 +82,22 @@ class ForwardSimBase(object):
         # TODO assert correctness
 
     def test_bulk_fill_hprobs(self):
-        hmx = np.zeros((self.nEls, 3, 3), 'd')
-        dmx = np.zeros((self.nEls, 3), 'd')
+        hmx = np.zeros((self.nEls, self.nP, self.nP), 'd')
+        dmx = np.zeros((self.nEls, self.nP), 'd')
         pmx = np.zeros(self.nEls, 'd')
         self.fwdsim.bulk_fill_hprobs(hmx, self.layout,
-                                     pr_array_to_fill=pmx, deriv1_array_to_fill=dmx, deriv2_array_to_fill=dmx,
-                                     wrt_filter1=[0, 1, 2], wrt_filter2=[0, 1, 2])  # same slice on each deriv
+                                     pr_array_to_fill=pmx, deriv1_array_to_fill=dmx, deriv2_array_to_fill=dmx)
         # TODO assert correctness
 
-        hmx = np.zeros((self.nEls, 3, 2), 'd')
-        dmx1 = np.zeros((self.nEls, 3), 'd')
-        dmx2 = np.zeros((self.nEls, 2), 'd')
+        hmx = np.zeros((self.nEls, self.nP, self.nP), 'd')
+        dmx1 = np.zeros((self.nEls, self.nP), 'd')
+        dmx2 = np.zeros((self.nEls, self.nP), 'd')
         pmx = np.zeros(self.nEls, 'd')
         self.fwdsim.bulk_fill_hprobs(hmx, self.layout,
-                                     pr_array_to_fill=pmx, deriv1_array_to_fill=dmx1, deriv2_array_to_fill=dmx2,
-                                     wrt_filter1=[0, 1, 2], wrt_filter2=[2, 3])  # different slices on 1st vs. 2nd deriv
+                                     pr_array_to_fill=pmx, deriv1_array_to_fill=dmx1, deriv2_array_to_fill=dmx2)
         # TODO assert correctness
 
-    def test_bulk_hprobs_by_block(self):
+    def test_iter_hprobs_by_rectangle(self):
         # TODO optimize
         mx = np.zeros((self.nEls, self.nP, self.nP), 'd')
         dmx1 = np.zeros((self.nEls, self.nP), 'd')

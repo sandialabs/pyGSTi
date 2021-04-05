@@ -48,6 +48,7 @@ from .opcalc import compact_deriv as _compact_deriv, \
 
 TOL = 1e-12
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
+MAX_EXPONENT = _np.log(_np.finfo('d').max) - 10.0  # so that exp(.) doesn't overflow
 
 
 def optimize_operation(op_to_optimize, target_op):
@@ -1755,8 +1756,10 @@ class TPDenseOp(DenseOperator):
         -------
         None
         """
-        assert(self.base.shape == (self.dim, self.dim))
-        self.base[1:, :] = v.reshape((self.dim - 1, self.dim))
+        #assert(self.base.shape == (self.dim, self.dim))
+        #self.base[1:, :] = v.reshape((self.dim - 1, self.dim))
+        #self._rep.base[1:, :] = v.reshape((self.dim - 1, self.dim))  # faster than line above
+        self._rep.base.flat[self.dim:] = v  # faster still
         self.dirty = dirty_value
 
     def deriv_wrt_params(self, wrt_filter=None):
@@ -3989,7 +3992,8 @@ class LindbladOp(LinearOperator, _ErrorGeneratorContainer):
         #egttm = self.errorgen.total_term_magnitude
         #print("  DB: exp(", egttm, ") = ",_np.exp(egttm))
         #return _np.exp(egttm)
-        return _np.exp(self.errorgen.total_term_magnitude)
+        return _np.exp(min(self.errorgen.total_term_magnitude, MAX_EXPONENT))
+        #return _np.exp(self.errorgen.total_term_magnitude)  # overflows sometimes
 
     @property
     def total_term_magnitude_deriv(self):

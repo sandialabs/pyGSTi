@@ -20,11 +20,13 @@ from ..tools import slicetools as _slct
 from ..tools import basistools as _bt
 from ..tools import matrixtools as _mt
 from ..tools import mpitools as _mpit
+from ..tools import sharedmemtools as _smt
 from . import spamvec as _sv
 from . import operation as _op
 from . import labeldicts as _ld
 from .resourceallocation import ResourceAllocation as _ResourceAllocation
 from .copalayout import CircuitOutcomeProbabilityArrayLayout as _CircuitOutcomeProbabilityArrayLayout
+from .distlayout import DistributableCOPALayout as _DistributableCOPALayout
 from .cachedlayout import CachedCOPALayout as _CachedCOPALayout
 from .circuit import Circuit as _Circuit
 
@@ -40,16 +42,14 @@ class ForwardSimulator(object):
     -- parameterizations of operation matrices and SPAM vectors) access to these
     fundamental operations.  It also allows for the easier addition of new forward simulators.
 
+    Note: a model holds or "contains" a forward simulator instance to perform its computations,
+    and a forward simulator holds a reference to its parent model, so we need to make sure the
+    forward simulator doesn't serialize the model or we have a circular reference.
+
     Parameters
     ----------
-    dim : int
-        The model-dimension.  All operations act on a `dim`-dimensional Hilbert-Schmidt space.
-
-    layer_op_server : LayerLizard
-        An object that can be queried for circuit-layer operations.
-
-    paramvec : numpy.ndarray
-        The current parameter vector of the Model.
+    model : Model, optional
+        The model this forward simulator will use to compute circuit outcome probabilities.
     """
 
     @classmethod
@@ -58,8 +58,8 @@ class ForwardSimulator(object):
         if method_name == 'bulk_probs': return ('E',) + cls._array_types_for_method('bulk_fill_probs')
         if method_name == 'bulk_dprobs': return ('EP',) + cls._array_types_for_method('bulk_fill_dprobs')
         if method_name == 'bulk_hprobs': return ('EPP',) + cls._array_types_for_method('bulk_fill_hprobs')
-        if method_name == 'bulk_hprobs_by_block': return cls._array_types_for_method('_bulk_hprobs_by_block')
-        if method_name == '_bulk_hprobs_by_block': return ('epp',) + cls._array_types_for_method('bulk_fill_hprobs')
+        if method_name == 'iter_hprobs_by_rectangle': return cls._array_types_for_method('_iter_hprobs_by_rectangle')
+        if method_name == '_iter_hprobs_by_rectangle': return ('epp',) + cls._array_types_for_method('bulk_fill_hprobs')
         if method_name == 'bulk_fill_probs': return cls._array_types_for_method('_bulk_fill_probs_block')
         if method_name == 'bulk_fill_dprobs': return cls._array_types_for_method('_bulk_fill_dprobs_block')
         if method_name == 'bulk_fill_hprobs': return cls._array_types_for_method('_bulk_fill_hprobs_block')
@@ -71,21 +71,6 @@ class ForwardSimulator(object):
         return ()
 
     def __init__(self, model=None):
-        """
-        TODO: docstring
-        Construct a new ForwardSimulator object.
-
-        Parameters
-        ----------
-        dim : int
-            The model-dimension.  All operations act on a `dim`-dimensional Hilbert-Schmidt space.
-
-        layer_op_server : LayerLizard
-            An object that can be queried for circuit-layer operations.
-
-        paramvec : numpy.ndarray
-            The current parameter vector of the Model.
-        """
         #self.dim = model.dim
         self._model = model
 
@@ -184,8 +169,7 @@ class ForwardSimulator(object):
 
     def probs(self, circuit, outcomes=None, time=None):
         """
-        Construct a dictionary containing the outcome probabilities of `simplified_circuit`
-        #TODO: docstrings: simplified_circuit => circuit in routines **below**, similar to this one.
+        Construct a dictionary containing the outcome probabilities for a single circuit.
 
         Parameters
         ----------
@@ -205,13 +189,12 @@ class ForwardSimulator(object):
             A dictionary with keys equal to outcome labels and
             values equal to probabilities.
         """
-        copa_layout = self.create_layout([circuit])
+        copa_layout = self.create_layout([circuit], array_types=('e',))
         probs_array = _np.empty(copa_layout.num_elements, 'd')
         if time is None:
             self.bulk_fill_probs(probs_array, copa_layout)
         else:
-            resource_alloc = _ResourceAllocation.cast(None)
-            self._bulk_fill_probs_at_times(probs_array, copa_layout, [time], resource_alloc)
+            self._bulk_fill_probs_at_times(probs_array, copa_layout, [time])
 
         if _np.any(_np.isnan(probs_array)):
             to_print = str(circuit) if len(circuit) < 10 else str(circuit[0:10]) + " ... (len %d)" % len(circuit)
@@ -224,7 +207,22 @@ class ForwardSimulator(object):
         return probs
 
     def dprobs(self, circuit):
-        copa_layout = self.create_layout([circuit])
+        """
+        Construct a dictionary containing outcome probability derivatives for a single circuit.
+
+        Parameters
+        ----------
+        circuit : Circuit or tuple of operation labels
+            The sequence of operation labels specifying the circuit.
+
+        Returns
+        -------
+        dprobs : OutcomeLabelDict
+            A dictionary with keys equal to outcome labels and
+            values equal to an array containing the (partial) derivatives
+            of the outcome probability with respect to all model parameters.
+        """
+        copa_layout = self.create_layout([circuit], array_types=('ep',))
         dprobs_array = _np.empty((copa_layout.num_elements, self.model.num_params), 'd')
         self.bulk_fill_dprobs(dprobs_array, copa_layout)
 
@@ -235,7 +233,22 @@ class ForwardSimulator(object):
         return dprobs
 
     def hprobs(self, circuit):
-        copa_layout = self.create_layout([circuit])
+        """
+        Construct a dictionary containing outcome probability Hessians for a single circuit.
+
+        Parameters
+        ----------
+        circuit : Circuit or tuple of operation labels
+            The sequence of operation labels specifying the circuit.
+
+        Returns
+        -------
+        hprobs : OutcomeLabelDict
+            A dictionary with keys equal to outcome labels and
+            values equal to a 2D array that is the Hessian matrix for
+            the corresponding outcome probability (with respect to all model parameters).
+        """
+        copa_layout = self.create_layout([circuit], array_types=('epp',))
         hprobs_array = _np.empty((copa_layout.num_elements, self.model.num_params, self.model.num_params), 'd')
         self.bulk_fill_hprobs(hprobs_array, copa_layout)
 
@@ -267,6 +280,29 @@ class ForwardSimulator(object):
         resource_alloc : ResourceAllocation
             A available resources and allocation information.  These factors influence how
             the layout (evaluation strategy) is constructed.
+
+        array_types : tuple, optional
+            A tuple of string-valued array types, as given by
+            :method:`CircuitOutcomeProbabilityArrayLayout.allocate_local_array`.  These types determine
+            what types of arrays we anticipate computing using this layout (and forward simulator).  These
+            are used to check available memory against the limit (if it exists) within `resource_alloc`.
+            The array types also determine the number of derivatives that this layout is able to compute.
+            So, for example, if you ever want to compute derivatives or Hessians of element arrays then
+            `array_types` must contain at least one `'ep'` or `'epp'` type, respectively or the layout
+            will not allocate needed intermediate storage for derivative-containing types.  If you don't
+            care about accurate memory limits, use `('e',)` when you only ever compute probabilities and
+            never their derivatives, and `('e','ep')` or `('e','ep','epp')` if you need to compute
+            Jacobians or Hessians too.
+
+        derivative_dimensions : tuple, optional
+            A tuple containing, optionally, the parameter-space dimension used when taking first
+            and second derivatives with respect to the cirucit outcome probabilities.  This must be
+            have minimally 1 or 2 elements when `array_types` contains `'ep'` or `'epp'` types,
+            respectively.
+
+        verbosity : int or VerbosityPrinter
+            Determines how much output to send to stdout.  0 means no output, higher
+            integers mean more output.
 
         Returns
         -------
@@ -334,29 +370,29 @@ class ForwardSimulator(object):
         if isinstance(circuits, _CircuitOutcomeProbabilityArrayLayout):
             copa_layout = circuits
         else:
-            circuits = [c if isinstance(c, _Circuit) else _Circuit(c) for c in circuits]  # cast to Circuits (needed?)
-            copa_layout = self.create_layout(circuits, resource_alloc=resource_alloc)
+            copa_layout = self.create_layout(circuits, array_types=('e',), resource_alloc=resource_alloc)
+        global_layout = copa_layout.global_layout
 
         resource_alloc = _ResourceAllocation.cast(resource_alloc)
-        with resource_alloc.temporarily_track_memory(copa_layout.num_elements):  # 'E' (vp)
-            vp = _np.empty(copa_layout.num_elements, 'd')
+        with resource_alloc.temporarily_track_memory(global_layout.num_elements):  # 'E' (vp)
+            local_vp = copa_layout.allocate_local_array('e', 'd')
             if smartc:
-                smartc.cached_compute(self.bulk_fill_probs, vp, copa_layout,
-                                      resource_alloc, _filledarrays=(0,))
+                smartc.cached_compute(self.bulk_fill_probs, local_vp, copa_layout, _filledarrays=(0,))
             else:
-                self.bulk_fill_probs(vp, copa_layout, resource_alloc)
+                self.bulk_fill_probs(local_vp, copa_layout)
+            vp = copa_layout.gather_local_array('e', local_vp)  # gather data onto rank-0 processor
+            copa_layout.free_local_array(local_vp)
 
-            if clip_to is not None:
-                vp = _np.clip(vp, clip_to[0], clip_to[1])
+        if resource_alloc.comm is None or resource_alloc.comm.rank == 0:
+            ret = _collections.OrderedDict()
+            for elInds, c, outcomes in global_layout.iter_unique_circuits():
+                if isinstance(elInds, slice): elInds = _slct.indices(elInds)
+                ret[c] = _ld.OutcomeLabelDict([(outLbl, vp[ei]) for ei, outLbl in zip(elInds, outcomes)])
+            return ret
+        else:
+            return None  # on non-root ranks
 
-        ret = _collections.OrderedDict()
-        for elInds, c, outcomes in copa_layout.iter_unique_circuits():
-            if isinstance(elInds, slice): elInds = _slct.indices(elInds)
-            ret[c] = _ld.OutcomeLabelDict([(outLbl, vp[ei]) for ei, outLbl in zip(elInds, outcomes)])
-        return ret
-
-    def bulk_dprobs(self, circuits, resource_alloc=None, smartc=None,
-                    wrt_filter=None):
+    def bulk_dprobs(self, circuits, resource_alloc=None, smartc=None):
         """
         Construct a dictionary containing the probability derivatives for an entire list of circuits.
 
@@ -374,12 +410,6 @@ class ForwardSimulator(object):
             A cache object to cache & use previously cached values inside this
             function.
 
-        wrt_filter : list of ints, optional
-            If not None, a list of integers specifying which parameters
-            to include in the derivative dimension. This argument is used
-            internally for distributing calculations across multiple
-            processors and to control memory usage.
-
         Returns
         -------
         dprobs : dictionary
@@ -390,22 +420,27 @@ class ForwardSimulator(object):
         if isinstance(circuits, _CircuitOutcomeProbabilityArrayLayout):
             copa_layout = circuits
         else:
-            copa_layout = self.create_layout(circuits, resource_alloc=resource_alloc)
+            copa_layout = self.create_layout(circuits, array_types=('ep',), resource_alloc=resource_alloc)
+        global_layout = copa_layout.global_layout
 
         resource_alloc = _ResourceAllocation.cast(resource_alloc)
-        with resource_alloc.temporarily_track_memory(copa_layout.num_elements * self.model.num_params):  # 'EP' (vdp)
+        with resource_alloc.temporarily_track_memory(global_layout.num_elements * self.model.num_params):  # 'EP' (vdp)
             #Note: don't use smartc for now.
-            vdp = _np.empty((copa_layout.num_elements, self.model.num_params), 'd')
-            self.bulk_fill_dprobs(vdp, copa_layout, None, resource_alloc, wrt_filter)
+            local_vdp = copa_layout.allocate_local_array('ep', 'd')
+            self.bulk_fill_dprobs(local_vdp, copa_layout, None)
+            vdp = copa_layout.gather_local_array('ep', local_vdp)  # gather data onto rank-0 processor
+            copa_layout.free_local_array(local_vdp)
 
-        ret = _collections.OrderedDict()
-        for elInds, c, outcomes in copa_layout.iter_unique_circuits():
-            if isinstance(elInds, slice): elInds = _slct.indices(elInds)
-            ret[c] = _ld.OutcomeLabelDict([(outLbl, vdp[ei]) for ei, outLbl in zip(elInds, outcomes)])
-        return ret
+        if resource_alloc.comm_rank == 0:
+            ret = _collections.OrderedDict()
+            for elInds, c, outcomes in global_layout.iter_unique_circuits():
+                if isinstance(elInds, slice): elInds = _slct.indices(elInds)
+                ret[c] = _ld.OutcomeLabelDict([(outLbl, vdp[ei]) for ei, outLbl in zip(elInds, outcomes)])
+            return ret
+        else:
+            return None  # on non-root ranks
 
-    def bulk_hprobs(self, circuits, resource_alloc=None, smartc=None,
-                    wrt_filter1=None, wrt_filter2=None):
+    def bulk_hprobs(self, circuits, resource_alloc=None, smartc=None):
         """
         Construct a dictionary containing the probability Hessians for an entire list of circuits.
 
@@ -423,14 +458,6 @@ class ForwardSimulator(object):
             A cache object to cache & use previously cached values inside this
             function.
 
-        wrt_filter1 : list of ints, optional
-            If not None, a list of integers specifying which model parameters
-            to differentiate with respect to in the first (row) derivative operations.
-
-        wrt_filter2 : list of ints, optional
-            If not None, a list of integers specifying which model parameters
-            to differentiate with respect to in the second (col) derivative operations.
-
         Returns
         -------
         hprobs : dictionary
@@ -441,22 +468,27 @@ class ForwardSimulator(object):
         if isinstance(circuits, _CircuitOutcomeProbabilityArrayLayout):
             copa_layout = circuits
         else:
-            copa_layout = self.create_layout(circuits, resource_alloc=resource_alloc)
+            copa_layout = self.create_layout(circuits, array_types=('epp',), resource_alloc=resource_alloc)
+        global_layout = copa_layout.global_layout
 
         resource_alloc = _ResourceAllocation.cast(resource_alloc)
-        with resource_alloc.temporarily_track_memory(copa_layout.num_elements * self.model.num_params**2):  # 'EPP'(vhp)
+        with resource_alloc.temporarily_track_memory(global_layout.num_elements * self.model.num_params**2):  # 'EPP'
             #Note: don't use smartc for now.
-            vhp = _np.empty((copa_layout.num_elements, self.model.num_params, self.model.num_params), 'd')
-            self.bulk_fill_hprobs(vhp, copa_layout, None, None, None, resource_alloc,
-                                  wrt_filter1, wrt_filter1)
+            local_vhp = copa_layout.allocate_local_array('epp', 'd')
+            self.bulk_fill_hprobs(local_vhp, copa_layout, None, None, None)
+            vhp = copa_layout.gather_local_array('epp', local_vhp)  # gather data onto rank-0 processor
+            copa_layout.free_local_array(local_vhp)
 
-        ret = _collections.OrderedDict()
-        for elInds, c, outcomes in copa_layout.iter_unique_circuits():
-            if isinstance(elInds, slice): elInds = _slct.indices(elInds)
-            ret[c] = _ld.OutcomeLabelDict([(outLbl, vhp[ei]) for ei, outLbl in zip(elInds, outcomes)])
-        return ret
+        if resource_alloc.comm_rank == 0:
+            ret = _collections.OrderedDict()
+            for elInds, c, outcomes in global_layout.iter_unique_circuits():
+                if isinstance(elInds, slice): elInds = _slct.indices(elInds)
+                ret[c] = _ld.OutcomeLabelDict([(outLbl, vhp[ei]) for ei, outLbl in zip(elInds, outcomes)])
+            return ret
+        else:
+            return None  # on non-root ranks
 
-    def bulk_fill_probs(self, array_to_fill, layout, resource_alloc=None):
+    def bulk_fill_probs(self, array_to_fill, layout):
         """
         Compute the outcome probabilities for a list circuits.
 
@@ -477,36 +509,30 @@ class ForwardSimulator(object):
             A layout for `array_to_fill`, describing what circuit outcome each
             element corresponds to.  Usually given by a prior call to :method:`create_layout`.
 
-        resource_alloc : ResourceAllocation, optional
-            A resource allocation object describing the available resources and a strategy
-            for partitioning them.
-
         Returns
         -------
         None
         """
-        resource_alloc = _ResourceAllocation.cast(resource_alloc)
-        return self._bulk_fill_probs(array_to_fill, layout, resource_alloc)
+        return self._bulk_fill_probs(array_to_fill, layout)
 
-    def _bulk_fill_probs(self, array_to_fill, layout, resource_alloc):
-        return self._bulk_fill_probs_block(array_to_fill, layout, resource_alloc)
+    def _bulk_fill_probs(self, array_to_fill, layout):
+        return self._bulk_fill_probs_block(array_to_fill, layout)
 
-    def _bulk_fill_probs_block(self, array_to_fill, layout, resource_alloc):
+    def _bulk_fill_probs_block(self, array_to_fill, layout):
         for element_indices, circuit, outcomes in layout.iter_unique_circuits():
             self._compute_circuit_outcome_probabilities(array_to_fill[element_indices], circuit,
-                                                        outcomes, resource_alloc, time=None)
+                                                        outcomes, layout.resource_alloc(), time=None)
 
-    def _bulk_fill_probs_at_times(self, array_to_fill, layout, times, resource_alloc):
+    def _bulk_fill_probs_at_times(self, array_to_fill, layout, times):
         # A separate function because computation with time-dependence is often approached differently
-        return self._bulk_fill_probs_block_at_times(array_to_fill, layout, times, resource_alloc)
+        return self._bulk_fill_probs_block_at_times(array_to_fill, layout, times)
 
-    def _bulk_fill_probs_block_at_times(self, array_to_fill, layout, times, resource_alloc):
+    def _bulk_fill_probs_block_at_times(self, array_to_fill, layout, times):
         for (element_indices, circuit, outcomes), time in zip(layout.iter_unique_circuits(), times):
             self._compute_circuit_outcome_probabilities(array_to_fill[element_indices], circuit,
-                                                        outcomes, resource_alloc, time)
+                                                        outcomes, layout.resource_alloc(), time)
 
-    def bulk_fill_dprobs(self, array_to_fill, layout,
-                         pr_array_to_fill=None, resource_alloc=None, wrt_filter=None):
+    def bulk_fill_dprobs(self, array_to_fill, layout, pr_array_to_fill=None):
         """
         Compute the outcome probability-derivatives for an entire tree of circuits.
 
@@ -531,33 +557,21 @@ class ForwardSimulator(object):
             when not None, an already-allocated length-`len(layout)` numpy array that is
             filled with probabilities, just as in :method:`bulk_fill_probs`.
 
-        resource_alloc : ResourceAllocation, optional
-            A resource allocation object describing the available resources and a strategy
-            for partitioning them.
-o
-        wrt_filter : list of ints, optional
-            If not None, a list of integers specifying which parameters
-            to include in the derivative dimension. This argument is used
-            internally for distributing calculations across multiple
-            processors and to control memory usage.
-
         Returns
         -------
         None
         """
-        resource_alloc = _ResourceAllocation.cast(resource_alloc)
-        return self._bulk_fill_dprobs(array_to_fill, layout, pr_array_to_fill, resource_alloc, wrt_filter)
+        return self._bulk_fill_dprobs(array_to_fill, layout, pr_array_to_fill)
 
-    def _bulk_fill_dprobs(self, array_to_fill, layout, pr_array_to_fill, resource_alloc, wrt_filter):
-        if wrt_filter is not None:
-            wrt_filter = _slct.list_to_slice(wrt_filter)  # for now, require the filter specify a slice
+    def _bulk_fill_dprobs(self, array_to_fill, layout, pr_array_to_fill):
         if pr_array_to_fill is not None:
-            self._bulk_fill_probs_block(pr_array_to_fill, layout, resource_alloc)
-        return self._bulk_fill_dprobs_block(array_to_fill, None, layout, wrt_filter, resource_alloc)
+            self._bulk_fill_probs_block(pr_array_to_fill, layout)
+        return self._bulk_fill_dprobs_block(array_to_fill, None, layout, None)
 
-    def _bulk_fill_dprobs_block(self, array_to_fill, dest_param_slice, layout, param_slice, resource_alloc):
+    def _bulk_fill_dprobs_block(self, array_to_fill, dest_param_slice, layout, param_slice):
 
         #If _compute_circuit_outcome_probability_derivatives is implemented, use it!
+        resource_alloc = layout.resource_alloc()
         try:
             for element_indices, circuit, outcomes in layout.iter_unique_circuits():
                 self._compute_circuit_outcome_probability_derivatives(
@@ -578,7 +592,7 @@ o
         iParamToFinal = {i: dest_param_indices[ii] for ii, i in enumerate(param_indices)}
 
         probs = _np.empty(len(layout), 'd')
-        self._bulk_fill_probs_block(probs, layout, resource_alloc)
+        self._bulk_fill_probs_block(probs, layout)
 
         probs2 = _np.empty(len(layout), 'd')
         orig_vec = self.model.to_vector().copy()
@@ -592,8 +606,7 @@ o
         self.model.from_vector(orig_vec, close=True)
 
     def bulk_fill_hprobs(self, array_to_fill, layout,
-                         pr_array_to_fill=None, deriv1_array_to_fill=None, deriv2_array_to_fill=None,
-                         resource_alloc=None, wrt_filter1=None, wrt_filter2=None):
+                         pr_array_to_fill=None, deriv1_array_to_fill=None, deriv2_array_to_fill=None):
         """
         Compute the outcome probability-Hessians for an entire list of circuits.
 
@@ -625,54 +638,29 @@ o
             that is filled with probability derivatives, similar to
             :method:`bulk_fill_dprobs` (see `array_to_fill` for a definition of `M2`).
 
-        resource_alloc : ResourceAllocation, optional
-            A resource allocation object describing the available resources and a strategy
-            for partitioning them.
-
-        wrt_filter1 : list of ints, optional
-            If not None, a list of integers specifying which model parameters
-            to differentiate with respect to in the first (row) derivative operations.
-
-        wrt_filter2 : list of ints, optional
-            If not None, a list of integers specifying which model parameters
-            to differentiate with respect to in the second (col) derivative operations.
-
         Returns
         -------
         None
         """
-        resource_alloc = _ResourceAllocation.cast(resource_alloc)
         return self._bulk_fill_hprobs(array_to_fill, layout, pr_array_to_fill,
-                                      deriv1_array_to_fill, deriv2_array_to_fill,
-                                      resource_alloc, wrt_filter1, wrt_filter2)
+                                      deriv1_array_to_fill, deriv2_array_to_fill)
 
     def _bulk_fill_hprobs(self, array_to_fill, layout,
-                          pr_array_to_fill, deriv1_array_to_fill, deriv2_array_to_fill,
-                          resource_alloc, wrt_filter1, wrt_filter2):
-        if wrt_filter1 is not None:
-            wrtSlice1 = _slct.list_to_slice(wrt_filter1)  # for now, require the filter specify a slice
-        else:
-            wrtSlice1 = None
-
-        if wrt_filter2 is not None:
-            wrtSlice2 = _slct.list_to_slice(wrt_filter2)  # for now, require the filter specify a slice
-        else:
-            wrtSlice2 = None
-
+                          pr_array_to_fill, deriv1_array_to_fill, deriv2_array_to_fill):
         if pr_array_to_fill is not None:
-            self._bulk_fill_probs_block(pr_array_to_fill, layout, resource_alloc)
+            self._bulk_fill_probs_block(pr_array_to_fill, layout)
         if deriv1_array_to_fill is not None:
-            self._bulk_fill_dprobs_block(deriv1_array_to_fill, None, layout, wrtSlice1, resource_alloc)
+            self._bulk_fill_dprobs_block(deriv1_array_to_fill, None, layout, None)
         if deriv2_array_to_fill is not None:
-            if wrtSlice1 == wrtSlice2:
-                deriv2_array_to_fill[:, :] = deriv1_array_to_fill[:, :]
-            else:
-                self._bulk_fill_dprobs_block(deriv2_array_to_fill, None, layout, wrtSlice2, resource_alloc)
+            #if wrtSlice1 == wrtSlice2:
+            deriv2_array_to_fill[:, :] = deriv1_array_to_fill[:, :]
+            #else:
+            #    self._bulk_fill_dprobs_block(deriv2_array_to_fill, None, layout, None)
 
-        return self._bulk_fill_hprobs_block(array_to_fill, None, None, layout, wrtSlice1, wrtSlice2, resource_alloc)
+        return self._bulk_fill_hprobs_block(array_to_fill, None, None, layout, None, None)
 
     def _bulk_fill_hprobs_block(self, array_to_fill, dest_param_slice1, dest_param_slice2, layout,
-                                param_slice1, param_slice2, resource_alloc):
+                                param_slice1, param_slice2):
         eps = 1e-4  # hardcoded?
         if param_slice1 is None: param_slice1 = slice(0, self.model.num_params)
         if param_slice2 is None: param_slice2 = slice(0, self.model.num_params)
@@ -690,7 +678,7 @@ o
 
         nP2 = len(param_indices2)
         dprobs = _np.empty((len(layout), nP2), 'd')
-        self._bulk_fill_dprobs_block(dprobs, None, layout, param_slice2, resource_alloc)
+        self._bulk_fill_dprobs_block(dprobs, None, layout, param_slice2)
 
         dprobs2 = _np.empty((len(layout), nP2), 'd')
         orig_vec = self.model.to_vector().copy()
@@ -699,21 +687,20 @@ o
                 iFinal = iParamToFinal[i]
                 vec = orig_vec.copy(); vec[i] += eps
                 self.model.from_vector(vec, close=True)
-                self._bulk_fill_dprobs_block(dprobs2, None, layout, param_slice2, resource_alloc)
+                self._bulk_fill_dprobs_block(dprobs2, None, layout, param_slice2)
                 array_to_fill[:, iFinal, dest_param_slice2] = (dprobs2 - dprobs) / eps
         self.model.from_vector(orig_vec, close=True)
 
-    def bulk_hprobs_by_block(self, layout, wrt_slices_list,
-                             return_dprobs_12=False, resource_alloc=None):
+    def iter_hprobs_by_rectangle(self, layout, wrt_slices_list,
+                                 return_dprobs_12=False):
         """
-        An iterator that computes 2nd derivatives of the `eval_tree`'s circuit probabilities column-by-column.
+        Iterates over the 2nd derivatives of a layout's circuit probabilities one rectangle at a time.
 
         This routine can be useful when memory constraints make constructing
-        the entire Hessian at once impractical, and one is able to compute
-        reduce results from a single column of the Hessian at a time.  For
-        example, the Hessian of a function of many gate sequence probabilities
-        can often be computed column-by-column from the using the columns of
-        the circuits.
+        the entire Hessian at once impractical, and as it only computes a subset of
+        the Hessian's rows and colums (a "rectangle") at once.  For example, the
+        Hessian of a function of many circuit probabilities can often be computed
+        rectangle-by-rectangle and without the need to ever store the entire Hessian at once.
 
         Parameters
         ----------
@@ -723,8 +710,8 @@ o
 
         wrt_slices_list : list
             A list of `(rowSlice,colSlice)` 2-tuples, each of which specify
-            a "block" of the Hessian to compute.  Iterating over the output
-            of this function iterates over these computed blocks, in the order
+            a "rectangle" of the Hessian to compute.  Iterating over the output
+            of this function iterates over these computed rectangles, in the order
             given by `wrt_slices_list`.  `rowSlice` and `colSlice` must by Python
             `slice` objects.
 
@@ -737,36 +724,40 @@ o
             Hessian, and turns out to be useful when computing the Hessian
             of functions of the probabilities.
 
-        resource_alloc : ResourceAllocation, optional
-            A resource allocation object describing the available resources and a strategy
-            for partitioning them.
-
         Returns
         -------
-        TODO: docstring - this is outdated!
-        block_generator
+        rectangle_generator
             A generator which, when iterated, yields the 3-tuple
-            `(rowSlice, colSlice, hprobs)` or `(rowSlice, colSlice, dprobs12)`
+            `(rowSlice, colSlice, hprobs)` or `(rowSlice, colSlice, hprobs, dprobs12)`
             (the latter if `return_dprobs_12 == True`).  `rowSlice` and `colSlice`
             are slices directly from `wrt_slices_list`. `hprobs` and `dprobs12` are
-            arrays of shape K x S x B x B', where:
+            arrays of shape E x B x B', where:
 
-            - K is the length of spam_label_rows,
-            - S is the number of circuits (i.e. eval_tree.num_final_circuits()),
+            - E is the length of layout elements
             - B is the number of parameter rows (the length of rowSlice)
             - B' is the number of parameter columns (the length of colSlice)
 
             If `mx`, `dp1`, and `dp2` are the outputs of :func:`bulk_fill_hprobs`
             (i.e. args `mx_to_fill`, `deriv1_mx_to_fill`, and `deriv2_mx_to_fill`), then:
 
-            - `hprobs == mx[:,:,rowSlice,colSlice]`
-            - `dprobs12 == dp1[:,:,rowSlice,None] * dp2[:,:,None,colSlice]`
+            - `hprobs == mx[:,rowSlice,colSlice]`
+            - `dprobs12 == dp1[:,rowSlice,None] * dp2[:,None,colSlice]`
         """
-        yield from self._bulk_hprobs_by_block(layout, wrt_slices_list, return_dprobs_12, resource_alloc)
+        yield from self._iter_hprobs_by_rectangle(layout, wrt_slices_list, return_dprobs_12)
 
-    def _bulk_hprobs_by_block(self, layout, wrt_slices_list, return_dprobs_12, resource_alloc):
+    def _iter_hprobs_by_rectangle(self, layout, wrt_slices_list, return_dprobs_12):
+        # under distributed layout each proc already has a local set of parameter slices, and
+        # this routine could just compute parts of that piecemeal so we never compute an entire
+        # proc's hprobs (may be too large) - so I think this function signature may still be fine,
+        # but need to construct wrt_slices_list from global slices assigned to it by the layout.
+        # (note the values in the wrt_slices_list must be global param indices - just not all of them)
 
-        nElements = len(layout)
+        #REMOVE  - a distributed layout should be using a DistributablsForwardSimulator that overrides this.
+        #if isinstance(layout, _DistributableCOPALayout):  # gather data onto rank-0 processor
+        #    nElements = layout.host_num_elements
+        #else:
+
+        nElements = len(layout)  # (global number of elements, though "global" isn't really defined)
 
         #NOTE: don't override this method in DistributableForwardSimulator
         # by a method that distributes wrt_slices_list across comm procs,
@@ -779,15 +770,18 @@ o
 
             if return_dprobs_12:
                 dprobs1 = _np.zeros((nElements, _slct.length(wrtSlice1)), 'd')
-                dprobs2 = _np.zeros((nElements, _slct.length(wrtSlice2)), 'd')
+                self._bulk_fill_dprobs_block(dprobs1, None, layout, wrtSlice1)
+
+                if wrtSlice1 == wrtSlice2:
+                    dprobs2 = dprobs1
+                else:
+                    dprobs2 = _np.zeros((nElements, _slct.length(wrtSlice2)), 'd')
+                    self._bulk_fill_dprobs_block(dprobs2, None, layout, wrtSlice2)
             else:
                 dprobs1 = dprobs2 = None
-            hprobs = _np.zeros((nElements, _slct.length(wrtSlice1),
-                                _slct.length(wrtSlice2)), 'd')
 
-            self.bulk_fill_hprobs(hprobs, layout, None, dprobs1, dprobs2, resource_alloc,
-                                  wrt_filter1=_slct.indices(wrtSlice1),
-                                  wrt_filter2=_slct.indices(wrtSlice2))
+            hprobs = _np.zeros((nElements, _slct.length(wrtSlice1), _slct.length(wrtSlice2)), 'd')
+            self._bulk_fill_hprobs_block(hprobs, None, None, layout, wrtSlice1, wrtSlice2)
 
             if return_dprobs_12:
                 dprobs12 = dprobs1[:, :, None] * dprobs2[:, None, :]  # (KM,N,1) * (KM,1,N') = (KM,N,N')
@@ -798,7 +792,7 @@ o
 
 class CacheForwardSimulator(ForwardSimulator):
     """
-    A forward simulator that works with :class:`CachedCOPALayout` layouts.
+    A forward simulator that works with non-distributed :class:`CachedCOPALayout` layouts.
 
     This is just a small addition to :class:`ForwardSimulator`, adding a
     persistent cache passed to new derived-class-overridable compute routines.
@@ -807,12 +801,12 @@ class CacheForwardSimulator(ForwardSimulator):
     def create_layout(self, circuits, dataset=None, resource_alloc=None,
                       array_types=(), derivative_dimensions=None, verbosity=0):
         """
-        Constructs an circuit-outcome-probability-array (COPA) layout for `circuits` and `dataset`.
+        Constructs an circuit-outcome-probability-array (COPA) layout for a list of circuits.
 
         Parameters
         ----------
         circuits : list
-            The circuits whose outcome probabilities should be computed.
+            The circuits whose outcome probabilities should be included in the layout.
 
         dataset : DataSet
             The source of data counts that will be compared to the circuit outcome
@@ -822,6 +816,19 @@ class CacheForwardSimulator(ForwardSimulator):
         resource_alloc : ResourceAllocation
             A available resources and allocation information.  These factors influence how
             the layout (evaluation strategy) is constructed.
+
+        array_types : tuple, optional
+            A tuple of string-valued array types.  See :method:`ForwardSimulator.create_layout`.
+
+        derivative_dimensions : tuple, optional
+            A tuple containing, optionally, the parameter-space dimension used when taking first
+            and second derivatives with respect to the cirucit outcome probabilities.  This must be
+            have minimally 1 or 2 elements when `array_types` contains `'ep'` or `'epp'` types,
+            respectively.
+
+        verbosity : int or VerbosityPrinter
+            Determines how much output to send to stdout.  0 means no output, higher
+            integers mean more output.
 
         Returns
         -------
@@ -835,15 +842,16 @@ class CacheForwardSimulator(ForwardSimulator):
         return _CachedCOPALayout.create_from(circuits, self.model, dataset, derivative_dimensions, cache)
 
     # Override these two functions to plumb `cache` down to _compute* methods
-    def _bulk_fill_probs_block(self, array_to_fill, layout, resource_alloc):
+    def _bulk_fill_probs_block(self, array_to_fill, layout):
         for element_indices, circuit, outcomes, cache in layout.iter_unique_circuits_with_cache():
             self._compute_circuit_outcome_probabilities_with_cache(array_to_fill[element_indices], circuit,
-                                                                   outcomes, resource_alloc, cache, time=None)
+                                                                   outcomes, layout.resource_alloc(), cache, time=None)
 
-    def _bulk_fill_dprobs_block(self, array_to_fill, dest_param_slice, layout, param_slice, resource_alloc):
+    def _bulk_fill_dprobs_block(self, array_to_fill, dest_param_slice, layout, param_slice):
         for element_indices, circuit, outcomes, cache in layout.iter_unique_circuits_with_cache():
             self._compute_circuit_outcome_probability_derivatives_with_cache(
-                array_to_fill[element_indices, dest_param_slice], circuit, outcomes, param_slice, resource_alloc, cache)
+                array_to_fill[element_indices, dest_param_slice], circuit, outcomes, param_slice,
+                layout.resource_alloc(), cache)
 
     def _compute_circuit_outcome_probabilities_with_cache(self, array_to_fill, circuit, outcomes, resource_alloc,
                                                           cache, time=None):
@@ -856,32 +864,35 @@ class CacheForwardSimulator(ForwardSimulator):
         raise NotImplementedError("Derived classes can implement this to speed up derivative computation")
 
 
-def _bytes_for_array_type(array_type, total_elements, max_per_processor_elements,
-                          total_circuits, max_per_processor_circuits,
-                          derivative_dimensions, max_per_processor_derivative_dimensions,
+def _bytes_for_array_type(array_type, global_elements, max_local_elements, max_atom_size,
+                          total_circuits, max_local_circuits,
+                          global_num_params, max_local_num_params, max_param_block_size,
                           max_per_processor_cachesize, dim, dtype='d'):
     bytes_per_item = _np.dtype(dtype).itemsize
 
     size = 1; cur_deriv_dim = 0
     for letter in array_type:
-        if letter == 'E': size *= total_elements
-        if letter == 'e': size *= max_per_processor_elements
+        if letter == 'E': size *= global_elements
+        if letter == 'e': size *= max_local_elements
+        if letter == 'a': size *= max_atom_size
         if letter == 'C': size *= total_circuits
-        if letter == 'c': size *= max_per_processor_circuits
+        if letter == 'c': size *= max_local_circuits
         if letter == 'P':
-            size *= derivative_dimensions[cur_deriv_dim]; cur_deriv_dim += 1
+            size *= global_num_params[cur_deriv_dim]; cur_deriv_dim += 1
         if letter == 'p':
-            size *= max_per_processor_derivative_dimensions[cur_deriv_dim]; cur_deriv_dim += 1
+            size *= max_local_num_params[cur_deriv_dim]; cur_deriv_dim += 1
+        if letter == 'b':
+            size *= max_param_block_size[cur_deriv_dim]; cur_deriv_dim += 1
         if letter == 'z': size *= max_per_processor_cachesize
         if letter == 'd': size *= dim
     return size * bytes_per_item
 
 
-def _bytes_for_array_types(array_types, total_elements, max_per_processor_elements,
-                           total_circuits, max_per_processor_circuits,
-                           derivative_dimensions, max_per_processor_derivative_dimensions,
+def _bytes_for_array_types(array_types, global_elements, max_local_elements, max_atom_size,
+                           total_circuits, max_local_circuits,
+                           global_num_params, max_local_num_params, max_param_block_size,
                            max_per_processor_cachesize, dim, dtype='d'):  # cache is only local to processors
-    return sum([_bytes_for_array_type(array_type, total_elements, max_per_processor_elements,
-                                      total_circuits, max_per_processor_circuits,
-                                      derivative_dimensions, max_per_processor_derivative_dimensions,
+    return sum([_bytes_for_array_type(array_type, global_elements, max_local_elements, max_atom_size,
+                                      total_circuits, max_local_circuits,
+                                      global_num_params, max_local_num_params, max_param_block_size,
                                       max_per_processor_cachesize, dim, dtype) for array_type in array_types])

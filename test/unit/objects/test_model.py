@@ -409,7 +409,7 @@ class SimMethodBase(object):
         # TODO assert correctness
 
     def test_bulk_fill_dprobs(self):
-        layout = self.model.sim.create_layout([self.gatestring1, self.gatestring2])
+        layout = self.model.sim.create_layout([self.gatestring1, self.gatestring2], array_types=('ep',))
         nElements = layout.num_elements
         nParams = self.model.num_params
         dprobs_to_fill = np.empty((nElements, nParams), 'd')
@@ -427,7 +427,7 @@ class SimMethodBase(object):
     def test_bulk_fill_dprobs_with_high_smallness_threshold(self):
         # TODO figure out better way to do this
         with smallness_threshold(10):
-            layout = self.model.sim.create_layout([self.gatestring1, self.gatestring2])
+            layout = self.model.sim.create_layout([self.gatestring1, self.gatestring2], array_types=('ep',))
             nElements = layout.num_elements
             nParams = self.model.num_params
             dprobs_to_fill = np.empty((nElements, nParams), 'd')
@@ -464,7 +464,7 @@ class SimMethodBase(object):
         ## TODO assert correctness
 
     def test_bulk_fill_hprobs(self):
-        layout = self.model.sim.create_layout([self.gatestring1, self.gatestring2])
+        layout = self.model.sim.create_layout([self.gatestring1, self.gatestring2], array_types=('epp',))
         nElements = layout.num_elements
         nParams = self.model.num_params
 
@@ -490,7 +490,7 @@ class SimMethodBase(object):
     def test_bulk_fill_hprobs_with_high_smallness_threshold(self):
         # TODO figure out better way to do this
         with smallness_threshold(10):
-            layout = self.model.sim.create_layout([self.gatestring1, self.gatestring2])
+            layout = self.model.sim.create_layout([self.gatestring1, self.gatestring2], array_types=('epp',))
             nElements = layout.num_elements
             nParams = self.model.num_params
             hprobs_to_fill = np.empty((nElements, nParams, nParams), 'd')
@@ -509,14 +509,14 @@ class SimMethodBase(object):
         self.model.bulk_fill_hprobs(hprobs_to_fill, evt)
         # TODO assert correctness
 
-    def test_bulk_hprobs_by_block(self):
-        layout = self.model.sim.create_layout([self.gatestring1, self.gatestring2])
+    def test_iter_hprobs_by_rectangle(self):
+        layout = self.model.sim.create_layout([self.gatestring1, self.gatestring2], array_types=('epp',))
         nP = self.model.num_params
 
         hcols = []
         d12cols = []
         slicesList = [(slice(0, nP), slice(i, i + 1)) for i in range(nP)]
-        for s1, s2, hprobs_col, dprobs12_col in self.model.sim.bulk_hprobs_by_block(
+        for s1, s2, hprobs_col, dprobs12_col in self.model.sim.iter_hprobs_by_rectangle(
                 layout, slicesList, True):
             hcols.append(hprobs_col)
             d12cols.append(dprobs12_col)
@@ -629,7 +629,7 @@ class StaticModelTester(StaticModelBase, StandardMethodBase, BaseCase):
     def test_bulk_fill_hprobs_with_high_smallness_threshold(self):
         self.skipTest("TODO should probably warn user?")
 
-    def test_bulk_hprobs_by_block(self):
+    def test_iter_hprobs_by_rectangle(self):
         self.skipTest("TODO should probably warn user?")
 
 

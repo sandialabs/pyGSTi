@@ -624,7 +624,8 @@ def run_gst_fit(mdc_store, optimizer, objective_function_builder, verbosity=0):
 
     objective_function_builder : ObjectiveFunctionBuilder
         Defines the objective function that is optimized.  Can also be anything
-        readily converted to an objective function builder, e.g. `"logl"`.
+        readily converted to an objective function builder, e.g. `"logl"`.  If
+        `None`, then `mdc_store` must itself be an already-built objective function.
 
     verbosity : int, optional
         How much detail to send to stdout.
@@ -654,14 +655,20 @@ def run_gst_fit(mdc_store, optimizer, objective_function_builder, verbosity=0):
     #MEM debug_prof = Profiler(comm)
     #MEM debug_prof.print_memory("run_gst_fit1", True)
 
-    objective_function_builder = _objs.ObjectiveFunctionBuilder.cast(objective_function_builder)
-    #MEM debug_prof.print_memory("run_gst_fit2", True)
-    objective = objective_function_builder.build_from_store(mdc_store, printer)  # (objective is *also* a store)
-    #MEM debug_prof.print_memory("run_gst_fit3", True)
+    if objective_function_builder is not None:
+        objective_function_builder = _objs.ObjectiveFunctionBuilder.cast(objective_function_builder)
+        #MEM debug_prof.print_memory("run_gst_fit2", True)
+        objective = objective_function_builder.build_from_store(mdc_store, printer)  # (objective is *also* a store)
+        #MEM debug_prof.print_memory("run_gst_fit3", True)
+    else:
+        assert(isinstance(mdc_store, _objfns.ObjectiveFunction)), \
+            "When `objective_function_builder` is None, `mdc_store` must be an objective fn!"
+        objective = mdc_store
+
     profiler.add_time("run_gst_fit: pre-opt", tStart)
     printer.log("--- %s GST ---" % objective.name, 1)
 
-    #Step 3: solve least squares minimization problem
+    # Solve least squares minimization problem
     if isinstance(objective.model.sim, _TermFSim):  # could have used mdc_store.model (it's the same model)
         opt_result = _do_term_runopt(objective, optimizer, printer)
     else:
@@ -730,7 +737,7 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
         of the i-th iteration.
     optimums : list of OptimizerResults
         list whose i-th element is the final optimizer result from that iteration.
-    final_store : MDSObjectiveFunction
+    final_objfn : MDSObjectiveFunction
         The final iteration's objective function / store, which encapsulated the final objective
         function evaluated at the best-fit point (an "evaluated" model-dataSet-circuits store).
     """
@@ -744,7 +751,7 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
     mdl = start_model.copy(); nIters = len(circuit_lists)
     tStart = _time.time()
     tRef = tStart
-    final_store = None
+    final_objfn = None
 
     iteration_objfn_builders = [_objs.ObjectiveFunctionBuilder.cast(ofb) for ofb in iteration_objfn_builders]
     final_objfn_builders = [_objs.ObjectiveFunctionBuilder.cast(ofb) for ofb in final_objfn_builders]
@@ -776,8 +783,9 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
             array_types = optimizer.array_types + \
                 _max_array_types([builder.compute_array_types(method_names, mdl.sim)
                                   for builder in iteration_objfn_builders + final_objfn_builders])
-            mdc_store = _objs.ModelDatasetCircuitsStore(mdl, dataset, circuitsToEstimate, resource_alloc,
-                                                        array_types=array_types, verbosity=printer - 1)
+            initial_mdc_store = _objs.ModelDatasetCircuitsStore(mdl, dataset, circuitsToEstimate, resource_alloc,
+                                                                array_types=array_types, verbosity=printer - 1)
+            mdc_store = initial_mdc_store
 
             for j, obj_fn_builder in enumerate(iteration_objfn_builders):
                 tNxt = _time.time()
@@ -795,16 +803,19 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
                 for j, obj_fn_builder in enumerate(final_objfn_builders):
                     tNxt = _time.time()
                     mdl.basis = start_model.basis
-                    opt_result, mdl = run_gst_fit(mdc_store, optimizer, obj_fn_builder, printer - 1)
+                    opt_result, mdc_store = run_gst_fit(mdc_store, optimizer, obj_fn_builder, printer - 1)
                     profiler.add_time('run_iterative_gst: final %s opt' % obj_fn_builder.name, tNxt)
 
                 tNxt = _time.time()
                 printer.log("Final optimization took %.1fs\n" % (tNxt - tRef), 2)
                 tRef = tNxt
 
-                #send final cache back to caller to facilitate more operations on the final (model, circuits, dataset)
-                final_store = mdc_store
                 models.append(mdc_store.model)  # don't copy so `mdc_store.model` *is* the final model, `models[-1]`
+
+                # send final objfn object back to caller to facilitate postproc  on the final (model, circuits, dataset)
+                # Note: initial_mdc_store is *not* an objective fn (it's just a store) so don't send it back.
+                if mdc_store is not initial_mdc_store:
+                    final_objfn = mdc_store
             else:
                 models.append(mdc_store.model.copy())
 
@@ -812,7 +823,7 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
 
     printer.log('Iterative GST Total Time: %.1fs' % (_time.time() - tStart))
     profiler.add_time('run_iterative_gst: total time', tStart)
-    return models, optimums, final_store
+    return models, optimums, final_objfn
 
 
 def _do_runopt(objective, optimizer, printer):
@@ -846,11 +857,11 @@ def _do_runopt(objective, optimizer, printer):
 
     #Perform actual optimization
     tm = _time.time()
-    opt_result = optimizer.run(objective, resource_alloc.comm, profiler, printer)
+    opt_result = optimizer.run(objective, profiler, printer)
     profiler.add_time("run_gst_fit: optimize", tm)
 
     if printer.verbosity > 0:
-        nModelParams = mdl.num_modeltest_params
+        nModelParams = mdl.num_params  # *don't* use num_modeltest_params here because it could be very slow
 
         #Get number of maximal-model parameter ("dataset params") if needed for print messages
         # -> number of independent parameters in dataset (max. model # of params)
@@ -862,7 +873,7 @@ def _do_runopt(objective, optimizer, printer):
         desc = objective.description
         # reject GST model if p-value < threshold (~0.05?)
         pvalue = 1.0 - _stats.chi2.cdf(chi2_k_qty, nDataParams - nModelParams)
-        printer.log("%s = %g (%d data params - %d model params = expected mean of %g; p-value = %g)" %
+        printer.log("%s = %g (%d data params - %d (approx) model params = expected mean of %g; p-value = %g)" %
                     (desc, chi2_k_qty, nDataParams, nModelParams, nDataParams - nModelParams, pvalue), 1)
 
     return opt_result
@@ -909,14 +920,12 @@ def _do_term_runopt(objective, optimizer, printer):
     #assume a path set has already been chosen, (one should have been chosen when layout was created)
     layout = objective.layout
 
-    resource_alloc = objective.resource_alloc
-    pathSet = layout.pathset(resource_alloc.comm)
+    pathSet = layout.pathset
     if pathSet:  # only some types of term "modes" (see fwdsim.mode) use path-sets
         pathFraction = pathSet.allowed_path_fraction
 
         objective.lsvec()  # ensure objective.probs initialized
-        bSufficient = fwdsim.bulk_test_if_paths_are_sufficient(layout, objective.probs,
-                                                               objective.resource_alloc, verbosity=0)
+        bSufficient = fwdsim.bulk_test_if_paths_are_sufficient(layout, objective.probs, verbosity=0)
 
         printer.log("Initial Term-stage model has %d failures and uses %.1f%% of allowed paths (ok=%s)." %
                     (pathSet.num_failures, 100 * pathFraction, str(bSufficient)))
@@ -927,15 +936,14 @@ def _do_term_runopt(objective, optimizer, printer):
             mdl.from_vector(0.9 * mdl.to_vector())  # contract paramvector toward zero
 
             #Adapting the path set doesn't seem necessary (and takes time), but we could do this:
-            #new_pathSet = mdl.sim.find_minimal_paths_set(layout, resource_alloc)  # `mdl.sim` instead of `fwdsim` to
+            #new_pathSet = mdl.sim.find_minimal_paths_set(layout)  # `mdl.sim` instead of `fwdsim` to
             #mdl.sim.select_paths_set(layout, new_pathSet, resource_alloc)  # ensure paramvec is updated
             #pathFraction = pathSet.allowed_path_fraction
             #printer.log("  After adapting paths, num failures = %d, %.1f%% of allowed paths used." %
             #            (pathSet.num_failures, 100 * pathFraction))
 
             obj_val = objective.fn()  # ensure objective.probs initialized
-            bSufficient = fwdsim.bulk_test_if_paths_are_sufficient(layout, objective.probs,
-                                                                   objective.resource_alloc, verbosity=0)
+            bSufficient = fwdsim.bulk_test_if_paths_are_sufficient(layout, objective.probs, verbosity=0)
             printer.log("Looking for initial model where paths are sufficient: |paramvec| = %g, obj=%g (ok=%s)"
                         % (_np.linalg.norm(mdl.to_vector()), obj_val, str(bSufficient)))
     else:
@@ -964,9 +972,9 @@ def _do_term_runopt(objective, optimizer, printer):
         else:
             # Try to get more paths if we can and use those regardless of whether there are failures
             #MEM debug_prof.print_memory("do_term_runopt3", True)
-            pathSet = mdl.sim.find_minimal_paths_set(layout, resource_alloc)  # `mdl.sim` instead of `fwdsim` to
+            pathSet = mdl.sim.find_minimal_paths_set(layout)  # `mdl.sim` instead of `fwdsim` to
             #MEM debug_prof.print_memory("do_term_runopt4", True)
-            mdl.sim.select_paths_set(layout, pathSet, resource_alloc)  # ensure paramvec is updated
+            mdl.sim.select_paths_set(layout, pathSet)  # ensure paramvec is updated
             #MEM debug_prof.print_memory("do_term_runopt5", True)
             pathFraction = pathSet.allowed_path_fraction
             optimizer.init_munu = opt_result.optimizer_specific_qtys['mu'], opt_result.optimizer_specific_qtys['nu']

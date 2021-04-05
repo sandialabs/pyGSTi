@@ -2085,8 +2085,16 @@ cdef vector[DMEffectCRep*] convert_ereps(ereps):
     return c_ereps
 
 
-def DM_mapfill_probs_block(fwdsim, np.ndarray[double, mode="c", ndim=1] array_to_fill,
-                           dest_indices, layout_atom, comm):
+def DM_mapfill_probs_atom(fwdsim, np.ndarray[double, mode="c", ndim=1] array_to_fill,
+                          dest_indices, layout_atom, resource_alloc):
+
+    # The required ending condition is that array_to_fill on each processor has been filled.  But if
+    # memory is being shared and resource_alloc contains multiple processors on a single host, we only
+    # want *one* (the rank=0) processor to perform the computation, since array_to_fill will be
+    # shared memory that we don't want to have muliple procs using simultaneously to compute the
+    # same thing.  Thus, we carefully guard any shared mem updates/usage
+    # using "if shared_mem_leader" (and barriers, if needed) below.
+    shared_mem_leader = resource_alloc.is_host_leader if (resource_alloc is not None) else True
 
     dest_indices = _slct.to_array(dest_indices)  # make sure this is an array and not a slice
     #dest_indices = np.ascontiguousarray(dest_indices) #unneeded
@@ -2099,7 +2107,7 @@ def DM_mapfill_probs_block(fwdsim, np.ndarray[double, mode="c", ndim=1] array_to
     ereps = [fwdsim.model._circuit_layer_operator(elbl, 'povm')._rep for elbl in layout_atom.full_effect_labels]  # cache these in future
 
     # convert to C-mode:  evaltree, operation_lookup, operationreps
-    cdef c_layout_atom = convert_maplayout(layout_atom, operation_lookup, rho_lookup)
+    cdef vector[vector[INT]] c_layout_atom = convert_maplayout(layout_atom, operation_lookup, rho_lookup)
     cdef vector[DMStateCRep*] c_rhos = convert_rhoreps(rhoreps)
     cdef vector[DMEffectCRep*] c_ereps = convert_ereps(ereps)
     cdef vector[DMOpCRep*] c_opreps = convert_opreps(operationreps)
@@ -2112,10 +2120,15 @@ def DM_mapfill_probs_block(fwdsim, np.ndarray[double, mode="c", ndim=1] array_to
     cdef vector[vector[INT]] final_indices_per_circuit = convert_and_wrap_dict_of_intlists(
         layout_atom.elindices_by_expcircuit, dest_indices)
 
-    dm_mapfill_probs(array_to_fill, c_layout_atom, c_opreps, c_rhos, c_ereps, &rho_cache,
-                     elabel_indices_per_circuit, final_indices_per_circuit, fwdsim.model.dim, comm)
+    if shared_mem_leader:
+        #Note: dm_mapfill_probs could have taken a resource_alloc to employ multiple cpus to do computation.
+        # Since array_fo_fill is assumed to be shared mem it would need to only update `array_to_fill` *if*
+        # it were the host leader.
+        dm_mapfill_probs(array_to_fill, c_layout_atom, c_opreps, c_rhos, c_ereps, &rho_cache,
+                         elabel_indices_per_circuit, final_indices_per_circuit, fwdsim.model.dim)
 
     free_rhocache(rho_cache)  #delete cache entries
+    #REMOVE if resource_alloc.comm is not None: resource_alloc.comm.barrier()  # ??
 
 
 cdef dm_mapfill_probs(double[:] array_to_fill,
@@ -2125,7 +2138,7 @@ cdef dm_mapfill_probs(double[:] array_to_fill,
                       vector[DMStateCRep*]* prho_cache,
                       vector[vector[INT]] elabel_indices_per_circuit,
                       vector[vector[INT]] final_indices_per_circuit,
-                      INT dim, comm): # any way to transmit comm?
+                      INT dim):
 
     #Note: we need to take in rho_cache as a pointer b/c we may alter the values its
     # elements point to (instead of copying the states) - we just guarantee that in the end
@@ -2210,13 +2223,14 @@ cdef dm_mapfill_probs(double[:] array_to_fill,
     del shelved
 
 
-def DM_mapfill_dprobs_block(fwdsim,
-                            np.ndarray[double, mode="c", ndim=2] array_to_fill,
-                            dest_indices,
-                            dest_param_indices,
-                            layout_atom, param_indices, comm):
+def DM_mapfill_dprobs_atom(fwdsim,
+                           np.ndarray[double, ndim=2] array_to_fill,
+                           dest_indices,
+                           dest_param_indices,
+                           layout_atom, param_indices, resource_alloc):
 
     cdef double eps = 1e-7 #hardcoded?
+    #REMOVE if resource_alloc.comm is not None: resource_alloc.comm.barrier()  # ??
 
     if param_indices is None:
         param_indices = list(range(fwdsim.model.num_params))
@@ -2226,8 +2240,9 @@ def DM_mapfill_dprobs_block(fwdsim,
     param_indices = _slct.to_array(param_indices)
     dest_param_indices = _slct.to_array(dest_param_indices)
 
-    dest_indices = _slct.to_array(dest_indices)  # make sure this is an array and not a slice
-    dest_indices = np.ascontiguousarray(dest_indices)
+    #TODO REMOVE: it seems fine, and even beneficial, that dest_indices is a slice
+    #dest_indices = _slct.to_array(dest_indices)  # make sure this is an array and not a slice
+    #dest_indices = np.ascontiguousarray(dest_indices)
 
     #Get (extension-type) representation objects
     # NOTE: the circuit_layer_operator(lbl) functions cache the returned operation
@@ -2241,7 +2256,7 @@ def DM_mapfill_dprobs_block(fwdsim,
     ereps = [fwdsim.model._circuit_layer_operator(elbl, 'povm')._rep for elbl in layout_atom.full_effect_labels]  # cache these in future
 
     # convert to C-mode:  evaltree, operation_lookup, operationreps
-    cdef c_layout_atom = convert_maplayout(layout_atom, operation_lookup, rho_lookup)
+    cdef vector[vector[INT]] c_layout_atom = convert_maplayout(layout_atom, operation_lookup, rho_lookup)
     cdef vector[DMStateCRep*] c_rhos = convert_rhoreps(rhoreps)
     cdef vector[DMEffectCRep*] c_ereps = convert_ereps(ereps)
     cdef vector[DMOpCRep*] c_opreps = convert_opreps(operationreps)
@@ -2254,39 +2269,45 @@ def DM_mapfill_dprobs_block(fwdsim,
     cdef vector[vector[INT]] elabel_indices_per_circuit = convert_dict_of_intlists(layout_atom.elbl_indices_by_expcircuit)
     cdef vector[vector[INT]] final_indices_per_circuit = convert_dict_of_intlists(layout_atom.elindices_by_expcircuit)
 
-    all_slices, my_slice, owners, subComm = \
-        _mpit.distribute_slice(slice(0, len(param_indices)), comm)
+    #REMOVE - we don't do any further distribution here
+    #all_slices, my_slice, owners, sub_resource_alloc = \
+    #    _mpit.distribute_slice(slice(0, len(param_indices)), resource_alloc)
+    #my_param_indices = param_indices[my_slice]
+    #st = my_slice.start  # beginning of where my_param_indices results get placed into dpr_cache
 
-    my_param_indices = param_indices[my_slice]
-    st = my_slice.start  # beginning of where my_param_indices results get placed into dpr_cache
-
-    #Get a map from global parameter indices to the desired
-    # final index within array_to_fill (fpoffset = final parameter offset)
-    iParamToFinal = {i: dest_param_indices[st + ii] for ii, i in enumerate(my_param_indices)}
-
+    #REMOVE if sub_resource_alloc.comm is None or sub_resource_alloc.comm.rank == 0:  # only compute on 0th rank
     orig_vec = fwdsim.model.to_vector().copy()
     fwdsim.model.from_vector(orig_vec, close=False)  # ensure we call with close=False first
 
     nEls = layout_atom.num_elements
     probs = np.empty(nEls, 'd') #must be contiguous!
     probs2 = np.empty(nEls, 'd') #must be contiguous!
-    dm_mapfill_probs(probs, c_layout_atom, c_opreps, c_rhos, c_ereps, &rho_cache,
-                     elabel_indices_per_circuit, final_indices_per_circuit, fwdsim.model.dim, subComm)
 
+    dm_mapfill_probs(probs, c_layout_atom, c_opreps, c_rhos, c_ereps, &rho_cache,
+                     elabel_indices_per_circuit, final_indices_per_circuit, fwdsim.model.dim)
+
+    shared_mem_leader = resource_alloc.is_host_leader
+
+    #Get a map from global parameter indices to the desired
+    # final index within array_to_fill
+    iParamToFinal = {i: dest_index for i, dest_index in zip(param_indices, dest_param_indices)}
+    
     for i in range(fwdsim.model.num_params):
         #print("dprobs cache %d of %d" % (i,self.Np))
         if i in iParamToFinal:
             iFinal = iParamToFinal[i]
             vec = orig_vec.copy(); vec[i] += eps
             fwdsim.model.from_vector(vec, close=True)
-            dm_mapfill_probs(probs2, c_layout_atom, c_opreps, c_rhos, c_ereps, &rho_cache,
-                             elabel_indices_per_circuit, final_indices_per_circuit, fwdsim.model.dim, subComm)
-            _fas(array_to_fill, [dest_indices, iFinal], (probs2 - probs) / eps)
+            #Note: dm_mapfill_probs could have taken a resource_alloc to employ multiple cpus to do computation.
+            # If probs2 were shared mem (seems not benefit to this?) it would need to only update `probs2` *if*
+            # it were the host leader.
+            if shared_mem_leader:  # don't fill assumed-shared array-to_fill on non-mem-leaders
+                dm_mapfill_probs(probs2, c_layout_atom, c_opreps, c_rhos, c_ereps, &rho_cache,
+                                 elabel_indices_per_circuit, final_indices_per_circuit, fwdsim.model.dim)
+                #_fas(array_to_fill, [dest_indices, iFinal], (probs2 - probs) / eps)  # I don't think this is needed
+                array_to_fill[dest_indices, iFinal] = (probs2 - probs) / eps
+
     fwdsim.model.from_vector(orig_vec, close=True)
-
-    #Now each processor has filled the relavant parts of array_to_fill, so gather together:
-    _mpit.gather_slices(all_slices, owners, array_to_fill, [], axes=1, comm=comm)
-
     free_rhocache(rho_cache)  #delete cache entries
 
 
@@ -2392,11 +2413,13 @@ def DM_mapfill_TDterms(fwdsim, objective, array_to_fill, dest_indices, num_outco
         N = 0; nOutcomes = 0
 
         if outcomes_cache is not None:  # calling dataset.outcomes can be a bottleneck
-            if iDest in outcomes_cache:
-                outcomes = outcomes_cache[iDest]
+            # need to base cache on this b/c same iDest for different atoms corresponds to different circuits!
+            iOrig = layout_atom.orig_indices_by_expcircuit[iDest]
+            if iOrig in outcomes_cache:
+                outcomes = outcomes_cache[iOrig]
             else:
                 outcomes = datarow.outcomes
-                outcomes_cache[iDest] = outcomes
+                outcomes_cache[iOrig] = outcomes
         else:
             outcomes = datarow.outcomes
 

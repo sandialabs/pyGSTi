@@ -274,7 +274,8 @@ def logl_per_circuit(model, dataset, circuits=None,
         obj.terms()  # objfn used within wildcard objective fn must be pre-evaluated
         obj = _objfns.LogLWildcardFunction(obj, model.to_vector(), wildcard)
 
-    return obj_max.percircuit() - obj.percircuit()
+    local = obj_max.percircuit() - obj.percircuit()
+    return obj.layout.allgather_local_array('c', local)
 
 
 def logl_jacobian(model, dataset, circuits=None,
@@ -346,7 +347,8 @@ def logl_jacobian(model, dataset, circuits=None,
     obj = _objfns._objfn(obj_cls, model, dataset, circuits,
                          regularization, {'prob_clip_interval': prob_clip_interval},
                          op_label_aliases, comm, mem_limit, ('jacobian',), (), mdc_store, verbosity)
-    return -obj.jacobian()  # negative b/c objective is deltaLogL = max_logl - logL
+    local = -obj.jacobian()  # negative b/c objective is deltaLogL = max_logl - logL
+    return obj.layout.allgather_local_array('ep', local)
 
 
 def logl_hessian(model, dataset, circuits=None,
@@ -419,7 +421,8 @@ def logl_hessian(model, dataset, circuits=None,
     obj = _objfns._objfn(obj_cls, model, dataset, circuits,
                          regularization, {'prob_clip_interval': prob_clip_interval},
                          op_label_aliases, comm, mem_limit, ('hessian',), (), mdc_store, verbosity)
-    return -obj.hessian()  # negative b/c objective is deltaLogL = max_logl - logL
+    local = -obj.hessian()  # negative b/c objective is deltaLogL = max_logl - logL
+    return obj.layout.allgather_local_array('epp', local)
 
 
 def logl_approximate_hessian(model, dataset, circuits=None,
@@ -504,7 +507,8 @@ def logl_approximate_hessian(model, dataset, circuits=None,
                           'radius': radius},
                          {'prob_clip_interval': prob_clip_interval},
                          op_label_aliases, comm, mem_limit, ('approximate_hessian',), (), mdc_store, verbosity)
-    return -obj.approximate_hessian()  # negative b/c objective is deltaLogL = max_logl - logL
+    local = -obj.approximate_hessian()  # negative b/c objective is deltaLogL = max_logl - logL
+    return obj.layout.allgather_local_array('epp', local)
 
 
 def logl_max(model, dataset, circuits=None, poisson_picture=True,
@@ -547,7 +551,7 @@ def logl_max(model, dataset, circuits=None, poisson_picture=True,
     """
     obj_max = _objfns._objfn(_objfns.MaxLogLFunction, model, dataset, circuits, mdc_store=mdc_store,
                              op_label_aliases=op_label_aliases, poisson_picture=poisson_picture, method_names=('fn',))
-    return obj_max.fn()
+    return obj_max.fn()  # gathers internally
 
 
 def logl_max_per_circuit(model, dataset, circuits=None,
@@ -591,7 +595,8 @@ def logl_max_per_circuit(model, dataset, circuits=None,
     obj_max = _objfns._objfn(_objfns.MaxLogLFunction, model, dataset, circuits, mdc_store=mdc_store,
                              op_label_aliases=op_label_aliases, poisson_picture=poisson_picture,
                              method_names=('percircuit',))
-    return obj_max.percircuit()
+    local = obj_max.percircuit()
+    return obj_max.layout.allgather_local_array('c', local)
 
 
 def two_delta_logl_nsigma(model, dataset, circuits=None,
@@ -758,7 +763,7 @@ def two_delta_logl(model, dataset, circuits=None,
         obj.terms()  # objfn used within wildcard objective fn must be pre-evaluated
         obj = _objfns.LogLWildcardFunction(obj, model.to_vector(), wildcard)
 
-    two_delta_logl = 2 * obj.fn()
+    two_delta_logl = 2 * obj.fn()  # gathers internally
 
     if dof_calc_method is None:
         return two_delta_logl
@@ -871,7 +876,7 @@ def two_delta_logl_per_circuit(model, dataset, circuits=None,
         obj.percircuit()  # objfn used within wildcard objective fn must be pre-evaluated
         obj = _objfns.LogLWildcardFunction(obj, model.to_vector(), wildcard)
 
-    two_dlogl_percircuit = 2 * obj.percircuit()
+    two_dlogl_percircuit = 2 * obj.layout.allgather_local_array('c', obj.percircuit())
 
     if dof_calc_method is None: return two_dlogl_percircuit
     elif dof_calc_method == "all": mdl_dof = model.num_params

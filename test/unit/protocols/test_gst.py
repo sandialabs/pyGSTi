@@ -71,7 +71,8 @@ class GSTUtilTester(BaseCase):
         badfit_opts = gst.GSTBadFitOptions(threshold=-10, actions=("robust", "Robust", "robust+", "Robust+",
                                                                    "wildcard", "do nothing"))
         res = self.results.copy()
-        gst._add_badfit_estimates(res, 'test-estimate', badfit_opts, builder, opt)
+        res.estimates['test-estimate'].parameters['final_objfn_builder'] = builder
+        gst._add_badfit_estimates(res, 'test-estimate', badfit_opts, opt)
         estimate_names = set(res.estimates.keys())
         self.assertEqual(estimate_names, set(['test-estimate',
                                               'test-estimate.robust', 'test-estimate.Robust',

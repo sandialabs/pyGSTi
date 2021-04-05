@@ -292,10 +292,10 @@ class TimeIndependentMDSObjectiveFunctionTester(ObjectiveFunctionData):
 
     def test_value(self):
         for objfn in self.objfns:
-            terms = objfn.terms()
+            terms = objfn.terms().copy()
 
             if self.computes_lsvec:
-                lsvec = objfn.lsvec()
+                lsvec = objfn.lsvec().copy()
                 self.assertArraysAlmostEqual(lsvec**2, terms)
 
     def test_derivative(self):
@@ -333,7 +333,7 @@ class TimeIndependentMDSObjectiveFunctionTester(ObjectiveFunctionData):
 
         for objfn in self.objfns:
             try:
-                hessian = objfn.hessian()
+                hessian = objfn.hessian().copy()
             except NotImplementedError:
                 continue  # ok if hessian is not always implemented
 

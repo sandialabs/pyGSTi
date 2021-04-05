@@ -29,7 +29,7 @@ from ..objects import wildcardbudget as _wild
 from ..objects.profiler import DummyProfiler as _DummyProfiler
 from ..objects import objectivefns as _objfns
 from ..objects.advancedoptions import GSTAdvancedOptions as _GSTAdvancedOptions
-from ..objects.termforwardsim import TermForwardSimulator as _TermFSim
+from ..objects.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
 
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]
 DEFAULT_BAD_FIT_THRESHOLD = 2.0
@@ -786,7 +786,7 @@ def _get_gst_builders(advanced_options):
 
 def _get_optimizer(advanced_options, exp_design):
     advanced_options = advanced_options or {}
-    default_fditer = 0 if isinstance(exp_design.target_model.sim, _TermFSim) else 1
+    default_fditer = 1 if isinstance(exp_design.target_model.sim, _MatrixFSim) else 0
     optimizer = {'maxiter': advanced_options.get('max_iterations', 100000),
                  'tol': advanced_options.get('tolerance', 1e-6),
                  'fditer': advanced_options.get('finitediff_iterations', default_fditer)}
