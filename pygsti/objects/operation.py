@@ -6803,7 +6803,7 @@ class CliffordOp(LinearOperator):
         s += " and vector " + _mt.mx_to_string(self.svector, width=2, prec=0)
         return s
 
-
+# TODO: Unify this with StochasticNoiseOp somehow? May need to split into StochasticDense and not
 class StochasticCHPOp(LinearOperator):
     """
     A probabilistic Clifford operation represented by lists of CHP operations.
@@ -6835,13 +6835,16 @@ class StochasticCHPOp(LinearOperator):
         else:
             self.rand_state = _RandomState(seed_or_state)
 
-        native_ops_list = []
+        self.stochastic_ops = []
         for chp_ops in chp_ops_list:
             ops = self._get_native_ops(chp_ops, nqubits, custom_chp_gates)
 
-            native_ops_list.append(ops)
+            self.stochastic_ops.append(ops)
+        
+        #Setup initial parameters
+        self.params = probs
 
-        rep = replib.StochasticCHPOpRep(native_ops_list, probs, nqubits)
+        rep = replib.StochasticCHPOpRep(self.stochastic_ops, self.params, nqubits)
         LinearOperator.__init__(self, rep, "chp")
     
     @property
@@ -6939,6 +6942,64 @@ class StochasticCHPOp(LinearOperator):
                 sanitized_ops.append(' '.join([nat_op] + op_targets))
 
         return sanitized_ops
+    
+    def _update_rep(self):
+        self._rep.ops_list[:] = self.stochastic_ops
+        self._rep.probs[:] = self.params
+
+    @property
+    def num_params(self):
+        """
+        Get the number of independent parameters which specify this operation.
+
+        Returns
+        -------
+        int
+            the number of independent parameters.
+        """
+        return len(self.to_vector())
+
+    def to_vector(self):
+        """
+        Extract a vector of the underlying operation parameters from this operation.
+
+        If only one possible op, returns empty list since this actually has 0 free parameters,
+        i.e. sum(p_i) = 1 should hold
+
+        Returns
+        -------
+        numpy array
+            a 1D numpy array with length == num_params().
+        """
+        return self.params if len(self.params) > 1 else []
+
+    def from_vector(self, v, close=False, dirty_value=True):
+        """
+        Initialize the operation using a vector of parameters.
+
+        Parameters
+        ----------
+        v : numpy array
+            The 1D vector of operation parameters.  Length
+            must == num_params()
+
+        close : bool, optional
+            Whether `v` is close to this operation's current
+            set of parameters.  Under some circumstances, when this
+            is true this call can be completed more quickly.
+
+        dirty_value : bool, optional
+            The value to set this object's "dirty flag" to before exiting this
+            call.  This is passed as an argument so it can be updated *recursively*.
+            Leave this set to `True` unless you know what you're doing.
+
+        Returns
+        -------
+        None
+        """
+        self.params[:] = v
+        self._update_rep()
+        self.dirty = dirty_value
 
     def __str__(self):
         """Return string representation"""

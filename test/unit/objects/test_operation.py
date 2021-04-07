@@ -771,3 +771,53 @@ class DepolarizeOpTester(BaseCase):
         rho = _create_spam_vector([4], ['Q0'], "0", 'pp')
         # b/c both X and Y dephasing rates => 0.01 reduction
         self.assertAlmostEqual(float(np.dot(rho.T, np.dot(dop.to_dense(), rho))), 0.98)
+
+
+class StochasticCHPOpTester(BaseCase):
+    def test_chp_op(self):
+        # Test constructor/representation
+        cop = op.CHPOp(['h 0', 'c 1 2'], 3)
+        self.assertEqual(cop._rep.ops_list[0], ['h 0', 'c 1 2'])
+        self.assertEqual(cop._rep.probs[0], 1.0)
+        self.assertEqual(cop._rep.nqubits, 3)
+        self.assertEqual(cop._rep.dim, 2**3)
+
+        # Test string output
+        self.assertEqual(cop.get_chp_str(), 'h 0\nc 1 2\n')
+        self.assertEqual(cop.get_chp_str([3, 5, 7]), 'h 3\nc 5 7\n')
+
+        # Test std gatename parsing
+        Gx_manual = op.CHPOp(['h 0', 'p 0', 'p 0', 'h 0'], 1)
+        Gx_gatename = op.CHPOp('Gxpi 0', 1)
+        self.assertEqual(Gx_manual._rep.ops_list, Gx_gatename._rep.ops_list)
+    
+    def test_stochastic_chp_op(self):
+        # Test constructor/representation
+        scop = op.StochasticCHPOp(['Gxpi 0', 'Gc20 0'], [0.2, 0.8], 1, seed_or_state=2021)
+        self.assertEqual(scop._rep.ops_list, [['h 0', 'p 0', 'p 0', 'h 0'], ['p 0', 'h 0', 'p 0', 'p 0', 'h 0']])
+        self.assertEqual(scop._rep.probs, [0.2, 0.8])
+        self.assertEqual(scop._rep.nqubits, 1)
+        self.assertEqual(scop._rep.dim, 2**1)
+
+        # Test string output (with this seed, expect Gc20, Gc20, Gxpi, Gc20)
+        self.assertEqual(scop.get_chp_str(), 'p 0\nh 0\np 0\np 0\nh 0\n')
+        self.assertEqual(scop.get_chp_str([1]), 'p 1\nh 1\np 1\np 1\nh 1\n')
+        self.assertEqual(scop.get_chp_str([2]), 'h 2\np 2\np 2\nh 2\n')
+        self.assertEqual(scop.get_chp_str([10]), 'p 10\nh 10\np 10\np 10\nh 10\n')
+    
+    def test_composed_chp_op(self):
+        Gxx_chp = op.CHPOp(['Gxpi 0', 'Gxpi 1'], 2)
+        Gxx_composed = op.ComposedOp([op.CHPOp('Gxpi 0', 2), op.CHPOp('Gxpi 1', 2)])
+        self.assertEqual(Gxx_chp.get_chp_str(), Gxx_composed.get_chp_str())
+        self.assertEqual(Gxx_chp.get_chp_str([1,2]), Gxx_composed.get_chp_str([1,2]))
+    
+    def test_embedded_chp_op(self):
+        Gxi_chp = op.CHPOp('Gxpi 0', 2)
+        Gxi_embedded = op.EmbeddedOp([0, 1], [0], op.CHPOp('Gxpi 0', 1))
+        self.assertEqual(Gxi_chp.get_chp_str(), Gxi_embedded.get_chp_str())
+        self.assertEqual(Gxi_chp.get_chp_str([1,2]), Gxi_embedded.get_chp_str([1,2]))
+
+        Gix_chp = op.CHPOp('Gxpi 1', 2)
+        Gix_embedded = op.EmbeddedOp([0, 1], [1], op.CHPOp('Gxpi 0', 1))
+        self.assertEqual(Gix_chp.get_chp_str(), Gix_embedded.get_chp_str())
+        self.assertEqual(Gix_chp.get_chp_str([1,2]), Gix_embedded.get_chp_str([1,2]))
