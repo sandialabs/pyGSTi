@@ -12,6 +12,7 @@ Functions for loading GST objects from text files.
 
 import os as _os
 import pathlib as _pathlib
+import warnings as _warnings
 
 from . import stdinput as _stdinput
 from .. import objects as _objs
@@ -351,6 +352,47 @@ def load_edesign_from_dir(dirname, quick_load=False, comm=None):
     """
     dirname = _pathlib.Path(dirname)
     return _metadir._cls_from_meta_json(dirname / 'edesign').from_dir(dirname, quick_load=quick_load)
+
+
+def create_edesign_from_dir(dirname):
+    from .. import protocols as _proto
+    topdir = _pathlib.Path(dirname)
+    edesign_dir = topdir / 'edesign'
+    circuit_lists = []; circuit_list_names = []
+
+    if edesign_dir.is_dir():
+        if (edesign_dir / 'meta.json').exists():  # load existing edesign
+            return _metadir._cls_from_meta_json(dirname / 'edesign').from_dir(dirname, quick_load=False)
+
+        # Find any circuit list files in the edesign directory
+        for child in sorted(edesign_dir.iterdir()):
+            if child.is_file():
+                try:
+                    lst = load_circuit_list(child, read_raw_strings=False, line_labels='auto')
+                    circuit_lists.append(lst); circuit_list_names.append(child.name)
+                except Exception:
+                    pass
+
+    #Otherwise see if we should recurse or not
+    subdirs = []
+    for child in topdir.iterdir():
+        if child == edesign_dir: continue  # special case, shouldn't be strictly needed
+        if child.is_dir() and (child / 'edesign').is_dir():
+            subdirs.append(child)
+
+    sub_edesigns = [create_edesign_from_dir(subdir) for subdir in subdirs]
+    if len(sub_edesigns) > 0:
+        if len(circuit_lists) > 0:
+            _warnings.warn("Ignoring %d circuit-list files [%s] in %d because sub-designs were detected." %
+                           (len(circuit_lists), ", ".join(circuit_list_names), edesign_dir.name))
+        return _proto.CombinedExperimentDesign({subdir.name: sub_edesign
+                                                for subdir, sub_edesign in zip(subdirs, sub_edesigns)})
+    elif len(circuit_lists) > 1:
+        return _proto.CircuitListsDesign(circuit_lists)
+    elif len(circuit_lists) == 1:
+        return _proto.ExperimentDesign(circuit_lists[0])
+    else:
+        raise ValueError("Could not create an experiment design from the files in this directory!")
 
 
 def load_data_from_dir(dirname, quick_load=False, comm=None):

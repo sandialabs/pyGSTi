@@ -584,6 +584,24 @@ class ExperimentDesign(_TreeNode):
 
         return ret
 
+    @classmethod
+    def from_edesign(cls, edesign):
+        """
+        Create an ExperimentDesign out of an existing experiment design.
+
+        Parameters
+        ----------
+        edesign : ExperimentDesign
+            The experiment design to convert (use as a base).
+
+        Returns
+        -------
+        ExperimentDesign
+        """
+        if cls != ExperimentDesign:
+            raise NotImplementedError("Cannot convert a %s to a %s!" % (str(type(edesign)), str(cls)))
+        return cls(edesign.all_circuits_needing_data, edesign.qubit_labels)
+
     def __init__(self, circuits=None, qubit_labels=None,
                  children=None, children_dirs=None):
         """
@@ -658,17 +676,18 @@ class ExperimentDesign(_TreeNode):
         else:
             self.qubit_labels = tuple(qubit_labels)
 
-        def auto_dirname(child_key):
-            if isinstance(child_key, (list, tuple)):
-                child_key = '_'.join(map(str, child_key))
-            return child_key.replace(' ', '_')
-
         if children is None: children = {}
         children_dirs = children_dirs.copy() if (children_dirs is not None) else \
-            {subname: auto_dirname(subname) for subname in children}
+            {subname: self._auto_dirname(subname) for subname in children}
 
         assert(set(children.keys()) == set(children_dirs.keys()))
         super().__init__(children_dirs, children)
+
+    def _auto_dirname(self, child_key):
+        """ A helper function to generate a default directory name base off of a sub-name key """
+        if isinstance(child_key, (list, tuple)):
+            child_key = '_'.join(map(str, child_key))
+        return child_key.replace(' ', '_')
 
     def set_actual_circuits_executed(self, actual_circuits):
         """
@@ -717,6 +736,23 @@ class ExperimentDesign(_TreeNode):
         """
         instance_name = default_protocol_instance.name
         self.default_protocols[instance_name] = default_protocol_instance
+
+    def truncate_to_circuits(self, circuits_to_keep):
+        """
+        Builds a new experiment design containing only the specified circuits.
+
+        Parameters
+        ----------
+        circuits_to_keep : list
+            A list of the circuits to keep.
+
+        Returns
+        -------
+        ExperimentDesign
+        """
+        base = _copy.deepcopy(self)  # so this works for derived classes tools
+        base._truncate_to_circuits_inplace(circuits_to_keep)
+        return base
 
     def truncate_to_available_data(self, dataset):
         """
@@ -864,6 +900,38 @@ class ExperimentDesign(_TreeNode):
         """
         raise NotImplementedError("This protocol edesign cannot create any subdata!")
 
+    def promote_to_combined(self, name="**0"):
+        """
+        Promote this experiment design to be a combined experiment design.
+
+        Wraps this experiment design in a new :class:`CombinedExperimentDesign`
+        whose only sub-design is this one, and returns the combined design.
+
+        Parameters
+        ----------
+        name : str, optional
+            The sub-design-name of this experiment design within the created
+            combined experiment design.
+
+        Returns
+        -------
+        CombinedExperimentDesign
+        """
+        return CombinedExperimentDesign.from_edesign(self, name)
+
+    def promote_to_simultaneous(self):
+        """
+        Promote this experiment design to be a simultaneous experiment design.
+
+        Wraps this experiment design in a new :class:`SimultaneousExperimentDesign`
+        whose only sub-design is this one, and returns the simultaneous design.
+
+        Returns
+        -------
+        SimultaneousExperimentDesign
+        """
+        return SimultaneousExperimentDesign.from_edesign(self)
+
 
 class CircuitListsDesign(ExperimentDesign):
     """
@@ -896,6 +964,37 @@ class CircuitListsDesign(ExperimentDesign):
         all the circuits that need data (this argument isn't used
         when `all_circuits_needing_data` is given).
     """
+
+    @classmethod
+    def from_edesign(cls, edesign):
+        """
+        Create a CircuitListsDesign out of an existing experiment design.
+
+        If `edesign` already is a circuit lists experiment design, it will
+        just be returned (not a copy of it).
+        
+        Parameters
+        ----------
+        edesign : ExperimentDesign
+            The experiment design to convert (use as a base).
+
+        Returns
+        -------
+        CircuitListsDesign
+        """
+        if cls != CircuitListsDesign:
+            raise NotImplementedError("Cannot convert a %s to a %s!" % (str(type(edesign)), str(cls)))
+
+        if isinstance(edesign, CircuitListsDesign):
+            return edesign
+        elif isinstance(edesign, (CombinedExperimentDesign, SimultaneousExperimentDesign)):
+            circuit_lists = [subd.all_circuits_needing_data for k, subd in edesign.items()]
+            return cls(circuit_lists, edesign.all_circuits_needing_data, edesign.qubit_labels, remove_duplicates=False)
+        elif isinstance(edesign, ExperimentDesign):
+            return cls([edesign.all_circuits_needing_data], edesign.all_circuits_needing_data,
+                       edesign.qubit_labels, remove_duplicates=False)
+        else:
+            raise ValueError("Cannot convert a %s to a %s!" % (str(type(edesign)), str(cls)))
 
     def __init__(self, circuit_lists, all_circuits_needing_data=None, qubit_labels=None,
                  nested=False, remove_duplicates=True):
@@ -974,6 +1073,13 @@ class CircuitListsDesign(ExperimentDesign):
         return CircuitListsDesign([self.circuit_lists[i] for i in list_indices_to_keep],
                                   qubit_labels=self.qubit_labels, nested=self.nested)
 
+    def _truncate_to_circuits_inplace(self, circuits_to_keep):
+        truncated_circuit_lists = [_CircuitList.cast(lst).truncate(circuits_to_keep)
+                                   for lst in self.circuit_lists]
+        self.circuit_lists = truncated_circuit_lists
+        self.nested = False  # we're not sure whether the truncated lists are nested
+        super()._truncate_to_circuits_inplace(circuits_to_keep)
+    
     def _truncate_to_design_inplace(self, other_design):
         self.circuit_lists = [my_circuit_list.truncate(other_circuit_list) for my_circuit_list, other_circuit_list
                               in zip(self.circuit_lists, other_design.circuit_lists)]
@@ -1025,6 +1131,34 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
         Whether the circuits of the `sub_designs` should be interleaved to
         form the circuit ordering of this experiment design.
     """
+
+    @classmethod
+    def from_edesign(cls, edesign, name):
+        """
+        Create a combined experiment design out of an existing experiment design.
+
+        This makes `edesign` the one and only member of a new combined experiment design,
+        even in `edesign` is already a `CombinedExperimentDesign`.
+
+        Parameters
+        ----------
+        edesign : ExperimentDesign
+            The experiment design to convert (use as a base).
+
+        name : str
+            The sub-name of `edesign` within the returned combined experiment design.
+
+        Returns
+        -------
+        CombinedExperimentDesign
+        """
+        if cls != CombinedExperimentDesign:
+            raise NotImplementedError("Cannot convert a %s to a %s!" % (str(type(edesign)), str(cls)))
+
+        if isinstance(edesign, ExperimentDesign):
+            return cls({name: edesign}, edesign.all_circuits_needing_data, edesign.qubit_labels)
+        else:
+            raise ValueError("Cannot convert a %s to a %s!" % (str(type(edesign)), str(cls)))
 
     def __init__(self, sub_designs, all_circuits=None, qubit_labels=None, sub_design_dirs=None,
                  interleave=False):
@@ -1117,6 +1251,27 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
             truncated_ds.add_std_nqubit_outcome_labels(len(self[sub_name].qubit_labels))
         return ProtocolData(self[sub_name], truncated_ds)
 
+    def __setitem__(self, key, val):
+        # must set base class self._vals and self._dirs (see treenode.py)
+        if not isinstance(val, ExperimentDesign):
+            raise ValueError("Only experiment designs can be set as sub-designs of a CombinedExperimentDesign!")
+
+        #Check whether the new design adds any more circuits (it's not allowed to
+        # because other objects, e.g. a ProtocolData object, may hold a reference to
+        # this combined experiment design (e.g., to index data) and expect that it will
+        # not change.
+        current_circuits = set(self.all_circuits_needing_data)
+        new_circuits = [c for c in val.all_circuits_needing_data if c not in current_circuits]
+        if len(new_circuits) > 0:
+            raise ValueError((("Adding this experiment design would add %d new circuits.  Adding circuits is not"
+                               " allowed because an experiment design's circuit list may be used to index data.  The"
+                               " circuits that would be added are:\n") % len(new_circuits))
+                             + "\n".join([c.str for c in new_circuits[0:10]])
+                             + ("\n..." if len(new_circuits) > 10 else ""))
+
+        self._dirs[key] = self._auto_dirname(key)
+        self._vals[key] = val
+
 
 class SimultaneousExperimentDesign(ExperimentDesign):
     """
@@ -1146,6 +1301,31 @@ class SimultaneousExperimentDesign(ExperimentDesign):
         The category name for the qubit-label-tuples correspoding to the
         elements of `edesigns`.
     """
+
+    @classmethod
+    def from_edesign(cls, edesign):
+        """
+        Create a simultaneous experiment design out of an existing experiment design.
+
+        This makes `edesign` the one and only member of a new simultanieous experiment
+        design, even in `edesign` is already a `SimultaneousExperimentDesign`.
+
+        Parameters
+        ----------
+        edesign : ExperimentDesign
+            The experiment design to convert (use as a base).
+
+        Returns
+        -------
+        SimultaneousExperimentDesign
+        """
+        if cls != SimultaneousExperimentDesign:
+            raise NotImplementedError("Cannot convert a %s to a %s!" % (str(type(edesign)), str(cls)))
+
+        if isinstance(edesign, ExperimentDesign):
+            return cls([edesign], None, edesign.qubit_labels)
+        else:
+            raise ValueError("Cannot convert a %s to a %s!" % (str(type(edesign)), str(cls)))
 
     #@classmethod
     #def from_tensored_circuits(cls, circuits, template_edesign, qubit_labels_per_edesign):
