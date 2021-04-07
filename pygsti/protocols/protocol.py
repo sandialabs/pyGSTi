@@ -1570,6 +1570,40 @@ class ProtocolData(_TreeNode):
         keys_vals_types = [(k, v, 'category') for k, v in self.tags.items()]
         return self.edesign.setup_nameddict(_NamedDict.create_nested(keys_vals_types, final_dict))
 
+    def auxinfo_dataframe(self, pivot_valuename=None, pivot_value=None, drop_columns=False):
+        """
+        Create a Pandas dataframe with aux-data from this dataset.
+
+        Parameters
+        ----------
+        pivot_valuename : str, optional
+            If not None, the resulting dataframe is pivoted using `pivot_valuename`
+            as the column whose values name the pivoted table's column names.
+            If None and `pivot_value` is not None,`"ValueName"` is used.
+
+        pivot_value : str, optional
+            If not None, the resulting dataframe is pivoted such that values of
+            the `pivot_value` column are rearranged into new columns whose names
+            are given by the values of the `pivot_valuename` column. If None and
+            `pivot_valuename` is not None,`"Value"` is used.
+
+        drop_columns : bool or list, optional
+            A list of column names to drop (prior to performing any pivot).  If
+            `True` appears in this list or is given directly, then all
+            constant-valued columns are dropped as well.  No columns are dropped
+            when `drop_columns == False`.
+
+        Returns
+        -------
+        pandas.DataFrame
+        """
+        cdict = _NamedDict('Circuit', None)
+        for cir, raw_auxdict in self.dataset.auxInfo.items():
+            cdict[cir.str] = _NamedDict('ValueName', 'category', items=raw_auxdict)
+
+        df = cdict.to_dataframe()
+        return _process_dataframe(df, pivot_valuename, pivot_value, drop_columns)
+
 
 class ProtocolResults(object):
     """
@@ -2239,6 +2273,118 @@ class ProtocolPostProcessor(object):
         None
         """
         _io.write_obj_to_meta_based_dir(self, dirname, 'auxfile_types')
+
+
+class DataSimulator(object):
+    """
+    An analysis routine that is run on an experiment design to produce data and auxiliary information.
+
+    A DataSimulator fundamentally simulates a model to create data, taking an :class:`ExperimentDesign`
+    as input and producing a :class:`ProtocolData` object as output.
+
+    Parameters
+    ----------
+    model : Model
+        The model to simulate.
+
+    num_samples : int or list of ints or None, optional
+        The simulated number of samples for each circuit.  This only has
+        effect when  ``sample_error == "binomial"`` or ``"multinomial"``.  If an
+        integer, all circuits have this number of total samples. If a list,
+        integer elements specify the number of samples for the corresponding
+        circuit.  If ``None``, then `model_or_dataset` must be a
+        :class:`~pygsti.objects.DataSet`, and total counts are taken from it
+        (on a per-circuit basis).
+
+    sample_error : string, optional
+        What type of sample error is included in the counts.  Can be:
+
+        - "none"  - no sample error: counts are floating point numbers such
+          that the exact probabilty can be found by the ratio of count / total.
+        - "clip" - no sample error, but clip probabilities to [0,1] so, e.g.,
+          counts are always positive.
+        - "round" - same as "clip", except counts are rounded to the nearest
+          integer.
+        - "binomial" - the number of counts is taken from a binomial
+          distribution.  Distribution has parameters p = (clipped) probability
+          of the circuit and n = number of samples.  This can only be used
+          when there are exactly two SPAM labels in model_or_dataset.
+        - "multinomial" - counts are taken from a multinomial distribution.
+          Distribution has parameters p_k = (clipped) probability of the gate
+          string using the k-th SPAM label and n = number of samples.
+
+    seed : int, optional
+        If not ``None``, a seed for numpy's random number generator, which
+        is used to sample from the binomial or multinomial distribution.
+
+    rand_state : numpy.random.RandomState
+        A RandomState object to generate samples from. Can be useful to set
+        instead of `seed` if you want reproducible distribution samples across
+        multiple random function calls but you don't want to bother with
+        manually incrementing seeds between those calls.
+
+    alias_dict : dict, optional
+        A dictionary mapping single operation labels into tuples of one or more
+        other operation labels which translate the given circuits before values
+        are computed using `model_or_dataset`.  The resulting Dataset, however,
+        contains the *un-translated* circuits as keys.
+
+    collision_action : {"aggregate", "keepseparate"}
+        Determines how duplicate circuits are handled by the resulting
+        `DataSet`.  Please see the constructor documentation for `DataSet`.
+
+    record_zero_counts : bool, optional
+        Whether zero-counts are actually recorded (stored) in the returned
+        DataSet.  If False, then zero counts are ignored, except for
+        potentially registering new outcome labels.
+
+    times : iterable, optional
+        When not None, a list of time-stamps at which data should be sampled.
+        `num_samples` samples will be simulated at each time value, meaning that
+        each circuit in `circuit_list` will be evaluated with the given time
+        value as its *start time*.
+    """
+
+    def __init__(self, model, num_samples=1000, sample_error='multinomial',
+                 seed=None, rand_state=None, alias_dict=None,
+                 collision_action="aggregate", record_zero_counts=True, times=None):
+        super().__init__()
+        self.model = model
+        self.num_samples = num_samples
+        self.sample_error = sample_error
+        self.seed = seed
+        self.rand_state = rand_state
+        self.alias_dict = alias_dict
+        self.collision_action = collision_action
+        self.record_zero_counts = record_zero_counts
+        self.times = times
+
+    def run(self, edesign, memlimit=None, comm=None):
+        """
+        Run this data simulator on an experiment design.
+
+        Parameters
+        ----------
+        edesign : ExperimentDesign
+            The input experiment design.
+
+        memlimit : int, optional
+            A rough per-processor memory limit in bytes.
+
+        comm : mpi4py.MPI.Comm, optional
+            When not ``None``, an MPI communicator used to run this data
+            simulator in parallel.
+
+        Returns
+        -------
+        ProtocolData
+        """
+        from ..construction.datasetconstruction import simulate_data as _simulate_data
+        ds = _simulate_data(self.model, edesign.all_circuits_needing_data, self.num_samples,
+                            self.sample_error, self.seed, self.rand_state,
+                            self.alias_dict, self.collision_action,
+                            self.record_zero_counts, comm, memlimit, self.times)
+        return ProtocolData(edesign, ds)
 
 
 #In the future, we could put this function into a base class for

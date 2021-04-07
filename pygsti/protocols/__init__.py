@@ -17,3 +17,4 @@ from .rb import *
 from .rpe import *
 from .modeltest import *
 from .stability import *
+from .statefunctions import *
