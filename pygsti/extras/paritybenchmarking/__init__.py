@@ -10,4 +10,4 @@
 
 from .disturbancecalc import compute_disturbances, compute_disturbances_with_confidence, \
     compute_disturbances_from_bootstrap_rawdata, compute_disturbances_bootstrap_rawdata, \
-    resample_data, compute_residual_tvds
+    resample_data, compute_residual_tvds, build_basis

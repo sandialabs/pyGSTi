@@ -1,6 +1,7 @@
 import sys as _sys
 import numpy as _np
 import scipy as _sp
+import scipy.optimize as _spo
 from scipy.stats import chi2 as _chi2
 import warnings as _warnings
 import time as _time
@@ -346,7 +347,7 @@ class ResidualTVD:
         self.solver = solver
         self.initial_treg_factor = initial_treg_factor
         self.warning_msg = None
-        self.P0 = _np.array(reference)
+        self.P0 = _np.array(reference) if (reference is not None) else None
 
         # Hold values *separate* from cvxpy variables as we sometimes need to revert
         # cvxpy optimizations which actually move values in a way that gives a *worse*
@@ -525,7 +526,9 @@ class ResidualTVD:
             self.T.value[:, :] = self.build_transfer_mx(self.t_params)
 
         #OLD: returns the residual TVD:
-        #return self._obj(self.t_params)  # not self.obj.value b/c that has additional norm regularization
+        if self.P0 is None:
+            #print("Returning Residual TVD")
+            return self._obj(self.t_params)  # not self.obj.value b/c that has additional norm regularization
 
         #NEW: returns the residual OVD, but using the t-params found by the ResidualTVD calculation to compute the OVD:
         p0 = self.P0
@@ -536,7 +539,29 @@ class ResidualTVD:
         numerator = _np.dot(tmx, p0)
         nonzero_inds = _np.where(numerator > 0)[0]
         ratio[nonzero_inds] = numerator[nonzero_inds] / _np.dot(tmx, p)[nonzero_inds]
-        return _np.sum(ratio * _np.maximum(_np.dot(tmx, p) - q, 0))  # OVD
+        #print("Returning Residual OVD w/ratio = ", ratio)
+
+        ovd_initial = _np.sum(ratio * _np.maximum(_np.dot(tmx, p) - q, 0))  # OVD
+        #return ovd_initial  # return the OVD at the t-params point found by the normal residual-TVD calc
+
+        #Perform a final local optimization to find an even better set of t-params (tmx)
+        def objective(t_params):
+            tmx = self.build_transfer_mx(t_params)
+            numerator = _np.dot(tmx, p0)
+            nonzero_inds = _np.where(numerator > 0)[0]
+            ratio = _np.zeros(p.shape, 'd')
+            ratio[nonzero_inds] = numerator[nonzero_inds] / _np.dot(tmx, p)[nonzero_inds]
+            return _np.sum(ratio * _np.maximum(_np.dot(tmx, p) - q, 0))  # OVD
+
+        initial_tparams = self.t_params.copy()
+        soln = _spo.minimize(objective, initial_tparams, options={'maxiter': 100}, method='L-BFGS-B',
+                             callback=None, tol=1e-8)
+        ovd = objective(soln.x)
+        if abs(ovd - ovd_initial) / (abs(ovd) + 1e-6) > 0.5 and abs(ovd - ovd_initial) > 1e-3:
+            _warnings.warn(("Final local optimization in Residual-OVD computation yielded a significant improvement"
+                            " (%g -> %g = %g diff).  This may be fine, but may indicate an invalid OVD")
+                           % (ovd_initial, ovd, abs(ovd_initial - ovd)))
+        return ovd
 
         #Just checking curvature of ratio:
         # d(f/g) = f'/g - f/g^2 * g'
