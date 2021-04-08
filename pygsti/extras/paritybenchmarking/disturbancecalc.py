@@ -431,7 +431,15 @@ class ResidualTVD:
         """
         if self.exactly_zero: return 0.0  # shortcut for trivial case
         if self.weight == 0:
-            return _np.sum(_np.abs(q - p)) / 2
+            if self.P0 is None:
+                return _np.sum(_np.abs(q - p)) / 2  # TVD
+            else:
+                p0 = self.P0
+                ratio = _np.zeros(p.shape, 'd')
+                nonzero_inds = _np.where(p0 > 0)[0]
+                ratio[nonzero_inds] = p0[nonzero_inds] / p[nonzero_inds]
+                ovd = _np.sum(ratio * _np.maximum(p - q, 0))  # OVD
+                return ovd
 
         #Set parameter values
         self.P.value[:] = p[:]
