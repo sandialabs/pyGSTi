@@ -25,6 +25,11 @@ from .. import tools as _tools
 
 from . import CircuitParser as _CircuitParser
 
+# A dictionary mapping qubit string representations into created
+# :class:`Circuit` objects, which can improve performance by reducing
+# or eliminating the need to parse circuit strings we've already parsed.
+_global_parse_cache = {}
+
 
 def _create_display_progress_fn(show_progress):
     """
@@ -71,6 +76,7 @@ class StdInputParser(object):
 
     #  Using a single parser. This speeds up parsing, however, it means the parser is NOT reentrant
     _circuit_parser = _CircuitParser()
+    use_global_parse_cache = True
 
     def __init__(self):
         """ Create a new standard-input parser object """
@@ -78,7 +84,47 @@ class StdInputParser(object):
 
     def parse_circuit(self, s, lookup={}, create_subcircuits=True):
         """
-        Parse a circuit (string in grammar)
+        Parse a circuit from a string.
+
+        Parameters
+        ----------
+        s : string
+            The string to parse.
+
+        lookup : dict, optional
+            A dictionary with keys == reflbls and values == tuples of operation labels
+            which can be used for substitutions using the S<reflbl> syntax.
+
+        create_subcircuits : bool, optional
+            Whether to create sub-circuit-labels when parsing
+            string representations or to just expand these into non-subcircuit
+            labels.
+
+        Returns
+        -------
+        Circuit
+        """
+        circuit = None
+        if self.use_global_parse_cache:
+            circuit = _global_parse_cache.get(s, None)
+        if circuit is None:  # wasn't in cache
+            layer_tuple, line_lbls, occurrence_id = self.parse_circuit_raw(s, lookup, create_subcircuits)
+            if line_lbls is None: line_lbls = "auto"  # if line labels weren't given just use defaults
+            circuit = _objs.Circuit._fastinit(layer_tuple, line_lbls, editable=False,
+                                              name='', stringrep=s, occurrence=occurrence_id)
+            #circuit = _objs.Circuit(layer_tuple, stringrep=s, line_labels=line_lbls,
+            #                        expand_subcircuits=False, check=False, occurrence=occurrence_id)
+            #Note: never expand subcircuits since parse_circuit_raw already does this w/create_subcircuits arg
+            if self.use_global_parse_cache:
+                _global_parse_cache[s] = circuit
+        return circuit
+
+    def parse_circuit_raw(self, s, lookup={}, create_subcircuits=True):
+        """
+        Parse a circuit's constituent pieces from a string.
+
+        This doesn't actually create a circuit object, which may be desirable
+        in some scenarios.
 
         Parameters
         ----------
@@ -105,7 +151,8 @@ class StdInputParser(object):
         # print "DB: stack = ",self.exprStack
         return circuit_tuple, circuit_labels, occurrence_id
 
-    def parse_dataline(self, s, lookup={}, expected_counts=-1, create_subcircuits=True):
+    def parse_dataline(self, s, lookup={}, expected_counts=-1, create_subcircuits=True,
+                       line_labels=None):
         """
         Parse a data line (dataline in grammar)
 
@@ -129,12 +176,8 @@ class StdInputParser(object):
 
         Returns
         -------
-        circuitTuple : tuple
-            The circuit as a tuple of layer-operation labels.
-        circuitStr : string
-            The circuit as represented as a string in the dataline (minus any line labels)
-        circuitLabels : tuple
-            A tuple of the circuit's line labels (given after '@' symbol on line)
+        circuit : Circuit
+            The circuit.
         counts : list
             List of counts following the circuit.
         """
@@ -170,8 +213,8 @@ class StdInputParser(object):
             if nCounts == len(parts):
                 raise ValueError("No circuit column found -- all columns look like data")
 
-        circuitTuple, circuitLabels, occurrence_id = self.parse_circuit(circuitStr, lookup, create_subcircuits)
-        return circuitTuple, circuitStr, circuitLabels, occurrence_id, counts
+        circuit = self.parse_circuit(circuitStr, lookup, create_subcircuits)
+        return circuit, counts
 
     def parse_dictline(self, s):
         """
@@ -235,15 +278,18 @@ class StdInputParser(object):
             for line in stringfile:
                 line = line.strip()
                 if len(line) == 0 or line[0] == '#': continue
-                layer_lbls, line_lbls, occurrence_id = self.parse_circuit(line)
-                if line_lbls is None:
-                    line_lbls = line_labels  # default to the passed-in argument
-                    nlines = num_lines
-                else: nlines = None  # b/c we've got a valid line_lbls
-
-                circuit_list.append(_objs.Circuit(layer_lbls, stringrep=line.strip(),
-                                                  line_labels=line_lbls, num_lines=nlines,
-                                                  check=False, occurrence=occurrence_id))
+                if line_labels == "auto":
+                    circuit = self.parse_circuit(line)  # can be cached, and cache assumes "auto" behavior
+                else:
+                    layer_lbls, parsed_line_lbls, occurrence_id = self.parse_circuit_raw(line)
+                    if parsed_line_lbls is None:
+                        parsed_line_lbls = line_labels  # default to the passed-in argument
+                        nlines = num_lines
+                    else: nlines = None  # b/c we've got a valid line_lbls
+                    circuit = _objs.Circuit(layer_lbls, stringrep=line.strip(),
+                                            line_labels=parsed_line_lbls, num_lines=nlines,
+                                            check=False, occurrence=occurrence_id)
+                circuit_list.append(circuit)
         return circuit_list
 
     def parse_dictfile(self, filename):
@@ -324,6 +370,9 @@ class StdInputParser(object):
                 elif line.startswith("#"):
                     preamble_comments.append(line[1:].strip())
 
+        def str_to_outcome(x):  # always return a tuple as the "outcome label" (even if length 1)
+            return tuple(x.strip().split(":"))
+
         #Process premble
         orig_cwd = _os.getcwd()
         outcomeLabels = None
@@ -335,21 +384,37 @@ class StdInputParser(object):
             else: lookupDict = {}
             if 'Columns' in preamble_directives:
                 colLabels = [l.strip() for l in preamble_directives['Columns'].split(",")]
-                outcomeLabels, fillInfo = self._extract_labels_from_col_labels(colLabels)
+                #OLD: outcomeLabels, fillInfo = self._extract_labels_from_col_labels(colLabels)
+                fixed_column_outcome_labels = []
+                for i, colLabel in enumerate(colLabels):
+                    assert(colLabel.endswith(' count')), \
+                        "Invalid count column name `%s`! (Only *count* columns are supported now)" % colLabel
+                    outcomeLabel = str_to_outcome(colLabel[:-len(' count')])
+                    if outcomeLabel not in fixed_column_outcome_labels:
+                        fixed_column_outcome_labels.append(outcomeLabel)
+
                 nDataCols = len(colLabels)
             else:
-                fillInfo = None
+                fixed_column_outcome_labels = None
                 nDataCols = -1  # no column count check
             if 'Outcomes' in preamble_directives:
                 outcomeLabels = [l.strip().split(':') for l in preamble_directives['Outcomes'].split(",")]
+                outcome_labels_specified_in_preamble = True
             if 'StdOutcomeQubits' in preamble_directives:
                 outcomeLabels = int(preamble_directives['Outcomes'])
+                outcome_labels_specified_in_preamble = True
         finally:
             _os.chdir(orig_cwd)
 
         #Read data lines of data file
         dataset = _objs.DataSet(outcome_labels=outcomeLabels, collision_action=collision_action,
                                 comment="\n".join(preamble_comments))
+
+        if outcome_labels_specified_in_preamble and (fixed_column_outcome_labels is not None):
+            fixed_column_outcome_indices = [dataset.olIndex[ol] for ol in fixed_column_outcome_labels]
+        else:
+            fixed_column_outcome_indices = None
+
         nLines = 0
         with open(filename, 'r') as datafile:
             nLines = sum(1 for line in datafile)
@@ -401,13 +466,13 @@ class StdInputParser(object):
                         # section), so add it with zero counts (if we don't ignore it), and look for next circuit.
                         looking_for = "circuit_line"
                         if ignore_zero_count_lines is False and last_circuit is not None:
-                            dataset.add_count_dict(last_circuit, {}, aux=last_commentDict,
-                                                   record_zero_counts=record_zero_counts, update_ol=False)
+                            dataset.add_count_list(last_circuit, [], [], aux=last_commentDict,
+                                                   record_zero_counts=record_zero_counts, update_ol=False, unsafe=True)
 
                 if looking_for == "circuit_line":
                     if len(dataline) == 0: continue
                     try:
-                        circuitTuple, circuitStr, circuitLbls, occurrence_id, valueList = \
+                        circuit, valueList = \
                             self.parse_dataline(dataline, lookupDict, nDataCols,
                                                 create_subcircuits=not _objs.Circuit.default_expand_subcircuits)
 
@@ -416,24 +481,38 @@ class StdInputParser(object):
                     except ValueError as e:
                         raise ValueError("%s Line %d: %s" % (filename, iLine, str(e)))
 
-                    if circuitLbls is None: circuitLbls = "auto"  # if line labels weren't given just use defaults
-                    circuit = _objs.Circuit(circuitTuple, stringrep=circuitStr,
-                                            line_labels=circuitLbls, expand_subcircuits=False,
-                                            check=False, occurrence=occurrence_id)
-                    #Note: don't expand subcircuits because we've already directed parse_dataline to expand if needed
-
                     if with_times is True and len(valueList) > 0:
                         raise ValueError(("%s Line %d: Circuit line cannot contain count information when "
                                           "'with_times=True'") % (filename, iLine))
 
                     if with_times is False or len(valueList) > 0:
-                        bBad = ('BAD' in valueList)  # supresses warnings
-                        countDict = _objs.labeldicts.OutcomeLabelDict()
-                        self._fill_data_count_dict(countDict, fillInfo, valueList)
-                        if all([(abs(v) < 1e-9) for v in list(countDict.values())]):
+                        if 'BAD' in valueList:  # entire line is known to be BAD => no data for this circuit
+                            oliArray = _np.zeros(0, dataset.oliType)
+                            countArray = _np.zeros(0, dataset.repType)
+                        else:
+                            if fixed_column_outcome_labels is not None:
+                                if outcome_labels_specified_in_preamble:
+                                    outcome_indices, count_values = \
+                                        zip(*[(oli, v) for (oli, v) in zip(fixed_column_outcome_indices, valueList)
+                                              if v != '--'])  # drop "empty" sentinels
+                                else:
+                                    outcome_labels, count_values = \
+                                        zip(*[(nm, v) for (nm, v) in zip(fixed_column_outcome_labels, valueList)
+                                              if v != '--'])  # drop "empty" sentinels
+                                    dataset.add_outcome_labels(outcome_labels, update_ol=False)
+                                    outcome_indices = [dataset.olIndex[ol] for ol in outcome_labels]
+                            else:  # assume valueList is a list of (outcomeLabel, count) tuples -- see parse_dataline
+                                outcome_labels, count_values = zip(*valueList)
+                                if not outcome_labels_specified_in_preamble:
+                                    dataset.add_outcome_labels(outcome_labels, update_ol=False)
+                                outcome_indices = [dataset.olIndex[ol] for ol in outcome_labels]
+                            oliArray = _np.array(outcome_indices, dataset.oliType)
+                            countArray = _np.array(count_values, dataset.repType)
+
+                        if all([(abs(v) < 1e-9) for v in count_values]):
                             if ignore_zero_count_lines is True:
-                                if not bBad:
-                                    s = circuitStr if len(circuitStr) < 40 else circuitStr[0:37] + "..."
+                                if not ('BAD' in valueList):  # supress "no data" warning for known-bad circuits
+                                    s = circuit.str if len(circuit.str) < 40 else circuit.str[0:37] + "..."
                                     warnings.append("Dataline for circuit '%s' has zero counts and will be ignored" % s)
                                 continue  # skip lines in dataset file with zero counts (no experiments done)
                             else:
@@ -444,9 +523,9 @@ class StdInputParser(object):
                                 # fill_in_empty_dataset_with_fake_data).
                                 pass
 
-                        dataset.add_count_dict(circuit, countDict, aux=commentDict,
-                                               record_zero_counts=record_zero_counts,
-                                               update_ol=False)  # for performance - to this once at the end.
+                        #Call this low-level function for performance, so need to construct outcome *index* arrays above
+                        dataset.add_count_arrays(circuit, oliArray, countArray,
+                                                 record_zero_counts=record_zero_counts, aux=commentDict)
                     else:
                         current_item['circuit'] = circuit
                         looking_for = "circuit_data" if (with_times is True) else "circuit_data_or_line"
@@ -492,81 +571,82 @@ class StdInputParser(object):
         dataset.done_adding_data()
         return dataset
 
-    def _extract_labels_from_col_labels(self, col_labels):
-        outcomeLabels = []; countCols = []; freqCols = []; impliedCountTotCol1Q = (-1, -1)
-
-        def str_to_outcome(x):  # always return a tuple as the "outcome label" (even if length 1)
-            return tuple(x.strip().split(":"))
-
-        for i, colLabel in enumerate(col_labels):
-            if colLabel.endswith(' count'):
-                outcomeLabel = str_to_outcome(colLabel[:-len(' count')])
-                if outcomeLabel not in outcomeLabels: outcomeLabels.append(outcomeLabel)
-                countCols.append((outcomeLabel, i))
-
-            elif colLabel.endswith(' frequency'):
-                if 'count total' not in col_labels:
-                    raise ValueError("Frequency columns specified without count total")
-                else: iTotal = col_labels.index('count total')
-                outcomeLabel = str_to_outcome(colLabel[:-len(' frequency')])
-                if outcomeLabel not in outcomeLabels: outcomeLabels.append(outcomeLabel)
-                freqCols.append((outcomeLabel, i, iTotal))
-
-        if 'count total' in col_labels:
-            if ('1',) in outcomeLabels and ('0',) not in outcomeLabels:
-                outcomeLabels.append(('0',))
-                impliedCountTotCol1Q = ('0',), col_labels.index('count total')
-            elif ('0',) in outcomeLabels and ('1',) not in outcomeLabels:
-                outcomeLabels.append(('1',))
-                impliedCountTotCol1Q = '1', col_labels.index('count total')
-            #TODO - add standard count completion for 2Qubit case?
-
-        fillInfo = (countCols, freqCols, impliedCountTotCol1Q)
-        return outcomeLabels, fillInfo
-
-    def _fill_data_count_dict(self, count_dict, fill_info, col_values):
-        if 'BAD' in col_values:
-            return  # indicates entire row is known to be bad (no counts)
-
-        #Note: can use setitem_unsafe here because count_dict is a OutcomeLabelDict and
-        # by construction (see str_to_outcome in _extract_labels_from_col_labels) the
-        # outcome labels in fill_info are *always* tuples.
-        if fill_info is not None:
-            countCols, freqCols, impliedCountTotCol1Q = fill_info
-
-            for outcomeLabel, iCol in countCols:
-                if col_values[iCol] == '--': continue  # skip blank sentinels
-                if col_values[iCol] > 0 and col_values[iCol] < 1:
-                    _warnings.warn("Count column (%d) contains value(s) between 0 and 1 - "
-                                   "could this be a frequency?" % iCol)
-                assert(not isinstance(col_values[iCol], tuple)), \
-                    "Expanded-format count not allowed with column-key header"
-                count_dict.setitem_unsafe(outcomeLabel, col_values[iCol])
-
-            for outcomeLabel, iCol, iTotCol in freqCols:
-                if col_values[iCol] == '--' or col_values[iTotCol] == '--': continue  # skip blank sentinels
-                if col_values[iCol] < 0 or col_values[iCol] > 1.0:
-                    _warnings.warn("Frequency column (%d) contains value(s) outside of [0,1.0] interval - "
-                                   "could this be a count?" % iCol)
-                assert(not isinstance(col_values[iTotCol], tuple)), \
-                    "Expanded-format count not allowed with column-key header"
-                count_dict.setitem_unsafe(outcomeLabel, col_values[iCol] * col_values[iTotCol])
-
-            if impliedCountTotCol1Q[1] >= 0:
-                impliedOutcomeLabel, impliedCountTotCol = impliedCountTotCol1Q
-                if impliedOutcomeLabel == ('0',):
-                    count_dict.setitem_unsafe(('0',), col_values[impliedCountTotCol] - count_dict[('1',)])
-                else:
-                    count_dict.setitem_unsafe(('1',), col_values[impliedCountTotCol] - count_dict[('0',)])
-
-        else:  # assume col_values is a list of (outcomeLabel, count) tuples
-            for tup in col_values:
-                assert(isinstance(tup, tuple)), \
-                    ("Outcome labels must be specified with"
-                     "count data when there's no column-key header")
-                assert(len(tup) == 2), "Invalid count! (parsed to %s)" % str(tup)
-                count_dict.setitem_unsafe(tup[0], tup[1])
-        return count_dict
+    #TODO: REMOVE - unless we want to support frequency/total count columns again and take performance hit.
+    #def _extract_labels_from_col_labels(self, col_labels):
+    #    outcomeLabels = []; countCols = []; freqCols = []; impliedCountTotCol1Q = (-1, -1)
+    #
+    #    def str_to_outcome(x):  # always return a tuple as the "outcome label" (even if length 1)
+    #        return tuple(x.strip().split(":"))
+    #
+    #    for i, colLabel in enumerate(col_labels):
+    #        if colLabel.endswith(' count'):
+    #            outcomeLabel = str_to_outcome(colLabel[:-len(' count')])
+    #            if outcomeLabel not in outcomeLabels: outcomeLabels.append(outcomeLabel)
+    #            countCols.append((outcomeLabel, i))
+    #
+    #        elif colLabel.endswith(' frequency'):
+    #            if 'count total' not in col_labels:
+    #                raise ValueError("Frequency columns specified without count total")
+    #            else: iTotal = col_labels.index('count total')
+    #            outcomeLabel = str_to_outcome(colLabel[:-len(' frequency')])
+    #            if outcomeLabel not in outcomeLabels: outcomeLabels.append(outcomeLabel)
+    #            freqCols.append((outcomeLabel, i, iTotal))
+    #
+    #    if 'count total' in col_labels:
+    #        if ('1',) in outcomeLabels and ('0',) not in outcomeLabels:
+    #            outcomeLabels.append(('0',))
+    #            impliedCountTotCol1Q = ('0',), col_labels.index('count total')
+    #        elif ('0',) in outcomeLabels and ('1',) not in outcomeLabels:
+    #            outcomeLabels.append(('1',))
+    #            impliedCountTotCol1Q = '1', col_labels.index('count total')
+    #        #TODO - add standard count completion for 2Qubit case?
+    #
+    #    fillInfo = (countCols, freqCols, impliedCountTotCol1Q)
+    #    return outcomeLabels, fillInfo
+    #
+    #def _fill_data_count_dict(self, count_dict, fill_info, col_values):
+    #    if 'BAD' in col_values:
+    #        return  # indicates entire row is known to be bad (no counts)
+    #
+    #    #Note: can use setitem_unsafe here because count_dict is a OutcomeLabelDict and
+    #    # by construction (see str_to_outcome in _extract_labels_from_col_labels) the
+    #    # outcome labels in fill_info are *always* tuples.
+    #    if fill_info is not None:
+    #        countCols, freqCols, impliedCountTotCol1Q = fill_info
+    #
+    #        for outcomeLabel, iCol in countCols:
+    #            if col_values[iCol] == '--': continue  # skip blank sentinels
+    #            if col_values[iCol] > 0 and col_values[iCol] < 1:
+    #                _warnings.warn("Count column (%d) contains value(s) between 0 and 1 - "
+    #                               "could this be a frequency?" % iCol)
+    #            assert(not isinstance(col_values[iCol], tuple)), \
+    #                "Expanded-format count not allowed with column-key header"
+    #            count_dict.setitem_unsafe(outcomeLabel, col_values[iCol])
+    #
+    #        for outcomeLabel, iCol, iTotCol in freqCols:
+    #            if col_values[iCol] == '--' or col_values[iTotCol] == '--': continue  # skip blank sentinels
+    #            if col_values[iCol] < 0 or col_values[iCol] > 1.0:
+    #                _warnings.warn("Frequency column (%d) contains value(s) outside of [0,1.0] interval - "
+    #                               "could this be a count?" % iCol)
+    #            assert(not isinstance(col_values[iTotCol], tuple)), \
+    #                "Expanded-format count not allowed with column-key header"
+    #            count_dict.setitem_unsafe(outcomeLabel, col_values[iCol] * col_values[iTotCol])
+    #
+    #        if impliedCountTotCol1Q[1] >= 0:
+    #            impliedOutcomeLabel, impliedCountTotCol = impliedCountTotCol1Q
+    #            if impliedOutcomeLabel == ('0',):
+    #                count_dict.setitem_unsafe(('0',), col_values[impliedCountTotCol] - count_dict[('1',)])
+    #            else:
+    #                count_dict.setitem_unsafe(('1',), col_values[impliedCountTotCol] - count_dict[('0',)])
+    #
+    #    else:  # assume col_values is a list of (outcomeLabel, count) tuples
+    #        for tup in col_values:
+    #            assert(isinstance(tup, tuple)), \
+    #                ("Outcome labels must be specified with"
+    #                 "count data when there's no column-key header")
+    #            assert(len(tup) == 2), "Invalid count! (parsed to %s)" % str(tup)
+    #            count_dict.setitem_unsafe(tup[0], tup[1])
+    #    return count_dict
 
     def parse_multidatafile(self, filename, show_progress=True,
                             collision_action="aggregate", record_zero_counts=True, ignore_zero_count_lines=True):
@@ -662,7 +742,7 @@ class StdInputParser(object):
                 if len(dataline) == 0: continue
 
                 try:
-                    circuitTuple, circuitStr, circuitLbls, occurrence_id, valueList = \
+                    circuit, valueList = \
                         self.parse_dataline(dataline, lookupDict, nDataCols,
                                             create_subcircuits=not _objs.Circuit.default_expand_subcircuits)
 
@@ -681,10 +761,6 @@ class StdInputParser(object):
                 except ValueError as e:
                     raise ValueError("%s Line %d: %s" % (filename, iLine, str(e)))
 
-                if circuitLbls is None: circuitLbls = "auto"  # if line labels aren't given find them automatically
-                opStr = _objs.Circuit(circuitTuple, stringrep=circuitStr, line_labels=circuitLbls,
-                                      check=False, expand_subcircuits=False, occurrence=occurrence_id)
-                #Note: don't expand subcircuits because we've already directed parse_dataline to expand if needed
                 bBad = ('BAD' in valueList)  # supresses warnings
                 for count_dict in dsCountDicts.values(): count_dict.clear()  # reset before filling
                 self._fill_multi_data_count_dicts(dsCountDicts, fillInfo, valueList)
@@ -693,19 +769,19 @@ class StdInputParser(object):
                 if all([(abs(v) < 1e-9) for cDict in dsCountDicts.values() for v in cDict.values()]):
                     if ignore_zero_count_lines:
                         if not bBad:
-                            s = circuitStr if len(circuitStr) < 40 else circuitStr[0:37] + "..."
+                            s = circuit.str if len(circuit.str) < 40 else circuit.str[0:37] + "..."
                             warnings.append("Dataline for circuit '%s' has zero counts and will be ignored" % s)
                         bSkip = True  # skip lines in dataset file with zero counts (no experiments done)
                     else:
                         if not bBad:
-                            s = circuitStr if len(circuitStr) < 40 else circuitStr[0:37] + "..."
+                            s = circuit.str if len(circuit.str) < 40 else circuit.str[0:37] + "..."
                             warnings.append("Dataline for circuit '%s' has zero counts." % s)
 
                 if not bSkip:
                     for dsLabel, countDict in dsCountDicts.items():
                         datasets[dsLabel].add_count_dict(
-                            opStr, countDict, record_zero_counts=record_zero_counts, update_ol=False)
-                        mds.add_auxiliary_info(opStr, commentDict)
+                            circuit, countDict, record_zero_counts=record_zero_counts, update_ol=False)
+                        mds.add_auxiliary_info(circuit, commentDict)
 
         for dsLabel, ds in datasets.items():
             ds.update_ol()  # because we set update_ol=False above, we need to do this
@@ -868,11 +944,7 @@ class StdInputParser(object):
                     parts = line.split()
                     lastpart = parts[-1]
                     circuitStr = line[:-len(lastpart)].strip()
-                    circuitTuple, circuitLbls, occurrence_id = self.parse_circuit(circuitStr, lookupDict)
-                    # maybe allow a default line_labels to be passed in later?
-                    if circuitLbls is None: circuitLbls = "auto"
-                    circuit = _objs.Circuit(circuitTuple, stringrep=circuitStr, line_labels=circuitLbls,
-                                            check=False, occurrence=occurrence_id)
+                    circuit = self.parse_circuit(circuitStr, lookupDict)
                     timeSeriesStr = lastpart.strip()
                 except ValueError as e:
                     raise ValueError("%s Line %d: %s" % (filename, iLine, str(e)))

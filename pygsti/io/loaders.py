@@ -21,7 +21,7 @@ from . import metadir as _metadir
 
 def load_dataset(filename, cache=False, collision_action="aggregate",
                  record_zero_counts=True, ignore_zero_count_lines=True,
-                 with_times="auto", verbosity=1):
+                 with_times="auto", circuit_parse_cache=None, verbosity=1):
     """
     Load a DataSet from a file.
 
@@ -62,6 +62,11 @@ def load_dataset(filename, cache=False, collision_action="aggregate",
         "auto", then the time-stamped format is allowed but not required on a
         per-circuit basis (so the dataset can contain both formats).  Typically
         you only need to set this to False when reading in a template file.
+
+    circuit_parse_cache : dict, optional
+        A dictionary mapping qubit string representations into created
+        :class:`Circuit` objects, which can improve performance by reducing
+        or eliminating the need to parse circuit strings.
 
     verbosity : int, optional
         If zero, no output is shown.  If greater than zero,
@@ -468,6 +473,6 @@ def load_results_from_dir(dirname, name=None, preloaded_data=None, quick_load=Fa
     if name is None:  # then it's a directory object
         cls = _metadir._cls_from_meta_json(results_dir) if (results_dir / 'meta.json').exists() \
             else _ProtocolResultsDir  # default if no meta.json (if only a results obj has been written inside dir)
-        return cls.from_dir(dirname, quick_load=quick_load)
+        return cls.from_dir(dirname, preloaded_data=preloaded_data, quick_load=quick_load)
     else:  # it's a ProtocolResults object
         return _metadir._cls_from_meta_json(results_dir / name).from_dir(dirname, name, preloaded_data, quick_load)

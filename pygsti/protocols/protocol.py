@@ -2133,7 +2133,7 @@ class ProtocolResultsDir(_TreeNode):
     """
 
     @classmethod
-    def from_dir(cls, dirname, parent=None, name=None, quick_load=False):
+    def from_dir(cls, dirname, parent=None, name=None, preloaded_data=None, quick_load=False):
         """
         Initialize a new ProtocolResultsDir object from `dirname`.
 
@@ -2153,6 +2153,11 @@ class ProtocolResultsDir(_TreeNode):
             The name of this result within `parent`.  This is only
             used when `parent` is not None.
 
+        preloaded_data : ProtocolData, optional
+            In the case that the :class:`ProtocolData` object for `dirname`
+            is already loaded, it can be passed in here.  Otherwise leave this
+            as None and it will be loaded.
+
         quick_load : bool, optional
             Setting this to True skips the loading of data and experiment-design
             components that may take a long time to load. This can be useful
@@ -2164,7 +2169,8 @@ class ProtocolResultsDir(_TreeNode):
         """
         dirname = _pathlib.Path(dirname)
         data = parent.data[name] if (parent and name) else \
-            _io.load_data_from_dir(dirname, quick_load=quick_load)
+            (preloaded_data if preloaded_data is not None else
+             _io.load_data_from_dir(dirname, quick_load=quick_load))
 
         #Load results in results_dir
         results = {}

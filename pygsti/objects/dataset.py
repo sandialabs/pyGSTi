@@ -1477,6 +1477,76 @@ class DataSet(object):
                                  aux, update_ol, unsafe=True)
         #unsafe=True OK b/c outcome_label_list contains the keys of an OutcomeLabelDict
 
+    def add_count_list(self, circuit, outcome_labels, counts, record_zero_counts=True,
+                       aux=None, update_ol=True, unsafe=False):
+        """
+        Add a single circuit's counts to this DataSet
+
+        Parameters
+        ----------
+        circuit : tuple or Circuit
+            A tuple of operation labels specifying the circuit or a Circuit object
+
+        outcome_labels : list or tuple
+            The outcome labels corresponding to `counts`.
+
+        counts : list or tuple
+            The counts themselves.
+
+        record_zero_counts : bool, optional
+            Whether zero-counts are actually recorded (stored) in this DataSet.
+            If False, then zero counts are ignored, except for potentially
+            registering new outcome labels.
+
+        aux : dict, optional
+            A dictionary of auxiliary meta information to be included with
+            this set of data counts (associated with `circuit`).
+
+        update_ol : bool, optional
+            This argument is for internal use only and should be left as True.
+
+        unsafe : bool, optional
+            `True` means that `outcome_labels` is guaranteed to hold tuple-type
+            outcome labels and never plain strings.  Only set this to `True` if
+            you know what you're doing.
+
+        Returns
+        -------
+        None
+        """
+        if self.bStatic: raise ValueError("Cannot add data to a static DataSet object")
+        circuit = self._collisionaction_update_circuit(circuit)
+
+        if self.collisionAction == "aggregate" and circuit in self:
+            iNext = int(max(self[circuit].time)) + 1 \
+                if (len(self[circuit].time) > 0) else 0
+            timeStampList = [iNext] * len(counts)
+            overwriteExisting = False
+        else:
+            timeStampList = [0] * len(counts)
+            overwriteExisting = True
+
+        self.add_raw_series_data(circuit, outcome_labels, timeStampList,
+                                 counts, overwriteExisting, record_zero_counts,
+                                 aux, update_ol, unsafe=unsafe)
+
+    def add_count_arrays(self, circuit, outcome_index_array, count_array,
+                         record_zero_counts=True, aux=None):
+        """
+        TODO: docstring
+        """
+        if self.collisionAction == "aggregate" and circuit in self:
+            iNext = int(max(self[circuit].time)) + 1 \
+                if (len(self[circuit].time) > 0) else 0
+            time_array = iNext * _np.ones(count_array.shape[0], self.timeType)
+            overwriteExisting = False
+        else:
+            time_array = _np.zeros(count_array.shape[0], self.timeType)
+            overwriteExisting = True
+
+        self._add_raw_arrays(circuit, outcome_index_array, time_array, count_array,
+                             overwriteExisting, record_zero_counts, aux)
+
     def add_cirq_trial_result(self, circuit, trial_result, key):
         """
         Add a single circuit's counts --- stored in a Cirq TrialResult --- to this DataSet
@@ -1582,43 +1652,52 @@ class DataSet(object):
         assert(oliArray.shape == timeArray.shape), \
             "Outcome-label and time stamp lists must have the same length!"
 
-        if rep_count_list is None:
-            if self.repData is None: repArray = None
-            else: repArray = _np.ones(len(oliArray), self.repType)
+        if rep_count_list is not None:
+            repArray = _np.array(rep_count_list, self.repType)
+
+        self._add_raw_arrays(circuit, oliArray, timeArray, repArray,
+                             overwrite_existing, record_zero_counts, aux)
+
+    def _add_raw_arrays(self, circuit, oli_array, time_array, rep_array,
+                        overwrite_existing, record_zero_counts, aux):
+
+        if rep_array is None:
+            if self.repData is not None:
+                rep_array = _np.ones(len(oli_array), self.repType)
         else:
             if self.repData is None:
                 #rep count data was given, but we're not currently holding repdata,
                 # so we need to build this up for all existings sequences:
                 self._add_explicit_repetition_counts()
-            repArray = _np.array(rep_count_list, self.repType)
 
         if not record_zero_counts:
             # Go through repArray and remove any zeros, along with
             # corresponding elements of oliArray and timeArray
-            mask = repArray != 0  # boolean array (note: == float comparison *is* desired)
-            repArray = repArray[mask]
-            oliArray = oliArray[mask]
-            timeArray = timeArray[mask]
+            mask = rep_array != 0  # boolean array (note: == float comparison *is* desired)
+            if not _np.all(mask):
+                rep_array = rep_array[mask]
+                oli_array = oli_array[mask]
+                time_array = time_array[mask]
 
         if circuit in self.cirIndex:
             circuitIndx = self.cirIndex[circuit]
             if overwrite_existing:
-                self.oliData[circuitIndx] = oliArray  # OVERWRITE existing time series
-                self.timeData[circuitIndx] = timeArray  # OVERWRITE existing time series
-                if repArray is not None: self.repData[circuitIndx] = repArray
+                self.oliData[circuitIndx] = oli_array  # OVERWRITE existing time series
+                self.timeData[circuitIndx] = time_array  # OVERWRITE existing time series
+                if rep_array is not None: self.repData[circuitIndx] = rep_array
             else:
-                self.oliData[circuitIndx] = _np.concatenate((self.oliData[circuitIndx], oliArray))
-                self.timeData[circuitIndx] = _np.concatenate((self.timeData[circuitIndx], timeArray))
-                if repArray is not None:
-                    self.repData[circuitIndx] = _np.concatenate((self.repData[circuitIndx], repArray))
+                self.oliData[circuitIndx] = _np.concatenate((self.oliData[circuitIndx], oli_array))
+                self.timeData[circuitIndx] = _np.concatenate((self.timeData[circuitIndx], time_array))
+                if rep_array is not None:
+                    self.repData[circuitIndx] = _np.concatenate((self.repData[circuitIndx], rep_array))
 
         else:
             #add data for a new circuit
             assert(len(self.oliData) == len(self.timeData)), "OLI and TIME data are out of sync!!"
             circuitIndx = len(self.oliData)  # index of to-be-added circuit
-            self.oliData.append(oliArray)
-            self.timeData.append(timeArray)
-            if repArray is not None: self.repData.append(repArray)
+            self.oliData.append(oli_array)
+            self.timeData.append(time_array)
+            if rep_array is not None: self.repData.append(rep_array)
             self.cirIndex[circuit] = circuitIndx
 
         if aux is not None: self.add_auxiliary_info(circuit, aux)
