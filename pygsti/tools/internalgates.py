@@ -161,10 +161,9 @@ def standard_gatename_unitaries():
     - Clifford Gates:
 
       - 'Gi' : the 1Q idle operation.
-      - 'Gxpi2','Gypi2','Gzpi2' : 1Q pi/2 rotations around X, Y and Z.
       - 'Gxpi','Gypi','Gzpi' : 1Q pi rotations around X, Y and Z.
       - 'Gxpi2','Gypi2','Gzpi2' : 1Q pi/2 rotations around X, Y and Z.
-      - 'Gxpi2','Gypi2','Gzpi2' : 1Q pi/2 rotations around X, Y and Z.
+      - 'Gxmpi2','Gympi2','Gzmpi2' : 1Q -pi/2 rotations around X, Y and Z.
       - 'Gh' : Hadamard.
       - 'Gp', 'Gpdag' : phase and inverse phase (an alternative notation/name for Gzpi and Gzmpi2).
       - 'Gci' where i = 0, 1, ..., 23 : the 24 1-qubit Cliffor gates (all the gates above are included as one of these).

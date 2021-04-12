@@ -30,6 +30,7 @@ from ..tools import listtools as _lt
 from ..tools import slicetools as _slct
 from ..tools import symplectic as _symp
 from ..tools import lindbladtools as _lbt
+from ..tools import internalgates as _itgs
 from . import gaugegroup as _gaugegroup
 from . import modelmember as _modelmember
 from . import stabilizer as _stabilizer
@@ -1399,6 +1400,46 @@ class DenseOperator(BasedDenseOperatorInterface, LinearOperator):
     def __str__(self):
         s = "%s with shape %s\n" % (self.__class__.__name__, str(self.base.shape))
         s += _mt.mx_to_string(self.base, width=4, prec=2)
+        return s
+
+
+class StaticStandardOp(LinearOperator):
+    """
+    An operation that is completely fixed, or "static" (i.e. that posesses no parameters)
+    that can be constructed from "standard" gate names (as defined in pygsti.tools.internalgates).
+
+    Parameters
+    ----------
+    name : str
+        Standard gate name
+
+    evotype : {"statevec", "densitymx"}
+        The evolution type.
+        - "statevec": Unitary from standard_gatename_unitaries is used directly
+        - "densitymx": Pauli transfer matrix is built from standard_gatename_unitaries (i.e. basis = 'pp')
+    """
+    def __init__(self, name, evotype):
+        self.name = name
+
+        if evotype in ('statevec', 'densitymx'):
+            std_unitaries = _itgs.standard_gatename_unitaries()
+            if self.name not in std_unitaries:
+                raise ValueError("Name %s not in standard unitaries" % self.name)
+
+            U = std_unitaries[self.name]
+
+            if evotype == 'statevec':
+                rep = replib.SVOpRepDense(LinearOperator.convert_to_matrix(U))
+            else:
+                ptm = _gt.unitary_to_pauligate(U)
+                rep = replib.DMOpRepDense(LinearOperator.convert_to_matrix(ptm))
+        else:
+            raise ValueError("Invalid evotype for a StaticStandardOp: %s" % evotype)
+        
+        LinearOperator.__init__(self, rep, evotype)
+    
+    def __str__(self):
+        s = "%s with name %s and evotype %s\n" % (self.__class__.__name__, self.name, self._evotype)
         return s
 
 

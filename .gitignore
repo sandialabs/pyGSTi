@@ -20,6 +20,7 @@ hooks/etc/permissions.yml
 *.cache
 /.eggs/
 .ropeproject
+.vscode
 
 # Test Metadata #
 #################

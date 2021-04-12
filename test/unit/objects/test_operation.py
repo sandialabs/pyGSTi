@@ -10,6 +10,8 @@ from pygsti.tools import basisconstructors as bc
 import pygsti.construction as pc
 from pygsti.construction.modelconstruction import _create_spam_vector, _create_operation
 import pygsti.objects.operation as op
+import pygsti.tools.internalgates as itgs
+import pygsti.tools.optools as gt
 
 
 class OpBase(object):
@@ -251,6 +253,32 @@ class DenseOpTester(ImmutableDenseOpBase, BaseCase):
         for bad_mx in bad_mxs:
             with self.assertRaises(ValueError):
                 op.DenseOperator.convert_to_matrix(bad_mx)
+
+
+class StaticStdOpTester(BaseCase):
+    def test_statevec(self):
+        std_unitaries = itgs.standard_gatename_unitaries()
+
+        for name, U in std_unitaries.items():
+            svop = op.StaticStandardOp(name, 'statevec')
+            self.assertArraysAlmostEqual(svop._rep.base, U)
+
+    def test_densitymx(self):
+        std_unitaries = itgs.standard_gatename_unitaries()
+
+        for name, U in std_unitaries.items():
+            dmop = op.StaticStandardOp(name, 'densitymx')
+            self.assertArraysAlmostEqual(dmop._rep.base, gt.unitary_to_pauligate(U))
+        
+    def test_raises_on_bad_name(self):
+        with self.assertRaises(ValueError):
+            op.StaticStandardOp('BadGate', 'statevec')
+        with self.assertRaises(ValueError):
+            op.StaticStandardOp('BadGate', 'densitymx')
+    
+    def test_raises_on_bad_evotype(self):
+        with self.assertRaises(ValueError):
+            op.StaticStandardOp('Gi', 'not_an_evotype')
 
 
 class FullOpTester(MutableDenseOpBase, BaseCase):
