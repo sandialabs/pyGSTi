@@ -30,3 +30,4 @@ from .opttools import *
 from .nameddict import NamedDict
 from .typeddict import TypedDict
 from .pdftools import *
+from .rbtheory import *

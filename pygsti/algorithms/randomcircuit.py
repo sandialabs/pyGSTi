@@ -1963,7 +1963,8 @@ def create_simultaneous_direct_rb_experiment(pspec, depths, circuits_per_length,
     return experiment_dict
 
 
-def create_clifford_rb_circuit(pspec, length, qubit_labels=None, randomizeout=False, citerations=20, compilerargs=[]):
+def create_clifford_rb_circuit(pspec, length, qubit_labels=None, randomizeout=False, citerations=20, compilerargs=[],
+                               interleaved_circuit=None):
     """
     Generates a "Clifford randomized benchmarking" (CRB) circuit.
 
@@ -2066,6 +2067,10 @@ def create_clifford_rb_circuit(pspec, length, qubit_labels=None, randomizeout=Fa
         # Keeps track of the current composite Clifford
         s_composite, p_composite = _symp.compose_cliffords(s_composite, p_composite, s, p)
         full_circuit.append_circuit_inplace(circuit)
+        if interleaved_circuit is not None:
+            s, p = _symp.symplectic_rep_of_clifford_circuit(interleaved_circuit, pspec=pspec)
+            s_composite, p_composite = _symp.compose_cliffords(s_composite, p_composite, s, p)
+            full_circuit.append_circuit_inplace(interleaved_circuit)
 
     # Find the symplectic rep of the inverse clifford
     s_inverse, p_inverse = _symp.inverse_clifford(s_composite, p_composite)

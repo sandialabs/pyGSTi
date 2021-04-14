@@ -261,8 +261,8 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
                  descriptor='A random germ mirror circuit experiment'):
 
         if qubit_labels is None: qubit_labels = tuple(pspec.qubit_labels)
-        circuit_lists = [[] for d in depths]
-        ideal_outs = [[] for d in depths]
+        circuit_lists = []
+        ideal_outs = []
 
         for j in range(circuits_per_depth):
             circtemp, outtemp, junk = _rc.create_random_germpower_mirror_circuits(
@@ -271,7 +271,7 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
                 fixed_versus_depth=fixed_versus_depth)
             for ind in range(len(depths)):
                 circuit_lists[ind].append(circtemp[ind])
-                ideal_outs[ind].append(outtemp[ind])
+                ideal_outs[ind].append((''.join(map(str, outtemp[ind])),))
 
         self._init_foundation(depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
                               sampler, samplerargs, localclifford, paulirandomize, fixed_versus_depth, descriptor)
@@ -563,7 +563,10 @@ class SummaryStatistics(_proto.Protocol):
                     totalcounts = total_counts[depth][ind] if finitecounts else None
                     bcache['success_probabilities'][depth].append(sampledSP)
                     if finitecounts:
-                        bcache['success_counts'][depth].append(_np.random.binomial(totalcounts, sampledSP))
+                        if not _np.isnan(sampledSP):
+                            bcache['success_counts'][depth].append(_np.random.binomial(totalcounts, sampledSP))
+                        else:
+                            bcache['success_probabilities'][depth].append(sampledSP)
                         bcache['total_counts'][depth].append(totalcounts)
                     else:
                         bcache['success_counts'][depth].append(sampledSP)
@@ -574,8 +577,11 @@ class SummaryStatistics(_proto.Protocol):
                     sampledHDpdf = _np.array(sampledHDcounts) / _np.sum(sampledHDcounts)
 
                     if finitecounts:
-                        bcache['hamming_distance_counts'][depth].append(
-                            list(_np.random.multinomial(totalcounts, sampledHDpdf)))
+                        if not _np.isnan(sampledSP):
+                            bcache['hamming_distance_counts'][depth].append(
+                                list(_np.random.multinomial(totalcounts, sampledHDpdf)))
+                        else:
+                            bcache['hamming_distance_counts'][depth].append(sampledHDpdf)
                     else:
                         bcache['hamming_distance_counts'][depth].append(sampledHDpdf)
 

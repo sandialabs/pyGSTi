@@ -445,13 +445,11 @@ def standard_gatenames_openqasm_conversions(version='u3'):
         std_gatenames_to_qasm['Gc23'] = 'u3(0, 0, 4.71238898038469)'  # [0, 0, 3] * pi/2 (this is Gzmpi2 / Gpdag)
 
         std_gatenames_to_qasm['Gzr'] = 'u3'
-        std_gatenames_to_qasm['Gz'] = 'u3'
 
         def Gz_theta_map(gatearg):
             return '(0, 0, ' + gatearg[0] + ')'
         std_gatenames_to_argmap = {}
         std_gatenames_to_argmap['Gzr'] = Gz_theta_map
-        std_gatenames_to_argmap['Gz'] = Gz_theta_map
 
     elif version == 'x-sx-rz':
         std_gatenames_to_qasm = {}
@@ -500,13 +498,11 @@ def standard_gatenames_openqasm_conversions(version='u3'):
         std_gatenames_to_qasm['Gtdag'] = ['rz(5.497787143782138)']
 
         std_gatenames_to_qasm['Gzr'] = 'rz'
-        std_gatenames_to_qasm['Gz'] = 'rz'
 
         def Gz_theta_map(gatearg):
             return '(' + gatearg[0] + ')'
         std_gatenames_to_argmap = {}
         std_gatenames_to_argmap['Gzr'] = Gz_theta_map
-        std_gatenames_to_argmap['Gz'] = Gz_theta_map
 
     else:
         raise ValueError("Unknown version!")

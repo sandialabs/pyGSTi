@@ -67,7 +67,7 @@ def create_mirror_circuit(circ, pspec, circtype='Clifford+Gzr', pauli_labels=Non
     if pauli_labels is None: pauli_labels = ['Gi', 'Gxpi', 'Gypi', 'Gzpi']
     qubits = circ.line_labels
     identity = _np.identity(2 * n, int)
-    zrotname = 'Gz'
+    zrotname = 'Gzr'
     # qubit_labels = ['G{}'.format(i) for i in range(n)]
 
     quasi_inverse_circ = []
