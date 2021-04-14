@@ -188,7 +188,7 @@ class EvalTree(list):
         if len(circuits_to_evaluate) > 0:
             test_ratios = (100, 10, 3); ratio = len(eval_tree) / len(circuits_to_evaluate)
             for test_ratio in test_ratios:
-                if ratio >= test_ratio:
+                if ratio >= test_ratio and len(circuits_to_evaluate) > 1:  # no warning for 1-circuit case
                     _warnings.warn(("Created an evaluation tree that is inefficient: tree-size > %d * #circuits !\n"
                                     "This is likely due to the fact that the circuits being simulated do not have a\n"
                                     "periodic structure. Consider using a different forward simulator "

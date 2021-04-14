@@ -924,7 +924,7 @@ class LabelTupTup(Label, tuple):
         if len(tupOfLabels) > 0:
             assert(max([lbl.time for lbl in tupOfLabels]) == 0.0), \
                 "Cannot create a LabelTupTup containing labels with time != 0"
-        return cls.__new__(cls, tupOfLabels, time)
+        return cls.__new__(cls, tupOfLabels)
 
     __new__ = tuple.__new__
 

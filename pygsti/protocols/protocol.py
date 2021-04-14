@@ -935,7 +935,7 @@ class ExperimentDesign(_TreeNode):
 
 class CircuitListsDesign(ExperimentDesign):
     """
-    Experiment deisgn specification that is comprised of multiple circuit lists.
+    Experiment design specification that is comprised of multiple circuit lists.
 
     Parameters
     ----------
@@ -972,7 +972,7 @@ class CircuitListsDesign(ExperimentDesign):
 
         If `edesign` already is a circuit lists experiment design, it will
         just be returned (not a copy of it).
-        
+
         Parameters
         ----------
         edesign : ExperimentDesign
@@ -1079,7 +1079,7 @@ class CircuitListsDesign(ExperimentDesign):
         self.circuit_lists = truncated_circuit_lists
         self.nested = False  # we're not sure whether the truncated lists are nested
         super()._truncate_to_circuits_inplace(circuits_to_keep)
-    
+
     def _truncate_to_design_inplace(self, other_design):
         self.circuit_lists = [my_circuit_list.truncate(other_circuit_list) for my_circuit_list, other_circuit_list
                               in zip(self.circuit_lists, other_design.circuit_lists)]
@@ -1455,6 +1455,93 @@ class SimultaneousExperimentDesign(ExperimentDesign):
         return ProtocolData(sub_design, filtered_ds)
 
 
+class FreeformDesign(ExperimentDesign):
+    """
+    Experiment design holding an arbitrary circuit list and meta data.
+
+    Parameters
+    ----------
+    circuits : list or dict
+        A list of the circuits needing data.  If None, then the list is empty.
+
+    qubit_labels : tuple, optional
+        The qubits that this experiment design applies to. If None, the
+        line labels of the first circuit is used.
+    """
+
+    @classmethod
+    def from_dataframe(cls, df, qubit_labels=None):
+        """
+        Create a FreeformDesign from a pandas dataframe.
+
+        Parameters
+        ----------
+        df : pandas.Dataframe
+            A dataframe containing a `"Circuit"` column and possibly others.
+
+        qubit_labels : tuple, optional
+            The qubits that this experiment design applies to. If None, the
+            line labels of the first circuit is used.
+
+        Returns
+        -------
+        FreeformDesign
+        """
+        circuits = {}
+        for index, row in df.iterrows():
+            data = {k: v for k, v in row.items() if k != 'Circuit'}
+            circuits[_objs.Circuit(row['Circuit'])] = data
+        return cls(circuits, qubit_labels)
+
+    @classmethod
+    def from_edesign(cls, edesign):
+        """
+        Create a FreeformDesign out of an existing experiment design.
+
+        If `edesign` already is a free-form experiment design, it will
+        just be returned (not a copy of it).
+
+        Parameters
+        ----------
+        edesign : ExperimentDesign
+            The experiment design to convert (use as a base).
+
+        Returns
+        -------
+        FreeformDesign
+        """
+        if cls != FreeformDesign:
+            raise NotImplementedError("Cannot convert a %s to a %s!" % (str(type(edesign)), str(cls)))
+
+        if isinstance(edesign, FreeformDesign):
+            return edesign
+        elif isinstance(edesign, ExperimentDesign):
+            return cls(edesign.all_circuits_needing_data, edesign.qubit_labels)
+        else:
+            raise ValueError("Cannot convert a %s to a %s!" % (str(type(edesign)), str(cls)))
+
+    def __init__(self, circuits, qubit_labels=None):
+        if isinstance(circuits, dict):
+            self.aux_info = circuits.copy()
+            circuits = list(circuits.keys())
+        else:
+            self.aux_info = {c: None for c in circuits}
+        super().__init__(circuits, qubit_labels)
+        self.auxfile_types['aux_info'] = 'pickle'
+
+    def _truncate_to_circuits_inplace(self, circuits_to_keep):
+        truncated_aux_info = {k: v for k, v in self.aux_info.items() if k in circuits_to_keep}
+        self.aux_info = truncated_aux_info
+        super()._truncate_to_circuits_inplace(circuits_to_keep)
+
+    def to_dataframe(self, pivot_valuename=None, pivot_value="Value", drop_columns=False):
+        cdict = _NamedDict('Circuit', None)
+        for cir, info in self.aux_info.items():
+            cdict[cir.str] = _NamedDict('ValueName', 'category', items=info)
+        df = cdict.to_dataframe()
+        return _process_dataframe(df, pivot_valuename, pivot_value, drop_columns, preserve_order=True)
+
+
 class ProtocolData(_TreeNode):
     """
     Represents the experimental data needed to run one or more QCVV protocols.
@@ -1750,9 +1837,9 @@ class ProtocolData(_TreeNode):
         keys_vals_types = [(k, v, 'category') for k, v in self.tags.items()]
         return self.edesign.setup_nameddict(_NamedDict.create_nested(keys_vals_types, final_dict))
 
-    def auxinfo_dataframe(self, pivot_valuename=None, pivot_value=None, drop_columns=False):
+    def to_dataframe(self, pivot_valuename=None, pivot_value=None, drop_columns=False):
         """
-        Create a Pandas dataframe with aux-data from this dataset.
+        Create a Pandas dataframe with this data.
 
         Parameters
         ----------
@@ -1778,11 +1865,19 @@ class ProtocolData(_TreeNode):
         pandas.DataFrame
         """
         cdict = _NamedDict('Circuit', None)
-        for cir, raw_auxdict in self.dataset.auxInfo.items():
-            cdict[cir.str] = _NamedDict('ValueName', 'category', items=raw_auxdict)
+        if isinstance(self.dataset, _objs.FreeformDataSet):
+            for cir, i in self.dataset.cirIndex.items():
+                d = _NamedDict('ValueName', 'category', items=self.dataset._info[i])
+                if isinstance(self.edesign, FreeformDesign):
+                    edesign_aux = self.edesign.aux_info[cir]
+                    if edesign_aux is not None:
+                        d.update(edesign_aux)
+                cdict[cir.str] = d
+        else:
+            raise NotImplementedError("Can only convert free-form data to dataframes currently.")
 
         df = cdict.to_dataframe()
-        return _process_dataframe(df, pivot_valuename, pivot_value, drop_columns)
+        return _process_dataframe(df, pivot_valuename, pivot_value, drop_columns, preserve_order=True)
 
 
 class ProtocolResults(object):
@@ -2463,10 +2558,50 @@ class ProtocolPostProcessor(object):
 
 class DataSimulator(object):
     """
-    An analysis routine that is run on an experiment design to produce data and auxiliary information.
+    An analysis routine that is run on an experiment design to produce per-circuit data.
 
     A DataSimulator fundamentally simulates a model to create data, taking an :class:`ExperimentDesign`
     as input and producing a :class:`ProtocolData` object as output.
+
+    The produced data may consist of data counts for some/all of the circuit outcomes, and
+    thus result in a :class:`ProtocolData` containsing a normal :class:`DataSet`.  Alternatively,
+    a data simulator may compute arbitrary quantities to be associated with the circuits, resulting
+    in a :class:`ProtocolData` containsing a normal :class:`FreeformDataSet`.
+
+    """
+
+    def __init__(self):
+        pass
+
+    def run(self, edesign, memlimit=None, comm=None):
+        """
+        Run this data simulator on an experiment design.
+
+        Parameters
+        ----------
+        edesign : ExperimentDesign
+            The input experiment design.
+
+        memlimit : int, optional
+            A rough per-processor memory limit in bytes.
+
+        comm : mpi4py.MPI.Comm, optional
+            When not ``None``, an MPI communicator used to run this data
+            simulator in parallel.
+
+        Returns
+        -------
+        ProtocolData
+        """
+        raise NotImplementedError("Derived classes should implement this!")
+
+
+class DataCountsSimulator(DataSimulator):
+    """
+    Simulates data counts for each circuit outcome, producing a simulated data set.
+
+    This object can also be used to compute the outcome probabilities for each
+    circuit outcome instead of sampled counts by setting `sample_error="none"`.
 
     Parameters
     ----------
@@ -2606,7 +2741,7 @@ def _reset_index(df):
     return _pd.merge(index_df, df, left_index=True, right_index=True)
 
 
-def _process_dataframe(df, pivot_valuename, pivot_value, drop_columns):
+def _process_dataframe(df, pivot_valuename, pivot_value, drop_columns, preserve_order=False):
     """ See to_dataframe docstrings for argument descriptions. """
     if drop_columns:
         if drop_columns is True: drop_columns = (True,)
@@ -2619,6 +2754,11 @@ def _process_dataframe(df, pivot_valuename, pivot_value, drop_columns):
         index_columns = list(df.columns)
         index_columns.remove(pivot_valuename)
         index_columns.remove(pivot_value)
-        df = _reset_index(df.set_index(index_columns + [pivot_valuename])[pivot_value].unstack())
+        df_all_index_but_value = df.set_index(index_columns + [pivot_valuename])
+        df_unstacked = df_all_index_but_value[pivot_value].unstack()
+        if preserve_order:  # a documented bug in pandas is unstack sorts - this tries to fix (HACK)
+            #df_unstacked = df_unstacked.reindex(df_all_index_but_value.index.get_level_values(0))
+            df_unstacked = df_unstacked.reindex(df_all_index_but_value.index.get_level_values(0).unique())
+        df = _reset_index(df_unstacked)
 
     return df

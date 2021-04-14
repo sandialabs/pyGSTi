@@ -30,6 +30,7 @@ from collections import defaultdict as _defaultdict
 from ..tools import listtools as _lt
 from ..tools import compattools as _compat
 from ..tools.legacytools import deprecate as _deprecated_fn
+from ..tools import NamedDict as _NamedDict
 
 from . import circuit as _cir
 from . import labeldicts as _ld
@@ -3037,3 +3038,38 @@ class DataSet(object):
         if added and update_ol:  # rebuild self.ol because olIndex has changed
             self.update_ol()
         self.olIndex_max = iNext
+
+    def auxinfo_dataframe(self, pivot_valuename=None, pivot_value=None, drop_columns=False):
+        """
+        Create a Pandas dataframe with aux-data from this dataset.
+
+        Parameters
+        ----------
+        pivot_valuename : str, optional
+            If not None, the resulting dataframe is pivoted using `pivot_valuename`
+            as the column whose values name the pivoted table's column names.
+            If None and `pivot_value` is not None,`"ValueName"` is used.
+
+        pivot_value : str, optional
+            If not None, the resulting dataframe is pivoted such that values of
+            the `pivot_value` column are rearranged into new columns whose names
+            are given by the values of the `pivot_valuename` column. If None and
+            `pivot_valuename` is not None,`"Value"` is used.
+
+        drop_columns : bool or list, optional
+            A list of column names to drop (prior to performing any pivot).  If
+            `True` appears in this list or is given directly, then all
+            constant-valued columns are dropped as well.  No columns are dropped
+            when `drop_columns == False`.
+
+        Returns
+        -------
+        pandas.DataFrame
+        """
+        from ..protocols.protocol import _process_dataframe
+        cdict = _NamedDict('Circuit', None)
+        for cir, raw_auxdict in self.auxInfo.items():
+            cdict[cir.str] = _NamedDict('ValueName', 'category', items=raw_auxdict)
+
+        df = cdict.to_dataframe()
+        return _process_dataframe(df, pivot_valuename, pivot_value, drop_columns)
