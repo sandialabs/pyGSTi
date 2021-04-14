@@ -1257,7 +1257,7 @@ def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}
     for key in all_keys:
         # Use custom gate directly as error gate
         if key in custom_gates:
-            gatedict[name] = custom_gates[name]
+            gatedict[key] = custom_gates[key]
             continue
     
         # Skip idle, prep, and povm here, just do gates
