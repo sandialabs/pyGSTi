@@ -1403,7 +1403,7 @@ class DenseOperator(BasedDenseOperatorInterface, LinearOperator):
         return s
 
 
-class StaticStandardOp(LinearOperator):
+class StaticStandardOp(DenseOperator):
     """
     An operation that is completely fixed, or "static" (i.e. that posesses no parameters)
     that can be constructed from "standard" gate names (as defined in pygsti.tools.internalgates).
@@ -1413,15 +1413,15 @@ class StaticStandardOp(LinearOperator):
     name : str
         Standard gate name
 
-    evotype : {"statevec", "densitymx"}
+    evotype : {"statevec", "densitymx", "svterm", "cterm"}
         The evolution type.
         - "statevec": Unitary from standard_gatename_unitaries is used directly
-        - "densitymx": Pauli transfer matrix is built from standard_gatename_unitaries (i.e. basis = 'pp')
+        - "densitymx", "svterm", "cterm": Pauli transfer matrix is built from standard_gatename_unitaries (i.e. basis = 'pp')
     """
     def __init__(self, name, evotype):
         self.name = name
 
-        if evotype in ('statevec', 'densitymx'):
+        if evotype in ('statevec', 'densitymx', 'svterm', 'cterm'):
             std_unitaries = _itgs.standard_gatename_unitaries()
             if self.name not in std_unitaries:
                 raise ValueError("Name %s not in standard unitaries" % self.name)
@@ -1430,7 +1430,7 @@ class StaticStandardOp(LinearOperator):
 
             if evotype == 'statevec':
                 rep = replib.SVOpRepDense(LinearOperator.convert_to_matrix(U))
-            else:
+            else: # evotype in ('densitymx', 'svterm', 'cterm')
                 ptm = _gt.unitary_to_pauligate(U)
                 rep = replib.DMOpRepDense(LinearOperator.convert_to_matrix(ptm))
         else:
@@ -2634,7 +2634,7 @@ class StochasticNoiseOp(LinearOperator):
     """
     A stochastic noise operation.
 
-    Implements the stocastic noise map:
+    Implements the stochastic noise map:
     `rho -> (1-sum(p_i))rho + sum_(i>0) p_i * B_i * rho * B_i^dagger`
     where `p_i > 0` and `sum(p_i) < 1`, and `B_i` is basis where `B_0` is the identity.
 
@@ -3023,7 +3023,7 @@ class DepolarizeOp(StochasticNoiseOp):
             A copy of this object.
         """
         if memo is not None and id(self) in memo: return memo[id(self)]
-        copyOfMe = DepolarizeOp(self.dim, self.basis, self.evotype, self._params_to_rates(self.to_vector())[0])
+        copyOfMe = DepolarizeOp(self.dim, self.basis, self._evotype, self._params_to_rates(self.to_vector())[0])
         return self._copy_gpindices(copyOfMe, parent, memo)
 
 

@@ -263,20 +263,20 @@ class StaticStdOpTester(BaseCase):
             svop = op.StaticStandardOp(name, 'statevec')
             self.assertArraysAlmostEqual(svop._rep.base, U)
 
-    def test_densitymx(self):
+    def test_densitymx_svterm_cterm(self):
         std_unitaries = itgs.standard_gatename_unitaries()
 
-        for name, U in std_unitaries.items():
-            dmop = op.StaticStandardOp(name, 'densitymx')
-            self.assertArraysAlmostEqual(dmop._rep.base, gt.unitary_to_pauligate(U))
+        for evotype in ['densitymx', 'svterm', 'cterm']:
+            for name, U in std_unitaries.items():
+                dmop = op.StaticStandardOp(name, evotype)
+                self.assertArraysAlmostEqual(dmop._rep.base, gt.unitary_to_pauligate(U))
         
-    def test_raises_on_bad_name(self):
+    def test_raises_on_bad_values(self):
         with self.assertRaises(ValueError):
             op.StaticStandardOp('BadGate', 'statevec')
         with self.assertRaises(ValueError):
             op.StaticStandardOp('BadGate', 'densitymx')
-    
-    def test_raises_on_bad_evotype(self):
+
         with self.assertRaises(ValueError):
             op.StaticStandardOp('Gi', 'not_an_evotype')
 

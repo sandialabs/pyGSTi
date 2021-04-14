@@ -49,6 +49,7 @@ from ..io import CircuitParser as _CircuitParser
 
 from . import circuitconstruction as _gsc
 from .modelconstruction import _basis_create_spam_vector as _basis_build_vector
+from .modelconstruction import _parameterization_from_errgendict
 
 RANK_TOL = 1e-9
 
@@ -654,18 +655,6 @@ def create_cloud_crosstalk_model(num_qubits, gate_names, error_rates, nonstd_gat
             if k.sslbls is not None:
                 assert(all([sslbl in qubitGraph.node_names for sslbl in k.sslbls])), \
                     "One or more invalid qubit names in the label: %s" % str(k)
-
-    def _parameterization_from_errgendict(errs):
-        paramtypes = []
-        if any([nm[0] == 'H' for nm in errs]): paramtypes.append('H')
-        if any([nm[0] == 'S' for nm in errs]): paramtypes.append('S')
-        if any([nm[0] == 'A' for nm in errs]): paramtypes.append('A')
-        if any([nm[0] == 'S' and isinstance(nm, tuple) and len(nm) == 3 for nm in errs]):
-            # parameterization must be "CPTP" if there are any ('S',b1,b2) keys
-            parameterization = "CPTP"
-        else:
-            parameterization = '+'.join(paramtypes)
-        return parameterization
 
     def _map_stencil_sslbls(stencil_sslbls, target_lbls):  # deals with graph directions
         ret = [qubitGraph.resolve_relative_nodelabel(s, target_lbls) for s in stencil_sslbls]
