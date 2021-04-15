@@ -907,20 +907,19 @@ def _parameterization_from_errgendict(errs):
         parameterization = '+'.join(paramtypes)
     return parameterization
 
-def _get_error_gate(key, ideal_gate, depol_error_rates, sto_error_rates,
-                    lindblad_error_coeffs, lindblad_error_rates, parameterization):
+def _get_error_gate(key, ideal_gate, depol_strengths, sto_error_probs, lindblad_error_coeffs, parameterization):
     """Build a gate from an ideal gate and an error specification.
 
     Errors can be specified using any combination of the 4 error rate/coeff arguments,
     but each gate name must be provided exclusively to one type of specification.
     Each specification results in a different type of operation based on the parameterization:
-        - `depol_error_rates`     ->    parameterization[0] == 'depolarize':
+        - `depol_strengths`       ->    parameterization[0] == 'depolarize', 'auto':
                                             ComposedOp of target operation with DepolarizeOp
                                         parameterization[0] == 'stochastic':
                                             ComposedOp of target operation with StochasticNoiseOp
-                                        parameterization[0] == 'lindblad', 'auto':
+                                        parameterization[0] == 'lindblad':
                                             LindbladOp with "depol", "diagonal" parameterization
-        - `sto_error_rates`       ->    parameterization[1] == 'stochastic', 'auto':
+        - `sto_error_probs`       ->    parameterization[1] == 'stochastic', 'auto':
                                             ComposedOp of target operation with StochasticNoiseOp
                                         parameterization[1] == 'lindblad':
                                             LindbladOp with "cptp", "diagonal" parameterization
@@ -928,12 +927,6 @@ def _get_error_gate(key, ideal_gate, depol_error_rates, sto_error_rates,
                                         parameterization[2] == 'auto':
                                             Parameterization determined from error dict
                                         Otherwise, parameterization[2] passed through to LindbladOp
-        - `lindblad_error_rates`  ->    LindbladOp with coefficients determined via `set_error_rates()`
-                                        parameterization[2] == 'auto':
-                                            Parameterization determined from error dict
-                                        Otherwise, parameterization[2] passed through to LindbladOp
-    More details on the different specifications (particularly the difference between `lindblad_error_coeffs`
-    and `lindblad_error_rates`) are found below.
 
     Parameters
     ----------
@@ -943,16 +936,16 @@ def _get_error_gate(key, ideal_gate, depol_error_rates, sto_error_rates,
     ideal_gate : LinearOperator
         Ideal operation to compose/alter with errors
     
-    depol_error_rates : dict
+    depol_strengths : dict, optional
         A dictionary whose keys are gate names (e.g. `"Gx"`) and whose values
-        are floats that specify a rate of uniform depolarization.
+        are floats that specify the strength of uniform depolarization.
     
-    sto_error_rates : dict
+    sto_error_probs : dict, optional
         A dictionary whose keys are gate names (e.g. `"Gx"`) and whose values
         are tuples that specify Pauli-stochastic rates for each of the non-trivial
         Paulis (so a 3-tuple would be expected for a 1Q gate and a 15-tuple for a 2Q gate)
     
-    lindblad_error_coeffs : dict
+    lindblad_error_coeffs : dict, optional
         A dictionary whose keys are gate names (e.g. `"Gx"`) and whose values
         are dictionaries corresponding to the `lindblad_term_dict` kwarg taken
         by `LindbladErrorgen`. Keys are `(termType, basisLabel1, <basisLabel2>)`
@@ -965,14 +958,6 @@ def _get_error_gate(key, ideal_gate, depol_error_rates, sto_error_rates,
         "off-diagonal" non-Hamiltonian Lindblad terms.  Basis labels can be
         strings or integers.  Values are complex coefficients.
     
-    lindblad_error_rates : dict
-        A dictionary like `lindblad_error_coeffs` but where the values are error rates
-        rather than raw error generator coefficients. This distinction impacts non-Hamiltonian
-        terms where the rates are scaled as `(1 - exp(-d^2 * coeff)) / d^2`. Intuitively,
-        this "error rate" would be the rate of the resulting depolarizing channel if all 
-        stochastic error generators had the same given coefficient. See the
-        `logscale_nonham` kwarg of `LindbladErrorgen.coefficients()` for more details.
-    
     parameterization : list of str
         List of parameterizations for the depolarizing, stochastic, and lindblad specifications,
         adjusting the type of operator returned as described above.
@@ -983,8 +968,8 @@ def _get_error_gate(key, ideal_gate, depol_error_rates, sto_error_rates,
         Gate with errors, with parameterization/type as specified above based on which
         error specification method was used
     """
-    if key in depol_error_rates: # Depolarizing error specification
-        depol_rate = depol_error_rates[key]
+    if key in depol_strengths: # Depolarizing error specification
+        depol_rate = depol_strengths[key]
 
         if parameterization[0] == "depolarize": # DepolarizeOp
             depol_gate = _op.DepolarizeOp(ideal_gate.dim, basis="pp", evotype=ideal_gate._evotype, initial_rate=depol_rate)
@@ -1006,8 +991,8 @@ def _get_error_gate(key, ideal_gate, depol_error_rates, sto_error_rates,
         else:
             raise ValueError("Unknown parameterization %s for depolarizing error specification" % parameterization[0])
 
-    elif key in sto_error_rates: # Stochastic error specification
-        sto_rates = sto_error_rates[key]
+    elif key in sto_error_probs: # Stochastic error specification
+        sto_rates = sto_error_probs[key]
 
         if parameterization[1] in ["stochastic", "auto"]: # StochasticNoiseOp    
             sto_gate = _op.StochasticNoiseOp(ideal_gate.dim, basis="pp", evotype=ideal_gate._evotype, initial_rates=sto_rates)
@@ -1020,6 +1005,8 @@ def _get_error_gate(key, ideal_gate, depol_error_rates, sto_error_rates,
             
             # TODO: Make this not require dense
             err_gate = _op.LindbladOp(ideal_gate.to_dense(), errgen, dense_rep=True)
+
+            # TODO: This correct behavior to use probs as coeffs, or should we use Erik's conversion from rates?
         else:
             raise ValueError("Unknown parameterization %s for stochastic error specification" % parameterization[0])
 
@@ -1040,32 +1027,13 @@ def _get_error_gate(key, ideal_gate, depol_error_rates, sto_error_rates,
         
         # TODO: Make this not require dense
         err_gate = _op.LindbladOp(ideal_gate.to_dense(), errgen, dense_rep=True)
-    elif key in lindblad_error_rates: # LindbladOp with error rates
-        errdict = lindblad_error_rates[key]
-
-        # If auto, determine from provided dict. Otherwise, pass through
-        if parameterization[2] == "auto":
-            paramtype = _parameterization_from_errgendict(errdict)
-        else:
-            paramtype = parameterization[2]
-        _, _, nonham_mode, param_mode = _op.LindbladOp.decomp_paramtype(paramtype)
-
-        # Build LindbladErrorgen directly to have control over which parameters are set (leads to lower param counts)
-        basis = _BuiltinBasis('pp', ideal_gate.dim)
-        errgen = _op.LindbladErrorgen(ideal_gate.dim, errdict, basis, param_mode, nonham_mode,
-                                      truncate=False, mx_basis='pp', evotype=ideal_gate._evotype)
-        
-        # TODO: Make this not require dense
-        err_gate = _op.LindbladOp(ideal_gate.to_dense(), errgen, dense_rep=True)
-        # Set error rates for nonham rate -> coeff conversion
-        err_gate.set_error_rates(errdict)
     else: # No errors
         err_gate = ideal_gate
     
     return err_gate
 
 def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}, custom_gates={},
-                                depol_error_rates={}, sto_error_rates={}, lindblad_error_coeffs={}, lindblad_error_rates={},
+                                depol_strengths={}, sto_error_probs={}, lindblad_error_coeffs={},
                                 availability=None, qubit_labels=None, geometry="line", parameterization='auto',
                                 evotype="auto", simulator="auto", on_construction_error='raise',
                                 independent_gates=False, ensure_composed_gates=False):
@@ -1078,13 +1046,9 @@ def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}
     Errors can be specified using any combination of the 4 error rate/coeff arguments,
     but each gate name must be provided exclusively to one type of specification.
     Each specification results in a different type of operation, depending on the parameterization:
-        - `depol_error_rates`     -> DepolarizeOp, StochasticNoiseOp, or LindbladOp
-        - `sto_error_rates`       -> StochasticNoiseOp or LindbladOp
-        - `lindblad_error_coeffs` -> LindbladOp with LindbladErrgen coefficients set directly
-        - `lindblad_error_rates`  -> LindbladOp with LindladErrgen coefficients determined via `set_error_rates()`
-    More details on the different specifications (particularly the difference between `lindblad_error_coeffs`
-    and `lindblad_error_rates`) are found below.
-    
+        - `depol_strengths`       -> DepolarizeOp, StochasticNoiseOp, or LindbladOp
+        - `sto_error_probs`       -> StochasticNoiseOp or LindbladOp
+        - `lindblad_error_coeffs` -> LindbladOp
     In addition to the gate names, the special values `"prep"`, `"povm"`, and `"idle"` may be used as
     keys to specify the error on the state preparation, measurement, and global idle, respectively.
 
@@ -1112,11 +1076,11 @@ def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}
         `nonstd_gate_unitaries`).  Keys of this dictionary may
         be string-type gate *names* or labels that include target qubits.
 
-    depol_error_rates : dict, optional
+    depol_strengths : dict, optional
         A dictionary whose keys are gate names (e.g. `"Gx"`) and whose values
-        are floats that specify a rate of uniform depolarization.
+        are floats that specify the strength of uniform depolarization.
     
-    sto_error_rates : dict, optional
+    sto_error_probs : dict, optional
         A dictionary whose keys are gate names (e.g. `"Gx"`) and whose values
         are tuples that specify Pauli-stochastic rates for each of the non-trivial
         Paulis (so a 3-tuple would be expected for a 1Q gate and a 15-tuple for a 2Q gate)
@@ -1133,14 +1097,6 @@ def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}
         Stochastic term tuples can include 2 basis labels to specify
         "off-diagonal" non-Hamiltonian Lindblad terms.  Basis labels can be
         strings or integers.  Values are complex coefficients.
-    
-    lindblad_error_rates : dict, optional
-        A dictionary like `lindblad_error_coeffs` but where the values are error rates
-        rather than raw error generator coefficients. This distinction impacts non-Hamiltonian
-        terms where the rates are scaled as `(1 - exp(-d^2 * coeff)) / d^2`. Intuitively,
-        this "error rate" would be the rate of the resulting depolarizing channel if all 
-        stochastic error generators had the same given coefficient. See the
-        `logscale_nonham` kwarg of `LindbladErrorgen.coefficients()` for more details.
 
     availability : dict, optional
         A dictionary whose keys are the same gate names as in
@@ -1242,14 +1198,13 @@ def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}
                           "({'auto', or LindbladOp `param_type`}) error specifications."))
 
     # Ensure no duplicates
-    duplicate_keys = set(depol_error_rates.keys()) & set(sto_error_rates.keys()) & \
-                     set(lindblad_error_coeffs.keys()) & set(lindblad_error_rates.keys())
+    duplicate_keys = set(depol_strengths.keys()) & set(sto_error_probs.keys()) & set(lindblad_error_coeffs.keys())
     assert len(duplicate_keys) == 0, "Duplicate keys not allowed in error specifications: %s" % ','.join(duplicate_keys)
 
     # All possible entries into the upcoming gate dictionary
     # Not just gatenames as it is possible to override in qubit-specific operations
-    all_keys = set(gate_names) | set(custom_gates) | set(depol_error_rates.keys()) | set(sto_error_rates.keys()) | \
-               set(lindblad_error_coeffs.keys()) | set(lindblad_error_rates.keys())
+    all_keys = set(gate_names) | set(custom_gates) | set(depol_strengths.keys()) | set(sto_error_probs.keys()) | \
+               set(lindblad_error_coeffs.keys())
 
     std_gate_unitaries = _itgs.standard_gatename_unitaries()
 
@@ -1272,8 +1227,8 @@ def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}
         if name in std_gate_unitaries:
             # Build "standard" operation as ideal op
             ideal_gate = _op.StaticStandardOp(name, evotype)
-            gatedict[key] = _get_error_gate(key, ideal_gate, depol_error_rates, sto_error_rates,
-                                            lindblad_error_coeffs, lindblad_error_rates, parameterization)
+            gatedict[key] = _get_error_gate(key, ideal_gate, depol_strengths, sto_error_probs,
+                                            lindblad_error_coeffs, parameterization)
         elif name in nonstd_gate_unitaries:
             U = nonstd_gate_unitaries[name]
             if callable(U):  # then assume a function: args -> unitary
@@ -1282,14 +1237,14 @@ def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}
 
                 # For factories, build the error gate using identity as "ideal" and then make ComposedOp
                 identity_gate = _op.StaticDenseOp(_np.identity(ideal_factory.dim))
-                noise_gate = _get_error_gate(key, identity_gate, depol_error_rates, sto_error_rates,
-                                             lindblad_error_coeffs, lindblad_error_rates, parameterization)
+                noise_gate = _get_error_gate(key, identity_gate, depol_strengths, sto_error_probs,
+                                             lindblad_error_coeffs, parameterization)
                 gatedict[key] = _opfactory.ComposedOpFactory([ideal_factory, noise_gate])
             else:
                 if evotype in ("densitymx", "svterm", "cterm"):
                     ideal_gate = _op.StaticDenseOp(_gt.unitary_to_pauligate(U), evotype)
-                    gatedict[key] = _get_error_gate(key, ideal_gate, depol_error_rates, sto_error_rates,
-                                                    lindblad_error_coeffs, lindblad_error_rates, parameterization)
+                    gatedict[key] = _get_error_gate(key, ideal_gate, depol_strengths, sto_error_probs,
+                                                    lindblad_error_coeffs, parameterization)
                 else:  # we just store the unitaries
                     raise NotImplementedError("Setting error rates on unitaries isn't implemented yet")
         else:
@@ -1297,20 +1252,19 @@ def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}
 
     if 'idle' in all_keys:
         ideal_gate = _op.StaticStandardOp('Gi', evotype)
-        idle_op = _get_error_gate('idle', ideal_gate, depol_error_rates, sto_error_rates,
-                                  lindblad_error_coeffs, lindblad_error_rates, parameterization)  # 1-qubit idle op
+        idle_op = _get_error_gate('idle', ideal_gate, depol_strengths, sto_error_probs,
+                                  lindblad_error_coeffs, parameterization)  # 1-qubit idle op
     else:
         idle_op = None
 
     prep_layers = {}
     if 'prep' in all_keys:
-        assert(('prep' in depol_error_rates and parameterization[0] == 'lindblad') or \
-            ('prep' in sto_error_rates and parameterization[1] == 'lindblad') or \
-            'prep' in lindblad_error_coeffs or 'prep' in lindblad_error_rates), \
+        assert(('prep' in depol_strengths and parameterization[0] == 'lindblad') or \
+            ('prep' in sto_error_probs and parameterization[1] == 'lindblad') or 'prep' in lindblad_error_coeffs), \
             "'prep' error specification must have Lindblad parameterization!"
         rho_base1Q = _spamvec.ComputationalSPAMVec([0], evotype, 'prep')
-        err_gate = _get_error_gate('prep', _op.StaticStandardOp('Gi', evotype), depol_error_rates, sto_error_rates,
-                                   lindblad_error_coeffs, lindblad_error_rates, parameterization)
+        err_gate = _get_error_gate('prep', _op.StaticStandardOp('Gi', evotype), depol_strengths, sto_error_probs,
+                                   lindblad_error_coeffs, parameterization)
         prep1Q = _spamvec.LindbladSPAMVec(rho_base1Q, err_gate, 'prep')
         prep_factors = [prep1Q.copy() for i in range(num_qubits)] if independent_gates else [prep1Q] * num_qubits
         prep_layers['rho0'] = _spamvec.TensorProdSPAMVec('prep', prep_factors)
@@ -1319,13 +1273,12 @@ def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}
 
     povm_layers = {}
     if 'povm' in all_keys:
-        assert(('povm' in depol_error_rates and parameterization[0] == 'lindblad') or \
-            ('povm' in sto_error_rates and parameterization[1] == 'lindblad') or \
-            'povm' in lindblad_error_coeffs or 'povm' in lindblad_error_rates), \
+        assert(('povm' in depol_strengths and parameterization[0] == 'lindblad') or \
+            ('povm' in sto_error_probs and parameterization[1] == 'lindblad') or 'povm' in lindblad_error_coeffs), \
             "'povm' error specification must have Lindblad parameterization!"
         Mdefault_base1Q = _povm.ComputationalBasisPOVM(1, evotype)
-        err_gate = _get_error_gate('povm', _op.StaticStandardOp('Gi', evotype), depol_error_rates, sto_error_rates,
-                                   lindblad_error_coeffs, lindblad_error_rates, parameterization)
+        err_gate = _get_error_gate('povm', _op.StaticStandardOp('Gi', evotype), depol_strengths, sto_error_probs,
+                                   lindblad_error_coeffs, parameterization)
         povm1Q = _povm.LindbladPOVM(err_gate, Mdefault_base1Q, "pp")
         povm_factors = [povm1Q.copy() for i in range(num_qubits)] if independent_gates else [povm1Q] * num_qubits
         povm_layers['Mdefault'] = _povm.TensorProdPOVM(povm_factors)

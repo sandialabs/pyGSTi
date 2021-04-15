@@ -94,9 +94,9 @@ class ModelConstructionTester(BaseCase):
         # Case: ensure_composed_gates=False, independent_gates=True
         cfmdl = mc.create_crosstalk_free_model(
             nQubits, ('Gx', 'Gy', 'Gcnot'),
-            depol_error_rates={'Gx': 0.1, 'idle': 0.01, 'prep': 0.01, 'povm': 0.01},
-            sto_error_rates={'Gy': (0.02, 0.02, 0.02)},
-            lindblad_error_rates={
+            depol_strengths={'Gx': 0.1, 'idle': 0.01, 'prep': 0.01, 'povm': 0.01},
+            sto_error_probs={'Gy': (0.02, 0.02, 0.02)},
+            lindblad_error_coeffs={
                 'Gcnot': {('H', 'ZZ'): 0.01, ('S', 'IX'): 0.01},
             }, qubit_labels=['qb{}'.format(i) for i in range(nQubits)], 
             ensure_composed_gates=False, independent_gates=True)
@@ -106,9 +106,9 @@ class ModelConstructionTester(BaseCase):
         # Case: ensure_composed_gates=True, independent_gates=False
         cfmdl2 = mc.create_crosstalk_free_model(
             nQubits, ('Gx', 'Gy', 'Gcnot'),
-            depol_error_rates={'Gx': 0.1, 'idle': 0.01, 'prep': 0.01, 'povm': 0.01},
-            sto_error_rates={'Gy': (0.02, 0.02, 0.02)},
-            lindblad_error_rates={
+            depol_strengths={'Gx': 0.1, 'idle': 0.01, 'prep': 0.01, 'povm': 0.01},
+            sto_error_probs={'Gy': (0.02, 0.02, 0.02)},
+            lindblad_error_coeffs={
                 'Gcnot': {('H', 'ZZ'): 0.01, ('S', 'IX'): 0.01},
              }, qubit_labels=['qb{}'.format(i) for i in range(nQubits)],
             ensure_composed_gates=True, independent_gates=False)
@@ -117,9 +117,9 @@ class ModelConstructionTester(BaseCase):
         # Same as above but add ('Gx','qb0') to test giving qubit-specific error rates
         cfmdl3 = mc.create_crosstalk_free_model(
             nQubits, ('Gx', 'Gy', 'Gcnot'),
-            depol_error_rates={'Gx': 0.1, ('Gx', 'qb0'): 0.2, 'idle': 0.01, 'prep': 0.01, 'povm': 0.01},
-            sto_error_rates={'Gy': (0.02, 0.02, 0.02)},
-            lindblad_error_rates={
+            depol_strengths={'Gx': 0.1, ('Gx', 'qb0'): 0.2, 'idle': 0.01, 'prep': 0.01, 'povm': 0.01},
+            sto_error_probs={'Gy': (0.02, 0.02, 0.02)},
+            lindblad_error_coeffs={
                 'Gcnot': {('H', 'ZZ'): 0.01, ('S', 'IX'): 0.01}, # adds another independent depol param for Gx:qb0
              }, qubit_labels=['qb{}'.format(i) for i in range(nQubits)],
             ensure_composed_gates=True, independent_gates=False)
@@ -130,7 +130,7 @@ class ModelConstructionTester(BaseCase):
 
         # Test depolarizing
         mdl_depol1 = mc.create_crosstalk_free_model(
-            nQubits, ('Gi',), depol_error_rates={'Gi': 0.1},
+            nQubits, ('Gi',), depol_strengths={'Gi': 0.1},
             parameterization=['depolarize', 'auto', 'auto']
         )
         Gi_op = mdl_depol1.operation_blks['gates']['Gi']
@@ -141,7 +141,7 @@ class ModelConstructionTester(BaseCase):
 
         # Expand into StochasticNoiseOp
         mdl_depol2 = mc.create_crosstalk_free_model(
-            nQubits, ('Gi',), depol_error_rates={'Gi': 0.1},
+            nQubits, ('Gi',), depol_strengths={'Gi': 0.1},
             parameterization=['stochastic', 'auto', 'auto']
         )
         Gi_op = mdl_depol2.operation_blks['gates']['Gi']
@@ -152,7 +152,7 @@ class ModelConstructionTester(BaseCase):
 
         # Use LindbladOp with "depol", "diagonal" param
         mdl_depol3 = mc.create_crosstalk_free_model(
-            nQubits, ('Gi',), depol_error_rates={'Gi': 0.1},
+            nQubits, ('Gi',), depol_strengths={'Gi': 0.1},
             parameterization=['lindblad', 'auto', 'auto']
         )
         Gi_op = mdl_depol3.operation_blks['gates']['Gi']
@@ -161,7 +161,7 @@ class ModelConstructionTester(BaseCase):
 
         # Same as depol3
         mdl_depol4 = mc.create_crosstalk_free_model(
-            nQubits, ('Gi',), depol_error_rates={'Gi': 0.1},
+            nQubits, ('Gi',), depol_strengths={'Gi': 0.1},
             parameterization=['auto', 'auto', 'auto']
         )
         Gi_op = mdl_depol4.operation_blks['gates']['Gi']
@@ -173,7 +173,7 @@ class ModelConstructionTester(BaseCase):
 
         # Test stochastic
         mdl_sto1 = mc.create_crosstalk_free_model(
-            nQubits, ('Gi',), sto_error_rates={'Gi': (0.1, 0.1, 0.1)},
+            nQubits, ('Gi',), sto_error_probs={'Gi': (0.1, 0.1, 0.1)},
             parameterization=['auto', 'stochastic', 'auto']
         )
         Gi_op = mdl_sto1.operation_blks['gates']['Gi']
@@ -184,7 +184,7 @@ class ModelConstructionTester(BaseCase):
 
         # Same as sto1
         mdl_sto2 = mc.create_crosstalk_free_model(
-            nQubits, ('Gi',), sto_error_rates={'Gi': (0.1, 0.1, 0.1)},
+            nQubits, ('Gi',), sto_error_probs={'Gi': (0.1, 0.1, 0.1)},
             parameterization=['auto', 'auto', 'auto']
         )
         Gi_op = mdl_sto2.operation_blks['gates']['Gi']
@@ -195,7 +195,7 @@ class ModelConstructionTester(BaseCase):
 
         # Use LindbladOp with "cptp", "diagonal" param
         mdl_sto3 = mc.create_crosstalk_free_model(
-            nQubits, ('Gi',), sto_error_rates={'Gi': (0.1, 0.1, 0.1)},
+            nQubits, ('Gi',), sto_error_probs={'Gi': (0.1, 0.1, 0.1)},
             parameterization=['auto', 'lindblad', 'auto']
         )
         Gi_op = mdl_sto3.operation_blks['gates']['Gi']
@@ -207,33 +207,23 @@ class ModelConstructionTester(BaseCase):
 
         # Test Lindblad
         mdl_lb1 = mc.create_crosstalk_free_model(
-            nQubits, ('Gi',), lindblad_error_rates={'Gi': {('H', 'X'): 0.1, ('S', 'Y'): 0.1}},
+            nQubits, ('Gi',), lindblad_error_coeffs={'Gi': {('H', 'X'): 0.1, ('S', 'Y'): 0.1}},
             parameterization=['auto', 'auto', 'auto']
         )
         Gi_op = mdl_lb1.operation_blks['gates']['Gi']
         self.assertTrue(isinstance(Gi_op, op.LindbladOp))
-        self.assertEqual(Gi_op.error_rates(), {('H', 'X'): 0.1, ('S', 'Y'): 0.1})
+        self.assertEqual(Gi_op.errorgen_coefficients(), {('H', 'X'): 0.1, ('S', 'Y'): 0.1})
         self.assertEqual(mdl_lb1.num_params, 2)
     
         # Test param passthrough
         mdl_lb2 = mc.create_crosstalk_free_model(
-            nQubits, ('Gi',), lindblad_error_rates={'Gi': {('H', 'X'): 0.1, ('S', 'Y'): 0.1}},
+            nQubits, ('Gi',), lindblad_error_coeffs={'Gi': {('H', 'X'): 0.1, ('S', 'Y'): 0.1}},
             parameterization=['auto', 'auto', 'H+S']
         )
         Gi_op = mdl_lb2.operation_blks['gates']['Gi']
         self.assertTrue(isinstance(Gi_op, op.LindbladOp))
-        self.assertEqual(Gi_op.error_rates(), {('H', 'X'): 0.1, ('S', 'Y'): 0.1})
-        self.assertEqual(mdl_lb2.num_params, 2)
-
-        # Test coeff instead of rates
-        mdl_lb3 = mc.create_crosstalk_free_model(
-            nQubits, ('Gi',), lindblad_error_coeffs={'Gi': {('H', 'X'): 0.1, ('S', 'Y'): 0.1}},
-            parameterization=['auto', 'auto', 'auto']
-        )
-        Gi_op = mdl_lb3.operation_blks['gates']['Gi']
-        self.assertTrue(isinstance(Gi_op, op.LindbladOp))
         self.assertEqual(Gi_op.errorgen_coefficients(), {('H', 'X'): 0.1, ('S', 'Y'): 0.1})
-        self.assertEqual(mdl_lb3.num_params, 2)
+        self.assertEqual(mdl_lb2.num_params, 2)
 
     def test_build_crosstalk_free_model_with_nonstd_gate_unitary_factory(self):
         nQubits = 2
@@ -252,6 +242,39 @@ class ModelConstructionTester(BaseCase):
 
         self.assertAlmostEqual(p['00'], 0.08733219254516078)
         self.assertAlmostEqual(p['01'], 0.9126678074548386)
+    
+    def test_build_crosstalk_free_model_with_custom_gates(self):
+        nQubits = 2
+
+        class XRotationOpFactory(pygsti.obj.OpFactory):
+            def __init__(self):
+                pygsti.obj.OpFactory.__init__(self, dim=4, evotype="densitymx")
+                
+            def create_object(self, args=None, sslbls=None):
+                theta = float(args[0])/2.0
+                b = 2*np.cos(theta)*np.sin(theta)
+                c = np.cos(theta)**2 - np.sin(theta)**2
+                superop = np.array([[1,   0,   0,   0],
+                                    [0,   1,   0,   0],
+                                    [0,   0,   c,  -b],
+                                    [0,   0,   b,   c]],'d')
+                return pygsti.obj.StaticDenseOp(superop)
+
+        xrot_fact = XRotationOpFactory()
+    
+        cfmdl = mc.create_crosstalk_free_model(nQubits, ('Gi', 'Gxr'),
+                                              custom_gates={'Gxr': xrot_fact})
+
+        c = pygsti.obj.Circuit("Gxr;3.1415926536:1@(0,1)")
+        p = cfmdl.probabilities(c)
+
+        self.assertAlmostEqual(p['01'], 1.0)
+
+        c = pygsti.obj.Circuit("Gxr;1.5707963268:1@(0,1)")
+        p = cfmdl.probabilities(c)
+        
+        self.assertAlmostEqual(p['00'], 0.5)
+        self.assertAlmostEqual(p['01'], 0.5)
 
     def test_build_operation_raises_on_bad_parameterization(self):
         with self.assertRaises(ValueError):
