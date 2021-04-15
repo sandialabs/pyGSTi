@@ -3963,11 +3963,15 @@ class Circuit(object):
         sslInds = {sslbl: i for i, sslbl in enumerate(model.state_space_labels.labels[0])}
         # Note: we ignore all but the first tensor product block of the state space.
 
+        ssls = model.state_space_labels.labels[0]
+        reduced_ssls = [ssl for ssl in ssls if ssl in self.line_labels]
+        ll_to_sslInds = {ll: reduced_ssls.index(ll) for ll in self.line_labels}
+
         def process_outcome(outcome):
             """Relabels an outcome tuple and drops state space labels not in the circuit."""
             processed_outcome = []
             for lbl in outcome:  # lbl is a string - an instrument element or POVM effect label, e.g. '010'
-                relbl = ''.join([lbl[sslInds[ll]] for ll in self.line_labels])
+                relbl = ''.join([lbl[ll_to_sslInds[ll]] for ll in self.line_labels])
                 processed_outcome.append(relbl)
                 #Note: above code *assumes* that each state-space label (and so circuit line label)
                 # corresponds to a *single* letter of the instrument/POVM label `lbl`.  This is almost
