@@ -84,6 +84,7 @@ class ModelConstructionTester(BaseCase):
 
         self.assertEqual(mdl.num_params, 24)
 
+        # TODO: These are maybe not deterministic? Sometimes are swapped for me...
         self.assertEqual(mdl.operation_blks['layers'][('Gx', 0)].gpindices, slice(0, 12))
         self.assertEqual(mdl.operation_blks['layers'][('Gy', 0)].gpindices, slice(12, 24))
         self.assertEqual(mdl.operation_blks['layers'][('Gi', 0)].gpindices, slice(0, 12))
@@ -137,7 +138,7 @@ class ModelConstructionTester(BaseCase):
         self.assertTrue(isinstance(Gi_op, op.ComposedOp))
         self.assertTrue(isinstance(Gi_op.factorops[0], op.StaticStandardOp))
         self.assertTrue(isinstance(Gi_op.factorops[1], op.DepolarizeOp))
-        self.assertEqual(mdl_depol1.num_params, 3) # Currently, DepolarizeOp uses StochasticNoiseOp so 3 params
+        self.assertEqual(mdl_depol1.num_params, 1)
 
         # Expand into StochasticNoiseOp
         mdl_depol2 = mc.create_crosstalk_free_model(
@@ -159,14 +160,16 @@ class ModelConstructionTester(BaseCase):
         self.assertTrue(isinstance(Gi_op, op.LindbladOp))
         self.assertEqual(mdl_depol3.num_params, 1)
 
-        # Same as depol3
+        # Same as depol1
         mdl_depol4 = mc.create_crosstalk_free_model(
             nQubits, ('Gi',), depol_strengths={'Gi': 0.1},
             parameterization=['auto', 'auto', 'auto']
         )
-        Gi_op = mdl_depol4.operation_blks['gates']['Gi']
-        self.assertTrue(isinstance(Gi_op, op.LindbladOp))
-        self.assertEqual(mdl_depol4.num_params, 1) # Use LindbladOp with "depol", "diagonal" param
+        Gi_op = mdl_depol1.operation_blks['gates']['Gi']
+        self.assertTrue(isinstance(Gi_op, op.ComposedOp))
+        self.assertTrue(isinstance(Gi_op.factorops[0], op.StaticStandardOp))
+        self.assertTrue(isinstance(Gi_op.factorops[1], op.DepolarizeOp))
+        self.assertEqual(mdl_depol1.num_params, 1)
 
     def test_build_crosstalk_free_model_stochastic_parameterizations(self):
         nQubits = 2

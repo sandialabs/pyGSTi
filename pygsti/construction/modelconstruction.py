@@ -939,11 +939,17 @@ def _get_error_gate(key, ideal_gate, depol_strengths, sto_error_probs, lindblad_
     depol_strengths : dict, optional
         A dictionary whose keys are gate names (e.g. `"Gx"`) and whose values
         are floats that specify the strength of uniform depolarization.
+        In the case of the "stochastic" parameterization, this value is uniformly
+        distributed amongst the Pauli stochastic channels. In the case of the
+        "lindblad" parameterization, this value is uniformly distributed as the
+        coefficients of stochastic error generators.
     
     sto_error_probs : dict, optional
         A dictionary whose keys are gate names (e.g. `"Gx"`) and whose values
         are tuples that specify Pauli-stochastic rates for each of the non-trivial
-        Paulis (so a 3-tuple would be expected for a 1Q gate and a 15-tuple for a 2Q gate)
+        Paulis (so a 3-tuple would be expected for a 1Q gate and a 15-tuple for a 2Q gate).
+        In the case of the "lindblad" parameterization, these values are treated
+        as the coefficients of stochastic error generators.
     
     lindblad_error_coeffs : dict, optional
         A dictionary whose keys are gate names (e.g. `"Gx"`) and whose values
@@ -971,7 +977,7 @@ def _get_error_gate(key, ideal_gate, depol_strengths, sto_error_probs, lindblad_
     if key in depol_strengths: # Depolarizing error specification
         depol_rate = depol_strengths[key]
 
-        if parameterization[0] == "depolarize": # DepolarizeOp
+        if parameterization[0] in ["depolarize", "auto"]: # DepolarizeOp
             depol_gate = _op.DepolarizeOp(ideal_gate.dim, basis="pp", evotype=ideal_gate._evotype, initial_rate=depol_rate)
             err_gate = _op.ComposedOp([ideal_gate, depol_gate])
         elif parameterization[0] == "stochastic": # StochasticNoiseOp
@@ -979,7 +985,7 @@ def _get_error_gate(key, ideal_gate, depol_strengths, sto_error_probs, lindblad_
             rates = [rate_per_pauli] * (ideal_gate.dim - 1)
             sto_gate = _op.StochasticNoiseOp(ideal_gate.dim, basis="pp", evotype=ideal_gate._evotype, initial_rates=rates)
             err_gate = _op.ComposedOp([ideal_gate, sto_gate])
-        elif parameterization[0] in ["lindblad", "auto"]: #LindbladOp with "depol", "diagonal" parameterization
+        elif parameterization[0] == "lindblad": #LindbladOp with "depol", "diagonal" parameterization
             basis = _BuiltinBasis('pp', ideal_gate.dim)
             rate_per_pauli = depol_rate / (ideal_gate.dim - 1)
             errdict = {('S', bl): rate_per_pauli for bl in basis.labels[1:]}
@@ -1005,8 +1011,6 @@ def _get_error_gate(key, ideal_gate, depol_strengths, sto_error_probs, lindblad_
             
             # TODO: Make this not require dense
             err_gate = _op.LindbladOp(ideal_gate.to_dense(), errgen, dense_rep=True)
-
-            # TODO: This correct behavior to use probs as coeffs, or should we use Erik's conversion from rates?
         else:
             raise ValueError("Unknown parameterization %s for stochastic error specification" % parameterization[0])
 
@@ -1079,11 +1083,17 @@ def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}
     depol_strengths : dict, optional
         A dictionary whose keys are gate names (e.g. `"Gx"`) and whose values
         are floats that specify the strength of uniform depolarization.
+        In the case of the "stochastic" parameterization, this value is uniformly
+        distributed amongst the Pauli stochastic channels. In the case of the
+        "lindblad" parameterization, this value is uniformly distributed as the
+        coefficients of stochastic error generators.
     
     sto_error_probs : dict, optional
         A dictionary whose keys are gate names (e.g. `"Gx"`) and whose values
         are tuples that specify Pauli-stochastic rates for each of the non-trivial
-        Paulis (so a 3-tuple would be expected for a 1Q gate and a 15-tuple for a 2Q gate)
+        Paulis (so a 3-tuple would be expected for a 1Q gate and a 15-tuple for a 2Q gate).
+        In the case of the "lindblad" parameterization, these values are treated
+        as the coefficients of stochastic error generators.
     
     lindblad_error_coeffs : dict, optional
         A dictionary whose keys are gate names (e.g. `"Gx"`) and whose values
@@ -1140,8 +1150,7 @@ def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}
         depolarizing {"depolarize", "stochastic", "lindblad", "auto"},
         stochastic {"stochastic", "auto", "lindblad"}, or
         lindblad {"auto", or LindbladOp `param_type`} error specification types.
-        If "auto", the list ["lindblad", "stochastic", "auto"] is used,
-        which recovers the previous behavior when "auto" was the only allowed value.
+        If "auto", the list ["depolarize", "stochastic", "auto"] is used.
 
     evotype : {"auto","densitymx","statevec","stabilizer","svterm","cterm"}
         The evolution type.  If "auto" is specified, "densitymx" is used.
@@ -1189,7 +1198,7 @@ def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}
         evotype = "densitymx"  # FUTURE: do something more sophisticated?
 
     if parameterization == "auto":
-        parameterization = ["lindblad", "stochastic", "auto"]
+        parameterization = ["depolarize", "stochastic", "auto"]
     if len(parameterization) != 3 or parameterization[0] not in ['depolarize', 'stochastic', 'lindblad', 'auto'] or \
         parameterization[1] not in ['stochastic', 'auto', 'lindblad']:
         raise ValueError(("Paramterization must be given as a list of three values for the depolarizing"
