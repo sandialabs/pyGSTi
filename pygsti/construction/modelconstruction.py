@@ -1053,8 +1053,12 @@ def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}
         - `depol_strengths`       -> DepolarizeOp, StochasticNoiseOp, or LindbladOp
         - `sto_error_probs`       -> StochasticNoiseOp or LindbladOp
         - `lindblad_error_coeffs` -> LindbladOp
+
     In addition to the gate names, the special values `"prep"`, `"povm"`, and `"idle"` may be used as
     keys to specify the error on the state preparation, measurement, and global idle, respectively.
+    The `"prep"` and `"povm"` error specifications can only use the "lindblad" parameterization -
+    a warning will be raised and the parameterization overridden for these two operations if
+    an alternate parameterization was provided.
 
     Parameters
     ----------
@@ -1268,12 +1272,16 @@ def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}
 
     prep_layers = {}
     if 'prep' in all_keys:
-        assert(('prep' in depol_strengths and parameterization[0] == 'lindblad') or \
-            ('prep' in sto_error_probs and parameterization[1] == 'lindblad') or 'prep' in lindblad_error_coeffs), \
-            "'prep' error specification must have Lindblad parameterization!"
+        if 'prep' in depol_strengths and parameterization[0] != 'lindblad':
+            _warnings.warn(("'prep' error specification requires Lindblad parameterization, "
+                           "depolarization parameterization %s overridden!" % parameterization[0]))
+        elif 'prep' in sto_error_probs and parameterization[1] != 'lindblad':
+            _warnings.warn(("'prep' error specification requires Lindblad parameterization, "
+                           "stochastic parameterization %s overridden!" % parameterization[1]))
+                        
         rho_base1Q = _spamvec.ComputationalSPAMVec([0], evotype, 'prep')
         err_gate = _get_error_gate('prep', _op.StaticStandardOp('Gi', evotype), depol_strengths, sto_error_probs,
-                                   lindblad_error_coeffs, parameterization)
+                                   lindblad_error_coeffs, ['lindblad',]*3) # Override parameterization to force Lindblad
         prep1Q = _spamvec.LindbladSPAMVec(rho_base1Q, err_gate, 'prep')
         prep_factors = [prep1Q.copy() for i in range(num_qubits)] if independent_gates else [prep1Q] * num_qubits
         prep_layers['rho0'] = _spamvec.TensorProdSPAMVec('prep', prep_factors)
@@ -1282,12 +1290,16 @@ def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}
 
     povm_layers = {}
     if 'povm' in all_keys:
-        assert(('povm' in depol_strengths and parameterization[0] == 'lindblad') or \
-            ('povm' in sto_error_probs and parameterization[1] == 'lindblad') or 'povm' in lindblad_error_coeffs), \
-            "'povm' error specification must have Lindblad parameterization!"
+        if 'povm' in depol_strengths and parameterization[0] != 'lindblad':
+            _warnings.warn(("'povm' error specification requires Lindblad parameterization, "
+                           "depolarization parameterization %s overridden!" % parameterization[0]))
+        elif 'povm' in sto_error_probs and parameterization[1] != 'lindblad':
+            _warnings.warn(("'povm' error specification requires Lindblad parameterization, "
+                           "stochastic parameterization %s overridden!" % parameterization[1]))
+
         Mdefault_base1Q = _povm.ComputationalBasisPOVM(1, evotype)
         err_gate = _get_error_gate('povm', _op.StaticStandardOp('Gi', evotype), depol_strengths, sto_error_probs,
-                                   lindblad_error_coeffs, parameterization)
+                                   lindblad_error_coeffs, ['lindblad',]*3) # Override parameterization to force Lindblad
         povm1Q = _povm.LindbladPOVM(err_gate, Mdefault_base1Q, "pp")
         povm_factors = [povm1Q.copy() for i in range(num_qubits)] if independent_gates else [povm1Q] * num_qubits
         povm_layers['Mdefault'] = _povm.TensorProdPOVM(povm_factors)

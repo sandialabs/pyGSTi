@@ -165,11 +165,31 @@ class ModelConstructionTester(BaseCase):
             nQubits, ('Gi',), depol_strengths={'Gi': 0.1},
             parameterization=['auto', 'auto', 'auto']
         )
-        Gi_op = mdl_depol1.operation_blks['gates']['Gi']
+        Gi_op = mdl_depol4.operation_blks['gates']['Gi']
         self.assertTrue(isinstance(Gi_op, op.ComposedOp))
         self.assertTrue(isinstance(Gi_op.factorops[0], op.StaticStandardOp))
         self.assertTrue(isinstance(Gi_op.factorops[1], op.DepolarizeOp))
-        self.assertEqual(mdl_depol1.num_params, 1)
+        self.assertEqual(mdl_depol4.num_params, 1)
+
+        # For prep and povm, only lindblad parameterization is allowed
+        # Test that proper warnings are raised
+        with self.assertWarns(UserWarning):
+            mc.create_crosstalk_free_model(
+                nQubits, ('Gi',), depol_strengths={'Gi': 0.1, 'prep': 0.1},
+                parameterization=['depolarize', 'auto', 'auto'])
+        with self.assertWarns(UserWarning):
+            mc.create_crosstalk_free_model(
+                nQubits, ('Gi',), depol_strengths={'Gi': 0.1, 'prep': 0.1},
+                parameterization=['stochastic', 'auto', 'auto'])
+        
+        with self.assertWarns(UserWarning):
+            mc.create_crosstalk_free_model(
+                nQubits, ('Gi',), depol_strengths={'Gi': 0.1, 'povm': 0.1},
+                parameterization=['depolarize', 'auto', 'auto'])
+        with self.assertWarns(UserWarning):
+            mc.create_crosstalk_free_model(
+                nQubits, ('Gi',), depol_strengths={'Gi': 0.1, 'povm': 0.1},
+                parameterization=['stochastic', 'auto', 'auto'])
 
     def test_build_crosstalk_free_model_stochastic_parameterizations(self):
         nQubits = 2
@@ -204,6 +224,17 @@ class ModelConstructionTester(BaseCase):
         Gi_op = mdl_sto3.operation_blks['gates']['Gi']
         self.assertTrue(isinstance(Gi_op, op.LindbladOp))
         self.assertEqual(mdl_sto3.num_params, 3)
+
+        # For prep and povm, only lindblad parameterization is allowed
+        # Test that proper warnings are raised
+        with self.assertWarns(UserWarning):
+            mc.create_crosstalk_free_model(
+                nQubits, ('Gi',), depol_strengths={'Gi': 0.1, 'prep': 0.1},
+                parameterization=['auto', 'stochastic', 'auto'])
+        with self.assertWarns(UserWarning):
+            mc.create_crosstalk_free_model(
+                nQubits, ('Gi',), depol_strengths={'Gi': 0.1, 'povm': 0.1},
+                parameterization=['auto', 'stochastic', 'auto'])
 
     def test_build_crosstalk_free_model_lindblad_parameterizations(self):
         nQubits = 2
