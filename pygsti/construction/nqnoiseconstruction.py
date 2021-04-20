@@ -448,8 +448,10 @@ def create_cloudnoise_model_from_hops_and_weights(
         return mdl
 
 
-def create_cloud_crosstalk_model(num_qubits, gate_names, error_rates, nonstd_gate_unitaries=None, custom_gates=None,
-                                 availability=None, qubit_labels=None, geometry="line", parameterization='auto',
+def create_cloud_crosstalk_model(num_qubits, gate_names, nonstd_gate_unitaries={}, custom_gates={},
+                                 depolarization_strengths={}, stochastic_error_probs={}, lindblad_error_coeffs={},
+                                 depolarization_parameterization='depolarize', stochastic_parameterization='stochastic',
+                                 lindblad_parameterization='auto', availability=None, qubit_labels=None, geometry="line",
                                  evotype="auto", simulator="auto", independent_gates=False, sparse_lindblad_basis=False,
                                  sparse_lindblad_reps=False, errcomp_type="errorgens", add_idle_noise_to_all_gates=True,
                                  verbosity=0):
@@ -512,6 +514,50 @@ def create_cloud_crosstalk_model(num_qubits, gate_names, error_rates, nonstd_gat
         be *static*, and keys of this dictionary must by strings - there's
         no way to specify the "cloudnoise" part of a gate via this dict
         yet, only the "target" part.
+    
+    depolarization_strengths : dict, optional
+        A dictionary whose keys are gate names (e.g. `"Gx"`) and whose values
+        are floats that specify the strength of uniform depolarization.
+    
+    stochastic_error_probs : dict, optional
+        A dictionary whose keys are gate names (e.g. `"Gx"`) and whose values
+        are tuples that specify Pauli-stochastic rates for each of the non-trivial
+        Paulis (so a 3-tuple would be expected for a 1Q gate and a 15-tuple for a 2Q gate).
+    
+    lindblad_error_coeffs : dict, optional
+        A dictionary whose keys are gate names (e.g. `"Gx"`) and whose values
+        are dictionaries corresponding to the `lindblad_term_dict` kwarg taken
+        by `LindbladErrorgen`. Keys are `(termType, basisLabel1, <basisLabel2>)`
+        tuples, where `termType` can be `"H"` (Hamiltonian), `"S"`
+        (Stochastic), or `"A"` (Affine).  Hamiltonian and Affine terms always
+        have a single basis label (so key is a 2-tuple) whereas Stochastic
+        tuples with 1 basis label indicate a *diagonal* term, and are the
+        only types of terms allowed when `nonham_mode != "all"`.  Otherwise,
+        Stochastic term tuples can include 2 basis labels to specify
+        "off-diagonal" non-Hamiltonian Lindblad terms.  Basis labels can be
+        strings or integers.  Values are complex coefficients.
+    
+    depolarization_parameterization : str of {"depolarize", "stochastic", or "lindblad"}
+        Determines whether a DepolarizeOp, StochasticNoiseOp, or LindbladOp
+        is used to parameterize the depolarization noise, respectively.
+        When "depolarize" (the default), a DepolarizeOp is created with the strength given
+        in `depolarization_strengths`. When "stochastic", the depolarization strength is split
+        evenly among the stochastic channels of a StochasticOp. When "lindblad", the depolarization
+        strength is split evenly among the coefficients of the stochastic error generators
+        (which are exponentiated to form a LindbladOp with the "depol" parameterization).
+    
+    stochastic_parameterization : str of {"stochastic", or "lindblad"}
+        Determines whether a StochasticNoiseOp or LindbladOp is used to parameterize the
+        stochastic noise, respectively. When "stochastic", elements of `stochastic_error_probs`
+        are used as coefficients in a linear combination of stochastic channels (the default).
+        When "lindblad", the elements of `stochastic_error_probs` are coefficients of
+        stochastic error generators (which are exponentiated to form a LindbladOp with the
+        "cptp" parameterization).
+    
+    lindblad_parameterization : "auto" or a LindbladOp paramtype
+        Determines the parameterization of the LindbladOp. When "auto" (the default), the parameterization
+        is inferred from the types of error generators specified in the `lindblad_error_coeffs` dictionaries.
+        When not "auto", the parameterization type is passed through to the LindbladOp.
 
     availability : dict, optional
         A dictionary whose keys are the same gate names as in
@@ -547,9 +593,6 @@ def create_cloud_crosstalk_model(num_qubits, gate_names, error_rates, nonstd_gat
         graph used to define neighbor relationships.  Alternatively,
         a :class:`QubitGraph` object with node labels equal to
         `qubit_labels` may be passed directly.
-
-    parameterization : "auto"
-        This argument is for future expansion and currently must be set to `"auto"`.
 
     evotype : {"auto","densitymx","statevec","stabilizer","svterm","cterm"}
         The evolution type.  If "auto" is specified, "densitymx" is used.
@@ -612,10 +655,8 @@ def create_cloud_crosstalk_model(num_qubits, gate_names, error_rates, nonstd_gat
     # the qubit graph.
     printer = _VerbosityPrinter.create_printer(verbosity)
 
-    if parameterization != "auto":
-        raise NotImplementedError(("Future versions of pyGSTi may allow you to specify a non-automatic "
-                                   "parameterization - for instance building DepolarizeOp objects "
-                                   "instead of LindbladOps for depolarization errors."))
+    if depolarization_strengths or stochastic_error_probs:
+        raise NotImplementedError("Cloud noise models can currently only be built with `lindbad_error_coeffs`")
 
     if evotype == "auto":
         evotype = "densitymx"  # FUTURE: do something more sophisticated?
@@ -640,17 +681,17 @@ def create_cloud_crosstalk_model(num_qubits, gate_names, error_rates, nonstd_gat
 
     nQubit_dim = 2**num_qubits if evotype in ('statevec', 'stabilizer') else 4**num_qubits
 
-    orig_error_rates = error_rates.copy()
+    orig_lindblad_error_coeffs = lindblad_error_coeffs.copy()
     cparser = _CircuitParser()
     cparser.lookup = None  # lookup - functionality removed as it wasn't used
-    for k, v in orig_error_rates.items():
+    for k, v in orig_lindblad_error_coeffs.items():
         if isinstance(k, str) and ":" in k:  # then parse this to get a label, allowing, e.g. "Gx:0"
             lbls, _, _ = cparser.parse(k)
             assert(len(lbls) == 1), "Only single primitive-gate labels allowed as keys! (not %s)" % str(k)
             assert(all([sslbl in qubitGraph.node_names for sslbl in lbls[0].sslbls])), \
                 "One or more invalid qubit names in: %s" % k
-            del error_rates[k]
-            error_rates[lbls[0]] = v
+            del lindblad_error_coeffs[k]
+            lindblad_error_coeffs[lbls[0]] = v
         elif isinstance(k, _Lbl):
             if k.sslbls is not None:
                 assert(all([sslbl in qubitGraph.node_names for sslbl in k.sslbls])), \
@@ -822,29 +863,29 @@ def create_cloud_crosstalk_model(num_qubits, gate_names, error_rates, nonstd_gat
             return errgen
 
     #Process "auto" simulator
-    _, evotype = _gt.split_lindblad_paramtype(parameterization)  # what about "auto" parameterization?
+    _, evotype = _gt.split_lindblad_paramtype(lindblad_parameterization)  # what about "auto" parameterization?
     assert(evotype in ("densitymx", "svterm", "cterm")), "State-vector evolution types not allowed."
     if simulator == "auto":
         if evotype in ("svterm", "cterm"): simulator = _TermFSim()
         else: simulator = _MapFSim() if num_qubits > 2 else _MatrixFSim()
 
     #Global Idle
-    if 'idle' in error_rates:
+    if 'idle' in lindblad_error_coeffs:
         printer.log("Creating Idle:")
-        global_idle_layer = create_error(qubit_labels, error_rates['idle'], return_what="errmap")
+        global_idle_layer = create_error(qubit_labels, lindblad_error_coeffs['idle'], return_what="errmap")
     else:
         global_idle_layer = None
 
     #SPAM
-    if 'prep' in error_rates:
+    if 'prep' in lindblad_error_coeffs:
         prepPure = _sv.ComputationalSPAMVec([0] * num_qubits, evotype)
-        prepNoiseMap = create_error(qubit_labels, error_rates['prep'], return_what="errmap")
+        prepNoiseMap = create_error(qubit_labels, lindblad_error_coeffs['prep'], return_what="errmap")
         prep_layers = [_sv.LindbladSPAMVec(prepPure, prepNoiseMap, "prep")]
     else:
         prep_layers = [_sv.ComputationalSPAMVec([0] * num_qubits, evotype)]
 
-    if 'povm' in error_rates:
-        povmNoiseMap = create_error(qubit_labels, error_rates['povm'], return_what="errmap")
+    if 'povm' in lindblad_error_coeffs:
+        povmNoiseMap = create_error(qubit_labels, lindblad_error_coeffs['povm'], return_what="errmap")
         povm_layers = [_povm.LindbladPOVM(povmNoiseMap, None, "pp")]
     else:
         povm_layers = [_povm.ComputationalBasisPOVM(num_qubits, evotype)]
@@ -857,12 +898,12 @@ def create_cloud_crosstalk_model(num_qubits, gate_names, error_rates, nonstd_gat
         # regardless of the value of `independent_gates`) using these rates.  Otherwise, if we have a stencil
         # for this gate, then we should use it to construct the output, using a copy when gates are independent
         # and a reference to the *same* stencil operations when `independent_gates==False`.
-        if lbl in error_rates:
-            return create_error(lbl.sslbls, errs=error_rates[lbl])  # specific instructions for this primitive layer
+        if lbl in lindblad_error_coeffs:
+            return create_error(lbl.sslbls, errs=lindblad_error_coeffs[lbl])  # specific instructions for this primitive layer
         elif lbl.name in stencils:
             return create_error(lbl.sslbls, stencil=stencils[lbl.name])  # use existing stencil
-        elif lbl.name in error_rates:
-            stencils[lbl.name] = create_error(lbl.sslbls, error_rates[lbl.name],
+        elif lbl.name in lindblad_error_coeffs:
+            stencils[lbl.name] = create_error(lbl.sslbls, lindblad_error_coeffs[lbl.name],
                                               return_what='stencil')  # create stencil
             return create_error(lbl.sslbls, stencil=stencils[lbl.name])  # and then use it
         else:

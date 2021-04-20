@@ -2995,7 +2995,7 @@ class DepolarizeOp(StochasticNoiseOp):
         StochasticNoiseOp.__init__(self, dim, basis, evotype, initial_sto_rates)
 
         # For DepolarizeOp, set params to only first element
-        self.params = [self.params[0]]
+        self.params = _np.array([self.params[0]])
 
     def _rates_to_params(self, rates):
         """Note: requires rates to all be the same"""
@@ -3004,45 +3004,6 @@ class DepolarizeOp(StochasticNoiseOp):
 
     def _params_to_rates(self, params):
         return _np.array([params[0]**2] * (self.basis.size - 1), 'd')
-    
-    def to_vector(self):
-        """
-        Extract a vector of the underlying operation parameters from this operation.
-
-        Returns
-        -------
-        numpy array
-            a 1D numpy array with length == num_params().
-        """
-        return self.params
-
-    def from_vector(self, v, close=False, dirty_value=True):
-        """
-        Initialize the operation using a vector of parameters.
-
-        Parameters
-        ----------
-        v : numpy array
-            The 1D vector of operation parameters.  Length
-            must == num_params()
-
-        close : bool, optional
-            Whether `v` is close to this operation's current
-            set of parameters.  Under some circumstances, when this
-            is true this call can be completed more quickly.
-
-        dirty_value : bool, optional
-            The value to set this object's "dirty flag" to before exiting this
-            call.  This is passed as an argument so it can be updated *recursively*.
-            Leave this set to `True` unless you know what you're doing.
-
-        Returns
-        -------
-        None
-        """
-        self.params[:] = v
-        self._update_rep()
-        self.dirty = dirty_value
 
     def _get_rate_poly_dicts(self):
         """ Return a list of dicts, one per rate, expressing the
