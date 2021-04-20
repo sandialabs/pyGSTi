@@ -106,7 +106,7 @@ class TestGateSetMethods(GateSetTestCase):
         hcols = []
         d12cols = []
         slicesList = [ (slice(0,nP),slice(i,i+1)) for i in range(nP) ]
-        for s1,s2, hprobs_col, dprobs12_col in self.model.sim.bulk_hprobs_by_block(
+        for s1,s2, hprobs_col, dprobs12_col in self.model.sim.iter_hprobs_by_rectangle(
             layout, slicesList, True):
             hcols.append(hprobs_col)
             d12cols.append(dprobs12_col)
@@ -114,7 +114,7 @@ class TestGateSetMethods(GateSetTestCase):
         all_d12cols = np.concatenate( d12cols, axis=2 )
         dprobs12 = dprobs_to_fill[:,:,None] * dprobs_to_fill[:,None,:]
 
-        #NOTE: Currently bulk_hprobs_by_block isn't implemented in map calculator - but it could
+        #NOTE: Currently iter_hprobs_by_rectangle isn't implemented in map calculator - but it could
         # (and probably should) be later on, at which point the commented code here and
         # below would test it.
 
@@ -141,7 +141,7 @@ class TestGateSetMethods(GateSetTestCase):
         hcols = []
         d12cols = []
         slicesList = [ (slice(0,nP),slice(i,i+1)) for i in range(1,10) ]
-        for s1,s2, hprobs_col, dprobs12_col in self.model.sim.bulk_hprobs_by_block(
+        for s1,s2, hprobs_col, dprobs12_col in self.model.sim.iter_hprobs_by_rectangle(
             layout, slicesList, True):
             hcols.append(hprobs_col)
             d12cols.append(dprobs12_col)
@@ -151,7 +151,7 @@ class TestGateSetMethods(GateSetTestCase):
         #mhcols = []
         #md12cols = []
         #mslicesList = [ (slice(0,nP),slice(i,i+1)) for i in range(1,10) ]
-        #for s1,s2, hprobs_col, dprobs12_col in self.mgateset.bulk_hprobs_by_block(
+        #for s1,s2, hprobs_col, dprobs12_col in self.mgateset.iter_hprobs_by_rectangle(
         #    spam_label_rows, mevt, mslicesList, True):
         #    mhcols.append(hprobs_col)
         #    md12cols.append(dprobs12_col)
@@ -170,7 +170,7 @@ class TestGateSetMethods(GateSetTestCase):
         hcols = []
         d12cols = []
         slicesList = [ (slice(2,12),slice(i,i+1)) for i in range(1,10) ]
-        for s1,s2, hprobs_col, dprobs12_col in self.model.sim.bulk_hprobs_by_block(
+        for s1,s2, hprobs_col, dprobs12_col in self.model.sim.iter_hprobs_by_rectangle(
             layout, slicesList, True):
             hcols.append(hprobs_col)
             d12cols.append(dprobs12_col)
@@ -180,7 +180,7 @@ class TestGateSetMethods(GateSetTestCase):
         #mhcols = []
         #md12cols = []
         #mslicesList = [ (slice(2,12),slice(i,i+1)) for i in range(1,10) ]
-        #for s1,s2, hprobs_col, dprobs12_col in self.mgateset.bulk_hprobs_by_block(
+        #for s1,s2, hprobs_col, dprobs12_col in self.mgateset.iter_hprobs_by_rectangle(
         #    mevt, mslicesList, True):
         #    mhcols.append(hprobs_col)
         #    md12cols.append(dprobs12_col)
@@ -203,18 +203,18 @@ class TestGateSetMethods(GateSetTestCase):
         blocks1 = pygsti.tools.mpitools.slice_up_range(nP, 3)
         blocks2 = pygsti.tools.mpitools.slice_up_range(nP, 5)
         slicesList = list(itertools.product(blocks1,blocks2))
-        for s1,s2, hprobs_blk, dprobs12_blk in self.model.sim.bulk_hprobs_by_block(
+        for s1,s2, hprobs_blk, dprobs12_blk in self.model.sim.iter_hprobs_by_rectangle(
             layout, slicesList, True):
             hprobs_by_block[:,s1,s2] = hprobs_blk
             dprobs12_by_block[:,s1,s2] = dprobs12_blk
 
         #again, but no dprobs12
         hprobs_by_block2 = np.zeros(hprobs_to_fill.shape,'d')
-        for s1,s2, hprobs_blk in self.model.sim.bulk_hprobs_by_block(
+        for s1,s2, hprobs_blk in self.model.sim.iter_hprobs_by_rectangle(
                 layout, slicesList, False):
             hprobs_by_block2[:,s1,s2] = hprobs_blk
 
-        #for s1,s2, hprobs_blk, dprobs12_blk in self.mgateset.bulk_hprobs_by_block(
+        #for s1,s2, hprobs_blk, dprobs12_blk in self.mgateset.iter_hprobs_by_rectangle(
         #    mevt, slicesList, True):
         #    mhprobs_by_block[:,s1,s2] = hprobs_blk
         #    mdprobs12_by_block[:,s1,s2] = dprobs12_blk

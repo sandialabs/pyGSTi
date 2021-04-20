@@ -16,6 +16,7 @@ import sys as _sys
 import math as _math  # used for digit formatting
 
 from ..tools import compattools as _compat
+from .resourceallocation import ResourceAllocation as _ResourceAllocation
 
 
 def _num_digits(n):
@@ -129,7 +130,7 @@ class VerbosityPrinter(object):
     filename : str, optional
         Where to put output (If none, output goes to screen)
 
-    comm : mpi4py.MPI.Comm, optional
+    comm : mpi4py.MPI.Comm or ResourceAllocation, optional
         Restricts output if the program is running in parallel  (By default,
         if the rank is 0, output is sent to screen, and otherwise sent to commfiles 1, 2, ...
 
@@ -188,13 +189,14 @@ class VerbosityPrinter(object):
         filename : str, optional
             Where to put output (If none, output goes to screen)
 
-        comm : mpi4py.MPI.Comm, optional
+        comm : mpi4py.MPI.Comm or ResourceAllocation, optional
             Restricts output if the program is running in parallel  (By default,
             if the rank is 0, output is sent to screen, and otherwise sent to commfiles 1, 2, ...
 
         warnings : bool, optional
             Whether or not to print warnings
         '''
+        if isinstance(comm, _ResourceAllocation): comm = comm.comm
         if comm:
             if comm.Get_rank() != 0 and not filename:  # A filename will override the default comm behavior
                 filename = self._get_comm_file(comm.Get_rank())
@@ -256,6 +258,7 @@ class VerbosityPrinter(object):
         if _compat.isint(verbosity):
             printer = VerbosityPrinter(verbosity, comm=comm)
         else:
+            if isinstance(comm, _ResourceAllocation): comm = comm.comm
             printer = verbosity.clone()  # deepcopy the printer object if it has been passed as a verbosity
             printer._comm = comm  # override happens here
         return printer

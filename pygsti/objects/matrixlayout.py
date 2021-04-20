@@ -23,12 +23,55 @@ import collections as _collections
 
 class _MatrixCOPALayoutAtom(_DistributableAtom):
     """
-    Object that acts as "atomic unit" of instructions-for-applying a COPA strategy.
+    The atom ("atomic unit") for dividing up the element dimension in a :class:`MatrixCOPALayout`.
+
+    Parameters
+    ----------
+    unique_complete_circuits : list
+        A list that contains *all* the "complete" circuits for the parent layout.  This
+        atom only owns a subset of these, as given by `group` below.
+
+    unique_nospam_circuits : list
+        A list that contains the unique circuits within `unique_complete_circuits` once
+        their state preparations and measurements are removed.  A subset of these circuits
+        (see `group` below) are what fundamentally define the circuit outcomes that this atom
+        includes: it includes *all* the circuit outcomes of those circuits.
+
+    circuits_by_unique_nospam_circuits : dict
+       A dictionary with keys equal to the elements of `unique_nospam_circuits` and values
+       that are lists of indices into `unique_complete_circuits`.  Thus, this dictionary
+       maps each distinct circuit-without-SPAM circuit to the list of complete circuits
+       within `unique_complete_circuits` that correspond to it.
+
+    ds_circuits : list
+        A list of circuits parallel to `unique_complete_circuits` of these circuits
+        as they should be accessed from `dataset`.  This applies any aliases and
+        removes implied SPAM elements relative to `unique_complete_circuits`.
+
+    group : set
+        The set of indices into `unique_nospam_circuits` that define the circuit
+        outcomes owned by this atom.
+
+    helpful_scratch : set
+        A set of indices into `unique_nospam_circuits` that specify circuits that
+        aren't owned by this atom but are helpful in building up an efficient evaluation
+        tree.
+
+    model : Model
+        The model being used to construct this layout.  Used for expanding instruments
+        within the circuits.
+
+    dataset : DataSet
+        The dataset, used to include only observed circuit outcomes in this atom
+        and therefore the parent layout.
     """
 
     def __init__(self, unique_complete_circuits, unique_nospam_circuits, circuits_by_unique_nospam_circuits,
-                 ds_circuits, group, helpful_scratch, model, dataset, offset, elindex_outcome_tuples):
+                 ds_circuits, group, helpful_scratch, model, dataset):
 
+        #Note: group gives unique_nospam_circuits indices, which circuits_by_unique_nospam_circuits
+        # turns into "unique complete circuit" indices, which the layout via it's to_unique can map
+        # to original circuit indices.
         def add_expanded_circuits(indices, add_to_this_dict):
             _expanded_nospam_circuit_outcomes = add_to_this_dict
             for i in indices:
@@ -110,15 +153,19 @@ class _MatrixCOPALayoutAtom(_DistributableAtom):
             local_offset += len(tree_indices)
             #TODO: allow tree_indices to be None or a slice?
 
-        element_slice = slice(offset, offset + local_offset)  # *global* (of parent layout) element-index slice
+        element_slice = None  # slice(offset, offset + local_offset)  # *global* (of parent layout) element-index slice
         num_elements = local_offset
+
+        elindex_outcome_tuples = _collections.OrderedDict([
+            (unique_i, list()) for unique_i in range(len(unique_complete_circuits))])
 
         for spam_tuple, (element_indices, tree_indices) in self.indices_by_spamtuple.items():
             for elindex, tree_index in zip(_slct.indices(element_indices), _slct.to_array(tree_indices)):
                 outcome_by_spamtuple = expanded_nospam_circuit_outcomes[expanded_nospam_circuits[tree_index]]
                 outcome, unique_is = outcome_by_spamtuple[spam_tuple]
                 for unique_i in unique_is:
-                    elindex_outcome_tuples[unique_i].append((offset + elindex, outcome))  # *global* element indices
+                    elindex_outcome_tuples[unique_i].append((elindex, outcome))  # *local* element indices
+        self.elindex_outcome_tuples = elindex_outcome_tuples
 
         super().__init__(element_slice, num_elements)
 
@@ -161,16 +208,20 @@ class _MatrixCOPALayoutAtom(_DistributableAtom):
 
     @property
     def cache_size(self):
+        """The cache size of this atom."""
         return len(self.tree)
 
 
 class MatrixCOPALayout(_DistributableCOPALayout):
     """
-    TODO: update docstring
+    A circuit outcome probability array (COPA) layout for circuit simulation by process matrix multiplication.
 
-    An Evaluation Tree that structures circuits for efficient multiplication of process matrices.
+    A distributed layout that divides a list of circuits into several "evaluation trees"
+    that compute subsets of the circuit outcomes by multiplying together process matrices.
+    Often these evaluation trees correspond to available processors, but it can be useful
+    to divide computations in order to lessen the amount of intermediate memory required.
 
-    MatrixEvalTree instances create and store the decomposition of a list of circuits into
+    MatrixCOPALayout instances create and store the decomposition of a list of circuits into
     a sequence of 2-term products of smaller strings.  Ideally, this sequence would
     prescribe the way to obtain the entire list of circuits, starting with just the single
     gates, using the fewest number of multiplications, but this optimality is not
@@ -178,21 +229,52 @@ class MatrixCOPALayout(_DistributableCOPALayout):
 
     Parameters
     ----------
-    items : list, optional
-        Initial items.  This argument should only be used internally
-        in the course of serialization.
+    circuits : list
+        A list of:class:`Circuit` objects representing the circuits this layout will include.
 
-    num_strategy_subcomms : int, optional
-        The number of processor groups (communicators) to divide the "atomic" portions
-        of this strategy (a circuit probability array layout) among when calling `distribute`.
-        By default, the communicator is not divided.  This default behavior is fine for cases
-        when derivatives are being taken, as multiple processors are used to process differentiations
-        with respect to different variables.  If no derivaties are needed, however, this should be
-        set to (at least) the number of processors.
+    model : Model
+        The model that will be used to compute circuit outcome probabilities using this layout.
+        This model is used to complete and expand the circuits in `circuits`.
+
+    dataset : DataSet, optional
+        If not None, restrict the circuit outcomes stored by this layout to only the
+        outcomes observed in this data set.
+
+    num_sub_trees : int, optional
+        The number of groups ("sub-trees") to divide the circuits into.  This is the
+        number of *atoms* for this layout.
+
+    num_tree_processors : int, optional
+        The number of atom-processors, i.e. groups of processors that process sub-trees.
+
+    num_param_dimension_processors : tuple, optional
+        A 1- or 2-tuple of integers specifying how many parameter-block processors are
+        used when dividing the physical processors into a grid.  The first and second
+        elements correspond to counts for the first and second parameter dimensions,
+        respecively.
+
+    param_dimensions : tuple, optional
+        The number of parameters along each parameter dimension.  Can be an
+        empty, 1-, or 2-tuple of integers which dictates how many parameter dimensions this
+        layout supports.
+
+    param_dimension_blk_sizes : tuple, optional
+        The parameter block sizes along each present parameter dimension, so this should
+        be the same shape as `param_dimensions`.  A block size of `None` means that there
+        should be no division into blocks, and that each block processor computes all of
+        its parameter indices at once.
+
+    resource_alloc : ResourceAllocation, optional
+        The resources available for computing circuit outcome probabilities.
+
+    verbosity : int or VerbosityPrinter
+        Determines how much output to send to stdout.  0 means no output, higher
+        integers mean more output.
     """
 
-    def __init__(self, circuits, model, dataset=None, max_sub_tree_size=None,
-                 num_sub_trees=None, additional_dimensions=(), verbosity=0):
+    def __init__(self, circuits, model, dataset=None, num_sub_trees=None, num_tree_processors=1,
+                 num_param_dimension_processors=(), param_dimensions=(),
+                 param_dimension_blk_sizes=(), resource_alloc=None, verbosity=0):
 
         #OUTDATED: TODO - revise this:
         # 1. pre-process => get complete circuits => spam-tuples list for each no-spam circuit (no expanding yet)
@@ -220,112 +302,44 @@ class MatrixCOPALayout(_DistributableCOPALayout):
                 circuits_by_unique_nospam_circuits[nospam_c] = [i]
         unique_nospam_circuits = list(circuits_by_unique_nospam_circuits.keys())
 
-        #REMOVE: print("DEBUG: SETTING NUM_SUB_TREES = 2 to trigger behavior"); num_sub_trees = 2
+        # Split circuits into groups that will make good subtrees (all procs do this)
+        max_sub_tree_size = None  # removed from being an argument (unused)
         if (num_sub_trees is not None and num_sub_trees > 1) or max_sub_tree_size is not None:
             circuit_tree = _EvalTree.create(unique_nospam_circuits)
             groups, helpful_scratch = circuit_tree.find_splitting(len(unique_nospam_circuits),
-                                                                  max_sub_tree_size, num_sub_trees, verbosity)
+                                                                  max_sub_tree_size, num_sub_trees, verbosity - 1)
             #print("%d circuits => tree of size %d" % (len(unique_nospam_circuits), len(circuit_tree)))
         else:
             groups = [set(range(len(unique_nospam_circuits)))]
             helpful_scratch = [set()]
         # (elements of `groups` contain indices into `unique_nospam_circuits`)
 
-        atoms = []
-        elindex_outcome_tuples = _collections.OrderedDict([
-            (orig_i, list()) for orig_i in range(len(unique_circuits))])
+        # Divide `groups` into num_tree_processors roughly equal sets (each containing
+        # potentially multiple groups)
+        #my_group_indices, group_owners, grp_subcomm = self._distribute(num_tree_processors, len(groups),
+        #                                                                resource_alloc, verbosity)
+        #my_group_indices = set(my_group_indices)
 
-        offset = 0
-        for group, helpful_scratch_group in zip(groups, helpful_scratch):
-            atoms.append(_MatrixCOPALayoutAtom(unique_complete_circuits, unique_nospam_circuits,
-                                               circuits_by_unique_nospam_circuits, ds_circuits,
-                                               group, helpful_scratch_group, model, dataset, offset,
-                                               elindex_outcome_tuples))
-            offset += atoms[-1].num_elements
+        #my_atoms = []
+        #elindex_outcome_tuples = _collections.OrderedDict([
+        #    (orig_i, list()) for orig_i in range(len(unique_circuits))])
+        #
+        #offset = 0
+        #for i, (group, helpful_scratch_group) in enumerate(zip(groups, helpful_scratch)):
+        #    if i not in my_group_indices: continue
+        #    my_atoms.append(_MatrixCOPALayoutAtom(unique_complete_circuits, unique_nospam_circuits,
+        #                                       circuits_by_unique_nospam_circuits, ds_circuits,
+        #                                       group, helpful_scratch_group, model, dataset, offset,
+        #                                       elindex_outcome_tuples))
+        #    offset += my_atoms[-1].num_elements
 
-        super().__init__(circuits, unique_circuits, to_unique, elindex_outcome_tuples, unique_complete_circuits,
-                         atoms, additional_dimensions)
+        def _create_atom(args):
+            group, helpful_scratch_group = args
+            return _MatrixCOPALayoutAtom(unique_complete_circuits, unique_nospam_circuits,
+                                         circuits_by_unique_nospam_circuits, ds_circuits,
+                                         group, helpful_scratch_group, model, dataset)
 
-
-class _MatrixTimeDepCOPALayoutAtom(_MatrixCOPALayoutAtom):
-    """
-    Object that acts as "atomic unit" of instructions-for-applying a COPA strategy.
-    """
-
-    def __init__(self, master_atom, timestamp):
-        self.timestamp = timestamp
-
-        #Shallow-copy all of master_atom's attributes
-        self.tree = master_atom.tree
-        self._num_nonscratch_tree_items = master_atom._num_nonscratch_tree_items
-        self.indices_by_spamtuple = master_atom.indices_by_spamtuple
-        _DistributableAtom.__init__(self, master_atom.element_slice, master_atom.num_elements)
-
-
-class MatrixTimeDepCOPALayout(_DistributableCOPALayout):
-    """
-    TODO: update docstring
-
-    An Evaluation Tree that structures circuits for efficient multiplication of process matrices.
-
-    MatrixEvalTree instances create and store the decomposition of a list of circuits into
-    a sequence of 2-term products of smaller strings.  Ideally, this sequence would
-    prescribe the way to obtain the entire list of circuits, starting with just the single
-    gates, using the fewest number of multiplications, but this optimality is not
-    guaranteed.
-
-    Parameters
-    ----------
-    items : list, optional
-        Initial items.  This argument should only be used internally
-        in the course of serialization.
-
-    num_strategy_subcomms : int, optional
-        The number of processor groups (communicators) to divide the "atomic" portions
-        of this strategy (a circuit probability array layout) among when calling `distribute`.
-        By default, the communicator is not divided.  This default behavior is fine for cases
-        when derivatives are being taken, as multiple processors are used to process differentiations
-        with respect to different variables.  If no derivaties are needed, however, this should be
-        set to (at least) the number of processors.
-    """
-
-    def __init__(self, circuits, model, dataset,
-                 additional_dimensions=(), verbosity=0):
-
-        assert(all([c.duration == 0 for c in circuits])), \
-            "Matrix layouts can only be used with time-free circuits"
-
-        unique_circuits, to_unique = self._compute_unique_circuits(circuits)
-        aliases = circuits.op_label_aliases if isinstance(circuits, _CircuitList) else None
-        ds_circuits = _lt.apply_aliases_to_circuits(unique_circuits, aliases)
-        unique_complete_circuits = [model.complete_circuit(c) for c in unique_circuits]
-        #Note: "unique" means a unique circuit *before* circuit-completion, so there could be duplicate
-        # "unique circuits" after completion, e.g. "rho0Gx" and "Gx" could both complete to "rho0GxMdefault_0".
-
-        circuits_by_unique_nospam_circuits = _collections.OrderedDict()
-        for i, c in enumerate(unique_complete_circuits):
-            _, nospam_c, _ = model.split_circuit(c)
-            if nospam_c in circuits_by_unique_nospam_circuits:
-                circuits_by_unique_nospam_circuits[nospam_c].append(i)
-            else:
-                circuits_by_unique_nospam_circuits[nospam_c] = [i]
-        unique_nospam_circuits = list(circuits_by_unique_nospam_circuits.keys())
-
-        #Difference from normal matrix layout: don't split based on circuits, just by time.
-        # All atoms have the *same* set of circuits
-        group = set(range(len(unique_nospam_circuits)))
-
-        #Do the work that would be done in to setup an atom with all the circuits (common to all atoms)
-        # then create atoms that are equivalent except for their times
-        elindex_outcome_tuples = _collections.OrderedDict([
-            (orig_i, list()) for orig_i in range(len(unique_circuits))])
-        master_atom = _MatrixCOPALayoutAtom(unique_complete_circuits, unique_nospam_circuits,
-                                            circuits_by_unique_nospam_circuits, ds_circuits,
-                                            group, set(), model, dataset, 0, elindex_outcome_tuples)
-        #print("Master atom with tree size = ",len(master_atom.tree))
-
-        timestamps = dataset.timestamps if dataset is not None else [0.0]
-        atoms = [_MatrixTimeDepCOPALayoutAtom(master_atom, t) for t in timestamps]
-
-        super().__init__(circuits, unique_circuits, to_unique, elindex_outcome_tuples, unique_complete_circuits,
-                         atoms, additional_dimensions)
+        super().__init__(circuits, unique_circuits, to_unique, unique_complete_circuits,
+                         _create_atom, list(zip(groups, helpful_scratch)), num_tree_processors,
+                         num_param_dimension_processors, param_dimensions,
+                         param_dimension_blk_sizes, resource_alloc, verbosity)

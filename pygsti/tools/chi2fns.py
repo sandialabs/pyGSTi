@@ -76,7 +76,7 @@ def chi2(model, dataset, circuits=None,
     return _objfns._objfn(_objfns.Chi2Function, model, dataset, circuits,
                           {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
                           {'prob_clip_interval': prob_clip_interval},
-                          op_label_aliases, comm, mem_limit, ('fn',), (), mdc_store).fn()
+                          op_label_aliases, comm, mem_limit, ('fn',), (), mdc_store).fn()  # gathers internally
 
 
 def chi2_per_circuit(model, dataset, circuits=None,
@@ -136,10 +136,11 @@ def chi2_per_circuit(model, dataset, circuits=None,
         Values are the chi2 contributions of the corresponding circuit
         aggregated over outcomes.
     """
-    return _objfns._objfn(_objfns.Chi2Function, model, dataset, circuits,
-                          {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
-                          {'prob_clip_interval': prob_clip_interval},
-                          op_label_aliases, comm, mem_limit, ('percircuit',), (), mdc_store).percircuit()
+    obj = _objfns._objfn(_objfns.Chi2Function, model, dataset, circuits,
+                         {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
+                         {'prob_clip_interval': prob_clip_interval},
+                         op_label_aliases, comm, mem_limit, ('percircuit',), (), mdc_store)
+    return obj.layout.allgather_local_array('c', obj.percircuit())
 
 
 def chi2_jacobian(model, dataset, circuits=None,
@@ -195,10 +196,11 @@ def chi2_jacobian(model, dataset, circuits=None,
     numpy array
         The gradient vector of length `model.num_params`, the number of model parameters.
     """
-    return _objfns._objfn(_objfns.Chi2Function, model, dataset, circuits,
-                          {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
-                          {'prob_clip_interval': prob_clip_interval},
-                          op_label_aliases, comm, mem_limit, ('jacobian',), (), mdc_store).jacobian()
+    obj = _objfns._objfn(_objfns.Chi2Function, model, dataset, circuits,
+                         {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
+                         {'prob_clip_interval': prob_clip_interval},
+                         op_label_aliases, comm, mem_limit, ('jacobian',), (), mdc_store)
+    return obj.layout.allgather_local_array('ep', obj.jacobian())
 
 
 def chi2_hessian(model, dataset, circuits=None,
@@ -256,7 +258,7 @@ def chi2_hessian(model, dataset, circuits=None,
                          {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
                          {'prob_clip_interval': prob_clip_interval},
                          op_label_aliases, comm, mem_limit, ('hessian',), (), mdc_store)
-    return obj.hessian()
+    return obj.layout.allgather_local_array('epp', obj.hessian())
 
 
 def chi2_approximate_hessian(model, dataset, circuits=None,
@@ -319,7 +321,7 @@ def chi2_approximate_hessian(model, dataset, circuits=None,
                          {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
                          {'prob_clip_interval': prob_clip_interval},
                          op_label_aliases, comm, mem_limit, ('approximate_hessian',), (), mdc_store)
-    return obj.approximate_hessian()
+    return obj.layout.allgather_local_array('epp', obj.approximate_hessian())
 
 
 def chialpha(alpha, model, dataset, circuits=None,
@@ -457,12 +459,13 @@ def chialpha_per_circuit(alpha, model, dataset, circuits=None,
         Values are the chi-alpha contributions of the corresponding circuit
         aggregated over outcomes.
     """
-    return _objfns._objfn(_objfns.ChiAlphaFunction, model, dataset, circuits,
-                          {'pfratio_stitchpt': pfratio_stitchpt,
-                           'pfratio_derivpt': pfratio_derivpt,
-                           'radius': radius},
-                          {'prob_clip_interval': prob_clip_interval},
-                          op_label_aliases, comm, mem_limit, ('percircuit',), (), mdc_store, alpha=alpha).percircuit()
+    obj = _objfns._objfn(_objfns.ChiAlphaFunction, model, dataset, circuits,
+                         {'pfratio_stitchpt': pfratio_stitchpt,
+                          'pfratio_derivpt': pfratio_derivpt,
+                          'radius': radius},
+                         {'prob_clip_interval': prob_clip_interval},
+                         op_label_aliases, comm, mem_limit, ('percircuit',), (), mdc_store, alpha=alpha)
+    return obj.layout.allgather_local_array('c', obj.percircuit())
 
 
 @_deprecated_fn('This function will be removed soon.  Use chi2fn(...) with `p` and `1-p`.')

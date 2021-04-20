@@ -2303,7 +2303,7 @@ def _create_xycnot_cloudnoise_circuits(num_qubits, max_lengths, geometry, cnot_e
 def create_standard_localnoise_circuits(num_qubits, max_lengths, single_q_fiducials,
                                         gate_names, nonstd_gate_unitaries=None,
                                         availability=None, geometry="line",
-                                        paramroot="H+S", sparse_lindblad_basis=False, sparse_lindblad_reps=False,
+                                        paramroot="H+S", sparse_lindblad_basis=False, sparse_lindblad_reps=True,
                                         verbosity=0, cache=None, idle_only=False, idt_pauli_dicts=None,
                                         algorithm="greedy", idle_op_str=((),), comm=None):
     """
@@ -2466,7 +2466,7 @@ def create_standard_cloudnoise_circuits(num_qubits, max_lengths, single_q_fiduci
                                         gate_names, nonstd_gate_unitaries=None,
                                         availability=None, geometry="line",
                                         max_idle_weight=1, maxhops=0, extra_weight_1_hops=0, extra_gate_weight=0,
-                                        paramroot="H+S", sparse_lindblad_basis=False, sparse_lindblad_reps=False,
+                                        paramroot="H+S", sparse_lindblad_basis=False, sparse_lindblad_reps=True,
                                         verbosity=0, cache=None, idle_only=False, idt_pauli_dicts=None,
                                         algorithm="greedy", idle_op_str=((),), comm=None):
     """
@@ -2655,7 +2655,7 @@ def create_standard_cloudnoise_circuits(num_qubits, max_lengths, single_q_fiduci
 def create_cloudnoise_circuits(num_qubits, max_lengths, single_q_fiducials,
                                gatedict, availability, geometry, max_idle_weight=1, maxhops=0,
                                extra_weight_1_hops=0, extra_gate_weight=0, paramroot="H+S",
-                               sparse_lindblad_basis=False, sparse_lindblad_reps=False, verbosity=0,
+                               sparse_lindblad_basis=False, sparse_lindblad_reps=True, verbosity=0,
                                cache=None, idle_only=False, idt_pauli_dicts=None, algorithm="greedy",
                                idle_op_str=((),), comm=None):
     """
@@ -2831,6 +2831,8 @@ def create_cloudnoise_circuits(num_qubits, max_lengths, single_q_fiducials,
         cache['Idle gatename fidpair lists'] = {}
     if 'Cloud templates' not in cache:
         cache['Cloud templates'] = _collections.defaultdict(list)
+    assert(sparse_lindblad_reps is True), "Must set sparse_lindblad_reps=True` when creating cloudnoise circuits!"
+    # b/c we need to avoid dense reps when using the term simulator
 
     ptermstype = paramroot + " terms"
     #the parameterization type used for constructing Models

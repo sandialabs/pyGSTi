@@ -336,30 +336,23 @@ class WildcardBudget(object):
                 if return_deriv: p_deriv[elInds] = 0.0
                 continue
 
-            if min_qvec < 0:
-                #Stopgap solution when a probability is negative: use wcbudget to move as
-                # much negative prob to zero as possible, while reducing all the positive
-                # probs.  This seems reasonable but isn't provably the right thing to do!
-                qvec = qvec.copy()  # make sure we don't mess with memory we shouldn't
-                neg_inds = _np.where(qvec < 0)[0]; neg_sum = sum(qvec[neg_inds])
-                pos_inds = _np.where(qvec > 0)[0]; pos_sum = sum(qvec[pos_inds])  # note: NOT >= (leave zeros alone)
-                if -neg_sum > pos_sum:
-                    raise NotImplementedError(("Wildcard budget cannot be applied when the model predicts more "
-                                               "*negative* then positive probability! (%s predicts neg_sum=%.3g, "
-                                               "pos_sum=%.3g)") % (circ.str, neg_sum, pos_sum))
-                while _np.min(qvec) < 0 and not _np.isclose(W, 0):
-                    add_to = _np.argmin(qvec)
-                    subtract_from = _np.argmax(qvec)
-                    amount = _np.min([qvec[subtract_from], -qvec[add_to], W])
-                    qvec[add_to] += amount
-                    qvec[subtract_from] -= amount
-                    W -= amount
+            if min_qvec < 0 or abs(1.0 - sum(qvec)) > 1e-6:
+
+                qvec, W = _adjust_qvec_to_be_nonnegative_and_unit_sum(qvec, W, min_qvec, circ)
 
                 #recompute A-D b/c we've updated qvec
                 A = _np.logical_and(qvec > fvec, fvec > 0); sum_fA = sum(fvec[A]); sum_qA = sum(qvec[A])
                 B = _np.logical_and(qvec < fvec, fvec > 0); sum_fB = sum(fvec[B]); sum_qB = sum(qvec[B])
                 C = (qvec == fvec); sum_qC = sum(qvec[C])
                 D = _np.logical_and(qvec != fvec, fvec == 0); sum_qD = sum(qvec[D])
+
+                #update other values tht depend on qvec (same as in precompute_for_same_probs_freqs)
+                sum_qA = float(_np.sum(qvec[A]))
+                sum_qB = float(_np.sum(qvec[B]))
+                sum_qC = float(_np.sum(qvec[C]))
+                sum_qD = float(_np.sum(qvec[D]))
+                iA = sorted(zip(_np.nonzero(A)[0], qvec[A] / fvec[A]), key=lambda x: x[1])
+                iB = sorted(zip(_np.nonzero(B)[0], qvec[B] / fvec[B]), key=lambda x: -x[1])
 
             indices_moved_to_C = []; alist_ptr = blist_ptr = 0
 
@@ -453,7 +446,6 @@ class WildcardBudget(object):
 
             assert(W > 0 or min_qvec < 0 or _np.linalg.norm(qvec - pvec) < 1e-6), \
                 "Probability shouldn't be updated when W=0!"  # don't check this when there are negative probs
-
             #Check with other version (for debugging)
             #check_pvec = update_circuit_probs(qvec.copy(), fvec.copy(), W)
             #assert(_np.linalg.norm(check_pvec - pvec) < 1e-6)
@@ -813,6 +805,37 @@ def _chk_sum(alpha, beta, fvec, A, B, C):
     return alpha * sum(fvec[A]) + beta * sum(fvec[B]) + sum(fvec[C])
 
 
+def _adjust_qvec_to_be_nonnegative_and_unit_sum(qvec, W, min_qvec, circ=None):
+    if min_qvec >= 0 and abs(1.0 - sum(qvec)) < 1e-6:
+        return qvec, W  # no change needed
+
+    if min_qvec < 0:
+        #Stopgap solution when a probability is negative: use wcbudget to move as
+        # much negative prob to zero as possible, while reducing all the positive
+        # probs.  This seems reasonable but isn't provably the right thing to do!
+        qvec = qvec.copy()  # make sure we don't mess with memory we shouldn't
+        neg_inds = _np.where(qvec < 0)[0]; neg_sum = sum(qvec[neg_inds])
+        pos_inds = _np.where(qvec > 0)[0]; pos_sum = sum(qvec[pos_inds])  # note: NOT >= (leave zeros alone)
+        if -neg_sum > pos_sum:
+            circ_str = circ.str if (circ is not None) else "circuit"
+            raise NotImplementedError(("Wildcard budget cannot be applied when the model predicts more "
+                                       "*negative* then positive probability! (%s predicts neg_sum=%.3g, "
+                                       "pos_sum=%.3g)") % (circ_str, neg_sum, pos_sum))
+        while _np.min(qvec) < 0 and not _np.isclose(W, 0):
+            add_to = _np.argmin(qvec)
+            subtract_from = _np.argmax(qvec)
+            amount = _np.min([qvec[subtract_from], -qvec[add_to], W])
+            qvec[add_to] += amount
+            qvec[subtract_from] -= amount
+            W -= amount
+
+    if abs(1.0 - sum(qvec)) > 1e-6:
+        qvec = qvec.copy()  # make sure we don't mess with memory we shouldn't
+        qvec /= sum(qvec)
+
+    return qvec, W
+
+
 def update_circuit_probs(probs, freqs, circuit_budget):
     qvec = probs
     fvec = freqs
@@ -824,6 +847,8 @@ def update_circuit_probs(probs, freqs, circuit_budget):
     initialTVD = 0.5 * sum(_np.abs(qvec - fvec))
     if initialTVD <= W + tol:  # TVD is already "in-budget" for this circuit - can adjust to fvec exactly
         return fvec
+
+    qvec, W = _adjust_qvec_to_be_nonnegative_and_unit_sum(qvec, W, min(qvec))
 
     #Note: must ensure that A,B,C,D are *disjoint*
     fvec_equals_qvec = _np.logical_and(fvec - base_tol <= qvec, qvec <= fvec + base_tol)  # fvec == qvec
