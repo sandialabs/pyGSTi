@@ -948,7 +948,8 @@ def _get_error_gate(key, ideal_gate, depolarization_strengths, stochastic_error_
                 # TODO: Make this not require dense
                 err_gate = _op.LindbladOp(ideal_gate.to_dense(), errgen, dense_rep=True)
             else:
-                raise ValueError("Unknown parameterization %s for depolarizing error specification" % parameterization[0])
+                raise ValueError("Unknown parameterization %s for depolarizing error specification" \
+                                 % depolarization_parameterization)
 
         elif key in stochastic_error_probs: # Stochastic error specification
             sto_rates = stochastic_error_probs[key]
@@ -965,7 +966,8 @@ def _get_error_gate(key, ideal_gate, depolarization_strengths, stochastic_error_
                 # TODO: Make this not require dense
                 err_gate = _op.LindbladOp(ideal_gate.to_dense(), errgen, dense_rep=True)
             else:
-                raise ValueError("Unknown parameterization %s for stochastic error specification" % parameterization[0])
+                raise ValueError("Unknown parameterization %s for stochastic error specification" \
+                                 % stochastic_parameterization)
 
         elif key in lindblad_error_coeffs: # LindbladOp with errgen coefficients
             errdict = lindblad_error_coeffs[key]
