@@ -121,7 +121,7 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
 
     @classmethod
     def from_existing_circuits(cls, circuits_and_idealouts_by_depth, qubit_labels=None,
-                               randomizeout=False, citerations=20, compilerargs=(),
+                               randomizeout=False, citerations=20, compilerargs=(), interleaved_circuit=None,
                                descriptor='A Clifford RB experiment', add_default_protocol=False):
         """
         Create a :class:`CliffordRBDesign` from an existing set of sampled RB circuits.
@@ -196,10 +196,12 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
         circuits_per_depth = [len(circuits_and_idealouts_by_depth[d]) for d in depths]
         self = cls.__new__(cls)
         self._init_foundation(depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
-                              randomizeout, citerations, compilerargs, descriptor, add_default_protocol)
+                              randomizeout, citerations, compilerargs, descriptor, add_default_protocol,
+                              interleaved_circuit)
         return self
 
     def __init__(self, pspec, depths, circuits_per_depth, qubit_labels=None, randomizeout=False,
+                 interleaved_circuit=None,
                  citerations=20, compilerargs=(), descriptor='A Clifford RB experiment',
                  add_default_protocol=False, seed=None, verbosity=1):
         """
@@ -300,7 +302,8 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
             idealouts_at_depth = []
             for j in range(circuits_per_depth):
                 c, iout = _rc.create_clifford_rb_circuit(pspec, l, qubit_labels=qubit_labels, randomizeout=randomizeout,
-                                                         citerations=citerations, compilerargs=compilerargs)
+                                                         citerations=citerations, compilerargs=compilerargs,
+                                                         interleaved_circuit=interleaved_circuit)
                 circuits_at_depth.append(c)
                 idealouts_at_depth.append((''.join(map(str, iout)),))
                 if verbosity > 0: print(j + 1, end=',')
@@ -309,16 +312,19 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
             if verbosity > 0: print('')
 
         self._init_foundation(depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
-                              randomizeout, citerations, compilerargs, descriptor, add_default_protocol)
+                              randomizeout, citerations, compilerargs, descriptor, add_default_protocol,
+                              interleaved_circuit)
 
     def _init_foundation(self, depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
-                         randomizeout, citerations, compilerargs, descriptor, add_default_protocol):
+                         randomizeout, citerations, compilerargs, descriptor, add_default_protocol,
+                         interleaved_circuit):
         super().__init__(depths, circuit_lists, ideal_outs, qubit_labels, remove_duplicates=False)
         self.circuits_per_depth = circuits_per_depth
         self.randomizeout = randomizeout
         self.citerations = citerations
         self.compilerargs = compilerargs
         self.descriptor = descriptor
+        self.interleaved_circuit = interleaved_circuit
         if add_default_protocol:
             if randomizeout:
                 defaultfit = 'A-fixed'
@@ -1092,7 +1098,7 @@ class RandomizedBenchmarking(_vb.SummaryStatistics):
     """
 
     def __init__(self, datatype='success_probabilities', defaultfit='full', asymptote='std', rtype='EI',
-                 seed=(0.8, 0.95), bootstrap_samples=200, depths='all', name=None):
+                 seed=(0.8, 0.95), bootstrap_samples=200, depths='all', square_mean_root=False, name=None):
         """
         Initialize an RB protocol for analyzing RB data.
 
@@ -1152,6 +1158,7 @@ class RandomizedBenchmarking(_vb.SummaryStatistics):
         self.rtype = rtype
         self.datatype = datatype
         self.defaultfit = defaultfit
+        self.square_mean_root = square_mean_root
 
     def run(self, data, memlimit=None, comm=None):
         """
@@ -1201,7 +1208,15 @@ class RandomizedBenchmarking(_vb.SummaryStatistics):
             adj_sps = []
             for depth in depths:
                 percircuitdata = circuitdata_per_depth[depth]
-                adj_sps.append(_np.mean(percircuitdata))  # average [adjusted] success probabilities
+                #print(percircuitdata)
+                if self.square_mean_root:
+                    #print(percircuitdata)
+                    adj_sps.append(_np.nanmean(_np.sqrt(percircuitdata))**2)
+                    #print(adj_sps)
+                else:
+                    adj_sps.append(_np.nanmean(percircuitdata))  # average [adjusted] success probabilities
+
+            #print(adj_sps)
 
             full_fit_results, fixed_asym_fit_results = _rbfit.std_least_squares_fit(
                 depths, adj_sps, nqubits, seed=self.seed, asymptote=asymptote,

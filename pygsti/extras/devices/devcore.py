@@ -23,6 +23,7 @@ from . import ibmq_essex
 from . import ibmq_burlington
 from . import ibmq_london
 from . import ibmq_yorktown
+from . import ibmq_manhattan
 from . import rigetti_agave
 from . import rigetti_aspen4
 from . import rigetti_aspen6
@@ -50,6 +51,7 @@ def _get_dev_specs(devname):
     elif devname == 'rigetti_aspen4': dev = rigetti_aspen4
     elif devname == 'rigetti_aspen6': dev = rigetti_aspen6
     elif devname == 'rigetti_aspen7': dev = rigetti_aspen7
+    elif devname == 'ibmq_manhattan': dev = ibmq_manhattan
     else:
         raise ValueError("This device name is not known!")
 
@@ -149,7 +151,7 @@ def create_error_rates_model(caldata, device, one_qubit_gates, one_qubit_gates_t
         for dct in caldata['multiQubitGates']:
 
             # Converts to our gate name convention.
-            gatename = (two_qubit_gate, ':Q' + str(dct['qubits'][0]), ':Q' + str(dct['qubits'][1]))
+            gatename = (two_qubit_gate, 'Q' + str(dct['qubits'][0]), 'Q' + str(dct['qubits'][1]))
             # Assumes that the error rate is an average gate infidelity (as stated in qiskit docs).
             agi = dct['gateError']['value']
             # Maps the AGI to an entanglement infidelity.
@@ -169,7 +171,7 @@ def create_error_rates_model(caldata, device, one_qubit_gates, one_qubit_gates_t
         # gate on each qubit to that qubits label (the error rates key in error_rates['gates'])
         alias_dict = {}
         for q in specs.qubits:
-            alias_dict.update({(oneQgate, ':' + q): q for oneQgate in one_qubit_gates})
+            alias_dict.update({(oneQgate, q): q for oneQgate in one_qubit_gates})
 
     elif calformat == 'ibmq-v2019':
 
