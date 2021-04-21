@@ -69,7 +69,7 @@ class NQNoiseConstructionTester(BaseCase):
         nQubits = 2
         ccmdl1 = nc.create_cloud_crosstalk_model(
             nQubits, ('Gx', 'Gy', 'Gcnot'),
-            {('Gx', 'qb0'): {('H', 'X'): 0.01, ('S', 'XY:qb0,qb1'): 0.01},
+            lindblad_error_coeffs={('Gx', 'qb0'): {('H', 'X'): 0.01, ('S', 'XY:qb0,qb1'): 0.01},
              ('Gcnot', 'qb0', 'qb1'): {('H', 'ZZ'): 0.02, ('S', 'XX:qb0,qb1'): 0.02},
              'idle': {('S', 'XX:qb0,qb1'): 0.01},
              'prep': {('S', 'XX:qb0,qb1'): 0.01},
@@ -80,7 +80,7 @@ class NQNoiseConstructionTester(BaseCase):
         #Using sparse=True and a map-based simulator
         ccmdl1 = nc.create_cloud_crosstalk_model(
             nQubits, ('Gx', 'Gy', 'Gcnot'),
-            {('Gx', 'qb0'): {('H', 'X'): 0.01, ('S', 'XY:qb0,qb1'): 0.01},
+            lindblad_error_coeffs={('Gx', 'qb0'): {('H', 'X'): 0.01, ('S', 'XY:qb0,qb1'): 0.01},
              ('Gcnot', 'qb0', 'qb1'): {('H', 'ZZ'): 0.02, ('S', 'XX:qb0,qb1'): 0.02},
              'idle': {('S', 'XX:qb0,qb1'): 0.01},
              'prep': {('S', 'XX:qb0,qb1'): 0.01},
@@ -93,7 +93,7 @@ class NQNoiseConstructionTester(BaseCase):
         #Using compact notation:
         ccmdl2 = nc.create_cloud_crosstalk_model(
             nQubits, ('Gx', 'Gy', 'Gcnot'),
-            {'Gx:0': {('HX'): 0.01, 'SXY:0,1': 0.01},
+            lindblad_error_coeffs={'Gx:0': {('HX'): 0.01, 'SXY:0,1': 0.01},
              'Gcnot:0:1': {'HZZ': 0.02, 'SXX:0,1': 0.02},
              'idle': {'SXX:0,1': 0.01},
              'prep': {'SXX:0,1': 0.01},
@@ -104,7 +104,7 @@ class NQNoiseConstructionTester(BaseCase):
         #also using qubit_labels
         ccmdl3 = nc.create_cloud_crosstalk_model(
             nQubits, ('Gx', 'Gy', 'Gcnot'),
-            {'Gx:qb0': {('HX'): 0.01, 'SXY:qb0,qb1': 0.01},
+            lindblad_error_coeffs={'Gx:qb0': {('HX'): 0.01, 'SXY:qb0,qb1': 0.01},
              'Gcnot:qb0:qb1': {'HZZ': 0.02, 'SXX:qb0,qb1': 0.02},
              'idle': {'SXX:qb0,qb1': 0.01},
              'prep': {'SXX:qb0,qb1': 0.01},
@@ -112,11 +112,24 @@ class NQNoiseConstructionTester(BaseCase):
              }, qubit_labels=['qb{}'.format(i) for i in range(nQubits)])
         self.assertEqual(ccmdl3.num_params, 7)
 
+        # Assert if try to use non-lindblad error specification (will be removed in the future when implemented)
+        with self.assertRaises(NotImplementedError):
+            nc.create_cloud_crosstalk_model(
+                nQubits, ('Gx', 'Gy', 'Gcnot'),
+                depolarization_strengths={'Gx': 0.15}
+            )
+        with self.assertRaises(NotImplementedError):
+            nc.create_cloud_crosstalk_model(
+                nQubits, ('Gx', 'Gy', 'Gcnot'),
+                stochastic_error_probs={'Gx': (0.01,)*15}
+            )
+
+
     def test_build_cloud_crosstalk_model_stencils(self):
         nQubits = 2
         ccmdl1 = nc.create_cloud_crosstalk_model(
             nQubits, ('Gx', 'Gy', 'Gcnot'),
-            {'Gx': {('H', 'X'): 0.01, ('S', 'X:@0+left'): 0.01},  # ('S','XX:@1+right,@0+left'): 0.02
+            lindblad_error_coeffs={'Gx': {('H', 'X'): 0.01, ('S', 'X:@0+left'): 0.01},  # ('S','XX:@1+right,@0+left'): 0.02
              'Gcnot': {('H', 'ZZ'): 0.02, ('S', 'XX:@1+right,@0+left'): 0.02},
              'idle': {('S', 'XX:qb0,qb1'): 0.01}
              }, qubit_labels=['qb{}'.format(i) for i in range(nQubits)])
@@ -125,7 +138,7 @@ class NQNoiseConstructionTester(BaseCase):
         #Using compact notation:
         ccmdl2 = nc.create_cloud_crosstalk_model(
             nQubits, ('Gx', 'Gy', 'Gcnot'),
-            {'Gx': {'HX': 0.01, 'SX:@0+left': 0.01},  # ('S','XX:@1+right,@0+left'): 0.02
+            lindblad_error_coeffs={'Gx': {'HX': 0.01, 'SX:@0+left': 0.01},  # ('S','XX:@1+right,@0+left'): 0.02
              'Gcnot': {'HZZ': 0.02, 'SXX:@1+right,@0+left': 0.02},
              'idle': {'SXX:qb0,qb1': 0.01}
              }, qubit_labels=['qb{}'.format(i) for i in range(nQubits)])
@@ -136,7 +149,7 @@ class NQNoiseConstructionTester(BaseCase):
         nQubits = 2
         ccmdl1 = nc.create_cloud_crosstalk_model(
             nQubits, ('Gx', 'Gy', 'Gcnot'),
-            {'Gx': {('H', 'X'): 0.01, ('S', 'X:@0+left'): 0.01},  # ('S','XX:@1+right,@0+left'): 0.02
+            lindblad_error_coeffs={'Gx': {('H', 'X'): 0.01, ('S', 'X:@0+left'): 0.01},  # ('S','XX:@1+right,@0+left'): 0.02
              'Gcnot': {('H', 'ZZ'): 0.02, ('S', 'XX:@1+right,@0+left'): 0.02},
              'idle': {('S', 'XX:qb0,qb1'): 0.01}
              }, qubit_labels=['qb{}'.format(i) for i in range(nQubits)], independent_gates=True)
@@ -152,7 +165,7 @@ class NQNoiseConstructionTester(BaseCase):
             return scipy.linalg.expm(1j * float(a) * sigmaZ)
 
         ccmdl = nc.create_cloud_crosstalk_model(nQubits, ('Gx', 'Gy', 'Gcnot', 'Ga'),
-                                                {}, nonstd_gate_unitaries={'Ga': fn})
+                                                nonstd_gate_unitaries={'Ga': fn})
         c = Circuit("Gx:1Ga;0.3:1Gx:1@(0,1)")
         p1 = ccmdl.probabilities(c)
 
