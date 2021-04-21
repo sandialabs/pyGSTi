@@ -12,6 +12,8 @@ class LabelDictTester(BaseCase):
         flags = {'auto_embed': True, 'match_parent_dim': True,
                  'match_parent_evotype': True, 'cast_to_type': "spamvec"}
         d = ld.OrderedMemberDict(None, "foobar", "rho", flags)
+        #print(d.items())
+        #assert False
         # TODO assert correctness
 
         with self.assertRaises(ValueError):
