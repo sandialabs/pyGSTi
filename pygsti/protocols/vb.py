@@ -261,8 +261,8 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
                  descriptor='A random germ mirror circuit experiment'):
 
         if qubit_labels is None: qubit_labels = tuple(pspec.qubit_labels)
-        circuit_lists = []
-        ideal_outs = []
+        circuit_lists = [[] for d in depths]
+        ideal_outs = [[] for d in depths]
 
         for j in range(circuits_per_depth):
             circtemp, outtemp, junk = _rc.create_random_germpower_mirror_circuits(
