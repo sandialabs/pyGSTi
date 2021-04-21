@@ -174,9 +174,8 @@ def _yy_qutrit(theta):
     return to_qutrit_space(_y_2qubit(theta))
 
 
-def _random_rot(scale, arr_type=_np.array, seed=None):
-    rndm = _np.random.RandomState(seed)
-    randH = scale * (rndm.randn(3, 3) + 1j * rndm.randn(3, 3))
+def _random_rot(scale, rand_state, arr_type=_np.array):
+    randH = scale * (rand_state.randn(3, 3) + 1j * rand_state.randn(3, 3))
     randH = _np.dot(_np.conj(randH.T), randH)
     randU = _linalg.expm(-1j * randH)
     return arr_type(randU)
@@ -244,24 +243,24 @@ def create_qutrit_model(error_scale, x_angle=_np.pi / 2, y_angle=_np.pi / 2,
     gateMmx = arrType(_ms_qutrit(ms_global, ms_local))
 
     #Now introduce unitary noise.
-
     scale = error_scale
-    Xrand = _random_rot(scale, seed=seed)
-    Yrand = _random_rot(scale)
-    Mrand = _random_rot(scale)
-    Irand = _random_rot(scale)
+    rndm = _np.random.RandomState(seed)
+    Xrand = _random_rot(scale, rndm)
+    Yrand = _random_rot(scale, rndm)
+    Mrand = _random_rot(scale, rndm)
+    Irand = _random_rot(scale, rndm)
 
     if similarity:  # Change basis for each gate; this preserves rotation angles, and should map identity to identity
         gateXmx = _np.dot(_np.dot(_np.conj(Xrand).T, gateXmx), Xrand)
         gateYmx = _np.dot(_np.dot(_np.conj(Yrand).T, gateYmx), Yrand)
         gateMmx = _np.dot(_np.dot(_np.conj(Mrand).T, gateMmx), Mrand)
-        gateImx = _np.dot(_np.dot(_np.conj(Irand).T, gateMmx), Irand)
+        gateImx = _np.dot(_np.dot(_np.conj(Irand).T, gateImx), Irand)
 
     else:
         gateXmx = _np.dot(gateXmx, Xrand)
         gateYmx = _np.dot(gateYmx, Yrand)
         gateMmx = _np.dot(gateMmx, Mrand)
-        gateImx = _np.dot(gateImx, Mrand)
+        gateImx = _np.dot(gateImx, Irand)
 
     #Change gate representation to superoperator in Gell-Mann basis
     gateISO = unitary_to_process_mx(gateImx)

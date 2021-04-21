@@ -234,6 +234,8 @@ def _basis_create_operation(state_space_labels, op_expr, basis="gm", parameteriz
 
     #Working with a StateSpaceLabels object gives us access to all the info we'll need later
     sslbls = _ld.StateSpaceLabels(state_space_labels)
+    if isinstance(basis, str):
+        basis = _Basis.cast(basis, sslbls)
     assert(sslbls.dim == basis.dim), \
         "State space labels dim (%s) != basis dim (%s)" % (sslbls.dim, basis.dim)
 
@@ -464,7 +466,7 @@ def basis_create_explicit_model(state_space_labels, basis,
     op_expressions : list of strings
         A list of gate expressions, each corresponding to a operation label in
         op_labels, which determine what operation each gate performs (see
-        documentation for :meth:`_create_operation`).
+        documentation for :meth:`_basis_create_operation`).
 
     prep_labels : list of string, optional
         A list of labels for each created state preparation in the final
@@ -499,7 +501,7 @@ def basis_create_explicit_model(state_space_labels, basis,
 
     parameterization : {"full","TP","static"}, optional
         How to parameterize the gates of the resulting Model (see
-        documentation for :meth:`_create_operation`).
+        documentation for :meth:`_basis_create_operation`).
 
     Returns
     -------
@@ -599,7 +601,7 @@ def create_explicit_model(state_space_labels,
     op_expressions : list of strings
         A list of gate expressions, each corresponding to a operation label in
         op_labels, which determine what operation each gate performs (see
-        documentation for :meth:`_create_operation`).
+        documentation for :meth:`_basis_create_operation`).
 
     prep_labels : list of string
         A list of labels for each created state preparation in the final
@@ -648,7 +650,7 @@ def create_explicit_model(state_space_labels,
 
     parameterization : {"full","TP"}, optional
         How to parameterize the gates of the resulting Model (see
-        documentation for :meth:`_create_operation`).
+        documentation for :meth:`_basis_create_operation`).
 
     Returns
     -------
@@ -1244,10 +1246,10 @@ def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}
     if 'prep' in all_keys:
         if 'prep' in depolarization_strengths and depolarization_parameterization != 'lindblad':
             _warnings.warn(("'prep' error specification requires Lindblad parameterization, "
-                           "depolarization parameterization %s overridden!" % depolarization_parameterization))
+                           "depolarization parameterization '%s' overridden!" % depolarization_parameterization))
         elif 'prep' in stochastic_error_probs and stochastic_parameterization != 'lindblad':
             _warnings.warn(("'prep' error specification requires Lindblad parameterization, "
-                           "stochastic parameterization %s overridden!" % stochastic_parameterization))
+                           "stochastic parameterization '%s' overridden!" % stochastic_parameterization))
                         
         rho_base1Q = _spamvec.ComputationalSPAMVec([0], evotype, 'prep')
         # Override parameterization to force Lindblad
@@ -1264,10 +1266,10 @@ def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}
     if 'povm' in all_keys:
         if 'povm' in depolarization_strengths and depolarization_parameterization != 'lindblad':
             _warnings.warn(("'povm' error specification requires Lindblad parameterization, "
-                           "depolarization parameterization %s overridden!" % depolarization_parameterization))
+                           "depolarization parameterization '%s' overridden!" % depolarization_parameterization))
         elif 'povm' in stochastic_error_probs and stochastic_parameterization != 'lindblad':
             _warnings.warn(("'povm' error specification requires Lindblad parameterization, "
-                           "stochastic parameterization %s overridden!" % stochastic_parameterization))
+                           "stochastic parameterization '%s' overridden!" % stochastic_parameterization))
 
         Mdefault_base1Q = _povm.ComputationalBasisPOVM(1, evotype)
         # Override parameterization to force Lindblad
