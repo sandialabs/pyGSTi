@@ -91,12 +91,18 @@ class ModelConstructionTester(BaseCase):
         self.assertEqual(mdl.num_params, 24)
 
         # TODO: These are maybe not deterministic? Sometimes are swapped for me...
-        self.assertEqual(mdl.operation_blks['layers'][('Gx', 0)].gpindices, slice(0, 12))
-        self.assertEqual(mdl.operation_blks['layers'][('Gy', 0)].gpindices, slice(12, 24))
-        self.assertEqual(mdl.operation_blks['layers'][('Gi', 0)].gpindices, slice(0, 12))
-        self.assertEqual(mdl.operation_blks['gates']['Gx'].gpindices, slice(0, 12))
-        self.assertEqual(mdl.operation_blks['gates']['Gy'].gpindices, slice(12, 24))
-        self.assertEqual(mdl.operation_blks['gates']['Gi'].gpindices, slice(0, 12))
+        if mdl.operation_blks['layers'][('Gx', 0)].gpindices == slice(0, 12):
+            slice1 = slice(0, 12)
+            slice2 = slice(12, 24)
+        else:
+            slice1 = slice(12, 24)
+            slice2 = slice(0, 12)
+        self.assertEqual(mdl.operation_blks['layers'][('Gx', 0)].gpindices, slice1)
+        self.assertEqual(mdl.operation_blks['layers'][('Gy', 0)].gpindices, slice2)
+        self.assertEqual(mdl.operation_blks['layers'][('Gi', 0)].gpindices, slice1)
+        self.assertEqual(mdl.operation_blks['gates']['Gx'].gpindices, slice1)
+        self.assertEqual(mdl.operation_blks['gates']['Gy'].gpindices, slice2)
+        self.assertEqual(mdl.operation_blks['gates']['Gi'].gpindices, slice1)
 
         # Case: ensure_composed_gates=False, independent_gates=True
         cfmdl = mc.create_crosstalk_free_model(
