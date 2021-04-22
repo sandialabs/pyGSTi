@@ -381,9 +381,14 @@ def standard_gatenames_quil_conversions():
 
 def standard_gatenames_chp_conversions():
     """
-    A dictionary converting the gates with standard names to CHPOp objects.
+    A dictionary converting the gates with standard names to CHP native operations.
 
     See :function:`standard_gatename_unitaries`.
+
+    Note that the native operations are assumed to act on qubit 0 or qubits 0 and 1,
+    depending on whether it is a one-qubit or two-qubit operation. It is recommended
+    to use ComposedOp and EmbeddedOp to get compositions/different target qubits
+    for CHP operations.
 
     Note that throughout pyGSTi the standard gatenames (e.g., 'Gh' for Hadamard)
     are not enforced to correspond to the expected unitaries. So, if the user
@@ -397,58 +402,59 @@ def standard_gatenames_chp_conversions():
     std_gatenames_to_chp = {}
 
     # Native gates for CHP
-    std_gatenames_to_chp['h']  = ['h']
-    std_gatenames_to_chp['p']  = ['p']
-    std_gatenames_to_chp['c']  = ['c']
-    std_gatenames_to_chp['m']  = ['m']
+    std_gatenames_to_chp['h']  = ['h 0']
+    std_gatenames_to_chp['p']  = ['p 0']
+    std_gatenames_to_chp['c']  = ['c 0 1']
+    std_gatenames_to_chp['m']  = ['m 0']
 
     # Cliffords
     std_gatenames_to_chp['Gc0']  = []
-    std_gatenames_to_chp['Gc1']  = ['h', 'p', 'h', 'p']
-    std_gatenames_to_chp['Gc2']  = ['h', 'p']
-    std_gatenames_to_chp['Gc3']  = ['h', 'p', 'p', 'h']
-    std_gatenames_to_chp['Gc4']  = ['p', 'h', 'p', 'p']
-    std_gatenames_to_chp['Gc5']  = ['h', 'p', 'p', 'p']
-    std_gatenames_to_chp['Gc6']  = ['h', 'p', 'p', 'h', 'p', 'p']
-    std_gatenames_to_chp['Gc7']  = ['h', 'p', 'h', 'p', 'p', 'p']
-    std_gatenames_to_chp['Gc8']  = ['h', 'p', 'h', 'p', 'p', 'h']
-    std_gatenames_to_chp['Gc9']  = ['p', 'p']
-    std_gatenames_to_chp['Gc10'] = ['p', 'h']
-    std_gatenames_to_chp['Gc11'] = ['p', 'p', 'h', 'p']
-    std_gatenames_to_chp['Gc12'] = ['h']
-    std_gatenames_to_chp['Gc13'] = ['p', 'h', 'p']
-    std_gatenames_to_chp['Gc14'] = ['p']
-    std_gatenames_to_chp['Gc15'] = ['h', 'p', 'p']
-    std_gatenames_to_chp['Gc16'] = ['h', 'p', 'h']
-    std_gatenames_to_chp['Gc17'] = ['h', 'p', 'p', 'h', 'p']
-    std_gatenames_to_chp['Gc18'] = ['p', 'p', 'h', 'p', 'p']
-    std_gatenames_to_chp['Gc19'] = ['p', 'h', 'p', 'p', 'p']
-    std_gatenames_to_chp['Gc20'] = ['p', 'h', 'p', 'p', 'h']
-    std_gatenames_to_chp['Gc21'] = ['p', 'p', 'h']
-    std_gatenames_to_chp['Gc22'] = ['h', 'p', 'h', 'p', 'p']
-    std_gatenames_to_chp['Gc23'] = ['p', 'p', 'p']
+    std_gatenames_to_chp['Gc1']  = ['h 0', 'p 0', 'h 0', 'p 0']
+    std_gatenames_to_chp['Gc2']  = ['h 0', 'p 0']
+    std_gatenames_to_chp['Gc3']  = ['h 0', 'p 0', 'p 0', 'h 0']
+    std_gatenames_to_chp['Gc4']  = ['p 0', 'h 0', 'p 0', 'p 0']
+    std_gatenames_to_chp['Gc5']  = ['h 0', 'p 0', 'p 0', 'p 0']
+    std_gatenames_to_chp['Gc6']  = ['h 0', 'p 0', 'p 0', 'h 0', 'p 0', 'p 0']
+    std_gatenames_to_chp['Gc7']  = ['h 0', 'p 0', 'h 0', 'p 0', 'p 0', 'p 0']
+    std_gatenames_to_chp['Gc8']  = ['h 0', 'p 0', 'h 0', 'p 0', 'p 0', 'h 0']
+    std_gatenames_to_chp['Gc9']  = ['p 0', 'p 0']
+    std_gatenames_to_chp['Gc10'] = ['p 0', 'h 0']
+    std_gatenames_to_chp['Gc11'] = ['p 0', 'p 0', 'h 0', 'p 0']
+    std_gatenames_to_chp['Gc12'] = ['h 0']
+    std_gatenames_to_chp['Gc13'] = ['p 0', 'h 0', 'p 0']
+    std_gatenames_to_chp['Gc14'] = ['p 0']
+    std_gatenames_to_chp['Gc15'] = ['h 0', 'p 0', 'p 0']
+    std_gatenames_to_chp['Gc16'] = ['h 0', 'p 0', 'h 0']
+    std_gatenames_to_chp['Gc17'] = ['h 0', 'p 0', 'p 0', 'h 0', 'p 0']
+    std_gatenames_to_chp['Gc18'] = ['p 0', 'p 0', 'h 0', 'p 0', 'p 0']
+    std_gatenames_to_chp['Gc19'] = ['p 0', 'h 0', 'p 0', 'p 0', 'p 0']
+    std_gatenames_to_chp['Gc20'] = ['p 0', 'h 0', 'p 0', 'p 0', 'h 0']
+    std_gatenames_to_chp['Gc21'] = ['p 0', 'p 0', 'h 0']
+    std_gatenames_to_chp['Gc22'] = ['h 0', 'p 0', 'h 0', 'p 0', 'p 0']
+    std_gatenames_to_chp['Gc23'] = ['p 0', 'p 0', 'p 0']
 
-    std_gatenames_to_chp['Gcnot'] = ['c']
-    std_gatenames_to_chp['Gcphase'] = ['h', 'c', 'h']
+    std_gatenames_to_chp['Gcnot'] = ['c 0 1']
+    std_gatenames_to_chp['Gcphase'] = ['h 0', 'c 0 1', 'h 0']
 
     # Standard names
     std_gatenames_to_chp['Gi'] = []
 
-    std_gatenames_to_chp['Gxpi'] = ['h', 'p', 'p', 'h']
-    std_gatenames_to_chp['Gypi'] = ['p', 'p', 'h', 'p', 'p', 'h']
-    std_gatenames_to_chp['Gzpi'] = ['p', 'p']
+    std_gatenames_to_chp['Gxpi'] = ['h 0', 'p 0', 'p 0', 'h 0']
+    # Shorter Y compilation is possible, up to global phase: p, p, h, p, p, h = ZX = iY
+    std_gatenames_to_chp['Gypi'] = ['p 0', 'h 0', 'p 0', 'p 0', 'h 0', 'p 0', 'p 0', 'p 0']
+    std_gatenames_to_chp['Gzpi'] = ['p 0', 'p 0']
 
-    std_gatenames_to_chp['Gxpi2'] = ['h', 'p', 'h']
-    #std_gatenames_to_chp['Gypi2'] =  TODO
-    std_gatenames_to_chp['Gzpi2'] = ['p']
+    std_gatenames_to_chp['Gxpi2'] = ['h 0', 'p 0', 'h 0']
+    std_gatenames_to_chp['Gypi2'] = ['p 0', 'h 0', 'p 0', 'h 0', 'p 0', 'p 0', 'p 0']
+    std_gatenames_to_chp['Gzpi2'] = ['p 0']
 
-    std_gatenames_to_chp['Gxmpi2'] = ['h', 'p', 'p', 'p', 'h']
-    #std_gatenames_to_chp['Gympi2'] =  TODO
-    std_gatenames_to_chp['Gzmpi2'] = ['p', 'p', 'p']
+    std_gatenames_to_chp['Gxmpi2'] = ['h 0', 'p 0', 'p 0', 'p 0', 'h 0']
+    std_gatenames_to_chp['Gympi2'] = ['p 0', 'h 0', 'p 0', 'p 0', 'p 0', 'h 0', 'p 0', 'p 0', 'p 0']
+    std_gatenames_to_chp['Gzmpi2'] = ['p 0', 'p 0', 'p 0']
 
-    std_gatenames_to_chp['Gh'] = ['h']
-    std_gatenames_to_chp['Gp'] = ['p']
-    std_gatenames_to_chp['Gpdag'] = ['p', 'p', 'p']
+    std_gatenames_to_chp['Gh'] = ['h 0']
+    std_gatenames_to_chp['Gp'] = ['p 0']
+    std_gatenames_to_chp['Gpdag'] = ['p 0', 'p 0', 'p 0']
 
     return std_gatenames_to_chp
 

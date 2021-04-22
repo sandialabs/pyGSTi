@@ -1197,6 +1197,41 @@ class LinearOperator(_modelmember.ModelMember):
             raise ValueError("%s is not a *square* 2D array" % m)  # pragma: no cover
 
         return matrix
+    
+    def get_chp_str(self, targets=None):
+        """Return a string suitable for printing to a CHP input file after
+        probabilistically selecting operation.
+
+        Parameters
+        ----------
+        targets: list of int, optional
+            Qubits to be applied to (if None, uses stored CHP strings directly)
+
+        Returns
+        -------
+        s : str
+            String of CHP code
+        """
+        assert (self._evotype == 'chp'), 'Only "chp" evotype can use get_chp_str'
+
+        ops = self._rep.chp_ops
+        nqubits = self._rep.nqubits
+
+        if targets is not None:
+            assert len(targets) == nqubits, "Got {0} targets instead of required {1}".format(len(targets, nqubits))
+            target_map = {str(i): str(t) for i,t in enumerate(targets)}
+
+        s = ""
+        for op in ops:
+            # Substitute if alternate targets provided
+            if targets is not None:
+                op_str = ''.join([target_map[c] if c in target_map else c for c in op])
+            else:
+                op_str = op
+            
+            s += op_str + '\n'
+        
+        return s
 
 
 #class MapOperator(LinearOperator):
@@ -1405,7 +1440,7 @@ class DenseOperator(BasedDenseOperatorInterface, LinearOperator):
         return s
 
 
-class StaticStandardOp(DenseOperator):
+class StaticStandardOp(LinearOperator):
     """
     An operation that is completely fixed, or "static" (i.e. that posesses no parameters)
     that can be constructed from "standard" gate names (as defined in pygsti.tools.internalgates).
@@ -1419,6 +1454,7 @@ class StaticStandardOp(DenseOperator):
         The evolution type.
         - "statevec": Unitary from standard_gatename_unitaries is used directly
         - "densitymx", "svterm", "cterm": Pauli transfer matrix is built from standard_gatename_unitaries (i.e. basis = 'pp')
+        - "chp": CHP compilation taken from standard_gatenames_chp_conversions
     """
     def __init__(self, name, evotype):
         self.name = name
@@ -1426,7 +1462,7 @@ class StaticStandardOp(DenseOperator):
         if evotype in ('statevec', 'densitymx', 'svterm', 'cterm'):
             std_unitaries = _itgs.standard_gatename_unitaries()
             if self.name not in std_unitaries:
-                raise ValueError("Name %s not in standard unitaries" % self.name)
+                raise ValueError("Name '%s' not in standard unitaries" % self.name)
 
             U = std_unitaries[self.name]
 
@@ -1435,13 +1471,36 @@ class StaticStandardOp(DenseOperator):
             else: # evotype in ('densitymx', 'svterm', 'cterm')
                 ptm = _gt.unitary_to_pauligate(U)
                 rep = replib.DMOpRepDense(LinearOperator.convert_to_matrix(ptm))
+        elif evotype == 'chp':
+            std_chp_ops = _itgs.standard_gatenames_chp_conversions()
+            if self.name not in std_chp_ops:
+                raise ValueError("Name '%s' not in standard CHP operations" % self.name)
+
+            native_ops = std_chp_ops[self.name]
+            nqubits = 2 if any(['c' in n for n in native_ops]) else 1
+
+            rep = replib.CHPOpRep(native_ops, nqubits)
         else:
             raise ValueError("Invalid evotype for a StaticStandardOp: %s" % evotype)
         
         LinearOperator.__init__(self, rep, evotype)
     
+    @property
+    def base(self):
+        """
+        The underlying dense process matrix.
+        """
+        if self._evotype in ['statevec', 'densitymx', 'svterm', 'cterm']:
+            return self._rep.base
+        else:
+            raise NotImplementedError('No base available for evotype "%s"' % self._evotype)
+    
     def __str__(self):
         s = "%s with name %s and evotype %s\n" % (self.__class__.__name__, self.name, self._evotype)
+        if self._evotype in ['statevec', 'densitymx', 'svterm', 'cterm']:
+            s += _mt.mx_to_string(self.base, width=4, prec=2)
+        elif self._evotype == 'chp':
+            s += 'CHP operations: ' + ','.join(self._rep.chp_ops) + '\n'
         return s
 
 
@@ -2640,10 +2699,14 @@ class StochasticNoiseOp(LinearOperator):
     `rho -> (1-sum(p_i))rho + sum_(i>0) p_i * B_i * rho * B_i^dagger`
     where `p_i > 0` and `sum(p_i) < 1`, and `B_i` is basis where `B_0` is the identity.
 
+    In the case of the 'chp' evotype, the `B_i` element is returned with
+    probability `p_i`, such that the outcome distribution matches the aforementioned
+    stochastic noise map when considered over many samples.
+
     Parameters
     ----------
     dim : int
-        The dimension of this operator (4 for a single qubit).
+        The basis dimension of this operator (4 for a single qubit).
 
     basis : Basis or {'pp','gm','qt'}, optional
         The basis to use, defining the "principle axes"
@@ -2657,11 +2720,15 @@ class StochasticNoiseOp(LinearOperator):
         if not None, a list of `dim-1` initial error rates along each of
         the directions corresponding to each basis element.  If None,
         then all initial rates are zero.
+    
+    seed_or_state : float or RandomState, optional
+        Random seed for RandomState (or directly provided RandomState)
+        for sampling stochastic superoperators with the 'chp' evotype.
     """
     # Difficult to parameterize and maintain the p_i conditions - Initially just store positive p_i's
     # and don't bother restricting their sum to be < 1?
 
-    def __init__(self, dim, basis="pp", evotype="densitymx", initial_rates=None):
+    def __init__(self, dim, basis="pp", evotype="densitymx", initial_rates=None, seed_or_state=None):
         """
         Create a new StochasticNoiseOp, representing a stochastic noise
         channel with possibly asymmetric noise but only noise that is
@@ -2670,39 +2737,75 @@ class StochasticNoiseOp(LinearOperator):
         Parameters
         ----------
         dim : int
-            The dimension of this operator (4 for a single qubit).
+            The basis dimension of this operator (4 for a single qubit).
 
         basis : Basis or {'pp','gm','qt'}, optional
             The basis to use, defining the "principle axes"
             along which there is stochastic noise.  We assume that
             the first element of `basis` is the identity.
+            This argument is ignored for the "chp" evotype (where
+            the Pauli basis is used).
 
-        evotype : {"densitymx", "cterm", "svterm"}
+        evotype : {"densitymx", "cterm", "svterm", "chp"}
             the evolution type being used.
 
         initial_rates : list or array
             if not None, a list of `dim-1` initial error rates along each of
             the directions corresponding to each basis element.  If None,
             then all initial rates are zero.
+        
+        seed_or_state : float or RandomState, optional
+            Random seed for RandomState (or directly provided RandomState)
+            for sampling stochastic superoperators with the 'chp' evotype.
         """
-        self.basis = _Basis.cast(basis, dim, sparse=False)  # sparse??
-        assert(dim == self.basis.dim), "Dimension of `basis` must match the dimension (`dim`) of this op."
+        if isinstance(seed_or_state, _RandomState):
+            self.rand_state = seed_or_state
+        else:
+            self.rand_state = _RandomState(seed_or_state)
 
-        self.stochastic_superops = []
-        for b in self.basis.elements[1:]:
-            std_superop = _lbt.nonham_lindbladian(b, b, sparse=False)
-            self.stochastic_superops.append(_bt.change_basis(std_superop, 'std', self.basis))
+        if evotype in ['densitymx', 'cterm', 'svterm']:
+            self.basis = _Basis.cast(basis, dim, sparse=False)  # sparse??
+            assert(dim == self.basis.dim), "Dimension of `basis` must match the dimension (`dim`) of this op."
+
+            self.stochastic_superops = []
+            for b in self.basis.elements[1:]:
+                std_superop = _lbt.nonham_lindbladian(b, b, sparse=False)
+                self.stochastic_superops.append(_bt.change_basis(std_superop, 'std', self.basis))
+        elif evotype == 'chp':
+            self.basis = _Basis.cast('pp', dim, sparse=False)
+
+            nqubits = (dim-1).bit_length() // 2
+
+            std_chp_ops = _itgs.standard_gatenames_chp_conversions()
+
+            # For CHP, need to make a Composed + EmbeddedOp for the super operators
+            # For lower overhead, make this directly using the rep instead of with objects
+            self.stochastic_superops = []
+            for label in self.basis.labels[1:]:
+                combined_chp_ops = []
+
+                for i, pauli in enumerate(label):
+                    name = 'Gi' if pauli == "I" else 'G%spi' % pauli.lower()
+                    chp_op = std_chp_ops[name]
+                    chp_op_targeted = [op.replace('0', str(i)) for op in chp_op]
+                    combined_chp_ops.extend(chp_op_targeted)
+                
+                rep = replib.CHPOpRep(combined_chp_ops, nqubits)
+                self.stochastic_superops.append(LinearOperator(rep, 'chp'))
+        else:
+            raise NotImplementedError('Evotype "%s" not available with StochasticNoiseOp' % evotype)
 
         #Setup initial parameters
         self.params = _np.zeros(self.basis.size - 1, 'd')  # note that basis.dim can be < self.dim (OK)
         if initial_rates is not None:
             assert(len(initial_rates) == self.basis.size - 1), \
-                "Expected %d initial rates but got %d!" % (len(initial_rates), self.basis.size - 1)
+                "Expected %d initial rates but got %d!" % (self.basis.size - 1, len(initial_rates))
             self.params[:] = self._rates_to_params(initial_rates)
-        assert(evotype in ("densitymx", "svterm", "cterm"))
 
         if evotype == "densitymx":  # for now just densitymx is supported
             rep = replib.DMOpRepDense(_np.ascontiguousarray(_np.identity(dim, 'd')))
+        elif evotype == "chp":
+            rep = 2**nqubits # Base rep doesn't matter, but need to set dim properly
         else:
             raise ValueError("Invalid evotype '%s' for %s" % (evotype, self.__class__.__name__))
 
@@ -2744,7 +2847,7 @@ class StochasticNoiseOp(LinearOperator):
             A copy of this object.
         """
         if memo is not None and id(self) in memo: return memo[id(self)]
-        copyOfMe = StochasticNoiseOp(self.dim, self.basis, self._evotype, self._params_to_rates(self.to_vector()))
+        copyOfMe = StochasticNoiseOp(self.basis.size, self.basis, self._evotype, self._params_to_rates(self.to_vector()))
         return self._copy_gpindices(copyOfMe, parent, memo)
 
     #to_dense / to_sparse?
@@ -2756,7 +2859,10 @@ class StochasticNoiseOp(LinearOperator):
         -------
         numpy.ndarray
         """
-        return self._rep.base  # copy?
+        if self._evotype == 'densitymx':
+            return self._rep.base  # copy?
+        else:
+            raise NotImplementedError('No to_dense implemented for evotype "%s"' % self._evotype)
 
     #def torep(self):
     #    """
@@ -2890,6 +2996,49 @@ class StochasticNoiseOp(LinearOperator):
         # so d( sum(abs(rates)) )/dparam_i = 2*param_i
         return 2 * self.to_vector()
 
+    def get_chp_str(self, targets=None):
+        """Return a string suitable for printing to a CHP input file after stochastically selecting operation.
+
+        Parameters
+        ----------
+        targets: list of int
+            Qubits to be applied to (if None, uses stored CHP strings directly)
+        
+        Returns
+        -------
+        s : str
+            String of CHP code
+        """
+        assert (self._evotype == 'chp'), "Must have 'chp' evotype to use get_chp_str"
+
+        rates = self._params_to_rates(self.to_vector())
+        all_rates = [*rates, 1.0 - sum(rates)] # Include identity so that probabilities are 1
+        index = self.rand_state.choice(self.basis.size, p=all_rates)
+        
+        # If first entry, no operation selected
+        if index == self.basis.size-1:
+            return ''
+        
+        op = self.stochastic_superops[index]
+        chp_ops = op._rep.chp_ops
+        nqubits = op._rep.nqubits
+
+        if targets is not None:
+            assert len(targets) == nqubits, "Got {0} targets instead of required {1}".format(len(targets, nqubits))
+            target_map = {str(i): str(t) for i,t in enumerate(targets)}
+
+        s = ""
+        for op in chp_ops:
+            # Substitute if alternate targets provided
+            if targets is not None:
+                op_str = ''.join([target_map[c] if c in target_map else c for c in op])
+            else:
+                op_str = op
+            
+            s += op_str + '\n'
+        
+        return s
+
     @property
     def num_params(self):
         """
@@ -2970,8 +3119,12 @@ class DepolarizeOp(StochasticNoiseOp):
 
     initial_rate : float, optional
         the initial error rate.
+
+    seed_or_state : float or RandomState, optional
+            Random seed for RandomState (or directly provided RandomState)
+            for sampling stochastic superoperators with the 'chp' evotype.
     """
-    def __init__(self, dim, basis="pp", evotype="densitymx", initial_rate=0):
+    def __init__(self, dim, basis="pp", evotype="densitymx", initial_rate=0, seed_or_state=None):
         """
         Create a new DepolarizeOp, representing a depolarizing channel.
 
@@ -2992,10 +3145,14 @@ class DepolarizeOp(StochasticNoiseOp):
 
         initial_rate : float, optional
             the initial error rate.
+        
+        seed_or_state : float or RandomState, optional
+            Random seed for RandomState (or directly provided RandomState)
+            for sampling stochastic superoperators with the 'chp' evotype.
         """
         num_rates = dim - 1
         initial_sto_rates = [initial_rate / num_rates] * num_rates
-        StochasticNoiseOp.__init__(self, dim, basis, evotype, initial_sto_rates)
+        StochasticNoiseOp.__init__(self, dim, basis, evotype, initial_sto_rates, seed_or_state)
 
         # For DepolarizeOp, set params to only first element
         self.params = _np.array([self.params[0]])
@@ -3029,8 +3186,13 @@ class DepolarizeOp(StochasticNoiseOp):
             A copy of this object.
         """
         if memo is not None and id(self) in memo: return memo[id(self)]
-        copyOfMe = DepolarizeOp(self.dim, self.basis, self._evotype, self._params_to_rates(self.to_vector())[0])
+        copyOfMe = DepolarizeOp(self.basis.size, self.basis, self._evotype, self._params_to_rates(self.to_vector())[0])
         return self._copy_gpindices(copyOfMe, parent, memo)
+
+    def __str__(self):
+        s = "Depolarize noise operation map with dim = %d, num params = %d\n" % \
+            (self.dim, self.num_params)
+        return s
 
 
 class LindbladOp(LinearOperator, _ErrorGeneratorContainer):
@@ -5886,10 +6048,11 @@ class EmbeddedOp(LinearOperator):
             assert(len(self.state_space_labels.labels) == 1
                    and all([ld == 2 for ld in self.state_space_labels.labeldims.values()])), \
                 "All state space labels must correspond to *qubits*"
-            if isinstance(self.embedded_op, StochasticCHPOp):
-                assert(len(target_labels) == self.embedded_op.nqubits), \
+            if self.embedded_op._evotype == 'chp':
+                op_nqubits = (self.embedded_op.dim-1).bit_length()
+                assert(len(target_labels) == op_nqubits), \
                     "Inconsistent number of qubits in `target_labels` ({0}) and CHP `embedded_op` ({1})".format(
-                        len(target_labels), self.embedded_op.nqubits)
+                        len(target_labels), op_nqubits)
             assert(not self.dense_rep), "`dense_rep` can only be set to True for densitymx and statevec evotypes"
 
             qubitLabels = self.state_space_labels.labels[0]
@@ -6669,7 +6832,7 @@ class EmbeddedOp(LinearOperator):
         s : str
             String of CHP code
         """
-        target_indices = self.target_indices
+        target_indices = list(self.target_indices)
 
         # Targets are for the full embedded operation so we need to map these to the actual targets of the CHP operation
         if targets is not None:
@@ -6849,246 +7012,6 @@ class CliffordOp(LinearOperator):
         s = "Clifford operation with matrix:\n"
         s += _mt.mx_to_string(self.smatrix, width=2, prec=0)
         s += " and vector " + _mt.mx_to_string(self.svector, width=2, prec=0)
-        return s
-
-# TODO: Unify this with StochasticNoiseOp somehow? May need to split into StochasticDense and not
-class StochasticCHPOp(LinearOperator):
-    """
-    A probabilistic Clifford operation represented by lists of CHP operations.
-    """
-    def __init__(self, chp_ops_list, probs, nqubits, custom_chp_gates=None, seed_or_state=None):
-        """
-        Creates a new StochasticCHPOp from a list of (CHP operation, probability) tuples.
-
-        Each CHP operation is stored as a string with qubit labels 0 through nqubits - 1.
-
-        Parameters
-        ----------
-        chp_ops_list : list of str or list of str
-            Strings with a CHP gatename (either from pygsti.tools.internalgates or provided in custom_chp_gates)
-            and labels for qubit templates to be used when generating CHP code
-        probs: list of float
-            Probabilities for each CHP operation
-        nqubits: int
-            Number of qubits acted on by the operation
-        custom_chp_gates : dict of str: list of str
-            Dictionary mapping custom chp_op names to lists of native CHP operations used to augment
-            the dictionary from pygsti.tools.internalgates.standard_gatenames_chp_conversions().
-            Entries will override those available provided by standard gatenames.
-        seed_or_state : float or numpy.random.RandomState
-            RandomState or seed for RandomState to use for stochastic choice of operation
-        """
-        if isinstance(seed_or_state, _RandomState):
-            self.rand_state = seed_or_state
-        else:
-            self.rand_state = _RandomState(seed_or_state)
-
-        self.stochastic_ops = []
-        for chp_ops in chp_ops_list:
-            ops = self._get_native_ops(chp_ops, nqubits, custom_chp_gates)
-
-            self.stochastic_ops.append(ops)
-        
-        #Setup initial parameters
-        self.params = probs
-
-        rep = replib.StochasticCHPOpRep(self.stochastic_ops, self.params, nqubits)
-        LinearOperator.__init__(self, rep, "chp")
-    
-    @property
-    def nqubits(self):
-        return self._rep.nqubits
-
-    def get_chp_str(self, targets=None):
-        """Return a string suitable for printing to a CHP input file after stochastically selecting operation.
-
-        Parameters
-        ----------
-        targets: list of int
-            Qubits to be applied to (if None, uses stored CHP strings directly)
-        
-        Returns
-        -------
-        s : str
-            String of CHP code
-        """
-        ops = self._choose_op()
-        nqubits = self._rep.nqubits
-
-        if targets is not None:
-            assert len(targets) == nqubits, "Got {0} targets instead of required {1}".format(len(targets, nqubits))
-            target_map = {str(i): str(t) for i,t in enumerate(targets)}
-
-        s = ""
-        for op in ops:
-            # Substitute if alternate targets provided
-            if targets is not None:
-                op_str = ''.join([target_map[c] if c in target_map else c for c in op])
-            else:
-                op_str = op
-            
-            s += op_str + '\n'
-        
-        return s
-
-    def _choose_op(self):
-        """Helper function to stochastically select operation
-        """
-        index = self.rand_state.choice(len(self._rep.probs), p=self._rep.probs)
-        return self._rep.ops_list[index]
-
-    def _get_native_ops(self, chp_ops, nqubits, custom_chp_gates=None):
-        """Parse/sanitize a single CHP operation.
-
-        Parameters
-        ----------
-        chp_ops : str or list of str
-            Strings with a CHP gatename (either from pygsti.tools.internalgates or provided in custom_chp_gates)
-            and labels for qubit templates to be used when generating CHP code
-        nqubits: int
-            Number of qubits acted on by the operation
-        custom_chp_gates : dict of str: list of str
-            Dictionary mapping custom chp_op names to lists of native CHP operations used to augment
-            the dictionary from pygsti.tools.internalgates.standard_gatenames_chp_conversions().
-            Entries will override those available provided by standard gatenames.
-
-        Returns
-        -------
-        sanitized_ops: list of str
-            Sanitizied list of native CHP strings
-        qubit_templates: set of str
-            List of qubit templates
-        """
-        # Get full dict mapping gate names to list of 1/2-qubit CHP operations
-        chp_gates = _igts.standard_gatenames_chp_conversions()
-        if custom_chp_gates is not None:
-            chp_gates.update(custom_chp_gates)
-        
-        # Cast one string to list of strings for sanitizing logic
-        if isinstance(chp_ops, str):
-            chp_ops = [chp_ops]
-
-        # Parse ops into native CHP strings
-        sanitized_ops = []
-        for op in chp_ops:
-            entries = op.split()
-            op_label = entries[0]
-            op_targets = entries[1:]
-            
-            # Expand to native gates and distribute targets
-            assert op_label in chp_gates.keys(), "No known compilation for {0}, please specify a standard gatename or provide custom_chp_gates".format(op_label)
-            native_ops = chp_gates[op_label]
-
-            for nat_op in native_ops:
-                if nat_op == 'c':
-                    assert len(op_targets) == 2, "CHP native gate 'c' requires two targets"
-                    assert all([int(t) < nqubits for t in op_targets]), "CHP targets must be less than specified number of qubits"
-                else:
-                    assert len(op_targets) == 1, "CHP native gate '{0}' requires one target".format(nat_op)
-                    assert all([int(t) < nqubits for t in op_targets]), "CHP targets must be less than specified number of qubits"
-                
-                sanitized_ops.append(' '.join([nat_op] + op_targets))
-
-        return sanitized_ops
-    
-    def _update_rep(self):
-        self._rep.ops_list[:] = self.stochastic_ops
-        self._rep.probs[:] = self.params
-
-    @property
-    def num_params(self):
-        """
-        Get the number of independent parameters which specify this operation.
-
-        Returns
-        -------
-        int
-            the number of independent parameters.
-        """
-        return len(self.to_vector())
-
-    def to_vector(self):
-        """
-        Extract a vector of the underlying operation parameters from this operation.
-
-        If only one possible op, returns empty list since this actually has 0 free parameters,
-        i.e. sum(p_i) = 1 should hold
-
-        Returns
-        -------
-        numpy array
-            a 1D numpy array with length == num_params().
-        """
-        return self.params if len(self.params) > 1 else []
-
-    def from_vector(self, v, close=False, dirty_value=True):
-        """
-        Initialize the operation using a vector of parameters.
-
-        Parameters
-        ----------
-        v : numpy array
-            The 1D vector of operation parameters.  Length
-            must == num_params()
-
-        close : bool, optional
-            Whether `v` is close to this operation's current
-            set of parameters.  Under some circumstances, when this
-            is true this call can be completed more quickly.
-
-        dirty_value : bool, optional
-            The value to set this object's "dirty flag" to before exiting this
-            call.  This is passed as an argument so it can be updated *recursively*.
-            Leave this set to `True` unless you know what you're doing.
-
-        Returns
-        -------
-        None
-        """
-        self.params[:] = v
-        self._update_rep()
-        self.dirty = dirty_value
-
-    def __str__(self):
-        """Return string representation"""
-        s = "Stochastic CHP operation with probabilities and labels:\n"
-        for chp_op, probs in zip(self._rep.ops_list, self._rep.probs):
-            label = ", ".join(chp_op)
-            s += f"{probs}: {label}\n"
-        return s
-
-class CHPOp(StochasticCHPOp):
-    """A Clifford operation represented by a list of CHP operations.
-
-    Convenience class for StochasticCHPOp when only a single operation is needed.
-    """
-    def __init__(self, chp_ops, nqubits, custom_chp_gates=None):
-        """
-        Creates a new CHPOp as a StochasticCHPOp with only one possible operation.
-
-        Parameters
-        ----------
-        chp_ops : str or list of str
-            Strings with a CHP gatename (either from pygsti.tools.internalgates or provided in custom_chp_gates)
-            and labels for qubit templates to be used when generating CHP code
-        nqubits: int
-            Number of qubits acted on by the operation
-        custom_chp_gates : dict of str: list of str
-            Dictionary mapping custom chp_op names to lists of native CHP operations used to augment
-            the dictionary from pygsti.tools.internalgates.standard_gatenames_chp_conversions().
-            Entries will override those available provided by standard gatenames.
-        """
-        super().__init__([chp_ops], [1.0], nqubits, custom_chp_gates=custom_chp_gates)
-
-    def _choose_op(self):
-        """Override for single operation to avoid RNG usage
-        """
-        return self._rep.ops_list[0]
-
-    def __str__(self):
-        """Return string representation"""
-        s = "CHP operation with labels: "
-        s += ", ".join(self._rep.ops_list[0]) + '\n'
         return s
 
 

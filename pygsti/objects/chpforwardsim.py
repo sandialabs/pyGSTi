@@ -78,7 +78,7 @@ class CHPForwardSimulator(_WeakForwardSimulator):
                 rho = self.model.circuit_layer_operator(circuit[0], 'prep')
                 tmp.write(rho.get_chp_str())
 
-                for op_label in circuit[1:-1]:
+                for op_label in circuit[1:]:
                     op = self.model.circuit_layer_operator(op_label, 'op')
                     tmp.write(op.get_chp_str())
                 
@@ -86,6 +86,7 @@ class CHPForwardSimulator(_WeakForwardSimulator):
                 povm = self.model.circuit_layer_operator(spc_circuit.povm_label, 'povm')
                 for i in range(povm.nqubits):
                     tmp.write(f'm {i}\n')
+            
 
             # Run CHP
             process = _sp.Popen([f'{self.chpexe.resolve()}', f'{path}'], stdout=_sp.PIPE, stderr=_sp.PIPE)

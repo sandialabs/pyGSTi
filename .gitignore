@@ -19,7 +19,6 @@ hooks/etc/permissions.yml
 *.lprof
 *.cache
 /.eggs/
-.vscode
 .ropeproject
 .vscode
 

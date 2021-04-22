@@ -38,10 +38,9 @@ class ExternalOpRep(object):
         raise NotImplementedError()
 
 
-class StochasticCHPOpRep(ExternalOpRep):
-    def __init__(self, ops_list, probs, nqubits):
-        self.ops_list = ops_list
-        self.probs = probs
+class CHPOpRep(ExternalOpRep):
+    def __init__(self, ops, nqubits):
+        self.chp_ops = ops
         self.nqubits = nqubits
         self.dim = 2**nqubits
 
