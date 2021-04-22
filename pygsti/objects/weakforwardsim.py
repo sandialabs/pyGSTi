@@ -34,17 +34,22 @@ class WeakForwardSimulator(_ForwardSimulator):
         self.shots = shots
         super().__init__(model)
 
-    def _compute_circuit_outcome_for_shot(self, array_to_fill, circuit, outcomes, resource_alloc, time=None):
+    def _compute_circuit_outcome_for_shot(self, array_to_fill, spc_circuit, spc_outcomes, resource_alloc, time=None):
         raise NotImplementedError("Derived classes should implement this!")
 
     def _compute_circuit_outcome_probabilities(self, array_to_fill, circuit, outcomes, resource_alloc, time=None):
         work_array = _np.zeros_like(array_to_fill)
 
-        # TODO: For parallelization, block over this for loop
-        for _ in range(self.shots):
-            self._compute_circuit_outcome_for_shot(work_array, circuit, outcomes, resource_alloc, time)
+        expanded_circuit_outcomes = circuit.expand_instruments_and_separate_povm(self.model, outcomes)
+        outcome_to_index = {outc: i for i, outc in enumerate(outcomes)}
+        for spc, spc_outcomes in expanded_circuit_outcomes.items():  # spc is a SeparatePOVMCircuit
+            indices = [outcome_to_index[o] for o in spc_outcomes]
 
-        array_to_fill[:] = work_array / self.shots
+            # TODO: For parallelization, block over this for loop
+            for _ in range(self.shots):
+                self._compute_circuit_outcome_for_shot(work_array, spc, spc_outcomes, resource_alloc, time)
+
+            array_to_fill[indices[:]] = work_array / self.shots
     
     # If _compute_circuit_outcome_probability_derivatives is not defined, ForwardSimulator will do it by finite difference
 

@@ -4038,7 +4038,7 @@ class ComputationalSPAMVec(SPAMVec):
             factor_dim = 4
             v0 = 1.0 / _np.sqrt(2) * _np.array((1, 0, 0, 1), 'd')  # '0' qubit state as Pauli dmvec
             v1 = 1.0 / _np.sqrt(2) * _np.array((1, 0, 0, -1), 'd')  # '1' qubit state as Pauli dmvec
-        elif self._evotype in ("statevec", "stabilizer"):
+        elif self._evotype in ("statevec", "stabilizer", "chp"):
             factor_dim = 2
             v0 = _np.array((1, 0), complex)  # '0' qubit state as complex state vec
             v1 = _np.array((0, 1), complex)  # '1' qubit state as complex state vec
