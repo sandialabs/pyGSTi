@@ -1214,7 +1214,7 @@ def spam_error_generator(spamvec, target_spamvec, mx_basis, typ="logGTi"):
     return _spl.logm(errgen)
 
 
-def error_generator(gate, target_op, mx_basis, typ="logG-logT"):
+def error_generator(gate, target_op, mx_basis, typ="logG-logT", logG_weight=None):
     """
     Construct the error generator from a gate and its target.
 
@@ -1242,6 +1242,13 @@ def error_generator(gate, target_op, mx_basis, typ="logG-logT"):
         - "logTiG" : errgen = log( dot(inv(target_op), gate) )
         - "logGTi" : errgen = log( dot(gate,inv(target_op)) )
 
+    logG_weight: float or None (default)
+        Regularization weight for logG-logT penalty of approximate logG.
+        If None, the default weight in :func:`approximate_matrix_log` is used.
+        Note that this will result in a logG close to logT, but G may not exactly equal exp(logG).
+        If self-consistency with func:`operation_from_error_generator` is desired,
+        consider testing lower (or zero) regularization weight.
+
     Returns
     -------
     errgen : ndarray
@@ -1254,7 +1261,11 @@ def error_generator(gate, target_op, mx_basis, typ="logG-logT"):
             logT = _mt.unitary_superoperator_matrix_log(target_op, mx_basis)
         except AssertionError:  # if not unitary, fall back to just taking the real log
             logT = _mt.real_matrix_log(target_op, "raise", TOL)  # make a fuss if this can't be done
-        logG = _mt.approximate_matrix_log(gate, logT)
+
+        if logG_weight is not None:
+            logG = _mt.approximate_matrix_log(gate, logT, target_weight=logG_weight)
+        else:
+            logG = _mt.approximate_matrix_log(gate, logT)
 
         # Both logG and logT *should* be real, so we just take the difference.
         if _np.linalg.norm(_np.imag(logG)) < TOL and \
@@ -1273,7 +1284,7 @@ def error_generator(gate, target_op, mx_basis, typ="logG-logT"):
             errgen = _mt.near_identity_matrix_log(_np.dot(target_op_inv, gate), TOL)
         except AssertionError:  # not near the identity, fall back to the real log
             _warnings.warn(("Near-identity matrix log failed; falling back "
-                            "to approximate log for logTiG error generator"))
+                            "to real matrix log for logTiG error generator"))
             errgen = _mt.real_matrix_log(_np.dot(target_op_inv, gate), "warn", TOL)
 
         if _np.linalg.norm(errgen.imag) > TOL:
@@ -1287,7 +1298,7 @@ def error_generator(gate, target_op, mx_basis, typ="logG-logT"):
             errgen = _mt.near_identity_matrix_log(_np.dot(gate, target_op_inv), TOL)
         except AssertionError as e:  # not near the identity, fall back to the real log
             _warnings.warn(("Near-identity matrix log failed; falling back "
-                            "to approximate log for logGTi error generator:\n%s") % str(e))
+                            "to real matrix log for logGTi error generator:\n%s") % str(e))
             errgen = _mt.real_matrix_log(_np.dot(gate, target_op_inv), "warn", TOL)
 
         if _np.linalg.norm(errgen.imag) > TOL:
@@ -1309,11 +1320,11 @@ def error_generator(gate, target_op, mx_basis, typ="logG-logT"):
     return _np.real(errgen)
 
 
-def operation_from_error_generator(error_gen, target_op, typ="logG-logT"):
+def operation_from_error_generator(error_gen, target_op, mx_basis, typ="logG-logT"):
     """
     Construct a gate from an error generator and a target gate.
 
-    Inverts the computation fone in :func:`error_generator` and
+    Inverts the computation done in :func:`error_generator` and
     returns the value of the gate given by
     gate = target_op * exp(error_gen).
 
@@ -1325,18 +1336,34 @@ def operation_from_error_generator(error_gen, target_op, typ="logG-logT"):
     target_op : ndarray
         The target operation matrix
 
-    typ : {"logG-logT", "logTiG"}
-        The type of error generator to compute.  Allowed values are:
+    mx_basis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The source and destination basis, respectively.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
 
-        - "logG-logT" : errgen = log(gate) - log(target_op)
-        - "logTiG" : errgen = log( dot(inv(target_op), gate) )
+    typ : {"logG-logT", "logG-logT-quick", "logTiG", "logGTi"}
+        The type of error generator to invert.  Allowed values are:
+
+        - "logG-logT" : gate = exp( errgen + log(target_op) ) using internal logm
+        - "logG-logT-quick" : gate = exp( errgen + log(target_op) ) using SciPy logm
+        - "logTiG" : gate = dot( target_op, exp(errgen) )
+        - "logGTi" : gate = dot( exp(errgen), target_op )
 
     Returns
     -------
     ndarray
         The operation matrix.
     """
+    TOL = 1e-8
+
     if typ == "logG-logT":
+        try:
+            logT = _mt.unitary_superoperator_matrix_log(target_op, mx_basis)
+        except AssertionError:
+            logT = _mt.real_matrix_log(target_op, "raise", TOL)
+
+        return _spl.expm(error_gen + logT)
+    elif typ == "logG-logT-quick":
         return _spl.expm(error_gen + _spl.logm(target_op))
     elif typ == "logTiG":
         return _np.dot(target_op, _spl.expm(error_gen))
@@ -2978,7 +3005,8 @@ def rotation_gate_mx(r, mx_basis="gm"):
 
 def project_model(model, target_model,
                   projectiontypes=('H', 'S', 'H+S', 'LND'),
-                  gen_type="logG-logT"):
+                  gen_type="logG-logT",
+                  logG_weight=None):
     """
     Construct a new model(s) by projecting the error generator of `model` onto some sub-space then reconstructing.
 
@@ -2990,7 +3018,7 @@ def project_model(model, target_model,
     target_model : Model
         The set of target (ideal) gates.
 
-    projectiontypes : tuple of {'H','S','H+S','LND','LNDCP'}
+    projectiontypes : tuple of {'H','S','H+S','LND','LNDF'}
         Which projections to use.  The length of this tuple gives the
         number of `Model` objects returned.  Allowed values are:
 
@@ -3000,11 +3028,13 @@ def project_model(model, target_model,
         - 'LND' = errgen projected to a normal (CPTP) Lindbladian
         - 'LNDF' = errgen projected to an unrestricted (full) Lindbladian
 
-    gen_type : {"logG-logT", "logTiG"}
-        The type of error generator to compute.  Allowed values are:
+    gen_type : {"logG-logT", "logTiG", "logGTi"}
+        The type of error generator to compute.
+        For more details, see func:`error_generator`.
 
-        - "logG-logT" : errgen = log(gate) - log(target_op)
-        - "logTiG" : errgen = log( dot(inv(target_op), gate) )
+    logG_weight: float or None (default)
+        Regularization weight for approximate logG in logG-logT generator.
+        For more details, see func:`error_generator`.
 
     Returns
     -------
@@ -3042,7 +3072,7 @@ def project_model(model, target_model,
 
     errgens = [error_generator(model.operations[gl],
                                target_model.operations[gl],
-                               target_model.basis, gen_type)
+                               target_model.basis, gen_type, logG_weight)
                for gl in opLabels]
 
     for gl, errgen in zip(opLabels, errgens):
@@ -3076,22 +3106,22 @@ def project_model(model, target_model,
 
         if 'H' in projectiontypes:
             gsDict['H'].operations[gl] = operation_from_error_generator(
-                ham_error_gen, targetOp, gen_type)
+                ham_error_gen, targetOp, basis, gen_type)
             NpDict['H'] += len(hamProj)
 
         if 'S' in projectiontypes:
             gsDict['S'].operations[gl] = operation_from_error_generator(
-                sto_error_gen, targetOp, gen_type)
+                sto_error_gen, targetOp, basis, gen_type)
             NpDict['S'] += len(stoProj)
 
         if 'H+S' in projectiontypes:
             gsDict['H+S'].operations[gl] = operation_from_error_generator(
-                ham_error_gen + sto_error_gen, targetOp, gen_type)
+                ham_error_gen + sto_error_gen, targetOp, basis, gen_type)
             NpDict['H+S'] += len(hamProj) + len(stoProj)
 
         if 'LNDF' in projectiontypes:
             gsDict['LNDF'].operations[gl] = operation_from_error_generator(
-                lnd_error_gen, targetOp, gen_type)
+                lnd_error_gen, targetOp, basis, gen_type)
             NpDict['LNDF'] += HProj.size + OProj.size
 
         if 'LND' in projectiontypes:
@@ -3106,7 +3136,7 @@ def project_model(model, target_model,
             lnd_error_gen_cp = _bt.change_basis(lnd_error_gen_cp, "std", basis)
 
             gsDict['LND'].operations[gl] = operation_from_error_generator(
-                lnd_error_gen_cp, targetOp, gen_type)
+                lnd_error_gen_cp, targetOp, basis, gen_type)
             NpDict['LND'] += HProj.size + OProj.size
 
         #Removed attempt to contract H+S to CPTP by removing positive stochastic projections,

@@ -1,3 +1,4 @@
+import unittest
 from ..util import BaseCase
 
 from pygsti.objects import Circuit, Label, DataSet
@@ -21,19 +22,12 @@ class StdListTester(BaseCase):
         lsgstLists = stdlists.create_lsgst_circuit_lists(
             std1Q_XY.target_model(), self.strs, self.strs, self.germs, maxLens, fid_pairs=None,
             trunc_scheme="whole germ powers")  # also try a Model as first arg
-        lsgstStructs = stdlists.make_lsgst_structs(
-            std1Q_XY.target_model(), self.strs, self.strs, self.germs, maxLens, fid_pairs=None,
-            trunc_scheme="whole germ powers")  # also try a Model as first arg
-        self.assertEqual(set(lsgstLists[-1]), set(lsgstStructs[-1]))
         self.assertEqual(lsgstLists[-1][26]._str, 'GxGx(Gx)^2GxGx')  # ensure that (.)^2 appears in string (*not* expanded)
 
         lsgstLists2 = stdlists.create_lsgst_circuit_lists(
             self.opLabels, self.strs, self.strs, self.germs, maxLens, fid_pairs=None,
             trunc_scheme="truncated germ powers")
-        lsgstStructs2 = stdlists.make_lsgst_structs(
-            self.opLabels, self.strs, self.strs, self.germs, maxLens, fid_pairs=None,
-            trunc_scheme="truncated germ powers")
-        self.assertEqual(set(lsgstLists2[-1]), set(lsgstStructs2[-1]))
+        self.assertEqual(set(lsgstLists[-1]), set(lsgstLists2[-1]))
 
         lsgstLists3 = stdlists.create_lsgst_circuit_lists(
             self.opLabels, self.strs, self.strs, self.germs, maxLens, fid_pairs=None,
@@ -83,7 +77,6 @@ class StdListTester(BaseCase):
             self.opLabels, self.strs, self.strs, self.germs, maxLens, fid_pairs=self.testFidPairs,
             trunc_scheme="whole germ powers", keep_fraction=0.7, keep_seed=1234)
         self.assertEqual(set(lsgstLists8[-1]), set(lsgstStructs8[-1]))
-        # TODO assert correctness
 
         # empty max-lengths ==> no output
         lsgstStructs9 = stdlists.make_lsgst_structs(
@@ -105,7 +98,7 @@ class StdListTester(BaseCase):
         lsgstExpListb = stdlists.create_lsgst_circuits(
             std1Q_XY.target_model(), self.strs, self.strs, self.germs, maxLens, fid_pairs=None,
             trunc_scheme="whole germ powers")  # with Model as first arg
-        # TODO assert correctness
+        self.assertEqual(set(lsgstExpList), set(lsgstExpListb))
 
     def test_lsgst_lists_structs_raises_on_bad_scheme(self):
         maxLens = [1, 2]
@@ -113,20 +106,23 @@ class StdListTester(BaseCase):
             stdlists.create_lsgst_circuit_lists(
                 self.opLabels, self.strs, self.strs, self.germs, maxLens, fid_pairs=None,
                 trunc_scheme="foobar")
-        with self.assertRaises(ValueError):
-            stdlists.make_lsgst_structs(
-                self.opLabels, self.strs, self.strs, self.germs, maxLens, fid_pairs=None,
-                trunc_scheme="foobar")
-        with self.assertRaises(ValueError):
-            stdlists.make_lsgst_structs(
-                self.opLabels, self.strs, self.strs, self.germs, maxLens, dscheck=self.ds,
-                action_if_missing="foobar")
+        
+        # make_lsgst_structs deprecated
+        # with self.assertRaises(ValueError):
+        #     stdlists.make_lsgst_structs(
+        #         self.opLabels, self.strs, self.strs, self.germs, maxLens, fid_pairs=None,
+        #         trunc_scheme="foobar")
+        # with self.assertRaises(ValueError):
+        #     stdlists.make_lsgst_structs(
+        #         self.opLabels, self.strs, self.strs, self.germs, maxLens, dscheck=self.ds,
+        #         action_if_missing="foobar")
 
     def test_lsgst_lists_structs_raises_on_missing_ds_sequence(self):
         with self.assertRaises(ValueError):
             stdlists.make_lsgst_structs(
                 self.opLabels, self.strs, self.strs, self.germs, [1, 2], dscheck=self.ds)  # missing sequences
 
+    @unittest.skip("Skipping due to deprecation of eLGST")
     def test_elgst_lists_structs(self):
         # ELGST
         maxLens = [1, 2]
@@ -140,13 +136,13 @@ class StdListTester(BaseCase):
         elgstLists2b = stdlists.create_elgst_lists(
             std1Q_XY.target_model(), self.germs, maxLens, trunc_scheme="whole germ powers",
             nest=False, include_lgst=False)  # with a Model as first arg
-        # TODO assert correctness
 
+    @unittest.skip("Skipping due to deprecation of eLGST")
     def test_elgst_experiment_list(self):
         elgstExpLists = stdlists.create_elgst_experiment_list(
             self.opLabels, self.germs, [1, 2], trunc_scheme="whole germ powers")
-        # TODO assert correctness
 
+    @unittest.skip("Skipping due to deprecation of eLGST")
     def test_elgst_lists_structs_raises_on_bad_scheme(self):
         with self.assertRaises(ValueError):
             stdlists.create_elgst_lists(

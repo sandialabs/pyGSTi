@@ -32,6 +32,7 @@ from ..tools import listtools as _lt
 from ..tools import slicetools as _slct
 from ..tools import symplectic as _symp
 from ..tools import lindbladtools as _lbt
+from ..tools import internalgates as _itgs
 from . import gaugegroup as _gaugegroup
 from . import modelmember as _modelmember
 from . import stabilizer as _stabilizer
@@ -50,6 +51,7 @@ from .opcalc import compact_deriv as _compact_deriv, \
 
 TOL = 1e-12
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
+MAX_EXPONENT = _np.log(_np.finfo('d').max) - 10.0  # so that exp(.) doesn't overflow
 
 
 def optimize_operation(op_to_optimize, target_op):
@@ -1403,6 +1405,46 @@ class DenseOperator(BasedDenseOperatorInterface, LinearOperator):
         return s
 
 
+class StaticStandardOp(DenseOperator):
+    """
+    An operation that is completely fixed, or "static" (i.e. that posesses no parameters)
+    that can be constructed from "standard" gate names (as defined in pygsti.tools.internalgates).
+
+    Parameters
+    ----------
+    name : str
+        Standard gate name
+
+    evotype : {"statevec", "densitymx", "svterm", "cterm"}
+        The evolution type.
+        - "statevec": Unitary from standard_gatename_unitaries is used directly
+        - "densitymx", "svterm", "cterm": Pauli transfer matrix is built from standard_gatename_unitaries (i.e. basis = 'pp')
+    """
+    def __init__(self, name, evotype):
+        self.name = name
+
+        if evotype in ('statevec', 'densitymx', 'svterm', 'cterm'):
+            std_unitaries = _itgs.standard_gatename_unitaries()
+            if self.name not in std_unitaries:
+                raise ValueError("Name %s not in standard unitaries" % self.name)
+
+            U = std_unitaries[self.name]
+
+            if evotype == 'statevec':
+                rep = replib.SVOpRepDense(LinearOperator.convert_to_matrix(U))
+            else: # evotype in ('densitymx', 'svterm', 'cterm')
+                ptm = _gt.unitary_to_pauligate(U)
+                rep = replib.DMOpRepDense(LinearOperator.convert_to_matrix(ptm))
+        else:
+            raise ValueError("Invalid evotype for a StaticStandardOp: %s" % evotype)
+        
+        LinearOperator.__init__(self, rep, evotype)
+    
+    def __str__(self):
+        s = "%s with name %s and evotype %s\n" % (self.__class__.__name__, self.name, self._evotype)
+        return s
+
+
 class StaticDenseOp(DenseOperator):
     """
     An operation matrix that is completely fixed, or "static" (i.e. that posesses no parameters).
@@ -1757,8 +1799,10 @@ class TPDenseOp(DenseOperator):
         -------
         None
         """
-        assert(self.base.shape == (self.dim, self.dim))
-        self.base[1:, :] = v.reshape((self.dim - 1, self.dim))
+        #assert(self.base.shape == (self.dim, self.dim))
+        #self.base[1:, :] = v.reshape((self.dim - 1, self.dim))
+        #self._rep.base[1:, :] = v.reshape((self.dim - 1, self.dim))  # faster than line above
+        self._rep.base.flat[self.dim:] = v  # faster still
         self.dirty = dirty_value
 
     def deriv_wrt_params(self, wrt_filter=None):
@@ -2592,7 +2636,7 @@ class StochasticNoiseOp(LinearOperator):
     """
     A stochastic noise operation.
 
-    Implements the stocastic noise map:
+    Implements the stochastic noise map:
     `rho -> (1-sum(p_i))rho + sum_(i>0) p_i * B_i * rho * B_i^dagger`
     where `p_i > 0` and `sum(p_i) < 1`, and `B_i` is basis where `B_0` is the identity.
 
@@ -2952,6 +2996,9 @@ class DepolarizeOp(StochasticNoiseOp):
         num_rates = dim - 1
         initial_sto_rates = [initial_rate / num_rates] * num_rates
         StochasticNoiseOp.__init__(self, dim, basis, evotype, initial_sto_rates)
+
+        # For DepolarizeOp, set params to only first element
+        self.params = _np.array([self.params[0]])
 
     def _rates_to_params(self, rates):
         """Note: requires rates to all be the same"""
@@ -3992,7 +4039,8 @@ class LindbladOp(LinearOperator, _ErrorGeneratorContainer):
         #egttm = self.errorgen.total_term_magnitude
         #print("  DB: exp(", egttm, ") = ",_np.exp(egttm))
         #return _np.exp(egttm)
-        return _np.exp(self.errorgen.total_term_magnitude)
+        return _np.exp(min(self.errorgen.total_term_magnitude, MAX_EXPONENT))
+        #return _np.exp(self.errorgen.total_term_magnitude)  # overflows sometimes
 
     @property
     def total_term_magnitude_deriv(self):

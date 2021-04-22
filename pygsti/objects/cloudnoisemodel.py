@@ -748,7 +748,7 @@ class CloudNoiseModel(_ImplicitOpModel):
 
         printer = _VerbosityPrinter.create_printer(verbosity)
         geometry_name = "custom" if isinstance(geometry, _qgraph.QubitGraph) else geometry
-        printer.log("Creating a %d-qubit local-noise %s model" % (num_qubits, geometry_name))
+        printer.log("Creating a %d-qubit cloud-noise %s model" % (num_qubits, geometry_name))
 
         if isinstance(geometry, _qgraph.QubitGraph):
             qubitGraph = geometry
@@ -902,14 +902,15 @@ class CloudNoiseModel(_ImplicitOpModel):
         return self._clouds
 
 
-def _get_lindblad_factory(simulator, parameterization, errcomp_type):
+def _get_lindblad_factory(simulator, parameterization, errcomp_type, sparse_lindblad_reps):
     """ Returns a function that creates a Lindblad-type gate appropriate
         given the simulation type and parameterization """
     _, evotype = _gt.split_lindblad_paramtype(parameterization)
     if errcomp_type == "gates":
         if evotype == "densitymx":
-            cls = _op.LindbladDenseOp if isinstance(simulator, _MatrixFSim) \
-                else _op.LindbladOp
+            if isinstance(simulator, _MatrixFSim):
+                assert(not sparse_lindblad_reps), "MatrixForwardSimulator cannot use sparse Lindblad reps!"
+            cls = _op.LindbladOp if sparse_lindblad_reps else _op.LindbladDenseOp
         elif evotype in ("svterm", "cterm"):
             assert(isinstance(simulator, _TermFSim))
             cls = _op.LindbladOp
@@ -939,8 +940,13 @@ def _get_lindblad_factory(simulator, parameterization, errcomp_type):
                 if parameterization == "CPTP": p = "GLND"
                 elif "S" in parameterization: p = parameterization.replace("S", "s")
                 elif "D" in parameterization: p = parameterization.replace("D", "d")
-            _, evotype, nonham_mode, param_mode = _op.LindbladOp.decomp_paramtype(p)
-            return _op.LindbladErrorgen.from_error_generator(error_gen, proj_basis, proj_basis,
+            bTyp, evotype, nonham_mode, param_mode = _op.LindbladOp.decomp_paramtype(p)
+
+            #Same logic as in LindbladOp.from_operation_obj -- TODO consolidate?
+            ham_basis = proj_basis if (("H" == bTyp) or ("H+" in bTyp) or bTyp in ("CPTP", "GLND")) else None
+            nonham_basis = None if bTyp == "H" else proj_basis
+
+            return _op.LindbladErrorgen.from_error_generator(error_gen, ham_basis, nonham_basis,
                                                              param_mode, nonham_mode, mx_basis,
                                                              truncate=True, evotype=evotype)
         return _f
@@ -1030,7 +1036,7 @@ def _build_nqn_global_noise(qubit_graph, max_weight, sparse_lindblad_basis=False
         Composed = _op.ComposedErrorgen
         Embedded = _op.EmbeddedErrorgen
     else: raise ValueError("Invalid `errcomp_type`: %s" % errcomp_type)
-    Lindblad = _get_lindblad_factory(simulator, parameterization, errcomp_type)
+    Lindblad = _get_lindblad_factory(simulator, parameterization, errcomp_type, sparse_lindblad_reps)
     #constructs a gate or errorgen based on value of errcomp_type
 
     printer = _VerbosityPrinter.create_printer(verbosity)
@@ -1083,9 +1089,10 @@ def _build_nqn_global_noise(qubit_graph, max_weight, sparse_lindblad_basis=False
         return Composed(termops)
     elif errcomp_type == "errorgens":
         errgen = Composed(termops)
-        has_matrix_sim = isinstance(simulator, _MatrixFSim)  # determines if created Lindblad ops have dense reps
-        LindbladOp = _op.LindbladDenseOp if has_matrix_sim else _op.LindbladOp
-        return LindbladOp(None, errgen, dense_rep=has_matrix_sim)
+        assert(not(sparse_lindblad_reps and isinstance(simulator, _MatrixFSim))), \
+            "Cannot use sparse Lindblad-op reps with a MatrixForwardSimulator!"
+        LindbladOp = _op.LindbladOp if sparse_lindblad_reps else _op.LindbladDenseOp
+        return LindbladOp(None, errgen)
     else: assert(False)
 
 
@@ -1167,7 +1174,7 @@ def _build_nqn_cloud_noise(target_qubit_inds, qubit_graph, weight_maxhops_tuples
         Composed = _op.ComposedErrorgen
         Embedded = _op.EmbeddedErrorgen
     else: raise ValueError("Invalid `errcomp_type`: %s" % errcomp_type)
-    Lindblad = _get_lindblad_factory(simulator, parameterization, errcomp_type)
+    Lindblad = _get_lindblad_factory(simulator, parameterization, errcomp_type, sparse_lindblad_reps)
     #constructs a gate or errorgen based on value of errcomp_type
 
     printer = _VerbosityPrinter.create_printer(verbosity)
@@ -1300,8 +1307,10 @@ class CloudNoiseLayerRules(_LayerRules):
         """
         #Note: cache uses 'op-layers' for *simple target* layers, not complete ones
         if layerlbl in caches['complete-layers']: return caches['complete-layers'][layerlbl]
-        dense_composed_reps = isinstance(model._sim, _MatrixFSim)  # whether dense matrix gates should be created
-        dense_lindblad_reps = (not self.sparse_lindblad_reps) or dense_composed_reps
+        assert(not(self.sparse_lindblad_reps and isinstance(model._sim, _MatrixFSim))), \
+            "Cannot use sparse Lindblad-op reps with a MatrixForwardSimulator!"
+        dense_lindblad_reps = not self.sparse_lindblad_reps
+        dense_composed_reps = dense_lindblad_reps  # whether dense matrix gates should be created
 
         if isinstance(layerlbl, _CircuitLabel):
             op = self._create_op_for_circuitlabel(model, layerlbl, dense_composed_reps)

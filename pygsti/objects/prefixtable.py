@@ -11,6 +11,7 @@ Defines the PrefixTable class.
 #***************************************************************************************************
 
 import collections as _collections
+from .circuit import SeparatePOVMCircuit as _SeparatePOVMCircuit
 
 
 class PrefixTable(object):
@@ -44,8 +45,18 @@ class PrefixTable(object):
             cache used to hold intermediate results.
         """
         #Sort the operation sequences "alphabetically", so that it's trivial to find common prefixes
-        sorted_circuits_to_evaluate = sorted(list(enumerate(circuits_to_evaluate)), key=lambda x: x[1])
         circuits_to_evaluate_fastlookup = {i: cir for i, cir in enumerate(circuits_to_evaluate)}
+        circuits_to_sort_by = [cir.circuit_without_povm if isinstance(cir, _SeparatePOVMCircuit) else cir
+                               for cir in circuits_to_evaluate]  # always Circuits - not SeparatePOVMCircuits
+        sorted_circuits_to_sort_by = sorted(list(enumerate(circuits_to_sort_by)), key=lambda x: x[1])
+        sorted_circuits_to_evaluate = [(i, circuits_to_evaluate_fastlookup[i]) for i, _ in sorted_circuits_to_sort_by]
+
+        distinct_line_labels = set([cir.line_labels for cir in circuits_to_sort_by])
+        if len(distinct_line_labels) == 1:  # if all circuits have the *same* line labels, we can just compare tuples
+            circuit_reps_to_compare_and_lengths = {i: (cir.layertup, len(cir))
+                                                   for i, cir in enumerate(circuits_to_sort_by)}
+        else:
+            circuit_reps_to_compare_and_lengths = {i: (cir, len(cir)) for i, cir in enumerate(circuits_to_sort_by)}
 
         if max_cache_size is None or max_cache_size > 0:
             #CACHE assessment pass: figure out what's worth keeping in the cache.
@@ -56,11 +67,11 @@ class PrefixTable(object):
             #  for chains of cached items.
             cacheIndices = []  # indices into circuits_to_evaluate of the results to cache
             cache_hits = _collections.defaultdict(lambda: 0)
-            for i, circuit in sorted_circuits_to_evaluate:
-                L = len(circuit)
+
+            for i, _ in sorted_circuits_to_evaluate:
+                circuit, L = circuit_reps_to_compare_and_lengths[i]  # can be a Circuit or a label tuple
                 for cached_index in reversed(cacheIndices):
-                    candidate = circuits_to_evaluate_fastlookup[cached_index]
-                    Lc = len(candidate)
+                    candidate, Lc = circuit_reps_to_compare_and_lengths[cached_index]
                     if L >= Lc > 0 and circuit[0:Lc] == candidate:  # a cache hit!
                         cache_hits[cached_index] += 1
                         break  # stop looking through cache
@@ -72,17 +83,16 @@ class PrefixTable(object):
         curCacheSize = 0
 
         for i, circuit in sorted_circuits_to_evaluate:
-            L = len(circuit)
+            circuit_rep, L = circuit_reps_to_compare_and_lengths[i]
 
             #find longest existing prefix for circuit by working backwards
             # and finding the first string that *is* a prefix of this string
             # (this will necessarily be the longest prefix, given the sorting)
             for i_in_cache in range(curCacheSize - 1, -1, -1):  # from curCacheSize-1 -> 0
-                candidate = circuits_to_evaluate_fastlookup[cacheIndices[i_in_cache]]
-                Lc = len(candidate)
-                if L >= Lc > 0 and circuit[0:Lc] == candidate:  # ">=" allows for duplicates
+                candidate, Lc = circuit_reps_to_compare_and_lengths[cacheIndices[i_in_cache]]
+                if L >= Lc > 0 and circuit_rep[0:Lc] == candidate:  # ">=" allows for duplicates
                     iStart = i_in_cache  # an index into the *cache*, not into circuits_to_evaluate
-                    remaining = circuit[Lc:]
+                    remaining = circuit[Lc:]  # *always* a SeparatePOVMCircuit or Circuit
                     break
             else:  # no break => no prefix
                 iStart = None
@@ -160,7 +170,7 @@ class PrefixTable(object):
             totalCost = N
             return subTables, totalCost
 
-        def create_subtables(max_cost, max_cost_rate=0):
+        def create_subtables(max_cost, max_cost_rate=0, max_num=None):
             """
             Find a set of subtables by iterating through the table
             and placing "break" points when the cost of evaluating the
@@ -178,23 +188,26 @@ class PrefixTable(object):
             else: raise ValueError("Uknown cost metric: %s" % cost_metric)
 
             subTables = []
-            curSubTable = set([table_contents[0][0]])  # destination index of 0th evaluant
-            curTableCost = cost_fn(table_contents[0][2])  # remainder length of 0th evaluant
+            curSubTable = set()  # destination index of 0th evaluant
+            curTableCost = 0  # remainder length of 0th evaluant
             totalCost = 0
             cacheIndices = [None] * self.cache_size
             contents_by_idest = {tup[0]: tup for tup in table_contents}  # for fast lookup by a circuit index
+            used_indices = set()  # so we don't add an index to two sub-tables (even though they may
+            # need to compute the index in the end)
 
             def traverse_index(idest, istart, remainder, current_table):
                 """Get the set of indices you'd need to add along with and including `k`, and their cost."""
                 cost = cost_fn(remainder)
                 inds = set([idest])
+                assert(idest not in used_indices)
 
                 if istart is not None and cacheIndices[istart] not in current_table:
                     #we need to add the table elements traversed by following istart
                     j = istart  # index into cache
                     while j is not None:
                         j_circuit = cacheIndices[j]  # cacheIndices[ istart ]
-                        inds.add(j_circuit)
+                        if j_circuit not in used_indices: inds.add(j_circuit)
                         _, jStart, jrem, _ = contents_by_idest[j_circuit]
                         cost += cost_fn(jrem)  # remainder
                         j = jStart
@@ -206,17 +219,20 @@ class PrefixTable(object):
 
                 #compute the cost (additional #applies) which results from
                 # adding this element (idest) to the current sub-table.
-                inds, cost = traverse_index(idest, istart, remainder)
+                inds, cost = traverse_index(idest, istart, remainder, curSubTable)
 
-                if curTableCost + cost < max_cost:
+                if curTableCost + cost < max_cost or (max_num is not None and len(subTables) == max_num - 1):
                     #Just add current string to current table
                     curTableCost += cost
                     curSubTable.update(inds)
+                    used_indices.update(inds)
                 else:
                     #End the current table and begin a new one
                     #print("cost %d+%d exceeds %d" % (curTableCost,cost,max_cost))
                     subTables.append(curSubTable)
-                    curSubTable, curTableCost = traverse_index(idest, istart, remainder)
+                    totalCost += curTableCost
+                    curSubTable, curTableCost = traverse_index(idest, istart, remainder, set())
+                    used_indices.update(curSubTable)
                     #print("Added new table w/initial cost %d" % (cost))
 
                 max_cost += max_cost_rate
@@ -251,18 +267,20 @@ class PrefixTable(object):
             else: maxCost = len(table_contents) / num_sub_tables
             maxCostLowerBound, maxCostUpperBound = maxCost, None
             maxCostRate, rateLowerBound, rateUpperBound = 0, -1.0, +1.0
+            failsafe_maxcost_and_rate = None
             #OLD (& incorrect) vals were 0, -1.0/len(self), +1.0/len(self),
             #   though current -1,1 vals are probably overly conservative...
             resultingSubtables = num_sub_tables + 1  # just to prime the loop
             iteration = 0
+            #print("DEBUG: targeting %d sub-tables" % num_sub_tables)
 
             #Iterate until the desired number of subtables have been found.
             while resultingSubtables != num_sub_tables:
                 subTableSetList, totalCost = create_subtables(maxCost, maxCostRate)
                 resultingSubtables = len(subTableSetList)
-                #print("DEBUG: resulting numTables = %d (cost %g) w/maxCost = %g [%s,%s] & rate = %g [%g,%g]" % \
-                #     (resultingSubtables, totalCost, maxCost, str(maxCostLowerBound), str(maxCostUpperBound),
-                #      maxCostRate, rateLowerBound, rateUpperBound))
+                #print("DEBUG: resulting sub-tables = %d (cost %g) w/maxCost = %g [%s,%s] & rate = %g [%g,%g]" %
+                #      (resultingSubtables, totalCost, maxCost, str(maxCostLowerBound), str(maxCostUpperBound),
+                #       maxCostRate, rateLowerBound, rateUpperBound))
 
                 #DEBUG
                 #totalSet = set()
@@ -280,6 +298,7 @@ class PrefixTable(object):
                         maxCost = (maxCost + maxCostLowerBound) / 2.0
                         maxCostUpperBound = last_maxCost
                     else:  # too many tables: raise maxCost
+                        failsafe_maxcost_and_rate = (maxCost, maxCostRate)  # just in case
                         if maxCostUpperBound is None:
                             maxCost = totalCost  # / num_sub_tables
                         else:
@@ -292,11 +311,20 @@ class PrefixTable(object):
                         maxCostRate = (maxCostRate + rateLowerBound) / 2.0
                         rateUpperBound = last_maxRate
                     else:  # too many tables: increase maxCostRate
+                        failsafe_maxcost_and_rate = (maxCost, maxCostRate)  # just in case
                         maxCostRate = (maxCostRate + rateUpperBound) / 2.0
                         rateLowerBound = last_maxRate
 
                 iteration += 1
-                assert(iteration < 100), "Unsuccessful splitting for 100 iterations!"
+                if iteration >= 100:
+                    #Force the correct number of tables using the max_cost & rate that produced the smallest number of
+                    # sub-tables greater than the target number.
+                    print("WARNING: Forcing splitting into %d tables after 100 iterations (achieved %d)!"
+                          % (num_sub_tables, resultingSubtables))
+                    subTableSetList, totalCost = create_subtables(failsafe_maxcost_and_rate[0],
+                                                                  failsafe_maxcost_and_rate[1], max_num=num_sub_tables)
+                    assert(len(subTableSetList) == num_sub_tables)  # ensure the loop exits now (~= break)
+                    break  # or could set resultingSubtables = len(subTableSetList)
 
         else:  # max_sub_table_size is not None
             subTableSetList, totalCost = create_subtables(

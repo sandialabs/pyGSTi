@@ -1449,7 +1449,7 @@ class TPSPAMVec(DenseSPAMVec):
         -------
         None
         """
-        assert(_np.isclose(self._base_1d[0], (self.dim)**-0.25))
+        #assert(_np.isclose(self._base_1d[0], (self.dim)**-0.25))  # takes too much time!
         self._base_1d[1:] = v
         self.dirty = dirty_value
 
@@ -1543,9 +1543,10 @@ class ComplementSPAMVec(DenseSPAMVec):
         self._construct_vector()  # reset's self.base
 
     def _construct_vector(self):
-        self._base_1d.flags.writeable = True
-        self._base_1d[:] = self.identity._base_1d - sum([vec._base_1d for vec in self.other_vecs])
-        self._base_1d.flags.writeable = False
+        base1d = self._base_1d
+        base1d.flags.writeable = True
+        base1d[:] = self.identity._base_1d - sum([vec._base_1d for vec in self.other_vecs])
+        base1d.flags.writeable = False
 
     @property
     def num_params(self):

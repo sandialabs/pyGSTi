@@ -3739,9 +3739,11 @@ class Circuit(object):
         return quil
 
     def convert_to_openqasm(self, num_qubits=None,
+                            standard_gates_version='u3',
                             gatename_conversion=None, qubit_conversion=None,
                             block_between_layers=True,
-                            block_between_gates=False):  # TODO
+                            block_between_gates=False,
+                            gateargs_map=None):  # TODO
         """
         Converts this circuit to an openqasm string.
 
@@ -3778,7 +3780,7 @@ class Circuit(object):
 
         # create standard conversations.
         if gatename_conversion is None:
-            gatename_conversion = _itgs.standard_gatenames_openqasm_conversions()
+            gatename_conversion, gateargs_map = _itgs.standard_gatenames_openqasm_conversions(standard_gates_version)
         if qubit_conversion is None:
             # To tell us whether we have found a standard qubit labelling type.
             standardtype = False
@@ -3796,6 +3798,9 @@ class Circuit(object):
 
         if num_qubits is None:
             num_qubits = len(self.line_labels)
+
+        # if gateargs_map is None:
+        #     gateargs_map = {}
 
         #Currently only using 'Iz' as valid intermediate measurement ('IM') label.
         #Todo:  Expand to all intermediate measurements.
@@ -3817,6 +3822,9 @@ class Circuit(object):
 
         depth = self.num_layers
 
+        def trivial_arg_map(gatearg):
+            return ''
+
         # Go through the layers, and add the openqasm for each layer in turn.
         for l in range(depth):
 
@@ -3832,30 +3840,40 @@ class Circuit(object):
 
                 # Find the openqasm for the gate.
                 if gate.name.__str__() != 'Iz':
-                    openqasm_for_gate = gatename_conversion[gate.name]
+                    openqasmlist_for_gate = gatename_conversion[gate.name]  # + gatearg_str
 
-                    #If gate.qubits is None, gate is assumed to be single-qubit gate
-                    #acting in parallel on all qubits.
-                    if gate.qubits is None:
-                        for q in gate_qubits:
-                            openqasm += openqasm_for_gate + ' q[' + str(qubit_conversion[q]) + '];\n'
-                        if block_between_gates:
-                            openqasm_for_gate += 'barrier '
-                            for q in self.line_labels[:-1]:
-                                openqasm_for_gate += 'q[{0}], '.format(str(qubit_conversion[q]))
-                            openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[self.line_labels[-1]]))
-
+                    if isinstance(openqasmlist_for_gate, str):
+                        gatearg_str = gateargs_map.get(gate.name, trivial_arg_map)(gate.args)
+                        openqasmlist_for_gate = [openqasmlist_for_gate + gatearg_str, ]
                     else:
-                        for q in gate_qubits:
-                            openqasm_for_gate += ' q[' + str(qubit_conversion[q]) + ']'
-                            if q != gate_qubits[-1]:
-                                openqasm_for_gate += ', '
-                        openqasm_for_gate += ';\n'
-                        if block_between_gates:
-                            openqasm_for_gate += 'barrier '
-                            for q in self.line_labels[:-1]:
-                                openqasm_for_gate += 'q[{0}], '.format(str(qubit_conversion[q]))
-                            openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[self.line_labels[-1]]))
+                        assert(gate.name not in gateargs_map.keys())
+
+                    openqasm_for_gate = ''
+                    for subopenqasm_for_gate in openqasmlist_for_gate:
+
+                        #If gate.qubits is None, gate is assumed to be single-qubit gate
+                        #acting in parallel on all qubits.
+                        if gate.qubits is None:
+                            for q in gate_qubits:
+                                openqasm_for_gate += subopenqasm_for_gate + ' q[' + str(qubit_conversion[q]) + '];\n'
+                            if block_between_gates:
+                                openqasm_for_gate += 'barrier '
+                                for q in self.line_labels[:-1]:
+                                    openqasm_for_gate += 'q[{0}], '.format(str(qubit_conversion[q]))
+                                openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[self.line_labels[-1]]))
+
+                        else:
+                            openqasm_for_gate += subopenqasm_for_gate
+                            for q in gate_qubits:
+                                openqasm_for_gate += ' q[' + str(qubit_conversion[q]) + ']'
+                                if q != gate_qubits[-1]:
+                                    openqasm_for_gate += ', '
+                            openqasm_for_gate += ';\n'
+                            if block_between_gates:
+                                openqasm_for_gate += 'barrier '
+                                for q in self.line_labels[:-1]:
+                                    openqasm_for_gate += 'q[{0}], '.format(str(qubit_conversion[q]))
+                                openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[self.line_labels[-1]]))
 
                 else:
                     assert len(gate.qubits) == 1
@@ -3945,11 +3963,15 @@ class Circuit(object):
         sslInds = {sslbl: i for i, sslbl in enumerate(model.state_space_labels.labels[0])}
         # Note: we ignore all but the first tensor product block of the state space.
 
+        ssls = model.state_space_labels.labels[0]
+        reduced_ssls = [ssl for ssl in ssls if ssl in self.line_labels]
+        ll_to_sslInds = {ll: reduced_ssls.index(ll) for ll in self.line_labels}
+
         def process_outcome(outcome):
             """Relabels an outcome tuple and drops state space labels not in the circuit."""
             processed_outcome = []
             for lbl in outcome:  # lbl is a string - an instrument element or POVM effect label, e.g. '010'
-                relbl = ''.join([lbl[sslInds[ll]] for ll in self.line_labels])
+                relbl = ''.join([lbl[ll_to_sslInds[ll]] for ll in self.line_labels])
                 processed_outcome.append(relbl)
                 #Note: above code *assumes* that each state-space label (and so circuit line label)
                 # corresponds to a *single* letter of the instrument/POVM label `lbl`.  This is almost

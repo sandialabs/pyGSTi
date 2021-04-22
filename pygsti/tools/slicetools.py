@@ -93,6 +93,79 @@ def intersect(s1, s2):
     return slice(start, stop, s1.step)
 
 
+def intersect_within(s1, s2):
+    """
+    Returns the intersection of two slices (which must have the same step).
+    *and* the sub-slice of `s1` and `s2` that specifies the intersection.
+
+    Furthermore, `s2` may be an array of indices, in which case the returned
+    slices become arrays as well.
+
+    Parameters
+    ----------
+    s1 : slice
+        First slice.  Must have definite boundaries (start & stop
+        cannot be `None`).
+
+    s2 : slice or numpy.ndarray
+        Second slice or index array.
+
+    Returns
+    -------
+    intersection : slice or numpy.ndarray
+        The intersection of `s1` and `s2`.
+
+    subslice1 : slice or numpy.ndarray
+        The portion of `s1` that yields `intersection`.
+
+    subslice2 : slice or numpy.ndarray
+        The portion of `s2` that yields `intersection`.
+    """
+    assert(s1.start is not None and s1.stop is not None), \
+        "`s1` = %s must have definite boundaries - start & stop cannot be None!" % str(s1)
+
+    if isinstance(s2, slice):
+        assert (s1.step is None and s2.step is None) or s1.step == s2.step == 1, \
+            "Only implemented for step == 1 slices"
+        assert(s2.start is not None and s2.stop is not None), \
+            "`s2` = %s must have definite boundaries - start & stop cannot be None!" % str(s2)
+
+        if s1.start < s2.start:
+            start = s2.start
+            sub1_start = s2.start - s1.start
+            sub2_start = 0
+        else:
+            start = s1.start
+            sub1_start = 0
+            sub2_start = s1.start - s2.start
+
+        if s1.stop < s2.stop:
+            stop = s1.stop
+            sub1_stop = s1.stop - s1.start
+            sub2_stop = s1.stop - s2.start
+        else:
+            stop = s2.stop
+            sub1_stop = s2.stop - s1.start
+            sub2_stop = s2.stop - s2.start
+
+        if start <= stop:  # then there's a nonzero intersection
+            return slice(start, stop), slice(sub1_start, sub1_stop), slice(sub2_start, sub2_stop)
+        else:  # no intersection - return all empty slices
+            return slice(0, 0), slice(0, 0), slice(0, 0)
+
+    else:  # s2 is an array of integer indices
+
+        intersect_indices = []
+        sub1_indices = []
+        sub2_indices = []
+        for ii, i in enumerate(s2):
+            if s1.start <= i < s1.stop:
+                intersect_indices.append(i)
+                sub1_indices.append(i - s1.start)
+                sub2_indices.append(ii)
+        return _np.array(intersect_indices), _np.array(sub1_indices), _np.array(sub2_indices)
+
+
 def indices(s, n=None):
     """
     Returns a list of the indices specified by slice `s`.
@@ -232,3 +305,47 @@ def divide(slc, max_len):
                                 slc.step))
         sub_start += max_len * step
     return sub_slices
+
+
+def slice_of_slice(slc, base_slc):
+    """
+    A slice that is the composition of `base_slc` and `slc`.
+
+    So that when indexing an array `a`,
+    `a[slice_of_slice(slc, base_slc)] == a[base_slc][slc]`
+
+    Parameters
+    ----------
+    slc : slice
+        the slice to take out of `base_slc`.
+
+    base_slc : slice
+        the original "base" slice to act upon.
+
+    Returns
+    -------
+    slice
+    """
+    #NOTE: this is very similar to shift(slc, base_slc.start) above - consolidate or remove this function?
+    assert(slc.step in (1, None) and base_slc.step in (1, None)), \
+        "This function only works with step == 1 slices so far"
+    if slc.start is None and slc.stop is None: return base_slc
+    if base_slc.start is None and base_slc.stop is None: return slc
+
+    if base_slc.start is None and slc.start is None:
+        start = None
+    else:
+        start = (base_slc.start if (base_slc.start is not None) else 0) \
+            + (slc.start if (slc.start is not None) else 0)
+
+    if base_slc.stop is None and slc.stop is None:
+        stop = None
+    else:
+        stop = (base_slc.start if (base_slc.start is not None) else 0) \
+            + (slc.stop if (slc.stop is not None) else 0)
+        assert(base_slc.stop is None or stop <= base_slc.stop)
+    return slice(start, stop)
+
+
+def slice_hash(slc):
+    return (slc.start, slc.stop, slc.step)

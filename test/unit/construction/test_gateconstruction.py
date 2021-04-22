@@ -1,8 +1,10 @@
+import itertools
 import numpy as np
 
 from ..util import BaseCase
 
 import pygsti.construction.gateconstruction as gc
+import pygsti.tools.basistools as bt
 
 
 class GateConstructionTester(BaseCase):
@@ -35,8 +37,24 @@ class GateConstructionTester(BaseCase):
             [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, ],
             [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, ]])
         self.assertArraysAlmostEqual(gate, expected)
-        # TODO edge cases?
 
     def test_two_qubit_gate(self):
-        gate = gc.two_qubit_gate(xx=0.5, xy=0.5, xz=0.5, yy=0.5, yz=0.5, zz=0.5)
-        # TODO assert correctness
+        # For independent operations, can check directly against tensored paulis
+        for op1, op2 in ['ii', 'xi', 'yi', 'zi', 'ix', 'iy', 'iz']:
+            coeffs = {'hx': 0, 'hy': 0, 'hz': 0}
+            if op1 != 'i':
+                coeffs[f'h{op1}'] = 1
+            gate1 = gc.single_qubit_gate(**coeffs)
+
+            coeffs = {'hx': 0, 'hy': 0, 'hz': 0}
+            if op2 != 'i':
+                coeffs[f'h{op2}'] = 1
+            gate2 = gc.single_qubit_gate(**coeffs)
+
+            composed_gate = np.kron(gate1, gate2)
+
+            arg = ''.join([op1, op2])
+            coeffs = {arg: 1}
+            full_gate = gc.two_qubit_gate(**coeffs)
+
+            self.assertArraysAlmostEqual(composed_gate, full_gate)

@@ -48,14 +48,9 @@ class TermForwardSimulator(_DistributableForwardSimulator):
 
     Parameters
     ----------
-    dim : int
-        The model-dimension.  All operations act on a `dim`-dimensional Hilbert-Schmidt space.
-
-    layer_op_server : LayerLizard
-        An object that can be queried for circuit-layer operations.
-
-    paramvec : numpy.ndarray
-        The current parameter vector of the Model.
+    model : Model, optional
+        The parent model of this simulator.  It's fine if this is `None` at first,
+        but it will need to be set (by assigning `self.model` before using this simulator.
 
     mode : {"taylor-order", "pruned", "direct"}
         Overall method used to compute (approximate) circuit probabilities.
@@ -139,6 +134,28 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         Computed values are added to any dictionary that is supplied, so
         supplying an empty dictionary and using this calculator will cause
         the dictionary to be filled with values.
+
+    num_atoms : int, optional
+        The number of atoms (sub-tables) to use when creating the layout (i.e. when calling
+        :method:`create_layout`).  This determines how many units the element (circuit outcome
+        probability) dimension is divided into, and doesn't have to correclate with the number of
+        processors.  When multiple processors are used, if `num_atoms` is less than the number of
+        processors then `num_atoms` should divide the number of processors evenly, so that
+        `num_atoms // num_procs` groups of processors can be used to divide the computation
+        over parameter dimensions.
+
+    processor_grid : tuple optional
+        Specifies how the total number of processors should be divided into a number of
+        atom-processors, 1st-parameter-deriv-processors, and 2nd-parameter-deriv-processors.
+        Each level of specification is optional, so this can be a 1-, 2-, or 3- tuple of
+        integers (or None).  Multiplying the elements of `processor_grid` together should give
+        at most the total number of processors.
+
+    param_blk_sizes : tuple, optional
+        The parameter block sizes along the first or first & second parameter dimensions - so
+        this can be a 0-, 1- or 2-tuple of integers or `None` values.  A block size of `None`
+        means that there should be no division into blocks, and that each block processor
+        computes all of its parameter indices at once.
     """
 
     @classmethod
@@ -149,110 +166,13 @@ class TermForwardSimulator(_DistributableForwardSimulator):
     def __init__(self, model=None,  # below here are simtype-specific args
                  mode="pruned", max_order=3, desired_perr=0.01, allowed_perr=0.1,
                  min_term_mag=None, max_paths_per_outcome=1000, perr_heuristic="none",
-                 max_term_stages=5, path_fraction_threshold=0.9, oob_check_interval=10, cache=None):
-        """
-        Construct a new TermForwardSimulator object.
-        TODO: docstring
-
-        Parameters
-        ----------
-        dim : int
-            The model-dimension.  All operations act on a `dim`-dimensional Hilbert-Schmidt space.
-
-        layer_op_server : LayerLizard
-            An object that can be queried for circuit-layer operations.
-
-        paramvec : numpy.ndarray
-            The current parameter vector of the Model.
-
-        mode : {"taylor-order", "pruned", "direct"}
-            Overall method used to compute (approximate) circuit probabilities.
-            The `"taylor-order"` mode includes all taylor-expansion terms up to a
-            fixed and pre-defined order, fixing a single "path set" at the outset.
-            The `"pruned"` mode selects a path set based on a heuristic (sometimes a
-            true upper bound) calculation of the error in the approximate probabilities.
-            This method effectively "prunes" the paths to meet a fixed desired accuracy.
-            The `"direct"` method is still under development.  Its intention is to perform
-            path integrals directly without the use of polynomial computation and caching.
-            Initial testing showed the direct method to be much slower for common QCVV tasks,
-            making it less urgent to complete.
-
-        max_order : int
-            The maximum order of error-rate terms to include in probability
-            computations.  When polynomials are computed, the maximum Taylor
-            order to compute polynomials to.
-
-        desired_perr : float, optional
-            The desired maximum-error when computing probabilities..
-            Path sets are selected (heuristically) to target this error, within the
-            bounds set by `max_order`, etc.
-
-        allowed_perr : float, optional
-            The allowed maximum-error when computing probabilities.
-            When rigorous bounds cannot guarantee that probabilities are correct to
-            within this error, additional paths are added to the path set.
-
-        min_term_mag : float, optional
-            Terms with magnitudes less than this value will be ignored, i.e. not
-            considered candidates for inclusion in paths.  If this number is too
-            low, the number of possible paths to consder may be very large, impacting
-            performance.  If too high, then not enough paths will be considered to
-            achieve an accurate result.  By default this value is set automatically
-            based on the desired error and `max_paths_per_outcome`.  Only adjust this
-            if you know what you're doing.
-
-        max_paths_per_outcome : int, optional
-            The maximum number of paths that can be used (summed) to compute a
-            single outcome probability.
-
-        perr_heuristic : {"none", "scaled", "meanscaled"}
-            Which heuristic (if any) to use when deciding whether a given path set is
-            sufficient given the allowed error (`allowed_perr`).
-            - `"none"`:  This is the strictest setting, and is absence of any heuristic.
-            if the path-magnitude gap (the maximum - achieved sum-of-path-magnitudes,
-            a rigorous upper bound on the approximation error for a circuit
-            outcome probability) is greater than `allowed_perr` for any circuit, the
-            path set is deemed insufficient.
-            - `"scaled"`: a path set is deemed insufficient when, for any circuit, the
-            path-magnitude gap multiplied by a scaling factor is greater than `allowed_perr`.
-            This scaling factor is equal to the computed probability divided by the
-            achieved sum-of-path-magnitudes and is always less than 1.  This scaling
-            is essentially the ratio of the sum of the path amplitudes without and with
-            an absolute value, and tries to quantify and offset the degree of pessimism
-            in the computed path-magnitude gap.
-            - `"meanscaled"` : a path set is deemed insufficient when, the *mean* of all
-            the scaled (as above) path-magnitude gaps is greater than `allowed_perr`.  The
-            mean here is thus over the circuit outcomes.  This heuristic is even more
-            permissive of potentially bad path sets than `"scaled"`, as it allows badly
-            approximated circuits to be offset by well approximated ones.
-
-        max_term_stages : int, optional
-            The maximum number of "stage", i.e. re-computations of a path set, are
-            allowed before giving up.
-
-        path_fraction_threshold : float, optional
-            When greater than this fraction of the total available paths (set by
-            other constraints) are considered, no further re-compuation of the
-            path set will occur, as it is expected to give little improvement.
-
-        oob_check_interval : int, optional
-            The optimizer will check whether the computed probabilities have sufficiently
-            small error every `oob_check_interval` (outer) optimizer iteration.
-
-        cache : dict, optional
-            A dictionary of pre-computed compact polynomial objects.  Keys are
-            `(max_order, rholabel, elabel, circuit)` tuples, where
-            `max_order` is an integer, `rholabel` and `elabel` are
-            :class:`Label` objects, and `circuit` is a :class:`Circuit`.
-            Computed values are added to any dictionary that is supplied, so
-            supplying an empty dictionary and using this calculator will cause
-            the dictionary to be filled with values.
-        """
+                 max_term_stages=5, path_fraction_threshold=0.9, oob_check_interval=10, cache=None,
+                 num_atoms=None, processor_grid=None, param_blk_sizes=None):
         # self.unitary_evolution = False # Unused - idea was to have this flag
         #    allow unitary-evolution calcs to be term-based, which essentially
         #    eliminates the "pRight" portion of all the propagation calcs, and
         #    would require pLeft*pRight => |pLeft|^2
-        super().__init__(model)
+        super().__init__(model, num_atoms, processor_grid, param_blk_sizes)
 
         assert(mode in ("taylor-order", "pruned", "direct")), "Invalid term-fwdsim mode: %s" % mode
         assert(perr_heuristic in ("none", "scaled", "meanscaled")), "Invalid perr_heuristic: %s" % perr_heuristic
@@ -304,20 +224,52 @@ class TermForwardSimulator(_DistributableForwardSimulator):
 
     def create_layout(self, circuits, dataset=None, resource_alloc=None, array_types=('E',),
                       derivative_dimension=None, verbosity=0):
+        """
+        Constructs an circuit-outcome-probability-array (COPA) layout for a list of circuits.
 
+        Parameters
+        ----------
+        circuits : list
+            The circuits whose outcome probabilities should be included in the layout.
+
+        dataset : DataSet
+            The source of data counts that will be compared to the circuit outcome
+            probabilities.  The computed outcome probabilities are limited to those
+            with counts present in `dataset`.
+
+        resource_alloc : ResourceAllocation
+            A available resources and allocation information.  These factors influence how
+            the layout (evaluation strategy) is constructed.
+
+        array_types : tuple, optional
+            A tuple of string-valued array types.  See :method:`ForwardSimulator.create_layout`.
+
+        derivative_dimensions : tuple, optional
+            A tuple containing, optionally, the parameter-space dimension used when taking first
+            and second derivatives with respect to the cirucit outcome probabilities.  This must be
+            have minimally 1 or 2 elements when `array_types` contains `'ep'` or `'epp'` types,
+            respectively.
+
+        verbosity : int or VerbosityPrinter
+            Determines how much output to send to stdout.  0 means no output, higher
+            integers mean more output.
+
+        Returns
+        -------
+        TermCOPALayout
+        """
         #Since there's never any "cache" associated with Term-layouts, there's no way to reduce the
         # memory consumption by using more atoms - every processor still needs to hold the entire
         # output array (until we get gather=False mode) - so for now, just create a layout with
         # numAtoms == numProcs.
         resource_alloc = _ResourceAllocation.cast(resource_alloc)
-        comm = resource_alloc.comm
         mem_limit = resource_alloc.mem_limit  # *per-processor* memory limit
 
         #MEM debug_prof = Profiler(comm)
         #MEM debug_prof.print_memory("CreateLayout1", True)
 
-        printer = _VerbosityPrinter.create_printer(verbosity, comm)
-        nprocs = 1 if comm is None else comm.Get_size()
+        printer = _VerbosityPrinter.create_printer(verbosity, resource_alloc)
+        nprocs = resource_alloc.comm_size
         num_params = derivative_dimension if (derivative_dimension is not None) else self.model.num_params
         polynomial_vindices_per_int = _Polynomial._vindices_per_int(num_params)
         C = 1.0 / (1024.0**3)
@@ -326,20 +278,37 @@ class TermForwardSimulator(_DistributableForwardSimulator):
             if mem_limit <= 0:
                 raise MemoryError("Attempted layout creation w/memory limit = %g <= 0!" % mem_limit)
             printer.log("Layout creation w/mem limit = %.2fGB" % (mem_limit * C))
-            gather_mem_limit = mem_limit * 0.01  # better?
-        else:
-            gather_mem_limit = None
 
-        layout = _TermCOPALayout(circuits, self.model, dataset, None, nprocs, (num_params, num_params), printer)
-        layout.set_distribution_params(nprocs, (num_params, num_params), gather_mem_limit)  # *before* _prepare_layout!
+        natoms, na, npp, param_dimensions, param_blk_sizes = self._compute_processor_distribution(
+            array_types, nprocs, num_params, len(circuits), default_natoms=nprocs)
 
+        printer.log("TermLayout: %d processors divided into %s (= %d) grid along circuit and parameter directions." %
+                    (nprocs, ' x '.join(map(str, (na,) + npp)), _np.product((na,) + npp)))
+        printer.log("   %d atoms, parameter block size limits %s" % (natoms, str(param_blk_sizes)))
+        assert(_np.product((na,) + npp) <= nprocs), "Processor grid size exceeds available processors!"
+
+        layout = _TermCOPALayout(circuits, self.model, dataset, natoms, na, npp, param_dimensions,
+                                 param_blk_sizes, resource_alloc, printer)
         #MEM debug_prof.print_memory("CreateLayout2 - nAtoms = %d" % len(layout.atoms), True)
-        self._prepare_layout(layout, resource_alloc, polynomial_vindices_per_int)
+        self._prepare_layout(layout, polynomial_vindices_per_int)
         #MEM debug_prof.print_memory("CreateLayout3 - nEls = %d, nprocs=%d" % (layout.num_elements, nprocs), True)
 
         return layout
 
-    def _bulk_fill_probs_block(self, array_to_fill, layout_atom, resource_alloc):
+    def _bulk_fill_probs_atom(self, array_to_fill, layout_atom, resource_alloc):
+
+        if not resource_alloc.is_host_leader:
+            # (same as "if resource_alloc.host_comm is not None and resource_alloc.host_comm.rank != 0")
+            # we cannot further utilize multiplie processors when computing a single block.  The required
+            # ending condition is that array_to_fill on each processor has been filled.  But if memory
+            # is being shared and resource_alloc contains multiple processors on a single host, we only
+            # want *one* (the rank=0) processor to perform the computation, since array_to_fill will be
+            # shared memory that we don't want to have muliple procs using simultaneously to compute the
+            # same thing.  Thus, we just do nothing on all of the non-root host_comm processors.
+            # We could also print a warning (?), or we could carefully guard any shared mem updates
+            # using "if resource_alloc.is_host_leader" conditions (if we could use  multiple procs elsewhere).
+            return
+
         nEls = layout_atom.num_elements
         if self.mode == "direct":
             probs = self._prs_directly(layout_atom, resource_alloc)  # could make into a fill_routine? HERE
@@ -349,7 +318,10 @@ class TermForwardSimulator(_DistributableForwardSimulator):
                 polys[0], polys[1], self.model.to_vector(), (nEls,))  # shape (nElements,) -- could make this a *fill*
         _fas(array_to_fill, [slice(0, array_to_fill.shape[0])], probs)
 
-    def _bulk_fill_dprobs_block(self, array_to_fill, dest_param_slice, layout_atom, param_slice, resource_alloc):
+    def _bulk_fill_dprobs_atom(self, array_to_fill, dest_param_slice, layout_atom, param_slice, resource_alloc):
+        if not resource_alloc.is_host_leader:
+            return  # see above
+
         if param_slice is None: param_slice = slice(0, self.model.num_params)
         if dest_param_slice is None: dest_param_slice = slice(0, _slct.length(param_slice))
 
@@ -369,8 +341,11 @@ class TermForwardSimulator(_DistributableForwardSimulator):
 
         _fas(array_to_fill, [slice(0, array_to_fill.shape[0]), dest_param_slice], dprobs)
 
-    def _bulk_fill_hprobs_block(self, array_to_fill, dest_param_slice1, dest_param_slice2, layout_atom,
-                                param_slice1, param_slice2, resource_alloc):
+    def _bulk_fill_hprobs_atom(self, array_to_fill, dest_param_slice1, dest_param_slice2, layout_atom,
+                               param_slice1, param_slice2, resource_alloc):
+        if not resource_alloc.is_host_leader:
+            return  # see above
+
         if param_slice1 is None or param_slice1.start is None: param_slice1 = slice(0, self.model.num_params)
         if param_slice2 is None or param_slice2.start is None: param_slice2 = slice(0, self.model.num_params)
         if dest_param_slice1 is None: dest_param_slice1 = slice(0, _slct.length(param_slice1))
@@ -564,7 +539,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
 
         return npaths, threshold, target_sopm, achieved_sopm
 
-    def _find_minimal_paths_set_block(self, layout_atom, resource_alloc, exit_after_this_many_failures=0):
+    def _find_minimal_paths_set_atom(self, layout_atom, resource_alloc, exit_after_this_many_failures=0):
         """
         Find the minimal (smallest) path set that achieves the desired accuracy conditions.
 
@@ -623,12 +598,12 @@ class TermForwardSimulator(_DistributableForwardSimulator):
 
         #if comm is None or comm.Get_rank() == 0:
         comm = resource_alloc.comm
-        rank = comm.Get_rank() if comm is not None else 0
+        rank = resource_alloc.comm_rank
         nC = len(layout_atom.expanded_circuits)
         max_npaths = self.max_paths_per_outcome * layout_atom.num_elements
 
         if rank == 0:
-            rankStr = "Rank%d: " % comm.Get_rank() if comm is not None else ""
+            rankStr = "Rank%d: " % rank if comm is not None else ""
             print(("%sPruned path-integral: kept %d paths (%.1f%%) w/magnitude %.4g "
                    "(target=%.4g, #circuits=%d, #failed=%d)") %
                   (rankStr, tot_npaths, 100 * tot_npaths / max_npaths, tot_achieved_sopm, tot_target_sopm,
@@ -639,7 +614,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         return _AtomicTermPathSet(thresholds, repcache, circuitsetup_cache, tot_npaths, max_npaths, num_failed)
 
     # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good
-    def find_minimal_paths_set(self, layout, resource_alloc=None, exit_after_this_many_failures=0):
+    def find_minimal_paths_set(self, layout, exit_after_this_many_failures=0):
         """
         Find a good, i.e. minimial, path set for the current model-parameter space point.
 
@@ -649,10 +624,6 @@ class TermForwardSimulator(_DistributableForwardSimulator):
             The layout specifiying the quantities (circuit outcome probabilities) to be
             computed, and related information.
 
-        resource_alloc : ResourceAllocation
-            Available resources for this computation. Includes the number of processors
-            (MPI comm) and memory limit.
-
         exit_after_this_many_failures : int, optional
            If > 0, give up after this many circuits fail to meet the desired accuracy criteria.
            This short-circuits doomed attempts to find a good path set so they don't take too long.
@@ -661,16 +632,17 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         -------
         TermPathSet
         """
-        def compute_path_set(layout_atom, sub_resource_alloc):
+        atom_resource_alloc = layout.resource_alloc('atom-processing')
+        local_atom_pathsets = []
+        for layout_atom in layout.atoms:
             if self.mode == "pruned":
-                return self._find_minimal_paths_set_block(layout_atom, sub_resource_alloc,
-                                                          exit_after_this_many_failures)
+                pathset = self._find_minimal_paths_set_atom(layout_atom, atom_resource_alloc,
+                                                            exit_after_this_many_failures)
             else:
-                return _AtomicTermPathSet(None, None, None, 0, 0, 0)
+                pathset = _AtomicTermPathSet(None, None, None, 0, 0, 0)
+            local_atom_pathsets.append(pathset)
 
-        resource_alloc = _ResourceAllocation.cast(resource_alloc)
-        local_atom_pathsets = self._run_on_atoms(layout, compute_path_set, resource_alloc)
-        return TermPathSet(local_atom_pathsets, resource_alloc.comm)
+        return TermPathSet(local_atom_pathsets, layout.resource_alloc().comm)
 
     ## ----- Get maximum possible sum-of-path-magnitudes and that which was actually achieved -----
     def _circuit_achieved_and_max_sopm(self, rholabel, elabels, circuit, repcache, threshold):
@@ -709,7 +681,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         else:
             raise NotImplementedError("TODO mimic SV case")
 
-    def _achieved_and_max_sopm_block(self, layout_atom):
+    def _achieved_and_max_sopm_atom(self, layout_atom):
         """
         Compute the achieved and maximum possible sum-of-path-magnitudes for a single layout atom.
 
@@ -745,7 +717,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         assert(len(achieved_sopm) == len(max_sopm) == layout_atom.num_elements)
         return _np.array(achieved_sopm, 'd'), _np.array(max_sopm, 'd')
 
-    def bulk_achieved_and_max_sopm(self, layout, resource_alloc=None):
+    def _bulk_fill_achieved_and_max_sopm(self, achieved_sopm, max_sopm, layout):
         """
         Compute element arrays of achieved and maximum-possible sum-of-path-magnitudes.
 
@@ -753,50 +725,37 @@ class TermForwardSimulator(_DistributableForwardSimulator):
 
         Parameters
         ----------
-        layout : TermCOPALayout
-            The layout specifiying the quantities (circuit outcome probabilities) to be
-            computed, and related information.
-
-        resource_alloc : ResourceAllocation
-            Available resources for this computation. Includes the number of processors
-            (MPI comm) and memory limit.
-
-        Returns
-        -------
         achieved_sopm : numpy.ndarray
             An array containing the per-circuit-outcome achieved sum-of-path-magnitudes.
 
         max_sopm : numpy.ndarray
             An array containing the per-circuit-outcome maximum sum-of-path-magnitudes.
+
+        layout : TermCOPALayout
+            The layout specifiying the quantities (circuit outcome probabilities) to be
+            computed, and related information.
+
+        Returns
+        -------
+        None
         """
         assert(self.mode == "pruned")
-        resource_alloc = _ResourceAllocation.cast(resource_alloc)
-        max_sopm = _np.empty(layout.num_elements, 'd')
-        achieved_sopm = _np.empty(layout.num_elements, 'd')
-
+        #atom_resource_alloc = layout.resource_alloc('atom-processing')
         #MEM debug_prof = Profiler(resource_alloc.comm)
 
-        def compute_sopm(layout_atom, sub_resource_alloc):
+        for layout_atom in layout.atoms:
+            # compute SOPM for layout_atom
             elInds = layout_atom.element_slice
-            # MEM debug_prof.print_memory("bulk_achieved_and_max_sop1", True)
+            # MEM debug_prof.print_memory("_bulk_achieved_and_max_sop1", True)
             replib.SV_refresh_magnitudes_in_repcache(layout_atom.pathset.highmag_termrep_cache, self.model.to_vector())
-            # MEM debug_prof.print_memory("bulk_achieved_and_max_sop2", True)  # HERE - memory used before this...
-            achieved, maxx = self._achieved_and_max_sopm_block(layout_atom)
-            # MEM debug_prof.print_memory("bulk_achieved_and_max_sop3", True)
+            # MEM debug_prof.print_memory("_bulk_achieved_and_max_sop2", True)
+            achieved, maxx = self._achieved_and_max_sopm_atom(layout_atom)
+            # MEM debug_prof.print_memory("_bulk_achieved_and_max_sop3", True)
             _fas(max_sopm, [elInds], maxx)
             _fas(achieved_sopm, [elInds], achieved)
 
-        atomOwners = self._compute_on_atoms(layout, compute_sopm, resource_alloc)
-
-        #collect/gather results
-        all_atom_element_slices = [atom.element_slice for atom in layout.atoms]
-        _mpit.gather_slices(all_atom_element_slices, atomOwners, max_sopm, [], 0, resource_alloc.comm)
-        _mpit.gather_slices(all_atom_element_slices, atomOwners, achieved_sopm, [], 0, resource_alloc.comm)
-
-        return achieved_sopm, max_sopm
-
-    ## ----- A couple more bulk_* convenience functions that wrap bulk_achieved_and_max_sopm -----
-    def bulk_test_if_paths_are_sufficient(self, layout, probs, resource_alloc=None, verbosity=0):
+    ## ----- A couple more bulk_* convenience functions that wrap _bulk_achieved_and_max_sopm -----
+    def bulk_test_if_paths_are_sufficient(self, layout, probs, verbosity=0):
         """
         Determine whether `layout`'s current path set (perhaps heuristically) achieves the desired accuracy.
 
@@ -815,10 +774,6 @@ class TermForwardSimulator(_DistributableForwardSimulator):
             needed because some heuristics take into account an probability's value when
             computing an acceptable path-magnitude gap.
 
-        resource_alloc : ResourceAllocation, optional
-            Available resources for this computation. Includes the number of processors
-            (MPI comm) and memory limit.
-
         verbosity : int or VerbosityPrinter, optional
             An integer verbosity level or printer object for displaying messages.
 
@@ -829,42 +784,53 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         if self.mode != "pruned":
             return True  # no "failures" for non-pruned-path mode
 
-        resource_alloc = _ResourceAllocation.cast(resource_alloc)
-        printer = _VerbosityPrinter.create_printer(verbosity, resource_alloc.comm)
+        printer = _VerbosityPrinter.create_printer(verbosity, layout.resource_alloc())
+        resource_alloc = layout.resource_alloc()
+        atom_resource_alloc = layout.resource_alloc('atom-processing')
 
-        # # done in bulk_achieved_and_max_sopm
+        # # done in _bulk_achieved_and_max_sopm:
         # replib.SV_refresh_magnitudes_in_repcache(eval_tree.highmag_termrep_cache, self.to_vector())
-        achieved_sopm, max_sopm = self.bulk_achieved_and_max_sopm(layout, resource_alloc)
+        max_sopm = layout.allocate_local_array('e', 'd')
+        achieved_sopm = layout.allocate_local_array('e', 'd')
+        self._bulk_fill_achieved_and_max_sopm(achieved_sopm, max_sopm, layout)  # fills *local* quantities
+
         # a strict bound on the error in each outcome probability, but often pessimistic
         gaps = max_sopm - achieved_sopm
-        assert(_np.all(gaps >= 0))
+        #assert(_np.all(gaps >= 0))  # gaps is *local* so we don't want some procs to raise errors when others don't
 
+        ret = True
         if self.perr_heuristic == "none":
             nFailures = _np.count_nonzero(gaps > self.allowed_perr)
+            nFailures = resource_alloc.allreduce_sum_simple(nFailures, unit_ralloc=atom_resource_alloc)
             if nFailures > 0:
                 printer.log("Paths are insufficient! (%d failures using strict error bound of %g)"
                             % (nFailures, self.allowed_perr))
-                return False
+                ret = False
         elif self.perr_heuristic == "scaled":
             scale = probs / achieved_sopm
             nFailures = _np.count_nonzero(gaps * scale > self.allowed_perr)
+            nFailures = resource_alloc.allreduce_sum_simple(nFailures, unit_ralloc=atom_resource_alloc)
             if nFailures > 0:
                 printer.log("Paths are insufficient! (%d failures using %s heuristic with error bound of %g)"
                             % (nFailures, self.perr_heuristic, self.allowed_perr))
-                return False
+                ret = False
         elif self.perr_heuristic == "meanscaled":
             scale = probs / achieved_sopm
-            bFailed = _np.mean(gaps * scale) > self.allowed_perr
-            if bFailed:
+            bFailed = 1.0 if (_np.mean(gaps * scale) > self.allowed_perr) else 0.0
+            bFailed = resource_alloc.allreduce_sum_simple(bFailed, unit_ralloc=atom_resource_alloc)
+            if bFailed > 0.0:
                 printer.log("Paths are insufficient! (Using %s heuristic with error bound of %g)"
                             % (self.perr_heuristic, self.allowed_perr))
-                return False
+                ret = False
         else:
             raise ValueError("Unknown probability-error heuristic name: %s" % self.perr_heuristic)
 
-        return True
+        resource_alloc.host_comm_barrier()  # make sure host is finished before freeing
+        layout.free_local_array(max_sopm)
+        layout.free_local_array(achieved_sopm)
+        return ret
 
-    def bulk_sopm_gaps(self, layout, resource_alloc=None):
+    def bulk_sopm_gaps(self, layout):
         """
         Compute an element array sum-of-path-magnitude gaps (the difference between maximum and achieved).
 
@@ -876,23 +842,27 @@ class TermForwardSimulator(_DistributableForwardSimulator):
             The layout specifiying the quantities (circuit outcome probabilities) to be
             computed, and related information.
 
-        resource_alloc : ResourceAllocation, optional
-            Available resources for this computation. Includes the number of processors
-            (MPI comm) and memory limit.
-
         Returns
         -------
         numpy.ndarray
             An array containing the per-circuit-outcome sum-of-path-magnitude gaps.
         """
-        achieved_sopm, max_sopm = self.bulk_achieved_and_max_sopm(layout, resource_alloc)
-        gaps = max_sopm - achieved_sopm
+        max_sopm = layout.allocate_local_array('e', 'd')
+        achieved_sopm = layout.allocate_local_array('e', 'd')
+        self._bulk_fill_achieved_and_max_sopm(achieved_sopm, max_sopm, layout)  # fills *local* quantities
+
+        global_max_sopm = layout.allgather_local_array('e', max_sopm)  # return_shared=True?
+        global_achieved_sopm = layout.allgather_local_array('e', achieved_sopm)  # return_shared=True?
+        layout.free_local_array(max_sopm)
+        layout.free_local_array(achieved_sopm)
+
+        gaps = global_max_sopm - global_achieved_sopm
         # Gaps can be slightly negative b/c of SMALL magnitude given to acutually-0-weight paths.
         assert(_np.all(gaps >= -1e-6))
         return _np.clip(gaps, 0, None)
 
     ## ----- Jacobian of gaps (don't need jacobian of achieved and max SOPM separately) -----
-    def _achieved_and_max_sopm_jacobian_block(self, layout_atom):
+    def _achieved_and_max_sopm_jacobian_atom(self, layout_atom):
         """
         Compute the jacobian of the achieved and maximum possible sum-of-path-magnitudes for a single layout atom.
 
@@ -967,7 +937,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
 
         return d_achieved_mags, d_max_sopms
 
-    def _sopm_gaps_jacobian_block(self, layout_atom):
+    def _sopm_gaps_jacobian_atom(self, layout_atom):
         """
         Compute the jacobian of the (maximum-possible - achieved) sum-of-path-magnitudes for a single layout atom.
 
@@ -985,7 +955,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         dgaps = d_max_sopms - d_achieved_mags
         return dgaps
 
-    def bulk_sopm_gaps_jacobian(self, layout, resource_alloc=None):
+    def bulk_sopm_gaps_jacobian(self, layout):
         """
         Compute the jacobian of the the output of :method:`bulk_sopm_gaps`.
 
@@ -1006,20 +976,26 @@ class TermForwardSimulator(_DistributableForwardSimulator):
             of the sum-of-path-magnitude gaps.
         """
         assert(self.mode == "pruned")
-        termgap_penalty_jac = _np.empty((layout.num_elements, self.model.num_params), 'd')
+        termgap_penalty_jac = layout.allocate_local_array('ep', 'd')
+        # OLD: _np.empty((layout.num_elements, self.model.num_params), 'd')
 
-        def compute_gap_jac(layout_atom, sub_resource_alloc):
+        #TODO: need to update this function for distributed mem if it's ever used (currently it's not)
+        # -> _sopm_gaps_jacobian_atom(layout_atom) needs to compute derivs wrt just the *local* params (previously all)
+        # -> this routine used to gather the jac, but it shouldn't need to do this in a dist. mem framework -- make sure
+        #    upstream callers know what to expect, and if we return an allocated local array they'll need to free it (we
+        #    should probably just *fill* an already allocated jac array)
+        raise NotImplementedError("Need to update this function to use distributed memory!")
+
+        for layout_atom in layout.atoms:
             elInds = layout_atom.element_slice
             replib.SV_refresh_magnitudes_in_repcache(layout_atom.pathset.highmag_termrep_cache, self.model.to_vector())
-            gap_jacs = self._sopm_gaps_jacobian_block(layout_atom)
+            gap_jacs = self._sopm_gaps_jacobian_atom(layout_atom)
             #gap_jacs[ _np.where(gaps < self.pathmagnitude_gap) ] = 0.0  # set deriv to zero where gap was clipped to 0
             _fas(termgap_penalty_jac, [elInds], gap_jacs)
 
-        atomOwners = self._compute_on_atoms(layout, compute_gap_jac, resource_alloc)
-
-        #collect/gather results
-        all_atom_element_slices = [atom.element_slice for atom in layout.atoms]
-        _mpit.gather_slices(all_atom_element_slices, atomOwners, termgap_penalty_jac, [], 0, resource_alloc.comm)
+        #REMOVE #collect/gather results
+        #all_atom_element_slices = [atom.element_slice for atom in layout.atoms]
+        #_mpit.gather_slices(all_atom_element_slices, atomOwners, termgap_penalty_jac, [], 0, resource_alloc.comm)
 
         return termgap_penalty_jac
 
@@ -1118,7 +1094,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
 
         return prps
 
-    def _select_paths_set_block(self, layout_atom, pathset, resource_alloc):
+    def _select_paths_set_atom(self, layout_atom, pathset, resource_alloc):
         """
         Selects (makes "current") a path set *and* computes polynomials the new set for a single layout atom.
 
@@ -1142,7 +1118,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         None
         """
 
-        #TODO: update this outdated docstring
+        # **This may be out of date**
         # We're finding and "locking in" a set of paths to use in subsequent evaluations.  This
         # means we're going to re-compute the high-magnitude terms for each operation (in
         # self.pathset.highmag_termrep_cache) and re-compute the thresholds (in self.percircuit_p_polys)
@@ -1315,7 +1291,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         layout_atom.merged_compact_polys = (vtape, ctape)  # Note: ctape should always be complex here
 
     # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good
-    def select_paths_set(self, layout, path_set, resource_alloc):
+    def select_paths_set(self, layout, path_set):
         """
         Selects (makes "current") a path set *and* computes polynomials the new set.
 
@@ -1327,29 +1303,24 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         path_set : PathSet
             The path set to select.
 
-        resource_alloc : ResourceAllocation
-            Available resources for this computation. Includes the number of processors
-            (MPI comm) and memory limit.
-
         Returns
         -------
         None
         """
+        atom_resource_alloc = layout.resource_alloc('atom-processing')
         local_path_sets = list(path_set.local_atom_pathsets) if self.mode == "pruned" else None
         polynomial_vindices_per_int = _Polynomial._vindices_per_int(self.model.num_params)
 
-        def set_pathset_for_atom(layout_atom, sub_resource_alloc):
+        for layout_atom in layout.atoms:
             if self.mode == "pruned":
                 sub_pathset = local_path_sets.pop(0)  # take the next path set (assumes same order of calling atoms!)
-                self._select_paths_set_block(layout_atom, sub_pathset, sub_resource_alloc)
+                self._select_paths_set_atom(layout_atom, sub_pathset, atom_resource_alloc)
                 #This computes (&caches) polys for this path set as well
             else:
-                self._cache_p_polynomials(layout_atom, sub_resource_alloc, polynomial_vindices_per_int)
-
-        self._run_on_atoms(layout, set_pathset_for_atom, resource_alloc)
+                self._cache_p_polynomials(layout_atom, atom_resource_alloc, polynomial_vindices_per_int)
 
     ## ----- Other functions -----
-    def _prepare_layout(self, layout, resource_alloc, polynomial_vindices_per_int):
+    def _prepare_layout(self, layout, polynomial_vindices_per_int):
         """
         Performs preparatory work for computing circuit outcome probabilities.
 
@@ -1360,10 +1331,6 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         ----------
         layout : TermCOPALayout
             The layout to prepare.
-
-        resource_alloc : ResourceAllocation
-            Available resources for this computation. Includes the number of processors
-            (MPI comm) and memory limit.
 
         polynomial_vindices_per_int : int
             The number of variable indices that can fit into a single platform-width integer
@@ -1377,25 +1344,27 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         # MEM if resource_alloc.comm is None or resource_alloc.comm.rank == 0:
         # MEM     print("Finding & selecting path set using %d atoms" % len(layout.atoms))
 
-        def find_and_select_pathset(layout_atom, sub_resource_alloc):
+        atom_resource_alloc = layout.resource_alloc('atom-processing')
+        local_nFailures = 0
+
+        for layout_atom in layout.atoms:
             if self.mode == "pruned":
                 # MEM debug_prof.print_memory("find_and_select_pathset1 - nEls = %d, nExpanded=%d, rank=%d" %
                 # MEM                         (layout_atom.num_elements, len(layout_atom.expanded_circuits),
                 # MEM                         resource_alloc.comm.rank), True)
-                pathset = self._find_minimal_paths_set_block(layout_atom, sub_resource_alloc,
-                                                             exit_after_this_many_failures=0)
+                pathset = self._find_minimal_paths_set_atom(layout_atom, atom_resource_alloc,
+                                                            exit_after_this_many_failures=0)
                 # MEM debug_prof.print_memory("find_and_select_pathset2", True)
                 # MEM DEBUG import sys; sys.exit(0)
-                self._select_paths_set_block(layout_atom, pathset, sub_resource_alloc)  # "locks in" path set
-                return pathset.num_failures
+                self._select_paths_set_atom(layout_atom, pathset, atom_resource_alloc)  # "locks in" path set
+                local_nFailures += pathset.num_failures
             else:
-                self._cache_p_polynomials(layout_atom, sub_resource_alloc, polynomial_vindices_per_int)
-                return 0  # (nTotFailed += 0)
-
-        local_nFailures = self._run_on_atoms(layout, find_and_select_pathset, resource_alloc)
+                self._cache_p_polynomials(layout_atom, atom_resource_alloc, polynomial_vindices_per_int)
 
         # Get the number of failures to create an accurate-enough polynomial (# of circuit probabilities, i.e. elements)
-        nTotFailed = _mpit.sum_across_procs(sum(local_nFailures), resource_alloc.comm)
+        if atom_resource_alloc.comm is not None and atom_resource_alloc.comm.rank > 0:
+            local_nFailures = 0  # don't count atom-processor non-root failure counts in sum (these are duplicates)
+        nTotFailed = _mpit.sum_across_procs(local_nFailures, layout.resource_alloc().comm)
         if nTotFailed > 0:
             _warnings.warn(("Unable to find a path set that achieves the desired "
                             "pathmagnitude gap (%d circuits failed)") % nTotFailed)

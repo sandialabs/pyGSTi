@@ -19,14 +19,15 @@ import collections as _collections
 
 from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
+from ..tools import sharedmemtools as _smt
 from ..tools.matrixtools import _fas
 from .profiler import DummyProfiler as _DummyProfiler
 from .label import Label as _Label
 from .matrixlayout import MatrixCOPALayout as _MatrixCOPALayout
-from .matrixlayout import MatrixTimeDepCOPALayout as _MatrixTimeDepCOPALayout
 from .forwardsim import ForwardSimulator as _ForwardSimulator
 from .forwardsim import _bytes_for_array_types
 from .distforwardsim import DistributableForwardSimulator as _DistributableForwardSimulator
+from .distlayout import DistributableCOPALayout as _DistributableCOPALayout
 from .resourceallocation import ResourceAllocation as _ResourceAllocation
 from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from .evaltree import EvalTree as _EvalTree
@@ -42,6 +43,17 @@ _HSMALL = 1e-100
 
 
 class SimpleMatrixForwardSimulator(_ForwardSimulator):
+    """
+    A forward simulator that uses matrix-matrix products to compute circuit outcome probabilities.
+
+    This is "simple" in that it adds a minimal implementation to its :class:`ForwardSimulator`
+    base class.  Because of this, it lacks some of the efficiency of a :class:`MatrixForwardSimulator`
+    object, and is mainly useful as a reference implementation and check for other simulators.
+    """
+    # NOTE: It is currently not a *distributed* forward simulator, but after the addition of
+    # the `as_layout` method to distributed atoms, this class could instead derive from
+    # DistributableForwardSimulator and (I think) not need any more implementation.
+    # If this is done, then MatrixForwardSimulator wouldn't need to separately subclass DistributableForwardSimulator
 
     def product(self, circuit, scale=False):
         """
@@ -813,6 +825,54 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
 
 
 class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForwardSimulator):
+    """
+    Computes circuit outcome probabilities by multiplying together circuit-layer process matrices.
+
+    Interfaces with a model via its `circuit_layer_operator` method and extracts a dense matrix
+    representation of operators by calling their `to_dense` method.  An "evaluation tree" that
+    composes all of the circuits using pairwise "joins"  is constructed by a :class:`MatrixCOPALayout`
+    layout object, and this tree then directs pairwise multiplications of process matrices to compute
+    circuit outcome probabilities.  Derivatives are computed analytically, using operators'
+    `deriv_wrt_params` methods.
+
+    Parameters
+    ----------
+    model : Model, optional
+        The parent model of this simulator.  It's fine if this is `None` at first,
+        but it will need to be set (by assigning `self.model` before using this simulator.
+
+    distribute_by_timestamp : bool, optional
+        When `True`, treat the data as time dependent, and distribute the computation of outcome
+        probabilitiesby assigning groups of processors to the distinct time stamps within the
+        dataset.  This means of distribution be used only when the circuits themselves contain
+        no time delay infomation (all circuit layer durations are 0), as operators are cached
+        at the "start" time of each circuit, i.e., the timestamp in the data set.  If `False`,
+        then the data is treated in a time-independent way, and the overall counts for each outcome
+        are used.  If support for intra-circuit time dependence is needed, you must use a different
+        forward simulator (e.g. :class:`MapForwardSimulator`).
+
+    num_atoms : int, optional
+        The number of atoms (sub-evaluation-trees) to use when creating the layout (i.e. when calling
+        :method:`create_layout`).  This determines how many units the element (circuit outcome
+        probability) dimension is divided into, and doesn't have to correclate with the number of
+        processors.  When multiple processors are used, if `num_atoms` is less than the number of
+        processors then `num_atoms` should divide the number of processors evenly, so that
+        `num_atoms // num_procs` groups of processors can be used to divide the computation
+        over parameter dimensions.
+
+    processor_grid : tuple optional
+        Specifies how the total number of processors should be divided into a number of
+        atom-processors, 1st-parameter-deriv-processors, and 2nd-parameter-deriv-processors.
+        Each level of specification is optional, so this can be a 1-, 2-, or 3- tuple of
+        integers (or None).  Multiplying the elements of `processor_grid` together should give
+        at most the total number of processors.
+
+    param_blk_sizes : tuple, optional
+        The parameter block sizes along the first or first & second parameter dimensions - so
+        this can be a 0-, 1- or 2-tuple of integers or `None` values.  A block size of `None`
+        means that there should be no division into blocks, and that each block processor
+        computes all of its parameter indices at once.
+    """
 
     @classmethod
     def _array_types_for_method(cls, method_name):
@@ -827,12 +887,13 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                 + cls._array_types_for_method('_compute_hproduct_cache')
 
         if method_name == '_compute_product_cache': return ('zdd', 'z', 'z')  # cache of gates, scales, and scaleVals
-        if method_name == '_compute_dproduct_cache': return ('zddp',)  # cache x dim x dim x distributed_nparams
-        if method_name == '_compute_hproduct_cache': return ('zddpp',)  # cache x dim x dim x dist_np1 x dist_np2
+        if method_name == '_compute_dproduct_cache': return ('zddb',)  # cache x dim x dim x distributed_nparams
+        if method_name == '_compute_hproduct_cache': return ('zddbb',)  # cache x dim x dim x dist_np1 x dist_np2
         return super()._array_types_for_method(method_name)
 
-    def __init__(self, model=None, distribute_by_timestamp=False):
-        super().__init__(model)
+    def __init__(self, model=None, distribute_by_timestamp=False, num_atoms=None, processor_grid=None,
+                 param_blk_sizes=None):
+        super().__init__(model, num_atoms, processor_grid, param_blk_sizes)
         self._mode = "distribute_by_timestamp" if distribute_by_timestamp else "time_independent"
 
     def copy(self):
@@ -845,7 +906,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         """
         return MatrixForwardSimulator(self.model)
 
-    def _compute_product_cache(self, layout_atom_tree, comm=None):
+    def _compute_product_cache(self, layout_atom_tree, resource_alloc):
         """
         Computes an array of operation sequence products (process matrices).
 
@@ -854,15 +915,10 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         """
         dim = self.model.dim
 
-        #Note: previously, we tried to allow for parallelization of
-        # _compute_product_cache when the tree was split, but this is was
-        # incorrect (and luckily never used) - so it's been removed.
-
-        if comm is not None:  # ignoring comm since can't do anything with it!
-            #_warnings.warn("More processors than can be used for product computation")
-            pass  # this is a fairly common occurrence, and doesn't merit a warning
-
-        # ------------------------------------------------------------------
+        #Note: resource_alloc gives procs that could work together to perform
+        # computation, e.g. paralllel dot products but NOT to just partition
+        # futher (e.g. among the wrt_slices) as this is done in the layout.
+        # This function doesn't make use of resource_alloc - all procs compute the same thing.
 
         eval_tree = layout_atom_tree
         cacheSize = len(eval_tree)
@@ -905,7 +961,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         return prodCache, scaleCache
 
     def _compute_dproduct_cache(self, layout_atom_tree, prod_cache, scale_cache,
-                                comm=None, wrt_slice=None, profiler=None):
+                                resource_alloc=None, wrt_slice=None, profiler=None):
         """
         Computes a tree of product derivatives in a linear cache space. Will
         use derivative columns to parallelize computation.
@@ -919,45 +975,52 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         eval_tree = layout_atom_tree
         cacheSize = len(eval_tree)
 
-        # ------------------------------------------------------------------
+        #Note: resource_alloc gives procs that could work together to perform
+        # computation, e.g. paralllel dot products but NOT to just partition
+        # futher (e.g. among the wrt_slices) as this is done in the layout.
+        # This function doesn't make use of resource_alloc - all procs compute the same thing.
 
-        #print("MPI: _compute_dproduct_cache begin: %d deriv cols" % nDerivCols)
-        if comm is not None and comm.Get_size() > 1:
-            #print("MPI: _compute_dproduct_cache called w/comm size %d" % comm.Get_size())
-            # parallelize of deriv cols, then sub-trees (if available and necessary)
+        ## ------------------------------------------------------------------
+        #
+        ##print("MPI: _compute_dproduct_cache begin: %d deriv cols" % nDerivCols)
+        #if resource_alloc is not None and resource_alloc.comm is not None and resource_alloc.comm.Get_size() > 1:
+        #    #print("MPI: _compute_dproduct_cache called w/comm size %d" % comm.Get_size())
+        #    # parallelize of deriv cols, then sub-trees (if available and necessary)
+        #
+        #    if resource_alloc.comm.Get_size() > nDerivCols:
+        #
+        #        #If there are more processors than deriv cols, give a
+        #        # warning -- note that we *cannot* make use of a tree being
+        #        # split because there's no good way to reconstruct the
+        #        # *non-final* parent-tree elements from those of the sub-trees.
+        #        _warnings.warn("Increased speed could be obtained by giving dproduct cache computation"
+        #                       " *fewer* processors, as there are more cpus than derivative columns.")
+        #
+        #    # Use comm to distribute columns
+        #    allDerivColSlice = slice(0, nDerivCols) if (wrt_slice is None) else wrt_slice
+        #    _, myDerivColSlice, _, sub_resource_alloc = \
+        #        _mpit.distribute_slice(allDerivColSlice, resource_alloc.comm)
+        #    #print("MPI: _compute_dproduct_cache over %d cols (%s) (rank %d computing %s)" \
+        #    #    % (nDerivCols, str(allDerivColIndices), comm.Get_rank(), str(myDerivColIndices)))
+        #    if sub_resource_alloc is not None and sub_resource_alloc.comm is not None \
+        #       and sub_resource_alloc.comm.Get_size() > 1:
+        #        _warnings.warn("Too many processors to make use of in "
+        #                       " _compute_dproduct_cache.")
+        #        if sub_resource_alloc.comm.Get_rank() > 0: myDerivColSlice = slice(0, 0)
+        #        #don't compute anything on "extra", i.e. rank != 0, cpus
+        #
+        #    my_results = self._compute_dproduct_cache(
+        #        layout_atom_tree, prod_cache, scale_cache, None, myDerivColSlice, profiler)
+        #    # pass None as comm, *not* mySubComm, since we can't do any
+        #    #  further parallelization
+        #
+        #    tm = _time.time()
+        #    all_results = resource_alloc.comm.allgather(my_results)
+        #    profiler.add_time("MPI IPC", tm)
+        #    return _np.concatenate(all_results, axis=1)  # TODO: remove this concat w/better gather?
+        #
+        ## ------------------------------------------------------------------
 
-            if comm.Get_size() > nDerivCols:
-
-                #If there are more processors than deriv cols, give a
-                # warning -- note that we *cannot* make use of a tree being
-                # split because there's no good way to reconstruct the
-                # *non-final* parent-tree elements from those of the sub-trees.
-                _warnings.warn("Increased speed could be obtained by giving dproduct cache computation"
-                               " *fewer* processors, as there are more cpus than derivative columns.")
-
-            # Use comm to distribute columns
-            allDerivColSlice = slice(0, nDerivCols) if (wrt_slice is None) else wrt_slice
-            _, myDerivColSlice, _, mySubComm = \
-                _mpit.distribute_slice(allDerivColSlice, comm)
-            #print("MPI: _compute_dproduct_cache over %d cols (%s) (rank %d computing %s)" \
-            #    % (nDerivCols, str(allDerivColIndices), comm.Get_rank(), str(myDerivColIndices)))
-            if mySubComm is not None and mySubComm.Get_size() > 1:
-                _warnings.warn("Too many processors to make use of in "
-                               " _compute_dproduct_cache.")
-                if mySubComm.Get_rank() > 0: myDerivColSlice = slice(0, 0)
-                #don't compute anything on "extra", i.e. rank != 0, cpus
-
-            my_results = self._compute_dproduct_cache(
-                layout_atom_tree, prod_cache, scale_cache, None, myDerivColSlice, profiler)
-            # pass None as comm, *not* mySubComm, since we can't do any
-            #  further parallelization
-
-            tm = _time.time()
-            all_results = comm.allgather(my_results)
-            profiler.add_time("MPI IPC", tm)
-            return _np.concatenate(all_results, axis=1)  # TODO: remove this concat w/better gather?
-
-        # ------------------------------------------------------------------
         tSerialStart = _time.time()
         dProdCache = _np.zeros((cacheSize,) + deriv_shape)
         wrtIndices = _slct.indices(wrt_slice) if (wrt_slice is not None) else None
@@ -1005,7 +1068,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         return dProdCache
 
     def _compute_hproduct_cache(self, layout_atom_tree, prod_cache, d_prod_cache1,
-                                d_prod_cache2, scale_cache, comm=None,
+                                d_prod_cache2, scale_cache, resource_alloc=None,
                                 wrt_slice1=None, wrt_slice2=None):
         """
         Computes a tree of product 2nd derivatives in a linear cache space. Will
@@ -1023,80 +1086,87 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         eval_tree = layout_atom_tree
         cacheSize = len(eval_tree)
 
-        # ------------------------------------------------------------------
+        #Note: resource_alloc gives procs that could work together to perform
+        # computation, e.g. paralllel dot products but NOT to just partition
+        # futher (e.g. among the wrt_slices) as this is done in the layout.
+        # This function doesn't make use of resource_alloc - all procs compute the same thing.
 
-        if comm is not None and comm.Get_size() > 1:
-            # parallelize of deriv cols, then sub-trees (if available and necessary)
-
-            if comm.Get_size() > nDerivCols1 * nDerivCols2:
-                #If there are more processors than deriv cells, give a
-                # warning -- note that we *cannot* make use of a tree being
-                # split because there's no good way to reconstruct the
-                # *non-final* parent-tree elements from those of the sub-trees.
-                _warnings.warn("Increased speed could be obtained"
-                               " by giving hproduct cache computation"
-                               " *fewer* processors and *smaller* (sub-)tree"
-                               " (e.g. by splitting tree beforehand), as there"
-                               " are more cpus than hessian elements.")  # pragma: no cover
-
-            # allocate final result memory
-            hProdCache = _np.zeros((cacheSize,) + hessn_shape)
-
-            # Use comm to distribute columns
-            allDeriv1ColSlice = slice(0, nDerivCols1)
-            allDeriv2ColSlice = slice(0, nDerivCols2)
-            deriv1Slices, myDeriv1ColSlice, deriv1Owners, mySubComm = \
-                _mpit.distribute_slice(allDeriv1ColSlice, comm)
-
-            # Get slice into entire range of model params so that
-            #  per-gate hessians can be computed properly
-            if wrt_slice1 is not None and wrt_slice1.start is not None:
-                myHessianSlice1 = _slct.shift(myDeriv1ColSlice, wrt_slice1.start)
-            else: myHessianSlice1 = myDeriv1ColSlice
-
-            #print("MPI: _compute_hproduct_cache over %d cols (rank %d computing %s)" \
-            #    % (nDerivCols2, comm.Get_rank(), str(myDerivColSlice)))
-
-            if mySubComm is not None and mySubComm.Get_size() > 1:
-                deriv2Slices, myDeriv2ColSlice, deriv2Owners, mySubSubComm = \
-                    _mpit.distribute_slice(allDeriv2ColSlice, mySubComm)
-
-                # Get slice into entire range of model params (see above)
-                if wrt_slice2 is not None and wrt_slice2.start is not None:
-                    myHessianSlice2 = _slct.shift(myDeriv2ColSlice, wrt_slice2.start)
-                else: myHessianSlice2 = myDeriv2ColSlice
-
-                if mySubSubComm is not None and mySubSubComm.Get_size() > 1:
-                    _warnings.warn("Too many processors to make use of in "
-                                   " _compute_hproduct_cache.")
-                    #TODO: remove: not needed now that we track owners
-                    #if mySubSubComm.Get_rank() > 0: myDeriv2ColSlice = slice(0,0)
-                    #  #don't compute anything on "extra", i.e. rank != 0, cpus
-
-                hProdCache[:, myDeriv1ColSlice, myDeriv2ColSlice] = self._compute_hproduct_cache(
-                    layout_atom_tree, prod_cache, d_prod_cache1[:, myDeriv1ColSlice],
-                    d_prod_cache2[:, myDeriv2ColSlice], scale_cache, None, myHessianSlice1, myHessianSlice2)
-                # pass None as comm, *not* mySubSubComm, since we can't do any further parallelization
-
-                _mpit.gather_slices(deriv2Slices, deriv2Owners, hProdCache, [None, myDeriv1ColSlice],
-                                    2, mySubComm)  # , gather_mem_limit) #gather over col-distribution (Deriv2)
-                #note: gathering axis 2 of hProdCache[:,myDeriv1ColSlice],
-                #      dim=(cacheSize,nDerivCols1,nDerivCols2,dim,dim)
-            else:
-                #compute "Deriv1" row-derivatives distribution only; don't use column distribution
-                hProdCache[:, myDeriv1ColSlice] = self._compute_hproduct_cache(
-                    layout_atom_tree, prod_cache, d_prod_cache1[:, myDeriv1ColSlice], d_prod_cache2,
-                    scale_cache, None, myHessianSlice1, wrt_slice2)
-                # pass None as comm, *not* mySubComm (this is ok, see "if" condition above)
-
-            _mpit.gather_slices(deriv1Slices, deriv1Owners, hProdCache, [], 1, comm)
-            #, gather_mem_limit) #gather over row-distribution (Deriv1)
-            #note: gathering axis 1 of hProdCache,
-            #      dim=(cacheSize,nDerivCols1,nDerivCols2,dim,dim)
-
-            return hProdCache
-
-        # ------------------------------------------------------------------
+        ## ------------------------------------------------------------------
+        #
+        #if resource_alloc is not None and resource_alloc.comm is not None and resource_alloc.comm.Get_size() > 1:
+        #    # parallelize of deriv cols, then sub-trees (if available and necessary)
+        #
+        #    if resource_alloc.comm.Get_size() > nDerivCols1 * nDerivCols2:
+        #        #If there are more processors than deriv cells, give a
+        #        # warning -- note that we *cannot* make use of a tree being
+        #        # split because there's no good way to reconstruct the
+        #        # *non-final* parent-tree elements from those of the sub-trees.
+        #        _warnings.warn("Increased speed could be obtained"
+        #                       " by giving hproduct cache computation"
+        #                       " *fewer* processors and *smaller* (sub-)tree"
+        #                       " (e.g. by splitting tree beforehand), as there"
+        #                       " are more cpus than hessian elements.")  # pragma: no cover
+        #
+        #    # allocate final result memory
+        #    hProdCache = _np.zeros((cacheSize,) + hessn_shape)
+        #
+        #    # Use comm to distribute columns
+        #    allDeriv1ColSlice = slice(0, nDerivCols1)
+        #    allDeriv2ColSlice = slice(0, nDerivCols2)
+        #    deriv1Slices, myDeriv1ColSlice, deriv1Owners, mySubComm = \
+        #        _mpit.distribute_slice(allDeriv1ColSlice, resource_alloc.comm)
+        #
+        #    # Get slice into entire range of model params so that
+        #    #  per-gate hessians can be computed properly
+        #    if wrt_slice1 is not None and wrt_slice1.start is not None:
+        #        myHessianSlice1 = _slct.shift(myDeriv1ColSlice, wrt_slice1.start)
+        #    else: myHessianSlice1 = myDeriv1ColSlice
+        #
+        #    #print("MPI: _compute_hproduct_cache over %d cols (rank %d computing %s)" \
+        #    #    % (nDerivCols2, comm.Get_rank(), str(myDerivColSlice)))
+        #
+        #    if mySubComm is not None and mySubComm.Get_size() > 1:
+        #        deriv2Slices, myDeriv2ColSlice, deriv2Owners, mySubSubComm = \
+        #            _mpit.distribute_slice(allDeriv2ColSlice, mySubComm)
+        #
+        #        # Get slice into entire range of model params (see above)
+        #        if wrt_slice2 is not None and wrt_slice2.start is not None:
+        #            myHessianSlice2 = _slct.shift(myDeriv2ColSlice, wrt_slice2.start)
+        #        else: myHessianSlice2 = myDeriv2ColSlice
+        #
+        #        if mySubSubComm is not None and mySubSubComm.Get_size() > 1:
+        #            _warnings.warn("Too many processors to make use of in "
+        #                           " _compute_hproduct_cache.")
+        #            #TODO: remove: not needed now that we track owners
+        #            #if mySubSubComm.Get_rank() > 0: myDeriv2ColSlice = slice(0,0)
+        #            #  #don't compute anything on "extra", i.e. rank != 0, cpus
+        #
+        #        hProdCache[:, myDeriv1ColSlice, myDeriv2ColSlice] = self._compute_hproduct_cache(
+        #            layout_atom_tree, prod_cache, d_prod_cache1[:, myDeriv1ColSlice],
+        #            d_prod_cache2[:, myDeriv2ColSlice], scale_cache, None, myHessianSlice1, myHessianSlice2)
+        #        # pass None as comm, *not* mySubSubComm, since we can't do any further parallelization
+        #
+        #        #NOTE: we only need to gather to the root processor (TODO: update this)
+        #        _mpit.gather_slices(deriv2Slices, deriv2Owners, hProdCache, [None, myDeriv1ColSlice],
+        #                            2, mySubComm)  # , gather_mem_limit) #gather over col-distribution (Deriv2)
+        #        #note: gathering axis 2 of hProdCache[:,myDeriv1ColSlice],
+        #        #      dim=(cacheSize,nDerivCols1,nDerivCols2,dim,dim)
+        #    else:
+        #        #compute "Deriv1" row-derivatives distribution only; don't use column distribution
+        #        hProdCache[:, myDeriv1ColSlice] = self._compute_hproduct_cache(
+        #            layout_atom_tree, prod_cache, d_prod_cache1[:, myDeriv1ColSlice], d_prod_cache2,
+        #            scale_cache, None, myHessianSlice1, wrt_slice2)
+        #        # pass None as comm, *not* mySubComm (this is ok, see "if" condition above)
+        #
+        #    #NOTE: we only need to gather to the root processor (TODO: update this)
+        #    _mpit.gather_slices(deriv1Slices, deriv1Owners, hProdCache, [], 1, resource_alloc.comm)
+        #    #, gather_mem_limit) #gather over row-distribution (Deriv1)
+        #    #note: gathering axis 1 of hProdCache,
+        #    #      dim=(cacheSize,nDerivCols1,nDerivCols2,dim,dim)
+        #
+        #    return hProdCache
+        #
+        ## ------------------------------------------------------------------
 
         hProdCache = _np.zeros((cacheSize,) + hessn_shape)
         wrtIndices1 = _slct.indices(wrt_slice1) if (wrt_slice1 is not None) else None
@@ -1149,43 +1219,57 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
     def create_layout(self, circuits, dataset=None, resource_alloc=None, array_types=('E',),
                       derivative_dimension=None, verbosity=0):
+        """
+        Constructs an circuit-outcome-probability-array (COPA) layout for a list of circuits.
 
-        # Let np = # param groups, so 1 <= np <= num_params, size of each param group = num_params/np
-        # Let nc = # circuit groups == # atoms, so 1 <= nc <= max_split_num; size of each group = size of
-        #          corresponding atom
-        # With nprocs processors, split into Ng comms of ~nprocs/Ng procs each.  These comms are each assigned some
-        #  number of circuit groups, where their ~nprocs/Ng processors are used to partition the np param
-        #  groups. Note that 1 <= Ng <= min(nc,nprocs).
-        # Notes:
-        #  - making np or nc > nprocs can be useful for saving memory.  Raising np saves *Jacobian* and *Hessian*
-        #     function memory without layout overhead, and I think will typically be preferred over raising nc.
-        #     Raising nc will additionally save *Probability/Product* function memory, but will incur layout overhead.
-        #  - any given CPU will be running a *single* (nc-index,np-index) pair at any given time, and so memory
-        #     estimates only depend on nc and np, and not on Ng, *except* when an array is *gathered* from the
-        #     end results from a divided computation.
-        #  - "circuits" distribute_method: never distribute num_params (np == 1, Ng == nprocs always).
-        #     Choose nc such that nc >= nprocs, mem_estimate(nc,np=1) < mem_limit, and nc % nprocs == 0 (nc % Ng == 0).
-        #  - "deriv" distribute_method: if possible, set nc=1, nprocs <= np <= num_params, Ng = 1 (np % nprocs == 0?)
-        #     If memory constraints don't allow this, set np = num_params, Ng ~= nprocs/num_params (but Ng >= 1),
-        #     and nc set by mem_estimate and nc % Ng == 0 (so comms are kept busy)
-        #
-        # find nc, np, Ng such that:
-        # - mem_estimate(nc,np,Ng) < mem_limit
-        # - full cpu usage:
-        #   - np*nc >= nprocs (all procs used)
-        #   - nc % Ng == 0 (each proc has the same number of atoms, so they're kept busy)
-        # -nice, but not essential:
-        #   - num_params % np == 0 (each param group has same size)
-        #   - np % (nprocs/Ng) == 0 would be nice (all procs have same num of param groups to process)
+        Parameters
+        ----------
+        circuits : list
+            The circuits whose outcome probabilities should be included in the layout.
+
+        dataset : DataSet
+            The source of data counts that will be compared to the circuit outcome
+            probabilities.  The computed outcome probabilities are limited to those
+            with counts present in `dataset`.
+
+        resource_alloc : ResourceAllocation
+            A available resources and allocation information.  These factors influence how
+            the layout (evaluation strategy) is constructed.
+
+        array_types : tuple, optional
+            A tuple of string-valued array types.  See :method:`ForwardSimulator.create_layout`.
+
+        derivative_dimensions : tuple, optional
+            A tuple containing, optionally, the parameter-space dimension used when taking first
+            and second derivatives with respect to the cirucit outcome probabilities.  This must be
+            have minimally 1 or 2 elements when `array_types` contains `'ep'` or `'epp'` types,
+            respectively.
+
+        verbosity : int or VerbosityPrinter
+            Determines how much output to send to stdout.  0 means no output, higher
+            integers mean more output.
+
+        Returns
+        -------
+        MatrixCOPALayout
+        """
+        # There are two types of quantities we adjust to create a good layout: "group-counts" and "processor-counts"
+        #  - group counts:  natoms, nblks, nblks2 give how many indpendently computed groups/ranges of circuits,
+        #                   1st parameters, and 2nd parameters are used.  Making these larger can reduce memory
+        #                   consumption by reducing intermediate memory usage.
+        #  - processor counts: na, np, np2 give how many "atom-processors", "param-processors" and "param2-processors"
+        #                      are used to process data along each given direction.  These values essentially specify
+        #                      how the physical procesors are divided by giving the number of (roughly equal) intervals
+        #                      exist along each dimension of the physical processor "grid".  Thus, thees values are set
+        #                      based on the total number of cores available and how many dimensions are being computed.
 
         resource_alloc = _ResourceAllocation.cast(resource_alloc)
-        comm = resource_alloc.comm
         mem_limit = resource_alloc.mem_limit - resource_alloc.allocated_memory \
             if (resource_alloc.mem_limit is not None) else None  # *per-processor* memory limit
-        printer = _VerbosityPrinter.create_printer(verbosity, comm)
-        nprocs = 1 if comm is None else comm.Get_size()
+        printer = _VerbosityPrinter.create_printer(verbosity, resource_alloc)
+        nprocs = resource_alloc.comm_size
+        comm = resource_alloc.comm
         num_params = derivative_dimension if (derivative_dimension is not None) else self.model.num_params
-        num_circuits = len(circuits)
         C = 1.0 / (1024.0**3)
 
         if mem_limit is not None:
@@ -1195,156 +1279,57 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
         if not hasattr(self, '_mode'): self._mode = 'time_independent'  # HACK for backward compatibility (REMOVE?)
 
+        natoms, na, npp, param_dimensions, param_blk_sizes = self._compute_processor_distribution(
+            array_types, nprocs, num_params, len(circuits), default_natoms=1)
+
         if self._mode == "distribute_by_timestamp":
             #Special case: time dependent data that gets grouped & distributed by unique timestamp
-            layout = _MatrixTimeDepCOPALayout(circuits, self.model, dataset,
-                                              (num_params, num_params), verbosity)
-            layout.set_distribution_params(nprocs, (num_params, num_params),
-                                           mem_limit * 0.01 if (mem_limit is not None) else None)
-            return layout
+            # To to this, we override above values of natoms, na, and npp:
+            natoms = 1  # save all processor division for within the (single) atom, for different timestamps
+            na, npp = 1, (1, 1)  # save all processor division for within the (single) atom, for different timestamps
 
-        def create_layout_candidate(num_atoms):
-            return _MatrixCOPALayout(circuits, self.model, dataset, None, num_atoms,
-                                     (num_params, num_params), verbosity)
+        printer.log("MatrixLayout: %d processors divided into %s (= %d) grid along circuit and parameter directions." %
+                    (nprocs, ' x '.join(map(str, (na,) + npp)), _np.product((na,) + npp)))
+        printer.log("   %d atoms, parameter block size limits %s" % (natoms, str(param_blk_sizes)))
+        assert(_np.product((na,) + npp) <= nprocs), "Processor grid size exceeds available processors!"
 
-        bNp1Matters = bool("EP" in array_types or "EPP" in array_types or "ep" in array_types or "epp" in array_types)
-        bNp2Matters = bool("EPP" in array_types or "epp" in array_types)
+        layout = _MatrixCOPALayout(circuits, self.model, dataset, natoms,
+                                   na, npp, param_dimensions, param_blk_sizes, resource_alloc, verbosity)
 
-        #Start with how we'd like to split processors up (without regard to memory limit):
-        nc = Ng = 1
-        if bNp2Matters:
-            if nprocs > num_params**2:
-                np1 = np2 = max(num_params, 1)
-                nc = Ng = _mpit.processor_group_size(nprocs, nprocs / max(num_params**2, 1))  # float division
-            elif nprocs > num_params:
-                np1 = max(num_params, 1)
-                np2 = int(_np.ceil(nprocs / max(num_params, 1)))
+        if mem_limit is not None:
+            loc_nparams1 = num_params / npp[0] if len(npp) > 0 else 0
+            loc_nparams2 = num_params / npp[1] if len(npp) > 1 else 0
+            blk1 = param_blk_sizes[0] if len(param_blk_sizes) > 0 else 0
+            blk2 = param_blk_sizes[1] if len(param_blk_sizes) > 1 else 0
+            if blk1 is None: blk1 = loc_nparams1
+            if blk2 is None: blk1 = loc_nparams2
+            global_layout = layout.global_layout
+            if comm is not None:
+                from mpi4py import MPI
+                max_local_els = comm.allreduce(layout.num_elements, op=MPI.MAX)    # layout.max_atom_elements
+                max_atom_els = comm.allreduce(layout.max_atom_elements, op=MPI.MAX)
+                max_local_circuits = comm.allreduce(layout.num_circuits, op=MPI.MAX)
+                max_atom_cachesize = comm.allreduce(layout.max_atom_cachesize, op=MPI.MAX)
             else:
-                np1 = nprocs; np2 = 1
-        elif bNp1Matters:
-            np2 = 1
-            if nprocs > num_params:
-                np1 = max(num_params, 1)
-                nc = Ng = _mpit.processor_group_size(nprocs, nprocs / max(num_params, 1))
-            else:
-                np1 = nprocs
-        else:
-            np1 = np2 = 1
-            nc = Ng = nprocs
+                max_local_els = layout.num_elements
+                max_atom_els = layout.max_atom_elements
+                max_local_circuits = layout.num_circuits
+                max_atom_cachesize = layout.max_atom_cachesize
+            mem_estimate = _bytes_for_array_types(array_types, global_layout.num_elements, max_local_els, max_atom_els,
+                                                  global_layout.num_circuits, max_local_circuits,
+                                                  layout._param_dimensions, (loc_nparams1, loc_nparams2),
+                                                  (blk1, blk2), max_atom_cachesize, self.model.dim)
 
-        #Create initial layout, and get the "final memory" that is required to hold the final results
-        # for each array type.  This amount doesn't depend on how the layout is "split" into atoms.
+            #def approx_mem_estimate(natoms, np1, np2):
+            #    approx_cachesize = (num_circuits / natoms) * 1.3  # inflate expected # circuits per atom => cache_size
+            #    return _bytes_for_array_types(array_types, num_elements, num_elements / natoms,
+            #                                  num_circuits, num_circuits / natoms,
+            #                                  (num_params, num_params), (num_params / np1, num_params / np2),
+            #                                  approx_cachesize, self.model.dim)
 
-        # NOTE: This assumes "gather=True" mode, where all processors hold complete final arrays containing
-        # *all* derivative columns. In gather=False mode, this amount would change based on the
-        # memory of all the atoms and deriv columns assigned to a single processor. E.g. mayb code like:
-        #    dist_info = trial_layout.distribution_info(nprocs)
-        #    rank_total_els = [sum([trial_layout.atoms[i].num_elements for i in rank_info['atom_indices']])
-        #                      for rank_info in dist_info.values()]  # total elements per processor
+            if mem_estimate > mem_limit:
+                raise MemoryError("Not enough memory for desired layout!")
 
-        layout_cache = {}  # cache of layout candidates indexed on # (minimal) atoms, to avoid re-computation
-        layout_cache[nc] = create_layout_candidate(nc)
-        num_elements = layout_cache[nc].num_elements  # should be fixed
-
-        if mem_limit is not None:  # the hard case when there's a memory limit
-            gather_mem_limit = mem_limit * 0.01  # better?
-
-            def mem_estimate(nc, np1, np2):
-                if nc not in layout_cache: layout_cache[nc] = create_layout_candidate(nc)
-                layout = layout_cache[nc]
-                return _bytes_for_array_types(array_types, layout.num_elements, layout.max_atom_elements,
-                                              layout.num_circuits, num_circuits / nc,
-                                              layout._additional_dimensions, (num_params / np1, num_params / np2),
-                                              layout.max_atom_cachesize, self.model.dim)
-
-            def approx_mem_estimate(nc, np1, np2):
-                approx_cachesize = (num_circuits / nc) * 1.3  # inflate expected # of circuits per atom => cache_size
-                return _bytes_for_array_types(array_types, num_elements, num_elements / nc,
-                                              num_circuits, num_circuits / nc,
-                                              (num_params, num_params), (num_params / np1, num_params / np2),
-                                              approx_cachesize, self.model.dim)
-
-            mem = mem_estimate(nc, np1, np2)  # initial estimate (to screen)
-            #printer.log(f" mem({nc} atoms, {np1},{np2} param-grps, {Ng} proc-grps) = {mem * C}GB")
-            printer.log(" mem(%d atoms, %d,%d param-grps, %d proc-grps) = %.2fGB" %
-                        (nc, np1, np2, Ng, mem * C))
-
-            #Now do (fast) memory checks that try to increase np1 and/or np2 if memory constraint is unmet.
-            ok = False
-            if (not ok) and bNp1Matters and np1 < num_params:
-                #First try to decrease mem consumption by increasing np1
-                for n in range(np1, num_params + 1, nprocs):
-                    if mem_estimate(nc, n, np2) < mem_limit:
-                        np1 = n; ok = True; break
-                else: np1 = num_params
-
-            if (not ok) and bNp2Matters and np2 < num_params:
-                #Next try to decrease mem consumption by increasing np2
-                for n in range(np2, num_params + 1, nprocs):
-                    if mem_estimate(nc, np1, n) < mem_limit:
-                        np2 = n; ok = True; break
-                else: np2 = num_params
-
-            #Finally, increase nc in amounts of Ng (so nc % Ng == 0).  Start
-            # with fast cache_size computation then switch to slow
-            if not ok:
-                mem = approx_mem_estimate(nc, np1, np2)
-                while mem > mem_limit:
-                    nc += Ng; _next = mem_estimate(nc, np1, np2)
-                    if _next >= mem: raise MemoryError("Not enough memory: increasing #atoms unproductive")
-                    mem = _next
-
-                mem = mem_estimate(nc, np1, np2)
-                #printer.log(f" mem({nc} atoms, {np1},{np2} param-grps, {Ng} proc-grps) = {mem * C}GB")
-                printer.log(" mem(%d atoms, %d,%d param-grps, %d proc-grps) ~= %.2fGB" %
-                            (nc, np1, np2, Ng, mem * C))
-
-                while mem > mem_limit:
-                    nc += Ng; _next = mem_estimate(nc, np1, np2)
-                    #printer.log((f" mem({nc} atoms, {np1},{np2} param-grps, {Ng} proc-grps) ="
-                    #             f" {_next * C}GB"))
-                    printer.log(" mem(%d atoms, %d,%d param-grps, %d proc-grps) = %.2fGB" %
-                                (nc, np1, np2, Ng, _next * C))
-
-                    if _next >= mem: raise MemoryError("Not enough memory: increasing #atoms unproductive")
-                    mem = _next
-        else:
-            gather_mem_limit = None
-
-        layout = layout_cache[nc]
-
-        paramBlkSize1 = num_params / np1
-        paramBlkSize2 = num_params / np2  # the *average* param block size
-        # (in general *not* an integer), which ensures that the intended # of
-        # param blocks is communicated to forwardsim routines (taking ceiling or
-        # floor can lead to inefficient MPI distribution)
-
-        nparams = (num_params, num_params) if bNp2Matters else num_params
-        np = (np1, np2) if bNp2Matters else np1
-        paramBlkSizes = (paramBlkSize1, paramBlkSize2) if bNp2Matters else paramBlkSize1
-        #printer.log((f"Created matrix-sim layout for {len(circuits)} circuits over {nprocs} processors:\n"
-        #             f" Layout comprised of {nc} atoms, processed in {Ng} groups of ~{nprocs // Ng} processors each.\n"
-        #             f" {nparams} parameters divided into {np} blocks of ~{paramBlkSizes} params."))
-        printer.log(("Created matrix-sim layout for %d circuits over %d processors:\n"
-                     " Layout comprised of %d atoms, processed in %d groups of ~%d processors each.\n"
-                     " %s parameters divided into %s blocks of ~%s params.") %
-                    (len(circuits), nprocs, nc, Ng, nprocs // Ng, str(nparams), str(np), str(paramBlkSizes)))
-
-        if np1 == 1:  # (paramBlkSize == num_params)
-            paramBlkSize1 = None  # == all parameters, and may speed logic in dprobs, etc.
-        else:
-            if comm is not None:  # check that all procs have *same* paramBlkSize1
-                blkSizeTest = comm.bcast(paramBlkSize1, root=0)
-                assert(abs(blkSizeTest - paramBlkSize1) < 1e-3)
-
-        if np2 == 1:  # (paramBlkSize == num_params)
-            paramBlkSize2 = None  # == all parameters, and may speed logic in hprobs, etc.
-        else:
-            if comm is not None:  # check that all procs have *same* paramBlkSize2
-                blkSizeTest = comm.bcast(paramBlkSize2, root=0)
-                assert(abs(blkSizeTest - paramBlkSize2) < 1e-3)
-
-        layout.set_distribution_params(Ng, (paramBlkSize1, paramBlkSize2), gather_mem_limit)
         return layout
 
     def _scale_exp(self, scale_exps):
@@ -1578,14 +1563,25 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
         return ret
 
-    def _bulk_fill_probs_block(self, array_to_fill, layout_atom, resource_alloc):
-        # Note: *don't* set dest_indices arg = layout.element_slice, as this is already done by caller
+    def _bulk_fill_probs_atom(self, array_to_fill, layout_atom, resource_alloc):
         #Free memory from previous subtree iteration before computing caches
         scaleVals = Gs = prodCache = scaleCache = None
         resource_alloc.check_can_allocate_memory(layout_atom.cache_size * self.model.dim * self.model.dim)  # prod cache
 
         #Fill cache info
-        prodCache, scaleCache = self._compute_product_cache(layout_atom.tree, resource_alloc.comm)
+        prodCache, scaleCache = self._compute_product_cache(layout_atom.tree, resource_alloc)
+
+        if not resource_alloc.is_host_leader:
+            # (same as "if resource_alloc.host_comm is not None and resource_alloc.host_comm.rank != 0")
+            # we cannot further utilize multiplie processors when computing a single block.  The required
+            # ending condition is that array_to_fill on each processor has been filled.  But if memory
+            # is being shared and resource_alloc contains multiple processors on a single host, we only
+            # want *one* (the rank=0) processor to perform the computation, since array_to_fill will be
+            # shared memory that we don't want to have muliple procs using simultaneously to compute the
+            # same thing.  Thus, we just do nothing on all of the non-root host_comm processors.
+            # We could also print a warning (?), or we could carefully guard any shared mem updates
+            # using "if resource_alloc.is_host_leader" conditions (if we could use  multiple procs elsewhere).
+            return
 
         #use cached data to final values
         scaleVals = self._scale_exp(layout_atom.nonscratch_cache_view(scaleCache))
@@ -1597,17 +1593,20 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             # "element indices" index a circuit outcome probability in array_to_fill's first dimension
             # "tree indices" index a quantity for a no-spam circuit in a computed cache, which correspond
             #  to the the element indices when `spamtuple` is used.
+            # (Note: *don't* set dest_indices arg = layout.element_slice, as this is already done by caller)
             rho, E = self._rho_e_from_spam_tuple(spam_tuple)
             _fas(array_to_fill, [element_indices],
                  self._probs_from_rho_e(rho, E, Gs[tree_indices], scaleVals[tree_indices]))
         _np.seterr(**old_err)
 
-    def _bulk_fill_dprobs_block(self, array_to_fill, dest_param_slice, layout_atom, param_slice, resource_alloc):
+    def _bulk_fill_dprobs_atom(self, array_to_fill, dest_param_slice, layout_atom, param_slice, resource_alloc):
         dim = self.model.dim
-        resource_alloc.check_can_allocate_memory(layout_atom.cache_size * dim * dim * self.model.num_params)
-        prodCache, scaleCache = self._compute_product_cache(layout_atom.tree, resource_alloc.comm)
+        resource_alloc.check_can_allocate_memory(layout_atom.cache_size * dim * dim * _slct.length(param_slice))
+        prodCache, scaleCache = self._compute_product_cache(layout_atom.tree, resource_alloc)
         dProdCache = self._compute_dproduct_cache(layout_atom.tree, prodCache, scaleCache,
-                                                  resource_alloc.comm, param_slice)
+                                                  resource_alloc, param_slice)
+        if not resource_alloc.is_host_leader:
+            return  # Non-root host processors aren't used anymore to compute the result on the root proc
 
         scaleVals = self._scale_exp(layout_atom.nonscratch_cache_view(scaleCache))
         Gs = layout_atom.nonscratch_cache_view(prodCache, axis=0)
@@ -1621,16 +1620,23 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
         _np.seterr(**old_err)
 
-    def _bulk_fill_hprobs_block(self, array_to_fill, dest_param_slice1, dest_param_slice2, layout_atom,
-                                param_slice1, param_slice2, resource_alloc):
+    def _bulk_fill_hprobs_atom(self, array_to_fill, dest_param_slice1, dest_param_slice2, layout_atom,
+                               param_slice1, param_slice2, resource_alloc):
         dim = self.model.dim
-        resource_alloc.check_can_allocate_memory(layout_atom.cache_size * dim**2 * self.model.num_params**2)
-        prodCache, scaleCache = self._compute_product_cache(layout_atom.tree, resource_alloc.comm)
+        resource_alloc.check_can_allocate_memory(layout_atom.cache_size * dim**2
+                                                 * _slct.length(param_slice1) * _slct.length(param_slice2))
+        prodCache, scaleCache = self._compute_product_cache(layout_atom.tree, resource_alloc)
         dProdCache1 = self._compute_dproduct_cache(
-            layout_atom.tree, prodCache, scaleCache, resource_alloc.comm, param_slice1)
+            layout_atom.tree, prodCache, scaleCache, resource_alloc, param_slice1)  # computed on rank=0 only
         dProdCache2 = dProdCache1 if (param_slice1 == param_slice2) else \
             self._compute_dproduct_cache(layout_atom.tree, prodCache, scaleCache,
-                                         resource_alloc.comm, param_slice2)
+                                         resource_alloc, param_slice2)  # computed on rank=0 only
+        hProdCache = self._compute_hproduct_cache(layout_atom.tree, prodCache, dProdCache1,
+                                                  dProdCache2, scaleCache, resource_alloc,
+                                                  param_slice1, param_slice2)  # computed on rank=0 only
+
+        if not resource_alloc.is_host_leader:
+            return  # Non-root host processors aren't used anymore to compute the result on the root proc
 
         scaleVals = self._scale_exp(layout_atom.nonscratch_cache_view(scaleCache))
         Gs = layout_atom.nonscratch_cache_view(prodCache, axis=0)
@@ -1638,9 +1644,6 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         dGs2 = layout_atom.nonscratch_cache_view(dProdCache2, axis=0)
         #( n_circuits, nDerivColsX, dim, dim )
 
-        hProdCache = self._compute_hproduct_cache(layout_atom.tree, prodCache, dProdCache1,
-                                                  dProdCache2, scaleCache, resource_alloc.comm,
-                                                  param_slice1, param_slice2)
         hGs = layout_atom.nonscratch_cache_view(hProdCache, axis=0)
         #( n_circuits, len(wrt_filter1), len(wrt_filter2), dim, dim )
 
@@ -1818,14 +1821,6 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             totals = _np.empty(layout.num_elements, 'd')
             dataset_at_t = ds_cache['ds_for_time'][timestamp]  # trunc_dataset.time_slice(timestamp, timestamp+TIMETOL)
 
-            #DEBUG CHECK REMOVE
-            #tStart = _time.time()
-            #dataset_at_t_check = trunc_dataset.time_slice(timestamp, timestamp+TIMETOL)
-            #print("DB: Took time slice at t=%g in %.1fs" % (timestamp, _time.time() - tStart))
-            #for c in dataset_at_t:
-            #    if(dataset_at_t[c].counts != dataset_at_t_check[c].counts):
-            #        import bpdb; bpdb.set_trace()
-
             firsts = []; indicesOfCircuitsWithOmittedData = []
             for (i, circuit) in enumerate(layout.circuits):  # should be 'ds_circuits' really
                 inds = layout.indices_for_index(i)
@@ -1857,105 +1852,143 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         return ds_cache[timestamp]
 
     def _bulk_fill_timedep_objfn(self, raw_objective, array_to_fill, layout, ds_circuits,
-                                 num_total_outcomes, dataset, resource_alloc=None, ds_cache=None):
+                                 num_total_outcomes, dataset, ds_cache=None):
 
         assert(self._mode == "distribute_by_timestamp"), \
             ("Must set `distribute_by_timestamp=True` to use a "
              "time-dependent objective function with MatrixForwardSimulator!")
 
-        probs_array = _np.empty(layout.num_elements, 'd')
+        resource_alloc = layout.resource_alloc()
+        atom_resource_alloc = layout.resource_alloc('atom-processing')
+        atom_resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory before we begin
+
+        #Split timestamps up between processors - maybe do this in a time-dep layout?
+        all_timestamps = {i: t for i, t in enumerate(dataset.timestamps)}
+        my_timestamp_inds, timestampOwners, timestamp_processing_ralloc = \
+            _mpit.distribute_indices(list(range(len(all_timestamps))), atom_resource_alloc)
+        shared_mem_leader = timestamp_processing_ralloc.is_host_leader
+
+        probs_array, probs_array_shm = _smt.create_shared_ndarray(timestamp_processing_ralloc,
+                                                                  (layout.num_elements,), 'd')
+        # Allocated this way b/c, e.g.,  say we have 4 procs on a single node and 2 timestamps: then
+        # timestamp_processing_ralloc will have 2 procs and only the first will fill probs_array below since
+        #_bulk_fill_probs_atom assumes it's given shared mem allocated using the resource alloc object it's given.
+
         array_to_fill[:] = 0.0
+        my_array_to_fill = _np.zeros(array_to_fill.shape, 'd')  # purely local array to accumulate results
+        assert(my_array_to_fill.shape == (layout.num_elements,))
 
-        def compute_timedep(layout_atom, sub_resource_alloc):
-            # compute objective at time layout_atom.time
-            for _, obj in self.model._iter_parameterized_objs():
-                obj.set_time(layout_atom.timestamp)
-            for opcache in self.model._opcaches.values():
-                for obj in opcache.values():
-                    obj.set_time(layout_atom.timestamp)
+        for timestamp_index in my_timestamp_inds:
+            timestamp = all_timestamps[timestamp_index]
 
-            self._bulk_fill_probs_block(probs_array, layout_atom, sub_resource_alloc)
+            # compute objective at time timestamp
             counts, totals, freqs, firsts, indicesOfCircuitsWithOmittedData = \
-                self._ds_quantities(layout_atom.timestamp, ds_cache, layout, dataset)
+                self._ds_quantities(timestamp, ds_cache, layout, dataset)
             if counts is None: return  # no data at this time => no contribution
 
+            for _, obj in self.model._iter_parameterized_objs():
+                obj.set_time(timestamp)
+            for opcache in self.model._opcaches.values():
+                for obj in opcache.values():
+                    obj.set_time(timestamp)
+
+            for atom in layout.atoms:  # layout only holds local atoms
+                self._bulk_fill_probs_atom(probs_array[atom.element_slice], atom, timestamp_processing_ralloc)
+
+            timestamp_processing_ralloc.host_comm_barrier()  # don't exit until all proc's array_to_fill is ready
+            # (similar to DistributableForwardSimulator._bulk_fill_probs)
+
             terms = raw_objective.terms(probs_array, counts, totals, freqs)
-            if firsts is not None:  # consolidate with `_update_terms_for_omitted_probs`
+            if firsts is not None and shared_mem_leader:  # consolidate with `_update_terms_for_omitted_probs`
                 omitted_probs = 1.0 - _np.array([_np.sum(probs_array[layout.indices_for_index(i)])
                                                  for i in indicesOfCircuitsWithOmittedData])
                 terms[firsts] += raw_objective.zero_freq_terms(totals[firsts], omitted_probs)
+            timestamp_processing_ralloc.host_comm_barrier()  # have non-leader procs wait for leaders to set shared mem
 
-            array_to_fill[layout_atom.element_slice] += terms
-
-        atomOwners = self._compute_on_atoms(layout, compute_timedep, resource_alloc)
+            my_array_to_fill += terms
 
         #collect/gather results (SUM local arrays together)
-        summed = _mpit.sum_arrays(array_to_fill, set(atomOwners.values()), resource_alloc.comm)
-        array_to_fill[:] = summed  # this could probably be done more efficiently
+        resource_alloc.allreduce_sum(array_to_fill, my_array_to_fill, unit_ralloc=timestamp_processing_ralloc)
+
+        _smt.cleanup_shared_ndarray(probs_array_shm)
 
     def _bulk_fill_timedep_dobjfn(self, raw_objective, array_to_fill, layout, ds_circuits,
-                                  num_total_outcomes, dataset, resource_alloc=None, ds_cache=None):
+                                  num_total_outcomes, dataset, ds_cache=None):
 
         assert(self._mode == "distribute_by_timestamp"), \
             ("Must set `distribute_by_timestamp=True` to use a "
              "time-dependent objective function with MatrixForwardSimulator!")
 
-        probs_array = _np.empty(layout.num_elements, 'd')
-        dprobs_array = _np.empty((layout.num_elements, self.model.num_params), 'd')
-        all_param_slice = slice(0, self.model.num_params)  # All params computed at once for now
-        array_to_fill[:] = 0.0
+        resource_alloc = layout.resource_alloc()
+        param_resource_alloc = layout.resource_alloc('param-processing')
+        param_resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory before we begin
 
-        def compute_timedep(layout_atom, sub_resource_alloc):
+        #Split timestamps up between processors - maybe do this in a time-dep layout?
+        all_timestamps = {i: t for i, t in enumerate(dataset.timestamps)}
+        my_timestamp_inds, timestampOwners, timestamp_processing_ralloc = \
+            _mpit.distribute_indices(list(range(len(all_timestamps))), param_resource_alloc)
+        shared_mem_leader = timestamp_processing_ralloc.is_host_leader
+
+        probs_array, probs_array_shm = _smt.create_shared_ndarray(timestamp_processing_ralloc,
+                                                                  (layout.num_elements,), 'd')
+        dprobs_array, dprobs_array_shm = _smt.create_shared_ndarray(timestamp_processing_ralloc,
+                                                                    (layout.num_elements, self.model.num_params), 'd')
+        # Allocated this way b/c, e.g.,  say we have 4 procs on a single node and 2 timestamps: then
+        # timestamp_processing_ralloc will have 2 procs and only the first will fill probs_array below since
+        #_bulk_fill_probs_atom assumes it's given shared mem allocated using the resource alloc object it's given.
+
+        array_to_fill[:] = 0.0
+        my_array_to_fill = _np.zeros(array_to_fill.shape, 'd')  # purely local array to accumulate results
+        all_param_slice = slice(0, self.model.num_params)  # All params computed at once for now
+        assert(my_array_to_fill.shape == (layout.num_elements, self.model.num_params))
+
+        for timestamp_index in my_timestamp_inds:
+            timestamp = all_timestamps[timestamp_index]
             # compute objective at time layout_atom.time
             #print("DB: Rank %d : layout atom for t=" % resource_alloc.comm.rank, layout_atom.timestamp)
+
+            counts, totals, freqs, firsts, indicesOfCircuitsWithOmittedData = \
+                self._ds_quantities(timestamp, ds_cache, layout, dataset)
+
             for _, obj in self.model._iter_parameterized_objs():
-                obj.set_time(layout_atom.timestamp)
+                obj.set_time(timestamp)
             for opcache in self.model._opcaches.values():
                 for obj in opcache.values():
-                    obj.set_time(layout_atom.timestamp)
+                    obj.set_time(timestamp)
 
-            self._bulk_fill_probs_block(probs_array, layout_atom, sub_resource_alloc)
-            self._bulk_fill_dprobs_block(dprobs_array, all_param_slice, layout_atom,
-                                         all_param_slice, sub_resource_alloc)
+            for atom in layout.atoms:  # layout only holds local atoms
+                self._bulk_fill_probs_atom(probs_array, atom, timestamp_processing_ralloc)
+                self._bulk_fill_dprobs_atom(dprobs_array, all_param_slice, atom,
+                                            all_param_slice, timestamp_processing_ralloc)
 
-            #import bpdb; bpdb.set_trace()
-            counts, totals, freqs, firsts, indicesOfCircuitsWithOmittedData = \
-                self._ds_quantities(layout_atom.timestamp, ds_cache, layout, dataset)
+            timestamp_processing_ralloc.host_comm_barrier()  # don't exit until all proc's array_to_fill is ready
+            # (similar to DistributableForwardSimulator._bulk_fill_probs)
 
-            #Note: computing jacobian of objective here doesn't support sparse data yet!!! TODO
-            if firsts is not None:  # consolidate with TimeIndependentMDCObjectiveFunction.dterms?
-                dprobs_omitted_rowsum = _np.empty((len(firsts), self.model.num_params), 'd')
-                for ii, i in enumerate(indicesOfCircuitsWithOmittedData):
-                    dprobs_omitted_rowsum[ii, :] = _np.sum(dprobs_array[layout.indices_for_index(i), :], axis=0)
+            if shared_mem_leader:
+                if firsts is not None:  # consolidate with TimeIndependentMDCObjectiveFunction.dterms?
+                    dprobs_omitted_rowsum = _np.empty((len(firsts), self.model.num_params), 'd')
+                    for ii, i in enumerate(indicesOfCircuitsWithOmittedData):
+                        dprobs_omitted_rowsum[ii, :] = _np.sum(dprobs_array[layout.indices_for_index(i), :], axis=0)
 
-            #print("Layout atom t=",layout_atom.timestamp)
-            #print("p = ",probs_array)
-            #print("dp[29] = ",dprobs_array[:,29])
-            #print("cnts = ",counts)
-            dprobs_array[:, :] = dprobs_array * raw_objective.dterms(probs_array, counts, totals, freqs)[:, None]
-            #print("raw dterms = ",raw_objective.dterms(probs_array, counts, totals, freqs))
-            #print("jac_contrib[:,29] = ",dprobs_array[:,29])
+                dprobs_array *= raw_objective.dterms(probs_array, counts, totals, freqs)[:, None]
 
-            if firsts is not None:  # consolidate with _update_dterms_for_omitted_probs?
-                omitted_probs = 1.0 - _np.array([_np.sum(probs_array[layout.indices_for_index(i)])
-                                                 for i in indicesOfCircuitsWithOmittedData])
-                dprobs_array[firsts] -= raw_objective.zero_freq_dterms(totals[firsts], omitted_probs)[:, None] \
-                    * dprobs_omitted_rowsum
-            #print("jac_contrib[:,29] post = ",dprobs_array[:,29])
+                if firsts is not None:  # consolidate with _update_dterms_for_omitted_probs?
+                    omitted_probs = 1.0 - _np.array([_np.sum(probs_array[layout.indices_for_index(i)])
+                                                     for i in indicesOfCircuitsWithOmittedData])
+                    dprobs_array[firsts] -= raw_objective.zero_freq_dterms(totals[firsts], omitted_probs)[:, None] \
+                        * dprobs_omitted_rowsum
+            timestamp_processing_ralloc.host_comm_barrier()  # have non-leader procs wait for leaders to set shared mem
 
-            array_to_fill[layout_atom.element_slice] += dprobs_array
-            #print("array_to_fill[:,29] = ",array_to_fill[:,29], " sum = ",_np.sum(array_to_fill[:,29]))
-            #print()
-
-        atomOwners = self._compute_on_atoms(layout, compute_timedep, resource_alloc)
+            my_array_to_fill += dprobs_array
 
         #collect/gather results (SUM local arrays together)
-        summed = _mpit.sum_arrays(array_to_fill, set(atomOwners.values()), resource_alloc.comm)
-        array_to_fill[:] = summed  # this could probably be done more efficiently
+        resource_alloc.allreduce_sum(array_to_fill, my_array_to_fill, unit_ralloc=timestamp_processing_ralloc)
+
+        _smt.cleanup_shared_ndarray(probs_array_shm)
+        _smt.cleanup_shared_ndarray(dprobs_array_shm)
 
     def bulk_fill_timedep_chi2(self, array_to_fill, layout, ds_circuits, num_total_outcomes, dataset,
-                               min_prob_clip_for_weighting, prob_clip_interval, resource_alloc=None,
-                               ds_cache=None):
+                               min_prob_clip_for_weighting, prob_clip_interval, ds_cache=None):
         """
         Compute the chi2 contributions for an entire tree of circuits, allowing for time dependent operations.
 
@@ -1995,22 +2028,18 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             (min,max) values used to clip the predicted probabilities to.
             If None, no clipping is performed.
 
-        resource_alloc : ResourceAllocation, optional
-            A resource allocation object describing the available resources and a strategy
-            for partitioning them.
-
         Returns
         -------
         None
         """
         raw_obj = _RawChi2Function({'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
-                                   resource_alloc)
+                                   layout.resource_alloc())
         return self._bulk_fill_timedep_objfn(raw_obj, array_to_fill, layout, ds_circuits, num_total_outcomes,
-                                             dataset, resource_alloc, ds_cache)
+                                             dataset, ds_cache)
 
     def bulk_fill_timedep_dchi2(self, array_to_fill, layout, ds_circuits, num_total_outcomes, dataset,
                                 min_prob_clip_for_weighting, prob_clip_interval, chi2_array_to_fill=None,
-                                wrt_filter=None, resource_alloc=None, ds_cache=None):
+                                ds_cache=None):
         """
         Compute the chi2 jacobian contributions for an entire tree of circuits, allowing for time dependent operations.
 
@@ -2057,28 +2086,17 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             with the per-circuit chi2 contributions, just like in
             bulk_fill_timedep_chi2(...).
 
-        wrt_filter : list of ints, optional
-            If not None, a list of integers specifying which parameters
-            to include in the derivative dimension. This argument is used
-            internally for distributing calculations across multiple
-            processors and to control memory usage.
-
-        resource_alloc : ResourceAllocation, optional
-            A resource allocation object describing the available resources and a strategy
-            for partitioning them.
-
         Returns
         -------
         None
         """
         raw_obj = _RawChi2Function({'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
-                                   resource_alloc)
+                                   layout.resource_alloc())
         return self._bulk_fill_timedep_dobjfn(raw_obj, array_to_fill, layout, ds_circuits, num_total_outcomes,
-                                              dataset, resource_alloc, ds_cache)
+                                              dataset, ds_cache)
 
     def bulk_fill_timedep_loglpp(self, array_to_fill, layout, ds_circuits, num_total_outcomes, dataset,
-                                 min_prob_clip, radius, prob_clip_interval, resource_alloc=None,
-                                 ds_cache=None):
+                                 min_prob_clip, radius, prob_clip_interval, ds_cache=None):
         """
         Compute the log-likelihood contributions (within the "poisson picture") for an entire tree of circuits.
 
@@ -2124,22 +2142,17 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             (min,max) values used to clip the predicted probabilities to.
             If None, no clipping is performed.
 
-        resource_alloc : ResourceAllocation, optional
-            A resource allocation object describing the available resources and a strategy
-            for partitioning them.
-
         Returns
         -------
         None
         """
         raw_obj = _RawPoissonPicDeltaLogLFunction({'min_prob_clip': min_prob_clip, 'radius': radius},
-                                                  resource_alloc)
+                                                  layout.resource_alloc())
         return self._bulk_fill_timedep_objfn(raw_obj, array_to_fill, layout, ds_circuits, num_total_outcomes,
-                                             dataset, resource_alloc, ds_cache)
+                                             dataset, ds_cache)
 
     def bulk_fill_timedep_dloglpp(self, array_to_fill, layout, ds_circuits, num_total_outcomes, dataset,
-                                  min_prob_clip, radius, prob_clip_interval, logl_array_to_fill=None,
-                                  wrt_filter=None, resource_alloc=None, ds_cache=None):
+                                  min_prob_clip, radius, prob_clip_interval, logl_array_to_fill=None, ds_cache=None):
         """
         Compute the ("poisson picture")log-likelihood jacobian contributions for an entire tree of circuits.
 
@@ -2187,21 +2200,11 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             with the per-circuit logl contributions, just like in
             bulk_fill_timedep_loglpp(...).
 
-        wrt_filter : list of ints, optional
-            If not None, a list of integers specifying which parameters
-            to include in the derivative dimension. This argument is used
-            internally for distributing calculations across multiple
-            processors and to control memory usage.
-
-        resource_alloc : ResourceAllocation, optional
-            A resource allocation object describing the available resources and a strategy
-            for partitioning them.
-
         Returns
         -------
         None
         """
         raw_obj = _RawPoissonPicDeltaLogLFunction({'min_prob_clip': min_prob_clip, 'radius': radius},
-                                                  resource_alloc)
+                                                  layout.resource_alloc())
         return self._bulk_fill_timedep_dobjfn(raw_obj, array_to_fill, layout, ds_circuits, num_total_outcomes,
-                                              dataset, resource_alloc, ds_cache)
+                                              dataset, ds_cache)

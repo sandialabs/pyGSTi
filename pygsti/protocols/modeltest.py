@@ -128,6 +128,7 @@ class ModelTest(_proto.Protocol):
         self.auxfile_types['target_model'] = 'pickle'
         self.auxfile_types['gaugeopt_suite'] = 'pickle'  # TODO - better later? - json?
         self.auxfile_types['gaugeopt_target'] = 'pickle'  # TODO - better later? - json?
+        self.auxfile_types['badfit_options'] = 'pickle'  # SS: Had issues using json, unclear what was not serializable
         self.auxfile_types['objfn_builders'] = 'pickle'
 
         #Advanced options that could be changed by users who know what they're doing
@@ -208,7 +209,7 @@ class ModelTest(_proto.Protocol):
         parameters['raw_objective_values'] = objfn_vals
         parameters['model_test_values'] = chi2k_distributed_vals
         parameters['final_objfn_builder'] = self.objfn_builders[-1]
-        parameters['final_objfn_store'] = mdc_store
+        parameters['final_mdc_store'] = mdc_store
         parameters['profiler'] = profiler
 
         from .gst import _add_gaugeopt_and_badfit
@@ -220,6 +221,6 @@ class ModelTest(_proto.Protocol):
         if target_model is not None:
             models['target'] = target_model
         ret.add_estimate(_Estimate(ret, models, parameters), estimate_key=self.name)
-        return _add_gaugeopt_and_badfit(ret, self.name, mdc_store, target_model, self.gaugeopt_suite,
+        return _add_gaugeopt_and_badfit(ret, self.name, target_model, self.gaugeopt_suite,
                                         self.gaugeopt_target, self.unreliable_ops, self.badfit_options,
-                                        self.objfn_builders[-1], None, resource_alloc, printer)
+                                        None, resource_alloc, printer)

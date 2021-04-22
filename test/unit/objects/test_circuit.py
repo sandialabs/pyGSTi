@@ -1,4 +1,5 @@
 import copy
+import pickle
 import unittest
 
 from ..util import BaseCase
@@ -307,12 +308,14 @@ class CircuitMethodTester(BaseCase):
         # Test appending
         c2 = circuit.Circuit(layer_labels=[Label('Gx', 'Q0')], line_labels=['Q0', ], editable=True)
         self.c.append_circuit_inplace(c2)
-        # TODO assert correctness
+        self.assertEqual(self.c.depth, 6)
+        self.assertEqual(self.c[5, 'Q0'], Label('Gx', 'Q0'))
 
     def test_prefix_circuit(self):
         c2 = circuit.Circuit(layer_labels=[Label('Gx', 'Q0')], line_labels=['Q0', ], editable=True)
         self.c.prefix_circuit_inplace(c2)
-        # TODO assert correctness
+        self.assertEqual(self.c.depth, 6)
+        self.assertEqual(self.c[0, 'Q0'], Label('Gx', 'Q0'))
 
     def test_tensor_circuit(self):
         # Test tensoring circuits of same length
@@ -407,8 +410,9 @@ class CircuitMethodTester(BaseCase):
         self.assertEqual(c.num_multiq_gates, 3)
 
     def test_to_string(self):
+        test_s = "Qubit Q0 ---|Gx|-|Gx|-|Gy|-|Gi|-|  |---\nQubit Q1 ---|Gy|-|Gy|-|Gx|-|  |-|Gi|---\n"
         s = str(self.c)
-        # TODO assert correctness
+        self.assertEqual(test_s, s)
 
     def test_compress_depth(self):
         ls = [Label('H', 1), Label('P', 1), Label('P', 1), Label(()), Label('CNOT', (2, 3))]
@@ -439,11 +443,28 @@ class CircuitMethodTester(BaseCase):
         self.assertLess(abs(epsilon - (1 - (1 - 0.7) * (1 - 0.8) * (1 - 0.9)**2)), 10**-10)
 
     def test_convert_to_quil(self):
-        # Check that convert_to_quil runs, doesn't check the output makes sense.
+        # Quil string with setup, each layer, and block_between_layers=True (current default)
+        quil_str = """DECLARE ro BIT[2]
+RESET
+PRAGMA INITIAL_REWIRING "NAIVE"
+I 1
+I 2
+PRAGMA PRESERVE_BLOCK
+PRAGMA END_PRESERVE_BLOCK
+X 1
+I 2
+PRAGMA PRESERVE_BLOCK
+PRAGMA END_PRESERVE_BLOCK
+CNOT 1 2
+PRAGMA PRESERVE_BLOCK
+PRAGMA END_PRESERVE_BLOCK
+MEASURE 1 ro[1]
+MEASURE 2 ro[2]
+"""
         labels = [Label(('Gi', 'Q1')), Label(('Gxpi', 'Q1')), Label('Gcnot', ('Q1', 'Q2'))]
         c = circuit.Circuit(layer_labels=labels, line_labels=['Q1', 'Q2'])
         s = c.convert_to_quil()
-        # TODO assert correctness
+        self.assertEqual(quil_str, s)
 
     def test_done_editing(self):
         self.c.done_editing()
@@ -519,8 +540,13 @@ class CircuitOperationTester(BaseCase):
 class CompressedCircuitTester(BaseCase):
     def test_compress_op_label(self):
         mdl = circuit.Circuit(None, stringrep="Gx^100")
+
+        comp_init = circuit.CompressedCircuit(mdl, max_period_to_look_for=100)
+        pkl_unpkl = pickle.loads(pickle.dumps(comp_init))
+        self.assertEqual(comp_init._tup, pkl_unpkl._tup)
+
         comp_gs = circuit.CompressedCircuit.compress_op_label_tuple(tuple(mdl))
-        # TODO assert correctness
+        self.assertEqual(comp_init._tup, comp_gs)
 
         exp_gs = circuit.CompressedCircuit.expand_op_label_tuple(comp_gs)
         self.assertEqual(tuple(mdl), exp_gs)

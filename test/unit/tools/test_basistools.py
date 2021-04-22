@@ -32,7 +32,6 @@ class BasisToolsTester(BaseCase):
         # Non power of two for pp labels:
         with self.assertRaises(ValueError):
             label = bt.basis_element_labels('pp', 9)
-            # TODO assert correctness
 
         # Single list arg for pp labels
         self.assertEqual(bt.basis_element_labels('pp', 4), ['I', 'X', 'Y', 'Z'])
@@ -184,7 +183,11 @@ class BasisToolsTester(BaseCase):
         std = Basis.cast('std', 9)
         mxStd = np.identity(5)
         test = bt.resize_std_mx(mxStd, 'expand', comp, std)
-        # TODO assert intermediate correctness
+        # Intermediate test
+        mxInter = np.identity(9)
+        mxInter[2,2] = mxInter[5,5] = mxInter[6,6] = mxInter[7,7] = 0
+        self.assertArraysAlmostEqual(test, mxInter)
+        
         test2 = bt.resize_std_mx(test, 'contract', std, comp)
         self.assertArraysAlmostEqual(test2, mxStd)
 
@@ -243,32 +246,42 @@ class BasisToolsTester(BaseCase):
         end = Basis.cast('std', 4)
         mxInReducedBasis = bt.resize_std_mx(mxInStdBasis, 'contract', end, begin)
         original = bt.resize_std_mx(mxInReducedBasis, 'expand', begin, end)
-        # TODO assert correctness
+        self.assertArraysAlmostEqual(mxInStdBasis, original)
 
     def test_sparse_lindblad_bases(self):
         sparsePP = Basis.cast("pp", 16, sparse=True)
         mxs = sparsePP.elements
-        for lbl, mx in zip(sparsePP.labels, mxs):
-            print("{}: {} matrix with {} nonzero entries (of {} total)".format(
-                lbl, mx.shape, mx.nnz, mx.shape[0] * mx.shape[1]
-            ))
-            print(mx.toarray())
-        print("{} basis elements".format(len(sparsePP)))
+        #for lbl, mx in zip(sparsePP.labels, mxs):
+        #    print("{}: {} matrix with {} nonzero entries (of {} total)".format(
+        #        lbl, mx.shape, mx.nnz, mx.shape[0] * mx.shape[1]
+        #    ))
+        #    print(mx.toarray())
+        #print("{} basis elements".format(len(sparsePP)))
         self.assertEqual(len(sparsePP), 16)
 
-        # TODO assert correctness
+        densePP = Basis.cast("pp", 16, sparse=False)
+        for smx, dmx in zip(sparsePP.elements, densePP.elements):
+            self.assertArraysAlmostEqual(smx.toarray(), dmx)
 
         M = np.ones((16, 16), 'd')
         v = np.ones(16, 'd')
         S = scipy.sparse.identity(16, 'd', 'csr')
 
-        print("Test types after basis change by sparse basis:")
+        #print("Test types after basis change by sparse basis:")
         Mout = bt.change_basis(M, sparsePP, 'std')
         vout = bt.change_basis(v, sparsePP, 'std')
         Sout = bt.change_basis(S, sparsePP, 'std')
-        print("{} -> {}".format(type(M), type(Mout)))
-        print("{} -> {}".format(type(v), type(vout)))
-        print("{} -> {}".format(type(S), type(Sout)))
+        #print("{} -> {}".format(type(M), type(Mout)))
+        #print("{} -> {}".format(type(v), type(vout)))
+        #print("{} -> {}".format(type(S), type(Sout)))
         self.assertIsInstance(Mout, np.ndarray)
         self.assertIsInstance(vout, np.ndarray)
         self.assertIsInstance(Sout, scipy.sparse.csr_matrix)
+
+        Mdout = bt.change_basis(M, densePP, 'std')
+        vdout = bt.change_basis(v, densePP, 'std')
+        Sdout = bt.change_basis(S, densePP, 'std')
+        self.assertIsInstance(Sdout, np.ndarray)
+        self.assertArraysAlmostEqual(Mout, Mdout)
+        self.assertArraysAlmostEqual(vout, vdout)
+        self.assertArraysAlmostEqual(Sout, Sdout)

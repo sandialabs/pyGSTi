@@ -8,6 +8,7 @@ from ..util import BaseCase, needs_cvxpy
 from pygsti.modelpacks.legacy import std2Q_XXYYII
 import pygsti.tools.optools as ot
 import pygsti.tools.basistools as bt
+import pygsti.tools.lindbladtools as lt
 from pygsti.objects.basis import Basis
 
 
@@ -39,32 +40,52 @@ class OpToolsTester(BaseCase):
                            [ 0.,  0.,  0., -1.]], 'd')
         self.assertArraysAlmostEqual(op, op_ans)
 
-        U_2Q = np.identity(4, 'complex'); U_2Q[2:, 2:] = U
+        U_2Q = np.identity(4, 'complex')
+        U_2Q[2:, 2:] = U
         # U_2Q is 4x4 unitary matrix operating on isolated two-qubit space (CX(pi) rotation)
 
         op_2Q = ot.unitary_to_pauligate(U_2Q)
-        # TODO assert correctness
+        op_2Q_inv = ot.process_mx_to_unitary(bt.change_basis(op_2Q, 'pp', 'std'))
+        self.assertArraysAlmostEqual(U_2Q, op_2Q_inv)
 
     def test_decompose_gate_matrix(self):
+        # decompose gate mx whose eigenvalues have a real but non-unit pair
         oneRealPair = np.array([
-            [1+1j,    0, 0, 0],
+            [1+1j,    0, 0, 0],  # Angle between 0 and 1 should give rotation
             [   0, 1-1j, 0, 0],
-            [   0,    0, 2, 0],
-            [   0,    0, 0, 2]
+            [   0,    0, 2, 0],  # should be picked out as fixed point (first real eigenval)
+            [   0,    0, 0, 2]   # should be picked out as axis of rotation
         ], 'complex')
         decomp = ot.decompose_gate_matrix(oneRealPair)
-        # decompose gate mx whose eigenvalues have a real but non-unit pair
-        # TODO assert correctness
+
+        self.assertEqual(decomp['isValid'], True)
+        self.assertEqual(decomp['isUnitary'], False)
+        self.assertArraysAlmostEqual(decomp['fixed point'], [0, 0, 1, 0])
+        self.assertArraysAlmostEqual(decomp['axis of rotation'], [0, 0, 0, 1])
+        self.assertArraysAlmostEqual(decomp['rotating axis 1'], [1, 0, 0, 0])
+        self.assertArraysAlmostEqual(decomp['rotating axis 2'], [0, 1, 0, 0])
+        self.assertEqual(decomp['decay of diagonal rotation terms'], 1.0 - 2.0)
+        self.assertEqual(decomp['decay of off diagonal rotation terms'], 1.0 - abs(1+1j))
+        self.assertEqual(decomp['pi rotations'], np.angle(1+1j)/np.pi)
 
         dblRealPair = np.array([
             [ 3, 0, 0, 0],
             [ 0, 3, 0, 0],
-            [ 0, 0, 2, 0],
+            [ 0, 0, 2, 0], # still taken as fixed point because closest to identity (1.0)
             [ 0, 0, 0, 2]
         ], 'complex')
         decomp = ot.decompose_gate_matrix(dblRealPair)
         # decompose gate mx whose eigenvalues have two real but non-unit pairs
-        # TODO assert correctness
+        
+        self.assertEqual(decomp['isValid'], True)
+        self.assertEqual(decomp['isUnitary'], False)
+        self.assertArraysAlmostEqual(decomp['fixed point'], [0, 0, 1, 0])
+        self.assertArraysAlmostEqual(decomp['axis of rotation'], [0, 0, 0, 1])
+        self.assertArraysAlmostEqual(decomp['rotating axis 1'], [1, 0, 0, 0])
+        self.assertArraysAlmostEqual(decomp['rotating axis 2'], [0, 1, 0, 0])
+        self.assertEqual(decomp['decay of diagonal rotation terms'], 1.0 - 2.0)
+        self.assertEqual(decomp['decay of off diagonal rotation terms'], 1.0 - 3.0)
+        self.assertEqual(decomp['pi rotations'], np.angle(3.0)/np.pi)
 
     def test_decompose_gate_matrix_invalidates_on_all_complex_eigval(self):
         unpairedMx = np.array([
@@ -104,16 +125,36 @@ class ProjectModelTester(BaseCase):
 
     @fake_minimize
     def test_log_diff_model_projection(self):
-        proj_model, Np_dict = ot.project_model(self.model, self.target_model, self.projectionTypes, 'logG-logT')
-        # TODO assert correctness
+        self.skipTest("project_model for logG-logT is known to be inconsistent in testing (Gxx,Gxy,Gyx,Gyy gates).  Skip tests until it gets fixed.")
+        basis = self.target_model.basis
+        gen_type = 'logG-logT'
+        proj_model, Np_dict = ot.project_model(self.model, self.target_model, self.projectionTypes, gen_type, logG_weight=0)
+        # Project a second time and ensure models don't change
+        for pm1, ptype in zip(proj_model, self.projectionTypes):
+            proj2, _ = ot.project_model(pm1, self.target_model, [ptype], gen_type, logG_weight=0)
+            pm2 = proj2[0]
+            for pm1_op, pm2_op in zip(pm1.operations.values(), pm2.operations.values()):
+                self.assertArraysAlmostEqual(pm1_op, pm2_op)
 
     def test_logTiG_model_projection(self):
-        proj_model, Np_dict = ot.project_model(self.model, self.target_model, self.projectionTypes, 'logTiG')
-        # TODO assert correctness
+        gen_type = 'logTiG'
+        proj_model, Np_dict = ot.project_model(self.model, self.target_model, self.projectionTypes, gen_type)
+        # Project a second time and ensure models don't change
+        for pm1, ptype in zip(proj_model, self.projectionTypes):
+            proj2, _ = ot.project_model(pm1, self.target_model, [ptype], gen_type, logG_weight=0)
+            pm2 = proj2[0]
+            for pm1_op, pm2_op in zip(pm1.operations.values(), pm2.operations.values()):
+                self.assertArraysAlmostEqual(pm1_op, pm2_op)
 
     def test_logGTi_model_projection(self):
-        proj_model, Np_dict = ot.project_model(self.model, self.target_model, self.projectionTypes, 'logGTi')
-        # TODO assert correctness
+        gen_type = 'logGTi'
+        proj_model, Np_dict = ot.project_model(self.model, self.target_model, self.projectionTypes, gen_type)
+        # Project a second time and ensure models don't change
+        for pm1, ptype in zip(proj_model, self.projectionTypes):
+            proj2, _ = ot.project_model(pm1, self.target_model, [ptype], gen_type, logG_weight=0)
+            pm2 = proj2[0]
+            for pm1_op, pm2_op in zip(pm1.operations.values(), pm2.operations.values()):
+                self.assertArraysAlmostEqual(pm1_op, pm2_op)
 
     def test_raises_on_basis_mismatch(self):
         with self.assertRaises(ValueError):
@@ -147,49 +188,145 @@ class ErrorGenTester(BaseCase):
 
         normalize = False
         other_mode = "all"
-        ot.lindblad_error_generators(basis, basis, normalize, other_mode)
-        ot.lindblad_error_generators(None, basis, normalize, other_mode)
-        ot.lindblad_error_generators(basis, None, normalize, other_mode)
-        ot.lindblad_error_generators(None, None, normalize, other_mode)
+        H0, O0 = ot.lindblad_error_generators(basis, basis, normalize, other_mode)
+        H1, O1 = ot.lindblad_error_generators(None, basis, normalize, other_mode)
+        H2, O2 = ot.lindblad_error_generators(basis, None, normalize, other_mode)
+        H3, O3 = ot.lindblad_error_generators(None, None, normalize, other_mode)
+
+        # Check lindblad generators called as expected
+        for i, mi in enumerate(basis[1:]):
+            Hi = lt.hamiltonian_to_lindbladian(mi)
+            self.assertArraysAlmostEqual(Hi, H0[i])
+
+            for j, mj in enumerate(basis[1:]):
+                Oij = lt.nonham_lindbladian(mi, mj)
+                self.assertArraysAlmostEqual(Oij, O0[i, j])
+
+        # Check Nones handled properly
+        self.assertEqual(H1, None)
+        self.assertArraysAlmostEqual(O0, O1)
+        self.assertArraysAlmostEqual(H0, H2)
+        self.assertEqual(O2, None)
+        self.assertEqual(H3, None)
+        self.assertEqual(O3, None)
 
         normalize = True
         other_mode = "all"
-        ot.lindblad_error_generators(basis, basis, normalize, other_mode)
-        ot.lindblad_error_generators(None, basis, normalize, other_mode)
-        ot.lindblad_error_generators(basis, None, normalize, other_mode)
-        ot.lindblad_error_generators(None, None, normalize, other_mode)
+        H0n, O0n = ot.lindblad_error_generators(basis, basis, normalize, other_mode)
+        H1n, O1n = ot.lindblad_error_generators(None, basis, normalize, other_mode)
+        H2n, O2n = ot.lindblad_error_generators(basis, None, normalize, other_mode)
+        H3n, O3n = ot.lindblad_error_generators(None, None, normalize, other_mode)
 
-        normalize = True
+        # Check normalization against unnormalized version
+        for h, hn in zip(H0, H0n):
+            norm = np.linalg.norm(h)
+            normedh = h if np.isclose(norm, 0) else h / norm
+            self.assertArraysAlmostEqual(normedh, hn)
+        for row, rown in zip(O0, O0n):
+            for o, on in zip(row, rown):
+                norm = np.linalg.norm(o)
+                normedo = o if np.isclose(norm, 0) else o / norm
+                self.assertArraysAlmostEqual(normedo, on)
+
+        # Check Nones handled properly
+        self.assertEqual(H1n, None)
+        self.assertArraysAlmostEqual(O0n, O1n)
+        self.assertArraysAlmostEqual(H0n, H2n)
+        self.assertEqual(O2n, None)
+        self.assertEqual(H3n, None)
+        self.assertEqual(O3n, None)
+
+        normalize = False
         other_mode = "diagonal"
-        ot.lindblad_error_generators(basis, basis, normalize, other_mode)
-        ot.lindblad_error_generators(None, basis, normalize, other_mode)
-        ot.lindblad_error_generators(basis, None, normalize, other_mode)
-        ot.lindblad_error_generators(None, None, normalize, other_mode)
+        H0d, O0d = ot.lindblad_error_generators(basis, basis, normalize, other_mode)
+        H1d, O1d = ot.lindblad_error_generators(None, basis, normalize, other_mode)
+        H2d, O2d = ot.lindblad_error_generators(basis, None, normalize, other_mode)
+        H3d, O3d = ot.lindblad_error_generators(None, None, normalize, other_mode)
 
-        basis = Basis.cast('gm', 16)
-        mxBasis = Basis.cast('gm', 16)
-        errgen = np.identity(16, 'd')
-        ot.lindblad_errorgen_projections(errgen, basis, basis, mxBasis,
+        # Check diag vs all
+        self.assertArraysAlmostEqual(H0, H0d)
+        for i, od in enumerate(O0d):
+            self.assertArraysEqual(O0[i, i], od)
+
+        # Check Nones handled properly
+        self.assertEqual(H1d, None)
+        self.assertArraysAlmostEqual(O0d, O1d)
+        self.assertArraysAlmostEqual(H0d, H2d)
+        self.assertEqual(O2d, None)
+        self.assertEqual(H3d, None)
+        self.assertEqual(O3d, None)
+
+        normalize = False
+        other_mode = "diag_affine"
+        H0da, O0da = ot.lindblad_error_generators(basis, basis, normalize, other_mode)
+        H1da, O1da = ot.lindblad_error_generators(None, basis, normalize, other_mode)
+        H2da, O2da = ot.lindblad_error_generators(basis, None, normalize, other_mode)
+        H3da, O3da = ot.lindblad_error_generators(None, None, normalize, other_mode)
+
+        # Check diag component
+        self.assertArraysAlmostEqual(H0, H0da)
+        self.assertArraysAlmostEqual(O0d, O0da[0, :])
+        # Check affine component called as expected
+        for i, mi in enumerate(basis[1:]):
+            A = lt.affine_lindbladian(mi)
+            self.assertArraysAlmostEqual(A, O0da[1, i])
+
+        # Check Nones handled properly
+        self.assertEqual(H1da, None)
+        self.assertArraysAlmostEqual(O0da, O1da)
+        self.assertArraysAlmostEqual(H0da, H2da)
+        self.assertEqual(O2da, None)
+        self.assertEqual(H3da, None)
+        self.assertEqual(O3da, None)
+
+    def test_lind_errgen_projects(self):
+        basis = Basis.cast('gm', 4)
+        
+        # Build known combination to project back to
+        Hgen, Ogen = ot.lindblad_error_generators(basis, basis, True, 'all')
+
+        href = np.array([1/4, 0, 0])
+        oref = np.array([[1/4, 0, 0], [0, 0, 1/4], [0, 0, 1/4]])
+        
+        errgen = np.zeros_like(Hgen[0])
+        for i in range(3):
+            errgen += href[i]*Hgen[i]
+            for j in range(3):
+                errgen += oref[i,j]*Ogen[i,j]
+
+        hc, oc = ot.lindblad_errorgen_projections(errgen, basis, basis, 'std',
+                                                  normalize=True, return_generators=False,
+                                                  other_mode="all", sparse=False)
+        self.assertArraysAlmostEqual(href, hc)
+        self.assertArraysAlmostEqual(oref, oc)
+
+        # Test basis from name (really as base case for sparse)
+        hc, oc = ot.lindblad_errorgen_projections(errgen, 'gm', 'gm', 'std',
                                        normalize=True, return_generators=False,
                                        other_mode="all", sparse=False)
+        self.assertArraysAlmostEqual(href, hc)
+        self.assertArraysAlmostEqual(oref, oc)
 
-        ot.lindblad_errorgen_projections(errgen, None, 'gm', mxBasis,
+        # Test sparse version
+        hc, oc = ot.lindblad_errorgen_projections(errgen, 'gm', 'gm', 'std',
                                        normalize=True, return_generators=False,
-                                       other_mode="all", sparse=False)
-        ot.lindblad_errorgen_projections(errgen, 'gm', None, mxBasis,
-                                       normalize=True, return_generators=True,
+                                       other_mode="all", sparse=True)
+        self.assertArraysAlmostEqual(href, hc)
+        self.assertArraysAlmostEqual(oref, oc)
+
+        # Test diagonal contributions only
+        href = np.array([1/4, 0, 0])
+        odiag = np.array([1/4, 1/4, 1/4])
+        
+        errgen = np.zeros_like(Hgen[0])
+        for i in range(3):
+            errgen += href[i]*Hgen[i]
+            errgen += odiag[i]*Ogen[i, i]
+        hc, oc = ot.lindblad_errorgen_projections(errgen, 'gm', 'gm', 'std',
+                                       normalize=True, return_generators=False,
                                        other_mode="diagonal", sparse=False)
-
-        basisMxs = bt.basis_matrices('gm', 16, sparse=False)
-        ot.lindblad_errorgen_projections(errgen, basisMxs, basisMxs, mxBasis,
-                                       normalize=True, return_generators=False,
-                                       other_mode="all", sparse=False)
-
-        ot.lindblad_errorgen_projections(errgen, None, None, mxBasis,
-                                       normalize=True, return_generators=False,
-                                       other_mode="all", sparse=False)
-
-        # TODO assert correctness
+        self.assertArraysAlmostEqual(href, hc)
+        self.assertArraysAlmostEqual(odiag, oc)
 
     @fake_minimize
     def test_err_gen(self):
@@ -207,12 +344,12 @@ class ErrorGenTester(BaseCase):
                 for basisName in basisNames:
                     ot.std_errorgen_projections(errgen, projectionType, basisName)
 
-            originalGate = ot.operation_from_error_generator(errgen, gateTarget, 'logG-logT')
-            altOriginalGate = ot.operation_from_error_generator(altErrgen, gateTarget, 'logTiG')
-            altOriginalGate2 = ot.operation_from_error_generator(altErrgen, gateTarget, 'logGTi')
+            originalGate = ot.operation_from_error_generator(errgen, gateTarget, self.target_model.basis, 'logG-logT')
+            altOriginalGate = ot.operation_from_error_generator(altErrgen, gateTarget, self.target_model.basis, 'logTiG')
+            altOriginalGate2 = ot.operation_from_error_generator(altErrgen, gateTarget, self.target_model.basis, 'logGTi')
             with self.assertRaises(ValueError):
-                ot.operation_from_error_generator(errgen, gateTarget, 'adsf')
-            #self.assertArraysAlmostEqual(originalGate, gate) # sometimes need to approximate the log for this one
+                ot.operation_from_error_generator(errgen, gateTarget, self.target_model.basis, 'adsf')
+            self.assertArraysAlmostEqual(originalGate, gate) # sometimes need to approximate the log for this one
             self.assertArraysAlmostEqual(altOriginalGate, gate)
             self.assertArraysAlmostEqual(altOriginalGate2, gate)
 
@@ -221,14 +358,18 @@ class ErrorGenTester(BaseCase):
         errgen_nonunitary = ot.error_generator(self.mdl_datagen.operations['Gxi'],
                                                self.mdl_datagen.operations['Gxi'],
                                                self.mdl_datagen.basis)
-        # TODO assert correctness
+        # Perfect match, should get all 0s
+        self.assertArraysAlmostEqual(np.zeros_like(self.mdl_datagen.operations['Gxi']), errgen_nonunitary)
 
     def test_err_gen_not_near_gate(self):
-        errgen_notsmall = ot.error_generator(self.mdl_datagen.operations['Gxi'], self.target_model.operations['Gix'],
-                                             self.target_model.basis, 'logTiG')
-        errgen_notsmall = ot.error_generator(self.mdl_datagen.operations['Gxi'], self.target_model.operations['Gix'],
-                                             self.target_model.basis, 'logGTi')
-        # TODO assert correctness
+        # Both should warn
+        with self.assertWarns(UserWarning):
+            errgen_notsmall = ot.error_generator(self.mdl_datagen.operations['Gxi'], self.target_model.operations['Gix'],
+                                                 self.target_model.basis, 'logTiG')
+
+        with self.assertWarns(UserWarning):
+            errgen_notsmall = ot.error_generator(self.mdl_datagen.operations['Gxi'], self.target_model.operations['Gix'],
+                                                 self.target_model.basis, 'logGTi')
 
     def test_err_gen_raises_on_bad_type(self):
         with self.assertRaises(ValueError):

@@ -10,5 +10,5 @@ class LegacyTestCase(BaseCase):
         def oldFn(x):
             return x
 
-        oldFn(5)
-        # TODO assert correctness
+        with self.assertWarns(UserWarning):
+            oldFn(5)
