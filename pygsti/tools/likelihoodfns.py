@@ -420,7 +420,7 @@ def logl_hessian(model, dataset, circuits=None,
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
     obj = _objfns._objfn(obj_cls, model, dataset, circuits,
                          regularization, {'prob_clip_interval': prob_clip_interval},
-                         op_label_aliases, comm, mem_limit, ('hessian',), (), mdc_store, verbosity)
+                         op_label_aliases, comm, mem_limit, ('hessian',), ('EPP',), mdc_store, verbosity)
     local = -obj.hessian()  # negative b/c objective is deltaLogL = max_logl - logL
     return obj.layout.allgather_local_array('epp', local)
 

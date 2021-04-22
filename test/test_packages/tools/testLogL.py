@@ -61,7 +61,7 @@ class LogLTestCase(BaseTestCase):
         ds   = pygsti.objects.DataSet(file_to_load_from=compare_files + "/analysis.dataset")
         model = pygsti.io.load_model(compare_files + "/analysis.model")
         L = pygsti.logl_hessian(model, ds,
-                                prob_clip_interval=(-1e6,1e6), mem_limit=25000000+current_mem(),
+                                prob_clip_interval=(-1e6,1e6), mem_limit=500*1024**2+current_mem(),
                                 poisson_picture=True, comm=comm)
 
         print(L)

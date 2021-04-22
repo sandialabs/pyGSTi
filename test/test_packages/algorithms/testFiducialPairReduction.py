@@ -20,11 +20,11 @@ class FiducialPairReductionTestCase(AlgorithmTestCase):
         # A low memlimit
         pygsti.alg.find_sufficient_fiducial_pairs(std.target_model(), std.fiducials, std.fiducials,
                                                   std.germs, test_pair_list=[(0,0),(0,1),(1,0)],
-                                                  verbosity=0, mem_limit=1 * 1024**2)  # 1MB
+                                                  verbosity=0, mem_limit=40 * 1024**2)  # 10MB
         # A higher limit
         pygsti.alg.find_sufficient_fiducial_pairs(std.target_model(), std.fiducials, std.fiducials,
                                                   std.germs, test_pair_list=[(0,0),(0,1),(1,0)],
-                                                  verbosity=0, mem_limit=8 * 1024**2)  # 8MB
+                                                  verbosity=0, mem_limit=80 * 1024**2)  # 80MB
 
 
     def test_intelligentFiducialPairReduction(self):
@@ -57,7 +57,7 @@ class FiducialPairReductionTestCase(AlgorithmTestCase):
                        search_mode="random",
                        constrain_to_tp=True,
                        n_random=3, seed=None, verbosity=3,
-                       mem_limit=1024*10)
+                       mem_limit=1024*30)
 
         fidPairs3 = self.runSilent( #larger n_random
             pygsti.alg.find_sufficient_fiducial_pairs_per_germ,
@@ -66,7 +66,7 @@ class FiducialPairReductionTestCase(AlgorithmTestCase):
                        search_mode="random",
                        constrain_to_tp=True,
                        n_random=100, seed=None, verbosity=3,
-                       mem_limit=1024*10)
+                       mem_limit=1024*30)
 
         fidPairs3b = self.runSilent( #huge n_random (should cap to all pairs)
             pygsti.alg.find_sufficient_fiducial_pairs_per_germ,
@@ -75,7 +75,7 @@ class FiducialPairReductionTestCase(AlgorithmTestCase):
                        search_mode="random",
                        constrain_to_tp=True,
                        n_random=1000000, seed=None, verbosity=3,
-                       mem_limit=1024*10)
+                       mem_limit=1024*30)
 
     def test_FPR_test_pairs(self):
         target_model = std.target_model()

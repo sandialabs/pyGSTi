@@ -1561,7 +1561,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
                     if self.raw_objfn.printer.verbosity > 3 or \
                        (self.raw_objfn.printer.verbosity == 3 and blk_rank == 0):
                         print("rank %d: %gs: block %d/%d, atom %d/%d, atom-size (#circuits) = %d"
-                              % (self.resource_alloc.comm.Get_rank(), _time.time() - tm, k + 1, kmax, iAtom,
+                              % (self.resource_alloc.comm_rank, _time.time() - tm, k + 1, kmax, iAtom,
                                  len(layout.atoms), atom.num_elements))
                         _sys.stdout.flush(); k += 1
 
