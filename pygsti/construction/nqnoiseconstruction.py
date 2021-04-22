@@ -451,10 +451,10 @@ def create_cloudnoise_model_from_hops_and_weights(
 def create_cloud_crosstalk_model(num_qubits, gate_names, nonstd_gate_unitaries={}, custom_gates={},
                                  depolarization_strengths={}, stochastic_error_probs={}, lindblad_error_coeffs={},
                                  depolarization_parameterization='depolarize', stochastic_parameterization='stochastic',
-                                 lindblad_parameterization='auto', availability=None, qubit_labels=None, geometry="line",
-                                 evotype="auto", simulator="auto", independent_gates=False, sparse_lindblad_basis=False,
-                                 sparse_lindblad_reps=False, errcomp_type="errorgens", add_idle_noise_to_all_gates=True,
-                                 verbosity=0):
+                                 lindblad_parameterization='auto', availability=None, qubit_labels=None,
+                                 geometry="line", evotype="auto", simulator="auto", independent_gates=False,
+                                 sparse_lindblad_basis=False, sparse_lindblad_reps=False, errcomp_type="errorgens",
+                                 add_idle_noise_to_all_gates=True, verbosity=0):
     """
     Create a n-qubit model that may contain crosstalk errors.
 
@@ -514,16 +514,16 @@ def create_cloud_crosstalk_model(num_qubits, gate_names, nonstd_gate_unitaries={
         be *static*, and keys of this dictionary must by strings - there's
         no way to specify the "cloudnoise" part of a gate via this dict
         yet, only the "target" part.
-    
+
     depolarization_strengths : dict, optional
         A dictionary whose keys are gate names (e.g. `"Gx"`) and whose values
         are floats that specify the strength of uniform depolarization.
-    
+
     stochastic_error_probs : dict, optional
         A dictionary whose keys are gate names (e.g. `"Gx"`) and whose values
         are tuples that specify Pauli-stochastic rates for each of the non-trivial
         Paulis (so a 3-tuple would be expected for a 1Q gate and a 15-tuple for a 2Q gate).
-    
+
     lindblad_error_coeffs : dict, optional
         A dictionary whose keys are gate names (e.g. `"Gx"`) and whose values
         are dictionaries corresponding to the `lindblad_term_dict` kwarg taken
@@ -536,7 +536,7 @@ def create_cloud_crosstalk_model(num_qubits, gate_names, nonstd_gate_unitaries={
         Stochastic term tuples can include 2 basis labels to specify
         "off-diagonal" non-Hamiltonian Lindblad terms.  Basis labels can be
         strings or integers.  Values are complex coefficients.
-    
+
     depolarization_parameterization : str of {"depolarize", "stochastic", or "lindblad"}
         Determines whether a DepolarizeOp, StochasticNoiseOp, or LindbladOp
         is used to parameterize the depolarization noise, respectively.
@@ -545,7 +545,7 @@ def create_cloud_crosstalk_model(num_qubits, gate_names, nonstd_gate_unitaries={
         evenly among the stochastic channels of a StochasticOp. When "lindblad", the depolarization
         strength is split evenly among the coefficients of the stochastic error generators
         (which are exponentiated to form a LindbladOp with the "depol" parameterization).
-    
+
     stochastic_parameterization : str of {"stochastic", or "lindblad"}
         Determines whether a StochasticNoiseOp or LindbladOp is used to parameterize the
         stochastic noise, respectively. When "stochastic", elements of `stochastic_error_probs`
@@ -553,7 +553,7 @@ def create_cloud_crosstalk_model(num_qubits, gate_names, nonstd_gate_unitaries={
         When "lindblad", the elements of `stochastic_error_probs` are coefficients of
         stochastic error generators (which are exponentiated to form a LindbladOp with the
         "cptp" parameterization).
-    
+
     lindblad_parameterization : "auto" or a LindbladOp paramtype
         Determines the parameterization of the LindbladOp. When "auto" (the default), the parameterization
         is inferred from the types of error generators specified in the `lindblad_error_coeffs` dictionaries.
@@ -899,7 +899,8 @@ def create_cloud_crosstalk_model(num_qubits, gate_names, nonstd_gate_unitaries={
         # for this gate, then we should use it to construct the output, using a copy when gates are independent
         # and a reference to the *same* stencil operations when `independent_gates==False`.
         if lbl in lindblad_error_coeffs:
-            return create_error(lbl.sslbls, errs=lindblad_error_coeffs[lbl])  # specific instructions for this primitive layer
+            # specific instructions for this primitive layer
+            return create_error(lbl.sslbls, errs=lindblad_error_coeffs[lbl])
         elif lbl.name in stencils:
             return create_error(lbl.sslbls, stencil=stencils[lbl.name])  # use existing stencil
         elif lbl.name in lindblad_error_coeffs:

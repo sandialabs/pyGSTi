@@ -1416,7 +1416,8 @@ class StaticStandardOp(DenseOperator):
     evotype : {"statevec", "densitymx", "svterm", "cterm"}
         The evolution type.
         - "statevec": Unitary from standard_gatename_unitaries is used directly
-        - "densitymx", "svterm", "cterm": Pauli transfer matrix is built from standard_gatename_unitaries (i.e. basis = 'pp')
+        - "densitymx", "svterm", "cterm": Pauli transfer matrix is built from standard_gatename_unitaries
+          (i.e. basis = 'pp')
     """
     def __init__(self, name, evotype):
         self.name = name
@@ -1430,14 +1431,14 @@ class StaticStandardOp(DenseOperator):
 
             if evotype == 'statevec':
                 rep = replib.SVOpRepDense(LinearOperator.convert_to_matrix(U))
-            else: # evotype in ('densitymx', 'svterm', 'cterm')
+            else:  # evotype in ('densitymx', 'svterm', 'cterm')
                 ptm = _gt.unitary_to_pauligate(U)
                 rep = replib.DMOpRepDense(LinearOperator.convert_to_matrix(ptm))
         else:
             raise ValueError("Invalid evotype for a StaticStandardOp: %s" % evotype)
-        
+
         LinearOperator.__init__(self, rep, evotype)
-    
+
     def __str__(self):
         s = "%s with name %s and evotype %s\n" % (self.__class__.__name__, self.name, self._evotype)
         return s

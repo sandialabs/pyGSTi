@@ -1330,7 +1330,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             if mem_estimate > mem_limit:
                 GB = 1.0 / 1024.0**3
                 raise MemoryError("Not enough memory for desired layout! (limit=%.1fGB, required=%.1fGB" % (
-                    mem_limit*GB, mem_estimate*GB))
+                    mem_limit * GB, mem_estimate * GB))
 
         return layout
 
