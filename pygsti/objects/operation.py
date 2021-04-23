@@ -1440,7 +1440,7 @@ class DenseOperator(BasedDenseOperatorInterface, LinearOperator):
         return s
 
 
-class StaticStandardOp(LinearOperator):
+class StaticStandardOp(DenseOperator):
     """
     An operation that is completely fixed, or "static" (i.e. that posesses no parameters)
     that can be constructed from "standard" gate names (as defined in pygsti.tools.internalgates).
