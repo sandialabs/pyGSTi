@@ -3095,6 +3095,7 @@ class StochasticNoiseOp(LinearOperator):
     def __str__(self):
         s = "Stochastic noise operation map with dim = %d, num params = %d\n" % \
             (self.dim, self.num_params)
+        s += 'Rates: %s\n' % self._params_to_rates(self.to_vector())
         return s
 
 
@@ -3192,6 +3193,7 @@ class DepolarizeOp(StochasticNoiseOp):
     def __str__(self):
         s = "Depolarize noise operation map with dim = %d, num params = %d\n" % \
             (self.dim, self.num_params)
+        s += 'Strength: %s\n' % self._params_to_rates(self.to_vector())
         return s
 
 
