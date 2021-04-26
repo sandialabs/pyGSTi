@@ -27,11 +27,11 @@ class LogLTestCase(BaseTestCase):
                                 poisson_picture=True, mem_limit=None, verbosity=10) # Reference: no mem limit
         musage("Pt3")
         L1 = pygsti.logl_hessian(model, ds, prob_clip_interval=(-1e6,1e6),
-                                 poisson_picture=True, mem_limit=current_mem()+100000000, verbosity=10) # Limit memory a bit
+                                 poisson_picture=True, mem_limit=1024.0**3, verbosity=10) # Limit memory (1GB)
         musage("Pt4")
-        L2 = pygsti.logl_hessian(model, ds,prob_clip_interval=(-1e6,1e6),
-                                 poisson_picture=True, mem_limit=current_mem()+1000000, verbosity=10) # Limit memory a bit more
-        musage("Pt5")
+        #L2 = pygsti.logl_hessian(model, ds,prob_clip_interval=(-1e6,1e6),
+        #                         poisson_picture=True, mem_limit=current_mem()+1000000, verbosity=10) # Limit memory a bit more
+        #musage("Pt5")
         #L3 = pygsti.logl_hessian(model, ds, prob_clip_interval=(-1e6,1e6),
         #                         poisson_picture=True, mem_limit=current_mem()+300000, verbosity=10) # Very low memory (splits tree)
 
@@ -51,7 +51,7 @@ class LogLTestCase(BaseTestCase):
         #        if diff > 1e-6:
         #            print("[%d,%d] diff = %g - %g = %g" % (i,j,L3[i,j],L[i,j],L3[i,j]-L[i,j]))
         self.assertArraysAlmostEqual(L, L1)
-        self.assertArraysAlmostEqual(L, L2, places=6) # roundoff?)
+        #self.assertArraysAlmostEqual(L, L2, places=6) # roundoff?)
         #self.assertArraysAlmostEqual(L, L3, places=6) # roundoff?
 
     def test_hessian_mpi(self):
