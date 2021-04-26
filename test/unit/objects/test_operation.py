@@ -260,6 +260,7 @@ class StaticStdOpTester(BaseCase):
         std_unitaries = itgs.standard_gatename_unitaries()
 
         for name, U in std_unitaries.items():
+            if callable(U): continue  # skip unitary functions (create factories)
             svop = op.StaticStandardOp(name, 'statevec')
             self.assertArraysAlmostEqual(svop._rep.base, U)
 
@@ -268,6 +269,7 @@ class StaticStdOpTester(BaseCase):
 
         for evotype in ['densitymx', 'svterm', 'cterm']:
             for name, U in std_unitaries.items():
+                if callable(U): continue  # skip unitary functions (create factories)
                 dmop = op.StaticStandardOp(name, evotype)
                 self.assertArraysAlmostEqual(dmop._rep.base, gt.unitary_to_pauligate(U))
         
