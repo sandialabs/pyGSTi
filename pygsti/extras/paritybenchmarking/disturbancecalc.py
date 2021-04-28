@@ -549,53 +549,6 @@ class ResidualTVD:
             return scale_fctr * self._obj(self.t_params), tmx
         return scale_fctr * self._obj(self.t_params)  # not self.obj.value b/c that has additional norm regularization
 
-        #TODO: REMOVE - below is an attempted computation of the Residual-OVD, but this concept seems
-        # problematic (foliating the OVD).  Now we just scale the Residual-TVD by an overall OVD/TVD factor.
-
-        ##NEW: returns the residual OVD, but using the t-params found by the ResidualTVD calculation to compute the OVD:
-        #p0 = self.P0
-        #p = self.P.value
-        #q = self.Q.value
-        #tmx = self.build_transfer_mx(self.t_params)
-        #ratio = _np.zeros(p.shape, 'd')
-        #numerator = _np.dot(tmx, p0)
-        #nonzero_inds = _np.where(numerator > 0)[0]
-        #ratio[nonzero_inds] = numerator[nonzero_inds] / _np.dot(tmx, p)[nonzero_inds]
-        ##print("Returning Residual OVD w/ratio = ", ratio)
-        #
-        #ovd_initial = _np.sum(ratio * _np.maximum(_np.dot(tmx, p) - q, 0))  # OVD
-        #if debug: return ovd_initial, tmx
-        #return ovd_initial  # return the OVD at the t-params point found by the normal residual-TVD calc
-
-        ##Perform a final local optimization to find an even better set of t-params (tmx)
-        #def objective(t_params):
-        #    tmx = self.build_transfer_mx(t_params)
-        #    numerator = _np.dot(tmx, p0)
-        #    nonzero_inds = _np.where(numerator > 0)[0]
-        #    ratio = _np.zeros(p.shape, 'd')
-        #    ratio[nonzero_inds] = numerator[nonzero_inds] / _np.dot(tmx, p)[nonzero_inds]
-        #    return _np.sum(ratio * _np.maximum(_np.dot(tmx, p) - q, 0))  # OVD
-        #
-        #initial_tparams = self.t_params.copy()
-        #soln = _spo.minimize(objective, initial_tparams, options={'maxiter': 100}, method='L-BFGS-B',
-        #                     callback=None, tol=1e-8)
-        #ovd = objective(soln.x)
-        #if abs(ovd - ovd_initial) / (abs(ovd) + 1e-6) > 0.5 and abs(ovd - ovd_initial) > 1e-3:
-        #    _warnings.warn(("Final local optimization in Residual-OVD computation yielded a significant improvement"
-        #                    " (%g -> %g = %g diff).  This may be fine, but may indicate an invalid OVD")
-        #                   % (ovd_initial, ovd, abs(ovd_initial - ovd)))
-        #return ovd
-
-        #Just checking curvature of ratio:
-        # d(f/g) = f'/g - f/g^2 * g'
-        # d2(f/g) = f''/g - f'/g^2 * g' - f'/g^2 * g' + 2*f/g^3 * g' * g' - f/g^2 * g''
-        # when f'' = g'' == 0 =>  -2f'g'/g^2 + 2fg'^2/g^3
-
-        # TP_i = sum_i Tij * P_j
-        # TP0_i = sum_i Tij * P0_j
-        # TP0_i = sum_i Tij * (P0_j - P_j) + Tij * P_j = TP_i + sum_i Tij * (P0_j - P_j)
-        # TP0_i / TP_i = 1 + sum_i Tij * (P0_j - P_j) / sum_i Tij * P_j
-
 
 class RegularizedDeltaLikelihood:
     """
