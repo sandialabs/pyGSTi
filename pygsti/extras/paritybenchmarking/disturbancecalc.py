@@ -409,7 +409,7 @@ class ResidualTVD:
         tmx = self.build_transfer_mx(t_params)
         return _np.sum(_np.abs(q - _np.dot(tmx, p))) / 2
 
-    def __call__(self, p, q, verbosity=1, warn=True):
+    def __call__(self, p, q, verbosity=1, warn=True, debug=False):
         """
         Compute the residual TVD.
 
@@ -425,21 +425,32 @@ class ResidualTVD:
         warn : bool, optional
             Whether warning messages should be issued if problems are encountered.
 
+        debug : bool, optional
+            When `True`, also return the optimal transfer matrix used to make `p` close to `q`.
+
         Returns
         -------
         float
         """
         if self.exactly_zero: return 0.0  # shortcut for trivial case
+
+        if self.P0 is not None:
+            # scale residual-TVD by the ratio OVD/TVD so that all residual-TVDs add to OVD.
+            p0 = self.P0
+            ratio = _np.zeros(p.shape, 'd')
+            nonzero_inds = _np.where(p0 > 0)[0]
+            ratio[nonzero_inds] = p0[nonzero_inds] / p[nonzero_inds]
+            tvd = _np.sum(_np.abs(q - p)) / 2
+            ovd = _np.sum(ratio * _np.maximum(p - q, 0))  # OVD
+            scale_fctr = ovd / tvd
+        else:
+            scale_fctr = 1.0
+
         if self.weight == 0:
-            if self.P0 is None:
-                return _np.sum(_np.abs(q - p)) / 2  # TVD
-            else:
-                p0 = self.P0
-                ratio = _np.zeros(p.shape, 'd')
-                nonzero_inds = _np.where(p0 > 0)[0]
-                ratio[nonzero_inds] = p0[nonzero_inds] / p[nonzero_inds]
-                ovd = _np.sum(ratio * _np.maximum(p - q, 0))  # OVD
-                return ovd
+            tvd = scale_fctr * _np.sum(_np.abs(q - p)) / 2
+            if debug:
+                return tvd, _np.identity(len(p), 'd')
+            return tvd
 
         #Set parameter values
         self.P.value[:] = p[:]
@@ -533,43 +544,47 @@ class ResidualTVD:
             self.T_params.value[:] = self.t_params[:]
             self.T.value[:, :] = self.build_transfer_mx(self.t_params)
 
-        #OLD: returns the residual TVD:
-        if self.P0 is None:
-            #print("Returning Residual TVD")
-            return self._obj(self.t_params)  # not self.obj.value b/c that has additional norm regularization
+        if debug:
+            tmx = self.build_transfer_mx(self.t_params)
+            return scale_fctr * self._obj(self.t_params), tmx
+        return scale_fctr * self._obj(self.t_params)  # not self.obj.value b/c that has additional norm regularization
 
-        #NEW: returns the residual OVD, but using the t-params found by the ResidualTVD calculation to compute the OVD:
-        p0 = self.P0
-        p = self.P.value
-        q = self.Q.value
-        tmx = self.build_transfer_mx(self.t_params)
-        ratio = _np.zeros(p.shape, 'd')
-        numerator = _np.dot(tmx, p0)
-        nonzero_inds = _np.where(numerator > 0)[0]
-        ratio[nonzero_inds] = numerator[nonzero_inds] / _np.dot(tmx, p)[nonzero_inds]
-        #print("Returning Residual OVD w/ratio = ", ratio)
+        #TODO: REMOVE - below is an attempted computation of the Residual-OVD, but this concept seems
+        # problematic (foliating the OVD).  Now we just scale the Residual-TVD by an overall OVD/TVD factor.
 
-        ovd_initial = _np.sum(ratio * _np.maximum(_np.dot(tmx, p) - q, 0))  # OVD
+        ##NEW: returns the residual OVD, but using the t-params found by the ResidualTVD calculation to compute the OVD:
+        #p0 = self.P0
+        #p = self.P.value
+        #q = self.Q.value
+        #tmx = self.build_transfer_mx(self.t_params)
+        #ratio = _np.zeros(p.shape, 'd')
+        #numerator = _np.dot(tmx, p0)
+        #nonzero_inds = _np.where(numerator > 0)[0]
+        #ratio[nonzero_inds] = numerator[nonzero_inds] / _np.dot(tmx, p)[nonzero_inds]
+        ##print("Returning Residual OVD w/ratio = ", ratio)
+        #
+        #ovd_initial = _np.sum(ratio * _np.maximum(_np.dot(tmx, p) - q, 0))  # OVD
+        #if debug: return ovd_initial, tmx
         #return ovd_initial  # return the OVD at the t-params point found by the normal residual-TVD calc
 
-        #Perform a final local optimization to find an even better set of t-params (tmx)
-        def objective(t_params):
-            tmx = self.build_transfer_mx(t_params)
-            numerator = _np.dot(tmx, p0)
-            nonzero_inds = _np.where(numerator > 0)[0]
-            ratio = _np.zeros(p.shape, 'd')
-            ratio[nonzero_inds] = numerator[nonzero_inds] / _np.dot(tmx, p)[nonzero_inds]
-            return _np.sum(ratio * _np.maximum(_np.dot(tmx, p) - q, 0))  # OVD
-
-        initial_tparams = self.t_params.copy()
-        soln = _spo.minimize(objective, initial_tparams, options={'maxiter': 100}, method='L-BFGS-B',
-                             callback=None, tol=1e-8)
-        ovd = objective(soln.x)
-        if abs(ovd - ovd_initial) / (abs(ovd) + 1e-6) > 0.5 and abs(ovd - ovd_initial) > 1e-3:
-            _warnings.warn(("Final local optimization in Residual-OVD computation yielded a significant improvement"
-                            " (%g -> %g = %g diff).  This may be fine, but may indicate an invalid OVD")
-                           % (ovd_initial, ovd, abs(ovd_initial - ovd)))
-        return ovd
+        ##Perform a final local optimization to find an even better set of t-params (tmx)
+        #def objective(t_params):
+        #    tmx = self.build_transfer_mx(t_params)
+        #    numerator = _np.dot(tmx, p0)
+        #    nonzero_inds = _np.where(numerator > 0)[0]
+        #    ratio = _np.zeros(p.shape, 'd')
+        #    ratio[nonzero_inds] = numerator[nonzero_inds] / _np.dot(tmx, p)[nonzero_inds]
+        #    return _np.sum(ratio * _np.maximum(_np.dot(tmx, p) - q, 0))  # OVD
+        #
+        #initial_tparams = self.t_params.copy()
+        #soln = _spo.minimize(objective, initial_tparams, options={'maxiter': 100}, method='L-BFGS-B',
+        #                     callback=None, tol=1e-8)
+        #ovd = objective(soln.x)
+        #if abs(ovd - ovd_initial) / (abs(ovd) + 1e-6) > 0.5 and abs(ovd - ovd_initial) > 1e-3:
+        #    _warnings.warn(("Final local optimization in Residual-OVD computation yielded a significant improvement"
+        #                    " (%g -> %g = %g diff).  This may be fine, but may indicate an invalid OVD")
+        #                   % (ovd_initial, ovd, abs(ovd_initial - ovd)))
+        #return ovd
 
         #Just checking curvature of ratio:
         # d(f/g) = f'/g - f/g^2 * g'
