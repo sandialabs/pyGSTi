@@ -1655,6 +1655,8 @@ class DataSet(object):
 
         if rep_count_list is not None:
             repArray = _np.array(rep_count_list, self.repType)
+        else:
+            repArray = None
 
         self._add_raw_arrays(circuit, oliArray, timeArray, repArray,
                              overwrite_existing, record_zero_counts, aux)

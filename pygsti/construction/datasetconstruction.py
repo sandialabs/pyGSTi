@@ -149,11 +149,10 @@ def simulate_data(model_or_dataset, circuit_list, num_samples,
 
     if comm is None or comm.Get_rank() == 0:  # only root rank computes
 
-        if sample_error in ("binomial", "multinomial"):
-            if rand_state is None:
-                rndm = _rndm.RandomState(seed)  # ok if seed is None
-            else:
-                rndm = rand_state
+        if sample_error in ("binomial", "multinomial") and rand_state is None:
+            rndm = _rndm.RandomState(seed)  # ok if seed is None
+        else:
+            rndm = rand_state  # can be None
 
         circuit_times = times if times is not None else ["N/A dummy"]
         count_lists = _collections.OrderedDict()

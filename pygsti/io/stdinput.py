@@ -109,12 +109,14 @@ class StdInputParser(object):
             circuit = _global_parse_cache[create_subcircuits].get(s, None)
         if circuit is None:  # wasn't in cache
             layer_tuple, line_lbls, occurrence_id = self.parse_circuit_raw(s, lookup, create_subcircuits)
-            if line_lbls is None: line_lbls = "auto"  # if line labels weren't given just use defaults
-            circuit = _objs.Circuit._fastinit(layer_tuple, line_lbls, editable=False,
-                                              name='', stringrep=s, occurrence=occurrence_id)
-            #circuit = _objs.Circuit(layer_tuple, stringrep=s, line_labels=line_lbls,
-            #                        expand_subcircuits=False, check=False, occurrence=occurrence_id)
-            #Note: never expand subcircuits since parse_circuit_raw already does this w/create_subcircuits arg
+            if line_lbls is None:  # if there are no line labels then we need to use "auto" and do a full init
+                circuit = _objs.Circuit(layer_tuple, stringrep=s, line_labels="auto",
+                                        expand_subcircuits=False, check=False, occurrence=occurrence_id)
+                #Note: never expand subcircuits since parse_circuit_raw already does this w/create_subcircuits arg
+            else:
+                circuit = _objs.Circuit._fastinit(layer_tuple, line_lbls, editable=False,
+                                                  name='', stringrep=s, occurrence=occurrence_id)
+
             if self.use_global_parse_cache:
                 _global_parse_cache[create_subcircuits][s] = circuit
         return circuit
@@ -385,6 +387,7 @@ class StdInputParser(object):
         #Process premble
         orig_cwd = _os.getcwd()
         outcomeLabels = None
+        outcome_labels_specified_in_preamble = False
         if len(_os.path.dirname(filename)) > 0: _os.chdir(
             _os.path.dirname(filename))  # allow paths relative to datafile path
         try:
