@@ -28,7 +28,7 @@ from . import CircuitParser as _CircuitParser
 # A dictionary mapping qubit string representations into created
 # :class:`Circuit` objects, which can improve performance by reducing
 # or eliminating the need to parse circuit strings we've already parsed.
-_global_parse_cache = {}
+_global_parse_cache = {False: {}, True: {}}  # key == create_subcircuits
 
 
 def _create_display_progress_fn(show_progress):
@@ -106,7 +106,7 @@ class StdInputParser(object):
         """
         circuit = None
         if self.use_global_parse_cache:
-            circuit = _global_parse_cache.get(s, None)
+            circuit = _global_parse_cache[create_subcircuits].get(s, None)
         if circuit is None:  # wasn't in cache
             layer_tuple, line_lbls, occurrence_id = self.parse_circuit_raw(s, lookup, create_subcircuits)
             if line_lbls is None: line_lbls = "auto"  # if line labels weren't given just use defaults
@@ -116,7 +116,7 @@ class StdInputParser(object):
             #                        expand_subcircuits=False, check=False, occurrence=occurrence_id)
             #Note: never expand subcircuits since parse_circuit_raw already does this w/create_subcircuits arg
             if self.use_global_parse_cache:
-                _global_parse_cache[s] = circuit
+                _global_parse_cache[create_subcircuits][s] = circuit
         return circuit
 
     def parse_circuit_raw(self, s, lookup={}, create_subcircuits=True):
@@ -247,7 +247,7 @@ class StdInputParser(object):
         circuitTuple, circuitLineLabels, occurrence_id = self._circuit_parser.parse(circuitStr)
         return circuitLabel, circuitTuple, circuitStr, circuitLineLabels, occurrence_id
 
-    def parse_stringfile(self, filename, line_labels="auto", num_lines=None):
+    def parse_stringfile(self, filename, line_labels="auto", num_lines=None, create_subcircuits=True):
         """
         Parse a circuit list file.
 
@@ -268,6 +268,11 @@ class StdInputParser(object):
             Specify this instead of `line_labels` to set the latter to the
             integers between 0 and `num_lines-1`.
 
+        create_subcircuits : bool, optional
+            Whether to create sub-circuit-labels when parsing
+            string representations or to just expand these into non-subcircuit
+            labels.
+
         Returns
         -------
         list of Circuits
@@ -279,16 +284,20 @@ class StdInputParser(object):
                 line = line.strip()
                 if len(line) == 0 or line[0] == '#': continue
                 if line_labels == "auto":
-                    circuit = self.parse_circuit(line)  # can be cached, and cache assumes "auto" behavior
+                    # can be cached, and cache assumes "auto" behavior
+                    circuit = self.parse_circuit(line, {}, create_subcircuits)
                 else:
-                    layer_lbls, parsed_line_lbls, occurrence_id = self.parse_circuit_raw(line)
+                    layer_lbls, parsed_line_lbls, occurrence_id = self.parse_circuit_raw(line, {}, create_subcircuits)
                     if parsed_line_lbls is None:
                         parsed_line_lbls = line_labels  # default to the passed-in argument
-                        nlines = num_lines
-                    else: nlines = None  # b/c we've got a valid line_lbls
-                    circuit = _objs.Circuit(layer_lbls, stringrep=line.strip(),
-                                            line_labels=parsed_line_lbls, num_lines=nlines,
-                                            check=False, occurrence=occurrence_id)
+                        #nlines = num_lines
+                    #else: nlines = None  # b/c we've got a valid line_lbls
+                    circuit = _objs.Circuit._fastinit(layer_lbls, parsed_line_lbls, editable=False,
+                                                      name='', stringrep=line.strip(), occurrence=occurrence_id)
+                    #circuit = _objs.Circuit(layer_lbls, stringrep=line.strip(),
+                    #                        line_labels=parsed_line_lbls, num_lines=nlines,
+                    #                        expand_subcircuits=False, check=False, occurrence=occurrence_id)
+                    ##Note: never expand subcircuits since parse_circuit_raw already does this w/create_subcircuits arg
                 circuit_list.append(circuit)
         return circuit_list
 
@@ -874,7 +883,8 @@ class StdInputParser(object):
         #TODO - add standard count completion for 2Qubit case?
         return count_dicts
 
-    def parse_tddatafile(self, filename, show_progress=True, record_zero_counts=True):
+    def parse_tddatafile(self, filename, show_progress=True, record_zero_counts=True,
+                         create_subcircuits=True):
         """
         Parse a timstamped data set file into a DataSet object.
 
@@ -890,6 +900,11 @@ class StdInputParser(object):
             Whether zero-counts are actually recorded (stored) in the returned
             DataSet.  If False, then zero counts are ignored, except for
             potentially registering new outcome labels.
+
+        create_subcircuits : bool, optional
+            Whether to create sub-circuit-labels when parsing
+            string representations or to just expand these into non-subcircuit
+            labels.
 
         Returns
         -------
@@ -944,7 +959,7 @@ class StdInputParser(object):
                     parts = line.split()
                     lastpart = parts[-1]
                     circuitStr = line[:-len(lastpart)].strip()
-                    circuit = self.parse_circuit(circuitStr, lookupDict)
+                    circuit = self.parse_circuit(circuitStr, lookupDict, create_subcircuits)
                     timeSeriesStr = lastpart.strip()
                 except ValueError as e:
                     raise ValueError("%s Line %d: %s" % (filename, iLine, str(e)))

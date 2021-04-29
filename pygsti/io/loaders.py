@@ -231,7 +231,9 @@ def load_time_dependent_dataset(filename, cache=False, record_zero_counts=True):
     DataSet
     """
     parser = _stdinput.StdInputParser()
-    tdds = parser.parse_tddatafile(filename, record_zero_counts=record_zero_counts)
+    create_subcircuits = not _objs.Circuit.default_expand_subcircuits
+    tdds = parser.parse_tddatafile(filename, record_zero_counts=record_zero_counts,
+                                   create_subcircuits=create_subcircuits)
     return tdds
 
 
@@ -305,8 +307,9 @@ def load_circuit_list(filename, read_raw_strings=False, line_labels='auto', num_
                 rawList.append(line.strip())
         return rawList
     else:
+        create_subcircuits = not _objs.Circuit.default_expand_subcircuits
         std = _stdinput.StdInputParser()
-        return std.parse_stringfile(filename, line_labels, num_lines)
+        return std.parse_stringfile(filename, line_labels, num_lines, create_subcircuits)
 
 
 def load_protocol_from_dir(dirname, quick_load=False, comm=None):
