@@ -1239,11 +1239,10 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         array_types : tuple, optional
             A tuple of string-valued array types.  See :method:`ForwardSimulator.create_layout`.
 
-        derivative_dimensions : tuple, optional
-            A tuple containing, optionally, the parameter-space dimension used when taking first
+        derivative_dimension : int, optional
+            Optionally, the parameter-space dimension used when taking first
             and second derivatives with respect to the cirucit outcome probabilities.  This must be
-            have minimally 1 or 2 elements when `array_types` contains `'ep'` or `'epp'` types,
-            respectively.
+            non-None when `array_types` contains `'ep'` or `'epp'` types.
 
         verbosity : int or VerbosityPrinter
             Determines how much output to send to stdout.  0 means no output, higher
