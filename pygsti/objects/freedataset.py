@@ -49,7 +49,7 @@ class FreeformDataSet(object):
             self.cirIndex = _OrderedDict([(opstr if isinstance(opstr, _cir.Circuit) else _cir.Circuit(opstr), i)
                                           for opstr, i in circuit_indices.items()])
             #convert keys to Circuits if necessary
-        else: #if not static:
+        else:  # if not static:
             if circuits is not None:
                 dictData = [(opstr if isinstance(opstr, _cir.Circuit) else _cir.Circuit(opstr), i)
                             for (i, opstr) in enumerate(circuits)]  # convert to Circuits if necessary
@@ -136,7 +136,7 @@ class FreeformDataSet(object):
         if circuit not in self.cirIndex:
             self.cirIndex[circuit] = len(self.cirIndex)  # add a new circuit index
         self._info[self.cirIndex[circuit]] = info_dict
-        
+
     def __delitem__(self, circuit):
         if not isinstance(circuit, _cir.Circuit):
             circuit = _cir.Circuit(circuit)
