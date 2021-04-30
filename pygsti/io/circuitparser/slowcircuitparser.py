@@ -41,7 +41,7 @@ def parse_circuit(code, create_subcircuits=True, integerize_sslbls=True):
         lbls_list, i, segment = _get_next_lbls(code, i, end, create_subcircuits, integerize_sslbls, segment)
         result.extend(lbls_list)
 
-    return result, labels, occurrence_id
+    return tuple(result), labels, occurrence_id
 
 
 def _get_next_lbls(s, start, end, create_subcircuits, integerize_sslbls, segment):
@@ -79,7 +79,8 @@ def _get_next_lbls(s, start, end, create_subcircuits, integerize_sslbls, segment
         elif len(lbls_list) > 1:
             time = max([l.time for l in lbls_list])
             # create a layer label - a label of the labels within square brackets
-            to_exponentiate = _lbl.LabelTupTup(tuple(lbls_list), time)
+            to_exponentiate = _lbl.LabelTupTup(tuple(lbls_list)) if (time == 0.0) \
+                else _lbl.LabelTupTupWithTime(tuple(lbls_list), time)
         else:
             to_exponentiate = lbls_list[0]
         return [to_exponentiate] * exponent, i, segment
@@ -167,8 +168,10 @@ def _get_next_simple_lbl(s, start, end, integerize_sslbls, segment):
     if len(args) == 0:
         if len(sslbls) == 0:
             return [_lbl.LabelStr(name, time)], i, segment
+        elif time == 0.0:
+            return [_lbl.LabelTup((name,) + tuple(sslbls))], i, segment
         else:
-            return [_lbl.LabelTup((name,) + tuple(sslbls), time)], i, segment
+            return [_lbl.LabelTupWithTime((name,) + tuple(sslbls), time)], i, segment
     else:
         return [_lbl.LabelTupWithArgs((name, 2 + len(args)) + tuple(args) + tuple(sslbls), time)], i, segment
 

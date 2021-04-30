@@ -787,9 +787,10 @@ class GateSetTomography(_proto.Protocol):
         #TODO: add qtys about fit from optimums_list
 
         ret = ModelEstimateResults(data, self)
-        estimate = _Estimate.create_gst_estimate(ret, data.edesign.target_model, mdl_start, mdl_lsgst_list, parameters)
+        target_model = data.edesign.target_model if isinstance(data.edesign, HasTargetModel) else None
+        estimate = _Estimate.create_gst_estimate(ret, target_model, mdl_start, mdl_lsgst_list, parameters)
         ret.add_estimate(estimate, estimate_key=self.name)
-        return _add_gaugeopt_and_badfit(ret, self.name, data.edesign.target_model,
+        return _add_gaugeopt_and_badfit(ret, self.name, target_model,
                                         self.gaugeopt_suite, self.gaugeopt_target, self.unreliable_ops,
                                         self.badfit_options, self.optimizer, resource_alloc, printer)
 

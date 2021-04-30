@@ -298,6 +298,7 @@ class Circuit(object):
         """
         if isinstance(obj, cls): return obj
         if isinstance(obj, (tuple, list)): return cls.from_tuple(obj)
+        if isinstance(obj, str): return cls(obj)
         raise ValueError("Cannot create an %s object from '%s'" % (cls.__name__, str(type(obj))))
 
     @classmethod

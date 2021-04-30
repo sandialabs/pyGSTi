@@ -82,11 +82,15 @@ class Label(object):
 
             if len(name) == 0:
                 if args: return LabelTupTupWithArgs.init((), time, args)
-                else: return LabelTupTup.init((), time)
+                elif time == 0:
+                    return LabelTupTup.init(())
+                else:
+                    return LabelTupTupWithTime.init((), time)
             elif isinstance(name[0], (tuple, list, Label)):
                 if len(name) > 1:
                     if args: return LabelTupTupWithArgs.init(name, time, args)
-                    else: return LabelTupTup.init(name, time)
+                    elif time == 0: return LabelTupTup.init(name)
+                    else: return LabelTupTupWithTime.init(name, time)
                 else:
                     return Label(name[0], time=time, args=args)
             else:
@@ -135,7 +139,11 @@ class Label(object):
 
         else:
             if args: return LabelTupWithArgs.init(name, state_space_labels, time, args)
-            else: return LabelTup.init(name, state_space_labels, time)
+            else:
+                if time == 0.0:
+                    return LabelTup.init(name, state_space_labels)
+                else:
+                    return LabelTupWithTime.init(name, state_space_labels, time)
 
     @property
     def depth(self):
@@ -182,6 +190,273 @@ class LabelTup(Label, tuple):
     """
 
     @classmethod
+    def init(cls, name, state_space_labels):
+        """
+        Creates a new Model-item label.
+
+        The created label is comprised of a simple string label and a tuple
+        specifying the part of the Hilbert space upon which the item acts
+        (often just qubit indices).
+
+        Parameters
+        ----------
+        name : str
+            The item name. E.g., 'CNOT' or 'H'.
+
+        state_space_labels : list or tuple
+            A list or tuple that identifies which sectors/parts of the Hilbert
+            space is acted upon.  In many cases, this is a list of integers
+            specifying the qubits on which a gate acts, when the ordering in the
+            list defines the 'direction' of the gate.  If something other than
+            a list or tuple is passed, a single-element tuple is created
+            containing the passed object.
+
+        Returns
+        -------
+        LabelTup
+        """
+
+        #Type checking
+        assert(isinstance(name, str)), "`name` must be a string, but it's '%s'" % str(name)
+        assert(state_space_labels is not None), "LabelTup must be initialized with non-None state-space labels"
+        if not isinstance(state_space_labels, (tuple, list)):
+            state_space_labels = (state_space_labels,)
+        for ssl in state_space_labels:
+            assert(isinstance(ssl, str) or isinstance(ssl, _numbers.Integral)), \
+                "State space label '%s' must be a string or integer!" % str(ssl)
+
+        #Try to convert integer-strings to ints (for parsing from files...)
+        integerized_sslbls = []
+        for ssl in state_space_labels:
+            try: integerized_sslbls.append(int(ssl))
+            except: integerized_sslbls.append(ssl)
+
+        # Regardless of whether the input is a list, tuple, or int, the state space labels
+        # (qubits) that the item/gate acts on are stored as a tuple (because tuples are immutable).
+        sslbls = tuple(integerized_sslbls)
+        tup = (name,) + sslbls
+        return tuple.__new__(cls, tup)
+
+    __new__ = tuple.__new__
+    #def __new__(cls, tup, time=0.0):
+    #    ret = tuple.__new__(cls, tup)  # creates a LabelTup object using tuple's __new__
+    #    ret.time = time
+    #    return ret
+
+    @property
+    def time(self):
+        """
+        This label's name time (always 0)
+        """
+        return 0
+
+    @property
+    def name(self):
+        """
+        This label's name (a string).
+        """
+        return self[0]
+
+    @property
+    def sslbls(self):
+        """
+        This label's state-space labels, often qubit labels (a tuple).
+        """
+        if len(self) > 1:
+            return self[1:]
+        else: return None
+
+    @property
+    def args(self):
+        """
+        This label's arguments.
+        """
+        return ()
+
+    @property
+    def components(self):
+        """
+        The sub-label components of this label, or just `(self,)` if no sub-labels exist.
+        """
+        return (self,)  # just a single "sub-label" component
+
+    @property
+    def qubits(self):  # Used in Circuit
+        """
+        An alias for sslbls, since commonly these are just qubit indices. (a tuple)
+        """
+        return self.sslbls
+
+    @property
+    def number_of_qubits(self):  # Used in Circuit
+        """
+        The number of qubits this label "acts" on (an integer). `None` if `self.ssbls is None`.
+        """
+        return len(self.sslbls) if (self.sslbls is not None) else None
+
+    def has_prefix(self, prefix, typ="all"):
+        """
+        Whether this label has the given `prefix`.
+
+        Usually used to test whether the label names a given type.
+
+        Parameters
+        ----------
+        prefix : str
+            The prefix to check for.
+
+        typ : {"any","all"}
+            Whether, when there are multiple parts to the label, the prefix
+            must occur in any or all of the parts.
+
+        Returns
+        -------
+        bool
+        """
+        return self.name.startswith(prefix)
+
+    def map_state_space_labels(self, mapper):
+        """
+        Apply a mapping to this Label's state-space (qubit) labels.
+
+        Return a copy of this Label with all of the state-space labels
+        (often just qubit labels) updated according to a mapping function.
+
+        For example, calling this function with `mapper = {0: 1, 1: 3}`
+        on the Label "Gcnot:0:1" would return "Gcnot:1:3".
+
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing state-space-label values
+            and whose value are the new labels, or a function which takes a
+            single (existing state-space-label) argument and returns a new state-space-label.
+
+        Returns
+        -------
+        Label
+        """
+        if isinstance(mapper, dict):
+            mapped_sslbls = [mapper[sslbl] for sslbl in self.sslbls]
+        else:  # assume mapper is callable
+            mapped_sslbls = [mapper(sslbl) for sslbl in self.sslbls]
+        return Label(self.name, mapped_sslbls)
+
+    #OLD
+    #def __iter__(self):
+    #    return self.tup.__iter__()
+
+    #OLD
+    #def __iter__(self):
+    #    """ Iterate over the name + state space labels """
+    #    # Note: tuple(.) uses __iter__ to construct tuple rep.
+    #    yield self.name
+    #    if self.sslbls is not None:
+    #        for ssl in self.sslbls:
+    #            yield ssl
+
+    def __str__(self):
+        """
+        Defines how a Label is printed out, e.g. Gx:0 or Gcnot:1:2
+        """
+        #caller = inspect.getframeinfo(inspect.currentframe().f_back)
+        #ky = "%s:%s:%d" % (caller[2],os.path.basename(caller[0]),caller[1])
+        #_debug_record[ky] = _debug_record.get(ky, 0) + 1
+        s = str(self.name)
+        if self.sslbls:  # test for None and len == 0
+            s += ":" + ":".join(map(str, self.sslbls))
+        return s
+
+    def __repr__(self):
+        return "Label[" + str(self) + "]"
+
+    def __add__(self, s):
+        if isinstance(s, str):
+            return LabelTup.init(self.name + s, self.sslbls)
+        else:
+            raise NotImplementedError("Cannot add %s to a Label" % str(type(s)))
+
+    def __eq__(self, other):
+        """
+        Defines equality between gates, so that they are equal if their values
+        are equal.
+        """
+        #Unnecessary now that we have a separate LabelStr
+        #if isinstance(other, str):
+        #    if self.sslbls: return False # tests for None and len > 0
+        #    return self.name == other
+
+        return tuple.__eq__(self, other)
+        #OLD return self.name == other.name and self.sslbls == other.sslbls # ok to compare None
+
+    def __lt__(self, x):
+        return tuple.__lt__(self, tuple(x))
+
+    def __gt__(self, x):
+        return tuple.__gt__(self, tuple(x))
+
+    def __pygsti_reduce__(self):
+        return self.__reduce__()
+
+    def __reduce__(self):
+        # Need to tell serialization logic how to create a new Label since it's derived
+        # from the immutable tuple type (so cannot have its state set after creation)
+        return (LabelTup, (self[:],), None)
+
+    def to_native(self):
+        """
+        Returns this label as native python types.
+
+        Useful for faster serialization.
+
+        Returns
+        -------
+        tuple
+        """
+        return tuple(self)
+
+    def replace_name(self, oldname, newname):
+        """
+        Returns a label with `oldname` replaced by `newname`.
+
+        Parameters
+        ----------
+        oldname : str
+            Name to find.
+
+        newname : str
+            Name to replace found name with.
+
+        Returns
+        -------
+        LabelTup
+        """
+        return LabelTup(newname, self.sslbls) if (self.name == oldname) else self
+
+    def is_simple(self):
+        """
+        Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
+
+        Returns
+        -------
+        bool
+        """
+        return True
+
+    __hash__ = tuple.__hash__  # this is why we derive from tuple - using the
+    # native tuple.__hash__ directly == speed boost
+
+
+class LabelTupWithTime(Label, tuple):
+    """
+    A label consisting of a string along with a tuple of integers or state-space-names.
+
+    These state-space sector names specify which qubits, or
+    more generally, parts of the Hilbert space that is
+    acted upon by the object this label refers to.
+    """
+
+    @classmethod
     def init(cls, name, state_space_labels, time=0.0):
         """
         Creates a new Model-item label.
@@ -208,12 +483,12 @@ class LabelTup(Label, tuple):
 
         Returns
         -------
-        LabelTup
+        LabelTupWithTime
         """
 
         #Type checking
         assert(isinstance(name, str)), "`name` must be a string, but it's '%s'" % str(name)
-        assert(state_space_labels is not None), "LabelTup must be initialized with non-None state-space labels"
+        assert(state_space_labels is not None), "LabelTupWithTime must be initialized with non-None state-space labels"
         assert(isinstance(time, float)), "`time` must be a floating point value, received: " + str(time)
         if not isinstance(state_space_labels, (tuple, list)):
             state_space_labels = (state_space_labels,)
@@ -234,7 +509,7 @@ class LabelTup(Label, tuple):
         return cls.__new__(cls, tup, time)
 
     def __new__(cls, tup, time=0.0):
-        ret = tuple.__new__(cls, tup)  # creates a LabelTup object using tuple's __new__
+        ret = tuple.__new__(cls, tup)  # creates a LabelTupWithTime object using tuple's __new__
         ret.time = time
         return ret
 
@@ -362,7 +637,7 @@ class LabelTup(Label, tuple):
 
     def __add__(self, s):
         if isinstance(s, str):
-            return LabelTup.init(self.name + s, self.sslbls)
+            return LabelTupWithTime.init(self.name + s, self.sslbls)
         else:
             raise NotImplementedError("Cannot add %s to a Label" % str(type(s)))
 
@@ -391,7 +666,7 @@ class LabelTup(Label, tuple):
     def __reduce__(self):
         # Need to tell serialization logic how to create a new Label since it's derived
         # from the immutable tuple type (so cannot have its state set after creation)
-        return (LabelTup, (self[:], self.time), None)
+        return (LabelTupWithTime, (self[:], self.time), None)
 
     def to_native(self):
         """
@@ -419,9 +694,9 @@ class LabelTup(Label, tuple):
 
         Returns
         -------
-        LabelTup
+        LabelTupWithTime
         """
-        return LabelTup(newname, self.sslbls) if (self.name == oldname) else self
+        return LabelTupWithTime(newname, self.sslbls) if (self.name == oldname) else self
 
     def is_simple(self):
         """
@@ -627,7 +902,7 @@ class LabelTupTup(Label, tuple):
     """
 
     @classmethod
-    def init(cls, tup_of_tups, time=None):
+    def init(cls, tup_of_tups):
         """
         Creates a new Model-item tuple-of-tuples label.
 
@@ -641,25 +916,24 @@ class LabelTupTup(Label, tuple):
             The item data - a tuple of (string, state-space-labels) tuples
             which labels a parallel layer/level of a circuit.
 
-        time : float, optional
-            A time value associated with this label.  Often this is the
-            duration of the object or operation labeled.
-
         Returns
         -------
         LabelTupTup
         """
-        assert(time is None or isinstance(time, float)), "`time` must be a floating point value, received: " + str(time)
         tupOfLabels = tuple((Label(tup) for tup in tup_of_tups))  # Note: tup can also be a Label obj
-        if time is None:
-            time = 0.0 if len(tupOfLabels) == 0 else \
-                max([lbl.time for lbl in tupOfLabels])
-        return cls.__new__(cls, tupOfLabels, time)
+        if len(tupOfLabels) > 0:
+            assert(max([lbl.time for lbl in tupOfLabels]) == 0.0), \
+                "Cannot create a LabelTupTup containing labels with time != 0"
+        return cls.__new__(cls, tupOfLabels)
 
-    def __new__(cls, tup_of_labels, time=0.0):
-        ret = tuple.__new__(cls, tup_of_labels)  # creates a LabelTupTup object using tuple's __new__
-        ret.time = time
-        return ret
+    __new__ = tuple.__new__
+
+    @property
+    def time(self):
+        """
+        This label's name time (always 0)
+        """
+        return 0.0
 
     @property
     def name(self):
@@ -798,7 +1072,7 @@ class LabelTupTup(Label, tuple):
     def __reduce__(self):
         # Need to tell serialization logic how to create a new Label since it's derived
         # from the immutable tuple type (so cannot have its state set after creation)
-        return (LabelTupTup, (self[:], self.time), None)
+        return (LabelTupTup, (self[:],), None)
 
     def __contains__(self, x):
         # "recursive" contains checks component containers
@@ -881,6 +1155,274 @@ class LabelTupTup(Label, tuple):
                     ec.extend(expanded_comp[i].components)  # .components = vertical expansion
             #assert(len(ec) > 0), "Logic error!" #this is ok (e.g. an idle subcircuit)
             ret.append(LabelTupTup.init(ec))
+        return tuple(ret)
+
+    __hash__ = tuple.__hash__  # this is why we derive from tuple - using the
+    # native tuple.__hash__ directly == speed boost
+
+
+class LabelTupTupWithTime(Label, tuple):
+    """
+    A label consisting of a *tuple* of (string, state-space-labels) tuples.
+
+    This typically labels a layer of a circuit (a parallel level of gates).
+    """
+
+    @classmethod
+    def init(cls, tup_of_tups, time=None):
+        """
+        Creates a new Model-item tuple-of-tuples label.
+
+        This is a tuple of tuples of simple string labels and
+        tuples specifying the part of the Hilbert space upon
+        which that item acts (often just qubit indices).
+
+        Parameters
+        ----------
+        tup_of_tups : tuple
+            The item data - a tuple of (string, state-space-labels) tuples
+            which labels a parallel layer/level of a circuit.
+
+        time : float, optional
+            A time value associated with this label.  Often this is the
+            duration of the object or operation labeled.
+
+        Returns
+        -------
+        LabelTupTupWithTime
+        """
+        assert(time is None or isinstance(time, float)), "`time` must be a floating point value, received: " + str(time)
+        tupOfLabels = tuple((Label(tup) for tup in tup_of_tups))  # Note: tup can also be a Label obj
+        if time is None:
+            time = 0.0 if len(tupOfLabels) == 0 else \
+                max([lbl.time for lbl in tupOfLabels])
+        return cls.__new__(cls, tupOfLabels, time)
+
+    def __new__(cls, tup_of_labels, time=0.0):
+        ret = tuple.__new__(cls, tup_of_labels)  # creates a LabelTupTupWithTime object using tuple's __new__
+        ret.time = time
+        return ret
+
+    @property
+    def name(self):
+        """
+        This label's name (a string).
+        """
+        # TODO - something intelligent here?
+        # no real "name" for a compound label... but want it to be a string so
+        # users can use .startswith, etc.
+        return "COMPOUND"
+
+    @property
+    def sslbls(self):
+        # Note: if any component has sslbls == None, which signifies operating
+        # on *all* qubits, then this label is on *all* qubites
+        """
+        This label's state-space labels, often qubit labels (a tuple).
+        """
+        if len(self) == 0: return None  # "idle" label containing no gates - *all* qubits idle
+        s = set()
+        for lbl in self:
+            if lbl.sslbls is None: return None
+            s.update(lbl.sslbls)
+        return tuple(sorted(list(s)))
+
+    @property
+    def args(self):
+        """
+        This label's arguments.
+        """
+        return ()
+
+    @property
+    def components(self):
+        """
+        The sub-label components of this label, or just `(self,)` if no sub-labels exist.
+        """
+        return self  # self is a tuple of "sub-label" components
+
+    @property
+    def qubits(self):  # Used in Circuit
+        """
+        An alias for sslbls, since commonly these are just qubit indices.
+        """
+        return self.sslbls
+
+    @property
+    def number_of_qubits(self):  # Used in Circuit
+        """
+        The number of qubits this label "acts" on (an integer). `None` if `self.ssbls is None`.
+        """
+        return len(self.sslbls) if (self.sslbls is not None) else None
+
+    def has_prefix(self, prefix, typ="all"):
+        """
+        Whether this label has the given `prefix`.
+
+        Usually used to test whether the label names a given type.
+
+        Parameters
+        ----------
+        prefix : str
+            The prefix to check for.
+
+        typ : {"any","all"}
+            Whether, when there are multiple parts to the label, the prefix
+            must occur in any or all of the parts.
+
+        Returns
+        -------
+        bool
+        """
+        if typ == "all":
+            return all([lbl.has_prefix(prefix) for lbl in self])
+        elif typ == "any":
+            return any([lbl.has_prefix(prefix) for lbl in self])
+        else: raise ValueError("Invalid `typ` arg: %s" % str(typ))
+
+    def map_state_space_labels(self, mapper):
+        """
+        Apply a mapping to this Label's state-space (qubit) labels.
+
+        Return a copy of this Label with all of the state-space labels
+        (often just qubit labels) updated according to a mapping function.
+
+        For example, calling this function with `mapper = {0: 1, 1: 3}`
+        on the Label "Gcnot:0:1" would return "Gcnot:1:3".
+
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing state-space-label values
+            and whose value are the new labels, or a function which takes a
+            single (existing state-space-label) argument and returns a new state-space-label.
+
+        Returns
+        -------
+        Label
+        """
+        return LabelTupTupWithTime(tuple((lbl.map_state_space_labels(mapper) for lbl in self)))
+
+    def __str__(self):
+        """
+        Defines how a Label is printed out, e.g. Gx:0 or Gcnot:1:2
+        """
+        return "[" + "".join([str(lbl) for lbl in self]) + "]"
+
+    def __repr__(self):
+        return "Label[" + str(self) + "]"
+
+    def __add__(self, s):
+        raise NotImplementedError("Cannot add %s to a Label" % str(type(s)))
+
+    def __eq__(self, other):
+        """
+        Defines equality between gates, so that they are equal if their values
+        are equal.
+        """
+        #Unnecessary now that we have a separate LabelStr
+        #if isinstance(other, str):
+        #    if self.sslbls: return False # tests for None and len > 0
+        #    return self.name == other
+
+        return tuple.__eq__(self, other)
+        #OLD return self.name == other.name and self.sslbls == other.sslbls # ok to compare None
+
+    def __lt__(self, x):
+        return tuple.__lt__(self, tuple(x))
+
+    def __gt__(self, x):
+        return tuple.__gt__(self, tuple(x))
+
+    def __pygsti_reduce__(self):
+        return self.__reduce__()
+
+    def __reduce__(self):
+        # Need to tell serialization logic how to create a new Label since it's derived
+        # from the immutable tuple type (so cannot have its state set after creation)
+        return (LabelTupTupWithTime, (self[:], self.time), None)
+
+    def __contains__(self, x):
+        # "recursive" contains checks component containers
+        return any([(x == layer or x in layer) for layer in self.components])
+
+    def to_native(self):
+        """
+        Returns this label as native python types.
+
+        Useful for faster serialization.
+
+        Returns
+        -------
+        tuple
+        """
+        return tuple((x.to_native() for x in self))
+
+    def replace_name(self, oldname, newname):
+        """
+        Returns a label with `oldname` replaced by `newname`.
+
+        Parameters
+        ----------
+        oldname : str
+            Name to find.
+
+        newname : str
+            Name to replace found name with.
+
+        Returns
+        -------
+        LabelTupTupWithTime
+        """
+        return LabelTupTupWithTime(tuple((x.replace_name(oldname, newname) for x in self)))
+
+    def is_simple(self):
+        """
+        Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
+
+        Returns
+        -------
+        bool
+        """
+        return False
+
+    @property
+    def depth(self):
+        """
+        The depth of this label, viewed as a sub-circuit.
+        """
+        if len(self.components) == 0: return 1  # still depth 1 even if empty
+        return max([x.depth for x in self.components])
+
+    def expand_subcircuits(self):
+        """
+        Expand any sub-circuits within this label.
+
+        Returns a list of component labels which doesn't include any
+        :class:`CircuitLabel` labels.  This effectively expands any "boxes" or
+        "exponentiation" within this label.
+
+        Returns
+        -------
+        tuple
+            A tuple of component Labels (none of which should be
+            :class:`CircuitLabel`s).
+        """
+        ret = []
+        expanded_comps = [x.expand_subcircuits() for x in self.components]
+
+        #DEBUG TODO REMOVE
+        #print("DB: expaned comps:")
+        #for i,x in enumerate(expanded_comps):
+        #    print(i,": ",x)
+
+        for i in range(self.depth):  # depth == # of layers when expanded
+            ec = []
+            for expanded_comp in expanded_comps:
+                if i < len(expanded_comp):
+                    ec.extend(expanded_comp[i].components)  # .components = vertical expansion
+            #assert(len(ec) > 0), "Logic error!" #this is ok (e.g. an idle subcircuit)
+            ret.append(LabelTupTupWithTime.init(ec))
         return tuple(ret)
 
     __hash__ = tuple.__hash__  # this is why we derive from tuple - using the
