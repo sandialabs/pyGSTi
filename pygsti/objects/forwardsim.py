@@ -160,6 +160,9 @@ class ForwardSimulator(object):
 
     def _compute_circuit_outcome_probabilities(self, array_to_fill, circuit, outcomes, resource_alloc, time=None):
         raise NotImplementedError("Derived classes should implement this!")
+    
+    def _compute_sparse_circuit_outcome_probabilities(self, circuit, resource_alloc, time=None):
+        raise NotImplementedError("Derived classes should implement this to provide sparse (non-zero) probabilites!")
 
     def _compute_circuit_outcome_probability_derivatives(self, array_to_fill, circuit, outcomes, param_slice,
                                                          resource_alloc):
@@ -179,6 +182,7 @@ class ForwardSimulator(object):
         outcomes : list or tuple
             A sequence of outcomes, which can themselves be either tuples
             (to include intermediate measurements) or simple strings, e.g. `'010'`.
+            If None, only non-zero outcome probabilities will be reported.
 
         time : float, optional
             The *start* time at which `circuit` is evaluated.
@@ -187,8 +191,16 @@ class ForwardSimulator(object):
         -------
         probs : OutcomeLabelDict
             A dictionary with keys equal to outcome labels and
-            values equal to probabilities.
+            values equal to probabilities. If no target outcomes provided,
+            only non-zero probabilities will be reported.
         """
+        if outcomes is None:
+            try:
+                # TODO: Patch ralloc up into probs so it can be passed here (and in create_layout)
+                return self._compute_sparse_circuit_outcome_probabilities(circuit, None, time)
+            except NotImplementedError:
+                pass # continue on to create full layout and calcualte all outcomes
+        
         copa_layout = self.create_layout([circuit], array_types=('e',))
         probs_array = _np.empty(copa_layout.num_elements, 'd')
         if time is None:

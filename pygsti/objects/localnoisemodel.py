@@ -698,11 +698,9 @@ class LocalNoiseModel(_ImplicitOpModel):
         #Note - evotype="auto" not allowed here b/c no parameterization to infer from
         if evotype in ("densitymx", "svterm", "cterm"):
             basis1Q = _BuiltinBasis("pp", 4)
-        elif evotype == "statevec":
-            basis1Q = _BuiltinBasis("sv", 2)
         else:
             basis1Q = _BuiltinBasis("sv", 2)
-            assert(evotype in ("stabilizer", "chp")), "Invalid evolution type: %s" % evotype
+            assert(evotype in ("stabilizer", "statevec", "chp")), "Invalid evolution type: %s" % evotype
 
         if simulator == "auto":
             if evotype == "densitymx":

@@ -1007,6 +1007,11 @@ class ComputationalBasisPOVM(POVM):
         """
         An iterator over the effect (outcome) labels of this POVM.
         """
+        # TODO: CHP short circuit
+        if self._evotype == 'chp':
+            return
+            yield
+
         iterover = [('0', '1')] * self.nqubits
         for k in _itertools.product(*iterover):
             yield "".join(k)
@@ -1063,6 +1068,63 @@ class ComputationalBasisPOVM(POVM):
         -------
         OrderedDict of SPAMVecs
         """
+        # Create "simplified" effect vectors, which infer their parent and
+        # gpindices from the set of "factor-POVMs" they're constructed with.
+        if prefix: prefix += "_"
+        simplified = _collections.OrderedDict(
+            [(prefix + k, self[k]) for k in self.keys()])
+        return simplified
+
+    def __str__(self):
+        s = "Computational(Z)-basis POVM on %d qubits and filter %s\n" \
+            % (self.nqubits, str(self.qubit_filter))
+        return s
+
+class CHPPOVM(POVM):
+    """Temporary POVM for CHP.
+
+    """
+    def __init__(self, nqubits, evotype='chp', error_op=None):
+        """Create a new CHPPOVM object.
+
+        Parameters:
+        ----------
+        nqubits: int
+            Number of qubits to measure
+        
+        evotype: str
+            Must be "chp" for now
+
+        error_op: LinearOperator, optional
+            An operator to act on before the measurement.
+            Must either act on all qubits or one qubit
+        """
+        self.nqubits = nqubits
+        assert evotype == 'chp', "Must be 'chp' ev"
+    
+    def simplify_effects(self, prefix=""):
+        """
+        Creates a dictionary of simplified effect vectors.
+
+        Returns a dictionary of effect SPAMVecs that belong to the POVM's parent
+        `Model` - that is, whose `gpindices` are set to all or a subset of
+        this POVM's gpindices.  Such effect vectors are used internally within
+        computations involving the parent `Model`.
+
+        Parameters
+        ----------
+        prefix : str
+            A string, usually identitying this POVM, which may be used
+            to prefix the simplified gate keys.
+
+        Returns
+        -------
+        OrderedDict of SPAMVecs
+        """
+        # TODO: CHP short circuit
+        if self._evotype == 'chp':
+            return _collections.OrderedDict()
+        
         # Create "simplified" effect vectors, which infer their parent and
         # gpindices from the set of "factor-POVMs" they're constructed with.
         if prefix: prefix += "_"
