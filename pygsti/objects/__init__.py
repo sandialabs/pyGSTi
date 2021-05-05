@@ -16,6 +16,7 @@ pyGSTi Objects Python Package
 #Import Objects at package level
 from .confidenceregionfactory import ConfidenceRegionFactory
 from .dataset import DataSet
+from .freedataset import FreeformDataSet
 from .operation import LinearOperator
 from .operation import DenseOperator
 from .operation import LinearlyParamDenseOp

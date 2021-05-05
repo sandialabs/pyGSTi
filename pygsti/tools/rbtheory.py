@@ -542,7 +542,8 @@ def R_matrix(model, group, group_to_model=None, weights=None):  # noqa N802
 #     group_dim = len(group)
 #     R = R_matrix(model, group, group_to_model=group_to_model, weights=weights)
 #     success_prepLabel = list(model.preps.keys())[0]  # just take first prep
-#     success_effectLabel = success_outcomelabel[-1] if isinstance(success_outcomelabel, tuple) else success_outcomelabel
+#     success_effectLabel = success_outcomelabel[-1] if isinstance(success_outcomelabel, tuple) \
+#         else success_outcomelabel
 #     extended_E = _np.kron(_mtls.column_basis_vector(0, group_dim).T, model.povms['Mdefault'][success_effectLabel].T)
 #     extended_rho = _np.kron(_mtls.column_basis_vector(0, group_dim), model.preps[success_prepLabel])
 
@@ -659,7 +660,8 @@ def R_matrix(model, group, group_to_model=None, weights=None):  # noqa N802
 #         model_go = model.copy()
 #     L = L_matrix(model_go, target_model, weights=weights)
 #     success_prepLabel = list(model.preps.keys())[0]  # just take first prep
-#     success_effectLabel = success_outcomelabel[-1] if isinstance(success_outcomelabel, tuple) else success_outcomelabel
+#     success_effectLabel = success_outcomelabel[-1] if isinstance(success_outcomelabel, tuple) \
+#         else success_outcomelabel
 #     identity_vec = _mtls.vec(_np.identity(d**2, float))
 
 #     if compilation is not None:

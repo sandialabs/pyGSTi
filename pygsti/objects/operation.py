@@ -1468,7 +1468,7 @@ class StaticStandardOp(DenseOperator):
 
             if evotype == 'statevec':
                 rep = replib.SVOpRepDense(LinearOperator.convert_to_matrix(U))
-            else: # evotype in ('densitymx', 'svterm', 'cterm')
+            else:  # evotype in ('densitymx', 'svterm', 'cterm')
                 ptm = _gt.unitary_to_pauligate(U)
                 rep = replib.DMOpRepDense(LinearOperator.convert_to_matrix(ptm))
         elif evotype == 'chp':
@@ -1482,9 +1482,9 @@ class StaticStandardOp(DenseOperator):
             rep = replib.CHPOpRep(native_ops, nqubits)
         else:
             raise ValueError("Invalid evotype for a StaticStandardOp: %s" % evotype)
-        
+
         LinearOperator.__init__(self, rep, evotype)
-    
+
     @property
     def base(self):
         """
@@ -1494,7 +1494,7 @@ class StaticStandardOp(DenseOperator):
             return self._rep.base
         else:
             raise NotImplementedError('No base available for evotype "%s"' % self._evotype)
-    
+
     def __str__(self):
         s = "%s with name %s and evotype %s\n" % (self.__class__.__name__, self.name, self._evotype)
         if self._evotype in ['statevec', 'densitymx', 'svterm', 'cterm']:

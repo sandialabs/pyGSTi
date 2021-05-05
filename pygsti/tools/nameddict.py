@@ -31,14 +31,14 @@ class NamedDict(dict):
         dict contained the keys `"dog"` and `"cat"`, this might be `"animals"`.
         This becomes a column header if this dict is converted to a data frame.
 
-    keytype : {"float", "int", "categor", None}, optional
+    keytype : {"float", "int", "category", None}, optional
         The key-type, in correspondence with different pandas series types.
 
     valname : str, optional
         A category name for the keys of this dict. This becomse a column header
         if this dict is converted to a data frame.
 
-    valtype : {"float", "int", "categor", None}, optional
+    valtype : {"float", "int", "category", None}, optional
         The value-type, in correspondence with different pandas series types.
 
     items : list or dict, optional

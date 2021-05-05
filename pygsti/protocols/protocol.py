@@ -584,6 +584,24 @@ class ExperimentDesign(_TreeNode):
 
         return ret
 
+    @classmethod
+    def from_edesign(cls, edesign):
+        """
+        Create an ExperimentDesign out of an existing experiment design.
+
+        Parameters
+        ----------
+        edesign : ExperimentDesign
+            The experiment design to convert (use as a base).
+
+        Returns
+        -------
+        ExperimentDesign
+        """
+        if cls != ExperimentDesign:
+            raise NotImplementedError("Cannot convert a %s to a %s!" % (str(type(edesign)), str(cls)))
+        return cls(edesign.all_circuits_needing_data, edesign.qubit_labels)
+
     def __init__(self, circuits=None, qubit_labels=None,
                  children=None, children_dirs=None):
         """
@@ -658,17 +676,18 @@ class ExperimentDesign(_TreeNode):
         else:
             self.qubit_labels = tuple(qubit_labels)
 
-        def auto_dirname(child_key):
-            if isinstance(child_key, (list, tuple)):
-                child_key = '_'.join(map(str, child_key))
-            return child_key.replace(' ', '_')
-
         if children is None: children = {}
         children_dirs = children_dirs.copy() if (children_dirs is not None) else \
-            {subname: auto_dirname(subname) for subname in children}
+            {subname: self._auto_dirname(subname) for subname in children}
 
         assert(set(children.keys()) == set(children_dirs.keys()))
         super().__init__(children_dirs, children)
+
+    def _auto_dirname(self, child_key):
+        """ A helper function to generate a default directory name base off of a sub-name key """
+        if isinstance(child_key, (list, tuple)):
+            child_key = '_'.join(map(str, child_key))
+        return child_key.replace(' ', '_')
 
     def set_actual_circuits_executed(self, actual_circuits):
         """
@@ -717,6 +736,23 @@ class ExperimentDesign(_TreeNode):
         """
         instance_name = default_protocol_instance.name
         self.default_protocols[instance_name] = default_protocol_instance
+
+    def truncate_to_circuits(self, circuits_to_keep):
+        """
+        Builds a new experiment design containing only the specified circuits.
+
+        Parameters
+        ----------
+        circuits_to_keep : list
+            A list of the circuits to keep.
+
+        Returns
+        -------
+        ExperimentDesign
+        """
+        base = _copy.deepcopy(self)  # so this works for derived classes tools
+        base._truncate_to_circuits_inplace(circuits_to_keep)
+        return base
 
     def truncate_to_available_data(self, dataset):
         """
@@ -864,10 +900,42 @@ class ExperimentDesign(_TreeNode):
         """
         raise NotImplementedError("This protocol edesign cannot create any subdata!")
 
+    def promote_to_combined(self, name="**0"):
+        """
+        Promote this experiment design to be a combined experiment design.
+
+        Wraps this experiment design in a new :class:`CombinedExperimentDesign`
+        whose only sub-design is this one, and returns the combined design.
+
+        Parameters
+        ----------
+        name : str, optional
+            The sub-design-name of this experiment design within the created
+            combined experiment design.
+
+        Returns
+        -------
+        CombinedExperimentDesign
+        """
+        return CombinedExperimentDesign.from_edesign(self, name)
+
+    def promote_to_simultaneous(self):
+        """
+        Promote this experiment design to be a simultaneous experiment design.
+
+        Wraps this experiment design in a new :class:`SimultaneousExperimentDesign`
+        whose only sub-design is this one, and returns the simultaneous design.
+
+        Returns
+        -------
+        SimultaneousExperimentDesign
+        """
+        return SimultaneousExperimentDesign.from_edesign(self)
+
 
 class CircuitListsDesign(ExperimentDesign):
     """
-    Experiment deisgn specification that is comprised of multiple circuit lists.
+    Experiment design specification that is comprised of multiple circuit lists.
 
     Parameters
     ----------
@@ -896,6 +964,37 @@ class CircuitListsDesign(ExperimentDesign):
         all the circuits that need data (this argument isn't used
         when `all_circuits_needing_data` is given).
     """
+
+    @classmethod
+    def from_edesign(cls, edesign):
+        """
+        Create a CircuitListsDesign out of an existing experiment design.
+
+        If `edesign` already is a circuit lists experiment design, it will
+        just be returned (not a copy of it).
+
+        Parameters
+        ----------
+        edesign : ExperimentDesign
+            The experiment design to convert (use as a base).
+
+        Returns
+        -------
+        CircuitListsDesign
+        """
+        if cls != CircuitListsDesign:
+            raise NotImplementedError("Cannot convert a %s to a %s!" % (str(type(edesign)), str(cls)))
+
+        if isinstance(edesign, CircuitListsDesign):
+            return edesign
+        elif isinstance(edesign, (CombinedExperimentDesign, SimultaneousExperimentDesign)):
+            circuit_lists = [subd.all_circuits_needing_data for k, subd in edesign.items()]
+            return cls(circuit_lists, edesign.all_circuits_needing_data, edesign.qubit_labels, remove_duplicates=False)
+        elif isinstance(edesign, ExperimentDesign):
+            return cls([edesign.all_circuits_needing_data], edesign.all_circuits_needing_data,
+                       edesign.qubit_labels, remove_duplicates=False)
+        else:
+            raise ValueError("Cannot convert a %s to a %s!" % (str(type(edesign)), str(cls)))
 
     def __init__(self, circuit_lists, all_circuits_needing_data=None, qubit_labels=None,
                  nested=False, remove_duplicates=True):
@@ -974,6 +1073,13 @@ class CircuitListsDesign(ExperimentDesign):
         return CircuitListsDesign([self.circuit_lists[i] for i in list_indices_to_keep],
                                   qubit_labels=self.qubit_labels, nested=self.nested)
 
+    def _truncate_to_circuits_inplace(self, circuits_to_keep):
+        truncated_circuit_lists = [_CircuitList.cast(lst).truncate(circuits_to_keep)
+                                   for lst in self.circuit_lists]
+        self.circuit_lists = truncated_circuit_lists
+        self.nested = False  # we're not sure whether the truncated lists are nested
+        super()._truncate_to_circuits_inplace(circuits_to_keep)
+
     def _truncate_to_design_inplace(self, other_design):
         self.circuit_lists = [my_circuit_list.truncate(other_circuit_list) for my_circuit_list, other_circuit_list
                               in zip(self.circuit_lists, other_design.circuit_lists)]
@@ -1025,6 +1131,34 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
         Whether the circuits of the `sub_designs` should be interleaved to
         form the circuit ordering of this experiment design.
     """
+
+    @classmethod
+    def from_edesign(cls, edesign, name):
+        """
+        Create a combined experiment design out of an existing experiment design.
+
+        This makes `edesign` the one and only member of a new combined experiment design,
+        even in `edesign` is already a `CombinedExperimentDesign`.
+
+        Parameters
+        ----------
+        edesign : ExperimentDesign
+            The experiment design to convert (use as a base).
+
+        name : str
+            The sub-name of `edesign` within the returned combined experiment design.
+
+        Returns
+        -------
+        CombinedExperimentDesign
+        """
+        if cls != CombinedExperimentDesign:
+            raise NotImplementedError("Cannot convert a %s to a %s!" % (str(type(edesign)), str(cls)))
+
+        if isinstance(edesign, ExperimentDesign):
+            return cls({name: edesign}, edesign.all_circuits_needing_data, edesign.qubit_labels)
+        else:
+            raise ValueError("Cannot convert a %s to a %s!" % (str(type(edesign)), str(cls)))
 
     def __init__(self, sub_designs, all_circuits=None, qubit_labels=None, sub_design_dirs=None,
                  interleave=False):
@@ -1117,6 +1251,27 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
             truncated_ds.add_std_nqubit_outcome_labels(len(self[sub_name].qubit_labels))
         return ProtocolData(self[sub_name], truncated_ds)
 
+    def __setitem__(self, key, val):
+        # must set base class self._vals and self._dirs (see treenode.py)
+        if not isinstance(val, ExperimentDesign):
+            raise ValueError("Only experiment designs can be set as sub-designs of a CombinedExperimentDesign!")
+
+        #Check whether the new design adds any more circuits (it's not allowed to
+        # because other objects, e.g. a ProtocolData object, may hold a reference to
+        # this combined experiment design (e.g., to index data) and expect that it will
+        # not change.
+        current_circuits = set(self.all_circuits_needing_data)
+        new_circuits = [c for c in val.all_circuits_needing_data if c not in current_circuits]
+        if len(new_circuits) > 0:
+            raise ValueError((("Adding this experiment design would add %d new circuits.  Adding circuits is not"
+                               " allowed because an experiment design's circuit list may be used to index data.  The"
+                               " circuits that would be added are:\n") % len(new_circuits))
+                             + "\n".join([c.str for c in new_circuits[0:10]])
+                             + ("\n..." if len(new_circuits) > 10 else ""))
+
+        self._dirs[key] = self._auto_dirname(key)
+        self._vals[key] = val
+
 
 class SimultaneousExperimentDesign(ExperimentDesign):
     """
@@ -1146,6 +1301,31 @@ class SimultaneousExperimentDesign(ExperimentDesign):
         The category name for the qubit-label-tuples correspoding to the
         elements of `edesigns`.
     """
+
+    @classmethod
+    def from_edesign(cls, edesign):
+        """
+        Create a simultaneous experiment design out of an existing experiment design.
+
+        This makes `edesign` the one and only member of a new simultanieous experiment
+        design, even in `edesign` is already a `SimultaneousExperimentDesign`.
+
+        Parameters
+        ----------
+        edesign : ExperimentDesign
+            The experiment design to convert (use as a base).
+
+        Returns
+        -------
+        SimultaneousExperimentDesign
+        """
+        if cls != SimultaneousExperimentDesign:
+            raise NotImplementedError("Cannot convert a %s to a %s!" % (str(type(edesign)), str(cls)))
+
+        if isinstance(edesign, ExperimentDesign):
+            return cls([edesign], None, edesign.qubit_labels)
+        else:
+            raise ValueError("Cannot convert a %s to a %s!" % (str(type(edesign)), str(cls)))
 
     #@classmethod
     #def from_tensored_circuits(cls, circuits, template_edesign, qubit_labels_per_edesign):
@@ -1273,6 +1453,93 @@ class SimultaneousExperimentDesign(ExperimentDesign):
             else:
                 filtered_ds = filtered_ds.process_circuits(lambda c: actual_to_desired[c], aggregate=False)
         return ProtocolData(sub_design, filtered_ds)
+
+
+class FreeformDesign(ExperimentDesign):
+    """
+    Experiment design holding an arbitrary circuit list and meta data.
+
+    Parameters
+    ----------
+    circuits : list or dict
+        A list of the circuits needing data.  If None, then the list is empty.
+
+    qubit_labels : tuple, optional
+        The qubits that this experiment design applies to. If None, the
+        line labels of the first circuit is used.
+    """
+
+    @classmethod
+    def from_dataframe(cls, df, qubit_labels=None):
+        """
+        Create a FreeformDesign from a pandas dataframe.
+
+        Parameters
+        ----------
+        df : pandas.Dataframe
+            A dataframe containing a `"Circuit"` column and possibly others.
+
+        qubit_labels : tuple, optional
+            The qubits that this experiment design applies to. If None, the
+            line labels of the first circuit is used.
+
+        Returns
+        -------
+        FreeformDesign
+        """
+        circuits = {}
+        for index, row in df.iterrows():
+            data = {k: v for k, v in row.items() if k != 'Circuit'}
+            circuits[_objs.Circuit(row['Circuit'])] = data
+        return cls(circuits, qubit_labels)
+
+    @classmethod
+    def from_edesign(cls, edesign):
+        """
+        Create a FreeformDesign out of an existing experiment design.
+
+        If `edesign` already is a free-form experiment design, it will
+        just be returned (not a copy of it).
+
+        Parameters
+        ----------
+        edesign : ExperimentDesign
+            The experiment design to convert (use as a base).
+
+        Returns
+        -------
+        FreeformDesign
+        """
+        if cls != FreeformDesign:
+            raise NotImplementedError("Cannot convert a %s to a %s!" % (str(type(edesign)), str(cls)))
+
+        if isinstance(edesign, FreeformDesign):
+            return edesign
+        elif isinstance(edesign, ExperimentDesign):
+            return cls(edesign.all_circuits_needing_data, edesign.qubit_labels)
+        else:
+            raise ValueError("Cannot convert a %s to a %s!" % (str(type(edesign)), str(cls)))
+
+    def __init__(self, circuits, qubit_labels=None):
+        if isinstance(circuits, dict):
+            self.aux_info = circuits.copy()
+            circuits = list(circuits.keys())
+        else:
+            self.aux_info = {c: None for c in circuits}
+        super().__init__(circuits, qubit_labels)
+        self.auxfile_types['aux_info'] = 'pickle'
+
+    def _truncate_to_circuits_inplace(self, circuits_to_keep):
+        truncated_aux_info = {k: v for k, v in self.aux_info.items() if k in circuits_to_keep}
+        self.aux_info = truncated_aux_info
+        super()._truncate_to_circuits_inplace(circuits_to_keep)
+
+    def to_dataframe(self, pivot_valuename=None, pivot_value="Value", drop_columns=False):
+        cdict = _NamedDict('Circuit', None)
+        for cir, info in self.aux_info.items():
+            cdict[cir.str] = _NamedDict('ValueName', 'category', items=info)
+        df = cdict.to_dataframe()
+        return _process_dataframe(df, pivot_valuename, pivot_value, drop_columns, preserve_order=True)
 
 
 class ProtocolData(_TreeNode):
@@ -1569,6 +1836,48 @@ class ProtocolData(_TreeNode):
         """
         keys_vals_types = [(k, v, 'category') for k, v in self.tags.items()]
         return self.edesign.setup_nameddict(_NamedDict.create_nested(keys_vals_types, final_dict))
+
+    def to_dataframe(self, pivot_valuename=None, pivot_value=None, drop_columns=False):
+        """
+        Create a Pandas dataframe with this data.
+
+        Parameters
+        ----------
+        pivot_valuename : str, optional
+            If not None, the resulting dataframe is pivoted using `pivot_valuename`
+            as the column whose values name the pivoted table's column names.
+            If None and `pivot_value` is not None,`"ValueName"` is used.
+
+        pivot_value : str, optional
+            If not None, the resulting dataframe is pivoted such that values of
+            the `pivot_value` column are rearranged into new columns whose names
+            are given by the values of the `pivot_valuename` column. If None and
+            `pivot_valuename` is not None,`"Value"` is used.
+
+        drop_columns : bool or list, optional
+            A list of column names to drop (prior to performing any pivot).  If
+            `True` appears in this list or is given directly, then all
+            constant-valued columns are dropped as well.  No columns are dropped
+            when `drop_columns == False`.
+
+        Returns
+        -------
+        pandas.DataFrame
+        """
+        cdict = _NamedDict('Circuit', None)
+        if isinstance(self.dataset, _objs.FreeformDataSet):
+            for cir, i in self.dataset.cirIndex.items():
+                d = _NamedDict('ValueName', 'category', items=self.dataset._info[i])
+                if isinstance(self.edesign, FreeformDesign):
+                    edesign_aux = self.edesign.aux_info[cir]
+                    if edesign_aux is not None:
+                        d.update(edesign_aux)
+                cdict[cir.str] = d
+        else:
+            raise NotImplementedError("Can only convert free-form data to dataframes currently.")
+
+        df = cdict.to_dataframe()
+        return _process_dataframe(df, pivot_valuename, pivot_value, drop_columns, preserve_order=True)
 
 
 class ProtocolResults(object):
@@ -1919,7 +2228,7 @@ class ProtocolResultsDir(_TreeNode):
     """
 
     @classmethod
-    def from_dir(cls, dirname, parent=None, name=None, quick_load=False):
+    def from_dir(cls, dirname, parent=None, name=None, preloaded_data=None, quick_load=False):
         """
         Initialize a new ProtocolResultsDir object from `dirname`.
 
@@ -1939,6 +2248,11 @@ class ProtocolResultsDir(_TreeNode):
             The name of this result within `parent`.  This is only
             used when `parent` is not None.
 
+        preloaded_data : ProtocolData, optional
+            In the case that the :class:`ProtocolData` object for `dirname`
+            is already loaded, it can be passed in here.  Otherwise leave this
+            as None and it will be loaded.
+
         quick_load : bool, optional
             Setting this to True skips the loading of data and experiment-design
             components that may take a long time to load. This can be useful
@@ -1950,7 +2264,8 @@ class ProtocolResultsDir(_TreeNode):
         """
         dirname = _pathlib.Path(dirname)
         data = parent.data[name] if (parent and name) else \
-            _io.load_data_from_dir(dirname, quick_load=quick_load)
+            (preloaded_data if preloaded_data is not None else
+             _io.load_data_from_dir(dirname, quick_load=quick_load))
 
         #Load results in results_dir
         results = {}
@@ -2241,6 +2556,158 @@ class ProtocolPostProcessor(object):
         _io.write_obj_to_meta_based_dir(self, dirname, 'auxfile_types')
 
 
+class DataSimulator(object):
+    """
+    An analysis routine that is run on an experiment design to produce per-circuit data.
+
+    A DataSimulator fundamentally simulates a model to create data, taking an :class:`ExperimentDesign`
+    as input and producing a :class:`ProtocolData` object as output.
+
+    The produced data may consist of data counts for some/all of the circuit outcomes, and
+    thus result in a :class:`ProtocolData` containsing a normal :class:`DataSet`.  Alternatively,
+    a data simulator may compute arbitrary quantities to be associated with the circuits, resulting
+    in a :class:`ProtocolData` containsing a normal :class:`FreeformDataSet`.
+
+    """
+
+    def __init__(self):
+        pass
+
+    def run(self, edesign, memlimit=None, comm=None):
+        """
+        Run this data simulator on an experiment design.
+
+        Parameters
+        ----------
+        edesign : ExperimentDesign
+            The input experiment design.
+
+        memlimit : int, optional
+            A rough per-processor memory limit in bytes.
+
+        comm : mpi4py.MPI.Comm, optional
+            When not ``None``, an MPI communicator used to run this data
+            simulator in parallel.
+
+        Returns
+        -------
+        ProtocolData
+        """
+        raise NotImplementedError("Derived classes should implement this!")
+
+
+class DataCountsSimulator(DataSimulator):
+    """
+    Simulates data counts for each circuit outcome, producing a simulated data set.
+
+    This object can also be used to compute the outcome probabilities for each
+    circuit outcome instead of sampled counts by setting `sample_error="none"`.
+
+    Parameters
+    ----------
+    model : Model
+        The model to simulate.
+
+    num_samples : int or list of ints or None, optional
+        The simulated number of samples for each circuit.  This only has
+        effect when  ``sample_error == "binomial"`` or ``"multinomial"``.  If an
+        integer, all circuits have this number of total samples. If a list,
+        integer elements specify the number of samples for the corresponding
+        circuit.  If ``None``, then `model_or_dataset` must be a
+        :class:`~pygsti.objects.DataSet`, and total counts are taken from it
+        (on a per-circuit basis).
+
+    sample_error : string, optional
+        What type of sample error is included in the counts.  Can be:
+
+        - "none"  - no sample error: counts are floating point numbers such
+          that the exact probabilty can be found by the ratio of count / total.
+        - "clip" - no sample error, but clip probabilities to [0,1] so, e.g.,
+          counts are always positive.
+        - "round" - same as "clip", except counts are rounded to the nearest
+          integer.
+        - "binomial" - the number of counts is taken from a binomial
+          distribution.  Distribution has parameters p = (clipped) probability
+          of the circuit and n = number of samples.  This can only be used
+          when there are exactly two SPAM labels in model_or_dataset.
+        - "multinomial" - counts are taken from a multinomial distribution.
+          Distribution has parameters p_k = (clipped) probability of the gate
+          string using the k-th SPAM label and n = number of samples.
+
+    seed : int, optional
+        If not ``None``, a seed for numpy's random number generator, which
+        is used to sample from the binomial or multinomial distribution.
+
+    rand_state : numpy.random.RandomState
+        A RandomState object to generate samples from. Can be useful to set
+        instead of `seed` if you want reproducible distribution samples across
+        multiple random function calls but you don't want to bother with
+        manually incrementing seeds between those calls.
+
+    alias_dict : dict, optional
+        A dictionary mapping single operation labels into tuples of one or more
+        other operation labels which translate the given circuits before values
+        are computed using `model_or_dataset`.  The resulting Dataset, however,
+        contains the *un-translated* circuits as keys.
+
+    collision_action : {"aggregate", "keepseparate"}
+        Determines how duplicate circuits are handled by the resulting
+        `DataSet`.  Please see the constructor documentation for `DataSet`.
+
+    record_zero_counts : bool, optional
+        Whether zero-counts are actually recorded (stored) in the returned
+        DataSet.  If False, then zero counts are ignored, except for
+        potentially registering new outcome labels.
+
+    times : iterable, optional
+        When not None, a list of time-stamps at which data should be sampled.
+        `num_samples` samples will be simulated at each time value, meaning that
+        each circuit in `circuit_list` will be evaluated with the given time
+        value as its *start time*.
+    """
+
+    def __init__(self, model, num_samples=1000, sample_error='multinomial',
+                 seed=None, rand_state=None, alias_dict=None,
+                 collision_action="aggregate", record_zero_counts=True, times=None):
+        super().__init__()
+        self.model = model
+        self.num_samples = num_samples
+        self.sample_error = sample_error
+        self.seed = seed
+        self.rand_state = rand_state
+        self.alias_dict = alias_dict
+        self.collision_action = collision_action
+        self.record_zero_counts = record_zero_counts
+        self.times = times
+
+    def run(self, edesign, memlimit=None, comm=None):
+        """
+        Run this data simulator on an experiment design.
+
+        Parameters
+        ----------
+        edesign : ExperimentDesign
+            The input experiment design.
+
+        memlimit : int, optional
+            A rough per-processor memory limit in bytes.
+
+        comm : mpi4py.MPI.Comm, optional
+            When not ``None``, an MPI communicator used to run this data
+            simulator in parallel.
+
+        Returns
+        -------
+        ProtocolData
+        """
+        from ..construction.datasetconstruction import simulate_data as _simulate_data
+        ds = _simulate_data(self.model, edesign.all_circuits_needing_data, self.num_samples,
+                            self.sample_error, self.seed, self.rand_state,
+                            self.alias_dict, self.collision_action,
+                            self.record_zero_counts, comm, memlimit, self.times)
+        return ProtocolData(edesign, ds)
+
+
 #In the future, we could put this function into a base class for
 # the classes that utilize it above, so it would become a proper method.
 def _convert_nameddict_attributes(obj):
@@ -2274,7 +2741,7 @@ def _reset_index(df):
     return _pd.merge(index_df, df, left_index=True, right_index=True)
 
 
-def _process_dataframe(df, pivot_valuename, pivot_value, drop_columns):
+def _process_dataframe(df, pivot_valuename, pivot_value, drop_columns, preserve_order=False):
     """ See to_dataframe docstrings for argument descriptions. """
     if drop_columns:
         if drop_columns is True: drop_columns = (True,)
@@ -2287,6 +2754,11 @@ def _process_dataframe(df, pivot_valuename, pivot_value, drop_columns):
         index_columns = list(df.columns)
         index_columns.remove(pivot_valuename)
         index_columns.remove(pivot_value)
-        df = _reset_index(df.set_index(index_columns + [pivot_valuename])[pivot_value].unstack())
+        df_all_index_but_value = df.set_index(index_columns + [pivot_valuename])
+        df_unstacked = df_all_index_but_value[pivot_value].unstack()
+        if preserve_order:  # a documented bug in pandas is unstack sorts - this tries to fix (HACK)
+            #df_unstacked = df_unstacked.reindex(df_all_index_but_value.index.get_level_values(0))
+            df_unstacked = df_unstacked.reindex(df_all_index_but_value.index.get_level_values(0).unique())
+        df = _reset_index(df_unstacked)
 
     return df

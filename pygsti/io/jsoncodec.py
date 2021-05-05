@@ -87,10 +87,12 @@ def encode_obj(py_obj, binary):
         #Get State (and/or init args)
         if _class_hasattr(py_obj, '__pygsti_reduce__'):
             red = py_obj.__pygsti_reduce__()  # returns class, construtor_args, state
-            assert(red[0] is py_obj.__class__), "No support for weird reducing!"
+            assert(callable(red[0]))
             init_args = red[1] if len(red) > 1 else []
             state = red[2] if len(red) > 2 else {}
             if state is None: state = {}
+            if red[0] is not py_obj.__class__:
+                state['__init_fn__'] = (red[0].__module__, red[0].__name__)
             state.update({'__init_args__': init_args})
         elif _class_hasattr(py_obj, '__pygsti_getstate__'):
             state = py_obj.__pygsti_getstate__()  # must return a dict
@@ -287,12 +289,21 @@ def decode_obj(json_obj, binary):
             module = _importlib.import_module(_tostr(modname))
             class_ = getattr(module, _tostr(clsname))
 
+            if B('__init_fn__') in json_obj:  # construct via this function instead of class_.__init__
+                ifn_modname, ifn_fnname = decode_obj(json_obj[B('__init_fn__')], binary)
+                initfn = getattr(_importlib.import_module(_tostr(ifn_modname)), _tostr(ifn_fnname))
+            else:
+                initfn = class_  # just use the class a the callable initialization function
+
             if B('__init_args__') in json_obj:  # construct via __init__
                 args = decode_obj(json_obj[B('__init_args__')], binary)
-                instance = class_(*args)
+                instance = initfn(*args)
 
             else:  # init via __new__ and set state
-                instance = class_.__new__(class_)
+                try:
+                    instance = class_.__new__(class_)
+                except Exception as e:
+                    raise ValueError("Could not create class " + str(class_) + ": " + str(e))
 
             #Create state dict
             state_dict = {}

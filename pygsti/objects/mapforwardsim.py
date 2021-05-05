@@ -173,11 +173,10 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         array_types : tuple, optional
             A tuple of string-valued array types.  See :method:`ForwardSimulator.create_layout`.
 
-        derivative_dimensions : tuple, optional
-            A tuple containing, optionally, the parameter-space dimension used when taking first
+        derivative_dimension : int, optional
+            Optionally, the parameter-space dimension used when taking first
             and second derivatives with respect to the cirucit outcome probabilities.  This must be
-            have minimally 1 or 2 elements when `array_types` contains `'ep'` or `'epp'` types,
-            respectively.
+            non-None when `array_types` contains `'ep'` or `'epp'` types.
 
         verbosity : int or VerbosityPrinter
             Determines how much output to send to stdout.  0 means no output, higher
@@ -225,7 +224,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
             blk1 = param_blk_sizes[0] if len(param_blk_sizes) > 0 else 0
             blk2 = param_blk_sizes[1] if len(param_blk_sizes) > 1 else 0
             if blk1 is None: blk1 = loc_nparams1
-            if blk2 is None: blk1 = loc_nparams2
+            if blk2 is None: blk2 = loc_nparams2
             global_layout = layout.global_layout
             if comm is not None:
                 from mpi4py import MPI

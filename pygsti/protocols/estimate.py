@@ -556,8 +556,8 @@ class Estimate(object):
         """ TODO: docstring """
         if self.parameters.get('final_objfn', None) is None:
             mdc_store = self.final_mdc_store(resource_alloc)
-            objfn_builder = self.parameters['final_objfn_builder']
-            #objfn_builder = self.parameters.get('final_objfn_builder', _objfns.PoissonPicDeltaLogLFunction.builder())
+            #objfn_builder = self.parameters['final_objfn_builder']
+            objfn_builder = self.parameters.get('final_objfn_builder', _objfns.PoissonPicDeltaLogLFunction.builder())
             objfn = objfn_builder.build_from_store(mdc_store)
             self.parameters['final_objfn'] = objfn
         return self.parameters['final_objfn']

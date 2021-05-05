@@ -23,7 +23,7 @@ from ..tools import slicetools as _slct
 class SuccessFailForwardSimulator(_CacheForwardSimulator):
 
     def create_layout(self, circuits, dataset=None, resource_alloc=None,
-                      array_types=(), derivative_dimensions=None, verbosity=0):
+                      array_types=('E',), derivative_dimension=None, verbosity=0):
         """
         Constructs an circuit-outcome-probability-array (COPA) layout for `circuits` and `dataset`.
 
@@ -41,10 +41,17 @@ class SuccessFailForwardSimulator(_CacheForwardSimulator):
             A available resources and allocation information.  These factors influence how
             the layout (evaluation strategy) is constructed.
 
-        cache : dict
-            A dictionary whose keys are the elements of `circuits` and values can be
-            whatever the user wants.  These values are provided when calling
-            :method:`iter_unique_circuits_with_cache`.
+        array_types : tuple, optional
+            A tuple of string-valued array types.  See :method:`ForwardSimulator.create_layout`.
+
+        derivative_dimension : int, optional
+            Optionally, the parameter-space dimension used when taking first
+            and second derivatives with respect to the cirucit outcome probabilities.  This must be
+            non-None when `array_types` contains `'ep'` or `'epp'` types.
+
+        verbosity : int or VerbosityPrinter
+            Determines how much output to send to stdout.  0 means no output, higher
+            integers mean more output.
 
         Returns
         -------
@@ -52,7 +59,9 @@ class SuccessFailForwardSimulator(_CacheForwardSimulator):
         """
         #Note: resource_alloc not even used -- make a slightly more complex "default" strategy?
         cache = {c: self.model._circuit_cache(c) for c in circuits}
-        return _CachedCOPALayout.create_from(circuits, self.model, dataset, derivative_dimensions, cache)
+        num_params = derivative_dimension if (derivative_dimension is not None) else self.model.num_params
+        return _CachedCOPALayout.create_from(circuits, self.model, dataset, (num_params, num_params),
+                                             resource_alloc, cache)
 
     def _compute_circuit_outcome_probabilities_with_cache(self, array_to_fill, circuit, outcomes, resource_alloc, cache,
                                                           time=None):

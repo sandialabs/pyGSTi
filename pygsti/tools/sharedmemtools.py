@@ -31,7 +31,7 @@ class LocalNumpyArray(_np.ndarray):
     Numpy array with metadata for referencing how this "local" array is part
     of a larger shared memory array.
     """
-    def __new__(subtype, shape, dtype=float, buffer=None, offset=0,
+    def __new__(subtype, shape=None, dtype=float, buffer=None, offset=0,
                 strides=None, order=None, host_array=None, slices_into_host_array=None,
                 shared_memory_handle=None):
         obj = super(LocalNumpyArray, subtype).__new__(subtype, shape, dtype,
@@ -41,6 +41,35 @@ class LocalNumpyArray(_np.ndarray):
         obj.slices_into_host_array = slices_into_host_array
         obj.shared_memory_handle = shared_memory_handle
         return obj
+
+    def __pygsti_reduce__(self):
+        reconstruct_fn, reconstruct_args, state = super(LocalNumpyArray, self).__reduce__()
+
+        # Serialized dtypes as strings since the np.dtype object cannot be serialized
+        updated_state = []; dtype_arg_indices = []
+        for i, v in enumerate(state):
+            if isinstance(v, _np.dtype):
+                updated_state.append(str(v))
+                dtype_arg_indices.append(i)
+            else:
+                updated_state.append(v)
+
+        #Note: maybe host/shared info should all be set to 'None' since we shouldn't really be serializing these?
+        state_as_dict = {'ndarray_state': updated_state,
+                         'dtype_arg_indices': dtype_arg_indices,
+                         'host_array': self.host_array,
+                         'slices_into_host_array': self.slices_into_host_array,
+                         'shared_memory_handle': self.shared_memory_handle}
+        return (reconstruct_fn, reconstruct_args, state_as_dict)
+
+    def __pygsti_setstate__(self, state_dict):
+        dtype_arg_indices = state_dict.get('dtype_arg_indices', [])
+        updated_state = [(_np.dtype(v) if (i in dtype_arg_indices) else v)
+                         for i, v in enumerate(state_dict.get('ndarray_state', []))]
+        self.__setstate__(tuple(updated_state))
+        self.host_array = state_dict.get("host_array", None)
+        self.slices_into_host_array = state_dict.get("slices_into_host_array", None)
+        self.shared_memory_handle = state_dict.get("shared_memory_handle", None)
 
     def __array_finalize__(self, obj):
         if obj is None: return
