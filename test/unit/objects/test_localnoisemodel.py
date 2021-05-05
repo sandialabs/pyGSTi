@@ -101,46 +101,6 @@ class LocalNoiseModelInstanceTester(BaseCase):
             EmbeddedDenseOp(mdl_local.state_space_labels, ('qb1',), mdl_local.operation_blks['gates']['Gx']) # Gx operation
         ])
         self.assertEqual(str(op), str(ref_op))
-    
-    def test_localnoise_1Q_padded_idle(self):
-        nQubits = 2
-        noisy_idle = np.array([[1, 0, 0, 0],
-                               [0, 0.9, 0, 0],
-                               [0, 0, 0.9, 0],
-                               [0, 0, 0, 0.9]], 'd')
-
-        mdl_local = LocalNoiseModel.from_parameterization(
-            nQubits, ('Gx', 'Gy', 'Gcnot'), geometry="line",
-            qubit_labels=['qb{}'.format(i) for i in range(nQubits)],
-            parameterization='static', independent_gates=False,
-            ensure_composed_gates=False, padded_idle=noisy_idle)
-
-        self.assertEqual(set(mdl_local.operation_blks['gates'].keys()), set(["Gx", "Gy", "Gcnot", "1QPadIdle"]))
-        self.assertEqual(set(mdl_local.operation_blks['layers'].keys()),
-            set([('Gx', 'qb0'), ('Gx', 'qb1'), ('Gy', 'qb0'), ('Gy', 'qb1'), ('Gcnot', 'qb0', 'qb1'), ('Gcnot', 'qb1', 'qb0')]))
-        self.assertEqual(set(mdl_local.factories['layers'].keys()), set(['padIdle']))
-        
-        test_circuit = (('Gx', 'qb0'), ('Gcnot', 'qb0', 'qb1'), [], [('Gx', 'qb1'), ('Gy', 'qb0')])
-        self.assertAlmostEqual(sum(mdl_local.probabilities(test_circuit).values()), 1.0)
-        # Note that this probability is different than the global idle, since noise is not applied to active gates
-        self.assertAlmostEqual(mdl_local.probabilities(test_circuit)['00'], 0.432249999)
-        self.assertEqual(mdl_local.num_params, 0)
-    
-        test_circuit = ([('padIdle', 'qb0'), ('Gx', 'qb0')], [('padIdle', 'qb0'), ('padIdle', 'qb1'), ('Gcnot', 'qb0', 'qb1')],
-            [('padIdle', 'qb0'), ('padIdle', 'qb1')], [('padIdle', 'qb0'), ('padIdle', 'qb1'), ('Gx', 'qb1'), ('Gy', 'qb0')])
-        self.assertAlmostEqual(sum(mdl_local.probabilities(test_circuit).values()), 1.0)
-        # This now should be the same circuit as one from test_localnoise_1Q_global_idle
-        # Since I've added the padded idle before non-idle gates as well (i.e. all gates have it prepended)
-        self.assertAlmostEqual(mdl_local.probabilities(test_circuit)['00'], 0.3576168)
-        self.assertEqual(mdl_local.num_params, 0)
-
-        op = mdl_local.circuit_layer_operator(Label('Gx', 'qb1'))
-        # Order matters here for test, we start with base operation and then idles are added on (probably in order)
-        ref_op = ComposedDenseOp([
-            EmbeddedDenseOp(mdl_local.state_space_labels, ('qb1',), mdl_local.operation_blks['gates']['Gx']), # Gx operation
-            EmbeddedDenseOp(mdl_local.state_space_labels, ('qb0',), mdl_local.operation_blks['gates']['1QPadIdle']), # Idle on qb0
-        ])
-        self.assertEqual(str(op), str(ref_op))
 
     def test_marginalized_povm(self):
         nQubits = 4
