@@ -933,9 +933,11 @@ def _get_error_gate(key, ideal_gate, depolarization_strengths, stochastic_error_
     """
     # "dim" below needs to be number of paulis, so CHP/statevec dim needs to be doubled
     if ideal_gate._evotype == 'chp':
-        dim = 2**ideal_gate.dim
+        dim = ideal_gate.dim
+        basis_size = 2**dim
     else:
         dim = ideal_gate.dim
+        basis_size = dim
         
     if key in depolarization_strengths: # Depolarizing error specification
         depol_rate = depolarization_strengths[key]
@@ -944,13 +946,13 @@ def _get_error_gate(key, ideal_gate, depolarization_strengths, stochastic_error_
             depol_gate = _op.DepolarizeOp(dim, basis="pp", evotype=ideal_gate._evotype, initial_rate=depol_rate)
             err_gate = _op.ComposedOp([ideal_gate, depol_gate])
         elif depolarization_parameterization == "stochastic": # StochasticNoiseOp
-            rate_per_pauli = depol_rate / (dim - 1)
-            rates = [rate_per_pauli] * (dim - 1)
+            rate_per_pauli = depol_rate / (basis_size - 1)
+            rates = [rate_per_pauli] * (basis_size - 1)
             sto_gate = _op.StochasticNoiseOp(dim, basis="pp", evotype=ideal_gate._evotype, initial_rates=rates)
             err_gate = _op.ComposedOp([ideal_gate, sto_gate])
         elif depolarization_parameterization == "lindblad": #LindbladOp with "depol", "diagonal" parameterization
-            basis = _BuiltinBasis('pp', dim)
-            rate_per_pauli = depol_rate / (dim - 1)
+            basis = _BuiltinBasis('pp', basis_size)
+            rate_per_pauli = depol_rate / (basis_size - 1)
             errdict = {('S', bl): rate_per_pauli for bl in basis.labels[1:]}
             errgen = _op.LindbladErrorgen(dim, errdict, basis, "depol", "diagonal",
                                         truncate=False, mx_basis='pp', evotype=ideal_gate._evotype)
@@ -968,7 +970,7 @@ def _get_error_gate(key, ideal_gate, depolarization_strengths, stochastic_error_
             sto_gate = _op.StochasticNoiseOp(dim, basis="pp", evotype=ideal_gate._evotype, initial_rates=sto_rates)
             err_gate = _op.ComposedOp([ideal_gate, sto_gate])
         elif stochastic_parameterization == "lindblad": # LindbladOp with "cptp", "diagonal" parameterization
-            basis = _BuiltinBasis('pp', dim)
+            basis = _BuiltinBasis('pp', basis_size)
             errdict = {('S', bl): rate for bl, rate in zip(basis.labels[1:], sto_rates)}
             errgen = _op.LindbladErrorgen(dim, errdict, basis, "cptp", "diagonal",
                                         truncate=False, mx_basis='pp', evotype=ideal_gate._evotype)
@@ -990,8 +992,8 @@ def _get_error_gate(key, ideal_gate, depolarization_strengths, stochastic_error_
         _, _, nonham_mode, param_mode = _op.LindbladOp.decomp_paramtype(paramtype)
 
         # Build LindbladErrorgen directly to have control over which parameters are set (leads to lower param counts)
-        basis = _BuiltinBasis('pp', ideal_gate.dim)
-        errgen = _op.LindbladErrorgen(ideal_gate.dim, errdict, basis, param_mode, nonham_mode,
+        basis = _BuiltinBasis('pp', basis_size)
+        errgen = _op.LindbladErrorgen(dim, errdict, basis, param_mode, nonham_mode,
                                       truncate=False, mx_basis='pp', evotype=ideal_gate._evotype)
 
         # TODO: Make this not require dense
@@ -1257,6 +1259,8 @@ def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}
         assert ('prep' not in all_keys), "Cannot specify 'prep' error specification with CHP evotype"
 
         # For CHP, prep can only be idle gate
+        # TODO: This should be replaced by a SPAMVec in the near future
+        # Only works because LocalNoiseModel allows it, which it probably shouldn't
         rho0 = _op.ComposedOp([_op.EmbeddedOp(range(num_qubits), [i], _op.StaticStandardOp('Gi', 'chp'))
                                for i in range(num_qubits)])
         prep_layers['rho0'] = rho0

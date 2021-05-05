@@ -1485,6 +1485,8 @@ class StaticStandardOp(DenseOperator):
 
         LinearOperator.__init__(self, rep, evotype)
 
+    # TODO: This should not be necessary to define, but is here as a temporary measure
+    # This will likely be removed as "dense" is reworked in the evotype refactor
     @property
     def base(self):
         """
@@ -2717,7 +2719,7 @@ class StochasticNoiseOp(LinearOperator):
         the evolution type being used.
 
     initial_rates : list or array
-        if not None, a list of `dim-1` initial error rates along each of
+        if not None, a list of `basis.size-1` initial error rates along each of
         the directions corresponding to each basis element.  If None,
         then all initial rates are zero.
     
@@ -2743,8 +2745,7 @@ class StochasticNoiseOp(LinearOperator):
             The basis to use, defining the "principle axes"
             along which there is stochastic noise.  We assume that
             the first element of `basis` is the identity.
-            This argument is ignored for the "chp" evotype (where
-            the Pauli basis is used).
+            This must be 'pp' for the 'chp' evotype.
 
         evotype : {"densitymx", "cterm", "svterm", "chp"}
             the evolution type being used.
@@ -2772,9 +2773,10 @@ class StochasticNoiseOp(LinearOperator):
                 std_superop = _lbt.nonham_lindbladian(b, b, sparse=False)
                 self.stochastic_superops.append(_bt.change_basis(std_superop, 'std', self.basis))
         elif evotype == 'chp':
-            self.basis = _Basis.cast('pp', dim, sparse=False)
-
-            nqubits = (dim-1).bit_length() // 2
+            assert (basis == 'pp'), "Only Pauli basis is allowed for 'chp' evotype"
+            nqubits = (dim-1).bit_length()
+            
+            self.basis = _Basis.cast(basis, 4**nqubits, sparse=False)
 
             std_chp_ops = _itgs.standard_gatenames_chp_conversions()
 
@@ -2805,7 +2807,7 @@ class StochasticNoiseOp(LinearOperator):
         if evotype == "densitymx":  # for now just densitymx is supported
             rep = replib.DMOpRepDense(_np.ascontiguousarray(_np.identity(dim, 'd')))
         elif evotype == "chp":
-            rep = 2**nqubits # Base rep doesn't matter, but need to set dim properly
+            rep = dim
         else:
             raise ValueError("Invalid evotype '%s' for %s" % (evotype, self.__class__.__name__))
 
@@ -2847,7 +2849,7 @@ class StochasticNoiseOp(LinearOperator):
             A copy of this object.
         """
         if memo is not None and id(self) in memo: return memo[id(self)]
-        copyOfMe = StochasticNoiseOp(self.basis.size, self.basis, self._evotype, self._params_to_rates(self.to_vector()))
+        copyOfMe = StochasticNoiseOp(self.dim, self.basis, self._evotype, self._params_to_rates(self.to_vector()))
         return self._copy_gpindices(copyOfMe, parent, memo)
 
     #to_dense / to_sparse?
@@ -3151,7 +3153,14 @@ class DepolarizeOp(StochasticNoiseOp):
             Random seed for RandomState (or directly provided RandomState)
             for sampling stochastic superoperators with the 'chp' evotype.
         """
-        num_rates = dim - 1
+        if evotype == 'chp':
+            assert (basis == 'pp'), "Only Pauli basis is allowed for 'chp' evotype"
+            # For chp (and statevec, etc), want full superoperator basis
+            basis = _Basis.cast(basis, 2**dim, sparse=False)
+        else:
+            basis = _Basis.cast(basis, dim, sparse=False)
+        
+        num_rates = basis.size - 1
         initial_sto_rates = [initial_rate / num_rates] * num_rates
         StochasticNoiseOp.__init__(self, dim, basis, evotype, initial_sto_rates, seed_or_state)
 
@@ -3187,7 +3196,7 @@ class DepolarizeOp(StochasticNoiseOp):
             A copy of this object.
         """
         if memo is not None and id(self) in memo: return memo[id(self)]
-        copyOfMe = DepolarizeOp(self.basis.size, self.basis, self._evotype, self._params_to_rates(self.to_vector())[0])
+        copyOfMe = DepolarizeOp(self.dim, self.basis, self._evotype, self._params_to_rates(self.to_vector())[0])
         return self._copy_gpindices(copyOfMe, parent, memo)
 
     def __str__(self):
@@ -6050,11 +6059,12 @@ class EmbeddedOp(LinearOperator):
             assert(len(self.state_space_labels.labels) == 1
                    and all([ld == 2 for ld in self.state_space_labels.labeldims.values()])), \
                 "All state space labels must correspond to *qubits*"
-            if self.embedded_op._evotype == 'chp':
-                op_nqubits = (self.embedded_op.dim-1).bit_length()
-                assert(len(target_labels) == op_nqubits), \
-                    "Inconsistent number of qubits in `target_labels` ({0}) and CHP `embedded_op` ({1})".format(
-                        len(target_labels), op_nqubits)
+            assert(self.embedded_op._evotype == 'chp'), \
+                "Embedded op must also have CHP evotype instead of %s" % self.embedded_op._evotype 
+            op_nqubits = (self.embedded_op.dim-1).bit_length()
+            assert(len(target_labels) == op_nqubits), \
+                "Inconsistent number of qubits in `target_labels` ({0}) and CHP `embedded_op` ({1})".format(
+                    len(target_labels), op_nqubits)
             assert(not self.dense_rep), "`dense_rep` can only be set to True for densitymx and statevec evotypes"
 
             qubitLabels = self.state_space_labels.labels[0]
