@@ -177,7 +177,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                               geometry="line", parameterization='static', evotype="auto",
                               simulator="auto", on_construction_error='raise',
                               independent_gates=False, ensure_composed_gates=False,
-                              global_idle=None, padded_idle=None):
+                              global_idle=None):
         """
         Creates a n-qubit model, usually of ideal gates, that is capable of describing "local noise".
 
@@ -340,12 +340,7 @@ class LocalNoiseModel(_ImplicitOpModel):
             If a 1-qubit operator is given and `num_qubits > 1` the global idle
             is the parallel application of this operator on each qubit line.
             Otherwise the given operator must act on all `num_qubits` qubits.
-
-        padded_idle : LinearOperator, optional
-            A padding idle operation, which is performed on every qubit without
-            an explicit operation of every circuit layer. If `None`, no operation
-            is used (default). Otherwise, a 1-qubit operator should be provided,
-            which will automatically applied to untouched qubit lines.
+        
         Returns
         -------
         LocalNoiseModel
@@ -496,17 +491,10 @@ class LocalNoiseModel(_ImplicitOpModel):
                     global_idle = _op.StaticDenseOp(global_idle, "statevec")
                 else:
                     global_idle = _op.convert(_op.StaticDenseOp(global_idle), parameterization, "pp")
-        
-        if padded_idle is not None:
-            if not isinstance(padded_idle, _op.LinearOperator):
-                if parameterization == "static unitary":  # assume gate dict is already unitary gates?
-                    padded_idle = _op.StaticDenseOp(padded_idle, "statevec")
-                else:
-                    padded_idle = _op.convert(_op.StaticDenseOp(padded_idle), parameterization, "pp")
 
         return cls(num_qubits, gatedict, prep_layers, povm_layers, availability,
                    qubit_labels, geometry, evotype, simulator, on_construction_error,
-                   independent_gates, ensure_composed_gates, global_idle, padded_idle)
+                   independent_gates, ensure_composed_gates, global_idle)
 
     #        spamdict : dict
     #        A dictionary (an `OrderedDict` if you care about insertion order) which
@@ -520,7 +508,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                  qubit_labels=None, geometry="line", evotype="densitymx",
                  simulator="auto", on_construction_error='raise',
                  independent_gates=False, ensure_composed_gates=False,
-                 global_idle=None, padded_idle=None):
+                 global_idle=None):
         """
         Creates a n-qubit model by embedding the *same* gates from `gatedict`
         as requested and creating a perfect 0-prep and z-basis POVM.
@@ -653,12 +641,6 @@ class LocalNoiseModel(_ImplicitOpModel):
             If a 1-qubit operator is given and `num_qubits > 1` the global idle
             is the parallel application of this operator on each qubit line.
             Otherwise the given operator must act on all `num_qubits` qubits.
-        
-        padded_idle : LinearOperator, optional
-            A padding idle operation, which is performed on every qubit without
-            an explicit operation of every circuit layer. If `None`, no operation
-            is used (default). Otherwise, a 1-qubit operator should be provided,
-            which will automatically applied to untouched qubit lines.
         """
         if qubit_labels is None:
             qubit_labels = tuple(range(num_qubits))
@@ -884,24 +866,6 @@ class LocalNoiseModel(_ImplicitOpModel):
             assert(global_idle_nQubits == num_qubits), \
                 "Global idle gate acts on %d qubits but should act on %d!" % (global_idle_nQubits, num_qubits)
             self.operation_blks['layers'][_Lbl('globalIdle')] = global_idle
-        
-        if padded_idle is not None:
-            if not isinstance(padded_idle, _op.LinearOperator):
-                padded_idle = _op.StaticDenseOp(padded_idle, evotype)  # static gates by default
-            
-            padded_idle_nQubits = int(round(_np.log2(padded_idle.dim) / 2)) \
-                if (evotype in ("densitymx", "svterm", "cterm")) \
-                else int(round(_np.log2(padded_idle.dim)))  # evotype in ("statevec","stabilizer", "chp")
-            assert(padded_idle_nQubits==1), \
-                "Padded idle gate acts on %d qubits but should act on 1 only!" % padded_idle_nQubits
-            
-            self.operation_blks['gates'][_Lbl('1QPadIdle')] = padded_idle
-
-            # Can use EmbeddingOpFactory
-            embedded_op = _opfactory.EmbeddingOpFactory(self.state_space_labels, padded_idle,
-                                                        dense=isinstance(simulator, _MatrixFSim),
-                                                        num_target_labels=1)
-            self.factories['layers'][_Lbl('padIdle')] = embedded_op
 
 
 class _SimpleCompLayerRules(_LayerRules):
@@ -975,28 +939,16 @@ class _SimpleCompLayerRules(_LayerRules):
         Composed = _op.ComposedDenseOp if dense else _op.ComposedOp
         components = layerlbl.components
         bHasGlobalIdle = bool(_Lbl('globalIdle') in model.operation_blks['layers'])
-        bHasPaddedIdle = bool(_Lbl('padIdle') in model.factories['layers'])
 
         if isinstance(layerlbl, _CircuitLabel):
             op = self._create_op_for_circuitlabel(model, layerlbl, dense)
             caches['complete-layers'][layerlbl] = op
             return op
 
-        if len(components) == 1 and not bHasGlobalIdle and not bHasPaddedIdle:
+        if len(components) == 1 and not bHasGlobalIdle:
             ret = self._layer_component_operation(model, components[0], caches['op-layers'], dense)
         else:
             gblIdle = [model.operation_blks['layers'][_Lbl('globalIdle')]] if bHasGlobalIdle else []
-
-            # Find all qubits not acted on by components of this layer, and add padded idles if provided
-            if bHasPaddedIdle:
-                # Cast to list to avoid tuple vs LabelTupTup issues
-                components = list(components)
-
-                unused_qubits = set(model.qubit_labels)
-                for l in components:
-                    unused_qubits -= set(l.sslbls)
-
-                components += [_Lbl('padIdle', ql) for ql in unused_qubits]
 
             #Note: OK if len(components) == 0, as it's ok to have a composed gate with 0 factors
             ret = Composed(gblIdle + [self._layer_component_operation(model, l, caches['op-layers'], dense)

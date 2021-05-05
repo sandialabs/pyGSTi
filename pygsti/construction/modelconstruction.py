@@ -1021,11 +1021,11 @@ def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}
         - `stochastic_error_probs`      -> StochasticNoiseOp or LindbladOp
         - `lindblad_error_coeffs`       -> LindbladOp
 
-    In addition to the gate names, the special values `"prep"`, `"povm"`, `"global_idle"`,
-    and `"padded_idle"` may be used as keys to specify the error on the state preparation,
-    measurement, and global idle, respectively. The `"prep"` and `"povm"` error specifications
-    can only use the "lindblad" parameterization - a warning will be raised and the parameterization
-    overridden for these two operations if an alternate parameterization was provided.
+    In addition to the gate names, the special values `"prep"`, `"povm"`, `"idle"`,
+    may be used as keys to specify the error on the state preparation, measurement, and global idle,
+    respectively. The `"prep"` and `"povm"` error specifications can only use the "lindblad"
+    parameterization - a warning will be raised and the parameterization overridden for these
+    two operations if an alternate parameterization was provided.
 
     Parameters
     ----------
@@ -1206,7 +1206,7 @@ def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}
             continue
 
         # Skip idle, prep, and povm here, just do gates
-        if key in ['global_idle', 'padded_idle', 'prep', 'povm']:
+        if key in ['idle', 'prep', 'povm']:
             continue
 
         # If key has qubits, get base name for lookup
@@ -1243,23 +1243,14 @@ def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}
         else:
             raise KeyError("'%s' gate unitary needs to be provided by `nonstd_gate_unitaries` arg" % name)
 
-    if 'global_idle' in all_keys:
+    if 'idle' in all_keys:
         ideal_gate = _op.StaticStandardOp('Gi', evotype)
-        global_idle_op = _get_error_gate('global_idle', ideal_gate, depolarization_strengths,
+        global_idle_op = _get_error_gate('idle', ideal_gate, depolarization_strengths,
                                          stochastic_error_probs, lindblad_error_coeffs,
                                          depolarization_parameterization, stochastic_parameterization,
                                          lindblad_parameterization)  # 1-qubit idle op
     else:
         global_idle_op = None
-    
-    if 'padded_idle' in all_keys:
-        ideal_gate = _op.StaticStandardOp('Gi', evotype)
-        padded_idle_op = _get_error_gate('padded_idle', ideal_gate, depolarization_strengths,
-                                         stochastic_error_probs, lindblad_error_coeffs,
-                                         depolarization_parameterization, stochastic_parameterization,
-                                         lindblad_parameterization)  # 1-qubit idle op
-    else:
-        padded_idle_op = None
 
     prep_layers = {}
     if evotype == 'chp':
@@ -1311,4 +1302,4 @@ def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}
     return _LocalNoiseModel(num_qubits, gatedict, prep_layers, povm_layers, availability, qubit_labels,
                             geometry, evotype, simulator, on_construction_error,
                             independent_gates, ensure_composed_gates,
-                            global_idle=global_idle_op, padded_idle=padded_idle_op)
+                            global_idle=global_idle_op)
