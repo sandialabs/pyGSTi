@@ -125,7 +125,7 @@ class Instrument(_gm.ModelMember, _collections.OrderedDict):
 
         _collections.OrderedDict.__init__(self, items)
         _gm.ModelMember.__init__(self, dim, evotype)
-        self._paramvec = self._build_paramvec()
+        self._paramvec, self._paramlbls = self._build_paramvec()
         self._readonly = True
 
     #No good way to update Instrument on the fly yet...
@@ -149,12 +149,14 @@ class Instrument(_gm.ModelMember, _collections.OrderedDict):
             and will initialize new elements of _paramvec, but does NOT change
             existing elements of _paramvec (use _clean_paramvec for this)"""
         v = _np.empty(0, 'd'); off = 0
+        vl = _np.empty(0, dtype=object)
 
         # Step 2: add parameters that don't exist yet
-        for obj in self.values():
+        for lbl, obj in self.items():
             if obj.gpindices is None or obj.parent is not self:
                 #Assume all parameters of obj are new independent parameters
                 v = _np.insert(v, off, obj.to_vector())
+                vl = _np.insert(vl, off, ["%s: %s" % (str(lbl), obj_plbl) for obj_plbl in obj.parameter_labels])
                 num_new_params = obj.allocate_gpindices(off, self)
                 off += num_new_params
             else:
@@ -163,11 +165,15 @@ class Instrument(_gm.ModelMember, _collections.OrderedDict):
                 if M >= L:
                     #Some indices specified by obj are absent, and must be created.
                     w = obj.to_vector()
+                    wl = _np.array(["%s: %s" % (str(lbl), obj_plbl) for obj_plbl in obj.parameter_labels])
                     v = _np.concatenate((v, _np.empty(M + 1 - L, 'd')), axis=0)  # [v.resize(M+1) doesn't work]
+                    vl = _np.concatenate((vl, _np.empty(M + 1 - L, dtype=object)), axis=0)
                     for ii, i in enumerate(inds):
-                        if i >= L: v[i] = w[ii]
+                        if i >= L:
+                            v[i] = w[ii]
+                            vl[i] = wl[ii]
                 off = M + 1
-        return v
+        return v, vl
 
     def _clean_paramvec(self):
         """ Updates _paramvec corresponding to any "dirty" elements, which may
@@ -603,6 +609,16 @@ class TPInstrument(_gm.ModelMember, _collections.OrderedDict):
                 [(prefix + k, _op.TPInstrumentOp(param_simplified, i))
                  for i, k in enumerate(self.keys())])
         return simplified
+
+    @property
+    def parameter_labels(self):
+        """
+        An array of labels (usually strings) describing this model member's parameters.
+        """
+        vl = _np.empty(self.num_params, dtype=object)
+        for gate in self.param_ops:
+            vl[gate.gpindices] = gate.parameter_labels
+        return vl
 
     @property
     def num_elements(self):

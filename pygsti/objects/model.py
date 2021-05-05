@@ -94,7 +94,7 @@ v
         self._num_modeltest_params = None
         self._hyperparams = {}
         self._paramvec = _np.zeros(0, 'd')
-        self._paramlbls = None  # a placeholder for FUTURE functionality
+        self._paramlbls = _np.empty(0, dtype=object)
         self.uuid = _uuid.uuid4()  # a Model's uuid is like a persistent id(), useful for hashing
 
     @property
@@ -176,6 +176,31 @@ v
     @num_modeltest_params.setter
     def num_modeltest_params(self, count):
         self._num_modeltest_params = count
+
+    @property
+    def parameter_labels(self):
+        """
+        A list of labels, usually of the form `(op_label, string_description)` describing this model's parameters.
+        """
+        return self._paramlbls
+
+    def set_parameter_label(self, index, label):
+        """
+        Set the label of a single model parameter.
+
+        Parameters
+        ----------
+        index : int
+            The index of the paramter whose label should be set.
+
+        label : object
+            An object that serves to label this parameter.  Often a string.
+
+        Returns
+        -------
+        None
+        """
+        self._paramlbls[index] = label
 
     def to_vector(self):
         """
@@ -692,6 +717,7 @@ class OpModel(Model):
             and will initialize new elements of _paramvec, but does NOT change
             existing elements of _paramvec (use _update_paramvec for this)"""
         v = self._paramvec; Np = len(self._paramvec)  # NOT self.num_params since the latter calls us!
+        vl = self._paramlbls
         off = 0; shift = 0
         #print("DEBUG: rebuilding...")
 
@@ -710,6 +736,7 @@ class OpModel(Model):
         if len(indices_to_remove) > 0:
             #print("DEBUG: Removing %d params:"  % len(indices_to_remove), indices_to_remove)
             v = _np.delete(v, indices_to_remove)
+            vl = _np.delete(vl, indices_to_remove)
             def get_shift(j): return _bisect.bisect_left(indices_to_remove, j)
             memo = set()  # keep track of which object's gpindices have been set
             for _, obj in self._iter_parameterized_objs():
@@ -747,10 +774,17 @@ class OpModel(Model):
                 #Assume all parameters of obj are new independent parameters
                 num_new_params = obj.allocate_gpindices(off, self, memo)
                 objvec = obj.to_vector()  # may include more than "new" indices
+                objlbls = _np.empty(obj.num_params, dtype=object)
+                objlbls[:] = [(lbl, obj_plbl) for obj_plbl in obj.parameter_labels]
                 if num_new_params > 0:
                     new_local_inds = _gm._decompose_gpindices(obj.gpindices, slice(off, off + num_new_params))
                     assert(len(objvec[new_local_inds]) == num_new_params)
                     v = _np.insert(v, off, objvec[new_local_inds])
+                    try:
+                        vl = _np.insert(vl, off, objlbls[new_local_inds])
+                    except:
+                        import bpdb; bpdb.set_trace()
+                        print("DB:")
                 # print("objvec len = ",len(objvec), "num_new_params=",num_new_params,
                 #       " gpinds=",obj.gpindices) #," loc=",new_local_inds)
 
@@ -769,15 +803,21 @@ class OpModel(Model):
                 if M >= L:
                     #Some indices specified by obj are absent, and must be created.
                     w = obj.to_vector()
+                    wl = _np.empty(obj.num_params, dtype=object)
+                    wl[:] = [(lbl, obj_plbl) for obj_plbl in obj.parameter_labels]
                     v = _np.concatenate((v, _np.empty(M + 1 - L, 'd')), axis=0)  # [v.resize(M+1) doesn't work]
+                    vl = _np.concatenate((vl, _np.empty(M + 1 - L, dtype=object)), axis=0)
                     shift += M + 1 - L
                     for ii, i in enumerate(inds):
-                        if i >= L: v[i] = w[ii]
+                        if i >= L:
+                            v[i] = w[ii]
+                            vl[i] = wl[ii]
                     #print("DEBUG:    --> added %d new params" % (M+1-L))
                 if M >= 0:  # M == -1 signifies this object has no parameters, so we'll just leave `off` alone
                     off = M + 1
 
         self._paramvec = v
+        self._paramlbls = vl
         #print("DEBUG: Done rebuild: %d params" % len(v))
 
     def _init_virtual_obj(self, obj):

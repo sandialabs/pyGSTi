@@ -1203,6 +1203,11 @@ class FullSPAMVec(DenseSPAMVec):
         assert(evotype in ("statevec", "densitymx")), \
             "Invalid evolution type '%s' for %s" % (evotype, self.__class__.__name__)
         DenseSPAMVec.__init__(self, vec, evotype, typ)
+        if self._evotype == "statevec":
+            self._paramlbls = _np.array(["VecElement Re(%d)" % i for i in range(self.dim)]
+                                        + ["VecElement Im(%d)" % i for i in range(self.dim)], dtype=object)
+        else:
+            self._paramlbls = _np.array(["VecElement Re(%d)" % i for i in range(self.dim)], dtype=object)
 
     def set_dense(self, vec):
         """
@@ -1365,6 +1370,7 @@ class TPSPAMVec(DenseSPAMVec):
                              "first element must equal %g!" % firstEl)
         DenseSPAMVec.__init__(self, vec, "densitymx", "prep")
         assert(isinstance(self.base, _ProtectedArray))
+        self._paramlbls = _np.array(["VecElement %d" % i for i in range(1, self.dim)], dtype=object)
 
     @property
     def base(self):
@@ -1706,10 +1712,19 @@ class CPTPSPAMVec(DenseSPAMVec):
         # set self.params and self.dmDim
         self._set_params_from_vector(vector, truncate)
 
+        #parameter labels (parameter encode the Cholesky Lmx)
+        labels = []
+        for i, ilbl in enumerate(basis.labels[1:]):
+            for j, jlbl in enumerate(basis.labels[1:]):
+                if i == j: labels.append("%s diagonal element of density matrix Cholesky decomp" % ilbl)
+                elif j < i: labels.append("Re[(%s,%s) element of density matrix Cholesky decomp]" % (ilbl, jlbl))
+                else: labels.append("Im[(%s,%s) element of density matrix Cholesky decomp]" % (ilbl, jlbl))
+
         #scratch space
         self.Lmx = _np.zeros((self.dmDim, self.dmDim), 'complex')
 
         DenseSPAMVec.__init__(self, vector, "densitymx", "prep")
+        self._paramlbls = _np.array(labels, dtype=object)
 
     def _set_params_from_vector(self, vector, truncate):
         density_mx = _np.dot(self.basis_mxs, vector)
@@ -1758,7 +1773,7 @@ class CPTPSPAMVec(DenseSPAMVec):
     def _construct_vector(self):
         dmDim = self.dmDim
 
-        #  params is an array of length dmDim^2-1 that
+        #  params is an array of length dmDim^2 that
         #  encodes a lower-triangular matrix "Lmx" via:
         #  Lmx[i,i] = params[i*dmDim + i] / param-norm  # i = 0...dmDim-2
         #     *last diagonal el is given by sqrt(1.0 - sum(L[i,j]**2))
@@ -2149,6 +2164,17 @@ class TensorProdSPAMVec(SPAMVec):
                 #factorVecs = [factor_povms[i][self.effectLbls[i]] for i in range(1, len(factor_povms))]
                 #outcomes = _np.array(list(_itertools.chain(*[f.outcomes for f in factorVecs])), _np.int64)
                 #rep = replib.SBEffectRep(outcomes)
+
+    @property
+    def parameter_labels(self):
+        """
+        An array of labels (usually strings) describing this model member's parameters.
+        """
+        vl = _np.empty(self.Np, dtype=object); off = 0
+        for fct in self.factors:
+            N = fct.num_params
+            vl[off:off + N] = fct.parameter_labels; off += N
+        return vl
 
     def to_dense(self, scratch=None):
         """
@@ -2738,6 +2764,13 @@ class PureStateSPAMVec(SPAMVec):
     #    else:
     #        terms = []
     #    return terms
+
+    @property
+    def parameter_labels(self):
+        """
+        An array of labels (usually strings) describing this model member's parameters.
+        """
+        return self.pure_state_vec.parameter_labels
 
     @property
     def num_params(self):
@@ -3581,6 +3614,13 @@ class LindbladSPAMVec(SPAMVec, _ErrorMapContainer):
             # as an effect:  E.dag -> dot(E.dag,errmap) ==> E -> dot(errmap.dag,E)
             #return _np.einsum("jikl,j->ikl", herrgen.conjugate(), dmVec) # return shape = (dim,n_params)
             return _np.tensordot(herrgen.conjugate(), dmVec, (0, 0))  # return shape = (dim,n_params)
+
+    @property
+    def parameter_labels(self):
+        """
+        An array of labels (usually strings) describing this model member's parameters.
+        """
+        return self.error_map.parameter_labels
 
     @property
     def num_params(self):

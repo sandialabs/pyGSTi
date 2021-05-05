@@ -1545,6 +1545,15 @@ class FullDenseOp(DenseOperator):
             "Invalid evolution type '%s' for %s" % (evotype, self.__class__.__name__)
         DenseOperator.__init__(self, m, evotype)
 
+        d = self.dim
+        if self._evotype == "statevec":
+            self._paramlbls = _np.array(["MxElement Re(%d,%d)" % (i, j) for i in range(d) for j in range(d)]
+                                        + ["MxElement Im(%d,%d)" % (i, j) for i in range(d) for j in range(d)],
+                                        dtype=object)
+        else:
+            self._paramlbls = _np.array(["MxElement %d,%d" % (i, j) for i in range(d) for j in range(d)],
+                                        dtype=object)
+
     def set_dense(self, m):
         """
         Set the dense-matrix value of this operation.
@@ -1715,6 +1724,8 @@ class TPDenseOp(DenseOperator):
         DenseOperator.__init__(self, raw, "densitymx")
         assert(self._rep.base.flags['C_CONTIGUOUS'] and self._rep.base.flags['OWNDATA'])
         assert(isinstance(self.base, _ProtectedArray))
+        self._paramlbls = _np.array(["MxElement %d,%d" % (i, j) for i in range(1, self.dim) for j in range(self.dim)],
+                                    dtype=object)
 
     @property
     def base(self):
@@ -2371,6 +2382,7 @@ class EigenvalueParamDenseOp(DenseOperator):
         #Build a list of parameter descriptors.  Each element of self.params
         # is a list of (prefactor, (i,j)) tuples.
         self.params = []
+        paramlbls = []
         i = 0; N = len(self.evals); processed = [False] * N
         while i < N:
             if processed[i]:
@@ -2428,6 +2440,7 @@ class EigenvalueParamDenseOp(DenseOperator):
                     if tp_constrained_and_unital and k == 0: continue
                     prefactor = 1.0; mx_indx = (k, k)
                     self.params.append([(prefactor, mx_indx)])
+                    paramlbls.append("Real eigenvalue %d" % k)
                     processed[k] = True
             else:
                 iConjugate = {}
@@ -2448,6 +2461,8 @@ class EigenvalueParamDenseOp(DenseOperator):
                             self.params.append([  # imag-part param
                                 (1j, (k, k)),  # (prefactor, index)
                                 (-1j, (l, l))])
+                            paramlbls.append("Eigenvalue-pair (%d,%d) Re-part" % (k, l))
+                            paramlbls.append("Eigenvalue-pair (%d,%d) Im-part" % (k, l))
                             processed[k] = processed[l] = True
                             iConjugate[k] = l  # save conj. pair index for below
                             break
@@ -2471,10 +2486,12 @@ class EigenvalueParamDenseOp(DenseOperator):
                             # k1,k2 element
                             if not tp_constrained_and_unital or k1 != 0:
                                 self.params.append([(1.0, (k1, k2))])
+                                paramlbls.append("Off-diag (%d,%d) of real eigval block" % (k1, k2))
 
                             # k2,k1 element
                             if not tp_constrained_and_unital or k2 != 0:
                                 self.params.append([(1.0, (k2, k1))])
+                                paramlbls.append("Off-diag (%d,%d) of real eigval block" % (k2, k1))
                         else:
                             k1c, k2c = iConjugate[k1], iConjugate[k2]
 
@@ -2485,6 +2502,10 @@ class EigenvalueParamDenseOp(DenseOperator):
                             self.params.append([  # imag-part param
                                 (1j, (k1, k2)),
                                 (-1j, (k1c, k2c))])
+                            paramlbls.append("Off-diags (%d,%d), (%d,%d) Re-part for eigval-pair blocks" % (
+                                k1, k2, k1c, k2c))
+                            paramlbls.append("Off-diags (%d,%d), (%d,%d) Im-part for eigval-pair blocks" % (
+                                k1, k2, k1c, k2c))
 
                             # k2,k1 element
                             self.params.append([  # real-part param
@@ -2493,6 +2514,10 @@ class EigenvalueParamDenseOp(DenseOperator):
                             self.params.append([  # imag-part param
                                 (1j, (k2, k1)),
                                 (-1j, (k2c, k1c))])
+                            paramlbls.append("Off-diags (%d,%d), (%d,%d) Re-part for eigval-pair blocks" % (
+                                k2, k1, k2c, k1c))
+                            paramlbls.append("Off-diags (%d,%d), (%d,%d) Im-part for eigval-pair blocks" % (
+                                k2, k1, k2c, k1c))
 
             i = j  # advance to next block
 
@@ -2504,6 +2529,9 @@ class EigenvalueParamDenseOp(DenseOperator):
         DenseOperator.__init__(self, mx, "densitymx")
         self.base.flags.writeable = False  # only _construct_matrix can change array
         self._construct_matrix()  # construct base from the parameters
+
+        #Set parameter labels
+        self._paramlbls = _np.array(paramlbls, dtype=object)
 
     def _construct_matrix(self):
         """
@@ -2707,6 +2735,7 @@ class StochasticNoiseOp(LinearOperator):
 
         LinearOperator.__init__(self, rep, evotype)
         self._update_rep()  # initialize self._rep
+        self._paramlbls = _np.array(['sqrt(%s error rate)' % bl for bl in self.basis.labels[1:]], dtype=object)
 
     def _update_rep(self):
         # Create dense error superoperator from paramvec
@@ -4056,6 +4085,13 @@ class LindbladOp(LinearOperator, _ErrorGeneratorContainer):
         return _np.exp(self.errorgen.total_term_magnitude) * self.errorgen.total_term_magnitude_deriv
 
     @property
+    def parameter_labels(self):
+        """
+        An array of labels (usually strings) describing this model member's parameters.
+        """
+        return self.errorgen.parameter_labels
+
+    @property
     def num_params(self):
         """
         Get the number of independent parameters which specify this operation.
@@ -5142,6 +5178,18 @@ class ComposedOp(LinearOperator):
         return ret
 
     @property
+    def parameter_labels(self):
+        """
+        An array of labels (usually strings) describing this model member's parameters.
+        """
+        vl = _np.empty(self.num_params, dtype=object)
+        for operation in self.factorops:
+            factorgate_local_inds = _modelmember._decompose_gpindices(
+                self.gpindices, operation.gpindices)
+            vl[factorgate_local_inds] = operation.parameter_labels
+        return vl
+
+    @property
     def num_params(self):
         """
         Get the number of independent parameters which specify this operation.
@@ -5663,6 +5711,13 @@ class ExponentiatedOp(LinearOperator):
 
     #FUTURE: term-related functions (maybe base off of ComposedOp or use a composedop to generate them?)
     # e.g. ComposedOp([self.exponentiated_op] * power, dim, evotype)
+
+    @property
+    def parameter_labels(self):
+        """
+        An array of labels (usually strings) describing this model member's parameters.
+        """
+        return self.exponentiated_op.paramter_labels
 
     @property
     def num_params(self):
@@ -6282,6 +6337,13 @@ class EmbeddedOp(LinearOperator):
             An array of length self.num_params
         """
         return self.embedded_op.total_term_magnitude_deriv
+
+    @property
+    def parameter_labels(self):
+        """
+        An array of labels (usually strings) describing this model member's parameters.
+        """
+        return self.embedded_op.paramter_labels
 
     @property
     def num_params(self):
@@ -7459,6 +7521,19 @@ class ComposedErrorgen(LinearOperator):
         return ret
 
     @property
+    def parameter_labels(self):
+        """
+        An array of labels (usually strings) describing this model member's parameters.
+        """
+        assert(self.gpindices is not None), "Must set a ComposedErrorgen's .gpindices before calling parameter_labels"
+        vl = _np.empty(self.num_params, dtype=object)
+        for eg in self.factors:
+            factor_local_inds = _modelmember._decompose_gpindices(
+                self.gpindices, eg.gpindices)
+            vl[factor_local_inds] = eg.parameter_labels
+        return vl
+
+    @property
     def num_params(self):
         """
         Get the number of independent parameters which specify this error generator.
@@ -8317,6 +8392,7 @@ class LindbladErrorgen(LinearOperator):
 
         LinearOperator.__init__(self, rep, evotype)  # sets self.dim
         if self._rep is not None: self._update_rep()  # updates _rep whether it's a dense or sparse matrix
+        self._paramlbls = _gt.lindblad_param_labels(self.ham_basis, self.other_basis, self.param_mode, self.nonham_mode)
         #Done with __init__(...)
 
     def _init_generators(self, dim):

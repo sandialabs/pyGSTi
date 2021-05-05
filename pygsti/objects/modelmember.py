@@ -132,7 +132,7 @@ class ModelMember(ModelChild):
         self.dim = dim
         self._evotype = evotype
         self._gpindices = gpindices
-        self._gplabels = None  # a placeholder for FUTURE features
+        self._paramlbls = None  # signals auto-generation of "unknown" parameter labels
         self._dirty = False  # True when there's any *possibility* that this
         # gate's parameters have been changed since the
         # last setting of dirty=False
@@ -172,6 +172,15 @@ class ModelMember(ModelChild):
         """
         raise ValueError(("Use set_gpindices(...) to set the gpindices member"
                           " of a ModelMember object"))
+
+    @property
+    def parameter_labels(self):
+        """
+        An array of labels (usually strings) describing this model member's parameters.
+        """
+        if self._paramlbls is None:
+            return _np.array(["Unknown param %d" % i for i in range(self.num_params)], dtype=object)
+        return self._paramlbls
 
     @property
     def parent(self):

@@ -397,6 +397,7 @@ class _BasePOVM(POVM):
         #Copy each effect vector and set it's parent and gpindices.
         # Assume each given effect vector's parameters are independent.
         copied_items = []
+        paramlbls = []
         evotype = None
         for k, v in items:
             if k == self.complement_label: continue
@@ -414,6 +415,7 @@ class _BasePOVM(POVM):
 
             N = effect.num_params
             effect.set_gpindices(slice(self.Np, self.Np + N), self); self.Np += N
+            paramlbls.extend(effect.parameter_labels)
             copied_items.append((k, effect))
         items = copied_items
 
@@ -431,6 +433,7 @@ class _BasePOVM(POVM):
             items.append((self.complement_label, complement_effect))
 
         super(_BasePOVM, self).__init__(dim, evotype, items)
+        self._paramlbls = _np.array(paramlbls, dtype=object)
 
     def _reset_member_gpindices(self):
         """
@@ -850,6 +853,16 @@ class TensorProdPOVM(POVM):
             [(prefix + k, _sv.TensorProdSPAMVec('effect', factorPOVMs_simplified, self[k].effectLbls))
              for k in self.keys()])
         return simplified
+
+    @property
+    def parameter_labels(self):
+        """
+        An array of labels (usually strings) describing this model member's parameters.
+        """
+        vl = _np.empty(self.num_params, dtype=object)
+        for povm in self.factorPOVMs:
+            vl[povm.gpindices] = povm.parameter_labels
+        return vl
 
     @property
     def num_params(self):
@@ -1335,6 +1348,13 @@ class LindbladPOVM(POVM, _ErrorMapContainer):
         simplified = _collections.OrderedDict(
             [(prefix + k, self[k]) for k in self.keys()])
         return simplified
+
+    @property
+    def parameter_labels(self):
+        """
+        An array of labels (usually strings) describing this model member's parameters.
+        """
+        return self.error_map.parameter_labels
 
     @property
     def num_params(self):
