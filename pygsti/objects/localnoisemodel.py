@@ -340,7 +340,7 @@ class LocalNoiseModel(_ImplicitOpModel):
             If a 1-qubit operator is given and `num_qubits > 1` the global idle
             is the parallel application of this operator on each qubit line.
             Otherwise the given operator must act on all `num_qubits` qubits.
-
+        
         Returns
         -------
         LocalNoiseModel
@@ -680,11 +680,9 @@ class LocalNoiseModel(_ImplicitOpModel):
         #Note - evotype="auto" not allowed here b/c no parameterization to infer from
         if evotype in ("densitymx", "svterm", "cterm"):
             basis1Q = _BuiltinBasis("pp", 4)
-        elif evotype == "statevec":
-            basis1Q = _BuiltinBasis("sv", 2)
         else:
             basis1Q = _BuiltinBasis("sv", 2)
-            assert(evotype == "stabilizer"), "Invalid evolution type: %s" % evotype
+            assert(evotype in ("stabilizer", "statevec", "chp")), "Invalid evolution type: %s" % evotype
 
         if simulator == "auto":
             if evotype == "densitymx":
@@ -695,7 +693,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                 simulator = _MapFSim()  # use map as default for stabilizer-type evolutions
             else: assert(False)  # should be unreachable
 
-        qubit_dim = 2 if evotype in ('statevec', 'stabilizer') else 4
+        qubit_dim = 2 if evotype in ('statevec', 'stabilizer', 'chp') else 4
         if not isinstance(qubit_labels, _ld.StateSpaceLabels):  # allow user to specify a StateSpaceLabels object
             qubit_sslbls = _ld.StateSpaceLabels(qubit_labels, (qubit_dim,) * len(qubit_labels), evotype=evotype)
         else:
@@ -857,7 +855,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                 else int(round(_np.log2(global_idle.dim)))  # evotype in ("statevec","stabilizer")
 
             if num_qubits > 1 and global_idle_nQubits == 1:  # auto create tensor-prod 1Q global idle
-                self.operation_blks['gates'][_Lbl('1QIdle')] = global_idle
+                self.operation_blks['gates'][_Lbl('1QGlobalIdle')] = global_idle
                 Embedded = _op.EmbeddedDenseOp if isinstance(simulator, _MatrixFSim) else _op.EmbeddedOp
                 global_idle = Composed([Embedded(self.state_space_labels, (qlbl,), global_idle)
                                         for qlbl in qubit_labels])
@@ -947,15 +945,11 @@ class _SimpleCompLayerRules(_LayerRules):
             caches['complete-layers'][layerlbl] = op
             return op
 
-        # OLD: special case: 'Gi' acts as global idle!
-        #if hasGlobalIdle and layerlbl == 'Gi' and \
-        #   'Gi' not in self.simpleop_blks['layers'])):
-        #    return self.simpleop_blks['layers'][_Lbl('globalIdle')]
-
         if len(components) == 1 and not bHasGlobalIdle:
             ret = self._layer_component_operation(model, components[0], caches['op-layers'], dense)
         else:
             gblIdle = [model.operation_blks['layers'][_Lbl('globalIdle')]] if bHasGlobalIdle else []
+
             #Note: OK if len(components) == 0, as it's ok to have a composed gate with 0 factors
             ret = Composed(gblIdle + [self._layer_component_operation(model, l, caches['op-layers'], dense)
                                       for l in components],

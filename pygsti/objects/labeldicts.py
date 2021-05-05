@@ -687,7 +687,7 @@ class StateSpaceLabels(object):
                     elif lbl.startswith('L'): d = 1  # single level
                     elif lbl.startswith('C'): d = 2  # classical bits
                     else: raise ValueError("Cannot determine state-space dimension from '%s'" % lbl)
-                    if evotype not in ('statevec', 'stabilizer') and self.labeltypes[lbl] == 'Q':
+                    if evotype not in ('statevec', 'stabilizer', 'chp') and self.labeltypes[lbl] == 'Q':
                         d = d**2  # density-matrix spaces have squared dim
                         # ("densitymx","svterm","cterm") all use super-ops
                     self.labeldims[lbl] = d
