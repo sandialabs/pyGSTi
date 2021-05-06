@@ -82,14 +82,14 @@ class Label(object):
 
             if len(name) == 0:
                 if args: return LabelTupTupWithArgs.init((), time, args)
-                elif time == 0:
+                elif time is None or time == 0:
                     return LabelTupTup.init(())
                 else:
                     return LabelTupTupWithTime.init((), time)
             elif isinstance(name[0], (tuple, list, Label)):
                 if len(name) > 1:
                     if args: return LabelTupTupWithArgs.init(name, time, args)
-                    elif time == 0: return LabelTupTup.init(name)
+                    elif time is None or time == 0: return LabelTupTup.init(name)
                     else: return LabelTupTupWithTime.init(name, time)
                 else:
                     return Label(name[0], time=time, args=args)
@@ -368,7 +368,7 @@ class LabelTup(Label, tuple):
         return s
 
     def __repr__(self):
-        return "Label[" + str(self) + "]"
+        return "Label(" + repr(self[:]) + ")"
 
     def __add__(self, s):
         if isinstance(s, str):
@@ -633,7 +633,8 @@ class LabelTupWithTime(Label, tuple):
         return s
 
     def __repr__(self):
-        return "Label[" + str(self) + "]"
+        timearg = ",time=" + repr(self.time) if (self.time != 0.0) else ""
+        return "Label(" + repr(self[:]) + timearg + ")"
 
     def __add__(self, s):
         if isinstance(s, str):
@@ -821,7 +822,8 @@ class LabelStr(Label, str):
         return s
 
     def __repr__(self):
-        return "Label{" + str(self) + "}"
+        timearg = ",time=" + repr(self.time) if (self.time != 0.0) else ""
+        return "Label(" + repr(self[:]) + timearg + ")"
 
     def __add__(self, s):
         if isinstance(s, str):
@@ -1042,7 +1044,7 @@ class LabelTupTup(Label, tuple):
         return "[" + "".join([str(lbl) for lbl in self]) + "]"
 
     def __repr__(self):
-        return "Label[" + str(self) + "]"
+        return "Label(" + repr(self[:]) + ")"
 
     def __add__(self, s):
         raise NotImplementedError("Cannot add %s to a Label" % str(type(s)))
@@ -1310,7 +1312,8 @@ class LabelTupTupWithTime(Label, tuple):
         return "[" + "".join([str(lbl) for lbl in self]) + "]"
 
     def __repr__(self):
-        return "Label[" + str(self) + "]"
+        timearg = ",time=" + repr(self.time) if (self.time != 0.0) else ""
+        return "Label(" + repr(self[:]) + timearg + ")"
 
     def __add__(self, s):
         raise NotImplementedError("Cannot add %s to a Label" % str(type(s)))
@@ -1605,7 +1608,8 @@ class CircuitLabel(Label, tuple):
         return s
 
     def __repr__(self):
-        return "CircuitLabel[" + str(self) + "]"
+        return "CircuitLabel(" + repr(self.name) + "," + repr(self[3:]) + "," \
+            + repr(self[1]) + "," + repr(self[2]) + "," + repr(self.time) + ")"
 
     def __add__(self, s):
         raise NotImplementedError("Cannot add %s to a Label" % str(type(s)))
@@ -1901,7 +1905,14 @@ class LabelTupWithArgs(Label, tuple):
         return s
 
     def __repr__(self):
-        return "Label[" + str(self) + "]"
+        timearg = ",time=" + repr(self.time) if (self.time != 0.0) else ""
+        return "Label(" + repr(self.name) + "," + repr(self.sslbls) + ",args=" + repr(self.args) + timearg + ")"
+
+        #Alternate way of giving rep (this pattern could be repeated for other label classes too):
+        #singletup = (self.name,) + self.sslbls
+        #for arg in self.args: singletup += (';', arg)
+        #if self.time != 0.0: singletup += ("!", self.time)
+        #return "Label(" + repr(singletup) + ")"
 
     def __add__(self, s):
         if isinstance(s, str):
@@ -2148,7 +2159,8 @@ class LabelTupTupWithArgs(Label, tuple):
         return "[" + "".join([str(lbl) for lbl in self]) + argstr + timestr + "]"
 
     def __repr__(self):
-        return "Label[" + str(self) + "]"
+        timearg = ",time=" + repr(self.time) if (self.time != 0.0) else ""
+        return "Label(" + repr(self[:]) + timearg + ")"
 
     def __add__(self, s):
         raise NotImplementedError("Cannot add %s to a Label" % str(type(s)))
