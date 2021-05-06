@@ -55,7 +55,7 @@ class ParserTester(StdInputBase, IOBase):
                         ("rho0*Gx*Mdefault", ('rho0', 'Gx', 'Mdefault'))]
 
         for s, expected in string_tests:
-            result, line_labels, occurrence_id = self.std.parse_circuit(s, lookup=lkup)
+            result, line_labels, occurrence_id = self.std.parse_circuit_raw(s, lookup=lkup)
             self.assertEqual(line_labels, None)
             circuit_result = Circuit(result, line_labels="auto", expand_subcircuits=True)
             #use "auto" line labels since none are parsed.
@@ -84,19 +84,19 @@ class ParserTester(StdInputBase, IOBase):
 
         self.assertEqual(
             self.std.parse_dataline(dataline_tests[0], expected_counts=2),
-            (['G1', 'G2', 'G3'], 'G1G2G3', None, None, [0.1, 100.0])
+            (['G1', 'G2', 'G3'], [0.1, 100.0])
         )
         self.assertEqual(
             self.std.parse_dataline(dataline_tests[1], expected_counts=2),
-            (['G1', 'G2', 'G3'], 'G1*G2*G3', None, None, [0.798, 100.0])
+            (['G1', 'G2', 'G3'], [0.798, 100.0])
         )
         self.assertEqual(
             self.std.parse_dataline(dataline_tests[2], expected_counts=2),
-            (['G1', CircuitLabel('', ('G2', 'G3'), None, 2), 'G4'], 'G1*(G2*G3)^2*G4', None, None, [1.0, 100.0])
+            (['G1', CircuitLabel('', ('G2', 'G3'), None, 2), 'G4'], [1.0, 100.0])
         )
         self.assertEqual(
             self.std.parse_dataline("G1G2G3 0.1 100 2.0", expected_counts=2),
-            (['G1', 'G2', 'G3'], 'G1G2G3', None, None, [0.1, 100.0])
+            (['G1', 'G2', 'G3'], [0.1, 100.0])
         )  # extra col ignored
 
     def test_parse_dataline_raises_on_syntax_error(self):
@@ -110,11 +110,11 @@ class ParserTester(StdInputBase, IOBase):
                           "MyFav (G1G2)^3"]
         self.assertEqual(
             self.std.parse_dictline(dictline_tests[0]),
-            ('1', ['G1', 'G2', 'G3'], 'G1G2G3', None, None)
+            ('1', ('G1', 'G2', 'G3'), 'G1G2G3', None, None)
         )
         self.assertEqual(
             self.std.parse_dictline(dictline_tests[1]),
-            ('MyFav', [CircuitLabel('', ('G1', 'G2'), None, 3)], '(G1G2)^3', None, None)
+            ('MyFav', (CircuitLabel('', ('G1', 'G2'), None, 3),), '(G1G2)^3', None, None)
         )
 
 
@@ -149,23 +149,23 @@ thatOne G1G2*G3
         contents = """#My Data file
 #Get string lookup data from the file test.dict
 ## Lookup = {dict_path}
-## Columns = 0 frequency, count total
-# OLD Columns = 0 count, 1 count
+## Columns = 0 count, 1 count
+# OLD Columns = 0 frequency, count total
 
 #empty string
-{{}}            1.0 100
+{{}}            100 0
 
 #simple sequences
-G1G2          0.098  100
-G2G3          0.2    100
-(G1)^4        0.1   1000
+G1G2          9.8  90.2
+G2G3          20    80
+(G1)^4        100   900
 
 #using lookups
-#G1 S<1>       0.9999 100
-#S<MyFav1>G2   0.23   100
-#G1S<2>^2      0.5     20
-#S<3>[0:4]     0.2      5
-#G1G2G3G4      0.2      5
+#G1 S<1>       100   0
+#S<MyFav1>G2   23   77
+#G1S<2>^2      10   10
+#S<3>[0:4]     2     3
+#G1G2G3G4      2     3
 
 #different ways to concatenate gates
 G_my_xG_my_y  0.5 24.0
@@ -186,11 +186,11 @@ G_my_xG_my_y 0.5 24.0
 
         contents = """#Multi Data File
 ## Lookup = {dict_path}
-## Columns = ds1 0 count, ds1 count total, ds2 0 count, ds2 count total
-{{}}            30  100  20 200
-G1            10  100  10 200
-G2            20  100  5  200
-G3            10  100  80 200
+## Columns = ds1 0 count, ds1 1 count, ds2 0 count, ds2 1 count
+{{}}            30  70  20 180
+G1            10  90  10 190
+G2            20  80  5  195
+G3            10  90  80 120
 """.format(dict_path=dict_path)
         with open(tmp_path, 'w') as f:
             f.write(contents)
@@ -208,74 +208,74 @@ G1(G2G3)^2
         # TODO assert correctness
 
     @with_temp_file("""#Data File without Header
-{}            1.0 100
+{}            100 0
 """)
     def test_parse_datafile_no_header(self, tmp_path):
         ds = self.std.parse_datafile(tmp_path)
         # TODO assert correctness
 
     @with_temp_file("""#Data File with bad syntax
-## Columns = 0 frequency, count total
-{}            1.0 100
-G1            0.0 100
-FooBar        0.4 100
-G3            0.2 100
+## Columns = 0 count, 1 count
+{}            100  0
+G1            0  100
+FooBar        40  60
+G3            20  80
 """)
     def test_parse_datafile_raises_on_bad_data(self, tmp_path):
         with self.assertRaises(ValueError):
             self.std.parse_datafile(tmp_path)
 
     @with_temp_file("""#Data File with bad syntax
-## Columns = 0 count, count total
-{xx}            10  100
+## Columns = 0 count, 1 count
+{xx}            10  90
 """)
     def test_parse_datafile_raises_on_syntax_error(self, tmp_path):
         with self.assertRaises(ValueError):
             self.std.parse_datafile(tmp_path)
 
     @with_temp_file("""#Data File with zero counts
-## Columns = 0 frequency, count total
-{}            1.0 100
+## Columns = 0 count, 1 count
+{}            100 0
 G1            0.0 100
 G2            0   0
-G3            0.2 100
+G3            20 80
 """)
     def test_parse_datafile_warns_on_missing_counts(self, tmp_path):
         self.assertWarns(self.std.parse_datafile, tmp_path)
         # TODO assert correctness
 
-    @with_temp_file("""#Data File with bad columns
-## Columns = 0 frequency, 1 frequency
-{}            1.0 0.0
-G1            0.0 1.0
-G2            0   1.0
-G3            0.2 0.8
-""")
-    def test_parse_datafile_raises_on_bad_columns(self, tmp_path):
-        with self.assertRaises(ValueError):
-            self.std.parse_datafile(tmp_path)
-
-    @with_temp_file("""#Data File with bad frequency
-## Columns = 1 frequency, count total
-{}            1.0 100
-G1            0.0 100
-G2            3.4 100
-G3            0.2 100
-""")
-    def test_parse_datafile_warns_on_frequency_out_of_range(self, tmp_path):
-        self.assertWarns(self.std.parse_datafile, tmp_path)
-        # TODO assert correctness
-
-    @with_temp_file("""#Data File with bad counts
-## Columns = 0 count, count total
-{}            30  100
-G1            10  100
-G2            0.2 100
-G3            0.1 100
-""")
-    def test_parse_datafile_warns_on_counts_out_of_range(self, tmp_path):
-        self.assertWarns(self.std.parse_datafile, tmp_path)
-        # TODO assert correctness
+#    @with_temp_file("""#Data File with bad columns
+### Columns = 0 frequency, 1 frequency
+#{}            1.0 0.0
+#G1            0.0 1.0
+#G2            0   1.0
+#G3            0.2 0.8
+#""")
+#    def test_parse_datafile_raises_on_bad_columns(self, tmp_path):
+#        with self.assertRaises(ValueError):
+#            self.std.parse_datafile(tmp_path)
+#
+#    @with_temp_file("""#Data File with bad frequency
+### Columns = 1 frequency, count total
+#{}            1.0 100
+#G1            0.0 100
+#G2            3.4 100
+#G3            0.2 100
+#""")
+#    def test_parse_datafile_warns_on_frequency_out_of_range(self, tmp_path):
+#        self.assertWarns(self.std.parse_datafile, tmp_path)
+#        # TODO assert correctness
+#
+#    @with_temp_file("""#Data File with bad counts
+### Columns = 0 count, count total
+#{}            30  100
+#G1            10  100
+#G2            0.2 100
+#G3            0.1 100
+#""")
+#    def test_parse_datafile_warns_on_counts_out_of_range(self, tmp_path):
+#        self.assertWarns(self.std.parse_datafile, tmp_path)
+#        # TODO assert correctness
 
     @with_temp_file("""#Multi Data File with default cols
 {}            30  100
@@ -296,35 +296,35 @@ G2            20  100
         with self.assertRaises(ValueError):
             self.std.parse_multidatafile(tmp_path)
 
-    @with_temp_file("""#Multi Data File bad columns
-## Columns = ds1 0 frequency, ds1 1 frequency, ds2 1 count, ds2 count total
-{}            0.3  0.4  20 200
-G1            0.1  0.5  10 200
-G2            0.2  0.3  5  200
-""")
-    def test_parse_multidatafile_raises_on_bad_columns(self, tmp_path):
-        with self.assertRaises(ValueError):
-            self.std.parse_multidatafile(tmp_path)
-
-    @with_temp_file("""#Multi Data File frequency out of range and count before frequency
-## Columns = ds1 count total, ds1 0 frequency, ds2 0 count, ds2 count total
-{}            100  0.3  20 200
-G1            100  10   10 200
-G2            100  0.2  5  200
-""")
-    def test_parse_multidatafile_raises_on_frequency_out_of_range(self, tmp_path):
-        with self.assertRaises(ValueError):
-            self.std.parse_multidatafile(tmp_path)
-
-    @with_temp_file("""#Multi Data File count out of range
-## Columns = ds1 0 count, ds1 count total, ds2 0 count, ds2 count total
-{}            0.3  100  20 200
-G1            0.1   100  10 200
-G2            20  100  5  200
-""")
-    def test_parse_multidatafile_raises_on_counts_out_of_range(self, tmp_path):
-        with self.assertRaises(ValueError):
-            self.std.parse_multidatafile(tmp_path)
+#    @with_temp_file("""#Multi Data File bad columns
+### Columns = ds1 0 frequency, ds1 1 frequency, ds2 1 count, ds2 count total
+#{}            0.3  0.4  20 200
+#G1            0.1  0.5  10 200
+#G2            0.2  0.3  5  200
+#""")
+#    def test_parse_multidatafile_raises_on_bad_columns(self, tmp_path):
+#        with self.assertRaises(ValueError):
+#            self.std.parse_multidatafile(tmp_path)
+#
+#    @with_temp_file("""#Multi Data File frequency out of range and count before frequency
+### Columns = ds1 count total, ds1 0 frequency, ds2 0 count, ds2 count total
+#{}            100  0.3  20 200
+#G1            100  10   10 200
+#G2            100  0.2  5  200
+#""")
+#    def test_parse_multidatafile_raises_on_frequency_out_of_range(self, tmp_path):
+#        with self.assertRaises(ValueError):
+#            self.std.parse_multidatafile(tmp_path)
+#
+#    @with_temp_file("""#Multi Data File count out of range
+### Columns = ds1 0 count, ds1 count total, ds2 0 count, ds2 count total
+#{}            0.3  100  20 200
+#G1            0.1   100  10 200
+#G2            20  100  5  200
+#""")
+#    def test_parse_multidatafile_raises_on_counts_out_of_range(self, tmp_path):
+#        with self.assertRaises(ValueError):
+#            self.std.parse_multidatafile(tmp_path)
 
     @with_temp_file("""#Multi Data File with bad syntax
 ## Columns = ds1 0 count, ds1 count total, ds2 0 count, ds2 count total

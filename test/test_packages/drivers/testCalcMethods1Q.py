@@ -110,7 +110,7 @@ class CalcMethods1QTestCase(BaseTestCase):
             cls.redmod_germs, cls.redmod_maxLs)
 
         #RUN BELOW FOR DATAGEN (SAVE)
-        if regenerate_references():
+        if True or regenerate_references():
             redmod_ds = pygsti.construction.simulate_data(cls.mdl_redmod_datagen, expList, 1000, "round", seed=1234)
             redmod_ds.save(compare_files + "/calcMethods1Q_redmod.dataset")
 

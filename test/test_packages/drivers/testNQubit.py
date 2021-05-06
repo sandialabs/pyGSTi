@@ -196,7 +196,7 @@ class NQubitTestCase(BaseTestCase):
         mdl_to_optimize = build_XYCNOT_cloudnoise_model(nQubits, "line", cnot_edges, maxIdleWeight=2, maxhops=1,
                                                         extraWeight1Hops=0, extraGateWeight=1, verbosity=1,
                                                         simulator=termsim, parameterization="H+S terms",
-                                                        sparse_lindblad_basis=False, sparse_lindblad_reps=False)
+                                                        sparse_lindblad_basis=False, sparse_lindblad_reps=True)
 
         #RUN to create cache (SAVE)
         if regenerate_references():
