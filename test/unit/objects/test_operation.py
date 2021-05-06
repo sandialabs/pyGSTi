@@ -272,6 +272,16 @@ class StaticStdOpTester(BaseCase):
                 if callable(U): continue  # skip unitary functions (create factories)
                 dmop = op.StaticStandardOp(name, evotype)
                 self.assertArraysAlmostEqual(dmop._rep.base, gt.unitary_to_pauligate(U))
+
+    def test_chp(self):
+        std_chp_ops = itgs.standard_gatenames_chp_conversions()
+
+        for name, ops in std_chp_ops.items():
+            chpop = op.StaticStandardOp(name, 'chp')
+            op_str = '\n'.join(ops)
+            if len(op_str):
+                op_str += '\n'
+            self.assertEqual(chpop.get_chp_str(), op_str)
         
     def test_raises_on_bad_values(self):
         with self.assertRaises(ValueError):

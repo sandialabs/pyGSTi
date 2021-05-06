@@ -1000,7 +1000,7 @@ class ComputationalBasisPOVM(POVM):
 
         items = []  # init as empty (lazy creation of members)
 
-        assert(evotype in ("statevec", "densitymx", "stabilizer", "svterm", "cterm"))
+        assert(evotype in ("statevec", "densitymx", "stabilizer", "svterm", "cterm", "chp"))
         dim = 4**nqubits if (evotype in ("densitymx", "svterm", "cterm")) else 2**nqubits
         super(ComputationalBasisPOVM, self).__init__(dim, evotype, items)
 
@@ -1020,6 +1020,11 @@ class ComputationalBasisPOVM(POVM):
         """
         An iterator over the effect (outcome) labels of this POVM.
         """
+        # TODO: CHP short circuit
+        if self._evotype == 'chp':
+            return
+            yield
+
         iterover = [('0', '1')] * self.nqubits
         for k in _itertools.product(*iterover):
             yield "".join(k)
@@ -1087,7 +1092,6 @@ class ComputationalBasisPOVM(POVM):
         s = "Computational(Z)-basis POVM on %d qubits and filter %s\n" \
             % (self.nqubits, str(self.qubit_filter))
         return s
-
 
 class LindbladPOVM(POVM, _ErrorMapContainer):
     """
