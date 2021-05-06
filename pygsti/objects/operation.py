@@ -3188,13 +3188,14 @@ class DepolarizeOp(StochasticNoiseOp):
             basis = _Basis.cast(basis, 2**dim, sparse=False)
         else:
             basis = _Basis.cast(basis, dim, sparse=False)
-        
+
         num_rates = basis.size - 1
         initial_sto_rates = [initial_rate / num_rates] * num_rates
         StochasticNoiseOp.__init__(self, dim, basis, evotype, initial_sto_rates, seed_or_state)
 
         # For DepolarizeOp, set params to only first element
         self.params = _np.array([self.params[0]])
+        self._params = _np.array(["common stochastic error rate for depolarization"], dtype=object)
 
     def _rates_to_params(self, rates):
         """Note: requires rates to all be the same"""
