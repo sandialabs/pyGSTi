@@ -1038,7 +1038,7 @@ def compute_internal_gate_symplectic_representations(gllist=None):
     return srep_dict
 
 
-def symplectic_rep_of_clifford_circuit(circuit, srep_dict=None, pspec=None):
+def symplectic_rep_of_clifford_circuit(circuit, srep_dict={}, pspec=None):
     """
     Returns the symplectic representation of the composite Clifford implemented by the specified Clifford circuit.
 
@@ -1051,10 +1051,10 @@ def symplectic_rep_of_clifford_circuit(circuit, srep_dict=None, pspec=None):
         Circuit object.
 
     srep_dict : dict, optional
-        If not None, a dictionary providing the (symplectic matrix, phase vector)
+        A dictionary providing the (symplectic matrix, phase vector)
         tuples associated with each operation label. If the circuit layer contains only
         'standard' gates which have a hard-coded symplectic representation this
-        may be None. Alternatively, if `pspec` is specifed and it contains the
+        may be empty. Alternatively, if `pspec` is specifed and it contains the
         gates in `circuit` in a Clifford model, it also does not need to be
         specified (and it is ignored if it is specified). Otherwise it must be
         specified.
@@ -1075,8 +1075,9 @@ def symplectic_rep_of_clifford_circuit(circuit, srep_dict=None, pspec=None):
     n = circuit.num_lines
     depth = circuit.depth
 
+    srep_dict.update(compute_internal_gate_symplectic_representations())
     if pspec is not None:
-        srep_dict = pspec.models['clifford'].compute_clifford_symplectic_reps()
+        srep_dict.update(pspec.models['clifford'].compute_clifford_symplectic_reps())
 
     # The initial action of the circuit before any layers are applied.
     s = _np.identity(2 * n, int)
@@ -1087,7 +1088,8 @@ def symplectic_rep_of_clifford_circuit(circuit, srep_dict=None, pspec=None):
         # not returned in the layer. Note that the layer contains each gate only once.
         layer = circuit.layer_label(i)
         # future : update so that we don't use this function, because it slower than necessary (possibly much slower).
-        layer_s, layer_p = symplectic_rep_of_clifford_layer(layer, n, circuit.line_labels, srep_dict)
+        layer_s, layer_p = symplectic_rep_of_clifford_layer(layer, n, circuit.line_labels, srep_dict, add_internal_sreps=False)
+        #s, p = compose_cliffords(s, p, layer_s, layer_p, do_checks=False)
         if _fastcalc is not None:
             s, p = _fastcalc.fast_compose_cliffords(s, p, layer_s, layer_p)
         else:
@@ -1096,7 +1098,7 @@ def symplectic_rep_of_clifford_circuit(circuit, srep_dict=None, pspec=None):
     return s, p
 
 
-def symplectic_rep_of_clifford_layer(layer, n=None, q_labels=None, srep_dict=None):
+def symplectic_rep_of_clifford_layer(layer, n=None, q_labels=None, srep_dict={}, add_internal_sreps=True):
     """
     Constructs the symplectic representation of the n-qubit Clifford implemented by a single quantum circuit layer.
 
@@ -1121,12 +1123,16 @@ def symplectic_rep_of_clifford_layer(layer, n=None, q_labels=None, srep_dict=Non
         correct order.
 
     srep_dict : dict, optional
-        If not None, a dictionary providing the (symplectic matrix, phase vector)
+        A dictionary providing the (symplectic matrix, phase vector)
         tuples associated with each operation label. If the circuit layer contains only
         'standard' gates which have a hard-coded symplectic representation this
-        may be None. Otherwise it must be specified. If the layer contains some
+        may be empty. Otherwise it must be specified. If the layer contains some
         standard gates it is not necesary to specify the symplectic represenation
         for those gates.
+    
+    add_internal_sreps : bool, optional
+        If True, the symplectic reps for internal gates are calculated and added to srep_dict.
+        For speed, calculate these reps once, store them in srep_dict, and set this to False.
 
     Returns
     -------
@@ -1138,7 +1144,8 @@ def symplectic_rep_of_clifford_layer(layer, n=None, q_labels=None, srep_dict=Non
         circuit layer
     """
     # This method uses a brute-force matrix construction. Future: perhaps this should be updated.
-    sreps = srep_dict if srep_dict is not None else compute_internal_gate_symplectic_representations()
+    if add_internal_sreps is True or len(srep_dict) == 0:
+        srep_dict.update(compute_internal_gate_symplectic_representations())
 
     if q_labels is None:
         assert(n is not None), "The number of qubits must be specified if `q_labels` is None!"
@@ -1156,7 +1163,7 @@ def symplectic_rep_of_clifford_layer(layer, n=None, q_labels=None, srep_dict=Non
         layer = _Label(layer)
 
     for sub_lbl in layer.components:
-        matrix, phase = sreps[sub_lbl.name]
+        matrix, phase = srep_dict[sub_lbl.name]
         nforgate = sub_lbl.number_of_qubits
         sub_lbl_qubits = sub_lbl.qubits if (sub_lbl.qubits is not None) else q_labels
         for ind1, qlabel1 in enumerate(sub_lbl_qubits):

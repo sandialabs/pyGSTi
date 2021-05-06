@@ -1269,6 +1269,11 @@ def fast_compose_cliffords(np.ndarray[INT, ndim=2] s1, np.ndarray[INT, ndim=1] p
     cdef np.ndarray[INT, ndim=2, mode="c"] s = np.zeros([2*N, 2*N], dtype=np.int)
     cdef np.ndarray[INT, ndim=1, mode="c"] p = np.zeros([2*N], dtype=np.int)
 
+    # Temp debugging
+    #cdef np.ndarray[INT, ndim=1, mode="c"] vec1 = np.zeros([2*N], dtype=np.int)
+    #cdef np.ndarray[INT, ndim=1, mode="c"] vec2 = np.zeros([2*N], dtype=np.int)
+    #cdef np.ndarray[INT, ndim=1, mode="c"] vec3 = np.zeros([2*N], dtype=np.int)
+
     # If C' = [[C^00, C^01], [C^10, C^11]] and U = [[0, 0], [I, 0]]
     # then C'^T U C' = [[C^10^T C00, C^10^T C^01], [C^11^T C^00, C^11^T C^01]]
     for i in range(N):
@@ -1279,28 +1284,37 @@ def fast_compose_cliffords(np.ndarray[INT, ndim=2] s1, np.ndarray[INT, ndim=1] p
                 inner[i+N, j]   += s2[k+N, i+N] * s2[k, j]   # C^11^T C^00
                 inner[i+N, j+N] += s2[k+N, i+N] * s2[k, j+N] # C^11^T C^01
     
+    #print('inner\n', inner)
     
     # 2P_upps(C'^T U C') + P_diag(C'^T U C') in-place (now equivalent to matrix in Python version)
     for i in range(2*N):
-        for j in range(2*N):
-            if i < j:
-                inner[i, j] = 0
-            elif i > j:
-                inner[i, j] = 2*inner[i,j]
+        for j in range(0, i):
+            inner[i, j] = 0
+        for j in range(i+1, 2*N):
+            inner[i, j] = 2*inner[i,j]
+    #print('matrix\n', inner)
 
     # Eqn 8 from Hostens and De Moor PRA 71, 042315 (2005)
     for i in range(2*N):
         p[i] += p1[i] # h
         for j in range(2*N):
+            #vec1[i] += s1[j, i] * p2[j] # C^T h'
             p[i] += s1[j, i] * p2[j] # C^T h'
-            p[i] -= s1[j, i] * inner[j, j] # C^T Vdiag(C'^T U C') (OK because diagonal only)
+            p[i] -= s1[j, i] * inner[j, j] # - C^T Vdiag(C'^T U C') (OK because diagonal only)
+            #vec3[i] -= s1[j, i] * inner[j, j] # - C^T Vdiag(C'^T U C') (OK because diagonal only)
             for k in range(2*N):
                 s[i, j] += s2[i, k] * s1[k, j] # C'' = C' C
-                p[i] += s1[j, i] * inner[j, k] * s1[k, i] # Vdiag(C^T inner C)
+                p[i] += s1[j, i] * inner[j, k] * s1[k, i] # Vdiag(C^T [2P_upps(C'^T U C') + P_diag(C'^T U C')] C)
+                #vec2[i] += s1[j, i] * inner[j, k] * s1[k, i] # Vdiag(C^T [2P_upps(C'^T U C') + P_diag(C'^T U C')] C)
+
+    #print('vec1', vec1)
+    #print('vec2', vec2)
+    #print('vec3', vec3)
 
     # Mod d/2d
     for i in range(2*N):
         p[i] = p[i] % 4
+        #p[i] = (p[i] + vec1[i] + vec2[i] + vec3[i]) % 4
         for j in range(2*N):
             s[i, j] = s[i, j] % 2
 

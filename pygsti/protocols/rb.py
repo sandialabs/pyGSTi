@@ -35,7 +35,6 @@ from ..objects import objectivefns as _objfns
 from ..algorithms import randomcircuit as _rc
 from ..algorithms import rbfit as _rbfit
 
-
 class CliffordRBDesign(_vb.BenchmarkingDesign):
     """
     Experiment design for Clifford randomized benchmarking.
@@ -203,7 +202,7 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
     def __init__(self, pspec, depths, circuits_per_depth, qubit_labels=None, randomizeout=False,
                  interleaved_circuit=None,
                  citerations=20, compilerargs=(), descriptor='A Clifford RB experiment',
-                 add_default_protocol=False, seed=None, verbosity=1):
+                 add_default_protocol=False, seed=None, verbosity=1, num_processes=1):
         """
         Generates a "Clifford randomized benchmarking" (CRB) experiment, which is the RB protocol defined
         in "Scalable and robust randomized benchmarking of quantum processes", Magesan et al. PRL 106 180504 (2011).
@@ -282,6 +281,9 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
 
         verbosity : int, optional
             If > 0 the number of circuits generated so far is shown.
+        
+        num_processes : int, optional
+            Number of processes to parallelize circuit creation over. Defaults to 1
 
         Returns
         -------
@@ -297,19 +299,20 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
             if verbosity > 0:
                 print('- Sampling {} circuits at CRB length {} ({} of {} depths)'.format(circuits_per_depth, l,
                                                                                          lnum + 1, len(depths)))
-                print('  - Number of circuits sampled = ', end='')
-            circuits_at_depth = []
-            idealouts_at_depth = []
-            for j in range(circuits_per_depth):
-                c, iout = _rc.create_clifford_rb_circuit(pspec, l, qubit_labels=qubit_labels, randomizeout=randomizeout,
+
+            results = _tools.mptools.starmap_with_kwargs(_rc.create_clifford_rb_circuit, circuits_per_depth, num_processes,
+                                                         pspec, l, qubit_labels=qubit_labels, randomizeout=randomizeout,
                                                          citerations=citerations, compilerargs=compilerargs,
                                                          interleaved_circuit=interleaved_circuit)
+
+            circuits_at_depth = []
+            idealouts_at_depth = []
+            for c, iout in results:
                 circuits_at_depth.append(c)
                 idealouts_at_depth.append((''.join(map(str, iout)),))
-                if verbosity > 0: print(j + 1, end=',')
+
             circuit_lists.append(circuits_at_depth)
             ideal_outs.append(idealouts_at_depth)
-            if verbosity > 0: print('')
 
         self._init_foundation(depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
                               randomizeout, citerations, compilerargs, descriptor, add_default_protocol,
@@ -575,7 +578,7 @@ class DirectRBDesign(_vb.BenchmarkingDesign):
     def __init__(self, pspec, depths, circuits_per_depth, qubit_labels=None, sampler='Qelimination', samplerargs=[],
                  addlocal=False, lsargs=(), randomizeout=False, cliffordtwirl=True, conditionaltwirl=True,
                  citerations=20, compilerargs=(), partitioned=False, descriptor='A DRB experiment',
-                 add_default_protocol=False, seed=None, verbosity=1):
+                 add_default_protocol=False, seed=None, verbosity=1, num_processes=1):
         """
         Generates a "direct randomized benchmarking" (DRB) experiments, which is the protocol introduced in
         arXiv:1807.07975 (2018).
@@ -694,6 +697,9 @@ class DirectRBDesign(_vb.BenchmarkingDesign):
 
         verbosity : int, optional
             If > 0 the number of circuits generated so far is shown.
+        
+        num_processes : int, optional
+            Number of processes to parallelize circuit creation over. Defaults to 1
 
         Returns
         -------
@@ -710,22 +716,23 @@ class DirectRBDesign(_vb.BenchmarkingDesign):
             if verbosity > 0:
                 print('- Sampling {} circuits at DRB length {} ({} of {} depths)'.format(circuits_per_depth, l,
                                                                                          lnum + 1, len(depths)))
-                print('  - Number of circuits sampled = ', end='')
+            
+
+            results = _tools.mptools.starmap_with_kwargs(_rc.create_direct_rb_circuit, circuits_per_depth, num_processes,
+                                                         pspec, l, qubit_labels=qubit_labels, sampler=sampler, samplerargs=samplerargs,
+                                                         addlocal=addlocal, lsargs=lsargs, randomizeout=randomizeout,
+                                                         cliffordtwirl=cliffordtwirl, conditionaltwirl=conditionaltwirl,
+                                                         citerations=citerations, compilerargs=compilerargs,
+                                                         partitioned=partitioned)
+
             circuits_at_depth = []
             idealouts_at_depth = []
-            for j in range(circuits_per_depth):
-                c, iout = _rc.create_direct_rb_circuit(
-                    pspec, l, qubit_labels=qubit_labels, sampler=sampler, samplerargs=samplerargs,
-                    addlocal=addlocal, lsargs=lsargs, randomizeout=randomizeout,
-                    cliffordtwirl=cliffordtwirl, conditionaltwirl=conditionaltwirl,
-                    citerations=citerations, compilerargs=compilerargs,
-                    partitioned=partitioned)
+            for c, iout in results:
                 circuits_at_depth.append(c)
                 idealouts_at_depth.append((''.join(map(str, iout)),))
-                if verbosity > 0: print(j + 1, end=',')
+
             circuit_lists.append(circuits_at_depth)
             ideal_outs.append(idealouts_at_depth)
-            if verbosity > 0: print('')
 
         self._init_foundation(depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
                               sampler, samplerargs, addlocal, lsargs, randomizeout, cliffordtwirl,
@@ -924,7 +931,7 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
 
     def __init__(self, pspec, depths, circuits_per_depth, qubit_labels=None, sampler='Qelimination', samplerargs=(),
                  localclifford=True, paulirandomize=True, descriptor='A mirror RB experiment',
-                 add_default_protocol=False):
+                 add_default_protocol=False, num_processes=1, verbosity=1):
         """
         Generates a "mirror randomized benchmarking" (MRB) experiment, for the case of Clifford gates and with
         the option of Pauli randomization and local Clifford twirling. To implement mirror RB it is necessary
@@ -1005,6 +1012,12 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
         add_default_protocol : bool, optional
             Whether to add a default RB protocol to the experiment design, which can be run
             later (once data is taken) by using a :class:`DefaultProtocolRunner` object.
+        
+        num_processes : int, optional
+            Number of processes to parallelize circuit creation over. Defaults to 1
+        
+        verbosity : int, optional
+            If > 0 the number of depths for which circuits have been generated so far.
 
         Returns
         -------
@@ -1015,14 +1028,21 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
         ideal_outs = []
 
         for lnum, l in enumerate(depths):
+            if verbosity > 0:
+                print('- Sampling {} circuits at MRB length {} ({} of {} depths)'.format(circuits_per_depth, l,
+                                                                                         lnum + 1, len(depths)))
+
+            results = _tools.mptools.starmap_with_kwargs(_rc.create_mirror_rb_circuit, circuits_per_depth, num_processes,
+                                                         pspec, l, qubit_labels=qubit_labels, sampler=sampler,
+                                                         samplerargs=samplerargs, localclifford=localclifford,
+                                                         paulirandomize=paulirandomize)
+
             circuits_at_depth = []
             idealouts_at_depth = []
-            for j in range(circuits_per_depth):
-                c, iout = _rc.create_mirror_rb_circuit(pspec, l, qubit_labels=qubit_labels, sampler=sampler,
-                                                       samplerargs=samplerargs, localclifford=localclifford,
-                                                       paulirandomize=paulirandomize)
+            for c, iout in results:
                 circuits_at_depth.append(c)
                 idealouts_at_depth.append((''.join(map(str, iout)),))
+
             circuit_lists.append(circuits_at_depth)
             ideal_outs.append(idealouts_at_depth)
 
