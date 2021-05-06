@@ -3,7 +3,9 @@ import numpy as np
 from ..util import BaseCase
 
 from pygsti.objects.circuit import Circuit
+from pygsti.objects.label import Label
 from pygsti.objects.localnoisemodel import LocalNoiseModel
+from pygsti.objects.operation import ComposedDenseOp, EmbeddedDenseOp, StaticDenseOp
 
 
 class LocalNoiseModelInstanceTester(BaseCase):
@@ -38,7 +40,7 @@ class LocalNoiseModelInstanceTester(BaseCase):
         self.assertAlmostEqual(sum(mdl_local.probabilities(test_circuit).values()), 1.0)
         self.assertEqual(mdl_local.num_params, 66)
 
-    def test_localnoise_with1Qidle(self):
+    def test_localnoise_1Q_global_idle(self):
         nQubits = 2
         noisy_idle = np.array([[1, 0, 0, 0],
                                [0, 0.9, 0, 0],
@@ -51,7 +53,7 @@ class LocalNoiseModelInstanceTester(BaseCase):
             parameterization='static', independent_gates=False,
             ensure_composed_gates=False, global_idle=noisy_idle)
 
-        assert(set(mdl_local.operation_blks['gates'].keys()) == set(["Gx", "Gy", "Gcnot", "1QIdle"]))
+        assert(set(mdl_local.operation_blks['gates'].keys()) == set(["Gx", "Gy", "Gcnot", "1QGlobalIdle"]))
         assert(set(mdl_local.operation_blks['layers'].keys()) == set(
             [('Gx', 'qb0'), ('Gx', 'qb1'), ('Gy', 'qb0'), ('Gy', 'qb1'), ('Gcnot', 'qb0', 'qb1'), ('Gcnot', 'qb1', 'qb0'), 'globalIdle']))
         test_circuit = (('Gx', 'qb0'), ('Gcnot', 'qb0', 'qb1'), [], [('Gx', 'qb1'), ('Gy', 'qb0')])
@@ -59,7 +61,22 @@ class LocalNoiseModelInstanceTester(BaseCase):
         self.assertAlmostEqual(mdl_local.probabilities(test_circuit)['00'], 0.3576168)
         self.assertEqual(mdl_local.num_params, 0)
 
-    def test_localnoise_withNQidle(self):
+        op = mdl_local.circuit_layer_operator(Label('Gx', 'qb1'))
+        ref_op = ComposedDenseOp([
+            ComposedDenseOp([
+                EmbeddedDenseOp(mdl_local.state_space_labels, ('qb0',), mdl_local.operation_blks['gates']['1QGlobalIdle']),
+                EmbeddedDenseOp(mdl_local.state_space_labels, ('qb1',), mdl_local.operation_blks['gates']['1QGlobalIdle']),
+            ]), # Global idle
+            EmbeddedDenseOp(mdl_local.state_space_labels, ('qb1',), mdl_local.operation_blks['gates']['Gx']) # Gx operation
+        ])
+        ref_op2 = ComposedDenseOp([
+            mdl_local.operation_blks['layers']['globalIdle'], # Global idle
+            EmbeddedDenseOp(mdl_local.state_space_labels, ('qb1',), mdl_local.operation_blks['gates']['Gx']) # Gx operation
+        ])
+        self.assertEqual(str(op), str(ref_op))
+        self.assertEqual(str(op), str(ref_op2))
+
+    def test_localnoise_NQ_global_idle(self):
         nQubits = 2
         noisy_idle = 0.9 * np.identity(4**nQubits, 'd')
         noisy_idle[0, 0] = 1.0
@@ -70,13 +87,20 @@ class LocalNoiseModelInstanceTester(BaseCase):
             parameterization='H+S+A', independent_gates=False,
             ensure_composed_gates=False, global_idle=noisy_idle)
 
-        assert(set(mdl_local.operation_blks['gates'].keys()) == set(["Gx", "Gy", "Gcnot"]))
+        self.assertEqual(set(mdl_local.operation_blks['gates'].keys()), set(["Gx", "Gy", "Gcnot"]))
         assert(set(mdl_local.operation_blks['layers'].keys()) == set(
             [('Gx', 'qb0'), ('Gx', 'qb1'), ('Gy', 'qb0'), ('Gy', 'qb1'), ('Gcnot', 'qb0', 'qb1'), ('Gcnot', 'qb1', 'qb0'), 'globalIdle']))
         test_circuit = (('Gx', 'qb0'), ('Gcnot', 'qb0', 'qb1'), [], [('Gx', 'qb1'), ('Gy', 'qb0')])
         self.assertAlmostEqual(sum(mdl_local.probabilities(test_circuit).values()), 1.0)
         self.assertAlmostEqual(mdl_local.probabilities(test_circuit)['00'], 0.414025)
         self.assertEqual(mdl_local.num_params, 144)
+
+        op = mdl_local.circuit_layer_operator(Label('Gx', 'qb1'))
+        ref_op = ComposedDenseOp([
+            mdl_local.operation_blks['layers'][Label('globalIdle')], # Global idle
+            EmbeddedDenseOp(mdl_local.state_space_labels, ('qb1',), mdl_local.operation_blks['gates']['Gx']) # Gx operation
+        ])
+        self.assertEqual(str(op), str(ref_op))
 
     def test_marginalized_povm(self):
         nQubits = 4
@@ -92,12 +116,12 @@ class LocalNoiseModelInstanceTester(BaseCase):
 
         c2 = Circuit( [('Gx','qb0'),('Gx','qb1')], num_lines=2)
         prob2 = mdl_local.probabilities(c2)
-        self.assertEqual(len(prob2), 4) # Full 4 qubit space
+        self.assertEqual(len(prob2), 4) # Full 2 qubit space
 
         c3 = Circuit( [('Gx','qb0'),('Gx','qb1')])
         c3.insert_idling_lines_inplace(None, ['qb2', 'qb3'])
         prob3 = mdl_local.probabilities(c3)
-        self.assertEqual(len(prob3), 16) # Full 16 qubit space
+        self.assertEqual(len(prob3), 16) # Full 4 qubit space
 
 
 

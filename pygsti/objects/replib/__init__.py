@@ -20,6 +20,7 @@ message.
 try:
     # Import cython implementation if it's been built...
     from .fastreplib import *
+
 except ImportError:
     # ... If not, fall back to the python implementation, with a warning.
     import os as _os
@@ -29,3 +30,6 @@ except ImportError:
         _warnings.warn(warn_msg)
 
     from .slowreplib import *
+
+# Import representations for external simulators
+from .externalreplib import *

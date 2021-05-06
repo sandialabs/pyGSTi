@@ -1817,7 +1817,12 @@ def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options,
     # in dataset (max. model # of params)
     nparams = model.num_modeltest_params  # just use total number of params
     percentile = 0.025; nboxes = len(global_circuits_to_use)
-    two_dlogl_threshold = _chi2.ppf(1 - percentile, ds_dof - nparams)
+    if ds_dof < nparams:
+        _warnings.warn(("Data has fewer degrees of freedom than model (%d < %d), and so to compute an "
+                        "aggregate 2*DeltaLogL we'll use a k=1 chi2_k distribution. Please set "
+                        "model.num_modeltest_params to an appropriate value!") % (ds_dof, nparams))
+
+    two_dlogl_threshold = _chi2.ppf(1 - percentile, max(ds_dof - nparams, 1))
     redbox_threshold = _chi2.ppf(1 - percentile / nboxes, 1)
     # if p is prob that box is red and there are N boxes, then prob of no red boxes is q = (1-p)^N ~= 1-p*N
     # and so probability of any red boxes is ~p*N.  Here `percentile` is the probability of seeing *any* red

@@ -160,6 +160,9 @@ class ForwardSimulator(object):
 
     def _compute_circuit_outcome_probabilities(self, array_to_fill, circuit, outcomes, resource_alloc, time=None):
         raise NotImplementedError("Derived classes should implement this!")
+    
+    def _compute_sparse_circuit_outcome_probabilities(self, circuit, resource_alloc, time=None):
+        raise NotImplementedError("Derived classes should implement this to provide sparse (non-zero) probabilites!")
 
     def _compute_circuit_outcome_probability_derivatives(self, array_to_fill, circuit, outcomes, param_slice,
                                                          resource_alloc):
@@ -167,7 +170,7 @@ class ForwardSimulator(object):
         # derivatives of each specified circuit outcome probability.
         raise NotImplementedError("Derived classes can implement this to speed up derivative computation")
 
-    def probs(self, circuit, outcomes=None, time=None):
+    def probs(self, circuit, outcomes=None, time=None, resource_alloc=None):
         """
         Construct a dictionary containing the outcome probabilities for a single circuit.
 
@@ -179,17 +182,28 @@ class ForwardSimulator(object):
         outcomes : list or tuple
             A sequence of outcomes, which can themselves be either tuples
             (to include intermediate measurements) or simple strings, e.g. `'010'`.
+            If None, only non-zero outcome probabilities will be reported.
 
         time : float, optional
             The *start* time at which `circuit` is evaluated.
+        
+        resource_alloc : ResourceAllocation, optional
+            The resources available for computing circuit outcome probabilities.
 
         Returns
         -------
         probs : OutcomeLabelDict
             A dictionary with keys equal to outcome labels and
-            values equal to probabilities.
+            values equal to probabilities. If no target outcomes provided,
+            only non-zero probabilities will be reported.
         """
-        copa_layout = self.create_layout([circuit], array_types=('e',))
+        if outcomes is None:
+            try:
+                return self._compute_sparse_circuit_outcome_probabilities(circuit, resource_alloc, time)
+            except NotImplementedError:
+                pass # continue on to create full layout and calcualte all outcomes
+        
+        copa_layout = self.create_layout([circuit], array_types=('e',), resource_alloc=resource_alloc)
         probs_array = _np.empty(copa_layout.num_elements, 'd')
         if time is None:
             self.bulk_fill_probs(probs_array, copa_layout)
@@ -206,7 +220,7 @@ class ForwardSimulator(object):
             probs[outcome] = probs_array[element_index]
         return probs
 
-    def dprobs(self, circuit):
+    def dprobs(self, circuit, resource_alloc=None):
         """
         Construct a dictionary containing outcome probability derivatives for a single circuit.
 
@@ -214,6 +228,9 @@ class ForwardSimulator(object):
         ----------
         circuit : Circuit or tuple of operation labels
             The sequence of operation labels specifying the circuit.
+        
+        resource_alloc : ResourceAllocation, optional
+            The resources available for computing circuit outcome probability derivatives.
 
         Returns
         -------
@@ -222,7 +239,7 @@ class ForwardSimulator(object):
             values equal to an array containing the (partial) derivatives
             of the outcome probability with respect to all model parameters.
         """
-        copa_layout = self.create_layout([circuit], array_types=('ep',))
+        copa_layout = self.create_layout([circuit], array_types=('ep',), resource_alloc=resource_alloc)
         dprobs_array = _np.empty((copa_layout.num_elements, self.model.num_params), 'd')
         self.bulk_fill_dprobs(dprobs_array, copa_layout)
 
@@ -232,7 +249,7 @@ class ForwardSimulator(object):
             dprobs[outcome] = dprobs_array[element_index]
         return dprobs
 
-    def hprobs(self, circuit):
+    def hprobs(self, circuit, resource_alloc=None):
         """
         Construct a dictionary containing outcome probability Hessians for a single circuit.
 
@@ -240,6 +257,9 @@ class ForwardSimulator(object):
         ----------
         circuit : Circuit or tuple of operation labels
             The sequence of operation labels specifying the circuit.
+        
+        resource_alloc : ResourceAllocation, optional
+            The resources available for computing circuit outcome probability Hessians.
 
         Returns
         -------
@@ -248,7 +268,7 @@ class ForwardSimulator(object):
             values equal to a 2D array that is the Hessian matrix for
             the corresponding outcome probability (with respect to all model parameters).
         """
-        copa_layout = self.create_layout([circuit], array_types=('epp',))
+        copa_layout = self.create_layout([circuit], array_types=('epp',), resource_alloc=None)
         hprobs_array = _np.empty((copa_layout.num_elements, self.model.num_params, self.model.num_params), 'd')
         self.bulk_fill_hprobs(hprobs_array, copa_layout)
 
@@ -308,8 +328,8 @@ class ForwardSimulator(object):
         -------
         CircuitOutcomeProbabilityArrayLayout
         """
-        #Note: resource_alloc not even used -- make a slightly more complex "default" strategy?
-        return _CircuitOutcomeProbabilityArrayLayout.create_from(circuits, self.model, dataset, derivative_dimensions)
+        return _CircuitOutcomeProbabilityArrayLayout.create_from(circuits, self.model, dataset, derivative_dimensions,
+                                                                 resource_alloc=resource_alloc)
 
     #TODO UPDATE
     #def bulk_prep_probs(self, eval_tree, comm=None, mem_limit=None):
