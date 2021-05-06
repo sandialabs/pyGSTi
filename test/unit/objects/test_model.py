@@ -86,6 +86,7 @@ class StaticModelBase(ModelBase):
 class GeneralMethodBase(object):
     def _assert_model_params(self, nOperations, nSPVecs, nEVecs, nParamsPerGate, nParamsPerSP):
         nParams = nOperations * nParamsPerGate + nSPVecs * nParamsPerSP + nEVecs * 4
+        print("num params = ", self.model.num_params)
         self.assertEqual(self.model.num_params, nParams)
         # TODO does this actually assert correctness?
 
@@ -117,6 +118,16 @@ class GeneralMethodBase(object):
             nEVecs=0,
             nParamsPerGate=12,
             nParamsPerSP=3
+        )
+
+    def test_set_all_parameterizations_HS(self):
+        self.model.set_all_parameterizations("H+S")
+        self._assert_model_params(
+            nOperations=3,
+            nSPVecs=2,
+            nEVecs=0,
+            nParamsPerGate=6,
+            nParamsPerSP=6
         )
 
     def test_element_accessors(self):
@@ -237,6 +248,49 @@ class GeneralMethodBase(object):
     def test_set_gate_raises_on_bad_dimension(self):
         with self.assertRaises(ValueError):
             self.model['Gbad'] = FullDenseOp(np.zeros((5, 5), 'd'))
+
+    def test_parameter_labels(self):
+        self.model.set_all_parameterizations("H+s")
+
+        self.model.parameter_labels
+        if self.model.num_params > 0:
+            self.model.set_parameter_label(index=0, label="My favorite parameter")
+            self.assertEqual(self.model.parameter_labels[0], "My favorite parameter")
+
+        self.model.operations['Gx'].parameter_labels  # ('Gxpi2',0)
+        self.model.print_parameters_by_op()
+
+    def test_collect_parameters(self):
+        self.model.set_all_parameterizations("H+s")
+        self.assertEqual(self.model.num_params, 30)
+
+        self.model.collect_parameters([ ('Gx', 'X Hamiltonian error coefficient'),
+                                  ('Gy', 'Y Hamiltonian error coefficient')],
+                                new_param_label='Over-rotation')
+        self.assertEqual(self.model.num_params, 29)
+        self.assertTrue(bool(('Gx', 'X Hamiltonian error coefficient') not in set(self.model.parameter_labels)))
+        self.assertTrue(bool(('Gy', 'Y Hamiltonian error coefficient') not in set(self.model.parameter_labels)))
+        self.assertTrue(bool('Over-rotation' in set(self.model.parameter_labels)))
+
+        # You can also use integer indices, and parameter labels can be tuples too.
+        self.model.collect_parameters([3,4,5], new_param_label=("rho0", "common stochastic coefficient"))
+        self.assertEqual(self.model.num_params, 27)
+
+        lbls_save = self.model.parameter_labels.copy()
+
+        # Using "pretty" labels works too:
+        self.model.collect_parameters(['Gx: Y stochastic coefficient',
+                                       'Gx: Z stochastic coefficient' ],
+                                      new_param_label='Gxpi2 off-axis stochastic')
+        self.assertEqual(self.model.num_params, 26)
+        
+        #Just make sure printing works
+        self.model.parameter_labels_pretty
+        self.model.print_parameters_by_op()
+
+        self.model.uncollect_parameters('Gxpi2 off-axis stochastic')
+        self.assertEqual(self.model.num_params, 27)
+        self.assertEqual(set(lbls_save), set(self.model.parameter_labels))  # ok if ordering if different
 
 
 class ThresholdMethodBase(object):
