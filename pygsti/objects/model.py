@@ -94,7 +94,7 @@ v
         self._num_modeltest_params = None
         self._hyperparams = {}
         self._paramvec = _np.zeros(0, 'd')
-        self._paramlbls = None  # a placeholder for FUTURE functionality
+        self._paramlbls = _np.empty(0, dtype=object)
         self.uuid = _uuid.uuid4()  # a Model's uuid is like a persistent id(), useful for hashing
 
     @property
@@ -176,6 +176,47 @@ v
     @num_modeltest_params.setter
     def num_modeltest_params(self, count):
         self._num_modeltest_params = count
+
+    @property
+    def parameter_labels(self):
+        """
+        A list of labels, usually of the form `(op_label, string_description)` describing this model's parameters.
+        """
+        return self._paramlbls
+
+    @property
+    def parameter_labels_pretty(self):
+        """
+        The list of parameter labels but formatted in a nice way.
+
+        In particular, tuples where the first element is an op label are made into
+        a single string beginning with the string representation of the operation.
+        """
+        ret = []
+        for lbl in self.parameter_labels:
+            if isinstance(lbl, (tuple, list)):
+                ret.append(": ".join([str(x) for x in lbl]))
+            else:
+                ret.append(lbl)
+        return ret
+
+    def set_parameter_label(self, index, label):
+        """
+        Set the label of a single model parameter.
+
+        Parameters
+        ----------
+        index : int
+            The index of the paramter whose label should be set.
+
+        label : object
+            An object that serves to label this parameter.  Often a string.
+
+        Returns
+        -------
+        None
+        """
+        self._paramlbls[index] = label
 
     def to_vector(self):
         """
@@ -681,17 +722,169 @@ class OpModel(Model):
         # to True (and said object may have parent=None and so won't
         # auto-propagate up to set this model's dirty flag (self.dirty)
 
-    def _print_gpindices(self):
+    def _print_gpindices(self, max_depth=100):
         print("PRINTING MODEL GPINDICES!!!")
         for lbl, obj in self._iter_parameterized_objs():
-            print("LABEL ", lbl)
-            obj._print_gpindices()
+            obj._print_gpindices("", str(lbl), max_depth)
+
+    def print_parameters_by_op(self, max_depth=0):
+        plbls = {i: lbl for i, lbl in enumerate(self.parameter_labels)}
+        print("*** MODEL PARAMETERS (%d total) ***" % self.num_params)
+        for lbl, obj in self._iter_parameterized_objs():
+            obj._print_gpindices("", lbl, plbls, max_depth)
+
+    def collect_parameters(self, params_to_collect, new_param_label=None):
+        """
+        Updates this model's parameters so that previously independent parameters are tied together.
+
+        The model's parameterization is modified so that all of the parameters
+        given by `params_to_collect` are replaced by a single parameter.  The label
+        of this single parameter may be given if desired.
+
+        Note that after this function is called the model's parameter vector (i.e. the
+        result of `to_vector()`) should be assumed to have a new format unrelated to the
+        parameter vector before their adjustment.  For example, you should not assume that
+        un-modified parameters will retain their old indices.
+
+        Parameters
+        ----------
+        params_to_collect : iterable
+            A list or tuple of parameter labels describing the parameters to collect.
+            These should be a subset of the elements of `self.parameter_labels` or
+            of `self.parameter_labels_pretty`, or integer indices into the model's parameter
+            vector.  If empty, no parameter adjustment is performed.
+
+        new_param_label : object, optional
+            The label for the new common parameter.  If `None`, then the parameter label
+            of the first collected parameter is used.
+
+        Returns
+        -------
+        None
+        """
+        if all([isinstance(p, int) for p in params_to_collect]):
+            indices = list(params_to_collect)  # all parameters are given as indices
+        else:
+            plbl_dict = {plbl: i for i, plbl in enumerate(self.parameter_labels)}
+            try:
+                indices = [plbl_dict[plbl] for plbl in params_to_collect]
+            except KeyError:
+                plbl_dict_pretty = {plbl: i for i, plbl in enumerate(self.parameter_labels_pretty)}
+                indices = [plbl_dict_pretty[plbl] for plbl in params_to_collect]
+        indices.sort()
+
+        if len(indices) == 0:
+            return  # nothing to do
+
+        # go through all gpindices and reset so that all occurrences of elements in
+        # indices[1:] are updated to be indices[0]
+        memo = set()  # keep track of which object's gpindices have been set
+        for _, obj in self._iter_parameterized_objs():
+            assert(obj.gpindices is not None and obj.parent is self), \
+                "Model's parameter vector still needs to be built!"
+
+            new_gpindices = None
+            if isinstance(obj.gpindices, slice):
+                if indices[0] >= obj.gpindices.stop or indices[-1] < obj.gpindices.start:
+                    continue  # short circuit so we don't have to check condition in line below
+                if any([obj.gpindices.start <= i < obj.gpindices.stop for i in indices[1:]]):
+                    new_gpindices = obj.gpindices_as_array()
+            else:
+                if indices[0] > max(obj.gpindices) or indices[-1] < min(obj.gpindices):
+                    continue  # short circuit
+                new_gpindices = obj.gpindices.copy()
+
+            if new_gpindices is not None:
+                for k in indices[1:]:
+                    new_gpindices[new_gpindices == k] = indices[0]
+                obj.set_gpindices(new_gpindices, self, memo)
+
+        #Rename the collected parameter if desired.
+        if new_param_label is not None:
+            self._paramlbls[indices[0]] = new_param_label
+
+        # now all gpindices are updated, so just rebuild paramvec to remove unused indices.
+        self._rebuild_paramvec()
+
+    def uncollect_parameters(self, param_to_uncollect):
+        """
+        Updates this model's parameters so that a common paramter becomes independent parameters.
+
+        The model's parameterization is modified so that each usage of the given parameter
+        in the model's parameterized operations is promoted to being a new independent
+        parameter. The labels of the new parameters are set by the operations.
+
+        Note that after this function is called the model's parameter vector (i.e. the
+        result of `to_vector()`) should be assumed to have a new format unrelated to the
+        parameter vector before their adjustment.  For example, you should not assume that
+        un-modified parameters will retain their old indices.
+
+        Parameters
+        ----------
+        param_to_uncollect : int or object
+            A parameter label specifying the parameter to "uncollect".  This should be an
+            element of `self.parameter_labels` or `self.parameter_labels_pretty`, or it may be
+            an integer index into the model's parameter vector.
+
+        Returns
+        -------
+        None
+        """
+        if isinstance(param_to_uncollect, int):
+            index = param_to_uncollect
+        else:
+            plbl_dict = {plbl: i for i, plbl in enumerate(self.parameter_labels)}
+            try:
+                index = plbl_dict[param_to_uncollect]
+            except KeyError:
+                plbl_dict_pretty = {plbl: i for i, plbl in enumerate(self.parameter_labels_pretty)}
+                index = plbl_dict_pretty[param_to_uncollect]
+
+        # go through all gpindices and reset so that each occurrence of `index` after the
+        # first gets a new index => independent parameter.
+        next_new_index = self.num_params; first_occurrence = True
+        memo = set()  # keep track of which object's gpindices have been set
+        for lbl, obj in self._iter_parameterized_objs():
+            assert(obj.gpindices is not None and obj.parent is self), \
+                "Model's parameter vector still needs to be built!"
+
+            if id(obj) in memo:
+                continue  # don't add any new indices when set_gpindices doesn't actually do anything
+
+            new_gpindices = None
+            if isinstance(obj.gpindices, slice):
+                if obj.gpindices.start <= index < obj.gpindices.stop:
+                    if first_occurrence:  # just update/reset parameter label
+                        self._paramlbls[index] = (lbl, obj.parameter_labels[index - obj.gpindices.start])
+                        first_occurrence = False
+                    else:  # index as a new parameter
+                        new_gpindices = obj.gpindices_as_array()
+                        new_gpindices[index - obj.gpindices.start] = next_new_index
+                        next_new_index += 1
+            else:
+                if min(obj.gpindices) <= index <= max(obj.gpindices):
+                    new_gpindices = obj.gpindices.copy()
+                    for i in range(len(new_gpindices)):
+                        if new_gpindices[i] == index:
+                            if first_occurrence:  # just update/reset parameter label
+                                self._paramlbls[index] = (lbl, obj.parameter_labels[i])
+                                first_occurrence = False
+                            else:  # index as a new parameter
+                                new_gpindices[i] = next_new_index
+                                next_new_index += 1
+
+            if new_gpindices is not None:
+                obj.set_gpindices(new_gpindices, self, memo)
+
+        # now all gpindices are updated, so just rebuild paramvec create new parameters.
+        self._rebuild_paramvec()
 
     def _rebuild_paramvec(self):
         """ Resizes self._paramvec and updates gpindices & parent members as needed,
             and will initialize new elements of _paramvec, but does NOT change
             existing elements of _paramvec (use _update_paramvec for this)"""
         v = self._paramvec; Np = len(self._paramvec)  # NOT self.num_params since the latter calls us!
+        vl = self._paramlbls
         off = 0; shift = 0
         #print("DEBUG: rebuilding...")
 
@@ -710,6 +903,7 @@ class OpModel(Model):
         if len(indices_to_remove) > 0:
             #print("DEBUG: Removing %d params:"  % len(indices_to_remove), indices_to_remove)
             v = _np.delete(v, indices_to_remove)
+            vl = _np.delete(vl, indices_to_remove)
             def get_shift(j): return _bisect.bisect_left(indices_to_remove, j)
             memo = set()  # keep track of which object's gpindices have been set
             for _, obj in self._iter_parameterized_objs():
@@ -738,6 +932,7 @@ class OpModel(Model):
         for lbl, obj in self._iter_parameterized_objs():
 
             if shift > 0 and obj.gpindices is not None:
+                #print("DEBUG: %s: shifting indices by %d.  Initially %s" % (str(lbl), shift, str(obj.gpindices)))
                 if isinstance(obj.gpindices, slice):
                     obj.set_gpindices(_slct.shift(obj.gpindices, shift), self, memo)
                 else:
@@ -747,10 +942,13 @@ class OpModel(Model):
                 #Assume all parameters of obj are new independent parameters
                 num_new_params = obj.allocate_gpindices(off, self, memo)
                 objvec = obj.to_vector()  # may include more than "new" indices
+                objlbls = _np.empty(obj.num_params, dtype=object)
+                objlbls[:] = [(lbl, obj_plbl) for obj_plbl in obj.parameter_labels]
                 if num_new_params > 0:
                     new_local_inds = _gm._decompose_gpindices(obj.gpindices, slice(off, off + num_new_params))
                     assert(len(objvec[new_local_inds]) == num_new_params)
                     v = _np.insert(v, off, objvec[new_local_inds])
+                    vl = _np.insert(vl, off, objlbls[new_local_inds])
                 # print("objvec len = ",len(objvec), "num_new_params=",num_new_params,
                 #       " gpinds=",obj.gpindices) #," loc=",new_local_inds)
 
@@ -769,15 +967,21 @@ class OpModel(Model):
                 if M >= L:
                     #Some indices specified by obj are absent, and must be created.
                     w = obj.to_vector()
+                    wl = _np.empty(obj.num_params, dtype=object)
+                    wl[:] = [(lbl, obj_plbl) for obj_plbl in obj.parameter_labels]
                     v = _np.concatenate((v, _np.empty(M + 1 - L, 'd')), axis=0)  # [v.resize(M+1) doesn't work]
-                    shift += M + 1 - L
+                    vl = _np.concatenate((vl, _np.empty(M + 1 - L, dtype=object)), axis=0)
+                    #shift += M + 1 - L  # OLD EGN doesn't think we want to shift anything here
                     for ii, i in enumerate(inds):
-                        if i >= L: v[i] = w[ii]
+                        if i >= L:
+                            v[i] = w[ii]
+                            vl[i] = wl[ii]
                     #print("DEBUG:    --> added %d new params" % (M+1-L))
                 if M >= 0:  # M == -1 signifies this object has no parameters, so we'll just leave `off` alone
                     off = M + 1
 
         self._paramvec = v
+        self._paramlbls = vl
         #print("DEBUG: Done rebuild: %d params" % len(v))
 
     def _init_virtual_obj(self, obj):

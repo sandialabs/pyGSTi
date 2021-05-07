@@ -97,3 +97,31 @@ class LabelTester(BaseCase):
         l = L('GrotX', (0, 1), args=('1.4',), time=0.2)
         self.assertEqual(str(l), "GrotX;1.4:0:1!0.2")  # make sure we do print time when it's nonzero
         self.assertEqual(l.time, 0.2)
+
+    def test_label_rep_evalulation(self):
+        """ Make sure Label reps evaluate back to the correct Label """
+        from pygsti.objects import Label, CircuitLabel
+        labels_to_test = []
+        l = Label(('Gx', 0)); labels_to_test.append(l)
+        l = Label('Gx', (0,)); labels_to_test.append(l)
+        l = Label('rho0'); labels_to_test.append(l)
+        l = Label((('Gx', 0), ('Gy', 1))); labels_to_test.append(l)
+        l = Label(('Gx', 0, ';', 0.1)); labels_to_test.append(l)
+        l = Label('Gx', (0,), args=(0.1,)); labels_to_test.append(l)
+
+        l = Label(('Gx', 0), time=1.0); labels_to_test.append(l)
+        l = Label('Gx', (0,), time=1.0); labels_to_test.append(l)
+        l = Label('rho0', time=1.0); labels_to_test.append(l)
+        l = Label((('Gx', 0), ('Gy', 1)), time=1.0); labels_to_test.append(l)
+        l = Label(('Gx', 0, ';', 0.1, '!', 1.0)); labels_to_test.append(l)
+        l = Label('Gx', (0,), args=(0.1,), time=1.0); labels_to_test.append(l)
+
+        c = Circuit("[Gx:0Gy:1]^2[Gi]", line_labels=(0,1))
+        l = c.to_label(); labels_to_test.append(l)
+
+        for l in labels_to_test:
+            print(l, type(l).__name__, end='')
+            r = repr(l)
+            print(' => eval ' + r)
+            evald_repr_l = eval(r)
+            self.assertEqual(l, evald_repr_l)

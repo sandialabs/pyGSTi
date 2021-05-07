@@ -132,7 +132,7 @@ class ModelMember(ModelChild):
         self.dim = dim
         self._evotype = evotype
         self._gpindices = gpindices
-        self._gplabels = None  # a placeholder for FUTURE features
+        self._paramlbls = None  # signals auto-generation of "unknown" parameter labels
         self._dirty = False  # True when there's any *possibility* that this
         # gate's parameters have been changed since the
         # last setting of dirty=False
@@ -172,6 +172,15 @@ class ModelMember(ModelChild):
         """
         raise ValueError(("Use set_gpindices(...) to set the gpindices member"
                           " of a ModelMember object"))
+
+    @property
+    def parameter_labels(self):
+        """
+        An array of labels (usually strings) describing this model member's parameters.
+        """
+        if self._paramlbls is None:
+            return _np.array(["Unknown param %d" % i for i in range(self.num_params)], dtype=object)
+        return self._paramlbls
 
     @property
     def parent(self):
@@ -518,11 +527,29 @@ class ModelMember(ModelChild):
 
         return op_obj
 
-    def _print_gpindices(self, prefix=""):
-        print(self.gpindices, " [%s]" % str(type(self)))
-        for i, sub in enumerate(self.submembers()):
-            print(prefix, "  Sub%d: " % i, end='')
-            sub._print_gpindices(prefix + "  ")
+    def _print_gpindices(self, prefix="", member_label=None, param_labels=None, max_depth=0):
+        nsub = len(self.submembers())
+        print(prefix
+              + ">>> " + (str(member_label) if (member_label is not None) else "")
+              + " [%s]: %d params, indices=%s" % (type(self).__name__, self.num_params, str(self.gpindices))
+              + ((", %d sub-members" % nsub) if (nsub > 0 and max_depth == 0) else ""))
+        # Note: we only print # of sub-members if they're not shown below.
+
+        if param_labels is not None:
+            for i, plbl in zip(self.gpindices_as_array(), self.parameter_labels):
+                gplabel = param_labels.get(i, "(no label)")
+                if gplabel == "(no label)" or gplabel == (member_label, plbl):
+                    # this parameter corresponds to the default model label for this object,
+                    # so don't print the member label for brevity
+                    lbl = str(plbl)
+                else:
+                    lbl = str(plbl) + " --> " + str(gplabel)
+                print(prefix + "   %d: %s" % (i, lbl))
+        #print(self.gpindices, " [%s]" % str(type(self)))
+        if max_depth > 0:
+            for i, sub in enumerate(self.submembers()):
+                #print(prefix, "  Sub%d: " % i, end='')
+                sub._print_gpindices(prefix + "  ", "Sub%d" % i, param_labels, max_depth - 1)
 
 
 def _compose_gpindices(parent_gpindices, child_gpindices):

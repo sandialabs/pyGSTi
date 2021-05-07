@@ -2376,6 +2376,119 @@ def lindblad_terms_to_projections(lindblad_term_dict, basis, other_mode="all"):
     return hamProjs, otherProjs, ham_basis, other_basis
 
 
+def lindblad_param_labels(ham_basis, other_basis, param_mode="cptp", other_mode="all", dim=None):
+    """
+    Generate human-readable labels for the Lindblad parameters.
+
+    Computes labels corresponding to the parameters obtained via calls to
+    :function:`lindblad_errorgen_projections` and then :function:`lindblad_projections_to_paramvals`.
+    The arguments to this function must match those given to the above (where they overlap).
+
+    Parameters
+    ----------
+    ham_basis : {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
+        The basis used to construct the Hamiltonian-type lindblad error
+        Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt), list of numpy arrays, or a custom basis object.
+
+    other_basis : {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
+        The basis used to construct the Stochastic-type lindblad error
+        Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt), list of numpy arrays, or a custom basis object.
+
+    param_mode : {"unconstrained", "cptp", "depol", "reldepol"}
+        Describes how values in `ham_projs` and `otherProj` relate to the
+        returned parameter values.  Allowed values are:
+        `"unconstrained"` (projs are independent unconstrained parameters),
+        `"cptp"` (independent parameters but constrained so map is CPTP),
+        `"reldepol"` (all non-Ham. diagonal projs take the *same* value),
+        `"depol"` (same as `"reldepol"` but projs must be *positive*)
+
+    other_mode : {"diagonal", "diag_affine", "all"}
+        Which non-Hamiltonian Lindblad error projections `other_projs` includes.
+        Allowed values are: `"diagonal"` (only the diagonal Stochastic),
+        `"diag_affine"` (diagonal + affine generators), and `"all"`.
+
+    dim : int, optional
+        The dimension of the error generator matrix, used if the bases
+        are given as strings.
+
+    Returns
+    -------
+    param_labels : list
+        A list of strings that describe each parameter.
+    """
+
+    #Get a list of the labels in corresspondence with the specified basis elements.
+    if isinstance(ham_basis, _Basis):
+        hamBasisLbls = ham_basis.labels
+    elif isinstance(ham_basis, str):
+        assert(dim is not None), "Must specify `dim` argument when bases are given as strings!"
+        hamBasisLbls = _bt.basis_element_labels(ham_basis, dim)
+    elif ham_basis is None:
+        hamBasisLbls = []
+    else:
+        raise ValueError("`ham_basis` must be a Basis object or a string!")
+
+    if isinstance(other_basis, _Basis):
+        otherBasisLbls = other_basis.labels
+    elif isinstance(other_basis, str):
+        assert(dim is not None), "Must specify `dim` argument when bases are given as strings!"
+        otherBasisLbls = _bt.basis_element_labels(other_basis, dim)
+    elif other_basis is None:
+        otherBasisLbls = []
+    else:
+        raise ValueError("`other_basis` must be a Basis object or a string!")
+
+    labels = ["%s Hamiltonian error coefficient" % lbl for lbl in hamBasisLbls[1:]]
+    if len(otherBasisLbls) > 0:
+        if other_mode == "diagonal":
+            if param_mode in ("depol", "reldepol"):
+                if param_mode == "depol":
+                    labels.append("sqrt(common stochastic error coefficient for depolarization)")
+                else:  # "reldepol" -- no sqrt since not necessarily positive
+                    labels.append("common stochastic error coefficient for depolarization")
+
+            elif param_mode == "cptp":  # otherParams is a 1D vector of the sqrts of diagonal els
+                labels.extend(["sqrt(%s stochastic coefficient)" % lbl for lbl in otherBasisLbls[1:]])
+            else:  # "unconstrained": otherParams is a 1D vector of the real diagonal els of other_projs
+                labels.extend(["%s stochastic coefficient" % lbl for lbl in otherBasisLbls[1:]])
+
+        elif other_mode == "diag_affine":
+            if param_mode in ("depol", "reldepol"):  # otherParams is a single depol value + unconstrained affine coeffs
+                if param_mode == "depol":
+                    labels.append("sqrt(common stochastic error coefficient for depolarization)")
+                else:  # "reldepol" -- no sqrt
+                    labels.append("common stochastic error coefficient for depolarization")
+                labels.extend(["%s affine coefficient" % lbl for lbl in otherBasisLbls[1:]])
+
+            elif param_mode == "cptp":  # Note: does not constrained affine coeffs to CPTP
+                labels.extend(["sqrt(%s stochastic coefficient)" % lbl for lbl in otherBasisLbls[1:]])
+                labels.extend(["%s affine coefficient" % lbl for lbl in otherBasisLbls[1:]])
+
+            else:  # param_mode == "unconstrained": otherParams is a 1D vector of the real diagonal els of other_projs
+                labels.extend(["%s stochastic coefficient" % lbl for lbl in otherBasisLbls[1:]])
+                labels.extend(["%s affine coefficient" % lbl for lbl in otherBasisLbls[1:]])
+
+        else:  # other_mode == "all"
+            assert(param_mode != "depol"), "`depol` is not supported when `other_mode == 'all'`"
+
+            if param_mode == "cptp":  # otherParams mx stores Cholesky decomp
+                for i, ilbl in enumerate(otherBasisLbls[1:]):
+                    for j, jlbl in enumerate(otherBasisLbls[1:]):
+                        if i == j: labels.append("%s diagonal element of non-H coeff Cholesky decomp" % ilbl)
+                        elif j < i: labels.append("Re[(%s,%s) element of non-H coeff Cholesky decomp]" % (ilbl, jlbl))
+                        else: labels.append("Im[(%s,%s) element of non-H coeff Cholesky decomp]" % (ilbl, jlbl))
+
+            else:  # param_mode == "unconstrained": otherParams mx stores other_projs (hermitian) directly
+                for i, ilbl in enumerate(otherBasisLbls[1:]):
+                    for j, jlbl in enumerate(otherBasisLbls[1:]):
+                        if i == j: labels.append("%s diagonal element of non-H coeff matrix" % ilbl)
+                        elif j < i: labels.append("Re[(%s,%s) element of non-H coeff matrix]" % (ilbl, jlbl))
+                        else: labels.append("Im[(%s,%s) element of non-H coeff matrix]" % (ilbl, jlbl))
+    return labels
+
+
 def lindblad_projections_to_paramvals(ham_projs, other_projs, param_mode="cptp",
                                       other_mode="all", truncate=True):
     """
@@ -2423,7 +2536,7 @@ def lindblad_projections_to_paramvals(ham_projs, other_projs, param_mode="cptp",
 
     Returns
     -------
-    numpy.ndarray
+    param_vals : numpy.ndarray
         A 1D array of real parameter values consisting of d-1 Hamiltonian
         values followed by either (d-1)^2, 2*(d-1), or just d-1 non-Hamiltonian
         values for `other_mode` equal to `"all"`, `"diag_affine"`, or
