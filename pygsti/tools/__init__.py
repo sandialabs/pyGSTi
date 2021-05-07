@@ -23,6 +23,7 @@ from .optools import *
 from .slicetools import *
 from .legacytools import *
 from .mpitools import parallel_apply, mpi4py_comm
+from .mptools import starmap_with_kwargs
 from .symplectic import *
 from .matrixmod2 import *
 from .hypothesis import *
