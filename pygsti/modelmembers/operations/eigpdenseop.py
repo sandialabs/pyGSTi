@@ -1,0 +1,410 @@
+class EigenvalueParamDenseOp(DenseOperator):
+    """
+    A real operation matrix parameterized only by its eigenvalues.
+
+    These eigenvalues are assumed to be either real or to occur in
+    conjugate pairs.  Thus, the number of parameters is equal to the
+    number of eigenvalues.
+
+    Parameters
+    ----------
+    matrix : numpy array
+        a square 2D numpy array that gives the raw operation matrix to
+        paramterize.  The shape of this array sets the dimension
+        of the operation.
+
+    include_off_diags_in_degen_2_blocks : bool
+        If True, include as parameters the (initially zero)
+        off-diagonal elements in degenerate 2x2 blocks of the
+        the diagonalized operation matrix (no off-diagonals are
+        included in blocks larger than 2x2).  This is an option
+        specifically used in the intelligent fiducial pair
+        reduction (IFPR) algorithm.
+
+    tp_constrained_and_unital : bool
+        If True, assume the top row of the operation matrix is fixed
+        to [1, 0, ... 0] and should not be parameterized, and verify
+        that the matrix is unital.  In this case, "1" is always a
+        fixed (not-paramterized0 eigenvalue with eigenvector
+        [1,0,...0] and if include_off_diags_in_degen_2_blocks is True
+        any off diagonal elements lying on the top row are *not*
+        parameterized as implied by the TP constraint.
+    """
+
+    def __init__(self, matrix, include_off_diags_in_degen_2_blocks=False,
+                 tp_constrained_and_unital=False):
+        """
+        Initialize an EigenvalueParamDenseOp object.
+
+        Parameters
+        ----------
+        matrix : numpy array
+            a square 2D numpy array that gives the raw operation matrix to
+            paramterize.  The shape of this array sets the dimension
+            of the operation.
+
+        include_off_diags_in_degen_2_blocks : bool
+            If True, include as parameters the (initially zero)
+            off-diagonal elements in degenerate 2x2 blocks of the
+            the diagonalized operation matrix (no off-diagonals are
+            included in blocks larger than 2x2).  This is an option
+            specifically used in the intelligent fiducial pair
+            reduction (IFPR) algorithm.
+
+        tp_constrained_and_unital : bool
+            If True, assume the top row of the operation matrix is fixed
+            to [1, 0, ... 0] and should not be parameterized, and verify
+            that the matrix is unital.  In this case, "1" is always a
+            fixed (not-paramterized0 eigenvalue with eigenvector
+            [1,0,...0] and if include_off_diags_in_degen_2_blocks is True
+            any off diagonal elements lying on the top row are *not*
+            parameterized as implied by the TP constraint.
+        """
+        def cmplx_compare(ia, ib):
+            return _mt.complex_compare(evals[ia], evals[ib])
+        cmplx_compare_key = _functools.cmp_to_key(cmplx_compare)
+
+        def isreal(a):
+            """ b/c numpy's isreal tests for strict equality w/0 """
+            return _np.isclose(_np.imag(a), 0.0)
+
+        # Since matrix is real, eigenvalues must either be real or occur in
+        #  conjugate pairs.  Find and sort by conjugate pairs.
+
+        assert(_np.linalg.norm(_np.imag(matrix)) < IMAG_TOL)  # matrix should be real
+        evals, B = _np.linalg.eig(matrix)  # matrix == B * diag(evals) * Bi
+        dim = len(evals)
+
+        #Sort eigenvalues & eigenvectors by:
+        # 1) unit eigenvalues first (with TP eigenvalue first of all)
+        # 2) non-unit real eigenvalues in order of magnitude
+        # 3) complex eigenvalues in order of real then imaginary part
+
+        unitInds = []; realInds = []; complexInds = []
+        for i, ev in enumerate(evals):
+            if _np.isclose(ev, 1.0): unitInds.append(i)
+            elif isreal(ev): realInds.append(i)
+            else: complexInds.append(i)
+
+        if tp_constrained_and_unital:
+            #check matrix is TP and unital
+            unitRow = _np.zeros((len(evals)), 'd'); unitRow[0] = 1.0
+            assert(_np.allclose(matrix[0, :], unitRow))
+            assert(_np.allclose(matrix[:, 0], unitRow))
+
+            #find the eigenvector with largest first element and make sure
+            # this is the first index in unitInds
+            k = _np.argmax([B[0, i] for i in unitInds])
+            if k != 0:  # swap indices 0 <-> k in unitInds
+                t = unitInds[0]; unitInds[0] = unitInds[k]; unitInds[k] = t
+
+            #Assume we can recombine unit-eval eigenvectors so that the first
+            # one (actually the closest-to-unit-row one) == unitRow and the
+            # rest do not have any 0th component.
+            iClose = _np.argmax([abs(B[0, ui]) for ui in unitInds])
+            B[:, unitInds[iClose]] = unitRow
+            for i, ui in enumerate(unitInds):
+                if i == iClose: continue
+                B[0, ui] = 0.0; B[:, ui] /= _np.linalg.norm(B[:, ui])
+
+        realInds = sorted(realInds, key=lambda i: -abs(evals[i]))
+        complexInds = sorted(complexInds, key=cmplx_compare_key)
+        new_ordering = unitInds + realInds + complexInds
+
+        #Re-order the eigenvalues & vectors
+        sorted_evals = _np.zeros(evals.shape, 'complex')
+        sorted_B = _np.zeros(B.shape, 'complex')
+        for i, indx in enumerate(new_ordering):
+            sorted_evals[i] = evals[indx]
+            sorted_B[:, i] = B[:, indx]
+
+        #Save the final list of (sorted) eigenvalues & eigenvectors
+        self.evals = sorted_evals
+        self.B = sorted_B
+        self.Bi = _np.linalg.inv(sorted_B)
+
+        self.options = {'includeOffDiags': include_off_diags_in_degen_2_blocks,
+                        'TPandUnital': tp_constrained_and_unital}
+
+        #Check that nothing has gone horribly wrong
+        assert(_np.allclose(_np.dot(
+            self.B, _np.dot(_np.diag(self.evals), self.Bi)), matrix))
+
+        #Build a list of parameter descriptors.  Each element of self.params
+        # is a list of (prefactor, (i,j)) tuples.
+        self.params = []
+        paramlbls = []
+        i = 0; N = len(self.evals); processed = [False] * N
+        while i < N:
+            if processed[i]:
+                i += 1; continue
+
+            # Find block (i -> j) of degenerate eigenvalues
+            j = i + 1
+            while j < N and _np.isclose(self.evals[i], self.evals[j]): j += 1
+            blkSize = j - i
+
+            #Add eigenvalues as parameters
+            ev = self.evals[i]  # current eigenvalue being processed
+            if isreal(ev):
+
+                # Side task: for a *real* block of degenerate evals, we want
+                # to ensure the eigenvectors are real, which numpy doesn't
+                # always guarantee (could be conj. pairs for instance).
+
+                # Solve or Cmx: [v1,v2,v3,v4]Cmx = [v1',v2',v3',v4'] ,
+                # where ' qtys == real, so Im([v1,v2,v3,v4]Cmx) = 0
+                # Let Cmx = Cr + i*Ci, v1 = v1.r + i*v1.i, etc.,
+                #  then solve [v1.r, ...]Ci + [v1.i, ...]Cr = 0
+                #  which can be cast as [Vr,Vi]*[Ci] = 0
+                #                               [Cr]      (nullspace of V)
+                # Note: only involve complex evecs (don't disturb TP evec!)
+                evecIndsToMakeReal = []
+                for k in range(i, j):
+                    if _np.linalg.norm(self.B[:, k].imag) >= IMAG_TOL:
+                        evecIndsToMakeReal.append(k)
+
+                nToReal = len(evecIndsToMakeReal)
+                if nToReal > 0:
+                    vecs = _np.empty((dim, nToReal), 'complex')
+                    for ik, k in enumerate(evecIndsToMakeReal):
+                        vecs[:, ik] = self.B[:, k]
+                    V = _np.concatenate((vecs.real, vecs.imag), axis=1)
+                    nullsp = _mt.nullspace(V)
+                    # if nullsp.shape[1] < nToReal: # DEBUG
+                    #    raise ValueError("Nullspace only has dimension %d when %d was expected! "
+                    #                     "(i=%d, j=%d, blkSize=%d)\nevals = %s" \
+                    #                     % (nullsp.shape[1],nToReal, i,j,blkSize,str(self.evals)) )
+                    assert(nullsp.shape[1] >= nToReal), "Cannot find enough real linear combos!"
+                    nullsp = nullsp[:, 0:nToReal]  # truncate #cols if there are more than we need
+
+                    Cmx = nullsp[nToReal:, :] + 1j * nullsp[0:nToReal, :]  # Cr + i*Ci
+                    new_vecs = _np.dot(vecs, Cmx)
+                    assert(_np.linalg.norm(new_vecs.imag) < IMAG_TOL), \
+                        "Imaginary mag = %g!" % _np.linalg.norm(new_vecs.imag)
+                    for ik, k in enumerate(evecIndsToMakeReal):
+                        self.B[:, k] = new_vecs[:, ik]
+                    self.Bi = _np.linalg.inv(self.B)
+
+                #Now, back to constructing parameter descriptors...
+                for k in range(i, j):
+                    if tp_constrained_and_unital and k == 0: continue
+                    prefactor = 1.0; mx_indx = (k, k)
+                    self.params.append([(prefactor, mx_indx)])
+                    paramlbls.append("Real eigenvalue %d" % k)
+                    processed[k] = True
+            else:
+                iConjugate = {}
+                for k in range(i, j):
+                    #Find conjugate eigenvalue to eval[k]
+                    conj = _np.conj(self.evals[k])  # == conj(ev), indep of k
+                    conjB = _np.conj(self.B[:, k])
+                    for l in range(j, N):
+                        # numpy normalizes but doesn't fix "phase" of evecs
+                        if _np.isclose(conj, self.evals[l]) \
+                           and (_np.allclose(conjB, self.B[:, l])
+                                or _np.allclose(conjB, 1j * self.B[:, l])
+                                or _np.allclose(conjB, -1j * self.B[:, l])
+                                or _np.allclose(conjB, -1 * self.B[:, l])):
+                            self.params.append([  # real-part param
+                                (1.0, (k, k)),  # (prefactor, index)
+                                (1.0, (l, l))])
+                            self.params.append([  # imag-part param
+                                (1j, (k, k)),  # (prefactor, index)
+                                (-1j, (l, l))])
+                            paramlbls.append("Eigenvalue-pair (%d,%d) Re-part" % (k, l))
+                            paramlbls.append("Eigenvalue-pair (%d,%d) Im-part" % (k, l))
+                            processed[k] = processed[l] = True
+                            iConjugate[k] = l  # save conj. pair index for below
+                            break
+                    else:
+                        # should be unreachable, since we ensure mx is real above - but
+                        # this may fail when there are multiple degenerate complex evals
+                        # since the evecs can get mixed (and we check for evec "match" above)
+                        raise ValueError("Could not find conjugate pair "
+                                         + " for %s" % self.evals[k])  # pragma: no cover
+
+            if include_off_diags_in_degen_2_blocks and blkSize == 2:
+                #Note: could remove blkSize == 2 condition or make this a
+                # separate option.  This is useful currently so that we don't
+                # add lots of off-diag elements in accidentally-degenerate
+                # cases, but there's probabaly a better heuristic for this, such
+                # as only including off-diag els for unit-eigenvalue blocks
+                # of size 2 (?)
+                for k1 in range(i, j - 1):
+                    for k2 in range(k1 + 1, j):
+                        if isreal(ev):
+                            # k1,k2 element
+                            if not tp_constrained_and_unital or k1 != 0:
+                                self.params.append([(1.0, (k1, k2))])
+                                paramlbls.append("Off-diag (%d,%d) of real eigval block" % (k1, k2))
+
+                            # k2,k1 element
+                            if not tp_constrained_and_unital or k2 != 0:
+                                self.params.append([(1.0, (k2, k1))])
+                                paramlbls.append("Off-diag (%d,%d) of real eigval block" % (k2, k1))
+                        else:
+                            k1c, k2c = iConjugate[k1], iConjugate[k2]
+
+                            # k1,k2 element
+                            self.params.append([  # real-part param
+                                (1.0, (k1, k2)),
+                                (1.0, (k1c, k2c))])
+                            self.params.append([  # imag-part param
+                                (1j, (k1, k2)),
+                                (-1j, (k1c, k2c))])
+                            paramlbls.append("Off-diags (%d,%d), (%d,%d) Re-part for eigval-pair blocks" % (
+                                k1, k2, k1c, k2c))
+                            paramlbls.append("Off-diags (%d,%d), (%d,%d) Im-part for eigval-pair blocks" % (
+                                k1, k2, k1c, k2c))
+
+                            # k2,k1 element
+                            self.params.append([  # real-part param
+                                (1.0, (k2, k1)),
+                                (1.0, (k2c, k1c))])
+                            self.params.append([  # imag-part param
+                                (1j, (k2, k1)),
+                                (-1j, (k2c, k1c))])
+                            paramlbls.append("Off-diags (%d,%d), (%d,%d) Re-part for eigval-pair blocks" % (
+                                k2, k1, k2c, k1c))
+                            paramlbls.append("Off-diags (%d,%d), (%d,%d) Im-part for eigval-pair blocks" % (
+                                k2, k1, k2c, k1c))
+
+            i = j  # advance to next block
+
+        #Allocate array of parameter values (all zero initially)
+        self.paramvals = _np.zeros(len(self.params), 'd')
+
+        #Finish LinearOperator construction
+        mx = _np.empty(matrix.shape, "d")
+        DenseOperator.__init__(self, mx, "densitymx")
+        self.base.flags.writeable = False  # only _construct_matrix can change array
+        self._construct_matrix()  # construct base from the parameters
+
+        #Set parameter labels
+        self._paramlbls = _np.array(paramlbls, dtype=object)
+
+    def _construct_matrix(self):
+        """
+        Build the internal operation matrix using the current parameters.
+        """
+        base_diag = _np.diag(self.evals)
+        for pdesc, pval in zip(self.params, self.paramvals):
+            for prefactor, (i, j) in pdesc:
+                base_diag[i, j] += prefactor * pval
+        matrix = _np.dot(self.B, _np.dot(base_diag, self.Bi))
+        assert(_np.linalg.norm(matrix.imag) < IMAG_TOL)
+        assert(matrix.shape == (self.dim, self.dim))
+        self.base.flags.writeable = True
+        self.base[:, :] = matrix.real
+        self.base.flags.writeable = False
+
+    @property
+    def num_params(self):
+        """
+        Get the number of independent parameters which specify this operation.
+
+        Returns
+        -------
+        int
+            the number of independent parameters.
+        """
+        return len(self.paramvals)
+
+    def to_vector(self):
+        """
+        Extract a vector of the underlying operation parameters from this operation.
+
+        Returns
+        -------
+        numpy array
+            a 1D numpy array with length == num_params().
+        """
+        return self.paramvals
+
+    def from_vector(self, v, close=False, dirty_value=True):
+        """
+        Initialize the operation using a vector of parameters.
+
+        Parameters
+        ----------
+        v : numpy array
+            The 1D vector of operation parameters.  Length
+            must == num_params()
+
+        close : bool, optional
+            Whether `v` is close to this operation's current
+            set of parameters.  Under some circumstances, when this
+            is true this call can be completed more quickly.
+
+        dirty_value : bool, optional
+            The value to set this object's "dirty flag" to before exiting this
+            call.  This is passed as an argument so it can be updated *recursively*.
+            Leave this set to `True` unless you know what you're doing.
+
+        Returns
+        -------
+        None
+        """
+        assert(len(v) == self.num_params)
+        self.paramvals = v
+        self._construct_matrix()
+        self.dirty = dirty_value
+
+    def deriv_wrt_params(self, wrt_filter=None):
+        """
+        The element-wise derivative this operation.
+
+        Construct a matrix whose columns are the vectorized
+        derivatives of the flattened operation matrix with respect to a
+        single operation parameter.  Thus, each column is of length
+        op_dim^2 and there is one column per operation parameter.
+
+        Parameters
+        ----------
+        wrt_filter : list or numpy.ndarray
+            List of parameter indices to take derivative with respect to.
+            (None means to use all the this operation's parameters.)
+
+        Returns
+        -------
+        numpy array
+            Array of derivatives, shape == (dimension^2, num_params)
+        """
+
+        # matrix = B * diag * Bi, and only diag depends on parameters
+        #  (and only linearly), so:
+        # d(matrix)/d(param) = B * d(diag)/d(param) * Bi
+
+        # EigenvalueParameterizedGates are assumed to be real
+        derivMx = _np.zeros((self.dim**2, self.num_params), 'd')
+
+        # Compute d(diag)/d(param) for each params, then apply B & Bi
+        for k, pdesc in enumerate(self.params):
+            dMx = _np.zeros((self.dim, self.dim), 'complex')
+            for prefactor, (i, j) in pdesc:
+                dMx[i, j] = prefactor
+            tmp = _np.dot(self.B, _np.dot(dMx, self.Bi))
+            if _np.linalg.norm(tmp.imag) >= IMAG_TOL:  # just a warning until we figure this out.
+                print("EigenvalueParamDenseOp deriv_wrt_params WARNING:"
+                      " Imag part = ", _np.linalg.norm(tmp.imag), " pdesc = ", pdesc)  # pragma: no cover
+            #assert(_np.linalg.norm(tmp.imag) < IMAG_TOL), \
+            #       "Imaginary mag = %g!" % _np.linalg.norm(tmp.imag)
+            derivMx[:, k] = tmp.real.flatten()
+
+        if wrt_filter is None:
+            return derivMx
+        else:
+            return _np.take(derivMx, wrt_filter, axis=1)
+
+    def has_nonzero_hessian(self):
+        """
+        Whether this operation has a non-zero Hessian with respect to its parameters.
+
+        (i.e. whether it only depends linearly on its parameters or not)
+
+        Returns
+        -------
+        bool
+        """
+        return False
