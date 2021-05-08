@@ -38,24 +38,3 @@ class StaticDenseOp(DenseOperator):
         #if self._evotype == "svterm": # then we need to extract unitary
         #    op_std = _bt.change_basis(operation, basis, 'std')
         #    U = _gt.process_mx_to_unitary(self)
-
-    def compose(self, other_op):
-        """
-        Compose this operation with another :class:`StaticDenseOp`.
-
-        Create and return a new operation that is the composition of this operation
-        followed by other_op, which *must be another StaticDenseOp*.
-        (For more general compositions between different types of operations, use
-        the module-level compose function.)  The returned operation's matrix is
-        equal to dot(this, other_op).
-
-        Parameters
-        ----------
-        other_op : StaticDenseOp
-            The operation to compose to the right of this one.
-
-        Returns
-        -------
-        StaticDenseOp
-        """
-        return StaticDenseOp(_np.dot(self.base, other_op.base), self._evotype)

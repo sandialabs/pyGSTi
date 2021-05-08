@@ -668,28 +668,6 @@ class LinearOperator(_modelmember.ModelMember):
         rotnMx = _gt.rotation_gate_mx(amount, mx_basis)
         self.set_dense(_np.dot(rotnMx, self.to_dense()))
 
-    def compose(self, other_op):
-        """
-        Compose this operation with `other_op`.
-
-        Create and return a new operation that is the composition of this operation
-        followed by other_op of the same type.  (For more general compositions
-        between different types of operations, use the module-level compose function.
-        )  The returned operation's matrix is equal to dot(this, other_op).
-
-        Parameters
-        ----------
-        other_op : DenseOperator
-            The operation to compose to the right of this one.
-
-        Returns
-        -------
-        DenseOperator
-        """
-        cpy = self.copy()
-        cpy.set_dense(_np.dot(self.to_dense(), other_op.to_dense()))
-        return cpy
-
     def deriv_wrt_params(self, wrt_filter=None):
         """
         The element-wise derivative this operation.

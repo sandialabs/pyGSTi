@@ -847,25 +847,6 @@ class EmbeddedOp(LinearOperator):
         self.embedded_op.rotate(amount, mx_basis)
         if self.dense_rep: self._update_denserep()
 
-    #def compose(self, other_op):
-    #    """
-    #    Create and return a new operation that is the composition of this operation
-    #    followed by other_op, which *must be another EmbeddedDenseOp*.
-    #    (For more general compositions between different types of operations, use
-    #    the module-level compose function.)  The returned operation's matrix is
-    #    equal to dot(this, other_op).
-    #
-    #    Parameters
-    #    ----------
-    #    other_op : EmbeddedDenseOp
-    #        The operation to compose to the right of this one.
-    #
-    #    Returns
-    #    -------
-    #    EmbeddedDenseOp
-    #    """
-    #    raise NotImplementedError("Can't compose an EmbeddedDenseOp yet")
-
     def has_nonzero_hessian(self):
         """
         Whether this operation has a non-zero Hessian with respect to its parameters.
