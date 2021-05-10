@@ -6,6 +6,7 @@ from ..util import BaseCase
 from pygsti.objects import FullGaugeGroupElement, Basis, ExplicitOpModel, TPPOVM, UnconstrainedPOVM
 import pygsti.construction as pc
 import pygsti.objects.spamvec as sv
+import pygsti.objects.operation as op
 
 
 class SpamvecUtilTester(BaseCase):
@@ -309,3 +310,34 @@ class TensorProdEffectSpamvecTester(TensorProdSpamvecBase, POVMSpamvecBase, Base
         v = np.ones((4, 1), 'd')
         povm = UnconstrainedPOVM([('0', sv.FullSPAMVec(v,typ="effect"))])
         return sv.TensorProdSPAMVec("effect", [povm], ['0'])
+
+# For NoisySPAMVec, mutability can be either in noise op or SPAM vec
+class MutableNoisyStaticSpamvecBase(SpamvecBase):
+    # Almost MutableSpamvecBase, but no set_dense for StaticSPAMVec
+    # transform_inplace is OK because allowed by StaticSPAMVec
+    # depolarize is OK because it acts on the Mutable noisy op
+    def test_transform(self):
+        S = FullGaugeGroupElement(np.identity(4, 'd'))
+        self.vec.transform_inplace(S, 'prep')
+        self.vec.transform_inplace(S, 'effect')
+        # TODO assert correctness
+
+    def test_transform_raises_on_bad_type(self):
+        S = FullGaugeGroupElement(np.identity(4, 'd'))
+        with self.assertRaises(ValueError):
+            self.vec.transform_inplace(S, 'foobar')
+
+    def test_depolarize(self):
+        self.vec.depolarize(0.9)
+        self.vec.depolarize([0.9, 0.8, 0.7])
+        # TODO assert correctness
+
+class FullDenseNoisyStaticSpamvecTester(MutableNoisyStaticSpamvecBase, BaseCase):
+    n_params = 16
+
+    @staticmethod
+    def build_vec():
+        full_depol = op.FullDenseOp(np.eye(4))
+        full_depol.depolarize(0.1)
+        return sv.NoisySPAMVec([1, 0, 0, 0], full_depol, 'prep')
+
