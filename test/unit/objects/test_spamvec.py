@@ -3,10 +3,14 @@ import pickle
 
 from ..util import BaseCase
 
-from pygsti.objects import FullGaugeGroupElement, Basis, ExplicitOpModel, TPPOVM, UnconstrainedPOVM
 import pygsti.construction as pc
-import pygsti.objects.spamvec as sv
+from pygsti.objects import Circuit, ExplicitOpModel, TPPOVM, UnconstrainedPOVM
+from pygsti.objects.basis import Basis, BuiltinBasis
+from pygsti.objects.gaugegroup import FullGaugeGroupElement, UnitaryGaugeGroupElement
+import pygsti.objects.labeldicts as ld
 import pygsti.objects.operation as op
+import pygsti.objects.povm as pv
+import pygsti.objects.spamvec as sv
 
 
 class SpamvecUtilTester(BaseCase):
@@ -311,11 +315,54 @@ class TensorProdEffectSpamvecTester(TensorProdSpamvecBase, POVMSpamvecBase, Base
         povm = UnconstrainedPOVM([('0', sv.FullSPAMVec(v,typ="effect"))])
         return sv.TensorProdSPAMVec("effect", [povm], ['0'])
 
-# For NoisySPAMVec, mutability can be either in noise op or SPAM vec
-class MutableNoisyStaticSpamvecBase(SpamvecBase):
-    # Almost MutableSpamvecBase, but no set_dense for StaticSPAMVec
-    # transform_inplace is OK because allowed by StaticSPAMVec
-    # depolarize is OK because it acts on the Mutable noisy op
+# Main test of ComposedSpamvecBase:
+# Is the composed SPAM vec equivalent to applying each component separately?
+class ComposedSpamvecBase(SpamvecBase):
+    base_prep_vec = 1.0/np.sqrt(2) * np.array([1, 0, 0, 1]) # 0 state
+    base_noise_op = op.StaticStandardOp('Gxpi2', 'densitymx') # X(pi/2) rotation as noise
+    expected_out = ld.OutcomeLabelDict([(('0',), 0.5), (('1',), 0.5)])
+
+    def test_forward_simulation(self):
+        pure_vec = self.vec.state_vec
+        noise_op = self.vec.noise_op
+        typ = self.vec._prep_or_effect
+
+        # TODO: Would be nice to check more than densitymx evotype
+        indep_mdl = ExplicitOpModel(['Q0'], evotype='densitymx')
+        if typ == 'prep': 
+            indep_mdl['rho0'] = pure_vec
+            indep_mdl['G0'] = noise_op
+            indep_mdl['Mdefault'] = pv.ComputationalBasisPOVM(1, 'densitymx')
+        else:
+            raise NotImplementedError('TODO: forward sim effect')
+        
+        composed_mdl = ExplicitOpModel(['Q0'], evotype='densitymx')
+        if typ == 'prep':
+            composed_mdl['rho0'] = self.vec
+            composed_mdl['Mdefault'] = pv.ComputationalBasisPOVM(1, 'densitymx')
+        else:
+            raise NotImplementedError('TODO: forward sim effect')
+        
+        # Sanity check
+        indep_circ = Circuit(['rho0', 'G0', 'Mdefault'])
+        indep_probs = indep_mdl.probabilities(indep_circ)
+        for k,v in indep_probs.items():
+            self.assertAlmostEqual(self.expected_out[k], v)
+
+        composed_circ = Circuit(['rho0', 'Mdefault'])
+        composed_probs = composed_mdl.probabilities(composed_circ)
+        for k,v in composed_probs.items():
+            self.assertAlmostEqual(self.expected_out[k], v)
+
+
+# For ComposedSpamvec, the spam vec is immutable (set_value),
+# but the noise op can be not (transform, depolarize)
+class MutableComposedSpamvecBase(ComposedSpamvecBase):
+    def test_raises_on_set_value(self):
+        v = np.asarray(self.vec)
+        with self.assertRaises(ValueError):
+            self.vec.set_dense(v)
+
     def test_transform(self):
         S = FullGaugeGroupElement(np.identity(4, 'd'))
         self.vec.transform_inplace(S, 'prep')
@@ -332,12 +379,37 @@ class MutableNoisyStaticSpamvecBase(SpamvecBase):
         self.vec.depolarize([0.9, 0.8, 0.7])
         # TODO assert correctness
 
-class FullDenseNoisyStaticSpamvecTester(MutableNoisyStaticSpamvecBase, BaseCase):
+# Cases where noise op is also static acts like an immutable spamvec
+class StandardStaticComposedSpamvecTester(ImmutableSpamvecBase, ComposedSpamvecBase, BaseCase):
+    n_params = 0
+
+    def build_vec(self):
+        return sv.ComposedSPAMVec(self.base_prep_vec, self.base_noise_op, 'prep')
+
+class StaticDenseComposedSpamvecTester(ImmutableSpamvecBase, ComposedSpamvecBase, BaseCase):
+    n_params = 0
+
+    def build_vec(self):
+        sdop = op.StaticDenseOp(self.base_noise_op.to_dense())
+        return sv.ComposedSPAMVec(self.base_prep_vec, sdop, 'prep')
+
+class FullDenseComposedSpamvecTester(MutableComposedSpamvecBase, BaseCase):
     n_params = 16
 
-    @staticmethod
-    def build_vec():
-        full_depol = op.FullDenseOp(np.eye(4))
-        full_depol.depolarize(0.1)
-        return sv.NoisySPAMVec([1, 0, 0, 0], full_depol, 'prep')
+    def build_vec(self):
+        fdop = op.FullDenseOp(self.base_noise_op.to_dense())
+        return sv.ComposedSPAMVec(self.base_prep_vec, fdop, 'prep')
+
+class LindbladSPAMVecTester(MutableComposedSpamvecBase, BaseCase):
+    n_params = 12
+
+    # Transform cannot be FullGaugeGroup for Lindblad
+    def test_transform(self):
+        S = UnitaryGaugeGroupElement(np.identity(4, 'd'))
+        self.vec.transform_inplace(S, 'prep')
+        self.vec.transform_inplace(S, 'effect')
+
+    def build_vec(self):
+        lop = op.LindbladDenseOp.from_operation_matrix(self.base_noise_op.to_dense())
+        return sv.LindbladSPAMVec(self.base_prep_vec, lop, 'prep')
 

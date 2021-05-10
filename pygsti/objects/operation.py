@@ -4461,7 +4461,8 @@ class LindbladOp(LinearOperator, _ErrorGeneratorContainer):
         -------
         None
         """
-        assert(typ in ('prep', 'effect')), "Invalid `typ` argument: %s" % typ
+        if typ not in ('prep', 'effect'):
+            raise ValueError("Invalid `typ` argument: %s" % typ)
 
         if isinstance(s, _gaugegroup.UnitaryGaugeGroupElement) or \
            isinstance(s, _gaugegroup.TPSpamGaugeGroupElement):
@@ -9720,7 +9721,8 @@ class LindbladErrorgen(LinearOperator):
         -------
         None
         """
-        assert(typ in ('prep', 'effect')), "Invalid `typ` argument: %s" % typ
+        if typ not in ('prep', 'effect'):
+            raise ValueError("Invalid `typ` argument: %s" % typ)
 
         if isinstance(s, _gaugegroup.UnitaryGaugeGroupElement) or \
            isinstance(s, _gaugegroup.TPSpamGaugeGroupElement):

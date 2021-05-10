@@ -2859,13 +2859,15 @@ class PureStateSPAMVec(SPAMVec):
         s += "  " + str(self.pure_state_vec)
         return s
 
-class NoisySPAMVec(DenseSPAMVec):
-    def __init__(self, pure_vec, errormap, typ):
+class ComposedSPAMVec(DenseSPAMVec):
+    def __init__(self, pure_vec, noise_op, typ):
         """
-        Initialize a NoisySPAMVec object.
+        Initialize a ComposedSPAMVec object.
 
         Essentially a pure state preparation or projection that is followed
         or preceded by, respectively, the action of a general LinearOperator.
+        The state prep/projection must be parameterized by a StaticSPAMVec,
+        currently.
 
         Parameters
         ----------
@@ -2875,10 +2877,10 @@ class NoisySPAMVec(DenseSPAMVec):
             represents a pure-state preparation or projection.  This is used as
             the "base" preparation or projection that is followed or preceded
             by, respectively, the noisy operation.
-            (This argument is *not* copied if it is a SPAMVec.  A numpy array
-             is converted to a new StaticSPAMVec.)
+            (This argument is *not* copied if it is a StaticSPAMVec; otherwise,
+             it is converted to a new StaticSPAMVec.)
 
-        errormap : LinearOperator
+        noise_op : LinearOperator
             The noisy operation to follow or precede the pure SPAMVec
             (This argument is *not* copied to allow the LinearOperator
             to share error parameters with other gates and spam vectors.)
@@ -2886,20 +2888,20 @@ class NoisySPAMVec(DenseSPAMVec):
         typ : {"prep","effect"}
             Whether this is a state preparation or POVM effect vector.
         """
-        evotype = errormap._evotype
+        evotype = noise_op._evotype
         assert(evotype in ("densitymx", "svterm", "cterm")), \
             "Invalid evotype: %s for %s" % (evotype, self.__class__.__name__)
 
-        if not isinstance(pure_vec, SPAMVec):
+        if not isinstance(pure_vec, StaticSPAMVec):
             pure_vec = StaticSPAMVec(pure_vec, evotype, typ)  # assume spamvec is just a vector
 
         assert(pure_vec._evotype == evotype), \
-            "`pure_vec` evotype must match `errormap` ('%s' != '%s')" % (pure_vec._evotype, evotype)
+            "`pure_vec` evotype must match `noise_op` ('%s' != '%s')" % (pure_vec._evotype, evotype)
         assert(pure_vec.num_params == 0), "`pure_vec` 'reference' must have *zero* parameters!"
 
         d2 = pure_vec.dim
         self.state_vec = pure_vec
-        self.error_map = errormap
+        self.noise_op = noise_op
         self.terms = {} if evotype in ("svterm", "cterm") else None
         self.local_term_poly_coeffs = {} if evotype in ("svterm", "cterm") else None
         # TODO REMOVE self.direct_terms = {} if evotype in ("svterm","cterm") else None
@@ -2908,21 +2910,22 @@ class NoisySPAMVec(DenseSPAMVec):
         #Create representation
         if evotype == "densitymx":
             assert(self.state_vec._prep_or_effect == typ), \
-                "NoisySPAMVec prep/effect mismatch with given statevec!"
+                "ComposedSPAMVec prep/effect mismatch with given statevec!"
 
             if typ == "prep":
                 dmRep = self.state_vec._rep
-                errmapRep = self.error_map._rep
+                errmapRep = self.noise_op._rep
                 rep = errmapRep.acton(dmRep)  # FUTURE: do this acton in place somehow? (like C-reps do)
                 #maybe make a special _Errgen *state* rep?
 
             else:  # effect
                 dmEffectRep = self.state_vec._rep
-                errmapRep = self.error_map._rep
-                rep = replib.DMEffectRepErrgen(errmapRep, dmEffectRep, id(self.error_map))
+                errmapRep = self.noise_op._rep
+                # TODO: This is vestigial from LindbladOp, may or may not always work...
+                rep = replib.DMEffectRepErrgen(errmapRep, dmEffectRep, id(self.noise_op))
                 # an effect that applies a *named* errormap before computing with dmEffectRep
         else:
-            rep = d2  # no representations for term-based evotypes
+            rep = d2  # no representations for term-based evotypes or chp
 
         SPAMVec.__init__(self, rep, evotype, typ)  # sets self.dim
 
@@ -2931,7 +2934,7 @@ class NoisySPAMVec(DenseSPAMVec):
             if self._prep_or_effect == "prep":
                 # _rep is a DMStateRep
                 dmRep = self.state_vec._rep
-                errmapRep = self.error_map._rep
+                errmapRep = self.noise_op._rep
                 self._rep.base[:] = errmapRep.acton(dmRep).base[:]  # copy from "new_rep"
 
             else:  # effect
@@ -2948,7 +2951,7 @@ class NoisySPAMVec(DenseSPAMVec):
         -------
         list
         """
-        return [self.error_map]
+        return [self.noise_op]
 
     def copy(self, parent=None, memo=None):
         """
@@ -2968,7 +2971,7 @@ class NoisySPAMVec(DenseSPAMVec):
         # parent reset correctly.
         if memo is not None and id(self) in memo: return memo[id(self)]
         cls = self.__class__  # so that this method works for derived classes too
-        copyOfMe = cls(self.state_vec, self.error_map.copy(parent), self._prep_or_effect)
+        copyOfMe = cls(self.state_vec, self.noise_op.copy(parent), self._prep_or_effect)
         return self._copy_gpindices(copyOfMe, parent, memo)
 
     def set_gpindices(self, gpindices, parent, memo=None):
@@ -3013,12 +3016,12 @@ class NoisySPAMVec(DenseSPAMVec):
         """
         if self._prep_or_effect == "prep":
             #error map acts on dmVec
-            return _np.dot(self.error_map.to_dense(), self.state_vec.to_dense())
+            return _np.dot(self.noise_op.to_dense(), self.state_vec.to_dense())
         else:
             #Note: if this is an effect vector, self.error_map is the
             # map that acts on the *state* vector before dmVec acts
             # as an effect:  E.T -> dot(E.T,errmap) ==> E -> dot(errmap.T,E)
-            return _np.dot(self.error_map.to_dense().conjugate().T, self.state_vec.to_dense())
+            return _np.dot(self.noise_op.to_dense().conjugate().T, self.state_vec.to_dense())
         
     def set_dense(self, vec):
         """
@@ -3117,11 +3120,11 @@ class NoisySPAMVec(DenseSPAMVec):
         if order not in self.terms:
             if self._evotype not in ('svterm', 'cterm'):
                 raise ValueError("Invalid evolution type %s for calling `taylor_order_terms`" % self._evotype)
-            assert(self.gpindices is not None), "NoisySPAMVec must be added to a Model before use!"
+            assert(self.gpindices is not None), "ComposedSPAMVec must be added to a Model before use!"
 
             state_terms = self.state_vec.taylor_order_terms(0, max_polynomial_vars); assert(len(state_terms) == 1)
             stateTerm = state_terms[0]
-            err_terms, cpolys = self.error_map.taylor_order_terms(order, max_polynomial_vars, True)
+            err_terms, cpolys = self.noise_op.taylor_order_terms(order, max_polynomial_vars, True)
             if self._prep_or_effect == "prep":
                 terms = [_term.compose_terms((stateTerm, t)) for t in err_terms]  # t ops occur *after* stateTerm's
             else:  # "effect"
@@ -3172,7 +3175,7 @@ class NoisySPAMVec(DenseSPAMVec):
         stateTerm = stateTerm.copy_with_magnitude(1.0)
         #assert(stateTerm.coeff == Polynomial_1.0) # TODO... so can assume local polys are same as for errorgen
 
-        err_terms = self.error_map.taylor_order_terms_above_mag(
+        err_terms = self.noise_op.taylor_order_terms_above_mag(
             order, max_polynomial_vars, min_term_mag / stateTerm.magnitude)
 
         #This gives the appropriate logic, but *both* prep or effect results in *same* expression, so just run it:
@@ -3202,7 +3205,7 @@ class NoisySPAMVec(DenseSPAMVec):
         float
         """
         # return (sum of absvals of *all* term coeffs)
-        return self.error_map.total_term_magnitude  # error map is only part with terms
+        return self.noise_op.total_term_magnitude  # error map is only part with terms
 
     @property
     def total_term_magnitude_deriv(self):
@@ -3217,7 +3220,7 @@ class NoisySPAMVec(DenseSPAMVec):
         numpy array
             An array of length self.num_params
         """
-        return self.error_map.total_term_magnitude_deriv
+        return self.noise_op.total_term_magnitude_deriv
 
     def deriv_wrt_params(self, wrt_filter=None):
         """
@@ -3240,7 +3243,7 @@ class NoisySPAMVec(DenseSPAMVec):
         """
         dmVec = self.state_vec.to_dense()
 
-        derrgen = self.error_map.deriv_wrt_params(wrt_filter)  # shape (dim*dim, n_params)
+        derrgen = self.noise_op.deriv_wrt_params(wrt_filter)  # shape (dim*dim, n_params)
         derrgen.shape = (self.dim, self.dim, derrgen.shape[1])  # => (dim,dim,n_params)
 
         if self._prep_or_effect == "prep":
@@ -3278,7 +3281,7 @@ class NoisySPAMVec(DenseSPAMVec):
         """
         dmVec = self.state_vec.to_dense()
 
-        herrgen = self.error_map.hessian_wrt_params(wrt_filter1, wrt_filter2)  # shape (dim*dim, nParams1, nParams2)
+        herrgen = self.noise_op.hessian_wrt_params(wrt_filter1, wrt_filter2)  # shape (dim*dim, nParams1, nParams2)
         herrgen.shape = (self.dim, self.dim, herrgen.shape[1], herrgen.shape[2])  # => (dim,dim,nParams1, nParams2)
 
         if self._prep_or_effect == "prep":
@@ -3296,7 +3299,7 @@ class NoisySPAMVec(DenseSPAMVec):
         """
         An array of labels (usually strings) describing this model member's parameters.
         """
-        return self.error_map.parameter_labels
+        return self.noise_op.parameter_labels
 
     @property
     def num_params(self):
@@ -3310,7 +3313,7 @@ class NoisySPAMVec(DenseSPAMVec):
         """
         # TODO: SS to Erik: Can the SPAM Vec part not also have params?
         # It doesn't in the "base" case of a StaticSPAMVec, but this is not a strict requirement
-        return self.error_map.num_params
+        return self.noise_op.num_params
 
     def to_vector(self):
         """
@@ -3321,7 +3324,7 @@ class NoisySPAMVec(DenseSPAMVec):
         numpy array
             a 1D numpy array with length == num_params().
         """
-        return self.error_map.to_vector()
+        return self.noise_op.to_vector()
 
     def from_vector(self, v, close=False, dirty_value=True):
         """
@@ -3347,7 +3350,7 @@ class NoisySPAMVec(DenseSPAMVec):
         -------
         None
         """
-        self.error_map.from_vector(v, close, dirty_value)
+        self.noise_op.from_vector(v, close, dirty_value)
         self._update_rep()
         self.dirty = dirty_value
 
@@ -3381,7 +3384,7 @@ class NoisySPAMVec(DenseSPAMVec):
         # `spam_tranform` function, which applies either
         # error_map -> inv(s) * error_map ("prep" case) OR
         # error_map -> error_map * s      ("effect" case)
-        self.error_map.spam_transform_inplace(s, typ)
+        self.noise_op.spam_transform_inplace(s, typ)
         self._update_rep()
         self.dirty = True
 
@@ -3407,7 +3410,7 @@ class NoisySPAMVec(DenseSPAMVec):
         -------
         None
         """
-        self.error_map.depolarize(amount)
+        self.noise_op.depolarize(amount)
         self._update_rep()
     
     # SS to Erik: Should this have a non-zero Hessian, or is that redundant with the
@@ -3423,7 +3426,7 @@ class NoisySPAMVec(DenseSPAMVec):
         return False
 
 
-class LindbladSPAMVec(NoisySPAMVec, _ErrorMapContainer):
+class LindbladSPAMVec(ComposedSPAMVec, _ErrorMapContainer):
     """
     A Lindblad-parameterized SPAMVec (that is also expandable into terms).
 
@@ -3766,7 +3769,7 @@ class LindbladSPAMVec(NoisySPAMVec, _ErrorMapContainer):
                          truncate, mx_basis, evotype)
         return cls(pure_vec, errmap, typ)
 
-    def __init__(self, pure_vec, errormap, typ):
+    def __init__(self, pure_vec, noise_op, typ):
         """
         Initialize a LindbladSPAMVec object.
 
@@ -3784,7 +3787,7 @@ class LindbladSPAMVec(NoisySPAMVec, _ErrorMapContainer):
             (This argument is *not* copied if it is a SPAMVec.  A numpy array
              is converted to a new StaticSPAMVec.)
 
-        errormap : LinearOperator
+        noise_op : LinearOperator
             The error generator action and parameterization, encapsulated in
             a gate object.  Usually a :class:`LindbladOp`
             or :class:`ComposedOp` object.  (This argument is *not* copied,
@@ -3794,8 +3797,8 @@ class LindbladSPAMVec(NoisySPAMVec, _ErrorMapContainer):
         typ : {"prep","effect"}
             Whether this is a state preparation or POVM effect vector.
         """
-        NoisySPAMVec.__init__(self, pure_vec, errormap, typ)
-        _ErrorMapContainer.__init__(self, self.error_map)
+        ComposedSPAMVec.__init__(self, pure_vec, noise_op, typ)
+        _ErrorMapContainer.__init__(self, noise_op)
 
 
 class StabilizerSPAMVec(SPAMVec):
