@@ -256,10 +256,18 @@ def standard_gatename_unitaries():
                                        0., 1., 0., 0.], [0., 0., 0., 1.]], complex)
 
     def Gzr(theta):
-        if theta is None: return _np.array([[1., 0.], [0., 1.]])
+        if theta is None: return _np.array([[1., 0.], [0., 1.]], complex)
         else: return _np.array([[1., 0.], [0., _np.exp(-1j * float(theta[0]))]])
 
     std_unitaries['Gzr'] = Gzr
+
+    def Gczr(theta):
+        if theta is None: return _np.array([[1., 0., 0., 0.], [0., 1., 0., 0.],
+                                            [0., 0., 1., 0.], [0., 0., 0., 1.]], complex)
+        else: return _np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.],
+                                [0., 0., 0., _np.exp(-1j * float(theta[0]))]], complex)
+
+    std_unitaries['Gczr'] = Gczr
 
     return std_unitaries
 
