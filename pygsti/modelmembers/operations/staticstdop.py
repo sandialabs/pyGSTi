@@ -17,7 +17,9 @@ class StaticStandardOp(DenseOperator):
     """
     def __init__(self, name, evotype):
         self.name = name
-
+        evotype = _Evotype.cast(evotype)
+        evotype.create_standard_rep(name)
+        
         if evotype in ('statevec', 'densitymx', 'svterm', 'cterm'):
             std_unitaries = _itgs.standard_gatename_unitaries()
             if self.name not in std_unitaries:
@@ -44,22 +46,24 @@ class StaticStandardOp(DenseOperator):
 
         LinearOperator.__init__(self, rep, evotype)
 
-    # TODO: This should not be necessary to define, but is here as a temporary measure
-    # This will likely be removed as "dense" is reworked in the evotype refactor
-    @property
-    def base(self):
-        """
-        The underlying dense process matrix.
-        """
-        if self._evotype in ['statevec', 'densitymx', 'svterm', 'cterm']:
-            return self._rep.base
-        else:
-            raise NotImplementedError('No base available for evotype "%s"' % self._evotype)
+#TODO REMOVE
+#    # TODO: This should not be necessary to define, but is here as a temporary measure
+#    # This will likely be removed as "dense" is reworked in the evotype refactor
+#    @property
+#    def base(self):
+#        """
+#        The underlying dense process matrix.
+#        """
+#        if self._evotype in ['statevec', 'densitymx', 'svterm', 'cterm']:
+#            return self._rep.base
+#        else:
+#            raise NotImplementedError('No base available for evotype "%s"' % self._evotype)
 
     def __str__(self):
         s = "%s with name %s and evotype %s\n" % (self.__class__.__name__, self.name, self._evotype)
-        if self._evotype in ['statevec', 'densitymx', 'svterm', 'cterm']:
-            s += _mt.mx_to_string(self.base, width=4, prec=2)
-        elif self._evotype == 'chp':
-            s += 'CHP operations: ' + ','.join(self._rep.chp_ops) + '\n'
+        #TODO: move this to __str__ methods of reps??
+        #if self._evotype in ['statevec', 'densitymx', 'svterm', 'cterm']:
+        #    s += _mt.mx_to_string(self.base, width=4, prec=2)
+        #elif self._evotype == 'chp':
+        #    s += 'CHP operations: ' + ','.join(self._rep.chp_ops) + '\n'
         return s

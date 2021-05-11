@@ -1,4 +1,4 @@
-class FullDenseOp(DenseOperator):
+class FullUnitaryOp(DenseOperator):
     """
     An operation matrix that is fully parameterized.
 
@@ -15,7 +15,7 @@ class FullDenseOp(DenseOperator):
         has a complex datatype.
     """
 
-    def __init__(self, m, evotype="densitymx"):
+    def __init__(self, m, evotype="statevec"):
         """
         Initialize a FullDenseOp object.
 
@@ -31,9 +31,9 @@ class FullDenseOp(DenseOperator):
         """
         m = LinearOperator.convert_to_matrix(m)
         DenseOperator.__init__(self, m, evotype)
-
         d = self.dim
-        self._paramlbls = _np.array(["MxElement %d,%d" % (i, j) for i in range(d) for j in range(d)],
+        self._paramlbls = _np.array(["MxElement Re(%d,%d)" % (i, j) for i in range(d) for j in range(d)]
+                                    + ["MxElement Im(%d,%d)" % (i, j) for i in range(d) for j in range(d)],
                                     dtype=object)
 
     def set_dense(self, m):
@@ -70,7 +70,7 @@ class FullDenseOp(DenseOperator):
         int
             the number of independent parameters.
         """
-        return self.size
+        return 2 * self.size
 
     def to_vector(self):
         """
@@ -81,7 +81,7 @@ class FullDenseOp(DenseOperator):
         numpy array
             The operation parameters as a 1D array with length num_params().
         """
-        return self.base.flatten()
+        return _np.concatenate((self.base.real.flatten(), self.base.imag.flatten()), axis=0)
 
     def from_vector(self, v, close=False, dirty_value=True):
         """
@@ -108,7 +108,8 @@ class FullDenseOp(DenseOperator):
         None
         """
         assert(self.base.shape == (self.dim, self.dim))
-        self.base[:, :] = v.reshape((self.dim, self.dim))
+        self.base[:, :] = v[0:self.dim**2].reshape((self.dim, self.dim)) + \
+            1j * v[self.dim**2:].reshape((self.dim, self.dim))
         self.dirty = dirty_value
 
     def deriv_wrt_params(self, wrt_filter=None):
@@ -131,8 +132,9 @@ class FullDenseOp(DenseOperator):
         numpy array
             Array of derivatives with shape (dimension^2, num_params)
         """
-        derivMx = _np.identity(self.dim**2, self.base.dtype)
-
+        derivMx = _np.concatenate((_np.identity(self.dim**2, 'complex'),
+                                   1j * _np.identity(self.dim**2, 'complex')),
+                                  axis=1)
         if wrt_filter is None:
             return derivMx
         else:

@@ -1,4 +1,4 @@
-class LindbladOp(LinearOperator, _ErrorGeneratorContainer):
+class ExpErrorgenOp(LinearOperator, _ErrorGeneratorContainer):
     """
     An operation parameterized by the coefficients of an exponentiated sum of Lindblad-like terms.
 
@@ -366,78 +366,34 @@ class LindbladOp(LinearOperator, _ErrorGeneratorContainer):
         self.errorgen = errorgen  # don't copy (allow object reuse)
 
         evotype = self.errorgen._evotype
-        if evotype in ("svterm", "cterm"):
-            dense_rep = True  # we need *dense* unitary postfactors for the term-based processing below
-        self.dense_rep = dense_rep
 
-        # make unitary postfactor sparse when dense_rep == False and vice versa.
-        # (This doens't have to be the case, but we link these two "sparseness" notions:
-        #  when we perform matrix exponentiation in a "sparse" way we assume the matrices
-        #  are large and so the unitary postfactor (if present) should be sparse).
-        # FUTURE: warn if there is a sparsity mismatch btwn basis and postfactor?
-        if unitary_postfactor is not None:
-            if self.dense_rep and _sps.issparse(unitary_postfactor):
-                unitary_postfactor = unitary_postfactor.toarray()  # sparse -> dense
-            elif not self.dense_rep and not _sps.issparse(unitary_postfactor):
-                unitary_postfactor = _sps.csr_matrix(_np.asarray(unitary_postfactor))  # dense -> sparse
+        #TODO REMOVE
+        #if evotype in ("svterm", "cterm"):
+        #    dense_rep = True  # we need *dense* unitary postfactors for the term-based processing below
+        #self.dense_rep = dense_rep
+        #
+        ## make unitary postfactor sparse when dense_rep == False and vice versa.
+        ## (This doens't have to be the case, but we link these two "sparseness" notions:
+        ##  when we perform matrix exponentiation in a "sparse" way we assume the matrices
+        ##  are large and so the unitary postfactor (if present) should be sparse).
+        ## FUTURE: warn if there is a sparsity mismatch btwn basis and postfactor?
+        #if unitary_postfactor is not None:
+        #    if self.dense_rep and _sps.issparse(unitary_postfactor):
+        #        unitary_postfactor = unitary_postfactor.toarray()  # sparse -> dense
+        #    elif not self.dense_rep and not _sps.issparse(unitary_postfactor):
+        #        unitary_postfactor = _sps.csr_matrix(_np.asarray(unitary_postfactor))  # dense -> sparse
 
         #Finish initialization based on evolution type
-        if evotype == "densitymx":
-            self.unitary_postfactor = unitary_postfactor  # can be None
-            #self.err_gen_prep = None REMOVE
+        if self.dense_rep:
+            rep = evotype.create_dense_rep(d2)
 
-            #Pre-compute the exponential of the error generator if dense matrices
-            # are used, otherwise cache prepwork for sparse expm calls
-            if self.dense_rep:
-                rep = replib.DMOpRepDense(_np.ascontiguousarray(_np.identity(d2, 'd'), 'd'))
-            else:
-                # "sparse mode" => don't ever compute matrix-exponential explicitly
-
-                #Allocate sparse matrix arrays for rep
-                if self.unitary_postfactor is None:
-                    Udata = _np.empty(0, 'd')
-                    Uindices = _np.empty(0, _np.int64)
-                    Uindptr = _np.zeros(1, _np.int64)
-                else:
-                    assert(_sps.isspmatrix_csr(self.unitary_postfactor)), \
-                        "Internal error! Unitary postfactor should be a *sparse* CSR matrix!"
-                    Udata = self.unitary_postfactor.data
-                    Uindptr = _np.ascontiguousarray(self.unitary_postfactor.indptr, _np.int64)
-                    Uindices = _np.ascontiguousarray(self.unitary_postfactor.indices, _np.int64)
-
-                mu, m_star, s, eta = 1.0, 0, 0, 1.0  # initial values - will be updated by call to _update_rep below
-                rep = replib.DMOpRepLindblad(self.errorgen._rep,
-                                             mu, eta, m_star, s,
-                                             Udata, Uindices, Uindptr)
-
-        else:  # Term-based evolution
-
-            assert(self.dense_rep), "Sparse unitary postfactors are not supported for term-based evolution"
-            #TODO: make terms init-able from sparse elements, and below code work with a *sparse* unitary_postfactor
-            termtype = "dense" if evotype == "svterm" else "clifford"
-
-            # Store *unitary* as self.unitary_postfactor - NOT a superop
-            if unitary_postfactor is not None:  # can be None
-                op_std = _bt.change_basis(unitary_postfactor, self.errorgen.matrix_basis, 'std')
-                self.unitary_postfactor = _gt.process_mx_to_unitary(op_std)
-
-                # automatically "up-convert" operation to CliffordOp if needed
-                if termtype == "clifford":
-                    self.unitary_postfactor = CliffordOp(self.unitary_postfactor)
-            else:
-                self.unitary_postfactor = None
-
-            rep = d2  # no representation object in term-mode (will be set to None by LinearOperator)
-
-        #Cache values
-        self.terms = {}
-        self.exp_terms_cache = {}  # used for repeated calls to the exponentiate_terms function
-        self.local_term_poly_coeffs = {}
-        self.exp_err_gen = None   # used for dense_rep=True mode to cache qty needed in deriv_wrt_params
-        self.base_deriv = None
-        self.base_hessian = None
-        # TODO REMOVE self.direct_terms = {}
-        # TODO REMOVE self.direct_term_poly_coeffs = {}
+            # Cache values - for later work with dense rep
+            self.exp_err_gen = None   # used for dense_rep=True mode to cache qty needed in deriv_wrt_params
+            self.base_deriv = None
+            self.base_hessian = None
+        else:
+            # "sparse mode" => don't ever compute matrix-exponential explicitly
+            rep = evotype.create_experrorgen_rep(self.errorgen._rep)
 
         LinearOperator.__init__(self, rep, evotype)
         _ErrorGeneratorContainer.__init__(self, self.errorgen)
@@ -472,21 +428,22 @@ class LindbladOp(LinearOperator, _ErrorGeneratorContainer):
         # parent reset correctly.
         if memo is not None and id(self) in memo: return memo[id(self)]
 
-        if self.unitary_postfactor is None:
-            upost = None
-        elif self._evotype == "densitymx":
-            upost = self.unitary_postfactor
-        else:
-            #self.unitary_postfactor is actually the *unitary* not the postfactor
-            termtype = "dense" if self._evotype == "svterm" else "clifford"
-
-            # automatically "up-convert" operation to CliffordOp if needed
-            if termtype == "clifford":
-                assert(isinstance(self.unitary_postfactor, CliffordOp))  # see __init__
-                U = self.unitary_postfactor.unitary
-            else: U = self.unitary_postfactor
-            op_std = _gt.unitary_to_process_mx(U)
-            upost = _bt.change_basis(op_std, 'std', self.errorgen.matrix_basis)
+        #TODO REMOVE
+        #if self.unitary_postfactor is None:
+        #    upost = None
+        #elif self._evotype == "densitymx":
+        #    upost = self.unitary_postfactor
+        #else:
+        #    #self.unitary_postfactor is actually the *unitary* not the postfactor
+        #    termtype = "dense" if self._evotype == "svterm" else "clifford"
+        #
+        #    # automatically "up-convert" operation to CliffordOp if needed
+        #    if termtype == "clifford":
+        #        assert(isinstance(self.unitary_postfactor, CliffordOp))  # see __init__
+        #        U = self.unitary_postfactor.unitary
+        #    else: U = self.unitary_postfactor
+        #    op_std = _gt.unitary_to_process_mx(U)
+        #    upost = _bt.change_basis(op_std, 'std', self.errorgen.matrix_basis)
 
         cls = self.__class__  # so that this method works for derived classes too
         copyOfMe = cls(upost, self.errorgen.copy(parent, memo), self.dense_rep)
@@ -496,23 +453,22 @@ class LindbladOp(LinearOperator, _ErrorGeneratorContainer):
         """
         Updates self._rep as needed after parameters have changed.
         """
-        if self._evotype == "densitymx":
-            if self.dense_rep:  # "sparse mode" => don't ever compute matrix-exponential explicitly
-                self.exp_err_gen = _spl.expm(self.errorgen.to_dense())  # used in deriv_wrt_params
-                if self.unitary_postfactor is not None:
-                    dense = _np.dot(self.exp_err_gen, self.unitary_postfactor)
-                else: dense = self.exp_err_gen
-                self._rep.base.flags.writeable = True
-                self._rep.base[:, :] = dense
-                self._rep.base.flags.writeable = False
-                self.base_deriv = None
-                self.base_hessian = None
-            elif not close:
-                # don't reset matrix exponential params (based on operator norm) when vector hasn't changed much
-                mu, m_star, s, eta = _mt.expop_multiply_prep(
-                    self.errorgen._rep.aslinearoperator(),
-                    a_1_norm=self.errorgen.onenorm_upperbound())
-                self._rep.set_exp_params(mu, eta, m_star, s)
+        if self.dense_rep:
+            # compute matrix-exponential explicitly
+            self.exp_err_gen = _spl.expm(self.errorgen.to_dense())  # used in deriv_wrt_params
+
+            #TODO REMOVE
+            #if self.unitary_postfactor is not None:
+            #    dense = _np.dot(self.exp_err_gen, self.unitary_postfactor)
+            #else: dense = self.exp_err_gen
+            dense = self.exp_err_gen
+            self._rep.base.flags.writeable = True
+            self._rep.base[:, :] = dense
+            self._rep.base.flags.writeable = False
+            self.base_deriv = None
+            self.base_hessian = None
+        elif not close:
+            self._rep.errgenrep_has_changed()
 
     def set_gpindices(self, gpindices, parent, memo=None):
         """
@@ -533,12 +489,8 @@ class LindbladOp(LinearOperator, _ErrorGeneratorContainer):
         -------
         None
         """
-        self.terms = {}  # clear terms cache since param indices have changed now
-        self.exp_terms_cache = {}
-        self.local_term_poly_coeffs = {}
-        #TODO REMOVE self.direct_terms = {}
-        #TODO REMOVE self.direct_term_poly_coeffs = {}
         _modelmember.ModelMember.set_gpindices(self, gpindices, parent, memo)
+        self._rep.param_indices_have_changed()
 
     def to_dense(self):
         """
@@ -548,7 +500,7 @@ class LindbladOp(LinearOperator, _ErrorGeneratorContainer):
         -------
         numpy.ndarray
         """
-        if self._evotype == "densitymx" and self.dense_rep:
+        if self.dense_rep:
             # Then self._rep contains a dense version already
             return self._rep.base  # copy() unnecessary since we set to readonly
 
@@ -556,20 +508,21 @@ class LindbladOp(LinearOperator, _ErrorGeneratorContainer):
             # Construct a dense version from scratch (more time consuming)
             exp_errgen = _spl.expm(self.errorgen.to_dense())
 
-            if self.unitary_postfactor is not None:
-                if self._evotype in ("svterm", "cterm"):
-                    if self._evotype == "cterm":
-                        assert(isinstance(self.unitary_postfactor, CliffordOp))  # see __init__
-                        U = self.unitary_postfactor.unitary
-                    else: U = self.unitary_postfactor
-                    op_std = _gt.unitary_to_process_mx(U)
-                    upost = _bt.change_basis(op_std, 'std', self.errorgen.matrix_basis)
-                else:
-                    upost = self.unitary_postfactor
-
-                dense = _mt.safe_dot(exp_errgen, upost)
-            else:
-                dense = exp_errgen
+            #TODO REMOVE
+            #if self.unitary_postfactor is not None:
+            #    if self._evotype in ("svterm", "cterm"):
+            #        if self._evotype == "cterm":
+            #            assert(isinstance(self.unitary_postfactor, CliffordOp))  # see __init__
+            #            U = self.unitary_postfactor.unitary
+            #        else: U = self.unitary_postfactor
+            #        op_std = _gt.unitary_to_process_mx(U)
+            #        upost = _bt.change_basis(op_std, 'std', self.errorgen.matrix_basis)
+            #    else:
+            #        upost = self.unitary_postfactor
+            #
+            #    dense = _mt.safe_dot(exp_errgen, upost)
+            #else:
+            dense = exp_errgen
             return dense
 
     #FUTURE: maybe remove this function altogether, as it really shouldn't be called
@@ -588,10 +541,11 @@ class LindbladOp(LinearOperator, _ErrorGeneratorContainer):
             return _sps.csr_matrix(self.to_dense())
         else:
             exp_err_gen = _spsl.expm(self.errorgen.to_sparse().tocsc()).tocsr()
-            if self.unitary_postfactor is not None:
-                return exp_err_gen.dot(self.unitary_postfactor)
-            else:
-                return exp_err_gen
+            #TODO REMOVE
+            #if self.unitary_postfactor is not None:
+            #    return exp_err_gen.dot(self.unitary_postfactor)
+            #else:
+            return exp_err_gen
 
     #def torep(self):
     #    """
@@ -768,259 +722,6 @@ class LindbladOp(LinearOperator, _ErrorGeneratorContainer):
             else:
                 return _np.take(_np.take(self.base_hessian, wrt_filter1, axis=1),
                                 wrt_filter2, axis=2)
-
-    def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
-        """
-        Get the `order`-th order Taylor-expansion terms of this operation.
-
-        This function either constructs or returns a cached list of the terms at
-        the given order.  Each term is "rank-1", meaning that its action on a
-        density matrix `rho` can be written:
-
-        `rho -> A rho B`
-
-        The coefficients of these terms are typically polynomials of the operation's
-        parameters, where the polynomial's variable indices index the *global*
-        parameters of the operation's parent (usually a :class:`Model`), not the
-        operation's local parameter array (i.e. that returned from `to_vector`).
-
-        Parameters
-        ----------
-        order : int
-            Which order terms (in a Taylor expansion of this :class:`LindbladOp`)
-            to retrieve.
-
-        max_polynomial_vars : int, optional
-            maximum number of variables the created polynomials can have.
-
-        return_coeff_polys : bool
-            Whether a parallel list of locally-indexed (using variable indices
-            corresponding to *this* object's parameters rather than its parent's)
-            polynomial coefficients should be returned as well.
-
-        Returns
-        -------
-        terms : list
-            A list of :class:`RankOneTerm` objects.
-        coefficients : list
-            Only present when `return_coeff_polys == True`.
-            A list of *compact* polynomial objects, meaning that each element
-            is a `(vtape,ctape)` 2-tuple formed by concatenating together the
-            output of :method:`Polynomial.compact`.
-        """
-        if order not in self.terms:
-            self._compute_taylor_order_terms(order, max_polynomial_vars)
-
-        if return_coeff_polys:
-            return self.terms[order], self.local_term_poly_coeffs[order]
-        else:
-            return self.terms[order]
-
-    def _compute_taylor_order_terms(self, order, max_polynomial_vars):  # separated for profiling
-
-        mapvec = _np.ascontiguousarray(_np.zeros(max_polynomial_vars, _np.int64))
-        for ii, i in enumerate(self.gpindices_as_array()):
-            mapvec[ii] = i
-
-        def _compose_poly_indices(terms):
-            for term in terms:
-                #term.map_indices_inplace(lambda x: tuple(_modelmember._compose_gpindices(
-                #    self.gpindices, _np.array(x, _np.int64))))
-                term.mapvec_indices_inplace(mapvec)
-            return terms
-
-        assert(self.gpindices is not None), "LindbladOp must be added to a Model before use!"
-        assert(not _sps.issparse(self.unitary_postfactor)
-               ), "Unitary post-factor needs to be dense for term-based evotypes"
-        # for now - until StaticDenseOp and CliffordOp can init themselves from a *sparse* matrix
-        mpv = max_polynomial_vars
-        postTerm = _term.RankOnePolynomialOpTerm.create_from(_Polynomial({(): 1.0}, mpv), self.unitary_postfactor,
-                                                             self.unitary_postfactor, self._evotype)
-        #Note: for now, *all* of an error generator's terms are considered 0-th order,
-        # so the below call to taylor_order_terms just gets all of them.  In the FUTURE
-        # we might want to allow a distinction among the error generator terms, in which
-        # case this term-exponentiation step will need to become more complicated...
-        loc_terms = _term.exponentiate_terms(self.errorgen.taylor_order_terms(0, max_polynomial_vars),
-                                             order, postTerm, self.exp_terms_cache)
-        #OLD: loc_terms = [ t.collapse() for t in loc_terms ] # collapse terms for speed
-
-        poly_coeffs = [t.coeff for t in loc_terms]
-        tapes = [poly.compact(complex_coeff_tape=True) for poly in poly_coeffs]
-        if len(tapes) > 0:
-            vtape = _np.concatenate([t[0] for t in tapes])
-            ctape = _np.concatenate([t[1] for t in tapes])
-        else:
-            vtape = _np.empty(0, _np.int64)
-            ctape = _np.empty(0, complex)
-        coeffs_as_compact_polys = (vtape, ctape)
-        self.local_term_poly_coeffs[order] = coeffs_as_compact_polys
-
-        # only cache terms with *global* indices to avoid confusion...
-        self.terms[order] = _compose_poly_indices(loc_terms)
-
-    def taylor_order_terms_above_mag(self, order, max_polynomial_vars, min_term_mag):
-        """
-        Get the `order`-th order Taylor-expansion terms of this operation that have magnitude above `min_term_mag`.
-
-        This function constructs the terms at the given order which have a magnitude (given by
-        the absolute value of their coefficient) that is greater than or equal to `min_term_mag`.
-        It calls :method:`taylor_order_terms` internally, so that all the terms at order `order`
-        are typically cached for future calls.
-
-        The coefficients of these terms are typically polynomials of the operation's
-        parameters, where the polynomial's variable indices index the *global*
-        parameters of the operation's parent (usually a :class:`Model`), not the
-        operation's local parameter array (i.e. that returned from `to_vector`).
-
-        Parameters
-        ----------
-        order : int
-            The order of terms to get (and filter).
-
-        max_polynomial_vars : int, optional
-            maximum number of variables the created polynomials can have.
-
-        min_term_mag : float
-            the minimum term magnitude.
-
-        Returns
-        -------
-        list
-            A list of :class:`Rank1Term` objects.
-        """
-        mapvec = _np.ascontiguousarray(_np.zeros(max_polynomial_vars, _np.int64))
-        for ii, i in enumerate(self.gpindices_as_array()):
-            mapvec[ii] = i
-
-        assert(self.gpindices is not None), "LindbladOp must be added to a Model before use!"
-        assert(not _sps.issparse(self.unitary_postfactor)
-               ), "Unitary post-factor needs to be dense for term-based evotypes"
-        # for now - until StaticDenseOp and CliffordOp can init themselves from a *sparse* matrix
-        mpv = max_polynomial_vars
-        postTerm = _term.RankOnePolynomialOpTerm.create_from(_Polynomial({(): 1.0}, mpv), self.unitary_postfactor,
-                                                             self.unitary_postfactor, self._evotype)
-        postTerm = postTerm.copy_with_magnitude(1.0)
-        #Note: for now, *all* of an error generator's terms are considered 0-th order,
-        # so the below call to taylor_order_terms just gets all of them.  In the FUTURE
-        # we might want to allow a distinction among the error generator terms, in which
-        # case this term-exponentiation step will need to become more complicated...
-        errgen_terms = self.errorgen.taylor_order_terms(0, max_polynomial_vars)
-
-        #DEBUG: CHECK MAGS OF ERRGEN COEFFS
-        #poly_coeffs = [t.coeff for t in errgen_terms]
-        #tapes = [poly.compact(complex_coeff_tape=True) for poly in poly_coeffs]
-        #if len(tapes) > 0:
-        #    vtape = _np.concatenate([t[0] for t in tapes])
-        #    ctape = _np.concatenate([t[1] for t in tapes])
-        #else:
-        #    vtape = _np.empty(0, _np.int64)
-        #    ctape = _np.empty(0, complex)
-        #v = self.to_vector()
-        #errgen_coeffs = _bulk_eval_compact_polynomials_complex(
-        #    vtape, ctape, v, (len(errgen_terms),))  # an array of coeffs
-        #for coeff, t in zip(errgen_coeffs, errgen_terms):
-        #    coeff2 = t.coeff.evaluate(v)
-        #    if not _np.isclose(coeff,coeff2):
-        #        assert(False), "STOP"
-        #    t.set_magnitude(abs(coeff))
-
-        #evaluate errgen_terms' coefficients using their local vector of parameters
-        # (which happends to be the same as our paramvec in this case)
-        egvec = self.errorgen.to_vector()
-        errgen_terms = [egt.copy_with_magnitude(abs(egt.coeff.evaluate(egvec))) for egt in errgen_terms]
-
-        #DEBUG!!!
-        #import bpdb; bpdb.set_trace()
-        #loc_terms = _term.exponentiate_terms_above_mag(errgen_terms, order, postTerm, min_term_mag=-1)
-        #loc_terms_chk = _term.exponentiate_terms(errgen_terms, order, postTerm)
-        #assert(len(loc_terms) == len(loc_terms2))
-        #poly_coeffs = [t.coeff for t in loc_terms_chk]
-        #tapes = [poly.compact(complex_coeff_tape=True) for poly in poly_coeffs]
-        #if len(tapes) > 0:
-        #    vtape = _np.concatenate([t[0] for t in tapes])
-        #    ctape = _np.concatenate([t[1] for t in tapes])
-        #else:
-        #    vtape = _np.empty(0, _np.int64)
-        #    ctape = _np.empty(0, complex)
-        #v = self.to_vector()
-        #coeffs = _bulk_eval_compact_polynomials_complex(
-        #    vtape, ctape, v, (len(loc_terms_chk),))  # an array of coeffs
-        #for coeff, t, t2 in zip(coeffs, loc_terms, loc_terms_chk):
-        #    coeff2 = t.coeff.evaluate(v)
-        #    if not _np.isclose(coeff,coeff2):
-        #        assert(False), "STOP"
-        #    t.set_magnitude(abs(coeff))
-
-        #for ii,t in enumerate(loc_terms):
-        #    coeff1 = t.coeff.evaluate(egvec)
-        #    if not _np.isclose(abs(coeff1), t.magnitude):
-        #        assert(False),"STOP"
-        #    #t.set_magnitude(abs(t.coeff.evaluate(egvec)))
-
-        #FUTURE:  maybe use bulk eval of compact polys? Something like this:
-        #coeffs = _bulk_eval_compact_polynomials_complex(
-        #    cpolys[0], cpolys[1], v, (len(terms_at_order),))  # an array of coeffs
-        #for coeff, t in zip(coeffs, terms_at_order):
-        #    t.set_magnitude(abs(coeff))
-
-        terms = []
-        for term in _term.exponentiate_terms_above_mag(errgen_terms, order,
-                                                       postTerm, min_term_mag=min_term_mag):
-            #poly_coeff = term.coeff
-            #compact_poly_coeff = poly_coeff.compact(complex_coeff_tape=True)
-            term.mapvec_indices_inplace(mapvec)  # local -> global indices
-
-            # CHECK - to ensure term magnitudes are being set correctly (i.e. are in sync with evaluated coeffs)
-            # REMOVE later
-            # t = term
-            # vt, ct = t._rep.coeff.compact_complex()
-            # coeff_array = _bulk_eval_compact_polynomials_complex(vt, ct, self.parent.to_vector(), (1,))
-            # if not _np.isclose(abs(coeff_array[0]), t._rep.magnitude):  # DEBUG!!!
-            #     print(coeff_array[0], "vs.", t._rep.magnitude)
-            #     import bpdb; bpdb.set_trace()
-            #     c1 = _Polynomial.from_rep(t._rep.coeff)
-
-            terms.append(term)
-        return terms
-
-    @property
-    def total_term_magnitude(self):
-        """
-        Get the total (sum) of the magnitudes of all this operator's terms.
-
-        The magnitude of a term is the absolute value of its coefficient, so
-        this function returns the number you'd get from summing up the
-        absolute-coefficients of all the Taylor terms (at all orders!) you
-        get from expanding this operator in a Taylor series.
-
-        Returns
-        -------
-        float
-        """
-        # return exp( mag of errorgen ) = exp( sum of absvals of errgen term coeffs )
-        # (unitary postfactor has weight == 1.0 so doesn't enter)
-        #TODO REMOVE:
-        #print("  DB: LindbladOp.get_totat_term_magnitude: (errgen type =",self.errorgen.__class__.__name__)
-        #egttm = self.errorgen.total_term_magnitude
-        #print("  DB: exp(", egttm, ") = ",_np.exp(egttm))
-        #return _np.exp(egttm)
-        return _np.exp(min(self.errorgen.total_term_magnitude, MAX_EXPONENT))
-        #return _np.exp(self.errorgen.total_term_magnitude)  # overflows sometimes
-
-    @property
-    def total_term_magnitude_deriv(self):
-        """
-        The derivative of the sum of *all* this operator's terms.
-
-        Computes the derivative of the total (sum) of the magnitudes of all this
-        operator's terms with respect to the operators (local) parameters.
-
-        Returns
-        -------
-        numpy array
-            An array of length self.num_params
-        """
-        return _np.exp(self.errorgen.total_term_magnitude) * self.errorgen.total_term_magnitude_deriv
 
     @property
     def parameter_labels(self):

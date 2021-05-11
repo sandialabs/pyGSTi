@@ -74,108 +74,16 @@ class EmbeddedOp(LinearOperator):
         opDim = self.state_space_labels.dim
 
         #Create representation
-        if evotype == "stabilizer":
-            # assert that all state space labels == qubits, since we only know
-            # how to embed cliffords on qubits...
-            assert(len(self.state_space_labels.labels) == 1
-                   and all([ld == 2 for ld in self.state_space_labels.labeldims.values()])), \
-                "All state space labels must correspond to *qubits*"
-            if isinstance(self.embedded_op, CliffordOp):
-                assert(len(target_labels) == len(self.embedded_op.svector) // 2), \
-                    "Inconsistent number of qubits in `target_labels` and Clifford `embedded_op`"
-            assert(not self.dense_rep), "`dense_rep` can only be set to True for densitymx and statevec evotypes"
-
-            #Cache info to speedup representation's acton(...) methods:
-            # Note: ...labels[0] is the *only* tensor-prod-block, asserted above
-            qubitLabels = self.state_space_labels.labels[0]
-            qubit_indices = _np.array([qubitLabels.index(targetLbl)
-                                       for targetLbl in target_labels], _np.int64)
-
-            nQubits = self.state_space_labels.nqubits
-            assert(nQubits is not None), "State space does not contain a definite number of qubits!"
-            rep = replib.SBOpRepEmbedded(self.embedded_op._rep,
-                                         nQubits, qubit_indices)
-        elif evotype == "chp":
-            # assert that all state space labels == qubits, since we only know
-            # how to embed cliffords on qubits...
-            assert(len(self.state_space_labels.labels) == 1
-                   and all([ld == 2 for ld in self.state_space_labels.labeldims.values()])), \
-                "All state space labels must correspond to *qubits*"
-            assert(self.embedded_op._evotype == 'chp'), \
-                "Embedded op must also have CHP evotype instead of %s" % self.embedded_op._evotype
-            op_nqubits = (self.embedded_op.dim - 1).bit_length()
-            assert(len(target_labels) == op_nqubits), \
-                "Inconsistent number of qubits in `target_labels` ({0}) and CHP `embedded_op` ({1})".format(
-                    len(target_labels), op_nqubits)
-            assert(not self.dense_rep), "`dense_rep` can only be set to True for densitymx and statevec evotypes"
-
-            qubitLabels = self.state_space_labels.labels[0]
-            qubit_indices = _np.array([qubitLabels.index(targetLbl)
-                                       for targetLbl in target_labels], _np.int64)
-
-            nQubits = self.state_space_labels.nqubits
-            assert(nQubits is not None), "State space does not contain a definite number of qubits!"
-
-            # Store qubit indices as targets for later use
-            self.target_indices = qubit_indices
-
-            rep = opDim  # Don't set representation again, just use embedded_op calls later
-
-        elif evotype in ("statevec", "densitymx"):
-
-            iTensorProdBlks = [self.state_space_labels.tpb_index[label] for label in target_labels]
-            # index of tensor product block (of state space) a bit label is part of
-            if len(set(iTensorProdBlks)) != 1:
-                raise ValueError("All qubit labels of a multi-qubit operation must correspond to the"
-                                 " same tensor-product-block of the state space -- checked previously")  # pragma: no cover # noqa
-
-            iTensorProdBlk = iTensorProdBlks[0]  # because they're all the same (tested above) - this is "active" block
-            tensorProdBlkLabels = self.state_space_labels.labels[iTensorProdBlk]
-            # count possible *density-matrix-space* indices of each component of the tensor product block
-            numBasisEls = _np.array([self.state_space_labels.labeldims[l] for l in tensorProdBlkLabels], _np.int64)
-
-            # Separate the components of the tensor product that are not operated on, i.e. that our
-            # final map just acts as identity w.r.t.
-            labelIndices = [tensorProdBlkLabels.index(label) for label in target_labels]
-            actionInds = _np.array(labelIndices, _np.int64)
-            assert(_np.product([numBasisEls[i] for i in actionInds]) == self.embedded_op.dim), \
-                "Embedded operation has dimension (%d) inconsistent with the given target labels (%s)" % (
-                    self.embedded_op.dim, str(target_labels))
-
-            if self.dense_rep:
-                #maybe cache items to speed up _iter_matrix_elements in FUTURE here?
-                if evotype == "statevec":
-                    rep = replib.SVOpRepDense(_np.require(_np.identity(opDim, complex),
-                                                          requirements=['OWNDATA', 'C_CONTIGUOUS']))
-                else:  # "densitymx"
-                    rep = replib.DMOpRepDense(_np.require(_np.identity(opDim, 'd'),
-                                                          requirements=['OWNDATA', 'C_CONTIGUOUS']))
-            else:
-                nBlocks = self.state_space_labels.num_tensor_prod_blocks()
-                iActiveBlock = iTensorProdBlk
-                nComponents = len(self.state_space_labels.labels[iActiveBlock])
-                embeddedDim = self.embedded_op.dim
-                blocksizes = _np.array([_np.product(self.state_space_labels.tensor_product_block_dims(k))
-                                        for k in range(nBlocks)], _np.int64)
-                if evotype == "statevec":
-                    rep = replib.SVOpRepEmbedded(self.embedded_op._rep,
-                                                 numBasisEls, actionInds, blocksizes, embeddedDim,
-                                                 nComponents, iActiveBlock, nBlocks, opDim)
-                else:  # "densitymx"
-                    rep = replib.DMOpRepEmbedded(self.embedded_op._rep,
-                                                 numBasisEls, actionInds, blocksizes, embeddedDim,
-                                                 nComponents, iActiveBlock, nBlocks, opDim)
-
-        elif evotype in ("svterm", "cterm"):
-            assert(not self.dense_rep), "`dense_rep` can only be set to True for densitymx and statevec evotypes"
-            rep = opDim  # these evotypes don't have representations (LinearOperator will set _rep to None)
+        if dense_rep:
+            rep = evotype.create_dense_rep(dim)
         else:
-            raise ValueError("Invalid evotype `%s` for %s" % (evotype, self.__class__.__name__))
+            rep = evotype.create_embedded_rep(self.state_space_labels, self.targetLabels, self.embedded_op._rep)
 
         LinearOperator.__init__(self, rep, evotype)
         if self.dense_rep: self._update_denserep()
 
     def _update_denserep(self):
+        """Performs additional update for the case when we use a dense underlying representation."""
         self._rep.base.flags.writeable = True
         self._rep.base[:, :] = self.to_dense()
         self._rep.base.flags.writeable = False
@@ -330,44 +238,6 @@ class EmbeddedOp(LinearOperator):
                     self._iter_elements_cache.append(item)
                     yield item
 
-    #def torep(self):
-    #    """
-    #    Return a "representation" object for this operation.
-    #
-    #    Such objects are primarily used internally by pyGSTi to compute
-    #    things like probabilities more efficiently.
-    #
-    #    Returns
-    #    -------
-    #    OpRep
-    #    """
-    #    if self._evotype == "stabilizer":
-    #        nQubits = int(round(_np.log2(self.dim)))
-    #        return replib.SBOpRepEmbedded(self.embedded_op.torep(),
-    #                                       nQubits, self.qubit_indices)
-    #
-    #    if self._evotype not in ("statevec", "densitymx"):
-    #        raise ValueError("Invalid evotype '%s' for %s.torep(...)" %
-    #                         (self._evotype, self.__class__.__name__))
-    #
-    #    nBlocks = self.state_space_labels.num_tensor_prod_blocks()
-    #    iActiveBlock = self.iTensorProdBlk
-    #    nComponents = len(self.state_space_labels.labels[iActiveBlock])
-    #    embeddedDim = self.embedded_op.dim
-    #    blocksizes = _np.array([_np.product(self.state_space_labels.tensor_product_block_dims(k))
-    #                            for k in range(nBlocks)], _np.int64)
-    #
-    #    if self._evotype == "statevec":
-    #        return replib.SVOpRepEmbedded(self.embedded_op.torep(),
-    #                                       self.numBasisEls, self.actionInds, blocksizes,
-    #                                       embeddedDim, nComponents, iActiveBlock, nBlocks,
-    #                                       self.dim)
-    #    else:
-    #        return replib.DMOpRepEmbedded(self.embedded_op.torep(),
-    #                                       self.numBasisEls, self.actionInds, blocksizes,
-    #                                       embeddedDim, nComponents, iActiveBlock, nBlocks,
-    #                                       self.dim)
-
     def to_sparse(self):
         """
         Return the operation as a sparse matrix
@@ -414,135 +284,6 @@ class EmbeddedOp(LinearOperator):
         for i, j, gi, gj in self._iter_matrix_elements():
             finalOp[i, j] = embedded_dense[gi, gj]
         return finalOp
-
-    def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
-        """
-        Get the `order`-th order Taylor-expansion terms of this operation.
-
-        This function either constructs or returns a cached list of the terms at
-        the given order.  Each term is "rank-1", meaning that its action on a
-        density matrix `rho` can be written:
-
-        `rho -> A rho B`
-
-        The coefficients of these terms are typically polynomials of the operation's
-        parameters, where the polynomial's variable indices index the *global*
-        parameters of the operation's parent (usually a :class:`Model`), not the
-        operation's local parameter array (i.e. that returned from `to_vector`).
-
-        Parameters
-        ----------
-        order : int
-            The order of terms to get.
-
-        max_polynomial_vars : int, optional
-            maximum number of variables the created polynomials can have.
-
-        return_coeff_polys : bool
-            Whether a parallel list of locally-indexed (using variable indices
-            corresponding to *this* object's parameters rather than its parent's)
-            polynomial coefficients should be returned as well.
-
-        Returns
-        -------
-        terms : list
-            A list of :class:`RankOneTerm` objects.
-        coefficients : list
-            Only present when `return_coeff_polys == True`.
-            A list of *compact* polynomial objects, meaning that each element
-            is a `(vtape,ctape)` 2-tuple formed by concatenating together the
-            output of :method:`Polynomial.compact`.
-        """
-        #Reduce labeldims b/c now working on *state-space* instead of density mx:
-        sslbls = self.state_space_labels.copy()
-        sslbls.reduce_dims_densitymx_to_state_inplace()
-        if return_coeff_polys:
-            terms, coeffs = self.embedded_op.taylor_order_terms(order, max_polynomial_vars, True)
-            embedded_terms = [t.embed(sslbls, self.targetLabels) for t in terms]
-            return embedded_terms, coeffs
-        else:
-            return [t.embed(sslbls, self.targetLabels)
-                    for t in self.embedded_op.taylor_order_terms(order, max_polynomial_vars, False)]
-
-    def taylor_order_terms_above_mag(self, order, max_polynomial_vars, min_term_mag):
-        """
-        Get the `order`-th order Taylor-expansion terms of this operation that have magnitude above `min_term_mag`.
-
-        This function constructs the terms at the given order which have a magnitude (given by
-        the absolute value of their coefficient) that is greater than or equal to `min_term_mag`.
-        It calls :method:`taylor_order_terms` internally, so that all the terms at order `order`
-        are typically cached for future calls.
-
-        The coefficients of these terms are typically polynomials of the operation's
-        parameters, where the polynomial's variable indices index the *global*
-        parameters of the operation's parent (usually a :class:`Model`), not the
-        operation's local parameter array (i.e. that returned from `to_vector`).
-
-        Parameters
-        ----------
-        order : int
-            The order of terms to get (and filter).
-
-        max_polynomial_vars : int, optional
-            maximum number of variables the created polynomials can have.
-
-        min_term_mag : float
-            the minimum term magnitude.
-
-        Returns
-        -------
-        list
-            A list of :class:`Rank1Term` objects.
-        """
-        sslbls = self.state_space_labels.copy()
-        sslbls.reduce_dims_densitymx_to_state_inplace()
-        return [t.embed(sslbls, self.targetLabels)
-                for t in self.embedded_op.taylor_order_terms_above_mag(order, max_polynomial_vars, min_term_mag)]
-
-    @property
-    def total_term_magnitude(self):
-        """
-        Get the total (sum) of the magnitudes of all this operator's terms.
-
-        The magnitude of a term is the absolute value of its coefficient, so
-        this function returns the number you'd get from summing up the
-        absolute-coefficients of all the Taylor terms (at all orders!) you
-        get from expanding this operator in a Taylor series.
-
-        Returns
-        -------
-        float
-        """
-        # In general total term mag == sum of the coefficients of all the terms (taylor expansion)
-        #  of an errorgen or operator.
-        # In this case, since the coeffs of the terms of an EmbeddedOp are the same as those
-        # of the operator being embedded, the total term magnitude is the same:
-
-        #DEBUG TODO REMOVE
-        #print("DB: Embedded.total_term_magnitude = ",self.embedded_op.get_total_term_magnitude()," -- ",
-        #   self.embedded_op.__class__.__name__)
-        #ret = self.embedded_op.get_total_term_magnitude()
-        #egterms = self.taylor_order_terms(0)
-        #mags = [ abs(t.evaluate_coeff(self.to_vector()).coeff) for t in egterms ]
-        #print("EmbeddedErrorgen CHECK = ",sum(mags), " vs ", ret)
-        #assert(sum(mags) <= ret+1e-4)
-
-        return self.embedded_op.total_term_magnitude
-
-    @property
-    def total_term_magnitude_deriv(self):
-        """
-        The derivative of the sum of *all* this operator's terms.
-
-        Computes the derivative of the total (sum) of the magnitudes of all this
-        operator's terms with respect to the operators (local) parameters.
-
-        Returns
-        -------
-        numpy array
-            An array of length self.num_params
-        """
-        return self.embedded_op.total_term_magnitude_deriv
 
     @property
     def parameter_labels(self):
@@ -858,31 +599,6 @@ class EmbeddedOp(LinearOperator):
         bool
         """
         return self.embedded_op.has_nonzero_hessian()
-
-    def get_chp_str(self, targets=None):
-        """Return a string suitable for printing to a CHP input file from the embedded operations.
-
-        Just calls underlying get_chp_str but with an extra layer of target redirection.
-
-        Parameters
-        ----------
-        targets: list of int
-            Qubits to be applied to (if None, uses stored CHP strings directly).
-
-        Returns
-        -------
-        s : str
-            String of CHP code
-        """
-        target_indices = list(self.target_indices)
-
-        # Targets are for the full embedded operation so we need to map these to the actual targets of the CHP operation
-        if targets is not None:
-            assert len(targets) == self.state_space_labels.nqubits, \
-                "Got {0} targets instead of required {1}".format(len(targets), self.state_space_labels.nqubits)
-            target_indices = [targets[ti] for ti in self.target_indices]
-
-        return self.embedded_op.get_chp_str(target_indices)
 
     def __str__(self):
         """ Return string representation """

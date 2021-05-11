@@ -710,9 +710,9 @@ namespace CReps {
     if(_U_nnz > 0) {
       // do init_state = dot(unitary_postfactor, state) via *sparse* dotprod
       for(i=0; i<_dim; i++) {
-	init_state->_dataptr[i] = 0;
-	for(j=_U_indptr[i]; j< _U_indptr[i+1]; j++)
-	  init_state->_dataptr[i] += _U_data[j] * state->_dataptr[_U_indices[j]];
+          init_state->_dataptr[i] = 0;
+          for(j=_U_indptr[i]; j< _U_indptr[i+1]; j++)
+              init_state->_dataptr[i] += _U_data[j] * state->_dataptr[_U_indices[j]];
       }
     } else {
       // in this case, we still need a *copy* of state, since

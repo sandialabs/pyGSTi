@@ -167,17 +167,9 @@ class DenseOperator(BasedDenseOperatorInterface, LinearOperator):
 
     def __init__(self, mx, evotype):
         """ Initialize a new LinearOperator """
-        dtype = complex if evotype == "statevec" else 'd'
-        mx = _np.ascontiguousarray(mx, dtype)  # may not give mx it's own data
-        mx = _np.require(mx, requirements=['OWNDATA', 'C_CONTIGUOUS'])
-
-        if evotype == "statevec":
-            rep = replib.SVOpRepDense(mx)
-        elif evotype == "densitymx":
-            rep = replib.DMOpRepDense(mx)
-        else:
-            raise ValueError("Invalid evotype for a DenseOperator: %s" % evotype)
-
+        evotype = _Evotype.cast(evotype)
+        rep = evotype.create_dense_rep(mx.shape[0])
+        rep.base[:, :] = mx
         LinearOperator.__init__(self, rep, evotype)
         BasedDenseOperatorInterface.__init__(self)
         # "Based" interface requires this and derived classes to have a .base attribute

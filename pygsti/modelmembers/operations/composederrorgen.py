@@ -52,6 +52,7 @@ class ComposedErrorgen(LinearOperator):
 
         if evotype == "auto":
             evotype = errgens_to_compose[0]._evotype
+        evotype = _Evotype.cast(evotype)
         assert(all([evotype == eg._evotype for eg in errgens_to_compose])), \
             "All error generators must have the same evolution type (%s expected)!" % evotype
 
@@ -69,15 +70,7 @@ class ComposedErrorgen(LinearOperator):
 
         #Create representation object
         factor_reps = [op._rep for op in self.factors]
-        if evotype == "densitymx":
-            rep = replib.DMOpRepSum(factor_reps, dim)
-        elif evotype == "statevec":
-            rep = replib.SVOpRepSum(factor_reps, dim)
-        elif evotype == "stabilizer":
-            nQubits = int(round(_np.log2(dim)))  # "stabilizer" is a unitary-evolution type mode
-            rep = replib.SBOpRepSum(factor_reps, nQubits)
-        else:
-            rep = dim  # no representations for term-based evotypes
+        rep = evotype.create_sum_rep(factor_reps, dim)
 
         LinearOperator.__init__(self, rep, evotype)
 
@@ -511,154 +504,6 @@ class ComposedErrorgen(LinearOperator):
         for eg in self.factors[1:]:
             mx += eg.to_dense()
         return mx
-
-    #OLD: UNUSED - now use to_sparse/to_dense
-    #def _construct_errgen_matrix(self):
-    #    self.factors[0]._construct_errgen_matrix()
-    #    mx = self.factors[0].err_gen_mx
-    #    for eg in self.factors[1:]:
-    #        eg._construct_errgen_matrix()
-    #        mx += eg.err_gen_mx
-    #    self.err_gen_mx = mx
-
-    #def torep(self):
-    #    """
-    #    Return a "representation" object for this error generator.
-    #
-    #    Such objects are primarily used internally by pyGSTi to compute
-    #    things like probabilities more efficiently.
-    #
-    #    Returns
-    #    -------
-    #    OpRep
-    #    """
-    #    factor_reps = [factor.torep() for factor in self.factors]
-    #    if self._evotype == "densitymx":
-    #        return replib.DMOpRepSum(factor_reps, self.dim)
-    #    elif self._evotype == "statevec":
-    #        return replib.SVOpRepSum(factor_reps, self.dim)
-    #    elif self._evotype == "stabilizer":
-    #        nQubits = int(round(_np.log2(self.dim)))  # "stabilizer" is a unitary-evolution type mode
-    #        return replib.SBOpRepSum(factor_reps, nQubits)
-    #    assert(False), "Invalid internal _evotype: %s" % self._evotype
-
-    def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
-        """
-        Get the `order`-th order Taylor-expansion terms of this error generator..
-
-        This function either constructs or returns a cached list of the terms at
-        the given order.  Each term is "rank-1", meaning that its action on a
-        density matrix `rho` can be written:
-
-        `rho -> A rho B`
-
-        The coefficients of these terms are typically polynomials of the operation's
-        parameters, where the polynomial's variable indices index the *global*
-        parameters of the operation's parent (usually a :class:`Model`), not the
-        operation's local parameter array (i.e. that returned from `to_vector`).
-
-        Parameters
-        ----------
-        order : int
-            The order of terms to get.
-
-        max_polynomial_vars : int, optional
-            maximum number of variables the created polynomials can have.
-
-        return_coeff_polys : bool
-            Whether a parallel list of locally-indexed (using variable indices
-            corresponding to *this* object's parameters rather than its parent's)
-            polynomial coefficients should be returned as well.
-
-        Returns
-        -------
-        terms : list
-            A list of :class:`RankOneTerm` objects.
-        coefficients : list
-            Only present when `return_coeff_polys == True`.
-            A list of *compact* polynomial objects, meaning that each element
-            is a `(vtape,ctape)` 2-tuple formed by concatenating together the
-            output of :method:`Polynomial.compact`.
-        """
-        assert(order == 0), \
-            "Error generators currently treat all terms as 0-th order; nothing else should be requested!"
-        assert(return_coeff_polys is False)
-
-        #Need to adjust indices b/c in error generators we (currently) expect terms to have local indices
-        ret = []
-        for eg in self.factors:
-            eg_terms = [t.copy() for t in eg.taylor_order_terms(order, max_polynomial_vars, return_coeff_polys)]
-            mapvec = _np.ascontiguousarray(_modelmember._decompose_gpindices(
-                self.gpindices, _modelmember._compose_gpindices(eg.gpindices, _np.arange(eg.num_params))))
-            for t in eg_terms:
-                # t.map_indices_inplace(lambda x: tuple(_modelmember._decompose_gpindices(
-                #     # map global to *local* indices
-                #     self.gpindices, _modelmember._compose_gpindices(eg.gpindices, _np.array(x, _np.int64)))))
-                t.mapvec_indices_inplace(mapvec)
-            ret.extend(eg_terms)
-        return ret
-        # return list(_itertools.chain(
-        #     *[eg.get_taylor_order_terms(order, max_polynomial_vars, return_coeff_polys) for eg in self.factors]
-        # ))
-
-    @property
-    def total_term_magnitude(self):
-        """
-        Get the total (sum) of the magnitudes of all this operator's terms.
-
-        The magnitude of a term is the absolute value of its coefficient, so
-        this function returns the number you'd get from summing up the
-        absolute-coefficients of all the Taylor terms (at all orders!) you
-        get from expanding this operator in a Taylor series.
-
-        Returns
-        -------
-        float
-        """
-        # In general total term mag == sum of the coefficients of all the terms (taylor expansion)
-        #  of an errorgen or operator.
-        # In this case, since composed error generators are just summed, the total term
-        # magnitude is just the sum of the components
-
-        #DEBUG TODO REMOVE
-        #factor_ttms = [eg.get_total_term_magnitude() for eg in self.factors]
-        #print("DB: ComposedErrorgen.total_term_magnitude = sum(",factor_ttms,") -- ",
-        #      [eg.__class__.__name__ for eg in self.factors])
-        #for k,eg in enumerate(self.factors):
-        #    sub_egterms = eg.get_taylor_order_terms(0)
-        #    sub_mags = [ abs(t.evaluate_coeff(eg.to_vector()).coeff) for t in sub_egterms ]
-        #    print(" -> ",k,": total terms mag = ",sum(sub_mags), "(%d)" % len(sub_mags),"\n", sub_mags)
-        #    print("     gpindices = ",eg.gpindices)
-        #
-        #ret = sum(factor_ttms)
-        #egterms = self.taylor_order_terms(0)
-        #mags = [ abs(t.evaluate_coeff(self.to_vector()).coeff) for t in egterms ]
-        #print("ComposedErrgen term mags (should concat above) ",len(egterms),":\n",mags)
-        #print("gpindices = ",self.gpindices)
-        #print("ComposedErrorgen CHECK = ",sum(mags), " vs ", ret)
-        #assert(sum(mags) <= ret+1e-4)
-
-        return sum([eg.total_term_magnitude for eg in self.factors])
-
-    @property
-    def total_term_magnitude_deriv(self):
-        """
-        The derivative of the sum of *all* this operator's terms.
-
-        Computes the derivative of the total (sum) of the magnitudes of all this
-        operator's terms with respect to the operators (local) parameters.
-
-        Returns
-        -------
-        numpy array
-            An array of length self.num_params
-        """
-        ret = _np.zeros(self.num_params, 'd')
-        for eg in self.factors:
-            eg_local_inds = _modelmember._decompose_gpindices(
-                self.gpindices, eg.gpindices)
-            ret[eg_local_inds] += eg.total_term_magnitude_deriv
-        return ret
 
     @property
     def parameter_labels(self):

@@ -29,10 +29,12 @@ class EigenvalueParamDenseOp(DenseOperator):
         [1,0,...0] and if include_off_diags_in_degen_2_blocks is True
         any off diagonal elements lying on the top row are *not*
         parameterized as implied by the TP constraint.
+
+    evotype : TODO docstring
     """
 
     def __init__(self, matrix, include_off_diags_in_degen_2_blocks=False,
-                 tp_constrained_and_unital=False):
+                 tp_constrained_and_unital=False, evotype="densitymx"):
         """
         Initialize an EigenvalueParamDenseOp object.
 
@@ -277,7 +279,7 @@ class EigenvalueParamDenseOp(DenseOperator):
 
         #Finish LinearOperator construction
         mx = _np.empty(matrix.shape, "d")
-        DenseOperator.__init__(self, mx, "densitymx")
+        DenseOperator.__init__(self, mx, evotype)
         self.base.flags.writeable = False  # only _construct_matrix can change array
         self._construct_matrix()  # construct base from the parameters
 

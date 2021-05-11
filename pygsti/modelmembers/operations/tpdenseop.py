@@ -19,7 +19,7 @@ class TPDenseOp(DenseOperator):
         Direct access to the underlying process matrix data.
     """
 
-    def __init__(self, m):
+    def __init__(self, m, evotype="densitymx"):
         """
         Initialize a TPDenseOp object.
 
@@ -38,7 +38,7 @@ class TPDenseOp(DenseOperator):
                              "invalid form for 1st row!")
         raw = _np.require(mx, requirements=['OWNDATA', 'C_CONTIGUOUS'])
 
-        DenseOperator.__init__(self, raw, "densitymx")
+        DenseOperator.__init__(self, raw, evotype)
         assert(self._rep.base.flags['C_CONTIGUOUS'] and self._rep.base.flags['OWNDATA'])
         assert(isinstance(self.base, _ProtectedArray))
         self._paramlbls = _np.array(["MxElement %d,%d" % (i, j) for i in range(1, self.dim) for j in range(self.dim)],

@@ -11,9 +11,12 @@ class CliffordOp(LinearOperator):
         A (symplectic matrix, phase vector) 2-tuple specifying the pre-
         computed symplectic representation of `unitary`.  If None, then
         this representation is computed automatically from `unitary`.
+
+    evotype : {"stabilizer"}
+        The evolution type.
     """
 
-    def __init__(self, unitary, symplecticrep=None):
+    def __init__(self, unitary, symplecticrep=None, evotype='stabilizer'):
         """
         Creates a new CliffordOp from a unitary operation.
 
@@ -34,70 +37,21 @@ class CliffordOp(LinearOperator):
             computed symplectic representation of `unitary`.  If None, then
             this representation is computed automatically from `unitary`.
 
+        evotype : {"stabilizer"}
+            The evolution type.
         """
         #self.superop = superop
         self.unitary = unitary
         assert(self.unitary is not None), "Must supply `unitary` argument!"
-
-        #if self.superop is not None:
-        #    assert(unitary is None and symplecticrep is None),"Only supply one argument to __init__"
-        #    raise NotImplementedError("Superop -> Unitary calc not implemented yet")
-
-        if symplecticrep is not None:
-            self.smatrix, self.svector = symplecticrep
-        else:
-            # compute symplectic rep from unitary
-            self.smatrix, self.svector = _symp.unitary_to_symplectic(self.unitary, flagnonclifford=True)
-
-        self.inv_smatrix, self.inv_svector = _symp.inverse_clifford(
-            self.smatrix, self.svector)  # cache inverse since it's expensive
-
-        #nQubits = len(self.svector) // 2
-        #dim = 2**nQubits  # "stabilizer" is a "unitary evolution"-type mode
-
-        #Update members so they reference the same (contiguous) memory as the rep
         U = self.unitary.to_dense() if isinstance(self.unitary, LinearOperator) else self.unitary
-        self._dense_unitary = _np.ascontiguousarray(U, complex)
-        self.smatrix = _np.ascontiguousarray(self.smatrix, _np.int64)
-        self.svector = _np.ascontiguousarray(self.svector, _np.int64)
-        self.inv_smatrix = _np.ascontiguousarray(self.inv_smatrix, _np.int64)
-        self.inv_svector = _np.ascontiguousarray(self.inv_svector, _np.int64)
 
-        #Create representation
-        rep = replib.SBOpRepClifford(self.smatrix, self.svector,
-                                     self.inv_smatrix, self.inv_svector,
-                                     self._dense_unitary)
-        LinearOperator.__init__(self, rep, "stabilizer")
+        evotype = _Evotype.cast(evotype)
+        rep = evotype.create_clifford_rep(U, symplecticrep)
+        LinearOperator.__init__(self, rep, evotype)
 
     #NOTE: if this operation had parameters, we'd need to clear inv_smatrix & inv_svector
     # whenever the smatrix or svector changed, respectively (probably in from_vector?)
 
-    #def torep(self):
-    #    """
-    #    Return a "representation" object for this operation.
-    #
-    #    Such objects are primarily used internally by pyGSTi to compute
-    #    things like probabilities more efficiently.
-    #
-    #    Returns
-    #    -------
-    #    OpRep
-    #    """
-    #    if self.inv_smatrix is None or self.inv_svector is None:
-    #        self.inv_smatrix, self.inv_svector = _symp.inverse_clifford(
-    #            self.smatrix, self.svector)  # cache inverse since it's expensive
-    #
-    #    invs, invp = self.inv_smatrix, self.inv_svector
-    #    U = self.unitary.todense() if isinstance(self.unitary, LinearOperator) else self.unitary
-    #    return replib.SBOpRepClifford(_np.ascontiguousarray(self.smatrix, _np.int64),
-    #                                   _np.ascontiguousarray(self.svector, _np.int64),
-    #                                   _np.ascontiguousarray(invs, _np.int64),
-    #                                   _np.ascontiguousarray(invp, _np.int64),
-    #                                   _np.ascontiguousarray(U, complex))
-
     def __str__(self):
         """ Return string representation """
-        s = "Clifford operation with matrix:\n"
-        s += _mt.mx_to_string(self.smatrix, width=2, prec=0)
-        s += " and vector " + _mt.mx_to_string(self.svector, width=2, prec=0)
-        return s
+        return str(self._rep)
