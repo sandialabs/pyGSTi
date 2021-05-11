@@ -81,6 +81,23 @@ class DepolarizeOp(StochasticNoiseOp):
             keys of dicts <=> poly terms, e.g. (1,1) <=> x1^2) """
         return [{(0, 0): 1.0} for i in range(self.basis.size - 1)]  # rates are all just param0 squared
 
+    @property
+    def total_term_magnitude_deriv(self):
+        """
+        The derivative of the sum of *all* this operator's terms.
+
+        Computes the derivative of the total (sum) of the magnitudes of all this
+        operator's terms with respect to the operators (local) parameters.
+
+        Returns
+        -------
+        numpy array
+            An array of length self.num_params
+        """
+        # abs(rate) = rate = param_0**2, and there are basis.size-1 of them,
+        # so d( sum(abs(rates)) )/dparam_0 = 2*(basis.size-1)*param_0
+        return 2 * (self.basis.size - 1) * self.to_vector()
+
     def copy(self, parent=None, memo=None):
         """
         Copy this object.

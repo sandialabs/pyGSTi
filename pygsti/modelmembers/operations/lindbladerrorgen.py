@@ -260,6 +260,7 @@ class LindbladErrorgen(LinearOperator):
         self.ham_basis_size = len(self.ham_basis)
         self.other_basis_size = len(self.other_basis)
 
+        # Determine whether bases we've been given are sparse
         if self.ham_basis_size > 0: self.sparse = _sps.issparse(self.ham_basis[0])
         elif self.other_basis_size > 0: self.sparse = _sps.issparse(self.other_basis[0])
         else: self.sparse = False
@@ -269,15 +270,9 @@ class LindbladErrorgen(LinearOperator):
         self.paramvals = _gt.lindblad_projections_to_paramvals(
             hamC, otherC, self.param_mode, self.nonham_mode, truncate)
 
-        #Finish initialization based on evolution type
-        assert(evotype in ("densitymx", "svterm", "cterm")), \
-            "Invalid evotype: %s for %s" % (evotype, self.__class__.__name__)
-
         #Fast CSR-matrix summing variables: N/A if not sparse or using terms
         self._CSRSumIndices = self._CSRSumData = self._CSRSumPtr = None
-        #self.hamCSRSumIndices = None  #REMOVE
-        #self.otherCSRSumIndices = None #REMOVE
-        self.sparse_err_gen_template = None
+        #REMOVE? self.sparse_err_gen_template = None
 
         # Generator matrices & cache qtys: N/A for term-based evotypes
         self.hamGens = self.otherGens = None
@@ -286,7 +281,13 @@ class LindbladErrorgen(LinearOperator):
         self.Lmx = None
         self._coefficient_weights = None
 
-        if evotype == "densitymx":
+        #First try to create a lindblad-errorgen rep
+        evotype = _Evotype.cast(evotype)
+        try:
+            rep = evotype.create_lindblad_errorgen_rep(lindblad_term_dict, basis)
+        except Exception as e:
+            #Otherwise try to create a sparse or dense matrix representation
+        
             self.hamGens, self.otherGens = self._init_generators(dim)
 
             if self.hamGens is not None:
@@ -329,22 +330,11 @@ class LindbladErrorgen(LinearOperator):
                 self._CSRSumPtr = flat_nnzptr
 
                 self._data_scratch = _np.zeros(len(indices), complex)  # *complex* scratch space for updating rep
-                rep = replib.DMOpRepSparse(_np.ascontiguousarray(_np.zeros(len(indices), 'd')),
-                                           _np.ascontiguousarray(indices, _np.int64),
-                                           _np.ascontiguousarray(indptr, _np.int64))
+                rep = evotype.create_sparse_rep(_np.ascontiguousarray(_np.zeros(len(indices), 'd')),
+                                                _np.ascontiguousarray(indices, _np.int64),
+                                                _np.ascontiguousarray(indptr, _np.int64))
             else:
-                rep = replib.DMOpRepDense(_np.ascontiguousarray(_np.zeros((dim, dim), 'd')))
-
-        else:  # Term-based evolution
-
-            assert(not self.sparse), "Sparse bases are not supported for term-based evolution"
-            #TODO: make terms init-able from sparse elements, and below code  work with a *sparse* unitary_postfactor
-
-            self.LtermdictAndBasis = (lindblad_term_dict, basis)  # HACK
-            self.Lterms, self.Lterm_coeffs = None, None
-            # # OLD: do this lazily now that we need max_polynomial_vars...
-            # self._init_terms(lindblad_term_dict, basis, evotype, dim, max_polynomial_vars)
-            rep = dim  # rep = None for term-based evotypes
+                rep = evotype.create_dense_rep(_np.ascontiguousarray(_np.zeros((dim, dim), 'd')))
 
         LinearOperator.__init__(self, rep, evotype)  # sets self.dim
         if self._rep is not None: self._update_rep()  # updates _rep whether it's a dense or sparse matrix
@@ -870,11 +860,11 @@ class LindbladErrorgen(LinearOperator):
         assert(order == 0), \
             "Error generators currently treat all terms as 0-th order; nothing else should be requested!"
         assert(return_coeff_polys is False)
-        if self.Lterms is None:
-            Ltermdict, basis = self.LtermdictAndBasis
-            self.Lterms, self.Lterm_coeffs = self._init_terms(Ltermdict, basis, self._evotype,
-                                                              self.dim, max_polynomial_vars)
-        return self.Lterms  # terms with local-index polynomial coefficients
+        if self._rep.Lterms is None:
+            Ltermdict, basis = self._rep.LtermdictAndBasis
+            self._rep.Lterms, self._rep.Lterm_coeffs = self._init_terms(Ltermdict, basis, self._evotype,
+                                                                        self.dim, max_polynomial_vars)
+        return self._rep.Lterms  # terms with local-index polynomial coefficients
 
     #def get_direct_order_terms(self, order): # , order_base=None - unused currently b/c order is always 0...
     #    v = self.to_vector()
@@ -896,9 +886,9 @@ class LindbladErrorgen(LinearOperator):
         float
         """
         # return (sum of absvals of term coeffs)
-        assert(self.Lterms is not None), "Must call `taylor_order_terms` before calling total_term_magnitude!"
-        vtape, ctape = self.Lterm_coeffs
-        return _abs_sum_bulk_eval_compact_polynomials_complex(vtape, ctape, self.to_vector(), len(self.Lterms))
+        assert(self._rep.Lterms is not None), "Must call `taylor_order_terms` before calling total_term_magnitude!"
+        vtape, ctape = self._rep.Lterm_coeffs
+        return _abs_sum_bulk_eval_compact_polynomials_complex(vtape, ctape, self.to_vector(), len(self._rep.Lterms))
 
     @property
     def total_term_magnitude_deriv(self):
@@ -918,11 +908,11 @@ class LindbladErrorgen(LinearOperator):
         # d( sum_i( |coeff_i| )/dp = sum_i( d(|coeff_i|)/dp ) = sum_i( Re(coeff_i * conj(d(coeff_i)/dp)) / |coeff_i| )
 
         wrtInds = _np.ascontiguousarray(_np.arange(self.num_params), _np.int64)  # for Cython arg mapping
-        vtape, ctape = self.Lterm_coeffs
-        coeff_values = _bulk_eval_compact_polynomials_complex(vtape, ctape, self.to_vector(), (len(self.Lterms),))
+        vtape, ctape = self._rep.Lterm_coeffs
+        coeff_values = _bulk_eval_compact_polynomials_complex(vtape, ctape, self.to_vector(), (len(self._rep.Lterms),))
         coeff_deriv_polys = _compact_deriv(vtape, ctape, wrtInds)
         coeff_deriv_vals = _bulk_eval_compact_polynomials_complex(coeff_deriv_polys[0], coeff_deriv_polys[1],
-                                                                  self.to_vector(), (len(self.Lterms), len(wrtInds)))
+                                                                  self.to_vector(), (len(self._rep.Lterms), len(wrtInds)))
         abs_coeff_values = _np.abs(coeff_values)
         abs_coeff_values[abs_coeff_values < 1e-10] = 1.0  # so ratio is 0 in cases where coeff_value == 0
         ret = _np.sum(_np.real(coeff_values[:, None] * _np.conj(coeff_deriv_vals))

@@ -65,7 +65,7 @@ class EmbeddedOp(LinearOperator):
         from .labeldicts import StateSpaceLabels as _StateSpaceLabels
         self.state_space_labels = _StateSpaceLabels(state_space_labels,
                                                     evotype=operation_to_embed._evotype)
-        self.targetLabels = target_labels
+        self.target_labels = target_labels
         self.embedded_op = operation_to_embed
         self.dense_rep = dense_rep
         self._iter_elements_cache = None  # speeds up _iter_matrix_elements significantly
@@ -77,7 +77,7 @@ class EmbeddedOp(LinearOperator):
         if dense_rep:
             rep = evotype.create_dense_rep(dim)
         else:
-            rep = evotype.create_embedded_rep(self.state_space_labels, self.targetLabels, self.embedded_op._rep)
+            rep = evotype.create_embedded_rep(self.state_space_labels, self.target_labels, self.embedded_op._rep)
 
         LinearOperator.__init__(self, rep, evotype)
         if self.dense_rep: self._update_denserep()
@@ -142,24 +142,24 @@ class EmbeddedOp(LinearOperator):
         # parent reset correctly.
         if memo is not None and id(self) in memo: return memo[id(self)]
         cls = self.__class__  # so that this method works for derived classes too
-        copyOfMe = cls(self.state_space_labels, self.targetLabels,
+        copyOfMe = cls(self.state_space_labels, self.target_labels,
                        self.embedded_op.copy(parent, memo))
         return self._copy_gpindices(copyOfMe, parent, memo)
 
     def _iter_matrix_elements_precalc(self):
         divisor = 1; divisors = []
-        for l in self.targetLabels:
+        for l in self.target_labels:
             divisors.append(divisor)
             divisor *= self.state_space_labels.labeldims[l]  # e.g. 4 or 2 for qubits (depending on evotype)
 
-        iTensorProdBlk = [self.state_space_labels.tpb_index[label] for label in self.targetLabels][0]
+        iTensorProdBlk = [self.state_space_labels.tpb_index[label] for label in self.target_labels][0]
         tensorProdBlkLabels = self.state_space_labels.labels[iTensorProdBlk]
         basisInds = [list(range(self.state_space_labels.labeldims[l])) for l in tensorProdBlkLabels]
         # e.g. [0,1,2,3] for densitymx qubits (I, X, Y, Z) OR [0,1] for statevec qubits (std *complex* basis)
 
         basisInds_noop = basisInds[:]
         basisInds_noop_blankaction = basisInds[:]
-        labelIndices = [tensorProdBlkLabels.index(label) for label in self.targetLabels]
+        labelIndices = [tensorProdBlkLabels.index(label) for label in self.target_labels]
         for labelIndex in sorted(labelIndices, reverse=True):
             del basisInds_noop[labelIndex]
             basisInds_noop_blankaction[labelIndex] = [0]
@@ -375,6 +375,135 @@ class EmbeddedOp(LinearOperator):
             derivMx[i * self.dim + j, :] = embedded_deriv[gi * M + gj, :]  # fill row of jacobian
         return derivMx  # Note: wrt_filter has already been applied above
 
+    def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
+        """
+        Get the `order`-th order Taylor-expansion terms of this operation.
+
+        This function either constructs or returns a cached list of the terms at
+        the given order.  Each term is "rank-1", meaning that its action on a
+        density matrix `rho` can be written:
+
+        `rho -> A rho B`
+
+        The coefficients of these terms are typically polynomials of the operation's
+        parameters, where the polynomial's variable indices index the *global*
+        parameters of the operation's parent (usually a :class:`Model`), not the
+        operation's local parameter array (i.e. that returned from `to_vector`).
+
+        Parameters
+        ----------
+        order : int
+            The order of terms to get.
+
+        max_polynomial_vars : int, optional
+            maximum number of variables the created polynomials can have.
+
+        return_coeff_polys : bool
+            Whether a parallel list of locally-indexed (using variable indices
+            corresponding to *this* object's parameters rather than its parent's)
+            polynomial coefficients should be returned as well.
+
+        Returns
+        -------
+        terms : list
+            A list of :class:`RankOneTerm` objects.
+        coefficients : list
+            Only present when `return_coeff_polys == True`.
+            A list of *compact* polynomial objects, meaning that each element
+            is a `(vtape,ctape)` 2-tuple formed by concatenating together the
+            output of :method:`Polynomial.compact`.
+        """
+        #Reduce labeldims b/c now working on *state-space* instead of density mx:
+        sslbls = self.state_space_labels.copy()
+        sslbls.reduce_dims_densitymx_to_state_inplace()
+        if return_coeff_polys:
+            terms, coeffs = self.embedded_op.taylor_order_terms(order, max_polynomial_vars, True)
+            embedded_terms = [t.embed(sslbls, self.target_labels) for t in terms]
+            return embedded_terms, coeffs
+        else:
+            return [t.embed(sslbls, self.target_labels)
+                    for t in self.embedded_op.taylor_order_terms(order, max_polynomial_vars, False)]
+
+    def taylor_order_terms_above_mag(self, order, max_polynomial_vars, min_term_mag):
+        """
+        Get the `order`-th order Taylor-expansion terms of this operation that have magnitude above `min_term_mag`.
+
+        This function constructs the terms at the given order which have a magnitude (given by
+        the absolute value of their coefficient) that is greater than or equal to `min_term_mag`.
+        It calls :method:`taylor_order_terms` internally, so that all the terms at order `order`
+        are typically cached for future calls.
+
+        The coefficients of these terms are typically polynomials of the operation's
+        parameters, where the polynomial's variable indices index the *global*
+        parameters of the operation's parent (usually a :class:`Model`), not the
+        operation's local parameter array (i.e. that returned from `to_vector`).
+
+        Parameters
+        ----------
+        order : int
+            The order of terms to get (and filter).
+
+        max_polynomial_vars : int, optional
+            maximum number of variables the created polynomials can have.
+
+        min_term_mag : float
+            the minimum term magnitude.
+
+        Returns
+        -------
+        list
+            A list of :class:`Rank1Term` objects.
+        """
+        sslbls = self.state_space_labels.copy()
+        sslbls.reduce_dims_densitymx_to_state_inplace()
+        return [t.embed(sslbls, self.target_labels)
+                for t in self.embedded_op.taylor_order_terms_above_mag(order, max_polynomial_vars, min_term_mag)]
+
+    @property
+    def total_term_magnitude(self):
+        """
+        Get the total (sum) of the magnitudes of all this operator's terms.
+
+        The magnitude of a term is the absolute value of its coefficient, so
+        this function returns the number you'd get from summing up the
+        absolute-coefficients of all the Taylor terms (at all orders!) you
+        get from expanding this operator in a Taylor series.
+
+        Returns
+        -------
+        float
+        """
+        # In general total term mag == sum of the coefficients of all the terms (taylor expansion)
+        #  of an errorgen or operator.
+        # In this case, since the coeffs of the terms of an EmbeddedOp are the same as those
+        # of the operator being embedded, the total term magnitude is the same:
+
+        #DEBUG TODO REMOVE
+        #print("DB: Embedded.total_term_magnitude = ",self.embedded_op.get_total_term_magnitude()," -- ",
+        #   self.embedded_op.__class__.__name__)
+        #ret = self.embedded_op.get_total_term_magnitude()
+        #egterms = self.taylor_order_terms(0)
+        #mags = [ abs(t.evaluate_coeff(self.to_vector()).coeff) for t in egterms ]
+        #print("EmbeddedErrorgen CHECK = ",sum(mags), " vs ", ret)
+        #assert(sum(mags) <= ret+1e-4)
+
+        return self.embedded_op.total_term_magnitude
+
+    @property
+    def total_term_magnitude_deriv(self):
+        """
+        The derivative of the sum of *all* this operator's terms.
+
+        Computes the derivative of the total (sum) of the magnitudes of all this
+        operator's terms with respect to the operators (local) parameters.
+
+        Returns
+        -------
+        numpy array
+            An array of length self.num_params
+        """
+        return self.embedded_op.total_term_magnitude_deriv
+    
     def transform_inplace(self, s):
         """
         Update operation matrix `O` with `inv(s) * O * s`.
@@ -447,7 +576,7 @@ class EmbeddedOp(LinearOperator):
         if return_basis:
             # embed basis
             Ltermdict, basis = embedded_coeffs
-            embedded_basis = _EmbeddedBasis(basis, self.state_space_labels, self.targetLabels)
+            embedded_basis = _EmbeddedBasis(basis, self.state_space_labels, self.target_labels)
             bel_map = {lbl: embedded_lbl for lbl, embedded_lbl in zip(basis.labels, embedded_basis.labels)}
 
             #go through and embed Ltermdict labels
@@ -459,7 +588,7 @@ class EmbeddedOp(LinearOperator):
             #go through and embed Ltermdict labels
             Ltermdict = embedded_coeffs
             for k, val in Ltermdict.items():
-                embedded_key = (k[0],) + tuple([_EmbeddedBasis.embed_label(x, self.targetLabels) for x in k[1:]])
+                embedded_key = (k[0],) + tuple([_EmbeddedBasis.embed_label(x, self.target_labels) for x in k[1:]])
                 embedded_Ltermdict[embedded_key] = val
             return embedded_Ltermdict
 
@@ -604,7 +733,7 @@ class EmbeddedOp(LinearOperator):
         """ Return string representation """
         s = "Embedded operation with full dimension %d and state space %s\n" % (self.dim, self.state_space_labels)
         s += " that embeds the following %d-dimensional operation into acting on the %s space\n" \
-             % (self.embedded_op.dim, str(self.targetLabels))
+             % (self.embedded_op.dim, str(self.target_labels))
         s += str(self.embedded_op)
         return s
 

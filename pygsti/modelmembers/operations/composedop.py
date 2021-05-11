@@ -78,8 +78,9 @@ class ComposedOp(LinearOperator):
             factor_op_reps = [op._rep for op in self.factorops]
             rep = evotype.create_composed_rep(factor_op_reps, dim)
 
-        #Note: sometimes we's set rep=dim, peraps for svterm/cterm types? CHECK TODO REMOVE
-        # rep = dim  # no proper representation (_rep will be set to None by LinearOperator)
+        # caches in case terms are used
+        self.terms = {}
+        self.local_term_poly_coeffs = {}
 
         LinearOperator.__init__(self, rep, evotype)
         if self.dense_rep: self._update_denserep()  # update dense rep if needed
@@ -146,7 +147,8 @@ class ComposedOp(LinearOperator):
         -------
         None
         """
-        self._rep.param_indices_have_changed()
+        self.terms = {}  # clear terms cache since param indices have changed now
+        self.local_term_poly_coeffs = {}
         _modelmember.ModelMember.set_gpindices(self, gpindices, parent, memo)
 
     def append(self, *factorops_to_add):
@@ -371,6 +373,198 @@ class ComposedOp(LinearOperator):
             return derivMx
         else:
             return _np.take(derivMx, wrt_filter, axis=1)
+
+    def taylor_order_terms(self, order, gpindices_array, max_polynomial_vars=100, return_coeff_polys=False):
+        """
+        TODO docstring: add gpindices_array
+        Get the `order`-th order Taylor-expansion terms of this operation.
+
+        This function either constructs or returns a cached list of the terms at
+        the given order.  Each term is "rank-1", meaning that its action on a
+        density matrix `rho` can be written:
+
+        `rho -> A rho B`
+
+        The coefficients of these terms are typically polynomials of the operation's
+        parameters, where the polynomial's variable indices index the *global*
+        parameters of the operation's parent (usually a :class:`Model`), not the
+        operation's local parameter array (i.e. that returned from `to_vector`).
+
+        Parameters
+        ----------
+        order : int
+            The order of terms to get.
+
+        max_polynomial_vars : int, optional
+            maximum number of variables the created polynomials can have.
+
+        return_coeff_polys : bool
+            Whether a parallel list of locally-indexed (using variable indices
+            corresponding to *this* object's parameters rather than its parent's)
+            polynomial coefficients should be returned as well.
+
+        Returns
+        -------
+        terms : list
+            A list of :class:`RankOneTerm` objects.
+        coefficients : list
+            Only present when `return_coeff_polys == True`.
+            A list of *compact* polynomial objects, meaning that each element
+            is a `(vtape,ctape)` 2-tuple formed by concatenating together the
+            output of :method:`Polynomial.compact`.
+        """
+        if order not in self.terms:
+            self._compute_taylor_order_terms(order, max_polynomial_vars, gpindices_array)
+
+        if return_coeff_polys:
+            #Return coefficient polys in terms of *local* parameters (get_taylor_terms
+            #  and above composition gives polys in terms of *global*, model params)
+            return self.terms[order], self.local_term_poly_coeffs[order]
+        else:
+            return self.terms[order]
+
+    def _compute_taylor_order_terms(self, order, max_polynomial_vars, gpindices_array):  # separated for profiling
+        terms = []
+
+        #DEBUG TODO REMOVE
+        #print("Composed op getting order",order,"terms:")
+        #for i,fop in enumerate(self.factorops):
+        #    print(" ",i,fop.__class__.__name__,"totalmag = ",fop.get_total_term_magnitude())
+        #    hmdebug,_ = fop.highmagnitude_terms(0.00001, True, order)
+        #    print("  hmterms w/max order=",order," have magnitude ",sum([t.magnitude for t in hmdebug]))
+
+        for p in _lt.partition_into(order, len(self.factorops)):
+            factor_lists = [self.factorops[i].taylor_order_terms(pi, max_polynomial_vars) for i, pi in enumerate(p)]
+            for factors in _itertools.product(*factor_lists):
+                terms.append(_term.compose_terms(factors))
+        self.terms[order] = terms
+
+        #def _decompose_indices(x):
+        #    return tuple(_modelmember._decompose_gpindices(
+        #        self.gpindices, _np.array(x, _np.int64)))
+
+        mapvec = _np.ascontiguousarray(_np.zeros(max_polynomial_vars, _np.int64))
+        for ii, i in enumerate(gpindices_array):
+            mapvec[i] = ii
+
+        #poly_coeffs = [t.coeff.map_indices(_decompose_indices) for t in terms]  # with *local* indices
+        poly_coeffs = [t.coeff.mapvec_indices(mapvec) for t in terms]  # with *local* indices
+        tapes = [poly.compact(complex_coeff_tape=True) for poly in poly_coeffs]
+        if len(tapes) > 0:
+            vtape = _np.concatenate([t[0] for t in tapes])
+            ctape = _np.concatenate([t[1] for t in tapes])
+        else:
+            vtape = _np.empty(0, _np.int64)
+            ctape = _np.empty(0, complex)
+        coeffs_as_compact_polys = (vtape, ctape)
+        self.local_term_poly_coeffs[order] = coeffs_as_compact_polys
+
+    def taylor_order_terms_above_mag(self, order, max_polynomial_vars, min_term_mag):
+        """
+        Get the `order`-th order Taylor-expansion terms of this operation that have magnitude above `min_term_mag`.
+
+        This function constructs the terms at the given order which have a magnitude (given by
+        the absolute value of their coefficient) that is greater than or equal to `min_term_mag`.
+        It calls :method:`taylor_order_terms` internally, so that all the terms at order `order`
+        are typically cached for future calls.
+
+        The coefficients of these terms are typically polynomials of the operation's
+        parameters, where the polynomial's variable indices index the *global*
+        parameters of the operation's parent (usually a :class:`Model`), not the
+        operation's local parameter array (i.e. that returned from `to_vector`).
+
+        Parameters
+        ----------
+        order : int
+            The order of terms to get (and filter).
+
+        max_polynomial_vars : int, optional
+            maximum number of variables the created polynomials can have.
+
+        min_term_mag : float
+            the minimum term magnitude.
+
+        Returns
+        -------
+        list
+            A list of :class:`Rank1Term` objects.
+        """
+        terms = []
+        factor_lists_cache = [
+            [rep.taylor_order_terms_above_mag(i, max_polynomial_vars, min_term_mag) for i in range(order + 1)]
+            for rep in self.factorops
+        ]
+        for p in _lt.partition_into(order, len(self.factorops)):
+            # factor_lists = [self.factorops[i].get_taylor_order_terms_above_mag(pi, max_polynomial_vars, min_term_mag)
+            #                 for i, pi in enumerate(p)]
+            factor_lists = [factor_lists_cache[i][pi] for i, pi in enumerate(p)]
+            for factors in _itertools.product(*factor_lists):
+                mag = _np.product([factor.magnitude for factor in factors])
+                if mag >= min_term_mag:
+                    terms.append(_term.compose_terms_with_mag(factors, mag))
+        return terms
+        #def _decompose_indices(x):
+        #    return tuple(_modelmember._decompose_gpindices(
+        #        self.gpindices, _np.array(x, _np.int64)))
+        #
+        #mapvec = _np.ascontiguousarray(_np.zeros(max_polynomial_vars,_np.int64))
+        #for ii,i in enumerate(self.gpindices_as_array()):
+        #    mapvec[i] = ii
+        #
+        ##poly_coeffs = [t.coeff.map_indices(_decompose_indices) for t in terms]  # with *local* indices
+        #poly_coeffs = [t.coeff.mapvec_indices(mapvec) for t in terms]  # with *local* indices
+        #tapes = [poly.compact(complex_coeff_tape=True) for poly in poly_coeffs]
+        #if len(tapes) > 0:
+        #    vtape = _np.concatenate([t[0] for t in tapes])
+        #    ctape = _np.concatenate([t[1] for t in tapes])
+        #else:
+        #    vtape = _np.empty(0, _np.int64)
+        #    ctape = _np.empty(0, complex)
+        #coeffs_as_compact_polys = (vtape, ctape)
+        #self.local_term_poly_coeffs[order] = coeffs_as_compact_polys
+
+    @property
+    def total_term_magnitude(self):
+        """
+        Get the total (sum) of the magnitudes of all this operator's terms.
+
+        The magnitude of a term is the absolute value of its coefficient, so
+        this function returns the number you'd get from summing up the
+        absolute-coefficients of all the Taylor terms (at all orders!) you
+        get from expanding this operator in a Taylor series.
+
+        Returns
+        -------
+        float
+        """
+        # In general total term mag == sum of the coefficients of all the terms (taylor expansion)
+        #  of an errorgen or operator.
+        # In this case, since the taylor expansions are composed (~multiplied),
+        # the total term magnitude is just the product of those of the components.
+        return _np.product([f.total_term_magnitude for f in self.factorops])
+
+    @property
+    def total_term_magnitude_deriv(self):
+        """
+        The derivative of the sum of *all* this operator's terms.
+
+        Computes the derivative of the total (sum) of the magnitudes of all this
+        operator's terms with respect to the operators (local) parameters.
+
+        Returns
+        -------
+        numpy array
+            An array of length self.num_params
+        """
+        opmags = [f.total_term_magnitude for f in self.factorops]
+        product = _np.product(opmags)
+        ret = _np.zeros(self.num_params, 'd')
+        for opmag, f in zip(opmags, self.factorops):
+            f_local_inds = _modelmember._decompose_gpindices(
+                self.gpindices, f.gpindices)  # HERE - need factors *reps* to have gpindices??
+            local_deriv = product / opmag * f.total_term_magnitude_deriv
+            ret[f_local_inds] += local_deriv
+        return ret
 
     def has_nonzero_hessian(self):
         """

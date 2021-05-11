@@ -195,3 +195,8 @@ class OpRepStandard(XXX):
 
         ptm = _gt.unitary_to_pauligate(U)
         rep = replib.DMOpRepDense(LinearOperator.convert_to_matrix(ptm))
+
+
+class OpRepSparse(XXX):
+    def __init__(data, index, indptr):
+        pass  # see replib.DMOpRepSparse

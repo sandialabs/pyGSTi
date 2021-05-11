@@ -395,6 +395,13 @@ class ExpErrorgenOp(LinearOperator, _ErrorGeneratorContainer):
             # "sparse mode" => don't ever compute matrix-exponential explicitly
             rep = evotype.create_experrorgen_rep(self.errorgen._rep)
 
+        # Caches in case terms are used
+        self.terms = {}
+        self.exp_terms_cache = {}  # used for repeated calls to the exponentiate_terms function
+        self.local_term_poly_coeffs = {}
+        # TODO REMOVE self.direct_terms = {}
+        # TODO REMOVE self.direct_term_poly_coeffs = {}
+
         LinearOperator.__init__(self, rep, evotype)
         _ErrorGeneratorContainer.__init__(self, self.errorgen)
         self._update_rep()  # updates self._rep
@@ -490,7 +497,11 @@ class ExpErrorgenOp(LinearOperator, _ErrorGeneratorContainer):
         None
         """
         _modelmember.ModelMember.set_gpindices(self, gpindices, parent, memo)
-        self._rep.param_indices_have_changed()
+        self.terms = {}  # clear terms cache since param indices have changed now
+        self.exp_terms_cache = {}
+        self.local_term_poly_coeffs = {}
+        #TODO REMOVE self.direct_terms = {}
+        #TODO REMOVE self.direct_term_poly_coeffs = {}
 
     def to_dense(self):
         """
@@ -814,6 +825,259 @@ class ExpErrorgenOp(LinearOperator, _ErrorGeneratorContainer):
         self.errorgen.from_vector(tOp.errorgen.to_vector())
         self._update_rep()
         self.dirty = True
+
+    def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
+        """
+        Get the `order`-th order Taylor-expansion terms of this operation.
+
+        This function either constructs or returns a cached list of the terms at
+        the given order.  Each term is "rank-1", meaning that its action on a
+        density matrix `rho` can be written:
+
+        `rho -> A rho B`
+
+        The coefficients of these terms are typically polynomials of the operation's
+        parameters, where the polynomial's variable indices index the *global*
+        parameters of the operation's parent (usually a :class:`Model`), not the
+        operation's local parameter array (i.e. that returned from `to_vector`).
+
+        Parameters
+        ----------
+        order : int
+            Which order terms (in a Taylor expansion of this :class:`LindbladOp`)
+            to retrieve.
+
+        max_polynomial_vars : int, optional
+            maximum number of variables the created polynomials can have.
+
+        return_coeff_polys : bool
+            Whether a parallel list of locally-indexed (using variable indices
+            corresponding to *this* object's parameters rather than its parent's)
+            polynomial coefficients should be returned as well.
+
+        Returns
+        -------
+        terms : list
+            A list of :class:`RankOneTerm` objects.
+        coefficients : list
+            Only present when `return_coeff_polys == True`.
+            A list of *compact* polynomial objects, meaning that each element
+            is a `(vtape,ctape)` 2-tuple formed by concatenating together the
+            output of :method:`Polynomial.compact`.
+        """
+        if order not in self.terms:
+            self._compute_taylor_order_terms(order, max_polynomial_vars)
+
+        if return_coeff_polys:
+            return self.terms[order], self.local_term_poly_coeffs[order]
+        else:
+            return self.terms[order]
+
+    def _compute_taylor_order_terms(self, order, max_polynomial_vars):  # separated for profiling
+
+        mapvec = _np.ascontiguousarray(_np.zeros(max_polynomial_vars, _np.int64))
+        for ii, i in enumerate(self.gpindices_as_array()):
+            mapvec[ii] = i
+
+        def _compose_poly_indices(terms):
+            for term in terms:
+                #term.map_indices_inplace(lambda x: tuple(_modelmember._compose_gpindices(
+                #    self.gpindices, _np.array(x, _np.int64))))
+                term.mapvec_indices_inplace(mapvec)
+            return terms
+
+        assert(self.gpindices is not None), "LindbladOp must be added to a Model before use!"
+        assert(not _sps.issparse(self.unitary_postfactor)
+               ), "Unitary post-factor needs to be dense for term-based evotypes"
+        # for now - until StaticDenseOp and CliffordOp can init themselves from a *sparse* matrix
+        mpv = max_polynomial_vars
+        postTerm = _term.RankOnePolynomialOpTerm.create_from(_Polynomial({(): 1.0}, mpv), self.unitary_postfactor,
+                                                             self.unitary_postfactor, self._evotype)
+        #Note: for now, *all* of an error generator's terms are considered 0-th order,
+        # so the below call to taylor_order_terms just gets all of them.  In the FUTURE
+        # we might want to allow a distinction among the error generator terms, in which
+        # case this term-exponentiation step will need to become more complicated...
+        loc_terms = _term.exponentiate_terms(self.errorgen.taylor_order_terms(0, max_polynomial_vars),
+                                             order, postTerm, self.exp_terms_cache)
+        #OLD: loc_terms = [ t.collapse() for t in loc_terms ] # collapse terms for speed
+
+        poly_coeffs = [t.coeff for t in loc_terms]
+        tapes = [poly.compact(complex_coeff_tape=True) for poly in poly_coeffs]
+        if len(tapes) > 0:
+            vtape = _np.concatenate([t[0] for t in tapes])
+            ctape = _np.concatenate([t[1] for t in tapes])
+        else:
+            vtape = _np.empty(0, _np.int64)
+            ctape = _np.empty(0, complex)
+        coeffs_as_compact_polys = (vtape, ctape)
+        self.local_term_poly_coeffs[order] = coeffs_as_compact_polys
+
+        # only cache terms with *global* indices to avoid confusion...
+        self.terms[order] = _compose_poly_indices(loc_terms)
+
+    def taylor_order_terms_above_mag(self, order, max_polynomial_vars, min_term_mag):
+        """
+        Get the `order`-th order Taylor-expansion terms of this operation that have magnitude above `min_term_mag`.
+
+        This function constructs the terms at the given order which have a magnitude (given by
+        the absolute value of their coefficient) that is greater than or equal to `min_term_mag`.
+        It calls :method:`taylor_order_terms` internally, so that all the terms at order `order`
+        are typically cached for future calls.
+
+        The coefficients of these terms are typically polynomials of the operation's
+        parameters, where the polynomial's variable indices index the *global*
+        parameters of the operation's parent (usually a :class:`Model`), not the
+        operation's local parameter array (i.e. that returned from `to_vector`).
+
+        Parameters
+        ----------
+        order : int
+            The order of terms to get (and filter).
+
+        max_polynomial_vars : int, optional
+            maximum number of variables the created polynomials can have.
+
+        min_term_mag : float
+            the minimum term magnitude.
+
+        Returns
+        -------
+        list
+            A list of :class:`Rank1Term` objects.
+        """
+        mapvec = _np.ascontiguousarray(_np.zeros(max_polynomial_vars, _np.int64))
+        for ii, i in enumerate(self.gpindices_as_array()):
+            mapvec[ii] = i
+
+        assert(self.gpindices is not None), "LindbladOp must be added to a Model before use!"
+        assert(not _sps.issparse(self.unitary_postfactor)
+               ), "Unitary post-factor needs to be dense for term-based evotypes"
+        # for now - until StaticDenseOp and CliffordOp can init themselves from a *sparse* matrix
+        mpv = max_polynomial_vars
+        postTerm = _term.RankOnePolynomialOpTerm.create_from(_Polynomial({(): 1.0}, mpv), self.unitary_postfactor,
+                                                             self.unitary_postfactor, self._evotype)
+        postTerm = postTerm.copy_with_magnitude(1.0)
+        #Note: for now, *all* of an error generator's terms are considered 0-th order,
+        # so the below call to taylor_order_terms just gets all of them.  In the FUTURE
+        # we might want to allow a distinction among the error generator terms, in which
+        # case this term-exponentiation step will need to become more complicated...
+        errgen_terms = self.errorgen.taylor_order_terms(0, max_polynomial_vars)
+
+        #DEBUG: CHECK MAGS OF ERRGEN COEFFS
+        #poly_coeffs = [t.coeff for t in errgen_terms]
+        #tapes = [poly.compact(complex_coeff_tape=True) for poly in poly_coeffs]
+        #if len(tapes) > 0:
+        #    vtape = _np.concatenate([t[0] for t in tapes])
+        #    ctape = _np.concatenate([t[1] for t in tapes])
+        #else:
+        #    vtape = _np.empty(0, _np.int64)
+        #    ctape = _np.empty(0, complex)
+        #v = self.to_vector()
+        #errgen_coeffs = _bulk_eval_compact_polynomials_complex(
+        #    vtape, ctape, v, (len(errgen_terms),))  # an array of coeffs
+        #for coeff, t in zip(errgen_coeffs, errgen_terms):
+        #    coeff2 = t.coeff.evaluate(v)
+        #    if not _np.isclose(coeff,coeff2):
+        #        assert(False), "STOP"
+        #    t.set_magnitude(abs(coeff))
+
+        #evaluate errgen_terms' coefficients using their local vector of parameters
+        # (which happends to be the same as our paramvec in this case)
+        egvec = self.errorgen.to_vector()   # HERE - pass vector in?  we need errorgen's vector (usually not in rep) to perform evaluation...
+        errgen_terms = [egt.copy_with_magnitude(abs(egt.coeff.evaluate(egvec))) for egt in errgen_terms]
+
+        #DEBUG!!!
+        #import bpdb; bpdb.set_trace()
+        #loc_terms = _term.exponentiate_terms_above_mag(errgen_terms, order, postTerm, min_term_mag=-1)
+        #loc_terms_chk = _term.exponentiate_terms(errgen_terms, order, postTerm)
+        #assert(len(loc_terms) == len(loc_terms2))
+        #poly_coeffs = [t.coeff for t in loc_terms_chk]
+        #tapes = [poly.compact(complex_coeff_tape=True) for poly in poly_coeffs]
+        #if len(tapes) > 0:
+        #    vtape = _np.concatenate([t[0] for t in tapes])
+        #    ctape = _np.concatenate([t[1] for t in tapes])
+        #else:
+        #    vtape = _np.empty(0, _np.int64)
+        #    ctape = _np.empty(0, complex)
+        #v = self.to_vector()
+        #coeffs = _bulk_eval_compact_polynomials_complex(
+        #    vtape, ctape, v, (len(loc_terms_chk),))  # an array of coeffs
+        #for coeff, t, t2 in zip(coeffs, loc_terms, loc_terms_chk):
+        #    coeff2 = t.coeff.evaluate(v)
+        #    if not _np.isclose(coeff,coeff2):
+        #        assert(False), "STOP"
+        #    t.set_magnitude(abs(coeff))
+
+        #for ii,t in enumerate(loc_terms):
+        #    coeff1 = t.coeff.evaluate(egvec)
+        #    if not _np.isclose(abs(coeff1), t.magnitude):
+        #        assert(False),"STOP"
+        #    #t.set_magnitude(abs(t.coeff.evaluate(egvec)))
+
+        #FUTURE:  maybe use bulk eval of compact polys? Something like this:
+        #coeffs = _bulk_eval_compact_polynomials_complex(
+        #    cpolys[0], cpolys[1], v, (len(terms_at_order),))  # an array of coeffs
+        #for coeff, t in zip(coeffs, terms_at_order):
+        #    t.set_magnitude(abs(coeff))
+
+        terms = []
+        for term in _term.exponentiate_terms_above_mag(errgen_terms, order,
+                                                       postTerm, min_term_mag=min_term_mag):
+            #poly_coeff = term.coeff
+            #compact_poly_coeff = poly_coeff.compact(complex_coeff_tape=True)
+            term.mapvec_indices_inplace(mapvec)  # local -> global indices
+
+            # CHECK - to ensure term magnitudes are being set correctly (i.e. are in sync with evaluated coeffs)
+            # REMOVE later
+            # t = term
+            # vt, ct = t._rep.coeff.compact_complex()
+            # coeff_array = _bulk_eval_compact_polynomials_complex(vt, ct, self.parent.to_vector(), (1,))
+            # if not _np.isclose(abs(coeff_array[0]), t._rep.magnitude):  # DEBUG!!!
+            #     print(coeff_array[0], "vs.", t._rep.magnitude)
+            #     import bpdb; bpdb.set_trace()
+            #     c1 = _Polynomial.from_rep(t._rep.coeff)
+
+            terms.append(term)
+        return terms
+
+    @property
+    def total_term_magnitude(self):
+        """
+        Get the total (sum) of the magnitudes of all this operator's terms.
+
+        The magnitude of a term is the absolute value of its coefficient, so
+        this function returns the number you'd get from summing up the
+        absolute-coefficients of all the Taylor terms (at all orders!) you
+        get from expanding this operator in a Taylor series.
+
+        Returns
+        -------
+        float
+        """
+        # return exp( mag of errorgen ) = exp( sum of absvals of errgen term coeffs )
+        # (unitary postfactor has weight == 1.0 so doesn't enter)
+        #TODO REMOVE:
+        #print("  DB: LindbladOp.get_totat_term_magnitude: (errgen type =",self.errorgen.__class__.__name__)
+        #egttm = self.errorgen.total_term_magnitude
+        #print("  DB: exp(", egttm, ") = ",_np.exp(egttm))
+        #return _np.exp(egttm)
+        return _np.exp(min(self.errorgen.total_term_magnitude, MAX_EXPONENT))
+        #return _np.exp(self.errorgen.total_term_magnitude)  # overflows sometimes
+
+    @property
+    def total_term_magnitude_deriv(self):
+        """
+        The derivative of the sum of *all* this operator's terms.
+
+        Computes the derivative of the total (sum) of the magnitudes of all this
+        operator's terms with respect to the operators (local) parameters.
+
+        Returns
+        -------
+        numpy array
+            An array of length self.num_params
+        """
+        return _np.exp(self.errorgen.total_term_magnitude) * self.errorgen.total_term_magnitude_deriv
 
     def transform_inplace(self, s):
         """

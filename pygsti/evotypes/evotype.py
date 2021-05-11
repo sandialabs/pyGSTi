@@ -46,7 +46,13 @@ class EvoType(object):
 
     def create_standard_rep(self, standard_name):
         return self.module.OpRepStandard(standard_name)
-    
+
+    def create_sparse_rep(self, data, indices, indptr):
+        return self.module.OpRepSparse(data, indices, indptr)
+
+    def create_lindblad_errorgen_rep(self, lindblad_term_dict, basis):
+        return self.module.OpRepLindbladErrorgen(lindblad_term_dict, basis)
+
     def create_XXX(self, XXX):
         pass
 

@@ -180,6 +180,121 @@ class StochasticNoiseOp(LinearOperator):
         self._update_rep()
         self.dirty = dirty_value
 
+    def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
+        """
+        Get the `order`-th order Taylor-expansion terms of this operation.
+
+        This function either constructs or returns a cached list of the terms at
+        the given order.  Each term is "rank-1", meaning that its action on a
+        density matrix `rho` can be written:
+
+        `rho -> A rho B`
+
+        The coefficients of these terms are typically polynomials of the operation's
+        parameters, where the polynomial's variable indices index the *global*
+        parameters of the operation's parent (usually a :class:`Model`), not the
+        operation's local parameter array (i.e. that returned from `to_vector`).
+
+        Parameters
+        ----------
+        order : int
+            Which order terms (in a Taylor expansion of this :class:`LindbladOp`)
+            to retrieve.
+
+        max_polynomial_vars : int, optional
+            maximum number of variables the created polynomials can have.
+
+        return_coeff_polys : bool
+            Whether a parallel list of locally-indexed (using variable indices
+            corresponding to *this* object's parameters rather than its parent's)
+            polynomial coefficients should be returned as well.
+
+        Returns
+        -------
+        terms : list
+            A list of :class:`RankOneTerm` objects.
+        coefficients : list
+            Only present when `return_coeff_polys == True`.
+            A list of *compact* polynomial objects, meaning that each element
+            is a `(vtape,ctape)` 2-tuple formed by concatenating together the
+            output of :method:`Polynomial.compact`.
+        """
+
+        def _compose_poly_indices(terms):
+            for term in terms:
+                term.map_indices_inplace(lambda x: tuple(_modelmember._compose_gpindices(
+                    self.gpindices, _np.array(x, _np.int64))))
+            return terms
+
+        IDENT = None  # sentinel for the do-nothing identity op
+        mpv = max_polynomial_vars
+        if order == 0:
+            polydict = {(): 1.0}
+            for pd in self._get_rate_poly_dicts():
+                polydict.update({k: -v for k, v in pd.items()})  # subtracts the "rate" `pd` from `polydict`
+            loc_terms = [_term.RankOnePolynomialOpTerm.create_from(_Polynomial(polydict, mpv),
+                                                                   IDENT, IDENT, self._evotype)]
+
+        elif order == 1:
+            loc_terms = [_term.RankOnePolynomialOpTerm.create_from(_Polynomial(pd, mpv), bel, bel, self._evotype)
+                         for i, (pd, bel) in enumerate(zip(self.rate_poly_dicts, self.basis.elements[1:]))]
+        else:
+            loc_terms = []  # only first order "taylor terms"
+
+        poly_coeffs = [t.coeff for t in loc_terms]
+        tapes = [poly.compact(complex_coeff_tape=True) for poly in poly_coeffs]
+        if len(tapes) > 0:
+            vtape = _np.concatenate([t[0] for t in tapes])
+            ctape = _np.concatenate([t[1] for t in tapes])
+        else:
+            vtape = _np.empty(0, _np.int64)
+            ctape = _np.empty(0, complex)
+        coeffs_as_compact_polys = (vtape, ctape)
+
+        local_term_poly_coeffs = coeffs_as_compact_polys
+        global_param_terms = _compose_poly_indices(loc_terms)
+
+        if return_coeff_polys:
+            return global_param_terms, local_term_poly_coeffs
+        else:
+            return global_param_terms
+
+    @property
+    def total_term_magnitude(self):
+        """
+        Get the total (sum) of the magnitudes of all this operator's terms.
+
+        The magnitude of a term is the absolute value of its coefficient, so
+        this function returns the number you'd get from summing up the
+        absolute-coefficients of all the Taylor terms (at all orders!) you
+        get from expanding this operator in a Taylor series.
+
+        Returns
+        -------
+        float
+        """
+        # return exp( mag of errorgen ) = exp( sum of absvals of errgen term coeffs )
+        # (unitary postfactor has weight == 1.0 so doesn't enter)
+        rates = self._params_to_rates(self.to_vector())
+        return _np.sum(_np.abs(rates))
+
+    @property
+    def total_term_magnitude_deriv(self):
+        """
+        The derivative of the sum of *all* this operator's terms.
+
+        Computes the derivative of the total (sum) of the magnitudes of all this
+        operator's terms with respect to the operators (local) parameters.
+
+        Returns
+        -------
+        numpy array
+            An array of length self.num_params
+        """
+        # abs(rates) = rates = params**2
+        # so d( sum(abs(rates)) )/dparam_i = 2*param_i
+        return 2 * self.to_vector()
+
     #Transform functions? (for gauge opt)
 
     def __str__(self):
