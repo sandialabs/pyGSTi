@@ -62,6 +62,10 @@ from .opfactory import OpFactory
 from .opfactory import EmbeddedOpFactory
 from .opfactory import EmbeddingOpFactory
 
+# Temporary location for easy merge with evotype refactor
+from .composed_sv_pv import ComposedSPAMVec
+from .composed_sv_pv import ComposedPOVM
+
 from .model import Model
 from .explicitmodel import ExplicitOpModel
 from .explicitmodel import ExplicitOpModel as GateSet  # alias
