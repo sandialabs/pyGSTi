@@ -1,7 +1,7 @@
+import importlib as _importlib
 
 
-
-class EvoType(object):
+class Evotype(object):
     """
     The base class for all other evotype classes.
 
@@ -11,17 +11,17 @@ class EvoType(object):
 
     @classmethod
     def cast(cls, obj):
-        if isinstance(obj, EvoType):
+        if isinstance(obj, Evotype):
             return obj
         else:  # assume obj is a string naming an evotype
             return Evotype(str(obj))
 
     def __init__(self, name):
         self.name = name
-        self.module = XXX
+        self.module = _importlib.import_module("pygsti.evotypes." + name)
 
-    def create_dense_rep(self, process_mx):
-        return self.module.OpRepDense(process_mx) #?? or just have evotype.DenseRep ??
+    def create_dense_rep(self, process_mx=None, dim=None):
+        return self.module.OpRepDense(process_mx, dim)
 
     def create_composed_rep(self, factor_op_reps, dim):
         return self.module.OpRepComposed(factor_op_reps, dim)
@@ -52,9 +52,3 @@ class EvoType(object):
 
     def create_lindblad_errorgen_rep(self, lindblad_term_dict, basis):
         return self.module.OpRepLindbladErrorgen(lindblad_term_dict, basis)
-
-    def create_XXX(self, XXX):
-        pass
-
-
-    

@@ -1,5 +1,5 @@
 """
-The density-matrix, or "densitymx" evolution type, which uses Cython for speed.
+A pure python (and thus slower) density-matrix, evolution type.
 """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -11,4 +11,3 @@ The density-matrix, or "densitymx" evolution type, which uses Cython for speed.
 #***************************************************************************************************
 
 from .opreps import *
-

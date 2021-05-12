@@ -1,5 +1,5 @@
 """
-The density-matrix, or "densitymx" evolution type, which uses Cython for speed.
+Base classes for representations.
 """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -10,5 +10,10 @@ The density-matrix, or "densitymx" evolution type, which uses Cython for speed.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from .opreps import *
 
+try:
+    from .basereps_cython import OpRep
+except ImportError:
+    # If cython is unavailable, just make a pure-python base class to fill in.
+    class OpRep:
+        pass
