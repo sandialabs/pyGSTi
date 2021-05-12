@@ -29,7 +29,8 @@ cimport cython
 import itertools as _itertools
 from ...tools import mpitools as _mpit
 from ...tools import slicetools as _slct
-from ...tools import optools as _gt
+from ...tools import optools as _ot
+from ...tools import optools as _mt
 from ...tools.matrixtools import _fas
 from ..opcalc import fastopcalc as _fastopcalc
 from scipy.sparse.linalg import LinearOperator
@@ -90,11 +91,9 @@ cdef extern from "opcreps.h" namespace "CReps":
         StateCRep* acton(StateCRep*, StateCRep*)
         StateCRep* adjoint_acton(StateCRep*, StateCRep*)
 
-    cdef cppclass OpCRep_Lindblad(OpCRep):
-        OpCRep_Lindblad(OpCRep* errgen_rep,
-			    double mu, double eta, INT m_star, INT s, INT dim,
-			    double* unitarypost_data, INT* unitarypost_indices,
-                            INT* unitarypost_indptr, INT unitarypost_nnz) except +
+    cdef cppclass OpCRep_ExpErrorgen(OpCRep):
+        OpCRep_ExpErrorgen(OpCRep* errgen_rep,
+			   double mu, double eta, INT m_star, INT s, INT dim) except +
         StateCRep* acton(StateCRep*, StateCRep*)
         StateCRep* adjoint_acton(StateCRep*, StateCRep*)
         double _mu
@@ -232,7 +231,7 @@ class OpRepStandard(OpRepDense):
         #    rep = replib.SVOpRepDense(LinearOperator.convert_to_matrix(U))
         #else:  # evotype in ('densitymx', 'svterm', 'cterm')
 
-        ptm = _gt.unitary_to_pauligate(U)
+        ptm = _ot.unitary_to_pauligate(U)
         super(OpRepStandard, self).__init__(ptm.shape[0])
         self.base[:, :] = LinearOperator.convert_to_matrix(ptm)
 
@@ -342,7 +341,7 @@ cdef class OpRepEmbedded(OpRep):
         cdef INT active_block_index = iTensorProdBlk
         cdef INT ncomponents_in_active_block = len(state_space_labels.labels[iActiveBlock])
         cdef INT embedded_dim = embedded_rep.dim
-        cdef np.ndarray[np.int64_t, ndim=1, mode='c'] = \
+        cdef np.ndarray[np.int64_t, ndim=1, mode='c'] blocksizes = \
             _np.array([_np.product(state_space_labels.tensor_product_block_dims(k))
                        for k in range(nBlocks)], _np.int64)
         cdef INT i, j
@@ -399,10 +398,6 @@ cdef class OpRepEmbedded(OpRep):
                                         embedded_dim, ncomponents_in_active_block,
                                         active_block_index, nblocks, dim)
 
-            cdef np.ndarray blocksizes
-    cdef np.ndarray num_basis_els
-    cdef np.ndarray action_inds
-
 
     def __reduce__(self):
         state = (self.noop_incrementers, self.num_basis_els_noop_blankaction, self.baseinds,
@@ -442,9 +437,7 @@ cdef class OpRepExpErrorgen(OpRep):
     cdef public object errorgen_rep
 
     def __init__(self, errorgen_rep):
-        dim = errorgen_rep.dim
         self.errorgen_rep = errorgen_rep
-
         cdef INT dim = errorgen_rep.dim
         cdef double mu = 1.0
         cdef double eta = 1.0
@@ -475,11 +468,11 @@ cdef class OpRepExpErrorgen(OpRep):
                  (<OpCRep_ExpErrorgen*>self.c_rep)._s)
 
     def __reduce__(self):
-        return (OpRepLindblad, (), (self.errorgen_rep,
-                                    (<OpCRep_ExpErrorgen*>self.c_rep)._mu,
-                                    (<OpCRep_ExpErrorgen*>self.c_rep)._eta,
-                                    (<OpCRep_ExpErrorgen*>self.c_rep)._m_star,
-                                    (<OpCRep_ExpErrorgen*>self.c_rep)._s))
+        return (OpRepExpErrorgen, (), (self.errorgen_rep,
+                                       (<OpCRep_ExpErrorgen*>self.c_rep)._mu,
+                                       (<OpCRep_ExpErrorgen*>self.c_rep)._eta,
+                                       (<OpCRep_ExpErrorgen*>self.c_rep)._m_star,
+                                       (<OpCRep_ExpErrorgen*>self.c_rep)._s))
 
     def __setstate__(self, state):
         errorgen_rep, mu, eta, m_star, s = state
@@ -500,7 +493,7 @@ cdef class OpRepRepeated(OpRep):
     def __cinit__(self, OpRep rep_to_repeat, INT num_repetitions, INT dim):
         self.repeated_rep = rep_to_repeat
         self.num_repetitions = num_repetitions
-        self.c_rep = new OpCRep_Repeated(repeated_rep.c_rep, num_repetitions, dim)
+        self.c_rep = new OpCRep_Repeated(self.repeated_rep.c_rep, num_repetitions, dim)
 
     def __reduce__(self):
         return (OpRepRepeated, (self.repeated_rep, self.num_repetitions, self.c_rep._dim))

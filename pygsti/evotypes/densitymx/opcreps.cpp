@@ -679,16 +679,9 @@ namespace CReps {
   \****************************************************************************/
 
   OpCRep_ExpErrorgen::OpCRep_ExpErrorgen(OpCRep* errgen_rep,
-			double mu, double eta, INT m_star, INT s, INT dim,
-			double* unitarypost_data, INT* unitarypost_indices,
-			INT* unitarypost_indptr, INT unitarypost_nnz)
+			double mu, double eta, INT m_star, INT s, INT dim)
     :OpCRep(dim)
   {
-    _U_data = unitarypost_data;
-    _U_indices = unitarypost_indices;
-    _U_indptr = unitarypost_indptr;
-    _U_nnz = unitarypost_nnz;
-    
     _errgen_rep = errgen_rep;
     
     _mu = mu;
@@ -703,21 +696,10 @@ namespace CReps {
   {
     INT i, j;
     StateCRep* init_state = new StateCRep(_dim);
-    DEBUG(std::cout << "Lindblad acton called!" << _U_nnz << std::endl);
+    DEBUG(std::cout << "Lindblad acton called!" << std::endl);
     DEBUG(state->print("INPUT"));
 
-    if(_U_nnz > 0) {
-      // do init_state = dot(unitary_postfactor, state) via *sparse* dotprod
-      for(i=0; i<_dim; i++) {
-          init_state->_dataptr[i] = 0;
-          for(j=_U_indptr[i]; j< _U_indptr[i+1]; j++)
-              init_state->_dataptr[i] += _U_data[j] * state->_dataptr[_U_indices[j]];
-      }
-    } else {
-      // in this case, we still need a *copy* of state, since
-      // expm_multiply_simple_core modifies its `B` argument.
-      init_state->copy_from(state);
-    }
+    init_state->copy_from(state);
 	  
     // BEGIN state = _fastcalc.custom_expm_multiply_simple_core(
     //     A.data, A.indptr, A.indices, state, mu, m_star, s, tol, eta)

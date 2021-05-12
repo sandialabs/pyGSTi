@@ -121,10 +121,15 @@ def setup_with_extensions(extensions=None):
         package_dir={'': '.'},
         package_data={
             'pygsti.tools': ['fastcalc.pyx'],
-            'pygsti.objects.replib': [
-                'fastreplib.pyx',
-                'fastreps.cpp',
-                'fastreps.h'
+            #'pygsti.objects.replib': [
+            #    'fastreplib.pyx',
+            #    'fastreps.cpp',
+            #    'fastreps.h'
+            #],
+            'pygsti.evotypes.densitymx': [
+                'opreps.pyx',
+                'opcreps.cpp',
+                'opcreps.h'
             ],
             'pygsti.objects.opcalc': ['fastopcalc.pyx'],
             'pygsti.io.circuitparser': ['fastcircuitparser.pyx'],
@@ -207,11 +212,22 @@ try:
             extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
             extra_link_args=["-std=c++11"]
         ),
+        #Extension(
+        #    "pygsti.objects.replib.fastreplib",
+        #    sources=[
+        #        "pygsti/objects/replib/fastreplib.pyx",
+        #        "pygsti/objects/replib/fastreps.cpp"
+        #    ],
+        #    include_dirs=['.', np.get_include()],
+        #    language="c++",
+        #    extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
+        #    extra_link_args=["-std=c++11"]
+        #),
         Extension(
-            "pygsti.objects.replib.fastreplib",
+            "pygsti.evotypes.densitymx",
             sources=[
-                "pygsti/objects/replib/fastreplib.pyx",
-                "pygsti/objects/replib/fastreps.cpp"
+                "pygsti/evotypes/densitymx/opreps.pyx",
+                "pygsti/evotypes/densitymx/opcreps.cpp"
             ],
             include_dirs=['.', np.get_include()],
             language="c++",

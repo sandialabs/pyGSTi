@@ -169,19 +169,13 @@ namespace CReps {
   class OpCRep_ExpErrorgen :public OpCRep{
     public:
     OpCRep* _errgen_rep;
-    double* _U_data;
-    INT* _U_indices;
-    INT* _U_indptr;
-    INT _U_nnz;
     double _mu;
     double _eta;
     INT _m_star;
     INT _s;
 
     OpCRep_ExpErrorgen(OpCRep* errgen_rep,
-			double mu, double eta, INT m_star, INT s, INT dim,
-		        double* unitarypost_data, INT* unitarypost_indices,
-			INT* unitarypost_indptr, INT unitarypost_nnz);
+			double mu, double eta, INT m_star, INT s, INT dim);
     virtual ~OpCRep_ExpErrorgen();
     virtual StateCRep* acton(StateCRep* state, StateCRep* out_state);
     virtual StateCRep* adjoint_acton(StateCRep* state, StateCRep* out_state);
