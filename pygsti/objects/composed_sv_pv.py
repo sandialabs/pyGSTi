@@ -11,6 +11,7 @@ Will be merged into spamvec.py and povm.py after evotype refactor merge
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 import collections as _collections
+from pygsti.objects.operation import ComposedOp
 import numpy as _np
 
 #from . import labeldicts as _ld
@@ -18,7 +19,7 @@ from . import modelmember as _gm
 from . import replib
 from . import term as _term
 from .povm import POVM, ComputationalBasisPOVM
-from .spamvec import SPAMVec, StaticSPAMVec
+from .spamvec import ComputationalSPAMVec, SPAMVec
 
 
 class ComposedSPAMVec(SPAMVec):
@@ -28,19 +29,18 @@ class ComposedSPAMVec(SPAMVec):
 
         Essentially a pure state preparation or projection that is followed
         or preceded by, respectively, the action of a general LinearOperator.
-        The state prep/projection must be parameterized by a StaticSPAMVec,
+        The state prep/projection must be parameterized by a ComputationalSPAMVec,
         currently.
 
         Parameters
         ----------
-        pure_vec : numpy array or SPAMVec
-            An array or SPAMVec in the *full* density-matrix space (this
-            vector will have dimension 4 in the case of a single qubit) which
-            represents a pure-state preparation or projection.  This is used as
+        pure_vec : numpy array or ComputationalSPAMVec
+            An array of zvals or a ComputationalSPAMVec which
+            represents a pure-state preparation or projection. This is used as
             the "base" preparation or projection that is followed or preceded
             by, respectively, the noisy operation.
-            (This argument is *not* copied if it is a StaticSPAMVec; otherwise,
-             it is converted to a new StaticSPAMVec.)
+            (This argument is *not* copied if it is a ComputationalSPAMVec;
+            otherwise, it is converted to a new ComputationalSPAMVec.)
 
         noise_op : LinearOperator
             The noisy operation to follow or precede the pure SPAMVec
@@ -51,11 +51,11 @@ class ComposedSPAMVec(SPAMVec):
             Whether this is a state preparation or POVM effect vector.
         """
         evotype = noise_op._evotype
-        assert(evotype in ("densitymx", "svterm", "cterm")), \
+        assert(evotype in ("densitymx", "svterm", "cterm", "chp")), \
             "Invalid evotype: %s for %s" % (evotype, self.__class__.__name__)
 
-        if not isinstance(pure_vec, StaticSPAMVec):
-            pure_vec = StaticSPAMVec(pure_vec, evotype, typ)  # assume spamvec is just a vector
+        if not isinstance(pure_vec, ComputationalSPAMVec):
+            pure_vec = ComputationalSPAMVec(pure_vec, evotype, typ)  # assume spamvec is just a vector
 
         assert(pure_vec._evotype == evotype), \
             "`pure_vec` evotype must match `noise_op` ('%s' != '%s')" % (pure_vec._evotype, evotype)
@@ -157,8 +157,8 @@ class ComposedSPAMVec(SPAMVec):
         """
         self.terms = {}  # clear terms cache since param indices have changed now
         self.local_term_poly_coeffs = {}
-        # TODO REMOVE self.direct_terms = {}
-        # TODO REMOVE self.direct_term_poly_coeffs = {}
+        # All parameters should belong to noise op
+        #self.noise_op.set_gpindices(gpindices, parent, memo)
         _gm.ModelMember.set_gpindices(self, gpindices, parent, memo)
 
     def to_dense(self, scratch=None):
@@ -473,8 +473,6 @@ class ComposedSPAMVec(SPAMVec):
         int
             the number of independent parameters.
         """
-        # TODO: SS to Erik: Can the SPAM Vec part not also have params?
-        # It doesn't in the "base" case of a StaticSPAMVec, but this is not a strict requirement
         return self.noise_op.num_params
 
     def to_vector(self):
@@ -622,8 +620,9 @@ class ComposedPOVM(POVM):
         evotype = self.noise_op._evotype
 
         if povm is None:
-            nqubits = int(round(_np.log2(dim) / 2))
-            assert(_np.isclose(nqubits, _np.log2(dim) / 2)), \
+            factor = 2 if evotype in ['densitymx', 'svterm', 'cterm'] else 1
+            nqubits = int(round(_np.log2(dim) / factor))
+            assert(_np.isclose(nqubits, _np.log2(dim) / factor)), \
                 ("A default computational-basis POVM can only be used with an"
                  " integral number of qubits!")
             povm = ComputationalBasisPOVM(nqubits, evotype)

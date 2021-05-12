@@ -14,7 +14,7 @@ import pygsti.objects.spamvec as sv
 # Main test of ComposedSpamvecBase:
 # Is the composed SPAM vec equivalent to applying each component separately?
 class ComposedSpamvecBase(object):
-    base_prep_vec = 1.0/np.sqrt(2) * np.array([1, 0, 0, 1]) # 0 state
+    base_prep_vec = sv.ComputationalSPAMVec([0], 'densitymx')
     base_noise_op = op.StaticStandardOp('Gxpi2', 'densitymx') # X(pi/2) rotation as noise
     base_povm = pv.ComputationalBasisPOVM(1, 'densitymx') # Z-basis measurement
     expected_out = ld.OutcomeLabelDict([(('0',), 0.5), (('1',), 0.5)])

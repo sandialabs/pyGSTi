@@ -35,6 +35,7 @@ from ..objects import label as _label
 from ..objects.basis import Basis as _Basis
 from ..objects.basis import DirectSumBasis as _DirectSumBasis
 from ..objects.basis import BuiltinBasis as _BuiltinBasis
+from ..objects.composed_sv_pv import ComposedSPAMVec, ComposedPOVM # TODO: To be relocated to spamvec/povm post evotype refactor
 from ..tools.legacytools import deprecate as _deprecated_fn
 
 
@@ -1025,9 +1026,7 @@ def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}
 
     In addition to the gate names, the special values `"prep"`, `"povm"`, `"idle"`,
     may be used as keys to specify the error on the state preparation, measurement, and global idle,
-    respectively. The `"prep"` and `"povm"` error specifications can only use the "lindblad"
-    parameterization - a warning will be raised and the parameterization overridden for these
-    two operations if an alternate parameterization was provided.
+    respectively.
 
     Parameters
     ----------
@@ -1254,52 +1253,62 @@ def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}
     else:
         global_idle_op = None
 
+    # TODO: While TensorProdSPAMVec does not work with ComposedSPAMVec, build up prep/povm as n-qubit ops first
+    # Need qubit labels to make the right EmbeddedOps
+    if qubit_labels is None:
+        qubit_labels = range(num_qubits)
+    
     prep_layers = {}
-    if evotype == 'chp':
-        assert ('prep' not in all_keys), "Cannot specify 'prep' error specification with CHP evotype"
-
-        # For CHP, prep can only be idle gate
-        # TODO: This should be replaced by a SPAMVec in the near future
-        # Only works because LocalNoiseModel allows it, which it probably shouldn't
-        rho0 = _op.ComposedOp([_op.EmbeddedOp(range(num_qubits), [i], _op.StaticStandardOp('Gi', 'chp'))
-                               for i in range(num_qubits)])
-        prep_layers['rho0'] = rho0
-    elif 'prep' in all_keys:
-        if 'prep' in depolarization_strengths and depolarization_parameterization != 'lindblad':
-            _warnings.warn(("'prep' error specification requires Lindblad parameterization, "
-                           "depolarization parameterization '%s' overridden!" % depolarization_parameterization))
-        elif 'prep' in stochastic_error_probs and stochastic_parameterization != 'lindblad':
-            _warnings.warn(("'prep' error specification requires Lindblad parameterization, "
-                           "stochastic parameterization '%s' overridden!" % stochastic_parameterization))
-
-        rho_base1Q = _spamvec.ComputationalSPAMVec([0], evotype, 'prep')
-        # Override parameterization to force Lindblad
-        err_gate = _get_error_gate('prep', _op.StaticStandardOp('Gi', evotype), depolarization_strengths,
-                                   stochastic_error_probs, lindblad_error_coeffs,
-                                   "lindblad", "lindblad", "lindblad")
-        prep1Q = _spamvec.LindbladSPAMVec(rho_base1Q, err_gate, 'prep')
-        prep_factors = [prep1Q.copy() for i in range(num_qubits)] if independent_gates else [prep1Q] * num_qubits
-        prep_layers['rho0'] = _spamvec.TensorProdSPAMVec('prep', prep_factors)
+    if 'prep' in all_keys:
+        # rho_base1Q = _spamvec.ComputationalSPAMVec([0], evotype, 'prep')
+        # err_gate = _get_error_gate('prep', _op.StaticStandardOp('Gi', evotype), depolarization_strengths,
+        #                            stochastic_error_probs, lindblad_error_coeffs,
+        #                            depolarization_parameterization, stochastic_parameterization,
+        #                            lindblad_parameterization)
+        # if isinstance(err_gate, _op.LindbladOp):
+        #     prep1Q = _spamvec.LindbladSPAMVec(rho_base1Q, err_gate, 'prep')
+        # else:
+        #     prep1Q = ComposedSPAMVec(rho_base1Q, err_gate, 'prep')
+        # prep_factors = [prep1Q.copy() for i in range(num_qubits)] if independent_gates else [prep1Q] * num_qubits
+        # prep_layers['rho0'] = _spamvec.TensorProdSPAMVec('prep', prep_factors)
+        rho_baseNQ = _spamvec.ComputationalSPAMVec([0,]*num_qubits, evotype, 'prep')
+        err_gate1Q = _get_error_gate('prep', _op.StaticStandardOp('Gi', evotype), depolarization_strengths,
+                                     stochastic_error_probs, lindblad_error_coeffs,
+                                     depolarization_parameterization, stochastic_parameterization,
+                                     lindblad_parameterization)
+        # TODO: Could do qubit-specific by allowing different err_gate1Q
+        err_gates = [err_gate1Q.copy() for i in range(num_qubits)] if independent_gates else [err_gate1Q,] * num_qubits
+        err_gateNQ = _op.ComposedOp([
+            _op.EmbeddedOp(qubit_labels, [qubit_labels[i]], err_gates[i]) for i in range(num_qubits)])
+        # TODO: Could specialize for LindbladOps, although this should also handle that case
+        prep_layers['rho0'] = ComposedSPAMVec(rho_baseNQ, err_gateNQ, 'prep')
     else:
         prep_layers['rho0'] = _spamvec.ComputationalSPAMVec([0] * num_qubits, evotype, 'prep')
 
     povm_layers = {}
     if 'povm' in all_keys:
-        if 'povm' in depolarization_strengths and depolarization_parameterization != 'lindblad':
-            _warnings.warn(("'povm' error specification requires Lindblad parameterization, "
-                           "depolarization parameterization '%s' overridden!" % depolarization_parameterization))
-        elif 'povm' in stochastic_error_probs and stochastic_parameterization != 'lindblad':
-            _warnings.warn(("'povm' error specification requires Lindblad parameterization, "
-                           "stochastic parameterization '%s' overridden!" % stochastic_parameterization))
-
-        Mdefault_base1Q = _povm.ComputationalBasisPOVM(1, evotype)
-        # Override parameterization to force Lindblad
-        err_gate = _get_error_gate('povm', _op.StaticStandardOp('Gi', evotype), depolarization_strengths,
-                                   stochastic_error_probs, lindblad_error_coeffs,
-                                   "lindblad", "lindblad", "auto")
-        povm1Q = _povm.LindbladPOVM(err_gate, Mdefault_base1Q, "pp")
-        povm_factors = [povm1Q.copy() for i in range(num_qubits)] if independent_gates else [povm1Q] * num_qubits
-        povm_layers['Mdefault'] = _povm.TensorProdPOVM(povm_factors)
+        # Mdefault_base1Q = _povm.ComputationalBasisPOVM(1, evotype)
+        # err_gate = _get_error_gate('povm', _op.StaticStandardOp('Gi', evotype), depolarization_strengths,
+        #                            stochastic_error_probs, lindblad_error_coeffs,
+        #                            depolarization_parameterization, stochastic_parameterization,
+        #                            lindblad_parameterization)
+        # if isinstance(err_gate, _op.LindbladOp):
+        #     povm1Q = _povm.LindbladPOVM(err_gate, Mdefault_base1Q, "pp")
+        # else:
+        #     povm1Q = ComposedPOVM(err_gate, Mdefault_base1Q)
+        # povm_factors = [povm1Q.copy() for i in range(num_qubits)] if independent_gates else [povm1Q] * num_qubits
+        # povm_layers['Mdefault'] = _povm.TensorProdPOVM(povm_factors)
+        Mdefault_baseNQ = _povm.ComputationalBasisPOVM(num_qubits, evotype)
+        err_gate1Q = _get_error_gate('povm', _op.StaticStandardOp('Gi', evotype), depolarization_strengths,
+                                     stochastic_error_probs, lindblad_error_coeffs,
+                                     depolarization_parameterization, stochastic_parameterization,
+                                     lindblad_parameterization)
+        # TODO: Could do qubit-specific by allowing different err_gate1Q
+        err_gates = [err_gate1Q.copy() for i in range(num_qubits)] if independent_gates else [err_gate1Q,] * num_qubits
+        err_gateNQ = _op.ComposedOp([
+            _op.EmbeddedOp(qubit_labels, [qubit_labels[i]], err_gates[i]) for i in range(num_qubits)])
+        # TODO: Could specialize for LindbladOps, although this should also handle that case
+        prep_layers['Mdefault'] = ComposedPOVM(err_gateNQ, Mdefault_baseNQ)
     else:
         povm_layers['Mdefault'] = _povm.ComputationalBasisPOVM(num_qubits, evotype)
 

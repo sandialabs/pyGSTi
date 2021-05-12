@@ -350,7 +350,7 @@ class SPAMVec(_modelmember.ModelMember):
 
     def __init__(self, rep, evotype, typ):
         """ Initialize a new SPAM Vector """
-        if isinstance(rep, int):  # For operators that have no representation themselves (term ops)
+        if isinstance(rep, int) or isinstance(rep, _np.int64):  # For operators that have no representation themselves (term ops)
             dim = rep             # allow passing an integer as `rep`.
             rep = None
         else:
@@ -2100,7 +2100,7 @@ class TensorProdSPAMVec(SPAMVec):
                 #raise ValueError("Cannot convert Stabilizer tensor product effect to a representation!")
                 # should be using effect.outcomes property...
 
-        else:  # self._evotype in ("svterm","cterm")
+        else:  # self._evotype in ("svterm","cterm", "chp")
             rep = dim  # no reps for term-based evotypes
 
         SPAMVec.__init__(self, rep, evotype, typ)
@@ -2452,6 +2452,7 @@ class TensorProdSPAMVec(SPAMVec):
         """
         if self._prep_or_effect == "prep":
             for sv in self.factors:
+                print("Have gpindices: ", sv.gpindices, " v: ", v)
                 sv.from_vector(v[sv.gpindices], close, dirty_value)  # factors hold local indices
 
         elif all([self.effectLbls[i] == list(povm.keys())[0]

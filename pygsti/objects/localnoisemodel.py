@@ -717,6 +717,8 @@ class LocalNoiseModel(_ImplicitOpModel):
         #SPAM (same as for cloud noise model)
         if prep_layers is None:
             pass  # no prep layers
+        elif isinstance(prep_layers, _sv.SPAMVec): # just a single SPAMVec
+            self.prep_blks['layers'][_Lbl('rho0')] = prep_layers
         elif isinstance(prep_layers, dict):
             for rhoname, layerop in prep_layers.items():
                 self.prep_blks['layers'][_Lbl(rhoname)] = layerop
