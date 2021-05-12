@@ -1,6 +1,40 @@
-class ExpErrorgenOp(LinearOperator, _ErrorGeneratorContainer):
+"""
+The ExpErrorgenOp class and supporting functionality.
+"""
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
+
+import numpy as _np
+import scipy.sparse as _sps
+import scipy.linalg as _spl
+import scipy.sparse.linalg as _spsl
+import warnings as _warnings
+from .linearop import LinearOperator as _LinearOperator
+from .denseop import DenseOperatorInterface as _DenseOperatorInterface
+
+from .. import modelmember as _modelmember
+from ..errorgencontainer import ErrorGeneratorContainer as _ErrorGeneratorContainer
+from ...tools import optools as _ot
+from ...tools import jamiolkowski as _jt
+from ...tools import matrixtools as _mt
+from ...objects.basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis
+from ...objects import term as _term
+from ...objects.polynomial import Polynomial as _Polynomial
+from ...objects import gaugegroup as _gaugegroup
+IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
+MAX_EXPONENT = _np.log(_np.finfo('d').max) - 10.0  # so that exp(.) doesn't overflow
+
+
+class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
     """
     An operation parameterized by the coefficients of an exponentiated sum of Lindblad-like terms.
+    TODO: update docstring!
 
     The exponentiated terms give the operation's action.
 
@@ -73,7 +107,7 @@ class ExpErrorgenOp(LinearOperator, _ErrorGeneratorContainer):
         nonham_mode : str
         param_mode : str
         """
-        bTyp, evotype = _gt.split_lindblad_paramtype(param_type)
+        bTyp, evotype = _ot.split_lindblad_paramtype(param_type)
 
         if bTyp == "CPTP":
             nonham_mode = "all"; param_mode = "cptp"
@@ -165,9 +199,9 @@ class ExpErrorgenOp(LinearOperator, _ErrorGeneratorContainer):
 
         if unitary_postfactor is None:
             #Try to obtain unitary_post by getting the closest unitary
-            if isinstance(operation, LindbladDenseOp):
+            if isinstance(operation, ExpErrorgenDenseOp):
                 unitary_postfactor = operation.unitary_postfactor
-            elif isinstance(operation, LinearOperator) and operation._evotype == "densitymx":
+            elif isinstance(operation, _LinearOperator) and operation._evotype == "densitymx":
                 J = _jt.fast_jamiolkowski_iso_std(operation.to_dense(), mx_basis)  # Choi mx basis doesn't matter
                 if _np.linalg.matrix_rank(J, RANK_TOL) == 1:
                     unitary_postfactor = operation  # when 'operation' is unitary
@@ -192,17 +226,18 @@ class ExpErrorgenOp(LinearOperator, _ErrorGeneratorContainer):
             if a is None or b is None: return False
             return _mt.safe_norm(a - b) < 1e-6  # what about possibility of Clifford operations?
 
-        if lazy and isinstance(operation, LindbladOp) and \
-           normeq(operation.unitary_postfactor, unitary_postfactor) and \
-           isinstance(operation.errorgen, LindbladErrorgen) \
-           and beq(ham_basis, operation.errorgen.ham_basis) and beq(nonham_basis, operation.errorgen.other_basis) \
-           and param_mode == operation.errorgen.param_mode and nonham_mode == operation.errorgen.nonham_mode \
-           and beq(mx_basis, operation.errorgen.matrix_basis) and operation._evotype == evotype:
-            return operation  # no creation necessary!
-        else:
-            return cls.from_operation_matrix(
-                operation, unitary_postfactor, ham_basis, nonham_basis, param_mode,
-                nonham_mode, truncate, mx_basis, evotype)
+        #We need to get rid of this anyway -- TODO REMOVE (and update)
+        #if lazy and isinstance(operation, ExpErrorgenOp) and \
+        #   normeq(operation.unitary_postfactor, unitary_postfactor) and \
+        #   isinstance(operation.errorgen, LindbladErrorgen) \
+        #   and beq(ham_basis, operation.errorgen.ham_basis) and beq(nonham_basis, operation.errorgen.other_basis) \
+        #   and param_mode == operation.errorgen.param_mode and nonham_mode == operation.errorgen.nonham_mode \
+        #   and beq(mx_basis, operation.errorgen.matrix_basis) and operation._evotype == evotype:
+        #    return operation  # no creation necessary!
+        #else:
+        return cls.from_operation_matrix(
+            operation, unitary_postfactor, ham_basis, nonham_basis, param_mode,
+            nonham_mode, truncate, mx_basis, evotype)
 
     @classmethod
     def from_operation_matrix(cls, op_matrix, unitary_postfactor=None,
@@ -307,16 +342,16 @@ class ExpErrorgenOp(LinearOperator, _ErrorGeneratorContainer):
                 errgenMx = _sps.csr_matrix(op_matrix.shape, dtype='d')  # all zeros
             else:
                 errgenMx = _sps.csr_matrix(
-                    _gt.error_generator(op_matrix.toarray(), upost.toarray(),
+                    _ot.error_generator(op_matrix.toarray(), upost.toarray(),
                                         mx_basis, "logGTi"), dtype='d')
         else:
             #DB: assert(_np.linalg.norm(op_matrix.imag) < 1e-8)
             #DB: assert(_np.linalg.norm(upost.imag) < 1e-8)
-            errgenMx = _gt.error_generator(op_matrix, upost, mx_basis, "logGTi")
+            errgenMx = _ot.error_generator(op_matrix, upost, mx_basis, "logGTi")
 
-        errgen = LindbladErrorgen.from_error_generator(errgenMx, ham_basis,
-                                                       nonham_basis, param_mode, nonham_mode,
-                                                       mx_basis, truncate, evotype)
+        errgen = ExpErrorgenOp.from_error_generator(errgenMx, ham_basis,
+                                                    nonham_basis, param_mode, nonham_mode,
+                                                    mx_basis, truncate, evotype)
 
         #Use "sparse" matrix exponentiation when given operation matrix was sparse.
         return cls(unitary_postfactor, errgen, dense_rep=not sparseOp)
@@ -402,7 +437,7 @@ class ExpErrorgenOp(LinearOperator, _ErrorGeneratorContainer):
         # TODO REMOVE self.direct_terms = {}
         # TODO REMOVE self.direct_term_poly_coeffs = {}
 
-        LinearOperator.__init__(self, rep, evotype)
+        _LinearOperator.__init__(self, rep, evotype)
         _ErrorGeneratorContainer.__init__(self, self.errorgen)
         self._update_rep()  # updates self._rep
         #Done with __init__(...)
@@ -811,11 +846,11 @@ class ExpErrorgenOp(LinearOperator, _ErrorGeneratorContainer):
         """
 
         #TODO: move this function to errorgen?
-        if not isinstance(self.errorgen, LindbladErrorgen):
+        if not isinstance(self.errorgen, ExpErrorgenOp):
             raise NotImplementedError(("Can only set the value of a LindbladDenseOp that "
                                        "contains a single LindbladErrorgen error generator"))
 
-        tOp = LindbladOp.from_operation_matrix(
+        tOp = ExpErrorgenOp.from_operation_matrix(
             m, self.unitary_postfactor,
             self.errorgen.ham_basis, self.errorgen.other_basis,
             self.errorgen.param_mode, self.errorgen.nonham_mode,
@@ -1161,10 +1196,10 @@ class ExpErrorgenOp(LinearOperator, _ErrorGeneratorContainer):
             else:
                 tMx = _mt.safe_dot(self.to_dense(), U)
             trunc = bool(isinstance(s, _gaugegroup.UnitaryGaugeGroupElement))
-            tOp = LindbladOp.from_operation_matrix(tMx, self.unitary_postfactor,
-                                                   self.errorgen.ham_basis, self.errorgen.other_basis,
-                                                   self.errorgen.param_mode, self.errorgen.nonham_mode,
-                                                   trunc, self.errorgen.matrix_basis)
+            tOp = ExpErrorgenOp.from_operation_matrix(tMx, self.unitary_postfactor,
+                                                      self.errorgen.ham_basis, self.errorgen.other_basis,
+                                                      self.errorgen.param_mode, self.errorgen.nonham_mode,
+                                                      trunc, self.errorgen.matrix_basis)
             self.from_vector(tOp.to_vector())
             #Note: truncate=True above for unitary transformations because
             # while this trunctation should never be necessary (unitaries map CPTP -> CPTP)
@@ -1195,7 +1230,7 @@ class ExpErrorgenOp(LinearOperator, _ErrorGeneratorContainer):
         return s
 
 
-class LindbladDenseOp(LindbladOp, DenseOperatorInterface):
+class ExpErrorgenDenseOp(ExpErrorgenOp, _DenseOperatorInterface):
     """
     An operation matrix that is parameterized by a Lindblad-form expression.
 
@@ -1264,8 +1299,8 @@ class LindbladDenseOp(LindbladOp, DenseOperatorInterface):
         # signature as LindbladOp so its @classmethods will work on us.
 
         #Start with base class construction
-        LindbladOp.__init__(self, unitary_postfactor, errorgen, dense_rep=True)
-        DenseOperatorInterface.__init__(self)
+        ExpErrorgenOp.__init__(self, unitary_postfactor, errorgen, dense_rep=True)
+        _DenseOperatorInterface.__init__(self)
 
 
 def _d_exp_series(x, dx):

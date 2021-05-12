@@ -1,4 +1,29 @@
-class ComposedErrorgen(LinearOperator):
+"""
+The ComposedErrorgen class and supporting functionality.
+"""
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
+
+
+import numpy as _np
+import scipy.sparse as _sps
+import collections as _collections
+from .linearop import LinearOperator as _LinearOperator
+
+from .. import modelmember as _modelmember
+
+from ...evotypes import Evotype as _Evotype
+from ...tools import matrixtools as _mt
+from ...objects.basis import ExplicitBasis as _ExplicitBasis
+
+
+class ComposedErrorgen(_LinearOperator):
     """
     A composition (sum!) of several Lindbladian exponent operators.
 
@@ -72,7 +97,7 @@ class ComposedErrorgen(LinearOperator):
         factor_reps = [op._rep for op in self.factors]
         rep = evotype.create_sum_rep(factor_reps, dim)
 
-        LinearOperator.__init__(self, rep, evotype)
+        _LinearOperator.__init__(self, rep, evotype)
 
     def coefficients(self, return_basis=False, logscale_nonham=False):
         """
@@ -696,7 +721,6 @@ class ComposedErrorgen(LinearOperator):
             ret[eg_local_inds] += eg.total_term_magnitude_deriv
         return ret
 
-        
     def transform_inplace(self, s):
         """
         Update operation matrix `O` with `inv(s) * O * s`.

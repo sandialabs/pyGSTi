@@ -1,4 +1,26 @@
-class EigenvalueParamDenseOp(DenseOperator):
+"""
+The EigenvalueParamDenseOp class and supporting functionality.
+"""
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
+
+import numpy as _np
+import functools as _functools
+
+from .linearop import LinearOperator as _LinearOperator
+from .denseop import DenseOperator as _DenseOperator
+
+from ...tools import matrixtools as _mt
+IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
+
+
+class EigenvalueParamDenseOp(_DenseOperator):
     """
     A real operation matrix parameterized only by its eigenvalues.
 
@@ -279,7 +301,7 @@ class EigenvalueParamDenseOp(DenseOperator):
 
         #Finish LinearOperator construction
         mx = _np.empty(matrix.shape, "d")
-        DenseOperator.__init__(self, mx, evotype)
+        _DenseOperator.__init__(self, mx, evotype)
         self.base.flags.writeable = False  # only _construct_matrix can change array
         self._construct_matrix()  # construct base from the parameters
 

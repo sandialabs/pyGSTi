@@ -1,4 +1,22 @@
-class StaticStandardOp(DenseOperator):
+"""
+The StaticStandardOp class and supporting functionality.
+"""
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
+
+import numpy as _np
+from ...evotypes import Evotype as _Evotype
+from ...tools import internalgates as _igts
+from .linearop import LinearOperator as _LinearOperator
+
+
+class StaticStandardOp(_LinearOperator):
     """
     An operation that is completely fixed, or "static" (i.e. that posesses no parameters)
     that can be constructed from "standard" gate names (as defined in pygsti.tools.internalgates).
@@ -18,33 +36,8 @@ class StaticStandardOp(DenseOperator):
     def __init__(self, name, evotype):
         self.name = name
         evotype = _Evotype.cast(evotype)
-        evotype.create_standard_rep(name)
-        
-        if evotype in ('statevec', 'densitymx', 'svterm', 'cterm'):
-            std_unitaries = _itgs.standard_gatename_unitaries()
-            if self.name not in std_unitaries:
-                raise ValueError("Name '%s' not in standard unitaries" % self.name)
-
-            U = std_unitaries[self.name]
-
-            if evotype == 'statevec':
-                rep = replib.SVOpRepDense(LinearOperator.convert_to_matrix(U))
-            else:  # evotype in ('densitymx', 'svterm', 'cterm')
-                ptm = _gt.unitary_to_pauligate(U)
-                rep = replib.DMOpRepDense(LinearOperator.convert_to_matrix(ptm))
-        elif evotype == 'chp':
-            std_chp_ops = _itgs.standard_gatenames_chp_conversions()
-            if self.name not in std_chp_ops:
-                raise ValueError("Name '%s' not in standard CHP operations" % self.name)
-
-            native_ops = std_chp_ops[self.name]
-            nqubits = 2 if any(['c' in n for n in native_ops]) else 1
-
-            rep = replib.CHPOpRep(native_ops, nqubits)
-        else:
-            raise ValueError("Invalid evotype for a StaticStandardOp: %s" % evotype)
-
-        LinearOperator.__init__(self, rep, evotype)
+        rep = evotype.create_standard_rep(name)
+        _LinearOperator.__init__(self, rep, evotype)
 
 #TODO REMOVE
 #    # TODO: This should not be necessary to define, but is here as a temporary measure

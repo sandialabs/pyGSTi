@@ -1,4 +1,28 @@
-class EmbeddedOp(LinearOperator):
+"""
+The EmbeddedOp class and supporting functionality.
+"""
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
+
+import numpy as _np
+import scipy.sparse as _sps
+import itertools as _itertools
+import collections as _collections
+
+from .linearop import LinearOperator as _LinearOperator
+from .denseop import DenseOperatorInterface as _DenseOperatorInterface
+
+from .. import modelmember as _modelmember
+from ...basis.objects import EmbeddedBasis as _EmbeddedBasis
+
+
+class EmbeddedOp(_LinearOperator):
     """
     An operation containing a single lower (or equal) dimensional operation within it.
 
@@ -71,7 +95,7 @@ class EmbeddedOp(LinearOperator):
         self._iter_elements_cache = None  # speeds up _iter_matrix_elements significantly
 
         evotype = operation_to_embed._evotype
-        opDim = self.state_space_labels.dim
+        dim = self.state_space_labels.dim
 
         #Create representation
         if dense_rep:
@@ -79,7 +103,7 @@ class EmbeddedOp(LinearOperator):
         else:
             rep = evotype.create_embedded_rep(self.state_space_labels, self.target_labels, self.embedded_op._rep)
 
-        LinearOperator.__init__(self, rep, evotype)
+        _LinearOperator.__init__(self, rep, evotype)
         if self.dense_rep: self._update_denserep()
 
     def _update_denserep(self):
@@ -503,7 +527,7 @@ class EmbeddedOp(LinearOperator):
             An array of length self.num_params
         """
         return self.embedded_op.total_term_magnitude_deriv
-    
+
     def transform_inplace(self, s):
         """
         Update operation matrix `O` with `inv(s) * O * s`.
@@ -738,7 +762,7 @@ class EmbeddedOp(LinearOperator):
         return s
 
 
-class EmbeddedDenseOp(EmbeddedOp, DenseOperatorInterface):
+class EmbeddedDenseOp(EmbeddedOp, _DenseOperatorInterface):
     """
     An operation containing a single lower (or equal) dimensional operation within it.
 
@@ -794,7 +818,7 @@ class EmbeddedDenseOp(EmbeddedOp, DenseOperatorInterface):
         """
         EmbeddedOp.__init__(self, state_space_labels, target_labels,
                             operation_to_embed, dense_rep=True)
-        DenseOperatorInterface.__init__(self)
+        _DenseOperatorInterface.__init__(self)
 
     @property
     def parameter_labels(self):  # Needed because method resolution finds __getattr__ before base class property

@@ -1,4 +1,21 @@
-class FullUnitaryOp(DenseOperator):
+"""
+The FullUnitaryOp class and supporting functionality.
+"""
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
+
+import numpy as _np
+from .linearop import LinearOperator as _LinearOperator
+from .denseop import DenseOperator as _DenseOperator
+
+
+class FullUnitaryOp(_DenseOperator):
     """
     An operation matrix that is fully parameterized.
 
@@ -29,8 +46,8 @@ class FullUnitaryOp(DenseOperator):
             The evolution type.  If `"auto"`, then `"statevec"` is used if and only if `m`
             has a complex datatype.
         """
-        m = LinearOperator.convert_to_matrix(m)
-        DenseOperator.__init__(self, m, evotype)
+        m = _LinearOperator.convert_to_matrix(m)
+        _DenseOperator.__init__(self, m, evotype)
         d = self.dim
         self._paramlbls = _np.array(["MxElement Re(%d,%d)" % (i, j) for i in range(d) for j in range(d)]
                                     + ["MxElement Im(%d,%d)" % (i, j) for i in range(d) for j in range(d)],
@@ -53,7 +70,7 @@ class FullUnitaryOp(DenseOperator):
         -------
         None
         """
-        mx = LinearOperator.convert_to_matrix(m)
+        mx = _LinearOperator.convert_to_matrix(m)
         if(mx.shape != (self.dim, self.dim)):
             raise ValueError("Argument must be a (%d,%d) matrix!"
                              % (self.dim, self.dim))

@@ -1,4 +1,38 @@
-class LindbladErrorgen(LinearOperator):
+"""
+The LindbladErrorgen class and supporting functionality.
+"""
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
+
+import numpy as _np
+import scipy.sparse as _sps
+import scipy.sparse.linalg as _spsl
+import warnings as _warnings
+
+from .linearop import LinearOperator as _LinearOperator
+
+from ...objects import term as _term
+from ...objects import gaugegroup as _gaugegroup
+from ...objects.polynomial import Polynomial as _Polynomial
+from ...objects.basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis
+from ...tools import optools as _ot
+from ...tools import matrixtools as _mt
+from ...tools import basistools as _bt
+from ...evotypes import Evotype as _Evotype
+
+from ...objects.opcalc import compact_deriv as _compact_deriv, \
+    bulk_eval_compact_polynomials_complex as _bulk_eval_compact_polynomials_complex, \
+    abs_sum_bulk_eval_compact_polynomials_complex as _abs_sum_bulk_eval_compact_polynomials_complex
+IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
+
+
+class LindbladErrorgen(_LinearOperator):
     """
     An Lindblad-form error generator.
 
@@ -158,12 +192,12 @@ class LindbladErrorgen(LinearOperator):
 
         # errgen + bases => coeffs
         hamC, otherC = \
-            _gt.lindblad_errorgen_projections(
+            _ot.lindblad_errorgen_projections(
                 errgen, ham_basis, nonham_basis, matrix_basis, normalize=False,
                 return_generators=False, other_mode=nonham_mode, sparse=sparse)
 
         # coeffs + bases => Ltermdict, basis
-        Ltermdict, basis = _gt.projections_to_lindblad_terms(
+        Ltermdict, basis = _ot.projections_to_lindblad_terms(
             hamC, otherC, ham_basis, nonham_basis, nonham_mode)
 
         return cls(d2, Ltermdict, basis,
@@ -255,7 +289,7 @@ class LindbladErrorgen(LinearOperator):
         # but maybe we want lindblad_term_dict, basisdict => basis + projections/coeffs,
         #  then projections/coeffs => paramvals? since the latter is what set_errgen needs
         hamC, otherC, self.ham_basis, self.other_basis = \
-            _gt.lindblad_terms_to_projections(lindblad_term_dict, basis, self.nonham_mode)
+            _ot.lindblad_terms_to_projections(lindblad_term_dict, basis, self.nonham_mode)
 
         self.ham_basis_size = len(self.ham_basis)
         self.other_basis_size = len(self.other_basis)
@@ -267,7 +301,7 @@ class LindbladErrorgen(LinearOperator):
 
         self.matrix_basis = _Basis.cast(mx_basis, d2, sparse=self.sparse)
 
-        self.paramvals = _gt.lindblad_projections_to_paramvals(
+        self.paramvals = _ot.lindblad_projections_to_paramvals(
             hamC, otherC, self.param_mode, self.nonham_mode, truncate)
 
         #Fast CSR-matrix summing variables: N/A if not sparse or using terms
@@ -285,9 +319,9 @@ class LindbladErrorgen(LinearOperator):
         evotype = _Evotype.cast(evotype)
         try:
             rep = evotype.create_lindblad_errorgen_rep(lindblad_term_dict, basis)
-        except Exception as e:
+        except Exception:
             #Otherwise try to create a sparse or dense matrix representation
-        
+
             self.hamGens, self.otherGens = self._init_generators(dim)
 
             if self.hamGens is not None:
@@ -336,9 +370,9 @@ class LindbladErrorgen(LinearOperator):
             else:
                 rep = evotype.create_dense_rep(_np.ascontiguousarray(_np.zeros((dim, dim), 'd')))
 
-        LinearOperator.__init__(self, rep, evotype)  # sets self.dim
+        _LinearOperator.__init__(self, rep, evotype)  # sets self.dim
         if self._rep is not None: self._update_rep()  # updates _rep whether it's a dense or sparse matrix
-        self._paramlbls = _gt.lindblad_param_labels(self.ham_basis, self.other_basis, self.param_mode, self.nonham_mode)
+        self._paramlbls = _ot.lindblad_param_labels(self.ham_basis, self.other_basis, self.param_mode, self.nonham_mode)
         #Done with __init__(...)
 
     def _init_generators(self, dim):
@@ -359,7 +393,7 @@ class LindbladErrorgen(LinearOperator):
         hamBasisMxs = self.ham_basis.elements
         otherBasisMxs = self.other_basis.elements
 
-        hamGens, otherGens = _gt.lindblad_error_generators(
+        hamGens, otherGens = _ot.lindblad_error_generators(
             hamBasisMxs, otherBasisMxs, normalize=False,
             other_mode=self.nonham_mode)  # in std basis
 
@@ -368,7 +402,7 @@ class LindbladErrorgen(LinearOperator):
 
         if hamGens is not None:
             bsH = len(hamGens) + 1  # projection-basis size (not nec. == d2)
-            _gt._assert_shape(hamGens, (bsH - 1, d2, d2), self.sparse)
+            _ot._assert_shape(hamGens, (bsH - 1, d2, d2), self.sparse)
 
             # apply basis change now, so we don't need to do so repeatedly later
             if self.sparse:
@@ -388,7 +422,7 @@ class LindbladErrorgen(LinearOperator):
 
             if self.nonham_mode == "diagonal":
                 bsO = len(otherGens) + 1  # projection-basis size (not nec. == d2)
-                _gt._assert_shape(otherGens, (bsO - 1, d2, d2), self.sparse)
+                _ot._assert_shape(otherGens, (bsO - 1, d2, d2), self.sparse)
 
                 # apply basis change now, so we don't need to do so repeatedly later
                 if self.sparse:
@@ -404,7 +438,7 @@ class LindbladErrorgen(LinearOperator):
             elif self.nonham_mode == "diag_affine":
                 # projection-basis size (not nec. == d2) [~shape[1] but works for lists too]
                 bsO = len(otherGens[0]) + 1
-                _gt._assert_shape(otherGens, (2, bsO - 1, d2, d2), self.sparse)
+                _ot._assert_shape(otherGens, (2, bsO - 1, d2, d2), self.sparse)
 
                 # apply basis change now, so we don't need to do so repeatedly later
                 if self.sparse:
@@ -422,7 +456,7 @@ class LindbladErrorgen(LinearOperator):
 
             else:
                 bsO = len(otherGens) + 1  # projection-basis size (not nec. == d2)
-                _gt._assert_shape(otherGens, (bsO - 1, bsO - 1, d2, d2), self.sparse)
+                _ot._assert_shape(otherGens, (bsO - 1, bsO - 1, d2, d2), self.sparse)
 
                 # apply basis change now, so we don't need to do so repeatedly later
                 if self.sparse:
@@ -619,12 +653,12 @@ class LindbladErrorgen(LinearOperator):
     def _set_params_from_matrix(self, errgen, truncate):
         """ Sets self.paramvals based on `errgen` """
         hamC, otherC = \
-            _gt.lindblad_errorgen_projections(
+            _ot.lindblad_errorgen_projections(
                 errgen, self.ham_basis, self.other_basis, self.matrix_basis, normalize=False,
                 return_generators=False, other_mode=self.nonham_mode,
                 sparse=self.sparse)  # in std basis
 
-        self.paramvals = _gt.lindblad_projections_to_paramvals(
+        self.paramvals = _ot.lindblad_projections_to_paramvals(
             hamC, otherC, self.param_mode, self.nonham_mode, truncate)
         if self._evotype == "densitymx": self._update_rep()
 
@@ -636,7 +670,7 @@ class LindbladErrorgen(LinearOperator):
         accordingly (by rewriting its data).
         """
         d2 = self.dim
-        hamCoeffs, otherCoeffs = _gt.paramvals_to_lindblad_projections(
+        hamCoeffs, otherCoeffs = _ot.paramvals_to_lindblad_projections(
             self.paramvals, self.ham_basis_size, self.other_basis_size,
             self.param_mode, self.nonham_mode, self.Lmx)
         onenorm = 0.0
@@ -731,7 +765,7 @@ class LindbladErrorgen(LinearOperator):
         else:
             if self._evotype in ("svterm", "cterm"):
                 #Need to do similar things to __init__ - maybe consolidate?
-                hamCoeffs, otherCoeffs = _gt.paramvals_to_lindblad_projections(
+                hamCoeffs, otherCoeffs = _ot.paramvals_to_lindblad_projections(
                     self.paramvals, self.ham_basis_size, self.other_basis_size,
                     self.param_mode, self.nonham_mode)
 
@@ -769,7 +803,7 @@ class LindbladErrorgen(LinearOperator):
         if self.sparse:
             if self._evotype in ("svterm", "cterm"):
                 #Need to do similar things to __init__ - maybe consolidate?
-                hamCoeffs, otherCoeffs = _gt.paramvals_to_lindblad_projections(
+                hamCoeffs, otherCoeffs = _ot.paramvals_to_lindblad_projections(
                     self.paramvals, self.ham_basis_size, self.other_basis_size,
                     self.param_mode, self.nonham_mode)
 
@@ -912,7 +946,8 @@ class LindbladErrorgen(LinearOperator):
         coeff_values = _bulk_eval_compact_polynomials_complex(vtape, ctape, self.to_vector(), (len(self._rep.Lterms),))
         coeff_deriv_polys = _compact_deriv(vtape, ctape, wrtInds)
         coeff_deriv_vals = _bulk_eval_compact_polynomials_complex(coeff_deriv_polys[0], coeff_deriv_polys[1],
-                                                                  self.to_vector(), (len(self._rep.Lterms), len(wrtInds)))
+                                                                  self.to_vector(), (len(self._rep.Lterms),
+                                                                                     len(wrtInds)))
         abs_coeff_values = _np.abs(coeff_values)
         abs_coeff_values[abs_coeff_values < 1e-10] = 1.0  # so ratio is 0 in cases where coeff_value == 0
         ret = _np.sum(_np.real(coeff_values[:, None] * _np.conj(coeff_deriv_vals))
@@ -1028,11 +1063,11 @@ class LindbladErrorgen(LinearOperator):
             A Basis mapping the basis labels used in the
             keys of `Ltermdict` to basis matrices.
         """
-        hamC, otherC = _gt.paramvals_to_lindblad_projections(
+        hamC, otherC = _ot.paramvals_to_lindblad_projections(
             self.paramvals, self.ham_basis_size, self.other_basis_size,
             self.param_mode, self.nonham_mode, self.Lmx)
 
-        Ltermdict_and_maybe_basis = _gt.projections_to_lindblad_terms(
+        Ltermdict_and_maybe_basis = _ot.projections_to_lindblad_terms(
             hamC, otherC, self.ham_basis, self.other_basis, self.nonham_mode, return_basis)
 
         if logscale_nonham:
@@ -1058,7 +1093,7 @@ class LindbladErrorgen(LinearOperator):
             A 1D array of length equal to the number of coefficients in the linear
             combination of standard error generators that is this error generator.
         """
-        hamC, otherC = _gt.paramvals_to_lindblad_projections(
+        hamC, otherC = _ot.paramvals_to_lindblad_projections(
             self.paramvals, self.ham_basis_size, self.other_basis_size,
             self.param_mode, self.nonham_mode, self.Lmx)
 
@@ -1078,7 +1113,7 @@ class LindbladErrorgen(LinearOperator):
             coefficients in the linear combination of standard error generators that is this error
             generator, and `num_params` is this error generator's number of parameters.
         """
-        hamCderiv, otherCderiv = _gt.paramvals_to_lindblad_projections_deriv(
+        hamCderiv, otherCderiv = _ot.paramvals_to_lindblad_projections_deriv(
             self.paramvals, self.ham_basis_size, self.other_basis_size,
             self.param_mode, self.nonham_mode, self.Lmx)
 
@@ -1190,8 +1225,8 @@ class LindbladErrorgen(LinearOperator):
                 raise ValueError('Invalid `action` argument: must be one of "update", "add", or "reset"')
 
         hamC, otherC, _, _ = \
-            _gt.lindblad_terms_to_projections(existing_Ltermdict, basis, self.nonham_mode)
-        pvec = _gt.lindblad_projections_to_paramvals(
+            _ot.lindblad_terms_to_projections(existing_Ltermdict, basis, self.nonham_mode)
+        pvec = _ot.lindblad_projections_to_paramvals(
             hamC, otherC, self.param_mode, self.nonham_mode, truncate=True)  # shouldn't need to truncate
         self.from_vector(pvec)
 
@@ -1229,7 +1264,7 @@ class LindbladErrorgen(LinearOperator):
         """
         TODO: docstring
         """
-        lookup = _gt.lindblad_terms_projection_indices(self.ham_basis, self.other_basis, self.nonham_mode)
+        lookup = _ot.lindblad_terms_projection_indices(self.ham_basis, self.other_basis, self.nonham_mode)
         rev_lookup = {i: lbl for lbl, i in lookup.items()}
 
         if self._coefficient_weights is None:
@@ -1245,7 +1280,7 @@ class LindbladErrorgen(LinearOperator):
         """
         TODO: docstring
         """
-        lookup = _gt.lindblad_terms_projection_indices(self.ham_basis, self.other_basis, self.nonham_mode)
+        lookup = _ot.lindblad_terms_projection_indices(self.ham_basis, self.other_basis, self.nonham_mode)
         if self._coefficient_weights is None:
             self._coefficient_weights = _np.ones(len(self.coefficients_array()), 'd')
         for lbl, wt in weights.items():

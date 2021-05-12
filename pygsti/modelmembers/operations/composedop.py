@@ -1,4 +1,32 @@
-class ComposedOp(LinearOperator):
+"""
+The ComposedOp class and supporting functionality.
+"""
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
+
+import numpy as _np
+import itertools as _itertools
+import collections as _collections
+from .linearop import LinearOperator as _LinearOperator
+from .denseop import DenseOperatorInterface as _DenseOperatorInterface
+
+from .. import modelmember as _modelmember
+
+from ... import term as _term
+from ...evotypes import Evotype as _Evotype
+from ...tools import listtools as _lt
+from ...tools import matrixtools as _mt
+
+from ...objects.basis import ExplicitBasis as _ExplicitBasis
+
+
+class ComposedOp(_LinearOperator):
     """
     An operation that is the composition of a number of map-like factors (possibly other `LinearOperator`s).
 
@@ -82,7 +110,7 @@ class ComposedOp(LinearOperator):
         self.terms = {}
         self.local_term_poly_coeffs = {}
 
-        LinearOperator.__init__(self, rep, evotype)
+        _LinearOperator.__init__(self, rep, evotype)
         if self.dense_rep: self._update_denserep()  # update dense rep if needed
 
     def _update_denserep(self):
@@ -769,7 +797,7 @@ class ComposedOp(LinearOperator):
         return s
 
 
-class ComposedDenseOp(ComposedOp, DenseOperatorInterface):
+class ComposedDenseOp(ComposedOp, _DenseOperatorInterface):
     """
     An operation that is the composition of a number of matrix factors (possibly other operations).
 
@@ -817,7 +845,7 @@ class ComposedDenseOp(ComposedOp, DenseOperatorInterface):
             one operation being composed.
         """
         ComposedOp.__init__(self, ops_to_compose, dim, evotype, dense_rep=True)
-        DenseOperatorInterface.__init__(self)
+        _DenseOperatorInterface.__init__(self)
 
     @property
     def parameter_labels(self):  # Needed because method resolution finds __getattr__ before base class property

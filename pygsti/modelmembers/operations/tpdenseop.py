@@ -1,4 +1,22 @@
-class TPDenseOp(DenseOperator):
+"""
+The TPDenseOp class and supporting functionality.
+"""
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
+
+import numpy as _np
+from .linearop import LinearOperator as _LinearOperator
+from .denseop import DenseOperator as _DenseOperator
+from ...objects.protectedarray import ProtectedArray as _ProtectedArray
+
+
+class TPDenseOp(_DenseOperator):
     """
     A trace-preserving operation matrix.
 
@@ -30,7 +48,7 @@ class TPDenseOp(DenseOperator):
             shape of this array sets the dimension of the operation.
         """
         #LinearOperator.__init__(self, LinearOperator.convert_to_matrix(m))
-        mx = LinearOperator.convert_to_matrix(m)
+        mx = _LinearOperator.convert_to_matrix(m)
         assert(_np.isrealobj(mx)), "TPDenseOp must have *real* values!"
         if not (_np.isclose(mx[0, 0], 1.0)
                 and _np.allclose(mx[0, 1:], 0.0)):
@@ -38,7 +56,7 @@ class TPDenseOp(DenseOperator):
                              "invalid form for 1st row!")
         raw = _np.require(mx, requirements=['OWNDATA', 'C_CONTIGUOUS'])
 
-        DenseOperator.__init__(self, raw, evotype)
+        _DenseOperator.__init__(self, raw, evotype)
         assert(self._rep.base.flags['C_CONTIGUOUS'] and self._rep.base.flags['OWNDATA'])
         assert(isinstance(self.base, _ProtectedArray))
         self._paramlbls = _np.array(["MxElement %d,%d" % (i, j) for i in range(1, self.dim) for j in range(self.dim)],
@@ -68,7 +86,7 @@ class TPDenseOp(DenseOperator):
         -------
         None
         """
-        mx = LinearOperator.convert_to_matrix(m)
+        mx = _LinearOperator.convert_to_matrix(m)
         if(mx.shape != (self.dim, self.dim)):
             raise ValueError("Argument must be a (%d,%d) matrix!"
                              % (self.dim, self.dim))

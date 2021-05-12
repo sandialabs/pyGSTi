@@ -1,4 +1,11 @@
-class CliffordOp(LinearOperator):
+
+
+import numpy as _np
+from .linearop import LinearOperator as _LinearOperator
+from ...evotypes import Evotype as _Evotype
+
+
+class CliffordOp(_LinearOperator):
     """
     A Clifford operation, represented via a symplectic matrix.
 
@@ -43,11 +50,11 @@ class CliffordOp(LinearOperator):
         #self.superop = superop
         self.unitary = unitary
         assert(self.unitary is not None), "Must supply `unitary` argument!"
-        U = self.unitary.to_dense() if isinstance(self.unitary, LinearOperator) else self.unitary
+        U = self.unitary.to_dense() if isinstance(self.unitary, _LinearOperator) else self.unitary
 
         evotype = _Evotype.cast(evotype)
         rep = evotype.create_clifford_rep(U, symplecticrep)
-        LinearOperator.__init__(self, rep, evotype)
+        _LinearOperator.__init__(self, rep, evotype)
 
     #NOTE: if this operation had parameters, we'd need to clear inv_smatrix & inv_svector
     # whenever the smatrix or svector changed, respectively (probably in from_vector?)

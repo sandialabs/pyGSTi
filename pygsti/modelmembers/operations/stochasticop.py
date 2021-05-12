@@ -1,4 +1,26 @@
-class StochasticNoiseOp(LinearOperator):
+"""
+The StochasticNoiseOp class and supporting functionality.
+"""
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
+
+import numpy as _np
+from .linearop import LinearOperator as _LinearOperator
+
+from .. import modelmember as _modelmember
+from ...objects.basis import Basis as _Basis
+from ...objects.polynomial import Polynomial as _Polynomial
+from ...evotypes import Evotype as _Evotype
+from ...objects import term as _term
+
+
+class StochasticNoiseOp(_LinearOperator):
     """
     A stochastic noise operation.
 
@@ -80,7 +102,7 @@ class StochasticNoiseOp(LinearOperator):
             rates = _np.zeros(len(initial_rates), 'd')
 
         rep = evotype.create_stochastic_rep(basis, self._get_rate_poly_dicts(), rates, seed_or_state)
-        LinearOperator.__init__(self, rep, evotype)
+        _LinearOperator.__init__(self, rep, evotype)
         self._update_rep()  # initialize self._rep
         self._paramlbls = _np.array(['sqrt(%s error rate)' % bl for bl in self.basis.labels[1:]], dtype=object)
 

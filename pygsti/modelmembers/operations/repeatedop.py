@@ -1,4 +1,11 @@
-class RepeatedOp(LinearOperator):
+
+import numpy as _np
+import scipy.sparse as _sps
+from .linearop import LinearOperator as _LinearOperator
+from ...evotypes import Evotype as _Evotype
+
+
+class RepeatedOp(_LinearOperator):
     """
     An operation map that is the composition of a number of map-like factors (possibly other `LinearOperator`s)
 
@@ -27,7 +34,7 @@ class RepeatedOp(LinearOperator):
             evotype = op_to_repeat._evotype
         evotype = _Evotype.cast(evotype)
         rep = evotype.create_repeated_rep(self.repeated_op._rep, self.num_repetitions, dim)
-        LinearOperator.__init__(self, rep, evotype)
+        _LinearOperator.__init__(self, rep, evotype)
 
     def submembers(self):
         """
