@@ -125,7 +125,7 @@ class ModelConstructionTester(BaseCase):
                 'Gcnot': {('H', 'ZZ'): 0.01, ('S', 'IX'): 0.01},
              }, qubit_labels=['qb{}'.format(i) for i in range(nQubits)],
             ensure_composed_gates=True, independent_gates=False)
-        self.assertEqual(cfmdl2.num_params, 11)
+        self.assertEqual(cfmdl2.num_params, 9)
 
         # Same as above but add ('Gx','qb0') to test giving qubit-specific error rates
         cfmdl3 = mc.create_crosstalk_free_model(
@@ -136,7 +136,7 @@ class ModelConstructionTester(BaseCase):
                 'Gcnot': {('H', 'ZZ'): 0.01, ('S', 'IX'): 0.01},
              }, qubit_labels=['qb{}'.format(i) for i in range(nQubits)],
             ensure_composed_gates=True, independent_gates=False)
-        self.assertEqual(cfmdl3.num_params, 12)
+        self.assertEqual(cfmdl3.num_params, 10)
 
     def test_build_crosstalk_free_model_depolarize_parameterizations(self):
         nQubits = 2
@@ -171,29 +171,37 @@ class ModelConstructionTester(BaseCase):
         self.assertTrue(isinstance(Gi_op, op.LindbladOp))
         self.assertEqual(mdl_depol3.num_params, 1)
 
-        # For prep and povm, only lindblad parameterization is allowed
-        # Test that proper warnings are raised
-        with self.assertWarns(UserWarning):
-            mc.create_crosstalk_free_model(
-                nQubits, ('Gi',), depolarization_strengths={'Gi': 0.1, 'prep': 0.1},
-                depolarization_parameterization='depolarize'
-            )
-        with self.assertWarns(UserWarning):
-            mc.create_crosstalk_free_model(
-                nQubits, ('Gi',), depolarization_strengths={'Gi': 0.1, 'prep': 0.1},
-                depolarization_parameterization='stochastic'
-            )
-        
-        with self.assertWarns(UserWarning):
-            mc.create_crosstalk_free_model(
-                nQubits, ('Gi',), depolarization_strengths={'Gi': 0.1, 'povm': 0.1},
-                depolarization_parameterization='depolarize'
-            )
-        with self.assertWarns(UserWarning):
-            mc.create_crosstalk_free_model(
-                nQubits, ('Gi',), depolarization_strengths={'Gi': 0.1, 'povm': 0.1},
-                depolarization_parameterization='stochastic'
-            )
+        mdl_prep1 = mc.create_crosstalk_free_model(
+            nQubits, ('Gi',), depolarization_strengths={'Gi': 0.1, 'prep': 0.1},
+            depolarization_parameterization='depolarize'
+        )
+        rho0 = mdl_prep1.prep_blks['layers']['rho0']
+        self.assertTrue(isinstance(rho0, pygsti.obj.ComposedSPAMVec))
+        self.assertEqual(mdl_prep1.num_params, 2)
+    
+        mdl_prep2 = mc.create_crosstalk_free_model(
+            nQubits, ('Gi',), depolarization_strengths={'Gi': 0.1, 'prep': 0.1},
+            depolarization_parameterization='stochastic'
+        )
+        rho0 = mdl_prep2.prep_blks['layers']['rho0']
+        self.assertTrue(isinstance(rho0, pygsti.obj.ComposedSPAMVec))
+        self.assertEqual(mdl_prep2.num_params, 6)
+    
+        mdl_povm1 = mc.create_crosstalk_free_model(
+            nQubits, ('Gi',), depolarization_strengths={'Gi': 0.1, 'povm': 0.1},
+            depolarization_parameterization='depolarize'
+        )
+        Mdefault = mdl_povm1.povm_blks['layers']['Mdefault']
+        self.assertTrue(isinstance(Mdefault, pygsti.obj.ComposedPOVM))
+        self.assertEqual(mdl_povm1.num_params, 2)
+    
+        mdl_povm2 = mc.create_crosstalk_free_model(
+            nQubits, ('Gi',), depolarization_strengths={'Gi': 0.1, 'povm': 0.1},
+            depolarization_parameterization='stochastic'
+        )
+        Mdefault = mdl_povm2.povm_blks['layers']['Mdefault']
+        self.assertTrue(isinstance(Mdefault, pygsti.obj.ComposedPOVM))
+        self.assertEqual(mdl_povm2.num_params, 6)
 
     def test_build_crosstalk_free_model_stochastic_parameterizations(self):
         nQubits = 2
@@ -216,19 +224,22 @@ class ModelConstructionTester(BaseCase):
         Gi_op = mdl_sto3.operation_blks['gates']['Gi']
         self.assertTrue(isinstance(Gi_op, op.LindbladOp))
         self.assertEqual(mdl_sto3.num_params, 3)
+        
+        mdl_prep1 = mc.create_crosstalk_free_model(
+            nQubits, ('Gi',), stochastic_error_probs={'Gi': (0.1, 0.1, 0.1), 'prep': (0.01,)*3},
+                stochastic_parameterization='stochastic'
+        )
+        rho0 = mdl_prep1.prep_blks['layers']['rho0']
+        self.assertTrue(isinstance(rho0, pygsti.obj.ComposedSPAMVec))
+        self.assertEqual(mdl_prep1.num_params, 6)
 
-        # For prep and povm, only lindblad parameterization is allowed
-        # Test that proper warnings are raised
-        with self.assertWarns(UserWarning):
-            mc.create_crosstalk_free_model(
-                nQubits, ('Gi',), stochastic_error_probs={'Gi': (0.1, 0.1, 0.1), 'prep': (0.01,)*3},
+        mdl_povm1 = mc.create_crosstalk_free_model(
+            nQubits, ('Gi',), stochastic_error_probs={'Gi': (0.1,)*3, 'povm': (0.01,)*3},
                 stochastic_parameterization='stochastic'
-            )
-        with self.assertWarns(UserWarning):
-            mc.create_crosstalk_free_model(
-                nQubits, ('Gi',), stochastic_error_probs={'Gi': (0.1,)*3, 'povm': (0.01,)*3},
-                stochastic_parameterization='stochastic'
-            )
+        )
+        Mdefault = mdl_povm1.povm_blks['layers']['Mdefault']
+        self.assertTrue(isinstance(Mdefault, pygsti.obj.ComposedPOVM))
+        self.assertEqual(mdl_povm1.num_params, 6)
 
     def test_build_crosstalk_free_model_lindblad_parameterizations(self):
         nQubits = 2

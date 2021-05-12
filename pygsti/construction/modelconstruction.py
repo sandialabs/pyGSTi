@@ -1253,11 +1253,7 @@ def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}
     else:
         global_idle_op = None
 
-    # TODO: While TensorProdSPAMVec does not work with ComposedSPAMVec, build up prep/povm as n-qubit ops first
-    # Need qubit labels to make the right EmbeddedOps
-    if qubit_labels is None:
-        qubit_labels = range(num_qubits)
-    
+    # TODO: While TensorProdSPAMVec does not work with ComposedSPAMVec, build up prep/povm as n-qubit ops first    
     prep_layers = {}
     if 'prep' in all_keys:
         # rho_base1Q = _spamvec.ComputationalSPAMVec([0], evotype, 'prep')
@@ -1279,7 +1275,7 @@ def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}
         # TODO: Could do qubit-specific by allowing different err_gate1Q
         err_gates = [err_gate1Q.copy() for i in range(num_qubits)] if independent_gates else [err_gate1Q,] * num_qubits
         err_gateNQ = _op.ComposedOp([
-            _op.EmbeddedOp(qubit_labels, [qubit_labels[i]], err_gates[i]) for i in range(num_qubits)])
+            _op.EmbeddedOp(range(num_qubits), [i], err_gates[i]) for i in range(num_qubits)])
         # TODO: Could specialize for LindbladOps, although this should also handle that case
         prep_layers['rho0'] = ComposedSPAMVec(rho_baseNQ, err_gateNQ, 'prep')
     else:
@@ -1306,9 +1302,9 @@ def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}
         # TODO: Could do qubit-specific by allowing different err_gate1Q
         err_gates = [err_gate1Q.copy() for i in range(num_qubits)] if independent_gates else [err_gate1Q,] * num_qubits
         err_gateNQ = _op.ComposedOp([
-            _op.EmbeddedOp(qubit_labels, [qubit_labels[i]], err_gates[i]) for i in range(num_qubits)])
+            _op.EmbeddedOp(range(num_qubits), [i], err_gates[i]) for i in range(num_qubits)])
         # TODO: Could specialize for LindbladOps, although this should also handle that case
-        prep_layers['Mdefault'] = ComposedPOVM(err_gateNQ, Mdefault_baseNQ)
+        povm_layers['Mdefault'] = ComposedPOVM(err_gateNQ, Mdefault_baseNQ)
     else:
         povm_layers['Mdefault'] = _povm.ComputationalBasisPOVM(num_qubits, evotype)
 
