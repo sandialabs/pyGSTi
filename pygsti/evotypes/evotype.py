@@ -19,6 +19,7 @@ class Evotype(object):
     def __init__(self, name):
         self.name = name
         self.module = _importlib.import_module("pygsti.evotypes." + name)
+        self.term_evotype = None  # maybe parse this out of name? TODO , e.g. 'terms:statevec'? OR 'pathintegral:statevec'
 
     def create_dense_rep(self, process_mx=None, dim=None):
         return self.module.OpRepDense(process_mx, dim)
@@ -52,3 +53,35 @@ class Evotype(object):
 
     def create_lindblad_errorgen_rep(self, lindblad_term_dict, basis):
         return self.module.OpRepLindbladErrorgen(lindblad_term_dict, basis)
+
+
+
+    def create_dense_state_rep(self, vec):
+        return self.module.StateRepDense(vec)
+
+    def create_pure_state_rep(self, purevec, basis):
+        return self.module.StateRepPure(purevec, basis)
+
+    def create_computational_state_rep(self, zvals):
+        return self.module.StateRepComputational(zvals)
+
+    def create_composed_state_rep(self, state_rep, op_rep):
+        return self.module.StateRepComposed(state_rep, op_rep)
+
+    def create_tensorproduct_state_rep(self, factor_state_reps):
+        return self.module.StateRepTensorProduct(factor_state_reps)
+
+
+
+    def create_dense_effect_rep(self, vec):
+        return self.module.EffectRepDense(vec)
+
+    def create_computational_effect_rep(self, zvals):
+        return self.module.EffectRepComputational(zvals)
+
+    def create_tensorproduct_effect_rep(self, povm_factors, effect_labels):
+        return self.module.EffectRepTensorProduct(povm_factors, effect_labels)
+
+    def create_composed_effect_rep(self, errmap_rep, effect_rep, errmap_name):
+        return self.module.EffectRepComposed(errmap_rep, effect_rep, errmap_name)
+    
