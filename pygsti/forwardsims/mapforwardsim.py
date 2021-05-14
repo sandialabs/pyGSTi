@@ -14,6 +14,7 @@ import warnings as _warnings
 import numpy as _np
 import time as _time
 import itertools as _itertools
+import importlib as _importlib
 
 from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
@@ -29,7 +30,6 @@ from .distforwardsim import DistributableForwardSimulator as _DistributableForwa
 from ..layouts.distlayout import DistributableCOPALayout as _DistributableCOPALayout
 from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
 from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-#from . import replib REMOVE
 
 
 _dummy_profiler = _DummyProfiler()
@@ -80,6 +80,17 @@ class SimpleMapForwardSimulator(_ForwardSimulator):
                     # Note: don't advance time (all effects occur at same time)
                     ps.append(op._rep.probability(state))
                 array_to_fill[indices] = ps
+
+    def _set_evotype(self, evotype):
+        """ Called when the evotype being used (defined by the parent model) changes.
+            `evotype` will be `None` when the current model is None"""
+        if evotype is not None:
+            try:
+                self.calclib = _importlib.import_module("pygsti.forwardsims.mapforwardsim_calc_" + evotype.name)
+            except ImportError:
+                self.calclib = _importlib.import_module("pygsti.forwardsims.mapforwardsim_calc_generic")
+        else:
+            self.calclib = None
 
 
 class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimulator):

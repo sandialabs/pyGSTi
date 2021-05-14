@@ -126,7 +126,11 @@ def setup_with_extensions(extensions=None):
             #    'fastreps.cpp',
             #    'fastreps.h'
             #],
-            'pygsti.evotypes': ['basereps_cython.pxd', 'basereps_cython.pyx'],
+            'pygsti.evotypes': [
+                'basereps_cython.pxd',
+                'basereps_cython.pyx',
+                'basecreps.cpp',
+                'basecreps.h'],
             'pygsti.evotypes.densitymx': [
                 'opreps.pxd',
                 'opreps.pyx',
@@ -140,6 +144,11 @@ def setup_with_extensions(extensions=None):
                 'effectreps.pyx',
                 'effectcreps.cpp',
                 'effectcreps.h'
+            ],
+            'pygsti.forwardsims': [
+                'mapforwardsim_calc_densitymx.pyx',
+                'termforwardsim_calc_statevec.pyx',
+                'termforwardsim_calc_stabilizer.pyx'
             ],
             'pygsti.objects.opcalc': ['fastopcalc.pyx'],
             'pygsti.io.circuitparser': ['fastcircuitparser.pyx'],
@@ -237,7 +246,8 @@ try:
         Extension(
             "pygsti.evotypes.basereps_cython",
             sources=[
-                "pygsti/evotypes/basereps_cython.pyx"
+                "pygsti/evotypes/basereps_cython.pyx",
+                "pygsti/evotypes/basecreps.cpp"
             ],
             include_dirs=['.', np.get_include()],
             language="c++",
@@ -273,6 +283,16 @@ try:
                 "pygsti/evotypes/densitymx/effectcreps.cpp"
             ],
             include_dirs=['.', np.get_include()],
+            language="c++",
+            extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
+            extra_link_args=["-std=c++11"]
+        ),
+        Extension(
+            "pygsti.forwardsims.mapforwardsim_calc_densitymx",
+            sources=[
+                "pygsti/forwardsims/mapforwardsim_calc_densitymx.pyx",
+            ],
+            include_dirs=['.', 'pygsti/evotypes', np.get_include()],
             language="c++",
             extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
             extra_link_args=["-std=c++11"]

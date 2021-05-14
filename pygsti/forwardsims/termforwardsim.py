@@ -200,14 +200,27 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         self.path_fraction_threshold = path_fraction_threshold if mode == "pruned" else 0.0
         self.oob_check_interval = oob_check_interval if mode == "pruned" else 0
 
-    @_ForwardSimulator.model.setter
-    def model(self, val):
-        _ForwardSimulator.model.fset(self, val)  # set the base class property (self.model)
+    def _set_evotype(self, evotype):
+        """ Called when the evotype being used (defined by the parent model) changes.
+            `evotype` will be `None` when the current model is None"""
+        if evotype is not None:
+            #TODO: assert evotype has a path-evotype? ---------------------------------------------------------------------------------
+            try:
+                self.calclib = _importlib.import_module("pygsti.forwardsims.termforwardsim_calc_" + evotype.path_evotype.name)
+            except ImportError:
+                self.calclib = _importlib.import_module("pygsti.forwardsims.termforwardsim_calc_generic")
+        else:
+            self.calclib = None
 
-        #Do some additional initialization
-        if self.model.evotype not in ("svterm", "cterm"):
-            #raise ValueError(f"Evolution type {self.model.evotype} is incompatible with term-based calculations")
-            _warnings.warn("Evolution type %s is incompatible with term-based calculations" % self.model.evotype)
+    #OLD - now we have a _set_evotype method.
+    #@_ForwardSimulator.model.setter
+    #def model(self, val):
+    #    _ForwardSimulator.model.fset(self, val)  # set the base class property (self.model)
+    #
+    #    #Do some additional initialization
+    #    if self.model.evotype not in ("svterm", "cterm"):
+    #        #raise ValueError(f"Evolution type {self.model.evotype} is incompatible with term-based calculations")
+    #        _warnings.warn("Evolution type %s is incompatible with term-based calculations" % self.model.evotype)
 
     def copy(self):
         """

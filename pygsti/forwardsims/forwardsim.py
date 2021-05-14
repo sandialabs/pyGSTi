@@ -70,7 +70,7 @@ class ForwardSimulator(object):
 
     def __init__(self, model=None):
         #self.dim = model.dim
-        self._model = model
+        self.model = model
 
         #self.paramvec = paramvec
         #self.Np = len(paramvec)
@@ -97,6 +97,13 @@ class ForwardSimulator(object):
     @model.setter
     def model(self, val):
         self._model = val
+        evotype = None if val is None else self._model.evotype
+        self._set_evotype(evotype)  # alert the class of the evotype (allows loading evotype-specific calc functions)
+
+    def _set_evotype(self, evotype):
+        """ Called when the evotype being used (defined by the parent model) changes.
+            `evotype` will be `None` when the current model is None"""
+        pass
 
     #def to_vector(self):
     #    """
