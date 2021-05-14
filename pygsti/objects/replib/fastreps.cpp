@@ -2455,7 +2455,7 @@ namespace CReps {
     out_state->copy_from(state);
     out_state->clifford_update(_smatrix_inv, _svector_inv, _unitary_adj);
     return out_state;
-  }
+  
 
 
   

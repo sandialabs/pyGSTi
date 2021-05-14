@@ -260,7 +260,7 @@ try:
                 "pygsti/evotypes/densitymx/statereps.pyx",
                 "pygsti/evotypes/densitymx/statecreps.cpp"
             ],
-            include_dirs=['.', np.get_include()],
+            include_dirs=['.', 'pygsti/evotypes', np.get_include()],
             language="c++",
             extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
             extra_link_args=["-std=c++11"]
@@ -271,7 +271,7 @@ try:
                 "pygsti/evotypes/densitymx/opreps.pyx",
                 "pygsti/evotypes/densitymx/opcreps.cpp"
             ],
-            include_dirs=['.', np.get_include()],
+            include_dirs=['.', 'pygsti/evotypes', np.get_include()],
             language="c++",
             extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
             extra_link_args=["-std=c++11"]
@@ -282,7 +282,7 @@ try:
                 "pygsti/evotypes/densitymx/effectreps.pyx",
                 "pygsti/evotypes/densitymx/effectcreps.cpp"
             ],
-            include_dirs=['.', np.get_include()],
+            include_dirs=['.', 'pygsti/evotypes', np.get_include()],
             language="c++",
             extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
             extra_link_args=["-std=c++11"]

@@ -22,6 +22,8 @@ class EffectRepConjugatedState(EffectRep):
         # can assume state is a StateRep and self.state_rep is
         return _np.dot(self.state_rep.base, state.base)  # not vdot b/c *real* data
 
+    def to_dense(self):
+        return self.state_rep.to_dense()
 
 class EffectRepComputational(EffectRep):
 

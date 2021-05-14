@@ -246,7 +246,7 @@ class CustomLMOptimizer(Optimizer):
         nEls = objective.layout.num_elements + nExtra; nP = len(x0)  # 'e' and 'p' for array types
         objective.resource_alloc.check_can_allocate_memory(3 * nP + nEls + nEls * nP + nP * nP)  # see array_types above
 
-        from ..objects.distlayout import DistributableCOPALayout as _DL
+        from ..layouts.distlayout import DistributableCOPALayout as _DL
         ari = _ari.DistributedArraysInterface(objective.layout, nExtra) \
             if isinstance(objective.layout, _DL) else _ari.UndistributedArraysInterface(nEls, nP)
 

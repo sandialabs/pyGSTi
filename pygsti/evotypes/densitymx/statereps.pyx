@@ -16,16 +16,17 @@ from ...tools import basistools as _bt
 from ...tools import optools as _ot
 from ...tools import fastcalc as _fastcalc
 
+
 cdef class StateRep(_basereps_cython.StateRep):
     def __cinit__(self, _np.ndarray[double, ndim=1, mode='c'] data):
         self.base = _np.require(data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
         self.c_state = new StateCRep(<double*>self.base.data,<INT>self.base.shape[0],<bool>0)
 
     def __reduce__(self):
-        return (StateRep, (), (self.base,))
+        return (StateRep, (self.base,), (self.base.flags.writeable,))
 
     def __setstate__(self, state):
-        self.base, writeable = state
+        writeable, = state
         self.base.flags.writeable = writeable
 
     def copy_from(self, other):
@@ -49,6 +50,9 @@ cdef class StateRepDense(StateRep):
     def base_has_changed(self):
         pass
 
+    def __reduce__(self):
+        return (StateRepDense, (self.base,), (self.base.flags.writeable,))
+
 
 cdef class StateRepPure(StateRep):
     def __init__(self, purevec, basis):
@@ -62,8 +66,13 @@ cdef class StateRepPure(StateRep):
         dmVec_std = _ot.state_to_dmvec(self.purebase)
         self.base[:] = _bt.change_basis(dmVec_std, 'std', self.basis)
 
+    def __reduce__(self):
+        return (StateRepPure, (self.base, self.basis), (self.base.flags.writeable,))
+
 
 cdef class StateRepComputational(StateRep):
+    cdef object zvals
+    
     def __init__(self, zvals):
 
         #Convert zvals to dense vec:
@@ -84,7 +93,11 @@ cdef class StateRepComputational(StateRep):
             vec = _np.ascontiguousarray(_np.empty(factor_dim**len(zvals), typ))
             _fastcalc.fast_kron(vec, fast_kron_array, fast_kron_factordims)
 
+        self.zvals = zvals
         super(StateRepComputational, self).__init__(vec)
+
+    def __reduce__(self):
+        return (StateRepComputational, (self.zvals,), (self.base.flags.writeable,))
 
 
 cdef class StateRepComposed(StateRep):
@@ -97,6 +110,9 @@ cdef class StateRepComposed(StateRep):
     def reps_have_changed(self):
         rep = self.op_rep.acton(self.state_rep)
         self.base[:] = rep.base[:]
+
+    def __reduce__(self):
+        return (StateRepComposed, (self.state_rep, self.op_rep), (self.base.flags.writeable,))
 
 
 cdef class StateRepTensorProduct(StateRep):
@@ -114,3 +130,6 @@ cdef class StateRepTensorProduct(StateRep):
             for i in range(1, len(self.factors_reps)):
                 vec = _np.kron(vec, self.factor_reps[i].to_dense())
         self.base[:] = vec
+
+    def __reduce__(self):
+        return (StateRepTensorProduct, (self.factor_state_reps,), (self.base.flags.writeable,))

@@ -1297,7 +1297,7 @@ def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}
         err_gate = _get_error_gate('povm', _op.StaticStandardOp('Gi', evotype), depolarization_strengths,
                                    stochastic_error_probs, lindblad_error_coeffs,
                                    "lindblad", "lindblad", "auto")
-        povm1Q = _povm.ExpErrorgenPOVM(err_gate, Mdefault_base1Q, "pp")
+        povm1Q = _povm.ComposedPOVM(err_gate, Mdefault_base1Q, "pp")
         povm_factors = [povm1Q.copy() for i in range(num_qubits)] if independent_gates else [povm1Q] * num_qubits
         povm_layers['Mdefault'] = _povm.TensorProductPOVM(povm_factors)
     else:

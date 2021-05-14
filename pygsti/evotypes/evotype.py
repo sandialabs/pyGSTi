@@ -21,6 +21,15 @@ class Evotype(object):
         self.module = _importlib.import_module("pygsti.evotypes." + name)
         self.term_evotype = None  # maybe parse this out of name? TODO , e.g. 'terms:statevec'? OR 'pathintegral:statevec'
 
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        del state['module']  # can't pickle module
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self.module = _importlib.import_module("pygsti.evotypes." + self.name)
+
     def __eq__(self, other_evotype):
         if isinstance(other_evotype, Evotype):
             return self.name == other_evotype.name

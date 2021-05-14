@@ -97,6 +97,18 @@ namespace CReps {
     void copy_from(DMStateCRep* st);
   };
 
+
+
+
+
+
+
+
+
+
+
+
+
   // EFFECTSs
   class DMEffectCRep {
     public:

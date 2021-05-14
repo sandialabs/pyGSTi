@@ -179,22 +179,21 @@ class LinearOperator(_modelmember.ModelMember):
             return _sv.StabilizerSPAMVec(sframe=_stabilizer.StabilizerFrame(
                 output_rep.smatrix, output_rep.pvectors, output_rep.amps))
 
-    @property
-    def dirty(self):
-        """
-        Whether this operator is "dirty" - i.e. may have had its parameters changed.
-        """
-        return _modelmember.ModelMember.dirty.fget(self)  # call base class
-
-    #TODO: REMOVE  - we don't need _cachedrep anymore
-    #@dirty.setter
-    #def dirty(self, value):
+    #TODO REMOVE - no need to do anything beyond base class version
+    #@property
+    #def dirty(self):
     #    """
     #    Whether this operator is "dirty" - i.e. may have had its parameters changed.
     #    """
-    #    if value:
-    #        self._cachedrep = None  # clear cached rep
+    #    return _modelmember.ModelMember.dirty.fget(self)  # call base class
+    #
+    #@dirty.setter
+    #def dirty(self, value):  # need this otherwise dirty prop is read-only
+    #    """
+    #    Whether this operator is "dirty" - i.e. may have had its parameters changed.
+    #    """
     #    _modelmember.ModelMember.dirty.fset(self, value)  # call base class setter
+
     #def __getstate__(self):
     #    st = super(LinearOperator, self).__getstate__()
     #    st['_cachedrep'] = None  # can't pickle this!

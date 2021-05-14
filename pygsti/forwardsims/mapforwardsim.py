@@ -62,9 +62,9 @@ class SimpleMapForwardSimulator(_ForwardSimulator):
             if time is None:  # time-independent state propagation
                 rhorep = self.model.circuit_layer_operator(spc.circuit_without_povm[0], 'prep')._rep
                 ereps = [self.model.circuit_layer_operator(elabel, 'povm')._rep for elabel in spc.full_effect_labels]
-                rhorep = replib.propagate_staterep(rhorep,
-                                                   [self.model.circuit_layer_operator(ol, 'op')._rep
-                                                    for ol in spc.circuit_without_povm[1:]])
+                rhorep = self.calclib.propagate_staterep(rhorep,
+                                                         [self.model.circuit_layer_operator(ol, 'op')._rep
+                                                          for ol in spc.circuit_without_povm[1:]])
                 array_to_fill[indices] = [erep.probability(rhorep) for erep in ereps]  # outcome probabilities
             else:
                 t = time  # Note: time in labels == duration
@@ -91,6 +91,12 @@ class SimpleMapForwardSimulator(_ForwardSimulator):
                 self.calclib = _importlib.import_module("pygsti.forwardsims.mapforwardsim_calc_generic")
         else:
             self.calclib = None
+
+    def __getstate__(self):
+        state = super(SimpleMapForwardSimulator, self).__getstate__()
+        if 'calclib' in state: del state['calclib']
+        #Note: I don't think we need to implement __setstate__ since the model also needs to be reset,
+        # and this is done by the parent model which will cause _set_evotype to be called.
 
 
 class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimulator):
@@ -268,8 +274,9 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
     def _bulk_fill_probs_atom(self, array_to_fill, layout_atom, resource_alloc):
         # Note: *don't* set dest_indices arg = layout.element_slice, as this is already done by caller
         resource_alloc.check_can_allocate_memory(layout_atom.cache_size * self.model.dim)
-        replib.DM_mapfill_probs_atom(self, array_to_fill, slice(0, array_to_fill.shape[0]),  # all indices
-                                     layout_atom, resource_alloc)
+        HERE
+        self.calclib.mapfill_probs_atom(self, array_to_fill, slice(0, array_to_fill.shape[0]),  # all indices
+                                        layout_atom, resource_alloc)
 
     def _bulk_fill_dprobs_atom(self, array_to_fill, dest_param_slice, layout_atom, param_slice, resource_alloc):
         # Note: *don't* set dest_indices arg = layout.element_slice, as this is already done by caller

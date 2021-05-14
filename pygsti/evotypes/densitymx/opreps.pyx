@@ -24,7 +24,6 @@ from ...tools import optools as _mt
 from ...tools import basistools as _bt
 from ...tools import internalgates as _itgs
 from ...tools import lindbladtools as _lbt
-from ...objects.opcalc import fastopcalc as _fastopcalc
 from scipy.sparse.linalg import LinearOperator
 
 cdef double LARGE = 1000000000
@@ -93,7 +92,7 @@ cdef class OpRepDense(OpRep):
     def __reduce__(self):
         # because serialization of numpy array flags is borked (around Numpy v1.16), we need to copy data
         # (so self.base *owns* it's data) and manually convey the writeable flag.
-        return (OpRepDense, (), (self.base, self.base.flags.writeable))
+        return (OpRepDense.__new__, (self.__class__,), (self.base, self.base.flags.writeable))
 
     def __setstate__(self, state):
         assert(self.c_rep == NULL)

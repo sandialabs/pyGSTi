@@ -491,7 +491,7 @@ class CloudNoiseModel(_ImplicitOpModel):
             povmNoiseMap = _build_nqn_global_noise(
                 qubitGraph, max_spam_weight, sparse_lindblad_basis, sparse_lindblad_reps, simulator,
                 parameterization, errcomp_type, printer - 1)
-            povm_layers = {'Mdefault': _povm.ExpErrorgenPOVM(povmNoiseMap, None, "pp")}
+            povm_layers = {'Mdefault': _povm.ComposedPOVM(povmNoiseMap, None, "pp")}
 
         else:
             raise ValueError("Invalid `spamtype` argument: %s" % spamtype)

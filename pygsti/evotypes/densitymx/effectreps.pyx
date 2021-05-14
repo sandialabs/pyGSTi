@@ -58,6 +58,9 @@ cdef class EffectRepConjugatedState(EffectRep):
     def __reduce__(self):
         return (EffectRepConjugatedState, (self.state_rep,))
 
+    def to_dense(self):
+        return self.state_rep.to_dense()
+
 
 cdef class EffectRepComputational(EffectRep):
     cdef public _np.ndarray zvals

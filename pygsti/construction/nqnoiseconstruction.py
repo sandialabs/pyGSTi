@@ -887,7 +887,7 @@ def create_cloud_crosstalk_model(num_qubits, gate_names, nonstd_gate_unitaries={
 
     if 'povm' in lindblad_error_coeffs:
         povmNoiseMap = create_error(qubit_labels, lindblad_error_coeffs['povm'], return_what="errmap")
-        povm_layers = [_povm.ExpErrorgenPOVM(povmNoiseMap, None, "pp")]
+        povm_layers = [_povm.ComposedPOVM(povmNoiseMap, None, "pp")]
     else:
         povm_layers = [_povm.ComputationalBasisPOVM(num_qubits, evotype)]
 

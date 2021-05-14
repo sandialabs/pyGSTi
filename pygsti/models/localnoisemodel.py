@@ -451,7 +451,7 @@ class LocalNoiseModel(_ImplicitOpModel):
             povmNoiseMap = _cnm._build_nqn_global_noise(qubitGraph, maxSpamWeight, sparse_lindblad_basis,
                                                         sparse_lindblad_reps, simulator, parameterization,
                                                         errcomp_type, verbosity)
-            povm_layers['Mdefault'] = _povm.ExpErrorgenPOVM(povmNoiseMap, None, "pp")
+            povm_layers['Mdefault'] = _povm.ComposedPOVM(povmNoiseMap, None, "pp")
 
         #OLD: when had a 'spamdict' arg: else:
         #spamdict : dict
