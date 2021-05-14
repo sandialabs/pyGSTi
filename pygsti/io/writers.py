@@ -17,6 +17,10 @@ import pathlib as _pathlib
 # from . import stdinput as _stdinput
 from .. import tools as _tools
 from .. import objects as _objs
+from ..modelmembers import operations as _op
+from ..modelmembers import states as _state
+from ..modelmembers import povms as _povm
+from ..modelmembers import instruments as _instrument
 from . import loaders as _loaders
 
 
@@ -327,10 +331,10 @@ def write_model(model, filename, title=None):
 
         for prepLabel, rhoVec in model.preps.items():
             props = None
-            if isinstance(rhoVec, _objs.FullSPAMVec): typ = "PREP"
-            elif isinstance(rhoVec, _objs.TPSPAMVec): typ = "TP-PREP"
-            elif isinstance(rhoVec, _objs.StaticSPAMVec): typ = "STATIC-PREP"
-            elif isinstance(rhoVec, _objs.LindbladSPAMVec):
+            if isinstance(rhoVec, _state.FullState): typ = "PREP"
+            elif isinstance(rhoVec, _state.TPState): typ = "TP-PREP"
+            elif isinstance(rhoVec, _state.StaticState): typ = "STATIC-PREP"
+            elif isinstance(rhoVec, _state.LindbladSPAMVec):  # TODO - change to ComposedState
                 typ = "CPTP-PREP"
                 props = [("PureVec", rhoVec.state_vec.to_dense()),
                          ("ErrgenMx", rhoVec.error_map.to_dense())]
@@ -348,9 +352,9 @@ def write_model(model, filename, title=None):
 
         for povmLabel, povm in model.povms.items():
             props = None; povm_to_write = povm
-            if isinstance(povm, _objs.UnconstrainedPOVM): povmType = "POVM"
-            elif isinstance(povm, _objs.TPPOVM): povmType = "TP-POVM"
-            elif isinstance(povm, _objs.LindbladPOVM):
+            if isinstance(povm, _povm.UnconstrainedPOVM): povmType = "POVM"
+            elif isinstance(povm, _povm.TPPOVM): povmType = "TP-POVM"
+            elif isinstance(povm, _povm.LindbladPOVM):  # TODO - change to ComposedPOVM
                 povmType = "CPTP-POVM"
                 props = [("ErrgenMx", povm.error_map.to_dense())]
                 povm_to_write = povm.base_povm
@@ -367,10 +371,9 @@ def write_model(model, filename, title=None):
                     writeprop(output, lbl, val)
 
             for ELabel, EVec in povm_to_write.items():
-                if isinstance(EVec, _objs.FullSPAMVec): typ = "EFFECT"
-                elif isinstance(EVec, _objs.ComplementSPAMVec): typ = "EFFECT"  # ok
-                elif isinstance(EVec, _objs.TPSPAMVec): typ = "TP-EFFECT"
-                elif isinstance(EVec, _objs.StaticSPAMVec): typ = "STATIC-EFFECT"
+                if isinstance(EVec, _povm.FullPOVMEffect): typ = "EFFECT"
+                elif isinstance(EVec, _povm.ComplementPOVMEffect): typ = "EFFECT"  # ok
+                elif isinstance(EVec, _povm.StaticPOVMEffect): typ = "STATIC-EFFECT"
                 else:
                     _warnings.warn(
                         ("Non-standard effect of type {typ} cannot be described by"
@@ -384,15 +387,15 @@ def write_model(model, filename, title=None):
 
         for label, gate in model.operations.items():
             props = None
-            if isinstance(gate, _objs.FullDenseOp): typ = "GATE"
-            elif isinstance(gate, _objs.TPDenseOp): typ = "TP-GATE"
-            elif isinstance(gate, _objs.StaticDenseOp): typ = "STATIC-GATE"
-            elif isinstance(gate, _objs.LindbladDenseOp):
+            if isinstance(gate, _op.FullDenseOp): typ = "GATE"
+            elif isinstance(gate, _op.TPDenseOp): typ = "TP-GATE"
+            elif isinstance(gate, _op.StaticDenseOp): typ = "STATIC-GATE"
+            elif isinstance(gate, _op.LindbladDenseOp):  # TODO - change to ComposedOp ?? -------------------------------------------
                 typ = "CPTP-GATE"
                 props = [("LiouvilleMx", gate.to_dense())]
                 if gate.unitary_postfactor is not None:
                     upost = gate.unitary_postfactor.to_dense() \
-                        if isinstance(gate.unitary_postfactor, _objs.LinearOperator) \
+                        if isinstance(gate.unitary_postfactor, _op.LinearOperator) \
                         else gate.unitary_postfactor
                     props.append(("RefLiouvilleMx", upost))
             else:
@@ -408,8 +411,8 @@ def write_model(model, filename, title=None):
                 writeprop(output, lbl, val)
 
         for instLabel, inst in model.instruments.items():
-            if isinstance(inst, _objs.Instrument): typ = "Instrument"
-            elif isinstance(inst, _objs.TPInstrument): typ = "TP-Instrument"
+            if isinstance(inst, _instrument.Instrument): typ = "Instrument"
+            elif isinstance(inst, _instrument.TPInstrument): typ = "TP-Instrument"
             else:
                 _warnings.warn(
                     ("Non-standard Instrument of type {typ} cannot be described by"
@@ -419,9 +422,9 @@ def write_model(model, filename, title=None):
             output.write(typ + ": " + str(instLabel) + '\n\n')
 
             for label, gate in inst.items():
-                if isinstance(gate, _objs.FullDenseOp): typ = "IGATE"
-                elif isinstance(gate, _objs.TPInstrumentOp): typ = "IGATE"  # ok b/c instrument itself is marked as TP
-                elif isinstance(gate, _objs.StaticDenseOp): typ = "STATIC-IGATE"
+                if isinstance(gate, _op.FullDenseOp): typ = "IGATE"
+                elif isinstance(gate, _instrument.TPInstrumentOp): typ = "IGATE"  # ok b/c instrument itself is marked as TP
+                elif isinstance(gate, _op.StaticDenseOp): typ = "STATIC-IGATE"
                 else:
                     _warnings.warn(
                         ("Non-standard gate of type {typ} cannot be described by"

@@ -706,9 +706,10 @@ class UnitaryGaugeGroup(OpGaugeGroup):
         should be the same as `mdl.dim` where `mdl` is a :class:`Model` you
         might gauge-transform.
         """
-        operation = _op.LindbladDenseOp.from_operation_matrix(
-            None, _np.identity(dim, 'd'), ham_basis=basis, nonham_basis=None,
+        errgen = _op.LindbladErrorgen.from_operation_matrix(
+            _np.identity(dim, 'd'), ham_basis=basis, nonham_basis=None,
             param_mode="cptp", mx_basis=basis)
+        operation = _op.ExpErrorgenDenseOp(errgen)
         OpGaugeGroup.__init__(self, operation, UnitaryGaugeGroupElement, "Unitary")
 
 

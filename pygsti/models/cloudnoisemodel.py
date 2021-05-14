@@ -902,49 +902,52 @@ class CloudNoiseModel(_ImplicitOpModel):
         return self._clouds
 
 
-def _get_lindblad_factory(simulator, parameterization, errcomp_type, sparse_lindblad_reps):
-    """ Returns a function that creates a Lindblad-type gate appropriate
+def _get_experrgen_factory(simulator, parameterization, errcomp_type, sparse_lindblad_reps):
+    """ Returns a function that creates a ExpErrorgen-type gate appropriate
         given the simulation type and parameterization """
     _, evotype = _gt.split_lindblad_paramtype(parameterization)
+    # TODO - fix this evotype dependence -------------------------------------------------------------------------------------------------
     if errcomp_type == "gates":
         if evotype == "densitymx":
             if isinstance(simulator, _MatrixFSim):
-                assert(not sparse_lindblad_reps), "MatrixForwardSimulator cannot use sparse Lindblad reps!"
-            cls = _op.LindbladOp if sparse_lindblad_reps else _op.LindbladDenseOp
+                assert(not sparse_lindblad_reps), "MatrixForwardSimulator cannot use sparse ExpErrorgen reps!"
+            cls = _op.ExpErrorgenOp if sparse_lindblad_reps else _op.ExpErrorgenDenseOp
         elif evotype in ("svterm", "cterm"):
             assert(isinstance(simulator, _TermFSim))
-            cls = _op.LindbladOp
+            cls = _op.ExpErrorgenOp
         else:
-            raise ValueError(("Cannot create Lindblad gate factory for simtype=%s"
+            raise ValueError(("Cannot create ExpErrorgen gate factory for simtype=%s"
                               " and parameterization=%s") %
                              (str(type(simulator)), parameterization))
 
-        #Just call cls.from_operation_matrix with appropriate evotype
-        def _f(op_matrix,  # unitaryPostfactor=None,
-               proj_basis="pp", mx_basis="pp", relative=False):
-            unitaryPostfactor = None  # we never use this in gate construction
+        #Just call from_operation_matrix with appropriate evotype
+        def _f(op_matrix, proj_basis="pp", mx_basis="pp", relative=False):
             p = parameterization
             if relative:
                 if parameterization == "CPTP": p = "GLND"
                 elif "S" in parameterization: p = parameterization.replace("S", "s")
                 elif "D" in parameterization: p = parameterization.replace("D", "d")
-            return cls.from_operation_obj(op_matrix, p, unitaryPostfactor,
-                                          proj_basis, mx_basis, truncate=True)
+
+            bTyp, evotype, nonham_mode, param_mode, use_ham_basis, use_nonham_basis = \
+                _op.LindbladErrorgen.decomp_paramtype(p)
+            ham_basis = proj_basis if use_ham_basis else None
+            nonham_basis = proj_basis if use_nonham_basis else None
+            errorgen = _op.LinbladErrorgen.from_operation_matrix(op_matrix, ham_basis, nonham_basis, param_mode,
+                                                                 nonham_mode, True, mx_basis, evotype)  # truncate=True
+            return cls(errorgen)
         return _f
 
     elif errcomp_type == "errorgens":
-        def _f(error_gen,
-               proj_basis="pp", mx_basis="pp", relative=False):
+        def _f(error_gen, proj_basis="pp", mx_basis="pp", relative=False):
             p = parameterization
             if relative:
                 if parameterization == "CPTP": p = "GLND"
                 elif "S" in parameterization: p = parameterization.replace("S", "s")
                 elif "D" in parameterization: p = parameterization.replace("D", "d")
-            bTyp, evotype, nonham_mode, param_mode = _op.LindbladOp.decomp_paramtype(p)
-
-            #Same logic as in LindbladOp.from_operation_obj -- TODO consolidate?
-            ham_basis = proj_basis if (("H" == bTyp) or ("H+" in bTyp) or bTyp in ("CPTP", "GLND")) else None
-            nonham_basis = None if bTyp == "H" else proj_basis
+            bTyp, evotype, nonham_mode, param_mode, use_ham_basis, use_nonham_basis = \
+                _op.LindbladErrorgen.decomp_paramtype(p)
+            ham_basis = proj_basis if use_ham_basis else None
+            nonham_basis = proj_basis if use_nonham_basis else None
 
             return _op.LindbladErrorgen.from_error_generator(error_gen, ham_basis, nonham_basis,
                                                              param_mode, nonham_mode, mx_basis,
@@ -967,9 +970,10 @@ def _get_static_factory(simulator, evotype):
         assert(isinstance(simulator, _TermFSim))
 
         def _f(op_matrix, mx_basis="pp"):
-            return _op.LindbladOp.from_operation_matrix(
-                None, op_matrix, None, None, mx_basis=mx_basis, evotype=evotype)
-            # a LindbladDenseOp with None as ham_basis and nonham_basis => no parameters
+            errorgen = _op.LinbladErrorgen.from_operation_matrix(
+                op_matrix, None, None, mx_basis=mx_basis, evotype=evotype)
+            # a LindbladErrorgen with None as ham_basis and nonham_basis => no parameters
+            return _op.ExpErrorgenOp(errorgen)
 
         return _f
     raise ValueError("Cannot create Static gate factory for simtype=%s evotype=%s" %
@@ -1036,7 +1040,7 @@ def _build_nqn_global_noise(qubit_graph, max_weight, sparse_lindblad_basis=False
         Composed = _op.ComposedErrorgen
         Embedded = _op.EmbeddedErrorgen
     else: raise ValueError("Invalid `errcomp_type`: %s" % errcomp_type)
-    Lindblad = _get_lindblad_factory(simulator, parameterization, errcomp_type, sparse_lindblad_reps)
+    ExpErrorgen = _get_experrgen_factory(simulator, parameterization, errcomp_type, sparse_lindblad_reps)
     #constructs a gate or errorgen based on value of errcomp_type
 
     printer = _VerbosityPrinter.create_printer(verbosity)
@@ -1075,12 +1079,12 @@ def _build_nqn_global_noise(qubit_graph, max_weight, sparse_lindblad_basis=False
 
             printer.log("Error on qubits %s -> error basis of length %d" % (err_qubit_inds, len(errbasis)), 3)
             errbasis = _ExplicitBasis(errbasis, errbasis_lbls, real=True, sparse=sparse_lindblad_basis)
-            termErr = Lindblad(wtNoErr, proj_basis=errbasis, mx_basis=wtBasis)
+            termErr = ExpErrorgen(wtNoErr, proj_basis=errbasis, mx_basis=wtBasis)
 
             err_qubit_global_inds = err_qubit_inds
             fullTermErr = Embedded(ssAllQ, [qubit_labels[i] for i in err_qubit_global_inds], termErr)
             assert(fullTermErr.num_params == termErr.num_params)
-            printer.log("Lindblad gate w/dim=%d and %d params -> embedded to gate w/dim=%d" %
+            printer.log("Exp(errgen) gate w/dim=%d and %d params -> embedded to gate w/dim=%d" %
                         (termErr.dim, termErr.num_params, fullTermErr.dim))
 
             termops.append(fullTermErr)
@@ -1090,9 +1094,9 @@ def _build_nqn_global_noise(qubit_graph, max_weight, sparse_lindblad_basis=False
     elif errcomp_type == "errorgens":
         errgen = Composed(termops)
         assert(not(sparse_lindblad_reps and isinstance(simulator, _MatrixFSim))), \
-            "Cannot use sparse Lindblad-op reps with a MatrixForwardSimulator!"
-        LindbladOp = _op.LindbladOp if sparse_lindblad_reps else _op.LindbladDenseOp
-        return LindbladOp(None, errgen)
+            "Cannot use sparse ExpErrorgen-op reps with a MatrixForwardSimulator!"
+        ExpErrorgenOp = _op.ExpErrorgenOp if sparse_lindblad_reps else _op.ExpErrorgenDenseOp
+        return ExpErrorgenOp(None, errgen)
     else: assert(False)
 
 
@@ -1106,8 +1110,8 @@ def _build_nqn_cloud_noise(target_qubit_inds, qubit_graph, weight_maxhops_tuples
 
     where `idle_noise` is given by the `idle_noise` argument and `loc_noise` is
     given by the rest of the arguments.  `loc_noise` can be implemented either
-    by a single (n-qubit) embedded Lindblad gate with all relevant error
-    generators, or as a composition of embedded single-error-term Lindblad gates
+    by a single (n-qubit) embedded exp(errorgen) gate with all relevant error
+    generators, or as a composition of embedded single-errorgenerator exp(errorgen) gates
     (see param `errcomp_type`).
 
     The local noise consists terms up to a maximum weight acting on the qubits
@@ -1134,6 +1138,7 @@ def _build_nqn_cloud_noise(target_qubit_inds, qubit_graph, weight_maxhops_tuples
         model.  See :method:`CloudnoiseModel.__init__` for details.
 
     sparse_lindblad_basis : bool, optional
+        TODO - update docstring and probabaly rename this and arg below
         Whether the embedded Lindblad-parameterized gates within the constructed
         gate are represented as sparse or dense matrices.  (This is determied by
         whether they are constructed using sparse basis matrices.)
@@ -1174,13 +1179,13 @@ def _build_nqn_cloud_noise(target_qubit_inds, qubit_graph, weight_maxhops_tuples
         Composed = _op.ComposedErrorgen
         Embedded = _op.EmbeddedErrorgen
     else: raise ValueError("Invalid `errcomp_type`: %s" % errcomp_type)
-    Lindblad = _get_lindblad_factory(simulator, parameterization, errcomp_type, sparse_lindblad_reps)
+    ExpErrorgen = _get_experrgen_factory(simulator, parameterization, errcomp_type, sparse_lindblad_reps)
     #constructs a gate or errorgen based on value of errcomp_type
 
     printer = _VerbosityPrinter.create_printer(verbosity)
     printer.log("Creating local-noise error factor (%s)" % errcomp_type)
 
-    # make a composed-gate of embedded single-basis-element Lindblad-gates or -errorgens,
+    # make a composed-gate of embedded single-elementary-errogen exp(errogen)-gates or -errorgens,
     #  one for each specified error term
 
     loc_noise_termops = []  # list of gates to compose
@@ -1222,11 +1227,11 @@ def _build_nqn_cloud_noise(target_qubit_inds, qubit_graph, weight_maxhops_tuples
             err_qubit_global_inds = possible_err_qubit_inds[list(err_qubit_local_inds)]
             printer.log("Error on qubits %s -> error basis of length %d" % (err_qubit_global_inds, len(errbasis)), 4)
             errbasis = _ExplicitBasis(errbasis, errbasis_lbls, real=True, sparse=sparse_lindblad_basis)
-            termErr = Lindblad(wtNoErr, proj_basis=errbasis, mx_basis=wtBasis, relative=True)
+            termErr = ExpErrorgen(wtNoErr, proj_basis=errbasis, mx_basis=wtBasis, relative=True)
 
             fullTermErr = Embedded(ssAllQ, [qubit_labels[i] for i in err_qubit_global_inds], termErr)
             assert(fullTermErr.num_params == termErr.num_params)
-            printer.log("Lindblad gate w/dim=%d and %d params -> embedded to gate w/dim=%d" %
+            printer.log("Exp(errorgen) gate w/dim=%d and %d params -> embedded to gate w/dim=%d" %
                         (termErr.dim, termErr.num_params, fullTermErr.dim))
 
             loc_noise_termops.append(fullTermErr)
@@ -1308,7 +1313,7 @@ class CloudNoiseLayerRules(_LayerRules):
         #Note: cache uses 'op-layers' for *simple target* layers, not complete ones
         if layerlbl in caches['complete-layers']: return caches['complete-layers'][layerlbl]
         assert(not(self.sparse_lindblad_reps and isinstance(model._sim, _MatrixFSim))), \
-            "Cannot use sparse Lindblad-op reps with a MatrixForwardSimulator!"
+            "Cannot use sparse ExpErrorgen-op reps with a MatrixForwardSimulator!"
         dense_lindblad_reps = not self.sparse_lindblad_reps
         dense_composed_reps = dense_lindblad_reps  # whether dense matrix gates should be created
 
@@ -1318,7 +1323,7 @@ class CloudNoiseLayerRules(_LayerRules):
             return op
 
         Composed = _op.ComposedDenseOp if dense_composed_reps else _op.ComposedOp
-        Lindblad = _op.LindbladDenseOp if dense_lindblad_reps else _op.LindbladOp
+        ExpErrorgen = _op.ExpErrorgenDenseOp if dense_lindblad_reps else _op.ExpErrorgenOp
         Sum = _op.ComposedErrorgen
         #print("DB: CloudNoiseLayerLizard building gate %s for %s w/comp-type %s" %
         #      (('matrix' if dense else 'map'), str(oplabel), self.errcomp_type) )
@@ -1348,16 +1353,16 @@ class CloudNoiseLayerRules(_LayerRules):
 
         elif self.errcomp_type == "errorgens":
             #We compose the target operations to create a
-            # final target op, and compose this with a *singe* Lindblad gate which has as
+            # final target op, and compose this with a *single* ExpErrorgen operation which has as
             # its error generator the composition (sum) of all the factors' error gens.
             errorGens = [model.operation_blks['layers']['globalIdle'].errorgen] if self.add_idle_noise else []
             errorGens.extend(self._layer_component_cloudnoises(model, components, caches['op-cloudnoise']))
             if len(errorGens) > 0:
                 if len(errorGens) > 1:
-                    error = Lindblad(None, Sum(errorGens, dim=model.dim, evotype=model.evotype),
-                                     dense_rep=dense_lindblad_reps)
+                    error = ExpErrorgen(Sum(errorGens, dim=model.dim, evotype=model.evotype),
+                                        dense_rep=dense_lindblad_reps)
                 else:
-                    error = Lindblad(None, errorGens[0], dense_rep=dense_lindblad_reps)
+                    error = ExpErrorgen(errorGens[0], dense_rep=dense_lindblad_reps)
                 ops_to_compose.append(error)
         else:
             raise ValueError("Invalid errcomp_type in CloudNoiseLayerRules: %s" % str(self.errcomp_type))

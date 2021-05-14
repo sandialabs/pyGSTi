@@ -40,21 +40,9 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
 
     Parameters
     ----------
-    unitary_postfactor : numpy array or SciPy sparse matrix or int
-        a square 2D array which specifies a part of the operation action
-        to remove before parameterization via Lindblad projections.
-        While this is termed a "post-factor" because it occurs to the
-        right of the exponentiated Lindblad terms, this means it is applied
-        to a state *before* the Lindblad terms (which usually represent
-        operation errors).  Typically, this is a target (desired) operation operation.
-        If this post-factor is just the identity you can simply pass the
-        integer dimension as `unitary_postfactor` instead of a matrix, or
-        you can pass `None` and the dimension will be inferred from
-        `errorgen`.
-
     errorgen : LinearOperator
         The error generator for this operator.  That is, the `L` if this
-        operator is `exp(L)*unitary_postfactor`.
+        operator is `exp(L)`.
 
     dense_rep : bool, optional
         Whether to internally implement this operation as a dense matrix.
@@ -67,332 +55,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         say greater than 100.
     """
 
-    @classmethod
-    def decomp_paramtype(cls, param_type):
-        """
-        A utility method for creating LindbladOp objects.
-
-        Decomposes a high-level parameter-type `param_type` (e.g. `"H+S terms"`
-        into a "base" type (specifies parameterization without evolution type,
-        e.g. "H+S"), an evolution type (i.e. one of "densitymx", "svterm",
-        "cterm", or "statevec").  Furthermore, from the base type two "modes"
-        - one describing the number (and structure) of the non-Hamiltonian
-        Lindblad coefficients and one describing how the Lindblad coefficients
-        are converted to/from parameters - are derived.
-
-        The "non-Hamiltonian mode" describes which non-Hamiltonian Lindblad
-        coefficients are stored in a LindbladOp, and is one
-        of `"diagonal"` (only the diagonal elements of the full coefficient
-        matrix as a 1D array), `"diag_affine"` (a 2-by-d array of the diagonal
-        coefficients on top of the affine projections), or `"all"` (the entire
-        coefficient matrix).
-
-        The "parameter mode" describes how the Lindblad coefficients/projections
-        are converted into parameter values.  This can be:
-        `"unconstrained"` (coefficients are independent unconstrained parameters),
-        `"cptp"` (independent parameters but constrained so map is CPTP),
-        `"depol"` (all non-Ham. diagonal coeffs are the *same, positive* value), or
-        `"reldepol"` (same as `"depol"` but no positivity constraint).
-
-        Parameters
-        ----------
-        param_type : str
-            The high-level Lindblad parameter type to decompose.  E.g "H+S",
-            "H+S+A terms", "CPTP clifford terms".
-
-        Returns
-        -------
-        basetype : str
-        evotype : str
-        nonham_mode : str
-        param_mode : str
-        """
-        bTyp, evotype = _ot.split_lindblad_paramtype(param_type)
-
-        if bTyp == "CPTP":
-            nonham_mode = "all"; param_mode = "cptp"
-        elif bTyp == "H":
-            nonham_mode = "all"; param_mode = "cptp"  # these don't matter since there's no non-ham errors
-        elif bTyp in ("H+S", "S"):
-            nonham_mode = "diagonal"; param_mode = "cptp"
-        elif bTyp in ("H+s", "s"):
-            nonham_mode = "diagonal"; param_mode = "unconstrained"
-        elif bTyp in ("H+S+A", "S+A"):
-            nonham_mode = "diag_affine"; param_mode = "cptp"
-        elif bTyp in ("H+s+A", "s+A"):
-            nonham_mode = "diag_affine"; param_mode = "unconstrained"
-        elif bTyp in ("H+D", "D"):
-            nonham_mode = "diagonal"; param_mode = "depol"
-        elif bTyp in ("H+d", "d"):
-            nonham_mode = "diagonal"; param_mode = "reldepol"
-        elif bTyp in ("H+D+A", "D+A"):
-            nonham_mode = "diag_affine"; param_mode = "depol"
-        elif bTyp in ("H+d+A", "d+A"):
-            nonham_mode = "diag_affine"; param_mode = "reldepol"
-
-        elif bTyp == "GLND":
-            nonham_mode = "all"; param_mode = "unconstrained"
-        else:
-            raise ValueError("Unrecognized base type in `param_type`=%s" % param_type)
-
-        return bTyp, evotype, nonham_mode, param_mode
-
-    @classmethod
-    def from_operation_obj(cls, operation, param_type="GLND", unitary_postfactor=None,
-                           proj_basis="pp", mx_basis="pp", truncate=True, lazy=False):
-        """
-        Creates a LindbladOp from an existing LinearOperator object and some additional information.
-
-        This function is different from `from_operation_matrix` in that it assumes
-        that `operation` is a :class:`LinearOperator`-derived object, and if `lazy=True` and
-        if `operation` is already a matching LindbladOp, it is
-        returned directly.  This routine is primarily used in operation conversion
-        functions, where conversion is desired only when necessary.
-
-        Parameters
-        ----------
-        operation : LinearOperator
-            The operation object to "convert" to a `LindbladOp`.
-
-        param_type : str
-            The high-level "parameter type" of the operation to create.  This
-            specifies both which Lindblad parameters are included and what
-            type of evolution is used.  Examples of valid values are
-            `"CPTP"`, `"H+S"`, `"S terms"`, and `"GLND clifford terms"`.
-
-        unitary_postfactor : numpy array or SciPy sparse matrix, optional
-            a square 2D array of the same dimension of `operation`.  This specifies
-            a part of the operation action to remove before parameterization via
-            Lindblad projections.  Typically, this is a target (desired) operation
-            operation such that only the erroneous part of the operation (i.e. the
-            operation relative to the target), which should be close to the identity,
-            is parameterized.  If none, the identity is used by default.
-
-        proj_basis : {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
-            The basis used to construct the Lindblad-term error generators onto
-            which the operation's error generator is projected.  Allowed values are
-            Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-            and Qutrit (qt), list of numpy arrays, or a custom basis object.
-
-        mx_basis : {'std', 'gm', 'pp', 'qt'} or Basis object
-            The source and destination basis, respectively.  Allowed
-            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-            and Qutrit (qt) (or a custom basis object).
-
-        truncate : bool, optional
-            Whether to truncate the projections onto the Lindblad terms in
-            order to meet constraints (e.g. to preserve CPTP) when necessary.
-            If False, then an error is thrown when the given `operation` cannot
-            be realized by the specified set of Lindblad projections.
-
-        lazy : bool, optional
-            If True, then if `operation` is already a LindbladOp
-            with the requested details (given by the other arguments), then
-            `operation` is returned directly and no conversion/copying is performed.
-            If False, then a new operation object is always created and returned.
-
-        Returns
-        -------
-        LindbladOp
-        """
-        RANK_TOL = 1e-6
-
-        if unitary_postfactor is None:
-            #Try to obtain unitary_post by getting the closest unitary
-            if isinstance(operation, ExpErrorgenDenseOp):
-                unitary_postfactor = operation.unitary_postfactor
-            elif isinstance(operation, _LinearOperator) and operation._evotype == "densitymx":
-                J = _jt.fast_jamiolkowski_iso_std(operation.to_dense(), mx_basis)  # Choi mx basis doesn't matter
-                if _np.linalg.matrix_rank(J, RANK_TOL) == 1:
-                    unitary_postfactor = operation  # when 'operation' is unitary
-            # FUTURE: support other operation._evotypes?
-            else:
-                unitary_postfactor = None
-
-        #Break param_type in to a "base" type and an evotype
-        bTyp, evotype, nonham_mode, param_mode = cls.decomp_paramtype(param_type)
-
-        ham_basis = proj_basis if (("H" == bTyp) or ("H+" in bTyp) or bTyp in ("CPTP", "GLND")) else None
-        nonham_basis = None if bTyp == "H" else proj_basis
-
-        def beq(b1, b2):
-            """ Check if bases have equal names """
-            if not isinstance(b1, _Basis):  # b1 may be a string, in which case create a Basis
-                b1 = _BuiltinBasis(b1, b2.dim, b2.sparse)  # from b2, which *will* be a Basis
-            return b1 == b2
-
-        def normeq(a, b):
-            if a is None and b is None: return True
-            if a is None or b is None: return False
-            return _mt.safe_norm(a - b) < 1e-6  # what about possibility of Clifford operations?
-
-        #We need to get rid of this anyway -- TODO REMOVE (and update)
-        #if lazy and isinstance(operation, ExpErrorgenOp) and \
-        #   normeq(operation.unitary_postfactor, unitary_postfactor) and \
-        #   isinstance(operation.errorgen, LindbladErrorgen) \
-        #   and beq(ham_basis, operation.errorgen.ham_basis) and beq(nonham_basis, operation.errorgen.other_basis) \
-        #   and param_mode == operation.errorgen.param_mode and nonham_mode == operation.errorgen.nonham_mode \
-        #   and beq(mx_basis, operation.errorgen.matrix_basis) and operation._evotype == evotype:
-        #    return operation  # no creation necessary!
-        #else:
-        return cls.from_operation_matrix(
-            operation, unitary_postfactor, ham_basis, nonham_basis, param_mode,
-            nonham_mode, truncate, mx_basis, evotype)
-
-    @classmethod
-    def from_operation_matrix(cls, op_matrix, unitary_postfactor=None,
-                              ham_basis="pp", nonham_basis="pp", param_mode="cptp",
-                              nonham_mode="all", truncate=True, mx_basis="pp",
-                              evotype="densitymx"):
-        """
-        Creates a Lindblad-parameterized operation from a matrix and a basis.
-
-        The basis specifies how to decompose (project) the operation's error generator.
-
-        Parameters
-        ----------
-        op_matrix : numpy array or SciPy sparse matrix
-            a square 2D array that gives the raw operation matrix, assumed to
-            be in the `mx_basis` basis, to parameterize.  The shape of this
-            array sets the dimension of the operation. If None, then it is assumed
-            equal to `unitary_postfactor` (which cannot also be None). The
-            quantity `op_matrix inv(unitary_postfactor)` is parameterized via
-            projection onto the Lindblad terms.
-
-        unitary_postfactor : numpy array or SciPy sparse matrix, optional
-            a square 2D array of the same size of `op_matrix` (if
-            not None).  This matrix specifies a part of the operation action
-            to remove before parameterization via Lindblad projections.
-            Typically, this is a target (desired) operation operation such
-            that only the erroneous part of the operation (i.e. the operation
-            relative to the target), which should be close to the identity,
-            is parameterized.  If none, the identity is used by default.
-
-        ham_basis : {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
-            The basis is used to construct the Hamiltonian-type lindblad error
-            Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-            and Qutrit (qt), list of numpy arrays, or a custom basis object.
-
-        nonham_basis : {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
-            The basis is used to construct the non-Hamiltonian (generalized
-            Stochastic-type) lindblad error Allowed values are Matrix-unit
-            (std), Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt), list of
-            numpy arrays, or a custom basis object.
-
-        param_mode : {"unconstrained", "cptp", "depol", "reldepol"}
-            Describes how the Lindblad coefficients/projections relate to the
-            operation's parameter values.  Allowed values are:
-            `"unconstrained"` (coeffs are independent unconstrained parameters),
-            `"cptp"` (independent parameters but constrained so map is CPTP),
-            `"reldepol"` (all non-Ham. diagonal coeffs take the *same* value),
-            `"depol"` (same as `"reldepol"` but coeffs must be *positive*)
-
-        nonham_mode : {"diagonal", "diag_affine", "all"}
-            Which non-Hamiltonian Lindblad projections are potentially non-zero.
-            Allowed values are: `"diagonal"` (only the diagonal Lind. coeffs.),
-            `"diag_affine"` (diagonal coefficients + affine projections), and
-            `"all"` (the entire matrix of coefficients is allowed).
-
-        truncate : bool, optional
-            Whether to truncate the projections onto the Lindblad terms in
-            order to meet constraints (e.g. to preserve CPTP) when necessary.
-            If False, then an error is thrown when the given `operation` cannot
-            be realized by the specified set of Lindblad projections.
-
-        mx_basis : {'std', 'gm', 'pp', 'qt'} or Basis object
-            The source and destination basis, respectively.  Allowed
-            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-            and Qutrit (qt) (or a custom basis object).
-
-        evotype : {"densitymx","svterm","cterm"}
-            The evolution type of the operation being constructed.  `"densitymx"` is
-            usual Lioville density-matrix-vector propagation via matrix-vector
-            products.  `"svterm"` denotes state-vector term-based evolution
-            (action of operation is obtained by evaluating the rank-1 terms up to
-            some order).  `"cterm"` is similar but uses Clifford operation action
-            on stabilizer states.
-
-        Returns
-        -------
-        LindbladOp
-        """
-
-        #Compute a (errgen, unitary_postfactor) pair from the given
-        # (op_matrix, unitary_postfactor) pair.  Works with both
-        # dense and sparse matrices.
-
-        if op_matrix is None:
-            assert(unitary_postfactor is not None), "arguments cannot both be None"
-            op_matrix = unitary_postfactor
-
-        sparseOp = _sps.issparse(op_matrix)
-        if unitary_postfactor is None:
-            if sparseOp:
-                upost = _sps.identity(op_matrix.shape[0], 'd', 'csr')
-            else: upost = _np.identity(op_matrix.shape[0], 'd')
-        else: upost = unitary_postfactor
-
-        #Init base from error generator: sets basis members and ultimately
-        # the parameters in self.paramvals
-        if sparseOp:
-            #Instead of making error_generator(...) compatible with sparse matrices
-            # we require sparse matrices to have trivial initial error generators
-            # or we convert to dense:
-            if(_mt.safe_norm(op_matrix - upost) < 1e-8):
-                errgenMx = _sps.csr_matrix(op_matrix.shape, dtype='d')  # all zeros
-            else:
-                errgenMx = _sps.csr_matrix(
-                    _ot.error_generator(op_matrix.toarray(), upost.toarray(),
-                                        mx_basis, "logGTi"), dtype='d')
-        else:
-            #DB: assert(_np.linalg.norm(op_matrix.imag) < 1e-8)
-            #DB: assert(_np.linalg.norm(upost.imag) < 1e-8)
-            errgenMx = _ot.error_generator(op_matrix, upost, mx_basis, "logGTi")
-
-        errgen = ExpErrorgenOp.from_error_generator(errgenMx, ham_basis,
-                                                    nonham_basis, param_mode, nonham_mode,
-                                                    mx_basis, truncate, evotype)
-
-        #Use "sparse" matrix exponentiation when given operation matrix was sparse.
-        return cls(unitary_postfactor, errgen, dense_rep=not sparseOp)
-
-    def __init__(self, unitary_postfactor, errorgen, dense_rep=False):
-        """
-        Create a new `LinbladOp` based on an error generator and postfactor.
-
-        Note that if you want to construct a `LinbladOp` from an operation
-        matrix, you can use the :method:`from_operation_matrix` class
-        method and save youself some time and effort.
-
-        Parameters
-        ----------
-        unitary_postfactor : numpy array or SciPy sparse matrix or int
-            a square 2D array which specifies a part of the operation action
-            to remove before parameterization via Lindblad projections.
-            While this is termed a "post-factor" because it occurs to the
-            right of the exponentiated Lindblad terms, this means it is applied
-            to a state *before* the Lindblad terms (which usually represent
-            operation errors).  Typically, this is a target (desired) operation operation.
-            If this post-factor is just the identity you can simply pass the
-            integer dimension as `unitary_postfactor` instead of a matrix, or
-            you can pass `None` and the dimension will be inferred from
-            `errorgen`.
-
-        errorgen : LinearOperator
-            The error generator for this operator.  That is, the `L` if this
-            operator is `exp(L)*unitary_postfactor`.
-
-        dense_rep : bool, optional
-            Whether to internally implement this operation as a dense matrix.
-            If `True` the error generator is rendered as a dense matrix and
-            exponentiation is "exact".  If `False`, then this operation
-            implements exponentiation in an approximate way that treats the
-            error generator as a sparse matrix and only uses its action (and
-            its adjoint's action) on a state.  Setting `dense_rep=False` is
-            typically more efficient when `errorgen` has a large dimension,
-            say greater than 100.
-        """
-
+    def __init__(self, errorgen, dense_rep=False):
         # Extract superop dimension from 'errorgen'
         d2 = errorgen.dim
         d = int(round(_np.sqrt(d2)))
@@ -405,7 +68,6 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         #TODO REMOVE
         #if evotype in ("svterm", "cterm"):
         #    dense_rep = True  # we need *dense* unitary postfactors for the term-based processing below
-        #self.dense_rep = dense_rep
         #
         ## make unitary postfactor sparse when dense_rep == False and vice versa.
         ## (This doens't have to be the case, but we link these two "sparseness" notions:
@@ -419,6 +81,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         #        unitary_postfactor = _sps.csr_matrix(_np.asarray(unitary_postfactor))  # dense -> sparse
 
         #Finish initialization based on evolution type
+        self.dense_rep = dense_rep
         if self.dense_rep:
             rep = evotype.create_dense_rep(d2)
 
@@ -488,7 +151,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         #    upost = _bt.change_basis(op_std, 'std', self.errorgen.matrix_basis)
 
         cls = self.__class__  # so that this method works for derived classes too
-        copyOfMe = cls(upost, self.errorgen.copy(parent, memo), self.dense_rep)
+        copyOfMe = cls(self.errorgen.copy(parent, memo), self.dense_rep)
         return self._copy_gpindices(copyOfMe, parent, memo)
 
     def _update_rep(self, close=False):
@@ -650,19 +313,13 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         numpy array
             Array of derivatives, shape == (dimension^2, num_params)
         """
-        if not self.dense_rep:
-            raise NotImplementedError("deriv_wrt_params is only implemented for *dense-rep* LindbladOps")
-            # because we need self.unitary_postfactor to be a dense operation below (and it helps to
-            # have self.exp_err_gen cached)
-
         if self.base_deriv is None:
             d2 = self.dim
 
             #Deriv wrt hamiltonian params
             derrgen = self.errorgen.deriv_wrt_params(None)  # apply filter below; cache *full* deriv
             derrgen.shape = (d2, d2, -1)  # separate 1st d2**2 dim to (d2,d2)
-            dexpL = _d_exp_x(self.errorgen.to_dense(), derrgen, self.exp_err_gen,
-                             self.unitary_postfactor)
+            dexpL = _d_exp_x(self.errorgen.to_dense(), derrgen, self.exp_err_gen)
             derivMx = dexpL.reshape(d2**2, self.num_params)  # [iFlattenedOp,iParam]
 
             assert(_np.linalg.norm(_np.imag(derivMx)) < IMAG_TOL), \
@@ -740,12 +397,8 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
             series, series2 = _d2_exp_series(self.errorgen.to_dense(), dEdp, d2Edp2)
             term1 = series2
             term2 = _np.einsum("ija,jkq->ikaq", series, series)
-            if self.unitary_postfactor is None:
-                d2expL = _np.einsum("ikaq,kj->ijaq", term1 + term2,
-                                    self.exp_err_gen)
-            else:
-                d2expL = _np.einsum("ikaq,kl,lj->ijaq", term1 + term2,
-                                    self.exp_err_gen, self.unitary_postfactor)
+            d2expL = _np.einsum("ikaq,kj->ijaq", term1 + term2,
+                                self.exp_err_gen)
             hessianMx = d2expL.reshape((d2**2, nP, nP))
 
             #hessian has been made so index as [iFlattenedOp,iDeriv1,iDeriv2]
@@ -827,39 +480,40 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         self._update_rep(close)
         self.dirty = dirty_value
 
-    def set_dense(self, m):
-        """
-        Set the dense-matrix value of this operation.
-
-        Attempts to modify operation parameters so that the specified raw
-        operation matrix becomes mx.  Will raise ValueError if this operation
-        is not possible.
-
-        Parameters
-        ----------
-        m : array_like or LinearOperator
-            An array of shape (dim, dim) or LinearOperator representing the operation action.
-
-        Returns
-        -------
-        None
-        """
-
-        #TODO: move this function to errorgen?
-        if not isinstance(self.errorgen, ExpErrorgenOp):
-            raise NotImplementedError(("Can only set the value of a LindbladDenseOp that "
-                                       "contains a single LindbladErrorgen error generator"))
-
-        tOp = ExpErrorgenOp.from_operation_matrix(
-            m, self.unitary_postfactor,
-            self.errorgen.ham_basis, self.errorgen.other_basis,
-            self.errorgen.param_mode, self.errorgen.nonham_mode,
-            True, self.errorgen.matrix_basis, self._evotype)
-
-        #Note: truncate=True to be safe
-        self.errorgen.from_vector(tOp.errorgen.to_vector())
-        self._update_rep()
-        self.dirty = True
+    #REMOVE or revive this later - it doesn't seem like something that's really needed
+    #def set_dense(self, m):
+    #    """
+    #    Set the dense-matrix value of this operation.
+    #
+    #    Attempts to modify operation parameters so that the specified raw
+    #    operation matrix becomes mx.  Will raise ValueError if this operation
+    #    is not possible.
+    #
+    #    Parameters
+    #    ----------
+    #    m : array_like or LinearOperator
+    #        An array of shape (dim, dim) or LinearOperator representing the operation action.
+    #
+    #    Returns
+    #    -------
+    #    None
+    #    """
+    #
+    #    #TODO: move this function to errorgen?
+    #    if not isinstance(self.errorgen, ExpErrorgenOp):
+    #        raise NotImplementedError(("Can only set the value of a LindbladDenseOp that "
+    #                                   "contains a single LindbladErrorgen error generator"))
+    #
+    #    tOp = ExpErrorgenOp.from_operation_matrix(
+    #        m, self.unitary_postfactor,
+    #        self.errorgen.ham_basis, self.errorgen.other_basis,
+    #        self.errorgen.param_mode, self.errorgen.nonham_mode,
+    #        True, self.errorgen.matrix_basis, self._evotype)
+    #
+    #    #Note: truncate=True to be safe
+    #    self.errorgen.from_vector(tOp.errorgen.to_vector())
+    #    self._update_rep()
+    #    self.dirty = True
 
     def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
         """
@@ -922,16 +576,21 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
             return terms
 
         assert(self.gpindices is not None), "LindbladOp must be added to a Model before use!"
-        assert(not _sps.issparse(self.unitary_postfactor)
-               ), "Unitary post-factor needs to be dense for term-based evotypes"
-        # for now - until StaticDenseOp and CliffordOp can init themselves from a *sparse* matrix
         mpv = max_polynomial_vars
-        postTerm = _term.RankOnePolynomialOpTerm.create_from(_Polynomial({(): 1.0}, mpv), self.unitary_postfactor,
-                                                             self.unitary_postfactor, self._evotype)
+        
+        #REMOVE
+        #assert(not _sps.issparse(self.unitary_postfactor)
+        #       ), "Unitary post-factor needs to be dense for term-based evotypes"
+        ## for now - until StaticDenseOp and CliffordOp can init themselves from a *sparse* matrix
+        #postTerm = _term.RankOnePolynomialOpTerm.create_from(_Polynomial({(): 1.0}, mpv), self.unitary_postfactor,
+        #                                                     self.unitary_postfactor, self._evotype)
+        
         #Note: for now, *all* of an error generator's terms are considered 0-th order,
         # so the below call to taylor_order_terms just gets all of them.  In the FUTURE
         # we might want to allow a distinction among the error generator terms, in which
         # case this term-exponentiation step will need to become more complicated...
+        postTerm = _term.RankOnePolynomialOpTerm.create_from(_Polynomial({(): 1.0}, mpv),
+                                                             None, None, self._evotype)  # identity term
         loc_terms = _term.exponentiate_terms(self.errorgen.taylor_order_terms(0, max_polynomial_vars),
                                              order, postTerm, self.exp_terms_cache)
         #OLD: loc_terms = [ t.collapse() for t in loc_terms ] # collapse terms for speed
@@ -985,12 +644,17 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
             mapvec[ii] = i
 
         assert(self.gpindices is not None), "LindbladOp must be added to a Model before use!"
-        assert(not _sps.issparse(self.unitary_postfactor)
-               ), "Unitary post-factor needs to be dense for term-based evotypes"
-        # for now - until StaticDenseOp and CliffordOp can init themselves from a *sparse* matrix
         mpv = max_polynomial_vars
-        postTerm = _term.RankOnePolynomialOpTerm.create_from(_Polynomial({(): 1.0}, mpv), self.unitary_postfactor,
-                                                             self.unitary_postfactor, self._evotype)
+
+        #REMOVE
+        #assert(not _sps.issparse(self.unitary_postfactor)
+        #       ), "Unitary post-factor needs to be dense for term-based evotypes"
+        ## for now - until StaticDenseOp and CliffordOp can init themselves from a *sparse* matrix
+        #postTerm = _term.RankOnePolynomialOpTerm.create_from(_Polynomial({(): 1.0}, mpv), self.unitary_postfactor,
+        #                                                     self.unitary_postfactor, self._evotype)
+
+        postTerm = _term.RankOnePolynomialOpTerm.create_from(_Polynomial({(): 1.0}, mpv), None, None,
+                                                             self._evotype)  # identity term
         postTerm = postTerm.copy_with_magnitude(1.0)
         #Note: for now, *all* of an error generator's terms are considered 0-th order,
         # so the below call to taylor_order_terms just gets all of them.  In the FUTURE
@@ -998,7 +662,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         # case this term-exponentiation step will need to become more complicated...
         errgen_terms = self.errorgen.taylor_order_terms(0, max_polynomial_vars)
 
-        #DEBUG: CHECK MAGS OF ERRGEN COEFFS
+        #DEBUG: CHECK MAGS OF ERRGEN COEFFS  REMOVE
         #poly_coeffs = [t.coeff for t in errgen_terms]
         #tapes = [poly.compact(complex_coeff_tape=True) for poly in poly_coeffs]
         #if len(tapes) > 0:
@@ -1021,7 +685,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         egvec = self.errorgen.to_vector()   # HERE - pass vector in?  we need errorgen's vector (usually not in rep) to perform evaluation...
         errgen_terms = [egt.copy_with_magnitude(abs(egt.coeff.evaluate(egvec))) for egt in errgen_terms]
 
-        #DEBUG!!!
+        #DEBUG!!!  REMOVE
         #import bpdb; bpdb.set_trace()
         #loc_terms = _term.exponentiate_terms_above_mag(errgen_terms, order, postTerm, min_term_mag=-1)
         #loc_terms_chk = _term.exponentiate_terms(errgen_terms, order, postTerm)
@@ -1140,8 +804,9 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
             #assert(_np.allclose(U, _np.linalg.inv(Uinv)))
 
             #just conjugate postfactor and Lindbladian exponent by U:
-            if self.unitary_postfactor is not None:
-                self.unitary_postfactor = _mt.safe_dot(Uinv, _mt.safe_dot(self.unitary_postfactor, U))
+            #REMOVE
+            #if self.unitary_postfactor is not None:
+            #    self.unitary_postfactor = _mt.safe_dot(Uinv, _mt.safe_dot(self.unitary_postfactor, U))
             self.errorgen.transform_inplace(s)
             self._update_rep()  # needed to rebuild exponentiated error gen
             self.dirty = True
@@ -1196,6 +861,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
             else:
                 tMx = _mt.safe_dot(self.to_dense(), U)
             trunc = bool(isinstance(s, _gaugegroup.UnitaryGaugeGroupElement))
+            #TODO: update this -- need a way to initialize a exp(errorgen) from a matrix... 
             tOp = ExpErrorgenOp.from_operation_matrix(tMx, self.unitary_postfactor,
                                                       self.errorgen.ham_basis, self.errorgen.other_basis,
                                                       self.errorgen.param_mode, self.errorgen.nonham_mode,
@@ -1232,6 +898,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
 
 class ExpErrorgenDenseOp(ExpErrorgenOp, _DenseOperatorInterface):
     """
+    TODO: update docstring
     An operation matrix that is parameterized by a Lindblad-form expression.
 
     Specifically, each parameter multiplies a particular term in the Lindblad
@@ -1241,18 +908,6 @@ class ExpErrorgenDenseOp(ExpErrorgenOp, _DenseOperatorInterface):
 
     Parameters
     ----------
-    unitary_postfactor : numpy array or SciPy sparse matrix or int
-        a square 2D array which specifies a part of the operation action
-        to remove before parameterization via Lindblad projections.
-        While this is termed a "post-factor" because it occurs to the
-        right of the exponentiated Lindblad terms, this means it is applied
-        to a state *before* the Lindblad terms (which usually represent
-        operation errors).  Typically, this is a target (desired) operation operation.
-        If this post-factor is just the identity you can simply pass the
-        integer dimension as `unitary_postfactor` instead of a matrix, or
-        you can pass `None` and the dimension will be inferred from
-        `errorgen`.
-
     errorgen : LinearOperator
         The error generator for this operator.  That is, the `L` if this
         operator is `exp(L)*unitary_postfactor`.
@@ -1262,36 +917,7 @@ class ExpErrorgenDenseOp(ExpErrorgenOp, _DenseOperatorInterface):
         be set to `True`.
     """
 
-    def __init__(self, unitary_postfactor, errorgen, dense_rep=True):
-        """
-        Create a new LinbladDenseOp based on an error generator and postfactor.
-
-        Note that if you want to construct a `LinbladDenseOp` from an operation
-        matrix, you can use the :method:`from_operation_matrix` class method
-        and save youself some time and effort.
-
-        Parameters
-        ----------
-        unitary_postfactor : numpy array or SciPy sparse matrix or int
-            a square 2D array which specifies a part of the operation action
-            to remove before parameterization via Lindblad projections.
-            While this is termed a "post-factor" because it occurs to the
-            right of the exponentiated Lindblad terms, this means it is applied
-            to a state *before* the Lindblad terms (which usually represent
-            operation errors).  Typically, this is a target (desired) operation operation.
-            If this post-factor is just the identity you can simply pass the
-            integer dimension as `unitary_postfactor` instead of a matrix, or
-            you can pass `None` and the dimension will be inferred from
-            `errorgen`.
-
-        errorgen : LinearOperator
-            The error generator for this operator.  That is, the `L` if this
-            operator is `exp(L)*unitary_postfactor`.
-
-        dense_rep : bool, optional
-            Whether the internal representation is dense.  This currently *must*
-            be set to `True`.
-        """
+    def __init__(self, errorgen, dense_rep=True):
         assert(dense_rep), "LindbladDenseOp must be created with `dense_rep == True`"
         assert(errorgen._evotype == "densitymx"), \
             "LindbladDenseOp objects can only be used for the 'densitymx' evolution type"
@@ -1299,7 +925,7 @@ class ExpErrorgenDenseOp(ExpErrorgenOp, _DenseOperatorInterface):
         # signature as LindbladOp so its @classmethods will work on us.
 
         #Start with base class construction
-        ExpErrorgenOp.__init__(self, unitary_postfactor, errorgen, dense_rep=True)
+        ExpErrorgenOp.__init__(self, errorgen, dense_rep=True)
         _DenseOperatorInterface.__init__(self)
 
 
@@ -1384,7 +1010,7 @@ def _d2_exp_series(x, dx, d2x):
     return series, series2
 
 
-def _d_exp_x(x, dx, exp_x=None, postfactor=None):
+def _d_exp_x(x, dx, exp_x=None):
     """
     Computes the derivative of the exponential of x(t) using
     the Haddamard lemma series expansion.
@@ -1405,14 +1031,10 @@ def _d_exp_x(x, dx, exp_x=None, postfactor=None):
         a call to `scipy.linalg.expm`.  If None, then the value is
         computed internally.
 
-    postfactor : ndarray, optional
-        A 2-tensor of the same shape as x that post-multiplies the
-        result.
-
     Returns
     -------
     ndarray
-        The derivative of `exp(x)*postfactor` given as a tensor with the
+        The derivative of `exp(x)` given as a tensor with the
         same shape and axes as `dx`.
     """
     tr = len(dx.shape)  # tensor rank of dx; tr-2 == # of derivative dimensions
@@ -1424,14 +1046,8 @@ def _d_exp_x(x, dx, exp_x=None, postfactor=None):
     if tr == 3:
         #dExpX = _np.einsum('ika,kj->ija', series, exp_x)
         dExpX = _np.transpose(_np.tensordot(series, exp_x, (1, 0)), (0, 2, 1))
-        if postfactor is not None:
-            #dExpX = _np.einsum('ila,lj->ija', dExpX, postfactor)
-            dExpX = _np.transpose(_np.tensordot(dExpX, postfactor, (1, 0)), (0, 2, 1))
     elif tr == 4:
         #dExpX = _np.einsum('ikab,kj->ijab', series, exp_x)
         dExpX = _np.transpose(_np.tensordot(series, exp_x, (1, 0)), (0, 3, 1, 2))
-        if postfactor is not None:
-            #dExpX = _np.einsum('ilab,lj->ijab', dExpX, postfactor)
-            dExpX = _np.transpose(_np.tensordot(dExpX, postfactor, (1, 0)), (0, 3, 1, 2))
 
     return dExpX

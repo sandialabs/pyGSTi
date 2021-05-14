@@ -60,6 +60,10 @@ class ConjugatedStatePOVMEffect(_POVMEffect):
         #don't use scratch since we already have memory allocated
         return self._rep.to_dense()  # conjugate?
 
+    @property
+    def size(self):
+        return self.state.size
+
     def __str__(self):
         s = "%s with dimension %d\n" % (self.__class__.__name__, self.dim)
         s += _mt.mx_to_string(self.to_dense(), width=4, prec=2)

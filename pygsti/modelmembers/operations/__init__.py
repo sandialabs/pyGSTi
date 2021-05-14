@@ -17,7 +17,7 @@ from .depolarizeop import DepolarizeOp
 from .eigpdenseop import EigenvalueParamDenseOp
 from .embeddederrorgen import EmbeddedErrorgen
 from .embeddedop import EmbeddedOp, EmbeddedDenseOp
-from .experrorgenop import ExpErrorgenOp
+from .experrorgenop import ExpErrorgenOp, ExpErrorgenDenseOp
 from .fulldenseop import FullDenseOp
 from .fullunitaryop import FullUnitaryOp
 from .lindbladerrorgen import LindbladErrorgen

@@ -274,13 +274,13 @@ class ExplicitOpModelCalc(object):
             for lbl, rhoV in self.preps.items():
                 wt = sqrt_itemWeights.get(lbl, spamWeight)
                 resids.append(
-                    wt * rhoV.residuals(other_calc.preps[lbl], 'prep'))
+                    wt * rhoV.residuals(other_calc.preps[lbl]))
                 nSummands += wt**2 * rhoV.dim
 
             for lbl, Evec in self.effects.items():
                 wt = sqrt_itemWeights.get(lbl, spamWeight)
                 resids.append(
-                    wt * Evec.residuals(other_calc.effects[lbl], 'effect'))
+                    wt * Evec.residuals(other_calc.effects[lbl]))
                 nSummands += wt**2 * Evec.dim
 
         resids = [r.flatten() for r in resids]

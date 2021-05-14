@@ -22,6 +22,7 @@ import scipy.optimize as _spo
 from scipy.stats import chi2 as _chi2
 
 from . import protocol as _proto
+from ..models import Model as _Model
 from .modeltest import ModelTest as _ModelTest
 from .. import objects as _objs
 from .. import algorithms as _alg
@@ -1526,7 +1527,7 @@ def _add_gauge_opt(results, base_est_label, gaugeopt_suite, target_model, starti
                                                        unreliable_ops, printer - 1)
 
     if target_model is not None:
-        assert(isinstance(target_model, _objs.Model)), "`gaugeOptTarget` must be None or a Model"
+        assert(isinstance(target_model, _Model)), "`gaugeOptTarget` must be None or a Model"
         for goparams in gaugeopt_suite_dict.values():
             goparams_list = [goparams] if hasattr(goparams, 'keys') else goparams
             for goparams_dict in goparams_list:

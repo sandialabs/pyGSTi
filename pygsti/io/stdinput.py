@@ -20,6 +20,11 @@ import warnings as _warnings
 from scipy.linalg import expm as _expm
 from collections import OrderedDict as _OrderedDict
 
+from ..modelmembers import operations as _op
+from ..modelmembers import states as _state
+from ..modelmembers import povms as _povm
+from ..modelmembers import instruments as _instrument
+
 from .. import objects as _objs
 from .. import tools as _tools
 
@@ -1202,10 +1207,10 @@ def parse_model(filename):
 
         #Preps
         if cur_typ == "PREP":
-            mdl.preps[cur_label] = _objs.FullSPAMVec(
-                get_liouville_mx(obj), typ="prep")
+            mdl.preps[cur_label] = _state.FullState(
+                get_liouville_mx(obj))
         elif cur_typ == "TP-PREP":
-            mdl.preps[cur_label] = _objs.TPSPAMVec(
+            mdl.preps[cur_label] = _state.TPState(
                 get_liouville_mx(obj))
         elif cur_typ == "CPTP-PREP":
             props = obj['properties']
@@ -1214,12 +1219,13 @@ def parse_model(filename):
             nQubits = _np.log2(qty.size) / 2.0
             bQubits = bool(abs(nQubits - round(nQubits)) < 1e-10)  # integer # of qubits?
             proj_basis = "pp" if (basis == "pp" or bQubits) else basis
-            errorMap = _objs.LindbladDenseOp.from_operation_matrix(
-                qty, None, proj_basis, proj_basis, truncate=False, mx_basis=basis)  # unitary postfactor = Id
-            pureVec = _objs.StaticSPAMVec(_np.transpose(_eval_row_list(props["PureVec"], b_complex=False)), typ="prep")
-            mdl.preps[cur_label] = _objs.LindbladSPAMVec(pureVec, errorMap, "prep")
+            errorgen = _op.LinbladErrorgen.from_operation_matrix(
+                qty, proj_basis, proj_basis, truncate=False, mx_basis=basis)
+            errorMap = _op.ExpErrorgenOp(errorgen)
+            pureVec = _state.StaticState(_np.transpose(_eval_row_list(props["PureVec"], b_complex=False)))
+            mdl.preps[cur_label] = _state.ComposedState(pureVec, errorMap)
         elif cur_typ == "STATIC-PREP":
-            mdl.preps[cur_label] = _objs.StaticSPAMVec(get_liouville_mx(obj), typ="prep")
+            mdl.preps[cur_label] = _state.StaticState(get_liouville_mx(obj))
 
         #POVMs
         elif cur_typ in ("POVM", "TP-POVM", "CPTP-POVM"):
@@ -1227,18 +1233,18 @@ def parse_model(filename):
             for sub_obj in obj['objects']:
                 sub_typ = sub_obj['type']
                 if sub_typ == "EFFECT":
-                    Evec = _objs.FullSPAMVec(get_liouville_mx(sub_obj), typ="effect")
+                    Evec = _povm.FullPOVMEffect(get_liouville_mx(sub_obj))
                 elif sub_typ == "STATIC-EFFECT":
-                    Evec = _objs.StaticSPAMVec(get_liouville_mx(sub_obj), typ="effect")
+                    Evec = _povm.StaticPOVMEffect(get_liouville_mx(sub_obj))
                 #elif sub_typ == "CPTP-EFFECT":
                 #    Evec = _objs.LindbladSPAMVec.from_spam_vector(qty,qty,"effect")
                 effects.append((sub_obj['label'], Evec))
 
             if cur_typ == "POVM":
-                mdl.povms[cur_label] = _objs.UnconstrainedPOVM(effects)
+                mdl.povms[cur_label] = _povm.UnconstrainedPOVM(effects)
             elif cur_typ == "TP-POVM":
                 assert(len(effects) > 1), "TP-POVMs must have at least 2 elements!"
-                mdl.povms[cur_label] = _objs.TPPOVM(effects)
+                mdl.povms[cur_label] = _povm.TPPOVM(effects)
             elif cur_typ == "CPTP-POVM":
                 props = obj['properties']
                 assert("ErrgenMx" in props)  # and it must always be a Liouville rep!
@@ -1246,17 +1252,18 @@ def parse_model(filename):
                 nQubits = _np.log2(qty.size) / 2.0
                 bQubits = bool(abs(nQubits - round(nQubits)) < 1e-10)  # integer # of qubits?
                 proj_basis = "pp" if (basis == "pp" or bQubits) else basis
-                errorMap = _objs.LindbladDenseOp.from_operation_matrix(
-                    qty, None, proj_basis, proj_basis, truncate=False, mx_basis=basis)  # unitary postfactor = Id
-                base_povm = _objs.UnconstrainedPOVM(effects)  # could try to detect a ComputationalBasisPOVM in FUTURE
-                mdl.povms[cur_label] = _objs.LindbladPOVM(errorMap, base_povm)
+                errorgen = _op.LinbladErrorgen.from_operation_matrix(
+                    qty, proj_basis, proj_basis, truncate=False, mx_basis=basis)
+                errorMap = _op.ExpErrorgenOp(errorgen)
+                base_povm = _povm.UnconstrainedPOVM(effects)  # could try to detect a ComputationalBasisPOVM in FUTURE
+                mdl.povms[cur_label] = _povm.ComposedPOVM(errorMap, base_povm)
             else: assert(False), "Logic error!"
 
         elif cur_typ == "GATE":
-            mdl.operations[cur_label] = _objs.FullDenseOp(
+            mdl.operations[cur_label] = _op.FullDenseOp(
                 get_liouville_mx(obj))
         elif cur_typ == "TP-GATE":
-            mdl.operations[cur_label] = _objs.TPDenseOp(
+            mdl.operations[cur_label] = _op.TPDenseOp(
                 get_liouville_mx(obj))
         elif cur_typ == "CPTP-GATE":
             qty = get_liouville_mx(obj)
@@ -1267,26 +1274,28 @@ def parse_model(filename):
             nQubits = _np.log2(qty.shape[0]) / 2.0
             bQubits = bool(abs(nQubits - round(nQubits)) < 1e-10)  # integer # of qubits?
             proj_basis = "pp" if (basis == "pp" or bQubits) else basis
-            mdl.operations[cur_label] = _objs.LindbladDenseOp.from_operation_matrix(
-                qty, unitary_post, proj_basis, proj_basis, truncate=False, mx_basis=basis)
+            mdl.operations[cur_label] = _op.ComposedOp(
+                (_op.StaticOp(unitary_post),
+                 _op.ExpErrogenOp(_op.LinbladErrorgen.from_operation_matrix(
+                     qty, proj_basis, proj_basis, truncate=False, mx_basis=basis))))
 
         elif cur_typ == "STATIC-GATE":
-            mdl.operations[cur_label] = _objs.StaticDenseOp(get_liouville_mx(obj))
+            mdl.operations[cur_label] = _op.StaticDenseOp(get_liouville_mx(obj))
 
         elif cur_typ in ("Instrument", "TP-Instrument"):
             matrices = []
             for sub_obj in obj['objects']:
                 sub_typ = sub_obj['type']
                 qty = get_liouville_mx(sub_obj)
-                mxOrOp = _objs.StaticDenseOp(qty) if cur_typ == "STATIC-IGATE" \
+                mxOrOp = _op.StaticDenseOp(qty) if cur_typ == "STATIC-IGATE" \
                     else qty  # just add numpy array `qty` to matrices list
                 # and it will be made into a fully-param gate.
                 matrices.append((sub_obj['label'], mxOrOp))
 
             if cur_typ == "Instrument":
-                mdl.instruments[cur_label] = _objs.Instrument(matrices)
+                mdl.instruments[cur_label] = _instrument.Instrument(matrices)
             elif cur_typ == "TP-Instrument":
-                mdl.instruments[cur_label] = _objs.TPInstrument(matrices)
+                mdl.instruments[cur_label] = _instrument.TPInstrument(matrices)
             else: assert(False), "Logic error!"
         else:
             raise ValueError("Unknown type: %s!" % cur_typ)

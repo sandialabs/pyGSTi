@@ -671,7 +671,7 @@ class ExplicitOpModel(_mdl.OpModel):
         None
         """
         for rhoVec in self.preps.values():
-            rhoVec.transform_inplace(s, 'prep')
+            rhoVec.transform_inplace(s)
 
         for povm in self.povms.values():
             povm.transform_inplace(s)

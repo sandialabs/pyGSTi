@@ -99,6 +99,174 @@ class LindbladErrorgen(_LinearOperator):
     """
 
     @classmethod
+    def decomp_paramtype(cls, param_type):
+        """
+        A utility method for creating LindbladErrorgen objects.
+
+        Decomposes a high-level parameter-type `param_type` (e.g. `"H+S terms"`
+        into a "base" type (specifies parameterization without evolution type,
+        e.g. "H+S"), an evolution type (i.e. one of "densitymx", "svterm",
+        "cterm", or "statevec").  Furthermore, from the base type two "modes"
+        - one describing the number (and structure) of the non-Hamiltonian
+        Lindblad coefficients and one describing how the Lindblad coefficients
+        are converted to/from parameters - are derived.
+
+        The "non-Hamiltonian mode" describes which non-Hamiltonian Lindblad
+        coefficients are stored in a LindbladOp, and is one
+        of `"diagonal"` (only the diagonal elements of the full coefficient
+        matrix as a 1D array), `"diag_affine"` (a 2-by-d array of the diagonal
+        coefficients on top of the affine projections), or `"all"` (the entire
+        coefficient matrix).
+
+        The "parameter mode" describes how the Lindblad coefficients/projections
+        are converted into parameter values.  This can be:
+        `"unconstrained"` (coefficients are independent unconstrained parameters),
+        `"cptp"` (independent parameters but constrained so map is CPTP),
+        `"depol"` (all non-Ham. diagonal coeffs are the *same, positive* value), or
+        `"reldepol"` (same as `"depol"` but no positivity constraint).
+
+        Parameters
+        ----------
+        param_type : str
+            The high-level Lindblad parameter type to decompose.  E.g "H+S",
+            "H+S+A terms", "CPTP clifford terms".
+
+        Returns
+        -------
+        basetype : str
+        evotype : str
+        nonham_mode : str
+        param_mode : str
+        use_ham_basis : bool
+        use_nonham_basis : bool
+        """
+        bTyp, evotype = _ot.split_lindblad_paramtype(param_type)
+
+        if bTyp == "CPTP":
+            nonham_mode = "all"; param_mode = "cptp"
+        elif bTyp == "H":
+            nonham_mode = "all"; param_mode = "cptp"  # these don't matter since there's no non-ham errors
+        elif bTyp in ("H+S", "S"):
+            nonham_mode = "diagonal"; param_mode = "cptp"
+        elif bTyp in ("H+s", "s"):
+            nonham_mode = "diagonal"; param_mode = "unconstrained"
+        elif bTyp in ("H+S+A", "S+A"):
+            nonham_mode = "diag_affine"; param_mode = "cptp"
+        elif bTyp in ("H+s+A", "s+A"):
+            nonham_mode = "diag_affine"; param_mode = "unconstrained"
+        elif bTyp in ("H+D", "D"):
+            nonham_mode = "diagonal"; param_mode = "depol"
+        elif bTyp in ("H+d", "d"):
+            nonham_mode = "diagonal"; param_mode = "reldepol"
+        elif bTyp in ("H+D+A", "D+A"):
+            nonham_mode = "diag_affine"; param_mode = "depol"
+        elif bTyp in ("H+d+A", "d+A"):
+            nonham_mode = "diag_affine"; param_mode = "reldepol"
+
+        elif bTyp == "GLND":
+            nonham_mode = "all"; param_mode = "unconstrained"
+        else:
+            raise ValueError("Unrecognized base type in `param_type`=%s" % param_type)
+
+        use_ham_basis = True if (("H" == bTyp) or ("H+" in bTyp) or bTyp in ("CPTP", "GLND")) else False
+        use_nonham_basis = False if bTyp == "H" else True
+
+        return bTyp, evotype, nonham_mode, param_mode, use_ham_basis, use_nonham_basis
+
+    @classmethod
+    def from_operation_matrix(cls, op_matrix, ham_basis="pp", nonham_basis="pp", param_mode="cptp",
+                              nonham_mode="all", truncate=True, mx_basis="pp", evotype="densitymx"):
+        """
+        Creates a Lindblad-parameterized error generator from an operation.
+
+        Here "operation" means the exponentiated error generator, so this method
+        essentially takes the matrix log of `op_matrix` and constructs an error
+        generator from this using :method:`from_error_generator`.
+
+        Parameters
+        ----------
+        op_matrix : numpy array or SciPy sparse matrix
+            a square 2D array that gives the raw operation matrix, assumed to
+            be in the `mx_basis` basis, to parameterize.  The shape of this
+            array sets the dimension of the operation. If None, then it is assumed
+            equal to `unitary_postfactor` (which cannot also be None). The
+            quantity `op_matrix inv(unitary_postfactor)` is parameterized via
+            projection onto the Lindblad terms.
+
+        ham_basis : {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
+            The basis is used to construct the Hamiltonian-type lindblad error
+            Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt), list of numpy arrays, or a custom basis object.
+
+        nonham_basis : {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
+            The basis is used to construct the non-Hamiltonian (generalized
+            Stochastic-type) lindblad error Allowed values are Matrix-unit
+            (std), Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt), list of
+            numpy arrays, or a custom basis object.
+
+        param_mode : {"unconstrained", "cptp", "depol", "reldepol"}
+            Describes how the Lindblad coefficients/projections relate to the
+            operation's parameter values.  Allowed values are:
+            `"unconstrained"` (coeffs are independent unconstrained parameters),
+            `"cptp"` (independent parameters but constrained so map is CPTP),
+            `"reldepol"` (all non-Ham. diagonal coeffs take the *same* value),
+            `"depol"` (same as `"reldepol"` but coeffs must be *positive*)
+
+        nonham_mode : {"diagonal", "diag_affine", "all"}
+            Which non-Hamiltonian Lindblad projections are potentially non-zero.
+            Allowed values are: `"diagonal"` (only the diagonal Lind. coeffs.),
+            `"diag_affine"` (diagonal coefficients + affine projections), and
+            `"all"` (the entire matrix of coefficients is allowed).
+
+        truncate : bool, optional
+            Whether to truncate the projections onto the Lindblad terms in
+            order to meet constraints (e.g. to preserve CPTP) when necessary.
+            If False, then an error is thrown when the given `operation` cannot
+            be realized by the specified set of Lindblad projections.
+
+        mx_basis : {'std', 'gm', 'pp', 'qt'} or Basis object
+            The source and destination basis, respectively.  Allowed
+            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt) (or a custom basis object).
+
+        evotype : {"densitymx","svterm","cterm"}
+            The evolution type of the operation being constructed.  `"densitymx"` is
+            usual Lioville density-matrix-vector propagation via matrix-vector
+            products.  `"svterm"` denotes state-vector term-based evolution
+            (action of operation is obtained by evaluating the rank-1 terms up to
+            some order).  `"cterm"` is similar but uses Clifford operation action
+            on stabilizer states.
+
+        Returns
+        -------
+        LindbladOp
+        """
+
+        #Compute an errorgen from the given op_matrix. Works with both
+        # dense and sparse matrices.
+    
+        sparseOp = _sps.issparse(op_matrix)
+    
+        #Init base from error generator: sets basis members and ultimately
+        # the parameters in self.paramvals
+        if sparseOp:
+            #Instead of making error_generator(...) compatible with sparse matrices
+            # we require sparse matrices to have trivial initial error generators
+            # or we convert to dense:
+            if _mt.safe_norm(op_matrix - _sps.identity(op_matrix.shape[0], 'd')) < 1e-8:
+                errgenMx = _sps.csr_matrix(op_matrix.shape, dtype='d')  # all zeros
+            else:
+                errgenMx = _sps.csr_matrix(
+                    _ot.error_generator(op_matrix.toarray(), _np.identity(op_matrix.shape[0], 'd'),
+                                        mx_basis, "logGTi"), dtype='d')
+        else:
+            errgenMx = _ot.error_generator(op_matrix, _np.identity(op_matrix.shape[0], 'd'),
+                                           mx_basis, "logGTi")
+        return cls.from_error_generator(errgenMx, ham_basis,
+                                        nonham_basis, param_mode, nonham_mode,
+                                        mx_basis, truncate, evotype)
+
+    @classmethod
     def from_error_generator(cls, errgen, ham_basis="pp", nonham_basis="pp",
                              param_mode="cptp", nonham_mode="all",
                              mx_basis="pp", truncate=True, evotype="densitymx"):
@@ -368,7 +536,7 @@ class LindbladErrorgen(_LinearOperator):
                                                 _np.ascontiguousarray(indices, _np.int64),
                                                 _np.ascontiguousarray(indptr, _np.int64))
             else:
-                rep = evotype.create_dense_rep(_np.ascontiguousarray(_np.zeros((dim, dim), 'd')))
+                rep = evotype.create_dense_rep(dim)
 
         _LinearOperator.__init__(self, rep, evotype)  # sets self.dim
         if self._rep is not None: self._update_rep()  # updates _rep whether it's a dense or sparse matrix

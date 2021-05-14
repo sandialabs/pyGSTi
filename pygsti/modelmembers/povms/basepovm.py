@@ -248,7 +248,7 @@ class _BasePOVM(_POVM):
         """
         for lbl, effect in self.items():
             if lbl == self.complement_label: continue
-            effect.transform_inplace(s, 'effect')
+            effect.transform_inplace(s)
 
         if self.complement_label:
             #Other effects being transformed transforms the complement,

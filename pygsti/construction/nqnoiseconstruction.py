@@ -539,26 +539,26 @@ def create_cloud_crosstalk_model(num_qubits, gate_names, nonstd_gate_unitaries={
         strings or integers.  Values are complex coefficients.
 
     depolarization_parameterization : str of {"depolarize", "stochastic", or "lindblad"}
-        Determines whether a DepolarizeOp, StochasticNoiseOp, or LindbladOp
+        Determines whether a DepolarizeOp, StochasticNoiseOp, or LindbladErrorgen
         is used to parameterize the depolarization noise, respectively.
         When "depolarize" (the default), a DepolarizeOp is created with the strength given
         in `depolarization_strengths`. When "stochastic", the depolarization strength is split
         evenly among the stochastic channels of a StochasticOp. When "lindblad", the depolarization
         strength is split evenly among the coefficients of the stochastic error generators
-        (which are exponentiated to form a LindbladOp with the "depol" parameterization).
+        (which are exponentiated to form a LindbladErrorgen with the "depol" parameterization).
 
     stochastic_parameterization : str of {"stochastic", or "lindblad"}
-        Determines whether a StochasticNoiseOp or LindbladOp is used to parameterize the
+        Determines whether a StochasticNoiseOp or LindbladErrorgen is used to parameterize the
         stochastic noise, respectively. When "stochastic", elements of `stochastic_error_probs`
         are used as coefficients in a linear combination of stochastic channels (the default).
         When "lindblad", the elements of `stochastic_error_probs` are coefficients of
-        stochastic error generators (which are exponentiated to form a LindbladOp with the
+        stochastic error generators (which are exponentiated to form a LindbladErrorgen with the
         "cptp" parameterization).
 
-    lindblad_parameterization : "auto" or a LindbladOp paramtype
-        Determines the parameterization of the LindbladOp. When "auto" (the default), the parameterization
+    lindblad_parameterization : "auto" or a LindbladErrorgen paramtype
+        Determines the parameterization of the LindbladErrorgen. When "auto" (the default), the parameterization
         is inferred from the types of error generators specified in the `lindblad_error_coeffs` dictionaries.
-        When not "auto", the parameterization type is passed through to the LindbladOp.
+        When not "auto", the parameterization type is passed through to the LindbladErrorgen.
 
     availability : dict, optional
         A dictionary whose keys are the same gate names as in
@@ -838,7 +838,7 @@ def create_cloud_crosstalk_model(num_qubits, gate_names, nonstd_gate_unitaries={
 
                 parameterization = _parameterization_from_errgendict(local_errs_for_these_sslbls)
                 #REMOVE print("DB: Param from ", local_errs_for_these_sslbls, " = ",parameterization)
-                _, _, nonham_mode, param_mode = _op.ExpErrorgenOp.decomp_paramtype(parameterization)      ## TODO; check if this exists??
+                _, _, nonham_mode, param_mode, _, _ = _op.LinbladErrorgen.decomp_paramtype(parameterization)
                 lind_errgen = _op.LindbladErrorgen(local_dim, local_errs_for_these_sslbls, basis, param_mode,
                                                    nonham_mode, truncate=False, mx_basis="pp", evotype=evotype)
                 #REMOVE print("DB: Adding to stencil: ",error_sslbls,lind_errgen.dim,local_dim)
@@ -859,7 +859,7 @@ def create_cloud_crosstalk_model(num_qubits, gate_names, nonstd_gate_unitaries={
 
         #If we get here, we've created errgen, which we either return or package into a map:
         if return_what == "errmap":
-            return _op.LindbladOp(None, errgen, dense_rep=not sparse_lindblad_reps)
+            return _op.ExpErrorgenOp(errgen, dense_rep=not sparse_lindblad_reps)
         else:
             return errgen
 

@@ -17,6 +17,11 @@ import scipy.sparse as _sps
 from .. import construction as _cnst
 from .. import tools as _tools
 from .. import objects as _objs
+
+from ..modelmembers import operations as _op
+from ..modelmembers import states as _state
+from ..modelmembers import povms as _povm
+
 from . import reportables as _reportables
 from .reportables import evaluate as _ev
 from ..objects.label import Label as _Lbl
@@ -3447,38 +3452,33 @@ class MetadataTable(WorkspaceTable):
 
         if isinstance(self, _objs.ExplicitOpModel):
             for lbl, vec in model.preps.items():
-                if isinstance(vec, _objs.StaticSPAMVec): paramTyp = "static"
-                elif isinstance(vec, _objs.FullSPAMVec): paramTyp = "full"
-                elif isinstance(vec, _objs.TPSPAMVec): paramTyp = "TP"
-                elif isinstance(vec, _objs.ComplementSPAMVec): paramTyp = "Comp"
+                if isinstance(vec, _state.StaticState): paramTyp = "static"
+                elif isinstance(vec, _state.FullState): paramTyp = "full"
+                elif isinstance(vec, _state.TPState): paramTyp = "TP"
                 else: paramTyp = "unknown"  # pragma: no cover
                 table.add_row((lbl + " parameterization", paramTyp), (None, 'Verbatim'))
 
             for povmlbl, povm in model.povms.items():
-                if isinstance(povm, _objs.UnconstrainedPOVM): paramTyp = "unconstrained"
-                elif isinstance(povm, _objs.TPPOVM): paramTyp = "TP"
-                elif isinstance(povm, _objs.TensorProdPOVM): paramTyp = "TensorProd"
+                if isinstance(povm, _povm.UnconstrainedPOVM): paramTyp = "unconstrained"
+                elif isinstance(povm, _povm.TPPOVM): paramTyp = "TP"
+                elif isinstance(povm, _povm.TensorProductPOVM): paramTyp = "TensorProd"
                 else: paramTyp = "unknown"  # pragma: no cover
                 table.add_row((povmlbl + " parameterization", paramTyp), (None, 'Verbatim'))
 
                 for lbl, vec in povm.items():
-                    if isinstance(vec, _objs.StaticSPAMVec): paramTyp = "static"
-                    elif isinstance(vec, _objs.FullSPAMVec): paramTyp = "full"
-                    elif isinstance(vec, _objs.TPSPAMVec): paramTyp = "TP"
-                    elif isinstance(vec, _objs.ComplementSPAMVec): paramTyp = "Comp"
+                    if isinstance(vec, _povm.StaticPOVMEffect): paramTyp = "static"
+                    elif isinstance(vec, _povm.FullPOVMEffect): paramTyp = "full"
+                    elif isinstance(vec, _povm.ComplementPOVMEffect): paramTyp = "Comp"
                     else: paramTyp = "unknown"  # pragma: no cover
                     table.add_row(("> " + lbl + " parameterization", paramTyp), (None, 'Verbatim'))
 
             for gl, gate in model.operations.items():
-                if isinstance(gate, _objs.StaticDenseOp): paramTyp = "static"
-                elif isinstance(gate, _objs.FullDenseOp): paramTyp = "full"
-                elif isinstance(gate, _objs.TPDenseOp): paramTyp = "TP"
-                elif isinstance(gate, _objs.LinearlyParamDenseOp): paramTyp = "linear"
-                elif isinstance(gate, _objs.EigenvalueParamDenseOp): paramTyp = "eigenvalue"
-                elif isinstance(gate, _objs.LindbladDenseOp):
-                    paramTyp = "Lindblad"
-                    if gate.errorgen.param_mode == "cptp": paramTyp += " CPTP "
-                    paramTyp += "(%d, %d params)" % (gate.errorgen.ham_basis_size, gate.errorgen.other_basis_size)
+                if isinstance(gate, _op.StaticDenseOp): paramTyp = "static"
+                elif isinstance(gate, _op.FullDenseOp): paramTyp = "full"
+                elif isinstance(gate, _op.TPDenseOp): paramTyp = "TP"
+                elif isinstance(gate, _op.LinearlyParamDenseOp): paramTyp = "linear"
+                elif isinstance(gate, _op.EigenvalueParamDenseOp): paramTyp = "eigenvalue"
+                elif isinstance(gate, _op.ComposedDenseOp): paramTyp = "Composed"
                 else: paramTyp = "unknown"  # pragma: no cover
                 table.add_row((gl + " parameterization", paramTyp), (None, 'Verbatim'))
 

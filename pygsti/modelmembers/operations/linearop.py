@@ -12,6 +12,7 @@ The LinearOperator class and supporting functionality.
 
 import numpy as _np
 from .. import modelmember as _modelmember
+from ...tools import optools as _ot
 
 #Note on initialization sequence of Operations within a Model:
 # 1) a Model is constructed (empty)
@@ -503,9 +504,9 @@ class LinearOperator(_modelmember.ModelMember):
             A 1D-array of size equal to that of the flattened operation matrix.
         """
         if transform is None and inv_transform is None:
-            return _gt.residuals(self.to_dense(), other_op.to_dense())
+            return _ot.residuals(self.to_dense(), other_op.to_dense())
         else:
-            return _gt.residuals(_np.dot(
+            return _ot.residuals(_np.dot(
                 inv_transform, _np.dot(self.to_dense(), transform)),
                 other_op.to_dense())
 
