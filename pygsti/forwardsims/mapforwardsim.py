@@ -97,6 +97,7 @@ class SimpleMapForwardSimulator(_ForwardSimulator):
         if 'calclib' in state: del state['calclib']
         #Note: I don't think we need to implement __setstate__ since the model also needs to be reset,
         # and this is done by the parent model which will cause _set_evotype to be called.
+        return state
 
 
 class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimulator):
@@ -155,7 +156,8 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         return super()._array_types_for_method(method_name)
 
     def __init__(self, model=None, max_cache_size=None, num_atoms=None, processor_grid=None, param_blk_sizes=None):
-        super().__init__(model, num_atoms, processor_grid, param_blk_sizes)
+        #super().__init__(model, num_atoms, processor_grid, param_blk_sizes)
+        _DistributableForwardSimulator.__init__(self, model, num_atoms, processor_grid, param_blk_sizes)
         self._max_cache_size = max_cache_size
 
     def copy(self):
@@ -166,7 +168,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         -------
         MapForwardSimulator
         """
-        return MapForwardSimulator(self.model, self._max_cache_size)
+        return MapForwardSimulator(self.model, self._max_cache_size)   # TODO - FIX THIS --------------------------------------------------------
 
     def create_layout(self, circuits, dataset=None, resource_alloc=None, array_types=('E',),
                       derivative_dimension=None, verbosity=0):
@@ -274,26 +276,25 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
     def _bulk_fill_probs_atom(self, array_to_fill, layout_atom, resource_alloc):
         # Note: *don't* set dest_indices arg = layout.element_slice, as this is already done by caller
         resource_alloc.check_can_allocate_memory(layout_atom.cache_size * self.model.dim)
-        HERE
         self.calclib.mapfill_probs_atom(self, array_to_fill, slice(0, array_to_fill.shape[0]),  # all indices
                                         layout_atom, resource_alloc)
 
     def _bulk_fill_dprobs_atom(self, array_to_fill, dest_param_slice, layout_atom, param_slice, resource_alloc):
         # Note: *don't* set dest_indices arg = layout.element_slice, as this is already done by caller
         resource_alloc.check_can_allocate_memory(layout_atom.cache_size * self.model.dim * _slct.length(param_slice))
-        replib.DM_mapfill_dprobs_atom(self, array_to_fill, slice(0, array_to_fill.shape[0]), dest_param_slice,
-                                      layout_atom, param_slice, resource_alloc)
+        self.calclib.mapfill_dprobs_atom(self, array_to_fill, slice(0, array_to_fill.shape[0]), dest_param_slice,
+                                         layout_atom, param_slice, resource_alloc)
 
     def _bulk_fill_hprobs_atom(self, array_to_fill, dest_param_slice1, dest_param_slice2, layout_atom,
                                param_slice1, param_slice2, resource_alloc):
         # Note: *don't* set dest_indices arg = layout.element_slice, as this is already done by caller
         resource_alloc.check_can_allocate_memory(layout_atom.cache_size * self.model.dim
                                                  * _slct.length(param_slice1) * _slct.length(param_slice2))
-        self._dm_mapfill_hprobs_atom(array_to_fill, slice(0, array_to_fill.shape[0]), dest_param_slice1,
-                                     dest_param_slice2, layout_atom, param_slice1, param_slice2, resource_alloc)
+        self._mapfill_hprobs_atom(array_to_fill, slice(0, array_to_fill.shape[0]), dest_param_slice1,
+                                  dest_param_slice2, layout_atom, param_slice1, param_slice2, resource_alloc)
 
-    #Not used enough to warrant pushing to replibs yet... just keep a slow version
-    def _dm_mapfill_hprobs_atom(self, array_to_fill, dest_indices, dest_param_indices1, dest_param_indices2,
+    #Not used enough to warrant pushing to evotypes yet... just keep a slow version
+    def _mapfill_hprobs_atom(self, array_to_fill, dest_indices, dest_param_indices1, dest_param_indices2,
                                 layout_atom, param_indices1, param_indices2, resource_alloc):
 
         """
@@ -323,7 +324,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         nP2 = _slct.length(param_indices2) if isinstance(param_indices2, slice) else len(param_indices2)
         dprobs, shm = _smt.create_shared_ndarray(resource_alloc, (nEls, nP2), 'd')
         dprobs2, shm2 = _smt.create_shared_ndarray(resource_alloc, (nEls, nP2), 'd')
-        replib.DM_mapfill_dprobs_atom(self, dprobs, slice(0, nEls), None, layout_atom, param_indices2, resource_alloc)
+        self.calclib.mapfill_dprobs_atom(self, dprobs, slice(0, nEls), None, layout_atom, param_indices2, resource_alloc)
 
         orig_vec = self.model.to_vector().copy()
         for i in range(self.model.num_params):
@@ -331,8 +332,8 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
                 iFinal = iParamToFinal[i]
                 vec = orig_vec.copy(); vec[i] += eps
                 self.model.from_vector(vec, close=True)
-                replib.DM_mapfill_dprobs_atom(self, dprobs2, slice(0, nEls), None, layout_atom,
-                                              param_indices2, resource_alloc)
+                self.calclib.mapfill_dprobs_atom(self, dprobs2, slice(0, nEls), None, layout_atom,
+                                                 param_indices2, resource_alloc)
                 if shared_mem_leader:
                     _fas(array_to_fill, [dest_indices, iFinal, dest_param_indices2], (dprobs2 - dprobs) / eps)
         self.model.from_vector(orig_vec)
@@ -393,9 +394,9 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
                             for i_expanded, i in layout_atom.orig_indices_by_expcircuit.items()}
             num_outcomes = {i_expanded: num_total_outcomes[i]
                             for i_expanded, i in layout_atom.orig_indices_by_expcircuit.items()}
-            replib.DM_mapfill_TDchi2_terms(self, array_to_fill, layout_atom.element_slice, num_outcomes,
-                                           layout_atom, dataset_rows, min_prob_clip_for_weighting,
-                                           prob_clip_interval, resource_alloc, outcomes_cache=None)
+            self.calclib.mapfill_TDchi2_terms(self, array_to_fill, layout_atom.element_slice, num_outcomes,
+                                              layout_atom, dataset_rows, min_prob_clip_for_weighting,
+                                              prob_clip_interval, resource_alloc, outcomes_cache=None)
 
         atom_resource_alloc = layout.resource_alloc('atom-processing')
         atom_resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory before we begin
@@ -462,14 +463,14 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
 
         def dchi2(dest_mx, dest_indices, dest_param_indices, num_tot_outcomes, layout_atom,
                   dataset_rows, wrt_slice, fill_comm):
-            replib.DM_mapfill_TDdchi2_terms(self, dest_mx, dest_indices, dest_param_indices, num_tot_outcomes,
-                                            layout_atom, dataset_rows, min_prob_clip_for_weighting,
-                                            prob_clip_interval, wrt_slice, fill_comm, outcomes_cache)
+            self.calclib.mapfill_TDdchi2_terms(self, dest_mx, dest_indices, dest_param_indices, num_tot_outcomes,
+                                               layout_atom, dataset_rows, min_prob_clip_for_weighting,
+                                               prob_clip_interval, wrt_slice, fill_comm, outcomes_cache)
 
         def chi2(dest_mx, dest_indices, num_tot_outcomes, layout_atom, dataset_rows, fill_comm):
-            return replib.DM_mapfill_TDchi2_terms(self, dest_mx, dest_indices, num_tot_outcomes, layout_atom,
-                                                  dataset_rows, min_prob_clip_for_weighting, prob_clip_interval,
-                                                  fill_comm, outcomes_cache)
+            return self.calclib.mapfill_TDchi2_terms(self, dest_mx, dest_indices, num_tot_outcomes, layout_atom,
+                                                     dataset_rows, min_prob_clip_for_weighting, prob_clip_interval,
+                                                     fill_comm, outcomes_cache)
 
         return self._bulk_fill_timedep_deriv(layout, dataset, ds_circuits, num_total_outcomes,
                                              array_to_fill, dchi2, chi2_array_to_fill, chi2)
@@ -530,9 +531,9 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
                             for i_expanded, i in layout_atom.orig_indices_by_expcircuit.items()}
             num_outcomes = {i_expanded: num_total_outcomes[i]
                             for i_expanded, i in layout_atom.orig_indices_by_expcircuit.items()}
-            replib.DM_mapfill_TDloglpp_terms(self, array_to_fill, layout_atom.element_slice, num_outcomes,
-                                             layout_atom, dataset_rows, min_prob_clip,
-                                             radius, prob_clip_interval, resource_alloc, outcomes_cache=None)
+            self.calclib.mapfill_TDloglpp_terms(self, array_to_fill, layout_atom.element_slice, num_outcomes,
+                                                layout_atom, dataset_rows, min_prob_clip,
+                                                radius, prob_clip_interval, resource_alloc, outcomes_cache=None)
 
         atom_resource_alloc = layout.resource_alloc('atom-processing')
         atom_resource_alloc.host_comm_barrier()  # ensure all procs have finished w/shared memory before we begin
@@ -600,14 +601,14 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
 
         def dloglpp(array_to_fill, dest_indices, dest_param_indices, num_tot_outcomes, layout_atom,
                     dataset_rows, wrt_slice, fill_comm):
-            return replib.DM_mapfill_TDdloglpp_terms(self, array_to_fill, dest_indices, dest_param_indices,
-                                                     num_tot_outcomes, layout_atom, dataset_rows, min_prob_clip,
-                                                     radius, prob_clip_interval, wrt_slice, fill_comm, outcomes_cache)
+            return self.calclib.mapfill_TDdloglpp_terms(self, array_to_fill, dest_indices, dest_param_indices,
+                                                        num_tot_outcomes, layout_atom, dataset_rows, min_prob_clip,
+                                                        radius, prob_clip_interval, wrt_slice, fill_comm, outcomes_cache)
 
         def loglpp(array_to_fill, dest_indices, num_tot_outcomes, layout_atom, dataset_rows, fill_comm):
-            return replib.DM_mapfill_TDloglpp_terms(self, array_to_fill, dest_indices, num_tot_outcomes, layout_atom,
-                                                    dataset_rows, min_prob_clip, radius, prob_clip_interval,
-                                                    fill_comm, outcomes_cache)
+            return self.calclib.mapfill_TDloglpp_terms(self, array_to_fill, dest_indices, num_tot_outcomes, layout_atom,
+                                                       dataset_rows, min_prob_clip, radius, prob_clip_interval,
+                                                       fill_comm, outcomes_cache)
 
         return self._bulk_fill_timedep_deriv(layout, dataset, ds_circuits, num_total_outcomes,
                                              array_to_fill, dloglpp, logl_array_to_fill, loglpp)

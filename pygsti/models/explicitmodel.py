@@ -31,13 +31,14 @@ from ..tools import symplectic as _symp
 
 from . import model as _mdl
 from ..modelmembers import modelmember as _gm
-from ..objects import circuit as _cir
 from ..modelmembers import operations as _op
 from ..modelmembers import states as _state
 from ..modelmembers import povms as _povm
 from ..modelmembers import instruments as _instrument
 from ..modelmembers.operations import opfactory as _opfactory
+from ..evotypes import Evotype as _Evotype
 from . import labeldicts as _ld
+from ..objects import circuit as _cir
 from ..objects import gaugegroup as _gg
 from ..forwardsims import matrixforwardsim as _matrixfwdsim
 from ..forwardsims import mapforwardsim as _mapfwdsim
@@ -434,20 +435,20 @@ class ExplicitOpModel(_mdl.OpModel):
         if typ == 'static unitary':
             assert(self._evotype == "densitymx"), \
                 "Can only convert to 'static unitary' from a density-matrix evolution type."
-            self._evotype = "statevec"
+            self._evotype = _Evotype.cast("statevec")
             self._dim = int(round(_np.sqrt(self.dim)))  # reduce dimension d -> sqrt(d)
             if not isinstance(self._sim, (_matrixfwdsim.MatrixForwardSimulator, _mapfwdsim.MapForwardSimulator)):
                 self._sim = _matrixfwdsim.MatrixForwardSimulator(self) if self.dim <= 4 else \
                     _mapfwdsim.MapForwardSimulator(self, max_cache_size=0)
 
         elif typ == 'clifford':
-            self._evotype = "stabilizer"
+            self._evotype = _Evotype.cast("stabilizer")
             self._sim = _mapfwdsim.SimpleMapForwardSimulator(self)
             #self._sim = _mapfwdsim.MapForwardSimulator(self, max_cache_size=0)
 
         elif _gt.is_valid_lindblad_paramtype(typ):
             baseType, evotype = _gt.split_lindblad_paramtype(typ)
-            self._evotype = evotype
+            self._evotype = _Evotype.cast(evotype)
             if evotype == "densitymx":
                 if not isinstance(self._sim, (_matrixfwdsim.MatrixForwardSimulator, _mapfwdsim.MapForwardSimulator)):
                     self._sim = _matrixfwdsim.MatrixForwardSimulator(self) if self.dim <= 16 else \
@@ -457,7 +458,7 @@ class ExplicitOpModel(_mdl.OpModel):
                     self._sim = _termfwdsim.TermForwardSimulator(self)
 
         elif typ in ('static', 'full', 'TP', 'CPTP', 'linear'):  # assume all other parameterizations are densitymx type
-            self._evotype = "densitymx"
+            self._evotype = _Evotype.cast("densitymx")
             if not isinstance(self._sim, (_matrixfwdsim.MatrixForwardSimulator, _mapfwdsim.MapForwardSimulator)):
                 self._sim = _matrixfwdsim.MatrixForwardSimulator(self) if self.dim <= 16 else \
                     _mapfwdsim.MapForwardSimulator(self, max_cache_size=0)

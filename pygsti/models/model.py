@@ -30,6 +30,7 @@ from ..tools import listtools as _lt
 from ..tools import symplectic as _symp
 
 from ..modelmembers import modelmember as _gm
+from ..evotypes import Evotype as _Evotype
 
 from . import labeldicts as _ld
 from . import explicitcalc as _explicitcalc
@@ -486,7 +487,7 @@ class OpModel(Model):
             The forward simulator this model should use.  `"auto"`
             tries to determine and instantiate the best type automatically.
         """
-        self._evotype = evotype
+        self._evotype = _Evotype.cast(evotype)
         self._set_state_space(state_space_labels, basis)
         #sets self._state_space_labels, self._basis, self._dim
 
