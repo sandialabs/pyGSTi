@@ -13,16 +13,18 @@ import collections as _collections
 import numpy as _np
 import warnings as _warnings
 
-from ..tools import matrixtools as _mt
+from .staticdenseop import StaticDenseOp as _StaticDenseOp
+from .embeddedop import EmbeddedOp as _EmbeddedOp, EmbeddedDenseOp as _EmbeddedDenseOp
+from .composedop import ComposedOp as _ComposedOp, ComposedDenseOp as _ComposedDenseOp
+from .cliffordop import CliffordOp
 
-#from . import labeldicts as _ld
-from . import modelmember as _gm
-from . import operation as _op
-from . import instrument as _instrument
-from . import povm as _povm
-from .label import Label as _Lbl
-from ..tools import optools as _gt
-from ..tools import basistools as _bt
+from .. import modelmember as _gm
+from .. import instruments as _instrument
+from .. import povms as _povm
+from ...objects.label import Label as _Lbl
+from ...tools import optools as _gt
+from ...tools import basistools as _bt
+from ...tools import matrixtools as _mt
 
 
 def op_from_factories(factory_dict, lbl):
@@ -356,7 +358,7 @@ class EmbeddedOpFactory(OpFactory):
         assert(sslbls is None), ("EmbeddedOpFactory objects should not be asked to create "
                                  "operations with given `sslbls` (these are already fixed!)")
 
-        Embedded = _op.EmbeddedDenseOp if self.dense else _op.EmbeddedOp
+        Embedded = _EmbeddedDenseOp if self.dense else _EmbeddedOp
         op = self.embedded_factory.create_op(args, sslbls)  # Note: will have its gpindices set already
         embedded_op = Embedded(self.state_space_labels, self.targetLabels, op)
         embedded_op.set_gpindices(self.gpindices, self.parent)  # Overkill, since embedded op already has indices set?
@@ -539,7 +541,7 @@ class EmbeddingOpFactory(OpFactory):
             ("EmbeddingFactory.create_op called with the wrong number (%s) of target labels!"
              " (expected %d)") % (len(sslbls), self.num_target_labels)
 
-        Embedded = _op.EmbeddedDenseOp if self.dense else _op.EmbeddedOp
+        Embedded = _EmbeddedDenseOp if self.dense else _EmbeddedOp
         if self.embeds_factory:
             op = self.embedded_factory_or_op.create_op(args, None)  # Note: will have its gpindices set already
         else:
@@ -710,7 +712,7 @@ class ComposedOpFactory(OpFactory):
             Can be any type of operation, e.g. a LinearOperator, SPAMVec,
             Instrument, or POVM, depending on the label requested.
         """
-        Composed = _op.ComposedDenseOp if self.dense else _op.ComposedOp
+        Composed = _ComposedDenseOp if self.dense else _ComposedOp
         ops_to_compose = [f.create_op(args, sslbls) if is_f else f for is_f, f in zip(self.is_factory, self.factors)]
         op = Composed(ops_to_compose, self.dim, self._evotype)
         op.set_gpindices(self.gpindices, self.parent)  # Overkill, since composed ops already have indices set?
@@ -875,9 +877,9 @@ class UnitaryOpFactory(OpFactory):
         U = self.fn(args)
         if self.make_superop:
             superop = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", self.basis)
-            return _op.StaticDenseOp(superop, self._evotype)
+            return _StaticDenseOp(superop, self._evotype)
         else:
             if self._evotype == "stabilizer":
-                return _op.CliffordOp(U)
+                return _CliffordOp(U)
             else:
-                return _op.StaticDenseOp(U, self._evotype)
+                return _StaticDenseOp(U, self._evotype)

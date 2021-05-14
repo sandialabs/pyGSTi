@@ -17,25 +17,25 @@ import collections as _collections
 import scipy.sparse as _sps
 import warnings as _warnings
 
-from . import operation as _op
-from . import spamvec as _sv
-from . import povm as _povm
-from . import qubitgraph as _qgraph
+from ..modelmembers import operations as _op
+from ..modelmembers import states as _state
+from ..modelmembers import povms as _povm
+from ..modelmembers.operations import opfactory as _opfactory
+from ..objects import qubitgraph as _qgraph
 from . import labeldicts as _ld
-from . import opfactory as _opfactory
 from ..tools import optools as _gt
 from ..tools import basistools as _bt
 from ..tools import internalgates as _itgs
 from .implicitmodel import ImplicitOpModel as _ImplicitOpModel
 from .layerrules import LayerRules as _LayerRules
-from .forwardsim import ForwardSimulator as _FSim
-from .matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
-from .mapforwardsim import MapForwardSimulator as _MapFSim
-from .termforwardsim import TermForwardSimulator as _TermFSim
+from ..forwardsims.forwardsim import ForwardSimulator as _FSim
+from ..forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
+from ..forwardsims.mapforwardsim import MapForwardSimulator as _MapFSim
+from ..forwardsims.termforwardsim import TermForwardSimulator as _TermFSim
 
-from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from .basis import BuiltinBasis as _BuiltinBasis, ExplicitBasis as _ExplicitBasis
-from .label import Label as _Lbl, CircuitLabel as _CircuitLabel
+from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from ..objects.basis import BuiltinBasis as _BuiltinBasis
+from ..objects.label import Label as _Lbl, CircuitLabel as _CircuitLabel
 
 from ..tools.basisconstructors import sqrt2, id2x2, sigmax, sigmay, sigmaz
 
@@ -449,7 +449,7 @@ class CloudNoiseModel(_ImplicitOpModel):
             if max_spam_weight > 0:
                 _warnings.warn(("`spamtype == 'static'` ignores the supplied "
                                 "`max_spam_weight=%d > 0`") % max_spam_weight)
-            prep_layers = [_sv.ComputationalSPAMVec([0] * num_qubits, evotype)]
+            prep_layers = [_state.ComputationalBasisState([0] * num_qubits, evotype)]
             povm_layers = {'Mdefault': _povm.ComputationalBasisPOVM(num_qubits, evotype)}
 
         elif spamtype == "tensorproduct":
@@ -471,27 +471,27 @@ class CloudNoiseModel(_ImplicitOpModel):
 
             for i in range(num_qubits):
                 prep_factors.append(
-                    _sv.convert(_sv.StaticSPAMVec(v0), rtyp, basis1Q))
+                    _state.convert(_state.StaticState(v0), rtyp, basis1Q))                   # TODO - add evotypes here and for POV?
                 povm_factors.append(
                     _povm.convert(_povm.UnconstrainedPOVM(([
-                        ('0', _sv.StaticSPAMVec(v0)),
-                        ('1', _sv.StaticSPAMVec(v1))])), povmtyp, basis1Q))
+                        ('0', _povm.StaticPOVMEffect(v0)),
+                        ('1', _povm.StaticPOVMEffect(v1))])), povmtyp, basis1Q))
 
-            prep_layers = [_sv.TensorProdSPAMVec('prep', prep_factors)]
-            povm_layers = {'Mdefault': _povm.TensorProdPOVM(povm_factors)}
+            prep_layers = [_state.TensorProductState(prep_factors)]
+            povm_layers = {'Mdefault': _povm.TensorProductPOVM(povm_factors)}
 
         elif spamtype == "lindblad":
 
-            prepPure = _sv.ComputationalSPAMVec([0] * num_qubits, evotype)
+            prepPure = _state.ComputationalBasisState([0] * num_qubits, evotype)
             prepNoiseMap = _build_nqn_global_noise(
                 qubitGraph, max_spam_weight, sparse_lindblad_basis, sparse_lindblad_reps, simulator,
                 parameterization, errcomp_type, printer - 1)
-            prep_layers = [_sv.LindbladSPAMVec(prepPure, prepNoiseMap, "prep")]
+            prep_layers = [_state.ComposedState(prepPure, prepNoiseMap)]
 
             povmNoiseMap = _build_nqn_global_noise(
                 qubitGraph, max_spam_weight, sparse_lindblad_basis, sparse_lindblad_reps, simulator,
                 parameterization, errcomp_type, printer - 1)
-            povm_layers = {'Mdefault': _povm.LindbladPOVM(povmNoiseMap, None, "pp")}
+            povm_layers = {'Mdefault': _povm.ExpErrorgenPOVM(povmNoiseMap, None, "pp")}
 
         else:
             raise ValueError("Invalid `spamtype` argument: %s" % spamtype)

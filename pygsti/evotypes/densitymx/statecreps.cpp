@@ -24,7 +24,7 @@ namespace CReps {
     _ownmem = true;
   }
   
-  StateCRep::StateCRep(double* data, INT dim, bool copy=false) {
+  StateCRep::StateCRep(double* data, INT dim, bool copy) {
     //DEGUG std::cout << "StateCRep initialized w/dim = " << dim << std::endl;
     if(copy) {
       _dataptr = new double[dim];

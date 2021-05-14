@@ -1,6 +1,6 @@
 
 from .conjugatedeffect import ConjugatedStatePOVMEffect as _ConjugatedStatePOVMEffect
-from ..states.fullpurestate import StaticState as _StaticState
+from ..states.staticstate import StaticState as _StaticState
 
 
 class StaticPOVMEffect(_ConjugatedStatePOVMEffect):

@@ -15,9 +15,9 @@ import collections as _collections
 from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
 from ..tools import sharedmemtools as _smt
-from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
 from .copalayout import CircuitOutcomeProbabilityArrayLayout as _CircuitOutcomeProbabilityArrayLayout
-from .resourceallocation import ResourceAllocation as _ResourceAllocation
 
 import numpy as _np
 import warnings as _warnings

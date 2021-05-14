@@ -13,7 +13,7 @@ import numpy as _np
 import warnings as _warnings
 
 from .forwardsim import ForwardSimulator as _ForwardSimulator
-from .resourceallocation import ResourceAllocation as _ResourceAllocation
+from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
 from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
 from ..tools import sharedmemtools as _smt

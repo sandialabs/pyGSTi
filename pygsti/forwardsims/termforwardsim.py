@@ -21,20 +21,20 @@ from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
 from ..tools import listtools as _lt
 from ..tools.matrixtools import _fas
-from .label import Label as _Label
-from .termlayout import TermCOPALayout as _TermCOPALayout
+from ..objects.label import Label as _Label
+from ..layouts.termlayout import TermCOPALayout as _TermCOPALayout
 from .forwardsim import ForwardSimulator as _ForwardSimulator
 from .distforwardsim import DistributableForwardSimulator as _DistributableForwardSimulator
-from .polynomial import Polynomial as _Polynomial
-from .resourceallocation import ResourceAllocation as _ResourceAllocation
-from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from . import replib
+from ..objects.polynomial import Polynomial as _Polynomial
+from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
+from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+#from . import replib
 
 # For debug: sometimes helpful as it prints (python-only) tracebacks from segfaults
 #import faulthandler
 #faulthandler.enable()
 
-from .opcalc import compact_deriv as _compact_deriv, \
+from ..objects.opcalc import compact_deriv as _compact_deriv, \
     bulk_eval_compact_polynomials as _bulk_eval_compact_polynomials, \
     bulk_eval_compact_polynomials_derivs as _bulk_eval_compact_polynomials_derivs, \
     bulk_eval_compact_polynomials_complex as _bulk_eval_compact_polynomials_complex

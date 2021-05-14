@@ -22,7 +22,7 @@ from ..tools import slicetools as _slct, mpitools as _mpit, sharedmemtools as _s
 from . import profiler as _profiler
 from .circuitlist import CircuitList as _CircuitList
 from .resourceallocation import ResourceAllocation as _ResourceAllocation
-from .distlayout import DistributableCOPALayout as _DistributableCOPALayout
+from ..layouts.distlayout import DistributableCOPALayout as _DistributableCOPALayout
 
 
 def _objfn(objfn_cls, model, dataset, circuits=None,

@@ -26,7 +26,7 @@ from ..objects import objectivefns as _objfns
 from ..objects.profiler import DummyProfiler as _DummyProfiler
 from ..objects.circuitlist import CircuitList as _CircuitList
 from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
-from ..objects.termforwardsim import TermForwardSimulator as _TermFSim
+from ..forwardsims.termforwardsim import TermForwardSimulator as _TermFSim
 from ..optimize.customlm import Optimizer as _Optimizer
 from ..optimize.customlm import CustomLMOptimizer as _CustomLMOptimizer
 _dummy_profiler = _DummyProfiler()

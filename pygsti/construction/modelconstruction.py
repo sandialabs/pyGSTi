@@ -22,15 +22,15 @@ from ..tools import optools as _gt
 from ..tools import basistools as _bt
 from ..tools import internalgates as _itgs
 from ..tools.basisconstructors import sigmax, sigmay, sigmaz
-from ..objects import operation as _op
-from ..objects import spamvec as _spamvec
-from ..objects import povm as _povm
-from ..objects import opfactory as _opfactory
-from ..objects import explicitmodel as _emdl
+from ..modelmembers import operations as _op
+from ..modelmembers import states as _state
+from ..modelmembers import povms as _povm
+from ..modelmembers.operations import opfactory as _opfactory
+from ..models import labeldicts as _ld
+from ..models import explicitmodel as _emdl
+from ..models.localnoisemodel import LocalNoiseModel as _LocalNoiseModel
 from ..objects import gaugegroup as _gg
-from ..objects import labeldicts as _ld
 from ..objects import qubitgraph as _qubitgraph
-from ..objects.localnoisemodel import LocalNoiseModel as _LocalNoiseModel
 from ..objects import label as _label
 from ..objects.basis import Basis as _Basis
 from ..objects.basis import DirectSumBasis as _DirectSumBasis
@@ -517,11 +517,11 @@ def basis_create_explicit_model(state_space_labels, basis,
     for label, rhoExpr in zip(prep_labels, prep_expressions):
         vec = _basis_create_spam_vector(rhoExpr, basis)
         if parameterization == "full":
-            ret.preps[label] = _spamvec.FullSPAMVec(vec, 'densitymx', 'prep')
+            ret.preps[label] = _state.FullState(vec, 'densitymx')
         elif parameterization == "TP":
-            ret.preps[label] = _spamvec.TPSPAMVec(vec)  # only a "prep"
+            ret.preps[label] = _state.TPState(vec, 'densitymx')
         elif parameterization == "static":
-            ret.preps[label] = _spamvec.StaticSPAMVec(vec, 'densitymx', 'prep')
+            ret.preps[label] = _state.StaticState(vec, 'densitymx')
         else:
             raise ValueError("Invalid parameterization: %s" % parameterization)
 
@@ -550,9 +550,9 @@ def basis_create_explicit_model(state_space_labels, basis,
         for label, EExpr in zip(ELbls, EExprs):
             evec = _basis_create_spam_vector(EExpr, basis)
             if parameterization == "static":
-                effects.append((label, _spamvec.StaticSPAMVec(evec, 'densitymx', 'effect')))
+                effects.append((label, _povm.StaticPOVMEffect(evec, 'densitymx')))
             else:
-                effects.append((label, _spamvec.FullSPAMVec(evec, 'densitymx', 'effect')))
+                effects.append((label, _povm.FullPOVMEffect(evec, 'densitymx')))
 
         if len(effects) > 0:  # don't add POVMs with 0 effects
             if parameterization == "TP":
@@ -1272,16 +1272,16 @@ def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}
             _warnings.warn(("'prep' error specification requires Lindblad parameterization, "
                            "stochastic parameterization '%s' overridden!" % stochastic_parameterization))
 
-        rho_base1Q = _spamvec.ComputationalSPAMVec([0], evotype, 'prep')
+        rho_base1Q = _state.ComputationalBasisState([0], evotype)
         # Override parameterization to force Lindblad
         err_gate = _get_error_gate('prep', _op.StaticStandardOp('Gi', evotype), depolarization_strengths,
                                    stochastic_error_probs, lindblad_error_coeffs,
                                    "lindblad", "lindblad", "lindblad")
-        prep1Q = _spamvec.LindbladSPAMVec(rho_base1Q, err_gate, 'prep')
+        prep1Q = _state.ComposedState(rho_base1Q, err_gate)
         prep_factors = [prep1Q.copy() for i in range(num_qubits)] if independent_gates else [prep1Q] * num_qubits
-        prep_layers['rho0'] = _spamvec.TensorProdSPAMVec('prep', prep_factors)
+        prep_layers['rho0'] = _state.TensorProductState(prep_factors)
     else:
-        prep_layers['rho0'] = _spamvec.ComputationalSPAMVec([0] * num_qubits, evotype, 'prep')
+        prep_layers['rho0'] = _state.ComputationalBasisState([0] * num_qubits, evotype)
 
     povm_layers = {}
     if 'povm' in all_keys:
@@ -1297,9 +1297,9 @@ def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}
         err_gate = _get_error_gate('povm', _op.StaticStandardOp('Gi', evotype), depolarization_strengths,
                                    stochastic_error_probs, lindblad_error_coeffs,
                                    "lindblad", "lindblad", "auto")
-        povm1Q = _povm.LindbladPOVM(err_gate, Mdefault_base1Q, "pp")
+        povm1Q = _povm.ExpErrorgenPOVM(err_gate, Mdefault_base1Q, "pp")
         povm_factors = [povm1Q.copy() for i in range(num_qubits)] if independent_gates else [povm1Q] * num_qubits
-        povm_layers['Mdefault'] = _povm.TensorProdPOVM(povm_factors)
+        povm_layers['Mdefault'] = _povm.TensorProductPOVM(povm_factors)
     else:
         povm_layers['Mdefault'] = _povm.ComputationalBasisPOVM(num_qubits, evotype)
 

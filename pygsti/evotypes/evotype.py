@@ -21,8 +21,16 @@ class Evotype(object):
         self.module = _importlib.import_module("pygsti.evotypes." + name)
         self.term_evotype = None  # maybe parse this out of name? TODO , e.g. 'terms:statevec'? OR 'pathintegral:statevec'
 
-    def create_dense_rep(self, process_mx=None, dim=None):
-        return self.module.OpRepDense(process_mx, dim)
+    def __eq__(self, other_evotype):
+        if isinstance(other_evotype, Evotype):
+            return self.name == other_evotype.name
+        else:
+            return self.name == str(other_evotype)
+
+    def create_dense_rep(self, dim=None):  # process_mx=None, 
+        return self.module.OpRepDense(dim)
+        #ret.base[:,:] = process_mx  # HACK -----------------------------------------------------------------------------------------
+        #return ret
 
     def create_composed_rep(self, factor_op_reps, dim):
         return self.module.OpRepComposed(factor_op_reps, dim)
@@ -73,8 +81,8 @@ class Evotype(object):
 
 
 
-    def create_dense_effect_rep(self, vec):
-        return self.module.EffectRepDense(vec)
+    def create_conjugatedstate_effect_rep(self, state_rep):
+        return self.module.EffectRepConjugatedState(state_rep)
 
     def create_computational_effect_rep(self, zvals):
         return self.module.EffectRepComputational(zvals)

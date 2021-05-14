@@ -6,7 +6,7 @@ from ..states.fullstate import FullState as _FullState
 from .. import modelmember as _modelmember
 
 
-class ComplementSPAMVec(_ConjugatedStatePOVMEffect):
+class ComplementPOVMEffect(_ConjugatedStatePOVMEffect):
     """
     TODO: docstring
     A POVM effect vector that ensures that all the effects of a POVM sum to the identity.

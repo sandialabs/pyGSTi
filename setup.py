@@ -126,10 +126,20 @@ def setup_with_extensions(extensions=None):
             #    'fastreps.cpp',
             #    'fastreps.h'
             #],
+            'pygsti.evotypes': ['basereps_cython.pxd', 'basereps_cython.pyx'],
             'pygsti.evotypes.densitymx': [
+                'opreps.pxd',
                 'opreps.pyx',
                 'opcreps.cpp',
-                'opcreps.h'
+                'opcreps.h',
+                'statereps.pxd',
+                'statereps.pyx',
+                'statecreps.cpp',
+                'statecreps.h',
+                'effectreps.pxd',
+                'effectreps.pyx',
+                'effectcreps.cpp',
+                'effectcreps.h'
             ],
             'pygsti.objects.opcalc': ['fastopcalc.pyx'],
             'pygsti.io.circuitparser': ['fastcircuitparser.pyx'],
@@ -212,6 +222,7 @@ try:
             extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
             extra_link_args=["-std=c++11"]
         ),
+        #REMOVE:
         #Extension(
         #    "pygsti.objects.replib.fastreplib",
         #    sources=[
@@ -224,10 +235,42 @@ try:
         #    extra_link_args=["-std=c++11"]
         #),
         Extension(
-            "pygsti.evotypes.densitymx",
+            "pygsti.evotypes.basereps_cython",
+            sources=[
+                "pygsti/evotypes/basereps_cython.pyx"
+            ],
+            include_dirs=['.', np.get_include()],
+            language="c++",
+            extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
+            extra_link_args=["-std=c++11"]
+        ),
+        Extension(
+            "pygsti.evotypes.densitymx.statereps",
+            sources=[
+                "pygsti/evotypes/densitymx/statereps.pyx",
+                "pygsti/evotypes/densitymx/statecreps.cpp"
+            ],
+            include_dirs=['.', np.get_include()],
+            language="c++",
+            extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
+            extra_link_args=["-std=c++11"]
+        ),
+        Extension(
+            "pygsti.evotypes.densitymx.opreps",
             sources=[
                 "pygsti/evotypes/densitymx/opreps.pyx",
                 "pygsti/evotypes/densitymx/opcreps.cpp"
+            ],
+            include_dirs=['.', np.get_include()],
+            language="c++",
+            extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
+            extra_link_args=["-std=c++11"]
+        ),
+        Extension(
+            "pygsti.evotypes.densitymx.effectreps",
+            sources=[
+                "pygsti/evotypes/densitymx/effectreps.pyx",
+                "pygsti/evotypes/densitymx/effectcreps.cpp"
             ],
             include_dirs=['.', np.get_include()],
             language="c++",

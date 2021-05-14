@@ -1,5 +1,5 @@
 """
-Base classes for representations.
+pyGSTi Layouts Python Package
 """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -9,18 +9,3 @@ Base classes for representations.
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
-
-
-try:
-    from .basereps_cython import OpRep, StateRep, EffectRep
-except ImportError:
-    # If cython is unavailable, just make a pure-python base class to fill in.
-    class OpRep:
-        pass
-
-    class StateRep:
-        pass
-
-    class EffectRep:
-        pass
-

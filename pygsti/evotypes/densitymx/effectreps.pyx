@@ -1,54 +1,30 @@
 
 
-#Use 64-bit integers
-ctypedef long long INT
-ctypedef unsigned long long UINT
+import sys
+import time as pytime
+import numpy as _np
+import itertools as _itertools
 
-cdef extern from "fastreps.h" namespace "CReps":
-    cdef cppclass EffectCRep:
-        EffectCRep() except +
-        EffectCRep(INT) except +
-        double probability(StateCRep* state)
-        double probability_using_cache(StateCRep* state, StateCRep* precomp_state, INT& precomp_id)
-        INT _dim
-
-    cdef cppclass EffectCRep_Dense(EffectCRep):
-        EffectCRep_Dense() except +
-        EffectCRep_Dense(double*,INT) except +
-        double probability(StateCRep* state)
-        double probability_using_cache(StateCRep* state, StateCRep* precomp_state, INT& precomp_id)
-        INT _dim
-        double* _dataptr
-
-    cdef cppclass EffectCRep_TensorProd(EffectCRep):
-        EffectCRep_TensorProd() except +
-        EffectCRep_TensorProd(double*, INT*, INT, INT, INT) except +
-        double probability(StateCRep* state)
-        double probability_using_cache(StateCRep* state, StateCRep* precomp_state, INT& precomp_id)
-        INT _dim
-        INT _nfactors
-        INT _max_factor_dim
-
-    cdef cppclass EffectCRep_Computational(EffectCRep):
-        EffectCRep_Computational() except +
-        EffectCRep_Computational(INT, INT, double, INT) except +
-        double probability(StateCRep* state)
-        double probability_using_cache(StateCRep* state, StateCRep* precomp_state, INT& precomp_id)
-        INT _dim
-
-    cdef cppclass EffectCRep_Errgen(EffectCRep):
-        EffectCRep_Errgen() except +
-        EffectCRep_Errgen(OpCRep*, EffectCRep*, INT, INT) except +
-        double probability(StateCRep* state)
-        double probability_using_cache(StateCRep* state, StateCRep* precomp_state, INT& precomp_id)
-        INT _dim
-        INT _errgen_id
+from ...tools import mpitools as _mpit
+from ...tools import slicetools as _slct
+from ...tools import optools as _gt
+from ...tools.matrixtools import _fas
+from ...objects.opcalc import fastopcalc as _fastopcalc
+from scipy.sparse.linalg import LinearOperator
 
 
+cdef double LARGE = 1000000000
+# a large number such that LARGE is
+# a very high term weight which won't help (at all) a
+# path get included in the selected set of paths.
 
-class EffectRep(_basereps_cython.EffectRep):
-    cdef EffectCRep* c_effect
+cdef double SMALL = 1e-5
+# a number which is used in place of zero within the
+# product of term magnitudes to keep a running path
+# magnitude from being zero (and losing memory of terms).
 
+
+cdef class EffectRep(_basereps_cython.EffectRep):
     def __cinit__(self):
         self.c_effect = NULL
 
@@ -80,16 +56,16 @@ cdef class EffectRepConjugatedState(EffectRep):
         return str([ (<EffectCRep_Dense*>self.c_effect)._dataptr[i] for i in range(self.c_effect._dim)])
 
     def __reduce__(self):
-        return (EffectRepDense, (self.state_rep,))
+        return (EffectRepConjugatedState, (self.state_rep,))
 
 
 cdef class EffectRepComputational(EffectRep):
-    cdef public np.ndarray zvals
+    cdef public _np.ndarray zvals
 
-    def __cinit__(self, np.ndarray[np.int64_t, ndim=1, mode='c'] zvals, INT dim):
+    def __cinit__(self, _np.ndarray[_np.int64_t, ndim=1, mode='c'] zvals, INT dim):
         # cdef INT dim = 4**zvals.shape[0] -- just send as argument
         cdef INT nfactors = zvals.shape[0]
-        cdef double abs_elval = 1/(np.sqrt(2)**nfactors)
+        cdef double abs_elval = 1/(_np.sqrt(2)**nfactors)
         cdef INT base = 1
         cdef INT zvals_int = 0
         for i in range(nfactors):
@@ -107,23 +83,23 @@ cdef class EffectRepComputational(EffectRep):
 cdef class EffectRepTensorProduct(EffectRep):
     cdef public object povm_factors
     cdef public object effect_labels
-    cdef public np.ndarray kron_array
-    cdef public np.ndarray factor_dims
+    cdef public _np.ndarray kron_array
+    cdef public _np.ndarray factor_dims
 
     def __init__(self, povm_factors, effect_labels):
         #Arrays for speeding up kron product in effect reps
         cdef INT max_factor_dim = max(fct.dim for fct in povm_factors)
-        cdef np.ndarray[double, ndim=2, mode='c'] kron_array = \
+        cdef _np.ndarray[double, ndim=2, mode='c'] kron_array = \
             _np.ascontiguousarray(_np.empty((len(povm_factors), max_factor_dim), 'd'))
-        cdef np.ndarray[np.int64_t, ndim=1, mode='c'] factordims = \
+        cdef _np.ndarray[_np.int64_t, ndim=1, mode='c'] factor_dims = \
             _np.ascontiguousarray(_np.array([fct.dim for fct in povm_factors], _np.int64))
 
-        cdef INT dim = _np.product(factordims)
+        cdef INT dim = _np.product(factor_dims)
         cdef INT nfactors = len(self.povm_factors)
         self.povm_factors = povm_factors
         self.effect_labels = effect_labels
         self.kron_array = kron_array
-        self.factor_dims = factordims
+        self.factor_dims = factor_dims
         self.c_effect = new EffectCRep_TensorProd(<double*>kron_array.data,
                                                   <INT*>factor_dims.data,
                                                   nfactors, max_factor_dim, dim)
@@ -143,7 +119,7 @@ cdef class EffectRepTensorProduct(EffectRep):
     #TODO: Take to_dense from slow version?
 
 
-cdef class EffectRepCompsed(EffectRep):
+cdef class EffectRepComposed(EffectRep):
     cdef public OpRep op_rep
     cdef public EffectRep effect_rep
     cdef public object op_id
@@ -153,7 +129,7 @@ cdef class EffectRepCompsed(EffectRep):
         self.op_id = op_id
         self.op_rep = op_rep
         self.effect_rep = effect_rep
-        self.c_effect = new EffectCRep_Composed(op_rep.c_op,
+        self.c_effect = new EffectCRep_Composed(op_rep.c_rep,
                                                 effect_rep.c_effect,
                                                 <INT>op_id, dim)
 

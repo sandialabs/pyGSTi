@@ -20,7 +20,7 @@ from pygsti import tools as _tools
 from ..objects import objectivefns as _objfns
 from ..objects.confidenceregionfactory import ConfidenceRegionFactory as _ConfidenceRegionFactory
 from ..objects.circuit import Circuit as _Circuit
-from ..objects.explicitmodel import ExplicitOpModel as _ExplicitOpModel
+from ..models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
 from ..objects.circuitlist import CircuitList as _CircuitList
 from ..objects.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
 from ..objects.objectivefns import TimeIndependentMDCObjectiveFunction as _TIMDCObjFn

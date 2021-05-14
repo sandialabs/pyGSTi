@@ -1,5 +1,5 @@
 """
-Base classes for representations.
+Sub-package holding model POVM and POVM effect objects.
 """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -10,17 +10,15 @@ Base classes for representations.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from .complementeffect import ComplementPOVMEffect
+from .composedeffect import ComposedPOVMEffect
+from .computationaleffect import ComputationalBasisPOVMEffect
+from .conjugatedeffect import ConjugatedStatePOVMEffect
+#from .denseeffect.py  # REMOVE
+from .effect import POVMEffect
+from .fulleffect import FullPOVMEffect
+from .fullpureeffect import FullPOVMPureEffect
+from .staticeffect import StaticPOVMEffect
+from .tensorprodeffect import TensorProductPOVMEffect
 
-try:
-    from .basereps_cython import OpRep, StateRep, EffectRep
-except ImportError:
-    # If cython is unavailable, just make a pure-python base class to fill in.
-    class OpRep:
-        pass
-
-    class StateRep:
-        pass
-
-    class EffectRep:
-        pass
-
+from .povm import *

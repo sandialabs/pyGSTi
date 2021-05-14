@@ -68,7 +68,7 @@ class ComputationalBasisPOVMEffect(_POVMEffect):
         raise ValueError(("Given `vec` is not a z-basis product state - "
                           "cannot construct ComputatinoalSPAMVec"))
 
-        @classmethod
+    @classmethod
     def from_dense_purevec(cls, purevec):
         """
         TODO: update docstring

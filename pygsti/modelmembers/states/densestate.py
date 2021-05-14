@@ -32,7 +32,7 @@ class DenseState(_State):
         i.e, a (dim,1)-shaped array.
     """
 
-    def __init__(self, rep, base, evotype):
+    def __init__(self, rep, evotype, base):
         """ Initialize a new SPAM Vector """
         evotype = _Evotype.cast(evotype)
         super(DenseState, self).__init__(rep, evotype)

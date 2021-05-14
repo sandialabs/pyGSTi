@@ -15,14 +15,14 @@ import collections as _collections
 
 from .model import Model as _Model
 from .labeldicts import OutcomeLabelDict as _OutcomeLabelDict
-from .circuit import Circuit as _Circuit
-from .label import Label as _Label
-from .polynomial import Polynomial as _Polynomial
-from .resourceallocation import ResourceAllocation as _ResourceAllocation
-from .successfailfwdsim import SuccessFailForwardSimulator as _SuccessFailForwardSimulator
+from ..objects.circuit import Circuit as _Circuit
+from ..objects.label import Label as _Label
+from ..objects.polynomial import Polynomial as _Polynomial
+from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
+from ..forwardsims.successfailfwdsim import SuccessFailForwardSimulator as _SuccessFailForwardSimulator
 from ..tools import slicetools as _slct
 
-from .opcalc import compact_deriv as _compact_deriv, float_product as prod, \
+from ..objects.opcalc import compact_deriv as _compact_deriv, float_product as prod, \
     bulk_eval_compact_polynomials as _bulk_eval_compact_polynomials
 
 #REMOVE

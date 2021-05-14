@@ -30,22 +30,23 @@ from ..tools import listtools as _lt
 from ..tools import symplectic as _symp
 
 from . import model as _mdl
-from . import modelmember as _gm
-from . import circuit as _cir
-from . import operation as _op
-from . import spamvec as _sv
-from . import povm as _povm
-from . import instrument as _instrument
+from ..modelmembers import modelmember as _gm
+from ..objects import circuit as _cir
+from ..modelmembers import operations as _op
+from ..modelmembers import povms as _povm
+from ..modelmembers import instruments as _instrument
+
 from . import labeldicts as _ld
-from . import gaugegroup as _gg
-from . import matrixforwardsim as _matrixfwdsim
-from . import mapforwardsim as _mapfwdsim
-from . import termforwardsim as _termfwdsim
+from ..objects import gaugegroup as _gg
+from ..forwardsims import matrixforwardsim as _matrixfwdsim
+from ..forwardsims import mapforwardsim as _mapfwdsim
+from ..forwardsims import termforwardsim as _termfwdsim
 from . import explicitcalc as _explicitcalc
 
-from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from .basis import Basis as _Basis
-from .label import Label as _Label
+from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from ..objects.basis import BuiltinBasis as _BuiltinBasis, DirectSumBasis as _DirectSumBasis
+from ..objects.label import Label as _Label, CircuitLabel as _CircuitLabel
+from .layerrules import LayerRules as _LayerRules
 
 
 class ImplicitOpModel(_mdl.OpModel):

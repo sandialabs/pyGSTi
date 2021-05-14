@@ -15,7 +15,7 @@ namespace CReps {
     INT _dim;
     bool _ownmem;
     StateCRep(INT dim);    
-    StateCRep(double* data, INT dim, bool copy);
+    StateCRep(double* data, INT dim, bool copy=false);
     ~StateCRep();
     void print(const char* label);
     void copy_from(StateCRep* st);

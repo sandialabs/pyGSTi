@@ -18,7 +18,7 @@ from collections import defaultdict as _defaultdict
 
 from .dataset import DataSet as _DataSet
 from . import circuit as _cir
-from . import labeldicts as _ld
+from ..models import labeldicts as _ld
 
 
 class _MultiDataSetKVIterator(object):

@@ -21,14 +21,12 @@ from ..tools import basistools as _bt
 from ..tools import matrixtools as _mt
 from ..tools import mpitools as _mpit
 from ..tools import sharedmemtools as _smt
-from . import spamvec as _sv
-from . import operation as _op
-from . import labeldicts as _ld
-from .resourceallocation import ResourceAllocation as _ResourceAllocation
-from .copalayout import CircuitOutcomeProbabilityArrayLayout as _CircuitOutcomeProbabilityArrayLayout
-from .distlayout import DistributableCOPALayout as _DistributableCOPALayout
-from .cachedlayout import CachedCOPALayout as _CachedCOPALayout
-from .circuit import Circuit as _Circuit
+from ..models import labeldicts as _ld
+from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
+from ..layouts.copalayout import CircuitOutcomeProbabilityArrayLayout as _CircuitOutcomeProbabilityArrayLayout
+from ..layouts.distlayout import DistributableCOPALayout as _DistributableCOPALayout
+from ..layouts.cachedlayout import CachedCOPALayout as _CachedCOPALayout
+from ..objects.circuit import Circuit as _Circuit
 
 
 class ForwardSimulator(object):

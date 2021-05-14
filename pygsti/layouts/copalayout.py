@@ -17,10 +17,10 @@ import copy as _copy
 from functools import reduce as _reduce
 from operator import add as _add
 
-from .circuitlist import CircuitList as _CircuitList
-from .label import Label as _Label
-from .circuit import Circuit as _Circuit
-from .resourceallocation import ResourceAllocation as _ResourceAllocation
+from ..objects.circuitlist import CircuitList as _CircuitList
+from ..objects.label import Label as _Label
+from ..objects.circuit import Circuit as _Circuit
+from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
 from ..tools import listtools as _lt
 from ..tools import slicetools as _slct
 

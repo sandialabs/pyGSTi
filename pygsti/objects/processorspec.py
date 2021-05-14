@@ -15,12 +15,12 @@ import itertools as _itertools
 import collections as _collections
 import warnings as _warnings
 
-from .localnoisemodel import LocalNoiseModel as _LocalNoiseModel
+from ..models.localnoisemodel import LocalNoiseModel as _LocalNoiseModel
 from .compilationlibrary import CompilationLibrary as _CompilationLibrary
 from .compilationlibrary import CompilationError as _CompilationError
 from .qubitgraph import QubitGraph as _QubitGraph
 from .label import Label as _Label
-from .mapforwardsim import MapForwardSimulator as _MapFSim
+from ..forwardsims.mapforwardsim import MapForwardSimulator as _MapFSim
 from ..tools import optools as _gt
 from ..tools import internalgates as _itgs
 from ..tools import symplectic as _symp

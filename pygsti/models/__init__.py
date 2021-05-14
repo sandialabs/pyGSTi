@@ -1,5 +1,5 @@
 """
-Base classes for representations.
+pyGSTi Models Python Package
 """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -11,16 +11,12 @@ Base classes for representations.
 #***************************************************************************************************
 
 
-try:
-    from .basereps_cython import OpRep, StateRep, EffectRep
-except ImportError:
-    # If cython is unavailable, just make a pure-python base class to fill in.
-    class OpRep:
-        pass
-
-    class StateRep:
-        pass
-
-    class EffectRep:
-        pass
-
+from .labeldicts import StateSpaceLabels
+from .model import Model
+from .explicitmodel import ExplicitOpModel
+from .explicitmodel import ExplicitOpModel as GateSet  # alias
+from .implicitmodel import ImplicitOpModel
+from .localnoisemodel import LocalNoiseModel
+from .cloudnoisemodel import CloudNoiseModel
+from .oplessmodel import OplessModel
+from .oplessmodel import SuccessFailModel

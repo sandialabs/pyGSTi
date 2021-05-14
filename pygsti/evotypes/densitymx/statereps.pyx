@@ -1,32 +1,28 @@
+"""
+Base classes for Cython representations.
+"""
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
 
-
-#Use 64-bit integers
-ctypedef long long INT
-ctypedef unsigned long long UINT
-
-cdef extern from "fastreps.h" namespace "CReps":
-
-    # Density Matrix (DM) propagation classes
-    cdef cppclass DMStateCRep:
-        DMStateCRep() except +
-        DMStateCRep(INT) except +
-        DMStateCRep(double*,INT,bool) except +
-        void copy_from(DMStateCRep*)
-        INT _dim
-        double* _dataptr
-
+import numpy as _np
+import functools as _functools
+from ...tools import basistools as _bt
+from ...tools import optools as _ot
+from ...tools import fastcalc as _fastcalc
 
 cdef class StateRep(_basereps_cython.StateRep):
-    cdef StateCRep* c_state
-    cdef public np.ndarray base
-    #cdef double [:] data_view # alt way to hold a reference
-
-    def __cinit__(self, np.ndarray[double, ndim=1, mode='c'] data):
-        self.base = np.require(data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
-        self.c_state = new DMStateCRep(<double*>self.base.data,<INT>self.base.shape[0],<bool>0)
+    def __cinit__(self, _np.ndarray[double, ndim=1, mode='c'] data):
+        self.base = _np.require(data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
+        self.c_state = new StateCRep(<double*>self.base.data,<INT>self.base.shape[0],<bool>0)
 
     def __reduce__(self):
-        return (StateRep, (), (self.base, reducefix))
+        return (StateRep, (), (self.base,))
 
     def __setstate__(self, state):
         self.base, writeable = state
@@ -49,25 +45,25 @@ cdef class StateRep(_basereps_cython.StateRep):
         return str([self.c_state._dataptr[i] for i in range(self.c_state._dim)])
 
 
-class StateRepDense(StateRep):
+cdef class StateRepDense(StateRep):
     def base_has_changed(self):
         pass
 
 
-class StateRepPure(StateRep):
+cdef class StateRepPure(StateRep):
     def __init__(self, purevec, basis):
         assert(purevec.dtype == _np.dtype(complex))
         self.purebase = _np.require(purevec.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
         self.basis = basis
-        dmVec_std = _gt.state_to_dmvec(self.purebase)
+        dmVec_std = _ot.state_to_dmvec(self.purebase)
         super(StateRepPure, self).__init__(_bt.change_basis(dmVec_std, 'std', self.basis))
 
     def purebase_has_changed(self):
-        dmVec_std = _gt.state_to_dmvec(self.purebase)
+        dmVec_std = _ot.state_to_dmvec(self.purebase)
         self.base[:] = _bt.change_basis(dmVec_std, 'std', self.basis)
 
 
-class StateRepComputational(StateRep):
+cdef class StateRepComputational(StateRep):
     def __init__(self, zvals):
 
         #Convert zvals to dense vec:
@@ -86,12 +82,12 @@ class StateRepComputational(StateRep):
             for i, zi in enumerate(zvals):
                 fast_kron_array[i, :] = v[zi]
             vec = _np.ascontiguousarray(_np.empty(factor_dim**len(zvals), typ))
-            _fastcalc.fast_kron(ret, fast_kron_array, fast_kron_factordims)
+            _fastcalc.fast_kron(vec, fast_kron_array, fast_kron_factordims)
 
         super(StateRepComputational, self).__init__(vec)
 
 
-class StateRepComposed(StateRep):
+cdef class StateRepComposed(StateRep):
     def __init__(self, state_rep, op_rep):
         self.state_rep = state_rep
         self.op_rep = op_rep
@@ -103,10 +99,10 @@ class StateRepComposed(StateRep):
         self.base[:] = rep.base[:]
 
 
-class StateRepTensorProduct(StateRep):
+cdef class StateRepTensorProduct(StateRep):
     def __init__(self, factor_state_reps):
         self.factor_reps = factor_state_reps
-        dim = _np.product([fct.dim for fct in factors])
+        dim = _np.product([fct.dim for fct in self.factor_reps])
         super(StateRepTensorProduct, self).__init__(_np.zeros(dim, 'd'))
         self.reps_have_changed()
 

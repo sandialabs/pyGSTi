@@ -29,26 +29,23 @@ from ..tools import basistools as _bt
 from ..tools import listtools as _lt
 from ..tools import symplectic as _symp
 
-from . import modelmember as _gm
-from . import circuit as _cir
-from . import operation as _op
-from . import spamvec as _sv
-from . import povm as _povm
-from . import instrument as _instrument
-from . import labeldicts as _ld
-from . import gaugegroup as _gg
-from . import forwardsim as _fwdsim
-from . import matrixforwardsim as _matrixfwdsim
-from . import mapforwardsim as _mapfwdsim
-from . import termforwardsim as _termfwdsim
-from . import explicitcalc as _explicitcalc
+from ..modelmembers import modelmember as _gm
 
-from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from .basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis
-from .label import Label as _Label
-from .circuitlist import CircuitList as _CircuitList
+from . import labeldicts as _ld
+from . import explicitcalc as _explicitcalc
+from ..objects import gaugegroup as _gg
+from ..objects import circuit as _cir
+from ..forwardsims import forwardsim as _fwdsim
+from ..forwardsims import matrixforwardsim as _matrixfwdsim
+from ..forwardsims import mapforwardsim as _mapfwdsim
+from ..forwardsims import termforwardsim as _termfwdsim
+
+from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from ..objects.basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis
+from ..objects.label import Label as _Label
+from ..objects.circuitlist import CircuitList as _CircuitList
+from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
 from .layerrules import LayerRules as _LayerRules
-from .resourceallocation import ResourceAllocation as _ResourceAllocation
 
 MEMLIMIT_FOR_NONGAUGE_PARAMS = None
 

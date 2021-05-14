@@ -20,16 +20,16 @@ from ..tools import slicetools as _slct
 from ..tools.matrixtools import _fas
 from ..tools import symplectic as _symp
 from ..tools import sharedmemtools as _smt
-from .profiler import DummyProfiler as _DummyProfiler
-from .label import Label as _Label
-from .maplayout import MapCOPALayout as _MapCOPALayout
+from ..objects.profiler import DummyProfiler as _DummyProfiler
+from ..objects.label import Label as _Label
+from ..layouts.maplayout import MapCOPALayout as _MapCOPALayout
 from .forwardsim import ForwardSimulator as _ForwardSimulator
 from .forwardsim import _bytes_for_array_types
 from .distforwardsim import DistributableForwardSimulator as _DistributableForwardSimulator
-from .distlayout import DistributableCOPALayout as _DistributableCOPALayout
-from .resourceallocation import ResourceAllocation as _ResourceAllocation
-from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from . import replib
+from ..layouts.distlayout import DistributableCOPALayout as _DistributableCOPALayout
+from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
+from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+#from . import replib REMOVE
 
 
 _dummy_profiler = _DummyProfiler()

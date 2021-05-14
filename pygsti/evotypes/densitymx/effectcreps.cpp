@@ -4,7 +4,10 @@
 #include <complex>
 #include <assert.h>
 #include <algorithm>    // std::find
-#include "effectreps.h"
+
+#include "statecreps.h"
+#include "opcreps.h"
+#include "effectcreps.h"
 //#include <pthread.h>
 
 //using namespace std::complex_literals;

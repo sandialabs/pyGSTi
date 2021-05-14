@@ -17,25 +17,25 @@ import collections as _collections
 import scipy.sparse as _sps
 import warnings as _warnings
 
-from . import operation as _op
-from . import spamvec as _sv
-from . import povm as _povm
-from . import qubitgraph as _qgraph
+from ..modelmembers import operations as _op
+from ..modelmembers import states as _state
+from ..modelmembers import povms as _povm
+from ..modelmembers.operations import opfactory as _opfactory
+from ..objects import qubitgraph as _qgraph
 from . import labeldicts as _ld
-from . import opfactory as _opfactory
 from ..tools import optools as _gt
 from ..tools import basistools as _bt
 from ..tools import internalgates as _itgs
 from .implicitmodel import ImplicitOpModel as _ImplicitOpModel
 from .layerrules import LayerRules as _LayerRules
-from .forwardsim import ForwardSimulator as _FSim
-from .matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
-from .mapforwardsim import MapForwardSimulator as _MapFSim
-from .termforwardsim import TermForwardSimulator as _TermFSim
+from ..forwardsims.forwardsim import ForwardSimulator as _FSim
+from ..forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
+from ..forwardsims.mapforwardsim import MapForwardSimulator as _MapFSim
+from ..forwardsims.termforwardsim import TermForwardSimulator as _TermFSim
 
-from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from .basis import BuiltinBasis as _BuiltinBasis
-from .label import Label as _Lbl, CircuitLabel as _CircuitLabel
+from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from ..objects.basis import BuiltinBasis as _BuiltinBasis
+from ..objects.label import Label as _Lbl, CircuitLabel as _CircuitLabel
 
 from ..tools.basisconstructors import sqrt2, id2x2, sigmax, sigmay, sigmaz
 
@@ -412,23 +412,23 @@ class LocalNoiseModel(_ImplicitOpModel):
             prep_factors = []; povm_factors = []
             for i in range(num_qubits):
                 prep_factors.append(
-                    _sv.convert(_sv.StaticSPAMVec(v0), "TP", basis1Q))
+                    _state.convert(_state.StaticState(v0), "TP", basis1Q))    # ----------------------- evotype???????????? - and POVM elements below?
                 povm_factors.append(
                     _povm.convert(_povm.UnconstrainedPOVM(([
-                        ('0', _sv.StaticSPAMVec(v0, typ="effect")),
-                        ('1', _sv.StaticSPAMVec(v1, typ="effect"))])), "TP", basis1Q))
+                        ('0', _povm.StaticPOVMEffect(v0)),
+                        ('1', _povm.StaticPOVMEffect(v1))])), "TP", basis1Q))
 
-            prep_layers['rho0'] = _sv.TensorProdSPAMVec('prep', prep_factors)
-            povm_layers['Mdefault'] = _povm.TensorProdPOVM(povm_factors)
+            prep_layers['rho0'] = _state.TensorProductState(prep_factors)
+            povm_layers['Mdefault'] = _povm.TensorProductPOVM(povm_factors)
 
         elif parameterization == "clifford":
             # Clifford object construction is different enough we do it separately
-            prep_layers['rho0'] = _sv.StabilizerSPAMVec(num_qubits)  # creates all-0 state by default
+            prep_layers['rho0'] = _state.ComputationalBasisState([0]*num_qubits, 'stabilizer')
             povm_layers['Mdefault'] = _povm.ComputationalBasisPOVM(num_qubits, 'stabilizer')
 
         elif parameterization in ("static", "static unitary"):
             #static computational basis
-            prep_layers['rho0'] = _sv.ComputationalSPAMVec([0] * num_qubits, evotype)
+            prep_layers['rho0'] = _state.ComputationalBasisState([0] * num_qubits, evotype)
             povm_layers['Mdefault'] = _povm.ComputationalBasisPOVM(num_qubits, evotype)
 
         else:
@@ -442,16 +442,16 @@ class LocalNoiseModel(_ImplicitOpModel):
             qubitGraph = _qgraph.QubitGraph.common_graph(num_qubits, "line", qubit_labels=qubit_labels)
             # geometry doesn't matter while maxSpamWeight==1
 
-            prepPure = _sv.ComputationalSPAMVec([0] * num_qubits, evotype)
+            prepPure = _state.ComputationalBasisState([0] * num_qubits, evotype)
             prepNoiseMap = _cnm._build_nqn_global_noise(qubitGraph, maxSpamWeight, sparse_lindblad_basis,
                                                         sparse_lindblad_reps, simulator, parameterization,
                                                         errcomp_type, verbosity)
-            prep_layers['rho0'] = _sv.LindbladSPAMVec(prepPure, prepNoiseMap, "prep")
+            prep_layers['rho0'] = _state.ComposedState(prepPure, prepNoiseMap)
 
             povmNoiseMap = _cnm._build_nqn_global_noise(qubitGraph, maxSpamWeight, sparse_lindblad_basis,
                                                         sparse_lindblad_reps, simulator, parameterization,
                                                         errcomp_type, verbosity)
-            povm_layers['Mdefault'] = _povm.LindbladPOVM(povmNoiseMap, None, "pp")
+            povm_layers['Mdefault'] = _povm.ExpErrorgenPOVM(povmNoiseMap, None, "pp")
 
         #OLD: when had a 'spamdict' arg: else:
         #spamdict : dict
@@ -474,7 +474,7 @@ class LocalNoiseModel(_ImplicitOpModel):
             if not isinstance(gate, (_op.LinearOperator, _opfactory.OpFactory)):
                 try:
                     if parameterization == "static unitary":  # assume gate dict is already unitary gates?
-                        gate = _op.StaticDenseOp(gate, "statevec")
+                        gate = _op.StaticDenseOp(gate, "statevec")  # -----------------------------------------TODO - add evotype to these op constructions?
                     else:
                         gate = _op.convert(_op.StaticDenseOp(gate), parameterization, "pp")
                 except Exception as e:
@@ -488,7 +488,7 @@ class LocalNoiseModel(_ImplicitOpModel):
         if global_idle is not None:
             if not isinstance(global_idle, _op.LinearOperator):
                 if parameterization == "static unitary":  # assume gate dict is already unitary gates?
-                    global_idle = _op.StaticDenseOp(global_idle, "statevec")
+                    global_idle = _op.StaticDenseOp(global_idle, "statevec")   # --------------------------------------- evotype???????????????
                 else:
                     global_idle = _op.convert(_op.StaticDenseOp(global_idle), parameterization, "pp")
 

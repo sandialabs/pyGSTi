@@ -182,7 +182,7 @@ class Basis(object):
         Basis
         """
         #print("DB: CAST = ",name_or_basis_or_matrices,dim)
-        from .labeldicts import StateSpaceLabels as _SSLs
+        from ..models.labeldicts import StateSpaceLabels as _SSLs
         if name_or_basis_or_matrices is None:  # special case of empty basis
             return ExplicitBasis([], [], "*Empty*", "Empty (0-element) basis", False, sparse)  # empty basis
         elif isinstance(name_or_basis_or_matrices, Basis):

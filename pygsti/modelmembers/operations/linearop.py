@@ -10,6 +10,7 @@ The LinearOperator class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import numpy as _np
 from .. import modelmember as _modelmember
 
 #Note on initialization sequence of Operations within a Model:

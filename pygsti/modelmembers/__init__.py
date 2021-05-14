@@ -1,5 +1,5 @@
 """
-Base classes for representations.
+A sub-package containing the objects that are held within :class:`OpModel` models.
 """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -10,17 +10,4 @@ Base classes for representations.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-
-try:
-    from .basereps_cython import OpRep, StateRep, EffectRep
-except ImportError:
-    # If cython is unavailable, just make a pure-python base class to fill in.
-    class OpRep:
-        pass
-
-    class StateRep:
-        pass
-
-    class EffectRep:
-        pass
-
+from .modelmember import ModelMember, ModelChild

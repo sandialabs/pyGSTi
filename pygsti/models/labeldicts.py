@@ -16,10 +16,12 @@ import numbers as _numbers
 import warnings as _warnings
 import sys as _sys
 
-from . import spamvec as _sv
-from . import operation as _op
-from . import modelmember as _gm
-from .label import Label as _Label
+from ..modelmembers import operations as _op
+from ..modelmembers import states as _state
+from ..modelmembers import povms as _povm
+
+from ..modelmembers import modelmember as _mm
+from ..objects.label import Label as _Label
 
 
 class _PrefixOrderedDict(_collections.OrderedDict):
@@ -62,7 +64,7 @@ class _PrefixOrderedDict(_collections.OrderedDict):
     """
 
 
-class OrderedMemberDict(_PrefixOrderedDict, _gm.ModelChild):
+class OrderedMemberDict(_PrefixOrderedDict, _mm.ModelChild):
     """
     An ordered dictionary whose keys must begin with a given prefix.
 
@@ -157,7 +159,7 @@ class OrderedMemberDict(_PrefixOrderedDict, _gm.ModelChild):
                       'cast_to_type': flags.get('cast_to_type', None)
                       }
         _PrefixOrderedDict.__init__(self, prefix, items)
-        _gm.ModelChild.__init__(self, parent)  # set's self.parent
+        _mm.ModelChild.__init__(self, parent)  # set's self.parent
 
         #Set parent our elements, now that the list has been initialized
         # (done for un-pickling b/c reduce => __init__ is called to construct
@@ -168,7 +170,7 @@ class OrderedMemberDict(_PrefixOrderedDict, _gm.ModelChild):
 
     def _check_dim(self, obj):
         if not self.flags['match_parent_dim']: return  # no check
-        if isinstance(obj, _gm.ModelMember):
+        if isinstance(obj, _mm.ModelMember):
             dim = obj.dim
         elif self.flags['cast_to_type'] == "spamvec":
             dim = len(obj)
@@ -241,16 +243,17 @@ class OrderedMemberDict(_PrefixOrderedDict, _gm.ModelChild):
         -------
         object
         """
-        if isinstance(value, _gm.ModelMember): return value
+        if isinstance(value, _mm.ModelMember): return value
         if self.flags['cast_to_type'] is None:
             raise ValueError("Can only assign `ModelMember` objects as *new* values (not %s)."
                              % str(type(value)))
 
         basis = self.parent.basis if self.parent else None
         obj = None
+        #TODO: update this - now states & effects are different types, and is conversion still a good idea? -------------------------
         if self.flags['cast_to_type'] == "spamvec":
-            obj = _sv.StaticSPAMVec(value)
-            obj = _sv.convert(obj, self.default_param, basis)
+            obj = _state.StaticState(value)  # NEED effects sometimes
+            obj = _state.convert(obj, self.default_param, basis)
         elif self.flags['cast_to_type'] == "operation":
             obj = _op.StaticDenseOp(value)
             obj = _op.convert(obj, self.default_param, basis)
@@ -261,7 +264,7 @@ class OrderedMemberDict(_PrefixOrderedDict, _gm.ModelChild):
         value = self._auto_embed(key, value)  # automatically create an embedded gate if needed
         self._check_dim(value)
 
-        if isinstance(value, _gm.ModelMember):  # if we're given an object, just replace
+        if isinstance(value, _mm.ModelMember):  # if we're given an object, just replace
             #When self has a valid parent (as it usually does, except when first initializing)
             # we copy and reset the gpindices & parent of ModelMember values which either:
             # 1) belong to a different parent (indices would be inapplicable if they exist)

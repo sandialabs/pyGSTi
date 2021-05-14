@@ -22,8 +22,8 @@ from . import listtools as _lt
 from . import jamiolkowski as _jam
 from . import mpitools as _mpit
 from . import slicetools as _slct
-from ..objects import objectivefns as _objfns
-from ..objects.smartcache import smart_cached
+
+#from ..objects.smartcache import smart_cached
 
 TOL = 1e-20
 
@@ -259,6 +259,7 @@ def logl_per_circuit(model, dataset, circuits=None,
         Values are the log-likelihood contributions of the corresponding
         circuit aggregated over outcomes.
     """
+    from ..objects import objectivefns as _objfns
     regularization = {'min_prob_clip': min_prob_clip, 'radius': radius} if poisson_picture \
         else {'min_prob_clip': min_prob_clip}  # non-poisson-pic logl has no radius
     obj_max = _objfns._objfn(_objfns.MaxLogLFunction, model, dataset, circuits,
@@ -341,6 +342,7 @@ def logl_jacobian(model, dataset, circuits=None,
     numpy array
         array of shape (M,), where M is the length of the vectorized model.
     """
+    from ..objects import objectivefns as _objfns
     regularization = {'min_prob_clip': min_prob_clip, 'radius': radius} if poisson_picture \
         else {'min_prob_clip': min_prob_clip}  # non-poisson-pic logl has no radius
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
@@ -415,6 +417,7 @@ def logl_hessian(model, dataset, circuits=None,
     numpy array
         array of shape (M,M), where M is the length of the vectorized model.
     """
+    from ..objects import objectivefns as _objfns
     regularization = {'min_prob_clip': min_prob_clip, 'radius': radius} if poisson_picture \
         else {'min_prob_clip': min_prob_clip}  # non-poisson-pic logl has no radius
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
@@ -501,6 +504,7 @@ def logl_approximate_hessian(model, dataset, circuits=None,
     numpy array
         array of shape (M,M), where M is the length of the vectorized model.
     """
+    from ..objects import objectivefns as _objfns
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
     obj = _objfns._objfn(obj_cls, model, dataset, circuits,
                          {'min_prob_clip': min_prob_clip,
@@ -549,6 +553,7 @@ def logl_max(model, dataset, circuits=None, poisson_picture=True,
     -------
     float
     """
+    from ..objects import objectivefns as _objfns
     obj_max = _objfns._objfn(_objfns.MaxLogLFunction, model, dataset, circuits, mdc_store=mdc_store,
                              op_label_aliases=op_label_aliases, poisson_picture=poisson_picture, method_names=('fn',))
     return obj_max.fn()  # gathers internally
@@ -592,6 +597,7 @@ def logl_max_per_circuit(model, dataset, circuits=None,
         Values are the maximum log-likelihood contributions of the corresponding
         circuit aggregated over outcomes.
     """
+    from ..objects import objectivefns as _objfns
     obj_max = _objfns._objfn(_objfns.MaxLogLFunction, model, dataset, circuits, mdc_store=mdc_store,
                              op_label_aliases=op_label_aliases, poisson_picture=poisson_picture,
                              method_names=('percircuit',))
@@ -751,6 +757,7 @@ def two_delta_logl(model, dataset, circuits=None,
     Nsigma, pvalue : float
         Only returned when `dof_calc_method` is not None.
     """
+    from ..objects import objectivefns as _objfns
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
     obj = _objfns._objfn(obj_cls, model, dataset, circuits,
                          {'min_prob_clip': min_prob_clip,
@@ -865,6 +872,7 @@ def two_delta_logl_per_circuit(model, dataset, circuits=None,
     Nsigma, pvalue : numpy.ndarray
         Only returned when `dof_calc_method` is not None.
     """
+    from ..objects import objectivefns as _objfns
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
     obj = _objfns._objfn(obj_cls, model, dataset, circuits,
                          {'min_prob_clip': min_prob_clip,
@@ -1063,7 +1071,7 @@ def two_delta_logl_term(n, p, f, min_prob_clip=1e-6, poisson_picture=True):
     -------
     float or numpy array
     """
-
+    from ..objects import objectivefns as _objfns
     #Allow this function to pass NaNs through silently, since
     # fiducial pair reduction may pass inputs with nan's legitimately and the desired
     # behavior is to just let the nan's pass through to nan's in the output.

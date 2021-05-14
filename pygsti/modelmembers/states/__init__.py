@@ -1,5 +1,5 @@
 """
-Base classes for representations.
+Sub-package holding model state preparation objects.
 """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -10,17 +10,14 @@ Base classes for representations.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-
-try:
-    from .basereps_cython import OpRep, StateRep, EffectRep
-except ImportError:
-    # If cython is unavailable, just make a pure-python base class to fill in.
-    class OpRep:
-        pass
-
-    class StateRep:
-        pass
-
-    class EffectRep:
-        pass
-
+from .composedstate import ComposedState
+from .computationalstate import ComputationalBasisState
+from .cptpstate import CPTPState
+#from .densestate  REMOVE?
+from .fullpurestate import FullPureState
+from .fullstate import FullState
+#from .purestate #TODO??
+from .state import State
+from .staticstate import StaticState
+from .tensorprodstate import TensorProductState
+from .tpstate import TPState

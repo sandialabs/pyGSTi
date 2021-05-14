@@ -23,7 +23,7 @@ import itertools as _itertools
 from . import stdlists as _stdlists
 from .. import objects as _objs
 from ..tools import mpitools as _mpit
-from ..objects.termforwardsim import TermForwardSimulator as _TermFSim
+from ..forwardsims.termforwardsim import TermForwardSimulator as _TermFSim
 
 
 def _get_cachefile_names(std_module, param_type, simulator, py_version):

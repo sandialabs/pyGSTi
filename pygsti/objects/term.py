@@ -20,10 +20,10 @@ from operator import add as _add
 
 from .polynomial import Polynomial as _Polynomial
 from . import replib
-from . import modelmember as _mm
-from . import operation as _op
-from . import spamvec as _spamvec
-
+from ..modelmembers import modelmember as _mm
+from ..modelmembers import operations as _op
+from ..modelmembers import states as _state
+from ..modelmembers import povms as _povm
 
 def compose_terms_with_mag(terms, magnitude):
     """
@@ -308,7 +308,7 @@ def _embed_oprep(state_space_labels, target_labels, rep_to_embed, evotype):
 #    -------
 #    RankOneTerm
 #    """
-#    from . import operation as _op
+#    from ..modelmembers import operations as _op
 #    ret = RankOneTerm(term.coeff, None, None, term.termtype, term._evotype)
 #    ret.pre_ops = [_op.EmbeddedOp(state_space_labels, target_labels, op)
 #                   for op in term.pre_ops]
@@ -491,12 +491,12 @@ class RankOnePrepTerm(RankOneTerm, _NoMagnitude):
 
         if not isinstance(pre_state, _mm.ModelMember):
             if evotype == "svterm":
-                pre_state = _spamvec.StaticSPAMVec(pre_state, "statevec", "prep")
+                pre_state = _state.StaticState(pre_state, "statevec")
             else:
                 raise ValueError("No default term vector for evotype=%s" % evotype)
         if not isinstance(post_state, _mm.ModelMember):
             if evotype == "svterm":
-                pre_state = _spamvec.StaticSPAMVec(post_state, "statevec", "prep")
+                pre_state = _state.StaticState(post_state, "statevec")
             else:
                 raise ValueError("No default term vector for evotype=%s" % evotype)
 
@@ -563,12 +563,12 @@ class RankOneEffectTerm(RankOneTerm, _NoMagnitude):
 
         if not isinstance(pre_effect, _mm.ModelMember):
             if evotype == "svterm":
-                pre_effect = _spamvec.StaticSPAMVec(pre_effect, "statevec", "effect")
+                pre_effect = _povm.StaticPOVMEffect(pre_effect, "statevec")
             else:
                 raise ValueError("No default term vector for evotype=%s" % evotype)
         if not isinstance(post_effect, _mm.ModelMember):
             if evotype == "svterm":
-                pre_effect = _spamvec.StaticSPAMVec(post_effect, "statevec", "effect")
+                pre_effect = _povm.StaticPOVMEffect(post_effect, "statevec")
             else:
                 raise ValueError("No default term vector for evotype=%s" % evotype)
 
@@ -643,7 +643,7 @@ class RankOneOpTerm(RankOneTerm, _NoMagnitude):
                 if evotype == "svterm":
                     pre_op = _op.StaticDenseOp(pre_op, "statevec")
                 elif evotype == "cterm":
-                    pre_op = _op.CliffordOp(pre_op)
+                    pre_op = _op.CliffordOp(pre_op)  # ------------------------------------------ evotype ??????????????????????
                 else:
                     raise ValueError("Invalid `evotype` argument: %s" % evotype)
             pre_ops.append(pre_op)
@@ -653,7 +653,7 @@ class RankOneOpTerm(RankOneTerm, _NoMagnitude):
                 if evotype == "svterm":
                     post_op = _op.StaticDenseOp(post_op, "statevec")
                 elif evotype == "cterm":
-                    post_op = _op.CliffordOp(post_op)
+                    post_op = _op.CliffordOp(post_op)  # ------------------------------------------ evotype ??????????????????????
                 else:
                     raise ValueError("Invalid `evotype` argument: %s" % evotype)
             post_ops.append(post_op)

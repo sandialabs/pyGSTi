@@ -39,9 +39,9 @@ from ..objects.gaugegroup import TrivialGaugeGroup as _TrivialGaugeGroup
 from ..objects.gaugegroup import TrivialGaugeGroupElement as _TrivialGaugeGroupElement
 from ..objects.circuitlist import CircuitList as _CircuitList
 from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
-from ..objects.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
 from ..objects.objectivefns import ModelDatasetCircuitsStore as _ModelDatasetCircuitStore
-from ..objects.distlayout import DistributableCOPALayout as _DistributableCOPALayout
+from ..forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
+from ..layouts.distlayout import DistributableCOPALayout as _DistributableCOPALayout
 
 
 #For results object:

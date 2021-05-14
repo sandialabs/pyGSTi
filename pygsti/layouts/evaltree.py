@@ -16,8 +16,8 @@ import collections as _collections
 import bisect as _bisect
 import warnings as _warnings
 
-from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from .circuit import Circuit as _Circuit
+from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from ..objects.circuit import Circuit as _Circuit
 
 
 def _walk_subtree(treedict, indx, running_inds):

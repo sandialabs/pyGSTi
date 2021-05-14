@@ -18,7 +18,6 @@ import warnings as _warnings
 
 from ..tools import basisconstructors as _bc
 from ..tools import matrixtools as _mt
-from . import spamvec as _sv
 
 
 # Tolerace for matrix_rank when finding rank of a *normalized* projection
@@ -459,6 +458,7 @@ class ExplicitOpModelCalc(object):
         whose nullspace gives the gauge directions in parameter space.
         """
 
+        from ..modelmembers.povms.complementeffect import ComplementPOVMEffect as _ComplementPOVMEffect
         # ** See comments at the beginning of nongauge_projector for explanation **
 
         try:
@@ -490,7 +490,7 @@ class ExplicitOpModelCalc(object):
             newSelf = self.copy()
             newSelf.effects = self.effects.copy()  # b/c ForwardSimulator.__init__ doesn't copy members (for efficiency)
             for effectlbl, EVec in self.effects.items():
-                if isinstance(EVec, _sv.ComplementSPAMVec):
+                if isinstance(EVec, _ComplementPOVMEffect):
                     del newSelf.effects[effectlbl]
             self = newSelf  # HACK!!! replacing self for remainder of this fn with version without Ecs
 

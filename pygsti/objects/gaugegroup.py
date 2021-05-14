@@ -11,7 +11,7 @@ GaugeGroup and derived objects, used primarily in gauge optimization
 #***************************************************************************************************
 
 import numpy as _np
-from . import operation as _op
+from ..modelmembers import operations as _op
 
 
 class GaugeGroup(object):
@@ -329,7 +329,7 @@ class OpGaugeGroup(GaugeGroup):
             gauge optimization was performed.
         """
         if not isinstance(operation, _op.LinearOperator):
-            operation = _op.StaticDenseOp(operation)
+            operation = _op.StaticDenseOp(operation)     # -------------------- Evotype ????????????????????????? ------------
         self._operation = operation
         self.element = elementcls
         GaugeGroup.__init__(self, name)
@@ -397,7 +397,7 @@ class OpGaugeGroupElement(GaugeGroupElement):
             information and the gauge transformation matrix itself.
         """
         if not isinstance(operation, _op.LinearOperator):
-            operation = _op.StaticDenseOp(operation)
+            operation = _op.StaticDenseOp(operation)   # ------------------------------- Evotype ????????????????????????????????
         self._operation = operation
         self._inv_matrix = None
         GaugeGroupElement.__init__(self)
@@ -502,8 +502,7 @@ class FullGaugeGroup(OpGaugeGroup):
         should be the same as `mdl.dim` where `mdl` is a :class:`Model` you
         might gauge-transform.
         """
-        from . import operation as _op  # b/c operation.py imports gaugegroup
-        operation = _op.FullDenseOp(_np.identity(dim, 'd'))
+        operation = _op.FullDenseOp(_np.identity(dim, 'd'))  # ------------------------------------- Evotype ????????????????????????????????????????????
         OpGaugeGroup.__init__(self, operation, FullGaugeGroupElement, "Full")
 
 
@@ -546,8 +545,7 @@ class TPGaugeGroup(OpGaugeGroup):
         should be the same as `mdl.dim` where `mdl` is a :class:`Model` you
         might gauge-transform.
         """
-        from . import operation as _op  # b/c operation.py imports gaugegroup
-        operation = _op.TPDenseOp(_np.identity(dim, 'd'))
+        operation = _op.TPDenseOp(_np.identity(dim, 'd'))   # ---------------------------------------------- Evotype ???????????????????
         OpGaugeGroup.__init__(self, operation, TPGaugeGroupElement, "TP")
 
 
@@ -604,7 +602,6 @@ class DiagGaugeGroup(OpGaugeGroup):
         should be the same as `mdl.dim` where `mdl` is a :class:`Model` you
         might gauge-transform.
         """
-        from . import operation as _op  # b/c operation.py imports gaugegroup
         ltrans = _np.identity(dim, 'd')
         rtrans = _np.identity(dim, 'd')
         baseMx = _np.identity(dim, 'd')
@@ -655,7 +652,6 @@ class TPDiagGaugeGroup(TPGaugeGroup):
         should be the same as `mdl.dim` where `mdl` is a :class:`Model` you
         might gauge-transform.
         """
-        from . import operation as _op  # b/c operation.py imports gaugegroup
         ltrans = _np.identity(dim, 'd')
         rtrans = _np.identity(dim, 'd')
         baseMx = _np.identity(dim, 'd')
@@ -710,7 +706,6 @@ class UnitaryGaugeGroup(OpGaugeGroup):
         should be the same as `mdl.dim` where `mdl` is a :class:`Model` you
         might gauge-transform.
         """
-        from . import operation as _op  # b/c operation.py imports gaugegroup
         operation = _op.LindbladDenseOp.from_operation_matrix(
             None, _np.identity(dim, 'd'), ham_basis=basis, nonham_basis=None,
             param_mode="cptp", mx_basis=basis)
@@ -759,7 +754,6 @@ class SpamGaugeGroup(OpGaugeGroup):
         should be the same as `mdl.dim` where `mdl` is a :class:`Model` you
         might gauge-transform.
         """
-        from . import operation as _op  # b/c operation.py imports gaugegroup
         ltrans = _np.identity(dim, 'd')
         rtrans = _np.identity(dim, 'd')
         baseMx = _np.identity(dim, 'd')
@@ -812,7 +806,6 @@ class TPSpamGaugeGroup(OpGaugeGroup):
         should be the same as `mdl.dim` where `mdl` is a :class:`Model` you
         might gauge-transform.
         """
-        from . import operation as _op  # b/c operation.py imports gaugegroup
         ltrans = _np.identity(dim, 'd')
         rtrans = _np.identity(dim, 'd')
         baseMx = _np.identity(dim, 'd')

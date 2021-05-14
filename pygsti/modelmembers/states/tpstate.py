@@ -3,7 +3,7 @@ from .state import State as _State
 from .densestate import DenseState as _DenseState
 from ...evotypes import Evotype as _Evotype
 
-from .protectedarray import ProtectedArray as _ProtectedArray
+from ...objects.protectedarray import ProtectedArray as _ProtectedArray
 
 
 class TPState(_DenseState):

@@ -15,9 +15,9 @@ import re as _re
 import subprocess as _sp
 import tempfile as _tf
 
-from . import povm as _povm
-from .label import Label as _Label
-from .labeldicts import OutcomeLabelDict as _OutcomeLabelDict
+#from . import povm as _povm
+from ..objects.label import Label as _Label
+from ..models.labeldicts import OutcomeLabelDict as _OutcomeLabelDict
 from .weakforwardsim import WeakForwardSimulator as _WeakForwardSimulator
 
 

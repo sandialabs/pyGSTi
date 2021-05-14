@@ -4,6 +4,8 @@
 #include <complex>
 #include <assert.h>
 #include <algorithm>    // std::find
+
+#include "statecreps.h"
 #include "opcreps.h"
 //#include <pthread.h>
 
@@ -13,232 +15,6 @@
 #define DEBUG(x) 
 
 namespace CReps {
-  // DENSE MATRIX (DM) propagation
-  
-  /****************************************************************************\
-  |* StateCRep                                                              *|
-  \****************************************************************************/
-  StateCRep::StateCRep(INT dim) {
-    _dataptr = new double[dim];
-    for(INT i=0; i<dim; i++) _dataptr[i] = 0;
-    _dim = dim;
-    _ownmem = true;
-  }
-  
-  StateCRep::StateCRep(double* data, INT dim, bool copy=false) {
-    //DEGUG std::cout << "StateCRep initialized w/dim = " << dim << std::endl;
-    if(copy) {
-      _dataptr = new double[dim];
-      for(INT i=0; i<dim; i++) {
-	_dataptr[i] = data[i];
-      }
-    } else {
-      _dataptr = data;
-    }
-    _dim = dim;
-    _ownmem = copy;
-  }
-
-  StateCRep::~StateCRep() {
-    if(_ownmem && _dataptr != NULL)
-      delete [] _dataptr;
-  }
-
-  void StateCRep::print(const char* label) {
-    std::cout << label << " = [";
-    for(INT i=0; i<_dim; i++) std::cout << _dataptr[i] << " ";
-    std::cout << "]" << std::endl;
-  }
-
-  void StateCRep::copy_from(StateCRep* st) {
-    assert(_dim == st->_dim);
-    for(INT i=0; i<_dim; i++)
-      _dataptr[i] = st->_dataptr[i];
-  }
-
-  /****************************************************************************\
-  |* EffectCRep                                                             *|
-  \****************************************************************************/
-  EffectCRep::EffectCRep(INT dim) {
-    _dim = dim;
-  }
-  EffectCRep::~EffectCRep() { }
-
-
-  /****************************************************************************\
-  |* EffectCRep_Dense                                                       *|
-  \****************************************************************************/
-  EffectCRep_Dense::EffectCRep_Dense(double* data, INT dim)
-    :EffectCRep(dim)
-  {
-    _dataptr = data;
-  }
-
-  EffectCRep_Dense::~EffectCRep_Dense() { }
-
-  double EffectCRep_Dense::probability(StateCRep* state) {
-    double ret = 0.0;
-    for(INT i=0; i< _dim; i++) {
-      ret += _dataptr[i] * state->_dataptr[i];
-    }
-    return ret;
-  }
-
-  
-  /****************************************************************************\
-  |* EffectCRep_TensorProd                                                  *|
-  \****************************************************************************/
-
-  EffectCRep_TensorProd::EffectCRep_TensorProd(double* kron_array,
-						   INT* factordims, INT nfactors,
-						   INT max_factor_dim, INT dim) 
-    :EffectCRep(dim)
-  {
-    _kron_array = kron_array;
-    _max_factor_dim = max_factor_dim;
-    _factordims = factordims;
-    _nfactors = nfactors;
-  }
-
-  EffectCRep_TensorProd::~EffectCRep_TensorProd() { }
-    
-  double EffectCRep_TensorProd::probability(StateCRep* state) {
-    //future: add scratch buffer as argument? or compute in place somehow?
-    double ret = 0.0;
-    double* scratch = new double[_dim];
-
-    // BEGIN _fastcalc.fast_kron(scratch, _kron_array, _factordims)
-    // - TODO: make this into seprate function & reuse in fastcals.pyx?
-    INT N = _dim;
-    INT i, j, k, sz, off, endoff, krow;
-    double mult;
-    double* array = _kron_array;
-    INT* arraysizes = _factordims;
-
-    // Put last factor at end of scratch
-    k = _nfactors-1;  //last factor
-    off = N - arraysizes[k]; //offset into scratch
-    krow = k * _max_factor_dim; //offset to k-th row of `array`
-    for(i=0; i < arraysizes[k]; i++)
-      scratch[off+i] = array[krow+i];
-    sz = arraysizes[k];
-
-    // Repeatedly scale&copy last "sz" elements of outputvec forward
-    // (as many times as there are elements in the current factor array)
-    //  - but multiply *in-place* the last "sz" elements.
-    for(k=_nfactors-2; k >= 0; k--) { //for all but the last factor
-      off = N - sz*arraysizes[k];
-      endoff = N - sz;
-      krow = k * _max_factor_dim; //offset to k-th row of `array`
-
-      // For all but the final element of array[k,:],
-      // mult&copy final sz elements of scratch into position
-      for(j=0; j< arraysizes[k]-1; j++) {
-	mult = array[krow+j];
-	for(i=0; i<sz; i++) scratch[off+i] = mult*scratch[endoff+i];
-        off += sz;
-      }
-
-      // Last element: in-place mult
-      // assert(off == endoff)
-      mult = array[krow + arraysizes[k]-1];
-      for(i=0; i<sz; i++) scratch[endoff+i] *= mult;
-      sz *= arraysizes[k];
-    }
-    //assert(sz == N)
-    // END _fastcalc.fast_kron (output in `scratch`)
-
-    for(INT i=0; i< _dim; i++) {
-      ret += scratch[i] * state->_dataptr[i];
-    }
-    delete [] scratch;
-    return ret;
-  }
-
-
-  /****************************************************************************\
-  |* EffectCRep_Computational                                               *|
-  \****************************************************************************/
-
-  EffectCRep_Computational::EffectCRep_Computational(INT nfactors, INT zvals_int, double abs_elval, INT dim)
-    :EffectCRep(dim)
-  {
-    _nfactors = nfactors;
-    _zvals_int = zvals_int;
-    _abs_elval = abs_elval;
-  }
-
-  EffectCRep_Computational::~EffectCRep_Computational() { }
-    
-  double EffectCRep_Computational::probability(StateCRep* state) {
-    // The logic here is very similar to the todense method in the Python rep version
-    // Here we don't bother to compute the dense vector - we just perform the
-    // dot product using only the nonzero vector elements.
-    INT& N = _nfactors;
-    INT nNonzero = 1 << N; // 2**N
-    INT finalIndx, k, base;
-    double ret = 0.0;
-    
-    for(INT finds=0; finds < nNonzero; finds++) {
-
-      //Compute finalIndx
-      finalIndx = 0; base = 1 << (2*N-2); //4**(N-1) = 2**(2N-2)
-      for(k=0; k<N; k++) {
-	finalIndx += ((finds >> k) & 1) * 3 * base;
-	base = base >> 2; // /= 4 so base == 4**(N-1-k)
-      }
-
-      //Apply result
-      if(parity(finds & _zvals_int))
-	ret -= _abs_elval * state->_dataptr[finalIndx]; // minus sign
-      else
-	ret += _abs_elval * state->_dataptr[finalIndx];
-    }
-    return ret;
-  }
-
-  INT EffectCRep_Computational::parity(INT x) {
-    // int64-bit specific
-    x = (x & 0x00000000FFFFFFFF)^(x >> 32);
-    x = (x & 0x000000000000FFFF)^(x >> 16);
-    x = (x & 0x00000000000000FF)^(x >> 8);
-    x = (x & 0x000000000000000F)^(x >> 4);
-    x = (x & 0x0000000000000003)^(x >> 2);
-    x = (x & 0x0000000000000001)^(x >> 1);
-    return x & 1; // return the last bit (0 or 1)
-  }
-
-
-  /****************************************************************************\
-  |* EffectCRep_Errgen                                                      *|
-  \****************************************************************************/
-
-  EffectCRep_Errgen::EffectCRep_Errgen(OpCRep* errgen_oprep,
-					   EffectCRep* effect_rep,
-					   INT errgen_id, INT dim)
-    :EffectCRep(dim)
-  {
-    _errgen_ptr = errgen_oprep;
-    _effect_ptr = effect_rep;
-    _errgen_id = errgen_id;
-  }
-  
-  EffectCRep_Errgen::~EffectCRep_Errgen() { }
-  
-  double EffectCRep_Errgen::probability(StateCRep* state) {
-    StateCRep outState(_dim);
-    _errgen_ptr->acton(state, &outState);
-    return _effect_ptr->probability(&outState);
-  }
-
-  double EffectCRep_Errgen::probability_using_cache(StateCRep* state, StateCRep* errgen_on_state, INT& errgen_id) {
-    if(errgen_id != _errgen_id) {
-      _errgen_ptr->acton(state, errgen_on_state);
-      errgen_id = _errgen_id;
-    }
-    return _effect_ptr->probability(errgen_on_state);
-  }
-
 
   /****************************************************************************\
   |* OpCRep                                                               *|
@@ -592,10 +368,10 @@ namespace CReps {
   |* OpCRep_Repeated                                                   *|
   \****************************************************************************/
 
-  OpCRep_Repeated::OpCRep_Repeated(OpCRep* exponentiated_gate_crep, INT num_repetitions, INT dim)
+  OpCRep_Repeated::OpCRep_Repeated(OpCRep* repeated_crep, INT num_repetitions, INT dim)
     :OpCRep(dim)
   {
-    _exponentiated_gate_crep = exponentiated_gate_crep;
+    _repeated_crep = repeated_crep;
     _num_repetitions = num_repetitions;
   }
 
@@ -658,7 +434,7 @@ namespace CReps {
 
       //Act with additional gates: tmp1 -> tmp2 then swap, so output in tmp1
       for(INT i=1; i < _num_repetitions; i++) {
-	_repreated_crep->adjoint_acton(tmp1,tmp2);
+	_repeated_crep->adjoint_acton(tmp1,tmp2);
 	t = tmp1; tmp1 = tmp2; tmp2 = t;
       }
       
@@ -694,7 +470,7 @@ namespace CReps {
 
   StateCRep* OpCRep_ExpErrorgen::acton(StateCRep* state, StateCRep* out_state)
   {
-    INT i, j;
+    //INT i, j;
     StateCRep* init_state = new StateCRep(_dim);
     DEBUG(std::cout << "Lindblad acton called!" << std::endl);
     DEBUG(state->print("INPUT"));
@@ -769,4 +545,161 @@ namespace CReps {
     assert(false); //ajoint_acton not implemented yet for Sparse gates (TODO LATER)
     return NULL; //to avoid compiler warning
   }
+
+
+
+  // ADDITIONAL HELPER FUNCTIONS
+  
+  void expm_multiply_simple_core_sparsemx(double* Adata, INT* Aindptr,
+					  INT* Aindices, double* B,
+					  INT N, double mu, INT m_star,
+					  INT s, double tol, double eta,
+					  double* F, double* scratch) {
+    INT i;
+    INT j;
+    INT r;
+    INT k;
+
+    double a;
+    double c1;
+    double c2;
+    double coeff;
+    double normF;
+
+    //DEBUG printout
+    //std::cout << "expm_multiply_simple_core: N=" << N << ", s="<<s<<", eta="<<eta<<std::endl;
+    //std::cout << "B=";
+    //for(i=0; i<N; i++) std::cout << B[i] << " ";
+    //std::cout << std::endl;
+    //std::cout << "A_indptr=";
+    //for(i=0; i<N+1; i++) std::cout << Aindptr[i] << " ";
+    //std::cout << std::endl;
+    //std::cout << "A_indices=";
+    //for(i=0; i<Aindptr[N]; i++) std::cout << Aindices[i] << " ";
+    //std::cout << std::endl;
+    //std::cout << "A_data=";
+    //for(i=0; i<Aindptr[N]; i++) std::cout << Adata[i] << " ";
+    //std::cout << std::endl << std::endl;
+
+    for(i=0; i<N; i++) F[i] = B[i];
+    
+    for(i=0; i<s; i++) {
+      if(m_star > 0) { //added by EGN
+	//c1 = vec_inf_norm(B) #_exact_inf_norm(B)
+	c1 = 0.0;
+	for(k=0; k<N; k++) {
+	  a = (B[k] >= 0) ? B[k] : -B[k]; // abs(B[k])
+	  if(a > c1) c1 = a;
+	}
+      }
+      
+      for(j=0; j<m_star; j++) {
+	coeff = 1.0 / (s*(j+1)); // t == 1.0
+	
+	// B = coeff * A.dot(B)
+        // inline csr_matvec: implements scratch = A * B
+	for(r=0; r<N; r++) {
+	  scratch[r] = 0;
+	  for(k=Aindptr[r]; k<Aindptr[r+1]; k++)
+	    scratch[r] += Adata[k] * B[ Aindices[k]];
+	}
+
+	// if(j % 3 == 0) {...   // every == 3 TODO: work on this?
+	c2 = 0.0;
+	normF = 0.0;
+	for(k=0; k<N; k++) {
+	  B[k] = coeff * scratch[k]; //finishes B = coeff * A.dot(B) 
+	  F[k] += B[k]; //F += B
+        
+	  a = (B[k] >= 0)? B[k] : -B[k]; //abs(B[k])
+	  if(a > c2) c2 = a; // c2 = vec_inf_norm(B) // _exact_inf_norm(B)
+	  a = (F[k] >= 0)? F[k] : -F[k]; //abs(F[k])
+	  if(a > normF) normF = a; // normF = vec_inf_norm(F) // _exact_inf_norm(F)
+	}
+
+        // print("Iter %d,%d of %d,%d: %g+%g=%g < %g?" % (i,j,s,m_star,c1,c2,c1+c2,tol*normF))
+	if(c1 + c2 <= tol * normF) {
+	  // print(" --> YES - break early at %d of %d" % (i+1,s))
+	  break;
+	}
+	c1 = c2;
+      }
+
+      // F *= eta
+      // B = F
+      for(k=0; k<N; k++) {
+	F[k] *= eta;
+	B[k] = F[k];
+      }
+    }
+    // output value is in F upon returning
+  }
+
+
+  void expm_multiply_simple_core_rep(OpCRep* A_rep, double* B,
+				     INT N, double mu, INT m_star,
+				     INT s, double tol, double eta,
+				     double* F, double* scratch) {
+    INT i;
+    INT j;
+    INT k;
+
+    double a;
+    double c1;
+    double c2;
+    double coeff;
+    double normF;
+
+    StateCRep B_st(B, N); // just a wrapper
+    StateCRep scratch_st(scratch, N); // just a wrapper
+
+    for(i=0; i<N; i++) F[i] = B[i];
+    
+    for(i=0; i<s; i++) {
+      if(m_star > 0) { //added by EGN
+	//c1 = vec_inf_norm(B) #_exact_inf_norm(B)
+	c1 = 0.0;
+	for(k=0; k<N; k++) {
+	  a = (B[k] >= 0) ? B[k] : -B[k]; // abs(B[k])
+	  if(a > c1) c1 = a;
+	}
+      }
+      
+      for(j=0; j<m_star; j++) {
+	coeff = 1.0 / (s*(j+1)); // t == 1.0
+	
+	// B = coeff * A.dot(B)
+	A_rep->acton(&B_st,&scratch_st); // scratch = A.dot(B)
+
+	// if(j % 3 == 0) {...   // every == 3 TODO: work on this?
+	c2 = 0.0;
+	normF = 0.0;
+	for(k=0; k<N; k++) {
+	  B[k] = coeff * scratch[k]; //finishes B = coeff * A.dot(B) 
+	  F[k] += B[k]; //F += B
+        
+	  a = (B[k] >= 0)? B[k] : -B[k]; //abs(B[k])
+	  if(a > c2) c2 = a; // c2 = vec_inf_norm(B) // _exact_inf_norm(B)
+	  a = (F[k] >= 0)? F[k] : -F[k]; //abs(F[k])
+	  if(a > normF) normF = a; // normF = vec_inf_norm(F) // _exact_inf_norm(F)
+	}
+
+        // print("Iter %d,%d of %d,%d: %g+%g=%g < %g?" % (i,j,s,m_star,c1,c2,c1+c2,tol*normF))
+	if(c1 + c2 <= tol * normF) {
+	  // print(" --> YES - break early at %d of %d" % (i+1,s))
+	  break;
+	}
+	c1 = c2;
+      }
+
+      // F *= eta
+      // B = F
+      for(k=0; k<N; k++) {
+	F[k] *= eta;
+	B[k] = F[k];
+      }
+    }
+    // output value is in F upon returning
+  }
+
 }

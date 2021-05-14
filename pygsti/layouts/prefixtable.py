@@ -11,7 +11,7 @@ Defines the PrefixTable class.
 #***************************************************************************************************
 
 import collections as _collections
-from .circuit import SeparatePOVMCircuit as _SeparatePOVMCircuit
+from ..objects.circuit import SeparatePOVMCircuit as _SeparatePOVMCircuit
 
 
 class PrefixTable(object):

@@ -13,7 +13,6 @@ Chi-squared and related functions
 import numpy as _np
 from . import listtools as _lt
 from . import slicetools as _slct
-from ..objects import objectivefns as _objfns
 from ..tools.legacytools import deprecate as _deprecated_fn
 
 
@@ -73,6 +72,7 @@ def chi2(model, dataset, circuits=None,
     chi2 : float
         chi^2 value, equal to the sum of chi^2 terms from all specified circuits
     """
+    from ..objects import objectivefns as _objfns
     return _objfns._objfn(_objfns.Chi2Function, model, dataset, circuits,
                           {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
                           {'prob_clip_interval': prob_clip_interval},
@@ -136,6 +136,7 @@ def chi2_per_circuit(model, dataset, circuits=None,
         Values are the chi2 contributions of the corresponding circuit
         aggregated over outcomes.
     """
+    from ..objects import objectivefns as _objfns
     obj = _objfns._objfn(_objfns.Chi2Function, model, dataset, circuits,
                          {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
                          {'prob_clip_interval': prob_clip_interval},
@@ -196,6 +197,7 @@ def chi2_jacobian(model, dataset, circuits=None,
     numpy array
         The gradient vector of length `model.num_params`, the number of model parameters.
     """
+    from ..objects import objectivefns as _objfns
     obj = _objfns._objfn(_objfns.Chi2Function, model, dataset, circuits,
                          {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
                          {'prob_clip_interval': prob_clip_interval},
@@ -254,6 +256,7 @@ def chi2_hessian(model, dataset, circuits=None,
         The Hessian matrix of shape (nModelParams, nModelParams), where
         nModelParams = `model.num_params`.
     """
+    from ..objects import objectivefns as _objfns
     obj = _objfns._objfn(_objfns.Chi2Function, model, dataset, circuits,
                          {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
                          {'prob_clip_interval': prob_clip_interval},
@@ -317,6 +320,7 @@ def chi2_approximate_hessian(model, dataset, circuits=None,
         The Hessian matrix of shape (nModelParams, nModelParams), where
         nModelParams = `model.num_params`.
     """
+    from ..objects import objectivefns as _objfns
     obj = _objfns._objfn(_objfns.Chi2Function, model, dataset, circuits,
                          {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
                          {'prob_clip_interval': prob_clip_interval},
@@ -386,6 +390,7 @@ def chialpha(alpha, model, dataset, circuits=None,
     -------
     float
     """
+    from ..objects import objectivefns as _objfns
     return _objfns._objfn(_objfns.ChiAlphaFunction, model, dataset, circuits,
                           {'pfratio_stitchpt': pfratio_stitchpt,
                            'pfratio_derivpt': pfratio_derivpt,
@@ -459,6 +464,7 @@ def chialpha_per_circuit(alpha, model, dataset, circuits=None,
         Values are the chi-alpha contributions of the corresponding circuit
         aggregated over outcomes.
     """
+    from ..objects import objectivefns as _objfns
     obj = _objfns._objfn(_objfns.ChiAlphaFunction, model, dataset, circuits,
                          {'pfratio_stitchpt': pfratio_stitchpt,
                           'pfratio_derivpt': pfratio_derivpt,
@@ -561,6 +567,7 @@ def chi2fn(n, p, f, min_prob_clip_for_weighting=1e-4):
         where cp is the value of p clipped to the interval
         (min_prob_clip_for_weighting, 1-min_prob_clip_for_weighting)
     """
+    from ..objects import objectivefns as _objfns
     rawfn = _objfns.RawChi2Function({'min_prob_clip_for_weighting': min_prob_clip_for_weighting})
     return rawfn.terms(p, n * f, n, f)
 
@@ -592,5 +599,6 @@ def chi2fn_wfreqs(n, p, f, min_freq_clip_for_weighting=1e-4):
     -------
     float or numpy array
     """
+    from ..objects import objectivefns as _objfns
     rawfn = _objfns.RawFreqWeightedChi2Function({'min_freq_clip_for_weighting': min_freq_clip_for_weighting})
     return rawfn.terms(p, n * f, n, f)

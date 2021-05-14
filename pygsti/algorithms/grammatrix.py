@@ -12,7 +12,6 @@ Utility functions related to Gram matrix construction.
 
 from .. import construction as _construction
 from .core import gram_rank_and_eigenvalues as _gram_rank_and_evals
-from ..objects import ComplementSPAMVec as _ComplementSPAMVec
 
 
 ########################################################

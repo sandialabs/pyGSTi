@@ -12,7 +12,7 @@ Defines the WeakForwardSimulator calculator class
 import numpy as _np
 
 from .forwardsim import ForwardSimulator as _ForwardSimulator
-from . import labeldicts as _ld
+from ..models import labeldicts as _ld
 
 
 class WeakForwardSimulator(_ForwardSimulator):

@@ -16,15 +16,15 @@ import warnings as _warnings
 import functools as _functools
 
 #from . import labeldicts as _ld
-from . import modelmember as _gm
-from . import spamvec as _sv
-from . import operation as _op
-from . import labeldicts as _ld
-from .label import Label as _Label
-from ..tools import matrixtools as _mt
-from ..tools import basistools as _bt
-from ..tools import optools as _gt
-from .errorgencontainer import ErrorMapContainer as _ErrorMapContainer
+from .. import modelmember as _gm
+from .. import povms as _povm
+from .. import operations as _op
+from ...models import labeldicts as _ld
+from ...objects.label import Label as _Label
+from ...tools import matrixtools as _mt
+from ...tools import basistools as _bt
+from ...tools import optools as _gt
+from ..errorgencontainer import ErrorMapContainer as _ErrorMapContainer
 
 
 #Thoughts:
@@ -103,7 +103,7 @@ def convert(povm, to_type, basis, extra=None):
         object from the object passed as input.
     """
     if to_type in ("full", "static", "static unitary"):
-        converted_effects = [(lbl, _sv.convert(vec, to_type, basis))
+        converted_effects = [(lbl, _povm.convert(vec, to_type, basis))
                              for lbl, vec in povm.items()]
         return UnconstrainedPOVM(converted_effects)
 
@@ -111,7 +111,7 @@ def convert(povm, to_type, basis, extra=None):
         if isinstance(povm, TPPOVM):
             return povm  # no conversion necessary
         else:
-            converted_effects = [(lbl, _sv.convert(vec, "full", basis))
+            converted_effects = [(lbl, _povm.convert(vec, "full", basis))
                                  for lbl, vec in povm.items()]
             return TPPOVM(converted_effects)
 
@@ -131,7 +131,7 @@ def convert(povm, to_type, basis, extra=None):
             assert(povm.nqubits == nQubits)
             base_povm = ComputationalBasisPOVM(nQubits, evotype)
         else:
-            base_items = [(lbl, _sv._convert_to_lindblad_base(Evec, "effect", evotype, basis))
+            base_items = [(lbl, _povm._convert_to_lindblad_base(Evec, "effect", evotype, basis))
                           for lbl, Evec in povm.items()]
             base_povm = UnconstrainedPOVM(base_items)
 
@@ -401,10 +401,8 @@ class _BasePOVM(POVM):
         evotype = None
         for k, v in items:
             if k == self.complement_label: continue
-            effect = v if isinstance(v, _sv.SPAMVec) else \
-                _sv.FullSPAMVec(v, typ="effect")
-            if effect._prep_or_effect == "unknown": effect._prep_or_effect = "effect"  # backward compatibility
-            assert(effect._prep_or_effect == "effect"), "Elements of POVMs must be *effect* SPAM vecs!"
+            effect = v if isinstance(v, _povm.POVMEffect) else \
+                _povm.FullPOVMEffect(v)   # EVOTYPE -----------------------------------------------------------------------------????  - also need to update prep_or_effect stuff
 
             if evotype is None: evotype = effect._evotype
             else: assert(evotype == effect._evotype), \
@@ -427,7 +425,7 @@ class _BasePOVM(POVM):
             non_comp_effects = [v for k, v in items]
             identity_for_complement = _np.array(sum([v.reshape(comp_val.shape) for v in non_comp_effects])
                                                 + comp_val, 'd')  # ensure shapes match before summing
-            complement_effect = _sv.ComplementSPAMVec(
+            complement_effect = _povm.ComplementPOVMEffect(
                 identity_for_complement, non_comp_effects)
             complement_effect.set_gpindices(slice(0, self.Np), self)  # all parameters
             items.append((self.complement_label, complement_effect))
@@ -460,7 +458,7 @@ class _BasePOVM(POVM):
             if identity_for_complement is None:
                 identity_for_complement = self[self.complement_label].identity
 
-            complement_effect = _sv.ComplementSPAMVec(
+            complement_effect = _povm.ComplementPOVMEffect(
                 identity_for_complement, non_comp_effects)
             complement_effect.set_gpindices(slice(0, self.Np), self)  # all parameters
 
@@ -475,8 +473,8 @@ class _BasePOVM(POVM):
 
         if key == self.complement_label:
             raise KeyError("Cannot directly assign the complement effect vector!")
-        value = value.copy() if isinstance(value, _sv.SPAMVec) else \
-            _sv.FullSPAMVec(value, typ='effect')
+        value = value.copy() if isinstance(value, _povm.POVMEffect) else \
+            _povm.FullPOVMEffect(value)   # EVOTYPE -----------------------------------------???????????????????????????????
         _collections.OrderedDict.__setitem__(self, key, value)
         self._reset_member_gpindices()
         self._rebuild_complement()
@@ -511,7 +509,7 @@ class _BasePOVM(POVM):
 
         if self.complement_label:
             lbl = self.complement_label
-            simplified[prefix + lbl] = _sv.ComplementSPAMVec(
+            simplified[prefix + lbl] = _povm.ComplementPOVMEffect(
                 self[lbl].identity, [v for k, v in simplified.items()])
             self._copy_gpindices(simplified[prefix + lbl], self.parent, memo=None)  # set gpindices
             # of complement vector to the same as POVM (it uses *all* params)
@@ -803,7 +801,7 @@ class TensorProdPOVM(POVM):
             for fkeys, lbllen in zip(self._factor_keys, self._factor_lbllens):
                 elbls.append(key[i:i + lbllen]); i += lbllen
             # infers parent & gpindices from factor_povms
-            effect = _sv.TensorProdSPAMVec('effect', self.factorPOVMs, elbls)
+            effect = _povm.TensorProductPOVMEffect(self.factorPOVMs, elbls)
             _collections.OrderedDict.__setitem__(self, key, effect)
             return effect
         else: raise KeyError("%s is not an outcome label of this TensorProdPOVM" % key)
@@ -850,7 +848,7 @@ class TensorProdPOVM(POVM):
         # Currently simplify *all* the effects, creating those that haven't been yet (lazy creation)
         if prefix: prefix += "_"
         simplified = _collections.OrderedDict(
-            [(prefix + k, _sv.TensorProdSPAMVec('effect', factorPOVMs_simplified, self[k].effectLbls))
+            [(prefix + k, _povm.TensorProductPOVMEffect(factorPOVMs_simplified, self[k].effectLbls))
              for k in self.keys()])
         return simplified
 
@@ -1051,7 +1049,7 @@ class ComputationalBasisPOVM(POVM):
             #create effect vector now that it's been requested (lazy creation)
             # decompose key into separate factor-effect labels
             outcomes = [(0 if letter == '0' else 1) for letter in key]
-            effect = _sv.ComputationalSPAMVec(outcomes, self._evotype, "effect")  # "statevec" or "densitymx"
+            effect = _povm.ComputationalBasisPOVMEffect(outcomes, self._evotype)  # "statevec" or "densitymx"
             effect.set_gpindices(slice(0, 0, None), self.parent)  # computational vecs have no params
             _collections.OrderedDict.__setitem__(self, key, effect)
             return effect
@@ -1217,7 +1215,7 @@ class LindbladPOVM(POVM, _ErrorMapContainer):
         elif key in self:  # calls __contains__ to efficiently check for membership
             #create effect vector now that it's been requested (lazy creation)
             pureVec = self.base_povm[key]
-            effect = _sv.LindbladSPAMVec(pureVec, self.error_map, "effect")
+            effect = _povm.ComposedPOVMEffect(pureVec, self.error_map)   # ------------------------------ evotype ???????????????????????
             effect.set_gpindices(self.error_map.gpindices, self.parent)
             # initialize gpindices of "child" effect (should be in simplify_effects?)
             _collections.OrderedDict.__setitem__(self, key, effect)
@@ -1566,7 +1564,7 @@ class MarginalizedPOVM(POVM):
                     effect_vec = e.to_dense()
                 else:
                     effect_vec += e.to_dense()
-            effect = _sv.StaticSPAMVec(effect_vec, self._evotype, 'effect')
+            effect = _povm.StaticPOVMEffect(effect_vec, self._evotype)
             effect.set_gpindices(slice(0, 0), self.parent)
             _collections.OrderedDict.__setitem__(self, key, effect)
             return effect

@@ -11,12 +11,12 @@ Sub-package holding model operation objects.
 #***************************************************************************************************
 
 from .composederrorgen import ComposedErrorgen
-from .composedop import ComposedOp
+from .composedop import ComposedOp, ComposedDenseOp
 from .denseop import DenseOperator, DenseOperatorInterface
 from .depolarizeop import DepolarizeOp
 from .eigpdenseop import EigenvalueParamDenseOp
 from .embeddederrorgen import EmbeddedErrorgen
-from .embeddedop import EmbeddedOp
+from .embeddedop import EmbeddedOp, EmbeddedDenseOp
 from .experrorgenop import ExpErrorgenOp
 from .fulldenseop import FullDenseOp
 from .fullunitaryop import FullUnitaryOp

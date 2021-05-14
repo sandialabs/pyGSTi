@@ -33,7 +33,7 @@ from ..tools.legacytools import deprecate as _deprecated_fn
 from ..tools import NamedDict as _NamedDict
 
 from . import circuit as _cir
-from . import labeldicts as _ld
+from ..models import labeldicts as _ld
 #from . import dataset as _ds
 
 Oindex_type = _np.uint32

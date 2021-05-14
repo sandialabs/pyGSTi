@@ -29,7 +29,7 @@ from ..objects import wildcardbudget as _wild
 from ..objects.profiler import DummyProfiler as _DummyProfiler
 from ..objects import objectivefns as _objfns
 from ..objects.advancedoptions import GSTAdvancedOptions as _GSTAdvancedOptions
-from ..objects.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
+from ..forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
 
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]
 DEFAULT_BAD_FIT_THRESHOLD = 2.0

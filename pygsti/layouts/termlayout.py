@@ -14,10 +14,10 @@ import numpy as _np
 import collections as _collections
 import copy as _copy
 
-from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from ..objects.circuitlist import CircuitList as _CircuitList
 from ..tools import slicetools as _slct
 from ..tools import listtools as _lt
-from .circuitlist import CircuitList as _CircuitList
 from .distlayout import _DistributableAtom
 from .distlayout import DistributableCOPALayout as _DistributableCOPALayout
 

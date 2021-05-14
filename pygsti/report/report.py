@@ -19,9 +19,10 @@ import pickle as _pickle
 
 from . import autotitle as _autotitle
 from . import merge_helpers as _merge
-from .. import _version, tools as _tools
-from ..objects import VerbosityPrinter as _VerbosityPrinter, ExplicitOpModel as _ExplicitOpModel
 from . import workspace as _ws
+from .. import _version, tools as _tools
+from ..objects import VerbosityPrinter as _VerbosityPrinter
+from ..models import ExplicitOpModel as _ExplicitOpModel
 from .notebook import Notebook as _Notebook
 
 

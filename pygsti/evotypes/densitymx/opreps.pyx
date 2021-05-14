@@ -13,28 +13,19 @@
 
 import sys
 import time as pytime
-import numpy as np
-from libc.stdlib cimport malloc, free
-from libc.math cimport log10, sqrt, log
-from libc cimport time
-from libcpp cimport bool
-from libcpp.vector cimport vector
-from libcpp.pair cimport pair
-from libcpp.algorithm cimport sort as stdsort
-from libcpp.unordered_map cimport unordered_map
-from cython.operator cimport dereference as deref, preincrement as inc
-cimport numpy as np
-cimport cython
+import numpy as _np
+import copy as _copy
 
 import itertools as _itertools
 from ...tools import mpitools as _mpit
 from ...tools import slicetools as _slct
 from ...tools import optools as _ot
 from ...tools import optools as _mt
-from ...tools.matrixtools import _fas
-from ..opcalc import fastopcalc as _fastopcalc
+from ...tools import basistools as _bt
+from ...tools import internalgates as _itgs
+from ...tools import lindbladtools as _lbt
+from ...objects.opcalc import fastopcalc as _fastopcalc
 from scipy.sparse.linalg import LinearOperator
-from .. import basereps_cython as _basereps_cython
 
 cdef double LARGE = 1000000000
 # a large number such that LARGE is
@@ -47,70 +38,7 @@ cdef double SMALL = 1e-5
 # magnitude from being zero (and losing memory of terms).
 
 
-#Use 64-bit integers
-ctypedef long long INT
-ctypedef unsigned long long UINT
-
-
-cdef extern from "opcreps.h" namespace "CReps":
-    cdef cppclass OpCRep:
-        OpCRep(INT) except +
-        StateCRep* acton(StateCRep*, StateCRep*)
-        StateCRep* adjoint_acton(StateCRep*, StateCRep*)
-        INT _dim
-
-    cdef cppclass OpCRep_Dense(OpCRep):
-        OpCRep_Dense(double*,INT) except +
-        StateCRep* acton(StateCRep*, StateCRep*)
-        StateCRep* adjoint_acton(StateCRep*, StateCRep*)
-        double* _dataptr
-        INT _dim
-
-    cdef cppclass OpCRep_Embedded(OpCRep):
-        OpCRep_Embedded(OpCRep*, INT*, INT*, INT*, INT*, INT, INT, INT, INT, INT) except +
-        StateCRep* acton(StateCRep*, StateCRep*)
-        StateCRep* adjoint_acton(StateCRep*, StateCRep*)
-        INT _nComponents
-        INT _embeddedDim
-        INT _iActiveBlock
-        INT _nBlocks
-
-    cdef cppclass OpCRep_Composed(OpCRep):
-        OpCRep_Composed(vector[OpCRep*], INT) except +
-        void reinit_factor_op_creps(vector[OpCRep*])
-        StateCRep* acton(StateCRep*, StateCRep*)
-        StateCRep* adjoint_acton(StateCRep*, StateCRep*)
-
-    cdef cppclass OpCRep_Sum(OpCRep):
-        OpCRep_Sum(vector[OpCRep*], INT) except +
-        StateCRep* acton(StateCRep*, StateCRep*)
-        StateCRep* adjoint_acton(StateCRep*, StateCRep*)
-
-    cdef cppclass OpCRep_Repeated(OpCRep):
-        OpCRep_Repeated(OpCRep*, INT, INT) except +
-        StateCRep* acton(StateCRep*, StateCRep*)
-        StateCRep* adjoint_acton(StateCRep*, StateCRep*)
-
-    cdef cppclass OpCRep_ExpErrorgen(OpCRep):
-        OpCRep_ExpErrorgen(OpCRep* errgen_rep,
-			   double mu, double eta, INT m_star, INT s, INT dim) except +
-        StateCRep* acton(StateCRep*, StateCRep*)
-        StateCRep* adjoint_acton(StateCRep*, StateCRep*)
-        double _mu
-        double _eta
-        INT _m_star
-        INT _s
-
-    cdef cppclass OpCRep_Sparse(OpCRep):
-        OpCRep_Sparse(double* a_data, INT* a_indices, INT* a_indptr,
-                          INT nnz, INT dim) except +
-        StateCRep* acton(StateCRep*, StateCRep*)
-        StateCRep* adjoint_acton(StateCRep*, StateCRep*)
-
-
 cdef class OpRep(_basereps_cython.OpRep):
-    cdef OpCRep* c_rep
-
     def __cinit__(self):
         self.c_rep = NULL
 
@@ -126,14 +54,14 @@ cdef class OpRep(_basereps_cython.OpRep):
         return self.c_rep._dim
 
     def acton(self, StateRep state not None):
-        cdef StateRep out_state = StateRep(np.empty(self.c_rep._dim, dtype='d'))
+        cdef StateRep out_state = StateRep(_np.empty(self.c_rep._dim, dtype='d'))
         #print("PYX acton called w/dim ", self.c_rep._dim, out_state.c_state._dim)
         # assert(state.c_state._dataptr != out_state.c_state._dataptr) # DEBUG
         self.c_rep.acton(state.c_state, out_state.c_state)
         return out_state
 
     def adjoint_acton(self, StateRep state not None):
-        cdef StateRep out_state = StateRep(np.empty(self.c_rep._dim, dtype='d'))
+        cdef StateRep out_state = StateRep(_np.empty(self.c_rep._dim, dtype='d'))
         #print("PYX acton called w/dim ", self.c_rep._dim, out_state.c_state._dim)
         # assert(state.c_state._dataptr != out_state.c_state._dataptr) # DEBUG
         self.c_rep.adjoint_acton(state.c_state, out_state.c_state)
@@ -142,21 +70,21 @@ cdef class OpRep(_basereps_cython.OpRep):
     def aslinearoperator(self):
         def mv(v):
             if v.ndim == 2 and v.shape[1] == 1: v = v[:,0]
-            in_state = StateRep(np.ascontiguousarray(v,'d'))
+            in_state = StateRep(_np.ascontiguousarray(v,'d'))
             return self.acton(in_state).to_dense()
         def rmv(v):
             if v.ndim == 2 and v.shape[1] == 1: v = v[:,0]
-            in_state = StateRep(np.ascontiguousarray(v,'d'))
+            in_state = StateRep(_np.ascontiguousarray(v,'d'))
             return self.adjoint_acton(in_state).to_dense()
         dim = self.c_rep._dim
         return LinearOperator((dim,dim), matvec=mv, rmatvec=rmv, dtype='d') # transpose, adjoint, dot, matmat?
 
 
 cdef class OpRepDense(OpRep):
-    cdef public np.ndarray base
+    cdef public _np.ndarray base
 
     def __init__(self, int dim):
-        self.base = np.require(np.identity(dim, 'd'),
+        self.base = _np.require(_np.identity(dim, 'd'),
                                requirements=['OWNDATA', 'C_CONTIGUOUS'])
         assert(self.c_rep == NULL)
         self.c_rep = new OpCRep_Dense(<double*>self.base.data,
@@ -171,7 +99,7 @@ cdef class OpRepDense(OpRep):
         assert(self.c_rep == NULL)
 
         data, writable = state
-        self.base = np.require(data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
+        self.base = _np.require(data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
         self.base.flags.writeable = writable
 
         assert(self.c_rep == NULL)  # if setstate is call, __init__ shouldn't have been
@@ -196,13 +124,13 @@ cdef class OpRepDense(OpRep):
 
 
 cdef class OpRepSparse(OpRep):
-    cdef public np.ndarray data
-    cdef public np.ndarray indices
-    cdef public np.ndarray indptr
+    cdef public _np.ndarray data
+    cdef public _np.ndarray indices
+    cdef public _np.ndarray indptr
 
-    def __cinit__(self, np.ndarray[double, ndim=1, mode='c'] a_data,
-                  np.ndarray[np.int64_t, ndim=1, mode='c'] a_indices,
-                  np.ndarray[np.int64_t, ndim=1, mode='c'] a_indptr):
+    def __cinit__(self, _np.ndarray[double, ndim=1, mode='c'] a_data,
+                  _np.ndarray[_np.int64_t, ndim=1, mode='c'] a_indices,
+                  _np.ndarray[_np.int64_t, ndim=1, mode='c'] a_indptr):
         self.data = a_data
         self.indices = a_indices
         self.indptr = a_indptr
@@ -306,12 +234,12 @@ cdef class OpRepSum(OpRep):
 
 
 cdef class OpRepEmbedded(OpRep):
-    cdef np.ndarray noop_incrementers
-    cdef np.ndarray num_basis_els_noop_blankaction
-    cdef np.ndarray baseinds
-    cdef np.ndarray blocksizes
-    cdef np.ndarray num_basis_els
-    cdef np.ndarray action_inds
+    cdef _np.ndarray noop_incrementers
+    cdef _np.ndarray num_basis_els_noop_blankaction
+    cdef _np.ndarray baseinds
+    cdef _np.ndarray blocksizes
+    cdef _np.ndarray num_basis_els
+    cdef _np.ndarray action_inds
     cdef public OpRep embedded_rep
 
     def __init__(self, state_space_labels, target_labels, OpRep embedded_rep):
@@ -325,13 +253,13 @@ cdef class OpRepEmbedded(OpRep):
         iTensorProdBlk = iTensorProdBlks[0]  # because they're all the same (tested above) - this is "active" block
         tensorProdBlkLabels = state_space_labels.labels[iTensorProdBlk]
         # count possible *density-matrix-space* indices of each component of the tensor product block
-        cdef np.ndarray[np.int64_t, ndim=1, mode='c'] num_basis_els = \
+        cdef _np.ndarray[_np.int64_t, ndim=1, mode='c'] num_basis_els = \
             _np.array([state_space_labels.labeldims[l] for l in tensorProdBlkLabels], _np.int64)
         
         # Separate the components of the tensor product that are not operated on, i.e. that our
         # final map just acts as identity w.r.t.
         labelIndices = [tensorProdBlkLabels.index(label) for label in target_labels]
-        cdef np.ndarray[np.int64_t, ndim=1, mode='c'] action_inds = _np.array(labelIndices, _np.int64)
+        cdef _np.ndarray[_np.int64_t, ndim=1, mode='c'] action_inds = _np.array(labelIndices, _np.int64)
         assert(_np.product([num_basis_els[i] for i in action_inds]) == embedded_rep.dim), \
             "Embedded operation has dimension (%d) inconsistent with the given target labels (%s)" % (
                 embedded_rep.dim, str(target_labels))
@@ -339,30 +267,30 @@ cdef class OpRepEmbedded(OpRep):
         cdef INT dim = state_space_labels.dim
         cdef INT nblocks = state_space_labels.num_tensor_prod_blocks()
         cdef INT active_block_index = iTensorProdBlk
-        cdef INT ncomponents_in_active_block = len(state_space_labels.labels[iActiveBlock])
+        cdef INT ncomponents_in_active_block = len(state_space_labels.labels[active_block_index])
         cdef INT embedded_dim = embedded_rep.dim
-        cdef np.ndarray[np.int64_t, ndim=1, mode='c'] blocksizes = \
+        cdef _np.ndarray[_np.int64_t, ndim=1, mode='c'] blocksizes = \
             _np.array([_np.product(state_space_labels.tensor_product_block_dims(k))
-                       for k in range(nBlocks)], _np.int64)
+                       for k in range(nblocks)], _np.int64)
         cdef INT i, j
 
         # num_basis_els_noop_blankaction is just num_basis_els with action_inds == 1
-        cdef np.ndarray[np.int64_t, ndim=1, mode='c'] num_basis_els_noop_blankaction = num_basis_els.copy()
+        cdef _np.ndarray[_np.int64_t, ndim=1, mode='c'] num_basis_els_noop_blankaction = num_basis_els.copy()
         for i in action_inds:
             num_basis_els_noop_blankaction[i] = 1 # for indexing the identity space
 
         # multipliers to go from per-label indices to tensor-product-block index
         # e.g. if map(len,basisInds) == [1,4,4] then multipliers == [ 16 4 1 ]
-        cdef np.ndarray tmp = np.empty(ncomponents_in_active_block,np.int64)
+        cdef _np.ndarray tmp = _np.empty(ncomponents_in_active_block,_np.int64)
         tmp[0] = 1
         for i in range(1,ncomponents_in_active_block):
             tmp[i] = num_basis_els[ncomponents_in_active_block-i]
-        multipliers = np.array( np.flipud( np.cumprod(tmp) ), np.int64)
+        multipliers = _np.array( _np.flipud( _np.cumprod(tmp) ), _np.int64)
 
         # noop_incrementers[i] specifies how much the overall vector index
         #  is incremented when the i-th "component" digit is advanced
         cdef INT dec = 0
-        cdef np.ndarray[np.int64_t, ndim=1, mode='c'] noop_incrementers = np.empty(ncomponents_in_active_block,np.int64)
+        cdef _np.ndarray[_np.int64_t, ndim=1, mode='c'] noop_incrementers = _np.empty(ncomponents_in_active_block,_np.int64)
         for i in range(ncomponents_in_active_block-1,-1,-1):
             noop_incrementers[i] = multipliers[i] - dec
             dec += (num_basis_els_noop_blankaction[i]-1)*multipliers[i]
@@ -374,7 +302,7 @@ cdef class OpRepEmbedded(OpRep):
 
         # self.baseinds specifies the contribution from the "active
         #  component" digits to the overall vector index.
-        cdef np.ndarray[np.int64_t, ndim=1, mode='c'] baseinds = np.empty(embedded_dim,np.int64)
+        cdef _np.ndarray[_np.int64_t, ndim=1, mode='c'] baseinds = _np.empty(embedded_dim,_np.int64)
         basisInds_action = [ list(range(num_basis_els[i])) for i in action_inds ]
         for ii,op_b in enumerate(_itertools.product(*basisInds_action)):
             vec_index = offset
@@ -423,9 +351,9 @@ cdef class OpRepEmbedded(OpRep):
         self.embedded_rep = embedded_rep # needed to prevent garbage collection?
 
         assert(self.c_rep == NULL)
-        self.c_rep = new OpCRep_Embedded(embedded_rep.c_rep,
-                                        <INT*>noop_incrementers.data, <INT*>num_basis_els_noop_blankaction.data,
-                                        <INT*>baseinds.data, <INT*>blocksizes.data,
+        self.c_rep = new OpCRep_Embedded(self.embedded_rep.c_rep,
+                                        <INT*>self.noop_incrementers.data, <INT*>self.num_basis_els_noop_blankaction.data,
+                                        <INT*>self.baseinds.data, <INT*>self.blocksizes.data,
                                         embedded_dim, ncomponents_in_active_block,
                                         active_block_index, nblocks, dim)
 

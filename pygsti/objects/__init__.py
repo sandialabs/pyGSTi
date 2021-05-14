@@ -17,59 +17,51 @@ pyGSTi Objects Python Package
 from .confidenceregionfactory import ConfidenceRegionFactory
 from .dataset import DataSet
 from .freedataset import FreeformDataSet
-from .operation import LinearOperator
-from .operation import DenseOperator
-from .operation import LinearlyParamDenseOp
-from .operation import FullDenseOp
-from .operation import TPDenseOp
-from .operation import StaticDenseOp
-from .operation import EigenvalueParamDenseOp
-from .operation import LindbladDenseOp
-from .operation import LindbladOp
-from .operation import TPInstrumentOp
-from .operation import EmbeddedOp
-from .operation import EmbeddedDenseOp
-from .operation import ComposedOp
-from .operation import ComposedDenseOp
-from .operation import ExponentiatedOp
-from .operation import CliffordOp
-from .operation import LindbladErrorgen
-from .operation import ComposedErrorgen
-from .operation import EmbeddedErrorgen
-from .operation import StochasticNoiseOp
-from .operation import DepolarizeOp
-from .spamvec import SPAMVec
-from .spamvec import DenseSPAMVec
-from .spamvec import FullSPAMVec
-from .spamvec import TPSPAMVec
-from .spamvec import CPTPSPAMVec
-from .spamvec import ComplementSPAMVec
-from .spamvec import StaticSPAMVec
-from .spamvec import TensorProdSPAMVec
-from .spamvec import PureStateSPAMVec
-from .spamvec import LindbladSPAMVec
-from .spamvec import ComputationalSPAMVec
-from .povm import POVM
-from .povm import TPPOVM
-from .povm import UnconstrainedPOVM
-from .povm import TensorProdPOVM
-from .povm import ComputationalBasisPOVM
-from .povm import LindbladPOVM
-from .povm import MarginalizedPOVM
-from .instrument import Instrument
-from .instrument import TPInstrument
-from .opfactory import OpFactory
-from .opfactory import EmbeddedOpFactory
-from .opfactory import EmbeddingOpFactory
+#from .operation import LinearOperator
+#from .operation import DenseOperator
+#from .operation import LinearlyParamDenseOp
+#from .operation import FullDenseOp
+#from .operation import TPDenseOp
+#from .operation import StaticDenseOp
+#from .operation import EigenvalueParamDenseOp
+#from .operation import LindbladDenseOp
+#from .operation import LindbladOp
+#from .operation import TPInstrumentOp
+#from .operation import EmbeddedOp
+#from .operation import EmbeddedDenseOp
+#from .operation import ComposedOp
+#from .operation import ComposedDenseOp
+#from .operation import ExponentiatedOp
+#from .operation import CliffordOp
+#from .operation import LindbladErrorgen
+#from .operation import ComposedErrorgen
+#from .operation import EmbeddedErrorgen
+#from .operation import StochasticNoiseOp
+#from .operation import DepolarizeOp
+#from .spamvec import SPAMVec
+#from .spamvec import DenseSPAMVec
+#from .spamvec import FullSPAMVec
+#from .spamvec import TPSPAMVec
+#from .spamvec import CPTPSPAMVec
+#from .spamvec import ComplementSPAMVec
+#from .spamvec import StaticSPAMVec
+#from .spamvec import TensorProdSPAMVec
+#from .spamvec import PureStateSPAMVec
+#from .spamvec import LindbladSPAMVec
+#from .spamvec import ComputationalSPAMVec
+#from .povm import POVM
+#from .povm import TPPOVM
+#from .povm import UnconstrainedPOVM
+#from .povm import TensorProdPOVM
+#from .povm import ComputationalBasisPOVM
+#from .povm import LindbladPOVM
+#from .povm import MarginalizedPOVM
+#from .instrument import Instrument
+#from .instrument import TPInstrument
+#from .opfactory import OpFactory
+#from .opfactory import EmbeddedOpFactory
+#from .opfactory import EmbeddingOpFactory
 
-from .model import Model
-from .explicitmodel import ExplicitOpModel
-from .explicitmodel import ExplicitOpModel as GateSet  # alias
-from .implicitmodel import ImplicitOpModel
-from .localnoisemodel import LocalNoiseModel
-from .cloudnoisemodel import CloudNoiseModel
-from .oplessmodel import OplessModel
-from .oplessmodel import SuccessFailModel
 from .circuitstructure import CircuitPlaquette, FiducialPairPlaquette, GermFiducialPairPlaquette
 from .circuitstructure import PlaquetteGridCircuitStructure
 from .circuit import Circuit
@@ -81,13 +73,6 @@ from .stabilizer import StabilizerFrame
 from .qubitgraph import QubitGraph
 from .hypothesistest import HypothesisTest
 
-from .forwardsim import ForwardSimulator
-from .matrixforwardsim import SimpleMatrixForwardSimulator, MatrixForwardSimulator
-from .mapforwardsim import SimpleMapForwardSimulator, MapForwardSimulator
-from .termforwardsim import TermForwardSimulator
-from .weakforwardsim import WeakForwardSimulator
-from .chpforwardsim import CHPForwardSimulator
-
 from .gaugegroup import FullGaugeGroup, FullGaugeGroupElement
 from .gaugegroup import TPGaugeGroup, TPGaugeGroupElement
 from .gaugegroup import DiagGaugeGroup, DiagGaugeGroupElement
@@ -96,7 +81,6 @@ from .gaugegroup import UnitaryGaugeGroup, UnitaryGaugeGroupElement
 from .gaugegroup import SpamGaugeGroup, SpamGaugeGroupElement
 from .gaugegroup import TPSpamGaugeGroup, TPSpamGaugeGroupElement
 from .gaugegroup import TrivialGaugeGroup, TrivialGaugeGroupElement
-from .labeldicts import StateSpaceLabels
 
 from .circuitlist import CircuitList
 from .resourceallocation import ResourceAllocation
@@ -109,7 +93,7 @@ from .objectivefns import ObjectiveFunctionBuilder, \
 from .objectivefns import ModelDatasetCircuitsStore, EvaluatedModelDatasetCircuitsStore
 
 #from .results import Results  # REMOVE
-from .operation import compose, optimize_operation, finite_difference_deriv_wrt_params
+#from .operation import compose, optimize_operation, finite_difference_deriv_wrt_params
 from .smartcache import SmartCache
 from .verbosityprinter import VerbosityPrinter
 from .profiler import Profiler

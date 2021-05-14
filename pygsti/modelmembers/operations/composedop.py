@@ -18,7 +18,7 @@ from .denseop import DenseOperatorInterface as _DenseOperatorInterface
 
 from .. import modelmember as _modelmember
 
-from ... import term as _term
+from ...objects import term as _term
 from ...evotypes import Evotype as _Evotype
 from ...tools import listtools as _lt
 from ...tools import matrixtools as _mt

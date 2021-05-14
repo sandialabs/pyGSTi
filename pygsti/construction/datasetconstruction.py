@@ -16,8 +16,8 @@ import warnings as _warnings
 import collections as _collections
 import itertools as _itertools
 
+from ..models import labeldicts as _ld
 from ..objects import dataset as _ds
-from ..objects import labeldicts as _ld
 from ..objects import label as _lbl
 from ..protocols import ExperimentDesign as _ExperimentDesign
 from . import circuitconstruction as _gstrc

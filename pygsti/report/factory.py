@@ -41,7 +41,7 @@ from ..objects.label import Label as _Lbl
 from ..modelpacks import RBModelPack as _RBModelPack
 from ..objects.circuitlist import CircuitList as _CircuitList
 from ..objects.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
-from ..objects.labeldicts import StateSpaceLabels as _StateSpaceLabels
+from ..models.labeldicts import StateSpaceLabels as _StateSpaceLabels
 
 #maybe import these from drivers.longsequence so they stay synced?
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]  # ".wildcard" (not a separate estimate anymore)

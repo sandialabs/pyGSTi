@@ -26,19 +26,20 @@ from ..tools import listtools as _lt
 from ..tools import internalgates as _itgs
 from ..tools import mpitools as _mpit
 from ..tools.legacytools import deprecate as _deprecated_fn
-from ..objects import model as _mdl
-from ..objects import operation as _op
-from ..objects import opfactory as _opfactory
-from ..objects import spamvec as _sv
-from ..objects import povm as _povm
-from ..objects import qubitgraph as _qgraph
-from ..objects import labeldicts as _ld
-from ..objects.cloudnoisemodel import CloudNoiseModel as _CloudNoiseModel
-from ..objects.labeldicts import StateSpaceLabels as _StateSpaceLabels
-from ..objects.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
-from ..objects.mapforwardsim import MapForwardSimulator as _MapFSim
-from ..objects.termforwardsim import TermForwardSimulator as _TermFSim
+from ..models import model as _mdl
+from ..models import labeldicts as _ld
+from ..models.labeldicts import StateSpaceLabels as _StateSpaceLabels
+from ..models.cloudnoisemodel import CloudNoiseModel as _CloudNoiseModel
+from ..modelmembers import operations as _op
+from ..modelmembers import states as _state
+from ..modelmembers import povms as _povm
+from ..modelmembers.operations import opfactory as _opfactory
 
+from ..forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
+from ..forwardsims.mapforwardsim import MapForwardSimulator as _MapFSim
+from ..forwardsims.termforwardsim import TermForwardSimulator as _TermFSim
+
+from ..objects import qubitgraph as _qgraph
 from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from ..objects.basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis
 from ..objects.label import Label as _Lbl
@@ -837,7 +838,7 @@ def create_cloud_crosstalk_model(num_qubits, gate_names, nonstd_gate_unitaries={
 
                 parameterization = _parameterization_from_errgendict(local_errs_for_these_sslbls)
                 #REMOVE print("DB: Param from ", local_errs_for_these_sslbls, " = ",parameterization)
-                _, _, nonham_mode, param_mode = _op.LindbladOp.decomp_paramtype(parameterization)
+                _, _, nonham_mode, param_mode = _op.ExpErrorgenOp.decomp_paramtype(parameterization)      ## TODO; check if this exists??
                 lind_errgen = _op.LindbladErrorgen(local_dim, local_errs_for_these_sslbls, basis, param_mode,
                                                    nonham_mode, truncate=False, mx_basis="pp", evotype=evotype)
                 #REMOVE print("DB: Adding to stencil: ",error_sslbls,lind_errgen.dim,local_dim)
@@ -878,15 +879,15 @@ def create_cloud_crosstalk_model(num_qubits, gate_names, nonstd_gate_unitaries={
 
     #SPAM
     if 'prep' in lindblad_error_coeffs:
-        prepPure = _sv.ComputationalSPAMVec([0] * num_qubits, evotype)
+        prepPure = _state.ComputationalBasisState([0] * num_qubits, evotype)
         prepNoiseMap = create_error(qubit_labels, lindblad_error_coeffs['prep'], return_what="errmap")
-        prep_layers = [_sv.LindbladSPAMVec(prepPure, prepNoiseMap, "prep")]
+        prep_layers = [_state.ComposedState(prepPure, prepNoiseMap)]
     else:
-        prep_layers = [_sv.ComputationalSPAMVec([0] * num_qubits, evotype)]
+        prep_layers = [_state.ComputationalBasisState([0] * num_qubits, evotype)]
 
     if 'povm' in lindblad_error_coeffs:
         povmNoiseMap = create_error(qubit_labels, lindblad_error_coeffs['povm'], return_what="errmap")
-        povm_layers = [_povm.LindbladPOVM(povmNoiseMap, None, "pp")]
+        povm_layers = [_povm.ExpErrorgenPOVM(povmNoiseMap, None, "pp")]
     else:
         povm_layers = [_povm.ComputationalBasisPOVM(num_qubits, evotype)]
 

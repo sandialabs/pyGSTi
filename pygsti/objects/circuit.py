@@ -17,7 +17,7 @@ import itertools as _itertools
 import warnings as _warnings
 import collections as _collections
 
-from . import labeldicts as _ld
+from ..models import labeldicts as _ld
 from .label import Label as _Label, CircuitLabel as _CircuitLabel
 from ..io import CircuitParser as _CircuitParser
 from ..tools import internalgates as _itgs

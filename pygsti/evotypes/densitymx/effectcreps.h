@@ -2,7 +2,6 @@
 #include <vector>
 #include <unordered_map>
 #include <cmath>
-#include "opcreps.h"
 
 typedef std::complex<double> dcomplex;
 typedef long long INT;

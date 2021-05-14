@@ -12,10 +12,10 @@ Defines the OplessForwardSimulator calculator class
 
 import numpy as _np
 
-from .labeldicts import OutcomeLabelDict as _OutcomeLabelDict
-from .cachedlayout import CachedCOPALayout as _CachedCOPALayout
+from ..models.labeldicts import OutcomeLabelDict as _OutcomeLabelDict
+from ..layouts.cachedlayout import CachedCOPALayout as _CachedCOPALayout
 from .forwardsim import CacheForwardSimulator as _CacheForwardSimulator
-from .opcalc import compact_deriv as _compact_deriv, float_product as prod, \
+from ..objects.opcalc import compact_deriv as _compact_deriv, float_product as prod, \
     bulk_eval_compact_polynomials as _bulk_eval_compact_polynomials
 from ..tools import slicetools as _slct
 

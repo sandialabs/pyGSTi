@@ -30,22 +30,20 @@ from ..tools import basistools as _bt
 from ..tools import listtools as _lt
 from ..tools import symplectic as _symp
 
-from . import modelmember as _gm
-from . import circuit as _cir
-from . import operation as _op
-from . import spamvec as _sv
-from . import povm as _povm
-from . import instrument as _instrument
+from ..modelmembers import modelmember as _gm
+from ..objects import circuit as _cir
+from ..modelmembers import operations as _op
+
 from . import labeldicts as _ld
-from . import gaugegroup as _gg
-from . import matrixforwardsim as _matrixfwdsim
-from . import mapforwardsim as _mapfwdsim
-from . import termforwardsim as _termfwdsim
+from ..objects import gaugegroup as _gg
+from ..forwardsims import matrixforwardsim as _matrixfwdsim
+from ..forwardsims import mapforwardsim as _mapfwdsim
+from ..forwardsims import termforwardsim as _termfwdsim
 from . import explicitcalc as _explicitcalc
 
-from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from .basis import Basis as _Basis
-from .label import Label as _Label, CircuitLabel as _CircuitLabel
+from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from ..objects.basis import Basis as _Basis
+from ..objects.label import Label as _Label, CircuitLabel as _CircuitLabel
 
 
 class LayerRules(object):
@@ -85,7 +83,7 @@ class LayerRules(object):
         if circuitlbl.reps != 1:
             #finalOp = Composed([subCircuitOp]*circuitlbl.reps,
             #                   dim=model.dim, evotype=model.evotype)
-            finalOp = _op.ExponentiatedOp(subCircuitOp, circuitlbl.reps, evotype=model.evotype)
+            finalOp = _op.RepeatedOp(subCircuitOp, circuitlbl.reps, evotype=model.evotype)
         else:
             finalOp = subCircuitOp
 

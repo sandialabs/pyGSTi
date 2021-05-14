@@ -16,8 +16,8 @@ import numpy.random as _rndm
 
 from ..tools import listtools as _lt
 from ..objects import circuit as _cir
-from ..objects import Model as _Model
 from ..objects.label import Label as _Lbl
+from ..models import Model as _Model
 
 
 def _run_expression(str_expression, my_locals):

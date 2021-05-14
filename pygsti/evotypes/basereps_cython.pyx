@@ -10,5 +10,12 @@ Base classes for Cython representations.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-cdef class OpRep:  # no _cython b/c this is the single base class for all op classes
+
+cdef class OpRep:
+    pass
+
+cdef class StateRep:
+    pass
+
+cdef class EffectRep:
     pass

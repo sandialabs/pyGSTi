@@ -10,5 +10,7 @@ The density-matrix, or "densitymx" evolution type, which uses Cython for speed.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from .statereps import *
 from .opreps import *
+from .effectreps import *
 

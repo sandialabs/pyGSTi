@@ -19,7 +19,7 @@ from ..tools.legacytools import deprecate as _deprecated_fn
 from ..objects.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
 from ..objects.circuitstructure import FiducialPairPlaquette as _FiducialPairPlaquette
 from ..objects.circuitstructure import GermFiducialPairPlaquette as _GermFiducialPairPlaquette
-from ..objects.model import OpModel as _OpModel
+from ..models.model import OpModel as _OpModel
 from ..objects import Circuit as _Circuit
 from ..objects import CircuitList as _CircuitList
 from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter

@@ -19,7 +19,7 @@ from .linearop import LinearOperator as _LinearOperator
 from .denseop import DenseOperatorInterface as _DenseOperatorInterface
 
 from .. import modelmember as _modelmember
-from ...basis.objects import EmbeddedBasis as _EmbeddedBasis
+from ...objects.basis import EmbeddedBasis as _EmbeddedBasis
 
 
 class EmbeddedOp(_LinearOperator):
@@ -86,7 +86,7 @@ class EmbeddedOp(_LinearOperator):
             matrix.  This is expert-level functionality, and you should leave their
             the default value unless you know what you're doing.
         """
-        from .labeldicts import StateSpaceLabels as _StateSpaceLabels
+        from ...models.labeldicts import StateSpaceLabels as _StateSpaceLabels
         self.state_space_labels = _StateSpaceLabels(state_space_labels,
                                                     evotype=operation_to_embed._evotype)
         self.target_labels = target_labels

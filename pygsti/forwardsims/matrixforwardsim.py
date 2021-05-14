@@ -21,18 +21,18 @@ from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
 from ..tools import sharedmemtools as _smt
 from ..tools.matrixtools import _fas
-from .profiler import DummyProfiler as _DummyProfiler
-from .label import Label as _Label
-from .matrixlayout import MatrixCOPALayout as _MatrixCOPALayout
+from ..objects.profiler import DummyProfiler as _DummyProfiler
+from ..objects.label import Label as _Label
+from ..layouts.matrixlayout import MatrixCOPALayout as _MatrixCOPALayout
 from .forwardsim import ForwardSimulator as _ForwardSimulator
 from .forwardsim import _bytes_for_array_types
 from .distforwardsim import DistributableForwardSimulator as _DistributableForwardSimulator
-from .distlayout import DistributableCOPALayout as _DistributableCOPALayout
-from .resourceallocation import ResourceAllocation as _ResourceAllocation
-from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from .evaltree import EvalTree as _EvalTree
-from .objectivefns import RawChi2Function as _RawChi2Function
-from .objectivefns import RawPoissonPicDeltaLogLFunction as _RawPoissonPicDeltaLogLFunction
+from ..layouts.distlayout import DistributableCOPALayout as _DistributableCOPALayout
+from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
+from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from ..layouts.evaltree import EvalTree as _EvalTree
+from ..objects.objectivefns import RawChi2Function as _RawChi2Function
+from ..objects.objectivefns import RawPoissonPicDeltaLogLFunction as _RawPoissonPicDeltaLogLFunction
 _dummy_profiler = _DummyProfiler()
 
 # Smallness tolerances, used internally for conditional scaling required

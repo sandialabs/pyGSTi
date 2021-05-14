@@ -1,4 +1,13 @@
 
+import numpy as _np
+from .state import State as _State
+from .densestate import DenseState as _DenseState
+from ...evotypes import Evotype as _Evotype
+from ...objects.basis import Basis as _Basis
+
+IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
+
+
 class CPTPState(_DenseState):
     """
     TODO: update docstring
@@ -69,10 +78,12 @@ class CPTPState(_DenseState):
         self.Lmx = _np.zeros((self.dmDim, self.dmDim), 'complex')
 
         evotype = _Evotype.cast(evotype)
-        rep = evotype.create_state_rep()
-        rep.init_from_dense_vec(vector)
+        rep = evotype.create_dense_state_rep(vector)
         _DenseState.__init__(self, rep, evotype, rep.base)
         self._paramlbls = _np.array(labels, dtype=object)
+
+    def _base_1d_has_changed(self):
+        self._rep.base_has_changed()
 
     def _set_params_from_vector(self, vector, truncate):
         density_mx = _np.dot(self.basis_mxs, vector)

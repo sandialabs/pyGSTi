@@ -30,23 +30,23 @@ from ..tools import listtools as _lt
 from ..tools import symplectic as _symp
 
 from . import model as _mdl
-from . import modelmember as _gm
-from . import circuit as _cir
-from . import operation as _op
-from . import spamvec as _sv
-from . import povm as _povm
-from . import instrument as _instrument
+from ..modelmembers import modelmember as _gm
+from ..objects import circuit as _cir
+from ..modelmembers import operations as _op
+from ..modelmembers import states as _state
+from ..modelmembers import povms as _povm
+from ..modelmembers import instruments as _instrument
+from ..modelmembers.operations import opfactory as _opfactory
 from . import labeldicts as _ld
-from . import gaugegroup as _gg
-from . import matrixforwardsim as _matrixfwdsim
-from . import mapforwardsim as _mapfwdsim
-from . import termforwardsim as _termfwdsim
+from ..objects import gaugegroup as _gg
+from ..forwardsims import matrixforwardsim as _matrixfwdsim
+from ..forwardsims import mapforwardsim as _mapfwdsim
+from ..forwardsims import termforwardsim as _termfwdsim
 from . import explicitcalc as _explicitcalc
-from . import opfactory as _opfactory
 
-from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from .basis import BuiltinBasis as _BuiltinBasis, DirectSumBasis as _DirectSumBasis
-from .label import Label as _Label, CircuitLabel as _CircuitLabel
+from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from ..objects.basis import BuiltinBasis as _BuiltinBasis, DirectSumBasis as _DirectSumBasis
+from ..objects.label import Label as _Label, CircuitLabel as _CircuitLabel
 from .layerrules import LayerRules as _LayerRules
 
 
@@ -479,8 +479,8 @@ class ExplicitOpModel(_mdl.OpModel):
                                                         extra.get(lbl, None))
 
         for lbl, vec in self.preps.items():
-            self.preps[lbl] = _sv.convert(vec, rtyp, basis,
-                                          extra.get(lbl, None))
+            self.preps[lbl] = _state.convert(vec, rtyp, basis,
+                                             extra.get(lbl, None))
 
         for lbl, povm in self.povms.items():
             self.povms[lbl] = _povm.convert(povm, povmtyp, basis,
@@ -1239,7 +1239,7 @@ class ExplicitOpModel(_mdl.OpModel):
         for lbl, rhoVec in self.preps.items():
             assert(len(rhoVec) == curDim)
             new_model.preps[lbl] = \
-                _sv.FullSPAMVec(_np.concatenate((rhoVec, vec_zeroPad)))
+                _state.FullState(_np.concatenate((rhoVec, vec_zeroPad)))               # evotype???? TODO
 
         for lbl, povm in self.povms.items():
             assert(povm.dim == curDim)
@@ -1310,7 +1310,7 @@ class ExplicitOpModel(_mdl.OpModel):
         for lbl, rhoVec in self.preps.items():
             assert(len(rhoVec) == curDim)
             new_model.preps[lbl] = \
-                _sv.FullSPAMVec(rhoVec[0:new_dimension, :])
+                _state.FullState(rhoVec[0:new_dimension, :])     # evotype ??????????????????? TODO ----------------------------
 
         for lbl, povm in self.povms.items():
             assert(povm.dim == curDim)

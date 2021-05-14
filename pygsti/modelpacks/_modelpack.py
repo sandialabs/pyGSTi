@@ -18,8 +18,8 @@ import pickle as _pickle
 
 from ..objects.polynomial import bulk_load_compact_polynomials as _bulk_load_compact_polys
 from ..objects.circuit import Circuit as _Circuit
-from ..objects.termforwardsim import TermForwardSimulator as _TermFSim
 from ..objects.label import Label as _Label
+from ..forwardsims.termforwardsim import TermForwardSimulator as _TermFSim
 from ..construction.circuitconstruction import to_circuits as _circuit_list
 from ..construction.modelconstruction import create_explicit_model as _build_explicit_model
 from ..construction.stdlists import create_lsgst_circuit_lists as _make_lsgst_lists
