@@ -17,7 +17,7 @@ class POVMEffect(_modelmember.ModelMember):
     rep : object
         A representation object containing the core data for this spam vector.
 
-    evotype : str
+    evotype : Evotype
         The evolution type of this operator, for matching with forward simulators.
 
     Attributes

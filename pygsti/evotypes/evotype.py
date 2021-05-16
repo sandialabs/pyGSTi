@@ -8,11 +8,14 @@ class Evotype(object):
     Provides an interface for creating representations.  The `create_*` methods specify an API used by the
     operation classes so they can create the representation they need.
     """
+    defaut_evotype = None
 
     @classmethod
     def cast(cls, obj):
         if isinstance(obj, Evotype):
             return obj
+        elif obj == "default":
+            return Evotype(cls.default_evotype)
         else:  # assume obj is a string naming an evotype
             return Evotype(str(obj))
 
@@ -35,6 +38,9 @@ class Evotype(object):
             return self.name == other_evotype.name
         else:
             return self.name == str(other_evotype)
+
+    def __str__(self):
+        return self.name
 
     def create_dense_rep(self, dim=None):  # process_mx=None, 
         return self.module.OpRepDense(dim)
@@ -102,3 +108,9 @@ class Evotype(object):
     def create_composed_effect_rep(self, errmap_rep, effect_rep, errmap_name):
         return self.module.EffectRepComposed(errmap_rep, effect_rep, errmap_name)
     
+
+try:
+    from . import densitymx as _dummy
+    Evotype.default_evotype = "densitymx"
+except ImportError:
+    Evotype.default_evotype = "densitymx_slow"

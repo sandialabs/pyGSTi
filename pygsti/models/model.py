@@ -439,10 +439,10 @@ class OpModel(Model):
     basis : Basis
         The basis used for the state space by dense operator representations.
 
-    evotype : {"densitymx", "statevec", "stabilizer", "svterm", "cterm"}
+    evotype : Evotype or str, optional
         The evolution type of this model, describing how states are
-        represented, allowing compatibility checks with (super)operator
-        objects.
+        represented.  The special value `"default"` is equivalent
+        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
 
     layer_rules : LayerRules
         The "layer rules" used for constructing operators for circuit
@@ -460,32 +460,6 @@ class OpModel(Model):
     def __init__(self, state_space_labels, basis, evotype, layer_rules, simulator="auto"):
         """
         Creates a new OpModel.  Rarely used except from derived classes `__init__` functions.
-
-        Parameters
-        ----------
-        state_space_labels : StateSpaceLabels or list or tuple
-            The decomposition (with labels) of (pure) state-space this model
-            acts upon.  Regardless of whether the model contains operators or
-            superoperators, this argument describes the Hilbert space dimension
-            and imposed structure.  If a list or tuple is given, it must be
-            of a from that can be passed to `StateSpaceLabels.__init__`.
-
-        basis : Basis
-            The basis used for the state space by dense operator representations.
-
-        evotype : {"densitymx", "statevec", "stabilizer", "svterm", "cterm"}
-            The evolution type of this model, describing how states are
-            represented, allowing compatibility checks with (super)operator
-            objects.
-
-        layer_rules : LayerRules
-            The "layer rules" used for constructing operators for circuit
-            layers.  This functionality is essential to using this model to
-            simulate ciruits, and is typically supplied by derived classes.
-
-        simulator : ForwardSimulator or {"auto", "matrix", "map"}
-            The forward simulator this model should use.  `"auto"`
-            tries to determine and instantiate the best type automatically.
         """
         self._evotype = _Evotype.cast(evotype)
         self._set_state_space(state_space_labels, basis)

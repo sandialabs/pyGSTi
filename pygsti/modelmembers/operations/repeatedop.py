@@ -18,9 +18,10 @@ class RepeatedOp(_LinearOperator):
     num_repetitions : int
         the power to exponentiate `op_to_exponentiate` to.
 
-    evotype : {"densitymx","statevec","stabilizer","svterm","cterm","auto"}
-        the evolution type.  `"auto"` uses the evolution type of
-        `op_to_repeat`.
+    evotype : Evotype or str, optional
+        The evolution type.  The special value `"default"` is equivalent
+        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
+        The special value `"auto"` uses the evolutio ntype of `op_to_repeat`.
     """
 
     def __init__(self, op_to_repeat, num_repetitions, evotype="auto"):

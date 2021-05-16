@@ -34,27 +34,13 @@ class CPTPState(_DenseState):
     trunctate : bool, optional
         Whether or not a non-positive, trace=1 `vec` should
         be truncated to force a successful construction.
+
+    evotype : Evotype or str, optional
+        The evolution type.  The special value `"default"` is equivalent
+        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
     """
 
-    def __init__(self, vec, basis, truncate=False, evotype="densitymx"):
-        """
-        Initialize a CPTPSPAMVec object.
-
-        Parameters
-        ----------
-        vec : array_like or SPAMVec
-            a 1D numpy array representing the SPAM operation.  The
-            shape of this array sets the dimension of the SPAM op.
-
-        basis : {"std", "gm", "pp", "qt"} or Basis
-            The basis `vec` is in.  Needed because this parameterization
-            requires we construct the density matrix corresponding to
-            the Lioville vector `vec`.
-
-        trunctate : bool, optional
-            Whether or not a non-positive, trace=1 `vec` should
-            be truncated to force a successful construction.
-        """
+    def __init__(self, vec, basis, truncate=False, evotype="default"):
         vector = _State._to_vector(vec)
         basis = _Basis.cast(basis, len(vector))
 

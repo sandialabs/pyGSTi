@@ -276,8 +276,9 @@ class DenseOperator(BasedDenseOperatorInterface, _LinearOperator):
     mx : numpy.ndarray
         The operation as a dense process matrix.
 
-    evotype : {"statevec", "densitymx"}
-        The evolution type.
+    evotype : Evotype or str
+        The evolution type.  The special value `"default"` is equivalent
+        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
 
     Attributes
     ----------

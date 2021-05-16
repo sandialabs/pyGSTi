@@ -21,6 +21,10 @@ class TPState(_DenseState):
     vec : array_like or SPAMVec
         a 1D numpy array representing the SPAM operation.  The
         shape of this array sets the dimension of the SPAM op.
+
+    evotype : Evotype or str, optional
+        The evolution type.  The special value `"default"` is equivalent
+        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
     """
 
     #Note: here we assume that the first basis element is (1/sqrt(x) * I),
@@ -30,16 +34,7 @@ class TPState(_DenseState):
     # alpha = 1/sqrt(d) to obtain a trace-1 matrix, i.e., finding alpha
     # s.t. Tr(alpha*[1/sqrt(d)*I]) == 1 => alpha*d/sqrt(d) == 1 =>
     # alpha = 1/sqrt(d) = 1/(len(vec)**0.25).
-    def __init__(self, vec, evotype="densitymx"):
-        """
-        Initialize a TPSPAMVec object.
-
-        Parameters
-        ----------
-        vec : array_like or SPAMVec
-            a 1D numpy array representing the SPAM operation.  The
-            shape of this array sets the dimension of the SPAM op.
-        """
+    def __init__(self, vec, evotype="default"):
         vector = _State._to_vector(vec)
         firstEl = len(vector)**-0.25
         if not _np.isclose(vector[0], firstEl):

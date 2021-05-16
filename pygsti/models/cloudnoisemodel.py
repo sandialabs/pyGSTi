@@ -213,9 +213,10 @@ class CloudNoiseModel(_ImplicitOpModel):
                               max_idle_weight=1, max_spam_weight=1, maxhops=0,
                               extra_weight_1_hops=0, extra_gate_weight=0,
                               simulator="auto", parameterization="H+S",
-                              spamtype="lindblad", add_idle_noise_to_all_gates=True,
+                              evotype='default', spamtype="lindblad", add_idle_noise_to_all_gates=True,
                               errcomp_type="gates", independent_clouds=True,
-                              sparse_lindblad_basis=False, sparse_lindblad_reps=False, verbosity=0):
+                              sparse_lindblad_basis=False, sparse_lindblad_reps=False,
+                              verbosity=0):
         """
         Create a :class:`CloudNoiseModel` from hopping rules.
 
@@ -329,13 +330,15 @@ class CloudNoiseModel(_ImplicitOpModel):
             requested probabilities, e.g. from :method:`probs` or
             :method:`bulk_probs`.
 
-        parameterization : {"P", "P terms", "P clifford terms"}
-            Where *P* can be any Lindblad parameterization base type (e.g. CPTP,
+        parameterization : str, optional
+            Can be any Lindblad parameterization base type (e.g. CPTP,
             H+S+A, H+S, S, D, etc.) This is the type of parameterizaton to use in
-            the constructed model.  Types without any "terms" suffix perform
-            usual density-matrix evolution to compute circuit probabilities.  The
-            other "terms" options compute probabilities using a path-integral
-            approach designed for larger numbers of qubits (experts only).
+            the constructed model.
+
+        evotype : Evotype or str, optional
+            The evolution type of this model, describing how states are
+            represented.  The special value `"default"` is equivalent
+            to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
 
         spamtype : { "static", "lindblad", "tensorproduct" }
             Specifies how the SPAM elements of the returned `Model` are formed.
@@ -388,10 +391,6 @@ class CloudNoiseModel(_ImplicitOpModel):
         if nonstd_gate_unitaries is None: nonstd_gate_unitaries = {}
         std_unitaries = _itgs.standard_gatename_unitaries()
 
-        #Get evotype
-        _, evotype = _gt.split_lindblad_paramtype(parameterization)
-        assert(evotype in ("densitymx", "svterm", "cterm")), "State-vector evolution types not allowed."
-
         gatedict = _collections.OrderedDict()
         for name in gate_names:
             if name in custom_gates:
@@ -440,7 +439,7 @@ class CloudNoiseModel(_ImplicitOpModel):
             printer.log("Creating Idle:")
             global_idle_layer = _build_nqn_global_noise(
                 qubitGraph, max_idle_weight, sparse_lindblad_basis, sparse_lindblad_reps,
-                simulator, parameterization, errcomp_type, printer - 1)
+                simulator, parameterization, evotype, errcomp_type, printer - 1)
         else:
             global_idle_layer = None
 
@@ -485,12 +484,12 @@ class CloudNoiseModel(_ImplicitOpModel):
             prepPure = _state.ComputationalBasisState([0] * num_qubits, evotype)
             prepNoiseMap = _build_nqn_global_noise(
                 qubitGraph, max_spam_weight, sparse_lindblad_basis, sparse_lindblad_reps, simulator,
-                parameterization, errcomp_type, printer - 1)
+                parameterization, evotype, errcomp_type, printer - 1)
             prep_layers = [_state.ComposedState(prepPure, prepNoiseMap)]
 
             povmNoiseMap = _build_nqn_global_noise(
                 qubitGraph, max_spam_weight, sparse_lindblad_basis, sparse_lindblad_reps, simulator,
-                parameterization, errcomp_type, printer - 1)
+                parameterization, evotype, errcomp_type, printer - 1)
             povm_layers = {'Mdefault': _povm.ComposedPOVM(povmNoiseMap, None, "pp")}
 
         else:
@@ -514,7 +513,7 @@ class CloudNoiseModel(_ImplicitOpModel):
                 [qubitGraph.node_names.index(nn) for nn in lbl.sslbls], qubitGraph, weight_maxhops_tuples,
                 errcomp_type=errcomp_type, sparse_lindblad_basis=sparse_lindblad_basis,
                 sparse_lindblad_reps=sparse_lindblad_reps, simulator=simulator, parameterization=parameterization,
-                verbosity=printer - 1)
+                evotype=evotype, verbosity=printer - 1)
 
         def build_cloudkey_fn(lbl):
             cloud_maxhops = cloud_maxhops_1Q if len(lbl.sslbls) == 1 else cloud_maxhops_2Q
@@ -902,10 +901,9 @@ class CloudNoiseModel(_ImplicitOpModel):
         return self._clouds
 
 
-def _get_experrgen_factory(simulator, parameterization, errcomp_type, sparse_lindblad_reps):
+def _get_experrgen_factory(simulator, parameterization, errcomp_type, sparse_lindblad_reps, evotype):
     """ Returns a function that creates a ExpErrorgen-type gate appropriate
         given the simulation type and parameterization """
-    _, evotype = _gt.split_lindblad_paramtype(parameterization)
     # TODO - fix this evotype dependence -------------------------------------------------------------------------------------------------
     if errcomp_type == "gates":
         if evotype == "densitymx":
@@ -928,7 +926,7 @@ def _get_experrgen_factory(simulator, parameterization, errcomp_type, sparse_lin
                 elif "S" in parameterization: p = parameterization.replace("S", "s")
                 elif "D" in parameterization: p = parameterization.replace("D", "d")
 
-            bTyp, evotype, nonham_mode, param_mode, use_ham_basis, use_nonham_basis = \
+            nonham_mode, param_mode, use_ham_basis, use_nonham_basis = \
                 _op.LindbladErrorgen.decomp_paramtype(p)
             ham_basis = proj_basis if use_ham_basis else None
             nonham_basis = proj_basis if use_nonham_basis else None
@@ -944,7 +942,7 @@ def _get_experrgen_factory(simulator, parameterization, errcomp_type, sparse_lin
                 if parameterization == "CPTP": p = "GLND"
                 elif "S" in parameterization: p = parameterization.replace("S", "s")
                 elif "D" in parameterization: p = parameterization.replace("D", "d")
-            bTyp, evotype, nonham_mode, param_mode, use_ham_basis, use_nonham_basis = \
+            nonham_mode, param_mode, use_ham_basis, use_nonham_basis = \
                 _op.LindbladErrorgen.decomp_paramtype(p)
             ham_basis = proj_basis if use_ham_basis else None
             nonham_basis = proj_basis if use_nonham_basis else None
@@ -981,7 +979,7 @@ def _get_static_factory(simulator, evotype):
 
 
 def _build_nqn_global_noise(qubit_graph, max_weight, sparse_lindblad_basis=False, sparse_lindblad_reps=False,
-                            simulator=None, parameterization="H+S", errcomp_type="gates",
+                            simulator=None, parameterization="H+S", evotype='default', errcomp_type="gates",
                             verbosity=0):
     """
     Create a "global" idle gate, meaning one that acts on all the qubits in
@@ -1013,7 +1011,11 @@ def _build_nqn_global_noise(qubit_graph, max_weight, sparse_lindblad_basis=False
 
     parameterization : str
         The type of parameterizaton for the constructed gate. E.g. "H+S",
-        "H+S terms", "H+S clifford terms", "CPTP", etc.
+        "CPTP", etc.
+
+    evotype : Evotype or str, optional
+        The evolution type.  The special value `"default"` is equivalent
+        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
 
     errcomp_type : {"gates","errorgens"}
         How errors are composed when creating layer operations in the associated
@@ -1040,7 +1042,7 @@ def _build_nqn_global_noise(qubit_graph, max_weight, sparse_lindblad_basis=False
         Composed = _op.ComposedErrorgen
         Embedded = _op.EmbeddedErrorgen
     else: raise ValueError("Invalid `errcomp_type`: %s" % errcomp_type)
-    ExpErrorgen = _get_experrgen_factory(simulator, parameterization, errcomp_type, sparse_lindblad_reps)
+    ExpErrorgen = _get_experrgen_factory(simulator, parameterization, errcomp_type, sparse_lindblad_reps, evotype)
     #constructs a gate or errorgen based on value of errcomp_type
 
     printer = _VerbosityPrinter.create_printer(verbosity)
@@ -1102,7 +1104,7 @@ def _build_nqn_global_noise(qubit_graph, max_weight, sparse_lindblad_basis=False
 
 def _build_nqn_cloud_noise(target_qubit_inds, qubit_graph, weight_maxhops_tuples,
                            errcomp_type="gates", sparse_lindblad_basis=False, sparse_lindblad_reps=False,
-                           simulator=None, parameterization="H+S", verbosity=0):
+                           simulator=None, parameterization="H+S", evotype='default', verbosity=0):
     """
     Create an n-qubit gate that is a composition of:
 
@@ -1155,7 +1157,11 @@ def _build_nqn_cloud_noise(target_qubit_inds, qubit_graph, weight_maxhops_tuples
 
     parameterization : str
         The type of parameterizaton for the constructed gate. E.g. "H+S",
-        "H+S terms", "H+S clifford terms", "CPTP", etc.
+        "CPTP", etc.
+
+    evotype : Evotype or str, optional
+        The evolution type.  The special value `"default"` is equivalent
+        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
 
     verbosity : int, optional
         An integer >= 0 dictating how must output to send to stdout.
@@ -1179,7 +1185,7 @@ def _build_nqn_cloud_noise(target_qubit_inds, qubit_graph, weight_maxhops_tuples
         Composed = _op.ComposedErrorgen
         Embedded = _op.EmbeddedErrorgen
     else: raise ValueError("Invalid `errcomp_type`: %s" % errcomp_type)
-    ExpErrorgen = _get_experrgen_factory(simulator, parameterization, errcomp_type, sparse_lindblad_reps)
+    ExpErrorgen = _get_experrgen_factory(simulator, parameterization, errcomp_type, sparse_lindblad_reps, evotype)
     #constructs a gate or errorgen based on value of errcomp_type
 
     printer = _VerbosityPrinter.create_printer(verbosity)

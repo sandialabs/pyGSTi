@@ -97,55 +97,13 @@ class LinearlyParamDenseOp(_DenseOperator):
         be raised if the matrix contains any complex or imaginary
         elements.
 
-    evotype : {"statevec", "densitymx", "auto"}
-        The evolution type.  If `"auto"`, then `"statevec"` is used if `real == False`,
-        otherwise `"densitymx"` is used.
+    evotype : Evotype or str, optional
+        The evolution type.  The special value `"default"` is equivalent
+        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
     """
 
     def __init__(self, base_matrix, parameter_array, parameter_to_base_indices_map,
-                 left_transform=None, right_transform=None, real=False, evotype="auto"):
-        """
-        Initialize a LinearlyParamDenseOp object.
-
-        Parameters
-        ----------
-        basematrix : numpy array
-            a square 2D numpy array that acts as the starting point when
-            constructin the operation's matrix.  The shape of this array sets
-            the dimension of the operation.
-
-        parameter_array : numpy array
-            a 1D numpy array that holds the all the parameters for this
-            operation.  The shape of this array sets is what is returned by
-            value_dimension(...).
-
-        parameter_to_base_indices_map : dict
-            A dictionary with keys == index of a parameter
-            (i.e. in parameter_array) and values == list of 2-tuples
-            indexing potentially multiple operation matrix coordinates
-            which should be set equal to this parameter.
-
-        left_transform : numpy array or None, optional
-            A 2D array of the same shape as basematrix which left-multiplies
-            the base matrix after parameters have been evaluated.  Defaults to
-            no transform.
-
-        right_transform : numpy array or None, optional
-            A 2D array of the same shape as basematrix which right-multiplies
-            the base matrix after parameters have been evaluated.  Defaults to
-            no transform.
-
-        real : bool, optional
-            Whether or not the resulting operation matrix, after all
-            parameter evaluation and left & right transforms have
-            been performed, should be real.  If True, ValueError will
-            be raised if the matrix contains any complex or imaginary
-            elements.
-
-        evotype : {"statevec", "densitymx", "auto"}
-            The evolution type.  If `"auto"`, then `"statevec"` is used if `real == False`,
-            otherwise `"densitymx"` is used.
-        """
+                 left_transform=None, right_transform=None, real=False, evotype="default"):
 
         base_matrix = _np.array(_LinearOperator.convert_to_matrix(base_matrix), 'complex')
         #complex, even if passed all real base matrix
@@ -168,10 +126,6 @@ class LinearlyParamDenseOp(_DenseOperator):
         self.leftTrans = left_transform if (left_transform is not None) else I
         self.rightTrans = right_transform if (right_transform is not None) else I
         self.enforceReal = real
-
-        if evotype == "auto": evotype = "densitymx" if real else "statevec"
-        assert(evotype in ("densitymx", "statevec")), \
-            "Invalid evolution type '%s' for %s" % (evotype, self.__class__.__name__)
 
         #Note: dense op reps *always* own their own data so setting writeable flag is OK
         _DenseOperator.__init__(self, mx, evotype)

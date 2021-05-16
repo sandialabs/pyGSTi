@@ -12,7 +12,7 @@ class DensePOVMEffect(_POVMEffect):
     vec : numpy.ndarray
         The SPAM vector as a dense numpy array.
 
-    evotype : {"statevec", "densitymx"}
+    evotype : EvoType
         The evolution type.
 
     Attributes

@@ -3616,38 +3616,35 @@ def is_valid_lindblad_paramtype(typ):
     -------
     bool
     """
-    try:
-        baseTyp, _ = split_lindblad_paramtype(typ)
-    except ValueError:
-        return False  # if can't even split `typ`
-    return baseTyp in ("CPTP", "H+S", "S", "H+S+A", "S+A", "H+D", "D", "H+D+A", "D+A",
-                       "GLND", "H+s", "s", "H+s+A", "s+A", "H+d", "d", "H+d+A", "d+A", "H")
+    return typ in ("CPTP", "H+S", "S", "H+S+A", "S+A", "H+D", "D", "H+D+A", "D+A",
+                   "GLND", "H+s", "s", "H+s+A", "s+A", "H+d", "d", "H+d+A", "d+A", "H")
 
 
-def split_lindblad_paramtype(typ):
-    """
-    Splits a Lindblad-gate parameteriation type into a base-type (e.g. "H+S") and an evolution-type string.
-
-    Parameters
-    ----------
-    typ : str
-        The parameterization type, e.g. "H+S terms".
-
-    Returns
-    -------
-    base_type : str
-        The "base-parameterization" part of `typ`.
-    evotype : str
-        The evolution type corresponding to `typ`.
-    """
-    bTyp = typ.split()[0]  # "base" type
-    evostr = " ".join(typ.split()[1:])
-
-    if evostr == "": evotype = "densitymx"
-    elif evostr == "terms": evotype = "svterm"
-    elif evostr == "clifford terms": evotype = "cterm"
-    else: raise ValueError("Unrecognized evotype in `typ`=%s" % typ)
-    return bTyp, evotype
+#REMOVE
+#def split_lindblad_paramtype(typ):
+#    """
+#    Splits a Lindblad-gate parameteriation type into a base-type (e.g. "H+S") and an evolution-type string.
+#
+#    Parameters
+#    ----------
+#    typ : str
+#        The parameterization type, e.g. "H+S terms".
+#
+#    Returns
+#    -------
+#    base_type : str
+#        The "base-parameterization" part of `typ`.
+#    evotype : str
+#        The evolution type corresponding to `typ`.
+#    """
+#    bTyp = typ.split()[0]  # "base" type
+#    evostr = " ".join(typ.split()[1:])
+#
+#    if evostr == "": evotype = "densitymx"
+#    elif evostr == "terms": evotype = "svterm"
+#    elif evostr == "clifford terms": evotype = "cterm"
+#    else: raise ValueError("Unrecognized evotype in `typ`=%s" % typ)
+#    return bTyp, evotype
 
 
 def effect_label_to_outcome(povm_and_effect_lbl):

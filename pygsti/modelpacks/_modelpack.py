@@ -63,7 +63,7 @@ class ModelPack(_ABC):
         updated_gateexps = [gexp.format(*sslbls) for gexp in gate_expressions]
         return _build_explicit_model(full_sslbls, updated_gatenames, updated_gateexps, **kwargs)
 
-    def target_model(self, parameterization_type="full", simulator="auto", qubit_labels=None):
+    def target_model(self, parameterization_type="full", simulator="auto", qubit_labels=None, evotype='default'):
         """
         Returns a copy of the target model in the given parameterization.
 
@@ -81,6 +81,11 @@ class ModelPack(_ABC):
             A tuple of qubit labels, e.g. ('Q0', 'Q1') or (0, 1).  The default
             are the integers starting at 0.
 
+        evotype : Evotype or str, optional
+            The evolution type of this model, describing how states are
+            represented.  The special value `"default"` is equivalent
+            to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
+
         Returns
         -------
         Model
@@ -89,9 +94,9 @@ class ModelPack(_ABC):
         assert(len(qubit_labels) == len(self._sslbls)), \
             "Expected %d qubit labels and got: %s!" % (len(self._sslbls), str(qubit_labels))
 
-        if (parameterization_type, simulator, qubit_labels) not in self._gscache:
+        if (parameterization_type, simulator, qubit_labels, evotype) not in self._gscache:
             # cache miss
-            mdl = self._target_model(qubit_labels)
+            mdl = self._target_model(qubit_labels, evotype)
             mdl.set_all_parameterizations(parameterization_type)  # automatically sets simulator
             if parameterization_type == "H+S terms":
                 assert(simulator == "auto" or isinstance(simulator, _TermFSim)), \
@@ -109,9 +114,9 @@ class ModelPack(_ABC):
                     mdl.sim = simulator
 
             # finally cache result
-            self._gscache[(parameterization_type, simulator, qubit_labels)] = mdl
+            self._gscache[(parameterization_type, simulator, qubit_labels, evotype)] = mdl
 
-        return self._gscache[(parameterization_type, simulator, qubit_labels)].copy()
+        return self._gscache[(parameterization_type, simulator, qubit_labels, evotype)].copy()
 
     def _get_cachefile_names(self, param_type, simulator):
         """ Get the standard cache file names for a modelpack """
@@ -304,7 +309,8 @@ class GSTModelPack(ModelPack):
         """
         return self._indexed_circuitdict(self._pergerm_fidpairsdict_lite, qubit_labels)
 
-    def get_gst_experiment_design(self, max_max_length, qubit_labels=None, fpr=False, lite=True, **kwargs):
+    def get_gst_experiment_design(self, max_max_length, qubit_labels=None, fpr=False, lite=True,
+                                  evotype='default', **kwargs):
         """
         Construct a :class:`protocols.gst.StandardGSTDesign` from this modelpack
 
@@ -328,6 +334,11 @@ class GSTModelPack(ModelPack):
             Whether to use a smaller "lite" list of germs. Unless you know
             you have a need to use the more pessimistic "full" set of germs,
             leave this set to True.
+
+        evotype : Evotype or str, optional
+            The evolution type of this model, describing how states are
+            represented.  The special value `"default"` is equivalent
+            to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
 
         Returns
         -------
@@ -356,7 +367,7 @@ class GSTModelPack(ModelPack):
             max_lengths_list = list(_gen_max_length(max_max_length))
 
         return _gst.StandardGSTDesign(
-            self._target_model(qubit_labels),
+            self._target_model(qubit_labels, evotype),
             self.prep_fiducials(qubit_labels),
             self.meas_fiducials(qubit_labels),
             self.germs(qubit_labels, lite),

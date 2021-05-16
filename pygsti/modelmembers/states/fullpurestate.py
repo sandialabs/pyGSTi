@@ -14,11 +14,12 @@ class FullPureState(_DenseState):
         a 1D numpy array representing the SPAM operation.  The
         shape of this array sets the dimension of the SPAM op.
 
-    evotype : {"densitymx", "statevec"}
-        the evolution type being used.
+    evotype : Evotype or str, optional
+        The evolution type.  The special value `"default"` is equivalent
+        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
     """
 
-    def __init__(self, purevec, evotype="densitymx"):
+    def __init__(self, purevec, evotype="default"):
         purevec = _State._to_vector(purevec)
         #REMOVE ?
         #if evotype == "auto":

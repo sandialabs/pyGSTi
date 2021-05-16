@@ -52,11 +52,13 @@ class EigenvalueParamDenseOp(_DenseOperator):
         any off diagonal elements lying on the top row are *not*
         parameterized as implied by the TP constraint.
 
-    evotype : TODO docstring
+    evotype : Evotype or str, optional
+        The evolution type.  The special value `"default"` is equivalent
+        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
     """
 
     def __init__(self, matrix, include_off_diags_in_degen_2_blocks=False,
-                 tp_constrained_and_unital=False, evotype="densitymx"):
+                 tp_constrained_and_unital=False, evotype="default"):
         """
         Initialize an EigenvalueParamDenseOp object.
 

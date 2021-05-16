@@ -209,7 +209,7 @@ def create_cloudnoise_model_from_hops_and_weights(
         max_idle_weight=1, max_spam_weight=1, maxhops=0,
         extra_weight_1_hops=0, extra_gate_weight=0,
         rough_noise=None, sparse_lindblad_basis=False, sparse_lindblad_reps=False,
-        simulator="auto", parameterization="H+S",
+        simulator="auto", parameterization="H+S", evotype='default',
         spamtype="lindblad", add_idle_noise_to_all_gates=True,
         errcomp_type="gates", independent_clouds=True,
         return_clouds=False, verbosity=0):  # , debug=False):
@@ -364,13 +364,15 @@ def create_cloudnoise_model_from_hops_and_weights(
         each `evotype` is usually what you want.  Setting this to something
         else is expert-level tuning.
 
-    parameterization : {"P", "P terms", "P clifford terms"}
-        Where *P* can be any Lindblad parameterization base type (e.g. CPTP,
+    parameterization : str, optional
+        Can be any Lindblad parameterization base type (e.g. CPTP,
         H+S+A, H+S, S, D, etc.) This is the type of parameterizaton to use in
-        the constructed model.  Types without any "terms" suffix perform
-        usual density-matrix evolution to compute circuit probabilities.  The
-        other "terms" options compute probabilities using a path-integral
-        approach designed for larger numbers of qubits (experts only).
+        the constructed model.
+
+    evotype : Evotype or str, optional
+        The evolution type of this model, describing how states are
+        represented.  The special value `"default"` is equivalent
+        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
 
     spamtype : { "static", "lindblad", "tensorproduct" }
         Specifies how the SPAM elements of the returned `Model` are formed.
@@ -423,7 +425,7 @@ def create_cloudnoise_model_from_hops_and_weights(
         availability, qubit_labels, geometry,
         max_idle_weight, max_spam_weight, maxhops,
         extra_weight_1_hops, extra_gate_weight,
-        simulator, parameterization, spamtype,
+        simulator, parameterization, evotype, spamtype,
         add_idle_noise_to_all_gates, errcomp_type,
         independent_clouds, sparse_lindblad_basis,
         sparse_lindblad_reps, verbosity)
@@ -838,7 +840,7 @@ def create_cloud_crosstalk_model(num_qubits, gate_names, nonstd_gate_unitaries={
 
                 parameterization = _parameterization_from_errgendict(local_errs_for_these_sslbls)
                 #REMOVE print("DB: Param from ", local_errs_for_these_sslbls, " = ",parameterization)
-                _, _, nonham_mode, param_mode, _, _ = _op.LinbladErrorgen.decomp_paramtype(parameterization)
+                nonham_mode, param_mode, _, _ = _op.LinbladErrorgen.decomp_paramtype(parameterization)
                 lind_errgen = _op.LindbladErrorgen(local_dim, local_errs_for_these_sslbls, basis, param_mode,
                                                    nonham_mode, truncate=False, mx_basis="pp", evotype=evotype)
                 #REMOVE print("DB: Adding to stencil: ",error_sslbls,lind_errgen.dim,local_dim)
@@ -864,8 +866,6 @@ def create_cloud_crosstalk_model(num_qubits, gate_names, nonstd_gate_unitaries={
             return errgen
 
     #Process "auto" simulator
-    _, evotype = _gt.split_lindblad_paramtype(lindblad_parameterization)  # what about "auto" parameterization?
-    assert(evotype in ("densitymx", "svterm", "cterm")), "State-vector evolution types not allowed."
     if simulator == "auto":
         if evotype in ("svterm", "cterm"): simulator = _TermFSim()
         else: simulator = _MapFSim() if num_qubits > 2 else _MatrixFSim()
@@ -2886,7 +2886,8 @@ def create_cloudnoise_circuits(num_qubits, max_lengths, single_q_fiducials,
         max_idle_weight, 0, maxhops, extra_weight_1_hops, extra_gate_weight,
         verbosity=printer - 5,
         simulator=_TermFSim(mode="taylor-order", max_order=1),
-        parameterization=ptermstype,
+        parameterization=paramroot,
+        evotype="terms:statevec",
         errcomp_type="gates",
         sparse_lindblad_basis=sparse_lindblad_basis,
         sparse_lindblad_reps=sparse_lindblad_reps)
@@ -2927,7 +2928,9 @@ def create_cloudnoise_circuits(num_qubits, max_lengths, single_q_fiducials,
         max_idle_weight, tuple(gatedict.keys()), None, gatedict, {}, None, 'line',  # qubitGraph
         max_idle_weight, 0, maxhops, extra_weight_1_hops,
         extra_gate_weight, verbosity=printer - 5,
-        simulator=_TermFSim(mode="taylor-order", max_order=1), parameterization=ptermstype, errcomp_type="gates",
+        simulator=_TermFSim(mode="taylor-order", max_order=1),
+        parameterization=paramroot, evotype="terms:statevec",
+        errcomp_type="gates",
         sparse_lindblad_basis=sparse_lindblad_basis,
         sparse_lindblad_reps=sparse_lindblad_reps)
     idle_model._clean_paramvec()  # allocates/updates .gpindices of all blocks
@@ -3010,7 +3013,7 @@ def create_cloudnoise_circuits(num_qubits, max_lengths, single_q_fiducials,
                     max_idle_weight, 0, maxhops, extra_weight_1_hops,
                     extra_gate_weight, verbosity=printer - 5,
                     simulator=_TermFSim(mode="taylor-order", max_order=1),
-                    parameterization=ptermstype, errcomp_type="gates",
+                    parameterization=paramroot, evotype="terms:statevec", errcomp_type="gates",
                     sparse_lindblad_basis=sparse_lindblad_basis,
                     sparse_lindblad_reps=sparse_lindblad_reps)
                 sidle_model._clean_paramvec()  # allocates/updates .gpindices of all blocks

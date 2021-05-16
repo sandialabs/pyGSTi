@@ -27,30 +27,16 @@ class ComputationalBasisPOVM(_POVM):
     nqubits : int
         The number of qubits
 
-    evotype : {"densitymx", "statevec", "stabilizer", "svterm", "cterm"}
-        The type of evolution being performed.
+    evotype : Evotype or str, optional
+        The evolution type.  The special value `"default"` is equivalent
+        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
 
     qubit_filter : list, optional
         An optional list of integers specifying a subset
         of the qubits to be measured.
     """
 
-    def __init__(self, nqubits, evotype, qubit_filter=None):
-        """
-        Creates a new StabilizerZPOVM object.
-
-        Parameters
-        ----------
-        nqubits : int
-            The number of qubits
-
-        evotype : {"densitymx", "statevec", "stabilizer", "svterm", "cterm"}
-            The type of evolution being performed.
-
-        qubit_filter : list, optional
-            An optional list of integers specifying a subset
-            of the qubits to be measured.
-        """
+    def __init__(self, nqubits, evotype="default", qubit_filter=None):
         if qubit_filter is not None:
             raise NotImplementedError("Still need to implement qubit_filter functionality")
 

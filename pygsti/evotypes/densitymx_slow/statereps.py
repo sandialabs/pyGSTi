@@ -1,3 +1,26 @@
+"""
+State representation classes for the `densitymx_slow` evolution type.
+"""
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
+
+import numpy as _np
+import functools as _functools
+
+from .. import basereps as _basereps
+from ...tools import optools as _ot
+from ...tools import basistools as _bt
+
+try:
+    from ...tools import fastcalc as _fastcalc
+except ImportError:
+    _fastcalc = None
 
 
 class StateRep(_basereps.StateRep):
@@ -7,10 +30,10 @@ class StateRep(_basereps.StateRep):
         self.base = _np.require(data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
 
     def __reduce__(self):
-        return (StateRep.__new__, (), (self.base, self.base.flags.writeable))
+        return (StateRep, (self.base,), (self.base.flags.writeable,))
 
     def __setstate__(self, state):
-        self.base, writeable = state
+        writeable, = state
         self.base.flags.writeable = writeable
 
     def copy_from(self, other):
@@ -31,18 +54,24 @@ class StateRepDense(StateRep):
     def base_has_changed(self):
         pass
 
+    def __reduce__(self):
+        return (StateRepDense, (self.base,), (self.base.flags.writeable,))
+
 
 class StateRepPure(StateRep):
     def __init__(self, purevec, basis):
         assert(purevec.dtype == _np.dtype(complex))
         self.purebase = _np.require(purevec.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
         self.basis = basis
-        dmVec_std = _gt.state_to_dmvec(self.purebase)
+        dmVec_std = _ot.state_to_dmvec(self.purebase)
         super(StateRepPure, self).__init__(_bt.change_basis(dmVec_std, 'std', self.basis))
 
     def purebase_has_changed(self):
-        dmVec_std = _gt.state_to_dmvec(self.purebase)
+        dmVec_std = _ot.state_to_dmvec(self.purebase)
         self.base[:] = _bt.change_basis(dmVec_std, 'std', self.basis)
+
+    def __reduce__(self):
+        return (StateRepPure, (self.base, self.basis), (self.base.flags.writeable,))
 
 
 class StateRepComputational(StateRep):
@@ -64,9 +93,12 @@ class StateRepComputational(StateRep):
             for i, zi in enumerate(zvals):
                 fast_kron_array[i, :] = v[zi]
             vec = _np.ascontiguousarray(_np.empty(factor_dim**len(zvals), typ))
-            _fastcalc.fast_kron(ret, fast_kron_array, fast_kron_factordims)
+            _fastcalc.fast_kron(vec, fast_kron_array, fast_kron_factordims)
 
         super(StateRepComputational, self).__init__(vec)
+
+    def __reduce__(self):
+        return (StateRepComputational, (self.zvals,), (self.base.flags.writeable,))
 
 
 class StateRepComposed(StateRep):
@@ -80,11 +112,15 @@ class StateRepComposed(StateRep):
         rep = self.op_rep.acton(self.state_rep)
         self.base[:] = rep.base[:]
 
+    def __reduce__(self):
+        return (StateRepComposed, (self.state_rep, self.op_rep), (self.base.flags.writeable,))
+
+
 
 class StateRepTensorProduct(StateRep):
     def __init__(self, factor_state_reps):
         self.factor_reps = factor_state_reps
-        dim = _np.product([fct.dim for fct in factors])
+        dim = _np.product([fct.dim for fct in self.factor_reps])
         super(StateRepTensorProduct, self).__init__(_np.zeros(dim, 'd'))
         self.reps_have_changed()
 
@@ -97,6 +133,10 @@ class StateRepTensorProduct(StateRep):
                 vec = _np.kron(vec, self.factor_reps[i].to_dense())
         self.base[:] = vec
 
+    def __reduce__(self):
+        return (StateRepTensorProduct, (self.factor_state_reps,), (self.base.flags.writeable,))
+
+    #REMOVE - or do something with this for a to_dense method?
     #def _fill_fast_kron(self):
     #    """ Fills in self._fast_kron_array based on current self.factors """
     #    for i, factor_dim in enumerate(self._fast_kron_factordims):

@@ -119,8 +119,10 @@ class LocalNoiseModel(_ImplicitOpModel):
         a :class:`QubitGraph` object with node labels equal to
         `qubit_labels` may be passed directly.
 
-    evotype : {"densitymx","statevec","stabilizer","svterm","cterm"}
-        The evolution type.
+    evotype : Evotype or str, optional
+        The evolution type of this model, describing how states are
+        represented.  The special value `"default"` is equivalent
+        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
 
     simulator : ForwardSimulator or {"auto", "matrix", "map"}
         The circuit simulator used to compute any
@@ -174,7 +176,7 @@ class LocalNoiseModel(_ImplicitOpModel):
     @classmethod
     def from_parameterization(cls, num_qubits, gate_names, nonstd_gate_unitaries=None,
                               custom_gates=None, availability=None, qubit_labels=None,
-                              geometry="line", parameterization='static', evotype="auto",
+                              geometry="line", parameterization='static', evotype="default",
                               simulator="auto", on_construction_error='raise',
                               independent_gates=False, ensure_composed_gates=False,
                               global_idle=None):
@@ -293,13 +295,10 @@ class LocalNoiseModel(_ImplicitOpModel):
             The type of parameterizaton to convert each value in `gatedict` to. See
             :method:`ExplicitOpModel.set_all_parameterizations` for more details.
 
-        evotype : {"auto","densitymx","statevec","stabilizer","svterm","cterm"}
-            The evolution type.  Often this is determined by the choice of
-            `parameterization` and can be left as `"auto"`, which prefers
-            `"densitymx"` (full density matrix evolution) when possible. In some
-            cases, however, you may want to specify this manually.  For instance,
-            if you give unitary maps instead of superoperators in `gatedict`
-            you'll want to set this to `"statevec"`.
+        evotype : Evotype or str, optional
+            The evolution type of this model, describing how states are
+            represented.  The special value `"default"` is equivalent
+            to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
 
         simulator : ForwardSimulator or {"auto", "matrix", "map"}
             The circuit simulator used to compute any
@@ -348,13 +347,6 @@ class LocalNoiseModel(_ImplicitOpModel):
         if custom_gates is None: custom_gates = {}
         if nonstd_gate_unitaries is None: nonstd_gate_unitaries = {}
         std_unitaries = _itgs.standard_gatename_unitaries()
-
-        if evotype == "auto":  # same logic as in LocalNoiseModel
-            if parameterization == "clifford": evotype = "stabilizer"
-            elif parameterization == "static unitary": evotype = "statevec"
-            elif _gt.is_valid_lindblad_paramtype(parameterization):
-                _, evotype = _gt.split_lindblad_paramtype(parameterization)
-            else: evotype = "densitymx"  # everything else
 
         gatedict = _collections.OrderedDict()
         for name in gate_names:
@@ -505,143 +497,11 @@ class LocalNoiseModel(_ImplicitOpModel):
     #        will be created with the given `parameterization`.
 
     def __init__(self, num_qubits, gatedict, prep_layers=None, povm_layers=None, availability=None,
-                 qubit_labels=None, geometry="line", evotype="densitymx",
+                 qubit_labels=None, geometry="line", evotype="default",
                  simulator="auto", on_construction_error='raise',
                  independent_gates=False, ensure_composed_gates=False,
                  global_idle=None):
-        """
-        Creates a n-qubit model by embedding the *same* gates from `gatedict`
-        as requested and creating a perfect 0-prep and z-basis POVM.
 
-        The gates in `gatedict` often act on fewer (typically just 1 or 2) than
-        the total `num_qubits` qubits, in which case embedded-gate objects are
-        automatically (and repeatedly) created to wrap the lower-dimensional gate.
-        Parameterization of each gate is done once, before any embedding, so that
-        just a single set of parameters will exist for each low-dimensional gate.
-
-        Parameters
-        ----------
-        num_qubits : int
-            The total number of qubits.
-
-        gatedict : dict
-            A dictionary (an `OrderedDict` if you care about insertion order) that
-            associates with gate names (e.g. `"Gx"`) :class:`LinearOperator`,
-            `numpy.ndarray` objects. When the objects may act on fewer than the total
-            number of qubits (determined by their dimension/shape) then they are
-            repeatedly embedded into `num_qubits`-qubit gates as specified by `availability`.
-            While the keys of this dictionary are usually string-type gate *names*,
-            labels that include target qubits, e.g. `("Gx",0)`, may be used to
-            override the default behavior of embedding a reference or a copy of
-            the gate associated with the same label minus the target qubits
-            (e.g. `"Gx"`).  Furthermore, :class:`OpFactory` objects may be used
-            in place of `LinearOperator` objects to allow the evaluation of labels
-            with arguments.
-
-        prep_layers : None or operator or dict or list
-            The state preparateion operations as n-qubit layer operations.  If
-            `None`, then no state preparations will be present in the created model.
-            If a dict, then the keys are labels and the values are layer operators.
-            If a list, then the elements are layer operators and the labels will be
-            assigned as "rhoX" where X is an integer starting at 0.  If a single
-            layer operation is given, then this is used as the sole prep and is
-            assigned the label "rho0".
-
-        povm_layers : None or operator or dict or list
-            The state preparateion operations as n-qubit layer operations.  If
-            `None`, then no POVMS will be present in the created model.  If a dict,
-            then the keys are labels and the values are layer operators.  If a list,
-            then the elements are layer operators and the labels will be assigned as
-            "MX" where X is an integer starting at 0.  If a single layer operation
-            is given, then this is used as the sole POVM and is assigned the label
-            "Mdefault".
-
-        availability : dict, optional
-            A dictionary whose keys are the same gate names as in
-            `gatedict` and whose values are lists of qubit-label-tuples.  Each
-            qubit-label-tuple must have length equal to the number of qubits
-            the corresponding gate acts upon, and causes that gate to be
-            embedded to act on the specified qubits.  For example,
-            `{ 'Gx': [(0,),(1,),(2,)], 'Gcnot': [(0,1),(1,2)] }` would cause
-            the `1-qubit `'Gx'`-gate to be embedded three times, acting on qubits
-            0, 1, and 2, and the 2-qubit `'Gcnot'`-gate to be embedded twice,
-            acting on qubits 0 & 1 and 1 & 2.  Instead of a list of tuples,
-            values of `availability` may take the special values:
-
-            - `"all-permutations"` and `"all-combinations"` equate to all possible
-            permutations and combinations of the appropriate number of qubit labels
-            (deterined by the gate's dimension).
-            - `"all-edges"` equates to all the vertices, for 1Q gates, and all the
-            edges, for 2Q gates of the geometry.
-            - `"arbitrary"` or `"*"` means that the corresponding gate can be placed
-            on any target qubits via an :class:`EmbeddingOpFactory` (uses less
-            memory but slower than `"all-permutations"`.
-
-            If a gate name (a key of `gatedict`) is not present in `availability`,
-            the default is `"all-edges"`.
-
-        qubit_labels : tuple, optional
-            The circuit-line labels for each of the qubits, which can be integers
-            and/or strings.  Must be of length `num_qubits`.  If None, then the
-            integers from 0 to `num_qubits-1` are used.
-
-        geometry : {"line","ring","grid","torus"} or QubitGraph
-            The type of connectivity among the qubits, specifying a
-            graph used to define neighbor relationships.  Alternatively,
-            a :class:`QubitGraph` object with node labels equal to
-            `qubit_labels` may be passed directly.
-
-        evotype : {"densitymx","statevec","stabilizer","svterm","cterm"}
-            The evolution type.
-
-        simulator : ForwardSimulator or {"auto", "matrix", "map"}
-            The circuit simulator used to compute any
-            requested probabilities, e.g. from :method:`probs` or
-            :method:`bulk_probs`.  The default value of `"auto"` automatically
-            selects the simulation type, and is usually what you want. Other
-            special allowed values are:
-
-            - "matrix" : op_matrix-op_matrix products are computed and
-              cached to get composite gates which can then quickly simulate
-              a circuit for any preparation and outcome.  High memory demand;
-              best for a small number of (1 or 2) qubits.
-            - "map" : op_matrix-state_vector products are repeatedly computed
-              to simulate circuits.  Slower for a small number of qubits, but
-              faster and more memory efficient for higher numbers of qubits (3+).
-
-        on_construction_error : {'raise','warn',ignore'}
-            What to do when the conversion from a value in `gatedict` to a
-            :class:`LinearOperator` of the type given by `parameterization` fails.
-            Usually you'll want to `"raise"` the error.  In some cases,
-            for example when converting as many gates as you can into
-            `parameterization="clifford"` gates, `"warn"` or even `"ignore"`
-            may be useful.
-
-        independent_gates : bool, optional
-            Whether gates are allowed independent local noise or not.  If False,
-            then all gates with the same name (e.g. "Gx") will have the *same*
-            (local) noise (e.g. an overrotation by 1 degree), and the
-            `operation_bks['gates']` dictionary contains a single key per gate
-            name.  If True, then gates with the same name acting on different
-            qubits may have different local noise, and so the
-            `operation_bks['gates']` dictionary contains a key for each gate
-             available gate placement.
-
-        ensure_composed_gates : bool, optional
-            If True then the elements of the `operation_bks['gates']` will always
-            be either :class:`ComposedDenseOp` (with a "matrix" forward simulator)
-            or :class:`ComposedOp` (othewise) objects.  The purpose of this is to
-            facilitate modifying the gate operations after the model is created.
-            If False, then the appropriately parameterized gate objects (often
-            dense gates) are used directly.
-
-        global_idle : LinearOperator, optional
-            A global idle operation, which is performed once at the beginning
-            of every circuit layer.  If `None`, no such operation is performed.
-            If a 1-qubit operator is given and `num_qubits > 1` the global idle
-            is the parallel application of this operator on each qubit line.
-            Otherwise the given operator must act on all `num_qubits` qubits.
-        """
         if qubit_labels is None:
             qubit_labels = tuple(range(num_qubits))
         if availability is None:
@@ -678,13 +538,13 @@ class LocalNoiseModel(_ImplicitOpModel):
         #self.independent_gates = independent_gates
 
         #Note - evotype="auto" not allowed here b/c no parameterization to infer from
-        if evotype in ("densitymx", "svterm", "cterm"):
+        if evotype in ("densitymx", "svterm", "cterm"):   # TODO: make automatic based on Evotype -----------------------------------------------------
             basis1Q = _BuiltinBasis("pp", 4)
         else:
             basis1Q = _BuiltinBasis("sv", 2)
             assert(evotype in ("stabilizer", "statevec", "chp")), "Invalid evolution type: %s" % evotype
 
-        if simulator == "auto":
+        if simulator == "auto":   # TODO: make a function that gives the default simulator for an evotype --------------------------------
             if evotype == "densitymx":
                 simulator = _MatrixFSim() if num_qubits <= 2 else _MapFSim()
             elif evotype == "statevec":
@@ -693,7 +553,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                 simulator = _MapFSim()  # use map as default for stabilizer-type evolutions
             else: assert(False)  # should be unreachable
 
-        qubit_dim = 2 if evotype in ('statevec', 'stabilizer', 'chp') else 4
+        qubit_dim = 2 if evotype in ('statevec', 'stabilizer', 'chp') else 4   # TODO FIX based on Evotype ---------------------------
         if not isinstance(qubit_labels, _ld.StateSpaceLabels):  # allow user to specify a StateSpaceLabels object
             qubit_sslbls = _ld.StateSpaceLabels(qubit_labels, (qubit_dim,) * len(qubit_labels), evotype=evotype)
         else:

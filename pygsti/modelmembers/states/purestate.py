@@ -33,12 +33,13 @@ class EmbeddedPureState(_State):
         dimension is `d^2`).  Assumed to be a complex vector in the
         standard computational basis.
 
-    evotype : {'densitymx', 'svterm', 'cterm'}
-        The evolution type of this SPAMVec.  Note that the evotype of
-        `pure_state_vec` must be compatible with this value.  In particular,
-        `pure_state_vec` must have an evotype of `"statevec"` (then allowed
-        values are `"densitymx"` and `"svterm"`) or `"stabilizer"` (then
-        the only allowed value is `"cterm"`).
+    evotype : Evotype or str, optional
+        The evolution type.  The special value `"default"` is equivalent
+        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
+        Note that the evotype of `pure_state_vec` must be compatible with this value.
+        For example, if `pure_state_vec` has an evotype of `"statevec"` then allowed
+        values are `"densitymx"` and `"svterm"`,  or  if `"stabilizer"` then the only
+        allowed value is `"cterm"`.
 
     dm_basis : {'std', 'gm', 'pp', 'qt'} or Basis object
         The basis for this SPAM vector - that is, for the *density matrix*
@@ -47,7 +48,7 @@ class EmbeddedPureState(_State):
         (or a custom basis object).
     """
 
-    def __init__(self, pure_state, evotype='densitymx', dm_basis='pp'):
+    def __init__(self, pure_state, evotype='default', dm_basis='pp'):
         if not isinstance(pure_state, _State):
             pure_state = _StaticState(_State._to_vector(pure_state), 'statevec')
         self.pure_state = pure_state

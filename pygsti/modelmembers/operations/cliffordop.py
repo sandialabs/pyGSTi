@@ -23,7 +23,7 @@ class CliffordOp(_LinearOperator):
         The evolution type.
     """
 
-    def __init__(self, unitary, symplecticrep=None, evotype='stabilizer'):
+    def __init__(self, unitary, symplecticrep=None, evotype='default'):
         """
         Creates a new CliffordOp from a unitary operation.
 
@@ -44,8 +44,9 @@ class CliffordOp(_LinearOperator):
             computed symplectic representation of `unitary`.  If None, then
             this representation is computed automatically from `unitary`.
 
-        evotype : {"stabilizer"}
-            The evolution type.
+        evotype : Evotype or str
+            The evolution type.  The special value `"default"` is equivalent
+            to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
         """
         #self.superop = superop
         self.unitary = unitary

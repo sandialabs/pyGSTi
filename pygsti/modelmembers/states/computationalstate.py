@@ -30,8 +30,9 @@ class ComputationalBasisState(_State):
         which computational basis element this object represents.  The
         length of `zvals` gives the total number of qubits.
 
-    evotype : {"densitymx", "statevec", "stabilizer", "svterm", "cterm"}
-        The type of evolution being performed.
+    evotype : Evotype or str, optional
+        The evolution type.  The special value `"default"` is equivalent
+        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
     """
 
     @classmethod
@@ -43,13 +44,11 @@ class ComputationalBasisState(_State):
         ----------
         vec : numpy.ndarray
             A state vector specifying a computational basis state in the
-            standard basis.  This vector has length 2^n or 4^n for
-            n qubits depending on `evotype`.
+            standard basis.  This vector has length 4^n for n qubits.
 
-        evotype : {"densitymx", "statevec", "stabilizer", "svterm", "cterm"}
-            The evolution type of the resulting SPAM vector.  This value
-            must be consistent with `len(vec)`, in that `"statevec"` and
-            `"stabilizer"` expect 2^n whereas the rest expect 4^n.
+        evotype : Evotype or str
+            The evolution type.  The special value `"default"` is equivalent
+            to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
 
         Returns
         -------
@@ -72,7 +71,7 @@ class ComputationalBasisState(_State):
         raise ValueError(("Given `vec` is not a z-basis product state - "
                           "cannot construct ComputatinoalSPAMVec"))
 
-    def __init__(self, zvals, evotype):
+    def __init__(self, zvals, evotype="default"):
         self._zvals = _np.ascontiguousarray(_np.array(zvals, _np.int64))
 
         #nqubits = len(self._zvals)

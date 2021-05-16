@@ -295,7 +295,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
 
     #Not used enough to warrant pushing to evotypes yet... just keep a slow version
     def _mapfill_hprobs_atom(self, array_to_fill, dest_indices, dest_param_indices1, dest_param_indices2,
-                                layout_atom, param_indices1, param_indices2, resource_alloc):
+                             layout_atom, param_indices1, param_indices2, resource_alloc):
 
         """
         Helper function for populating hessian values by block.

@@ -19,8 +19,8 @@ class State(_modelmember.ModelMember):
     rep : object
         A representation object containing the core data for this spam vector.
 
-    evotype : str
-        The evolution type of this operator, for matching with forward simulators.
+    evotype : Evotype
+        The evolution type.
 
     Attributes
     ----------

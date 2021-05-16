@@ -919,8 +919,6 @@ class ExpErrorgenDenseOp(ExpErrorgenOp, _DenseOperatorInterface):
 
     def __init__(self, errorgen, dense_rep=True):
         assert(dense_rep), "LindbladDenseOp must be created with `dense_rep == True`"
-        assert(errorgen._evotype == "densitymx"), \
-            "LindbladDenseOp objects can only be used for the 'densitymx' evolution type"
         #Note: cannot remove the evotype argument b/c we need to maintain the same __init__
         # signature as LindbladOp so its @classmethods will work on us.
 

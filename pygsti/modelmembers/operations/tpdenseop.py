@@ -15,7 +15,6 @@ from .linearop import LinearOperator as _LinearOperator
 from .denseop import DenseOperator as _DenseOperator
 from ...objects.protectedarray import ProtectedArray as _ProtectedArray
 
-
 class TPDenseOp(_DenseOperator):
     """
     A trace-preserving operation matrix.
@@ -31,13 +30,17 @@ class TPDenseOp(_DenseOperator):
         a square 2D array-like or LinearOperator object representing the operation action.
         The shape of m sets the dimension of the operation.
 
+    evotype : Evotype or str, optional
+        The evolution type.  The special value `"default"` is equivalent
+        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
+
     Attributes
     ----------
     base : numpy.ndarray
         Direct access to the underlying process matrix data.
     """
 
-    def __init__(self, m, evotype="densitymx"):
+    def __init__(self, m, evotype="default"):
         """
         Initialize a TPDenseOp object.
 

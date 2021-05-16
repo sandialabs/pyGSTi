@@ -1,4 +1,18 @@
+"""
+POVM effect representation classes for the `densitymx_slow` evolution type.
+"""
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
 
+import numpy as _np
+#import functools as _functools
+from .. import basereps as _basereps
 
 
 class EffectRep(_basereps.EffectRep):
@@ -16,7 +30,7 @@ class EffectRepConjugatedState(EffectRep):
         super(EffectRepConjugatedState, self).__init__(state_rep.dim)
 
     def __reduce__(self):
-        return (EffectRepConjugatedState.__new__, (self.state_rep,))
+        return (EffectRepConjugatedState, (self.state_rep,))
 
     def probability(self, state):
         # can assume state is a StateRep and self.state_rep is
@@ -24,6 +38,7 @@ class EffectRepConjugatedState(EffectRep):
 
     def to_dense(self):
         return self.state_rep.to_dense()
+
 
 class EffectRepComputational(EffectRep):
 
@@ -137,7 +152,6 @@ class EffectRepComputational(EffectRep):
 #            return ret
 
 
-
 class EffectRepTensorProduct(EffectRep):
 
     def __init__(self, povm_factors, effect_labels):
@@ -210,8 +224,7 @@ class EffectRepTensorProduct(EffectRep):
     def _fill_fast_kron(self):
         """ Fills in self._fast_kron_array based on current self.factors """
         for i, (factor_dim, Elbl) in enumerate(zip(self.factor_dims, self.effect_labels)):
-                self.kron_array[i][0:factor_dim] = self.povm_factors[i][Elbl].to_dense()
-
+            self.kron_array[i][0:factor_dim] = self.povm_factors[i][Elbl].to_dense()
 
     def factor_effects_have_changed(self):
         self._fill_fast_kron()  # updates effect reps
@@ -247,4 +260,3 @@ class EffectRepComposed(EffectRep):
     def probability(self, state):
         state = self.op_rep.acton(state)  # *not* acton_adjoint
         return self.effect_rep.probability(state)
-

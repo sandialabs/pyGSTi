@@ -40,10 +40,11 @@ class ComposedErrorgen(_LinearOperator):
         the dimension from `errgens_to_compose[0]` *if* there's at least one
         error generator being composed.
 
-    evotype : {"densitymx","statevec","stabilizer","svterm","cterm","auto"}
-        The evolution type of this error generator.  Can be set to `"auto"`
-        to take the evolution type of `errgens_to_compose[0]` *if* there's
-        at least one error generator being composed.
+    evotype : Evotype or str, optional
+        The evolution type.  The special value `"default"` is equivalent
+        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
+        The special value `"auto"` is equivalent to the evolution type
+        of `ops_to_compose[0]` *if* there's at least one operation being composed.
     """
 
     def __init__(self, errgens_to_compose, dim="auto", evotype="auto"):

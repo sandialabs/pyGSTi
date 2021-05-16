@@ -103,13 +103,10 @@ class LindbladErrorgen(_LinearOperator):
         """
         A utility method for creating LindbladErrorgen objects.
 
-        Decomposes a high-level parameter-type `param_type` (e.g. `"H+S terms"`
-        into a "base" type (specifies parameterization without evolution type,
-        e.g. "H+S"), an evolution type (i.e. one of "densitymx", "svterm",
-        "cterm", or "statevec").  Furthermore, from the base type two "modes"
-        - one describing the number (and structure) of the non-Hamiltonian
-        Lindblad coefficients and one describing how the Lindblad coefficients
-        are converted to/from parameters - are derived.
+        Decomposes a high-level parameter-type `param_type` (e.g. `"H+S"`
+        into two "modes" - one describing the number (and structure) of the
+        non-Hamiltonian Lindblad coefficients and one describing how the
+        Lindblad coefficients are converted to/from parameters.
 
         The "non-Hamiltonian mode" describes which non-Hamiltonian Lindblad
         coefficients are stored in a LindbladOp, and is one
@@ -129,7 +126,7 @@ class LindbladErrorgen(_LinearOperator):
         ----------
         param_type : str
             The high-level Lindblad parameter type to decompose.  E.g "H+S",
-            "H+S+A terms", "CPTP clifford terms".
+            "H+S+A", "CPTP".
 
         Returns
         -------
@@ -140,42 +137,40 @@ class LindbladErrorgen(_LinearOperator):
         use_ham_basis : bool
         use_nonham_basis : bool
         """
-        bTyp, evotype = _ot.split_lindblad_paramtype(param_type)
-
-        if bTyp == "CPTP":
+        if param_type == "CPTP":
             nonham_mode = "all"; param_mode = "cptp"
-        elif bTyp == "H":
+        elif param_type == "H":
             nonham_mode = "all"; param_mode = "cptp"  # these don't matter since there's no non-ham errors
-        elif bTyp in ("H+S", "S"):
+        elif param_type in ("H+S", "S"):
             nonham_mode = "diagonal"; param_mode = "cptp"
-        elif bTyp in ("H+s", "s"):
+        elif param_type in ("H+s", "s"):
             nonham_mode = "diagonal"; param_mode = "unconstrained"
-        elif bTyp in ("H+S+A", "S+A"):
+        elif param_type in ("H+S+A", "S+A"):
             nonham_mode = "diag_affine"; param_mode = "cptp"
-        elif bTyp in ("H+s+A", "s+A"):
+        elif param_type in ("H+s+A", "s+A"):
             nonham_mode = "diag_affine"; param_mode = "unconstrained"
-        elif bTyp in ("H+D", "D"):
+        elif param_type in ("H+D", "D"):
             nonham_mode = "diagonal"; param_mode = "depol"
-        elif bTyp in ("H+d", "d"):
+        elif param_type in ("H+d", "d"):
             nonham_mode = "diagonal"; param_mode = "reldepol"
-        elif bTyp in ("H+D+A", "D+A"):
+        elif param_type in ("H+D+A", "D+A"):
             nonham_mode = "diag_affine"; param_mode = "depol"
-        elif bTyp in ("H+d+A", "d+A"):
+        elif param_type in ("H+d+A", "d+A"):
             nonham_mode = "diag_affine"; param_mode = "reldepol"
 
-        elif bTyp == "GLND":
+        elif param_type == "GLND":
             nonham_mode = "all"; param_mode = "unconstrained"
         else:
             raise ValueError("Unrecognized base type in `param_type`=%s" % param_type)
 
-        use_ham_basis = True if (("H" == bTyp) or ("H+" in bTyp) or bTyp in ("CPTP", "GLND")) else False
-        use_nonham_basis = False if bTyp == "H" else True
+        use_ham_basis = True if (("H" == param_type) or ("H+" in param_type) or param_type in ("CPTP", "GLND")) else False
+        use_nonham_basis = False if param_type == "H" else True
 
-        return bTyp, evotype, nonham_mode, param_mode, use_ham_basis, use_nonham_basis
+        return nonham_mode, param_mode, use_ham_basis, use_nonham_basis
 
     @classmethod
     def from_operation_matrix(cls, op_matrix, ham_basis="pp", nonham_basis="pp", param_mode="cptp",
-                              nonham_mode="all", truncate=True, mx_basis="pp", evotype="densitymx"):
+                              nonham_mode="all", truncate=True, mx_basis="pp", evotype="default"):
         """
         Creates a Lindblad-parameterized error generator from an operation.
 
@@ -229,13 +224,9 @@ class LindbladErrorgen(_LinearOperator):
             values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
             and Qutrit (qt) (or a custom basis object).
 
-        evotype : {"densitymx","svterm","cterm"}
-            The evolution type of the operation being constructed.  `"densitymx"` is
-            usual Lioville density-matrix-vector propagation via matrix-vector
-            products.  `"svterm"` denotes state-vector term-based evolution
-            (action of operation is obtained by evaluating the rank-1 terms up to
-            some order).  `"cterm"` is similar but uses Clifford operation action
-            on stabilizer states.
+        evotype : Evotype or str, optional
+            The evolution type.  The special value `"default"` is equivalent
+            to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
 
         Returns
         -------
@@ -374,7 +365,7 @@ class LindbladErrorgen(_LinearOperator):
 
     def __init__(self, dim, lindblad_term_dict, basis=None,
                  param_mode="cptp", nonham_mode="all", truncate=True,
-                 mx_basis="pp", evotype="densitymx"):
+                 mx_basis="pp", evotype="default"):
         """
         Create a new LinbladErrorgen based on a set of Lindblad terms.
 
@@ -429,13 +420,9 @@ class LindbladErrorgen(_LinearOperator):
             values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
             and Qutrit (qt) (or a custom basis object).
 
-        evotype : {"densitymx","svterm","cterm"}
-            The evolution type of the error generator being constructed.
-            `"densitymx"` means the usual Lioville density-matrix-vector
-            propagation via matrix-vector products.  `"svterm"` denotes
-            state-vector term-based evolution (action of operation is obtained by
-            evaluating the rank-1 terms up to some order).  `"cterm"` is similar
-            but uses Clifford operation action on stabilizer states.
+        evotype : Evotype or str, optional
+            The evolution type.  The special value `"default"` is equivalent
+            to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
         """
 
         #FUTURE:

@@ -27,12 +27,13 @@ class ComputationalBasisPOVMEffect(_POVMEffect):
         which computational basis element this object represents.  The
         length of `zvals` gives the total number of qubits.
 
-    evotype : {"densitymx", "statevec", "stabilizer", "svterm", "cterm"}
-        The type of evolution being performed.
+    evotype : Evotype or str, optional
+        The evolution type.  The special value `"default"` is equivalent
+        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
     """
 
     @classmethod
-    def from_dense_vec(cls, vec, evotype):
+    def from_dense_vec(cls, vec, evotype="default"):
         """
         Create a new ComputationalSPAMVec from a dense vector.
 
@@ -42,10 +43,10 @@ class ComputationalBasisPOVMEffect(_POVMEffect):
             A state vector specifying a computational basis state in the
             standard basis.  This vector has length 4^n for n qubits.
 
-        evotype : {"densitymx", "statevec", "stabilizer", "svterm", "cterm"}
-            The evolution type of the resulting SPAM vector.  This value
-            must be consistent with `len(vec)`, in that `"statevec"` and
-            `"stabilizer"` expect 2^n whereas the rest expect 4^n.
+        evotype : Evotype or str, optional
+            The evolution type of the resulting effect vector.  The special
+            value `"default"` is equivalent to specifying the value of
+            `pygsti.evotypes.Evotype.default_evotype`.
 
         Returns
         -------
@@ -69,7 +70,7 @@ class ComputationalBasisPOVMEffect(_POVMEffect):
                           "cannot construct ComputatinoalSPAMVec"))
 
     @classmethod
-    def from_dense_purevec(cls, purevec):
+    def from_dense_purevec(cls, purevec, evotype="default"):
         """
         TODO: update docstring
         Create a new StabilizerEffectVec from a pure-state vector.
@@ -84,6 +85,11 @@ class ComputationalBasisPOVMEffect(_POVMEffect):
             standard computational basis.  This vector has length 2^n for
             n qubits.
 
+        evotype : Evotype or str, optional
+            The evolution type of the resulting effect vector.  The special
+            value `"default"` is equivalent to specifying the value of
+            `pygsti.evotypes.Evotype.default_evotype`.
+
         Returns
         -------
         StabilizerSPAMVec
@@ -93,11 +99,11 @@ class ComputationalBasisPOVMEffect(_POVMEffect):
         for zvals in _itertools.product(*([(0, 1)] * nqubits)):
             testvec = _functools.reduce(_np.kron, [v[i] for i in zvals])
             if _np.allclose(testvec, purevec.flat):
-                return cls(zvals)
+                return cls(zvals, evotype)
         raise ValueError(("Given `purevec` must be a z-basis product state - "
                           "cannot construct StabilizerEffectVec"))
 
-    def __init__(self, zvals, evotype):
+    def __init__(self, zvals, evotype="default"):
         self._zvals = _np.ascontiguousarray(_np.array(zvals, _np.int64))
 
         #nqubits = len(self._zvals)

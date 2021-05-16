@@ -27,12 +27,12 @@ class FullUnitaryOp(_DenseOperator):
         a square 2D array-like or LinearOperator object representing the operation action.
         The shape of m sets the dimension of the operation.
 
-    evotype : {"statevec", "densitymx", "auto"}
-        The evolution type.  If `"auto"`, then `"statevec"` is used if and only if `m`
-        has a complex datatype.
+    evotype : Evotype or str, optional
+        The evolution type.  The special value `"default"` is equivalent
+        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
     """
 
-    def __init__(self, m, evotype="statevec"):
+    def __init__(self, m, evotype="default"):
         """
         Initialize a FullDenseOp object.
 

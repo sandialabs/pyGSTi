@@ -26,14 +26,11 @@ class StaticStandardOp(_LinearOperator):
     name : str
         Standard gate name
 
-    evotype : {"statevec", "densitymx", "svterm", "cterm"}
-        The evolution type.
-        - "statevec": Unitary from standard_gatename_unitaries is used directly
-        - "densitymx", "svterm", "cterm": Pauli transfer matrix is built from standard_gatename_unitaries
-          (i.e. basis = 'pp')
-        - "chp": CHP compilation taken from standard_gatenames_chp_conversions
+    evotype : Evotype or str, optional
+        The evolution type.  The special value `"default"` is equivalent
+        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
     """
-    def __init__(self, name, evotype):
+    def __init__(self, name, evotype="default"):
         self.name = name
         evotype = _Evotype.cast(evotype)
         rep = evotype.create_standard_rep(name)

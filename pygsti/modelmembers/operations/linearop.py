@@ -48,8 +48,8 @@ class LinearOperator(_modelmember.ModelMember):
     rep : object
         A representation object containing the core data for this operator.
 
-    evotype : str
-        The evolution type of this operator, for matching with forward simulators.
+    evotype : Evotype
+        The evolution type.
 
     Attributes
     ----------

@@ -111,10 +111,10 @@ class ExplicitOpModel(_mdl.OpModel):
           to simulate circuits.  Slower for a small number of qubits, but
           faster and more memory efficient for higher numbers of qubits (3+).
 
-    evotype : {"densitymx", "statevec", "stabilizer", "svterm", "cterm"}
+    evotype : Evotype or str, optional
         The evolution type of this model, describing how states are
-        represented, allowing compatibility checks with (super)operator
-        objects.
+        represented.  The special value `"default"` is equivalent
+        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
     """
 
     #Whether access to gates & spam vecs via Model indexing is allowed
@@ -123,50 +123,14 @@ class ExplicitOpModel(_mdl.OpModel):
     def __init__(self, state_space_labels, basis="auto", default_param="full",
                  prep_prefix="rho", effect_prefix="E", gate_prefix="G",
                  povm_prefix="M", instrument_prefix="I", simulator="auto",
-                 evotype="densitymx"):
-        """
-        Initialize an ExplictOpModel.
-
-        Parameters
-        ----------
-        state_space_labels : StateSpaceLabels or list or tuple
-            The decomposition (with labels) of (pure) state-space this model
-            acts upon.  Regardless of whether the model contains operators or
-            superoperators, this argument describes the Hilbert space dimension
-            and imposed structure.  If a list or tuple is given, it must be
-            of a from that can be passed to `StateSpaceLabels.__init__`.
-
-        basis : {"auto","pp","gm","qt","std","sv"} or Basis
-            The basis used for the state space by dense operator representations.
-
-        default_param : {"full", "TP", "CPTP", etc.}, optional
-            Specifies the default gate and SPAM vector parameterization type.
-            Can be any value allowed by :method:`set_all_parameterizations`,
-            which also gives a description of each parameterization type.
-
-        prep_prefix, effect_prefix, gate_prefix,
-        povm_prefix, instrument_prefix : string, optional
-            Key prefixes designating state preparations, POVM effects,
-            gates, POVM, and instruments respectively.  These prefixes allow
-            the Model to determine what type of object a key corresponds to.
-
-        simulator : ForwardSimulator or {"auto", "matrix", "map"}
-            The circuit simulator used to compute any
-            requested probabilities, e.g. from :method:`probs` or
-            :method:`bulk_probs`.
-
-        evotype : {"densitymx", "statevec", "stabilizer", "svterm", "cterm"}
-            The evolution type of this model, describing how states are
-            represented, allowing compatibility checks with (super)operator
-            objects.
-        """
+                 evotype="default"):
         #More options now (TODO enumerate?)
         #assert(default_param in ('full','TP','CPTP','H+S','S','static',
         #                         'H+S terms','clifford','H+S clifford terms'))
         def flagfn(typ): return {'auto_embed': True, 'match_parent_dim': True,
                                  'match_parent_evotype': True, 'cast_to_type': typ}
 
-        self.preps = _ld.OrderedMemberDict(self, default_param, prep_prefix, flagfn("spamvec"))
+        self.preps = _ld.OrderedMemberDict(self, default_param, prep_prefix, flagfn("state"))
         self.povms = _ld.OrderedMemberDict(self, default_param, povm_prefix, flagfn("povm"))
         self.operations = _ld.OrderedMemberDict(self, default_param, gate_prefix, flagfn("operation"))
         self.instruments = _ld.OrderedMemberDict(self, default_param, instrument_prefix, flagfn("instrument"))
@@ -175,8 +139,9 @@ class ExplicitOpModel(_mdl.OpModel):
         self._default_gauge_group = None
 
         if basis == "auto":
+            evotype = _Evotype.cast(evotype)
             basis = "pp" if evotype in ("densitymx", "svterm", "cterm") \
-                else "sv"  # ( if evotype in ("statevec","stabilizer") )
+                else "sv"  # ( if evotype in ("statevec","stabilizer") )  # TODO - change this based on evotype dimension in FUTURE ????
 
         super(ExplicitOpModel, self).__init__(state_space_labels, basis, evotype, ExplicitLayerRules(), simulator)
 
@@ -432,38 +397,42 @@ class ExplicitOpModel(_mdl.OpModel):
         #Update dim and evolution type so that setting converted elements works correctly
         baseType = typ  # the default - only updated if a lindblad param type
 
-        if typ == 'static unitary':
-            assert(self._evotype == "densitymx"), \
-                "Can only convert to 'static unitary' from a density-matrix evolution type."
-            self._evotype = _Evotype.cast("statevec")
-            self._dim = int(round(_np.sqrt(self.dim)))  # reduce dimension d -> sqrt(d)
-            if not isinstance(self._sim, (_matrixfwdsim.MatrixForwardSimulator, _mapfwdsim.MapForwardSimulator)):
-                self._sim = _matrixfwdsim.MatrixForwardSimulator(self) if self.dim <= 4 else \
-                    _mapfwdsim.MapForwardSimulator(self, max_cache_size=0)
-
-        elif typ == 'clifford':
-            self._evotype = _Evotype.cast("stabilizer")
-            self._sim = _mapfwdsim.SimpleMapForwardSimulator(self)
-            #self._sim = _mapfwdsim.MapForwardSimulator(self, max_cache_size=0)
-
-        elif _gt.is_valid_lindblad_paramtype(typ):
-            baseType, evotype = _gt.split_lindblad_paramtype(typ)
-            self._evotype = _Evotype.cast(evotype)
-            if evotype == "densitymx":
-                if not isinstance(self._sim, (_matrixfwdsim.MatrixForwardSimulator, _mapfwdsim.MapForwardSimulator)):
-                    self._sim = _matrixfwdsim.MatrixForwardSimulator(self) if self.dim <= 16 else \
-                        _mapfwdsim.MapForwardSimulator(self, max_cache_size=0)
-            elif evotype in ("svterm", "cterm"):
-                if not isinstance(self._sim, _termfwdsim.TermForwardSimulator):
-                    self._sim = _termfwdsim.TermForwardSimulator(self)
-
-        elif typ in ('static', 'full', 'TP', 'CPTP', 'linear'):  # assume all other parameterizations are densitymx type
-            self._evotype = _Evotype.cast("densitymx")
-            if not isinstance(self._sim, (_matrixfwdsim.MatrixForwardSimulator, _mapfwdsim.MapForwardSimulator)):
-                self._sim = _matrixfwdsim.MatrixForwardSimulator(self) if self.dim <= 16 else \
-                    _mapfwdsim.MapForwardSimulator(self, max_cache_size=0)
-        else:
-            raise ValueError("Invalid parameterization type: %s" % str(typ))
+        #Resets sim - don't do this automatically now
+        #if typ == 'static unitary':
+        #    assert(self._evotype == "densitymx"), \
+        #        "Can only convert to 'static unitary' from a density-matrix evolution type."
+        #    #self._evotype = _Evotype.cast("statevec")  # don't change evotype - just change parameterization TODO FIX ?????????????????
+        #    self._dim = int(round(_np.sqrt(self.dim)))  # reduce dimension d -> sqrt(d)
+        #    if not isinstance(self._sim, (_matrixfwdsim.MatrixForwardSimulator, _mapfwdsim.MapForwardSimulator)):
+        #        self._sim = _matrixfwdsim.MatrixForwardSimulator(self) if self.dim <= 4 else \
+        #            _mapfwdsim.MapForwardSimulator(self, max_cache_size=0)
+        #
+        #elif typ == 'clifford':
+        #    #self._evotype = _Evotype.cast("stabilizer")
+        #    self._sim = _mapfwdsim.SimpleMapForwardSimulator(self)
+        #    #self._sim = _mapfwdsim.MapForwardSimulator(self, max_cache_size=0)
+        #
+        #elif _gt.is_valid_lindblad_paramtype(typ):
+        #    baseType = typ
+        #    #baseType, evotype = _gt.split_lindblad_paramtype(typ)
+        #    #self._evotype = _Evotype.cast(evotype)              #self._evotype = _Evotype.cast("statevec")  # don't change evotype - just change parameterization TODO
+        #
+        #    #Resets sim - don't do this automatically now
+        #    #if evotype == "densitymx":
+        #    #    if not isinstance(self._sim, (_matrixfwdsim.MatrixForwardSimulator, _mapfwdsim.MapForwardSimulator)):
+        #    #        self._sim = _matrixfwdsim.MatrixForwardSimulator(self) if self.dim <= 16 else \
+        #    #            _mapfwdsim.MapForwardSimulator(self, max_cache_size=0)
+        #    #elif evotype in ("svterm", "cterm"):
+        #    #    if not isinstance(self._sim, _termfwdsim.TermForwardSimulator):
+        #    #        self._sim = _termfwdsim.TermForwardSimulator(self)
+        #
+        #elif typ in ('static', 'full', 'TP', 'CPTP', 'linear'):  # assume all other parameterizations are densitymx type
+        #    self._evotype = _Evotype.cast("densitymx")
+        #    if not isinstance(self._sim, (_matrixfwdsim.MatrixForwardSimulator, _mapfwdsim.MapForwardSimulator)):
+        #        self._sim = _matrixfwdsim.MatrixForwardSimulator(self) if self.dim <= 16 else \
+        #            _mapfwdsim.MapForwardSimulator(self, max_cache_size=0)
+        #else:
+        #    raise ValueError("Invalid parameterization type: %s" % str(typ))
 
         basis = self.basis
         if extra is None: extra = {}

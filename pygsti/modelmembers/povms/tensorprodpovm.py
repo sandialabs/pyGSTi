@@ -27,17 +27,15 @@ class TensorProductPOVM(_POVM):
     ----------
     factor_povms : list of POVMs
         POVMs that will be tensor-producted together.
+
+    evotype : Evotype or str, optional
+        The evolution type.  The special value `"default"` is equivalent
+        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
+        The special value `"auto"` uses the evolution type of the first
+        factor *if* there are more than zero factors.
     """
 
-    def __init__(self, factor_povms):
-        """
-        Creates a new TensorProdPOVM object.
-
-        Parameters
-        ----------
-        factor_povms : list of POVMs
-            POVMs that will be tensor-producted together.
-        """
+    def __init__(self, factor_povms, evotype="auto"):
         dim = _np.product([povm.dim for povm in factor_povms])
 
         # self.factorPOVMs
@@ -45,17 +43,17 @@ class TensorProductPOVM(_POVM):
         #  Assume each one's parameters are independent.
         self.factorPOVMs = [povm.copy() for povm in factor_povms]
 
-        off = 0; evotype = None
+        off = 0
         for povm in self.factorPOVMs:
             N = povm.num_params
             povm.set_gpindices(slice(off, off + N), self); off += N
 
-            if evotype is None: evotype = povm._evotype
+            if evotype == 'auto': evotype = povm._evotype
             else: assert(evotype == povm._evotype), \
                 "All factor povms must have the same evolution type"
 
-        if evotype is None:
-            evotype = "densitymx"  # default (if there are no factors)
+        if evotype == 'auto':
+            raise ValueError("The 'auto' evotype can only be used when there is at least one factor!")
 
         items = []  # init as empty (lazy creation of members)
         self._factor_keys = tuple((list(povm.keys()) for povm in factor_povms))

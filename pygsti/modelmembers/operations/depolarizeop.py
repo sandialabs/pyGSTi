@@ -31,8 +31,9 @@ class DepolarizeOp(_StochasticNoiseOp):
         underlying :class:`StochasticNoiseOp` and so is given as an option
         to the user.
 
-    evotype : {"densitymx", "cterm", "svterm"}
-        the evolution type being used.
+    evotype : Evotype or str, optional
+        The evolution type.  The special value `"default"` is equivalent
+        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
 
     initial_rate : float, optional
         the initial error rate.
@@ -41,7 +42,7 @@ class DepolarizeOp(_StochasticNoiseOp):
             Random seed for RandomState (or directly provided RandomState)
             for sampling stochastic superoperators with the 'chp' evotype.
     """
-    def __init__(self, dim, basis="pp", evotype="densitymx", initial_rate=0, seed_or_state=None):
+    def __init__(self, dim, basis="pp", evotype="default", initial_rate=0, seed_or_state=None):
         """
         Create a new DepolarizeOp, representing a depolarizing channel.
 

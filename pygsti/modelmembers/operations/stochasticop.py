@@ -42,8 +42,9 @@ class StochasticNoiseOp(_LinearOperator):
         along which there is stochastic noise.  We assume that
         the first element of `basis` is the identity.
 
-    evotype : {"densitymx", "cterm", "svterm"}
-        the evolution type being used.
+    evotype : Evotype or str, optional
+        The evolution type.  The special value `"default"` is equivalent
+        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
 
     initial_rates : list or array
         if not None, a list of `basis.size-1` initial error rates along each of
@@ -57,35 +58,7 @@ class StochasticNoiseOp(_LinearOperator):
     # Difficult to parameterize and maintain the p_i conditions - Initially just store positive p_i's
     # and don't bother restricting their sum to be < 1?
 
-    def __init__(self, dim, basis="pp", evotype="densitymx", initial_rates=None, seed_or_state=None):
-        """
-        Create a new StochasticNoiseOp, representing a stochastic noise
-        channel with possibly asymmetric noise but only noise that is
-        "diagonal" in a particular basis (e.g. Pauli-stochastic noise).
-
-        Parameters
-        ----------
-        dim : int
-            The basis dimension of this operator (4 for a single qubit).
-
-        basis : Basis or {'pp','gm','qt'}, optional
-            The basis to use, defining the "principle axes"
-            along which there is stochastic noise.  We assume that
-            the first element of `basis` is the identity.
-            This must be 'pp' for the 'chp' evotype.
-
-        evotype : {"densitymx", "cterm", "svterm", "chp"}
-            the evolution type being used.
-
-        initial_rates : list or array
-            if not None, a list of `dim-1` initial error rates along each of
-            the directions corresponding to each basis element.  If None,
-            then all initial rates are zero.
-
-        seed_or_state : float or RandomState, optional
-            Random seed for RandomState (or directly provided RandomState)
-            for sampling stochastic superoperators with the 'chp' evotype.
-        """
+    def __init__(self, dim, basis="pp", evotype="default", initial_rates=None, seed_or_state=None):
         self.basis = _Basis.cast(basis, dim, sparse=False)
         assert(dim == self.basis.dim), "Dimension of `basis` must match the dimension (`dim`) of this op."
 

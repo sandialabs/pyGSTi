@@ -71,7 +71,7 @@ class POVM(_mm.ModelMember, _collections.OrderedDict):
     dim : int
         The dimension of the Hilbert-Schmidt space of the effect vectors.
 
-    evotype : str
+    evotype : Evotype
         The evolution type.
 
     items : list or dict, optional

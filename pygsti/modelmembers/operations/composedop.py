@@ -44,10 +44,11 @@ class ComposedOp(_LinearOperator):
         from `ops_to_compose[0]` *if* there's at least one operation being
         composed.
 
-    evotype : {"densitymx","statevec","stabilizer","svterm","cterm","auto"}
-        The evolution type of this operation.  Can be set to `"auto"` to take
-        the evolution type of `ops_to_compose[0]` *if* there's at least
-        one operation being composed.
+    evotype : Evotype or str, optional
+        The evolution type.  The special value `"default"` is equivalent
+        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
+        The special value `"auto"` is equivalent to the evolution type
+        of `ops_to_compose[0]` *if* there's at least one operation being composed.
 
     dense_rep : bool, optional
         Whether this operator should be internally represented using a dense
@@ -56,33 +57,6 @@ class ComposedOp(_LinearOperator):
     """
 
     def __init__(self, ops_to_compose, dim="auto", evotype="auto", dense_rep=False):
-        """
-        Creates a new ComposedOp.
-
-        Parameters
-        ----------
-        ops_to_compose : list
-            List of `LinearOperator`-derived objects
-            that are composed to form this operation map.  Elements are composed
-            with vectors  in  *left-to-right* ordering, maintaining the same
-            convention as operation sequences in pyGSTi.  Note that this is
-            *opposite* from standard matrix multiplication order.
-
-        dim : int or "auto"
-            Dimension of this operation.  Can be set to `"auto"` to take dimension
-            from `ops_to_compose[0]` *if* there's at least one operation being
-            composed.
-
-        evotype : {"densitymx","statevec","stabilizer","svterm","cterm","auto"}
-            The evolution type of this operation.  Can be set to `"auto"` to take
-            the evolution type of `ops_to_compose[0]` *if* there's at least
-            one operation being composed.
-
-        dense_rep : bool, optional
-            Whether this operator should be internally represented using a dense
-            matrix.  This is expert-level functionality, and you should leave their
-            the default value unless you know what you're doing.
-        """
         assert(len(ops_to_compose) > 0 or dim != "auto"), \
             "Must compose at least one operation when dim='auto'!"
         self.factorops = list(ops_to_compose)

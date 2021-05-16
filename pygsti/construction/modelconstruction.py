@@ -170,7 +170,7 @@ def _create_identity_vec(state_space_dims, basis="gm"):
     return _basis_create_identity_vec(_Basis.cast(basis, state_space_dims))
 
 
-def _basis_create_operation(state_space_labels, op_expr, basis="gm", parameterization="full"):
+def _basis_create_operation(state_space_labels, op_expr, basis="gm", parameterization="full", evotype='default'):
     """
     Build an operation object from an expression.
 
@@ -217,6 +217,11 @@ def _basis_create_operation(state_space_labels, op_expr, basis="gm", parameteriz
         - "full" = return a FullDenseOp.
         - "TP" = return a TPDenseOp.
         - "static" = return a StaticDenseOp.
+
+    evotype : Evotype or str, optional
+        The evolution type of this operation, describing how states are
+        represented.  The special value `"default"` is equivalent
+        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
 
     Returns
     -------
@@ -276,7 +281,7 @@ def _basis_create_operation(state_space_labels, op_expr, basis="gm", parameteriz
             labels = to_labels(args)
             stateSpaceDim = sslbls.product_dim(labels)
             # *real* 4x4 mx in Pauli-product basis -- still just the identity!
-            pp_opMx = _op.StaticDenseOp(_np.identity(stateSpaceDim, 'd'), evotype='densitymx')
+            pp_opMx = _op.StaticDenseOp(_np.identity(stateSpaceDim, 'd'), evotype=evotype)
             opTermInFinalBasis = _op.EmbeddedDenseOp(sslbls, labels, pp_opMx)
 
         elif opName == "D":
@@ -314,7 +319,7 @@ def _basis_create_operation(state_space_labels, op_expr, basis="gm", parameteriz
             # complex 4x4 mx operating on vectorized 1Q densty matrix in std basis
             operationMx = _gt.unitary_to_process_mx(Uop)
             # *real* 4x4 mx in Pauli-product basis -- better for parameterization
-            pp_opMx = _op.StaticDenseOp(_bt.change_basis(operationMx, 'std', 'pp'), evotype='densitymx')
+            pp_opMx = _op.StaticDenseOp(_bt.change_basis(operationMx, 'std', 'pp'), evotype=evotype)
             opTermInFinalBasis = _op.EmbeddedDenseOp(sslbls, [label], pp_opMx)
 
         elif opName == 'N':  # more general single-qubit gate
@@ -331,7 +336,7 @@ def _basis_create_operation(state_space_labels, op_expr, basis="gm", parameteriz
             # complex 4x4 mx operating on vectorized 1Q densty matrix in std basis
             operationMx = _gt.unitary_to_process_mx(Uop)
             # *real* 4x4 mx in Pauli-product basis -- better for parameterization
-            pp_opMx = _op.StaticDenseOp(_bt.change_basis(operationMx, 'std', 'pp'), evotype='densitymx')
+            pp_opMx = _op.StaticDenseOp(_bt.change_basis(operationMx, 'std', 'pp'), evotype=evotype)
             opTermInFinalBasis = _op.EmbeddedDenseOp(sslbls, [label], pp_opMx)
 
         elif opName in ('CX', 'CY', 'CZ', 'CNOT', 'CPHASE'):  # two-qubit gate names
@@ -365,7 +370,7 @@ def _basis_create_operation(state_space_labels, op_expr, basis="gm", parameteriz
             # complex 16x16 mx operating on vectorized 2Q densty matrix in std basis
             operationMx = _gt.unitary_to_process_mx(Uop)
             # *real* 16x16 mx in Pauli-product basis -- better for parameterization
-            pp_opMx = _op.StaticDenseOp(_bt.change_basis(operationMx, 'std', 'pp'), evotype='densitymx')
+            pp_opMx = _op.StaticDenseOp(_bt.change_basis(operationMx, 'std', 'pp'), evotype=evotype)
             opTermInFinalBasis = _op.EmbeddedDenseOp(sslbls, [label1, label2], pp_opMx)
 
         elif opName == "LX":  # TODO - better way to describe leakage?
@@ -397,7 +402,7 @@ def _basis_create_operation(state_space_labels, op_expr, basis="gm", parameteriz
                                                         embedded_std_basis, std_basis)
 
             opMxInFinalBasis = _bt.change_basis(opTermInReducedStdBasis, std_basis, basis)
-            opTermInFinalBasis = _op.FullDenseOp(opMxInFinalBasis, evotype='densitymx')
+            opTermInFinalBasis = _op.FullDenseOp(opMxInFinalBasis, evotype=evotype)
 
         else: raise ValueError("Invalid gate name: %s" % opName)
 
@@ -413,11 +418,11 @@ def _basis_create_operation(state_space_labels, op_expr, basis="gm", parameteriz
         finalOpMx = _np.real(finalOpMx)
 
     if parameterization == "full":
-        return _op.FullDenseOp(finalOpMx)
+        return _op.FullDenseOp(finalOpMx, evotype)
     if parameterization == "static":
-        return _op.StaticDenseOp(finalOpMx)
+        return _op.StaticDenseOp(finalOpMx, evotype)
     if parameterization == "TP":
-        return _op.TPDenseOp(finalOpMx)
+        return _op.TPDenseOp(finalOpMx, evotype)
 
     raise ValueError("Invalid 'parameterization' parameter: "
                      "%s (must by 'full', 'TP', 'static')"
@@ -431,14 +436,14 @@ def _create_operation(state_space_dims, state_space_labels, op_expr, basis="gm",
     """
     sslbls = _ld.StateSpaceLabels(state_space_labels, state_space_dims)
     return _basis_create_operation(sslbls, op_expr, _Basis.cast(basis, state_space_dims),
-                                   parameterization)
+                                   parameterization, evotype='densitymx')
 
 
 def basis_create_explicit_model(state_space_labels, basis,
                                 op_labels, op_expressions,
                                 prep_labels=('rho0',), prep_expressions=('0',),
                                 effect_labels='standard', effect_expressions='standard',
-                                povm_labels='Mdefault', parameterization="full"):
+                                povm_labels='Mdefault', parameterization="full", evotype='default'):
     """
     Build a new Model given lists of operation labels and expressions.
 
@@ -503,6 +508,11 @@ def basis_create_explicit_model(state_space_labels, basis,
         How to parameterize the gates of the resulting Model (see
         documentation for :meth:`_basis_create_operation`).
 
+    evotype : Evotype or str, optional
+        The evolution type of this model, describing how states are
+        represented.  The special value `"default"` is equivalent
+        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
+
     Returns
     -------
     Model
@@ -511,17 +521,18 @@ def basis_create_explicit_model(state_space_labels, basis,
     #defP = "TP" if (parameterization in ("TP","linearTP")) else "full"
     state_space_labels = _ld.StateSpaceLabels(state_space_labels)
 
-    ret = _emdl.ExplicitOpModel(state_space_labels, basis.copy(), default_param=parameterization)
+    ret = _emdl.ExplicitOpModel(state_space_labels, basis.copy(), default_param=parameterization,
+                                evotype=evotype)
     #prep_prefix="rho", effect_prefix="E", gate_prefix="G")
 
     for label, rhoExpr in zip(prep_labels, prep_expressions):
         vec = _basis_create_spam_vector(rhoExpr, basis)
         if parameterization == "full":
-            ret.preps[label] = _state.FullState(vec, 'densitymx')
+            ret.preps[label] = _state.FullState(vec, evotype)
         elif parameterization == "TP":
-            ret.preps[label] = _state.TPState(vec, 'densitymx')
+            ret.preps[label] = _state.TPState(vec, evotype)
         elif parameterization == "static":
-            ret.preps[label] = _state.StaticState(vec, 'densitymx')
+            ret.preps[label] = _state.StaticState(vec, evotype)
         else:
             raise ValueError("Invalid parameterization: %s" % parameterization)
 
@@ -550,9 +561,9 @@ def basis_create_explicit_model(state_space_labels, basis,
         for label, EExpr in zip(ELbls, EExprs):
             evec = _basis_create_spam_vector(EExpr, basis)
             if parameterization == "static":
-                effects.append((label, _povm.StaticPOVMEffect(evec, 'densitymx')))
+                effects.append((label, _povm.StaticPOVMEffect(evec, evotype)))
             else:
-                effects.append((label, _povm.FullPOVMEffect(evec, 'densitymx')))
+                effects.append((label, _povm.FullPOVMEffect(evec, evotype)))
 
         if len(effects) > 0:  # don't add POVMs with 0 effects
             if parameterization == "TP":
@@ -562,7 +573,7 @@ def basis_create_explicit_model(state_space_labels, basis,
 
     for (opLabel, opExpr) in zip(op_labels, op_expressions):
         ret.operations[opLabel] = _basis_create_operation(state_space_labels,
-                                                          opExpr, basis, parameterization)
+                                                          opExpr, basis, parameterization, evotype)
 
     if parameterization == "full":
         ret.default_gauge_group = _gg.FullGaugeGroup(ret.dim)
@@ -578,7 +589,8 @@ def create_explicit_model(state_space_labels,
                           op_labels, op_expressions,
                           prep_labels=('rho0',), prep_expressions=('0',),
                           effect_labels='standard', effect_expressions='standard',
-                          povm_labels='Mdefault', basis="auto", parameterization="full"):
+                          povm_labels='Mdefault', basis="auto", parameterization="full",
+                          evotype='default'):
     """
     Build a new Model given lists of labels and expressions.
 
@@ -652,6 +664,11 @@ def create_explicit_model(state_space_labels,
         How to parameterize the gates of the resulting Model (see
         documentation for :meth:`_basis_create_operation`).
 
+    evotype : Evotype or str, optional
+        The evolution type of this model, describing how states are
+        represented.  The special value `"default"` is equivalent
+        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
+
     Returns
     -------
     Model
@@ -659,7 +676,7 @@ def create_explicit_model(state_space_labels,
     """
 
     #Note: so far, all allowed `parameterization` values => densitymx evotype
-    state_space_labels = _ld.StateSpaceLabels(state_space_labels, evotype="densitymx")
+    state_space_labels = _ld.StateSpaceLabels(state_space_labels, evotype=evotype)
     stateSpaceDim = state_space_labels.dim
     # Note: what about state_space_labels.tpb_dims?
 
@@ -676,7 +693,8 @@ def create_explicit_model(state_space_labels,
                                        op_labels, op_expressions,
                                        prep_labels, prep_expressions,
                                        effect_labels, effect_expressions,
-                                       povm_labels, parameterization=parameterization)
+                                       povm_labels, parameterization=parameterization,
+                                       evotype=evotype)
 
 
 def create_explicit_alias_model(mdl_primitives, alias_dict):
@@ -985,7 +1003,7 @@ def _get_error_gate(key, ideal_gate, depolarization_strengths, stochastic_error_
             paramtype = _parameterization_from_errgendict(errdict)
         else:
             paramtype = lindblad_parameterization
-        _, _, nonham_mode, param_mode, _, _ = _op.LindbladErrorgen.decomp_paramtype(paramtype)
+        nonham_mode, param_mode, _, _ = _op.LindbladErrorgen.decomp_paramtype(paramtype)
 
         # Build LindbladErrorgen directly to have control over which parameters are set (leads to lower param counts)
         basis = _BuiltinBasis('pp', basis_size)
