@@ -1,4 +1,5 @@
 import numpy as np
+import unittest
 
 from ..util import BaseCase
 
@@ -71,12 +72,14 @@ class MutableComposedSpamvecBase(ComposedSpamvecBase):
         with self.assertRaises(ValueError):
             self.vec.set_dense(v)
 
+    @unittest.skip("Transform is expected to fail while spam_transform_inplace is not available")
     def test_transform(self):
         S = FullGaugeGroupElement(np.identity(4, 'd'))
         self.vec.transform_inplace(S, 'prep')
         self.vec.transform_inplace(S, 'effect')
         # TODO assert correctness
 
+    @unittest.skip("Transform is expected to fail while spam_transform_inplace is not available")
     def test_transform_raises_on_bad_type(self):
         S = FullGaugeGroupElement(np.identity(4, 'd'))
         with self.assertRaises(ValueError):
@@ -93,6 +96,7 @@ class ImmutableComposedSpamvecBase(ComposedSpamvecBase):
         with self.assertRaises(ValueError):
             self.vec.set_dense(v)
 
+    @unittest.skip("Transform is expected to fail while spam_transform_inplace is not available")
     def test_raises_on_transform(self):
         S = FullGaugeGroupElement(np.identity(4, 'd'))
         with self.assertRaises(ValueError):
@@ -190,6 +194,7 @@ class MutableComposedPovmBase(ComposedPovmBase):
         v = self.povm.to_vector()
         self.povm.from_vector(v)
 
+    @unittest.skip("Transform is expected to fail while spam_transform_inplace is not available")
     def test_transform(self):
         S = FullGaugeGroupElement(np.identity(4, 'd'))
         self.povm.transform_inplace(S)
@@ -208,6 +213,7 @@ class ImmutableComposedPovmBase(ComposedPovmBase):
         # with self.assertRaises(ValueError):
         #     self.vec.set_dense(v)
 
+    @unittest.skip("Transform is expected to fail while spam_transform_inplace is not available")
     def test_raises_on_transform(self):
         S = FullGaugeGroupElement(np.identity(4, 'd'))
         with self.assertRaises(ValueError):

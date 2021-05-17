@@ -430,10 +430,8 @@ class LinearOperator(_modelmember.ModelMember):
 
     def __init__(self, rep, evotype):
         """ Initialize a new LinearOperator """
-        # For operators that have no representation themselves (term ops)
-        # allow passing an integer as `rep`.
-        if isinstance(rep, int) or isinstance(rep, _np.int64) or rep == _np.inf:   
-            dim = rep
+        if isinstance(rep, int):  # For operators that have no representation themselves (term ops)
+            dim = rep             # allow passing an integer as `rep`.
             rep = None
         else:
             dim = rep.dim
@@ -988,45 +986,6 @@ class LinearOperator(_modelmember.ModelMember):
         Smx = s.transform_matrix
         Si = s.transform_matrix_inverse
         self.set_dense(_np.dot(Si, _np.dot(self.to_dense(), Smx)))
-    
-    def spam_transform_inplace(self, s, typ):
-        """
-        Update operation matrix `O` with `inv(s) * O` OR `O * s`, depending on the value of `typ`.
-
-        This functions as `transform_inplace(...)` but is used when
-        this operation is used as a part of a SPAM vector. 
-        When `typ == "prep"`, the spam vector is assumed
-        to be `rho = dot(self, <spamvec>)`, which transforms as
-        `rho -> inv(s) * rho`, so `self -> inv(s) * self`. When
-        `typ == "effect"`, `e.dag = dot(e.dag, self)` (not that
-        `self` is NOT `self.dag` here), and `e.dag -> e.dag * s`
-        so that `self -> self * s`.
-
-        Parameters
-        ----------
-        s : GaugeGroupElement
-            A gauge group element which specifies the "s" matrix
-            (and it's inverse) used in the above similarity transform.
-
-        typ : { 'prep', 'effect' }
-            Which type of SPAM vector is being transformed (see above).
-
-        Returns
-        -------
-        None
-        """
-        if typ not in ('prep', 'effect'):
-            raise ValueError("Invalid `typ` argument: %s" % typ)
-
-        U = s.transform_matrix
-        Uinv = s.transform_matrix_inverse
-
-        #Note: this code may need to be tweaked to work with sparse matrices
-        if typ == "prep":
-            tMx = _mt.safe_dot(Uinv, self.to_dense())
-        else:
-            tMx = _mt.safe_dot(self.to_dense(), U)
-        self.set_dense(tMx)
 
     def depolarize(self, amount):
         """
@@ -4463,8 +4422,7 @@ class LindbladOp(LinearOperator, _ErrorGeneratorContainer):
         -------
         None
         """
-        if typ not in ('prep', 'effect'):
-            raise ValueError("Invalid `typ` argument: %s" % typ)
+        assert(typ in ('prep', 'effect')), "Invalid `typ` argument: %s" % typ
 
         if isinstance(s, _gaugegroup.UnitaryGaugeGroupElement) or \
            isinstance(s, _gaugegroup.TPSpamGaugeGroupElement):
@@ -5559,35 +5517,6 @@ class ComposedOp(LinearOperator):
         """
         for operation in self.factorops:
             operation.transform_inplace(s)
-    
-    def spam_transform_inplace(self, s, typ):
-        """
-        Update operation matrix `O` with `inv(s) * O` OR `O * s`, depending on the value of `typ`.
-
-        This functions as `transform_inplace(...)` but is used when
-        this operation is used as a part of a SPAM vector. 
-        When `typ == "prep"`, the spam vector is assumed
-        to be `rho = dot(self, <spamvec>)`, which transforms as
-        `rho -> inv(s) * rho`, so `self -> inv(s) * self`. When
-        `typ == "effect"`, `e.dag = dot(e.dag, self)` (not that
-        `self` is NOT `self.dag` here), and `e.dag -> e.dag * s`
-        so that `self -> self * s`.
-
-        Parameters
-        ----------
-        s : GaugeGroupElement
-            A gauge group element which specifies the "s" matrix
-            (and it's inverse) used in the above similarity transform.
-
-        typ : { 'prep', 'effect' }
-            Which type of SPAM vector is being transformed (see above).
-
-        Returns
-        -------
-        None
-        """
-        for operation in self.factorops:
-            operation.spam_transform_inplace(s, typ)
 
     def errorgen_coefficients(self, return_basis=False, logscale_nonham=False):
         """
@@ -6748,34 +6677,6 @@ class EmbeddedOp(LinearOperator):
         """
         # I think we could do this but extracting the approprate parts of the
         # s and Sinv matrices... but haven't needed it yet.
-        raise NotImplementedError("Cannot transform an EmbeddedDenseOp yet...")
-    
-    def spam_transform_inplace(self, s, typ):
-        """
-        Update operation matrix `O` with `inv(s) * O` OR `O * s`, depending on the value of `typ`.
-
-        This functions as `transform_inplace(...)` but is used when
-        this operation is used as a part of a SPAM vector. 
-        When `typ == "prep"`, the spam vector is assumed
-        to be `rho = dot(self, <spamvec>)`, which transforms as
-        `rho -> inv(s) * rho`, so `self -> inv(s) * self`. When
-        `typ == "effect"`, `e.dag = dot(e.dag, self)` (not that
-        `self` is NOT `self.dag` here), and `e.dag -> e.dag * s`
-        so that `self -> self * s`.
-
-        Parameters
-        ----------
-        s : GaugeGroupElement
-            A gauge group element which specifies the "s" matrix
-            (and it's inverse) used in the above similarity transform.
-
-        typ : { 'prep', 'effect' }
-            Which type of SPAM vector is being transformed (see above).
-
-        Returns
-        -------
-        None
-        """
         raise NotImplementedError("Cannot transform an EmbeddedDenseOp yet...")
 
     def errorgen_coefficients(self, return_basis=False, logscale_nonham=False):
@@ -9723,8 +9624,7 @@ class LindbladErrorgen(LinearOperator):
         -------
         None
         """
-        if typ not in ('prep', 'effect'):
-            raise ValueError("Invalid `typ` argument: %s" % typ)
+        assert(typ in ('prep', 'effect')), "Invalid `typ` argument: %s" % typ
 
         if isinstance(s, _gaugegroup.UnitaryGaugeGroupElement) or \
            isinstance(s, _gaugegroup.TPSpamGaugeGroupElement):

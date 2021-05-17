@@ -2452,7 +2452,6 @@ class TensorProdSPAMVec(SPAMVec):
         """
         if self._prep_or_effect == "prep":
             for sv in self.factors:
-                print("Have gpindices: ", sv.gpindices, " v: ", v)
                 sv.from_vector(v[sv.gpindices], close, dirty_value)  # factors hold local indices
 
         elif all([self.effectLbls[i] == list(povm.keys())[0]

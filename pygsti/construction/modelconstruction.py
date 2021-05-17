@@ -1010,7 +1010,8 @@ def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}
                                 depolarization_parameterization='depolarize', stochastic_parameterization='stochastic',
                                 lindblad_parameterization='auto', availability=None, qubit_labels=None, geometry="line",
                                 evotype="auto", simulator="auto", on_construction_error='raise',
-                                independent_gates=False, ensure_composed_gates=False):
+                                independent_gates=False, ensure_composed_gates=False,
+                                tensorprod_spamvec_povm=True):
     """
     Create a n-qubit "crosstalk-free" model.
 
@@ -1166,6 +1167,14 @@ def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}
         facilitate modifying the gate operations after the model is created.
         If False, then the appropriately parameterized gate objects (often
         dense gates) are used directly.
+    
+    tensorprod_spamvec_povm : bool, optional
+        If True (default), the TensorProdSPAMVec/TensorProdPOVM classes
+        made of 1-qubit noisy gates are used for prep/povm parameterization.
+        If False, the ComposedSPAMVec/ComposedPOVM classes made of pre-composed
+        N-qubit noisy gates are used for prep/povm parameterization.
+        This may have higher overhead than the TensorProd variants,
+        but may be more robust for use with the Composed variants.
 
     Returns
     -------
@@ -1256,55 +1265,59 @@ def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}
     # TODO: While TensorProdSPAMVec does not work with ComposedSPAMVec, build up prep/povm as n-qubit ops first    
     prep_layers = {}
     if 'prep' in all_keys:
-        # rho_base1Q = _spamvec.ComputationalSPAMVec([0], evotype, 'prep')
-        # err_gate = _get_error_gate('prep', _op.StaticStandardOp('Gi', evotype), depolarization_strengths,
-        #                            stochastic_error_probs, lindblad_error_coeffs,
-        #                            depolarization_parameterization, stochastic_parameterization,
-        #                            lindblad_parameterization)
-        # if isinstance(err_gate, _op.LindbladOp):
-        #     prep1Q = _spamvec.LindbladSPAMVec(rho_base1Q, err_gate, 'prep')
-        # else:
-        #     prep1Q = ComposedSPAMVec(rho_base1Q, err_gate, 'prep')
-        # prep_factors = [prep1Q.copy() for i in range(num_qubits)] if independent_gates else [prep1Q] * num_qubits
-        # prep_layers['rho0'] = _spamvec.TensorProdSPAMVec('prep', prep_factors)
-        rho_baseNQ = _spamvec.ComputationalSPAMVec([0,]*num_qubits, evotype, 'prep')
-        err_gate1Q = _get_error_gate('prep', _op.StaticStandardOp('Gi', evotype), depolarization_strengths,
-                                     stochastic_error_probs, lindblad_error_coeffs,
-                                     depolarization_parameterization, stochastic_parameterization,
-                                     lindblad_parameterization)
-        # TODO: Could do qubit-specific by allowing different err_gate1Q
-        err_gates = [err_gate1Q.copy() for i in range(num_qubits)] if independent_gates else [err_gate1Q,] * num_qubits
-        err_gateNQ = _op.ComposedOp([
-            _op.EmbeddedOp(range(num_qubits), [i], err_gates[i]) for i in range(num_qubits)])
-        # TODO: Could specialize for LindbladOps, although this should also handle that case
-        prep_layers['rho0'] = ComposedSPAMVec(rho_baseNQ, err_gateNQ, 'prep')
+        if tensorprod_spamvec_povm:
+            rho_base1Q = _spamvec.ComputationalSPAMVec([0], evotype, 'prep')
+            err_gate = _get_error_gate('prep', _op.StaticStandardOp('Gi', evotype), depolarization_strengths,
+                                       stochastic_error_probs, lindblad_error_coeffs,
+                                       depolarization_parameterization, stochastic_parameterization,
+                                       lindblad_parameterization)
+            if isinstance(err_gate, _op.LindbladOp):
+                prep1Q = _spamvec.LindbladSPAMVec(rho_base1Q, err_gate, 'prep')
+            else:
+                prep1Q = ComposedSPAMVec(rho_base1Q, err_gate, 'prep')
+            prep_factors = [prep1Q.copy() for i in range(num_qubits)] if independent_gates else [prep1Q] * num_qubits
+            prep_layers['rho0'] = _spamvec.TensorProdSPAMVec('prep', prep_factors)
+        else:
+            rho_baseNQ = _spamvec.ComputationalSPAMVec([0,]*num_qubits, evotype, 'prep')
+            err_gate1Q = _get_error_gate('prep', _op.StaticStandardOp('Gi', evotype), depolarization_strengths,
+                                        stochastic_error_probs, lindblad_error_coeffs,
+                                        depolarization_parameterization, stochastic_parameterization,
+                                        lindblad_parameterization)
+            # TODO: Could do qubit-specific by allowing different err_gate1Q
+            err_gates = [err_gate1Q.copy() for i in range(num_qubits)] if independent_gates else [err_gate1Q,] * num_qubits
+            err_gateNQ = _op.ComposedOp([
+                _op.EmbeddedOp(range(num_qubits), [i], err_gates[i]) for i in range(num_qubits)])
+            # TODO: Could specialize for LindbladOps, although this should also handle that case
+            prep_layers['rho0'] = ComposedSPAMVec(rho_baseNQ, err_gateNQ, 'prep')
     else:
         prep_layers['rho0'] = _spamvec.ComputationalSPAMVec([0] * num_qubits, evotype, 'prep')
 
     povm_layers = {}
     if 'povm' in all_keys:
-        # Mdefault_base1Q = _povm.ComputationalBasisPOVM(1, evotype)
-        # err_gate = _get_error_gate('povm', _op.StaticStandardOp('Gi', evotype), depolarization_strengths,
-        #                            stochastic_error_probs, lindblad_error_coeffs,
-        #                            depolarization_parameterization, stochastic_parameterization,
-        #                            lindblad_parameterization)
-        # if isinstance(err_gate, _op.LindbladOp):
-        #     povm1Q = _povm.LindbladPOVM(err_gate, Mdefault_base1Q, "pp")
-        # else:
-        #     povm1Q = ComposedPOVM(err_gate, Mdefault_base1Q)
-        # povm_factors = [povm1Q.copy() for i in range(num_qubits)] if independent_gates else [povm1Q] * num_qubits
-        # povm_layers['Mdefault'] = _povm.TensorProdPOVM(povm_factors)
-        Mdefault_baseNQ = _povm.ComputationalBasisPOVM(num_qubits, evotype)
-        err_gate1Q = _get_error_gate('povm', _op.StaticStandardOp('Gi', evotype), depolarization_strengths,
-                                     stochastic_error_probs, lindblad_error_coeffs,
-                                     depolarization_parameterization, stochastic_parameterization,
-                                     lindblad_parameterization)
-        # TODO: Could do qubit-specific by allowing different err_gate1Q
-        err_gates = [err_gate1Q.copy() for i in range(num_qubits)] if independent_gates else [err_gate1Q,] * num_qubits
-        err_gateNQ = _op.ComposedOp([
-            _op.EmbeddedOp(range(num_qubits), [i], err_gates[i]) for i in range(num_qubits)])
-        # TODO: Could specialize for LindbladOps, although this should also handle that case
-        povm_layers['Mdefault'] = ComposedPOVM(err_gateNQ, Mdefault_baseNQ)
+        if tensorprod_spamvec_povm:
+            Mdefault_base1Q = _povm.ComputationalBasisPOVM(1, evotype)
+            err_gate = _get_error_gate('povm', _op.StaticStandardOp('Gi', evotype), depolarization_strengths,
+                                       stochastic_error_probs, lindblad_error_coeffs,
+                                       depolarization_parameterization, stochastic_parameterization,
+                                       lindblad_parameterization)
+            if isinstance(err_gate, _op.LindbladOp):
+                povm1Q = _povm.LindbladPOVM(err_gate, Mdefault_base1Q, "pp")
+            else:
+                povm1Q = ComposedPOVM(err_gate, Mdefault_base1Q)
+            povm_factors = [povm1Q.copy() for i in range(num_qubits)] if independent_gates else [povm1Q] * num_qubits
+            povm_layers['Mdefault'] = _povm.TensorProdPOVM(povm_factors)
+        else:
+            Mdefault_baseNQ = _povm.ComputationalBasisPOVM(num_qubits, evotype)
+            err_gate1Q = _get_error_gate('povm', _op.StaticStandardOp('Gi', evotype), depolarization_strengths,
+                                        stochastic_error_probs, lindblad_error_coeffs,
+                                        depolarization_parameterization, stochastic_parameterization,
+                                        lindblad_parameterization)
+            # TODO: Could do qubit-specific by allowing different err_gate1Q
+            err_gates = [err_gate1Q.copy() for i in range(num_qubits)] if independent_gates else [err_gate1Q,] * num_qubits
+            err_gateNQ = _op.ComposedOp([
+                _op.EmbeddedOp(range(num_qubits), [i], err_gates[i]) for i in range(num_qubits)])
+            # TODO: Could specialize for LindbladOps, although this should also handle that case
+            povm_layers['Mdefault'] = ComposedPOVM(err_gateNQ, Mdefault_baseNQ)
     else:
         povm_layers['Mdefault'] = _povm.ComputationalBasisPOVM(num_qubits, evotype)
 
