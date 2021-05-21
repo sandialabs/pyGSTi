@@ -42,10 +42,11 @@ class Evotype(object):
     def __str__(self):
         return self.name
 
-    def create_dense_rep(self, dim=None):  # process_mx=None, 
+    def create_dense_rep(self, dim=None):  # process_mx=None,
         return self.module.OpRepDense(dim)
-        #ret.base[:,:] = process_mx  # HACK -----------------------------------------------------------------------------------------
-        #return ret
+
+    def create_pure_rep(self, dim=None):  # process_mx=None,
+        return self.module.OpRepPure(dim)
 
     def create_composed_rep(self, factor_op_reps, dim):
         return self.module.OpRepComposed(factor_op_reps, dim)

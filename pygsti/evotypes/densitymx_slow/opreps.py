@@ -69,9 +69,6 @@ class OpRepSparse(OpRep):
         self.A = _sps.csr_matrix((a_data, a_indices, a_indptr), shape=(dim, dim))
         super(OpRepSparse, self).__init__(dim)
 
-    def __reduce__(self):
-        return (OpRepSparse, (self.A.data, self.A.indices, self.A.indptr))
-
     @property
     def data(self):
         return self.A.data
@@ -147,9 +144,6 @@ class OpRepComposed(OpRep):
         self.factor_reps = factor_op_reps
         super(OpRepComposed, self).__init__(dim)
 
-    def __reduce__(self):
-        return (OpRepComposed, (self.factor_reps, self.dim))
-
     def acton(self, state):
         """ Act this gate map on an input state """
         for gate in self.factor_reps:
@@ -174,9 +168,6 @@ class OpRepSum(OpRep):
 
     def reinit_factor_reps(self, factor_reps):
         self.factor_reps = factor_reps
-
-    def __reduce__(self):
-        return (OpRepSum, (self.factor_reps, self.dim))
 
     def acton(self, state):
         """ Act this gate map on an input state """
@@ -397,9 +388,6 @@ class OpRepRepeated(OpRep):
         self.repeated_rep = rep_to_repeat
         self.num_repetitions = num_repetitions
         super(OpRepRepeated, self).__init__(dim)
-
-    def __reduce__(self):
-        return (OpRepRepeated, (self.repeated_rep, self.num_repetitions, self.dim))
 
     def acton(self, state):
         """ Act this gate map on an input state """

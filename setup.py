@@ -110,13 +110,15 @@ def setup_with_extensions(extensions=None):
             'pygsti.modelpacks',
             'pygsti.modelpacks.legacy',
             'pygsti.objects',
-            'pygsti.objects.replib',
             'pygsti.objects.opcalc',
             'pygsti.optimize',
             'pygsti.protocols',
             'pygsti.report',
             'pygsti.report.section',
-            'pygsti.tools'
+            'pygsti.tools',
+            'pygsti.evotypes',
+            'pygsti.evotypes.densitymx',
+            'pygsti.evotypes.statevec'
         ],
         package_dir={'': '.'},
         package_data={
@@ -132,6 +134,20 @@ def setup_with_extensions(extensions=None):
                 'basecreps.cpp',
                 'basecreps.h'],
             'pygsti.evotypes.densitymx': [
+                'opreps.pxd',
+                'opreps.pyx',
+                'opcreps.cpp',
+                'opcreps.h',
+                'statereps.pxd',
+                'statereps.pyx',
+                'statecreps.cpp',
+                'statecreps.h',
+                'effectreps.pxd',
+                'effectreps.pyx',
+                'effectcreps.cpp',
+                'effectcreps.h'
+            ],
+            'pygsti.evotypes.statevec': [
                 'opreps.pxd',
                 'opreps.pyx',
                 'opcreps.cpp',
@@ -281,6 +297,72 @@ try:
             sources=[
                 "pygsti/evotypes/densitymx/effectreps.pyx",
                 "pygsti/evotypes/densitymx/effectcreps.cpp"
+            ],
+            include_dirs=['.', 'pygsti/evotypes', np.get_include()],
+            language="c++",
+            extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
+            extra_link_args=["-std=c++11"]
+        ),
+        Extension(
+            "pygsti.evotypes.statevec.statereps",
+            sources=[
+                "pygsti/evotypes/statevec/statereps.pyx",
+                "pygsti/evotypes/statevec/statecreps.cpp"
+            ],
+            include_dirs=['.', 'pygsti/evotypes', np.get_include()],
+            language="c++",
+            extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
+            extra_link_args=["-std=c++11"]
+        ),
+        Extension(
+            "pygsti.evotypes.statevec.opreps",
+            sources=[
+                "pygsti/evotypes/statevec/opreps.pyx",
+                "pygsti/evotypes/statevec/opcreps.cpp"
+            ],
+            include_dirs=['.', 'pygsti/evotypes', np.get_include()],
+            language="c++",
+            extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
+            extra_link_args=["-std=c++11"]
+        ),
+        Extension(
+            "pygsti.evotypes.statevec.effectreps",
+            sources=[
+                "pygsti/evotypes/statevec/effectreps.pyx",
+                "pygsti/evotypes/statevec/effectcreps.cpp"
+            ],
+            include_dirs=['.', 'pygsti/evotypes', np.get_include()],
+            language="c++",
+            extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
+            extra_link_args=["-std=c++11"]
+        ),
+        Extension(
+            "pygsti.evotypes.stabilizer.statereps",
+            sources=[
+                "pygsti/evotypes/stabilizer/statereps.pyx",
+                "pygsti/evotypes/stabilizer/statecreps.cpp"
+            ],
+            include_dirs=['.', 'pygsti/evotypes', np.get_include()],
+            language="c++",
+            extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
+            extra_link_args=["-std=c++11"]
+        ),
+        Extension(
+            "pygsti.evotypes.stabilizer.opreps",
+            sources=[
+                "pygsti/evotypes/stabilizer/opreps.pyx",
+                "pygsti/evotypes/stabilizer/opcreps.cpp"
+            ],
+            include_dirs=['.', 'pygsti/evotypes', np.get_include()],
+            language="c++",
+            extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
+            extra_link_args=["-std=c++11"]
+        ),
+        Extension(
+            "pygsti.evotypes.stabilizer.effectreps",
+            sources=[
+                "pygsti/evotypes/stabilizer/effectreps.pyx",
+                "pygsti/evotypes/stabilizer/effectcreps.cpp"
             ],
             include_dirs=['.', 'pygsti/evotypes', np.get_include()],
             language="c++",

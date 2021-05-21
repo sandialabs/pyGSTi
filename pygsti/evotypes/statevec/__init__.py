@@ -1,5 +1,5 @@
 """
-The stabilizer-frame, or "stabilizer" evolution type, which uses Cython for speed.
+The state-vector, or "statevec" evolution type, which uses Cython for speed.
 """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
