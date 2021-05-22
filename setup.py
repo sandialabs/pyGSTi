@@ -118,7 +118,11 @@ def setup_with_extensions(extensions=None):
             'pygsti.tools',
             'pygsti.evotypes',
             'pygsti.evotypes.densitymx',
-            'pygsti.evotypes.statevec'
+            'pygsti.evotypes.statevec',
+            'pygsti.evotypes.stabilizer',
+            'pygsti.evotypes.densitymx_slow',
+            'pygsti.evotypes.statevec_slow',
+            'pygsti.evotypes.stabilizer_slow'
         ],
         package_dir={'': '.'},
         package_data={
@@ -148,6 +152,20 @@ def setup_with_extensions(extensions=None):
                 'effectcreps.h'
             ],
             'pygsti.evotypes.statevec': [
+                'opreps.pxd',
+                'opreps.pyx',
+                'opcreps.cpp',
+                'opcreps.h',
+                'statereps.pxd',
+                'statereps.pyx',
+                'statecreps.cpp',
+                'statecreps.h',
+                'effectreps.pxd',
+                'effectreps.pyx',
+                'effectcreps.cpp',
+                'effectcreps.h'
+            ],
+            'pygsti.evotypes.stabilizer': [
                 'opreps.pxd',
                 'opreps.pyx',
                 'opcreps.cpp',

@@ -177,6 +177,7 @@ class EffectRepTensorProduct(EffectRep):
         self.nfactors = len(self.povm_factors)
         self.max_factor_dim = max_factor_dim  # Unused
         super(EffectRepTensorProduct, self).__init__(dim)
+        self.factor_effects_have_changed()
 
     #TODO: fix this:
     #def __reduce__(self):
