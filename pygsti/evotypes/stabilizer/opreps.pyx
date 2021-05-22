@@ -1,5 +1,5 @@
 # encoding: utf-8
-# cython: profile=True
+# cython: profile=False
 # cython: linetrace=False
 
 #***************************************************************************************************
@@ -12,22 +12,10 @@
 #***************************************************************************************************
 
 import sys
-import time as pytime
 import numpy as _np
-import copy as _copy
 
 from ...tools import internalgates as _itgs
 from ...tools import symplectic as _symp
-
-cdef double LARGE = 1000000000
-# a large number such that LARGE is
-# a very high term weight which won't help (at all) a
-# path get included in the selected set of paths.
-
-cdef double SMALL = 1e-5
-# a number which is used in place of zero within the
-# product of term magnitudes to keep a running path
-# magnitude from being zero (and losing memory of terms).
 
 
 cdef class OpRep(_basereps_cython.OpRep):

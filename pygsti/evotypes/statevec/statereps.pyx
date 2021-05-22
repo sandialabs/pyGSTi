@@ -1,6 +1,7 @@
-"""
-Base classes for Cython representations.
-"""
+# encoding: utf-8
+# cython: profile=False
+# cython: linetrace=False
+
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -9,10 +10,9 @@ Base classes for Cython representations.
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
+
 import numpy as _np
 import functools as _functools
-from ...tools import basistools as _bt
-from ...tools import optools as _ot
 from ...tools import fastcalc as _fastcalc
 
 
@@ -52,14 +52,14 @@ cdef class StateRepPure(StateRep):
 
     def purebase_has_changed(self):
         pass
-    
+
     def __reduce__(self):
         return (StateRepPure, (self.base, self.basis), (self.base.flags.writeable,))
 
 
 cdef class StateRepComputational(StateRep):
     cdef object zvals
-    
+
     def __init__(self, zvals):
 
         #Convert zvals to dense vec:
