@@ -36,3 +36,4 @@ cdef class StateRep(_basereps_cython.StateRep):
     cdef public _np.ndarray smatrix
     cdef public _np.ndarray pvectors
     cdef public _np.ndarray amps
+    cdef public object state_space

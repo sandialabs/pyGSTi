@@ -31,18 +31,11 @@ class EmbeddedOp(_LinearOperator):
 
     Parameters
     ----------
-    state_space_labels : a list of tuples
-        This argument specifies the density matrix space upon which this
-        operation acts.  Each tuple corresponds to a block of a density matrix
-        in the standard basis (and therefore a component of the direct-sum
-        density matrix space). Elements of a tuple are user-defined labels
-        beginning with "L" (single Level) or "Q" (two-level; Qubit) which
-        interpret the d-dimensional state space corresponding to a d x d
-        block as a tensor product between qubit and single level systems.
-        (E.g. a 2-qubit space might be labelled `[('Q0','Q1')]`).
+    state_space : StateSpace
+        Specifies the density matrix space upon which this operation acts.
 
     target_labels : list of strs
-        The labels contained in `state_space_labels` which demarcate the
+        The labels contained in `state_space` which demarcate the
         portions of the state space acted on by `operation_to_embed` (the
         "contained" operation).
 
@@ -56,52 +49,19 @@ class EmbeddedOp(_LinearOperator):
         the default value unless you know what you're doing.
     """
 
-    def __init__(self, state_space_labels, target_labels, operation_to_embed, dense_rep=False):
-        """
-        Initialize an EmbeddedOp object.
-
-        Parameters
-        ----------
-        state_space_labels : a list of tuples
-            This argument specifies the density matrix space upon which this
-            operation acts.  Each tuple corresponds to a block of a density matrix
-            in the standard basis (and therefore a component of the direct-sum
-            density matrix space). Elements of a tuple are user-defined labels
-            beginning with "L" (single Level) or "Q" (two-level; Qubit) which
-            interpret the d-dimensional state space corresponding to a d x d
-            block as a tensor product between qubit and single level systems.
-            (E.g. a 2-qubit space might be labelled `[('Q0','Q1')]`).
-
-        target_labels : list of strs
-            The labels contained in `state_space_labels` which demarcate the
-            portions of the state space acted on by `operation_to_embed` (the
-            "contained" operation).
-
-        operation_to_embed : LinearOperator
-            The operation object that is to be contained within this operation, and
-            that specifies the only non-trivial action of the EmbeddedOp.
-
-        dense_rep : bool, optional
-            Whether this operator should be internally represented using a dense
-            matrix.  This is expert-level functionality, and you should leave their
-            the default value unless you know what you're doing.
-        """
-        from ...models.labeldicts import StateSpaceLabels as _StateSpaceLabels
-        self.state_space_labels = _StateSpaceLabels(state_space_labels,
-                                                    evotype=operation_to_embed._evotype)
+    def __init__(self, state_space, target_labels, operation_to_embed, dense_rep=False):
         self.target_labels = target_labels
         self.embedded_op = operation_to_embed
         self.dense_rep = dense_rep
         self._iter_elements_cache = None  # speeds up _iter_matrix_elements significantly
 
         evotype = operation_to_embed._evotype
-        dim = self.state_space_labels.dim
 
         #Create representation
         if dense_rep:
-            rep = evotype.create_dense_rep(dim)
+            rep = evotype.create_dense_rep(state_space)
         else:
-            rep = evotype.create_embedded_rep(self.state_space_labels, self.target_labels, self.embedded_op._rep)
+            rep = evotype.create_embedded_rep(state_space, self.target_labels, self.embedded_op._rep)
 
         _LinearOperator.__init__(self, rep, evotype)
         if self.dense_rep: self._update_denserep()
@@ -166,7 +126,7 @@ class EmbeddedOp(_LinearOperator):
         # parent reset correctly.
         if memo is not None and id(self) in memo: return memo[id(self)]
         cls = self.__class__  # so that this method works for derived classes too
-        copyOfMe = cls(self.state_space_labels, self.target_labels,
+        copyOfMe = cls(self.state_space, self.target_labels,
                        self.embedded_op.copy(parent, memo))
         return self._copy_gpindices(copyOfMe, parent, memo)
 
@@ -174,11 +134,11 @@ class EmbeddedOp(_LinearOperator):
         divisor = 1; divisors = []
         for l in self.target_labels:
             divisors.append(divisor)
-            divisor *= self.state_space_labels.labeldims[l]  # e.g. 4 or 2 for qubits (depending on evotype)
+            divisor *= self.state_space.label_dimension(l)  # e.g. 4 or 2 for qubits (depending on evotype)
 
-        iTensorProdBlk = [self.state_space_labels.tpb_index[label] for label in self.target_labels][0]
-        tensorProdBlkLabels = self.state_space_labels.labels[iTensorProdBlk]
-        basisInds = [list(range(self.state_space_labels.labeldims[l])) for l in tensorProdBlkLabels]
+        iTensorProdBlk = [self.state_space.label_tensor_product_block_index(label) for label in self.target_labels][0]
+        tensorProdBlkLabels = self.state_space.tensor_product_block_labels(iTensorProdBlk)
+        basisInds = [list(range(self.state_space.label_dimension(l))) for l in tensorProdBlkLabels]
         # e.g. [0,1,2,3] for densitymx qubits (I, X, Y, Z) OR [0,1] for statevec qubits (std *complex* basis)
 
         basisInds_noop = basisInds[:]
@@ -197,8 +157,8 @@ class EmbeddedOp(_LinearOperator):
             reversed(list(map(len, basisInds[1:])))))), _np.int64)
 
         # number of basis elements preceding our block's elements
-        blockDims = self.state_space_labels.tpb_dims
-        offset = sum([blockDims[i] for i in range(0, iTensorProdBlk)])
+        blockDims = [_np.product(tpb_dims) for tpb_dims in self.state_space.tensor_product_blocks_dimensions]
+        offset = sum([blockDims[0:iTensorProdBlk])
 
         return divisors, multipliers, sorted_bili, basisInds_noop, offset
 
@@ -294,7 +254,7 @@ class EmbeddedOp(_LinearOperator):
         #def tosymplectic(self):
         #    #Embed operation's symplectic rep in larger "full" symplectic rep
         #    #Note: (qubit) labels are in first (and only) tensor-product-block
-        #    qubitLabels = self.state_space_labels.labels[0]
+        #    qubitLabels = self.state_space.tensor_product_block_labels(0)
         #    smatrix, svector = _symp.embed_clifford(self.embedded_op.smatrix,
         #                                            self.embedded_op.svector,
         #                                            self.qubit_indices,len(qubitLabels))
@@ -438,7 +398,7 @@ class EmbeddedOp(_LinearOperator):
             output of :method:`Polynomial.compact`.
         """
         #Reduce labeldims b/c now working on *state-space* instead of density mx:
-        sslbls = self.state_space_labels.copy()
+        sslbls = self.state_space.copy()
         sslbls.reduce_dims_densitymx_to_state_inplace()
         if return_coeff_polys:
             terms, coeffs = self.embedded_op.taylor_order_terms(order, max_polynomial_vars, True)
@@ -478,7 +438,7 @@ class EmbeddedOp(_LinearOperator):
         list
             A list of :class:`Rank1Term` objects.
         """
-        sslbls = self.state_space_labels.copy()
+        sslbls = self.state_space.copy()
         sslbls.reduce_dims_densitymx_to_state_inplace()
         return [t.embed(sslbls, self.target_labels)
                 for t in self.embedded_op.taylor_order_terms_above_mag(order, max_polynomial_vars, min_term_mag)]
@@ -600,7 +560,7 @@ class EmbeddedOp(_LinearOperator):
         if return_basis:
             # embed basis
             Ltermdict, basis = embedded_coeffs
-            embedded_basis = _EmbeddedBasis(basis, self.state_space_labels, self.target_labels)
+            embedded_basis = _EmbeddedBasis(basis, self.state_space, self.target_labels)
             bel_map = {lbl: embedded_lbl for lbl, embedded_lbl in zip(basis.labels, embedded_basis.labels)}
 
             #go through and embed Ltermdict labels
@@ -755,7 +715,7 @@ class EmbeddedOp(_LinearOperator):
 
     def __str__(self):
         """ Return string representation """
-        s = "Embedded operation with full dimension %d and state space %s\n" % (self.dim, self.state_space_labels)
+        s = "Embedded operation with full dimension %d and state space %s\n" % (self.dim, self.state_space)
         s += " that embeds the following %d-dimensional operation into acting on the %s space\n" \
              % (self.embedded_op.dim, str(self.target_labels))
         s += str(self.embedded_op)

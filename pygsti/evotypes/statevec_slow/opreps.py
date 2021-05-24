@@ -16,12 +16,17 @@ from scipy.sparse.linalg import LinearOperator
 
 from .. import basereps as _basereps
 from .statereps import StateRep as _StateRep
+from ...models.statespace import StateSpace as _StateSpace
 from ...tools import internalgates as _itgs
 
 
 class OpRep(_basereps.OpRep):
-    def __init__(self, dim):
-        self.dim = dim
+    def __init__(self, state_space):
+        self.state_space = state_space
+
+    @property
+    def dim(self):
+        return self.state_space.udim
 
     def acton(self, state):
         raise NotImplementedError()
@@ -43,8 +48,9 @@ class OpRep(_basereps.OpRep):
 
 
 class OpRepPure(OpRep):
-    def __init__(self, dim):
-        self.base = _np.require(_np.identity(dim, complex),
+    def __init__(self, state_space):
+        state_space = _StateSpace.cast(state_space)
+        self.base = _np.require(_np.identity(state_space.udim, complex),
                                 requirements=['OWNDATA', 'C_CONTIGUOUS'])
         super(OpRep, self).__init__(self.base.shape[0])
 
@@ -59,14 +65,17 @@ class OpRepPure(OpRep):
 
 
 class OpRepStandard(OpRepPure):
-    def __init__(self, name):
+    def __init__(self, name, state_space):
         std_unitaries = _itgs.standard_gatename_unitaries()
         self.name = name
         if self.name not in std_unitaries:
             raise ValueError("Name '%s' not in standard unitaries" % self.name)
 
         U = std_unitaries[self.name]
-        super(OpRepStandard, self).__init__(U.shape[0])
+        state_space = _StateSpace.cast(state_space)
+        assert(U.shape[0] == state_space.udim)
+
+        super(OpRepStandard, self).__init__(state_space)
         self.base[:, :] = U
 
 
@@ -77,10 +86,10 @@ class OpRepStandard(OpRepPure):
 
 class OpRepComposed(OpRep):
     # exactly the same as densitymx case
-    def __init__(self, factor_op_reps, dim):
+    def __init__(self, factor_op_reps, state_space):
         #assert(len(factor_op_reps) > 0), "Composed gates must contain at least one factor gate!"
         self.factors_reps = factor_op_reps
-        super(OpRepComposed, self).__init__(dim)
+        super(OpRepComposed, self).__init__(state_space)
 
     def acton(self, state):
         """ Act this gate map on an input state """
@@ -100,10 +109,10 @@ class OpRepComposed(OpRep):
 
 class OpRepSum(OpRep):
     # exactly the same as densitymx case
-    def __init__(self, factor_reps, dim):
+    def __init__(self, factor_reps, state_space):
         #assert(len(factor_reps) > 0), "Composed gates must contain at least one factor gate!"
         self.factor_reps = factor_reps
-        super(OpRepSum, self).__init__(dim)
+        super(OpRepSum, self).__init__(state_space)
 
     def acton(self, state):
         """ Act this gate map on an input state """
@@ -122,18 +131,19 @@ class OpRepSum(OpRep):
 
 class OpRepEmbedded(OpRep):
 
-    def __init__(self, state_space_labels, target_labels, embedded_rep):
+    def __init__(self, state_space, target_labels, embedded_rep):
 
-        iTensorProdBlks = [state_space_labels.tpb_index[label] for label in target_labels]
+        state_space = _StateSpace.cast(state_space)
+        iTensorProdBlks = [state_space.label_tensor_product_block_index(label) for label in target_labels]
         # index of tensor product block (of state space) a bit label is part of
         if len(set(iTensorProdBlks)) != 1:
             raise ValueError("All qubit labels of a multi-qubit operation must correspond to the"
                              " same tensor-product-block of the state space -- checked previously")  # pragma: no cover # noqa
 
         iTensorProdBlk = iTensorProdBlks[0]  # because they're all the same (tested above) - this is "active" block
-        tensorProdBlkLabels = state_space_labels.labels[iTensorProdBlk]
+        tensorProdBlkLabels = state_space.tensor_product_block_labels(iTensorProdBlk)
         # count possible *density-matrix-space* indices of each component of the tensor product block
-        numBasisEls = _np.array([state_space_labels.labeldims[l] for l in tensorProdBlkLabels], _np.int64)
+        numBasisEls = _np.array([state_space.label_dimension(l) for l in tensorProdBlkLabels], _np.int64)
 
         # Separate the components of the tensor product that are not operated on, i.e. that our
         # final map just acts as identity w.r.t.
@@ -143,12 +153,12 @@ class OpRepEmbedded(OpRep):
             "Embedded operation has dimension (%d) inconsistent with the given target labels (%s)" % (
                 embedded_rep.dim, str(target_labels))
 
-        dim = state_space_labels.dim
-        nBlocks = state_space_labels.num_tensor_prod_blocks()
+        #dim = state_space.udim
+        nBlocks = state_space.num_tensor_product_blocks
         iActiveBlock = iTensorProdBlk
-        nComponents = len(state_space_labels.labels[iActiveBlock])
-        embeddedDim = embedded_rep.dim
-        blocksizes = _np.array([_np.product(state_space_labels.tensor_product_block_dims(k))
+        nComponents = len(state_space.tensor_product_blocks_labels(iActiveBlock))
+        embeddedDim = embedded_rep.udim
+        blocksizes = _np.array([_np.product(state_space.tensor_product_block_dimensions(k))
                                 for k in range(nBlocks)], _np.int64)
 
         self.embedded_rep = embedded_rep
@@ -171,7 +181,7 @@ class OpRepEmbedded(OpRep):
         self.active_block_index = iActiveBlock
         self.nblocks = nBlocks
         self.offset = sum(blocksizes[0:self.active_block_index])
-        super(OpRepEmbedded, self).__init__(dim)
+        super(OpRepEmbedded, self).__init__(state_space)
 
     def _acton_other_blocks_trivially(self, output_state, state):
         offset = 0
@@ -226,10 +236,11 @@ class OpRepEmbedded(OpRep):
 
 
 class OpRepRepeated(OpRep):
-    def __init__(self, rep_to_repeat, num_repetitions, dim):
+    def __init__(self, rep_to_repeat, num_repetitions, state_space):
+        state_space = _StateSpace.cast(state_space)
         self.repeated_rep = rep_to_repeat
         self.num_repetitions = num_repetitions
-        super(OpRepRepeated, self).__init__(dim)
+        super(OpRepRepeated, self).__init__(state_space)
 
     def acton(self, state):
         """ Act this gate map on an input state """

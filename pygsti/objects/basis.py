@@ -666,6 +666,23 @@ class Basis(object):
         if builtin_basis_name is None: return self.copy()
         else: return self.create_equivalent(builtin_basis_name)
 
+    def is_compatible_with_state_space(self, state_space):
+        """
+        Checks whether this basis is compatible with a given state space.
+
+        Parameters
+        ----------
+        state_space : StateSpace
+            the state space to check.
+
+        Returns
+        -------
+        bool
+        """
+        #FUTURE - need a way to deal with many qubits where total dim will overflow an int64
+        #if self.state_space.dim is None:  # `None` indicates that dim is effectively infinite?
+        return bool(self.dim == state_space.dim)
+
 
 class LazyBasis(Basis):
     """
@@ -1522,7 +1539,7 @@ class EmbeddedBasis(LazyBasis):
         else:
             raise ValueError("Cannot unembed '%s' - doesn't end in '%s'!" % (lbl, suffix))
 
-    def __init__(self, basis_to_embed, state_space_labels, target_labels, name=None, longname=None):
+    def __init__(self, basis_to_embed, state_space, target_labels, name=None, longname=None):
         '''
         Create a new EmbeddedBasis.
 
@@ -1531,7 +1548,7 @@ class EmbeddedBasis(LazyBasis):
         basis_to_embed : Basis
             The basis being embedded.
 
-        state_space_labels : StateSpaceLabels
+        state_space : StateSpace
             An object describing the struture of the entire state space.
 
         target_labels : list or tuple
@@ -1548,7 +1565,7 @@ class EmbeddedBasis(LazyBasis):
         '''
         self.embedded_basis = basis_to_embed
         self.target_labels = target_labels
-        self.state_space_labels = state_space_labels
+        self.state_space = state_space
 
         if name is None:
             name = ':'.join((basis_to_embed.name,) + tuple(map(str, target_labels)))
@@ -1575,7 +1592,7 @@ class EmbeddedBasis(LazyBasis):
         super(EmbeddedBasis, self).__init__(name, longname, dim, size, elshape, real, sparse)
 
     def __hash__(self):
-        return hash(tuple(hash(self.embedded_basis), self.target_labels, self.state_space_labels.labels))
+        return hash(tuple(hash(self.embedded_basis), self.target_labels, self.state_space.tensor_product_blocks_labels))
 
     def _lazy_build_elements(self):
         """ Take a dense or sparse basis matrix and embed it. """
@@ -1583,7 +1600,7 @@ class EmbeddedBasis(LazyBasis):
         if self.elndim == 2:  # then use EmbeddedOp to do matrix
             from .operation import StaticDenseOp
             from .operation import EmbeddedOp
-            sslbls = self.state_space_labels.copy()
+            sslbls = self.state_space.copy()
             sslbls.reduce_dims_densitymx_to_state_inplace()  # because we're working with basis matrices not gates
 
             if self.sparse:
@@ -1609,7 +1626,7 @@ class EmbeddedBasis(LazyBasis):
     def __eq__(self, other):
         otherIsBasis = isinstance(other, EmbeddedBasis)
         if not otherIsBasis: return False  # can't be equal to a non-EmbeddedBasis
-        if self.target_labels != other.target_labels or self.state_space_labels != other.state_space_labels:
+        if self.target_labels != other.target_labels or self.state_space != other.state_space:
             return False
         return self.embedded_basis == other.embedded_basis
 
@@ -1632,7 +1649,7 @@ class EmbeddedBasis(LazyBasis):
         EmbeddedBasis
         """
         equiv_embedded = self.embedded_basis.create_equivalent(builtin_basis_name)
-        return EmbeddedBasis(equiv_embedded, self.state_space_labels, self.target_labels)
+        return EmbeddedBasis(equiv_embedded, self.state_space, self.target_labels)
 
     def create_simple_equivalent(self, builtin_basis_name=None):
         """

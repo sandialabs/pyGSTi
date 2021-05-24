@@ -88,29 +88,17 @@ class OpFactory(_gm.ModelMember):
 
     Parameters
     ----------
-    dim : int
-        The state-space dimension of the operation(s) this factory builds.
-        (E.g. for a single qubit represented as a density matrix, `dim=4`)
+    state_space : StateSpace
+        The state-space of the operation(s) this factory builds.
 
-    evotype : {"densitymx","statevec","stabilizer","svterm","cterm"}
+    evotype : Evotype
         The evolution type of the operation(s) this factory builds.
     """
 
-    def __init__(self, dim, evotype):
-        """
-        Creates a new OpFactory object.
-
-        Parameters
-        ----------
-        dim : int
-            The state-space dimension of the operation(s) this factory builds.
-            (E.g. for a single qubit represented as a density matrix, `dim=4`)
-
-        evotype : {"densitymx","statevec","stabilizer","svterm","cterm"}
-            The evolution type of the operation(s) this factory builds.
-        """
+    def __init__(self, state_space, evotype):
+        evotype = 
         #self._paramvec = _np.zeros(nparams, 'd')
-        _gm.ModelMember.__init__(self, dim, evotype)
+        _gm.ModelMember.__init__(self, state_space, evotype)
 
     def create_object(self, args=None, sslbls=None):
         """
@@ -629,9 +617,9 @@ class ComposedOpFactory(OpFactory):
         in pyGSTi.  Note that this is *opposite* from standard matrix
         multiplication order.
 
-    dim : int or "auto"
-        Dimension of the operations produced by this factory.  Can be set
-        to `"auto"` to take dimension from `factories_or_ops_to_compose[0]`
+    state_space : StateSpace or "auto"
+        States space of the operations produced by this factory.  Can be set
+        to `"auto"` to take the state space from `factories_or_ops_to_compose[0]`
         *if* there's at least one factory or operator being composed.
 
     evotype : {"densitymx","statevec","stabilizer","svterm","cterm","auto"}
@@ -643,43 +631,15 @@ class ComposedOpFactory(OpFactory):
         Whether dense composed operations (ops which hold their entire
     """
 
-    def __init__(self, factories_or_ops_to_compose, dim="auto", evotype="auto", dense=False):
-        """
-        Creates a new ComposedOpFactory.
-
-        Parameters
-        ----------
-        factories_or_ops_to_compose : list
-            List of `LinearOperator` or `OpFactory`-derived objects
-            that are composed to form this factory.  There should be at least
-            one factory among this list, otherwise there's no need for a
-            factory.  Elements are composed with vectors in *left-to-right*
-            ordering, maintaining the same convention as operation sequences
-            in pyGSTi.  Note that this is *opposite* from standard matrix
-            multiplication order.
-
-        dim : int or "auto"
-            Dimension of the operations produced by this factory.  Can be set
-            to `"auto"` to take dimension from `factories_or_ops_to_compose[0]`
-            *if* there's at least one factory or operator being composed.
-
-        evotype : {"densitymx","statevec","stabilizer","svterm","cterm","auto"}
-            The evolution type of this factory.  Can be set to `"auto"` to take
-            the evolution type of `factories_or_ops_to_compose[0]` *if* there's
-            at least one factory or operator being composed.
-
-        dense : bool, optional
-            Whether dense composed operations (ops which hold their entire
-            "action" matrix in memory) should be created.
-        """
-        assert(len(factories_or_ops_to_compose) > 0 or dim != "auto"), \
-            "Must compose at least one factory/op when dim='auto'!"
+    def __init__(self, factories_or_ops_to_compose, state_space="auto", evotype="auto", dense=False):
+        assert(len(factories_or_ops_to_compose) > 0 or state_space != "auto"), \
+            "Must compose at least one factory/op when state_space='auto'!"
         self.factors = list(factories_or_ops_to_compose)
 
-        if dim == "auto":
-            dim = factories_or_ops_to_compose[0].dim
-        assert(all([dim == f.dim for f in factories_or_ops_to_compose])), \
-            "All factories/ops must have the same dimension (%d expected)!" % dim
+        if state_space == "auto":
+            state_space = factories_or_ops_to_compose[0].state_space
+        assert(all([state_space.is_compatible_with(f.state_space) for f in factories_or_ops_to_compose])), \
+            "All factories/ops must have compatible state spaces (%d expected)!" % str(state_space)
 
         if evotype == "auto":
             evotype = factories_or_ops_to_compose[0]._evotype
@@ -688,7 +648,7 @@ class ComposedOpFactory(OpFactory):
 
         self.dense = dense
         self.is_factory = [isinstance(f, OpFactory) for f in factories_or_ops_to_compose]
-        super(ComposedOpFactory, self).__init__(dim, evotype)
+        super(ComposedOpFactory, self).__init__(state_space, evotype)
 
     def create_op(self, args=None, sslbls=None):
         """
@@ -714,7 +674,7 @@ class ComposedOpFactory(OpFactory):
         """
         Composed = _ComposedDenseOp if self.dense else _ComposedOp
         ops_to_compose = [f.create_op(args, sslbls) if is_f else f for is_f, f in zip(self.is_factory, self.factors)]
-        op = Composed(ops_to_compose, self.dim, self._evotype)
+        op = Composed(ops_to_compose, self.state_space, self._evotype)
         op.set_gpindices(self.gpindices, self.parent)  # Overkill, since composed ops already have indices set?
         return op
 

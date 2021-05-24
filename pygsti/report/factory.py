@@ -1102,7 +1102,8 @@ def find_std_clifford_compilation(model, verbosity=0):
                    "smq2Q_XYZICNOT")
     for module_name in smq_modules:
         mod = importlib.import_module("pygsti.modelpacks." + module_name)
-        qubit_labels = model.state_space_labels.labels[0]  # this usually gets the qubit labels
+        if model.state_space.num_tensor_prod_blocks > 1: continue  # only try to match for single-TPB cases
+        qubit_labels = model.state_space.tensor_product_block_labels(0)  # this usually gets the qubit labels
         if len(mod._sslbls) != len(qubit_labels): continue  # wrong number of qubits!
         if _StateSpaceLabels.cast(mod._sslbls).dim != _StateSpaceLabels.cast(qubit_labels).dim: continue
 

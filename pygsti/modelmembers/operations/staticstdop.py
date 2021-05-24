@@ -12,7 +12,8 @@ The StaticStandardOp class and supporting functionality.
 
 import numpy as _np
 from ...evotypes import Evotype as _Evotype
-from ...tools import internalgates as _igts
+from ...tools import internalgates as _itgs
+from ...models import statespace as _statespace
 from .linearop import LinearOperator as _LinearOperator
 
 
@@ -30,10 +31,18 @@ class StaticStandardOp(_LinearOperator):
         The evolution type.  The special value `"default"` is equivalent
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
     """
-    def __init__(self, name, evotype="default"):
+    def __init__(self, name, evotype="default", state_space=None):
         self.name = name
+
+        #Create default state space if needed
+        std_unitaries = _itgs.standard_gatename_unitaries()
+        if name not in std_unitaries:
+            raise ValueError("'%s' does not name a standard operation" % self.name)
+        state_space = _statespace.default_space_for_udim(std_unitaries[name].shape[0]) if (state_space is None) \
+            else _statespace.StateSpace.cast(state_space)
+
         evotype = _Evotype.cast(evotype)
-        rep = evotype.create_standard_rep(name)
+        rep = evotype.create_standard_rep(name, state_space)
         _LinearOperator.__init__(self, rep, evotype)
 
 #TODO REMOVE

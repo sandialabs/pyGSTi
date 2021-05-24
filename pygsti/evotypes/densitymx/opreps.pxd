@@ -86,5 +86,6 @@ cdef extern from "opcreps.h" namespace "CReps":
 
 cdef class OpRep(_basereps_cython.OpRep):
     cdef OpCRep* c_rep
+    cdef public object state_space
 
 ctypedef OpCRep* OpCRep_ptr

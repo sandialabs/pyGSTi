@@ -32,8 +32,8 @@ from ..tools import symplectic as _symp
 from ..modelmembers import modelmember as _gm
 from ..evotypes import Evotype as _Evotype
 
-from . import labeldicts as _ld
 from . import explicitcalc as _explicitcalc
+from . import statespace as _statespace
 from ..objects import gaugegroup as _gg
 from ..objects import circuit as _cir
 from ..forwardsims import forwardsim as _fwdsim
@@ -62,7 +62,7 @@ class Model(object):
 v
     Parameters
     ----------
-    state_space_labels : StateSpaceLabels or list or tuple
+    state_space : StateSpaceLabels or list or tuple
         The decomposition (with labels) of (pure) state-space this model
         acts upon.  Regardless of whether the model contains operators or
         superoperators, this argument describes the Hilbert space dimension
@@ -70,24 +70,25 @@ v
         of a from that can be passed to `StateSpaceLabels.__init__`.
     """
 
-    def __init__(self, state_space_labels):
+    def __init__(self, state_space):
         """
         Creates a new Model.  Rarely used except from derived classes
         `__init__` functions.
 
         Parameters
         ----------
-        state_space_labels : StateSpaceLabels or list or tuple
+        state_space : StateSpaceLabels or list or tuple
             The decomposition (with labels) of (pure) state-space this model
             acts upon.  Regardless of whether the model contains operators or
             superoperators, this argument describes the Hilbert space dimension
             and imposed structure.  If a list or tuple is given, it must be
             of a from that can be passed to `StateSpaceLabels.__init__`.
         """
-        if isinstance(state_space_labels, _ld.StateSpaceLabels):
-            self._state_space_labels = state_space_labels
+        if isinstance(state_space, _statespace.StateSpace):
+            self._state_space = state_space
         else:
-            self._state_space_labels = _ld.StateSpaceLabels(state_space_labels)
+            #Maybe change to a different default?
+            self._state_space = _statespace.CustomStateSpace(state_space)
 
         self._num_modeltest_params = None
         self._hyperparams = {}
@@ -96,7 +97,7 @@ v
         self.uuid = _uuid.uuid4()  # a Model's uuid is like a persistent id(), useful for hashing
 
     @property
-    def state_space_labels(self):
+    def state_space(self):
         """
         State space labels
 
@@ -104,7 +105,7 @@ v
         -------
         StateSpaceLabels
         """
-        return self._state_space_labels
+        return self._state_space
 
     @property
     def hyperparams(self):
@@ -151,7 +152,7 @@ v
         elif 'num_nongauge_params' in dir(self):  # better than hasattr, which *runs* the @property method
             if MEMLIMIT_FOR_NONGAUGE_PARAMS is not None:
                 if hasattr(self, 'num_elements'):
-                    memForNumGaugeParams = self.num_elements * (self.num_params + self.dim**2) \
+                    memForNumGaugeParams = self.num_elements * (self.num_params + self.state_space.dim**2) \
                         * _np.dtype('d').itemsize  # see Model._buildup_dpg (this is mem for dPG)
                 else:
                     return self.num_params
@@ -429,7 +430,7 @@ class OpModel(Model):
 
     Parameters
     ----------
-    state_space_labels : StateSpaceLabels or list or tuple
+    state_space : StateSpaceLabels or list or tuple
         The decomposition (with labels) of (pure) state-space this model
         acts upon.  Regardless of whether the model contains operators or
         superoperators, this argument describes the Hilbert space dimension
@@ -457,15 +458,15 @@ class OpModel(Model):
     #Whether to perform extra parameter-vector integrity checks
     _pcheck = False
 
-    def __init__(self, state_space_labels, basis, evotype, layer_rules, simulator="auto"):
+    def __init__(self, state_space, basis, evotype, layer_rules, simulator="auto"):
         """
         Creates a new OpModel.  Rarely used except from derived classes `__init__` functions.
         """
         self._evotype = _Evotype.cast(evotype)
-        self._set_state_space(state_space_labels, basis)
-        #sets self._state_space_labels, self._basis, self._dim
+        self._set_state_space(state_space, basis)
+        #sets self._state_space, self._basis
 
-        super(OpModel, self).__init__(self.state_space_labels)  # do this as soon as possible
+        super(OpModel, self).__init__(self.state_space)  # do this as soon as possible
 
         self._layer_rules = layer_rules if (layer_rules is not None) else _LayerRules()
         self._opcaches = {}  # dicts of non-primitive operations (organized by derived class)
@@ -490,7 +491,7 @@ class OpModel(Model):
     @sim.setter
     def sim(self, simulator):
         if simulator == "auto":
-            d = self.dim if (self.dim is not None) else 0
+            d = self.state_space.dim if (self.state_space.dim is not None) else 0
             simulator = "matrix" if d <= 16 else "map"
 
         if simulator == "matrix":
@@ -530,11 +531,10 @@ class OpModel(Model):
         The basis used to represent dense (super)operators of this model
         """
         if isinstance(basis, _Basis):
-            assert(basis.dim == self.state_space_labels.dim), \
-                "Cannot set basis w/dim=%d when sslbls dim=%d!" % (basis.dim, self.state_space_labels.dim)
+            assert(basis.is_compatible_with_state_space(self.state_space)), "Basis is incompabtible with state space!"
             self._basis = basis
         else:  # create a basis with the proper structure & dimension
-            self._basis = _Basis.cast(basis, self.state_space_labels)
+            self._basis = _Basis.cast(basis, self.state_space)
 
     def _set_state_space(self, lbls, basis="pp"):
         """
@@ -555,31 +555,33 @@ class OpModel(Model):
         -------
         None
         """
-        if isinstance(lbls, _ld.StateSpaceLabels):
-            self._state_space_labels = lbls
+        if isinstance(lbls, _statespace.StateSpace):
+            self._state_space = lbls
         else:
-            self._state_space_labels = _ld.StateSpaceLabels(lbls, evotype=self._evotype)
+            #Maybe change to a different default?
+            self._state_space = _statespace.CustomStateSpace(lbls, evotype=self._evotype)
         self.basis = basis  # invokes basis setter to set self._basis
 
         #Operator dimension of this Model
-        self._dim = self.state_space_labels.dim
+        #self._dim = self.state_space.dim
         #e.g. 4 for 1Q (densitymx) or 2 for 1Q (statevec)
 
-    @property
-    def dim(self):
-        """
-        The dimension of the model.
-
-        This equals d when the gate (or, more generally, circuit-layer) matrices
-        would have shape d x d and spam vectors would have shape d x 1 (if they
-        were computed).
-
-        Returns
-        -------
-        int
-            model dimension
-        """
-        return self._dim
+    #TODO - deprecate this?
+    #@property
+    #def dim(self):
+    #    """
+    #    The dimension of the model.
+    #
+    #    This equals d when the gate (or, more generally, circuit-layer) matrices
+    #    would have shape d x d and spam vectors would have shape d x 1 (if they
+    #    were computed).
+    #
+    #    Returns
+    #    -------
+    #    int
+    #        model dimension
+    #    """
+    #    return self._state_space.dim
 
     ####################################################
     ## Parameter vector maintenance
@@ -1295,8 +1297,8 @@ class OpModel(Model):
         Label or None
         """
         if len(self._primitive_povm_label_dict) == 1 and \
-           (sslbls is None or sslbls == ('*',) or (len(self.state_space_labels.labels) == 1
-                                                   and self.state_space_labels.labels[0] == sslbls)):
+           (sslbls is None or sslbls == ('*',) or (self.state_space.num_tensor_prod_blocks == 1
+                                                   and self.state_space.tensor_product_block_labels(0) == sslbls)):
             return next(iter(self._primitive_povm_label_dict.keys()))
         else:
             return None

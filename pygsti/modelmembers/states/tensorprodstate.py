@@ -17,16 +17,19 @@ class TensorProductState(_State):
     ----------
     factors : list of States
         a list of the component states to take the tensor product of.
+
+    state_space : StateSpace, optional
+        The state space for this operation.
     """
 
-    def __init__(self, factors):
+    def __init__(self, factors, state_space):
         assert(len(factors) > 0), "Must have at least one factor!"
 
         self.factors = factors  # do *not* copy - needs to reference common objects
         self.Np = sum([fct.num_params for fct in factors])
 
         evotype = self.factors[0]._evotype
-        rep = evotype.create_tensorproduct_state_rep(factors)
+        rep = evotype.create_tensorproduct_state_rep(factors, state_space)
 
         _State.__init__(self, rep, evotype)
         self._update_rep()  # initializes rep data

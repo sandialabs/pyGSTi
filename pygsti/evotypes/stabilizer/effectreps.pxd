@@ -46,5 +46,6 @@ cdef extern from "effectcreps.h" namespace "CReps":
 cdef class EffectRep(_basereps_cython.EffectRep):
     cdef EffectCRep* c_effect
     cdef public _np.ndarray zvals
+    cdef public object state_space
 
 ctypedef EffectCRep* EffectCRep_ptr

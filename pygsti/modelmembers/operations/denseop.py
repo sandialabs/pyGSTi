@@ -16,6 +16,7 @@ import copy as _copy
 from .linearop import LinearOperator as _LinearOperator
 
 from ...evotypes import Evotype as _Evotype
+from ...models import statespace as _statespace
 from ...tools import matrixtools as _mt
 
 
@@ -280,16 +281,22 @@ class DenseOperator(BasedDenseOperatorInterface, _LinearOperator):
         The evolution type.  The special value `"default"` is equivalent
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
 
+    state_space : StateSpace, optional
+        The state space for this operation.  If `None` a default state space
+        with the appropriate number of qubits is used.
+
     Attributes
     ----------
     base : numpy.ndarray
         Direct access to the underlying process matrix data.
     """
 
-    def __init__(self, mx, evotype):
+    def __init__(self, mx, evotype, state_space=None):
         """ Initialize a new LinearOperator """
+        state_space = _statespace.default_space_for_dim(mx.shape[0]) if (state_space is None) \
+            else _statespace.StateSpace.cast(state_space)
         evotype = _Evotype.cast(evotype)
-        rep = evotype.create_dense_rep(mx.shape[0])
+        rep = evotype.create_dense_rep(state_space)
         rep.base[:, :] = mx
         _LinearOperator.__init__(self, rep, evotype)
         BasedDenseOperatorInterface.__init__(self)

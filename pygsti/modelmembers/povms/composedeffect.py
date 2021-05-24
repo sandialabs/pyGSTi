@@ -372,7 +372,7 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
         #Create representation
         effectRep = self.effect_vec._rep
         errmapRep = self.error_map._rep
-        rep = evotype.create_composed_effect_rep(errmapRep, effectRep, id(self.error_map))
+        rep = evotype.create_composed_effect_rep(errmapRep, effectRep, id(self.error_map), static_effect.state_space)
         # an effect that applies a *named* errormap before computing with effectRep
 
         _POVMEffect.__init__(self, rep, evotype)  # sets self.dim

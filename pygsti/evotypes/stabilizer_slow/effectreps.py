@@ -14,19 +14,22 @@ import numpy as _np
 import functools as _functools
 
 from .. import basereps as _basereps
+from ...models.statespace import StateSpace as _StateSpace
 
 
 class EffectRep(_basereps.EffectRep):
-    def __init__(self, zvals):
+    def __init__(self, zvals, state_space):
         self.zvals = zvals
+        self.state_space = _StateSpace.cast(state_space)
+        assert(self.state_space.num_qubits == len(self.zvals))
 
     @property
     def nqubits(self):
-        return len(self.zvals)
+        return self.state_space.num_qubits
 
-    @property
-    def dim(self):
-        return 2**self.nqubits  # assume "unitary evolution"-type mode
+    #@property
+    #def dim(self):
+    #    return 2**self.nqubits  # assume "unitary evolution"-type mode
 
     def probability(self, state):
         return state.sframe.measurement_probability(self.zvals, check=True)  # use check for now?
@@ -61,9 +64,8 @@ class EffectRep(_basereps.EffectRep):
 
 class EffectRepComputational(EffectRep):
 
-    def __init__(self, zvals, dim):
-        assert(dim == 2**len(zvals))
-        super(EffectRepComputational, self).__init__(zvals)
+    def __init__(self, zvals, state_space):
+        super(EffectRepComputational, self).__init__(zvals, state_space)
 
     #@property
     #def outcomes(self):

@@ -13,30 +13,34 @@
 
 import numpy as _np
 import itertools as _itertools
+from ...models.statespace import StateSpace as _StateSpace
 
 
 cdef class StateRep(_basereps_cython.StateRep):
     def __cinit__(self, _np.ndarray[_np.int64_t, ndim=2, mode='c'] smatrix,
                   _np.ndarray[_np.int64_t, ndim=2, mode='c'] pvectors,
-                  _np.ndarray[_np.complex128_t, ndim=1, mode='c'] amps):
+                  _np.ndarray[_np.complex128_t, ndim=1, mode='c'] amps,
+                  state_space):
         self.smatrix = smatrix
         self.pvectors = pvectors
         self.amps = amps
         cdef INT namps = amps.shape[0]
-        cdef INT n = smatrix.shape[0] // 2
+        self.state_space = _StateSpace.cast(state_space)
+        assert(smatrix.shape[0] // 2 == self.state_space.num_qubits)
         self.c_state = new StateCRep(<INT*>smatrix.data,<INT*>pvectors.data,
-                                       <double complex*>amps.data, namps, n)
+                                     <double complex*>amps.data, namps,
+                                     self.state_space.num_qubits)
 
     def __reduce__(self):
-        return (StateRep, (self.smatrix, self.pvectors, self.amps))
+        return (StateRep, (self.smatrix, self.pvectors, self.amps, self.state_space))
 
     @property
     def nqubits(self):
-        return self.c_state._n
+        return self.state_space.num_qubits
 
-    @property
-    def dim(self):
-        return 2**(self.c_state._n) # assume "unitary evolution"-type mode
+    #@property
+    #def dim(self):
+    #    return 2**(self.c_state._n) # assume "unitary evolution"-type mode
 
     def __dealloc__(self):
         del self.c_state
@@ -56,7 +60,7 @@ cdef class StateRep(_basereps_cython.StateRep):
 cdef class StateRepComputational(StateRep):
     cdef object zvals
     
-    def __init__(self, zvals):
+    def __init__(self, zvals, state_space):
 
         nqubits = len(zvals)
         state_s = _np.fliplr(_np.identity(2 * nqubits, int))  # flip b/c stab cols are *first*
@@ -69,19 +73,19 @@ cdef class StateRepComputational(StateRep):
         ps = state_ps.reshape(1, 2 * nqubits)
         a = _np.ones(1, complex)  # all == 1.0 by default
 
-        super(StateRepComputational, self).__init__(s, ps, a)
+        super(StateRepComputational, self).__init__(s, ps, a, state_space)
 
     #TODO: copy methods from StabilizerFrame or StateCRep - or maybe do this for base StateRep class? ----------------------------
 
     def __reduce__(self):
-        return (StateRepComputational, (self.zvals,))
+        return (StateRepComputational, (self.zvals, self.state_space))
 
 
 cdef class StateRepComposed(StateRep):
-    def __init__(self, state_rep, op_rep):
+    def __init__(self, state_rep, op_rep, state_space):
         self.state_rep = state_rep
         self.op_rep = op_rep
-        super(StateRepComposed, self).__init__(state_rep.smatrix, state_rep.pvectors, state_rep.amps)
+        super(StateRepComposed, self).__init__(state_rep.smatrix, state_rep.pvectors, state_rep.amps, state_space)
         self.reps_have_changed()
 
     def reps_have_changed(self):
@@ -91,18 +95,19 @@ cdef class StateRepComposed(StateRep):
         self.amps[:] = rep.amps[:]
 
     def __reduce__(self):
-        return (StateRepComposed, (self.state_rep, self.op_rep))
+        return (StateRepComposed, (self.state_rep, self.op_rep, self.state_space))
 
 
 cdef class StateRepTensorProduct(StateRep):
-    def __init__(self, factor_state_reps):
+    def __init__(self, factor_state_reps, state_space):
         self.factor_reps = factor_state_reps
         n = sum([sf.nqubits for sf in self.factor_reps])  # total number of qubits
         np = int(_np.product([len(sf.pvectors) for sf in self.factor_reps]))
         
         super(StateRepTensorProduct, self).__init__(_np.zeros((2 * n, 2 * n), int),
                                                     _np.zeros((np, 2 * n), int),
-                                                    _np.ones(np, complex))
+                                                    _np.ones(np, complex),
+                                                    state_space)
         self.reps_have_changed()
 
     def reps_have_changed(self):
@@ -132,4 +137,4 @@ cdef class StateRepTensorProduct(StateRep):
                 self.amps[pi] *= sf.amps[i]
 
     def __reduce__(self):
-        return (StateRepTensorProduct, (self.factor_reps,))
+        return (StateRepTensorProduct, (self.factor_reps, self.state_space))

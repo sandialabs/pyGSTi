@@ -13,13 +13,15 @@ Operation representation classes for the `stabilizer_slow` evolution type.
 import numpy as _np
 
 from .. import basereps as _basereps
+from ...models.statespace import StateSpace as _StateSpace
 from ...tools import symplectic as _symp
 from ...tools import matrixtools as _mt
 
 
 class OpRep(_basereps.OpRep):
-    def __init__(self, n):
-        self.n = n  # number of qubits
+    def __init__(self, state_space):
+        assert(state_space.num_qubits is not None), "State space does not contain a definite number of qubits!"
+        self.state_space = state_space
 
     def acton(self, state):
         raise NotImplementedError()
@@ -29,102 +31,15 @@ class OpRep(_basereps.OpRep):
 
     @property
     def nqubits(self):
-        return self.n
+        return self.state_space.num_qubits
 
-    @property
-    def dim(self):
-        return 2**(self.n)  # assume "unitary evolution"-type mode
-
-
-class OpRepComposed(OpRep):
-
-    def __init__(self, factor_op_reps, dim):
-        n = int(round(_np.log2(dim)))  # "stabilizer" is a unitary-evolution type mode
-        self.factor_reps = factor_op_reps
-        super(OpRepComposed, self).__init__(n)
-
-    def reinit_factor_op_reps(self, factor_op_reps):
-        self.factors_reps = factor_op_reps
-
-    def acton(self, state):
-        """ Act this gate map on an input state """
-        for gate in self.factor_reps:
-            state = gate.acton(state)
-        return state
-
-    def adjoint_acton(self, state):
-        """ Act the adjoint of this operation matrix on an input state """
-        for gate in reversed(self.factor_reps):
-            state = gate.adjoint_acton(state)
-        return state
-
-
-class OpRepSum(OpRep):
-    def __init__(self, factor_reps, dim):
-        n = int(round(_np.log2(dim)))  # "stabilizer" is a unitary-evolution type mode
-        self.factor_reps = factor_reps
-        super(OpRepSum, self).__init__(n)
-
-    def reinit_factor_reps(self, factor_reps):
-        self.factors_reps = factor_reps
-
-    def acton(self, state):
-        """ Act this gate map on an input state """
-        # need further stabilizer frame support to represent the sum of stabilizer states
-        raise NotImplementedError()
-
-    def adjoint_acton(self, state):
-        """ Act the adjoint of this operation matrix on an input state """
-        # need further stabilizer frame support to represent the sum of stabilizer states
-        raise NotImplementedError()
-
-
-class OpRepEmbedded(OpRep):
-
-    def __init__(self, state_space_labels, target_labels, embedded_rep):
-        # assert that all state space labels == qubits, since we only know
-        # how to embed cliffords on qubits...
-        assert(len(state_space_labels.labels) == 1
-               and all([ld == 2 for ld in state_space_labels.labeldims.values()])), \
-            "All state space labels must correspond to *qubits*"
-
-        # Just a sanity check...  TODO REMOVE?
-        #if isinstance(self.embedded_op, CliffordOp):
-        #    assert(len(target_labels) == len(self.embedded_op.svector) // 2), \
-        #        "Inconsistent number of qubits in `target_labels` and Clifford `embedded_op`"
-
-        #Cache info to speedup representation's acton(...) methods:
-        # Note: ...labels[0] is the *only* tensor-prod-block, asserted above
-        qubitLabels = state_space_labels.labels[0]
-        qubit_indices = _np.array([qubitLabels.index(targetLbl)
-                                   for targetLbl in target_labels], _np.int64)
-
-        nQubits = state_space_labels.nqubits
-        assert(nQubits is not None), "State space does not contain a definite number of qubits!"
-
-        self.embedded_rep = embedded_rep
-        self.qubits = qubit_indices  # qubit *indices*
-        super(OpRepEmbedded, self).__init__(nQubits)
-
-    def acton(self, state):
-        state = state.copy()  # needed?
-        state.sframe.push_view(self.qubits)
-        outstate = self.embedded_rep.acton(state)  # works b/c sfame has "view filters"
-        state.sframe.pop_view()  # return input state to original view
-        outstate.sframe.pop_view()
-        return outstate
-
-    def adjoint_acton(self, state):
-        state = state.copy()  # needed?
-        state.sframe.push_view(self.qubits)
-        outstate = self.embedded_rep.adjoint_acton(state)  # works b/c sfame has "view filters"
-        state.sframe.pop_view()  # return input state to original view
-        outstate.sframe.pop_view()
-        return outstate
+    #@property
+    #def dim(self):
+    #    return 2**(self.nqubits)  # assume "unitary evolution"-type mode
 
 
 class OpRepClifford(OpRep):
-    def __init__(self, unitarymx, symplecticrep):
+    def __init__(self, unitarymx, symplecticrep, state_space):
 
         if symplecticrep is not None:
             self.smatrix, self.svector = symplecticrep
@@ -138,6 +53,10 @@ class OpRepClifford(OpRep):
         #nQubits = len(self.svector) // 2
         #dim = 2**nQubits  # "stabilizer" is a "unitary evolution"-type mode
         self.unitary = unitarymx
+
+        state_space = _StateSpace.cast(state_space)
+        assert(state_space.num_qubits == self.smatrix.shape[0] // 2)
+        super(OpRepClifford, self).__init__(state_space)
 
     @property
     def unitary_dagger(self):
@@ -165,12 +84,108 @@ class OpRepClifford(OpRep):
         return s
 
 
+
+class OpRepStandard(OpRepClifford):
+    def __init__(self, name, state_space):
+        std_unitaries = _itgs.standard_gatename_unitaries()
+        if self.name not in std_unitaries:
+            raise ValueError("Name '%s' not in standard unitaries" % self.name)
+
+        U = std_unitaries[self.name]
+        super(OpRepStandard, self).__init__(U, None, state_space)
+
+
+class OpRepComposed(OpRep):
+
+    def __init__(self, factor_op_reps, state_space):
+        state_space = _StateSpace.cast(state_space)
+        self.factor_reps = factor_op_reps
+        super(OpRepComposed, self).__init__(state_space)
+
+    def reinit_factor_op_reps(self, factor_op_reps):
+        self.factors_reps = factor_op_reps
+
+    def acton(self, state):
+        """ Act this gate map on an input state """
+        for gate in self.factor_reps:
+            state = gate.acton(state)
+        return state
+
+    def adjoint_acton(self, state):
+        """ Act the adjoint of this operation matrix on an input state """
+        for gate in reversed(self.factor_reps):
+            state = gate.adjoint_acton(state)
+        return state
+
+
+class OpRepSum(OpRep):
+    def __init__(self, factor_reps, state_space):
+        state_space = _StateSpace.cast(state_space)
+        self.factor_reps = factor_reps
+        super(OpRepSum, self).__init__(state_space)
+
+    def reinit_factor_reps(self, factor_reps):
+        self.factors_reps = factor_reps
+
+    def acton(self, state):
+        """ Act this gate map on an input state """
+        # need further stabilizer frame support to represent the sum of stabilizer states
+        raise NotImplementedError()
+
+    def adjoint_acton(self, state):
+        """ Act the adjoint of this operation matrix on an input state """
+        # need further stabilizer frame support to represent the sum of stabilizer states
+        raise NotImplementedError()
+
+
+class OpRepEmbedded(OpRep):
+
+    def __init__(self, state_space, target_labels, embedded_rep):
+        # assert that all state space labels == qubits, since we only know
+        # how to embed cliffords on qubits...
+        state_space = _StateSpace.cast(state_space)
+        assert(state_space.num_tensor_product_blocks == 1
+               and all([state_space.label_dimension(l) == 2 for l in state_space.tensor_product_block_labels(0)])), \
+            "All state space labels must correspond to *qubits*"
+
+        # Just a sanity check...  TODO REMOVE?
+        #if isinstance(self.embedded_op, CliffordOp):
+        #    assert(len(target_labels) == len(self.embedded_op.svector) // 2), \
+        #        "Inconsistent number of qubits in `target_labels` and Clifford `embedded_op`"
+
+        #Cache info to speedup representation's acton(...) methods:
+        # Note: ...labels[0] is the *only* tensor-prod-block, asserted above
+        qubitLabels = state_space.tensor_product_block_labels(0)
+        qubit_indices = _np.array([qubitLabels.index(targetLbl)
+                                   for targetLbl in target_labels], _np.int64)
+
+        self.embedded_rep = embedded_rep
+        self.qubits = qubit_indices  # qubit *indices*
+        super(OpRepEmbedded, self).__init__(state_space)
+
+    def acton(self, state):
+        state = state.copy()  # needed?
+        state.sframe.push_view(self.qubits)
+        outstate = self.embedded_rep.acton(state)  # works b/c sfame has "view filters"
+        state.sframe.pop_view()  # return input state to original view
+        outstate.sframe.pop_view()
+        return outstate
+
+    def adjoint_acton(self, state):
+        state = state.copy()  # needed?
+        state.sframe.push_view(self.qubits)
+        outstate = self.embedded_rep.adjoint_acton(state)  # works b/c sfame has "view filters"
+        state.sframe.pop_view()  # return input state to original view
+        outstate.sframe.pop_view()
+        return outstate
+
+
 class OpRepRepeated(OpRep):
-    def __init__(self, rep_to_repeat, num_repetitions, dim):
-        nQubits = int(round(_np.log2(dim)))  # "stabilizer" is a unitary-evolution type mode
+    def __init__(self, rep_to_repeat, num_repetitions, state_space):
+        state_space = _StateSpace.cast(state_space)
         self.repeated_rep = rep_to_repeat
         self.num_repetitions = num_repetitions
-        super(OpRepRepeated, self).__init__(nQubits)
+        super(OpRepRepeated, self).__init__(state_space)
 
     def acton(self, state):
         """ Act this gate map on an input state """

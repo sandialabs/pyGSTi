@@ -2,6 +2,7 @@ import numpy as _np
 from .state import State as _State
 from .densestate import DenseState as _DenseState
 from ...evotypes import Evotype as _Evotype
+from ...models import statespace as _statespace
 
 
 class FullPureState(_DenseState):
@@ -17,18 +18,20 @@ class FullPureState(_DenseState):
     evotype : Evotype or str, optional
         The evolution type.  The special value `"default"` is equivalent
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
+
+    state_space : StateSpace, optional
+        The state space for this operation.  If `None` a default state space
+        with the appropriate number of qubits is used.
     """
 
-    def __init__(self, purevec, evotype="default"):
+    def __init__(self, purevec, evotype="default", state_space=None):
         purevec = _State._to_vector(purevec)
-        #REMOVE ?
-        #if evotype == "auto":
-        #    evotype = "statevec" if _np.iscomplexobj(vec) else "densitymx"
-        #assert(evotype in ("statevec", "densitymx")), \
-        #    "Invalid evolution type '%s' for %s" % (evotype, self.__class__.__name__)
+
+        state_space = _statespace.default_space_for_udim(purevec.shape[0]) if (state_space is None) \
+            else _statespace.StateSpace.cast(state_space)
 
         evotype = _Evotype.cast(evotype)
-        rep = evotype.create_pure_state_rep(purevec)
+        rep = evotype.create_pure_state_rep(purevec, state_space)
         _DenseState.__init__(self, rep, evotype, rep.purebase)
         self._paramlbls = _np.array(["VecElement Re(%d)" % i for i in range(self.dim)]
                                     + ["VecElement Im(%d)" % i for i in range(self.dim)], dtype=object)

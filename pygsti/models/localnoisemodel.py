@@ -564,7 +564,7 @@ class LocalNoiseModel(_ImplicitOpModel):
         super(LocalNoiseModel, self).__init__(qubit_sslbls, _SimpleCompLayerRules(), basis1Q.name,
                                               simulator=simulator, evotype=evotype)
 
-        flags = {'auto_embed': False, 'match_parent_dim': False,
+        flags = {'auto_embed': False, 'match_parent_statespace': False,
                  'match_parent_evotype': True, 'cast_to_type': None}
         self.prep_blks['layers'] = _ld.OrderedMemberDict(self, None, None, flags)
         self.povm_blks['layers'] = _ld.OrderedMemberDict(self, None, None, flags)
@@ -604,8 +604,7 @@ class LocalNoiseModel(_ImplicitOpModel):
             # only process gate labels w/out sslbls (e.g. "Gx", not "Gx:0") - we'll check for the
             # latter when we process the corresponding "name-only" gate's availability
 
-            gate_nQubits = int(round(_np.log2(gate.dim) / 2)) if (evotype in ("densitymx", "svterm", "cterm")) \
-                else int(round(_np.log2(gate.dim)))  # evotype in ("statevec","stabilizer")
+            gate_nQubits = gate.state_space.num_qubits
 
             availList = self.availability.get(gateName, 'all-edges')
             if availList == 'all-combinations':
@@ -680,7 +679,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                     # Note: can't use automatic-embedding b/c we need to force embedding
                     # when just ordering doesn't align (e.g. Gcnot:1:0 on 2-qubits needs to embed)
                     if inds[0] == '*':
-                        embedded_op = _opfactory.EmbeddingOpFactory(self.state_space_labels, base_gate,
+                        embedded_op = _opfactory.EmbeddingOpFactory(self.state_space, base_gate,
                                                                     dense=isinstance(simulator, _MatrixFSim),
                                                                     num_target_labels=inds[1])
                         self.factories['layers'][_Lbl(gateName)] = embedded_op
@@ -689,7 +688,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                         if inds == tuple(qubit_labels):  # then no need to embed
                             embedded_op = base_gate
                         else:
-                            embedded_op = _opfactory.EmbeddedOpFactory(self.state_space_labels, inds, base_gate,
+                            embedded_op = _opfactory.EmbeddedOpFactory(self.state_space, inds, base_gate,
                                                                        dense=isinstance(simulator, _MatrixFSim))
                         self.factories['layers'][_Lbl(gateName, inds)] = embedded_op
                     else:
@@ -697,7 +696,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                             embedded_op = base_gate
                         else:
                             EmbeddedOp = _op.EmbeddedDenseOp if isinstance(simulator, _MatrixFSim) else _op.EmbeddedOp
-                            embedded_op = EmbeddedOp(self.state_space_labels, inds, base_gate)
+                            embedded_op = EmbeddedOp(self.state_space, inds, base_gate)
                         self.operation_blks['layers'][_Lbl(gateName, inds)] = embedded_op
 
                 except Exception as e:
@@ -710,19 +709,15 @@ class LocalNoiseModel(_ImplicitOpModel):
             if not isinstance(global_idle, _op.LinearOperator):
                 global_idle = _op.StaticDenseOp(global_idle, evotype)  # static gates by default
 
-            global_idle_nQubits = int(round(_np.log2(global_idle.dim) / 2)) \
-                if (evotype in ("densitymx", "svterm", "cterm")) \
-                else int(round(_np.log2(global_idle.dim)))  # evotype in ("statevec","stabilizer")
+            global_idle_nQubits = global_idle.state_space.num_qubits
 
             if num_qubits > 1 and global_idle_nQubits == 1:  # auto create tensor-prod 1Q global idle
                 self.operation_blks['gates'][_Lbl('1QGlobalIdle')] = global_idle
                 Embedded = _op.EmbeddedDenseOp if isinstance(simulator, _MatrixFSim) else _op.EmbeddedOp
-                global_idle = Composed([Embedded(self.state_space_labels, (qlbl,), global_idle)
+                global_idle = Composed([Embedded(self.state_space, (qlbl,), global_idle)
                                         for qlbl in qubit_labels])
 
-            global_idle_nQubits = int(round(_np.log2(global_idle.dim) / 2)) \
-                if (evotype in ("densitymx", "svterm", "cterm")) \
-                else int(round(_np.log2(global_idle.dim)))  # evotype in ("statevec","stabilizer")
+            global_idle_nQubits = global_idle.state_space.num_qubits
             assert(global_idle_nQubits == num_qubits), \
                 "Global idle gate acts on %d qubits but should act on %d!" % (global_idle_nQubits, num_qubits)
             self.operation_blks['layers'][_Lbl('globalIdle')] = global_idle
@@ -772,7 +767,7 @@ class _SimpleCompLayerRules(_LayerRules):
                 # implicit creation of marginalized POVMs whereby an existing POVM name is used with sslbls that
                 # are not present in the stored POVM's label.
                 mpovm = _povm.MarginalizedPOVM(model.povm_blks['layers'][povmName],
-                                               model.state_space_labels, layerlbl.sslbls)  # cache in FUTURE
+                                               model.state_space, layerlbl.sslbls)  # cache in FUTURE
                 mpovm_lbl = _Lbl(povmName, layerlbl.sslbls)
                 caches['povm-layers'].update(mpovm.simplify_effects(mpovm_lbl))
                 assert(layerlbl in caches['povm-layers']), "Failed to create marginalized effect!"
@@ -813,7 +808,7 @@ class _SimpleCompLayerRules(_LayerRules):
             #Note: OK if len(components) == 0, as it's ok to have a composed gate with 0 factors
             ret = Composed(gblIdle + [self._layer_component_operation(model, l, caches['op-layers'], dense)
                                       for l in components],
-                           dim=model.dim, evotype=model.evotype)
+                           state_space=model.state_space, evotype=model.evotype)
             model._init_virtual_obj(ret)  # so ret's gpindices get set
 
         caches['complete-layers'][layerlbl] = ret  # cache the final label value

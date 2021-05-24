@@ -29,12 +29,12 @@ class RepeatedOp(_LinearOperator):
         self.repeated_op = op_to_repeat
         self.num_repetitions = num_repetitions
 
-        dim = op_to_repeat.dim
+        state_space = op_to_repeat.state_space
 
         if evotype == "auto":
             evotype = op_to_repeat._evotype
         evotype = _Evotype.cast(evotype)
-        rep = evotype.create_repeated_rep(self.repeated_op._rep, self.num_repetitions, dim)
+        rep = evotype.create_repeated_rep(self.repeated_op._rep, self.num_repetitions, state_space)
         _LinearOperator.__init__(self, rep, evotype)
 
     def submembers(self):

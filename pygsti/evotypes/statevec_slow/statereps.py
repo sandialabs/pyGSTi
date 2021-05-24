@@ -14,8 +14,7 @@ import numpy as _np
 import functools as _functools
 
 from .. import basereps as _basereps
-from ...tools import optools as _ot
-from ...tools import basistools as _bt
+from ...models.statespace import StateSpace as _StateSpace
 
 try:
     from ...tools import fastcalc as _fastcalc
@@ -24,9 +23,11 @@ except ImportError:
 
 
 class StateRep(_basereps.StateRep):
-    def __init__(self, data):
+    def __init__(self, data, state_space):
         assert(data.dtype == _np.dtype(complex))
         self.base = _np.require(data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
+        self.state_space = _StateSpace.cast(state_space)
+        assert(len(self.base) == self.state_space.udim)
 
     def __reduce__(self):
         return (StateRep, (self.base,), (self.base.flags.writeable,))
@@ -43,23 +44,23 @@ class StateRep(_basereps.StateRep):
 
     @property
     def dim(self):
-        return len(self.base)
+        return self.state_space.udim
 
     def __str__(self):
         return str(self.base)
 
 
 class StateRepPure(StateRep):
-    def __init__(self, purevec, basis):
+    def __init__(self, purevec, basis, state_space):
         self.basis = basis
-        super(StateRepPure, self).__init__(purevec)
+        super(StateRepPure, self).__init__(purevec, state_space)
 
     def purebase_has_changed(self):
         pass
 
 
 class StateRepComputational(StateRep):
-    def __init__(self, zvals):
+    def __init__(self, zvals, state_space):
 
         #Convert zvals to dense vec:
         factor_dim = 2
@@ -80,14 +81,14 @@ class StateRepComputational(StateRep):
             _fastcalc.fast_kron_complex(vec, fast_kron_array, fast_kron_factordims)
 
         self.zvals = zvals
-        super(StateRepComputational, self).__init__(vec)
+        super(StateRepComputational, self).__init__(vec, state_space)
 
 
 class StateRepComposed(StateRep):
-    def __init__(self, state_rep, op_rep):
+    def __init__(self, state_rep, op_rep, state_space):
         self.state_rep = state_rep
         self.op_rep = op_rep
-        super(StateRepComposed, self).__init__(state_rep.to_dense())
+        super(StateRepComposed, self).__init__(state_rep.to_dense(), state_space)
         self.reps_have_changed()
 
     def reps_have_changed(self):
@@ -96,10 +97,10 @@ class StateRepComposed(StateRep):
 
 
 class StateRepTensorProduct(StateRep):
-    def __init__(self, factor_state_reps):
+    def __init__(self, factor_state_reps, state_space):
         self.factor_reps = factor_state_reps
         dim = _np.product([fct.dim for fct in self.factor_reps])
-        super(StateRepTensorProduct, self).__init__(_np.zeros(dim, complex))
+        super(StateRepTensorProduct, self).__init__(_np.zeros(dim, complex), state_space)
         self.reps_have_changed()
 
     def reps_have_changed(self):

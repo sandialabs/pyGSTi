@@ -16,6 +16,7 @@ import numpy as _np
 import copy as _copy
 
 import itertools as _itertools
+from ...models.statespace import StateSpace as _StateSpace
 from ...tools import optools as _ot
 from ...tools import optools as _mt
 from ...tools import basistools as _bt
@@ -27,6 +28,7 @@ from scipy.sparse.linalg import LinearOperator
 cdef class OpRep(_basereps_cython.OpRep):
     def __cinit__(self):
         self.c_rep = NULL
+        self.state_space = None
 
     def __reduce__(self):
         return (OpRep, ())
@@ -37,7 +39,7 @@ cdef class OpRep(_basereps_cython.OpRep):
 
     @property
     def dim(self):
-        return self.c_rep._dim
+        return self.state_space.dim
 
     def acton(self, StateRep state not None):
         cdef StateRep out_state = StateRep(_np.empty(self.c_rep._dim, dtype='d'))
@@ -69,22 +71,25 @@ cdef class OpRep(_basereps_cython.OpRep):
 cdef class OpRepDense(OpRep):
     cdef public _np.ndarray base
 
-    def __init__(self, int dim):
-        self.base = _np.require(_np.identity(dim, 'd'),
-                               requirements=['OWNDATA', 'C_CONTIGUOUS'])
+    def __init__(self, state_space):
+        state_space = _StateSpace.cast(state_space)
+        self.base = _np.require(_np.identity(state_space.dim, 'd'),
+                                requirements=['OWNDATA', 'C_CONTIGUOUS'])
         assert(self.c_rep == NULL)
         self.c_rep = new OpCRep_Dense(<double*>self.base.data,
                                      <INT>self.base.shape[0])
+        self.state_space = state_space
 
     def __reduce__(self):
         # because serialization of numpy array flags is borked (around Numpy v1.16), we need to copy data
         # (so self.base *owns* it's data) and manually convey the writeable flag.
-        return (OpRepDense.__new__, (self.__class__,), (self.base, self.base.flags.writeable))
+        return (OpRepDense.__new__, (self.__class__,), (self.state_space, self.base, self.base.flags.writeable))
 
     def __setstate__(self, state):
         assert(self.c_rep == NULL)
 
-        data, writable = state
+        state_space, data, writable = state
+        self.state_space = state_space
         self.base = _np.require(data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
         self.base.flags.writeable = writable
 
@@ -116,7 +121,8 @@ cdef class OpRepSparse(OpRep):
 
     def __cinit__(self, _np.ndarray[double, ndim=1, mode='c'] a_data,
                   _np.ndarray[_np.int64_t, ndim=1, mode='c'] a_indices,
-                  _np.ndarray[_np.int64_t, ndim=1, mode='c'] a_indptr):
+                  _np.ndarray[_np.int64_t, ndim=1, mode='c'] a_indptr,
+                  state_space):
         self.data = a_data
         self.indices = a_indices
         self.indptr = a_indptr
@@ -125,15 +131,19 @@ cdef class OpRepSparse(OpRep):
         self.c_rep = new OpCRep_Sparse(<double*>a_data.data, <INT*>a_indices.data,
                                              <INT*>a_indptr.data, nnz, dim);
 
+        state_space = _StateSpace.cast(state_space)
+        assert(state_space.dim == dim)
+        self.state_space = state_space
+
     def __reduce__(self):
-        return (OpRepSparse, (self.data, self.indices, self.indptr))
+        return (OpRepSparse, (self.data, self.indices, self.indptr, self.state_space))
 
     def copy(self):
-        return OpRepSparse(self.data.copy(), self.indices.copy(), self.indptr.copy())
+        return OpRepSparse(self.data.copy(), self.indices.copy(), self.indptr.copy(), self.state_space.copy())
 
 
 class OpRepStandard(OpRepDense):
-    def __init__(self, name):
+    def __init__(self, name, state_space):
         std_unitaries = _itgs.standard_gatename_unitaries()
         self.name = name
         if self.name not in std_unitaries:
@@ -147,7 +157,10 @@ class OpRepStandard(OpRepDense):
         #else:  # evotype in ('densitymx', 'svterm', 'cterm')
 
         ptm = _ot.unitary_to_pauligate(U)
-        super(OpRepStandard, self).__init__(ptm.shape[0])
+        state_space = _StateSpace.cast(state_space)
+        assert(ptm.shape[0] == state_space.dim)
+        
+        super(OpRepStandard, self).__init__(state_space)
         self.base[:, :] = LinearOperator.convert_to_matrix(ptm)
 
     def __reduce__(self):
@@ -156,14 +169,17 @@ class OpRepStandard(OpRepDense):
 
 class OpRepStochastic(OpRepDense):
 
-    def __init__(self, basis, rate_poly_dicts, initial_rates, seed_or_state):
+    def __init__(self, basis, rate_poly_dicts, initial_rates, seed_or_state, state_space):
         self.basis = basis
         self.stochastic_superops = []
         for b in self.basis.elements[1:]:
             std_superop = _lbt.nonham_lindbladian(b, b, sparse=False)
             self.stochastic_superops.append(_bt.change_basis(std_superop, 'std', self.basis))
 
-        super(OpRepStochastic, self).__init__(self.basis.dim)
+        state_space = _StateSpace.cast(state_space)
+        assert(self.basis.dim == state_space.dim)
+
+        super(OpRepStochastic, self).__init__(state_space)
         self.update_rates(initial_rates)
 
     def update_rates(self, rates):
@@ -180,14 +196,15 @@ class OpRepStochastic(OpRepDense):
 cdef class OpRepComposed(OpRep):
     cdef public object factor_reps  # list of OpRep objs?
 
-    def __cinit__(self, factor_op_reps, INT dim):
+    def __cinit__(self, factor_op_reps, state_space):
         self.factor_reps = factor_op_reps
         cdef INT i
         cdef INT nfactors = len(factor_op_reps)
         cdef vector[OpCRep*] gate_creps = vector[OpCRep_ptr](nfactors)
         for i in range(nfactors):
             gate_creps[i] = (<OpRep?>factor_op_reps[i]).c_rep
-        self.c_rep = new OpCRep_Composed(gate_creps, dim)
+        self.state_space = _StateSpace.cast(state_space)
+        self.c_rep = new OpCRep_Composed(gate_creps, self.state_space.dim)
 
     def __reduce__(self):
         return (OpRepComposed, (self.factor_reps, self.c_rep._dim))
@@ -207,14 +224,15 @@ cdef class OpRepComposed(OpRep):
 cdef class OpRepSum(OpRep):
     cdef public object factor_reps # list of OpRep objs?
 
-    def __cinit__(self, factor_reps, INT dim):
+    def __cinit__(self, factor_reps, state_space):
         self.factor_reps = factor_reps
         cdef INT i
         cdef INT nfactors = len(factor_reps)
         cdef vector[OpCRep*] factor_creps = vector[OpCRep_ptr](nfactors)
         for i in range(nfactors):
             factor_creps[i] = (<OpRep?>factor_reps[i]).c_rep
-        self.c_rep = new OpCRep_Sum(factor_creps, dim)
+        self.state_space = _StateSpace.cast(state_space)
+        self.c_rep = new OpCRep_Sum(factor_creps, self.state_space.dim)
 
     def __reduce__(self):
         return (OpRepSum, (self.factor_reps, self.c_rep._dim))
@@ -232,20 +250,21 @@ cdef class OpRepEmbedded(OpRep):
     cdef _np.ndarray action_inds
     cdef public OpRep embedded_rep
 
-    def __init__(self, state_space_labels, target_labels, OpRep embedded_rep):
+    def __init__(self, state_space, target_labels, OpRep embedded_rep):
 
-        iTensorProdBlks = [state_space_labels.tpb_index[label] for label in target_labels]
+        state_space = _StateSpace.cast(state_space)
+        iTensorProdBlks = [state_space.label_tensor_product_block_index(label) for label in target_labels]
         # index of tensor product block (of state space) a bit label is part of
         if len(set(iTensorProdBlks)) != 1:
             raise ValueError("All qubit labels of a multi-qubit operation must correspond to the"
                              " same tensor-product-block of the state space -- checked previously")  # pragma: no cover # noqa
 
         iTensorProdBlk = iTensorProdBlks[0]  # because they're all the same (tested above) - this is "active" block
-        tensorProdBlkLabels = state_space_labels.labels[iTensorProdBlk]
+        tensorProdBlkLabels = state_space.tensor_product_block_labels(iTensorProdBlk)
         # count possible *density-matrix-space* indices of each component of the tensor product block
         cdef _np.ndarray[_np.int64_t, ndim=1, mode='c'] num_basis_els = \
-            _np.array([state_space_labels.labeldims[l] for l in tensorProdBlkLabels], _np.int64)
-        
+            _np.array([state_space.label_dimension(l) for l in tensorProdBlkLabels], _np.int64)
+
         # Separate the components of the tensor product that are not operated on, i.e. that our
         # final map just acts as identity w.r.t.
         labelIndices = [tensorProdBlkLabels.index(label) for label in target_labels]
@@ -254,13 +273,13 @@ cdef class OpRepEmbedded(OpRep):
             "Embedded operation has dimension (%d) inconsistent with the given target labels (%s)" % (
                 embedded_rep.dim, str(target_labels))
 
-        cdef INT dim = state_space_labels.dim
-        cdef INT nblocks = state_space_labels.num_tensor_prod_blocks()
+        cdef INT dim = state_space.dim
+        cdef INT nblocks = state_space.num_tensor_prod_blocks
         cdef INT active_block_index = iTensorProdBlk
-        cdef INT ncomponents_in_active_block = len(state_space_labels.labels[active_block_index])
+        cdef INT ncomponents_in_active_block = len(state_space.tensor_product_block_labels(active_block_index))
         cdef INT embedded_dim = embedded_rep.dim
         cdef _np.ndarray[_np.int64_t, ndim=1, mode='c'] blocksizes = \
-            _np.array([_np.product(state_space_labels.tensor_product_block_dims(k))
+            _np.array([_np.product(state_space.tensor_product_block_dimensions(k))
                        for k in range(nblocks)], _np.int64)
         cdef INT i, j
 
@@ -315,9 +334,10 @@ cdef class OpRepEmbedded(OpRep):
                                         <INT*>baseinds.data, <INT*>blocksizes.data,
                                         embedded_dim, ncomponents_in_active_block,
                                         active_block_index, nblocks, dim)
-
+        self.state_space = state_space
 
     def __reduce__(self):
+        #TODO - fix this - need to call init properly and set self.state_space and (?) carry over target labels, etc?
         state = (self.noop_incrementers, self.num_basis_els_noop_blankaction, self.baseinds,
                  self.blocksizes, self.num_basis_els, self.action_inds, self.embedded_rep,
                  (<OpCRep_Embedded*>self.c_rep)._embeddedDim,
@@ -365,6 +385,7 @@ cdef class OpRepExpErrorgen(OpRep):
         assert(self.c_rep == NULL)
         self.c_rep = new OpCRep_ExpErrorgen((<OpRep?>errorgen_rep).c_rep,
                                             mu, eta, m_star, s, dim)
+        self.state_space = errorgen_rep.state_space
 
     def errgenrep_has_changed(self):
         # don't reset matrix exponential params (based on operator norm) when vector hasn't changed much
@@ -408,14 +429,16 @@ cdef class OpRepRepeated(OpRep):
     cdef public OpRep repeated_rep
     cdef public INT num_repetitions
 
-    def __cinit__(self, OpRep rep_to_repeat, INT num_repetitions, INT dim):
+    def __cinit__(self, OpRep rep_to_repeat, INT num_repetitions, state_space):
+        state_space = _StateSpace.cast(state_space)
         self.repeated_rep = rep_to_repeat
         self.num_repetitions = num_repetitions
-        self.c_rep = new OpCRep_Repeated(self.repeated_rep.c_rep, num_repetitions, dim)
+        self.c_rep = new OpCRep_Repeated(self.repeated_rep.c_rep, num_repetitions, state_space.dim)
+        self.state_space = state_space
 
     def __reduce__(self):
-        return (OpRepRepeated, (self.repeated_rep, self.num_repetitions, self.c_rep._dim))
+        return (OpRepRepeated, (self.repeated_rep, self.num_repetitions, self.state_space))
 
     def copy(self):
-        return OpRepRepeated(self.repeated_rep.copy(), self.num_repetitions, self.c_rep._dim)
+        return OpRepRepeated(self.repeated_rep.copy(), self.num_repetitions, self.state_space.copy())
 

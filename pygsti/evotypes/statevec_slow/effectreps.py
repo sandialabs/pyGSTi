@@ -12,11 +12,12 @@ POVM effect representation classes for the `statevec_slow` evolution type.
 
 import sys
 import numpy as _np
+from ...models.statespace import StateSpace as _StateSpace
 
 
 class EffectRep(object):
-    def __init__(self, dim):
-        self.dim = dim
+    def __init__(self, state_space):
+        self.state_space = _StateSpace.cast(state_space)
 
     def probability(self, state):
         return abs(self.amplitude(state))**2
@@ -28,7 +29,7 @@ class EffectRep(object):
 class EffectRepConjugatedState(EffectRep):
     def __init__(self, state_rep):
         self.state_rep = state_rep
-        super(EffectRepConjugatedState, self).__init__(state_rep.dim)
+        super(EffectRepConjugatedState, self).__init__(state_rep.state_space)
 
     def __str__(self):
         return str(self.state_rep.base)
@@ -42,9 +43,9 @@ class EffectRepConjugatedState(EffectRep):
 
 
 class EffectRepComputational(EffectRep):
-    def __init__(self, zvals, dim):
-        # int dim = 4**len(zvals) -- just send as argument for speed?
-        assert(dim == 2**len(zvals))
+    def __init__(self, zvals, state_space):
+        state_space = _StateSpace.cast(state_space)
+        assert(state_space.num_qubits == len(zvals))
         assert(len(zvals) <= 64), "Cannot create a Computational basis rep with >64 qubits!"
         # Current storage of computational basis states converts zvals -> 64-bit integer
 
@@ -63,7 +64,7 @@ class EffectRepComputational(EffectRep):
             assert(v in (0, 1)), "zvals must contain only 0s and 1s"
             self.nonzero_index += base * v
             base //= 2  # or right shift?
-        super(EffectRepComputational, self).__init__(dim)
+        super(EffectRepComputational, self).__init__(state_space)
 
     def to_dense(self, outvec, trust_outvec_sparsity=False):
         # when trust_outvec_sparsity is True, assume we only need to fill in the
@@ -82,7 +83,7 @@ class EffectRepComputational(EffectRep):
 
 class EffectRepTensorProduct(EffectRep):
 
-    def __init__(self, povm_factors, effect_labels):
+    def __init__(self, povm_factors, effect_labels, state_space):
         #Arrays for speeding up kron product in effect reps
         max_factor_dim = max(fct.dim for fct in povm_factors)
         kron_array = _np.ascontiguousarray(
@@ -97,7 +98,9 @@ class EffectRepTensorProduct(EffectRep):
         self.factor_dims = factordims
         self.nfactors = len(self.povm_factors)
         self.max_factor_dim = max_factor_dim  # Unused
-        super(EffectRepTensorProduct, self).__init__(dim)
+        state_space = _StateSpace.cast(state_space)
+        assert(_np.product(factordims) == state_space.udim)
+        super(EffectRepTensorProduct, self).__init__(state_space)
         self.factor_effects_have_changed()
 
     def _fill_fast_kron(self):

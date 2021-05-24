@@ -193,7 +193,7 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
     assert(len((_np.isnan(invABMat_p)).nonzero()[0]) == 0)
 
     if svd_truncate_to is None or svd_truncate_to == target_model.dim:  # use target sslbls and basis
-        lgstModel = _objs.ExplicitOpModel(target_model.state_space_labels, target_model.basis)
+        lgstModel = _objs.ExplicitOpModel(target_model.state_space, target_model.basis)
     else:  # construct a default basis for the requested dimension
         # - just act on diagonal density mx
         dumb_basis = _objs.DirectSumBasis([_objs.BuiltinBasis('gm', 1)] * svd_truncate_to)

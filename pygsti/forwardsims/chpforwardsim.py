@@ -72,7 +72,7 @@ class CHPForwardSimulator(_WeakForwardSimulator):
                 # Handle marginalization (not through MarginalizedPOVM,
                 # where most logic is based on simplify_effects and therefore expensive for many qubits)
                 if povm_label.sslbls is not None:
-                    flat_sslbls = [lbl for tbp in self.model.state_space_labels.labels for lbl in tbp]
+                    flat_sslbls = [lbl for tbp in self.model.state_space.tensor_product_blocks_labels for lbl in tbp]
                     qubit_indices = [flat_sslbls.index(q) for q in povm_label.sslbls]
                 else:
                     qubit_indices = range(povm.nqubits)

@@ -127,7 +127,7 @@ class ExplicitOpModel(_mdl.OpModel):
         #More options now (TODO enumerate?)
         #assert(default_param in ('full','TP','CPTP','H+S','S','static',
         #                         'H+S terms','clifford','H+S clifford terms'))
-        def flagfn(typ): return {'auto_embed': True, 'match_parent_dim': True,
+        def flagfn(typ): return {'auto_embed': True, 'match_parent_statespace': True,
                                  'match_parent_evotype': True, 'cast_to_type': typ}
 
         self.preps = _ld.OrderedMemberDict(self, default_param, prep_prefix, flagfn("state"))
@@ -187,7 +187,7 @@ class ExplicitOpModel(_mdl.OpModel):
                 simplified_ops[k] = g
         simplified_preps = self.preps
 
-        return _explicitcalc.ExplicitOpModelCalc(self.dim, simplified_preps, simplified_ops,
+        return _explicitcalc.ExplicitOpModelCalc(self.state_space.dim, simplified_preps, simplified_ops,
                                                  simplified_effects, self.num_params)
 
     #Unneeded - just use string processing & rely on effect labels *not* having underscores in them
@@ -204,7 +204,7 @@ class ExplicitOpModel(_mdl.OpModel):
         """
         Called by OrderedMemberDict._auto_embed to create an embedded-gate
         object that embeds `op_val` into the sub-space of
-        `self.state_space_labels` given by `op_target_labels`.
+        `self.state_space` given by `op_target_labels`.
 
         Parameters
         ----------
@@ -224,18 +224,16 @@ class ExplicitOpModel(_mdl.OpModel):
         LinearOperator
             A gate of the full model dimension.
         """
-        if self.dim is None:
-            raise ValueError("Must set model dimension before adding auto-embedded gates.")
-        if self.state_space_labels is None:
-            raise ValueError("Must set model.state_space_labels before adding auto-embedded gates.")
+        if self.state_space is None:
+            raise ValueError("Must set model state space before adding auto-embedded gates.")
 
-        if op_val.dim == self.dim and not force:
+        if op_val.state_space == self.state_space and not force:
             return op_val  # if gate operates on full dimension, no need to embed.
 
         if isinstance(self._sim, _matrixfwdsim.MatrixForwardSimulator):
-            return _op.EmbeddedDenseOp(self.state_space_labels, op_target_labels, op_val)
+            return _op.EmbeddedDenseOp(self.state_space, op_target_labels, op_val)
         else:  # all other types, e.g. "map" and "termorder"
-            return _op.EmbeddedOp(self.state_space_labels, op_target_labels, op_val)
+            return _op.EmbeddedOp(self.state_space, op_target_labels, op_val)
 
     @property
     def default_gauge_group(self):
@@ -457,13 +455,13 @@ class ExplicitOpModel(_mdl.OpModel):
                                             extra.get(lbl, None))
 
         if typ == 'full':
-            self.default_gauge_group = _gg.FullGaugeGroup(self.dim)
+            self.default_gauge_group = _gg.FullGaugeGroup(self.state_space)
         elif typ == 'TP':
-            self.default_gauge_group = _gg.TPGaugeGroup(self.dim)
+            self.default_gauge_group = _gg.TPGaugeGroup(self.state_space)
         elif typ == 'CPTP':
-            self.default_gauge_group = _gg.UnitaryGaugeGroup(self.dim, basis)
+            self.default_gauge_group = _gg.UnitaryGaugeGroup(self.state_space, basis)
         else:  # typ in ('static','H+S','S', 'H+S terms', ...)
-            self.default_gauge_group = _gg.TrivialGaugeGroup(self.dim)
+            self.default_gauge_group = _gg.TrivialGaugeGroup(self.state_space)
 
     def __setstate__(self, state_dict):
 
@@ -816,7 +814,7 @@ class ExplicitOpModel(_mdl.OpModel):
             for k in range(1, operationMx.shape[1]):
                 penalty += abs(operationMx[0, k])**2
 
-        op_dim = self.dim
+        op_dim = self.state_space.dim
         firstEl = 1.0 / op_dim**0.25
         for rhoVec in list(self.preps.values()):
             penalty += abs(rhoVec[0, 0] - firstEl)**2
@@ -1070,7 +1068,7 @@ class ExplicitOpModel(_mdl.OpModel):
             the rotated Model
         """
         newModel = self.copy()  # start by just copying model
-        dim = self.dim
+        dim = self.state_space.dim
         myBasis = self.basis
 
         if max_rotate is not None:
@@ -1142,7 +1140,7 @@ class ExplicitOpModel(_mdl.OpModel):
         else:
             rndm = rand_state
 
-        op_dim = self.dim
+        op_dim = self.state_space.dim
         unitary_dim = int(round(_np.sqrt(op_dim)))
         assert(unitary_dim**2 == op_dim), \
             "Model dimension must be a perfect square, %d is not" % op_dim
@@ -1189,7 +1187,7 @@ class ExplicitOpModel(_mdl.OpModel):
             the increased-dimension Model
         """
 
-        curDim = self.dim
+        curDim = self.state_space.dim
         assert(new_dimension > curDim)
 
         #For now, just create a dumb default state space labels and basis for the new model:
@@ -1212,7 +1210,7 @@ class ExplicitOpModel(_mdl.OpModel):
                 _state.FullState(_np.concatenate((rhoVec, vec_zeroPad)))               # evotype???? TODO
 
         for lbl, povm in self.povms.items():
-            assert(povm.dim == curDim)
+            assert(povm.state_space.dim == curDim)
             effects = [(elbl, _np.concatenate((EVec, vec_zeroPad)))
                        for elbl, EVec in povm.items()]
 
@@ -1263,7 +1261,7 @@ class ExplicitOpModel(_mdl.OpModel):
         Model
             the decreased-dimension Model
         """
-        curDim = self.dim
+        curDim = self.state_space.dim
         assert(new_dimension < curDim)
 
         #For now, just create a dumb default state space labels and basis for the new model:
@@ -1283,7 +1281,7 @@ class ExplicitOpModel(_mdl.OpModel):
                 _state.FullState(rhoVec[0:new_dimension, :])     # evotype ??????????????????? TODO ----------------------------
 
         for lbl, povm in self.povms.items():
-            assert(povm.dim == curDim)
+            assert(povm.state_space.dim == curDim)
             effects = [(elbl, EVec[0:new_dimension, :]) for elbl, EVec in povm.items()]
 
             if isinstance(povm, _povm.TPPOVM):

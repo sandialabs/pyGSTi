@@ -13,11 +13,13 @@
 
 import sys
 import numpy as _np
+from ...models.statespace import StateSpace as _StateSpace
 
 
 cdef class EffectRep(_basereps_cython.EffectRep):
     def __cinit__(self):
         self.c_effect = NULL
+        self.state_space = None
 
     def __dealloc__(self):
         if self.c_effect != NULL:
@@ -28,7 +30,7 @@ cdef class EffectRep(_basereps_cython.EffectRep):
 
     @property
     def dim(self):
-        return self.c_effect._dim
+        return self.state_space.udim
 
     def probability(self, StateRep state not None):
         #unnecessary (just put in signature): cdef StateRep st = <StateRep?>state
@@ -43,6 +45,7 @@ cdef class EffectRepConjugatedState(EffectRep):
 
     def __cinit__(self, StateRep state_rep):
         self.state_rep = state_rep
+        self.state_space = state_rep.state_space
         self.c_effect = new EffectCRep_Dense(<double complex*>self.state_rep.base.data,
                                              <INT>self.state_rep.base.shape[0])
 
@@ -59,7 +62,7 @@ cdef class EffectRepConjugatedState(EffectRep):
 cdef class EffectRepComputational(EffectRep):
     cdef public _np.ndarray zvals
 
-    def __cinit__(self, _np.ndarray[_np.int64_t, ndim=1, mode='c'] zvals, INT dim):
+    def __cinit__(self, _np.ndarray[_np.int64_t, ndim=1, mode='c'] zvals, state_space):
         # cdef INT dim = 4**zvals.shape[0] -- just send as argument
         cdef INT nfactors = zvals.shape[0]
         cdef double abs_elval = 1/(_np.sqrt(2)**nfactors)
@@ -69,10 +72,11 @@ cdef class EffectRepComputational(EffectRep):
             zvals_int += base * zvals[i]
             base = base << 1 # *= 2
         self.zvals = zvals
-        self.c_effect = new EffectCRep_Computational(nfactors, zvals_int, dim)
+        self.state_space = _StateSpace.cast(state_space)
+        self.c_effect = new EffectCRep_Computational(nfactors, zvals_int, self.state_space.udim)
 
     def __reduce__(self):
-        return (EffectRepComputational, (self.zvals, self.c_effect._dim))
+        return (EffectRepComputational, (self.zvals, self.state_space))
 
     #Add party & to_dense from slow version?
 
@@ -83,7 +87,7 @@ cdef class EffectRepTensorProduct(EffectRep):
     cdef public _np.ndarray kron_array
     cdef public _np.ndarray factor_dims
 
-    def __init__(self, povm_factors, effect_labels):
+    def __init__(self, povm_factors, effect_labels, state_space):
         #Arrays for speeding up kron product in effect reps
         cdef INT max_factor_dim = max(fct.dim for fct in povm_factors)
         cdef _np.ndarray[double, ndim=2, mode='c'] kron_array = \
@@ -97,9 +101,11 @@ cdef class EffectRepTensorProduct(EffectRep):
         self.effect_labels = effect_labels
         self.kron_array = kron_array
         self.factor_dims = factor_dims
+        self.state_space = _StateSpace.cast(state_space)
         self.c_effect = new EffectCRep_TensorProd(<double complex*>kron_array.data,
                                                   <INT*>factor_dims.data,
                                                   nfactors, max_factor_dim, dim)
+        assert(self.state_space.udim == dim)
         self.factor_effects_have_changed()  # computes self.kron_array
 
     def __reduce__(self):

@@ -14,6 +14,7 @@
 import sys
 import numpy as _np
 
+from ...models.statespace import StateSpace as _StateSpace
 from ...tools import internalgates as _itgs
 from ...tools import symplectic as _symp
 
@@ -21,6 +22,7 @@ from ...tools import symplectic as _symp
 cdef class OpRep(_basereps_cython.OpRep):
     def __cinit__(self):
         self.c_rep = NULL
+        self.state_space = None
 
     def __reduce__(self):
         return (OpRep, ())
@@ -30,11 +32,11 @@ cdef class OpRep(_basereps_cython.OpRep):
 
     @property
     def nqubits(self):
-        return self.c_rep._n
+        return self.state_space.num_qubits
 
-    @property
-    def dim(self):
-        return 2**(self.c_rep._n)  # assume "unitary evolution"-type mode
+    #@property
+    #def dim(self):
+    #    return 2**(self.nqubits)  # assume "unitary evolution"-type mode
 
     def acton(self, StateRep state not None):
         cdef INT n = self.c_rep._n
@@ -63,7 +65,7 @@ cdef class OpRepClifford(OpRep):
     cdef public _np.ndarray svector_inv
     cdef public _np.ndarray unitary_dagger
 
-    def __cinit__(self, _np.ndarray[_np.complex128_t, ndim=2, mode='c'] unitarymx, symplecticrep):
+    def __cinit__(self, _np.ndarray[_np.complex128_t, ndim=2, mode='c'] unitarymx, symplecticrep, state_space):
         if symplecticrep is not None:
             self.smatrix, self.svector = symplecticrep
         else:
@@ -82,41 +84,42 @@ cdef class OpRepClifford(OpRep):
         self.smatrix_inv = _np.ascontiguousarray(self.smatrix_inv)
         self.svector_inv = _np.ascontiguousarray(self.svector_inv)
 
-        cdef INT n = self.smatrix.shape[0] // 2
+        self.state_space = _StateSpace.cast(state_space)
+        assert(self.state_space.num_qubits == self.smatrix.shape[0] // 2)
         self.c_rep = new OpCRep_Clifford(<INT*>self.smatrix.data, <INT*>self.svector.data,
                                          <double complex*>self.unitary.data,
                                          <INT*>self.smatrix_inv.data, <INT*>self.svector_inv.data,
                                          <double complex*>self.unitary_dagger.data, n)
 
     def __reduce__(self):
-        return (OpRepClifford, (self.unitary, (self.smatrix, self.svector)))
+        return (OpRepClifford, (self.unitary, (self.smatrix, self.svector), self.state_space))
 
 
 cdef class OpRepStandard(OpRepClifford):   # TODO
-    def __init__(self, name):
+    def __init__(self, name, state_space):
         std_unitaries = _itgs.standard_gatename_unitaries()
         if self.name not in std_unitaries:
             raise ValueError("Name '%s' not in standard unitaries" % self.name)
 
         U = std_unitaries[self.name]
-        super(OpRepStandard, self).__init__(U, None)
+        super(OpRepStandard, self).__init__(U, None, state_space)
 
 
 cdef class OpRepComposed(OpRep):
     cdef public object factor_reps  # list of OpRep objs?
 
-    def __cinit__(self, factor_op_reps, INT dim):
+    def __cinit__(self, factor_op_reps, state_space):
         self.factor_reps = factor_op_reps
-        cdef INT n = int(round(_np.log2(dim)))
         cdef INT i
         cdef INT nfactors = len(factor_op_reps)
         cdef vector[OpCRep*] creps = vector[OpCRep_ptr](nfactors)
         for i in range(nfactors):
             creps[i] = (<OpRep?>factor_op_reps[i]).c_rep
-        self.c_rep = new OpCRep_Composed(creps, n)
+        self.state_space = _StateSpace.cast(state_space)
+        self.c_rep = new OpCRep_Composed(creps, self.state_space.num_qubits)
 
     def __reduce__(self):
-        return (OpRepComposed, (self.factor_reps, self.dim))
+        return (OpRepComposed, (self.factor_reps, self.state_space))
 
     def reinit_factor_op_reps(self, new_factor_op_reps):
         cdef INT i
@@ -127,27 +130,27 @@ cdef class OpRepComposed(OpRep):
         (<OpCRep_Composed*>self.c_rep).reinit_factor_op_creps(creps)
 
     def copy(self):
-        return OpRepComposed([f.copy() for f in self.factor_reps], self.dim)
+        return OpRepComposed([f.copy() for f in self.factor_reps], self.state_space)
 
 
 cdef class OpRepSum(OpRep):
     cdef public object factor_reps # list of OpRep objs?
 
-    def __cinit__(self, factor_reps, INT dim):
+    def __cinit__(self, factor_reps, state_space):
         self.factor_reps = factor_reps
-        cdef INT n = int(round(_np.log2(dim)))
         cdef INT i
         cdef INT nfactors = len(factor_reps)
         cdef vector[OpCRep*] factor_creps = vector[OpCRep_ptr](nfactors)
         for i in range(nfactors):
             factor_creps[i] = (<OpRep?>factor_reps[i]).c_rep
-        self.c_rep = new OpCRep_Sum(factor_creps, n)
+        self.state_space = _StateSpace.cast(state_space)
+        self.c_rep = new OpCRep_Sum(factor_creps, self.state_space.num_qubits)
 
     def __reduce__(self):
-        return (OpRepSum, (self.factor_reps, self.dim))
+        return (OpRepSum, (self.factor_reps, self.state_space))
 
     def copy(self):
-        return OpRepSum([f.copy() for f in self.factor_reps], self.dim)
+        return OpRepSum([f.copy() for f in self.factor_reps], self.state_space)
 
 
 cdef class OpRepEmbedded(OpRep):
@@ -156,11 +159,12 @@ cdef class OpRepEmbedded(OpRep):
     cdef public object state_space_labels
     cdef public object target_labels
 
-    def __init__(self, state_space_labels, target_labels, OpRep embedded_rep):
+    def __init__(self, state_space, target_labels, OpRep embedded_rep):
         # assert that all state space labels == qubits, since we only know
         # how to embed cliffords on qubits...
-        assert(len(state_space_labels.labels) == 1
-               and all([ld == 2 for ld in state_space_labels.labeldims.values()])), \
+        state_space = _StateSpace.cast(state_space)
+        assert(state_space.num_tensor_product_blocks == 1
+               and all([state_space.label_dimension(l) == 2 for l in state_space.tensor_product_block_labels(0)])), \
             "All state space labels must correspond to *qubits*"
         if isinstance(embedded_rep, OpRepClifford):
             assert(len(target_labels) == len(embedded_rep.svector) // 2), \
@@ -168,39 +172,36 @@ cdef class OpRepEmbedded(OpRep):
 
         #Cache info to speedup representation's acton(...) methods:
         # Note: ...labels[0] is the *only* tensor-prod-block, asserted above
-        qubitLabels = state_space_labels.labels[0]
+        qubitLabels = state_space.tensor_product_block_labels(0)
         cdef _np.ndarray[_np.int64_t, ndim=1, mode='c'] qubit_indices = \
             _np.array([qubitLabels.index(targetLbl) for targetLbl in target_labels], _np.int64)
 
-        n = state_space_labels.nqubits
-        assert(n is not None), "State space does not contain a definite number of qubits!"
-
-        self.state_space_label = state_space_labels
         self.target_labels = target_labels
         self.qubits = qubit_indices
         self.embedded_rep = embedded_rep  # needed to prevent garbage collection?
-        self.c_rep = new OpCRep_Embedded(embedded_rep.c_rep, n,
+        self.c_rep = new OpCRep_Embedded(embedded_rep.c_rep, state_space.num_qubits,
                                          <INT*>qubit_indices.data, <INT>qubit_indices.shape[0])
+        self.state_space = state_space
 
     def __reduce__(self):
-        return (OpRepEmbedded, (self.embedded_rep, self.state_space_labels, self.target_labels))
+        return (OpRepEmbedded, (self.embedded_rep, self.state_space, self.target_labels))
 
     def copy(self):
-        return OpRepEmbedded(self.embedded_rep.copy(), self.state_space_labels, self.target_labels)
+        return OpRepEmbedded(self.embedded_rep.copy(), self.state_space, self.target_labels)
 
 
 cdef class OpRepRepeated(OpRep):
     cdef public OpRep repeated_rep
     cdef public INT num_repetitions
 
-    def __cinit__(self, OpRep rep_to_repeat, INT num_repetitions, INT dim):
-        cdef INT n = int(round(_np.log2(dim)))
+    def __cinit__(self, OpRep rep_to_repeat, INT num_repetitions, state_space):
         self.repeated_rep = rep_to_repeat
         self.num_repetitions = num_repetitions
-        self.c_rep = new OpCRep_Repeated(self.repeated_rep.c_rep, num_repetitions, n)
+        self.state_space = _StateSpace.cast(state_space)
+        self.c_rep = new OpCRep_Repeated(self.repeated_rep.c_rep, num_repetitions, self.state_space.num_qubits)
 
     def __reduce__(self):
-        return (OpRepRepeated, (self.repeated_rep, self.num_repetitions, self.dim))
+        return (OpRepRepeated, (self.repeated_rep, self.num_repetitions, self.state_space))
 
     def copy(self):
-        return OpRepRepeated(self.repeated_rep.copy(), self.num_repetitions, self.dim)
+        return OpRepRepeated(self.repeated_rep.copy(), self.num_repetitions, self.state_space)

@@ -17,6 +17,7 @@ from scipy.sparse.linalg import LinearOperator
 
 from .. import basereps as _basereps
 from .statereps import StateRep as _StateRep
+from ...models.statespace import StateSpace as _StateSpace
 from ...tools import internalgates as _itgs
 from ...tools import optools as _ot
 from ...tools import lindbladtools as _lbt
@@ -25,8 +26,12 @@ from ...tools import matrixtools as _mt
 
 
 class OpRep(_basereps.OpRep):
-    def __init__(self, dim):
-        self.dim = dim
+    def __init__(self, state_space):
+        self.state_space = state_space
+
+    @property
+    def dim(self):
+        return self.state_space.dim
 
     def acton(self, state):
         raise NotImplementedError()
@@ -48,10 +53,11 @@ class OpRep(_basereps.OpRep):
 
 
 class OpRepDense(OpRep):
-    def __init__(self, dim):
-        self.base = _np.require(_np.identity(dim, 'd'),
+    def __init__(self, state_space):
+        state_space = _StateSpace.cast(state_space)
+        self.base = _np.require(_np.identity(state_space.dim, 'd'),
                                 requirements=['OWNDATA', 'C_CONTIGUOUS'])
-        super(OpRepDense, self).__init__(self.base.shape[0])
+        super(OpRepDense, self).__init__(state_space)
 
     def acton(self, state):
         return _StateRep(_np.dot(self.base, state.base))
@@ -64,10 +70,12 @@ class OpRepDense(OpRep):
 
 
 class OpRepSparse(OpRep):
-    def __init__(self, a_data, a_indices, a_indptr):
+    def __init__(self, a_data, a_indices, a_indptr, state_space):
         dim = len(a_indptr) - 1
+        state_space = _StateSpace.cast(state_space)
+        assert(state_space.dim == dim)
         self.A = _sps.csr_matrix((a_data, a_indices, a_indptr), shape=(dim, dim))
-        super(OpRepSparse, self).__init__(dim)
+        super(OpRepSparse, self).__init__(state_space)
 
     @property
     def data(self):
@@ -92,7 +100,7 @@ class OpRepSparse(OpRep):
 
 
 class OpRepStandard(OpRepDense):
-    def __init__(self, name):
+    def __init__(self, name, state_space):
         std_unitaries = _itgs.standard_gatename_unitaries()
         if self.name not in std_unitaries:
             raise ValueError("Name '%s' not in standard unitaries" % self.name)
@@ -105,20 +113,26 @@ class OpRepStandard(OpRepDense):
         #else:  # evotype in ('densitymx', 'svterm', 'cterm')
 
         ptm = _ot.unitary_to_pauligate(U)
-        super(OpRepStandard, self).__init__(ptm.shape[0])
+        state_space = _StateSpace.cast(state_space)
+        assert(ptm.shape[0] == state_space.dim)
+
+        super(OpRepStandard, self).__init__(state_space)
         self.base[:, :] = LinearOperator.convert_to_matrix(ptm)
 
 
 class OpRepStochastic(OpRepDense):
 
-    def __init__(self, basis, rate_poly_dicts, initial_rates, seed_or_state):
+    def __init__(self, basis, rate_poly_dicts, initial_rates, seed_or_state, state_space):
         self.basis = basis
         self.stochastic_superops = []
         for b in self.basis.elements[1:]:
             std_superop = _lbt.nonham_lindbladian(b, b, sparse=False)
             self.stochastic_superops.append(_bt.change_basis(std_superop, 'std', self.basis))
 
-        super(OpRepStochastic, self).__init__(self.basis.dim)
+        state_space = _StateSpace.cast(state_space)
+        assert(self.basis.dim == state_space.dim)
+
+        super(OpRepStochastic, self).__init__(state_space)
         self.update_rates(initial_rates)
 
     def update_rates(self, rates):
@@ -139,10 +153,10 @@ class OpRepStochastic(OpRepDense):
 
 class OpRepComposed(OpRep):
 
-    def __init__(self, factor_op_reps, dim):
+    def __init__(self, factor_op_reps, state_space):
         #assert(len(factor_op_reps) > 0), "Composed gates must contain at least one factor gate!"
         self.factor_reps = factor_op_reps
-        super(OpRepComposed, self).__init__(dim)
+        super(OpRepComposed, self).__init__(state_space)
 
     def acton(self, state):
         """ Act this gate map on an input state """
@@ -161,10 +175,10 @@ class OpRepComposed(OpRep):
 
 
 class OpRepSum(OpRep):
-    def __init__(self, factor_reps, dim):
+    def __init__(self, factor_reps, state_space):
         #assert(len(factor_reps) > 0), "Summed gates must contain at least one factor gate!"
         self.factor_reps = factor_reps
-        super(OpRepSum, self).__init__(dim)
+        super(OpRepSum, self).__init__(state_space)
 
     def reinit_factor_reps(self, factor_reps):
         self.factor_reps = factor_reps
@@ -186,18 +200,19 @@ class OpRepSum(OpRep):
 
 class OpRepEmbedded(OpRep):
 
-    def __init__(self, state_space_labels, target_labels, embedded_rep):
+    def __init__(self, state_space, target_labels, embedded_rep):
 
-        iTensorProdBlks = [state_space_labels.tpb_index[label] for label in target_labels]
+        state_space = _StateSpace.cast(state_space)
+        iTensorProdBlks = [state_space.label_tensor_product_block_index(label) for label in target_labels]
         # index of tensor product block (of state space) a bit label is part of
         if len(set(iTensorProdBlks)) != 1:
             raise ValueError("All qubit labels of a multi-qubit operation must correspond to the"
                              " same tensor-product-block of the state space -- checked previously")  # pragma: no cover # noqa
 
         iTensorProdBlk = iTensorProdBlks[0]  # because they're all the same (tested above) - this is "active" block
-        tensorProdBlkLabels = state_space_labels.labels[iTensorProdBlk]
+        tensorProdBlkLabels = state_space.tensor_product_block_labels(iTensorProdBlk)
         # count possible *density-matrix-space* indices of each component of the tensor product block
-        numBasisEls = _np.array([state_space_labels.labeldims[l] for l in tensorProdBlkLabels], _np.int64)
+        numBasisEls = _np.array([state_space.label_dimension(l) for l in tensorProdBlkLabels], _np.int64)
 
         # Separate the components of the tensor product that are not operated on, i.e. that our
         # final map just acts as identity w.r.t.
@@ -207,12 +222,11 @@ class OpRepEmbedded(OpRep):
             "Embedded operation has dimension (%d) inconsistent with the given target labels (%s)" % (
                 embedded_rep.dim, str(target_labels))
 
-        dim = state_space_labels.dim
-        nBlocks = state_space_labels.num_tensor_prod_blocks()
+        nBlocks = state_space.num_tensor_prod_blocks
         iActiveBlock = iTensorProdBlk
-        nComponents = len(state_space_labels.labels[iActiveBlock])
-        embeddedDim = embedded_rep.dim
-        blocksizes = _np.array([_np.product(state_space_labels.tensor_product_block_dims(k))
+        nComponents = len(state_space.tensor_product_block_labels(iActiveBlock))
+        #embeddedDim = embedded_rep.dim
+        blocksizes = _np.array([_np.product(state_space.tensor_product_block_dimensions(k))
                                 for k in range(nBlocks)], _np.int64)
 
         self.embedded_rep = embedded_rep
@@ -230,12 +244,12 @@ class OpRepEmbedded(OpRep):
             reversed(list(self.num_basis_els[1:]))))), _np.int64)
         self.basisInds_action = [list(range(self.num_basis_els[i])) for i in self.action_inds]
 
-        self.embeddedDim = embeddedDim
+        #self.embeddedDim = embeddedDim
         self.ncomponents = nComponents  # number of components in "active" block
         self.active_block_index = iActiveBlock
         self.nblocks = nBlocks
         self.offset = sum(blocksizes[0:self.active_block_index])
-        super(OpRepEmbedded, self).__init__(dim)
+        super(OpRepEmbedded, self).__init__(state_space)
 
     #def __reduce__(self):
     #    return (DMOpRepEmbedded, (self.embedded,
@@ -329,7 +343,7 @@ class OpRepExpErrorgen(OpRep):
         #else:
         #    self.unitary_postfactor = None  # no unitary postfactor
 
-        dim = errorgen_rep.dim
+        state_space = errorgen_rep.state_space
         self.errorgen_rep = errorgen_rep
 
         #initial values - will be updated by calls to set_exp_params
@@ -337,7 +351,7 @@ class OpRepExpErrorgen(OpRep):
         self.eta = 1.0
         self.m_star = 0
         self.s = 0
-        super(OpRepExpErrorgen, self).__init__(dim)
+        super(OpRepExpErrorgen, self).__init__(state_space)
 
     def errgenrep_has_changed(self):
         # don't reset matrix exponential params (based on operator norm) when vector hasn't changed much
@@ -384,10 +398,11 @@ class OpRepExpErrorgen(OpRep):
 
 
 class OpRepRepeated(OpRep):
-    def __init__(self, rep_to_repeat, num_repetitions, dim):
+    def __init__(self, rep_to_repeat, num_repetitions, state_space):
+        state_space = _StateSpace.cast(state_space)
         self.repeated_rep = rep_to_repeat
         self.num_repetitions = num_repetitions
-        super(OpRepRepeated, self).__init__(dim)
+        super(OpRepRepeated, self).__init__(state_space)
 
     def acton(self, state):
         """ Act this gate map on an input state """

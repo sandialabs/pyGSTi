@@ -3,6 +3,7 @@
 import numpy as _np
 from .linearop import LinearOperator as _LinearOperator
 from ...evotypes import Evotype as _Evotype
+from ...models import statespace as _statespace
 
 
 class CliffordOp(_LinearOperator):
@@ -19,42 +20,26 @@ class CliffordOp(_LinearOperator):
         computed symplectic representation of `unitary`.  If None, then
         this representation is computed automatically from `unitary`.
 
-    evotype : {"stabilizer"}
-        The evolution type.
+    evotype : Evotype or str
+        The evolution type.  The special value `"default"` is equivalent
+        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
+
+    state_space : StateSpace, optional
+        The state space for this operation.  If `None` a default state space
+        with the appropriate number of qubits is used.
     """
 
-    def __init__(self, unitary, symplecticrep=None, evotype='default'):
-        """
-        Creates a new CliffordOp from a unitary operation.
-
-        Note: while the clifford operation is held internally in a symplectic
-        representation, it is also be stored as a unitary (so the `unitary`
-        argument is required) for keeping track of global phases when updating
-        stabilizer frames.
-
-        If a non-Clifford unitary is specified, then a ValueError is raised.
-
-        Parameters
-        ----------
-        unitary : numpy.ndarray
-            The unitary action of the clifford operation.
-
-        symplecticrep : tuple, optional
-            A (symplectic matrix, phase vector) 2-tuple specifying the pre-
-            computed symplectic representation of `unitary`.  If None, then
-            this representation is computed automatically from `unitary`.
-
-        evotype : Evotype or str
-            The evolution type.  The special value `"default"` is equivalent
-            to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
-        """
+    def __init__(self, unitary, symplecticrep=None, evotype='default', state_space=None):
         #self.superop = superop
         self.unitary = unitary
         assert(self.unitary is not None), "Must supply `unitary` argument!"
         U = self.unitary.to_dense() if isinstance(self.unitary, _LinearOperator) else self.unitary
 
+        state_space = _statespace.default_space_for_udim(U.shape[0]) if (state_space is None) \
+            else _statespace.StateSpace.cast(state_space)
+
         evotype = _Evotype.cast(evotype)
-        rep = evotype.create_clifford_rep(U, symplecticrep)
+        rep = evotype.create_clifford_rep(U, symplecticrep, state_space)
         _LinearOperator.__init__(self, rep, evotype)
 
     #NOTE: if this operation had parameters, we'd need to clear inv_smatrix & inv_svector

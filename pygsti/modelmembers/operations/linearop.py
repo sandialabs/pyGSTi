@@ -64,13 +64,19 @@ class LinearOperator(_modelmember.ModelMember):
 
     def __init__(self, rep, evotype):
         """ Initialize a new LinearOperator """
-        if isinstance(rep, int):  # For operators that have no representation themselves (term ops)
-            dim = rep             # allow passing an integer as `rep`.
-            rep = None
-        else:
-            dim = rep.dim
-        super(LinearOperator, self).__init__(dim, evotype)
+        super(LinearOperator, self).__init__(rep.state_space, evotype)
         self._rep = rep
+
+    @property
+    def dim(self):
+        """
+        Return the dimension of this operation (when viewed as a dense matrix)
+
+        Returns
+        -------
+        int
+        """
+        return self.state_space.dim
 
     @property
     def size(self):

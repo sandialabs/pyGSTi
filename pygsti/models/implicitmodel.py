@@ -300,8 +300,9 @@ class ImplicitOpModel(_mdl.OpModel):
         """
         if len(self.primitive_povm_labels) == 1:
             povm_name = next(iter(self.primitive_povm_labels)).name
-            if len(self.state_space_labels.labels) == 1 and (self.state_space_labels.labels[0] == sslbls
-                                                             or sslbls == ('*',)):
+            if (self.state_space.num_tensor_prod_blocks == 1
+                and (self.state_space.tensor_product_block_labels(0) == sslbls
+                     or sslbls == ('*',))):
                 return _Label(povm_name)  # because sslbls == all of model's sslbls
             else:
                 return _Label(povm_name, sslbls)
@@ -327,7 +328,7 @@ class ImplicitOpModel(_mdl.OpModel):
                 return tuple(povmdict[povm_lbl].keys())
             if isinstance(povm_lbl, _Label) and povm_lbl.name in povmdict:
                 return tuple(_povm.MarginalizedPOVM(povmdict[povm_lbl.name],
-                                                    self.state_space_labels, povm_lbl.sslbls).keys())
+                                                    self.state_space, povm_lbl.sslbls).keys())
 
         raise KeyError("No POVM labeled %s!" % str(povm_lbl))
 

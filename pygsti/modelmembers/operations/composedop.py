@@ -20,6 +20,7 @@ from .. import modelmember as _modelmember
 
 from ...objects import term as _term
 from ...evotypes import Evotype as _Evotype
+from ...models import statespace as _statespace
 from ...tools import listtools as _lt
 from ...tools import matrixtools as _mt
 
@@ -39,10 +40,10 @@ class ComposedOp(_LinearOperator):
         convention as operation sequences in pyGSTi.  Note that this is
         *opposite* from standard matrix multiplication order.
 
-    dim : int or "auto"
-        Dimension of this operation.  Can be set to `"auto"` to take dimension
-        from `ops_to_compose[0]` *if* there's at least one operation being
-        composed.
+    state_space : StateSpace or "auto"
+        State space of this error generator.  Can be set to `"auto"` to take
+        the state space from `errgens_to_compose[0]` *if* there's at least one
+        error generator being composed.
 
     evotype : Evotype or str, optional
         The evolution type.  The special value `"default"` is equivalent
@@ -56,16 +57,18 @@ class ComposedOp(_LinearOperator):
         the default value unless you know what you're doing.
     """
 
-    def __init__(self, ops_to_compose, dim="auto", evotype="auto", dense_rep=False):
-        assert(len(ops_to_compose) > 0 or dim != "auto"), \
-            "Must compose at least one operation when dim='auto'!"
+    def __init__(self, ops_to_compose, state_space="auto", evotype="auto", dense_rep=False):
+        assert(len(ops_to_compose) > 0 or state_space != "auto"), \
+            "Must compose at least one operation when state_space='auto'!"
         self.factorops = list(ops_to_compose)
         self.dense_rep = dense_rep
 
-        if dim == "auto":
-            dim = ops_to_compose[0].dim
-        assert(all([dim == operation.dim for operation in ops_to_compose])), \
-            "All operations must have the same dimension (%d expected)!" % dim
+        if state_space == "auto":
+            state_space = ops_to_compose[0].state_space
+        else:
+            state_space = _statespace.StateSpace.cast(state_space)
+        assert(all([state_space.is_compatible_with(operation.state_space) for operation in ops_to_compose])), \
+            "All operations must have compatible state spaces (%d expected)!" % str(state_space)
 
         if evotype == "auto":
             evotype = ops_to_compose[0]._evotype
@@ -75,10 +78,10 @@ class ComposedOp(_LinearOperator):
 
         #Create representation object
         if dense_rep:
-            rep = evotype.create_dense_rep(dim)
+            rep = evotype.create_dense_rep(state_space)
         else:
             factor_op_reps = [op._rep for op in self.factorops]
-            rep = evotype.create_composed_rep(factor_op_reps, dim)
+            rep = evotype.create_composed_rep(factor_op_reps, state_space)
 
         # caches in case terms are used
         self.terms = {}
@@ -90,7 +93,7 @@ class ComposedOp(_LinearOperator):
     def _update_denserep(self):
         """Performs additional update for the case when we use a dense underlying representation."""
         if len(self.factorops) == 0:
-            mx = _np.identity(self.dim, 'd')
+            mx = _np.identity(self.state_space.dim, 'd')
         else:
             mx = self.factorops[0].to_dense()
             for op in self.factorops[1:]:
@@ -215,7 +218,7 @@ class ComposedOp(_LinearOperator):
         # parent reset correctly.
         if memo is not None and id(self) in memo: return memo[id(self)]
         cls = self.__class__  # so that this method works for derived classes too
-        copyOfMe = cls([g.copy(parent, memo) for g in self.factorops], self.dim, self._evotype)
+        copyOfMe = cls([g.copy(parent, memo) for g in self.factorops], self.state_space, self._evotype)
         return self._copy_gpindices(copyOfMe, parent, memo)
 
     def to_sparse(self):
@@ -243,7 +246,7 @@ class ComposedOp(_LinearOperator):
             #We already have a dense version stored
             return self._rep.base
         elif len(self.factorops) == 0:
-            return _np.identity(self.dim, 'd')
+            return _np.identity(self.state_space.dim, 'd')
         else:
             mx = self.factorops[0].to_dense()
             for op in self.factorops[1:]:
@@ -784,41 +787,19 @@ class ComposedDenseOp(ComposedOp, _DenseOperatorInterface):
         convention as operation sequences in pyGSTi.  Note that this is
         *opposite* from standard matrix multiplication order.
 
-    dim : int or "auto"
-        Dimension of this operation.  Can be set to `"auto"` to take dimension
-        from `ops_to_compose[0]` *if* there's at least one operation being
-        composed.
+    state_space : StateSpace or "auto"
+        State space of this error generator.  Can be set to `"auto"` to take
+        the state space from `ops_to_compose[0]` *if* there's at least one
+        error generator being composed.
 
-    evotype : {"densitymx","statevec","stabilizer","svterm","cterm","auto"}
+    evotype : Evotype or str, optional
         The evolution type of this operation.  Can be set to `"auto"` to take
         the evolution type of `ops_to_compose[0]` *if* there's at least
         one operation being composed.
     """
 
-    def __init__(self, ops_to_compose, dim="auto", evotype="auto"):
-        """
-        Creates a new ComposedDenseOp.
-
-        Parameters
-        ----------
-        ops_to_compose : list
-            A list of 2D numpy arrays (matrices) and/or `DenseOperator`-derived
-            objects that are composed to form this operation.  Elements are composed
-            with vectors  in  *left-to-right* ordering, maintaining the same
-            convention as operation sequences in pyGSTi.  Note that this is
-            *opposite* from standard matrix multiplication order.
-
-        dim : int or "auto"
-            Dimension of this operation.  Can be set to `"auto"` to take dimension
-            from `ops_to_compose[0]` *if* there's at least one operation being
-            composed.
-
-        evotype : {"densitymx","statevec","stabilizer","svterm","cterm","auto"}
-            The evolution type of this operation.  Can be set to `"auto"` to take
-            the evolution type of `ops_to_compose[0]` *if* there's at least
-            one operation being composed.
-        """
-        ComposedOp.__init__(self, ops_to_compose, dim, evotype, dense_rep=True)
+    def __init__(self, ops_to_compose, state_space="auto", evotype="auto"):
+        ComposedOp.__init__(self, ops_to_compose, state_space, evotype, dense_rep=True)
         _DenseOperatorInterface.__init__(self)
 
     @property

@@ -19,6 +19,7 @@ from .linearop import LinearOperator as _LinearOperator
 from .. import modelmember as _modelmember
 
 from ...evotypes import Evotype as _Evotype
+from ...models import statespace as _statespace
 from ...tools import matrixtools as _mt
 from ...objects.basis import ExplicitBasis as _ExplicitBasis
 
@@ -35,9 +36,9 @@ class ComposedErrorgen(_LinearOperator):
         List of `LinearOperator`-derived objects that are summed together (composed)
         to form this error generator.
 
-    dim : int or "auto"
-        Dimension of this error generator.  Can be set to `"auto"` to take
-        the dimension from `errgens_to_compose[0]` *if* there's at least one
+    state_space : StateSpace or "auto"
+        State space of this error generator.  Can be set to `"auto"` to take
+        the state space from `errgens_to_compose[0]` *if* there's at least one
         error generator being composed.
 
     evotype : Evotype or str, optional
@@ -47,34 +48,17 @@ class ComposedErrorgen(_LinearOperator):
         of `ops_to_compose[0]` *if* there's at least one operation being composed.
     """
 
-    def __init__(self, errgens_to_compose, dim="auto", evotype="auto"):
-        """
-        Creates a new ComposedErrorgen.
-
-        Parameters
-        ----------
-        errgens_to_compose : list
-            List of `LinearOperator`-derived objects that are summed together (composed)
-            to form this error generator.
-
-        dim : int or "auto"
-            Dimension of this error generator.  Can be set to `"auto"` to take
-            the dimension from `errgens_to_compose[0]` *if* there's at least one
-            error generator being composed.
-
-        evotype : {"densitymx","statevec","stabilizer","svterm","cterm","auto"}
-            The evolution type of this error generator.  Can be set to `"auto"`
-            to take the evolution type of `errgens_to_compose[0]` *if* there's
-            at least one error generator being composed.
-        """
-        assert(len(errgens_to_compose) > 0 or dim != "auto"), \
-            "Must compose at least one error generator when dim='auto'!"
+    def __init__(self, errgens_to_compose, state_space="auto", evotype="auto"):
+        assert(len(errgens_to_compose) > 0 or state_space != "auto"), \
+            "Must compose at least one error generator when state_space='auto'!"
         self.factors = errgens_to_compose
 
-        if dim == "auto":
-            dim = errgens_to_compose[0].dim
-        assert(all([dim == eg.dim for eg in errgens_to_compose])), \
-            "All error generators must have the same dimension (%d expected)!" % dim
+        if state_space == "auto":
+            state_space = errgens_to_compose[0].state_space
+        else:
+            state_space = _statespace.StateSpace.cast(state_space)
+        assert(all([state_space.is_compatible_with(eg.state_space) for eg in errgens_to_compose])), \
+            "All error generators must have compatible state spaces (%d expected)!" % str(state_space)
 
         if evotype == "auto":
             evotype = errgens_to_compose[0]._evotype
@@ -96,7 +80,7 @@ class ComposedErrorgen(_LinearOperator):
 
         #Create representation object
         factor_reps = [op._rep for op in self.factors]
-        rep = evotype.create_sum_rep(factor_reps, dim)
+        rep = evotype.create_sum_rep(factor_reps, state_space)
 
         _LinearOperator.__init__(self, rep, evotype)
 
@@ -367,7 +351,7 @@ class ComposedErrorgen(_LinearOperator):
         # each factor gets an appropriate wrt_filter instead of
         # doing all filtering at the end
 
-        d2 = self.dim
+        d2 = self.state_space.dim
         derivMx = _np.zeros((d2**2, self.num_params), 'd')
         for eg in self.factors:
             factor_deriv = eg.deriv_wrt_params(None)  # do filtering at end
@@ -409,7 +393,7 @@ class ComposedErrorgen(_LinearOperator):
         # each factor gets an appropriate wrt_filter instead of
         # doing all filtering at the end
 
-        d2 = self.dim
+        d2 = self.state_space.dim
         nP = self.num_params
         hessianMx = _np.zeros((d2**2, nP, nP), 'd')
         for eg in self.factors:
@@ -498,7 +482,7 @@ class ComposedErrorgen(_LinearOperator):
         # parent reset correctly.
         if memo is not None and id(self) in memo: return memo[id(self)]
         cls = self.__class__  # so that this method works for derived classes too
-        copyOfMe = cls([f.copy(parent, memo) for f in self.factors], self.dim, self._evotype)
+        copyOfMe = cls([f.copy(parent, memo) for f in self.factors], self.state_space, self._evotype)
         return self._copy_gpindices(copyOfMe, parent, memo)
 
     def to_sparse(self):

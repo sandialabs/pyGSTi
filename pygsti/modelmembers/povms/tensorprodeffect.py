@@ -23,9 +23,12 @@ class TensorProductPOVMEffect(_POVMEffect):
     povm_effect_lbls : array-like
         The effect label of each factor POVM which is tensored together to form
         this effect vector.
+
+    state_space : StateSpace, optional
+        The state space for this operation.
     """
 
-    def __init__(self, typ, factors, povm_effect_lbls=None):
+    def __init__(self, factors, povm_effect_lbls, state_space):
         assert(len(factors) > 0), "Must have at least one factor!"
 
         self.factors = factors  # do *not* copy - needs to reference common objects
@@ -33,7 +36,7 @@ class TensorProductPOVMEffect(_POVMEffect):
         self.effectLbls = _np.array(povm_effect_lbls)
 
         evotype = self.factors[0]._evotype
-        rep = evotype.create_tensor_product_effect(factors, self.effectLbls)
+        rep = evotype.create_tensor_product_effect(factors, self.effectLbls, state_space)
 
         _POVMEffect.__init__(self, rep, evotype)
         self._rep.factor_effects_have_changed()  # initializes rep data

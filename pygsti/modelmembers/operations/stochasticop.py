@@ -18,6 +18,7 @@ from ...objects.basis import Basis as _Basis
 from ...objects.polynomial import Polynomial as _Polynomial
 from ...evotypes import Evotype as _Evotype
 from ...objects import term as _term
+from ...models import statespace as _statespace
 
 
 class StochasticNoiseOp(_LinearOperator):
@@ -34,8 +35,8 @@ class StochasticNoiseOp(_LinearOperator):
 
     Parameters
     ----------
-    dim : int
-        The basis dimension of this operator (4 for a single qubit).
+    state_space : StateSpace, optional
+        The state space for this operation.
 
     basis : Basis or {'pp','gm','qt'}, optional
         The basis to use, defining the "principle axes"
@@ -58,9 +59,10 @@ class StochasticNoiseOp(_LinearOperator):
     # Difficult to parameterize and maintain the p_i conditions - Initially just store positive p_i's
     # and don't bother restricting their sum to be < 1?
 
-    def __init__(self, dim, basis="pp", evotype="default", initial_rates=None, seed_or_state=None):
-        self.basis = _Basis.cast(basis, dim, sparse=False)
-        assert(dim == self.basis.dim), "Dimension of `basis` must match the dimension (`dim`) of this op."
+    def __init__(self, state_space, basis="pp", evotype="default", initial_rates=None, seed_or_state=None):
+        state_space = _statespace.StateSpace.cast(state_space)
+        self.basis = _Basis.cast(basis, state_space.dim, sparse=False)
+        assert(state_space.dim == self.basis.dim), "Dimension of `basis` must match the dimension (`dim`) of this op."
 
         evotype = _Evotype.cast(evotype)
 
@@ -74,7 +76,7 @@ class StochasticNoiseOp(_LinearOperator):
         else:
             rates = _np.zeros(len(initial_rates), 'd')
 
-        rep = evotype.create_stochastic_rep(basis, self._get_rate_poly_dicts(), rates, seed_or_state)
+        rep = evotype.create_stochastic_rep(basis, self._get_rate_poly_dicts(), rates, seed_or_state, state_space)
         _LinearOperator.__init__(self, rep, evotype)
         self._update_rep()  # initialize self._rep
         self._paramlbls = _np.array(['sqrt(%s error rate)' % bl for bl in self.basis.labels[1:]], dtype=object)
@@ -110,7 +112,7 @@ class StochasticNoiseOp(_LinearOperator):
             A copy of this object.
         """
         if memo is not None and id(self) in memo: return memo[id(self)]
-        copyOfMe = StochasticNoiseOp(self.dim, self.basis, self._evotype, self._params_to_rates(self.to_vector()))
+        copyOfMe = StochasticNoiseOp(self.state_space, self.basis, self._evotype, self._params_to_rates(self.to_vector()))
         return self._copy_gpindices(copyOfMe, parent, memo)
 
     #to_dense / to_sparse?
@@ -293,7 +295,7 @@ class StochasticNoiseOp(_LinearOperator):
     #Transform functions? (for gauge opt)
 
     def __str__(self):
-        s = "Stochastic noise operation map with dim = %d, num params = %d\n" % \
-            (self.dim, self.num_params)
+        s = "Stochastic noise operation map with state space = %s, num params = %d\n" % \
+            (self.state_space, self.num_params)
         s += 'Rates: %s\n' % self._params_to_rates(self.to_vector())
         return s

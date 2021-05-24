@@ -371,13 +371,13 @@ class ComposedState(_State):  # , _ErrorMapContainer
         # TODO REMOVE self.direct_term_poly_coeffs = {} if evotype in ("svterm","cterm") else None
 
         #Create representation
-        rep = evotype.create_composed_state_rep(self.state_vec._rep, self.error_map._rep)
+        rep = evotype.create_composed_state_rep(self.state_vec._rep, self.error_map._rep, static_state.state_space)
         #stateRep =
         #errmapRep =
         #rep = errmapRep.acton(stateRep)  # FUTURE: do this acton in place somehow? (like C-reps do)
         #maybe make a special _Errgen *state* rep?
 
-        _State.__init__(self, rep, evotype)  # sets self.dim
+        _State.__init__(self, rep, evotype)
         _ErrorMapContainer.__init__(self, self.error_map)
 
     def _update_rep(self):

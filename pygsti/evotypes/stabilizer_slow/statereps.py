@@ -16,12 +16,15 @@ import functools as _functools
 
 from .. import basereps as _basereps
 from ...objects import stabilizer as _stabilizer
+from ...models.statespace import StateSpace as _StateSpace
 
 
 class StateRep(_basereps.StateRep):
-    def __init__(self, smatrix, pvectors, amps):
+    def __init__(self, smatrix, pvectors, amps, state_space):
+        self.state_space = _StateSpace.cast(state_space)
         self.sframe = _stabilizer.StabilizerFrame(smatrix, pvectors, amps)
         # just rely on StabilizerFrame class to do all the heavy lifting...
+        assert(self.sframe.n == self.state_space.num_qubits)
 
     @property
     def smatrix(self):
@@ -39,9 +42,9 @@ class StateRep(_basereps.StateRep):
     def nqubits(self):
         return self.sframe.n
 
-    @property
-    def dim(self):
-        return 2**self.nqubits  # assume "unitary evolution"-type mode
+    #@property
+    #def dim(self):
+    #    return 2**self.nqubits  # assume "unitary evolution"-type mode
 
     def copy(self):
         cpy = StateRep(_np.zeros((0, 0), _np.int64), None, None)  # makes a dummy cpy.sframe
@@ -54,7 +57,7 @@ class StateRep(_basereps.StateRep):
 
 class StateRepComputational(StateRep):
 
-    def __init__(self, zvals):
+    def __init__(self, zvals, state_space):
 
         nqubits = len(zvals)
         state_s = _np.fliplr(_np.identity(2 * nqubits, int))  # flip b/c stab cols are *first*
@@ -66,16 +69,16 @@ class StateRepComputational(StateRep):
         ps = state_ps.reshape(1, 2 * nqubits)
         a = _np.ones(1, complex)  # all == 1.0 by default
 
-        super(StateRepComputational, self).__init__(state_s, ps, a)
+        super(StateRepComputational, self).__init__(state_s, ps, a, state_space)
 
     #TODO: copy methods from StabilizerFrame or StateCRep - or maybe do this for base StateRep class? ----------------------------
 
 
 class StateRepComposed(StateRep):
-    def __init__(self, state_rep, op_rep):
+    def __init__(self, state_rep, op_rep, state_space):
         self.state_rep = state_rep
         self.op_rep = op_rep
-        super(StateRepComposed, self).__init__(state_rep.smatrix, state_rep.pvectors, state_rep.amps)
+        super(StateRepComposed, self).__init__(state_rep.smatrix, state_rep.pvectors, state_rep.amps, state_space)
         self.reps_have_changed()
 
     def reps_have_changed(self):
@@ -86,14 +89,15 @@ class StateRepComposed(StateRep):
 
 
 class StateRepTensorProduct(StateRep):
-    def __init__(self, factor_state_reps):
+    def __init__(self, factor_state_reps, state_space):
         self.factor_reps = factor_state_reps
         n = sum([sf.nqubits for sf in self.factor_reps])  # total number of qubits
         np = int(_np.product([len(sf.pvectors) for sf in self.factor_reps]))
 
         super(StateRepTensorProduct, self).__init__(_np.zeros((2 * n, 2 * n), int),
                                                     _np.zeros((np, 2 * n), int),
-                                                    _np.ones(np, complex))
+                                                    _np.ones(np, complex),
+                                                    state_space)
         self.reps_have_changed()
 
     def reps_have_changed(self):

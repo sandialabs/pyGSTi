@@ -13,14 +13,17 @@
 
 import sys
 import numpy as _np
+from ...models.statespace import StateSpace as _StateSpace
 
 
 cdef class EffectRep(_basereps_cython.EffectRep):
 
-    def __cinit__(self, _np.ndarray[_np.int64_t, ndim=1, mode='c'] zvals):
+    def __cinit__(self, _np.ndarray[_np.int64_t, ndim=1, mode='c'] zvals, state_space):
         self.zvals = zvals
         self.c_effect = new EffectCRep(<INT*>zvals.data,
                                        <INT>zvals.shape[0])
+        self.state_space = _StateSpace.cast(state_space)
+        assert(self.state_space.num_qubits == len(self.zvals))
 
     def __reduce__(self):
         return (EffectRep, (self.zvals,))
@@ -30,11 +33,11 @@ cdef class EffectRep(_basereps_cython.EffectRep):
 
     @property
     def nqubits(self):
-        return self.c_effect._n
+        return self.state_space.num_qubits
 
-    @property
-    def dim(self):
-        return 2**(self.c_effect._n)  # assume "unitary evolution"-type mode
+    #@property
+    #def dim(self):
+    #    return 2**(self.c_effect._n)  # assume "unitary evolution"-type mode
 
     def probability(self, StateRep state not None):
         #unnecessary (just put in signature): cdef StateRep st = <StateRep?>state
@@ -50,11 +53,12 @@ cdef class EffectRep(_basereps_cython.EffectRep):
 
 cdef class EffectRepComputational(EffectRep):
 
-    def __cinit__(self, _np.ndarray[_np.int64_t, ndim=1, mode='c'] zvals, INT dim):
-        self.dim = dim
+    def __cinit__(self, _np.ndarray[_np.int64_t, ndim=1, mode='c'] zvals, state_space):
         self.zvals = zvals
         self.c_effect = new EffectCRep(<INT*>zvals.data,
                                        <INT>zvals.shape[0])
+        self.state_space = _StateSpace.cast(state_space)
+        assert(self.state_space.num_qubits == len(self.zvals))
 
     def __reduce__(self):
-        return (EffectRepComputational, (self.zvals, self.dim))
+        return (EffectRepComputational, (self.zvals, self.state_space))

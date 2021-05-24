@@ -25,6 +25,7 @@ from ...tools import optools as _ot
 from ...tools import matrixtools as _mt
 from ...tools import basistools as _bt
 from ...evotypes import Evotype as _Evotype
+from ...models import statespace as _statespace
 
 from ...objects.opcalc import compact_deriv as _compact_deriv, \
     bulk_eval_compact_polynomials_complex as _bulk_eval_compact_polynomials_complex, \
@@ -363,7 +364,7 @@ class LindbladErrorgen(_LinearOperator):
                    param_mode, nonham_mode, truncate,
                    matrix_basis, evotype)
 
-    def __init__(self, dim, lindblad_term_dict, basis=None,
+    def __init__(self, state_space, lindblad_term_dict, basis=None,
                  param_mode="cptp", nonham_mode="all", truncate=True,
                  mx_basis="pp", evotype="default"):
         """
@@ -375,9 +376,8 @@ class LindbladErrorgen(_LinearOperator):
 
         Parameters
         ----------
-        dim : int
-            The Hilbert-Schmidt (superoperator) dimension, which will be the
-            dimension of the created operator.
+        state_space : StateSpace, optional
+            The state space for this operation.
 
         lindblad_term_dict : dict
             A dictionary specifying which Linblad terms are present in the
@@ -432,8 +432,10 @@ class LindbladErrorgen(_LinearOperator):
         # maybe allow ('XY','Q1','Q4')? format when can assume single-letter labels.
         # - could add standard basis dict items so labels like "X", "XY", etc. are understood?
 
+        state_space = _statespace.StateSpace.cast(state_space)
+        
         # Store superop dimension
-        d2 = dim
+        dim = state_space.dim
         #d = int(round(_np.sqrt(d2))) #OLD TODO REMOVE
         #assert(d*d == d2), "Dimension must be a perfect square"
 
@@ -454,7 +456,7 @@ class LindbladErrorgen(_LinearOperator):
         elif self.other_basis_size > 0: self.sparse = _sps.issparse(self.other_basis[0])
         else: self.sparse = False
 
-        self.matrix_basis = _Basis.cast(mx_basis, d2, sparse=self.sparse)
+        self.matrix_basis = _Basis.cast(mx_basis, dim, sparse=self.sparse)
 
         self.paramvals = _ot.lindblad_projections_to_paramvals(
             hamC, otherC, self.param_mode, self.nonham_mode, truncate)
@@ -473,7 +475,7 @@ class LindbladErrorgen(_LinearOperator):
         #First try to create a lindblad-errorgen rep
         evotype = _Evotype.cast(evotype)
         try:
-            rep = evotype.create_lindblad_errorgen_rep(lindblad_term_dict, basis)
+            rep = evotype.create_lindblad_errorgen_rep(lindblad_term_dict, basis, state_space)
         except Exception:
             #Otherwise try to create a sparse or dense matrix representation
 
@@ -521,9 +523,10 @@ class LindbladErrorgen(_LinearOperator):
                 self._data_scratch = _np.zeros(len(indices), complex)  # *complex* scratch space for updating rep
                 rep = evotype.create_sparse_rep(_np.ascontiguousarray(_np.zeros(len(indices), 'd')),
                                                 _np.ascontiguousarray(indices, _np.int64),
-                                                _np.ascontiguousarray(indptr, _np.int64))
+                                                _np.ascontiguousarray(indptr, _np.int64),
+                                                state_space)
             else:
-                rep = evotype.create_dense_rep(dim)
+                rep = evotype.create_dense_rep(state_space)
 
         _LinearOperator.__init__(self, rep, evotype)  # sets self.dim
         if self._rep is not None: self._update_rep()  # updates _rep whether it's a dense or sparse matrix

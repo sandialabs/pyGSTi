@@ -36,18 +36,11 @@ class EmbeddedErrorgen(_EmbeddedOp):
 
     Parameters
     ----------
-    state_space_labels : a list of tuples
-        This argument specifies the density matrix space upon which this
-        generator acts.  Each tuple corresponds to a block of a density matrix
-        in the standard basis (and therefore a component of the direct-sum
-        density matrix space). Elements of a tuple are user-defined labels
-        beginning with "L" (single Level) or "Q" (two-level; Qubit) which
-        interpret the d-dimensional state space corresponding to a d x d
-        block as a tensor product between qubit and single level systems.
-        (E.g. a 2-qubit space might be labelled `[('Q0','Q1')]`).
+    state_space : StateSpace
+        Specifies the density matrix space upon which this operation acts.
 
     target_labels : list of strs
-        The labels contained in `state_space_labels` which demarcate the
+        The labels contained in `state_space` which demarcate the
         portions of the state space acted on by `errgen_to_embed` (the
         "contained" error generator).
 
@@ -57,33 +50,8 @@ class EmbeddedErrorgen(_EmbeddedOp):
         of the EmbeddedErrorgen.
     """
 
-    def __init__(self, state_space_labels, target_labels, errgen_to_embed):
-        """
-        Initialize an EmbeddedErrorgen object.
-
-        Parameters
-        ----------
-        state_space_labels : a list of tuples
-            This argument specifies the density matrix space upon which this
-            generator acts.  Each tuple corresponds to a block of a density matrix
-            in the standard basis (and therefore a component of the direct-sum
-            density matrix space). Elements of a tuple are user-defined labels
-            beginning with "L" (single Level) or "Q" (two-level; Qubit) which
-            interpret the d-dimensional state space corresponding to a d x d
-            block as a tensor product between qubit and single level systems.
-            (E.g. a 2-qubit space might be labelled `[('Q0','Q1')]`).
-
-        target_labels : list of strs
-            The labels contained in `state_space_labels` which demarcate the
-            portions of the state space acted on by `errgen_to_embed` (the
-            "contained" error generator).
-
-        errgen_to_embed : LinearOperator
-            The error generator object that is to be contained within this
-            error generator, and that specifies the only non-trivial action
-            of the EmbeddedErrorgen.
-        """
-        _EmbeddedOp.__init__(self, state_space_labels, target_labels, errgen_to_embed)
+    def __init__(self, state_space, target_labels, errgen_to_embed):
+        _EmbeddedOp.__init__(self, state_space, target_labels, errgen_to_embed)
 
         # set "API" error-generator members (to interface properly w/other objects)
         # FUTURE: create a base class that defines this interface (maybe w/properties?)
@@ -94,7 +62,7 @@ class EmbeddedErrorgen(_EmbeddedOp):
         if isinstance(embedded_matrix_basis, str):
             self.matrix_basis = embedded_matrix_basis
         else:  # assume a Basis object
-            my_basis_dim = self.state_space_labels.dim
+            my_basis_dim = self.state_space.dim
             self.matrix_basis = _Basis.cast(embedded_matrix_basis.name, my_basis_dim, sparse=True)
 
             #OLD: constructs a subset of this errorgen's full mxbasis, but not the whole thing:
@@ -123,7 +91,7 @@ class EmbeddedErrorgen(_EmbeddedOp):
     #    """ Take a dense or sparse basis matrix and embed it. """
     #    mxAsGate = StaticDenseOp(mx) if isinstance(mx, _np.ndarray) \
     #        else StaticDenseOp(mx.todense())  # assume mx is a sparse matrix
-    #    return EmbeddedOp(self.state_space_labels, self.targetLabels,
+    #    return EmbeddedOp(self.state_space, self.targetLabels,
     #                      mxAsGate).tosparse()  # always convert to *sparse* basis els
 
     def from_vector(self, v, close=False, dirty_value=True):
@@ -197,7 +165,7 @@ class EmbeddedErrorgen(_EmbeddedOp):
         if return_basis:
             # embed basis
             Ltermdict, basis = embedded_coeffs
-            embedded_basis = _EmbeddedBasis(basis, self.state_space_labels, self.targetLabels)
+            embedded_basis = _EmbeddedBasis(basis, self.state_space, self.targetLabels)
             bel_map = {lbl: embedded_lbl for lbl, embedded_lbl in zip(basis.labels, embedded_basis.labels)}
 
             #go through and embed Ltermdict labels
@@ -413,7 +381,7 @@ class EmbeddedErrorgen(_EmbeddedOp):
 
     def __str__(self):
         """ Return string representation """
-        s = "Embedded error generator with full dimension %d and state space %s\n" % (self.dim, self.state_space_labels)
+        s = "Embedded error generator with full dimension %d and state space %s\n" % (self.dim, self.state_space)
         s += " that embeds the following %d-dimensional operation into acting on the %s space\n" \
              % (self.embedded_op.dim, str(self.targetLabels))
         s += str(self.embedded_op)

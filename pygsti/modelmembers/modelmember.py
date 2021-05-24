@@ -90,7 +90,7 @@ class ModelChild(object):
 
 class ModelMember(ModelChild):
     """
-    Base class for Model member objects that possess a definite dimension, parameters count, and evolution type.
+    Base class for Model member objects that possess a definite state space, parameters count, and evolution type.
 
     A ModelMember can be vectorized into/onto a portion of their parent Model's
     (or other ModelMember's) parameter vector.  They therefore contain a
@@ -99,11 +99,11 @@ class ModelMember(ModelChild):
 
     Parameters
     ----------
-    dim : int
-        The dimension.
+    state_space : StateSpace
+        The state space, which should match the parent model if/when one exists.
 
-    evotype : str
-        The evolution type.
+    evotype : EvoType or str
+        The evolution type, which should match the parent model if/when one exists.
 
     gpindices : slice or numpy.ndarray, optional
         The indices of this member's local parameters into the parent Model's
@@ -127,9 +127,9 @@ class ModelMember(ModelChild):
         The parent model.
     """
 
-    def __init__(self, dim, evotype, gpindices=None, parent=None):
+    def __init__(self, state_space, evotype, gpindices=None, parent=None):
         """ Initialize a new ModelMember """
-        self.dim = dim
+        self._state_space = state_space
         self._evotype = evotype
         self._gpindices = gpindices
         self._paramlbls = None  # signals auto-generation of "unknown" parameter labels
@@ -137,6 +137,10 @@ class ModelMember(ModelChild):
         # gate's parameters have been changed since the
         # last setting of dirty=False
         super(ModelMember, self).__init__(parent)
+
+    @property
+    def state_space(self):
+        return self._state_space
 
     @property
     def dirty(self):

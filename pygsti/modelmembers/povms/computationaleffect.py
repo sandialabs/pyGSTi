@@ -7,6 +7,7 @@ from .effect import POVMEffect as _POVMEffect
 from ...evotypes import Evotype as _Evotype
 from ...objects import term as _term
 from ...objects.polynomial import Polynomial as _Polynomial
+from ...models import statespace as _statespace
 
 try:
     from ...tools import fastcalc as _fastcalc
@@ -30,10 +31,14 @@ class ComputationalBasisPOVMEffect(_POVMEffect):
     evotype : Evotype or str, optional
         The evolution type.  The special value `"default"` is equivalent
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
+
+    state_space : StateSpace, optional
+        The state space for this operation.  If `None` a default state space
+        with the appropriate number of qubits is used.
     """
 
     @classmethod
-    def from_dense_vec(cls, vec, evotype="default"):
+    def from_dense_vec(cls, vec, evotype="default", state_space=None):
         """
         Create a new ComputationalSPAMVec from a dense vector.
 
@@ -47,6 +52,10 @@ class ComputationalBasisPOVMEffect(_POVMEffect):
             The evolution type of the resulting effect vector.  The special
             value `"default"` is equivalent to specifying the value of
             `pygsti.evotypes.Evotype.default_evotype`.
+
+        state_space : StateSpace, optional
+            The state space for this operation.  If `None` a default state space
+            with the appropriate number of qubits is used.
 
         Returns
         -------
@@ -65,12 +74,12 @@ class ComputationalBasisPOVMEffect(_POVMEffect):
         for zvals in _itertools.product(*([(0, 1)] * nqubits)):
             testvec = _functools.reduce(_np.kron, [v[i] for i in zvals])
             if _np.allclose(testvec, vec.flat):
-                return cls(zvals, evotype)
+                return cls(zvals, evotype, state_space)
         raise ValueError(("Given `vec` is not a z-basis product state - "
                           "cannot construct ComputatinoalSPAMVec"))
 
     @classmethod
-    def from_dense_purevec(cls, purevec, evotype="default"):
+    def from_dense_purevec(cls, purevec, evotype="default", state_space=None):
         """
         TODO: update docstring
         Create a new StabilizerEffectVec from a pure-state vector.
@@ -90,6 +99,10 @@ class ComputationalBasisPOVMEffect(_POVMEffect):
             value `"default"` is equivalent to specifying the value of
             `pygsti.evotypes.Evotype.default_evotype`.
 
+        state_space : StateSpace, optional
+            The state space for this operation.  If `None` a default state space
+            with the appropriate number of qubits is used.
+
         Returns
         -------
         StabilizerSPAMVec
@@ -99,25 +112,19 @@ class ComputationalBasisPOVMEffect(_POVMEffect):
         for zvals in _itertools.product(*([(0, 1)] * nqubits)):
             testvec = _functools.reduce(_np.kron, [v[i] for i in zvals])
             if _np.allclose(testvec, purevec.flat):
-                return cls(zvals, evotype)
+                return cls(zvals, evotype, state_space)
         raise ValueError(("Given `purevec` must be a z-basis product state - "
                           "cannot construct StabilizerEffectVec"))
 
-    def __init__(self, zvals, evotype="default"):
+    def __init__(self, zvals, evotype="default", state_space=None):
         self._zvals = _np.ascontiguousarray(_np.array(zvals, _np.int64))
 
-        #nqubits = len(self._zvals)
-
-        #REMOVE
-        #if evotype in ("densitymx", "svterm", "cterm"):
-        #    dim = 4**nqubits
-        #elif evotype in ("statevec", "stabilizer", "chp"):
-        #    dim = 2**nqubits
-        #else: raise ValueError("Invalid `evotype`: %s" % evotype)
+        state_space = _statespace.default_space_for_num_qubits(len(self._zvals)) if (state_space is None) \
+            else _statespace.StateSpace.cast(state_space)
 
         evotype = _Evotype.cast(evotype)
         self._evotype = evotype  # set this before call to _State.__init__ so self.to_dense() can work...
-        rep = evotype.create_computational_effect(zvals)
+        rep = evotype.create_computational_effect(zvals, state_space)
         _POVMEffect.__init__(self, rep, evotype)
 
     def to_dense(self, scratch=None):

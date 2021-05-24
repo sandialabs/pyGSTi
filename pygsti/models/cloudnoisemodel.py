@@ -733,7 +733,7 @@ class CloudNoiseModel(_ImplicitOpModel):
         layer_rules = CloudNoiseLayerRules(self.addIdleNoiseToAllGates, errcomp_type, sparse_lindblad_reps)
         super(CloudNoiseModel, self).__init__(qubit_sslbls, layer_rules, "pp", simulator=simulator, evotype=evotype)
 
-        flags = {'auto_embed': False, 'match_parent_dim': False,
+        flags = {'auto_embed': False, 'match_parent_statespace': False,
                  'match_parent_evotype': True, 'cast_to_type': None}
         self.prep_blks['layers'] = _ld.OrderedMemberDict(self, None, None, flags)
         self.povm_blks['layers'] = _ld.OrderedMemberDict(self, None, None, flags)
@@ -771,8 +771,7 @@ class CloudNoiseModel(_ImplicitOpModel):
         #Get gates availability
         gates_and_avail = _collections.OrderedDict()
         for gateName, gate in mm_gatedict.items():  # gate is a static ModelMember (op or factory)
-            gate_nQubits = int(round(_np.log2(gate.dim) / 2)) if (evotype in ("densitymx", "svterm", "cterm")) \
-                else int(round(_np.log2(gate.dim)))  # evotype in ("statevec","stabilizer")
+            gate_nQubits = gate.state_space.num_qubits
 
             availList = self.availability.get(gateName, 'all-edges')
             if availList == 'all-combinations':
@@ -885,7 +884,7 @@ class CloudNoiseModel(_ImplicitOpModel):
             for i, layerop in enumerate(povm_layers):
                 self.povm_blks['layers'][_Lbl("M%d" % i)] = layerop
 
-        printer.log("DONE! - created Model with dim=%d and op-blks=" % self.dim)
+        printer.log("DONE! - created Model with nqubits=%d and op-blks=" % self.state_space.num_qubits)
         for op_blk_lbl, op_blk in self.operation_blks.items():
             printer.log("  %s: %s" % (op_blk_lbl, ', '.join(map(str, op_blk.keys()))))
 
@@ -1086,8 +1085,8 @@ def _build_nqn_global_noise(qubit_graph, max_weight, sparse_lindblad_basis=False
             err_qubit_global_inds = err_qubit_inds
             fullTermErr = Embedded(ssAllQ, [qubit_labels[i] for i in err_qubit_global_inds], termErr)
             assert(fullTermErr.num_params == termErr.num_params)
-            printer.log("Exp(errgen) gate w/dim=%d and %d params -> embedded to gate w/dim=%d" %
-                        (termErr.dim, termErr.num_params, fullTermErr.dim))
+            printer.log("Exp(errgen) gate w/nqubits=%d and %d params -> embedded to gate w/nqubits=%d" %
+                        (termErr.state_space.num_qubits, termErr.num_params, fullTermErr.state_space.num_qubits))
 
             termops.append(fullTermErr)
 
@@ -1237,8 +1236,8 @@ def _build_nqn_cloud_noise(target_qubit_inds, qubit_graph, weight_maxhops_tuples
 
             fullTermErr = Embedded(ssAllQ, [qubit_labels[i] for i in err_qubit_global_inds], termErr)
             assert(fullTermErr.num_params == termErr.num_params)
-            printer.log("Exp(errorgen) gate w/dim=%d and %d params -> embedded to gate w/dim=%d" %
-                        (termErr.dim, termErr.num_params, fullTermErr.dim))
+            printer.log("Exp(errorgen) gate w/nqubits=%d and %d params -> embedded to gate w/nqubits=%d" %
+                        (termErr.state_space.num_qubits, termErr.num_params, fullTermErr.state_space.num_qubits))
 
             loc_noise_termops.append(fullTermErr)
 
@@ -1295,7 +1294,7 @@ class CloudNoiseLayerRules(_LayerRules):
                 # implicit creation of marginalized POVMs whereby an existing POVM name is used with sslbls that
                 # are not present in the stored POVM's label.
                 mpovm = _povm.MarginalizedPOVM(model.povm_blks['layers'][povmName],
-                                               model.state_space_labels, layerlbl.sslbls)  # cache in FUTURE
+                                               model.state_space, layerlbl.sslbls)  # cache in FUTURE
                 mpovm_lbl = _Lbl(povmName, layerlbl.sslbls)
                 caches['povm-layers'].update(mpovm.simplify_effects(mpovm_lbl))
                 assert(layerlbl in caches['povm-layers']), "Failed to create marginalized effect!"
@@ -1342,7 +1341,7 @@ class CloudNoiseLayerRules(_LayerRules):
         # to the perfect (embedded) target ops in op_blks
         if len(components) > 1:
             targetOp = Composed([self._layer_component_targetop(model, l, caches['op-layers']) for l in components],
-                                dim=model.dim, evotype=model.evotype)
+                                state_space=model.state_space, evotype=model.evotype)
         else: targetOp = self._layer_component_targetop(model, components[0], caches['op-layers'])
         ops_to_compose = [targetOp]
 
@@ -1352,7 +1351,7 @@ class CloudNoiseLayerRules(_LayerRules):
             if len(component_cloudnoise_ops) > 0:
                 if len(component_cloudnoise_ops) > 1:
                     localErr = Composed(component_cloudnoise_ops,
-                                        dim=model.dim, evotype=model.evotype)
+                                        state_space=model.state_space, evotype=model.evotype)
                 else:
                     localErr = component_cloudnoise_ops[0]
                 ops_to_compose.append(localErr)
@@ -1365,7 +1364,7 @@ class CloudNoiseLayerRules(_LayerRules):
             errorGens.extend(self._layer_component_cloudnoises(model, components, caches['op-cloudnoise']))
             if len(errorGens) > 0:
                 if len(errorGens) > 1:
-                    error = ExpErrorgen(Sum(errorGens, dim=model.dim, evotype=model.evotype),
+                    error = ExpErrorgen(Sum(errorGens, state_space=model.state_space, evotype=model.evotype),
                                         dense_rep=dense_lindblad_reps)
                 else:
                     error = ExpErrorgen(errorGens[0], dense_rep=dense_lindblad_reps)
@@ -1373,7 +1372,7 @@ class CloudNoiseLayerRules(_LayerRules):
         else:
             raise ValueError("Invalid errcomp_type in CloudNoiseLayerRules: %s" % str(self.errcomp_type))
 
-        ret = Composed(ops_to_compose, dim=model.dim, evotype=model.evotype)
+        ret = Composed(ops_to_compose, state_space=model.state_space, evotype=model.evotype)
         model._init_virtual_obj(ret)  # so ret's gpindices get set
         caches['complete-layers'][layerlbl] = ret  # cache the final label value
         return ret

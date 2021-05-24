@@ -435,8 +435,8 @@ def write_model(model, filename, title=None):
                 writeprop(output, "LiouvilleMx", gate.to_dense())
             output.write("END Instrument\n\n")
 
-        if model.state_space_labels is not None:
-            output.write("STATESPACE: " + str(model.state_space_labels) + "\n")
+        if model.state_space is not None:
+            output.write("STATESPACE: " + str(model.state_space) + "\n")
             # StateSpaceLabels.__str__ formats the output properly
 
         basisdim = model.basis.dim
@@ -445,7 +445,7 @@ def write_model(model, filename, title=None):
             output.write("BASIS: %s\n" % model.basis.name)
         else:
             if model.basis.name not in ('std', 'pp', 'gm', 'qt'):  # a "fancy" basis
-                assert(model.state_space_labels is not None), \
+                assert(model.state_space is not None), \
                     "Must set a Model's state space labels when using fancy a basis!"
                 # don't write the dim - the state space labels will cover this.
                 output.write("BASIS: %s\n" % model.basis.name)

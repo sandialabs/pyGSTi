@@ -14,6 +14,7 @@ import numpy as _np
 import functools as _functools
 
 from .. import basereps as _basereps
+from ...models.statespace import StateSpace as _StateSpace
 from ...tools import optools as _ot
 from ...tools import basistools as _bt
 
@@ -24,10 +25,12 @@ except ImportError:
 
 
 class StateRep(_basereps.StateRep):
-    def __init__(self, data):
+    def __init__(self, data, state_space):
         #vec = _np.asarray(vec, dtype='d')
         assert(data.dtype == _np.dtype('d'))
         self.base = _np.require(data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
+        self.state_space = _StateSpace.cast(state_space)
+        assert(len(self.base) == self.state_space.dim)
 
     def __reduce__(self):
         return (StateRep, (self.base,), (self.base.flags.writeable,))
@@ -44,7 +47,7 @@ class StateRep(_basereps.StateRep):
 
     @property
     def dim(self):
-        return len(self.base)
+        return self.state_space.dim
 
     def __str__(self):
         return str(self.base)
@@ -59,23 +62,23 @@ class StateRepDense(StateRep):
 
 
 class StateRepPure(StateRep):
-    def __init__(self, purevec, basis):
+    def __init__(self, purevec, basis, state_space):
         assert(purevec.dtype == _np.dtype(complex))
         self.purebase = _np.require(purevec.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
         self.basis = basis
         dmVec_std = _ot.state_to_dmvec(self.purebase)
-        super(StateRepPure, self).__init__(_bt.change_basis(dmVec_std, 'std', self.basis))
+        super(StateRepPure, self).__init__(_bt.change_basis(dmVec_std, 'std', self.basis), state_space)
 
     def purebase_has_changed(self):
         dmVec_std = _ot.state_to_dmvec(self.purebase)
         self.base[:] = _bt.change_basis(dmVec_std, 'std', self.basis)
 
     def __reduce__(self):
-        return (StateRepPure, (self.base, self.basis), (self.base.flags.writeable,))
+        return (StateRepPure, (self.base, self.basis, self.state_space), (self.base.flags.writeable,))
 
 
 class StateRepComputational(StateRep):
-    def __init__(self, zvals):
+    def __init__(self, zvals, state_space):
 
         #Convert zvals to dense vec:
         factor_dim = 4
@@ -95,17 +98,17 @@ class StateRepComputational(StateRep):
             vec = _np.ascontiguousarray(_np.empty(factor_dim**len(zvals), typ))
             _fastcalc.fast_kron(vec, fast_kron_array, fast_kron_factordims)
 
-        super(StateRepComputational, self).__init__(vec)
+        super(StateRepComputational, self).__init__(vec, state_space)
 
     def __reduce__(self):
-        return (StateRepComputational, (self.zvals,), (self.base.flags.writeable,))
+        return (StateRepComputational, (self.zvals, self.state_space), (self.base.flags.writeable,))
 
 
 class StateRepComposed(StateRep):
-    def __init__(self, state_rep, op_rep):
+    def __init__(self, state_rep, op_rep, state_space):
         self.state_rep = state_rep
         self.op_rep = op_rep
-        super(StateRepComposed, self).__init__(state_rep.to_dense())
+        super(StateRepComposed, self).__init__(state_rep.to_dense(), state_space)
         self.reps_have_changed()
 
     def reps_have_changed(self):
@@ -113,15 +116,15 @@ class StateRepComposed(StateRep):
         self.base[:] = rep.base[:]
 
     def __reduce__(self):
-        return (StateRepComposed, (self.state_rep, self.op_rep), (self.base.flags.writeable,))
+        return (StateRepComposed, (self.state_rep, self.op_rep, self.state_space), (self.base.flags.writeable,))
 
 
 
 class StateRepTensorProduct(StateRep):
-    def __init__(self, factor_state_reps):
+    def __init__(self, factor_state_reps, state_space):
         self.factor_reps = factor_state_reps
         dim = _np.product([fct.dim for fct in self.factor_reps])
-        super(StateRepTensorProduct, self).__init__(_np.zeros(dim, 'd'))
+        super(StateRepTensorProduct, self).__init__(_np.zeros(dim, 'd'), state_space)
         self.reps_have_changed()
 
     def reps_have_changed(self):
@@ -134,7 +137,7 @@ class StateRepTensorProduct(StateRep):
         self.base[:] = vec
 
     def __reduce__(self):
-        return (StateRepTensorProduct, (self.factor_state_reps,), (self.base.flags.writeable,))
+        return (StateRepTensorProduct, (self.factor_state_reps, self.state_space), (self.base.flags.writeable,))
 
     #REMOVE - or do something with this for a to_dense method?
     #def _fill_fast_kron(self):

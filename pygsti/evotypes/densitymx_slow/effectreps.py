@@ -13,11 +13,12 @@ POVM effect representation classes for the `densitymx_slow` evolution type.
 import numpy as _np
 #import functools as _functools
 from .. import basereps as _basereps
+from ...models.statespace import StateSpace as _StateSpace
 
 
 class EffectRep(_basereps.EffectRep):
-    def __init__(self, dim):
-        self.dim = dim
+    def __init__(self, state_space):
+        self.state_space = _StateSpace.cast(state_space)
 
     def probability(self, state):
         raise NotImplementedError()
@@ -27,7 +28,7 @@ class EffectRepConjugatedState(EffectRep):
 
     def __init__(self, state_rep):
         self.state_rep = state_rep
-        super(EffectRepConjugatedState, self).__init__(state_rep.dim)
+        super(EffectRepConjugatedState, self).__init__(state_rep.state_space)
 
     def __reduce__(self):
         return (EffectRepConjugatedState, (self.state_rep,))
@@ -42,9 +43,9 @@ class EffectRepConjugatedState(EffectRep):
 
 class EffectRepComputational(EffectRep):
 
-    def __init__(self, zvals, dim):
-        # int dim = 4**len(zvals) -- just send as argument for speed?
-        assert(dim == 4**len(zvals))
+    def __init__(self, zvals, state_space):
+        state_space = _StateSpace.cast(state_space)
+        assert(state_space.num_qubits == len(zvals))
         assert(len(zvals) <= 64), "Cannot create a Computational basis rep with >64 qubits!"
         # Current storage of computational basis states converts zvals -> 64-bit integer
 
@@ -59,10 +60,10 @@ class EffectRepComputational(EffectRep):
         self.nfactors = len(zvals)  # (or nQubits)
         self.abs_elval = 1 / (_np.sqrt(2)**self.nfactors)
 
-        super(EffectRepComputational, self).__init__(dim)
+        super(EffectRepComputational, self).__init__(state_space)
 
     def __reduce__(self):
-        return (EffectRepComputational, (self.zvals, self.dim))
+        return (EffectRepComputational, (self.zvals, self.dim, self.state_space))
 
     def parity(self, x):
         """recursively divide the (64-bit) integer into two equal
@@ -154,7 +155,7 @@ class EffectRepComputational(EffectRep):
 
 class EffectRepTensorProduct(EffectRep):
 
-    def __init__(self, povm_factors, effect_labels):
+    def __init__(self, povm_factors, effect_labels, state_space):
         #Arrays for speeding up kron product in effect reps
         max_factor_dim = max(fct.dim for fct in povm_factors)
         kron_array = _np.ascontiguousarray(
@@ -169,14 +170,15 @@ class EffectRepTensorProduct(EffectRep):
         #int dim = _np.product(factor_dims) -- just send as argument for speed?
         #assert(dim == _np.product(kron_factor_dims))
 
-        dim = _np.product(factordims)
         self.povm_factors = povm_factors
         self.effect_labels = effect_labels
         self.kron_array = kron_array
         self.factor_dims = factordims
         self.nfactors = len(self.povm_factors)
         self.max_factor_dim = max_factor_dim  # Unused
-        super(EffectRepTensorProduct, self).__init__(dim)
+        state_space = _StateSpace.cast(state_space)
+        assert(_np.product(factordims) == state_space.dim)
+        super(EffectRepTensorProduct, self).__init__(state_space)
         self.factor_effects_have_changed()
 
     #TODO: fix this:
@@ -249,11 +251,10 @@ class EffectRepTensorProduct(EffectRep):
 
 class EffectRepComposed(EffectRep):
     def __init__(self, op_rep, effect_rep, op_id):
-        dim = effect_rep.dim
         self.op_rep = op_rep
         self.effect_rep = effect_rep
         self.op_id = op_id
-        super(EffectRepComposed, self).__init__(dim)
+        super(EffectRepComposed, self).__init__(effect_rep.state_space)
 
     def __reduce__(self):
         return (EffectRepComposed, (self.op_rep, self.effect_rep, self.op_id))

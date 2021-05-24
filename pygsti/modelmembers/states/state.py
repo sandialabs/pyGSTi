@@ -30,13 +30,19 @@ class State(_modelmember.ModelMember):
 
     def __init__(self, rep, evotype):
         """ Initialize a new SPAM Vector """
-        if isinstance(rep, int):  # For operators that have no representation themselves (term ops)
-            dim = rep             # allow passing an integer as `rep`.
-            rep = None
-        else:
-            dim = rep.dim
-        super(State, self).__init__(dim, evotype)
+        super(State, self).__init__(rep.state_space, evotype)
         self._rep = rep
+
+    @property
+    def dim(self):
+        """
+        Return the dimension of this state (when viewed as a dense array)
+
+        Returns
+        -------
+        int
+        """
+        return self.state_space.dim
 
     @property
     def size(self):
@@ -47,7 +53,7 @@ class State(_modelmember.ModelMember):
         -------
         int
         """
-        return self.dim
+        return self._rep.state_space.dim
 
     def set_dense(self, vec):
         """

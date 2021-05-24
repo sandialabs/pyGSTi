@@ -19,6 +19,7 @@ import numpy as _np
 cdef class EffectRep(_basereps_cython.EffectRep):
     def __cinit__(self):
         self.c_effect = NULL
+        self.state_space = None
 
     def __dealloc__(self):
         if self.c_effect != NULL:
@@ -29,7 +30,7 @@ cdef class EffectRep(_basereps_cython.EffectRep):
 
     @property
     def dim(self):
-        return self.c_effect._dim
+        return self.state_space.dim
 
     def probability(self, StateRep state not None):
         #unnecessary (just put in signature): cdef StateRep st = <StateRep?>state
@@ -43,6 +44,7 @@ cdef class EffectRepConjugatedState(EffectRep):
         self.state_rep = state_rep
         self.c_effect = new EffectCRep_Dense(<double*>self.state_rep.base.data,
                                                <INT>self.state_rep.base.shape[0])
+        self.state_space = state_rep.state_space
 
     def __str__(self):
         return str([ (<EffectCRep_Dense*>self.c_effect)._dataptr[i] for i in range(self.c_effect._dim)])
@@ -57,8 +59,11 @@ cdef class EffectRepConjugatedState(EffectRep):
 cdef class EffectRepComputational(EffectRep):
     cdef public _np.ndarray zvals
 
-    def __cinit__(self, _np.ndarray[_np.int64_t, ndim=1, mode='c'] zvals, INT dim):
-        # cdef INT dim = 4**zvals.shape[0] -- just send as argument
+    def __cinit__(self, _np.ndarray[_np.int64_t, ndim=1, mode='c'] zvals, state_space):
+
+        state_space = _StateSpace.cast(state_space)
+        assert(state_space.num_qubits == len(zvals))
+
         cdef INT nfactors = zvals.shape[0]
         cdef double abs_elval = 1/(_np.sqrt(2)**nfactors)
         cdef INT base = 1
@@ -67,10 +72,11 @@ cdef class EffectRepComputational(EffectRep):
             zvals_int += base * zvals[i]
             base = base << 1 # *= 2
         self.zvals = zvals
-        self.c_effect = new EffectCRep_Computational(nfactors, zvals_int, abs_elval, dim)
+        self.c_effect = new EffectCRep_Computational(nfactors, zvals_int, abs_elval, state_space.dim)
+        self.state_space = state_space
 
     def __reduce__(self):
-        return (EffectRepComputational, (self.zvals, self.c_effect._dim))
+        return (EffectRepComputational, (self.zvals, self.state_space))
 
     #Add party & to_dense from slow version?
 
@@ -81,7 +87,7 @@ cdef class EffectRepTensorProduct(EffectRep):
     cdef public _np.ndarray kron_array
     cdef public _np.ndarray factor_dims
 
-    def __init__(self, povm_factors, effect_labels):
+    def __init__(self, povm_factors, effect_labels, state_space):
         #Arrays for speeding up kron product in effect reps
         cdef INT max_factor_dim = max(fct.dim for fct in povm_factors)
         cdef _np.ndarray[double, ndim=2, mode='c'] kron_array = \
@@ -98,10 +104,12 @@ cdef class EffectRepTensorProduct(EffectRep):
         self.c_effect = new EffectCRep_TensorProd(<double*>kron_array.data,
                                                   <INT*>factor_dims.data,
                                                   nfactors, max_factor_dim, dim)
+        self.state_space = _StateSpace.cast(state_space)
+        assert(self.state_space.dim == dim)
         self.factor_effects_have_changed()  # computes self.kron_array
 
     def __reduce__(self):
-        return (EffectRepTensorProduct, (self.povm_factors, self.effect_labels))
+        return (EffectRepTensorProduct, (self.povm_factors, self.effect_labels, self.state_space))
 
     def _fill_fast_kron(self):
         """ Fills in self._fast_kron_array based on current self.factors """
@@ -119,7 +127,7 @@ cdef class EffectRepComposed(EffectRep):
     cdef public EffectRep effect_rep
     cdef public object op_id
 
-    def __cinit__(self, OpRep op_rep not None, EffectRep effect_rep not None, op_id):
+    def __cinit__(self, OpRep op_rep not None, EffectRep effect_rep not None, op_id, state_space):
         cdef INT dim = effect_rep.c_effect._dim
         self.op_id = op_id
         self.op_rep = op_rep
@@ -127,6 +135,8 @@ cdef class EffectRepComposed(EffectRep):
         self.c_effect = new EffectCRep_Composed(op_rep.c_rep,
                                                 effect_rep.c_effect,
                                                 <INT>op_id, dim)
+        self.state_space = _StateSpace.cast(state_space)
+        assert(self.state_space.dim == dim)
 
     def __reduce__(self):
-        return (EffectRepComposed, (self.op_rep, self.effect_rep, self.op_id))
+        return (EffectRepComposed, (self.op_rep, self.effect_rep, self.op_id, self.state_space))
