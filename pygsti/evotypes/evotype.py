@@ -20,9 +20,11 @@ class Evotype(object):
             return Evotype(str(obj))
 
     def __init__(self, name):
-        self.name = name
+        if ':' in name:
+            self.name, self.term_evotype = name.split(':')  # e.g. 'pathintegral:statevec'
+        else:
+            self.name, self.term_evotype = name, None
         self.module = _importlib.import_module("pygsti.evotypes." + name)
-        self.term_evotype = None  # maybe parse this out of name? TODO , e.g. 'terms:statevec'? OR 'pathintegral:statevec'
 
     def __getstate__(self):
         state = self.__dict__.copy()
@@ -42,11 +44,11 @@ class Evotype(object):
     def __str__(self):
         return self.name
 
-    def create_dense_rep(self, state_space):  # process_mx=None,
-        return self.module.OpRepDense(state_space)
+    def create_dense_rep(self, mx, state_space):  # process_mx=None,
+        return self.module.OpRepDense(mx, state_space)
 
-    def create_pure_rep(self, state_space):  # process_mx=None,
-        return self.module.OpRepPure(state_space)
+    def create_denseunitary_rep(self, mx, state_space):  # process_mx=None,
+        return self.module.OpRepDenseUnitary(mx, state_space)
 
     def create_composed_rep(self, factor_op_reps, state_space):
         return self.module.OpRepComposed(factor_op_reps, state_space)

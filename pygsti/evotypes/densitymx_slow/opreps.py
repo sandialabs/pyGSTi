@@ -53,10 +53,13 @@ class OpRep(_basereps.OpRep):
 
 
 class OpRepDense(OpRep):
-    def __init__(self, state_space):
+    def __init__(self, mx, state_space):
         state_space = _StateSpace.cast(state_space)
-        self.base = _np.require(_np.identity(state_space.dim, 'd'),
-                                requirements=['OWNDATA', 'C_CONTIGUOUS'])
+        if mx is None:
+            mx = _np.identity(state_space.dim, 'd')
+        assert(mx.ndim == 2 and mx.shape[0] == state_space.dim)
+
+        self.base = _np.require(mx, requirements=['OWNDATA', 'C_CONTIGUOUS'])
         super(OpRepDense, self).__init__(state_space)
 
     def acton(self, state):
@@ -116,8 +119,7 @@ class OpRepStandard(OpRepDense):
         state_space = _StateSpace.cast(state_space)
         assert(ptm.shape[0] == state_space.dim)
 
-        super(OpRepStandard, self).__init__(state_space)
-        self.base[:, :] = LinearOperator.convert_to_matrix(ptm)
+        super(OpRepStandard, self).__init__(LinearOperator.convert_to_matrix(ptm), state_space)
 
 
 class OpRepStochastic(OpRepDense):
@@ -132,7 +134,7 @@ class OpRepStochastic(OpRepDense):
         state_space = _StateSpace.cast(state_space)
         assert(self.basis.dim == state_space.dim)
 
-        super(OpRepStochastic, self).__init__(state_space)
+        super(OpRepStochastic, self).__init__(None, state_space)
         self.update_rates(initial_rates)
 
     def update_rates(self, rates):

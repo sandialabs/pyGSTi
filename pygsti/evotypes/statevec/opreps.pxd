@@ -35,8 +35,8 @@ cdef extern from "opcreps.h" namespace "CReps":
         StateCRep* adjoint_acton(StateCRep*, StateCRep*)
         INT _dim
 
-    cdef cppclass OpCRep_Pure(OpCRep):
-        OpCRep_Pure(double complex*,INT) except +
+    cdef cppclass OpCRep_DenseUnitary(OpCRep):
+        OpCRep_DenseUnitary(double complex*,INT) except +
         StateCRep* acton(StateCRep*, StateCRep*)
         StateCRep* adjoint_acton(StateCRep*, StateCRep*)
         double complex* _dataptr

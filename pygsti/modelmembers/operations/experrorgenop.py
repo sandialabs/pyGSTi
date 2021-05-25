@@ -57,10 +57,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
 
     def __init__(self, errorgen, dense_rep=False):
         # Extract superop dimension from 'errorgen'
-        d2 = errorgen.dim
-        d = int(round(_np.sqrt(d2)))
-        assert(d * d == d2), "LinearOperator dim must be a perfect square"
-
+        state_space = errorgen.state_space
         self.errorgen = errorgen  # don't copy (allow object reuse)
 
         evotype = self.errorgen._evotype
@@ -83,7 +80,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         #Finish initialization based on evolution type
         self.dense_rep = dense_rep
         if self.dense_rep:
-            rep = evotype.create_dense_rep(d2)
+            rep = evotype.create_dense_rep(None, state_space)
 
             # Cache values - for later work with dense rep
             self.exp_err_gen = None   # used for dense_rep=True mode to cache qty needed in deriv_wrt_params

@@ -78,7 +78,7 @@ class ComposedOp(_LinearOperator):
 
         #Create representation object
         if dense_rep:
-            rep = evotype.create_dense_rep(state_space)
+            rep = evotype.create_dense_rep(None, state_space)
         else:
             factor_op_reps = [op._rep for op in self.factorops]
             rep = evotype.create_composed_rep(factor_op_reps, state_space)

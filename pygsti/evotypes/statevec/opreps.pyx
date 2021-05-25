@@ -60,22 +60,25 @@ cdef class OpRep(_basereps_cython.OpRep):
         return LinearOperator((dim,dim), matvec=mv, rmatvec=rmv, dtype=_np.complex128)
 
 
-cdef class OpRepPure(OpRep):
+cdef class OpRepDenseUnitary(OpRep):
     cdef public _np.ndarray base
 
-    def __init__(self, state_space):
+    def __init__(self, mx, state_space):
         state_space = _StateSpace.cast(state_space)
-        self.base = _np.require(_np.identity(state_space.udim, _np.complex128),
-                                requirements=['OWNDATA', 'C_CONTIGUOUS'])
+        if mx is None:
+            mx = _np.identity(state_space.udim, _np.complex128)
+        assert(mx.ndim == 2 and mx.shape[0] == state_space.udim)
+
+        self.base = _np.require(mx, requirements=['OWNDATA', 'C_CONTIGUOUS'])
         assert(self.c_rep == NULL)
-        self.c_rep = new OpCRep_Pure(<double complex*>self.base.data,
-                                     <INT>self.base.shape[0])
+        self.c_rep = new OpCRep_DenseUnitary(<double complex*>self.base.data,
+                                             <INT>self.base.shape[0])
         self.state_space = state_space
 
     def __reduce__(self):
         # because serialization of numpy array flags is borked (around Numpy v1.16), we need to copy data
         # (so self.base *owns* it's data) and manually convey the writeable flag.
-        return (OpRepPure.__new__, (self.__class__,), (self.base, self.base.flags.writeable))
+        return (OpRepDenseUnitary.__new__, (self.__class__,), (self.base, self.base.flags.writeable))
 
     def __setstate__(self, state):
         assert(self.c_rep == NULL)
@@ -100,12 +103,12 @@ cdef class OpRepPure(OpRep):
         return s
 
     def copy(self):
-        cpy = OpRepPure(self.base.shape[0])
+        cpy = OpRepDenseUnitary(self.base.shape[0])
         cpy.base[:, :] = self.base.copy()
         return cpy
 
 
-class OpRepStandard(OpRepPure):
+class OpRepStandard(OpRepDenseUnitary):
     def __init__(self, name, state_space):
         std_unitaries = _itgs.standard_gatename_unitaries()
         self.name = name
@@ -115,8 +118,7 @@ class OpRepStandard(OpRepPure):
         U = std_unitaries[self.name]
         state_space = _StateSpace.cast(state_space)
         assert(U.shape[0] == state_space.udim)
-        super(OpRepStandard, self).__init__(state_space)
-        self.base[:, :] = U
+        super(OpRepStandard, self).__init__(U, state_space)
 
     def __reduce__(self):
         return (OpRepStandard, (self.name,))

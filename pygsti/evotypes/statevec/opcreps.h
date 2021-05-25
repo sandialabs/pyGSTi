@@ -19,11 +19,11 @@ namespace CReps {
     virtual StateCRep* adjoint_acton(StateCRep* state, StateCRep* out_state) = 0;
   };
 
-  class OpCRep_Pure :public OpCRep {
+  class OpCRep_DenseUnitary :public OpCRep {
     public:
     dcomplex* _dataptr;
-    OpCRep_Pure(dcomplex* data, INT dim);
-    virtual ~OpCRep_Pure();
+    OpCRep_DenseUnitary(dcomplex* data, INT dim);
+    virtual ~OpCRep_DenseUnitary();
     virtual StateCRep* acton(StateCRep* state, StateCRep* out_state);
     virtual StateCRep* adjoint_acton(StateCRep* state, StateCRep* out_state);
   };

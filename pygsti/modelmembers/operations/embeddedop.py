@@ -59,7 +59,7 @@ class EmbeddedOp(_LinearOperator):
 
         #Create representation
         if dense_rep:
-            rep = evotype.create_dense_rep(state_space)
+            rep = evotype.create_dense_rep(None, state_space)
         else:
             rep = evotype.create_embedded_rep(state_space, self.target_labels, self.embedded_op._rep)
 

@@ -71,10 +71,13 @@ cdef class OpRep(_basereps_cython.OpRep):
 cdef class OpRepDense(OpRep):
     cdef public _np.ndarray base
 
-    def __init__(self, state_space):
+    def __init__(self, mx, state_space):
         state_space = _StateSpace.cast(state_space)
-        self.base = _np.require(_np.identity(state_space.dim, 'd'),
-                                requirements=['OWNDATA', 'C_CONTIGUOUS'])
+        if mx is None:
+            mx = _np.identity(state_space.dim, 'd')
+        assert(mx.ndim == 2 and mx.shape[0] == state_space.dim)
+
+        self.base = _np.require(mx, requirements=['OWNDATA', 'C_CONTIGUOUS'])
         assert(self.c_rep == NULL)
         self.c_rep = new OpCRep_Dense(<double*>self.base.data,
                                      <INT>self.base.shape[0])
@@ -150,18 +153,11 @@ class OpRepStandard(OpRepDense):
             raise ValueError("Name '%s' not in standard unitaries" % self.name)
 
         U = std_unitaries[self.name]
-
-        #TODO: for statevec:
-        #if evotype == 'statevec':
-        #    rep = replib.SVOpRepDense(LinearOperator.convert_to_matrix(U))
-        #else:  # evotype in ('densitymx', 'svterm', 'cterm')
-
         ptm = _ot.unitary_to_pauligate(U)
         state_space = _StateSpace.cast(state_space)
         assert(ptm.shape[0] == state_space.dim)
-        
-        super(OpRepStandard, self).__init__(state_space)
-        self.base[:, :] = LinearOperator.convert_to_matrix(ptm)
+
+        super(OpRepStandard, self).__init__(LinearOperator.convert_to_matrix(ptm), state_space)
 
     def __reduce__(self):
         return (OpRepStandard, (self.name,))
@@ -179,7 +175,7 @@ class OpRepStochastic(OpRepDense):
         state_space = _StateSpace.cast(state_space)
         assert(self.basis.dim == state_space.dim)
 
-        super(OpRepStochastic, self).__init__(state_space)
+        super(OpRepStochastic, self).__init__(None, state_space)
         self.update_rates(initial_rates)
 
     def update_rates(self, rates):

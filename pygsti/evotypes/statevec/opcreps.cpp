@@ -27,18 +27,18 @@ namespace CReps {
 
 
   /****************************************************************************\
-  |* OpCRep_Pure                                                              *|
+  |* OpCRep_DenseUnitary                                                      *|
   \****************************************************************************/
 
-  OpCRep_Pure::OpCRep_Pure(dcomplex* data, INT dim)
+  OpCRep_DenseUnitary::OpCRep_DenseUnitary(dcomplex* data, INT dim)
     :OpCRep(dim)
   {
     _dataptr = data;
   }
-  OpCRep_Pure::~OpCRep_Pure() { }
+  OpCRep_DenseUnitary::~OpCRep_DenseUnitary() { }
 
-  StateCRep* OpCRep_Pure::acton(StateCRep* state,
-				       StateCRep* outstate) {
+  StateCRep* OpCRep_DenseUnitary::acton(StateCRep* state,
+                                        StateCRep* outstate) {
     DEBUG(std::cout << "Dense acton called!" << std::endl);
     DEBUG(state->print("INPUT"));
     INT k;
@@ -53,8 +53,8 @@ namespace CReps {
     return outstate;
   }
 
-  StateCRep* OpCRep_Pure::adjoint_acton(StateCRep* state,
-					       StateCRep* outstate) {
+  StateCRep* OpCRep_DenseUnitary::adjoint_acton(StateCRep* state,
+                                                StateCRep* outstate) {
     DEBUG(std::cout << "Dense adjoint_acton called!" << std::endl);
     DEBUG(state->print("INPUT"));
     for(INT i=0; i< _dim; i++) {

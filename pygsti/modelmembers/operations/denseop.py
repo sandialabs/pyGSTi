@@ -261,6 +261,9 @@ class BasedDenseOperatorInterface(DenseOperatorInterface):
     This is used by the TPDenseOp class, for example, which has a .base
     that is different from its ._rep.base.
     """
+    def __init__(self, base):
+        self.base = base
+
     @property
     def _ptr(self):
         return self.base
@@ -268,6 +271,7 @@ class BasedDenseOperatorInterface(DenseOperatorInterface):
 
 class DenseOperator(BasedDenseOperatorInterface, _LinearOperator):
     """
+    TODO: update docstring
     An operator that behaves like a dense operation matrix.
 
     This class is the common base class for more specific dense operators.
@@ -291,25 +295,61 @@ class DenseOperator(BasedDenseOperatorInterface, _LinearOperator):
         Direct access to the underlying process matrix data.
     """
 
-    def __init__(self, mx, evotype, state_space=None):
+    def __init__(self, mx, evotype, state_space):
         """ Initialize a new LinearOperator """
         state_space = _statespace.default_space_for_dim(mx.shape[0]) if (state_space is None) \
             else _statespace.StateSpace.cast(state_space)
+        rep = evotype.create_dense_rep(mx, state_space)
         evotype = _Evotype.cast(evotype)
-        rep = evotype.create_dense_rep(state_space)
-        rep.base[:, :] = mx
         _LinearOperator.__init__(self, rep, evotype)
-        BasedDenseOperatorInterface.__init__(self)
+        BasedDenseOperatorInterface.__init__(self, self._rep.base)
         # "Based" interface requires this and derived classes to have a .base attribute
         # or property that points to the data to interface with.  This gives derived classes
         # flexibility in defining something other than self._rep.base to be used (see TPDenseOp).
 
-    @property
-    def base(self):
-        """
-        The underlying dense process matrix.
-        """
-        return self._rep.base
+    def __str__(self):
+        s = "%s with shape %s\n" % (self.__class__.__name__, str(self.base.shape))
+        s += _mt.mx_to_string(self.base, width=4, prec=2)
+        return s
+
+
+class DenseUnitaryOperator(BasedDenseOperatorInterface, _LinearOperator):
+    """
+    TODO: update docstring
+    An operator that behaves like a dense operation matrix.
+
+    This class is the common base class for more specific dense operators.
+
+    Parameters
+    ----------
+    mx : numpy.ndarray
+        The operation as a dense process matrix.
+
+    evotype : Evotype or str
+        The evolution type.  The special value `"default"` is equivalent
+        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
+
+    state_space : StateSpace, optional
+        The state space for this operation.  If `None` a default state space
+        with the appropriate number of qubits is used.
+
+    Attributes
+    ----------
+    base : numpy.ndarray
+        Direct access to the underlying process matrix data.
+    """
+
+    def __init__(self, mx, evotype, state_space):
+        """ Initialize a new LinearOperator """
+        state_space = _statespace.default_space_for_dim(mx.shape[0]) if (state_space is None) \
+            else _statespace.StateSpace.cast(state_space)
+        rep = evotype.create_denseunitary_rep(mx, state_space)
+        evotype = _Evotype.cast(evotype)
+        _LinearOperator.__init__(self, rep, evotype)
+        BasedDenseOperatorInterface.__init__(self, self._rep.base)
+        # "Based" interface requires this and derived classes to have a .base attribute
+        # or property that points to the data to interface with.  This gives derived classes
+        # flexibility in defining something other than self._rep.base to be used (see TPDenseOp).
 
     def __str__(self):
         s = "%s with shape %s\n" % (self.__class__.__name__, str(self.base.shape))

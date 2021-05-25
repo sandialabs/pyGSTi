@@ -12,10 +12,10 @@ The FullUnitaryOp class and supporting functionality.
 
 import numpy as _np
 from .linearop import LinearOperator as _LinearOperator
-from .denseop import DenseOperator as _DenseOperator
+from .denseop import DenseOperator as _DenseUnitaryOperator
 
 
-class FullUnitaryOp(_DenseOperator):
+class FullUnitaryOp(_DenseUnitaryOperator):
     """
     An operation matrix that is fully parameterized.
 
@@ -33,21 +33,8 @@ class FullUnitaryOp(_DenseOperator):
     """
 
     def __init__(self, m, evotype="default"):
-        """
-        Initialize a FullDenseOp object.
-
-        Parameters
-        ----------
-        m : array_like or LinearOperator
-            a square 2D array-like or LinearOperator object representing the operation action.
-            The shape of m sets the dimension of the operation.
-
-        evotype : {"statevec", "densitymx", "auto"}
-            The evolution type.  If `"auto"`, then `"statevec"` is used if and only if `m`
-            has a complex datatype.
-        """
         m = _LinearOperator.convert_to_matrix(m)
-        _DenseOperator.__init__(self, m, evotype)
+        _DenseUnitaryOperator.__init__(self, m, evotype)
         d = self.dim
         self._paramlbls = _np.array(["MxElement Re(%d,%d)" % (i, j) for i in range(d) for j in range(d)]
                                     + ["MxElement Im(%d,%d)" % (i, j) for i in range(d) for j in range(d)],

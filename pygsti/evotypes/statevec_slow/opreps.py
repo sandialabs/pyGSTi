@@ -47,11 +47,13 @@ class OpRep(_basereps.OpRep):
         return LinearOperator((self.dim, self.dim), matvec=mv, rmatvec=rmv)  # transpose, adjoint, dot, matmat?
 
 
-class OpRepPure(OpRep):
-    def __init__(self, state_space):
+class OpRepDenseUnitary(OpRep):
+    def __init__(self, mx, state_space):
         state_space = _StateSpace.cast(state_space)
-        self.base = _np.require(_np.identity(state_space.udim, complex),
-                                requirements=['OWNDATA', 'C_CONTIGUOUS'])
+        if mx is None:
+            mx = _np.identity(state_space.udim, complex)
+        assert(mx.ndim == 2 and mx.shape[0] == state_space.udim)
+        self.base = _np.require(mx, requirements=['OWNDATA', 'C_CONTIGUOUS'])
         super(OpRep, self).__init__(self.base.shape[0])
 
     def acton(self, state):
@@ -61,10 +63,10 @@ class OpRepPure(OpRep):
         return _StateRep(_np.dot(_np.conjugate(self.base.T), state.base))
 
     def __str__(self):
-        return "OpRepDense:\n" + str(self.base)
+        return "OpRepDenseUnitary:\n" + str(self.base)
 
 
-class OpRepStandard(OpRepPure):
+class OpRepStandard(OpRepDenseUnitary):
     def __init__(self, name, state_space):
         std_unitaries = _itgs.standard_gatename_unitaries()
         self.name = name
@@ -75,8 +77,7 @@ class OpRepStandard(OpRepPure):
         state_space = _StateSpace.cast(state_space)
         assert(U.shape[0] == state_space.udim)
 
-        super(OpRepStandard, self).__init__(state_space)
-        self.base[:, :] = U
+        super(OpRepStandard, self).__init__(U, state_space)
 
 
 #class OpRepStochastic(OpRepDense):
