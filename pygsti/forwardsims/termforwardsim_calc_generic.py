@@ -1,21 +1,20 @@
+"""Defines generic Python-version of map forward simuator calculations"""
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
 
-
-
-
-
-def SV_prs_as_polynomials(fwdsim, rholabel, elabels, circuit, polynomial_vindices_per_int,
-                          comm=None, mem_limit=None, fastmode=True):
-    return _prs_as_polys(fwdsim, rholabel, elabels, circuit, polynomial_vindices_per_int, comm, mem_limit, fastmode)
-
-
-def SB_prs_as_polynomials(fwdsim, rholabel, elabels, circuit, polynomial_vindices_per_int,
-                          comm=None, mem_limit=None, fastmode=True):
-    return _prs_as_polys(fwdsim, rholabel, elabels, circuit, polynomial_vindices_per_int, comm, mem_limit, fastmode)
+import time as _time
+import numpy as _np
 
 
 #Base case which works for both SV and SB evolution types thanks to Python's duck typing
-def _prs_as_polys(fwdsim, rholabel, elabels, circuit, polynomial_vindices_per_int,
-                  comm=None, mem_limit=None, fastmode=True):
+def prs_as_polys(fwdsim, rholabel, elabels, circuit, polynomial_vindices_per_int,
+                 comm=None, mem_limit=None, fastmode=True):
     """
     Computes polynomials of the probabilities for multiple spam-tuples of `circuit`
 
@@ -225,61 +224,22 @@ def _prs_as_polys(fwdsim, rholabel, elabels, circuit, polynomial_vindices_per_in
     return prps  # can be a list of polys
 
 
-def SV_prs_directly(fwdsim, rholabel, elabels, circuit, repcache, comm=None, mem_limit=None, fastmode=True, wt_tol=0.0,
+def prs_directly(fwdsim, rholabel, elabels, circuit, repcache, comm=None, mem_limit=None, fastmode=True, wt_tol=0.0,
                     reset_term_weights=True, debug=None):
     #return _prs_directly(fwdsim, rholabel, elabels, circuit, comm, mem_limit, fastmode)
     raise NotImplementedError("No direct mode yet")
 
 
-def SB_prs_directly(fwdsim, rholabel, elabels, circuit, repcache, comm=None, mem_limit=None, fastmode=True, wt_tol=0.0,
-                    reset_term_weights=True, debug=None):
-    #return _prs_directly(fwdsim, rholabel, elabels, circuit, comm, mem_limit, fastmode)
-    raise NotImplementedError("No direct mode yet")
-
-
-def SV_refresh_magnitudes_in_repcache(repcache, paramvec):
+def refresh_magnitudes_in_repcache(repcache, paramvec):
     from ..opcalc import bulk_eval_compact_polynomials_complex as _bulk_eval_compact_polynomials_complex
     for repcel in repcache.values():
-        #repcel = <RepCacheEl?>repcel
         for termrep in repcel[0]:  # first element of tuple contains list of term-reps
             v, c = termrep.coeff.compact_complex()
             coeff_array = _bulk_eval_compact_polynomials_complex(v, c, paramvec, (1,))
             termrep.set_magnitude_only(abs(coeff_array[0]))
 
 
-def SV_find_best_pathmagnitude_threshold(fwdsim, rholabel, elabels, circuit, polynomial_vindices_per_int,
-                                         repcache, circuitsetup_cache, comm=None, mem_limit=None,
-                                         pathmagnitude_gap=0.0, min_term_mag=0.01, max_paths=500, threshold_guess=0.0):
-    return _find_best_pathmagnitude_threshold(fwdsim, rholabel, elabels, circuit, polynomial_vindices_per_int, repcache,
-                                              circuitsetup_cache, comm, mem_limit, pathmagnitude_gap, min_term_mag,
-                                              max_paths, threshold_guess)
-
-
-def SB_find_best_pathmagnitude_threshold(fwdsim, rholabel, elabels, circuit, polynomial_vindices_per_int, repcache,
-                                         circuitsetup_cache, comm=None, mem_limit=None, pathmagnitude_gap=0.0,
-                                         min_term_mag=0.01, max_paths=500, threshold_guess=0.0):
-    return _find_best_pathmagnitude_threshold(fwdsim, rholabel, elabels, circuit, polynomial_vindices_per_int, repcache,
-                                              circuitsetup_cache, comm, mem_limit, pathmagnitude_gap, min_term_mag,
-                                              max_paths, threshold_guess)
-
-
-def SV_compute_pruned_path_polynomials_given_threshold(threshold, fwdsim, rholabel, elabels, circuit,
-                                                       polynomial_vindices_per_int, repcache, circuitsetup_cache,
-                                                       comm=None, mem_limit=None, fastmode=True):
-    return _compute_pruned_path_polys_given_threshold(threshold, fwdsim, rholabel, elabels, circuit,
-                                                      polynomial_vindices_per_int, repcache, circuitsetup_cache,
-                                                      comm, mem_limit, fastmode)
-
-
-def SB_compute_pruned_path_polynomials_given_threshold(threshold, fwdsim, rholabel, elabels, circuit,
-                                                       polynomial_vindices_per_int, repcache, circuitsetup_cache,
-                                                       comm=None, mem_limit=None, fastmode=True):
-    return _compute_pruned_path_polys_given_threshold(threshold, fwdsim, rholabel, elabels, circuit,
-                                                      polynomial_vindices_per_int, repcache, circuitsetup_cache,
-                                                      comm, mem_limit, fastmode)
-
-
-def SV_circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcache, threshold, min_term_mag):
+def circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcache, threshold, min_term_mag):
     """ TODO: docstring """
     mpv = fwdsim.model.num_params  # max_polynomial_vars
     distinct_gateLabels = sorted(set(circuit))
@@ -346,14 +306,13 @@ def SV_circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcach
     #    initial_threshold=current_threshold, min_threshold=pathmagnitude_gap / 1000.0, max_npaths=max_paths)
 
 
-global_cnt = 0
-
+#global_cnt = 0
 #Base case which works for both SV and SB evolution types thanks to Python's duck typing
 
 
-def _find_best_pathmagnitude_threshold(fwdsim, rholabel, elabels, circuit, polynomial_vindices_per_int,
-                                       repcache, circuitsetup_cache, comm, mem_limit, pathmagnitude_gap,
-                                       min_term_mag, max_paths, threshold_guess):
+def find_best_pathmagnitude_threshold(fwdsim, rholabel, elabels, circuit, polynomial_vindices_per_int,
+                                      repcache, circuitsetup_cache, comm, mem_limit, pathmagnitude_gap,
+                                      min_term_mag, max_paths, threshold_guess):
     """
     Computes probabilities for multiple spam-tuples of `circuit`
 
@@ -475,9 +434,9 @@ def _find_best_pathmagnitude_threshold(fwdsim, rholabel, elabels, circuit, polyn
     return sum(npaths), threshold, sum(target_sum_of_pathmags), sum(achieved_sum_of_pathmags)
 
 
-def _compute_pruned_path_polys_given_threshold(threshold, fwdsim, rholabel, elabels, circuit,
-                                               polynomial_vindices_per_int, repcache, circuitsetup_cache,
-                                               comm, mem_limit, fastmode):
+def compute_pruned_path_polys_given_threshold(threshold, fwdsim, rholabel, elabels, circuit,
+                                              polynomial_vindices_per_int, repcache, circuitsetup_cache,
+                                              comm, mem_limit, fastmode):
     """
     Computes probabilities for multiple spam-tuples of `circuit`
 

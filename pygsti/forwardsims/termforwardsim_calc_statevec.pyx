@@ -12,11 +12,18 @@
 #***************************************************************************************************
 
 
-from libc.stdlib cimport malloc, free
-from libc.math cimport log10, sqrt
 from libc cimport time
 from libcpp cimport bool
 from libcpp.vector cimport vector
+from cython.operator cimport dereference as deref
+from ..evotypes.basereps_cython cimport PolynomialRep, PolynomialCRep, PolynomialVarsIndex
+from ..evotypes.statevec.statereps cimport StateRep, StateCRep
+from ..evotypes.statevec.opreps cimport OpRep, OpCRep
+from ..evotypes.statevec.effectreps cimport EffectRep, EffectCRep
+from ..evotypes.statevec.termreps cimport TermRep, TermCRep, TermDirectRep, TermDirectCRep
+
+from libc.stdlib cimport malloc, free
+from libc.math cimport log10, sqrt
 from libcpp.unordered_map cimport unordered_map
 #from libcpp.pair cimport pair
 #from libcpp.algorithm cimport sort as stdsort
@@ -31,11 +38,6 @@ import numpy as np
 from ..opcalc import fastopcalc as _fastopcalc
 #from scipy.sparse.linalg import LinearOperator
 
-cdef double LARGE = 1000000000
-# a large number such that LARGE is
-# a very high term weight which won't help (at all) a
-# path get included in the selected set of paths.
-
 cdef double SMALL = 1e-5
 # a number which is used in place of zero within the
 # product of term magnitudes to keep a running path
@@ -47,211 +49,35 @@ ctypedef long long INT
 ctypedef unsigned long long UINT
 
 ctypedef double complex DCOMPLEX
-ctypedef SVTermCRep* SVTermCRep_ptr
-ctypedef SVTermDirectCRep* SVTermDirectCRep_ptr
+ctypedef StateCRep* StateCRep_ptr
+ctypedef OpCRep* OpCRep_ptr
+ctypedef EffectCRep* EffectCRep_ptr
+ctypedef TermCRep* TermCRep_ptr
+ctypedef TermDirectCRep* TermDirectCRep_ptr
 ctypedef PolynomialCRep* PolynomialCRep_ptr
-ctypedef vector[SVTermCRep_ptr]* vector_SVTermCRep_ptr_ptr
-ctypedef vector[SVTermDirectCRep_ptr]* vector_SVTermDirectCRep_ptr_ptr
+ctypedef vector[TermCRep_ptr]* vector_TermCRep_ptr_ptr
+ctypedef vector[TermDirectCRep_ptr]* vector_TermDirectCRep_ptr_ptr
 ctypedef vector[INT]* vector_INT_ptr
 
 
 #Create a function pointer type for term-based calc inner loop
-ctypedef void (*sv_innerloopfn_ptr)(vector[vector_SVTermCRep_ptr_ptr],
-                                    vector[INT]*, vector[PolynomialCRep*]*, INT)
-ctypedef INT (*sv_innerloopfn_direct_ptr)(vector[vector_SVTermDirectCRep_ptr_ptr],
-                                          vector[INT]*, vector[DCOMPLEX]*, INT, vector[double]*, double)
-ctypedef void (*sb_innerloopfn_ptr)(vector[vector_SBTermCRep_ptr_ptr],
-                                    vector[INT]*, vector[PolynomialCRep*]*, INT)
-ctypedef void (*sv_addpathfn_ptr)(vector[PolynomialCRep*]*, vector[INT]&, INT, vector[vector_SVTermCRep_ptr_ptr]&,
-                                  SVStateCRep**, SVStateCRep**, vector[INT]*,
-                                  vector[SVStateCRep*]*, vector[SVStateCRep*]*, vector[PolynomialCRep]*)
-
-
-
-cdef class SVTermRep:
-    cdef SVTermCRep* c_term
-
-    #Hold references to other reps so we don't GC them
-    cdef public PolynomialRep coeff
-    cdef public SVStateRep pre_state
-    cdef public SVStateRep post_state
-    cdef public SVEffectRep pre_effect
-    cdef public SVEffectRep post_effect
-    cdef public object pre_ops
-    cdef public object post_ops
-    cdef public object compact_coeff
-
-
-    @classmethod
-    def composed(cls, terms_to_compose, double magnitude):
-        cdef double logmag = log10(magnitude) if magnitude > 0 else -LARGE
-        cdef SVTermRep first = terms_to_compose[0]
-        cdef PolynomialRep coeffrep = first.coeff
-        pre_ops = first.pre_ops[:]
-        post_ops = first.post_ops[:]
-        for t in terms_to_compose[1:]:
-            coeffrep = coeffrep.mult(t.coeff)
-            pre_ops += t.pre_ops
-            post_ops += t.post_ops
-        return SVTermRep(coeffrep, magnitude, logmag, first.pre_state, first.post_state,
-                         first.pre_effect, first.post_effect, pre_ops, post_ops)
-
-    def __cinit__(self, PolynomialRep coeff, double mag, double logmag,
-                  SVStateRep pre_state, SVStateRep post_state,
-                  SVEffectRep pre_effect, SVEffectRep post_effect, pre_ops, post_ops):
-        self.coeff = coeff
-        self.compact_coeff = coeff.compact_complex()
-        self.pre_ops = pre_ops
-        self.post_ops = post_ops
-
-        cdef INT i
-        cdef INT npre = len(pre_ops)
-        cdef INT npost = len(post_ops)
-        cdef vector[SVOpCRep*] c_pre_ops = vector[SVOpCRep_ptr](npre)
-        cdef vector[SVOpCRep*] c_post_ops = vector[SVOpCRep_ptr](<INT>len(post_ops))
-        for i in range(npre):
-            c_pre_ops[i] = (<SVOpRep?>pre_ops[i]).c_rep
-        for i in range(npost):
-            c_post_ops[i] = (<SVOpRep?>post_ops[i]).c_rep
-
-        if pre_state is not None or post_state is not None:
-            assert(pre_state is not None and post_state is not None)
-            self.pre_state = pre_state
-            self.post_state = post_state
-            self.pre_effect = self.post_effect = None
-            self.c_term = new SVTermCRep(coeff.c_polynomial, mag, logmag, pre_state.c_state, post_state.c_state,
-                                         c_pre_ops, c_post_ops);
-        elif pre_effect is not None or post_effect is not None:
-            assert(pre_effect is not None and post_effect is not None)
-            self.pre_effect = pre_effect
-            self.post_effect = post_effect
-            self.pre_state = self.post_state = None
-            self.c_term = new SVTermCRep(coeff.c_polynomial, mag, logmag, pre_effect.c_effect, post_effect.c_effect,
-                                         c_pre_ops, c_post_ops);
-        else:
-            self.pre_state = self.post_state = None
-            self.pre_effect = self.post_effect = None
-            self.c_term = new SVTermCRep(coeff.c_polynomial, mag, logmag, c_pre_ops, c_post_ops);
-
-    def __dealloc__(self):
-        del self.c_term
-
-    def __reduce__(self):
-        return (SVTermRep, (self.coeff, self.magnitude, self.logmagnitude,
-                self.pre_state, self.post_state, self.pre_effect, self.post_effect,
-                self.pre_ops, self.post_ops))
-
-    def set_magnitude(self, double mag):
-        self.c_term._magnitude = mag
-        self.c_term._logmagnitude = log10(mag) if mag > 0 else -LARGE
-
-    def set_magnitude_only(self, double mag):  # TODO: better name?
-        self.c_term._magnitude = mag
-
-    def mapvec_indices_inplace(self, mapvec):
-        self.coeff.mapvec_indices_inplace(mapvec)
-        self.compact_coeff = self.coeff.compact_complex()  #b/c indices have been updated!
-
-    @property
-    def magnitude(self):
-        return self.c_term._magnitude
-
-    @property
-    def logmagnitude(self):
-        return self.c_term._logmagnitude
-
-    def scalar_mult(self, x):
-        coeff = self.coeff.copy()
-        coeff.scale(x)
-        return SVTermRep(coeff, self.magnitude * x, self.logmagnitude + log10(x),
-                         self.pre_state, self.post_state, self.pre_effect, self.post_effect,
-                         self.pre_ops, self.post_ops)
-
-    def copy(self):
-        return SVTermRep(self.coeff.copy(), self.magnitude, self.logmagnitude,
-                         self.pre_state, self.post_state, self.pre_effect, self.post_effect,
-                         self.pre_ops, self.post_ops)
-
-    #Not needed - and this implementation is quite right as it will need to change
-    # the ordering of the pre/post ops also.
-    #def conjugate(self):
-    #    return SVTermRep(self.coeff.copy(), self.magnitude, self.logmagnitude,
-    #                     self.post_state, self.pre_state, self.post_effect, self.pre_effect,
-    #                     self.post_ops, self.pre_ops)
-
-
-#Note: to use direct term reps (numerical coeffs) we'll need to update
-# what the members are called and add methods as was done for SVTermRep.
-cdef class SVTermDirectRep:
-    cdef SVTermDirectCRep* c_term
-
-    #Hold references to other reps so we don't GC them
-    cdef SVStateRep state_ref1
-    cdef SVStateRep state_ref2
-    cdef SVEffectRep effect_ref1
-    cdef SVEffectRep effect_ref2
-    cdef object list_of_preops_ref
-    cdef object list_of_postops_ref
-
-    def __cinit__(self, double complex coeff, double mag, double logmag,
-                  SVStateRep pre_state, SVStateRep post_state,
-                  SVEffectRep pre_effect, SVEffectRep post_effect, pre_ops, post_ops):
-        self.list_of_preops_ref = pre_ops
-        self.list_of_postops_ref = post_ops
-
-        cdef INT i
-        cdef INT npre = len(pre_ops)
-        cdef INT npost = len(post_ops)
-        cdef vector[SVOpCRep*] c_pre_ops = vector[SVOpCRep_ptr](npre)
-        cdef vector[SVOpCRep*] c_post_ops = vector[SVOpCRep_ptr](<INT>len(post_ops))
-        for i in range(npre):
-            c_pre_ops[i] = (<SVOpRep?>pre_ops[i]).c_rep
-        for i in range(npost):
-            c_post_ops[i] = (<SVOpRep?>post_ops[i]).c_rep
-
-        if pre_state is not None or post_state is not None:
-            assert(pre_state is not None and post_state is not None)
-            self.state_ref1 = pre_state
-            self.state_ref2 = post_state
-            self.c_term = new SVTermDirectCRep(coeff, mag, logmag, pre_state.c_state, post_state.c_state,
-                                               c_pre_ops, c_post_ops);
-        elif pre_effect is not None or post_effect is not None:
-            assert(pre_effect is not None and post_effect is not None)
-            self.effect_ref1 = pre_effect
-            self.effect_ref2 = post_effect
-            self.c_term = new SVTermDirectCRep(coeff, mag, logmag, pre_effect.c_effect, post_effect.c_effect,
-                                               c_pre_ops, c_post_ops);
-        else:
-            self.c_term = new SVTermDirectCRep(coeff, mag, logmag, c_pre_ops, c_post_ops);
-
-    def __dealloc__(self):
-        del self.c_term
-
-    def set_coeff(self, coeff):
-        self.c_term._coeff = coeff
-
-    def set_magnitude(self, double mag, double logmag):
-        self.c_term._magnitude = mag
-        self.c_term._logmagnitude = logmag
-
-    @property
-    def magnitude(self):
-        return self.c_term._magnitude
-
-    @property
-    def logmagnitude(self):
-        return self.c_term._logmagnitude
-
+ctypedef void (*innerloopfn_ptr)(vector[vector_TermCRep_ptr_ptr],
+                                 vector[INT]*, vector[PolynomialCRep*]*, INT)
+ctypedef INT (*innerloopfn_direct_ptr)(vector[vector_TermDirectCRep_ptr_ptr],
+                                       vector[INT]*, vector[DCOMPLEX]*, INT, vector[double]*, double)
+ctypedef void (*addpathfn_ptr)(vector[PolynomialCRep*]*, vector[INT]&, INT, vector[vector_TermCRep_ptr_ptr]&,
+                               StateCRep**, StateCRep**, vector[INT]*,
+                               vector[StateCRep*]*, vector[StateCRep*]*, vector[PolynomialCRep]*)
 
 
 cdef class RepCacheEl:
-    cdef vector[SVTermCRep_ptr] reps
+    cdef vector[TermCRep_ptr] reps
     cdef vector[INT] foat_indices
     cdef vector[INT] e_indices
     cdef public object pyterm_references
 
     def __cinit__(self):
-        self.reps = vector[SVTermCRep_ptr](0)
+        self.reps = vector[TermCRep_ptr](0)
         self.foat_indices = vector[INT](0)
         self.e_indices = vector[INT](0)
         self.pyterm_references = []
@@ -259,9 +85,9 @@ cdef class RepCacheEl:
 
 cdef class CircuitSetupCacheEl:
     cdef vector[INT] cgatestring
-    cdef vector[SVTermCRep_ptr] rho_term_reps
-    cdef unordered_map[INT, vector[SVTermCRep_ptr] ] op_term_reps
-    cdef vector[SVTermCRep_ptr] E_term_reps
+    cdef vector[TermCRep_ptr] rho_term_reps
+    cdef unordered_map[INT, vector[TermCRep_ptr] ] op_term_reps
+    cdef vector[TermCRep_ptr] E_term_reps
     cdef vector[INT] rho_foat_indices
     cdef unordered_map[INT, vector[INT] ] op_foat_indices
     cdef vector[INT] E_foat_indices
@@ -270,9 +96,9 @@ cdef class CircuitSetupCacheEl:
 
     def __cinit__(self):
         self.cgatestring = vector[INT](0)
-        self.rho_term_reps = vector[SVTermCRep_ptr](0)
-        self.op_term_reps = unordered_map[INT, vector[SVTermCRep_ptr] ]()
-        self.E_term_reps = vector[SVTermCRep_ptr](0)
+        self.rho_term_reps = vector[TermCRep_ptr](0)
+        self.op_term_reps = unordered_map[INT, vector[TermCRep_ptr] ]()
+        self.E_term_reps = vector[TermCRep_ptr](0)
         self.rho_foat_indices = vector[INT](0)
         self.op_foat_indices = unordered_map[INT, vector[INT] ]()
         self.E_foat_indices = vector[INT](0)
@@ -288,18 +114,19 @@ cdef PolynomialRep_from_allocd_PolynomialCRep(PolynomialCRep* crep):
     ret.c_polynomial = crep
     return ret
 
-cdef vector[vector[SVTermCRep_ptr]] sv_extract_cterms(python_termrep_lists, INT max_order):
-    cdef vector[vector[SVTermCRep_ptr]] ret = vector[vector[SVTermCRep_ptr]](max_order+1)
-    cdef vector[SVTermCRep*] vec_of_terms
+
+cdef vector[vector[TermCRep_ptr]] extract_cterms(python_termrep_lists, INT max_order):
+    cdef vector[vector[TermCRep_ptr]] ret = vector[vector[TermCRep_ptr]](max_order+1)
+    cdef vector[TermCRep*] vec_of_terms
     for order,termreps in enumerate(python_termrep_lists): # maxorder+1 lists
-        vec_of_terms = vector[SVTermCRep_ptr](len(termreps))
+        vec_of_terms = vector[TermCRep_ptr](len(termreps))
         for i,termrep in enumerate(termreps):
-            vec_of_terms[i] = (<SVTermRep?>termrep).c_term
+            vec_of_terms[i] = (<TermRep?>termrep).c_term
         ret[order] = vec_of_terms
     return ret
 
 
-def SV_prs_as_polynomials(fwdsim, rholabel, elabels, circuit, polynomial_vindices_per_int,
+def prs_as_polynomials(fwdsim, rholabel, elabels, circuit, polynomial_vindices_per_int,
                           comm=None, mem_limit=None, fastmode=True):
 
     # Create gatelable -> int mapping to be used throughout
@@ -342,11 +169,11 @@ def SV_prs_as_polynomials(fwdsim, rholabel, elabels, circuit, polynomial_vindice
 
     #convert to c-reps
     cdef INT gi
-    cdef vector[vector[SVTermCRep_ptr]] rho_term_creps = sv_extract_cterms(rho_term_reps,fwdsim.max_order)
-    cdef vector[vector[SVTermCRep_ptr]] E_term_creps = sv_extract_cterms(E_term_reps,fwdsim.max_order)
-    cdef unordered_map[INT, vector[vector[SVTermCRep_ptr]]] gate_term_creps
+    cdef vector[vector[TermCRep_ptr]] rho_term_creps = extract_cterms(rho_term_reps,fwdsim.max_order)
+    cdef vector[vector[TermCRep_ptr]] E_term_creps = extract_cterms(E_term_reps,fwdsim.max_order)
+    cdef unordered_map[INT, vector[vector[TermCRep_ptr]]] gate_term_creps
     for gi,termrep_lists in op_term_reps.items():
-        gate_term_creps[gi] = sv_extract_cterms(termrep_lists,fwdsim.max_order)
+        gate_term_creps[gi] = extract_cterms(termrep_lists,fwdsim.max_order)
 
     E_cindices = vector[vector[INT]](<INT>len(e_indices))
     for ii,inds in enumerate(e_indices):
@@ -358,17 +185,17 @@ def SV_prs_as_polynomials(fwdsim, rholabel, elabels, circuit, polynomial_vindice
     stateDim = int(round(np.sqrt(fwdsim.model.dim)))
 
     #Call C-only function (which operates with C-representations only)
-    cdef vector[PolynomialCRep*] polynomials = sv_prs_as_polynomials(
+    cdef vector[PolynomialCRep*] polynomials = c_prs_as_polynomials(
         cgatestring, rho_term_creps, gate_term_creps, E_term_creps,
         E_cindices, numEs, fwdsim.max_order, mpv, vpi, stateDim, <bool>fastmode)
 
     return [ PolynomialRep_from_allocd_PolynomialCRep(polynomials[i]) for i in range(<INT>polynomials.size()) ]
 
 
-cdef vector[PolynomialCRep*] sv_prs_as_polynomials(
-    vector[INT]& circuit, vector[vector[SVTermCRep_ptr]] rho_term_reps,
-    unordered_map[INT, vector[vector[SVTermCRep_ptr]]] op_term_reps,
-    vector[vector[SVTermCRep_ptr]] E_term_reps, vector[vector[INT]] E_term_indices,
+cdef vector[PolynomialCRep*] c_prs_as_polynomials(
+    vector[INT]& circuit, vector[vector[TermCRep_ptr]] rho_term_reps,
+    unordered_map[INT, vector[vector[TermCRep_ptr]]] op_term_reps,
+    vector[vector[TermCRep_ptr]] E_term_reps, vector[vector[INT]] E_term_indices,
     INT numEs, INT max_order, INT max_polynomial_vars, INT vindices_per_int, INT dim, bool fastmode):
 
     #NOTE: circuit and gate_terms use *integers* as operation labels, not Label objects, to speed
@@ -379,11 +206,11 @@ cdef vector[PolynomialCRep*] sv_prs_as_polynomials(
     cdef INT i,j,k,order,nTerms
     cdef INT gn
 
-    cdef sv_innerloopfn_ptr innerloop_fn;
+    cdef innerloopfn_ptr innerloop_fn;
     if fastmode:
-        innerloop_fn = sv_pr_as_polynomial_innerloop_savepartials
+        innerloop_fn = pr_as_polynomial_innerloop_savepartials
     else:
-        innerloop_fn = sv_pr_as_polynomial_innerloop
+        innerloop_fn = pr_as_polynomial_innerloop
 
     #extract raw data from gate_terms dictionary-of-lists for faster lookup
     #gate_term_prefactors = np.empty( (nOperations,max_order+1,dim,dim)
@@ -393,7 +220,7 @@ cdef vector[PolynomialCRep*] sv_prs_as_polynomials(
     #cdef vector[vector[INT]] e_indices
 
     cdef vector[INT]* Einds
-    cdef vector[vector_SVTermCRep_ptr_ptr] factor_lists
+    cdef vector[vector_TermCRep_ptr_ptr] factor_lists
 
     assert(max_order <= 2) # only support this partitioning below (so far)
 
@@ -409,7 +236,7 @@ cdef vector[PolynomialCRep*] sv_prs_as_polynomials(
 
         #for p in partition_into(order, N):
         for i in range(N+2): p[i] = 0 # clear p
-        factor_lists = vector[vector_SVTermCRep_ptr_ptr](N+2)
+        factor_lists = vector[vector_TermCRep_ptr_ptr](N+2)
 
         if order == 0:
             #inner loop(p)
@@ -481,14 +308,14 @@ cdef vector[PolynomialCRep*] sv_prs_as_polynomials(
 
 
 
-cdef void sv_pr_as_polynomial_innerloop(vector[vector_SVTermCRep_ptr_ptr] factor_lists, vector[INT]* Einds,
-                                  vector[PolynomialCRep*]* prps, INT dim): #, prps_chk):
+cdef void pr_as_polynomial_innerloop(vector[vector_TermCRep_ptr_ptr] factor_lists, vector[INT]* Einds,
+                                     vector[PolynomialCRep*]* prps, INT dim): #, prps_chk):
     #print("DB partition = ","listlens = ",[len(fl) for fl in factor_lists])
 
     cdef INT i,j,Ei
     cdef double complex scale, val, newval, pLeft, pRight, p
 
-    cdef SVTermCRep* factor
+    cdef TermCRep* factor
 
     cdef INT nFactorLists = factor_lists.size() # may need to recompute this after fast-mode
     cdef INT* factorListLens = <INT*>malloc(nFactorLists * sizeof(INT))
@@ -503,10 +330,10 @@ cdef void sv_pr_as_polynomial_innerloop(vector[vector_SVTermCRep_ptr_ptr] factor
     cdef PolynomialCRep coeff
     cdef PolynomialCRep result
 
-    cdef SVStateCRep *prop1 = new SVStateCRep(dim)
-    cdef SVStateCRep *prop2 = new SVStateCRep(dim)
-    cdef SVStateCRep *tprop
-    cdef SVEffectCRep* EVec
+    cdef StateCRep *prop1 = new StateCRep(dim)
+    cdef StateCRep *prop2 = new StateCRep(dim)
+    cdef StateCRep *tprop
+    cdef EffectCRep* EVec
 
     cdef INT* b = <INT*>malloc(nFactorLists * sizeof(INT))
     for i in range(nFactorLists): b[i] = 0
@@ -587,15 +414,15 @@ cdef void sv_pr_as_polynomial_innerloop(vector[vector_SVTermCRep_ptr_ptr] factor
     return
 
 
-cdef void sv_pr_as_polynomial_innerloop_savepartials(vector[vector_SVTermCRep_ptr_ptr] factor_lists,
-                                               vector[INT]* Einds, vector[PolynomialCRep*]* prps, INT dim): #, prps_chk):
+cdef void pr_as_polynomial_innerloop_savepartials(vector[vector_TermCRep_ptr_ptr] factor_lists,
+                                                  vector[INT]* Einds, vector[PolynomialCRep*]* prps, INT dim): #, prps_chk):
     #print("DB partition = ","listlens = ",[len(fl) for fl in factor_lists])
 
     cdef INT i,j,Ei
     cdef double complex scale, val, newval, pLeft, pRight, p
 
     cdef INT incd
-    cdef SVTermCRep* factor
+    cdef TermCRep* factor
 
     cdef INT nFactorLists = factor_lists.size() # may need to recompute this after fast-mode
     cdef INT* factorListLens = <INT*>malloc(nFactorLists * sizeof(INT))
@@ -611,14 +438,14 @@ cdef void sv_pr_as_polynomial_innerloop_savepartials(vector[vector_SVTermCRep_pt
     cdef PolynomialCRep result
 
     #fast mode
-    cdef vector[SVStateCRep*] leftSaved = vector[SVStateCRep_ptr](nFactorLists-1)  # saved[i] is state after i-th
-    cdef vector[SVStateCRep*] rightSaved = vector[SVStateCRep_ptr](nFactorLists-1) # factor has been applied
+    cdef vector[StateCRep*] leftSaved = vector[StateCRep_ptr](nFactorLists-1)  # saved[i] is state after i-th
+    cdef vector[StateCRep*] rightSaved = vector[StateCRep_ptr](nFactorLists-1) # factor has been applied
     cdef vector[PolynomialCRep] coeffSaved = vector[PolynomialCRep](nFactorLists-1)
-    cdef SVStateCRep *shelved = new SVStateCRep(dim)
-    cdef SVStateCRep *prop2 = new SVStateCRep(dim) # prop2 is always a temporary allocated state not owned by anything else
-    cdef SVStateCRep *prop1
-    cdef SVStateCRep *tprop
-    cdef SVEffectCRep* EVec
+    cdef StateCRep *shelved = new StateCRep(dim)
+    cdef StateCRep *prop2 = new StateCRep(dim) # prop2 is always a temporary allocated state not owned by anything else
+    cdef StateCRep *prop1
+    cdef StateCRep *tprop
+    cdef EffectCRep* EVec
 
     cdef INT* b = <INT*>malloc(nFactorLists * sizeof(INT))
     for i in range(nFactorLists): b[i] = 0
@@ -628,8 +455,8 @@ cdef void sv_pr_as_polynomial_innerloop_savepartials(vector[vector_SVTermCRep_pt
 
     #Fill saved arrays with allocated states
     for i in range(nFactorLists-1):
-        leftSaved[i] = new SVStateCRep(dim)
-        rightSaved[i] = new SVStateCRep(dim)
+        leftSaved[i] = new StateCRep(dim)
+        rightSaved[i] = new StateCRep(dim)
 
     #for factors in _itertools.product(*factor_lists):
     #for incd,fi in incd_product(*[range(len(l)) for l in factor_lists]):
@@ -762,22 +589,22 @@ cdef void sv_pr_as_polynomial_innerloop_savepartials(vector[vector_SVTermCRep_pt
 
 
 # State-vector pruned-polynomial-term calcs -------------------------
-def SV_create_circuitsetup_cacheel(fwdsim, rholabel, elabels, circuit, repcache, min_term_mag, mpv):
+def create_circuitsetup_cacheel(fwdsim, rholabel, elabels, circuit, repcache, min_term_mag, mpv):
 
     cdef INT i, j
     cdef vector[INT] cgatestring
 
     cdef RepCacheEl repcel;
-    cdef vector[SVTermCRep_ptr] treps;
-    cdef SVTermRep rep;
-    cdef unordered_map[INT, vector[SVTermCRep_ptr] ] op_term_reps = unordered_map[INT, vector[SVTermCRep_ptr] ]();
+    cdef vector[TermCRep_ptr] treps;
+    cdef TermRep rep;
+    cdef unordered_map[INT, vector[TermCRep_ptr] ] op_term_reps = unordered_map[INT, vector[TermCRep_ptr] ]();
     cdef unordered_map[INT, vector[INT] ] op_foat_indices = unordered_map[INT, vector[INT] ]();
-    cdef vector[SVTermCRep_ptr] rho_term_reps;
+    cdef vector[TermCRep_ptr] rho_term_reps;
     cdef vector[INT] rho_foat_indices;
-    cdef vector[SVTermCRep_ptr] E_term_reps = vector[SVTermCRep_ptr](0);
+    cdef vector[TermCRep_ptr] E_term_reps = vector[TermCRep_ptr](0);
     cdef vector[INT] E_foat_indices = vector[INT](0);
     cdef vector[INT] e_indices = vector[INT](0);
-    cdef SVTermCRep_ptr cterm;
+    cdef TermCRep_ptr cterm;
     cdef CircuitSetupCacheEl cscel = CircuitSetupCacheEl()
 
     # Create gatelable -> int mapping to be used throughout
@@ -817,7 +644,7 @@ def SV_create_circuitsetup_cacheel(fwdsim, rholabel, elabels, circuit, repcache,
             #    print "Highmag terms recomputed (OK) - made op = ", db_made_op
 
             for t in hmterms:
-                rep = (<SVTermRep>t.torep())
+                rep = (<TermRep>t.torep())
                 repcel.pyterm_references.append(rep)
                 repcel.reps.push_back( rep.c_term )
 
@@ -839,7 +666,7 @@ def SV_create_circuitsetup_cacheel(fwdsim, rholabel, elabels, circuit, repcache,
             max_polynomial_vars=mpv)
 
         for t in hmterms:
-            rep = (<SVTermRep>t.torep())
+            rep = (<TermRep>t.torep())
             repcel.pyterm_references.append(rep)
             repcel.reps.push_back( rep.c_term )
 
@@ -866,7 +693,7 @@ def SV_create_circuitsetup_cacheel(fwdsim, rholabel, elabels, circuit, repcache,
         #Sort all terms by magnitude
         E_term_indices_and_reps.sort(key=lambda x: x[2], reverse=True)
         for j,(i,t,_,is_foat) in enumerate(E_term_indices_and_reps):
-            rep = (<SVTermRep>t.torep())
+            rep = (<TermRep>t.torep())
             repcel.pyterm_references.append(rep)
             repcel.reps.push_back( rep.c_term )
             repcel.e_indices.push_back(<INT>i)
@@ -888,9 +715,9 @@ def SV_create_circuitsetup_cacheel(fwdsim, rholabel, elabels, circuit, repcache,
     return cscel
 
 
-def SV_refresh_magnitudes_in_repcache(repcache, paramvec):
+def refresh_magnitudes_in_repcache(repcache, paramvec):
     cdef RepCacheEl repcel
-    cdef SVTermRep termrep
+    cdef TermRep termrep
     cdef np.ndarray coeff_array
 
     for repcel in repcache.values():
@@ -900,9 +727,9 @@ def SV_refresh_magnitudes_in_repcache(repcache, paramvec):
             termrep.set_magnitude_only(abs(coeff_array[0]))
 
 
-def SV_find_best_pathmagnitude_threshold(fwdsim, rholabel, elabels, circuit, polynomial_vindices_per_int,
-                                         repcache, circuitsetup_cache, comm=None, mem_limit=None,
-                                         pathmagnitude_gap=0.0, min_term_mag=0.01, max_paths=500, threshold_guess=0.0):
+def find_best_pathmagnitude_threshold(fwdsim, rholabel, elabels, circuit, polynomial_vindices_per_int,
+                                      repcache, circuitsetup_cache, comm=None, mem_limit=None,
+                                      pathmagnitude_gap=0.0, min_term_mag=0.01, max_paths=500, threshold_guess=0.0):
 
     cdef INT i
     cdef INT numEs = len(elabels)
@@ -914,7 +741,7 @@ def SV_find_best_pathmagnitude_threshold(fwdsim, rholabel, elabels, circuit, pol
     if circuit in circuitsetup_cache:
         cscel = <CircuitSetupCacheEl?>circuitsetup_cache[circuit]
     else:
-        cscel = <CircuitSetupCacheEl?>SV_create_circuitsetup_cacheel(fwdsim, rholabel, elabels, circuit, repcache, min_term_mag, mpv)
+        cscel = <CircuitSetupCacheEl?>create_circuitsetup_cacheel(fwdsim, rholabel, elabels, circuit, repcache, min_term_mag, mpv)
         circuitsetup_cache[circuit] = cscel
 
     #MEM REMOVE above circuitsetup cache seems to use memory!
@@ -933,7 +760,7 @@ def SV_find_best_pathmagnitude_threshold(fwdsim, rholabel, elabels, circuit, pol
         target_sum_of_pathmags[i] = max_partial_sopm * fwdsim.model._circuit_layer_operator(elbl, 'povm').total_term_magnitude - pathmagnitude_gap  # absolute gap
         #target_sum_of_pathmags[i] = max_partial_sopm * fwdsim.sos.get_effect(elbl).total_term_magnitude * (1.0 - pathmagnitude_gap)  # relative gap
 
-    cdef double threshold = sv_find_best_pathmagnitude_threshold(
+    cdef double threshold = c_find_best_pathmagnitude_threshold(
         cscel.cgatestring, cscel.rho_term_reps, cscel.op_term_reps, cscel.E_term_reps,
         cscel.rho_foat_indices, cscel.op_foat_indices, cscel.E_foat_indices, cscel.e_indices,
         numEs, pathmagnitude_gap, min_term_mag, max_paths, threshold_guess, target_sum_of_pathmags,
@@ -950,8 +777,8 @@ def SV_find_best_pathmagnitude_threshold(fwdsim, rholabel, elabels, circuit, pol
     return total_npaths, threshold, total_target_sopm, total_achieved_sopm
 
 
-cdef double sv_find_best_pathmagnitude_threshold(
-    vector[INT]& circuit, vector[SVTermCRep_ptr] rho_term_reps, unordered_map[INT, vector[SVTermCRep_ptr]] op_term_reps, vector[SVTermCRep_ptr] E_term_reps,
+cdef double c_find_best_pathmagnitude_threshold(
+    vector[INT]& circuit, vector[TermCRep_ptr] rho_term_reps, unordered_map[INT, vector[TermCRep_ptr]] op_term_reps, vector[TermCRep_ptr] E_term_reps,
     vector[INT] rho_foat_indices, unordered_map[INT,vector[INT]] op_foat_indices, vector[INT] E_foat_indices, vector[INT] e_indices,
     INT numEs, double pathmagnitude_gap, double min_term_mag, INT max_paths, double threshold_guess,
     vector[double]& target_sum_of_pathmags, vector[double]& achieved_sum_of_pathmags, vector[INT]& npaths):
@@ -969,7 +796,7 @@ cdef double sv_find_best_pathmagnitude_threshold(
     cdef INT t0 = time.clock()
     #cdef INT t, nPaths; #for below
 
-    cdef vector[vector_SVTermCRep_ptr_ptr] factor_lists = vector[vector_SVTermCRep_ptr_ptr](nFactorLists)
+    cdef vector[vector_TermCRep_ptr_ptr] factor_lists = vector[vector_TermCRep_ptr_ptr](nFactorLists)
     cdef vector[vector_INT_ptr] foat_indices_per_op = vector[vector_INT_ptr](nFactorLists)
     cdef vector[INT] nops = vector[INT](nFactorLists)
     cdef vector[INT] b = vector[INT](nFactorLists)
@@ -1009,9 +836,7 @@ cdef double sv_find_best_pathmagnitude_threshold(
     return threshold
 
 
-
-
-def SV_compute_pruned_path_polynomials_given_threshold(
+def compute_pruned_path_polynomials_given_threshold(
         threshold, fwdsim, rholabel, elabels, circuit, polynomial_vindices_per_int,
         repcache, circuitsetup_cache, comm=None, mem_limit=None, fastmode=1):
 
@@ -1027,10 +852,10 @@ def SV_compute_pruned_path_polynomials_given_threshold(
     if circuit in circuitsetup_cache:
         cscel = <CircuitSetupCacheEl?>circuitsetup_cache[circuit]
     else:
-        cscel = <CircuitSetupCacheEl?>SV_create_circuitsetup_cacheel(fwdsim, rholabel, elabels, circuit, repcache, min_term_mag, mpv)
+        cscel = <CircuitSetupCacheEl?>create_circuitsetup_cacheel(fwdsim, rholabel, elabels, circuit, repcache, min_term_mag, mpv)
         circuitsetup_cache[circuit] = cscel
 
-    cdef vector[PolynomialCRep*] polynomials = sv_compute_pruned_polynomials_given_threshold(
+    cdef vector[PolynomialCRep*] polynomials = c_compute_pruned_polynomials_given_threshold(
         <double>threshold, cscel.cgatestring, cscel.rho_term_reps, cscel.op_term_reps, cscel.E_term_reps,
         cscel.rho_foat_indices, cscel.op_foat_indices, cscel.E_foat_indices, cscel.e_indices,
         numEs, stateDim, <INT>fastmode,  mpv, vpi)
@@ -1038,9 +863,9 @@ def SV_compute_pruned_path_polynomials_given_threshold(
     return [ PolynomialRep_from_allocd_PolynomialCRep(polynomials[i]) for i in range(<INT>polynomials.size()) ]
 
 
-cdef vector[PolynomialCRep*] sv_compute_pruned_polynomials_given_threshold(
+cdef vector[PolynomialCRep*] c_compute_pruned_polynomials_given_threshold(
     double threshold, vector[INT]& circuit,
-    vector[SVTermCRep_ptr] rho_term_reps, unordered_map[INT, vector[SVTermCRep_ptr]] op_term_reps, vector[SVTermCRep_ptr] E_term_reps,
+    vector[TermCRep_ptr] rho_term_reps, unordered_map[INT, vector[TermCRep_ptr]] op_term_reps, vector[TermCRep_ptr] E_term_reps,
     vector[INT] rho_foat_indices, unordered_map[INT,vector[INT]] op_foat_indices, vector[INT] E_foat_indices, vector[INT] e_indices,
     INT numEs, INT dim, INT fastmode, INT max_polynomial_vars, INT vindices_per_int):
 
@@ -1048,7 +873,7 @@ cdef vector[PolynomialCRep*] sv_compute_pruned_polynomials_given_threshold(
     cdef INT nFactorLists = N+2
     cdef INT i
 
-    cdef vector[vector_SVTermCRep_ptr_ptr] factor_lists = vector[vector_SVTermCRep_ptr_ptr](nFactorLists)
+    cdef vector[vector_TermCRep_ptr_ptr] factor_lists = vector[vector_TermCRep_ptr_ptr](nFactorLists)
     cdef vector[vector_INT_ptr] foat_indices_per_op = vector[vector_INT_ptr](nFactorLists)
     cdef vector[INT] nops = vector[INT](nFactorLists)
     cdef vector[INT] b = vector[INT](nFactorLists)
@@ -1076,9 +901,9 @@ cdef vector[PolynomialCRep*] sv_compute_pruned_polynomials_given_threshold(
         b[i] = 0
 
     ## fn_visitpath(b, current_mag, 0) # visit root (all 0s) path
-    cdef sv_addpathfn_ptr addpath_fn;
-    cdef vector[SVStateCRep*] leftSaved = vector[SVStateCRep_ptr](nFactorLists-1)  # saved[i] is state after i-th
-    cdef vector[SVStateCRep*] rightSaved = vector[SVStateCRep_ptr](nFactorLists-1) # factor has been applied
+    cdef addpathfn_ptr addpath_fn;
+    cdef vector[StateCRep*] leftSaved = vector[StateCRep_ptr](nFactorLists-1)  # saved[i] is state after i-th
+    cdef vector[StateCRep*] rightSaved = vector[StateCRep_ptr](nFactorLists-1) # factor has been applied
     cdef vector[PolynomialCRep] coeffSaved = vector[PolynomialCRep](nFactorLists-1)
 
     #Fill saved arrays with allocated states
@@ -1086,8 +911,8 @@ cdef vector[PolynomialCRep*] sv_compute_pruned_polynomials_given_threshold(
         #fast mode
         addpath_fn = add_path_savepartials
         for i in range(nFactorLists-1):
-            leftSaved[i] = new SVStateCRep(dim)
-            rightSaved[i] = new SVStateCRep(dim)
+            leftSaved[i] = new StateCRep(dim)
+            rightSaved[i] = new StateCRep(dim)
 
     elif fastmode == 2: #achieved-SOPM mode
         addpath_fn = add_path_achievedsopm
@@ -1101,8 +926,8 @@ cdef vector[PolynomialCRep*] sv_compute_pruned_polynomials_given_threshold(
             leftSaved[i] = NULL
             rightSaved[i] = NULL
 
-    cdef SVStateCRep *prop1 = new SVStateCRep(dim)
-    cdef SVStateCRep *prop2 = new SVStateCRep(dim)
+    cdef StateCRep *prop1 = new StateCRep(dim)
+    cdef StateCRep *prop2 = new StateCRep(dim)
     addpath_fn(&prps, b, 0, factor_lists, &prop1, &prop2, &e_indices, &leftSaved, &rightSaved, &coeffSaved)
     ## -------------------------------
 
@@ -1115,21 +940,21 @@ cdef vector[PolynomialCRep*] sv_compute_pruned_polynomials_given_threshold(
     return prps
 
 
-cdef void add_path(vector[PolynomialCRep*]* prps, vector[INT]& b, INT incd, vector[vector_SVTermCRep_ptr_ptr]& factor_lists,
-                   SVStateCRep **pprop1, SVStateCRep **pprop2, vector[INT]* Einds,
-                   vector[SVStateCRep*]* pleftSaved, vector[SVStateCRep*]* prightSaved, vector[PolynomialCRep]* pcoeffSaved):
+cdef void add_path(vector[PolynomialCRep*]* prps, vector[INT]& b, INT incd, vector[vector_TermCRep_ptr_ptr]& factor_lists,
+                   StateCRep **pprop1, StateCRep **pprop2, vector[INT]* Einds,
+                   vector[StateCRep*]* pleftSaved, vector[StateCRep*]* prightSaved, vector[PolynomialCRep]* pcoeffSaved):
 
     cdef PolynomialCRep coeff
     cdef PolynomialCRep result
     cdef double complex pLeft, pRight
 
     cdef INT i,j, Ei
-    cdef SVTermCRep* factor
-    cdef SVStateCRep *prop1 = deref(pprop1)
-    cdef SVStateCRep *prop2 = deref(pprop2)
-    cdef SVStateCRep *tprop
-    cdef SVEffectCRep* EVec
-    cdef SVStateCRep *rhoVec
+    cdef TermCRep* factor
+    cdef StateCRep *prop1 = deref(pprop1)
+    cdef StateCRep *prop2 = deref(pprop2)
+    cdef StateCRep *tprop
+    cdef EffectCRep* EVec
+    cdef StateCRep *rhoVec
     cdef INT nFactorLists = b.size()
     cdef INT last_index = nFactorLists-1
     # ** Assume prop1 and prop2 begin as allocated **
@@ -1199,15 +1024,15 @@ cdef void add_path(vector[PolynomialCRep*]* prps, vector[INT]& b, INT incd, vect
     pprop2[0] = prop2
 
 
-cdef void add_path_achievedsopm(vector[PolynomialCRep*]* prps, vector[INT]& b, INT incd, vector[vector_SVTermCRep_ptr_ptr]& factor_lists,
-                                SVStateCRep **pprop1, SVStateCRep **pprop2, vector[INT]* Einds,
-                                vector[SVStateCRep*]* pleftSaved, vector[SVStateCRep*]* prightSaved, vector[PolynomialCRep]* pcoeffSaved):
+cdef void add_path_achievedsopm(vector[PolynomialCRep*]* prps, vector[INT]& b, INT incd, vector[vector_TermCRep_ptr_ptr]& factor_lists,
+                                StateCRep **pprop1, StateCRep **pprop2, vector[INT]* Einds,
+                                vector[StateCRep*]* pleftSaved, vector[StateCRep*]* prightSaved, vector[PolynomialCRep]* pcoeffSaved):
 
     cdef PolynomialCRep coeff
     cdef PolynomialCRep result
 
     cdef INT i,j, Ei
-    cdef SVTermCRep* factor
+    cdef TermCRep* factor
     cdef INT nFactorLists = b.size()
     cdef INT last_index = nFactorLists-1
 
@@ -1224,22 +1049,22 @@ cdef void add_path_achievedsopm(vector[PolynomialCRep*]* prps, vector[INT]& b, I
     deref(prps)[Ei].add_abs_inplace(result)
 
 
-cdef void add_path_savepartials(vector[PolynomialCRep*]* prps, vector[INT]& b, INT incd, vector[vector_SVTermCRep_ptr_ptr]& factor_lists,
-                                SVStateCRep** pprop1, SVStateCRep** pprop2, vector[INT]* Einds,
-                                vector[SVStateCRep*]* pleftSaved, vector[SVStateCRep*]* prightSaved, vector[PolynomialCRep]* pcoeffSaved):
+cdef void add_path_savepartials(vector[PolynomialCRep*]* prps, vector[INT]& b, INT incd, vector[vector_TermCRep_ptr_ptr]& factor_lists,
+                                StateCRep** pprop1, StateCRep** pprop2, vector[INT]* Einds,
+                                vector[StateCRep*]* pleftSaved, vector[StateCRep*]* prightSaved, vector[PolynomialCRep]* pcoeffSaved):
 
     cdef PolynomialCRep coeff
     cdef PolynomialCRep result
     cdef double complex pLeft, pRight
 
     cdef INT i,j, Ei
-    cdef SVTermCRep* factor
-    cdef SVStateCRep *prop1 = deref(pprop1)
-    cdef SVStateCRep *prop2 = deref(pprop2)
-    cdef SVStateCRep *tprop
-    cdef SVStateCRep *shelved = prop1
-    cdef SVEffectCRep* EVec
-    cdef SVStateCRep *rhoVec
+    cdef TermCRep* factor
+    cdef StateCRep *prop1 = deref(pprop1)
+    cdef StateCRep *prop2 = deref(pprop2)
+    cdef StateCRep *tprop
+    cdef StateCRep *shelved = prop1
+    cdef EffectCRep* EVec
+    cdef StateCRep *rhoVec
     cdef INT nFactorLists = b.size()
     cdef INT last_index = nFactorLists-1
     # ** Assume shelved and prop2 begin as allocated **
@@ -1347,12 +1172,12 @@ cdef void add_path_savepartials(vector[PolynomialCRep*]* prps, vector[INT]& b, I
     #print "DB prps[",INT(Ei),"] = ",dict(deref(prps)[Ei]._coeffs)
 
 
-cdef void add_paths(sv_addpathfn_ptr addpath_fn, vector[INT]& b, vector[vector_SVTermCRep_ptr_ptr] oprep_lists,
+cdef void add_paths(addpathfn_ptr addpath_fn, vector[INT]& b, vector[vector_TermCRep_ptr_ptr] oprep_lists,
                     vector[vector_INT_ptr] foat_indices_per_op, INT num_elabels,
                     vector[INT]& nops, vector[INT]& e_indices, INT incd, double log_thres,
                     double current_mag, double current_logmag, INT order,
-                    vector[PolynomialCRep*]* prps, SVStateCRep **pprop1, SVStateCRep **pprop2,
-                    vector[SVStateCRep*]* pleftSaved, vector[SVStateCRep*]* prightSaved, vector[PolynomialCRep]* pcoeffSaved):
+                    vector[PolynomialCRep*]* prps, StateCRep **pprop1, StateCRep **pprop2,
+                    vector[StateCRep*]* pleftSaved, vector[StateCRep*]* prightSaved, vector[PolynomialCRep]* pcoeffSaved):
     """ first_order means only one b[i] is incremented, e.g. b == [0 1 0] or [4 0 0] """
     cdef INT i, j, k, orig_bi, orig_bn
     cdef INT n = b.size()
@@ -1426,7 +1251,7 @@ cdef void add_paths(sv_addpathfn_ptr addpath_fn, vector[INT]& b, vector[vector_S
 # "refreshing" the .magnitudes of the terms and leaving the .logmagnitudes (which are used to determing which paths to
 # include) at their "locked in" values.  Thus, it is not always true that log10(term.magnitude) == term.logmagnitude.  This
 # seems non-intuitive and could be problematic if it isn't at least clarified in the FUTURE.
-cdef bool count_paths(vector[INT]& b, vector[vector_SVTermCRep_ptr_ptr]& oprep_lists,
+cdef bool count_paths(vector[INT]& b, vector[vector_TermCRep_ptr_ptr]& oprep_lists,
                       vector[vector_INT_ptr]& foat_indices_per_op, INT num_elabels,
                       vector[INT]& nops, vector[INT]& e_indices, vector[double]& pathmags, vector[INT]& nPaths,
                       INT incd, double log_thres, double current_mag, double current_logmag, INT order, INT max_npaths,
@@ -1529,7 +1354,7 @@ cdef bool count_paths(vector[INT]& b, vector[vector_SVTermCRep_ptr_ptr]& oprep_l
     return False
 
 
-cdef void count_paths_upto_threshold(vector[vector_SVTermCRep_ptr_ptr] oprep_lists, double pathmag_threshold, INT num_elabels,
+cdef void count_paths_upto_threshold(vector[vector_TermCRep_ptr_ptr] oprep_lists, double pathmag_threshold, INT num_elabels,
                                      vector[vector_INT_ptr] foat_indices_per_op, vector[INT]& e_indices, INT max_npaths,
                                      vector[double]& pathmags, vector[INT]& nPaths):
     """ TODO: docstring """
@@ -1555,7 +1380,7 @@ cdef void count_paths_upto_threshold(vector[vector_SVTermCRep_ptr_ptr] oprep_lis
     return
 
 
-cdef double pathmagnitude_threshold(vector[vector_SVTermCRep_ptr_ptr] oprep_lists, vector[INT]& e_indices,
+cdef double pathmagnitude_threshold(vector[vector_TermCRep_ptr_ptr] oprep_lists, vector[INT]& e_indices,
                                     INT nEffects, vector[double] target_sum_of_pathmags,
                                     vector[vector_INT_ptr] foat_indices_per_op,
                                     double initial_threshold, double min_threshold, INT max_npaths,
@@ -1627,10 +1452,10 @@ cdef double pathmagnitude_threshold(vector[vector_SVTermCRep_ptr_ptr] oprep_list
 
     return threshold_lower_bound
 
-def SV_circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcache, threshold, min_term_mag):
+def circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcache, threshold, min_term_mag):
     """ TODO: docstring """
 
-    #Same beginning as SV_prs_as_pruned_polynomials -- should consolidate this setup code elsewhere
+    #Same beginning as prs_as_pruned_polynomials -- should consolidate this setup code elsewhere
 
     #t0 = pytime.time()
     #if debug is not None:
@@ -1646,7 +1471,7 @@ def SV_circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcach
     if circuit in circuitsetup_cache:
         cscel = <CircuitSetupCacheEl?>circuitsetup_cache[circuit]
     else:
-        cscel = <CircuitSetupCacheEl?>SV_create_circuitsetup_cacheel(fwdsim, rholabel, elabels, circuit, repcache, min_term_mag, mpv)
+        cscel = <CircuitSetupCacheEl?>create_circuitsetup_cacheel(fwdsim, rholabel, elabels, circuit, repcache, min_term_mag, mpv)
         circuitsetup_cache[circuit] = cscel
 
     #Get MAX-SOPM for circuit outcomes and thereby the target SOPM (via MAX - gap)
@@ -1661,10 +1486,10 @@ def SV_circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcach
     #Note: term calculator "dim" is the full density matrix dim
     stateDim = int(round(np.sqrt(fwdsim.model.dim)))
 
-    #------ From sv_prs_pruned ---- build up factor_lists and foat_indices_per_op
+    #------ From prs_pruned ---- build up factor_lists and foat_indices_per_op
     cdef INT N = cscel.cgatestring.size()
     cdef INT nFactorLists = N+2
-    cdef vector[vector_SVTermCRep_ptr_ptr] factor_lists = vector[vector_SVTermCRep_ptr_ptr](nFactorLists)
+    cdef vector[vector_TermCRep_ptr_ptr] factor_lists = vector[vector_TermCRep_ptr_ptr](nFactorLists)
     cdef vector[vector_INT_ptr] foat_indices_per_op = vector[vector_INT_ptr](nFactorLists)
 
     factor_lists[0] = &cscel.rho_term_reps
@@ -1708,17 +1533,17 @@ def SV_circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcach
 
 # State-vector direct-term calcs -------------------------
 
-#cdef vector[vector[SVTermDirectCRep_ptr]] sv_extract_cterms_direct(python_termrep_lists, INT max_order):
-#    cdef vector[vector[SVTermDirectCRep_ptr]] ret = vector[vector[SVTermDirectCRep_ptr]](max_order+1)
-#    cdef vector[SVTermDirectCRep*] vec_of_terms
+#cdef vector[vector[TermDirectCRep_ptr]] extract_cterms_direct(python_termrep_lists, INT max_order):
+#    cdef vector[vector[TermDirectCRep_ptr]] ret = vector[vector[TermDirectCRep_ptr]](max_order+1)
+#    cdef vector[TermDirectCRep*] vec_of_terms
 #    for order,termreps in enumerate(python_termrep_lists): # maxorder+1 lists
-#        vec_of_terms = vector[SVTermDirectCRep_ptr](len(termreps))
+#        vec_of_terms = vector[TermDirectCRep_ptr](len(termreps))
 #        for i,termrep in enumerate(termreps):
-#            vec_of_terms[i] = (<SVTermDirectRep?>termrep).c_term
+#            vec_of_terms[i] = (<TermDirectRep?>termrep).c_term
 #        ret[order] = vec_of_terms
 #    return ret
 
-#def SV_prs_directly(calc, rholabel, elabels, circuit, repcache, comm=None, mem_limit=None, fastmode=True, wt_tol=0.0, reset_term_weights=True, debug=None):
+#def prs_directly(calc, rholabel, elabels, circuit, repcache, comm=None, mem_limit=None, fastmode=True, wt_tol=0.0, reset_term_weights=True, debug=None):
 #
 #    # Create gatelable -> int mapping to be used throughout
 #    distinct_gateLabels = sorted(set(circuit))
@@ -1759,15 +1584,15 @@ def SV_circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcach
 #    cdef INT numEs = len(elabels)
 #
 #    cdef RepCacheEl repcel;
-#    cdef vector[SVTermDirectCRep_ptr] treps;
+#    cdef vector[TermDirectCRep_ptr] treps;
 #    cdef DCOMPLEX* coeffs;
-#    cdef vector[SVTermDirectCRep*] reps_at_order;
+#    cdef vector[TermDirectCRep*] reps_at_order;
 #    cdef np.ndarray coeffs_array;
-#    cdef SVTermDirectRep rep;
+#    cdef TermDirectRep rep;
 #
 #    # Construct dict of gate term reps, then *convert* to c-reps, as this
 #    #  keeps alive the non-c-reps which keep the c-reps from being deallocated...
-#    cdef unordered_map[INT, vector[vector[SVTermDirectCRep_ptr]] ] op_term_reps = unordered_map[INT, vector[vector[SVTermDirectCRep_ptr]] ](); # OLD = {}
+#    cdef unordered_map[INT, vector[vector[TermDirectCRep_ptr]] ] op_term_reps = unordered_map[INT, vector[vector[TermDirectCRep_ptr]] ](); # OLD = {}
 #    for glbl in distinct_gateLabels:
 #        if glbl in repcache:
 #            repcel = <RepCacheEl?>repcache[glbl]
@@ -1785,9 +1610,9 @@ def SV_circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcach
 #        else:
 #            repcel = RepCacheEl(calc.max_order)
 #            for order in range(calc.max_order+1):
-#                reps_at_order = vector[SVTermDirectCRep_ptr](0)
+#                reps_at_order = vector[TermDirectCRep_ptr](0)
 #                for t in calc.sos.operation(glbl).get_direct_order_terms(order,order_base):
-#                    rep = (<SVTermDirectRep?>t.torep(None,None,"gate"))
+#                    rep = (<TermDirectRep?>t.torep(None,None,"gate"))
 #                    repcel.pyterm_references.append(rep)
 #                    reps_at_order.push_back( rep.c_term )
 #                repcel.reps[order] = reps_at_order
@@ -1803,7 +1628,7 @@ def SV_circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcach
 #    #                   for glbl in distinct_gateLabels }
 #
 #    #Similar with rho_terms and E_terms
-#    cdef vector[vector[SVTermDirectCRep_ptr]] rho_term_reps;
+#    cdef vector[vector[TermDirectCRep_ptr]] rho_term_reps;
 #    if rholabel in repcache:
 #        repcel = repcache[rholabel]
 #        rho_term_reps = repcel.reps
@@ -1821,9 +1646,9 @@ def SV_circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcach
 #    else:
 #        repcel = RepCacheEl(calc.max_order)
 #        for order in range(calc.max_order+1):
-#            reps_at_order = vector[SVTermDirectCRep_ptr](0)
+#            reps_at_order = vector[TermDirectCRep_ptr](0)
 #            for t in calc.sos.prep(rholabel).get_direct_order_terms(order,order_base):
-#                rep = (<SVTermDirectRep?>t.torep(None,None,"prep"))
+#                rep = (<TermDirectRep?>t.torep(None,None,"prep"))
 #                repcel.pyterm_references.append(rep)
 #                reps_at_order.push_back( rep.c_term )
 #            repcel.reps[order] = reps_at_order
@@ -1836,12 +1661,12 @@ def SV_circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcach
 #        #repcache[rholabel] = rho_term_reps
 #
 #    #E_term_reps = []
-#    cdef vector[vector[SVTermDirectCRep_ptr]] E_term_reps = vector[vector[SVTermDirectCRep_ptr]](0);
-#    cdef SVTermDirectCRep_ptr cterm;
+#    cdef vector[vector[TermDirectCRep_ptr]] E_term_reps = vector[vector[TermDirectCRep_ptr]](0);
+#    cdef TermDirectCRep_ptr cterm;
 #    e_indices = [] # TODO: upgrade to C-type?
 #    if all([ elbl in repcache for elbl in elabels]):
 #        for order in range(calc.max_order+1):
-#            reps_at_order = vector[SVTermDirectCRep_ptr](0) # the term reps for *all* the effect vectors
+#            reps_at_order = vector[TermDirectCRep_ptr](0) # the term reps for *all* the effect vectors
 #            cur_indices = [] # the Evec-index corresponding to each term rep
 #            for j,elbl in enumerate(elabels):
 #                repcel = <RepCacheEl?>repcache[elbl]
@@ -1871,13 +1696,13 @@ def SV_circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcach
 #        for elbl in elabels:
 #            if elbl not in repcache: repcache[elbl] = RepCacheEl(calc.max_order) #[None]*(calc.max_order+1) # make sure there's room
 #        for order in range(calc.max_order+1):
-#            reps_at_order = vector[SVTermDirectCRep_ptr](0) # the term reps for *all* the effect vectors
+#            reps_at_order = vector[TermDirectCRep_ptr](0) # the term reps for *all* the effect vectors
 #            cur_indices = [] # the Evec-index corresponding to each term rep
 #            for j,elbl in enumerate(elabels):
 #                repcel = <RepCacheEl?>repcache[elbl]
-#                treps = vector[SVTermDirectCRep_ptr](0) # the term reps for *all* the effect vectors
+#                treps = vector[TermDirectCRep_ptr](0) # the term reps for *all* the effect vectors
 #                for t in calc.sos.effect(elbl).get_direct_order_terms(order,order_base):
-#                    rep = (<SVTermDirectRep?>t.torep(None,None,"effect"))
+#                    rep = (<TermDirectRep?>t.torep(None,None,"effect"))
 #                    repcel.pyterm_references.append(rep)
 #                    treps.push_back( rep.c_term )
 #                    reps_at_order.push_back( rep.c_term )
@@ -1893,13 +1718,13 @@ def SV_circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcach
 #
 #    #convert to c-reps
 #    cdef INT gi
-#    #cdef vector[vector[SVTermDirectCRep_ptr]] rho_term_creps = rho_term_reps # already c-reps...
-#    #cdef vector[vector[SVTermDirectCRep_ptr]] E_term_creps = E_term_reps # already c-reps...
-#    #cdef unordered_map[INT, vector[vector[SVTermDirectCRep_ptr]]] gate_term_creps = op_term_reps # already c-reps...
-#    #cdef vector[vector[SVTermDirectCRep_ptr]] rho_term_creps = sv_extract_cterms_direct(rho_term_reps,calc.max_order)
-#    #cdef vector[vector[SVTermDirectCRep_ptr]] E_term_creps = sv_extract_cterms_direct(E_term_reps,calc.max_order)
+#    #cdef vector[vector[TermDirectCRep_ptr]] rho_term_creps = rho_term_reps # already c-reps...
+#    #cdef vector[vector[TermDirectCRep_ptr]] E_term_creps = E_term_reps # already c-reps...
+#    #cdef unordered_map[INT, vector[vector[TermDirectCRep_ptr]]] gate_term_creps = op_term_reps # already c-reps...
+#    #cdef vector[vector[TermDirectCRep_ptr]] rho_term_creps = extract_cterms_direct(rho_term_reps,calc.max_order)
+#    #cdef vector[vector[TermDirectCRep_ptr]] E_term_creps = extract_cterms_direct(E_term_reps,calc.max_order)
 #    #for gi,termrep_lists in op_term_reps.items():
-#    #    gate_term_creps[gi] = sv_extract_cterms_direct(termrep_lists,calc.max_order)
+#    #    gate_term_creps[gi] = extract_cterms_direct(termrep_lists,calc.max_order)
 #
 #    E_cindices = vector[vector[INT]](<INT>len(e_indices))
 #    for ii,inds in enumerate(e_indices):
@@ -1916,7 +1741,7 @@ def SV_circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcach
 #    #Call C-only function (which operates with C-representations only)
 #    cdef vector[float] debugvec = vector[float](10)
 #    debugvec[0] = 0.0
-#    cdef vector[DCOMPLEX] prs = sv_prs_directly(
+#    cdef vector[DCOMPLEX] prs = prs_directly(
 #        cgatestring, rho_term_reps, op_term_reps, E_term_reps,
 #        #cgatestring, rho_term_creps, gate_term_creps, E_term_creps,
 #        E_cindices, numEs, calc.max_order, stateDim, <bool>fastmode, &remainingWeight, remaingingWeightTol, debugvec)
@@ -1933,13 +1758,13 @@ def SV_circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcach
 #    #if not all([ abs(prs[i].imag) < 1e-4 for i in range(<INT>prs.size()) ]):
 #    #    print("ERROR: prs = ",[ prs[i] for i in range(<INT>prs.size()) ])
 #    #assert(all([ abs(prs[i].imag) < 1e-6 for i in range(<INT>prs.size()) ]))
-#    return [ prs[i].real for i in range(<INT>prs.size()) ] # TODO: make this into a numpy array? - maybe pass array to fill to sv_prs_directy above?
+#    return [ prs[i].real for i in range(<INT>prs.size()) ] # TODO: make this into a numpy array? - maybe pass array to fill to prs_directy above?
 #
 #
-#cdef vector[DCOMPLEX] sv_prs_directly(
-#    vector[INT]& circuit, vector[vector[SVTermDirectCRep_ptr]] rho_term_reps,
-#    unordered_map[INT, vector[vector[SVTermDirectCRep_ptr]]] op_term_reps,
-#    vector[vector[SVTermDirectCRep_ptr]] E_term_reps, vector[vector[INT]] E_term_indices,
+#cdef vector[DCOMPLEX] prs_directly(
+#    vector[INT]& circuit, vector[vector[TermDirectCRep_ptr]] rho_term_reps,
+#    unordered_map[INT, vector[vector[TermDirectCRep_ptr]]] op_term_reps,
+#    vector[vector[TermDirectCRep_ptr]] E_term_reps, vector[vector[INT]] E_term_indices,
 #    INT numEs, INT max_order, INT dim, bool fastmode, vector[double]* remainingWeight, double remTol, vector[float]& debugvec):
 #
 #    #NOTE: circuit and gate_terms use *integers* as operation labels, not Label objects, to speed
@@ -1953,11 +1778,11 @@ def SV_circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcach
 #    cdef INT t0 = time.clock()
 #    cdef INT t, n, nPaths; #for below
 #
-#    cdef sv_innerloopfn_direct_ptr innerloop_fn;
+#    cdef innerloopfn_direct_ptr innerloop_fn;
 #    if fastmode:
-#        innerloop_fn = sv_pr_directly_innerloop_savepartials
+#        innerloop_fn = pr_directly_innerloop_savepartials
 #    else:
-#        innerloop_fn = sv_pr_directly_innerloop
+#        innerloop_fn = pr_directly_innerloop
 #
 #    #extract raw data from gate_terms dictionary-of-lists for faster lookup
 #    #gate_term_prefactors = np.empty( (nOperations,max_order+1,dim,dim)
@@ -1967,7 +1792,7 @@ def SV_circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcach
 #    #cdef vector[vector[INT]] e_indices
 #
 #    cdef vector[INT]* Einds
-#    cdef vector[vector_SVTermDirectCRep_ptr_ptr] factor_lists
+#    cdef vector[vector_TermDirectCRep_ptr_ptr] factor_lists
 #
 #    assert(max_order <= 2) # only support this partitioning below (so far)
 #
@@ -1978,7 +1803,7 @@ def SV_circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcach
 #
 #        #for p in partition_into(order, N):
 #        for i in range(N+2): p[i] = 0 # clear p
-#        factor_lists = vector[vector_SVTermDirectCRep_ptr_ptr](N+2)
+#        factor_lists = vector[vector_TermDirectCRep_ptr_ptr](N+2)
 #
 #        if order == 0:
 #            #inner loop(p)
@@ -2068,7 +1893,7 @@ def SV_circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcach
 #
 #
 #
-#cdef INT sv_pr_directly_innerloop(vector[vector_SVTermDirectCRep_ptr_ptr] factor_lists, vector[INT]* Einds,
+#cdef INT pr_directly_innerloop(vector[vector_TermDirectCRep_ptr_ptr] factor_lists, vector[INT]* Einds,
 #                                   vector[DCOMPLEX]* prs, INT dim, vector[double]* remainingWeight, double remainingWeightTol):
 #    #print("DB partition = ","listlens = ",[len(fl) for fl in factor_lists])
 #
@@ -2077,7 +1902,7 @@ def SV_circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcach
 #    cdef double wt, cwt
 #    cdef int nPaths = 0
 #
-#    cdef SVTermDirectCRep* factor
+#    cdef TermDirectCRep* factor
 #
 #    cdef INT nFactorLists = factor_lists.size() # may need to recompute this after fast-mode
 #    cdef INT* factorListLens = <INT*>malloc(nFactorLists * sizeof(INT))
@@ -2092,10 +1917,10 @@ def SV_circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcach
 #    cdef double complex coeff   # THESE are only real changes from "as_polynomial"
 #    cdef double complex result  # version of this function (where they are PolynomialCRep type)
 #
-#    cdef SVStateCRep *prop1 = new SVStateCRep(dim)
-#    cdef SVStateCRep *prop2 = new SVStateCRep(dim)
-#    cdef SVStateCRep *tprop
-#    cdef SVEffectCRep* EVec
+#    cdef StateCRep *prop1 = new StateCRep(dim)
+#    cdef StateCRep *prop2 = new StateCRep(dim)
+#    cdef StateCRep *tprop
+#    cdef EffectCRep* EVec
 #
 #    cdef INT* b = <INT*>malloc(nFactorLists * sizeof(INT))
 #    for i in range(nFactorLists): b[i] = 0
@@ -2180,7 +2005,7 @@ def SV_circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcach
 #    return nPaths
 #
 #
-#cdef INT sv_pr_directly_innerloop_savepartials(vector[vector_SVTermDirectCRep_ptr_ptr] factor_lists,
+#cdef INT pr_directly_innerloop_savepartials(vector[vector_TermDirectCRep_ptr_ptr] factor_lists,
 #                                                vector[INT]* Einds, vector[DCOMPLEX]* prs, INT dim,
 #                                                vector[double]* remainingWeight, double remainingWeightTol):
 #    #print("DB partition = ","listlens = ",[len(fl) for fl in factor_lists])
@@ -2189,7 +2014,7 @@ def SV_circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcach
 #    cdef double complex scale, val, newval, pLeft, pRight, p
 #
 #    cdef INT incd
-#    cdef SVTermDirectCRep* factor
+#    cdef TermDirectCRep* factor
 #
 #    cdef INT nFactorLists = factor_lists.size() # may need to recompute this after fast-mode
 #    cdef INT* factorListLens = <INT*>malloc(nFactorLists * sizeof(INT))
@@ -2205,14 +2030,14 @@ def SV_circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcach
 #    cdef double complex result
 #
 #    #fast mode
-#    cdef vector[SVStateCRep*] leftSaved = vector[SVStateCRep_ptr](nFactorLists-1)  # saved[i] is state after i-th
-#    cdef vector[SVStateCRep*] rightSaved = vector[SVStateCRep_ptr](nFactorLists-1) # factor has been applied
+#    cdef vector[StateCRep*] leftSaved = vector[StateCRep_ptr](nFactorLists-1)  # saved[i] is state after i-th
+#    cdef vector[StateCRep*] rightSaved = vector[StateCRep_ptr](nFactorLists-1) # factor has been applied
 #    cdef vector[DCOMPLEX] coeffSaved = vector[DCOMPLEX](nFactorLists-1)
-#    cdef SVStateCRep *shelved = new SVStateCRep(dim)
-#    cdef SVStateCRep *prop2 = new SVStateCRep(dim) # prop2 is always a temporary allocated state not owned by anything else
-#    cdef SVStateCRep *prop1
-#    cdef SVStateCRep *tprop
-#    cdef SVEffectCRep* EVec
+#    cdef StateCRep *shelved = new StateCRep(dim)
+#    cdef StateCRep *prop2 = new StateCRep(dim) # prop2 is always a temporary allocated state not owned by anything else
+#    cdef StateCRep *prop1
+#    cdef StateCRep *tprop
+#    cdef EffectCRep* EVec
 #
 #    cdef INT* b = <INT*>malloc(nFactorLists * sizeof(INT))
 #    for i in range(nFactorLists): b[i] = 0
@@ -2222,8 +2047,8 @@ def SV_circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcach
 #
 #    #Fill saved arrays with allocated states
 #    for i in range(nFactorLists-1):
-#        leftSaved[i] = new SVStateCRep(dim)
-#        rightSaved[i] = new SVStateCRep(dim)
+#        leftSaved[i] = new StateCRep(dim)
+#        rightSaved[i] = new StateCRep(dim)
 #
 #    #for factors in _itertools.product(*factor_lists):
 #    #for incd,fi in incd_product(*[range(len(l)) for l in factor_lists]):

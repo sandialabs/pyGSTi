@@ -4,6 +4,7 @@ import functools as _functools
 
 from .state import State as _State
 from .. import modelmember as _modelmember
+from ..model import statespace as _statespace
 from ...objects import term as _term
 from ...tools import matrixtools as _mt
 from ...tools import listtools as _lt
@@ -151,7 +152,6 @@ class TensorProductState(_State):
             is a `(vtape,ctape)` 2-tuple formed by concatenating together the
             output of :method:`Polynomial.compact`.
         """
-        from .operation import EmbeddedOp as _EmbeddedGateMap
         terms = []
         fnq = [int(round(_np.log2(f.dim))) // 2 for f in self.factors]  # num of qubits per factor
         # assumes density matrix evolution
@@ -176,21 +176,22 @@ class TensorProductState(_State):
                 # we workaround this by still allowing such "prep"-mode
                 # TensorProdSPAMVecs to be represented as effects (i.e. in torep('effect'...) works)
                 coeff = _functools.reduce(lambda x, y: x.mult(y), [f.coeff for f in factors])
-                pre_op = TensorProductState("prep", [f.pre_ops[0] for f in factors
-                                                     if (f.pre_ops[0] is not None)])
-                post_op = TensorProductState("prep", [f.post_ops[0] for f in factors
-                                                      if (f.post_ops[0] is not None)])
-                term = _term.RankOnePolynomialPrepTerm.create_from(coeff, pre_op, post_op, self._evotype)
+                pre_rep = self._evotype.create_tensorproduct_state_rep(
+                    [f.pre_state for f in factors if (f.pre_state is not None)], self.state_space)
+                post_rep = self._evotype.create_tensorproduct_state_rep(
+                    [f.post_state for f in factors if (f.post_state is not None)], self.state_space)
+                term = _term.RankOnePolynomialPrepTerm.create_from(coeff, pre_rep, post_rep,
+                                                                   self._evotype, self.state_space)
 
                 if not collapsible:  # then may need to add more ops.  Assume factor ops are clifford gates
                     # Embed each factors ops according to their target qubit(s) and just daisy chain them
-                    stateSpaceLabels = tuple(range(total_nQ)); curQ = 0
+                    ss = _statespace.QubitSpace(total_nQ); curQ = 0
                     for f, nq in zip(factors, fnq):
                         targetLabels = tuple(range(curQ, curQ + nq)); curQ += nq
-                        term.pre_ops.extend([_EmbeddedGateMap(stateSpaceLabels, targetLabels, op)
-                                             for op in f.pre_ops[1:]])  # embed and add ops
-                        term.post_ops.extend([_EmbeddedGateMap(stateSpaceLabels, targetLabels, op)
-                                              for op in f.post_ops[1:]])  # embed and add ops
+                        term._rep.pre_ops.extend([self._evotype.create_embedded_rep(ss, targetLabels, op)
+                                                  for op in f.pre_ops])  # embed and add ops
+                        term._rep.post_ops.extend([self._evotype.create_embedded_rep(ss, targetLabels, op)
+                                                   for op in f.post_ops])  # embed and add ops
 
                 terms.append(term)
 

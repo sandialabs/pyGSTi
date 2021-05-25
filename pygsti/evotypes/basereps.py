@@ -10,9 +10,11 @@ Base classes for representations.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import math as _math
+import numpy as _np
 
 try:
-    from .basereps_cython import OpRep, StateRep, EffectRep
+    from .basereps_cython import OpRep, StateRep, EffectRep, TermRep
 except ImportError:
     # If cython is unavailable, just make a pure-python base class to fill in.
     class OpRep:
@@ -22,6 +24,9 @@ except ImportError:
         pass
 
     class EffectRep:
+        pass
+
+    class TermRep:
         pass
 
 
@@ -456,3 +461,67 @@ class PolynomialRep(dict):
     #    return "PolynomialRep w/max_vars=%d: nterms=%d, actual max-order=%d" % \
     #        (self.max_num_vars, len(self), actual_max_order)
     #
+
+LARGE = 1000000000
+# a large number such that LARGE is
+# a very high term weight which won't help (at all) a
+# path get included in the selected set of paths.
+
+SMALL = 1e-5
+# a number which is used in place of zero within the
+# product of term magnitudes to keep a running path
+# magnitude from being zero (and losing memory of terms).
+
+
+class StockTermRep(TermRep):
+    # just a container for other reps (polys, states, effects, and gates)
+
+    @classmethod
+    def composed(cls, terms_to_compose, magnitude):
+        logmag = _math.log10(magnitude) if magnitude > 0 else -LARGE
+        first = terms_to_compose[0]
+        coeffrep = first.coeff
+        pre_ops = first.pre_ops[:]
+        post_ops = first.post_ops[:]
+        for t in terms_to_compose[1:]:
+            coeffrep = coeffrep.mult(t.coeff)
+            pre_ops += t.pre_ops
+            post_ops += t.post_ops
+        return TermRep(coeffrep, magnitude, logmag, first.pre_state, first.post_state,
+                       first.pre_effect, first.post_effect, pre_ops, post_ops)
+
+    def __init__(self, coeff, mag, logmag, pre_state, post_state,
+                 pre_effect, post_effect, pre_ops, post_ops):
+        self.coeff = coeff
+        self.magnitude = mag
+        self.logmagnitude = logmag
+        self.pre_state = pre_state
+        self.post_state = post_state
+        self.pre_effect = pre_effect
+        self.post_effect = post_effect
+        self.pre_ops = pre_ops
+        self.post_ops = post_ops
+
+    def set_magnitude(self, mag):
+        self.magnitude = mag
+        self.logmagnitude = _math.log10(mag) if mag > 0 else -LARGE
+
+    def set_magnitude_only(self, mag):
+        self.magnitude = mag
+
+    def mapvec_indices_inplace(self, mapvec):
+        self.coeff.mapvec_indices_inplace(mapvec)
+
+    def scalar_mult(self, x):
+        coeff = self.coeff.copy()
+        coeff.scale(x)
+        return TermRep(coeff, self.magnitude, self.logmagnitude,
+                       self.pre_state, self.post_state, self.pre_effect, self.post_effect,
+                       self.pre_ops, self.post_ops)
+
+    def copy(self):
+        return TermRep(self.coeff.copy(), self.magnitude, self.logmagnitude,
+                       self.pre_state, self.post_state, self.pre_effect, self.post_effect,
+                       self.pre_ops, self.post_ops)
+
+    StockTermDirectRep = StockTermRep

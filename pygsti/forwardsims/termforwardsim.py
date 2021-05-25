@@ -540,7 +540,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
 
         if self.model.evotype == "svterm":
             npaths, threshold, target_sopm, achieved_sopm = \
-                replib.SV_find_best_pathmagnitude_threshold(
+                self.calclib.find_best_pathmagnitude_threshold(
                     self, rholabel, elabels, circuit, polynomial_vindices_per_int, repcache, circuitsetup_cache,
                     resource_alloc.comm, resource_alloc.mem_limit, self.desired_pathmagnitude_gap,
                     self.min_term_mag, self.max_paths_per_outcome, threshold_guess
@@ -688,7 +688,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
             The maximum possible sum-of-path-magnitudes. (summed over all circuit outcomes)
         """
         if self.model.evotype == "svterm":
-            return replib.SV_circuit_achieved_and_max_sopm(
+            return self.calclib.circuit_achieved_and_max_sopm(
                 self, rholabel, elabels, circuit, repcache, threshold, self.min_term_mag)
         else:
             raise NotImplementedError("TODO mimic SV case")
@@ -759,7 +759,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
             # compute SOPM for layout_atom
             elInds = layout_atom.element_slice
             # MEM debug_prof.print_memory("_bulk_achieved_and_max_sop1", True)
-            replib.SV_refresh_magnitudes_in_repcache(layout_atom.pathset.highmag_termrep_cache, self.model.to_vector())
+            self.calclib.refresh_magnitudes_in_repcache(layout_atom.pathset.highmag_termrep_cache, self.model.to_vector())
             # MEM debug_prof.print_memory("_bulk_achieved_and_max_sop2", True)
             achieved, maxx = self._achieved_and_max_sopm_atom(layout_atom)
             # MEM debug_prof.print_memory("_bulk_achieved_and_max_sop3", True)
@@ -801,7 +801,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         atom_resource_alloc = layout.resource_alloc('atom-processing')
 
         # # done in _bulk_achieved_and_max_sopm:
-        # replib.SV_refresh_magnitudes_in_repcache(eval_tree.highmag_termrep_cache, self.to_vector())
+        # self.calclib.refresh_magnitudes_in_repcache(eval_tree.highmag_termrep_cache, self.to_vector())
         max_sopm = layout.allocate_local_array('e', 'd')
         achieved_sopm = layout.allocate_local_array('e', 'd')
         self._bulk_fill_achieved_and_max_sopm(achieved_sopm, max_sopm, layout)  # fills *local* quantities
@@ -1000,7 +1000,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
 
         for layout_atom in layout.atoms:
             elInds = layout_atom.element_slice
-            replib.SV_refresh_magnitudes_in_repcache(layout_atom.pathset.highmag_termrep_cache, self.model.to_vector())
+            self.calclib.refresh_magnitudes_in_repcache(layout_atom.pathset.highmag_termrep_cache, self.model.to_vector())
             gap_jacs = self._sopm_gaps_jacobian_atom(layout_atom)
             #gap_jacs[ _np.where(gaps < self.pathmagnitude_gap) ] = 0.0  # set deriv to zero where gap was clipped to 0
             _fas(termgap_penalty_jac, [elInds], gap_jacs)
@@ -1091,7 +1091,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         circuitsetup_cache = {}
 
         if self.model.evotype == "svterm":
-            poly_reps = replib.SV_compute_pruned_path_polynomials_given_threshold(
+            poly_reps = self.calclib.compute_pruned_path_polynomials_given_threshold(
                 threshold, self, rholabel, elabels, circuit, polynomial_vindices_per_int, repcache,
                 circuitsetup_cache, resource_alloc.comm, resource_alloc.mem_limit, fastmode)
             # sopm = "sum of path magnitudes"
@@ -1206,12 +1206,8 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         list
             A list of Polynomial objects.
         """
-        if self.model.evotype == "svterm":
-            poly_reps = replib.SV_prs_as_polynomials(self, rholabel, elabels, circuit, polynomial_vindices_per_int,
-                                                     resource_alloc.comm, resource_alloc.mem_limit, fastmode)
-        else:  # "cterm" (stabilizer-based term evolution)
-            poly_reps = replib.SB_prs_as_polynomials(self, rholabel, elabels, circuit, polynomial_vindices_per_int,
-                                                     resource_alloc.comm, resource_alloc.mem_limit, fastmode)
+        poly_reps = self.calclib.prs_as_polynomials(self, rholabel, elabels, circuit, polynomial_vindices_per_int,
+                                                    resource_alloc.comm, resource_alloc.mem_limit, fastmode)
         return [_Polynomial.from_rep(rep) for rep in poly_reps]
 
     def _prs_as_compact_polynomials(self, rholabel, elabels, circuit, polynomial_vindices_per_int, resource_alloc):

@@ -254,3 +254,11 @@ class OpRepRepeated(OpRep):
         for i in range(self.num_repetitions):
             state = self.repeated_rep.adjoint_acton(state)
         return state
+
+
+class OpRepLindbladErrorgen(OpRep):
+    def __init__(self, lindblad_term_dict, basis, state_space):
+        super(OpRepLindbladErrorgen, self).__init__(state_space)
+        self.Lterms = None
+        self.Lterm_coeffs = None
+        self.LtermdictAndBasis = (lindblad_term_dict, basis)

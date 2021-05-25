@@ -25,6 +25,8 @@ cdef class StateRep:
 cdef class EffectRep:
     pass
 
+cdef class TermRep:
+    pass
 
 
 # Other classes
@@ -336,6 +338,7 @@ cdef class PolynomialRep:
 #
 #    def mapvec_indices_inplace(self, mapvec):
 #        self.term_ptr.mapvec_indices_inplace(mapvec)
+
 
 # Helper functions
 cdef PolynomialRep_from_allocd_PolynomialCRep(PolynomialCRep* crep):

@@ -141,10 +141,12 @@ class EmbeddedPureState(_State):
         if order == 0:  # only 0-th order term exists (assumes static pure_state_vec)
             purevec = self.pure_state
             coeff = _Polynomial({(): 1.0}, max_polynomial_vars)
-            if self._prep_or_effect == "prep":
-                terms = [_term.RankOnePolynomialPrepTerm.create_from(coeff, purevec, purevec, self._evotype)]
-            else:
-                terms = [_term.RankOnePolynomialEffectTerm.create_from(coeff, purevec, purevec, self._evotype)]
+            #if self._prep_or_effect == "prep":
+            terms = [_term.RankOnePolynomialPrepTerm.create_from(coeff, purevec, purevec,
+                                                                 self._evotype, self.state_space)]
+            #else:
+            #    terms = [_term.RankOnePolynomialEffectTerm.create_from(coeff, purevec, purevec,
+            #                                                           self._evotype, self.state_space)]
 
             if return_coeff_polys:
                 coeffs_as_compact_polys = coeff.compact(complex_coeff_tape=True)

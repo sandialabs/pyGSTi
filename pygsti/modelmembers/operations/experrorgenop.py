@@ -574,20 +574,13 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
 
         assert(self.gpindices is not None), "LindbladOp must be added to a Model before use!"
         mpv = max_polynomial_vars
-        
-        #REMOVE
-        #assert(not _sps.issparse(self.unitary_postfactor)
-        #       ), "Unitary post-factor needs to be dense for term-based evotypes"
-        ## for now - until StaticDenseOp and CliffordOp can init themselves from a *sparse* matrix
-        #postTerm = _term.RankOnePolynomialOpTerm.create_from(_Polynomial({(): 1.0}, mpv), self.unitary_postfactor,
-        #                                                     self.unitary_postfactor, self._evotype)
-        
+                
         #Note: for now, *all* of an error generator's terms are considered 0-th order,
         # so the below call to taylor_order_terms just gets all of them.  In the FUTURE
         # we might want to allow a distinction among the error generator terms, in which
         # case this term-exponentiation step will need to become more complicated...
         postTerm = _term.RankOnePolynomialOpTerm.create_from(_Polynomial({(): 1.0}, mpv),
-                                                             None, None, self._evotype)  # identity term
+                                                             None, None, self._evotype, self.state_space)  # identity
         loc_terms = _term.exponentiate_terms(self.errorgen.taylor_order_terms(0, max_polynomial_vars),
                                              order, postTerm, self.exp_terms_cache)
         #OLD: loc_terms = [ t.collapse() for t in loc_terms ] # collapse terms for speed
@@ -643,15 +636,8 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         assert(self.gpindices is not None), "LindbladOp must be added to a Model before use!"
         mpv = max_polynomial_vars
 
-        #REMOVE
-        #assert(not _sps.issparse(self.unitary_postfactor)
-        #       ), "Unitary post-factor needs to be dense for term-based evotypes"
-        ## for now - until StaticDenseOp and CliffordOp can init themselves from a *sparse* matrix
-        #postTerm = _term.RankOnePolynomialOpTerm.create_from(_Polynomial({(): 1.0}, mpv), self.unitary_postfactor,
-        #                                                     self.unitary_postfactor, self._evotype)
-
         postTerm = _term.RankOnePolynomialOpTerm.create_from(_Polynomial({(): 1.0}, mpv), None, None,
-                                                             self._evotype)  # identity term
+                                                             self._evotype, self.state_space)  # identity term
         postTerm = postTerm.copy_with_magnitude(1.0)
         #Note: for now, *all* of an error generator's terms are considered 0-th order,
         # so the below call to taylor_order_terms just gets all of them.  In the FUTURE

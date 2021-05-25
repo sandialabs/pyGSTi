@@ -16,6 +16,7 @@ from .. import basereps as _basereps
 from ...models.statespace import StateSpace as _StateSpace
 from ...tools import symplectic as _symp
 from ...tools import matrixtools as _mt
+from ...tools import internalgates as _itgs
 
 
 class OpRep(_basereps.OpRep):
@@ -82,7 +83,6 @@ class OpRepClifford(OpRep):
         s += _mt.mx_to_string(self.smatrix, width=2, prec=0)
         s += " and vector " + _mt.mx_to_string(self.svector, width=2, prec=0)
         return s
-
 
 
 class OpRepStandard(OpRepClifford):
@@ -198,3 +198,11 @@ class OpRepRepeated(OpRep):
         for i in range(self.num_repetitions):
             state = self.repated_rep.adjoint_acton(state)
         return state
+
+
+class OpRepLindbladErrorgen(OpRep):
+    def __init__(self, lindblad_term_dict, basis, state_space):
+        super(OpRepLindbladErrorgen, self).__init__(state_space)
+        self.Lterms = None
+        self.Lterm_coeffs = None
+        self.LtermdictAndBasis = (lindblad_term_dict, basis)

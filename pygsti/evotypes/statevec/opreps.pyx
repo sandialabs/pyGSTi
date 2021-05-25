@@ -88,12 +88,12 @@ cdef class OpRepDenseUnitary(OpRep):
         self.base.flags.writeable = writable
 
         assert(self.c_rep == NULL)  # if setstate is call, __init__ shouldn't have been
-        self.c_rep = new OpCRep_Pure(<double complex*>self.base.data,
-                                     <INT>self.base.shape[0])
+        self.c_rep = new OpCRep_DenseUnitary(<double complex*>self.base.data,
+                                             <INT>self.base.shape[0])
 
     def __str__(self):
         s = ""
-        cdef OpCRep_Pure* my_cgate = <OpCRep_Pure*>self.c_rep
+        cdef OpCRep_DenseUnitary* my_cgate = <OpCRep_DenseUnitary*>self.c_rep
         cdef INT i,j,k
         for i in range(my_cgate._dim):
             k = i*my_cgate._dim
@@ -313,8 +313,8 @@ cdef class OpRepRepeated(OpRep):
     def __cinit__(self, OpRep rep_to_repeat, INT num_repetitions, state_space):
         self.repeated_rep = rep_to_repeat
         self.num_repetitions = num_repetitions
-        self.c_rep = new OpCRep_Repeated(self.repeated_rep.c_rep, num_repetitions, dim)
         self.state_space = _StateSpace.cast(state_space)
+        self.c_rep = new OpCRep_Repeated(self.repeated_rep.c_rep, num_repetitions, self.state_space.udim)
 
     def __reduce__(self):
         return (OpRepRepeated, (self.repeated_rep, self.num_repetitions, self.state_space))
@@ -322,3 +322,10 @@ cdef class OpRepRepeated(OpRep):
     def copy(self):
         return OpRepRepeated(self.repeated_rep.copy(), self.num_repetitions, self.state_space.copy())
 
+
+cdef class OpRepLindbladErrorgen(OpRep):
+    def __init__(self, lindblad_term_dict, basis, state_space):
+        super(OpRepLindbladErrorgen, self).__init__(state_space)
+        self.Lterms = None
+        self.Lterm_coeffs = None
+        self.LtermdictAndBasis = (lindblad_term_dict, basis)

@@ -476,9 +476,10 @@ class LindbladErrorgen(_LinearOperator):
         evotype = _Evotype.cast(evotype)
         try:
             rep = evotype.create_lindblad_errorgen_rep(lindblad_term_dict, basis, state_space)
+            self._native_lindblad_rep = True
         except Exception:
             #Otherwise try to create a sparse or dense matrix representation
-
+            self._native_lindblad_rep = False
             self.hamGens, self.otherGens = self._init_generators(dim)
 
             if self.hamGens is not None:
@@ -526,10 +527,10 @@ class LindbladErrorgen(_LinearOperator):
                                                 _np.ascontiguousarray(indptr, _np.int64),
                                                 state_space)
             else:
-                rep = evotype.create_dense_rep(state_space)
+                rep = evotype.create_dense_rep(None, state_space)
 
         _LinearOperator.__init__(self, rep, evotype)  # sets self.dim
-        if self._rep is not None: self._update_rep()  # updates _rep whether it's a dense or sparse matrix
+        self._update_rep()  # updates _rep whether it's a dense or sparse matrix
         self._paramlbls = _ot.lindblad_param_labels(self.ham_basis, self.other_basis, self.param_mode, self.nonham_mode)
         #Done with __init__(...)
 
@@ -637,7 +638,7 @@ class LindbladErrorgen(_LinearOperator):
         assert(bsO == self.other_basis_size)
         return hamGens, otherGens
 
-    def _init_terms(self, lindblad_term_dict, basis, evotype, dim, max_polynomial_vars):
+    def _init_terms(self, lindblad_term_dict, basis, dim, max_polynomial_vars):
 
         d2 = dim
         # needed b/c operators produced by lindblad_error_generators have an extra 'd' scaling
@@ -669,9 +670,10 @@ class LindbladErrorgen(_LinearOperator):
                 scale, U = _mt.to_unitary(basis[termLbl[1]])
                 scale *= _np.sqrt(d) / 2  # mimics rho1's _np.sqrt(d) / 2 scaling in `hamiltonian_to_lindbladian`
                 Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-                    _Polynomial({(k,): -1j * scale}, mpv), U, IDENT, evotype))
+                    _Polynomial({(k,): -1j * scale}, mpv), U, IDENT, self._evotype))
                 Lterms.append(_term.RankOnePolynomialOpTerm.create_from(_Polynomial({(k,): +1j * scale}, mpv),
-                                                                        IDENT, U.conjugate().T, evotype))
+                                                                        IDENT, U.conjugate().T, self._evotype,
+                                                                        self.state_space))
 
             elif termType == "S":  # Stochastic
                 if self.nonham_mode in ("diagonal", "diag_affine"):
@@ -689,13 +691,15 @@ class LindbladErrorgen(_LinearOperator):
                     # assumes basis is dense (TODO: make sure works for sparse case too - and np.dots below!)
                     Ln_dag = Ln.conjugate().T
                     Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-                        _Polynomial({(k,) * pw: 1.0 * scale**2}, mpv), Ln, Lm_dag, evotype
+                        _Polynomial({(k,) * pw: 1.0 * scale**2}, mpv), Ln, Lm_dag, self._evotype, self.state_space
                     ))
                     Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-                        _Polynomial({(k,) * pw: -0.5 * scale**2}, mpv), IDENT, _np.dot(Ln_dag, Lm), evotype
+                        _Polynomial({(k,) * pw: -0.5 * scale**2}, mpv), IDENT, _np.dot(Ln_dag, Lm),
+                        self._evotype, self.state_space
                     ))
                     Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-                        _Polynomial({(k,) * pw: -0.5 * scale**2}, mpv), _np.dot(Lm_dag, Ln), IDENT, evotype
+                        _Polynomial({(k,) * pw: -0.5 * scale**2}, mpv), _np.dot(Lm_dag, Ln), IDENT,
+                        self._evotype, self.state_space
                     ))
 
                 else:
@@ -734,13 +738,14 @@ class LindbladErrorgen(_LinearOperator):
 
                     base_poly = _Polynomial(polyTerms, mpv)
                     Lm_dag = Lm.conjugate().T; Ln_dag = Ln.conjugate().T
-                    Lterms.append(_term.RankOnePolynomialOpTerm.create_from(1.0 * base_poly * scale, Ln, Lm, evotype))
+                    Lterms.append(_term.RankOnePolynomialOpTerm.create_from(1.0 * base_poly * scale, Ln, Lm,
+                                                                            self._evotype, self.state_space))
                     # adjoint(_np.dot(Lm_dag,Ln))
                     Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-                        -0.5 * base_poly * scale, IDENT, _np.dot(Ln_dag, Lm), evotype
+                        -0.5 * base_poly * scale, IDENT, _np.dot(Ln_dag, Lm), self._evotype, self.state_space
                     ))
                     Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-                        -0.5 * base_poly * scale, _np.dot(Lm_dag, Ln), IDENT, evotype
+                        -0.5 * base_poly * scale, _np.dot(Lm_dag, Ln), IDENT, self._evotype, self.state_space
                     ))
 
             elif termType == "A":  # Affine
@@ -765,7 +770,7 @@ class LindbladErrorgen(_LinearOperator):
                     UB = Bscale * B  # UB is unitary
                     Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
                         _Polynomial({(k,): 1.0 * scale / Bscale**2}, mpv),
-                        _np.dot(L, UB), UB, evotype))  # /(d2-1.)
+                        _np.dot(L, UB), UB, self._evotype, self.state_space))  # /(d2-1.)
 
                 #TODO: check normalization of these terms vs those used in projections.
 
@@ -818,7 +823,7 @@ class LindbladErrorgen(_LinearOperator):
 
         self.paramvals = _ot.lindblad_projections_to_paramvals(
             hamC, otherC, self.param_mode, self.nonham_mode, truncate)
-        if self._evotype == "densitymx": self._update_rep()
+        self._update_rep()
 
     def _update_rep(self):
         """
@@ -827,6 +832,13 @@ class LindbladErrorgen(_LinearOperator):
         error generator matrix using the current parameters and updates self._rep
         accordingly (by rewriting its data).
         """
+
+        if self._native_lindblad_rep:
+            # the code below is for updating sparse or dense matrix representations.  If our
+            # evotype has a native Lindblad representation, maybe in the FUTURE we should
+            # call an update method of it here?
+            return
+
         d2 = self.dim
         hamCoeffs, otherCoeffs = _ot.paramvals_to_lindblad_projections(
             self.paramvals, self.ham_basis_size, self.other_basis_size,
@@ -1049,12 +1061,14 @@ class LindbladErrorgen(_LinearOperator):
             is a `(vtape,ctape)` 2-tuple formed by concatenating together the
             output of :method:`Polynomial.compact`.
         """
+        assert(self._native_lindblad_rep), \
+            "Only evotypes with native Lindblad errorgen representations can utilize Taylor terms"
         assert(order == 0), \
             "Error generators currently treat all terms as 0-th order; nothing else should be requested!"
         assert(return_coeff_polys is False)
         if self._rep.Lterms is None:
             Ltermdict, basis = self._rep.LtermdictAndBasis
-            self._rep.Lterms, self._rep.Lterm_coeffs = self._init_terms(Ltermdict, basis, self._evotype,
+            self._rep.Lterms, self._rep.Lterm_coeffs = self._init_terms(Ltermdict, basis,
                                                                         self.dim, max_polynomial_vars)
         return self._rep.Lterms  # terms with local-index polynomial coefficients
 
@@ -1179,8 +1193,7 @@ class LindbladErrorgen(_LinearOperator):
         """
         assert(len(v) == self.num_params)
         self.paramvals = v
-        if self._evotype == "densitymx":
-            self._update_rep()
+        self._update_rep()
         self.dirty = dirty_value
 
     def coefficients(self, return_basis=False, logscale_nonham=False):

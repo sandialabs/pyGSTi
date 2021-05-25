@@ -33,6 +33,9 @@ cdef class StateRep:
 cdef class EffectRep:
     pass
 
+cdef class TermRep:
+    pass
+
 
 cdef extern from "basecreps.h" namespace "CReps":
 
@@ -56,6 +59,7 @@ cdef extern from "basecreps.h" namespace "CReps":
         unordered_map[PolynomialVarsIndex, complex] _coeffs
         INT _max_num_vars
         INT _vindices_per_int
+
 
 cdef class PolynomialRep:
     cdef PolynomialCRep* c_polynomial

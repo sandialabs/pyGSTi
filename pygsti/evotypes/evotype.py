@@ -1,4 +1,5 @@
 import importlib as _importlib
+from . import basereps as _basereps
 
 
 class Evotype(object):
@@ -20,11 +21,17 @@ class Evotype(object):
             return Evotype(str(obj))
 
     def __init__(self, name):
-        if ':' in name:
-            self.name, self.term_evotype = name.split(':')  # e.g. 'pathintegral:statevec'
-        else:
-            self.name, self.term_evotype = name, None
-        self.module = _importlib.import_module("pygsti.evotypes." + name)
+        self.name = name
+        #REMOVE - and get rid of module_name variable
+        #if ':' in name:
+        #    i = name.index(':')
+        #    module_name, sub_evotype_name = name[0:i], name[i + 1:]  # e.g. 'pathintegral:statevec'
+        #else:
+        #    module_name, sub_evotype_name = name, None
+        module_name = name
+
+        self.module = _importlib.import_module("pygsti.evotypes." + module_name)
+        #REMOVE self.sub_evotype = Evotype(sub_evotype_name) if (sub_evotype_name is not None) else None
 
     def __getstate__(self):
         state = self.__dict__.copy()
@@ -110,7 +117,26 @@ class Evotype(object):
 
     def create_composed_effect_rep(self, errmap_rep, effect_rep, errmap_name, state_space):
         return self.module.EffectRepComposed(errmap_rep, effect_rep, errmap_name, state_space)
-    
+
+
+    def create_term_rep(self, coeff, mag, logmag, pre_state, post_state,
+                        pre_effect, post_effect, pre_ops, post_ops):
+        try:  # see if module implements its own term rep, otherwise use "stock" version
+            return self.module.TermRep(coeff, mag, logmag, pre_state, post_state,
+                                       pre_effect, post_effect, pre_ops, post_ops)
+        except Exception:
+            return _basereps.StockTermRep(coeff, mag, logmag, pre_state, post_state,
+                                          pre_effect, post_effect, pre_ops, post_ops)
+
+    def create_direct_term_rep(self, coeff, mag, logmag, pre_state, post_state,
+                               pre_effect, post_effect, pre_ops, post_ops):
+        try:  # see if module implements its own term rep, otherwise use "stock" version
+            return self.module.TermDirectRep(coeff, mag, logmag, pre_state, post_state,
+                                             pre_effect, post_effect, pre_ops, post_ops)
+        except Exception:
+            return _basereps.StockTermDirectRep(coeff, mag, logmag, pre_state, post_state,
+                                                pre_effect, post_effect, pre_ops, post_ops)
+
 
 try:
     from . import densitymx as _dummy

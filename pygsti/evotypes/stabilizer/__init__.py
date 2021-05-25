@@ -13,3 +13,4 @@ The stabilizer-frame, or "stabilizer" evolution type, which uses Cython for spee
 from .statereps import *
 from .opreps import *
 from .effectreps import *
+from .termreps import *

@@ -89,7 +89,7 @@ cdef class OpRepClifford(OpRep):
         self.c_rep = new OpCRep_Clifford(<INT*>self.smatrix.data, <INT*>self.svector.data,
                                          <double complex*>self.unitary.data,
                                          <INT*>self.smatrix_inv.data, <INT*>self.svector_inv.data,
-                                         <double complex*>self.unitary_dagger.data, n)
+                                         <double complex*>self.unitary_dagger.data, self.state_space.num_qubits)
 
     def __reduce__(self):
         return (OpRepClifford, (self.unitary, (self.smatrix, self.svector), self.state_space))
@@ -205,3 +205,11 @@ cdef class OpRepRepeated(OpRep):
 
     def copy(self):
         return OpRepRepeated(self.repeated_rep.copy(), self.num_repetitions, self.state_space)
+
+
+cdef class OpRepLindbladErrorgen(OpRep):
+    def __init__(self, lindblad_term_dict, basis, state_space):
+        super(OpRepLindbladErrorgen, self).__init__(state_space)
+        self.Lterms = None
+        self.Lterm_coeffs = None
+        self.LtermdictAndBasis = (lindblad_term_dict, basis)

@@ -163,7 +163,11 @@ def setup_with_extensions(extensions=None):
                 'effectreps.pxd',
                 'effectreps.pyx',
                 'effectcreps.cpp',
-                'effectcreps.h'
+                'effectcreps.h',
+                'termreps.pxd',
+                'termreps.pyx',
+                'termcreps.cpp',
+                'termcreps.h',
             ],
             'pygsti.evotypes.stabilizer': [
                 'opreps.pxd',
@@ -177,7 +181,11 @@ def setup_with_extensions(extensions=None):
                 'effectreps.pxd',
                 'effectreps.pyx',
                 'effectcreps.cpp',
-                'effectcreps.h'
+                'effectcreps.h',
+                'termreps.pxd',
+                'termreps.pyx',
+                'termcreps.cpp',
+                'termcreps.h',
             ],
             'pygsti.forwardsims': [
                 'mapforwardsim_calc_densitymx.pyx',
@@ -355,6 +363,17 @@ try:
             extra_link_args=["-std=c++11"]
         ),
         Extension(
+            "pygsti.evotypes.statevec.termreps",
+            sources=[
+                "pygsti/evotypes/statevec/termreps.pyx",
+                "pygsti/evotypes/statevec/termcreps.cpp"
+            ],
+            include_dirs=['.', 'pygsti/evotypes', np.get_include()],
+            language="c++",
+            extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
+            extra_link_args=["-std=c++11"]
+        ),
+        Extension(
             "pygsti.evotypes.stabilizer.statereps",
             sources=[
                 "pygsti/evotypes/stabilizer/statereps.pyx",
@@ -388,9 +407,40 @@ try:
             extra_link_args=["-std=c++11"]
         ),
         Extension(
+            "pygsti.evotypes.stabilizer.termreps",
+            sources=[
+                "pygsti/evotypes/stabilizer/termreps.pyx",
+                "pygsti/evotypes/stabilizer/termcreps.cpp"
+            ],
+            include_dirs=['.', 'pygsti/evotypes', np.get_include()],
+            language="c++",
+            extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
+            extra_link_args=["-std=c++11"]
+        ),
+        Extension(
             "pygsti.forwardsims.mapforwardsim_calc_densitymx",
             sources=[
                 "pygsti/forwardsims/mapforwardsim_calc_densitymx.pyx",
+            ],
+            include_dirs=['.', 'pygsti/evotypes', np.get_include()],
+            language="c++",
+            extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
+            extra_link_args=["-std=c++11"]
+        ),
+        Extension(
+            "pygsti.forwardsims.termforwardsim_calc_statevec",
+            sources=[
+                "pygsti/forwardsims/termforwardsim_calc_statevec.pyx",
+            ],
+            include_dirs=['.', 'pygsti/evotypes', np.get_include()],
+            language="c++",
+            extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
+            extra_link_args=["-std=c++11"]
+        ),
+        Extension(
+            "pygsti.forwardsims.termforwardsim_calc_stabilizer",
+            sources=[
+                "pygsti/forwardsims/termforwardsim_calc_stabilizer.pyx",
             ],
             include_dirs=['.', 'pygsti/evotypes', np.get_include()],
             language="c++",

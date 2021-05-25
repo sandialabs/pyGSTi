@@ -185,11 +185,11 @@ class ComputationalBasisPOVMEffect(_POVMEffect):
             output of :method:`Polynomial.compact`.
         """
         if order == 0:  # only 0-th order term exists
-
-            term_evotype = self._evotype.term_evotype
-            purevec = ComputationalBasisPOVMEffect(self._zvals, term_evotype)
+            #REMOVE term_evotype = self._evotype.term_evotype
+            #REMOVE effect = ComputationalBasisPOVMEffect(self._zvals, term_evotype)
             coeff = _Polynomial({(): 1.0}, max_polynomial_vars)
-            terms = [_term.RankOnePolynomialEffectTerm.create_from(coeff, purevec, purevec, self._evotype)]
+            terms = [_term.RankOnePolynomialEffectTerm.create_from(coeff, self, self,
+                                                                   self._evotype, self.state_space)]
 
             if return_coeff_polys:
                 coeffs_as_compact_polys = coeff.compact(complex_coeff_tape=True)

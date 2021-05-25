@@ -116,7 +116,7 @@ cdef class StateRepComposed(StateRep):
         self.base[:] = rep.base[:]
 
     def __reduce__(self):
-        return (StateRepComposed, (self.state_rep, self.op_rep, state_space), (self.base.flags.writeable,))
+        return (StateRepComposed, (self.state_rep, self.op_rep, self.state_space), (self.base.flags.writeable,))
 
 
 cdef class StateRepTensorProduct(StateRep):

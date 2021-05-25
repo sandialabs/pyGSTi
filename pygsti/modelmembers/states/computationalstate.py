@@ -180,10 +180,11 @@ class ComputationalBasisState(_State):
         if order == 0:  # only 0-th order term exists
 
             #TODO - there should be a "term" evotype containing a sub-evotype used to create the state here
-            term_evotype = self._evotype.term_evotype
-            purevec = ComputationalBasisState(self._zvals, term_evotype)
+            #REMOVE term_evotype = self._evotype.term_evotype
+            #REMOVE purevec = ComputationalBasisState(self._zvals, term_evotype)
             coeff = _Polynomial({(): 1.0}, max_polynomial_vars)
-            terms = [_term.RankOnePolynomialPrepTerm.create_from(coeff, purevec, purevec, self._evotype)]
+            terms = [_term.RankOnePolynomialPrepTerm.create_from(coeff, self, self,
+                                                                 self._evotype, self.state_space)]
 
             if return_coeff_polys:
                 coeffs_as_compact_polys = coeff.compact(complex_coeff_tape=True)

@@ -4,6 +4,7 @@ import functools as _functools
 import numpy as _np
 from .effect import POVMEffect as _POVMEffect
 from .. import modelmember as _modelmember
+from ..model import statespace as _statespace
 from ..states.tensorprodstate import TensorProductState as _TensorProductState
 from ...tools import slicetools as _slct
 from ...tools import listtools as _lt
@@ -121,7 +122,6 @@ class TensorProductPOVMEffect(_POVMEffect):
             is a `(vtape,ctape)` 2-tuple formed by concatenating together the
             output of :method:`Polynomial.compact`.
         """
-        from .operation import EmbeddedOp as _EmbeddedGateMap
         terms = []
         fnq = [int(round(_np.log2(f.dim))) // 2 for f in self.factors]  # num of qubits per factor
         # assumes density matrix evolution
@@ -142,27 +142,34 @@ class TensorProductPOVMEffect(_POVMEffect):
                 factor_lists = [[t.collapse_vec() for t in fterms] for fterms in factor_lists]
 
             for factors in _itertools.product(*factor_lists):
-                # create a term with a TensorProdSPAMVec - Note we always create
-                # "prep"-mode vectors, since even when self._prep_or_effect == "effect" these
-                # vectors are created with factor (prep- or effect-type) SPAMVecs not factor POVMs
-                # we workaround this by still allowing such "prep"-mode
-                # TensorProdSPAMVecs to be represented as effects (i.e. in torep('effect'...) works)
                 coeff = _functools.reduce(lambda x, y: x.mult(y), [f.coeff for f in factors])
-                pre_op = _TensorProductState([f.pre_ops[0] for f in factors
-                                              if (f.pre_ops[0] is not None)])
-                post_op = _TensorProductState([f.post_ops[0] for f in factors
-                                               if (f.post_ops[0] is not None)])
-                term = _term.RankOnePolynomialPrepTerm.create_from(coeff, pre_op, post_op, self._evotype)
+
+                #Some gymnastics here to create an EffectRep that is the tensor product of a fixed
+                # set of other effect reps.  This isn't a TensorProductPOVMEffect, as that takes a
+                # set of POVMs as factors.  So we convert the factor effects -> dense -> states
+                # and then use a conjugated tensor-product-state as the final effect object.
+                pre_state_rep = self._evotype.create_tensorproduct_state_rep(
+                    [self._evotype.create_pure_state_rep(f.pre_effect.to_dense())
+                     for f in factors if (f.pre_effect is not None)], self.state_space)
+                pre_rep = self._evotype.create_conjugatedstate_effect_rep(pre_state_rep)
+
+                post_state_rep = self._evotype.create_tensorproduct_state_rep(
+                    [self._evotype.create_pure_state_rep(f.post_effect.to_dense())
+                     for f in factors if (f.post_effect is not None)], self.state_space)
+                post_rep = self._evotype.create_conjugatedstate_effect_rep(post_state_rep)
+
+                term = _term.RankOnePolynomialEffectTerm.create_from(coeff, pre_rep, post_rep,
+                                                                     self._evotype, self.state_space)
 
                 if not collapsible:  # then may need to add more ops.  Assume factor ops are clifford gates
                     # Embed each factors ops according to their target qubit(s) and just daisy chain them
-                    stateSpaceLabels = tuple(range(total_nQ)); curQ = 0
+                    ss = _statespace.QubitSpace(total_nQ); curQ = 0
                     for f, nq in zip(factors, fnq):
                         targetLabels = tuple(range(curQ, curQ + nq)); curQ += nq
-                        term.pre_ops.extend([_EmbeddedGateMap(stateSpaceLabels, targetLabels, op)
-                                             for op in f.pre_ops[1:]])  # embed and add ops
-                        term.post_ops.extend([_EmbeddedGateMap(stateSpaceLabels, targetLabels, op)
-                                              for op in f.post_ops[1:]])  # embed and add ops
+                        term._rep.pre_ops.extend([self._evotype.create_embedded_rep(ss, targetLabels, op)
+                                                  for op in f.pre_ops])  # embed and add ops
+                        term._rep.post_ops.extend([self._evotype.create_embedded_rep(ss, targetLabels, op)
+                                                   for op in f.post_ops])  # embed and add ops
 
                 terms.append(term)
 

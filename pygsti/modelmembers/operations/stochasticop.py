@@ -230,10 +230,11 @@ class StochasticNoiseOp(_LinearOperator):
             for pd in self._get_rate_poly_dicts():
                 polydict.update({k: -v for k, v in pd.items()})  # subtracts the "rate" `pd` from `polydict`
             loc_terms = [_term.RankOnePolynomialOpTerm.create_from(_Polynomial(polydict, mpv),
-                                                                   IDENT, IDENT, self._evotype)]
+                                                                   IDENT, IDENT, self._evotype, self.state_space)]
 
         elif order == 1:
-            loc_terms = [_term.RankOnePolynomialOpTerm.create_from(_Polynomial(pd, mpv), bel, bel, self._evotype)
+            loc_terms = [_term.RankOnePolynomialOpTerm.create_from(_Polynomial(pd, mpv), bel, bel,
+                                                                   self._evotype, self.state_space)
                          for i, (pd, bel) in enumerate(zip(self.rate_poly_dicts, self.basis.elements[1:]))]
         else:
             loc_terms = []  # only first order "taylor terms"

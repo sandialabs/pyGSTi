@@ -13,3 +13,4 @@ The state-vector, or "statevec" evolution type, which uses Cython for speed.
 from .statereps import *
 from .opreps import *
 from .effectreps import *
+from .termreps import *
