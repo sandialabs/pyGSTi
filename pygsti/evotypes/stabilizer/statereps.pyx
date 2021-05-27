@@ -59,8 +59,9 @@ cdef class StateRep(_basereps_cython.StateRep):
 
 cdef class StateRepComputational(StateRep):
     cdef object zvals
+    cdef object basis
     
-    def __init__(self, zvals, state_space):
+    def __init__(self, zvals, basis, state_space):
 
         nqubits = len(zvals)
         state_s = _np.fliplr(_np.identity(2 * nqubits, int))  # flip b/c stab cols are *first*
@@ -72,7 +73,8 @@ cdef class StateRepComputational(StateRep):
         s = state_s.copy()  # needed?
         ps = state_ps.reshape(1, 2 * nqubits)
         a = _np.ones(1, complex)  # all == 1.0 by default
-
+        
+        self.basis = basis
         super(StateRepComputational, self).__init__(s, ps, a, state_space)
 
     #TODO: copy methods from StabilizerFrame or StateCRep - or maybe do this for base StateRep class? ----------------------------

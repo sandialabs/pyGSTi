@@ -64,8 +64,9 @@ cdef class OpRepClifford(OpRep):
     cdef public _np.ndarray smatrix_inv
     cdef public _np.ndarray svector_inv
     cdef public _np.ndarray unitary_dagger
+    cdef public object basis
 
-    def __cinit__(self, _np.ndarray[_np.complex128_t, ndim=2, mode='c'] unitarymx, symplecticrep, state_space):
+    def __cinit__(self, _np.ndarray[_np.complex128_t, ndim=2, mode='c'] unitarymx, symplecticrep, basis, state_space):
         if symplecticrep is not None:
             self.smatrix, self.svector = symplecticrep
         else:
@@ -77,6 +78,7 @@ cdef class OpRepClifford(OpRep):
 
         self.unitary = unitarymx
         self.unitary_dagger = _np.ascontiguousarray(_np.conjugate(_np.transpose(unitarymx)))
+        self.basis = basis
 
         #Make sure all arrays are contiguous
         self.smatrix = _np.ascontiguousarray(self.smatrix)
@@ -92,17 +94,17 @@ cdef class OpRepClifford(OpRep):
                                          <double complex*>self.unitary_dagger.data, self.state_space.num_qubits)
 
     def __reduce__(self):
-        return (OpRepClifford, (self.unitary, (self.smatrix, self.svector), self.state_space))
+        return (OpRepClifford, (self.unitary, (self.smatrix, self.svector), self.basis, self.state_space))
 
 
 cdef class OpRepStandard(OpRepClifford):   # TODO
-    def __init__(self, name, state_space):
+    def __init__(self, name, basis, state_space):
         std_unitaries = _itgs.standard_gatename_unitaries()
         if self.name not in std_unitaries:
             raise ValueError("Name '%s' not in standard unitaries" % self.name)
 
         U = std_unitaries[self.name]
-        super(OpRepStandard, self).__init__(U, None, state_space)
+        super(OpRepStandard, self).__init__(U, None, basis, state_space)
 
 
 cdef class OpRepComposed(OpRep):

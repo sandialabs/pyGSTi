@@ -33,9 +33,10 @@ class ComplementPOVMEffect(_ConjugatedStatePOVMEffect):
 
     def __init__(self, identity, other_effects):
         evotype = other_effects[0]._evotype
+        state_space = other_effects[0].state_space
         self.identity_vec = identity.copy()
         identity_state = _FullState(
-            _State._to_vector(identity), evotype)  # so easy to transform or depolarize by parent POVM
+            _State._to_vector(identity), evotype, state_space)  # so easy to transform or depolarize by parent POVM
 
         self.other_effects = other_effects
         #Note: we assume that our parent will do the following:

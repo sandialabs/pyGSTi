@@ -13,7 +13,7 @@ import collections as _collections
 import numpy as _np
 import warnings as _warnings
 
-from .staticdenseop import StaticDenseOp as _StaticDenseOp
+from .staticunitaryop import StaticUnitaryOp as _StaticUnitaryOp
 from .embeddedop import EmbeddedOp as _EmbeddedOp, EmbeddedDenseOp as _EmbeddedDenseOp
 from .composedop import ComposedOp as _ComposedOp, ComposedDenseOp as _ComposedDenseOp
 from .cliffordop import CliffordOp
@@ -25,6 +25,7 @@ from ...objects.label import Label as _Lbl
 from ...tools import optools as _gt
 from ...tools import basistools as _bt
 from ...tools import matrixtools as _mt
+from ...models import statespace as _statespace
 
 
 def op_from_factories(factory_dict, lbl):
@@ -246,16 +247,9 @@ class EmbeddedOpFactory(OpFactory):
 
     Parameters
     ----------
-    state_space_labels : StateSpaceLabels or a list of tuples
-        This argument specifies the density matrix space upon which the
-        operations this factory builds act.  If a list of tuples, each tuple
-        corresponds to a block of a density matrix in the standard basis
-        (and therefore a component of the direct-sum density matrix
-        space). Elements of a tuple are user-defined labels beginning with
-        "L" (single Level) or "Q" (two-level; Qubit) which interpret the
-        d-dimensional state space corresponding to a d x d block as a tensor
-        product between qubit and single level systems.  (E.g. a 2-qubit
-        space might be labelled `[('Q0','Q1')]`).
+    state_space : StateSpace
+        The state space of this factory, describing the space of these that the
+        operations produced by this factory act upon.
 
     target_labels : list of strs
         The labels contained in `state_space_labels` which demarcate the
@@ -274,52 +268,18 @@ class EmbeddedOpFactory(OpFactory):
         :class:`EmbeddedOp` objects are.
     """
 
-    def __init__(self, state_space_labels, target_labels, factory_to_embed, dense=False):
-        """
-        Create a new EmbeddedOpFactory object.
-
-        Parameters
-        ----------
-        state_space_labels : StateSpaceLabels or a list of tuples
-            This argument specifies the density matrix space upon which the
-            operations this factory builds act.  If a list of tuples, each tuple
-            corresponds to a block of a density matrix in the standard basis
-            (and therefore a component of the direct-sum density matrix
-            space). Elements of a tuple are user-defined labels beginning with
-            "L" (single Level) or "Q" (two-level; Qubit) which interpret the
-            d-dimensional state space corresponding to a d x d block as a tensor
-            product between qubit and single level systems.  (E.g. a 2-qubit
-            space might be labelled `[('Q0','Q1')]`).
-
-        target_labels : list of strs
-            The labels contained in `state_space_labels` which demarcate the
-            portions of the state space acted on by the operations produced
-            by `factory_to_embed` (the "contained" factory).
-
-        factory_to_embed : OpFactory
-            The factory object that is to be contained within this factory,
-            and that specifies the only non-trivial action of the operations
-            this factory produces.
-
-        dense : bool, optional
-            Whether dense embedding operations (ops which hold their entire
-            "action" matrix in memory) should be created.  When `True`,
-            :class:`EmbeddedDenseOp` objects are created; when `False`,
-            :class:`EmbeddedOp` objects are.
-        """
-        from .labeldicts import StateSpaceLabels as _StateSpaceLabels
+    def __init__(self, state_space, target_labels, factory_to_embed, dense=False):
+        state_space = _statespace.StateSpace.cast(state_space)
         self.embedded_factory = factory_to_embed
-        self.state_space_labels = _StateSpaceLabels(state_space_labels,
-                                                    evotype=factory_to_embed._evotype)
-        self.targetLabels = target_labels
+        self.target_labels = target_labels
         self.dense = dense
-        super(EmbeddedOpFactory, self).__init__(self.state_space_labels.dim, factory_to_embed._evotype)
+        super(EmbeddedOpFactory, self).__init__(state_space, factory_to_embed._evotype)
 
         #FUTURE: somehow do all the difficult embedded op computation once at construction so we
         # don't need to keep reconstructing an Embedded op in each create_op call.
         #Embedded = _op.EmbeddedDenseOp if dense else _op.EmbeddedOp
         #dummyOp = _op.ComposedOp([], dim=factory_to_embed.dim, evotype=factor_to_embed._evotype)
-        #self.embedded_op = Embedded(stateSpaceLabels, targetLabels, dummyOp)
+        #self.embedded_op = Embedded(stateSpaceLabels, target_labels, dummyOp)
 
     def create_op(self, args=None, sslbls=None):
         """
@@ -348,7 +308,7 @@ class EmbeddedOpFactory(OpFactory):
 
         Embedded = _EmbeddedDenseOp if self.dense else _EmbeddedOp
         op = self.embedded_factory.create_op(args, sslbls)  # Note: will have its gpindices set already
-        embedded_op = Embedded(self.state_space_labels, self.targetLabels, op)
+        embedded_op = Embedded(self.state_space, self.target_labels, op)
         embedded_op.set_gpindices(self.gpindices, self.parent)  # Overkill, since embedded op already has indices set?
         return embedded_op
 
@@ -423,16 +383,9 @@ class EmbeddingOpFactory(OpFactory):
 
     Parameters
     ----------
-    state_space_labels : StateSpaceLabels or a list of tuples
-        This argument specifies the density matrix space upon which the
-        operations this factory builds act.  If a list of tuples, each tuple
-        corresponds to a block of a density matrix in the standard basis
-        (and therefore a component of the direct-sum density matrix
-        space). Elements of a tuple are user-defined labels beginning with
-        "L" (single Level) or "Q" (two-level; Qubit) which interpret the
-        d-dimensional state space corresponding to a d x d block as a tensor
-        product between qubit and single level systems.  (E.g. a 2-qubit
-        space might be labelled `[('Q0','Q1')]`).
+    state_space : StateSpace
+        The state space of this factory, describing the space of these that the
+        operations produced by this factory act upon.
 
     factory_or_op_to_embed : LinearOperator or OpFactory
         The factory or operation object that is to be contained within this
@@ -455,51 +408,13 @@ class EmbeddingOpFactory(OpFactory):
         factory's `create_op` method is not checked at all.
     """
 
-    def __init__(self, state_space_labels, factory_or_op_to_embed, dense=False, num_target_labels=None):
-        """
-        Create a new EmbeddingOpFactory object.
-
-        Parameters
-        ----------
-        state_space_labels : StateSpaceLabels or a list of tuples
-            This argument specifies the density matrix space upon which the
-            operations this factory builds act.  If a list of tuples, each tuple
-            corresponds to a block of a density matrix in the standard basis
-            (and therefore a component of the direct-sum density matrix
-            space). Elements of a tuple are user-defined labels beginning with
-            "L" (single Level) or "Q" (two-level; Qubit) which interpret the
-            d-dimensional state space corresponding to a d x d block as a tensor
-            product between qubit and single level systems.  (E.g. a 2-qubit
-            space might be labelled `[('Q0','Q1')]`).
-
-        factory_or_op_to_embed : LinearOperator or OpFactory
-            The factory or operation object that is to be contained within this
-            factory.  If a linear operator, this *same* operator (not a copy)
-            is embedded however is requested.  If a factory, then this object's
-            `create_op` method is called with any `args` that are passed to
-            the embedding-factory's `create_op` method, but the `sslbls` are
-            always set to `None` (as they are processed by the embedding
-
-        dense : bool, optional
-            Whether dense embedding operations (ops which hold their entire
-            "action" matrix in memory) should be created.  When `True`,
-            :class:`EmbeddedDenseOp` objects are created; when `False`,
-            :class:`EmbeddedOp` objects are.
-
-        num_target_labels : int, optional
-            If not `None`, the number of target labels that should be expected
-            (usually equal to the number of qubits the contained gate acts
-            upon).  If `None`, then the length of the `sslbls` passed to this
-            factory's `create_op` method is not checked at all.
-        """
-        from .labeldicts import StateSpaceLabels as _StateSpaceLabels
+    def __init__(self, state_space, factory_or_op_to_embed, dense=False, num_target_labels=None):
+        state_space = _statespace.StateSpace.cast(state_space)
         self.embedded_factory_or_op = factory_or_op_to_embed
         self.embeds_factory = isinstance(factory_or_op_to_embed, OpFactory)
-        self.state_space_labels = _StateSpaceLabels(state_space_labels,
-                                                    evotype=factory_or_op_to_embed._evotype)
         self.dense = dense
         self.num_target_labels = num_target_labels
-        super(EmbeddingOpFactory, self).__init__(self.state_space_labels.dim, factory_or_op_to_embed._evotype)
+        super(EmbeddingOpFactory, self).__init__(state_space, factory_or_op_to_embed._evotype)
 
     def create_op(self, args=None, sslbls=None):
         """
@@ -534,7 +449,7 @@ class EmbeddingOpFactory(OpFactory):
             op = self.embedded_factory_or_op.create_op(args, None)  # Note: will have its gpindices set already
         else:
             op = self.embedded_factory_or_op
-        embedded_op = Embedded(self.state_space_labels, sslbls, op)
+        embedded_op = Embedded(self.state_space, sslbls, op)
         embedded_op.set_gpindices(self.gpindices, self.parent)  # Overkill, since embedded op already has indices set?
         return embedded_op
 
@@ -767,49 +682,26 @@ class UnitaryOpFactory(OpFactory):
         complex numpy array that has dimension 2^nQubits, e.g.
         a 2x2 matrix in the 1-qubit case.
 
-    unitary_dim : int
-        The dimension of the unitary that is returned by `fn`,
-        e.g. 2 for a 1-qubit factory.
+    state_space : StateSpace
+        The state space of this factory, describing the space of these that the
+        operations produced by this factory act upon.  The function `fn` should
+        return a unitary matrix with dimension `state_space.udim`, e.g. a 2x2
+        matrix when `state_space` describes a single qubit.
 
     superop_basis : Basis or {"std","pp","gm","qt"}
-        The basis the resulting :class:`StaticDenseOp` superoperator
-        should be given in.  Usually the default of `"pp"` is what
-        you want.
+        The basis used to represent super-operators.  If the operations produced
+        by this factor need to be given a dense superoperator representation, this
+        basis is used.  Usually the default of `"pp"` is what you want.
 
     evotype : {"densitymx","statevec","stabilizer","svterm","cterm"}
         The evolution type of the operation(s) this factory builds.
     """
 
-    def __init__(self, fn, unitary_dim, superop_basis="pp", evotype="densitymx"):
-        """
-        Create a new UnitaryOpFactory object.
-
-        Parameters
-        ----------
-        fn : function
-            A function that takes as it's only argument a tuple
-            of label-arguments (arguments included in circuit labels,
-            e.g. 'Gxrot;0.347') and returns a unitary matrix -- a
-            complex numpy array that has dimension 2^nQubits, e.g.
-            a 2x2 matrix in the 1-qubit case.
-
-        unitary_dim : int
-            The dimension of the unitary that is returned by `fn`,
-            e.g. 2 for a 1-qubit factory.
-
-        superop_basis : Basis or {"std","pp","gm","qt"}
-            The basis the resulting :class:`StaticDenseOp` superoperator
-            should be given in.  Usually the default of `"pp"` is what
-            you want.
-
-        evotype : {"densitymx","statevec","stabilizer","svterm","cterm"}
-            The evolution type of the operation(s) this factory builds.
-        """
+    def __init__(self, fn, state_space, superop_basis="pp", evotype="densitymx"):
         self.basis = superop_basis
         self.fn = fn
-        self.make_superop = bool(evotype in ("densitymx", "svterm", "cterm"))
-        dim = unitary_dim**2 if self.make_superop else unitary_dim
-        super(UnitaryOpFactory, self).__init__(dim, evotype)
+        state_space = _statespace.StateSpace.cast(state_space)
+        super(UnitaryOpFactory, self).__init__(state_space, evotype)
 
     def create_object(self, args=None, sslbls=None):
         """
@@ -835,11 +727,4 @@ class UnitaryOpFactory(OpFactory):
         """
         assert(sslbls is None), "UnitaryOpFactory.create_object must be called with `sslbls=None`!"
         U = self.fn(args)
-        if self.make_superop:
-            superop = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", self.basis)
-            return _StaticDenseOp(superop, self._evotype)
-        else:
-            if self._evotype == "stabilizer":
-                return _CliffordOp(U)
-            else:
-                return _StaticDenseOp(U, self._evotype)
+        return _StaticUnitaryOp(U, self.basis, self.evotype, self.state_space)

@@ -17,6 +17,7 @@ import collections as _collections
 import scipy.sparse as _sps
 import warnings as _warnings
 
+from . import statespace as _statespace
 from ..modelmembers import operations as _op
 from ..modelmembers import states as _state
 from ..modelmembers import povms as _povm
@@ -358,70 +359,87 @@ class LocalNoiseModel(_ImplicitOpModel):
                     raise KeyError("'%s' gate unitary needs to be provided by `nonstd_gate_unitaries` arg" % name)
                 if callable(U):  # then assume a function: args -> unitary
                     U0 = U(None)  # U fns must return a sample unitary when passed None to get size.
-                    gatedict[name] = _opfactory.UnitaryOpFactory(U, U0.shape[0], evotype=evotype)
+                    local_state_space = _statespace.default_space_for_udim(U0.shape[0])
+                    gatedict[name] = _opfactory.UnitaryOpFactory(U, local_state_space, 'pp', evotype=evotype)
                 else:
-                    if evotype in ("densitymx", "svterm", "cterm"):
-                        gatedict[name] = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", "pp")
-                    else:  # we just store the unitaries
-                        assert(evotype in ("statevec", "stabilizer")), "Invalid evotype: %s" % evotype
-                        gatedict[name] = U
+                    #REMOVE:
+                    #if evotype in ("densitymx", "svterm", "cterm"):
+                    #    gatedict[name] = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", "pp")
+
+                    # we just store the unitaries
+                    gatedict[name] = U
 
         #Add anything from custom_gates directly if it wasn't added already
         for lbl, gate in custom_gates.items():
             if lbl not in gate_names: gatedict[lbl] = gate
 
-        if evotype in ("densitymx", "svterm", "cterm"):
-            from ..construction.modelconstruction import _basis_create_spam_vector
-            basis1Q = _BuiltinBasis("pp", 4)
-            v0 = _basis_create_spam_vector("0", basis1Q)
-            v1 = _basis_create_spam_vector("1", basis1Q)
-        elif evotype == "statevec":
-            basis1Q = _BuiltinBasis("sv", 2)
-            v0 = _np.array([[1], [0]], complex)
-            v1 = _np.array([[0], [1]], complex)
-        else:
-            basis1Q = _BuiltinBasis("sv", 2)
-            assert(evotype == "stabilizer"), "Invalid evolution type: %s" % evotype
-            v0 = v1 = None  # then we shouldn't use these
+        #REMOVE
+        #if evotype in ("densitymx", "svterm", "cterm"):
+        #    from ..construction.modelconstruction import _basis_create_spam_vector
+        #    basis1Q = _BuiltinBasis("pp", 4)
+        #    v0 = _basis_create_spam_vector("0", basis1Q)
+        #    v1 = _basis_create_spam_vector("1", basis1Q)
+        #elif evotype == "statevec":
+        #    basis1Q = _BuiltinBasis("sv", 2)
+        #    v0 = _np.array([[1], [0]], complex)
+        #    v1 = _np.array([[0], [1]], complex)
+        #else:
+        #    basis1Q = _BuiltinBasis("sv", 2)
+        #    assert(evotype == "stabilizer"), "Invalid evolution type: %s" % evotype
+        #    v0 = v1 = None  # then we shouldn't use these
 
         if simulator == "auto":
-            if evotype == "densitymx":
-                simulator = _MatrixFSim() if num_qubits <= 2 else _MapFSim()
-            elif evotype == "statevec":
-                simulator = _MatrixFSim() if num_qubits <= 4 else _MapFSim()
-            elif evotype == "stabilizer":
-                simulator = _MapFSim()  # use map as default for stabilizer-type evolutions
-            else: assert(False)  # should be unreachable
+            simulator = _MapFSim() if num_qubits > 2 else _MatrixFSim()
         elif simulator == "map":
             simulator = _MapFSim()
         elif simulator == "matrix":
             simulator = _MatrixFSim()
         assert(isinstance(simulator, _FSim)), "`simulator` must be a ForwardSimulator instance!"
 
+        if isinstance(geometry, _qgraph.QubitGraph):
+            qubitGraph = geometry
+            if qubit_labels is None:
+                qubit_labels = qubitGraph.node_names
+        else:
+            if qubit_labels is None:
+                qubit_labels = tuple(range(num_qubits))
+            qubitGraph = _qgraph.QubitGraph.common_graph(num_qubits, geometry, directed=False,
+                                                         qubit_labels=qubit_labels)
+        state_space = _statespace.QubitSpace(qubit_labels)
+        assert(state_space.num_qubits == num_qubits), "Number of qubit labels != `num_qubits`!"
+
         prep_layers = {}
         povm_layers = {}
         if parameterization in ("TP", "full"):  # then make tensor-product spam
             prep_factors = []; povm_factors = []
+
+            #Note: TP and full evotypes are require dense states
+            from ..construction.modelconstruction import _basis_create_spam_vector
+            basis1Q = _BuiltinBasis("pp", 4)
+            v0 = _basis_create_spam_vector("0", basis1Q)
+            v1 = _basis_create_spam_vector("1", basis1Q)
+            
             for i in range(num_qubits):
                 prep_factors.append(
-                    _state.convert(_state.StaticState(v0), "TP", basis1Q))    # ----------------------- evotype???????????? - and POVM elements below?
+                    _state.convert(_state.StaticState(v0, evotype, state_space=None), "TP", basis1Q))
                 povm_factors.append(
                     _povm.convert(_povm.UnconstrainedPOVM(([
-                        ('0', _povm.StaticPOVMEffect(v0)),
-                        ('1', _povm.StaticPOVMEffect(v1))])), "TP", basis1Q))
+                        ('0', _povm.StaticPOVMEffect(v0, evotype, state_space=None)),
+                        ('1', _povm.StaticPOVMEffect(v1, evotype, state_space=None))])), "TP", basis1Q))
 
-            prep_layers['rho0'] = _state.TensorProductState(prep_factors)
-            povm_layers['Mdefault'] = _povm.TensorProductPOVM(povm_factors)
+            prep_layers['rho0'] = _state.TensorProductState(prep_factors, state_space)
+            povm_layers['Mdefault'] = _povm.TensorProductPOVM(povm_factors, evotype, state_space)
 
-        elif parameterization == "clifford":
-            # Clifford object construction is different enough we do it separately
-            prep_layers['rho0'] = _state.ComputationalBasisState([0]*num_qubits, 'stabilizer')
-            povm_layers['Mdefault'] = _povm.ComputationalBasisPOVM(num_qubits, 'stabilizer')
+        #I don't think 'clifford' should be a parameterization choice (?)
+        #elif parameterization == "clifford":
+        #    # Clifford object construction is different enough we do it separately
+        #    prep_layers['rho0'] = _state.ComputationalBasisState([0] * num_qubits, 'pp', 'stabilizer', state_space)
+        #    povm_layers['Mdefault'] = _povm.ComputationalBasisPOVM(num_qubits, 'stabilizer', state_space=state_space)
 
-        elif parameterization in ("static", "static unitary"):
+        elif parameterization in ("static", "static unitary"):  # should "static unitary" be a choice here?
             #static computational basis
-            prep_layers['rho0'] = _state.ComputationalBasisState([0] * num_qubits, evotype)
-            povm_layers['Mdefault'] = _povm.ComputationalBasisPOVM(num_qubits, evotype)
+            prep_layers['rho0'] = _state.ComputationalBasisState([0] * num_qubits, 'pp', evotype, state_space)
+            povm_layers['Mdefault'] = _povm.ComputationalBasisPOVM(num_qubits, evotype, state_space=state_space)
 
         else:
             # parameterization should be a type amenable to Lindblad
@@ -429,12 +447,9 @@ class LocalNoiseModel(_ImplicitOpModel):
             from . import cloudnoisemodel as _cnm
             maxSpamWeight = 1; errcomp_type = 'gates'; verbosity = 0  # HARDCODED
             sparse_lindblad_basis = False; sparse_lindblad_reps = False  # HARDCODED
-            if qubit_labels is None:
-                qubit_labels = tuple(range(num_qubits))
-            qubitGraph = _qgraph.QubitGraph.common_graph(num_qubits, "line", qubit_labels=qubit_labels)
             # geometry doesn't matter while maxSpamWeight==1
 
-            prepPure = _state.ComputationalBasisState([0] * num_qubits, evotype)
+            prepPure = _state.ComputationalBasisState([0] * num_qubits, 'pp', evotype, state_space)
             prepNoiseMap = _cnm._build_nqn_global_noise(qubitGraph, maxSpamWeight, sparse_lindblad_basis,
                                                         sparse_lindblad_reps, simulator, parameterization,
                                                         errcomp_type, verbosity)
@@ -465,10 +480,14 @@ class LocalNoiseModel(_ImplicitOpModel):
             gate = gatedict[gateName]
             if not isinstance(gate, (_op.LinearOperator, _opfactory.OpFactory)):
                 try:
+                    # assume gate dict contains a unitary gates, and convert as needed
                     if parameterization == "static unitary":  # assume gate dict is already unitary gates?
-                        gate = _op.StaticDenseOp(gate, "statevec")  # -----------------------------------------TODO - add evotype to these op constructions?
+                        gate = _op.StaticUnitaryOp(gate, 'pp', evotype, state_space=None)
                     else:
-                        gate = _op.convert(_op.StaticDenseOp(gate), parameterization, "pp")
+                        #TODO - update this, currently all other parameterizations convert unitary -> superop matrix
+                        # and we convert this to the desired parameterizatio
+                        ptm = _bt.change_basis(_gt.unitary_to_process_mx(gate), "std", "pp")
+                        gate = _op.convert(_op.StaticDenseOp(ptm), parameterization, "pp")
                 except Exception as e:
                     if on_construction_error == 'warn':
                         _warnings.warn("Failed to create %s gate %s. Dropping it." %
@@ -479,15 +498,20 @@ class LocalNoiseModel(_ImplicitOpModel):
 
         if global_idle is not None:
             if not isinstance(global_idle, _op.LinearOperator):
-                if parameterization == "static unitary":  # assume gate dict is already unitary gates?
-                    global_idle = _op.StaticDenseOp(global_idle, "statevec")   # --------------------------------------- evotype???????????????
+                # assume global_idle is a unitary mx
+                if parameterization == "static unitary":
+                    global_idle = _op.StaticUnitaryOp(global_idle, 'pp', evotype, state_space=None)
                 else:
+                    #TODO - update this, currently all other parameterizations convert unitary -> superop matrix
+                    # and we convert this to the desired parameterization
+                    ptm = _bt.change_basis(_gt.unitary_to_process_mx(global_idle), "std", "pp")
                     global_idle = _op.convert(_op.StaticDenseOp(global_idle), parameterization, "pp")
 
         return cls(num_qubits, gatedict, prep_layers, povm_layers, availability,
                    qubit_labels, geometry, evotype, simulator, on_construction_error,
                    independent_gates, ensure_composed_gates, global_idle)
 
+    #REMOVE
     #        spamdict : dict
     #        A dictionary (an `OrderedDict` if you care about insertion order) which
     #        associates string-type state preparation and POVM names (e.g. `"rho0"`
@@ -502,16 +526,20 @@ class LocalNoiseModel(_ImplicitOpModel):
                  independent_gates=False, ensure_composed_gates=False,
                  global_idle=None):
 
-        if qubit_labels is None:
-            qubit_labels = tuple(range(num_qubits))
         if availability is None:
             availability = {}
 
         if isinstance(geometry, _qgraph.QubitGraph):
             qubitGraph = geometry
+            if qubit_labels is None:
+                qubit_labels = qubitGraph.node_names
         else:
+            if qubit_labels is None:
+                qubit_labels = tuple(range(num_qubits))
             qubitGraph = _qgraph.QubitGraph.common_graph(num_qubits, geometry, directed=False,
                                                          qubit_labels=qubit_labels)
+        state_space = _statespace.QubitSpace(qubit_labels)
+        assert(state_space.num_qubits == num_qubits), "Number of qubit labels != `num_qubits`!"
 
         # Build gate dictionaries. A value of `gatedict` can be an array, a LinearOperator, or an OpFactory.
         # For later processing, we'll create mm_gatedict to contain each item as a ModelMember.  In local noise
@@ -526,42 +554,43 @@ class LocalNoiseModel(_ImplicitOpModel):
             elif isinstance(gate, _opfactory.OpFactory):
                 # don't store factories in self.gatedict for now (no good dense representation)
                 mm_gatedict[gn] = gate
-            else:  # presumably a numpy array or something like it:
+            else:  # presumably a numpy array or something like it.
                 #REMOVE self.gatedict[gn] = _np.array(gate)
-                mm_gatedict[gn] = _op.StaticDenseOp(gate, evotype)  # static gates by default
+                mm_gatedict[gn] = _op.StaticDenseOp(gate, evotype, state_space)  # static gates by default
 
-        self.nQubits = num_qubits
         self.availability = availability.copy()  # create a local copy because we may update it below
-        self.qubit_labels = qubit_labels
         self.geometry = geometry
+
+        #REMoVE
+        #self.nQubits = num_qubits
+        #self.qubit_labels = qubit_labels
         #self.parameterization = parameterization
         #self.independent_gates = independent_gates
+        ##Note - evotype="auto" not allowed here b/c no parameterization to infer from
+        #if evotype in ("densitymx", "svterm", "cterm"):   # TODO: make automatic based on Evotype -----------------------------------------------------
+        #    basis1Q = _BuiltinBasis("pp", 4)
+        #else:
+        #    basis1Q = _BuiltinBasis("sv", 2)
+        #    assert(evotype in ("stabilizer", "statevec", "chp")), "Invalid evolution type: %s" % evotype
+        
+        if simulator == "auto":
+            simulator = _MapFSim() if num_qubits > 2 else _MatrixFSim()
+        elif simulator == "map":
+            simulator = _MapFSim()
+        elif simulator == "matrix":
+            simulator = _MatrixFSim()
+        assert(isinstance(simulator, _FSim)), "`simulator` must be a ForwardSimulator instance!"
 
-        #Note - evotype="auto" not allowed here b/c no parameterization to infer from
-        if evotype in ("densitymx", "svterm", "cterm"):   # TODO: make automatic based on Evotype -----------------------------------------------------
-            basis1Q = _BuiltinBasis("pp", 4)
-        else:
-            basis1Q = _BuiltinBasis("sv", 2)
-            assert(evotype in ("stabilizer", "statevec", "chp")), "Invalid evolution type: %s" % evotype
+        #REMoVE
+        #qubit_dim = 2 if evotype in ('statevec', 'stabilizer', 'chp') else 4   # TODO FIX based on Evotype ---------------------------
+        #if not isinstance(qubit_labels, _ld.StateSpaceLabels):  # allow user to specify a StateSpaceLabels object
+        #    qubit_sslbls = _ld.StateSpaceLabels(qubit_labels, (qubit_dim,) * len(qubit_labels), evotype=evotype)
+        #else:
+        #    qubit_sslbls = qubit_labels
+        #    qubit_labels = [lbl for lbl in qubit_sslbls.labels[0] if qubit_sslbls.labeldims[lbl] == qubit_dim]
+        #    #Only extract qubit labels from the first tensor-product block...
 
-        if simulator == "auto":   # TODO: make a function that gives the default simulator for an evotype --------------------------------
-            if evotype == "densitymx":
-                simulator = _MatrixFSim() if num_qubits <= 2 else _MapFSim()
-            elif evotype == "statevec":
-                simulator = _MatrixFSim() if num_qubits <= 4 else _MapFSim()
-            elif evotype == "stabilizer":
-                simulator = _MapFSim()  # use map as default for stabilizer-type evolutions
-            else: assert(False)  # should be unreachable
-
-        qubit_dim = 2 if evotype in ('statevec', 'stabilizer', 'chp') else 4   # TODO FIX based on Evotype ---------------------------
-        if not isinstance(qubit_labels, _ld.StateSpaceLabels):  # allow user to specify a StateSpaceLabels object
-            qubit_sslbls = _ld.StateSpaceLabels(qubit_labels, (qubit_dim,) * len(qubit_labels), evotype=evotype)
-        else:
-            qubit_sslbls = qubit_labels
-            qubit_labels = [lbl for lbl in qubit_sslbls.labels[0] if qubit_sslbls.labeldims[lbl] == qubit_dim]
-            #Only extract qubit labels from the first tensor-product block...
-
-        super(LocalNoiseModel, self).__init__(qubit_sslbls, _SimpleCompLayerRules(), basis1Q.name,
+        super(LocalNoiseModel, self).__init__(state_space, _SimpleCompLayerRules(), 'pp',
                                               simulator=simulator, evotype=evotype)
 
         flags = {'auto_embed': False, 'match_parent_statespace': False,
@@ -629,7 +658,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                 if ensure_composed_gates and not isinstance(gate, Composed) and not gate_is_factory:
                     #Make a single ComposedDenseOp *here*, which is used
                     # in all the embeddings for different target qubits
-                    gate = Composed([gate])  # to make adding more factors easy
+                    gate = Composed([gate], state_space="auto", evotype="auto")  # to make adding more factors easy
 
                 if gate_is_factory:
                     self.factories['gates'][_Lbl(gateName)] = gate
@@ -661,7 +690,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                         #Make a single ComposedDenseOp *here*, for *only this* embedding
                         # Don't copy gate here, as we assume it's ok to be shared when we
                         #  have independent composed gates
-                        base_gate = Composed([gate])  # to make adding more factors easy
+                        base_gate = Composed([gate], state_space="auto", evotype="auto")  # to make adding factors easy
                     else:  # want independent params but not a composed gate, so .copy()
                         base_gate = gate.copy()  # so independent parameters
 
@@ -679,7 +708,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                     # Note: can't use automatic-embedding b/c we need to force embedding
                     # when just ordering doesn't align (e.g. Gcnot:1:0 on 2-qubits needs to embed)
                     if inds[0] == '*':
-                        embedded_op = _opfactory.EmbeddingOpFactory(self.state_space, base_gate,
+                        embedded_op = _opfactory.EmbeddingOpFactory(state_space, base_gate,
                                                                     dense=isinstance(simulator, _MatrixFSim),
                                                                     num_target_labels=inds[1])
                         self.factories['layers'][_Lbl(gateName)] = embedded_op
@@ -688,7 +717,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                         if inds == tuple(qubit_labels):  # then no need to embed
                             embedded_op = base_gate
                         else:
-                            embedded_op = _opfactory.EmbeddedOpFactory(self.state_space, inds, base_gate,
+                            embedded_op = _opfactory.EmbeddedOpFactory(state_space, inds, base_gate,
                                                                        dense=isinstance(simulator, _MatrixFSim))
                         self.factories['layers'][_Lbl(gateName, inds)] = embedded_op
                     else:
@@ -696,7 +725,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                             embedded_op = base_gate
                         else:
                             EmbeddedOp = _op.EmbeddedDenseOp if isinstance(simulator, _MatrixFSim) else _op.EmbeddedOp
-                            embedded_op = EmbeddedOp(self.state_space, inds, base_gate)
+                            embedded_op = EmbeddedOp(state_space, inds, base_gate)
                         self.operation_blks['layers'][_Lbl(gateName, inds)] = embedded_op
 
                 except Exception as e:
@@ -707,14 +736,14 @@ class LocalNoiseModel(_ImplicitOpModel):
 
         if global_idle is not None:
             if not isinstance(global_idle, _op.LinearOperator):
-                global_idle = _op.StaticDenseOp(global_idle, evotype)  # static gates by default
+                global_idle = _op.StaticDenseOp(global_idle, evotype, state_space)  # static gates by default
 
             global_idle_nQubits = global_idle.state_space.num_qubits
 
             if num_qubits > 1 and global_idle_nQubits == 1:  # auto create tensor-prod 1Q global idle
                 self.operation_blks['gates'][_Lbl('1QGlobalIdle')] = global_idle
                 Embedded = _op.EmbeddedDenseOp if isinstance(simulator, _MatrixFSim) else _op.EmbeddedOp
-                global_idle = Composed([Embedded(self.state_space, (qlbl,), global_idle)
+                global_idle = Composed([Embedded(state_space, (qlbl,), global_idle)
                                         for qlbl in qubit_labels])
 
             global_idle_nQubits = global_idle.state_space.num_qubits

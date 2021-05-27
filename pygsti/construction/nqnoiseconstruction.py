@@ -455,7 +455,7 @@ def create_cloud_crosstalk_model(num_qubits, gate_names, nonstd_gate_unitaries={
                                  depolarization_strengths={}, stochastic_error_probs={}, lindblad_error_coeffs={},
                                  depolarization_parameterization='depolarize', stochastic_parameterization='stochastic',
                                  lindblad_parameterization='auto', availability=None, qubit_labels=None,
-                                 geometry="line", evotype="auto", simulator="auto", independent_gates=False,
+                                 geometry="line", evotype="default", simulator="auto", independent_gates=False,
                                  sparse_lindblad_basis=False, sparse_lindblad_reps=False, errcomp_type="errorgens",
                                  add_idle_noise_to_all_gates=True, verbosity=0):
     """
@@ -597,14 +597,15 @@ def create_cloud_crosstalk_model(num_qubits, gate_names, nonstd_gate_unitaries={
         a :class:`QubitGraph` object with node labels equal to
         `qubit_labels` may be passed directly.
 
-    evotype : {"auto","densitymx","statevec","stabilizer","svterm","cterm"}
-        The evolution type.  If "auto" is specified, "densitymx" is used.
+    evotype : Evotype or str, optional
+        The evolution type of this model, describing how states are
+        represented.  The special value `"default"` is equivalent
+        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
 
     simulator : ForwardSimulator or {"auto", "matrix", "map"}
         The simulator used to compute predicted probabilities for the
-        resulting :class:`Model`.  Usually `"auto"` is fine, the default for
-        each `evotype` is usually what you want.  Setting this to something
-        else is expert-level tuning.
+        resulting :class:`Model`.  Using `"auto"` selects `"matrix"` when there
+        are 2 qubits or less, and otherwise selects `"map"`.
 
     independent_gates : bool, optional
         Whether gates are allowed independent cloud noise or not.  If False,
@@ -661,19 +662,18 @@ def create_cloud_crosstalk_model(num_qubits, gate_names, nonstd_gate_unitaries={
     if depolarization_strengths or stochastic_error_probs:
         raise NotImplementedError("Cloud noise models can currently only be built with `lindbad_error_coeffs`")
 
-    if evotype == "auto":
-        evotype = "densitymx"  # FUTURE: do something more sophisticated?
-
     if qubit_labels is None:
         qubit_labels = tuple(range(num_qubits))
 
-    qubit_dim = 2 if evotype in ('statevec', 'stabilizer') else 4
-    if not isinstance(qubit_labels, _ld.StateSpaceLabels):  # allow user to specify a StateSpaceLabels object
-        all_sslbls = _ld.StateSpaceLabels(qubit_labels, (qubit_dim,) * len(qubit_labels), evotype=evotype)
+    if isinstance(qubit_labels, _statespace.StateSpace):
+        #Special experimental behavior - allow user to specify a StateSpace directly as `qubit_labels`
+        state_space = qubit_labels
+        qubit_labels = [lbl for lbl in state_space.tensor_product_block_labels(0)
+                        if state_space.label_dimension(lbl) == 4]  # get all qubit labels from 1st TPB
     else:
-        all_sslbls = qubit_labels
-        qubit_labels = [lbl for lbl in all_sslbls.labels[0] if all_sslbls.labeldims[lbl] == qubit_dim]
-        #Only extract qubit labels from the first tensor-product block...
+        state_space = _statespace.QubitSpace(qubit_labels)
+        assert(state_space.num_qubits == num_qubits), "Number of qubit labels != `num_qubits`!"
+    evotype = _Evotype.cast(evotype)
 
     if isinstance(geometry, _qgraph.QubitGraph):
         qubitGraph = geometry
@@ -681,8 +681,6 @@ def create_cloud_crosstalk_model(num_qubits, gate_names, nonstd_gate_unitaries={
         qubitGraph = _qgraph.QubitGraph.common_graph(num_qubits, geometry, directed=True,
                                                      qubit_labels=qubit_labels, all_directions=True)
         printer.log("Created qubit graph:\n" + str(qubitGraph))
-
-    nQubit_dim = 2**num_qubits if evotype in ('statevec', 'stabilizer') else 4**num_qubits
 
     orig_lindblad_error_coeffs = lindblad_error_coeffs.copy()
     cparser = _CircuitParser()
@@ -750,7 +748,7 @@ def create_cloud_crosstalk_model(num_qubits, gate_names, nonstd_gate_unitaries={
                 if return_what == "stencil":
                     new_stencil = _collections.OrderedDict()  # return an empty stencil
                     return new_stencil
-                errgen = _op.ComposedErrorgen([], nQubit_dim, evotype)
+                errgen = _op.ComposedErrorgen([], state_space, evotype)
             else:
                 # stencil is valid: apply it to create errgen
                 embedded_errgens = []
@@ -759,10 +757,10 @@ def create_cloud_crosstalk_model(num_qubits, gate_names, nonstd_gate_unitaries={
                     error_sslbls = _map_stencil_sslbls(stencil_sslbls, target_labels)  # deals with graph directions
                     if error_sslbls is None: continue  # signals not all direction were present => skip this term
                     op_to_embed = lind_errgen.copy() if independent_gates else lind_errgen  # copy for independent gates
-                    #REMOVE print("DB: Applying stencil: ",all_sslbls, error_sslbls,op_to_embed.dim)
-                    embedded_errgen = _op.EmbeddedErrorgen(all_sslbls, error_sslbls, op_to_embed)
+                    #REMOVE print("DB: Applying stencil: ",state_space, error_sslbls,op_to_embed.dim)
+                    embedded_errgen = _op.EmbeddedErrorgen(state_space, error_sslbls, op_to_embed)
                     embedded_errgens.append(embedded_errgen)
-                errgen = _op.ComposedErrorgen(embedded_errgens, nQubit_dim, evotype)
+                errgen = _op.ComposedErrorgen(embedded_errgens, state_space, evotype)
         else:
             #We need to build a stencil (which may contain QubitGraph directions) or an effective stencil
             assert(stencil is None)  # checked by above assert too
@@ -827,8 +825,8 @@ def create_cloud_crosstalk_model(num_qubits, gate_names, nonstd_gate_unitaries={
             new_stencil = _collections.OrderedDict()
             for error_sslbls, local_errs_for_these_sslbls in distinct_errorqubits.items():
                 local_nQubits = len(error_sslbls)  # weight of this group of errors which act on the same qubits
-                local_dim = 4**local_nQubits
-                basis = _BuiltinBasis('pp', local_dim, sparse=sparse_lindblad_basis)
+                local_state_space = _statespace.QubitSpace(local_nQubits)
+                basis = _BuiltinBasis('pp', local_state_space.dim, sparse=sparse_lindblad_basis)
                 # assume we're always given els in a Pauli basis?
 
                 #Sanity check to catch user errors that would be hard to interpret if they get caught further down
@@ -841,9 +839,9 @@ def create_cloud_crosstalk_model(num_qubits, gate_names, nonstd_gate_unitaries={
                 parameterization = _parameterization_from_errgendict(local_errs_for_these_sslbls)
                 #REMOVE print("DB: Param from ", local_errs_for_these_sslbls, " = ",parameterization)
                 nonham_mode, param_mode, _, _ = _op.LinbladErrorgen.decomp_paramtype(parameterization)
-                lind_errgen = _op.LindbladErrorgen(local_dim, local_errs_for_these_sslbls, basis, param_mode,
+                lind_errgen = _op.LindbladErrorgen(local_state_space, local_errs_for_these_sslbls, basis, param_mode,
                                                    nonham_mode, truncate=False, mx_basis="pp", evotype=evotype)
-                #REMOVE print("DB: Adding to stencil: ",error_sslbls,lind_errgen.dim,local_dim)
+                #REMOVE print("DB: Adding to stencil: ",error_sslbls,lind_errgen.dim,local_state_space)
                 new_stencil[error_sslbls] = lind_errgen
 
             if return_what == "stencil":  # then we just return the stencil, not the error map or generator
@@ -854,10 +852,10 @@ def create_cloud_crosstalk_model(num_qubits, gate_names, nonstd_gate_unitaries={
             embedded_errgens = []
             for error_sslbls, lind_errgen in new_stencil.items():
                 #Then use the stencils for these steps later (if independent errgens is False especially?)
-                #REMOVE print("DB: Creating from stencil: ",all_sslbls, error_sslbls)
-                embedded_errgen = _op.EmbeddedErrorgen(all_sslbls, error_sslbls, lind_errgen)
+                #REMOVE print("DB: Creating from stencil: ",state_space, error_sslbls)
+                embedded_errgen = _op.EmbeddedErrorgen(state_space, error_sslbls, lind_errgen)
                 embedded_errgens.append(embedded_errgen)
-            errgen = _op.ComposedErrorgen(embedded_errgens, nQubit_dim, evotype)
+            errgen = _op.ComposedErrorgen(embedded_errgens, state_space, evotype)
 
         #If we get here, we've created errgen, which we either return or package into a map:
         if return_what == "errmap":
@@ -867,8 +865,11 @@ def create_cloud_crosstalk_model(num_qubits, gate_names, nonstd_gate_unitaries={
 
     #Process "auto" simulator
     if simulator == "auto":
-        if evotype in ("svterm", "cterm"): simulator = _TermFSim()
-        else: simulator = _MapFSim() if num_qubits > 2 else _MatrixFSim()
+        simulator = _MapFSim() if num_qubits > 2 else _MatrixFSim()
+    elif simulator == "map":
+        simulator = _MapFSim()
+    elif simulator == "matrix":
+        simulator = _MatrixFSim()
 
     #Global Idle
     if 'idle' in lindblad_error_coeffs:
@@ -879,17 +880,17 @@ def create_cloud_crosstalk_model(num_qubits, gate_names, nonstd_gate_unitaries={
 
     #SPAM
     if 'prep' in lindblad_error_coeffs:
-        prepPure = _state.ComputationalBasisState([0] * num_qubits, evotype)
+        prepPure = _state.ComputationalBasisState([0] * num_qubits, 'pp', evotype, state_space)
         prepNoiseMap = create_error(qubit_labels, lindblad_error_coeffs['prep'], return_what="errmap")
         prep_layers = [_state.ComposedState(prepPure, prepNoiseMap)]
     else:
-        prep_layers = [_state.ComputationalBasisState([0] * num_qubits, evotype)]
+        prep_layers = [_state.ComputationalBasisState([0] * num_qubits, 'pp', evotype, state_space)]
 
     if 'povm' in lindblad_error_coeffs:
         povmNoiseMap = create_error(qubit_labels, lindblad_error_coeffs['povm'], return_what="errmap")
-        povm_layers = [_povm.ComposedPOVM(povmNoiseMap, None, "pp")]
+        povm_layers = [_povm.ComposedPOVM(povmNoiseMap, None, 'pp')]
     else:
-        povm_layers = [_povm.ComputationalBasisPOVM(num_qubits, evotype)]
+        povm_layers = [_povm.ComputationalBasisPOVM(num_qubits, evotype, state_space=state_space)]
 
     stencils = _collections.OrderedDict()
 
@@ -931,9 +932,10 @@ def create_cloud_crosstalk_model(num_qubits, gate_names, nonstd_gate_unitaries={
             if U is None: raise KeyError("'%s' gate unitary needs to be provided by `nonstd_gate_unitaries` arg" % name)
             if callable(U):  # then assume a function: args -> unitary
                 U0 = U(None)  # U fns must return a sample unitary when passed None to get size.
-                gatedict[name] = _opfactory.UnitaryOpFactory(U, U0.shape[0], evotype=evotype)
+                local_state_space = _statespace.default_space_for_udim(U0.shape[0])
+                gatedict[name] = _opfactory.UnitaryOpFactory(U, local_state_space, 'pp', evotype)
             else:
-                gatedict[name] = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", "pp")
+                gatedict[name] = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", 'pp')
                 # assume evotype is a densitymx or term type
 
     #Add anything from custom_gates directly if it wasn't added already

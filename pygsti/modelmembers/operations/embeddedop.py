@@ -158,7 +158,7 @@ class EmbeddedOp(_LinearOperator):
 
         # number of basis elements preceding our block's elements
         blockDims = [_np.product(tpb_dims) for tpb_dims in self.state_space.tensor_product_blocks_dimensions]
-        offset = sum([blockDims[0:iTensorProdBlk])
+        offset = sum(blockDims[0:iTensorProdBlk])
 
         return divisors, multipliers, sorted_bili, basisInds_noop, offset
 
@@ -731,15 +731,8 @@ class EmbeddedDenseOp(EmbeddedOp, _DenseOperatorInterface):
 
     Parameters
     ----------
-    state_space_labels : a list of tuples
-        This argument specifies the density matrix space upon which this
-        operation acts.  Each tuple corresponds to a block of a density matrix
-        in the standard basis (and therefore a component of the direct-sum
-        density matrix space). Elements of a tuple are user-defined labels
-        beginning with "L" (single Level) or "Q" (two-level; Qubit) which
-        interpret the d-dimensional state space corresponding to a d x d
-        block as a tensor product between qubit and single level systems.
-        (E.g. a 2-qubit space might be labelled `[('Q0','Q1')]`).
+    state_space : StateSpace
+        Specifies the density matrix space upon which this operation acts.
 
     target_labels : list of strs
         The labels contained in `state_space_labels` which demarcate the
@@ -751,32 +744,8 @@ class EmbeddedDenseOp(EmbeddedOp, _DenseOperatorInterface):
         that specifies the only non-trivial action of the EmbeddedDenseOp.
     """
 
-    def __init__(self, state_space_labels, target_labels, operation_to_embed):
-        """
-        Initialize a EmbeddedDenseOp object.
-
-        Parameters
-        ----------
-        state_space_labels : a list of tuples
-            This argument specifies the density matrix space upon which this
-            operation acts.  Each tuple corresponds to a block of a density matrix
-            in the standard basis (and therefore a component of the direct-sum
-            density matrix space). Elements of a tuple are user-defined labels
-            beginning with "L" (single Level) or "Q" (two-level; Qubit) which
-            interpret the d-dimensional state space corresponding to a d x d
-            block as a tensor product between qubit and single level systems.
-            (E.g. a 2-qubit space might be labelled `[('Q0','Q1')]`).
-
-        target_labels : list of strs
-            The labels contained in `state_space_labels` which demarcate the
-            portions of the state space acted on by `operation_to_embed` (the
-            "contained" operation).
-
-        operation_to_embed : DenseOperator
-            The operation object that is to be contained within this operation, and
-            that specifies the only non-trivial action of the EmbeddedDenseOp.
-        """
-        EmbeddedOp.__init__(self, state_space_labels, target_labels,
+    def __init__(self, state_space, target_labels, operation_to_embed):
+        EmbeddedOp.__init__(self, state_space, target_labels,
                             operation_to_embed, dense_rep=True)
         _DenseOperatorInterface.__init__(self)
 

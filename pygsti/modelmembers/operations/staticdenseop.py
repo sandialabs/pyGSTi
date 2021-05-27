@@ -28,11 +28,15 @@ class StaticDenseOp(_DenseOperator):
     evotype : Evotype or str, optional
         The evolution type.  The special value `"default"` is equivalent
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
+
+    state_space : StateSpace, optional
+        The state space for this operation.  If `None` a default state space
+        with the appropriate number of qubits is used.
     """
 
-    def __init__(self, m, evotype="default"):
+    def __init__(self, m, evotype="default", state_space=None):
         m = _LinearOperator.convert_to_matrix(m)
-        _DenseOperator.__init__(self, m, evotype)
+        _DenseOperator.__init__(self, m, evotype, state_space)
         #(default DenseOperator/LinearOperator methods implement an object with no parameters)
 
         #if self._evotype == "svterm": # then we need to extract unitary

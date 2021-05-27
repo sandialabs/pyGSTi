@@ -62,8 +62,9 @@ cdef class OpRep(_basereps_cython.OpRep):
 
 cdef class OpRepDenseUnitary(OpRep):
     cdef public _np.ndarray base
+    cdef public object basis
 
-    def __init__(self, mx, state_space):
+    def __init__(self, mx, basis, state_space):
         state_space = _StateSpace.cast(state_space)
         if mx is None:
             mx = _np.identity(state_space.udim, _np.complex128)
@@ -74,18 +75,22 @@ cdef class OpRepDenseUnitary(OpRep):
         self.c_rep = new OpCRep_DenseUnitary(<double complex*>self.base.data,
                                              <INT>self.base.shape[0])
         self.state_space = state_space
+        self.basis = basis
 
     def __reduce__(self):
         # because serialization of numpy array flags is borked (around Numpy v1.16), we need to copy data
         # (so self.base *owns* it's data) and manually convey the writeable flag.
-        return (OpRepDenseUnitary.__new__, (self.__class__,), (self.base, self.base.flags.writeable))
+        return (OpRepDenseUnitary.__new__, (self.__class__,),
+                (self.base, self.basis, self.state_space, self.base.flags.writeable))
 
     def __setstate__(self, state):
         assert(self.c_rep == NULL)
 
-        data, writable = state
+        data, basis, state_space, writable = state
         self.base = _np.require(data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
         self.base.flags.writeable = writable
+        self.basis = basis
+        self.state_space = state_space
 
         assert(self.c_rep == NULL)  # if setstate is call, __init__ shouldn't have been
         self.c_rep = new OpCRep_DenseUnitary(<double complex*>self.base.data,
@@ -103,13 +108,11 @@ cdef class OpRepDenseUnitary(OpRep):
         return s
 
     def copy(self):
-        cpy = OpRepDenseUnitary(self.base.shape[0])
-        cpy.base[:, :] = self.base.copy()
-        return cpy
+        return OpRepDenseUnitary(self.base.copy(), self.basis, self.state_space)
 
 
 class OpRepStandard(OpRepDenseUnitary):
-    def __init__(self, name, state_space):
+    def __init__(self, name, basis, state_space):
         std_unitaries = _itgs.standard_gatename_unitaries()
         self.name = name
         if self.name not in std_unitaries:
@@ -118,10 +121,10 @@ class OpRepStandard(OpRepDenseUnitary):
         U = std_unitaries[self.name]
         state_space = _StateSpace.cast(state_space)
         assert(U.shape[0] == state_space.udim)
-        super(OpRepStandard, self).__init__(U, state_space)
+        super(OpRepStandard, self).__init__(U, basis, state_space)
 
     def __reduce__(self):
-        return (OpRepStandard, (self.name,))
+        return (OpRepStandard, (self.name, self.basis, self.state_space))
 
 
 #class OpRepStochastic(OpRepDense):

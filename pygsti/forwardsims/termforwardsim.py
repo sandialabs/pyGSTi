@@ -538,16 +538,13 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         circuitsetup_cache = {}  # DEBUG REMOVE?
         #repcache = {}  # DEBUG REMOVE
 
-        if self.model.evotype == "svterm":
-            npaths, threshold, target_sopm, achieved_sopm = \
-                self.calclib.find_best_pathmagnitude_threshold(
-                    self, rholabel, elabels, circuit, polynomial_vindices_per_int, repcache, circuitsetup_cache,
-                    resource_alloc.comm, resource_alloc.mem_limit, self.desired_pathmagnitude_gap,
-                    self.min_term_mag, self.max_paths_per_outcome, threshold_guess
-                )
-            # sopm = "sum of path magnitudes"
-        else:  # "cterm" (stabilizer-based term evolution)
-            raise NotImplementedError("Just need to mimic SV version")
+        npaths, threshold, target_sopm, achieved_sopm = \
+            self.calclib.find_best_pathmagnitude_threshold(
+                self, rholabel, elabels, circuit, polynomial_vindices_per_int, repcache, circuitsetup_cache,
+                resource_alloc.comm, resource_alloc.mem_limit, self.desired_pathmagnitude_gap,
+                self.min_term_mag, self.max_paths_per_outcome, threshold_guess
+            )
+        # sopm = "sum of path magnitudes"
 
         return npaths, threshold, target_sopm, achieved_sopm
 
@@ -687,11 +684,8 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         max_sopm : float
             The maximum possible sum-of-path-magnitudes. (summed over all circuit outcomes)
         """
-        if self.model.evotype == "svterm":
-            return self.calclib.circuit_achieved_and_max_sopm(
-                self, rholabel, elabels, circuit, repcache, threshold, self.min_term_mag)
-        else:
-            raise NotImplementedError("TODO mimic SV case")
+        return self.calclib.circuit_achieved_and_max_sopm(
+            self, rholabel, elabels, circuit, repcache, threshold, self.min_term_mag)
 
     def _achieved_and_max_sopm_atom(self, layout_atom):
         """
@@ -1090,13 +1084,10 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         if repcache is None: repcache = {}
         circuitsetup_cache = {}
 
-        if self.model.evotype == "svterm":
-            poly_reps = self.calclib.compute_pruned_path_polynomials_given_threshold(
-                threshold, self, rholabel, elabels, circuit, polynomial_vindices_per_int, repcache,
-                circuitsetup_cache, resource_alloc.comm, resource_alloc.mem_limit, fastmode)
-            # sopm = "sum of path magnitudes"
-        else:  # "cterm" (stabilizer-based term evolution)
-            raise NotImplementedError("Just need to mimic SV version")
+        poly_reps = self.calclib.compute_pruned_path_polynomials_given_threshold(
+            threshold, self, rholabel, elabels, circuit, polynomial_vindices_per_int, repcache,
+            circuitsetup_cache, resource_alloc.comm, resource_alloc.mem_limit, fastmode)
+        # sopm = "sum of path magnitudes"
 
         #TODO REMOVE this case -- we don't check for cache hits anymore; I think we can just set prps = poly_reps here
         if len(poly_reps) == 0:  # HACK - length=0 => there's a cache hit, which we signify by None here

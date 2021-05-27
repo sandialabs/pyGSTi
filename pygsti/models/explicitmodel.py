@@ -61,15 +61,11 @@ class ExplicitOpModel(_mdl.OpModel):
 
     Parameters
     ----------
-    state_space_labels : StateSpaceLabels or list or tuple
-        The decomposition (with labels) of (pure) state-space this model
-        acts upon.  Regardless of whether the model contains operators or
-        superoperators, this argument describes the Hilbert space dimension
-        and imposed structure.  If a list or tuple is given, it must be
-        of a from that can be passed to `StateSpaceLabels.__init__`.
+    state_space : StateSpace
+        The state space for this model.
 
-    basis : {"auto","pp","gm","qt","std","sv"} or Basis
-        The basis used for the state space by dense operator representations.
+    basis : {"pp","gm","qt","std","sv"} or Basis, optional
+        The basis used for the state space by dense superoperator representations.
 
     default_param : {"full", "TP", "CPTP", etc.}, optional
         Specifies the default gate and SPAM vector parameterization type.
@@ -120,7 +116,7 @@ class ExplicitOpModel(_mdl.OpModel):
     #Whether access to gates & spam vecs via Model indexing is allowed
     _strict = False
 
-    def __init__(self, state_space_labels, basis="auto", default_param="full",
+    def __init__(self, state_space, basis="pp", default_param="full",
                  prep_prefix="rho", effect_prefix="E", gate_prefix="G",
                  povm_prefix="M", instrument_prefix="I", simulator="auto",
                  evotype="default"):
@@ -138,12 +134,13 @@ class ExplicitOpModel(_mdl.OpModel):
         self.effects_prefix = effect_prefix
         self._default_gauge_group = None
 
-        if basis == "auto":
-            evotype = _Evotype.cast(evotype)
-            basis = "pp" if evotype in ("densitymx", "svterm", "cterm") \
-                else "sv"  # ( if evotype in ("statevec","stabilizer") )  # TODO - change this based on evotype dimension in FUTURE ????
+        #REMOVE
+        #if basis == "auto":
+        #    evotype = _Evotype.cast(evotype)
+        #    basis = "pp" if evotype in ("densitymx", "svterm", "cterm") \
+        #        else "sv"  # ( if evotype in ("statevec","stabilizer") )  # TODO - change this based on evotype dimension in FUTURE ????
 
-        super(ExplicitOpModel, self).__init__(state_space_labels, basis, evotype, ExplicitLayerRules(), simulator)
+        super(ExplicitOpModel, self).__init__(state_space, basis, evotype, ExplicitLayerRules(), simulator)
 
     @property
     def _primitive_prep_label_dict(self):
@@ -469,7 +466,7 @@ class ExplicitOpModel(_mdl.OpModel):
             #Unpickling an OLD-version Model (or GateSet)
             _warnings.warn("Unpickling deprecated-format ExplicitOpModel (GateSet).  Please re-save/pickle asap.")
             self.operations = state_dict['gates']
-            self._state_space_labels = state_dict['stateSpaceLabels']
+            self.state_space = state_dict['stateSpaceLabels']
             self._paramlbls = None
             del state_dict['gates']
             del state_dict['_autogator']
@@ -485,7 +482,7 @@ class ExplicitOpModel(_mdl.OpModel):
         if 'basis' in state_dict:
             state_dict['_basis'] = state_dict['basis']; del state_dict['basis']
         if 'state_space_labels' in state_dict:
-            state_dict['_state_space_labels'] = state_dict['state_space_labels']; del state_dict['_state_space_labels']
+            state_dict['state_space'] = state_dict['state_space_labels']; del state_dict['state_space_labels']
         if 'factories' not in state_dict:
             ops = state_dict['operations']
             state_dict['factories'] = _ld.OrderedMemberDict(self, ops.default_param, ops._prefix, ops.flags)

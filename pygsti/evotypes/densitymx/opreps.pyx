@@ -145,25 +145,25 @@ cdef class OpRepSparse(OpRep):
         return OpRepSparse(self.data.copy(), self.indices.copy(), self.indptr.copy(), self.state_space.copy())
 
 
-class OpRepStandard(OpRepDense):
-    def __init__(self, name, state_space):
+cdef class OpRepStandard(OpRepDense):
+    def __init__(self, name, basis, state_space):
         std_unitaries = _itgs.standard_gatename_unitaries()
         self.name = name
         if self.name not in std_unitaries:
             raise ValueError("Name '%s' not in standard unitaries" % self.name)
 
         U = std_unitaries[self.name]
-        ptm = _ot.unitary_to_pauligate(U)
+        superop = _bt.change_basis(_ot.unitary_to_process_mx(U), 'std', basis)
         state_space = _StateSpace.cast(state_space)
-        assert(ptm.shape[0] == state_space.dim)
+        assert(superop.shape[0] == state_space.dim)
 
-        super(OpRepStandard, self).__init__(LinearOperator.convert_to_matrix(ptm), state_space)
+        super(OpRepStandard, self).__init__(LinearOperator.convert_to_matrix(superop), state_space)
 
     def __reduce__(self):
         return (OpRepStandard, (self.name,))
 
 
-class OpRepStochastic(OpRepDense):
+cdef class OpRepStochastic(OpRepDense):
 
     def __init__(self, basis, rate_poly_dicts, initial_rates, seed_or_state, state_space):
         self.basis = basis

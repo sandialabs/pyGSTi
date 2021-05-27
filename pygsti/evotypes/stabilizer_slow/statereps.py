@@ -47,7 +47,7 @@ class StateRep(_basereps.StateRep):
     #    return 2**self.nqubits  # assume "unitary evolution"-type mode
 
     def copy(self):
-        cpy = StateRep(_np.zeros((0, 0), _np.int64), None, None)  # makes a dummy cpy.sframe
+        cpy = StateRep(_np.zeros((0, 0), _np.int64), None, None, self.state_space)  # makes a dummy cpy.sframe
         cpy.sframe = self.sframe.copy()  # a legit copy *with* qubit filers copied too
         return cpy
 
@@ -57,7 +57,7 @@ class StateRep(_basereps.StateRep):
 
 class StateRepComputational(StateRep):
 
-    def __init__(self, zvals, state_space):
+    def __init__(self, zvals, basis, state_space):
 
         nqubits = len(zvals)
         state_s = _np.fliplr(_np.identity(2 * nqubits, int))  # flip b/c stab cols are *first*
@@ -69,6 +69,7 @@ class StateRepComputational(StateRep):
         ps = state_ps.reshape(1, 2 * nqubits)
         a = _np.ones(1, complex)  # all == 1.0 by default
 
+        self.basis = basis
         super(StateRepComputational, self).__init__(state_s, ps, a, state_space)
 
     #TODO: copy methods from StabilizerFrame or StateCRep - or maybe do this for base StateRep class? ----------------------------

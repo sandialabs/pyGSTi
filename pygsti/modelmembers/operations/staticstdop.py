@@ -27,11 +27,19 @@ class StaticStandardOp(_LinearOperator):
     name : str
         Standard gate name
 
+    basis : Basis or {'pp','gm','std'}, optional
+        The basis used to construct the Hilbert-Schmidt space representation
+        of this state as a super-operator.
+
     evotype : Evotype or str, optional
         The evolution type.  The special value `"default"` is equivalent
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
+
+    state_space : StateSpace, optional
+        The state space for this operation.  If `None` a default state space
+        with the appropriate number of qubits is used.
     """
-    def __init__(self, name, evotype="default", state_space=None):
+    def __init__(self, name, basis='pp', evotype="default", state_space=None):
         self.name = name
 
         #Create default state space if needed
@@ -42,7 +50,7 @@ class StaticStandardOp(_LinearOperator):
             else _statespace.StateSpace.cast(state_space)
 
         evotype = _Evotype.cast(evotype)
-        rep = evotype.create_standard_rep(name, state_space)
+        rep = evotype.create_standard_rep(name, basis, state_space)
         _LinearOperator.__init__(self, rep, evotype)
 
 #TODO REMOVE

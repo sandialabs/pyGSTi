@@ -55,37 +55,15 @@ class EigenvalueParamDenseOp(_DenseOperator):
     evotype : Evotype or str, optional
         The evolution type.  The special value `"default"` is equivalent
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
+
+    state_space : StateSpace, optional
+        The state space for this operation.  If `None` a default state space
+        with the appropriate number of qubits is used.
     """
 
     def __init__(self, matrix, include_off_diags_in_degen_2_blocks=False,
-                 tp_constrained_and_unital=False, evotype="default"):
-        """
-        Initialize an EigenvalueParamDenseOp object.
+                 tp_constrained_and_unital=False, evotype="default", state_space=None):
 
-        Parameters
-        ----------
-        matrix : numpy array
-            a square 2D numpy array that gives the raw operation matrix to
-            paramterize.  The shape of this array sets the dimension
-            of the operation.
-
-        include_off_diags_in_degen_2_blocks : bool
-            If True, include as parameters the (initially zero)
-            off-diagonal elements in degenerate 2x2 blocks of the
-            the diagonalized operation matrix (no off-diagonals are
-            included in blocks larger than 2x2).  This is an option
-            specifically used in the intelligent fiducial pair
-            reduction (IFPR) algorithm.
-
-        tp_constrained_and_unital : bool
-            If True, assume the top row of the operation matrix is fixed
-            to [1, 0, ... 0] and should not be parameterized, and verify
-            that the matrix is unital.  In this case, "1" is always a
-            fixed (not-paramterized0 eigenvalue with eigenvector
-            [1,0,...0] and if include_off_diags_in_degen_2_blocks is True
-            any off diagonal elements lying on the top row are *not*
-            parameterized as implied by the TP constraint.
-        """
         def cmplx_compare(ia, ib):
             return _mt.complex_compare(evals[ia], evals[ib])
         cmplx_compare_key = _functools.cmp_to_key(cmplx_compare)
@@ -303,7 +281,7 @@ class EigenvalueParamDenseOp(_DenseOperator):
 
         #Finish LinearOperator construction
         mx = _np.empty(matrix.shape, "d")
-        _DenseOperator.__init__(self, mx, evotype)
+        _DenseOperator.__init__(self, mx, evotype, state_space)
         self.base.flags.writeable = False  # only _construct_matrix can change array
         self._construct_matrix()  # construct base from the parameters
 

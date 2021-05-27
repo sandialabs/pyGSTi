@@ -26,23 +26,20 @@ class TPPOVM(_BasePOVM):
         no additional parameters and is always equal to
         `identity - sum(other_effects`, where `identity` is the sum of
         `effects` when this __init__ call is made.
+
+    evotype : Evotype or str, optional
+        The evolution type.  If `None`, the evotype is inferred
+        from the first effect vector.  If `len(effects) == 0` in this case,
+        an error is raised.
+
+    state_space : StateSpace, optional
+        The state space for this POVM.  If `None`, the space is inferred
+        from the first effect vector.  If `len(effects) == 0` in this case,
+        an error is raised.
     """
 
-    def __init__(self, effects):
-        """
-        Creates a new POVM object.
-
-        Parameters
-        ----------
-        effects : dict of SPAMVecs or array-like
-            A dict (or list of key,value pairs) of the effect vectors.  The
-            final effect vector will be stripped of any existing
-            parameterization and turned into a ComplementSPAMVec which has
-            no additional parameters and is always equal to
-            `identity - sum(other_effects`, where `identity` is the sum of
-            `effects` when this __init__ call is made.
-        """
-        super(TPPOVM, self).__init__(effects, preserve_sum=True)
+    def __init__(self, effects, evotype=None, state_space=None):
+        super(TPPOVM, self).__init__(effects, evotype, state_space, preserve_sum=True)
 
     def __reduce__(self):
         """ Needed for OrderedDict-derived classes (to set dict items) """
@@ -55,4 +52,4 @@ class TPPOVM(_BasePOVM):
         effects.append((self.complement_label,
                         self[self.complement_label].to_dense().reshape((-1, 1))))
 
-        return (TPPOVM, (effects,), {'_gpindices': self._gpindices})
+        return (TPPOVM, (effects, self.evotype, self.state_space), {'_gpindices': self._gpindices})

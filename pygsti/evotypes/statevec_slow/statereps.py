@@ -60,7 +60,7 @@ class StateRepPure(StateRep):
 
 
 class StateRepComputational(StateRep):
-    def __init__(self, zvals, state_space):
+    def __init__(self, zvals, basis, state_space):
 
         #Convert zvals to dense vec:
         factor_dim = 2
@@ -81,6 +81,7 @@ class StateRepComputational(StateRep):
             _fastcalc.fast_kron_complex(vec, fast_kron_array, fast_kron_factordims)
 
         self.zvals = zvals
+        self.basis = basis
         super(StateRepComputational, self).__init__(vec, state_space)
 
 

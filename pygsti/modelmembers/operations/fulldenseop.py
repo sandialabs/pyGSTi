@@ -30,11 +30,15 @@ class FullDenseOp(_DenseOperator):
     evotype : Evotype or str, optional
         The evolution type.  The special value `"default"` is equivalent
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
+
+    state_space : StateSpace, optional
+        The state space for this operation.  If `None` a default state space
+        with the appropriate number of qubits is used.
     """
 
-    def __init__(self, m, evotype="default"):
+    def __init__(self, m, evotype="default", state_space=None):
         m = _LinearOperator.convert_to_matrix(m)
-        _DenseOperator.__init__(self, m, evotype)
+        _DenseOperator.__init__(self, m, evotype, state_space)
 
         d = self.dim
         self._paramlbls = _np.array(["MxElement %d,%d" % (i, j) for i in range(d) for j in range(d)],

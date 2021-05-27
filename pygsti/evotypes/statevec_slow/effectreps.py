@@ -43,7 +43,7 @@ class EffectRepConjugatedState(EffectRep):
 
 
 class EffectRepComputational(EffectRep):
-    def __init__(self, zvals, state_space):
+    def __init__(self, zvals, basis, state_space):
         state_space = _StateSpace.cast(state_space)
         assert(state_space.num_qubits == len(zvals))
         assert(len(zvals) <= 64), "Cannot create a Computational basis rep with >64 qubits!"
@@ -60,6 +60,7 @@ class EffectRepComputational(EffectRep):
         base = 2**(len(zvals) - 1)
         self.nonzero_index = 0
         self.zvals = zvals
+        self.basis = basis
         for k, v in enumerate(zvals):
             assert(v in (0, 1)), "zvals must contain only 0s and 1s"
             self.nonzero_index += base * v

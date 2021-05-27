@@ -24,7 +24,7 @@ from .complementeffect import ComplementPOVMEffect as _ComplementPOVMEffect
 class _BasePOVM(_POVM):
     """ The base behavior for both UnconstrainedPOVM and TPPOVM """
 
-    def __init__(self, effects, preserve_sum=False):
+    def __init__(self, effects, evotype=None, state_space=None, preserve_sum=False):
         """
         Creates a new BasePOVM object.
 
@@ -33,12 +33,21 @@ class _BasePOVM(_POVM):
         effects : dict of SPAMVecs or array-like
             A dict (or list of key,value pairs) of the effect vectors.
 
+        evotype : Evotype or str, optional
+            The evolution type.  If `None`, the evotype is inferred
+            from the first effect vector.  If `len(effects) == 0` in this case,
+            an error is raised.
+
+        state_space : StateSpace, optional
+            The state space for this POVM.  If `None`, the space is inferred
+            from the first effect vector.  If `len(effects) == 0` in this case,
+            an error is raised.
+
         preserve_sum : bool, optional
             If true, the sum of `effects` is taken to be a constraint
             and so the final effect vector is made into a
             :class:`ComplementSPAMVec`.
         """
-        dim = None
         self.Np = 0
 
         if isinstance(effects, dict):
@@ -59,18 +68,18 @@ class _BasePOVM(_POVM):
         # Assume each given effect vector's parameters are independent.
         copied_items = []
         paramlbls = []
-        evotype = None
         for k, v in items:
             if k == self.complement_label: continue
             effect = v if isinstance(v, _POVMEffect) else \
-                _FullPOVMEffect(v)   # EVOTYPE -----------------------------------------------------------------------------????  - also need to update prep_or_effect stuff
+                _FullPOVMEffect(v, evotype, state_space)
 
-            if evotype is None: evotype = effect._evotype
-            else: assert(evotype == effect._evotype), \
+            if evotype is None: evotype = effect.evotype
+            else: assert(evotype == effect.evotype), \
                 "All effect vectors must have the same evolution type"
 
-            if dim is None: dim = effect.dim
-            assert(dim == effect.dim), "All effect vectors must have the same dimension"
+            if state_space is None: state_space = effect.state_space
+            assert(state_space.is_compatible_with(effect.state_space)), \
+                "All effect vectors must have compatible state spaces!"
 
             N = effect.num_params
             effect.set_gpindices(slice(self.Np, self.Np + N), self); self.Np += N
@@ -79,7 +88,9 @@ class _BasePOVM(_POVM):
         items = copied_items
 
         if evotype is None:
-            evotype = "densitymx"  # default (if no effects)
+            raise ValueError("Could not determine evotype - please specify `evotype` directly!")
+        if state_space is None:
+            raise ValueError("Could not determine state space - please specify `state_space` directly!")
 
         #Add a complement effect if desired
         if self.complement_label is not None:  # len(items) > 0 by assert
@@ -91,7 +102,7 @@ class _BasePOVM(_POVM):
             complement_effect.set_gpindices(slice(0, self.Np), self)  # all parameters
             items.append((self.complement_label, complement_effect))
 
-        super(_BasePOVM, self).__init__(dim, evotype, items)
+        super(_BasePOVM, self).__init__(state_space, evotype, items)
         self._paramlbls = _np.array(paramlbls, dtype=object)
 
     def _reset_member_gpindices(self):

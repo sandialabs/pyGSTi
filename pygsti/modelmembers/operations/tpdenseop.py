@@ -15,6 +15,7 @@ from .linearop import LinearOperator as _LinearOperator
 from .denseop import DenseOperator as _DenseOperator
 from ...objects.protectedarray import ProtectedArray as _ProtectedArray
 
+
 class TPDenseOp(_DenseOperator):
     """
     A trace-preserving operation matrix.
@@ -34,13 +35,17 @@ class TPDenseOp(_DenseOperator):
         The evolution type.  The special value `"default"` is equivalent
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
 
+    state_space : StateSpace, optional
+        The state space for this operation.  If `None` a default state space
+        with the appropriate number of qubits is used.
+
     Attributes
     ----------
     base : numpy.ndarray
         Direct access to the underlying process matrix data.
     """
 
-    def __init__(self, m, evotype="default"):
+    def __init__(self, m, evotype="default", state_space=None):
         """
         Initialize a TPDenseOp object.
 
@@ -59,7 +64,7 @@ class TPDenseOp(_DenseOperator):
                              "invalid form for 1st row!")
         raw = _np.require(mx, requirements=['OWNDATA', 'C_CONTIGUOUS'])
 
-        _DenseOperator.__init__(self, raw, evotype)
+        _DenseOperator.__init__(self, raw, evotype, state_space)
         assert(self._rep.base.flags['C_CONTIGUOUS'] and self._rep.base.flags['OWNDATA'])
         assert(isinstance(self.base, _ProtectedArray))
         self._paramlbls = _np.array(["MxElement %d,%d" % (i, j) for i in range(1, self.dim) for j in range(self.dim)],

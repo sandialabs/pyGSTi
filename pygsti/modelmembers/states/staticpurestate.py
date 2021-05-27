@@ -3,6 +3,7 @@ from .state import State as _State
 from .densestate import DenseState as _DenseState
 from ...evotypes import Evotype as _Evotype
 from ...models import statespace as _statespace
+from ...objects.basis import Basis as _Basis
 
 
 class StaticPureState(_DenseState):
@@ -15,6 +16,10 @@ class StaticPureState(_DenseState):
         a 1D numpy array representing the SPAM operation.  The
         shape of this array sets the dimension of the SPAM op.
 
+    basis : Basis or {'pp','gm','std'}, optional
+        The basis used to construct the Hilbert-Schmidt space representation
+        of this state as a super-ket.
+
     evotype : Evotype or str, optional
         The evolution type.  The special value `"default"` is equivalent
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
@@ -24,14 +29,15 @@ class StaticPureState(_DenseState):
         with the appropriate number of qubits is used.
     """
 
-    def __init__(self, purevec, evotype="default", state_space=None):
+    def __init__(self, purevec, basis='pp', evotype="default", state_space=None):
         purevec = _State._to_vector(purevec)
 
         state_space = _statespace.default_space_for_udim(purevec.shape[0]) if (state_space is None) \
             else _statespace.StateSpace.cast(state_space)
 
         evotype = _Evotype.cast(evotype)
-        rep = evotype.create_pure_state_rep(purevec, state_space)
+        basis = _Basis.cast(basis, state_space.dim)  # basis for Hilbert-Schmidt (superop) space
+        rep = evotype.create_pure_state_rep(purevec, basis, state_space)
         _DenseState.__init__(self, rep, evotype, rep.purebase)
 
     def _base_1d_has_changed(self):

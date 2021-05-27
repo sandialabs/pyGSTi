@@ -255,15 +255,22 @@ class OrderedMemberDict(_PrefixOrderedDict, _mm.ModelChild):
             raise ValueError("Can only assign `ModelMember` objects as *new* values (not %s)."
                              % str(type(value)))
 
-        basis = self.parent.basis if self.parent else None
+        if self.parent is None:
+            return None  # cannot cast to a model member without a parent model, since we need to know the evotype
+
+        evotype = self.parent.evotype
+        basis = self.parent.basis
+        state_space = self.parent.state_space
         obj = None
+
         #TODO: update this - now states & effects are different types, and is conversion still a good idea? -------------------------
         if self.flags['cast_to_type'] == "state":
-            obj = _state.StaticState(value)
+            obj = _state.StaticState(value, evotype, state_space)
             obj = _state.convert(obj, self.default_param, basis)
         elif self.flags['cast_to_type'] == "operation":
-            obj = _op.StaticDenseOp(value)
+            obj = _op.StaticDenseOp(value, evotype, state_space)
             obj = _op.convert(obj, self.default_param, basis)
+        # FUTURE: handle "povm", "instrument" and "factory"?
         return obj
 
     def __setitem__(self, key, value):

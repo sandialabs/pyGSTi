@@ -54,8 +54,8 @@ class Evotype(object):
     def create_dense_rep(self, mx, state_space):  # process_mx=None,
         return self.module.OpRepDense(mx, state_space)
 
-    def create_denseunitary_rep(self, mx, state_space):  # process_mx=None,
-        return self.module.OpRepDenseUnitary(mx, state_space)
+    def create_denseunitary_rep(self, mx, super_basis, state_space):  # process_mx=None,
+        return self.module.OpRepDenseUnitary(mx, super_basis, state_space)
 
     def create_composed_rep(self, factor_op_reps, state_space):
         return self.module.OpRepComposed(factor_op_reps, state_space)
@@ -72,14 +72,14 @@ class Evotype(object):
     def create_sum_rep(self, factor_reps, state_space):
         return self.module.OpRepSum(factor_reps, state_space)
 
-    def create_clifford_rep(self, unitarymx, symplecticrep, state_space):
-        return self.module.OpRepClifford(unitarymx, symplecticrep, state_space)
+    def create_clifford_rep(self, unitarymx, symplecticrep, super_basis, state_space):
+        return self.module.OpRepClifford(unitarymx, symplecticrep, super_basis, state_space)
 
     def create_repeated_rep(self, rep_to_repeat, num_repetitions, state_space):
         return self.module.OpRepRepeated(rep_to_repeat, num_repetitions, state_space)
 
-    def create_standard_rep(self, standard_name, state_space):
-        return self.module.OpRepStandard(standard_name, state_space)
+    def create_standard_rep(self, standard_name, super_basis, state_space):
+        return self.module.OpRepStandard(standard_name, super_basis, state_space)
 
     def create_sparse_rep(self, data, indices, indptr, state_space):
         return self.module.OpRepSparse(data, indices, indptr, state_space)
@@ -92,11 +92,11 @@ class Evotype(object):
     def create_dense_state_rep(self, vec, state_space):
         return self.module.StateRepDense(vec, state_space)
 
-    def create_pure_state_rep(self, purevec, basis, state_space):
-        return self.module.StateRepPure(purevec, basis, state_space)
+    def create_pure_state_rep(self, purevec, super_basis, state_space):
+        return self.module.StateRepPure(purevec, super_basis, state_space)
 
-    def create_computational_state_rep(self, zvals, state_space):
-        return self.module.StateRepComputational(zvals, state_space)
+    def create_computational_state_rep(self, zvals, super_basis, state_space):
+        return self.module.StateRepComputational(zvals, super_basis, state_space)
 
     def create_composed_state_rep(self, state_rep, op_rep, state_space):
         return self.module.StateRepComposed(state_rep, op_rep, state_space)
@@ -109,8 +109,8 @@ class Evotype(object):
     def create_conjugatedstate_effect_rep(self, state_rep):
         return self.module.EffectRepConjugatedState(state_rep)
 
-    def create_computational_effect_rep(self, zvals, state_space):
-        return self.module.EffectRepComputational(zvals, state_space)
+    def create_computational_effect_rep(self, zvals, super_basis, state_space):
+        return self.module.EffectRepComputational(zvals, super_basis, state_space)
 
     def create_tensorproduct_effect_rep(self, povm_factors, effect_labels, state_space):
         return self.module.EffectRepTensorProduct(povm_factors, effect_labels, state_space)

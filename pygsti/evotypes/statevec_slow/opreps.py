@@ -48,11 +48,12 @@ class OpRep(_basereps.OpRep):
 
 
 class OpRepDenseUnitary(OpRep):
-    def __init__(self, mx, state_space):
+    def __init__(self, mx, basis, state_space):
         state_space = _StateSpace.cast(state_space)
         if mx is None:
             mx = _np.identity(state_space.udim, complex)
         assert(mx.ndim == 2 and mx.shape[0] == state_space.udim)
+        self.basis = basis
         self.base = _np.require(mx, requirements=['OWNDATA', 'C_CONTIGUOUS'])
         super(OpRep, self).__init__(self.base.shape[0])
 
@@ -67,7 +68,7 @@ class OpRepDenseUnitary(OpRep):
 
 
 class OpRepStandard(OpRepDenseUnitary):
-    def __init__(self, name, state_space):
+    def __init__(self, name, basis, state_space):
         std_unitaries = _itgs.standard_gatename_unitaries()
         self.name = name
         if self.name not in std_unitaries:
@@ -77,7 +78,7 @@ class OpRepStandard(OpRepDenseUnitary):
         state_space = _StateSpace.cast(state_space)
         assert(U.shape[0] == state_space.udim)
 
-        super(OpRepStandard, self).__init__(U, state_space)
+        super(OpRepStandard, self).__init__(U, basis, state_space)
 
 
 #class OpRepStochastic(OpRepDense):

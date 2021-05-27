@@ -76,10 +76,11 @@ cdef class StateRepPure(StateRep):
 
 cdef class StateRepComputational(StateRep):
     cdef object zvals
-    
-    def __init__(self, zvals, state_space):
+
+    def __init__(self, zvals, basis, state_space):
 
         #Convert zvals to dense vec:
+        assert(basis.name == 'pp'), "Only Pauli-product-basis computational states are supported so far"
         factor_dim = 4
         v0 = 1.0 / _np.sqrt(2) * _np.array((1, 0, 0, 1), 'd')  # '0' qubit state as Pauli dmvec
         v1 = 1.0 / _np.sqrt(2) * _np.array((1, 0, 0, -1), 'd')  # '1' qubit state as Pauli dmvec

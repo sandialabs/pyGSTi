@@ -68,8 +68,8 @@ class POVM(_mm.ModelMember, _collections.OrderedDict):
 
     Parameters
     ----------
-    dim : int
-        The dimension of the Hilbert-Schmidt space of the effect vectors.
+    state_space : StateSpace
+        The state space of this POVM (and of the effect vectors).
 
     evotype : Evotype
         The evolution type.
@@ -78,12 +78,11 @@ class POVM(_mm.ModelMember, _collections.OrderedDict):
         Initial values.  This should only be used internally in de-serialization.
     """
 
-    def __init__(self, dim, evotype, items=[]):
+    def __init__(self, state_space, evotype, items=[]):
         self._readonly = False  # until init is done
         _collections.OrderedDict.__init__(self, items)
-        _mm.ModelMember.__init__(self, dim, evotype)
+        _mm.ModelMember.__init__(self, state_space, evotype)
         self._readonly = True
-        assert(self.dim == dim)
 
     def __setitem__(self, key, value):
         if self._readonly: raise ValueError("Cannot alter POVM elements")

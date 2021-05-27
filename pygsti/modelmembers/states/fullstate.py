@@ -21,7 +21,7 @@ class FullState(_DenseState):
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
 
     state_space : StateSpace, optional
-        The state space for this operation.  If `None` a default state space
+        The state space for this state.  If `None` a default state space
         with the appropriate number of qubits is used.
     """
 

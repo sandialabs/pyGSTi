@@ -16,6 +16,7 @@ import itertools as _itertools
 
 from .povm import POVM as _POVM
 from .computationaleffect import ComputationalBasisPOVMEffect as _ComputationalBasisPOVMEffect
+from ...models import statespace as _statespace
 
 
 class ComputationalBasisPOVM(_POVM):
@@ -34,9 +35,13 @@ class ComputationalBasisPOVM(_POVM):
     qubit_filter : list, optional
         An optional list of integers specifying a subset
         of the qubits to be measured.
+
+    state_space : StateSpace, optional
+        The state space for this POVM.  If `None` a default state space
+        with the appropriate number of qubits is used.
     """
 
-    def __init__(self, nqubits, evotype="default", qubit_filter=None):
+    def __init__(self, nqubits, evotype="default", qubit_filter=None, state_space=None):
         if qubit_filter is not None:
             raise NotImplementedError("Still need to implement qubit_filter functionality")
 
@@ -47,10 +52,10 @@ class ComputationalBasisPOVM(_POVM):
         # qubits = self.qubit_filter if (self.qubit_filter is not None) else list(range(self.nqubits))
 
         items = []  # init as empty (lazy creation of members)
-
-        assert(evotype in ("statevec", "densitymx", "stabilizer", "svterm", "cterm", "chp"))
-        dim = 4**nqubits if (evotype in ("densitymx", "svterm", "cterm")) else 2**nqubits
-        super(ComputationalBasisPOVM, self).__init__(dim, evotype, items)
+        if state_space is None:
+            state_space = _statespace.QubitSpace(nqubits)
+        assert(state_space.num_qubits == nqubits), "`state_space` must describe %d qubits!" % nqubits
+        super(ComputationalBasisPOVM, self).__init__(state_space, evotype, items)
 
     def __contains__(self, key):
         """ For lazy creation of effect vectors """
@@ -99,7 +104,7 @@ class ComputationalBasisPOVM(_POVM):
             #create effect vector now that it's been requested (lazy creation)
             # decompose key into separate factor-effect labels
             outcomes = [(0 if letter == '0' else 1) for letter in key]
-            effect = _ComputationalBasisPOVMEffect(outcomes, self._evotype)  # "statevec" or "densitymx"
+            effect = _ComputationalBasisPOVMEffect(outcomes, self._evotype, self.state_space)
             effect.set_gpindices(slice(0, 0, None), self.parent)  # computational vecs have no params
             _collections.OrderedDict.__setitem__(self, key, effect)
             return effect

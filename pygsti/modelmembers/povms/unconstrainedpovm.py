@@ -21,21 +21,23 @@ class UnconstrainedPOVM(_BasePOVM):
     ----------
     effects : dict of SPAMVecs or array-like
         A dict (or list of key,value pairs) of the effect vectors.
+
+    evotype : Evotype or str, optional
+        The evolution type.  If `None`, the evotype is inferred
+        from the first effect vector.  If `len(effects) == 0` in this case,
+        an error is raised.
+
+    state_space : StateSpace, optional
+        The state space for this POVM.  If `None`, the space is inferred
+        from the first effect vector.  If `len(effects) == 0` in this case,
+        an error is raised.
     """
 
-    def __init__(self, effects):
-        """
-        Creates a new POVM object.
-
-        Parameters
-        ----------
-        effects : dict of SPAMVecs or array-like
-            A dict (or list of key,value pairs) of the effect vectors.
-        """
-        super(UnconstrainedPOVM, self).__init__(effects, preserve_sum=False)
+    def __init__(self, effects, evotype=None, state_space=None):
+        super(UnconstrainedPOVM, self).__init__(effects, evotype, state_space, preserve_sum=False)
 
     def __reduce__(self):
         """ Needed for OrderedDict-derived classes (to set dict items) """
         assert(self.complement_label is None)
         effects = [(lbl, effect.copy()) for lbl, effect in self.items()]
-        return (UnconstrainedPOVM, (effects,), {'_gpindices': self._gpindices})
+        return (UnconstrainedPOVM, (effects, self.evotype, self.state_space), {'_gpindices': self._gpindices})

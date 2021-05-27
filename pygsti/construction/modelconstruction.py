@@ -28,6 +28,7 @@ from ..modelmembers import povms as _povm
 from ..modelmembers.operations import opfactory as _opfactory
 from ..models import labeldicts as _ld
 from ..models import explicitmodel as _emdl
+from ..models import statespace as _statespace
 from ..models.localnoisemodel import LocalNoiseModel as _LocalNoiseModel
 from ..objects import gaugegroup as _gg
 from ..objects import qubitgraph as _qubitgraph
@@ -35,13 +36,13 @@ from ..objects import label as _label
 from ..objects.basis import Basis as _Basis
 from ..objects.basis import DirectSumBasis as _DirectSumBasis
 from ..objects.basis import BuiltinBasis as _BuiltinBasis
+from ..evotypes import Evotype as _Evotype
 from ..tools.legacytools import deprecate as _deprecated_fn
 
 
 #############################################
 # Build gates based on "standard" gate names
 ############################################
-
 def _basis_create_spam_vector(vec_expr, basis):
     """
     Build a rho or E vector from an expression.
@@ -547,7 +548,7 @@ def basis_create_explicit_model(state_space_labels, basis,
         effects = []
 
         if ELbls == "standard":
-            qubit_dim = 4  # 2 if evotype in ('statevec', 'stabilizer') else 4
+            qubit_dim = 4
             if state_space_labels.num_tensor_prod_blocks() == 1 and \
                all([ldim == qubit_dim for ldim in state_space_labels.tensor_product_block_dims(0)]):
                 # a single tensor product block comprised of qubits: '000', '001', etc.
@@ -735,7 +736,7 @@ def create_explicit_alias_model(mdl_primitives, alias_dict):
 
 def create_localnoise_model(num_qubits, gate_names, nonstd_gate_unitaries=None, custom_gates=None,
                             availability=None, qubit_labels=None, geometry="line", parameterization='static',
-                            evotype="auto", simulator="auto", on_construction_error='raise',
+                            evotype="default", simulator="auto", on_construction_error='raise',
                             independent_gates=False, ensure_composed_gates=False, global_idle=None):
     """
     Creates a "standard" n-qubit local-noise model, usually of ideal gates.
@@ -836,13 +837,10 @@ def create_localnoise_model(num_qubits, gate_names, nonstd_gate_unitaries=None, 
         embedded. See :method:`Model.set_all_parameterizations` for more
         details.
 
-    evotype : {"auto","densitymx","statevec","stabilizer","svterm","cterm"}
-        The evolution type.  Often this is determined by the choice of
-        `parameterization` and can be left as `"auto"`, which prefers
-        `"densitymx"` (full density matrix evolution) when possible. In some
-        cases, however, you may want to specify this manually.  For instance,
-        if you give unitary maps instead of superoperators in `gatedict`
-        you'll want to set this to `"statevec"`.
+    evotype : Evotype or str, optional
+        The evolution type of this model, describing how states are
+        represented.  The special value `"default"` is equivalent
+        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
 
     simulator : ForwardSimulator or {"auto", "matrix", "map"}
         The simulator used to compute predicted probabilities for the
@@ -940,7 +938,7 @@ def _get_error_gate(key, ideal_gate, depolarization_strengths, stochastic_error_
         Key to lookup error specification (not just name, could also include qubit labels)
     ideal_gate : LinearOperator
         Ideal operation to compose/alter with errors
-    
+
     All other parameters match those described in `create_crosstalk_free_model`.
 
     Returns
@@ -949,50 +947,46 @@ def _get_error_gate(key, ideal_gate, depolarization_strengths, stochastic_error_
         Gate with errors, with parameterization/type as specified above based on which
         error specification method was used
     """
-    # "dim" below needs to be number of paulis, so CHP/statevec dim needs to be doubled
-    if ideal_gate._evotype == 'chp':
-        dim = ideal_gate.dim
-        basis_size = 2**dim
-    else:
-        dim = ideal_gate.dim
-        basis_size = dim
-        
-    if key in depolarization_strengths: # Depolarizing error specification
+    evotype = ideal_gate.evotype
+    state_space = ideal_gate.state_space
+    basis_size = state_space.dim  # e.g. 4 for a single qubit
+
+    if key in depolarization_strengths:  # Depolarizing error specification
         depol_rate = depolarization_strengths[key]
 
-        if depolarization_parameterization == "depolarize": # DepolarizeOp
-            depol_gate = _op.DepolarizeOp(dim, basis="pp", evotype=ideal_gate._evotype, initial_rate=depol_rate)
+        if depolarization_parameterization == "depolarize":  # DepolarizeOp
+            depol_gate = _op.DepolarizeOp(state_space, basis="pp", evotype=evotype, initial_rate=depol_rate)
             err_gate = _op.ComposedOp([ideal_gate, depol_gate])
-        elif depolarization_parameterization == "stochastic": # StochasticNoiseOp
+        elif depolarization_parameterization == "stochastic":  # StochasticNoiseOp
             rate_per_pauli = depol_rate / (basis_size - 1)
             rates = [rate_per_pauli] * (basis_size - 1)
-            sto_gate = _op.StochasticNoiseOp(dim, basis="pp", evotype=ideal_gate._evotype, initial_rates=rates)
+            sto_gate = _op.StochasticNoiseOp(state_space, basis="pp", evotype=evotype, initial_rates=rates)
             err_gate = _op.ComposedOp([ideal_gate, sto_gate])
-        elif depolarization_parameterization == "lindblad": # LindbladErrorgen with "depol", "diagonal" parameterization
+        elif depolarization_parameterization == "lindblad":  # LindbladErrorgen with "depol" or "diagonal" param
             basis = _BuiltinBasis('pp', basis_size)
             rate_per_pauli = depol_rate / (basis_size - 1)
             errdict = {('S', bl): rate_per_pauli for bl in basis.labels[1:]}
-            errgen = _op.LindbladErrorgen(dim, errdict, basis, "depol", "diagonal",
-                                          truncate=False, mx_basis='pp', evotype=ideal_gate._evotype)
+            errgen = _op.LindbladErrorgen(state_space, errdict, basis, "depol", "diagonal",
+                                          truncate=False, mx_basis='pp', evotype=evotype)
             err_gate = _op.ComposedOp((ideal_gate, _op.ExpErrorgenOp(errgen)))
         else:
-            raise ValueError("Unknown parameterization %s for depolarizing error specification" \
+            raise ValueError("Unknown parameterization %s for depolarizing error specification"
                              % depolarization_parameterization)
 
-    elif key in stochastic_error_probs: # Stochastic error specification
+    elif key in stochastic_error_probs:  # Stochastic error specification
         sto_rates = stochastic_error_probs[key]
 
-        if stochastic_parameterization == "stochastic": # StochasticNoiseOp    
-            sto_gate = _op.StochasticNoiseOp(dim, basis="pp", evotype=ideal_gate._evotype, initial_rates=sto_rates)
+        if stochastic_parameterization == "stochastic":  # StochasticNoiseOp
+            sto_gate = _op.StochasticNoiseOp(state_space, basis="pp", evotype=evotype, initial_rates=sto_rates)
             err_gate = _op.ComposedOp([ideal_gate, sto_gate])
-        elif stochastic_parameterization == "lindblad": # LindbladErrorgen with "cptp", "diagonal" parameterization
+        elif stochastic_parameterization == "lindblad":  # LindbladErrorgen with "cptp", "diagonal" parameterization
             basis = _BuiltinBasis('pp', basis_size)
             errdict = {('S', bl): rate for bl, rate in zip(basis.labels[1:], sto_rates)}
-            errgen = _op.LindbladErrorgen(dim, errdict, basis, "cptp", "diagonal",
-                                        truncate=False, mx_basis='pp', evotype=ideal_gate._evotype)
+            errgen = _op.LindbladErrorgen(state_space, errdict, basis, "cptp", "diagonal",
+                                          truncate=False, mx_basis='pp', evotype=evotype)
             err_gate = _op.ComposedOp((ideal_gate, _op.ExpErrorgenOp(errgen)))
         else:
-            raise ValueError("Unknown parameterization %s for stochastic error specification" \
+            raise ValueError("Unknown parameterization %s for stochastic error specification"
                              % stochastic_parameterization)
 
     elif key in lindblad_error_coeffs:  # LindbladErrorgen with given coefficients
@@ -1007,8 +1001,8 @@ def _get_error_gate(key, ideal_gate, depolarization_strengths, stochastic_error_
 
         # Build LindbladErrorgen directly to have control over which parameters are set (leads to lower param counts)
         basis = _BuiltinBasis('pp', basis_size)
-        errgen = _op.LindbladErrorgen(dim, errdict, basis, param_mode, nonham_mode,
-                                      truncate=False, mx_basis='pp', evotype=ideal_gate._evotype)
+        errgen = _op.LindbladErrorgen(state_space, errdict, basis, param_mode, nonham_mode,
+                                      truncate=False, mx_basis='pp', evotype=evotype)
         err_gate = _op.ComposedOp((ideal_gate, _op.ExpErrorgenOp(errgen)))
     else:  # No errors
         err_gate = ideal_gate
@@ -1020,7 +1014,7 @@ def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}
                                 depolarization_strengths={}, stochastic_error_probs={}, lindblad_error_coeffs={},
                                 depolarization_parameterization='depolarize', stochastic_parameterization='stochastic',
                                 lindblad_parameterization='auto', availability=None, qubit_labels=None, geometry="line",
-                                evotype="auto", simulator="auto", on_construction_error='raise',
+                                evotype="default", simulator="auto", on_construction_error='raise',
                                 independent_gates=False, ensure_composed_gates=False):
     """
     Create a n-qubit "crosstalk-free" model.
@@ -1146,14 +1140,14 @@ def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}
         availability (edge connections are used for gates whose availability
         is unspecified by `availability` or whose value there is `"all-edges"`).
 
-    evotype : {"auto","densitymx","statevec","stabilizer","svterm","cterm"}
-        The evolution type.  If "auto" is specified, "densitymx" is used.
+    evotype : Evotype or str, optional
+        The evolution type.  The special value `"default"` is equivalent
+        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
 
     simulator : ForwardSimulator or {"auto", "matrix", "map"}
         The simulator used to compute predicted probabilities for the
-        resulting :class:`Model`.  Usually `"auto"` is fine, the default for
-        each `evotype` is usually what you want.  Setting this to something
-        else is expert-level tuning.
+        resulting :class:`Model`.  Using `"auto"` selects `"matrix"` when there
+        are 2 qubits or less, and otherwise selects `"map"`.
 
     on_construction_error : {'raise','warn',ignore'}
         What to do when the creation of a gate with the given
@@ -1188,8 +1182,12 @@ def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}
         `availability`).  For instance, the operation label for the `"Gx"` gate on
         qubit 2 might be `Label("Gx",1)`.
     """
-    if evotype == "auto":
-        evotype = "densitymx"  # FUTURE: do something more sophisticated?
+    if qubit_labels is not None:
+        state_space = _statespace.QubitSpace(qubit_labels)
+        assert(state_space.num_qubits == num_qubits), "Number of qubit labels != `num_qubits`!"
+    else:
+        state_space = _statespace.QubitSpace(num_qubits)
+    evotype = _Evotype.cast(evotype)
 
     valid_depol_params = ['depolarize', 'stochastic', 'lindblad']
     assert (depolarization_parameterization in valid_depol_params), \
@@ -1230,7 +1228,7 @@ def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}
         # Get ideal gate
         if name in std_gate_unitaries:
             # Build "standard" operation as ideal op
-            ideal_gate = _op.StaticStandardOp(name, evotype)
+            ideal_gate = _op.StaticStandardOp(name, 'pp', evotype, state_space=None)  # use the default state space
             gatedict[key] = _get_error_gate(key, ideal_gate, depolarization_strengths, stochastic_error_probs,
                                             lindblad_error_coeffs, depolarization_parameterization,
                                             stochastic_parameterization, lindblad_parameterization)
@@ -1238,27 +1236,26 @@ def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}
             U = nonstd_gate_unitaries[name]
             if callable(U):  # then assume a function: args -> unitary
                 U0 = U(None)  # U fns must return a sample unitary when passed None to get size.
-                ideal_factory = _opfactory.UnitaryOpFactory(U, U0.shape[0], evotype=evotype)
+                local_state_space = _statespace.default_space_for_udim(U0.shape[0])
+                ideal_factory = _opfactory.UnitaryOpFactory(U, local_state_space, 'pp', evotype)
 
                 # For factories, build the error gate using identity as "ideal" and then make ComposedOp
-                identity_gate = _op.StaticDenseOp(_np.identity(ideal_factory.dim))
+                identity_gate = _op.StaticUnitaryOp(_np.identity(U0.shape[0]), 'pp', evotype,
+                                                    state_space=None)  # use the default state space
                 noise_gate = _get_error_gate(key, identity_gate, depolarization_strengths, stochastic_error_probs,
                                              lindblad_error_coeffs, depolarization_parameterization,
                                              stochastic_parameterization, lindblad_parameterization)
                 gatedict[key] = _opfactory.ComposedOpFactory([ideal_factory, noise_gate])
             else:
-                if evotype in ("densitymx", "svterm", "cterm"):
-                    ideal_gate = _op.StaticDenseOp(_gt.unitary_to_pauligate(U), evotype)
-                    gatedict[key] = _get_error_gate(key, ideal_gate, depolarization_strengths, stochastic_error_probs,
-                                                    lindblad_error_coeffs, depolarization_parameterization,
-                                                    stochastic_parameterization, lindblad_parameterization)
-                else:  # we just store the unitaries
-                    raise NotImplementedError("Setting error rates on unitaries isn't implemented yet")
+                ideal_gate = _op.StaticUnitaryOp(U, 'pp', evotype, state_space=None)  # use the default state space
+                gatedict[key] = _get_error_gate(key, ideal_gate, depolarization_strengths, stochastic_error_probs,
+                                                lindblad_error_coeffs, depolarization_parameterization,
+                                                stochastic_parameterization, lindblad_parameterization)
         else:
             raise KeyError("'%s' gate unitary needs to be provided by `nonstd_gate_unitaries` arg" % name)
 
     if 'idle' in all_keys:
-        ideal_gate = _op.StaticStandardOp('Gi', evotype)
+        ideal_gate = _op.StaticStandardOp('Gi', 'pp', evotype, state_space=None)
         global_idle_op = _get_error_gate('idle', ideal_gate, depolarization_strengths,
                                          stochastic_error_probs, lindblad_error_coeffs,
                                          depolarization_parameterization, stochastic_parameterization,
@@ -1267,16 +1264,7 @@ def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}
         global_idle_op = None
 
     prep_layers = {}
-    if evotype == 'chp':
-        assert ('prep' not in all_keys), "Cannot specify 'prep' error specification with CHP evotype"
-
-        # For CHP, prep can only be idle gate
-        # TODO: This should be replaced by a SPAMVec in the near future
-        # Only works because LocalNoiseModel allows it, which it probably shouldn't
-        rho0 = _op.ComposedOp([_op.EmbeddedOp(range(num_qubits), [i], _op.StaticStandardOp('Gi', 'chp'))
-                               for i in range(num_qubits)])
-        prep_layers['rho0'] = rho0
-    elif 'prep' in all_keys:
+    if 'prep' in all_keys:
         if 'prep' in depolarization_strengths and depolarization_parameterization != 'lindblad':
             _warnings.warn(("'prep' error specification requires Lindblad parameterization, "
                            "depolarization parameterization '%s' overridden!" % depolarization_parameterization))
@@ -1284,16 +1272,16 @@ def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}
             _warnings.warn(("'prep' error specification requires Lindblad parameterization, "
                            "stochastic parameterization '%s' overridden!" % stochastic_parameterization))
 
-        rho_base1Q = _state.ComputationalBasisState([0], evotype)
+        rho_base1Q = _state.ComputationalBasisState([0], 'pp', evotype)
         # Override parameterization to force Lindblad
-        err_gate = _get_error_gate('prep', _op.StaticStandardOp('Gi', evotype), depolarization_strengths,
-                                   stochastic_error_probs, lindblad_error_coeffs,
+        err_gate = _get_error_gate('prep', _op.StaticStandardOp('Gi', 'pp', evotype, state_space=None),
+                                   depolarization_strengths, stochastic_error_probs, lindblad_error_coeffs,
                                    "lindblad", "lindblad", "lindblad")
         prep1Q = _state.ComposedState(rho_base1Q, err_gate)
         prep_factors = [prep1Q.copy() for i in range(num_qubits)] if independent_gates else [prep1Q] * num_qubits
-        prep_layers['rho0'] = _state.TensorProductState(prep_factors)
+        prep_layers['rho0'] = _state.TensorProductState(prep_factors, state_space)
     else:
-        prep_layers['rho0'] = _state.ComputationalBasisState([0] * num_qubits, evotype)
+        prep_layers['rho0'] = _state.ComputationalBasisState([0] * num_qubits, 'pp', evotype, state_space)
 
     povm_layers = {}
     if 'povm' in all_keys:
@@ -1304,16 +1292,16 @@ def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}
             _warnings.warn(("'povm' error specification requires Lindblad parameterization, "
                            "stochastic parameterization '%s' overridden!" % stochastic_parameterization))
 
-        Mdefault_base1Q = _povm.ComputationalBasisPOVM(1, evotype)
+        Mdefault_base1Q = _povm.ComputationalBasisPOVM(1, evotype, state_space=None)
         # Override parameterization to force Lindblad
-        err_gate = _get_error_gate('povm', _op.StaticStandardOp('Gi', evotype), depolarization_strengths,
-                                   stochastic_error_probs, lindblad_error_coeffs,
+        err_gate = _get_error_gate('povm', _op.StaticStandardOp('Gi', 'pp', evotype, state_space=None),
+                                   depolarization_strengths, stochastic_error_probs, lindblad_error_coeffs,
                                    "lindblad", "lindblad", "auto")
-        povm1Q = _povm.ComposedPOVM(err_gate, Mdefault_base1Q, "pp")
+        povm1Q = _povm.ComposedPOVM(err_gate, Mdefault_base1Q, 'pp')
         povm_factors = [povm1Q.copy() for i in range(num_qubits)] if independent_gates else [povm1Q] * num_qubits
-        povm_layers['Mdefault'] = _povm.TensorProductPOVM(povm_factors)
+        povm_layers['Mdefault'] = _povm.TensorProductPOVM(povm_factors, evotype, state_space)
     else:
-        povm_layers['Mdefault'] = _povm.ComputationalBasisPOVM(num_qubits, evotype)
+        povm_layers['Mdefault'] = _povm.ComputationalBasisPOVM(num_qubits, evotype, state_space=state_space)
 
     return _LocalNoiseModel(num_qubits, gatedict, prep_layers, povm_layers, availability, qubit_labels,
                             geometry, evotype, simulator, on_construction_error,

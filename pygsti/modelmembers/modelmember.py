@@ -143,6 +143,10 @@ class ModelMember(ModelChild):
         return self._state_space
 
     @property
+    def evotype(self):
+        return self._evotype
+
+    @property
     def dirty(self):
         """
         Flag indicating whether this member's local parameters may have been updated without its parent's knowledge.

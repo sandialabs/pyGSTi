@@ -148,13 +148,18 @@ class TensorProductPOVMEffect(_POVMEffect):
                 # set of other effect reps.  This isn't a TensorProductPOVMEffect, as that takes a
                 # set of POVMs as factors.  So we convert the factor effects -> dense -> states
                 # and then use a conjugated tensor-product-state as the final effect object.
+                #Note: we set basis=None below because I don't think these args are actually needed,
+                # as they'd only be used if the evotype was like densitymx and needed to convert to
+                # a dense superoperator.
                 pre_state_rep = self._evotype.create_tensorproduct_state_rep(
-                    [self._evotype.create_pure_state_rep(f.pre_effect.to_dense())
+                    [self._evotype.create_pure_state_rep(f.pre_effect.to_dense(), None,
+                                                         f.pre_effect.state_space)
                      for f in factors if (f.pre_effect is not None)], self.state_space)
                 pre_rep = self._evotype.create_conjugatedstate_effect_rep(pre_state_rep)
 
                 post_state_rep = self._evotype.create_tensorproduct_state_rep(
-                    [self._evotype.create_pure_state_rep(f.post_effect.to_dense())
+                    [self._evotype.create_pure_state_rep(f.post_effect.to_dense(), None,
+                                                         f.post_effect.state_space)
                      for f in factors if (f.post_effect is not None)], self.state_space)
                 post_rep = self._evotype.create_conjugatedstate_effect_rep(post_state_rep)
 

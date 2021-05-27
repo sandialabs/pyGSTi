@@ -40,7 +40,7 @@ class OpRep(_basereps.OpRep):
 
 
 class OpRepClifford(OpRep):
-    def __init__(self, unitarymx, symplecticrep, state_space):
+    def __init__(self, unitarymx, symplecticrep, basis, state_space):
 
         if symplecticrep is not None:
             self.smatrix, self.svector = symplecticrep
@@ -54,6 +54,7 @@ class OpRepClifford(OpRep):
         #nQubits = len(self.svector) // 2
         #dim = 2**nQubits  # "stabilizer" is a "unitary evolution"-type mode
         self.unitary = unitarymx
+        self.basis = basis
 
         state_space = _StateSpace.cast(state_space)
         assert(state_space.num_qubits == self.smatrix.shape[0] // 2)
@@ -86,13 +87,14 @@ class OpRepClifford(OpRep):
 
 
 class OpRepStandard(OpRepClifford):
-    def __init__(self, name, state_space):
+    def __init__(self, name, basis, state_space):
         std_unitaries = _itgs.standard_gatename_unitaries()
+        self.name = name
         if self.name not in std_unitaries:
             raise ValueError("Name '%s' not in standard unitaries" % self.name)
 
         U = std_unitaries[self.name]
-        super(OpRepStandard, self).__init__(U, None, state_space)
+        super(OpRepStandard, self).__init__(U, None, basis, state_space)
 
 
 class OpRepComposed(OpRep):

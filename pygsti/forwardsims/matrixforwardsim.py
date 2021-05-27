@@ -555,6 +555,7 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
             if use_scaling:
                 old_err = _np.seterr(over='ignore')
                 G, scale = self.product(circuit_ops, True)
+                # TODO - add a ".dense_space_type" attribute of evotype that == either "Hilbert" or "Hilbert-Schmidt"?
                 if self.model.evotype == "statevec":
                     ps = _np.real(_np.abs(_np.dot(Es, _np.dot(G, rho)) * scale)**2)
                 else:  # evotype == "densitymx"

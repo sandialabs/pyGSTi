@@ -20,6 +20,10 @@ class CliffordOp(_LinearOperator):
         computed symplectic representation of `unitary`.  If None, then
         this representation is computed automatically from `unitary`.
 
+    basis : Basis or {'pp','gm','std'}, optional
+        The basis used to construct the Hilbert-Schmidt space representation
+        of this state as a super-operator.
+
     evotype : Evotype or str
         The evolution type.  The special value `"default"` is equivalent
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
@@ -29,8 +33,7 @@ class CliffordOp(_LinearOperator):
         with the appropriate number of qubits is used.
     """
 
-    def __init__(self, unitary, symplecticrep=None, evotype='default', state_space=None):
-        #self.superop = superop
+    def __init__(self, unitary, symplecticrep=None, basis='pp', evotype='default', state_space=None):
         self.unitary = unitary
         assert(self.unitary is not None), "Must supply `unitary` argument!"
         U = self.unitary.to_dense() if isinstance(self.unitary, _LinearOperator) else self.unitary
@@ -39,7 +42,7 @@ class CliffordOp(_LinearOperator):
             else _statespace.StateSpace.cast(state_space)
 
         evotype = _Evotype.cast(evotype)
-        rep = evotype.create_clifford_rep(U, symplecticrep, state_space)
+        rep = evotype.create_clifford_rep(U, symplecticrep, basis, state_space)
         _LinearOperator.__init__(self, rep, evotype)
 
     #NOTE: if this operation had parameters, we'd need to clear inv_smatrix & inv_svector

@@ -17,6 +17,7 @@ import itertools as _itertools
 from .. import modelmember as _mm
 from .povm import POVM as _POVM
 from .tensorprodeffect import TensorProductPOVMEffect as _TensorProductPOVMEffect
+from ...models import statespace as _statespace
 
 
 class TensorProductPOVM(_POVM):
@@ -33,10 +34,19 @@ class TensorProductPOVM(_POVM):
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
         The special value `"auto"` uses the evolution type of the first
         factor *if* there are more than zero factors.
+
+    state_space : StateSpace, optional
+        The state space for this POVM.  This should be a space description
+        compatible with the product of all the factors' state spaces.  If
+        `None` a default compatible space will be chosen.
     """
 
-    def __init__(self, factor_povms, evotype="auto"):
+    def __init__(self, factor_povms, evotype="auto", state_space=None):
         dim = _np.product([povm.dim for povm in factor_povms])
+        if state_space is None:
+            state_space = _statespace.default_space_for_dim(dim)
+        else:
+            assert(state_space.dim == dim), "`state_space` is incompatible with the product of the factors' spaces!"
 
         # self.factorPOVMs
         #  Copy each POVM and set it's parent and gpindices.
@@ -65,7 +75,7 @@ class TensorProductPOVM(_POVM):
                 "All the effect labels for a given factor POVM must be the *same* length!"
             self._factor_lbllens.append(l)
 
-        super(TensorProductPOVM, self).__init__(dim, evotype, items)
+        super(TensorProductPOVM, self).__init__(state_space, evotype, items)
 
     def __contains__(self, key):
         """ For lazy creation of effect vectors """

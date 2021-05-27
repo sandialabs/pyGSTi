@@ -57,12 +57,12 @@ class CHPForwardSimulator(_WeakForwardSimulator):
                 # Prep
                 # TODO: Make sure this works with SPAMVec
                 rho = self.model.circuit_layer_operator(complete_circuit[0], 'prep')
-                tmp.write(rho.get_chp_str())
+                tmp.write(rho.chp_str())
 
                 # Op layers
                 for op_label in complete_circuit[1:-1]:
                     op = self.model.circuit_layer_operator(op_label, 'op')
-                    tmp.write(op.get_chp_str())
+                    tmp.write(op.chp_str())
                 
                 # POVM (sort of, actually using it more like a straight PVM)
                 povm_label = complete_circuit[-1]
@@ -72,7 +72,9 @@ class CHPForwardSimulator(_WeakForwardSimulator):
                 # Handle marginalization (not through MarginalizedPOVM,
                 # where most logic is based on simplify_effects and therefore expensive for many qubits)
                 if povm_label.sslbls is not None:
-                    flat_sslbls = [lbl for tbp in self.model.state_space.tensor_product_blocks_labels for lbl in tbp]
+                    assert(self.model.state_space.num_tensor_product_blocks == 1), \
+                        "Only single-TPB state spaces are supported with CHPForwardSimulator"
+                    flat_sslbls = self.model.state_space.tensor_product_block_labels(0)
                     qubit_indices = [flat_sslbls.index(q) for q in povm_label.sslbls]
                 else:
                     qubit_indices = range(povm.nqubits)

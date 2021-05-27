@@ -62,28 +62,11 @@ class Model(object):
 v
     Parameters
     ----------
-    state_space : StateSpaceLabels or list or tuple
-        The decomposition (with labels) of (pure) state-space this model
-        acts upon.  Regardless of whether the model contains operators or
-        superoperators, this argument describes the Hilbert space dimension
-        and imposed structure.  If a list or tuple is given, it must be
-        of a from that can be passed to `StateSpaceLabels.__init__`.
+    state_space : StateSpace
+        The state space of this model.
     """
 
     def __init__(self, state_space):
-        """
-        Creates a new Model.  Rarely used except from derived classes
-        `__init__` functions.
-
-        Parameters
-        ----------
-        state_space : StateSpaceLabels or list or tuple
-            The decomposition (with labels) of (pure) state-space this model
-            acts upon.  Regardless of whether the model contains operators or
-            superoperators, this argument describes the Hilbert space dimension
-            and imposed structure.  If a list or tuple is given, it must be
-            of a from that can be passed to `StateSpaceLabels.__init__`.
-        """
         if isinstance(state_space, _statespace.StateSpace):
             self._state_space = state_space
         else:
@@ -430,12 +413,8 @@ class OpModel(Model):
 
     Parameters
     ----------
-    state_space : StateSpaceLabels or list or tuple
-        The decomposition (with labels) of (pure) state-space this model
-        acts upon.  Regardless of whether the model contains operators or
-        superoperators, this argument describes the Hilbert space dimension
-        and imposed structure.  If a list or tuple is given, it must be
-        of a from that can be passed to `StateSpaceLabels.__init__`.
+    state_space : StateSpace
+        The state space for this model.
 
     basis : Basis
         The basis used for the state space by dense operator representations.

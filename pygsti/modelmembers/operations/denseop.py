@@ -18,6 +18,7 @@ from .linearop import LinearOperator as _LinearOperator
 from ...evotypes import Evotype as _Evotype
 from ...models import statespace as _statespace
 from ...tools import matrixtools as _mt
+from ...objects.basis import Basis as _Basis
 
 
 def finite_difference_deriv_wrt_params(operation, wrt_filter, eps=1e-7):
@@ -325,6 +326,10 @@ class DenseUnitaryOperator(BasedDenseOperatorInterface, _LinearOperator):
     mx : numpy.ndarray
         The operation as a dense process matrix.
 
+    basis : Basis or {'pp','gm','std'}, optional
+        The basis used to construct the Hilbert-Schmidt space representation
+        of this state as a super-operator.
+
     evotype : Evotype or str
         The evolution type.  The special value `"default"` is equivalent
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
@@ -339,11 +344,12 @@ class DenseUnitaryOperator(BasedDenseOperatorInterface, _LinearOperator):
         Direct access to the underlying process matrix data.
     """
 
-    def __init__(self, mx, evotype, state_space):
+    def __init__(self, mx, basis, evotype, state_space):
         """ Initialize a new LinearOperator """
         state_space = _statespace.default_space_for_dim(mx.shape[0]) if (state_space is None) \
             else _statespace.StateSpace.cast(state_space)
-        rep = evotype.create_denseunitary_rep(mx, state_space)
+        basis = _Basis.cast(basis, state_space.dim)  # basis for Hilbert-Schmidt (superop) space
+        rep = evotype.create_denseunitary_rep(mx, basis, state_space)
         evotype = _Evotype.cast(evotype)
         _LinearOperator.__init__(self, rep, evotype)
         BasedDenseOperatorInterface.__init__(self, self._rep.base)

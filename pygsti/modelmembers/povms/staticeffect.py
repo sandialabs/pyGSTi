@@ -16,10 +16,14 @@ class StaticPOVMEffect(_ConjugatedStatePOVMEffect):
     evotype : Evotype or str, optional
         The evolution type.  The special value `"default"` is equivalent
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
+
+    state_space : StateSpace, optional
+        The state space for this operation.  If `None` a default state space
+        with the appropriate number of qubits is used.
     """
 
-    def __init__(self, vec, evotype="default"):
-        _ConjugatedStatePOVMEffect.__init__(self, _StaticState(vec, evotype))
+    def __init__(self, vec, evotype="default", state_space=None):
+        _ConjugatedStatePOVMEffect.__init__(self, _StaticState(vec, evotype, state_space))
 
     def set_dense(self, vec):
         """

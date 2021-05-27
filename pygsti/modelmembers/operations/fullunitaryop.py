@@ -27,14 +27,22 @@ class FullUnitaryOp(_DenseUnitaryOperator):
         a square 2D array-like or LinearOperator object representing the operation action.
         The shape of m sets the dimension of the operation.
 
+    basis : Basis or {'pp','gm','std'}, optional
+        The basis used to construct the Hilbert-Schmidt space representation
+        of this state as a super-operator.
+
     evotype : Evotype or str, optional
         The evolution type.  The special value `"default"` is equivalent
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
+
+    state_space : StateSpace, optional
+        The state space for this operation.  If `None` a default state space
+        with the appropriate number of qubits is used.
     """
 
-    def __init__(self, m, evotype="default"):
+    def __init__(self, m, basis='pp', evotype="default", state_space=None):
         m = _LinearOperator.convert_to_matrix(m)
-        _DenseUnitaryOperator.__init__(self, m, evotype)
+        _DenseUnitaryOperator.__init__(self, m, basis, evotype, state_space)
         d = self.dim
         self._paramlbls = _np.array(["MxElement Re(%d,%d)" % (i, j) for i in range(d) for j in range(d)]
                                     + ["MxElement Im(%d,%d)" % (i, j) for i in range(d) for j in range(d)],

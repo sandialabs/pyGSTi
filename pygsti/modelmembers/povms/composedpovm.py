@@ -77,7 +77,7 @@ class ComposedPOVM(_POVM):
             `errormap`.
         """
         self.error_map = errormap
-        dim = self.error_map.dim
+        state_space = self.error_map.state_space
 
         if mx_basis is None:
             if isinstance(errormap, _op.LindbladOp):
@@ -90,21 +90,20 @@ class ComposedPOVM(_POVM):
         evotype = self.error_map._evotype
 
         if povm is None:
-            nqubits = int(round(_np.log2(dim) / 2))
-            assert(_np.isclose(nqubits, _np.log2(dim) / 2)), \
+            assert(state_space.num_qubits >= 0), \
                 ("A default computational-basis POVM can only be used with an"
                  " integral number of qubits!")
-            povm = _ComputationalBasisPOVM(nqubits, evotype)
+            povm = _ComputationalBasisPOVM(state_space.num_qubits, evotype)
         else:
-            assert(povm._evotype == evotype), \
+            assert(povm.evotype == evotype), \
                 ("Evolution type of `povm` (%s) must match that of "
-                 "`errormap` (%s)!") % (povm._evotype, evotype)
+                 "`errormap` (%s)!") % (povm.evotype, evotype)
             assert(povm.num_params == 0), \
                 "Given `povm` must be static (have 0 parameters)!"
         self.base_povm = povm
 
         items = []  # init as empty (lazy creation of members)
-        _POVM.__init__(self, dim, evotype, items)
+        _POVM.__init__(self, state_space, evotype, items)
 
     def __contains__(self, key):
         """ For lazy creation of effect vectors """

@@ -61,8 +61,9 @@ cdef class EffectRepConjugatedState(EffectRep):
 
 cdef class EffectRepComputational(EffectRep):
     cdef public _np.ndarray zvals
+    cdef public object basis
 
-    def __cinit__(self, _np.ndarray[_np.int64_t, ndim=1, mode='c'] zvals, state_space):
+    def __cinit__(self, _np.ndarray[_np.int64_t, ndim=1, mode='c'] zvals, basis, state_space):
         # cdef INT dim = 4**zvals.shape[0] -- just send as argument
         cdef INT nfactors = zvals.shape[0]
         cdef double abs_elval = 1/(_np.sqrt(2)**nfactors)
@@ -73,6 +74,7 @@ cdef class EffectRepComputational(EffectRep):
             base = base << 1 # *= 2
         self.zvals = zvals
         self.state_space = _StateSpace.cast(state_space)
+        self.basis = basis
         self.c_effect = new EffectCRep_Computational(nfactors, zvals_int, self.state_space.udim)
 
     def __reduce__(self):

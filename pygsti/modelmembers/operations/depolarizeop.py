@@ -13,6 +13,7 @@ The DepolarizeOp class and supporting functionality.
 import numpy as _np
 from .stochasticop import StochasticNoiseOp as _StochasticNoiseOp
 from ...objects.basis import Basis as _Basis
+from ...models import statespace as _statespace
 
 
 class DepolarizeOp(_StochasticNoiseOp):
@@ -21,8 +22,8 @@ class DepolarizeOp(_StochasticNoiseOp):
 
     Parameters
     ----------
-    dim : int
-        The dimension of this operator (4 for a single qubit).
+    state_space : StateSpace, optional
+        The state space for this operation.
 
     basis : Basis or {'pp','gm','qt'}, optional
         The basis to use, defining the "principle axes"
@@ -42,44 +43,19 @@ class DepolarizeOp(_StochasticNoiseOp):
             Random seed for RandomState (or directly provided RandomState)
             for sampling stochastic superoperators with the 'chp' evotype.
     """
-    def __init__(self, dim, basis="pp", evotype="default", initial_rate=0, seed_or_state=None):
-        """
-        Create a new DepolarizeOp, representing a depolarizing channel.
-
-        Parameters
-        ----------
-        dim : int
-            The dimension of this operator (4 for a single qubit).
-
-        basis : Basis or {'pp','gm','qt'}, optional
-            The basis to use, defining the "principle axes"
-            along which there is stochastic noise.  While strictly unnecessary
-            since all complete bases yield the same operator, this affects the
-            underlying :class:`StochasticNoiseOp` and so is given as an option
-            to the user.
-
-        evotype : {"densitymx", "cterm", "svterm"}
-            the evolution type being used.
-
-        initial_rate : float, optional
-            the initial error rate.
-
-        seed_or_state : float or RandomState, optional
-            Random seed for RandomState (or directly provided RandomState)
-            for sampling stochastic superoperators with the 'chp' evotype.
-        """
-
+    def __init__(self, state_space, basis="pp", evotype="default", initial_rate=0, seed_or_state=None):
         #TODO - need to fix CHP basis dimension issue (dim ~= statevec but acts as density mx)
         #if evotype == 'chp':
         #    assert (basis == 'pp'), "Only Pauli basis is allowed for 'chp' evotype"
         #    # For chp (and statevec, etc), want full superoperator basis
         #    basis = _Basis.cast(basis, 2**dim, sparse=False)
         #else:
-        basis = _Basis.cast(basis, dim, sparse=False)
+        state_space = _statespace.StateSpace.cast(state_space)
+        basis = _Basis.cast(basis, state_space.dim, sparse=False)
 
         num_rates = basis.size - 1
         initial_sto_rates = [initial_rate / num_rates] * num_rates
-        _StochasticNoiseOp.__init__(self, dim, basis, evotype, initial_sto_rates, seed_or_state)
+        _StochasticNoiseOp.__init__(self, state_space, basis, evotype, initial_sto_rates, seed_or_state)
 
         # For DepolarizeOp, set params to only first element
         self.params = _np.array([self.params[0]])

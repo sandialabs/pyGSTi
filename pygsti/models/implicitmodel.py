@@ -60,12 +60,8 @@ class ImplicitOpModel(_mdl.OpModel):
 
     Parameters
     ----------
-    state_space_labels : StateSpaceLabels or list or tuple
-        The decomposition (with labels) of (pure) state-space this model
-        acts upon.  Regardless of whether the model contains operators or
-        superoperators, this argument describes the Hilbert space dimension
-        and imposed structure.  If a list or tuple is given, it must be
-        of a from that can be passed to `StateSpaceLabels.__init__`.
+    state_space : StateSpace
+        The state space for this model.
 
     layer_rules : LayerRules
         The "layer rules" used for constructing operators for circuit
@@ -85,50 +81,18 @@ class ImplicitOpModel(_mdl.OpModel):
         objects.
     """
     def __init__(self,
-                 state_space_labels,
+                 state_space,
                  layer_rules,
                  basis="pp",
                  simulator="auto",
                  evotype="densitymx"):
-        """
-        Creates a new ImplicitOpModel.  Usually only called from derived
-        classes `__init__` functions.
-
-        Parameters
-        ----------
-        state_space_labels : StateSpaceLabels or list or tuple
-            The decomposition (with labels) of (pure) state-space this model
-            acts upon.  Regardless of whether the model contains operators or
-            superoperators, this argument describes the Hilbert space dimension
-            and imposed structure.  If a list or tuple is given, it must be
-            of a from that can be passed to `StateSpaceLabels.__init__`.
-
-        layer_rules : LayerRules
-            The "layer rules" used for constructing operators for circuit
-            layers.  This functionality is essential to using this model to
-            simulate ciruits, and is typically supplied by derived classes.
-
-        basis : Basis
-            The basis used for the state space by dense operator representations.
-
-        simulator : ForwardSimulator or {"auto", "matrix", "map"}
-            The circuit simulator used to compute any
-            requested probabilities, e.g. from :method:`probs` or
-
-        evotype : {"densitymx", "statevec", "stabilizer", "svterm", "cterm"}
-            The evolution type of this model, describing how states are
-            represented, allowing compatibility checks with (super)operator
-            objects.
-        """
-
         self.prep_blks = _collections.OrderedDict()
         self.povm_blks = _collections.OrderedDict()
         self.operation_blks = _collections.OrderedDict()
         self.instrument_blks = _collections.OrderedDict()
         self.factories = _collections.OrderedDict()
 
-        super(ImplicitOpModel, self).__init__(state_space_labels, basis, evotype,
-                                              layer_rules, simulator)
+        super(ImplicitOpModel, self).__init__(state_space, basis, evotype, layer_rules, simulator)
 
     @property
     def _primitive_prep_label_dict(self):
@@ -178,7 +142,7 @@ class ImplicitOpModel(_mdl.OpModel):
         copy_into.factories = _collections.OrderedDict([(lbl, fdict.copy(copy_into, memo))
                                                        for lbl, fdict in self.factories.items()])
 
-        copy_into._state_space_labels = self._state_space_labels.copy()  # needed by simplifier helper
+        copy_into.state_space = self.state_space.copy()  # needed by simplifier helper
 
     def __setstate__(self, state_dict):
         super().__setstate__(state_dict)
