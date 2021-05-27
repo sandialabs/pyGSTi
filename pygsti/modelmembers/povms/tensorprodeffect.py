@@ -4,8 +4,8 @@ import functools as _functools
 import numpy as _np
 from .effect import POVMEffect as _POVMEffect
 from .. import modelmember as _modelmember
-from ..model import statespace as _statespace
 from ..states.tensorprodstate import TensorProductState as _TensorProductState
+from ...models import statespace as _statespace
 from ...tools import slicetools as _slct
 from ...tools import listtools as _lt
 from ...tools import matrixtools as _mt

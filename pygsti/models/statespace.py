@@ -61,7 +61,7 @@ class StateSpace(object):
         raise NotImplementedError("Derived classes should implement this!")
 
     @property
-    def num_tensor_prod_blocks(self):
+    def num_tensor_product_blocks(self):
         """
         Get the number of tensor-product blocks which are direct-summed to get the final state space.
 
@@ -104,6 +104,17 @@ class StateSpace(object):
         """
         raise NotImplementedError("Derived classes should implement this!")
 
+    @property
+    def tensor_product_blocks_types(self):
+        """
+        Get the type (quantum vs classical) of all the tensor-product blocks.
+
+        Returns
+        -------
+        tuple of tuples
+        """
+        raise NotImplementedError("Derived classes should implement this!")
+    
     def label_dimension(self, label):
         raise NotImplementedError("Derived classes should implement this!")
 
@@ -111,6 +122,9 @@ class StateSpace(object):
         raise NotImplementedError("Derived classes should implement this!")
 
     def label_tensor_product_block_index(self, label):
+        raise NotImplementedError("Derived classes should implement this!")
+
+    def label_type(self, label):
         raise NotImplementedError("Derived classes should implement this!")
 
     def tensor_product_block_labels(self, i_tpb):
@@ -190,7 +204,7 @@ class QubitSpace(StateSpace):
         return len(self.qubit_labels)
 
     @property
-    def num_tensor_prod_blocks(self):
+    def num_tensor_product_blocks(self):
         """
         Get the number of tensor-product blocks which are direct-summed to get the final state space.
 
@@ -232,6 +246,17 @@ class QubitSpace(StateSpace):
         tuple of tuples
         """
         return ((2,) * self.num_qubits,)
+
+    @property
+    def tensor_product_blocks_types(self):
+        """
+        Get the type (quantum vs classical) of all the tensor-product blocks.
+
+        Returns
+        -------
+        tuple of tuples
+        """
+        return (('Q',) * self.num_qubits,)
     
     def label_dimension(self, label):
         if label in self.qubit_labels:
@@ -250,6 +275,18 @@ class QubitSpace(StateSpace):
             return 0
         else:
             raise KeyError("Invalid qubit label: %s" % label)
+
+    def label_type(self, label):
+        if label in self.qubit_labels:
+            return 'Q'
+        else:
+            raise KeyError("Invalid qubit label: %s" % label)
+
+    def __str__(self):
+        if len(self.qubit_labels) <= 10:
+            return 'QubitSpace(' + str(self.qubit_labels) + ")"
+        else:
+            return 'QubitSpace(' + str(len(self.qubit_labels)) + ")"
 
 
 class ExplicitStateSpace(StateSpace):
@@ -365,7 +402,7 @@ class ExplicitStateSpace(StateSpace):
                     elif lbl.startswith('C'): d = 2  # classical bits
                     else: raise ValueError("Cannot determine state-space dimension from '%s'" % lbl)
                     self.label_udims[lbl] = d
-                    self.label_dims[lbl] = d**2 if (lbl[0] in ('Q', 'T')) else d
+                    self.label_dims[lbl] = d**2 if (isinstance(lbl, _numbers.Integral) or lbl[0] in ('Q', 'T')) else d
         else:
             for tpbLabels, tpbDims in zip(self.labels, udims):
                 for lbl, udim in zip(tpbLabels, tpbDims):
@@ -437,7 +474,7 @@ class ExplicitStateSpace(StateSpace):
         return self._nqubits
 
     @property
-    def num_tensor_prod_blocks(self):
+    def num_tensor_product_blocks(self):
         """
         Get the number of tensor-product blocks which are direct-summed to get the final state space.
 
@@ -479,7 +516,18 @@ class ExplicitStateSpace(StateSpace):
         tuple of tuples
         """
         return tuple([tuple([self.label_udims[lbl] for lbl in tpb_labels]) for tpb_labels in self.labels])
-    
+
+    @property
+    def tensor_product_blocks_types(self):
+        """
+        Get the type (quantum vs classical) of all the tensor-product blocks.
+
+        Returns
+        -------
+        tuple of tuples
+        """
+        return tuple([tuple([self.labeltypes[lbl] for lbl in tpb_labels]) for tpb_labels in self.labels])
+
     def label_dimension(self, label):
         return self.label_dims[label]
 
@@ -488,6 +536,9 @@ class ExplicitStateSpace(StateSpace):
 
     def label_tensor_product_block_index(self, label):
         return self.tpb_index[label]
+
+    def label_type(self, label):
+        return self.labeltypes[label]
 
     #REMOVE
     #def product_dim(self, labels):  # only in modelconstruction

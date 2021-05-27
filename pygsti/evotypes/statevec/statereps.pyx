@@ -88,7 +88,7 @@ cdef class StateRepComputational(StateRep):
         super(StateRepComputational, self).__init__(vec, state_space)
 
     def __reduce__(self):
-        return (StateRepComputational, (self.zvals, self.state_space), (self.base.flags.writeable,))
+        return (StateRepComputational, (self.zvals, self.basis, self.state_space), (self.base.flags.writeable,))
 
 
 cdef class StateRepComposed(StateRep):

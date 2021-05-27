@@ -491,18 +491,18 @@ class FullGaugeGroup(OpGaugeGroup):
 
     Parameters
     ----------
-    dim : int
-        The Hilbert-Schmidt space dimension of the superoperators
-        this gauge group acts on (e.g. 4 for 1-qubit operations).
+    state_space : StateSpace
+        The state space for this gauge group.  This is the state space that
+        elements of the gauge group act on.  This should be the same as `mdl.state_space`
+        where `mdl` is a :class:`Model` you want to gauge-transform.
+
+    evotype : Evotype or str, optional
+        The evolution type.  The special value `"default"` is equivalent
+        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
     """
 
-    def __init__(self, dim):
-        """
-        Create a new gauge group with gauge-transform dimension `dim`, which
-        should be the same as `mdl.dim` where `mdl` is a :class:`Model` you
-        might gauge-transform.
-        """
-        operation = _op.FullDenseOp(_np.identity(dim, 'd'))  # ------------------------------------- Evotype ????????????????????????????????????????????
+    def __init__(self, state_space, evotype='default'):
+        operation = _op.FullDenseOp(_np.identity(state_space.dim, 'd'), evotype, state_space)
         OpGaugeGroup.__init__(self, operation, FullGaugeGroupElement, "Full")
 
 
@@ -534,18 +534,18 @@ class TPGaugeGroup(OpGaugeGroup):
 
     Parameters
     ----------
-    dim : int
-        The Hilbert-Schmidt space dimension of the superoperators
-        this gauge group acts on (e.g. 4 for 1-qubit operations).
+    state_space : StateSpace
+        The state space for this gauge group.  This is the state space that
+        elements of the gauge group act on.  This should be the same as `mdl.state_space`
+        where `mdl` is a :class:`Model` you want to gauge-transform.
+
+    evotype : Evotype or str, optional
+        The evolution type.  The special value `"default"` is equivalent
+        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
     """
 
-    def __init__(self, dim):
-        """
-        Create a new gauge group with gauge-transform dimension `dim`, which
-        should be the same as `mdl.dim` where `mdl` is a :class:`Model` you
-        might gauge-transform.
-        """
-        operation = _op.TPDenseOp(_np.identity(dim, 'd'))   # ---------------------------------------------- Evotype ???????????????????
+    def __init__(self, state_space, evotype='default'):
+        operation = _op.TPDenseOp(_np.identity(state_space.dim, 'd'), evotype, state_space)
         OpGaugeGroup.__init__(self, operation, TPGaugeGroupElement, "TP")
 
 
@@ -591,17 +591,18 @@ class DiagGaugeGroup(OpGaugeGroup):
 
     Parameters
     ----------
-    dim : int
-        The Hilbert-Schmidt space dimension of the superoperators
-        this gauge group acts on (e.g. 4 for 1-qubit operations).
+    state_space : StateSpace
+        The state space for this gauge group.  This is the state space that
+        elements of the gauge group act on.  This should be the same as `mdl.state_space`
+        where `mdl` is a :class:`Model` you want to gauge-transform.
+
+    evotype : Evotype or str, optional
+        The evolution type.  The special value `"default"` is equivalent
+        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
     """
 
-    def __init__(self, dim):
-        """
-        Create a new gauge group with gauge-transform dimension `dim`, which
-        should be the same as `mdl.dim` where `mdl` is a :class:`Model` you
-        might gauge-transform.
-        """
+    def __init__(self, state_space, evotype='default'):
+        dim = state_space.dim
         ltrans = _np.identity(dim, 'd')
         rtrans = _np.identity(dim, 'd')
         baseMx = _np.identity(dim, 'd')
@@ -609,7 +610,8 @@ class DiagGaugeGroup(OpGaugeGroup):
         parameterToBaseIndicesMap = {i: [(i, i)] for i in range(dim)}
         operation = _op.LinearlyParamDenseOp(baseMx, parameterArray,
                                              parameterToBaseIndicesMap,
-                                             ltrans, rtrans, real=True)
+                                             ltrans, rtrans, real=True,
+                                             evotype=evotype, state_space=state_space)
         OpGaugeGroup.__init__(self, operation, DiagGaugeGroupElement, "Diagonal")
 
 
@@ -641,17 +643,23 @@ class TPDiagGaugeGroup(TPGaugeGroup):
 
     Parameters
     ----------
-    dim : int
-        The Hilbert-Schmidt space dimension of the superoperators
-        this gauge group acts on (e.g. 4 for 1-qubit operations).
+    state_space : StateSpace
+        The state space for this gauge group.  This is the state space that
+        elements of the gauge group act on.  This should be the same as `mdl.state_space`
+        where `mdl` is a :class:`Model` you want to gauge-transform.
+
+    evotype : Evotype or str, optional
+        The evolution type.  The special value `"default"` is equivalent
+        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
     """
 
-    def __init__(self, dim):
+    def __init__(self, state_space, evotype='default'):
         """
         Create a new gauge group with gauge-transform dimension `dim`, which
         should be the same as `mdl.dim` where `mdl` is a :class:`Model` you
         might gauge-transform.
         """
+        dim = state_space.dim
         ltrans = _np.identity(dim, 'd')
         rtrans = _np.identity(dim, 'd')
         baseMx = _np.identity(dim, 'd')
@@ -659,7 +667,8 @@ class TPDiagGaugeGroup(TPGaugeGroup):
         parameterToBaseIndicesMap = {i: [(i + 1, i + 1)] for i in range(dim - 1)}
         operation = _op.LinearlyParamDenseOp(baseMx, parameterArray,
                                              parameterToBaseIndicesMap,
-                                             ltrans, rtrans, real=True)
+                                             ltrans, rtrans, real=True,
+                                             evotype=evotype, state_space=state_space)
         OpGaugeGroup.__init__(self, operation, TPDiagGaugeGroupElement, "TP Diagonal")
 
 
@@ -692,23 +701,23 @@ class UnitaryGaugeGroup(OpGaugeGroup):
 
     Parameters
     ----------
-    dim : int
-        The Hilbert-Schmidt space dimension of the superoperators
-        this gauge group acts on (e.g. 4 for 1-qubit operations).
+    state_space : StateSpace
+        The state space for this gauge group.  This is the state space that
+        elements of the gauge group act on.  This should be the same as `mdl.state_space`
+        where `mdl` is a :class:`Model` you want to gauge-transform.
 
     basis : Basis or {"pp", "gm", "std"}
         The basis to use when parameterizing the Hamiltonian Lindblad terms.
+
+    evotype : Evotype or str, optional
+        The evolution type.  The special value `"default"` is equivalent
+        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
     """
 
-    def __init__(self, dim, basis):
-        """
-        Create a new gauge group with gauge-transform dimension `dim`, which
-        should be the same as `mdl.dim` where `mdl` is a :class:`Model` you
-        might gauge-transform.
-        """
+    def __init__(self, state_space, basis, evotype='default'):
         errgen = _op.LindbladErrorgen.from_operation_matrix(
-            _np.identity(dim, 'd'), ham_basis=basis, nonham_basis=None,
-            param_mode="cptp", mx_basis=basis, evotype='default')
+            _np.identity(state_space.dim, 'd'), ham_basis=basis, nonham_basis=None,
+            param_mode="cptp", mx_basis=basis, evotype=evotype)
         operation = _op.ExpErrorgenDenseOp(errgen)
         OpGaugeGroup.__init__(self, operation, UnitaryGaugeGroupElement, "Unitary")
 
@@ -744,17 +753,23 @@ class SpamGaugeGroup(OpGaugeGroup):
 
     Parameters
     ----------
-    dim : int
-        The Hilbert-Schmidt space dimension of the superoperators
-        this gauge group acts on (e.g. 4 for 1-qubit operations).
+    state_space : StateSpace
+        The state space for this gauge group.  This is the state space that
+        elements of the gauge group act on.  This should be the same as `mdl.state_space`
+        where `mdl` is a :class:`Model` you want to gauge-transform.
+
+    evotype : Evotype or str, optional
+        The evolution type.  The special value `"default"` is equivalent
+        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
     """
 
-    def __init__(self, dim):
+    def __init__(self, state_space, evotype='default'):
         """
         Create a new gauge group with gauge-transform dimension `dim`, which
         should be the same as `mdl.dim` where `mdl` is a :class:`Model` you
         might gauge-transform.
         """
+        dim = state_space.dim
         ltrans = _np.identity(dim, 'd')
         rtrans = _np.identity(dim, 'd')
         baseMx = _np.identity(dim, 'd')
@@ -763,7 +778,8 @@ class SpamGaugeGroup(OpGaugeGroup):
                                      1: [(i, i) for i in range(1, dim)]}
         operation = _op.LinearlyParamDenseOp(baseMx, parameterArray,
                                              parameterToBaseIndicesMap,
-                                             ltrans, rtrans, real=True)
+                                             ltrans, rtrans, real=True,
+                                             evotype=evotype, state_space=state_space)
         OpGaugeGroup.__init__(self, operation, SpamGaugeGroupElement, "Spam")
 
 
@@ -796,17 +812,23 @@ class TPSpamGaugeGroup(OpGaugeGroup):
 
     Parameters
     ----------
-    dim : int
-        The Hilbert-Schmidt space dimension of the superoperators
-        this gauge group acts on (e.g. 4 for 1-qubit operations).
+    state_space : StateSpace
+        The state space for this gauge group.  This is the state space that
+        elements of the gauge group act on.  This should be the same as `mdl.state_space`
+        where `mdl` is a :class:`Model` you want to gauge-transform.
+
+    evotype : Evotype or str, optional
+        The evolution type.  The special value `"default"` is equivalent
+        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
     """
 
-    def __init__(self, dim):
+    def __init__(self, state_space, evotype='default'):
         """
         Create a new gauge group with gauge-transform dimension `dim`, which
         should be the same as `mdl.dim` where `mdl` is a :class:`Model` you
         might gauge-transform.
         """
+        dim = state_space.dim
         ltrans = _np.identity(dim, 'd')
         rtrans = _np.identity(dim, 'd')
         baseMx = _np.identity(dim, 'd')
@@ -814,7 +836,8 @@ class TPSpamGaugeGroup(OpGaugeGroup):
         parameterToBaseIndicesMap = {0: [(i, i) for i in range(1, dim)]}
         operation = _op.LinearlyParamDenseOp(baseMx, parameterArray,
                                              parameterToBaseIndicesMap,
-                                             ltrans, rtrans, real=True)
+                                             ltrans, rtrans, real=True,
+                                             evotype=evotype, state_space=state_space)
         OpGaugeGroup.__init__(self, operation, TPSpamGaugeGroupElement, "TP Spam")
 
 
@@ -849,18 +872,14 @@ class TrivialGaugeGroup(GaugeGroup):
 
     Parameters
     ----------
-    dim : int
-        The Hilbert-Schmidt space dimension of the superoperators
-        this gauge group acts on (e.g. 4 for 1-qubit operations).
+    state_space : StateSpace
+        The state space for this gauge group.  This is the state space that
+        elements of the gauge group act on.  This should be the same as `mdl.state_space`
+        where `mdl` is a :class:`Model` you want to gauge-transform.
     """
 
-    def __init__(self, dim):
-        """
-        Create a new gauge group with gauge-transform dimension `dim`, which
-        should be the same as `mdl.dim` where `mdl` is a :class:`Model` you
-        might gauge-transform.
-        """
-        self.dim = dim
+    def __init__(self, state_space):
+        self.state_space = state_space
         GaugeGroup.__init__(self, "Trivial")
 
     @property
@@ -888,7 +907,7 @@ class TrivialGaugeGroup(GaugeGroup):
         TrivialGaugeGroupElement
         """
         assert(len(param_vec) == 0)
-        return TrivialGaugeGroupElement(self.dim)
+        return TrivialGaugeGroupElement(self.state_space.dim)
 
     @property
     def initial_params(self):

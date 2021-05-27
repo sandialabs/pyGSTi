@@ -60,11 +60,12 @@ class EffectRepComputational(EffectRep):
         self.zvals = zvals
         self.nfactors = len(zvals)  # (or nQubits)
         self.abs_elval = 1 / (_np.sqrt(2)**self.nfactors)
+        self.basis = basis
 
         super(EffectRepComputational, self).__init__(state_space)
 
     def __reduce__(self):
-        return (EffectRepComputational, (self.zvals, self.dim, self.state_space))
+        return (EffectRepComputational, (self.zvals, self.basis, self.state_space))
 
     def parity(self, x):
         """recursively divide the (64-bit) integer into two equal

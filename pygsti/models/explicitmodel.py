@@ -452,13 +452,13 @@ class ExplicitOpModel(_mdl.OpModel):
                                             extra.get(lbl, None))
 
         if typ == 'full':
-            self.default_gauge_group = _gg.FullGaugeGroup(self.state_space)
+            self.default_gauge_group = _gg.FullGaugeGroup(self.state_space, self.evotype)
         elif typ == 'TP':
-            self.default_gauge_group = _gg.TPGaugeGroup(self.state_space)
+            self.default_gauge_group = _gg.TPGaugeGroup(self.state_space, self.evotype)
         elif typ == 'CPTP':
-            self.default_gauge_group = _gg.UnitaryGaugeGroup(self.state_space, basis)
+            self.default_gauge_group = _gg.UnitaryGaugeGroup(self.state_space, basis, self.evotype)
         else:  # typ in ('static','H+S','S', 'H+S terms', ...)
-            self.default_gauge_group = _gg.TrivialGaugeGroup(self.state_space)
+            self.default_gauge_group = _gg.TrivialGaugeGroup(self.state_space, self.evotype)
 
     def __setstate__(self, state_dict):
 

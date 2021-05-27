@@ -146,7 +146,7 @@ cdef class OpRepComposed(OpRep):
         self.c_rep = new OpCRep_Composed(gate_creps, self.state_space.udim)
 
     def __reduce__(self):
-        return (OpRepComposed, (self.factor_reps, self.c_rep._dim))
+        return (OpRepComposed, (self.factor_reps, self.state_space))
 
     def reinit_factor_op_reps(self, new_factor_op_reps):
         cdef INT i
@@ -174,7 +174,7 @@ cdef class OpRepSum(OpRep):
         self.c_rep = new OpCRep_Sum(factor_creps, self.state_space.udim)
 
     def __reduce__(self):
-        return (OpRepSum, (self.factor_reps, self.c_rep._dim))
+        return (OpRepSum, (self.factor_reps, self.state_space))
 
     def copy(self):
         return OpRepSum([f.copy() for f in self.factor_reps], self.c_rep._dim)
@@ -275,20 +275,20 @@ cdef class OpRepEmbedded(OpRep):
                                          active_block_index, nblocks, dim)
         self.state_space = state_space
 
-    def __reduce__(self):  # TODO - FIX serialization
+    def __reduce__(self):
         state = (self.noop_incrementers, self.num_basis_els_noop_blankaction, self.baseinds,
                  self.blocksizes, self.num_basis_els, self.action_inds, self.embedded_rep,
                  (<OpCRep_Embedded*>self.c_rep)._embeddedDim,
                  (<OpCRep_Embedded*>self.c_rep)._nComponents,
                  (<OpCRep_Embedded*>self.c_rep)._iActiveBlock,
                  (<OpCRep_Embedded*>self.c_rep)._nBlocks,
-                 self.c_rep._dim)
-        return (OpRepEmbedded, (), state)
+                 self.state_space)
+        return (OpRepEmbedded.__new__, (self.__class__,), state)
 
     def __setstate__(self, state):
         (noop_incrementers, num_basis_els_noop_blankaction, baseinds,
          blocksizes, num_basis_els, action_inds, embedded_rep, embedded_dim,
-         ncomponents_in_active_block, active_block_index, nblocks, dim) = state
+         ncomponents_in_active_block, active_block_index, nblocks, state_space) = state
 
         self.noop_incrementers = noop_incrementers
         self.num_basis_els_noop_blankaction = num_basis_els_noop_blankaction
@@ -303,7 +303,8 @@ cdef class OpRepEmbedded(OpRep):
                                         <INT*>self.noop_incrementers.data, <INT*>self.num_basis_els_noop_blankaction.data,
                                         <INT*>self.baseinds.data, <INT*>self.blocksizes.data,
                                         embedded_dim, ncomponents_in_active_block,
-                                        active_block_index, nblocks, dim)
+                                        active_block_index, nblocks, state_space.udim)
+        self.state_space = state_space
 
     def copy(self):
         return _copy.deepcopy(self)  # I think this should work using reduce/setstate framework TODO - test and maybe put in base class?

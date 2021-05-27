@@ -1257,7 +1257,7 @@ def _update_gaugeopt_dict_from_suitename(gaugeopt_suite_dict, root_lbl, suite_na
                 {
                     'gates_metric': metric, 'spam_metric': metric,
                     'item_weights': {'gates': 1.0, 'spam': 0.0},
-                    'gauge_group': _objs.UnitaryGaugeGroup(model.dim, model.basis),
+                    'gauge_group': _objs.UnitaryGaugeGroup(model.state_space, model.basis, model.evotype),
                     'verbosity': printer
                 })
 
@@ -1271,7 +1271,7 @@ def _update_gaugeopt_dict_from_suitename(gaugeopt_suite_dict, root_lbl, suite_na
                     'gates_metric': metric, 'spam_metric': metric,
                     'item_weights': {'gates': 0.0, 'spam': 1.0},
                     'spam_penalty_factor': 1.0,
-                    'gauge_group': s3gg(model.dim),
+                    'gauge_group': s3gg(model.state_space, model.evotype),
                     'oob_check_interval': 1,
                     'verbosity': printer
                 })

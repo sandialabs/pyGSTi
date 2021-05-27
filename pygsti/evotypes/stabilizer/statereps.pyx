@@ -80,7 +80,7 @@ cdef class StateRepComputational(StateRep):
     #TODO: copy methods from StabilizerFrame or StateCRep - or maybe do this for base StateRep class? ----------------------------
 
     def __reduce__(self):
-        return (StateRepComputational, (self.zvals, self.state_space))
+        return (StateRepComputational, (self.zvals, self.basis, self.state_space))
 
 
 cdef class StateRepComposed(StateRep):

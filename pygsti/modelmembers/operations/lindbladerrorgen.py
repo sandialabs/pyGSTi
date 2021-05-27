@@ -324,9 +324,14 @@ class LindbladErrorgen(_LinearOperator):
         LindbladErrorgen
         """
 
-        d2 = errgen.shape[0]
-        #d = int(round(_np.sqrt(d2)))  # OLD TODO REMOVE
-        #if d*d != d2: raise ValueError("Error generator dim must be a perfect square")
+        if isinstance(errgen, _LinearOperator):
+            state_space = errgen.state_space
+            dim = state_space.dim
+        else:
+            dim = errgen.shape[0]
+            state_space = _statespace.default_space_for_dim(dim)
+        #d = int(round(_np.sqrt(dim)))  # OLD TODO REMOVE
+        #if d*d != dim: raise ValueError("Error generator dim must be a perfect square")
 
         #Determine whether we're using sparse bases or not
         sparse = None
@@ -342,12 +347,12 @@ class LindbladErrorgen(_LinearOperator):
 
         #Create or convert bases to appropriate sparsity
         if not isinstance(ham_basis, _Basis):
-            # needed b/c ham_basis could be a Basis w/dim=0 which can't be cast as dim=d2
-            ham_basis = _Basis.cast(ham_basis, d2, sparse=sparse)
+            # needed b/c ham_basis could be a Basis w/dim=0 which can't be cast as dim=dim
+            ham_basis = _Basis.cast(ham_basis, dim, sparse=sparse)
         if not isinstance(nonham_basis, _Basis):
-            nonham_basis = _Basis.cast(nonham_basis, d2, sparse=sparse)
+            nonham_basis = _Basis.cast(nonham_basis, dim, sparse=sparse)
         if not isinstance(mx_basis, _Basis):
-            matrix_basis = _Basis.cast(mx_basis, d2, sparse=sparse)
+            matrix_basis = _Basis.cast(mx_basis, dim, sparse=sparse)
         else: matrix_basis = mx_basis
 
         # errgen + bases => coeffs
@@ -360,7 +365,7 @@ class LindbladErrorgen(_LinearOperator):
         Ltermdict, basis = _ot.projections_to_lindblad_terms(
             hamC, otherC, ham_basis, nonham_basis, nonham_mode)
 
-        return cls(d2, Ltermdict, basis,
+        return cls(state_space, Ltermdict, basis,
                    param_mode, nonham_mode, truncate,
                    matrix_basis, evotype)
 
@@ -537,9 +542,8 @@ class LindbladErrorgen(_LinearOperator):
     def _init_generators(self, dim):
         #assumes self.dim, self.ham_basis, self.other_basis, and self.matrix_basis are setup...
 
-        d2 = dim
-        d = int(round(_np.sqrt(d2)))
-        assert(d * d == d2), "Errorgen dim must be a perfect square"
+        d = int(round(_np.sqrt(dim)))
+        assert(d * d == dim), "Errorgen dim must be a perfect square"
 
         # Get basis transfer matrix
         mxBasisToStd = self.matrix_basis.create_transform_matrix(
@@ -560,8 +564,8 @@ class LindbladErrorgen(_LinearOperator):
         #  given a sparse basis (or basis matrices)
 
         if hamGens is not None:
-            bsH = len(hamGens) + 1  # projection-basis size (not nec. == d2)
-            _ot._assert_shape(hamGens, (bsH - 1, d2, d2), self.sparse)
+            bsH = len(hamGens) + 1  # projection-basis size (not nec. == dim)
+            _ot._assert_shape(hamGens, (bsH - 1, dim, dim), self.sparse)
 
             # apply basis change now, so we don't need to do so repeatedly later
             if self.sparse:
@@ -580,8 +584,8 @@ class LindbladErrorgen(_LinearOperator):
         if otherGens is not None:
 
             if self.nonham_mode == "diagonal":
-                bsO = len(otherGens) + 1  # projection-basis size (not nec. == d2)
-                _ot._assert_shape(otherGens, (bsO - 1, d2, d2), self.sparse)
+                bsO = len(otherGens) + 1  # projection-basis size (not nec. == dim)
+                _ot._assert_shape(otherGens, (bsO - 1, dim, dim), self.sparse)
 
                 # apply basis change now, so we don't need to do so repeatedly later
                 if self.sparse:
@@ -595,9 +599,9 @@ class LindbladErrorgen(_LinearOperator):
                         _np.tensordot(leftTrans, otherGens, (1, 1)), rightTrans, (2, 0)), (1, 0, 2))
 
             elif self.nonham_mode == "diag_affine":
-                # projection-basis size (not nec. == d2) [~shape[1] but works for lists too]
+                # projection-basis size (not nec. == dim) [~shape[1] but works for lists too]
                 bsO = len(otherGens[0]) + 1
-                _ot._assert_shape(otherGens, (2, bsO - 1, d2, d2), self.sparse)
+                _ot._assert_shape(otherGens, (2, bsO - 1, dim, dim), self.sparse)
 
                 # apply basis change now, so we don't need to do so repeatedly later
                 if self.sparse:
@@ -614,8 +618,8 @@ class LindbladErrorgen(_LinearOperator):
                         _np.tensordot(leftTrans, otherGens, (1, 2)), rightTrans, (3, 0)), (1, 2, 0, 3))
 
             else:
-                bsO = len(otherGens) + 1  # projection-basis size (not nec. == d2)
-                _ot._assert_shape(otherGens, (bsO - 1, bsO - 1, d2, d2), self.sparse)
+                bsO = len(otherGens) + 1  # projection-basis size (not nec. == dim)
+                _ot._assert_shape(otherGens, (bsO - 1, bsO - 1, dim, dim), self.sparse)
 
                 # apply basis change now, so we don't need to do so repeatedly later
                 if self.sparse:
@@ -640,9 +644,8 @@ class LindbladErrorgen(_LinearOperator):
 
     def _init_terms(self, lindblad_term_dict, basis, dim, max_polynomial_vars):
 
-        d2 = dim
         # needed b/c operators produced by lindblad_error_generators have an extra 'd' scaling
-        d = int(round(_np.sqrt(d2)))
+        d = int(round(_np.sqrt(dim)))
         mpv = max_polynomial_vars
 
         # Lookup dictionaries for getting the *parameter* index associated
@@ -762,15 +765,15 @@ class LindbladErrorgen(_LinearOperator):
                 scale, U = _mt.to_unitary(basis[termLbl[1]])  # ensure all Rank1Term operators are *unitary*
                 L = U
                 # Note: only works when `d` corresponds to integral # of qubits!
-                Bmxs = _bt.basis_matrices("pp", d2, sparse=False)
+                Bmxs = _bt.basis_matrices("pp", dim, sparse=False)
                 # scaling to make Bmxs unitary (reverse of `scale` above, where scale * U == basis[.])
-                Bscale = d2**0.25
+                Bscale = dim**0.25
 
                 for B in Bmxs:  # Note: *include* identity! (see pauli scratch notebook for details)
                     UB = Bscale * B  # UB is unitary
                     Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
                         _Polynomial({(k,): 1.0 * scale / Bscale**2}, mpv),
-                        _np.dot(L, UB), UB, self._evotype, self.state_space))  # /(d2-1.)
+                        _np.dot(L, UB), UB, self._evotype, self.state_space))  # /(dim-1.)
 
                 #TODO: check normalization of these terms vs those used in projections.
 
@@ -839,7 +842,7 @@ class LindbladErrorgen(_LinearOperator):
             # call an update method of it here?
             return
 
-        d2 = self.dim
+        dim = self.dim
         hamCoeffs, otherCoeffs = _ot.paramvals_to_lindblad_projections(
             self.paramvals, self.ham_basis_size, self.other_basis_size,
             self.param_mode, self.nonham_mode, self.Lmx)
@@ -902,7 +905,7 @@ class LindbladErrorgen(_LinearOperator):
                 lnd_error_gen = _np.tensordot(hamCoeffs, self.hamGens, (0, 0))
                 onenorm += _np.dot(self.hamGens_1norms, _np.abs(hamCoeffs))
             else:
-                lnd_error_gen = _np.zeros((d2, d2), 'complex')
+                lnd_error_gen = _np.zeros((dim, dim), 'complex')
 
             if otherCoeffs is not None:
                 if self.nonham_mode == "diagonal":
@@ -1243,10 +1246,10 @@ class LindbladErrorgen(_LinearOperator):
 
         if logscale_nonham:
             Ltermdict = Ltermdict_and_maybe_basis[0] if return_basis else Ltermdict_and_maybe_basis
-            d2 = self.dim
+            dim = self.dim
             for k in Ltermdict.keys():
                 if k[0] == "S":  # reverse mapping: err_coeff -> err_rate
-                    Ltermdict[k] = (1 - _np.exp(-d2 * Ltermdict[k])) / d2  # err_rate = (1-exp(-d^2*errgen_coeff))/d^2
+                    Ltermdict[k] = (1 - _np.exp(-dim * Ltermdict[k])) / dim  # err_rate = (1-exp(-d^2*errgen_coeff))/d^2
 
         return Ltermdict_and_maybe_basis
 
@@ -1383,8 +1386,8 @@ class LindbladErrorgen(_LinearOperator):
                 # set the errgen coefficient to the value that would, in a depolarizing channel, give
                 # that per-Pauli (or basis-el general?) stochastic error rate. See lindbladtools.py also.
                 # errgen_coeff = -log(1-d^2*err_rate) / d^2
-                d2 = self.dim
-                v = -_np.log(1 - d2 * v) / d2
+                dim = self.dim
+                v = -_np.log(1 - dim * v) / dim
 
             if k not in existing_Ltermdict:
                 raise KeyError("Invalid L-term descriptor (key) `%s`" % str(k))
@@ -1554,14 +1557,14 @@ class LindbladErrorgen(_LinearOperator):
         bsH = self.ham_basis_size
         bsO = self.other_basis_size
         nHam = bsH - 1 if (bsH > 0) else 0
-        d2 = self.dim
+        dim = self.dim
 
         assert(bsO > 0), "Cannot construct dOdp when other_basis_size == 0!"
         if self.nonham_mode == "diagonal":
             otherParams = self.paramvals[nHam:]
 
-            # Derivative of exponent wrt other param; shape == [d2,d2,bs-1]
-            #  except "depol" & "reldepol" cases, when shape == [d2,d2,1]
+            # Derivative of exponent wrt other param; shape == [dim,dim,bs-1]
+            #  except "depol" & "reldepol" cases, when shape == [dim,dim,1]
             if self.param_mode == "depol":  # all coeffs same & == param^2
                 assert(len(otherParams) == 1), "Should only have 1 non-ham parameter in 'depol' case!"
                 #dOdp  = _np.einsum('alj->lj', self.otherGens)[:,:,None] * 2*otherParams[0]
@@ -1579,34 +1582,34 @@ class LindbladErrorgen(_LinearOperator):
 
         elif self.nonham_mode == "diag_affine":
             otherParams = self.paramvals[nHam:]
-            # Note: otherGens has shape (2,bsO-1,d2,d2) with diag-term generators
+            # Note: otherGens has shape (2,bsO-1,dim,dim) with diag-term generators
             # in first "row" and affine generators in second row.
 
-            # Derivative of exponent wrt other param; shape == [d2,d2,2,bs-1]
-            #  except "depol" & "reldepol" cases, when shape == [d2,d2,bs]
+            # Derivative of exponent wrt other param; shape == [dim,dim,2,bs-1]
+            #  except "depol" & "reldepol" cases, when shape == [dim,dim,bs]
             if self.param_mode == "depol":  # all coeffs same & == param^2
                 diag_params = otherParams[0:1]
-                dOdp = _np.empty((d2, d2, bsO), 'complex')
+                dOdp = _np.empty((dim, dim, bsO), 'complex')
                 #dOdp[:,:,0]  = _np.einsum('alj->lj', self.otherGens[0]) * 2*diag_params[0] # single diagonal term
                 #dOdp[:,:,1:] = _np.einsum('alj->lja', self.otherGens[1]) # no need for affine_params
                 dOdp[:, :, 0] = _np.sum(self.otherGens[0], axis=0) * 2 * diag_params[0]  # single diagonal term
                 dOdp[:, :, 1:] = _np.transpose(self.otherGens[1], (1, 2, 0))  # no need for affine_params
             elif self.param_mode == "reldepol":  # all coeffs same & == param^2
-                dOdp = _np.empty((d2, d2, bsO), 'complex')
+                dOdp = _np.empty((dim, dim, bsO), 'complex')
                 #dOdp[:,:,0]  = _np.einsum('alj->lj', self.otherGens[0]) # single diagonal term
                 #dOdp[:,:,1:] = _np.einsum('alj->lja', self.otherGens[1]) # affine part: each gen has own param
                 dOdp[:, :, 0] = _np.sum(self.otherGens[0], axis=0)  # single diagonal term
                 dOdp[:, :, 1:] = _np.transpose(self.otherGens[1], (1, 2, 0))  # affine part: each gen has own param
             elif self.param_mode == "cptp":  # (coeffs = params^2)
                 diag_params = otherParams[0:bsO - 1]
-                dOdp = _np.empty((d2, d2, 2, bsO - 1), 'complex')
+                dOdp = _np.empty((dim, dim, 2, bsO - 1), 'complex')
                 #dOdp[:,:,0,:] = _np.einsum('alj,a->lja', self.otherGens[0], 2*diag_params)
                 #dOdp[:,:,1,:] = _np.einsum('alj->lja', self.otherGens[1]) # no need for affine_params
                 dOdp[:, :, 0, :] = _np.transpose(self.otherGens[0], (1, 2, 0)) * 2 * diag_params  # broadcast works
                 dOdp[:, :, 1, :] = _np.transpose(self.otherGens[1], (1, 2, 0))  # no need for affine_params
             else:  # "unconstrained" (coeff == params)
-                #dOdp  = _np.einsum('ablj->ljab', self.otherGens) # -> shape (d2,d2,2,bsO-1)
-                dOdp = _np.transpose(self.otherGens, (2, 3, 0, 1))  # -> shape (d2,d2,2,bsO-1)
+                #dOdp  = _np.einsum('ablj->ljab', self.otherGens) # -> shape (dim,dim,2,bsO-1)
+                dOdp = _np.transpose(self.otherGens, (2, 3, 0, 1))  # -> shape (dim,dim,2,bsO-1)
 
         else:  # nonham_mode == "all" ; all lindblad terms included
             assert(self.param_mode in ("cptp", "unconstrained"))
@@ -1616,7 +1619,7 @@ class LindbladErrorgen(_LinearOperator):
                 F1 = _np.tril(_np.ones((bsO - 1, bsO - 1), 'd'))
                 F2 = _np.triu(_np.ones((bsO - 1, bsO - 1), 'd'), 1) * 1j
 
-                # Derivative of exponent wrt other param; shape == [d2,d2,bs-1,bs-1]
+                # Derivative of exponent wrt other param; shape == [dim,dim,bs-1,bs-1]
                 # Note: replacing einsums here results in at least 3 numpy calls (probably slower?)
                 dOdp = _np.einsum('amlj,mb,ab->ljab', self.otherGens, Lbar, F1)  # only a >= b nonzero (F1)
                 dOdp += _np.einsum('malj,mb,ab->ljab', self.otherGens, L, F1)    # ditto
@@ -1627,7 +1630,7 @@ class LindbladErrorgen(_LinearOperator):
                 F1 = _np.tril(_np.ones((bsO - 1, bsO - 1), 'd'), -1)
                 F2 = _np.triu(_np.ones((bsO - 1, bsO - 1), 'd'), 1) * 1j
 
-                # Derivative of exponent wrt other param; shape == [d2,d2,bs-1,bs-1]
+                # Derivative of exponent wrt other param; shape == [dim,dim,bs-1,bs-1]
                 #dOdp  = _np.einsum('ablj,ab->ljab', self.otherGens, F0)  # a == b case
                 #dOdp += _np.einsum('ablj,ab->ljab', self.otherGens, F1) + \
                 #           _np.einsum('balj,ab->ljab', self.otherGens, F1) # a > b (F1)
@@ -1650,14 +1653,14 @@ class LindbladErrorgen(_LinearOperator):
         bsH = self.ham_basis_size
         bsO = self.other_basis_size
         nHam = bsH - 1 if (bsH > 0) else 0
-        d2 = self.dim
+        dim = self.dim
 
         assert(bsO > 0), "Cannot construct dOdp when other_basis_size == 0!"
         if self.nonham_mode == "diagonal":
             otherParams = self.paramvals[nHam:]
             nP = len(otherParams)
 
-            # Derivative of exponent wrt other param; shape == [d2,d2,nP,nP]
+            # Derivative of exponent wrt other param; shape == [dim,dim,nP,nP]
             if self.param_mode == "depol":
                 assert(nP == 1)
                 #d2Odp2  = _np.einsum('alj->lj', self.otherGens)[:,:,None,None] * 2
@@ -1668,34 +1671,34 @@ class LindbladErrorgen(_LinearOperator):
                 d2Odp2 = _np.transpose(self.otherGens, (1, 2, 0))[:, :, :, None] * 2 * _np.identity(nP, 'd')
             else:  # param_mode == "unconstrained" or "reldepol"
                 assert(nP == bsO - 1)
-                d2Odp2 = _np.zeros([d2, d2, nP, nP], 'd')
+                d2Odp2 = _np.zeros([dim, dim, nP, nP], 'd')
 
         elif self.nonham_mode == "diag_affine":
             otherParams = self.paramvals[nHam:]
             nP = len(otherParams)
 
-            # Derivative of exponent wrt other param; shape == [d2,d2,nP,nP]
+            # Derivative of exponent wrt other param; shape == [dim,dim,nP,nP]
             if self.param_mode == "depol":
                 assert(nP == bsO)  # 1 diag param + (bsO-1) affine params
-                d2Odp2 = _np.empty((d2, d2, nP, nP), 'complex')
+                d2Odp2 = _np.empty((dim, dim, nP, nP), 'complex')
                 #d2Odp2[:,:,0,0]  = _np.einsum('alj->lj', self.otherGens[0]) * 2 # single diagonal term
                 d2Odp2[:, :, 0, 0] = _np.sum(self.otherGens[0], axis=0) * 2  # single diagonal term
                 d2Odp2[:, :, 1:, 1:] = 0  # 2nd deriv wrt. all affine params == 0
             elif self.param_mode == "cptp":
                 assert(nP == 2 * (bsO - 1)); hnP = bsO - 1  # half nP
-                d2Odp2 = _np.empty((d2, d2, nP, nP), 'complex')
+                d2Odp2 = _np.empty((dim, dim, nP, nP), 'complex')
                 #d2Odp2[:,:,0:hnP,0:hnP] = _np.einsum('alj,aq->ljaq', self.otherGens[0], 2*_np.identity(nP,'d'))
                 d2Odp2[:, :, 0:hnP, 0:hnP] = _np.transpose(self.otherGens[0], (1, 2, 0))[
                     :, :, :, None] * 2 * _np.identity(nP, 'd')
                 d2Odp2[:, :, hnP:, hnP:] = 0  # 2nd deriv wrt. all affine params == 0
             else:  # param_mode == "unconstrained" or "reldepol"
                 assert(nP == 2 * (bsO - 1))
-                d2Odp2 = _np.zeros([d2, d2, nP, nP], 'd')
+                d2Odp2 = _np.zeros([dim, dim, nP, nP], 'd')
 
         else:  # nonham_mode == "all" : all lindblad terms included
             nP = bsO - 1
             if self.param_mode == "cptp":
-                d2Odp2 = _np.zeros([d2, d2, nP, nP, nP, nP], 'complex')  # yikes! maybe make this SPARSE in future?
+                d2Odp2 = _np.zeros([dim, dim, nP, nP, nP, nP], 'complex')  # yikes! maybe make this SPARSE in future?
 
                 #Note: correspondence w/Erik's notes: a=alpha, b=beta, q=gamma, r=delta
                 # indices of d2Odp2 are [i,j,a,b,q,r]
@@ -1723,7 +1726,7 @@ class LindbladErrorgen(_LinearOperator):
                     d2Odp2[:, :, base, b, base, r] = self.otherGens[b, r] + self.otherGens[r, b]
 
             else:  # param_mode == "unconstrained"
-                d2Odp2 = _np.zeros([d2, d2, nP, nP, nP, nP], 'd')  # all params linear
+                d2Odp2 = _np.zeros([dim, dim, nP, nP, nP, nP], 'd')  # all params linear
 
         # apply basis transform
         tr = len(d2Odp2.shape)  # tensor rank
@@ -1755,23 +1758,23 @@ class LindbladErrorgen(_LinearOperator):
         assert(not self.sparse), \
             "LindbladErrorgen.deriv_wrt_params(...) can only be called when using *dense* basis elements!"
 
-        d2 = self.dim
+        dim = self.dim
         bsH = self.ham_basis_size
         bsO = self.other_basis_size
 
         #Deriv wrt hamiltonian params
         if bsH > 0:
             dH = self._d_hdp()
-            dH = dH.reshape((d2**2, bsH - 1))  # [iFlattenedOp,iHamParam]
+            dH = dH.reshape((dim**2, bsH - 1))  # [iFlattenedOp,iHamParam]
         else:
-            dH = _np.empty((d2**2, 0), 'd')  # so concat works below
+            dH = _np.empty((dim**2, 0), 'd')  # so concat works below
 
         #Deriv wrt other params
         if bsO > 0:
             dO = self._d_odp()
-            dO = dO.reshape((d2**2, -1))  # [iFlattenedOp,iOtherParam]
+            dO = dO.reshape((dim**2, -1))  # [iFlattenedOp,iOtherParam]
         else:
-            dO = _np.empty((d2**2, 0), 'd')  # so concat works below
+            dO = _np.empty((dim**2, 0), 'd')  # so concat works below
 
         derivMx = _np.concatenate((dH, dO), axis=1)
         assert(_np.linalg.norm(_np.imag(derivMx)) < IMAG_TOL)  # allowed to be complex?
@@ -1808,7 +1811,7 @@ class LindbladErrorgen(_LinearOperator):
         assert(not self.sparse), \
             "LindbladErrorgen.hessian_wrt_params(...) can only be called when using *dense* basis elements!"
 
-        d2 = self.dim
+        dim = self.dim
         bsH = self.ham_basis_size
         bsO = self.other_basis_size
         nHam = bsH - 1 if (bsH > 0) else 0
@@ -1818,13 +1821,13 @@ class LindbladErrorgen(_LinearOperator):
         # But only d2O is non-zero - and only when cptp == True
 
         nTotParams = self.num_params
-        hessianMx = _np.zeros((d2**2, nTotParams, nTotParams), 'd')
+        hessianMx = _np.zeros((dim**2, nTotParams, nTotParams), 'd')
 
         #Deriv wrt other params
         if bsO > 0:  # if there are any "other" params
             nP = nTotParams - nHam  # num "other" params, e.g. (bsO-1) or (bsO-1)**2
-            d2Odp2 = self._d2_odp2()
-            d2Odp2 = d2Odp2.reshape((d2**2, nP, nP))
+            dimOdp2 = self._dim_odp2()
+            dimOdp2 = dimOdp2.reshape((dim**2, nP, nP))
 
             #d2Odp2 has been reshape so index as [iFlattenedOp,iDeriv1,iDeriv2]
             assert(_np.linalg.norm(_np.imag(d2Odp2)) < IMAG_TOL)

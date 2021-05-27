@@ -24,8 +24,8 @@ from ..modelmembers import modelmember as _mm
 from ..modelmembers import operations as _op
 from ..modelmembers import states as _state
 from ..modelmembers import povms as _povm
-from ..evotype import Evotype as _Evotype
-from ..evotype.basereps import StateRep as _StateRep, EffectRep as _EffectRep, OpRep as _OpRep
+from ..evotypes import Evotype as _Evotype
+from ..evotypes.basereps import StateRep as _StateRep, EffectRep as _EffectRep, OpRep as _OpRep
 
 
 def compose_terms_with_mag(terms, magnitude):
@@ -268,7 +268,7 @@ def exponentiate_terms_above_mag(terms, order, postterm, cache=None, min_term_ma
 #            "Embedded gate has dimension (%d) inconsistent with the given target labels (%s)" % (
 #                rep_to_embed.dim, str(target_labels))
 #
-#        nBlocks = state_space_labels.num_tensor_prod_blocks()
+#        nBlocks = state_space_labels.num_tensor_product_blocks
 #        iActiveBlock = iTensorProdBlk
 #        nComponents = len(state_space_labels.labels[iActiveBlock])
 #        embeddedDim = rep_to_embed.dim

@@ -11,7 +11,7 @@ pyGSTi Models Python Package
 #***************************************************************************************************
 
 
-from .labeldicts import StateSpaceLabels
+from .statespace import StateSpace, QubitSpace, ExplicitStateSpace
 from .model import Model
 from .explicitmodel import ExplicitOpModel
 from .explicitmodel import ExplicitOpModel as GateSet  # alias

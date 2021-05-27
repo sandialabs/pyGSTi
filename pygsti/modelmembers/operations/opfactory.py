@@ -26,6 +26,7 @@ from ...tools import optools as _gt
 from ...tools import basistools as _bt
 from ...tools import matrixtools as _mt
 from ...models import statespace as _statespace
+from ...evotypes import Evotype as _Evotype
 
 
 def op_from_factories(factory_dict, lbl):
@@ -97,8 +98,9 @@ class OpFactory(_gm.ModelMember):
     """
 
     def __init__(self, state_space, evotype):
-        evotype = 
         #self._paramvec = _np.zeros(nparams, 'd')
+        state_space = _statespace.StateSpace.cast(state_space)
+        evotype = _Evotype.cast(evotype)
         _gm.ModelMember.__init__(self, state_space, evotype)
 
     def create_object(self, args=None, sslbls=None):

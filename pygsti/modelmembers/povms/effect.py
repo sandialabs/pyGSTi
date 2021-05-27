@@ -28,7 +28,7 @@ class POVMEffect(_modelmember.ModelMember):
 
     def __init__(self, rep, evotype):
         """ Initialize a new SPAM Vector """
-        super(POVMEffect, self).__init__(rep.dim, evotype)
+        super(POVMEffect, self).__init__(rep.state_space, evotype)
         self._rep = rep
 
     @property
@@ -43,6 +43,17 @@ class POVMEffect(_modelmember.ModelMember):
         numpy.ndarray
         """
         raise NotImplementedError("'outcomes' property is not implemented for %s objects" % self.__class__.__name__)
+
+    @property
+    def dim(self):
+        """
+        Return the dimension of this effect (when viewed as a dense array)
+
+        Returns
+        -------
+        int
+        """
+        return self.state_space.dim
 
     def set_dense(self, vec):
         """

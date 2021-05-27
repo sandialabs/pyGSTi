@@ -28,7 +28,7 @@ from ..tools import mpitools as _mpit
 from ..tools.legacytools import deprecate as _deprecated_fn
 from ..models import model as _mdl
 from ..models import labeldicts as _ld
-from ..models.labeldicts import StateSpaceLabels as _StateSpaceLabels
+from ..models import statespace as _statespace
 from ..models.cloudnoisemodel import CloudNoiseModel as _CloudNoiseModel
 from ..modelmembers import operations as _op
 from ..modelmembers import states as _state
@@ -2104,7 +2104,7 @@ def _compute_reps_for_synthetic_idle(model, germ_str, nqubits, core_qubits):
     def extract_gate(g):
         """ Get the gate action as a dense gate on core_qubits """
         if isinstance(g, _objs.EmbeddedOp):
-            assert(len(g.state_space.num_tensor_prod_blocks == 1)  # 1 tensor product block
+            assert(g.state_space.num_tensor_product_blocks == 1)  # 1 tensor product block
             assert(len(g.state_space.tensor_product_block_labels(0)) == nqubits)  # expected qubit count
             qubit_labels = g.state_space.tensor_product_block_labels(0)
 
@@ -2112,13 +2112,13 @@ def _compute_reps_for_synthetic_idle(model, germ_str, nqubits, core_qubits):
             for core_ql in core_qubits:
                 if core_ql in qubit_labels: new_qubit_labels.append(core_ql)  # same convention!
                 #elif ("Q%d" % core_ql) in qubit_labels: new_qubit_labels.append("Q%d" % core_ql)  # HACK!
-            ssl = _StateSpaceLabels(new_qubit_labels)
+            ss = _statespace.QubitSpace(new_qubit_labels)
             assert(all([(tgt in new_qubit_labels) for tgt in g.targetLabels]))  # all target qubits should be kept!
             if len(new_qubit_labels) == len(g.targetLabels):
                 # embedded gate acts on entire core-qubit space:
                 return g.embedded_op
             else:
-                return _objs.EmbeddedDenseOp(ssl, g.targetLabels, g.embedded_op)
+                return _objs.EmbeddedDenseOp(ss, g.targetLabels, g.embedded_op)
 
         elif isinstance(g, _objs.ComposedOp):
             return _objs.ComposedDenseOp([extract_gate(f) for f in g.factorops])

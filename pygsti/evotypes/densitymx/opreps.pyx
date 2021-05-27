@@ -151,6 +151,7 @@ cdef class OpRepStandard(OpRepDense):
         self.name = name
         if self.name not in std_unitaries:
             raise ValueError("Name '%s' not in standard unitaries" % self.name)
+        self.basis = basis
 
         U = std_unitaries[self.name]
         superop = _bt.change_basis(_ot.unitary_to_process_mx(U), 'std', basis)
@@ -160,7 +161,7 @@ cdef class OpRepStandard(OpRepDense):
         super(OpRepStandard, self).__init__(LinearOperator.convert_to_matrix(superop), state_space)
 
     def __reduce__(self):
-        return (OpRepStandard, (self.name,))
+        return (OpRepStandard, (self.name, self.basis, self.state_space))
 
 
 cdef class OpRepStochastic(OpRepDense):
@@ -203,7 +204,7 @@ cdef class OpRepComposed(OpRep):
         self.c_rep = new OpCRep_Composed(gate_creps, self.state_space.dim)
 
     def __reduce__(self):
-        return (OpRepComposed, (self.factor_reps, self.c_rep._dim))
+        return (OpRepComposed, (self.factor_reps, self.state_space))
 
     def reinit_factor_op_reps(self, new_factor_op_reps):
         cdef INT i
@@ -231,7 +232,7 @@ cdef class OpRepSum(OpRep):
         self.c_rep = new OpCRep_Sum(factor_creps, self.state_space.dim)
 
     def __reduce__(self):
-        return (OpRepSum, (self.factor_reps, self.c_rep._dim))
+        return (OpRepSum, (self.factor_reps, self.state_space))
 
     def copy(self):
         return OpRepSum([f.copy() for f in self.factor_reps], self.c_rep._dim)
@@ -340,13 +341,13 @@ cdef class OpRepEmbedded(OpRep):
                  (<OpCRep_Embedded*>self.c_rep)._nComponents,
                  (<OpCRep_Embedded*>self.c_rep)._iActiveBlock,
                  (<OpCRep_Embedded*>self.c_rep)._nBlocks,
-                 self.c_rep._dim)
-        return (OpRepEmbedded, (), state)
+                 self.state_space)
+        return (OpRepEmbedded.__new__, (self.__class__,), state)
 
     def __setstate__(self, state):
         (noop_incrementers, num_basis_els_noop_blankaction, baseinds,
          blocksizes, num_basis_els, action_inds, embedded_rep, embedded_dim,
-         ncomponents_in_active_block, active_block_index, nblocks, dim) = state
+         ncomponents_in_active_block, active_block_index, nblocks, state_space) = state
 
         self.noop_incrementers = noop_incrementers
         self.num_basis_els_noop_blankaction = num_basis_els_noop_blankaction
@@ -361,7 +362,8 @@ cdef class OpRepEmbedded(OpRep):
                                         <INT*>self.noop_incrementers.data, <INT*>self.num_basis_els_noop_blankaction.data,
                                         <INT*>self.baseinds.data, <INT*>self.blocksizes.data,
                                         embedded_dim, ncomponents_in_active_block,
-                                        active_block_index, nblocks, dim)
+                                        active_block_index, nblocks, state_space.dim)
+        self.state_space = state_space
 
     def copy(self):
         return _copy.deepcopy(self)  # I think this should work using reduce/setstate framework TODO - test and maybe put in base class?
@@ -403,11 +405,11 @@ cdef class OpRepExpErrorgen(OpRep):
                  (<OpCRep_ExpErrorgen*>self.c_rep)._s)
 
     def __reduce__(self):
-        return (OpRepExpErrorgen, (), (self.errorgen_rep,
-                                       (<OpCRep_ExpErrorgen*>self.c_rep)._mu,
-                                       (<OpCRep_ExpErrorgen*>self.c_rep)._eta,
-                                       (<OpCRep_ExpErrorgen*>self.c_rep)._m_star,
-                                       (<OpCRep_ExpErrorgen*>self.c_rep)._s))
+        return (OpRepExpErrorgen.__new__, (self.__class__,), (self.errorgen_rep,
+                                                              (<OpCRep_ExpErrorgen*>self.c_rep)._mu,
+                                                              (<OpCRep_ExpErrorgen*>self.c_rep)._eta,
+                                                              (<OpCRep_ExpErrorgen*>self.c_rep)._m_star,
+                                                              (<OpCRep_ExpErrorgen*>self.c_rep)._s))
 
     def __setstate__(self, state):
         errorgen_rep, mu, eta, m_star, s = state
@@ -416,6 +418,7 @@ cdef class OpRepExpErrorgen(OpRep):
         assert(self.c_rep == NULL)
         self.c_rep = new OpCRep_ExpErrorgen((<OpRep?>errorgen_rep).c_rep,
                                             mu, eta, m_star, s, dim)
+        self.state_space = errorgen_rep.state_space
         
     def copy(self):
         return _copy.deepcopy(self)  # I think this should work using reduce/setstate framework TODO - test and maybe put in base class?

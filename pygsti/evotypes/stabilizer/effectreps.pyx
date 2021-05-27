@@ -26,7 +26,7 @@ cdef class EffectRep(_basereps_cython.EffectRep):
         assert(self.state_space.num_qubits == len(self.zvals))
 
     def __reduce__(self):
-        return (EffectRep, (self.zvals,))
+        return (EffectRep, (self.zvals, self.state_space))
 
     def __dealloc__(self):
         del self.c_effect # check for NULL?

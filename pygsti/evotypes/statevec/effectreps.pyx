@@ -78,7 +78,7 @@ cdef class EffectRepComputational(EffectRep):
         self.c_effect = new EffectCRep_Computational(nfactors, zvals_int, self.state_space.udim)
 
     def __reduce__(self):
-        return (EffectRepComputational, (self.zvals, self.state_space))
+        return (EffectRepComputational, (self.zvals, self.basis, self.state_space))
 
     #Add party & to_dense from slow version?
 
@@ -111,7 +111,7 @@ cdef class EffectRepTensorProduct(EffectRep):
         self.factor_effects_have_changed()  # computes self.kron_array
 
     def __reduce__(self):
-        return (EffectRepTensorProduct, (self.povm_factors, self.effect_labels))
+        return (EffectRepTensorProduct, (self.povm_factors, self.effect_labels, self.state_space))
 
     def _fill_fast_kron(self):
         """ Fills in self._fast_kron_array based on current self.factors """

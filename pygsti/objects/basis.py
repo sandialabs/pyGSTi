@@ -182,31 +182,37 @@ class Basis(object):
         Basis
         """
         #print("DB: CAST = ",name_or_basis_or_matrices,dim)
-        from ..models.labeldicts import StateSpaceLabels as _SSLs
+        from ..models.statespace import StateSpace as _StateSpace
         if name_or_basis_or_matrices is None:  # special case of empty basis
             return ExplicitBasis([], [], "*Empty*", "Empty (0-element) basis", False, sparse)  # empty basis
         elif isinstance(name_or_basis_or_matrices, Basis):
             #then just check to make sure consistent with `dim` & `sparse`
             basis = name_or_basis_or_matrices
             if dim is not None:
-                assert(dim == basis.dim or dim == basis.elsize), \
-                    "Basis object has unexpected dimension: %d != %d or %d" % (dim, basis.dim, basis.elsize)
+                if isinstance(dim, _StateSpace):
+                    state_space = dim
+                    assert(state_space.dim == basis.dim or state_space.dim == basis.elsize), \
+                        "Basis object has unexpected dimension: %d != %d or %d" % (state_space.dim,
+                                                                                   basis.dim, basis.elsize)
+                else:  # assume dim is an integer
+                    assert(dim == basis.dim or dim == basis.elsize), \
+                        "Basis object has unexpected dimension: %d != %d or %d" % (dim, basis.dim, basis.elsize)
             if sparse is not None:
                 assert(sparse == basis.sparse), "Basis object has unexpected sparsity: %s" % (basis.sparse)
             return basis
         elif isinstance(name_or_basis_or_matrices, str):
             name = name_or_basis_or_matrices
-            if isinstance(dim, _SSLs):
-                sslbls = dim
+            if isinstance(dim, _StateSpace):
+                state_space = dim
                 tpbBases = []
-                for tpbLabels in sslbls.labels:
+                for tpbLabels in state_space.tensor_product_blocks_labels:
                     if len(tpbLabels) == 1:
-                        nm = name if (sslbls.labeltypes[tpbLabels[0]] == 'Q') else classical_name
-                        tpbBases.append(BuiltinBasis(nm, sslbls.labeldims[tpbLabels[0]], sparse))
+                        nm = name if (state_space.label_type(tpbLabels[0]) == 'Q') else classical_name
+                        tpbBases.append(BuiltinBasis(nm, state_space.label_dimension(tpbLabels[0]), sparse))
                     else:
                         tpbBases.append(TensorProdBasis([
-                            BuiltinBasis(name if (sslbls.labeltypes[l] == 'Q') else classical_name,
-                                         sslbls.labeldims[l], sparse) for l in tpbLabels]))
+                            BuiltinBasis(name if (state_space.label_type(l) == 'Q') else classical_name,
+                                         state_space.label_dimension(l), sparse) for l in tpbLabels]))
                 if len(tpbBases) == 1:
                     return tpbBases[0]
                 else:

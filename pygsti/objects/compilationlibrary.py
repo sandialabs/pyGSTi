@@ -209,7 +209,7 @@ class CompilationLibrary(_collections.OrderedDict):
         if template_to_use is not None:
             opstr = list(map(to_real_label, template_to_use))
             #REMOVE 'I's
-            assert(self.model.state_space.num_tensor_prod_blocks == 1), "Only single-TPB state spaces are supported!"
+            assert(self.model.state_space.num_tensor_product_blocks == 1), "Only single-TPB state spaces are supported!"
             return _Circuit(layer_labels=opstr,
                             line_labels=self.model.state_space.tensor_product_block_labels(0))
         else:
@@ -491,7 +491,7 @@ class CompilationLibrary(_collections.OrderedDict):
         None
         """
         nQ = int(round(_np.log2(self.model.dim)))  # assumes *unitary* mode (OK?)
-        assert(self.model.state_space.num_tensor_prod_blocks == 1), "Only single-TPB state spaces are supported"
+        assert(self.model.state_space.num_tensor_product_blocks == 1), "Only single-TPB state spaces are supported"
         qubit_labels = self.model.state_space.tensor_product_block_labels(0)
         d = {qlbl: i for i, qlbl in enumerate(qubit_labels)}
         assert(len(qubit_labels) == nQ), "Number of qubit labels is inconsistent with Model dimension!"
@@ -642,7 +642,7 @@ class CompilationLibrary(_collections.OrderedDict):
         cnot_circuit = part_1 + part_2 + part_3 + part_4
 
         # Convert the operationlist to a circuit.
-        assert(self.model.state_space.num_tensor_prod_blocks == 1), "Only single-TPB state spaces are supported"
+        assert(self.model.state_space.num_tensor_product_blocks == 1), "Only single-TPB state spaces are supported"
         line_labels = self.model.state_space.tensor_product_block_labels(0)
         circuit = _Circuit(layer_labels=cnot_circuit,
                            line_labels=line_labels,

@@ -264,7 +264,7 @@ class ImplicitOpModel(_mdl.OpModel):
         """
         if len(self.primitive_povm_labels) == 1:
             povm_name = next(iter(self.primitive_povm_labels)).name
-            if (self.state_space.num_tensor_prod_blocks == 1
+            if (self.state_space.num_tensor_product_blocks == 1
                 and (self.state_space.tensor_product_block_labels(0) == sslbls
                      or sslbls == ('*',))):
                 return _Label(povm_name)  # because sslbls == all of model's sslbls

@@ -30,7 +30,7 @@ class StateRep(_basereps.StateRep):
         assert(len(self.base) == self.state_space.udim)
 
     def __reduce__(self):
-        return (StateRep, (self.base,), (self.base.flags.writeable,))
+        return (StateRep, (self.base, self.state_space), (self.base.flags.writeable,))
 
     def __setstate__(self, state):
         writeable, = state

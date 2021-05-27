@@ -33,7 +33,7 @@ class StateRep(_basereps.StateRep):
         assert(len(self.base) == self.state_space.dim)
 
     def __reduce__(self):
-        return (StateRep, (self.base,), (self.base.flags.writeable,))
+        return (StateRep, (self.base, self.state_space), (self.base.flags.writeable,))
 
     def __setstate__(self, state):
         writeable, = state
@@ -58,7 +58,7 @@ class StateRepDense(StateRep):
         pass
 
     def __reduce__(self):
-        return (StateRepDense, (self.base,), (self.base.flags.writeable,))
+        return (StateRepDense, (self.base, self.state_space), (self.base.flags.writeable,))
 
 
 class StateRepPure(StateRep):
@@ -82,6 +82,7 @@ class StateRepComputational(StateRep):
 
         #Convert zvals to dense vec:
         assert(basis.name == 'pp'), "Only Pauli-product-basis computational states are supported so far"
+        self.basis = basis
         factor_dim = 4
         v0 = 1.0 / _np.sqrt(2) * _np.array((1, 0, 0, 1), 'd')  # '0' qubit state as Pauli dmvec
         v1 = 1.0 / _np.sqrt(2) * _np.array((1, 0, 0, -1), 'd')  # '1' qubit state as Pauli dmvec
@@ -102,7 +103,7 @@ class StateRepComputational(StateRep):
         super(StateRepComputational, self).__init__(vec, state_space)
 
     def __reduce__(self):
-        return (StateRepComputational, (self.zvals, self.state_space), (self.base.flags.writeable,))
+        return (StateRepComputational, (self.zvals, self.basis, self.state_space), (self.base.flags.writeable,))
 
 
 class StateRepComposed(StateRep):

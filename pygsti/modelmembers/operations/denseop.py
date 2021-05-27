@@ -300,8 +300,8 @@ class DenseOperator(BasedDenseOperatorInterface, _LinearOperator):
         """ Initialize a new LinearOperator """
         state_space = _statespace.default_space_for_dim(mx.shape[0]) if (state_space is None) \
             else _statespace.StateSpace.cast(state_space)
-        rep = evotype.create_dense_rep(mx, state_space)
         evotype = _Evotype.cast(evotype)
+        rep = evotype.create_dense_rep(mx, state_space)
         _LinearOperator.__init__(self, rep, evotype)
         BasedDenseOperatorInterface.__init__(self, self._rep.base)
         # "Based" interface requires this and derived classes to have a .base attribute

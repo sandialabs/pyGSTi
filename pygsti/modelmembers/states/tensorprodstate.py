@@ -4,7 +4,7 @@ import functools as _functools
 
 from .state import State as _State
 from .. import modelmember as _modelmember
-from ..model import statespace as _statespace
+from ...models import statespace as _statespace
 from ...objects import term as _term
 from ...tools import matrixtools as _mt
 from ...tools import listtools as _lt

@@ -524,4 +524,4 @@ class StockTermRep(TermRep):
                        self.pre_state, self.post_state, self.pre_effect, self.post_effect,
                        self.pre_ops, self.post_ops)
 
-    StockTermDirectRep = StockTermRep
+StockTermDirectRep = StockTermRep

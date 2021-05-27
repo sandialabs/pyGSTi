@@ -223,7 +223,7 @@ class OrderedMemberDict(_PrefixOrderedDict, _mm.ModelChild):
         if self.parent is not None and key_label.sslbls is not None:
             parent_sslbls = self.parent.state_space
             parent_sslbls = parent_sslbls.tensor_product_block_labels(0) \
-                if parent_sslbls.num_tensor_prod_blocks == 1 else None  # only 1st TPB
+                if parent_sslbls.num_tensor_product_blocks == 1 else None  # only 1st TPB
             if parent_sslbls == key_label.sslbls: return value  # no need to embed, as key_label uses *all* sslbls
 
             if self.flags['cast_to_type'] == "operation":

@@ -546,21 +546,21 @@ class OpModel(Model):
         #e.g. 4 for 1Q (densitymx) or 2 for 1Q (statevec)
 
     #TODO - deprecate this?
-    #@property
-    #def dim(self):
-    #    """
-    #    The dimension of the model.
-    #
-    #    This equals d when the gate (or, more generally, circuit-layer) matrices
-    #    would have shape d x d and spam vectors would have shape d x 1 (if they
-    #    were computed).
-    #
-    #    Returns
-    #    -------
-    #    int
-    #        model dimension
-    #    """
-    #    return self._state_space.dim
+    @property
+    def dim(self):
+        """
+        The dimension of the model.
+    
+        This equals d when the gate (or, more generally, circuit-layer) matrices
+        would have shape d x d and spam vectors would have shape d x 1 (if they
+        were computed).
+    
+        Returns
+        -------
+        int
+            model dimension
+        """
+        return self._state_space.dim
 
     ####################################################
     ## Parameter vector maintenance
@@ -1276,7 +1276,7 @@ class OpModel(Model):
         Label or None
         """
         if len(self._primitive_povm_label_dict) == 1 and \
-           (sslbls is None or sslbls == ('*',) or (self.state_space.num_tensor_prod_blocks == 1
+           (sslbls is None or sslbls == ('*',) or (self.state_space.num_tensor_product_blocks == 1
                                                    and self.state_space.tensor_product_block_labels(0) == sslbls)):
             return next(iter(self._primitive_povm_label_dict.keys()))
         else:
