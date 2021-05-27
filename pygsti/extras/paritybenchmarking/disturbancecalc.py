@@ -1670,7 +1670,7 @@ def compute_ovd_corrected_disturbances_bootstrap_rawdata(n_bits, data_ref, data_
     dist_by_weight_ml = compute_ovd_corrected_disturbances_noconfidence(
         n_bits, data_ref, data_test, p_ideal, max_weight, solver=solver, verbosity=verbosity - 1)
 
-    dist_by_weight = _np.zeros((max_weight, num_bootstrap_samples), 'd')
+    dist_by_weight = _np.zeros((max_weight + 1, num_bootstrap_samples), 'd')
     resampled_data = []
 
     bootstrap_data_ref = data_ref + _np.ones(len(data_ref), dtype='int')
@@ -1700,12 +1700,12 @@ def compute_ovd_corrected_disturbances_bootstrap_rawdata(n_bits, data_ref, data_
                     dist_by_weight[w, i] = _np.nan
 
         for w in range(max_weight + 1):  # +1 includes r=OVD/TVD ratio (scale factor)
-            dist_by_weight[w, i] = disturbances[w][0]
+            dist_by_weight[w, i] = disturbances[w]
 
         if verbosity > 0:
             print(" (%.1fs)" % (_time.time() - tStart))
 
-    dist_ml = _np.array([dist_by_weight_ml[w][0] for w in range(max_weight + 1)], 'd')
+    dist_ml = _np.array([dist_by_weight_ml[w] for w in range(max_weight + 1)], 'd')
 
     if return_resampled_data:
         return dist_ml, dist_by_weight, resampled_data
