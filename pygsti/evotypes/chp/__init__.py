@@ -28,7 +28,6 @@ class OpRepComposed(XXX):
         return s
 
 
-
 class OpRepEmbedded(XXX):
 
     def __init__(self, state_space_labels, target_labels, embedded_rep):
