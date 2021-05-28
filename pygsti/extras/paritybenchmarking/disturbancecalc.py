@@ -1,6 +1,7 @@
 import sys as _sys
 import numpy as _np
 import scipy as _sp
+import scipy.optimize as _spo
 from scipy.stats import chi2 as _chi2
 import warnings as _warnings
 import time as _time
@@ -376,7 +377,7 @@ class ResidualTVD:
 
     def _build_problem(self):
         # Initialize the variables - the parameters used to define the T matrix
-        self.T_params = _cp.Variable(self.dim, value=self.t_params.copy())
+        self.T_params = _cp.Variable(self.dim, value=self.t_params.copy(), nonneg=True)
 
         # Constraints
         # T must be stochastic, so
@@ -389,7 +390,8 @@ class ResidualTVD:
                             self.T_params >= 0]
 
         # Form objective.
-        self.T = _cp.sum([self.T_params[ind] * self.t_basis[ind] for ind in range(self.dim)]) + _np.eye(2**self.n_bits)
+        self.T = _cp.sum([self.T_params[ind] * self.t_basis[ind] for ind in range(self.dim)]) \
+            + _np.eye(2**self.n_bits)
         self.resid_tvd = _cp.sum(_cp.abs(self.Q - self.T @ self.P)) / 2
         self.obj = _cp.Minimize(self.resid_tvd + self.Treg_factor * _cp.norm(self.T_params, 1))
 
@@ -427,6 +429,7 @@ class ResidualTVD:
         float
         """
         if self.exactly_zero: return 0.0  # shortcut for trivial case
+
         if self.weight == 0:
             return _np.sum(_np.abs(q - p)) / 2
 
@@ -1291,6 +1294,94 @@ def compute_disturbances_with_confidence(n_bits, data_ref, data_test, confidence
     return disturbance_by_weight
 
 
+def compute_ovd_over_tvd_ratio(n_bits, data_ref, data_test, p_ideal, return_all=False):
+    """
+    TODO: docstring
+    """
+    p_ml = _np.array(data_ref) / _np.sum(data_ref)
+    q_ml = _np.array(data_test) / _np.sum(data_test)
+    ratio = _np.zeros(p_ml.shape, 'd')
+    nonzero_inds = _np.where(p_ideal > 0)[0]
+    ratio[nonzero_inds] = p_ideal[nonzero_inds] / p_ml[nonzero_inds]
+    tvd = _np.sum(_np.abs(q_ml - p_ml)) / 2
+    ovd = _np.sum(ratio * _np.maximum(p_ml - q_ml, 0))
+    r = ovd / tvd
+    return r if (not return_all) else (r, ovd, tvd)
+
+
+def compute_ovd_corrected_disturbances_noconfidence(n_bits, data_ref, data_test, p_ideal,
+                                                    max_weight=4, maxiters=20, search_tol=0.1, reltol=1e-5,
+                                                    abstol=1e-5, solver="SCS", initial_treg_factor=1e-3, verbosity=1):
+    """
+    Compute the weight-X distrubances between two data sets (including error bars).
+
+    This function is computes the weight-X OVD-corrected disturbances, defined as the
+    scaled difference between the weight-(X-1) and weight-X residual TVDs, for all weights up to
+    `max_weight`.  Each difference is scaled by the ratio of the original variation distance (OVD)
+    and the TVD, that is, multipled by r = OVD/TVD.
+
+    Parameters
+    ----------
+    n_bits : int
+        The number of bits (qubits).
+
+    data_ref, data_test : numpy array
+        Arrays of outcome counts from the reference and test experiments,
+        respectively.  Each array has one element per 2^n_bits bit string.
+
+    p_ideal : numpy array
+        The ideal probability distribution (of both reference and test experiments).
+
+    max_weight : int, optional
+        The maximum weight disturbance to compute.  Typically this is the same
+        as `n_bits`.
+
+    maxiters : int, optional
+        The maximum number of alternating-minimization iterations to allow within
+        the profile-loglikelihood computation before giving up and deeming
+        the final result "ok".
+
+    search_tol : float, optional
+        The tolerance on the log-likelihood used when trying to locate the
+        (residualTVD, logL) pair with logL at the edge of the confidence interval.
+
+    reltol : float, optional
+        The relative tolerance used to within profile likelihood.
+
+    abstol : float, optional
+        The absolute tolerance used to within profile likelihood.
+
+    solver : str, optional
+        The name of the solver to used (see `cvxpy.installed_solvers()`)
+
+    initial_treg_factor : float, optional
+        The magnitude of an internal penalty factor on the off-diagonals of
+        the T matrix (see :class:`ResidualTVD`).
+
+    verbosity : int, optional
+        Sets the level of detail for messages printed to the console (higher = more detail).
+
+    Returns
+    -------
+    list
+        A list of the OVD-corrected disturbances by weight.  The lists i-th element is
+        the weight (i+1) disturbance.  The `max_weight`-th element is the OVD/TVD ratio.
+    """
+    rtvds_by_weight = compute_residual_tvds(n_bits, data_ref, data_test, None,
+                                            max_weight, maxiters, search_tol, reltol,
+                                            abstol, solver, initial_treg_factor, verbosity)
+
+    rtvds = [value_and_errorbar[0] for value_and_errorbar in rtvds_by_weight]
+    scale_fctr = compute_ovd_over_tvd_ratio(n_bits, data_ref, data_test, p_ideal)
+
+    disturbance_by_weight = []
+    for i in range(1, max_weight + 1):
+        disturbance_by_weight.append(scale_fctr * (rtvds[i - 1] - rtvds[i]))
+    disturbance_by_weight.append(scale_fctr)
+
+    return disturbance_by_weight
+
+
 def compute_residual_tvds(n_bits, data_ref, data_test, confidence_percent=68.0,
                           max_weight=4, maxiters=20, search_tol=0.1, reltol=1e-5,
                           abstol=1e-5, solver="SCS", initial_treg_factor=1e-3, verbosity=1):
@@ -1499,7 +1590,8 @@ def compute_disturbances_bootstrap_rawdata(n_bits, data_ref, data_test, num_boot
             try:
                 if verbosity > 0: print("\nFalling back on ECOS")
                 disturbances = compute_disturbances_with_confidence(
-                    n_bits, redata_ref, redata_test, None, max_weight, solver="ECOS", verbosity=verbosity - 2)
+                    n_bits, redata_ref, redata_test, None, max_weight, solver="ECOS",
+                    verbosity=verbosity - 2)
             except Exception:
                 if verbosity > 0: print("\nFailed using %s and ECOS - reporting nans" % solver)
                 for w in range(max_weight):
@@ -1512,6 +1604,108 @@ def compute_disturbances_bootstrap_rawdata(n_bits, data_ref, data_test, num_boot
             print(" (%.1fs)" % (_time.time() - tStart))
 
     dist_ml = _np.array([dist_by_weight_ml[w][0] for w in range(max_weight)], 'd')
+
+    if return_resampled_data:
+        return dist_ml, dist_by_weight, resampled_data
+    else:
+        return dist_ml, dist_by_weight
+
+
+def compute_ovd_corrected_disturbances_bootstrap_rawdata(n_bits, data_ref, data_test, p_ideal, num_bootstrap_samples=20,
+                                                         max_weight=4, solver="SCS", verbosity=1, seed=0,
+                                                         return_resampled_data=False, add_one_to_data=True):
+    """
+    Compute the weight-X distrubances between two data sets (including error bars).
+
+    This function is computes the weight-X disturbance, defined as the difference between
+    the weight-(X-1) and weight-X residual TVDs, (evaluated at the ML probability
+    distributions implied by the data) for all weights up to `max_weight`.  It also
+    uses the data to compute 1-sigma error bar for each value using the boostrap method.
+
+    Parameters
+    ----------
+    n_bits : int
+        The number of bits (qubits).
+
+    data_ref, data_test : numpy array
+        Arrays of outcome counts from the reference and test experiments,
+        respectively.  Each array has one element per 2^n_bits bit string.
+
+    p_ideal : numpy array
+        The ideal probability distribution (of both reference and test experiments).
+
+    num_bootstrap_samples : int
+        The number of boostrap (re-)samples to use.
+
+    max_weight : int, optional
+        The maximum weight disturbance to compute.  Typically this is the same
+        as `n_bits`.
+
+    solver : str, optional
+        The name of the solver to used (see `cvxpy.installed_solvers()`)
+
+    verbosity : int, optional
+        Sets the level of detail for messages printed to the console (higher = more detail).
+
+    add_one_to_data : bool, optional
+        Sets whether the bootstrap should be calculated after adding a single fake count to every
+        possible outcome.
+
+    Returns
+    -------
+    disturbance_by_weight_ML : numpy.ndarray
+        The ML OVD-corrected disturbances by weight, with the OVD/TVD ratio tagged on at
+        the end (so the length is `max_weight + 1`)
+
+    bootstrap_disturbances_by_weight : numpy.ndarray
+        A (max_weight + 1, num_bootstrap_samples) sized array of each disturbance and the
+        OVD/TVD ratio (included as the final row in this matrix) for each of the
+        `num_bootstrap_samples` re-sampled data sets.
+    """
+    #p_ml = _np.array(data_ref) / _np.sum(data_ref)
+    #q_ml = _np.array(data_test) / _np.sum(data_test)
+
+    if verbosity > 0:
+        print("Computing base disturbances")
+    dist_by_weight_ml = compute_ovd_corrected_disturbances_noconfidence(
+        n_bits, data_ref, data_test, p_ideal, max_weight, solver=solver, verbosity=verbosity - 1)
+
+    dist_by_weight = _np.zeros((max_weight + 1, num_bootstrap_samples), 'd')
+    resampled_data = []
+
+    bootstrap_data_ref = data_ref + _np.ones(len(data_ref), dtype='int')
+    bootstrap_data_test = data_test + _np.ones(len(data_test), dtype='int')
+
+    for i in range(num_bootstrap_samples):
+        if verbosity > 0:
+            print("Analyzing bootstrap sample %d of %d..." % (i + 1, num_bootstrap_samples), end='')
+            _sys.stdout.flush(); tStart = _time.time()
+        redata_ref = resample_data(bootstrap_data_ref, seed=seed + i)
+        redata_test = resample_data(bootstrap_data_test, seed=seed + num_bootstrap_samples + i)
+        if return_resampled_data:
+            resampled_data.append((redata_ref, redata_test))
+
+        try:
+            disturbances = compute_ovd_corrected_disturbances_noconfidence(
+                n_bits, redata_ref, redata_test, p_ideal, max_weight, solver=solver, verbosity=verbosity - 2)
+        except Exception:
+            try:
+                if verbosity > 0: print("\nFalling back on ECOS")
+                disturbances = compute_ovd_corrected_disturbances_noconfidence(
+                    n_bits, redata_ref, redata_test, p_ideal, max_weight, solver="ECOS",
+                    verbosity=verbosity - 2)
+            except Exception:
+                if verbosity > 0: print("\nFailed using %s and ECOS - reporting nans" % solver)
+                for w in range(max_weight):
+                    dist_by_weight[w, i] = _np.nan
+
+        for w in range(max_weight + 1):  # +1 includes r=OVD/TVD ratio (scale factor)
+            dist_by_weight[w, i] = disturbances[w]
+
+        if verbosity > 0:
+            print(" (%.1fs)" % (_time.time() - tStart))
+
+    dist_ml = _np.array([dist_by_weight_ml[w] for w in range(max_weight + 1)], 'd')
 
     if return_resampled_data:
         return dist_ml, dist_by_weight, resampled_data
@@ -1615,6 +1809,57 @@ def compute_disturbances(n_bits, data_ref, data_test, num_bootstrap_samples=20,
     """
     dist_ml, dist = compute_disturbances_bootstrap_rawdata(
         n_bits, data_ref, data_test, num_bootstrap_samples,
+        max_weight, solver, verbosity, add_one_to_data=add_one_to_data)
+    return compute_disturbances_from_bootstrap_rawdata(dist_ml, dist)
+
+
+def compute_ovd_corrected_disturbances(n_bits, data_ref, data_test, p_ideal, num_bootstrap_samples=20,
+                                       max_weight=4, solver="SCS", verbosity=1, add_one_to_data=True):
+    """
+    Compute the weight-X disturbances between two data sets (including error bars).
+
+    This function is computes the weight-X disturbance, defined as the difference between
+    the weight-(X-1) and weight-X residual TVDs, (evaluated at the ML probability
+    distributions implied by the data) for all weights up to `max_weight`.  It also
+    uses the data to compute 1-sigma error bar for each value using the boostrap method.
+
+    Parameters
+    ----------
+    n_bits : int
+        The number of bits (qubits).
+
+    data_ref, data_test : numpy array
+        Arrays of outcome counts from the reference and test experiments,
+        respectively.  Each array has one element per 2^n_bits bit string.
+
+    num_bootstrap_samples : int
+        The number of boostrap (re-)samples to use.  If 0, then error bars are not computed.
+
+    max_weight : int, optional
+        The maximum weight disturbance to compute.  Typically this is the same
+        as `n_bits`.
+
+    solver : str, optional
+        The name of the solver to used (see `cvxpy.installed_solvers()`)
+
+    verbosity : int, optional
+        Sets the level of detail for messages printed to the console (higher = more detail).
+
+    add_one_to_data : bool, optional
+        Sets whether the bootstrap should be calculated after adding a single fake count to every
+        possible outcome.
+
+    Returns
+    -------
+    list
+        A list of the disturbances by weight.  The lists i-th element is a
+        `(disturbance, errorbar_length)` tuple for the weight (i+1) disturbance.
+        That is, the weight (i+1) disturbance = `disturbance +/- errorbar_length`.
+        the `max_weight`-th element gives the OVD/TVD ratio used to correct the
+        TVD-based disturbance values, along with its error bar.
+    """
+    dist_ml, dist = compute_ovd_corrected_disturbances_bootstrap_rawdata(
+        n_bits, data_ref, data_test, p_ideal, num_bootstrap_samples,
         max_weight, solver, verbosity, add_one_to_data=add_one_to_data)
     return compute_disturbances_from_bootstrap_rawdata(dist_ml, dist)
 
