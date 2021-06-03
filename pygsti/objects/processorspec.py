@@ -370,7 +370,8 @@ class ProcessorSpec(object):
         Model
         """
         if model_name == 'clifford':
-            assert(parameterization in ('auto', 'clifford')), "Clifford model must use 'clifford' parameterizations"
+            assert(parameterization in ('auto', 'static clifford')), \
+                "Clifford model must use 'static clifford' parameterizations"
             assert(simulator in ('auto', 'map') or isinstance(simulator, _MapFSim)), \
                 "Clifford model must use 'map' simulation type"
             model = _LocalNoiseModel.from_parameterization(
@@ -379,7 +380,8 @@ class ProcessorSpec(object):
                 self.nonstd_gate_unitaries, None,
                 self.availability,
                 self.qubit_labels,
-                parameterization='clifford',
+                parameterization='static clifford',
+                evotype='stabilizer',  # don't use default evotype - HARDCODED evotype!
                 simulator=simulator,
                 on_construction_error='warn',  # *drop* gates that aren't cliffords
                 independent_gates=False,

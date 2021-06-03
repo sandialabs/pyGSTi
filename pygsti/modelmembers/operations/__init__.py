@@ -10,6 +10,7 @@ Sub-package holding model operation objects.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from .cliffordop import CliffordOp
 from .composederrorgen import ComposedErrorgen
 from .composedop import ComposedOp, ComposedDenseOp
 from .denseop import DenseOperator, DenseOperatorInterface
@@ -25,8 +26,11 @@ from .linearop import LinearOperator
 from .lpdenseop import LinearlyParamDenseOp
 from .staticdenseop import StaticDenseOp
 from .staticstdop import StaticStandardOp
+from .staticunitaryop import StaticUnitaryOp
 from .stochasticop import StochasticNoiseOp
 from .tpdenseop import TPDenseOp
+
+from .linearop import finite_difference_deriv_wrt_params, finite_difference_hessian_wrt_params
 
 
 import numpy as _np
@@ -69,13 +73,13 @@ def convert(operation, to_type, basis, extra=None):
         if isinstance(operation, FullDenseOp):
             return operation  # no conversion necessary
         else:
-            return FullDenseOp(operation.to_dense())
+            return FullDenseOp(operation.to_dense(), operation.evotype, operation.state_space)
 
     elif to_type == "TP":
         if isinstance(operation, TPDenseOp):
             return operation  # no conversion necessary
         else:
-            return TPDenseOp(operation.to_dense())
+            return TPDenseOp(operation.to_dense(), operation.evotype, operation.state_space)
             # above will raise ValueError if conversion cannot be done
 
     elif to_type == "linear":
@@ -83,7 +87,8 @@ def convert(operation, to_type, basis, extra=None):
             return operation  # no conversion necessary
         elif isinstance(operation, StaticDenseOp):
             real = _np.isclose(_np.linalg.norm(operation.imag), 0)
-            return LinearlyParamDenseOp(operation.to_dense(), _np.array([]), {}, real)
+            return LinearlyParamDenseOp(operation.to_dense(), _np.array([]), {}, real,
+                                        operation.evotype, operation.state_space)
         else:
             raise ValueError("Cannot convert type %s to LinearlyParamDenseOp"
                              % type(operation))
@@ -92,101 +97,64 @@ def convert(operation, to_type, basis, extra=None):
         if isinstance(operation, StaticDenseOp):
             return operation  # no conversion necessary
         else:
-            return StaticDenseOp(operation.to_dense())
+            return StaticDenseOp(operation.to_dense(), operation.evotype, operation.state_space)
 
     elif to_type == "static unitary":
         op_std = _bt.change_basis(operation, basis, 'std')
         unitary = _ot.process_mx_to_unitary(op_std)
-        return StaticDenseOp(unitary, "statevec")
+        return StaticUnitaryOp(unitary, basis, operation.evotype, operation.state_space)
 
     elif _ot.is_valid_lindblad_paramtype(to_type):
         # e.g. "H+S terms","H+S clifford terms"
 
-        _, evotype = _ot.split_lindblad_paramtype(to_type)
-        LindbladOpType = LindbladOp \
-            if evotype in ("svterm", "cterm") else \
-            LindbladDenseOp
+        #REMOVE
+        #_, evotype = _ot.split_lindblad_paramtype(to_type)
+        #LindbladOpType = LindbladOp
+        #if evotype in ("svterm", "cterm") else \
+        #    LindbladDenseOp
 
-        nQubits = _np.log2(operation.dim) / 2.0
-        bQubits = bool(abs(nQubits - round(nQubits)) < 1e-10)  # integer # of qubits?
-        proj_basis = "pp" if (basis == "pp" or bQubits) else basis
+        unitary_postfactor = None
+        if isinstance(operation, (FullDenseOp, TPDenseOp, StaticDenseOp)):
+            from ...tools import jamiolkowski as _jt
+            RANK_TOL = 1e-6
+            J = _jt.fast_jamiolkowski_iso_std(operation.to_dense(), op_mx_basis=basis)  # Choi mx basis doesn't matter
+            if _np.linalg.matrix_rank(J, RANK_TOL) == 1:  # when 'operation' is unitary, separate it
+                unitary_op = _ot.process_mx_to_unitary(_bt.change_basis(operation.to_dense(), basis, 'std'))
+                unitary_postfactor = StaticUnitaryOp(unitary_op, basis, operation.evotype, operation.state_space)
 
-        #FUTURE: do something like this to get a guess for the post-op unitary factor
-        #  (this commented code doesn't seem to work quite right).  Such intelligence should
-        #  help scenarios where the assertion below fails.
-        #if isinstance(operation, DenseOperator):
-        #    J = _jt.jamiolkowski_iso(operation.to_dense(), opMxBasis=basis, choiMxBasis="std")
-        #    ev, U = _np.linalg.eig(operation.to_dense())
-        #    imax = _np.argmax(ev)
-        #    J_unitary = _np.kron(U[:,imax:imax+1], U[:,imax:imax+1].T)
-        #    postfactor = _jt.jamiolkowski_iso_inv(J_unitary, choiMxBasis="std", opMxBasis=basis)
-        #    unitary = _ot.process_mx_to_unitary(postfactor)
-        #else:
-        postfactor = None
+        proj_basis = 'pp' if operation.state_space.is_entirely_qubits else basis
+        nonham_mode, param_mode, use_ham_basis, use_nonham_basis = \
+            LindbladErrorgen.decomp_paramtype(to_type)
+        ham_basis = proj_basis if use_ham_basis else None
+        nonham_basis = proj_basis if use_nonham_basis else None
 
-        ret = LindbladOpType.from_operation_obj(operation, to_type, postfactor, proj_basis,
-                                                basis, truncate=True, lazy=True)
+        if unitary_postfactor is not None:
+            errorgen = LindbladErrorgen.from_error_generator(_np.zeros((operation.state_space.dim,
+                                                                        operation.state_space.dim), 'd'),
+                                                             ham_basis, nonham_basis, param_mode, nonham_mode,
+                                                             basis, truncate=True, evotype=operation.evotype)
+            ret = ComposedOp([unitary_postfactor, ExpErrorgenOp(errorgen)])
+        else:
+            errorgen = LindbladErrorgen.from_operation_matrix(operation.to_dense(), ham_basis, nonham_basis,
+                                                              param_mode, nonham_mode, truncate=True, mx_basis=basis,
+                                                              evotype=operation.evotype)
+            ret = ExpErrorgenOp(errorgen)
+
         if ret.dim <= 16:  # only do this for up to 2Q operations, otherwise to_dense is too expensive
             assert(_np.linalg.norm(operation.to_dense() - ret.to_dense()) < 1e-6), \
                 "Failure to create CPTP operation (maybe due the complex log's branch cut?)"
         return ret
 
-    elif to_type == "clifford":
+    elif to_type == "static clifford":
         if isinstance(operation, CliffordOp):
             return operation  # no conversion necessary
 
         # assume operation represents a unitary op (otherwise
         #  would need to change Model dim, which isn't allowed)
-        return Cliffordop(Operation)
+        return CliffordOp(operation)
 
     else:
         raise ValueError("Invalid to_type argument: %s" % to_type)
-
-
-def finite_difference_deriv_wrt_params(operation, wrt_filter, eps=1e-7):
-    """
-    Computes a finite-difference Jacobian for a LinearOperator object.
-
-    The returned value is a matrix whose columns are the vectorized
-    derivatives of the flattened operation matrix with respect to a single
-    operation parameter, matching the format expected from the operation's
-    `deriv_wrt_params` method.
-
-    Parameters
-    ----------
-    operation : LinearOperator
-        The operation object to compute a Jacobian for.
-
-    wrt_filter : list or numpy.ndarray
-        List of parameter indices to filter the result by (as though
-        derivative is only taken with respect to these parameters).
-
-    eps : float, optional
-        The finite difference step to use.
-
-    Returns
-    -------
-    numpy.ndarray
-        An M by N matrix where M is the number of operation elements and
-        N is the number of operation parameters.
-    """
-    dim = operation.dim
-    #operation.from_vector(operation.to_vector()) #ensure we call from_vector w/close=False first
-    op2 = operation.copy()
-    p = operation.to_vector()
-    fd_deriv = _np.empty((dim, dim, operation.num_params), operation.dtype)
-
-    for i in range(operation.num_params):
-        p_plus_dp = p.copy()
-        p_plus_dp[i] += eps
-        op2.from_vector(p_plus_dp)
-        fd_deriv[:, :, i] = (op2 - operation) / eps
-
-    fd_deriv.shape = [dim**2, operation.num_params]
-    if wrt_filter is None:
-        return fd_deriv
-    else:
-        return _np.take(fd_deriv, wrt_filter, axis=1)
 
 
 def check_deriv_wrt_params(operation, deriv_to_check=None, wrt_filter=None, eps=1e-7):
@@ -241,3 +209,56 @@ def check_deriv_wrt_params(operation, deriv_to_check=None, wrt_filter=None, eps=
         raise ValueError("Failed check of deriv_wrt_params:\n"
                          " norm diff = %g" %
                          _np.linalg.norm(fd_deriv - deriv_to_check))  # pragma: no cover
+
+
+def optimize_operation(op_to_optimize, target_op):
+    """
+    Optimize the parameters of `op_to_optimize`.
+
+    Optimization is performed so that the the resulting operation matrix
+    is as close as possible to target_op's matrix.
+
+    This is trivial for the case of FullDenseOp
+    instances, but for other types of parameterization
+    this involves an iterative optimization over all the
+    parameters of op_to_optimize.
+
+    Parameters
+    ----------
+    op_to_optimize : LinearOperator
+        The operation to optimize.  This object gets altered.
+
+    target_op : LinearOperator
+        The operation whose matrix is used as the target.
+
+    Returns
+    -------
+    None
+    """
+
+    #TODO: cleanup this code:
+    if isinstance(op_to_optimize, StaticDenseOp):
+        return  # nothing to optimize
+
+    if isinstance(op_to_optimize, FullDenseOp):
+        if(target_op.dim != op_to_optimize.dim):  # special case: operations can have different overall dimension
+            op_to_optimize.dim = target_op.dim  # this is a HACK to allow model selection code to work correctly
+        op_to_optimize.set_dense(target_op.to_dense())  # just copy entire overall matrix since fully parameterized
+        return
+
+    from ... import optimize as _opt
+    from ...tools import matrixtools as _mt
+    assert(target_op.dim == op_to_optimize.dim)  # operations must have the same overall dimension
+    targetMatrix = _np.asarray(target_op)
+
+    def _objective_func(param_vec):
+        op_to_optimize.from_vector(param_vec)
+        return _mt.frobeniusnorm(op_to_optimize.to_dense() - targetMatrix.to_dense())
+
+    x0 = op_to_optimize.to_vector()
+    minSol = _opt.minimize(_objective_func, x0, method='BFGS', maxiter=10000, maxfev=10000,
+                           tol=1e-6, callback=None)
+
+    op_to_optimize.from_vector(minSol.x)
+    #print("DEBUG: optimized operation to min frobenius distance %g" %
+    #      _mt.frobeniusnorm(op_to_optimize-targetMatrix))

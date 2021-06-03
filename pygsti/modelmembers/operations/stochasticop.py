@@ -74,9 +74,9 @@ class StochasticNoiseOp(_LinearOperator):
             self.params[:] = self._rates_to_params(initial_rates)
             rates = _np.array(initial_rates)
         else:
-            rates = _np.zeros(len(initial_rates), 'd')
+            rates = _np.zeros(len(self.params), 'd')
 
-        rep = evotype.create_stochastic_rep(basis, self._get_rate_poly_dicts(), rates, seed_or_state, state_space)
+        rep = evotype.create_stochastic_rep(self.basis, self._get_rate_poly_dicts(), rates, seed_or_state, state_space)
         _LinearOperator.__init__(self, rep, evotype)
         self._update_rep()  # initialize self._rep
         self._paramlbls = _np.array(['sqrt(%s error rate)' % bl for bl in self.basis.labels[1:]], dtype=object)

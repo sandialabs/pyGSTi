@@ -18,11 +18,11 @@ import copy as _copy
 import itertools as _itertools
 from ...models.statespace import StateSpace as _StateSpace
 from ...tools import optools as _ot
-from ...tools import optools as _mt
+from ...tools import matrixtools as _mt
 from ...tools import basistools as _bt
 from ...tools import internalgates as _itgs
 from ...tools import lindbladtools as _lbt
-from scipy.sparse.linalg import LinearOperator
+from scipy.sparse.linalg import LinearOperator as ScipyLinearOperator
 
 
 cdef class OpRep(_basereps_cython.OpRep):
@@ -42,14 +42,14 @@ cdef class OpRep(_basereps_cython.OpRep):
         return self.state_space.dim
 
     def acton(self, StateRep state not None):
-        cdef StateRep out_state = StateRep(_np.empty(self.c_rep._dim, dtype='d'))
+        cdef StateRep out_state = StateRepDense(_np.empty(self.c_rep._dim, dtype='d'), self.state_space)
         #print("PYX acton called w/dim ", self.c_rep._dim, out_state.c_state._dim)
         # assert(state.c_state._dataptr != out_state.c_state._dataptr) # DEBUG
         self.c_rep.acton(state.c_state, out_state.c_state)
         return out_state
 
     def adjoint_acton(self, StateRep state not None):
-        cdef StateRep out_state = StateRep(_np.empty(self.c_rep._dim, dtype='d'))
+        cdef StateRep out_state = StateRepDense(_np.empty(self.c_rep._dim, dtype='d'), self.state_space)
         #print("PYX acton called w/dim ", self.c_rep._dim, out_state.c_state._dim)
         # assert(state.c_state._dataptr != out_state.c_state._dataptr) # DEBUG
         self.c_rep.adjoint_acton(state.c_state, out_state.c_state)
@@ -65,7 +65,7 @@ cdef class OpRep(_basereps_cython.OpRep):
             in_state = StateRep(_np.ascontiguousarray(v,'d'))
             return self.adjoint_acton(in_state).to_dense()
         dim = self.c_rep._dim
-        return LinearOperator((dim,dim), matvec=mv, rmatvec=rmv, dtype='d') # transpose, adjoint, dot, matmat?
+        return ScipyLinearOperator((dim,dim), matvec=mv, rmatvec=rmv, dtype='d') # transpose, adjoint, dot, matmat?
 
 
 cdef class OpRepDense(OpRep):
@@ -82,6 +82,12 @@ cdef class OpRepDense(OpRep):
         self.c_rep = new OpCRep_Dense(<double*>self.base.data,
                                      <INT>self.base.shape[0])
         self.state_space = state_space
+
+    def base_has_changed(self):
+        pass
+
+    def to_dense(self):
+        return self.base
 
     def __reduce__(self):
         # because serialization of numpy array flags is borked (around Numpy v1.16), we need to copy data
@@ -112,9 +118,7 @@ cdef class OpRepDense(OpRep):
         return s
 
     def copy(self):
-        cpy = OpRepDense(self.base.shape[0])
-        cpy.base[:, :] = self.base.copy()
-        return cpy
+        return OpRepDense(self.base.copy(), self.state_space)
 
 
 cdef class OpRepSparse(OpRep):
@@ -132,7 +136,7 @@ cdef class OpRepSparse(OpRep):
         cdef INT nnz = a_data.shape[0]
         cdef INT dim = a_indptr.shape[0]-1
         self.c_rep = new OpCRep_Sparse(<double*>a_data.data, <INT*>a_indices.data,
-                                             <INT*>a_indptr.data, nnz, dim);
+                                       <INT*>a_indptr.data, nnz, dim)
 
         state_space = _StateSpace.cast(state_space)
         assert(state_space.dim == dim)
@@ -146,6 +150,9 @@ cdef class OpRepSparse(OpRep):
 
 
 cdef class OpRepStandard(OpRepDense):
+    cdef public object name
+    cdef public object basis
+
     def __init__(self, name, basis, state_space):
         std_unitaries = _itgs.standard_gatename_unitaries()
         self.name = name
@@ -158,13 +165,15 @@ cdef class OpRepStandard(OpRepDense):
         state_space = _StateSpace.cast(state_space)
         assert(superop.shape[0] == state_space.dim)
 
-        super(OpRepStandard, self).__init__(LinearOperator.convert_to_matrix(superop), state_space)
+        super(OpRepStandard, self).__init__(superop, state_space)
 
     def __reduce__(self):
         return (OpRepStandard, (self.name, self.basis, self.state_space))
 
 
 cdef class OpRepStochastic(OpRepDense):
+    cdef public object basis
+    cdef public object stochastic_superops
 
     def __init__(self, basis, rate_poly_dicts, initial_rates, seed_or_state, state_space):
         self.basis = basis
@@ -187,7 +196,7 @@ cdef class OpRepStochastic(OpRepDense):
 
     def to_dense(self):  # TODO - put this in all reps?  - used in stochastic op...
         # DEFAULT: raise NotImplementedError('No to_dense implemented for evotype "%s"' % self._evotype)
-        return self._rep.base  # copy?
+        return self.base  # copy?
 
 
 cdef class OpRepComposed(OpRep):
@@ -271,7 +280,7 @@ cdef class OpRepEmbedded(OpRep):
                 embedded_rep.dim, str(target_labels))
 
         cdef INT dim = state_space.dim
-        cdef INT nblocks = state_space.num_tensor_prod_blocks
+        cdef INT nblocks = state_space.num_tensor_product_blocks
         cdef INT active_block_index = iTensorProdBlk
         cdef INT ncomponents_in_active_block = len(state_space.tensor_product_block_labels(active_block_index))
         cdef INT embedded_dim = embedded_rep.dim
@@ -385,11 +394,11 @@ cdef class OpRepExpErrorgen(OpRep):
                                             mu, eta, m_star, s, dim)
         self.state_space = errorgen_rep.state_space
 
-    def errgenrep_has_changed(self):
+    def errgenrep_has_changed(self, onenorm_upperbound):
         # don't reset matrix exponential params (based on operator norm) when vector hasn't changed much
         mu, m_star, s, eta = _mt.expop_multiply_prep(
             self.errorgen_rep.aslinearoperator(),
-            a_1_norm=self.errorgen_rep.onenorm_upperbound())  # need to add ths to rep class from op TODO!!!
+            a_1_norm=onenorm_upperbound)
         self.set_exp_params(mu, eta, m_star, s)
 
     def set_exp_params(self, double mu, double eta, INT m_star, INT s):

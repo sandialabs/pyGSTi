@@ -11,61 +11,17 @@ Defines the Instrument class
 #***************************************************************************************************
 import collections as _collections
 import numpy as _np
-import warnings as _warnings
 
-from ..tools import matrixtools as _mt
-from .label import Label as _Label
-
-#from . import labeldicts as _ld
-from . import modelmember as _gm
-from . import operation as _op
-from . import spamvec as _sv
-
-
-def convert(instrument, to_type, basis, extra=None):
-    """
-    Convert intrument to a new type of parameterization.
-
-    This potentially creates a new object.
-    Raises ValueError for invalid conversions.
-
-    Parameters
-    ----------
-    instrument : Instrument
-        Instrument to convert
-
-    to_type : {"full","TP","static","static unitary"}
-        The type of parameterizaton to convert to.  See
-        :method:`Model.set_all_parameterizations` for more details.
-
-    basis : {'std', 'gm', 'pp', 'qt'} or Basis object
-        The basis for `povm`.  Allowed values are Matrix-unit (std),
-        Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt)
-        (or a custom basis object).
-
-    extra : object, optional
-        Additional information for conversion.
-
-    Returns
-    -------
-    Instrument
-        The converted instrument, usually a distinct
-        object from the object passed as input.
-    """
-
-    if to_type == "TP":
-        if isinstance(instrument, TPInstrument):
-            return instrument
-        else:
-            return TPInstrument(list(instrument.items()))
-    elif to_type in ("full", "static", "static unitary"):
-        gate_list = [(k, _op.convert(g, to_type, basis)) for k, g in instrument.items()]
-        return Instrument(gate_list)
-    else:
-        raise ValueError("Cannot convert an instrument to type %s" % to_type)
+from .. import modelmember as _mm
+from .. import operations as _op
+from .. import states as _state
+from ...evotypes import Evotype as _Evotype
+from ...models import statespace as _statespace
+from ...tools import matrixtools as _mt
+from ...objects.label import Label as _Label
 
 
-class Instrument(_gm.ModelMember, _collections.OrderedDict):
+class Instrument(_mm.ModelMember, _collections.OrderedDict):
     """
     A generalized quantum instrument.
 
@@ -76,55 +32,76 @@ class Instrument(_gm.ModelMember, _collections.OrderedDict):
 
     Parameters
     ----------
-    op_matrices : dict of LinearOperator objects
+    member_ops : dict of LinearOperator objects
         A dict (or list of key,value pairs) of the gates.
+
+    evotype : Evotype or str, optional
+        The evolution type.  If `None`, the evotype is inferred
+        from the first instrument member.  If `len(member_ops) == 0` in this case,
+        an error is raised.
+
+    state_space : StateSpace, optional
+        The state space for this POVM.  If `None`, the space is inferred
+        from the first instrument member.  If `len(member_ops) == 0` in this case,
+        an error is raised.
 
     items : list or dict, optional
         Initial values.  This should only be used internally in de-serialization.
     """
 
-    def __init__(self, op_matrices, items=[]):
-        """
-        Creates a new Instrument object.
-
-        Parameters
-        ----------
-        op_matrices : dict of LinearOperator objects
-            A dict (or list of key,value pairs) of the gates.
-        """
+    def __init__(self, member_ops, evotype=None, state_space=None, items=[]):
         self._readonly = False  # until init is done
         if len(items) > 0:
-            assert(op_matrices is None), "`items` was given when op_matrices != None"
+            assert(member_ops is None), "`items` was given when op_matrices != None"
 
-        dim = None
         evotype = None
 
-        if op_matrices is not None:
-            if isinstance(op_matrices, dict):
-                matrix_list = [(k, v) for k, v in op_matrices.items()]  # gives definite ordering
-            elif isinstance(op_matrices, list):
-                matrix_list = op_matrices  # assume it's is already an ordered (key,value) list
+        if member_ops is not None:
+            if isinstance(member_ops, dict):
+                member_list = [(k, v) for k, v in member_ops.items()]  # gives definite ordering
+            elif isinstance(member_ops, list):
+                member_list = member_ops  # assume it's is already an ordered (key,value) list
             else:
-                raise ValueError("Invalid `op_matrices` arg of type %s" % type(op_matrices))
+                raise ValueError("Invalid `member_ops` arg of type %s" % type(member_ops))
+
+            #Special case when we're given matrices: infer a default state space and evotype:
+            if len(member_list) > 0 and not isinstance(member_list[0][1], _op.LinearOperator):
+                if state_space is None:
+                    state_space = _statespace.default_space_for_dim(member_list[0][1].shape[0])
+                if evotype is None:
+                    evotype = _Evotype.cast('default')
+                member_list = [(k, v if isinstance(v, _op.LinearOperator) else
+                                _op.FullDenseOp(v, evotype, state_space)) for k, v in member_list]
+
+            assert(len(member_list) > 0 or state_space is not None), \
+                "Must specify `state_space` when there are no instrument members!"
+            assert(len(member_list) > 0 or evotype is not None), \
+                "Must specify `evotype` when there are no instrument members!"
+            evotype = _Evotype.cast(evotype) if (evotype is not None) else member_list[0][1].evotype
+            state_space = member_list[0][1].state_space if (state_space is None) \
+                else _statespace.StateSpace.cast(state_space)
 
             items = []
-            for k, v in matrix_list:
-                gate = v if isinstance(v, _op.LinearOperator) else \
-                    _op.FullDenseOp(v)
+            for k, member in member_list:
+                #REMOVE - we need to be given linear ops so that we can infer evotype & state space above
+                #if not isinstance(v, _op.LinearOperator):
+                #    member = _op.FullDenseOp(member, evotype, state_space)
 
-                if evotype is None: evotype = gate._evotype
-                else: assert(evotype == gate._evotype), \
-                    "All instrument gates must have the same evolution type"
-
-                if dim is None: dim = gate.dim
-                assert(dim == gate.dim), "All instrument gates must have the same dimension!"
-                items.append((k, gate))
-
-        if evotype is None:
-            evotype = "densitymx"  # default (if no instrument gates)
+                assert(evotype == member.evotype), \
+                    "All instrument members must have the same evolution type"
+                assert(state_space.is_compatible_with(member.state_space)), \
+                    "All instrument members must have compatible state spaces!"
+                items.append((k, member))
+        else:
+            if len(items) > 0:  # HACK so that OrderedDict.copy() works, which creates a new object with only items...
+                if state_space is None: state_space = items[0][1].state_space
+                if evotype is None: evotype = items[0][1].evotype
+                    
+            assert(state_space is not None), "`state_space` cannot be `None` when there are no members!"
+            assert(evotype is not None), "`evotype` cannot be `None` when there are no members!"
 
         _collections.OrderedDict.__init__(self, items)
-        _gm.ModelMember.__init__(self, dim, evotype)
+        _mm.ModelMember.__init__(self, state_space, evotype)
         self._paramvec, self._paramlbls = self._build_paramvec()
         self._readonly = True
 
@@ -232,7 +209,8 @@ class Instrument(_gm.ModelMember, _collections.OrderedDict):
         dict_to_pickle['_parent'] = None
 
         #Note: must *copy* elements for pickling/copying
-        return (Instrument, (None, [(key, gate.copy()) for key, gate in self.items()]), dict_to_pickle)
+        return (Instrument, (None, self.evotype, self.state_space, [(key, gate.copy()) for key, gate in self.items()]),
+                dict_to_pickle)
 
     def __pygsti_reduce__(self):
         return self.__reduce__()
@@ -261,14 +239,14 @@ class Instrument(_gm.ModelMember, _collections.OrderedDict):
         if isinstance(prefix, _Label):  # Deal with case when prefix isn't just a string
             for k, g in self.items():
                 comp = g.copy()
-                comp.set_gpindices(_gm._compose_gpindices(self.gpindices,
+                comp.set_gpindices(_mm._compose_gpindices(self.gpindices,
                                                           g.gpindices), self.parent)
                 simplified[_Label(prefix.name + "_" + k, prefix.sslbls)] = comp
         else:
             if prefix: prefix += "_"
             for k, g in self.items():
                 comp = g.copy()
-                comp.set_gpindices(_gm._compose_gpindices(self.gpindices,
+                comp.set_gpindices(_mm._compose_gpindices(self.gpindices,
                                                           g.gpindices), self.parent)
                 simplified[prefix + k] = comp
         return simplified
@@ -447,332 +425,13 @@ class Instrument(_gm.ModelMember, _collections.OrderedDict):
             output_unnormalized_state = output_rep.to_dense()
             prob = output_unnormalized_state[0] * state.dim**0.25
             output_normalized_state = output_unnormalized_state / prob  # so [0]th == 1/state_dim**0.25
-            outcome_probs_and_states[lbl] = (prob, _sv.StaticSPAMVec(output_normalized_state, self._evotype, 'prep'))
+            outcome_probs_and_states[lbl] = (prob, _state.StaticState(output_normalized_state, self.evotype,
+                                                                      self.state_space))
 
         return outcome_probs_and_states
 
     def __str__(self):
         s = "Instrument with elements:\n"
         for lbl, element in self.items():
-            s += "%s:\n%s\n" % (lbl, _mt.mx_to_string(element.base, width=4, prec=2))
-        return s
-
-
-class TPInstrument(_gm.ModelMember, _collections.OrderedDict):
-    """
-    A trace-preservng quantum instrument.
-
-    This is essentially a collection of operations whose sum is a
-    trace-preserving map.  The instrument's elements may or may not have all of
-    the properties associated by a mathematical quantum instrument.
-
-    If M1,M2,...Mn are the elements of the instrument, then we parameterize
-    1. MT = (M1+M2+...Mn) as a TPParmeterizedGate
-    2. Di = Mi - MT for i = 1..(n-1) as FullyParameterizedGates
-
-    So to recover M1...Mn we compute:
-    Mi = Di + MT for i = 1...(n-1)
-       = -(n-2)*MT-sum(Di) = -(n-2)*MT-[(MT-Mi)-n*MT] for i == (n-1)
-
-    Parameters
-    ----------
-    op_matrices : dict of numpy arrays
-        A dict (or list of key,value pairs) of the operation matrices whose sum
-        must be a trace-preserving (TP) map.
-
-    items : list or dict, optional
-        Initial values.  This should only be used internally in de-serialization.
-    """
-    #Scratch:
-    #    Scratch
-    # M1+M2+M3+M4  MT
-    #   -M2-M3-M4  M1-MT
-    #-M1   -M3-M4  M2-MT
-    #-M1-M2   -M4  M3-MT
-    #
-    #(M1-MT) + (M2-MT) + (M3-MT) = (MT-M4) - 3*MT = -2*MT-M4
-    # M4 = -(sum(Di)+(4-2=2)*MT) = -(sum(all)+(4-3=1)*MT)
-    #n=2 case: (M1-MT) = (MT-M2)-MT = -M2, so M2 = -sum(Di)
-
-    def __init__(self, op_matrices, items=[]):
-        """
-        Creates a new Instrument object.
-
-        Parameters
-        ----------
-        op_matrices : dict of numpy arrays
-            A dict (or list of key,value pairs) of the operation matrices whose sum
-            must be a trace-preserving (TP) map.
-        """
-        self._readonly = False  # until init is done
-        if len(items) > 0:
-            assert(op_matrices is None), "`items` was given when op_matrices != None"
-
-        dim = None
-        self.param_ops = []  # first element is TP sum (MT), following
-        #elements are fully-param'd (Mi-Mt) for i=0...n-2
-
-        #Note: when un-pickling using items arg, these members will
-        # remain the above values, but *will* be set when state dict is copied
-        # in (so unpickling works as desired)
-
-        if op_matrices is not None:
-            if isinstance(op_matrices, dict):
-                matrix_list = [(k, v) for k, v in op_matrices.items()]  # gives definite ordering
-            elif isinstance(op_matrices, list):
-                matrix_list = op_matrices  # assume it's is already an ordered (key,value) list
-            else:
-                raise ValueError("Invalid `op_matrices` arg of type %s" % type(op_matrices))
-
-            # Create gate objects that are used to parameterize this instrument
-            MT = _op.TPDenseOp(sum([v for k, v in matrix_list]))
-            MT.set_gpindices(slice(0, MT.num_params), self)
-            self.param_ops.append(MT)
-
-            dim = MT.dim; off = MT.num_params
-            for k, v in matrix_list[:-1]:
-                Di = _op.FullDenseOp(v - MT)
-                Di.set_gpindices(slice(off, off + Di.num_params), self)
-                assert(Di.dim == dim)
-                self.param_ops.append(Di); off += Di.num_params
-
-            #Create a TPInstrumentOp for each operation matrix
-            # Note: TPInstrumentOp sets it's own parent and gpindices
-            items = [(k, _op.TPInstrumentOp(self.param_ops, i))
-                     for i, (k, v) in enumerate(matrix_list)]
-
-            #DEBUG
-            #print("POST INIT PARAM GATES:")
-            #for i,v in enumerate(self.param_ops):
-            #    print(i,":\n",v)
-            #
-            #print("POST INIT ITEMS:")
-            #for k,v in items:
-            #    print(k,":\n",v)
-
-        _collections.OrderedDict.__init__(self, items)
-        _gm.ModelMember.__init__(self, dim, "densitymx")
-        self._readonly = True
-
-    def __setitem__(self, key, value):
-        if self._readonly: raise ValueError("Cannot alter POVM elements")
-        else: return _collections.OrderedDict.__setitem__(self, key, value)
-
-    def __reduce__(self):
-        """ Needed for OrderedDict-derived classes (to set dict items) """
-        #Don't pickle TPInstrumentGates b/c they'll each pickle the same
-        # param_ops and I don't this will unpickle correctly.  Instead, just
-        # strip the numpy array from each element and call __init__ again when
-        # unpickling:
-        op_matrices = [(lbl, _np.asarray(val)) for lbl, val in self.items()]
-        return (TPInstrument, (op_matrices, []), {'_gpindices': self._gpindices})
-
-    def __pygsti_reduce__(self):
-        return self.__reduce__()
-
-    def simplify_operations(self, prefix=""):
-        """
-        Creates a dictionary of simplified instrument operations.
-
-        Returns a dictionary of operations that belong to the Instrument's parent
-        `Model` - that is, whose `gpindices` are set to all or a subset of
-        this instruments's gpindices.  These are used internally within
-        computations involving the parent `Model`.
-
-        Parameters
-        ----------
-        prefix : str
-            A string, usually identitying this instrument, which may be used
-            to prefix the simplified gate keys.
-
-        Returns
-        -------
-        OrderedDict of Gates
-        """
-        #Create a "simplified" (Model-referencing) set of param gates
-        param_simplified = []
-        for g in self.param_ops:
-            comp = g.copy()
-            comp.set_gpindices(_gm._compose_gpindices(self.gpindices,
-                                                      g.gpindices), self.parent)
-            param_simplified.append(comp)
-
-        # Create "simplified" elements, which infer their parent and
-        # gpindices from the set of "param-gates" they're constructed with.
-        if isinstance(prefix, _Label):  # Deal with case when prefix isn't just a string
-            simplified = _collections.OrderedDict(
-                [(_Label(prefix.name + "_" + k, prefix.sslbls), _op.TPInstrumentOp(param_simplified, i))
-                 for i, k in enumerate(self.keys())])
-        else:
-            if prefix: prefix += "_"
-            simplified = _collections.OrderedDict(
-                [(prefix + k, _op.TPInstrumentOp(param_simplified, i))
-                 for i, k in enumerate(self.keys())])
-        return simplified
-
-    @property
-    def parameter_labels(self):
-        """
-        An array of labels (usually strings) describing this model member's parameters.
-        """
-        vl = _np.empty(self.num_params, dtype=object)
-        for gate in self.param_ops:
-            vl[gate.gpindices] = gate.parameter_labels
-        return vl
-
-    @property
-    def num_elements(self):
-        """
-        Return the number of total gate elements in this instrument.
-
-        This is in general different from the number of *parameters*,
-        which are the number of free variables used to generate all of
-        the matrix *elements*.
-
-        Returns
-        -------
-        int
-        """
-        return sum([g.size for g in self.values()])
-
-    @property
-    def num_params(self):
-        """
-        Get the number of independent parameters which specify this Instrument.
-
-        Returns
-        -------
-        int
-            the number of independent parameters.
-        """
-        return sum([g.num_params for g in self.param_ops])
-
-    def to_vector(self):
-        """
-        Extract a vector of the underlying gate parameters from this Instrument.
-
-        Returns
-        -------
-        numpy array
-            a 1D numpy array with length == num_params().
-        """
-        v = _np.empty(self.num_params, 'd')
-        for gate in self.param_ops:
-            v[gate.gpindices] = gate.to_vector()
-        return v
-
-    def from_vector(self, v, close=False, dirty_value=True):
-        """
-        Initialize the Instrument using a vector of its parameters.
-
-        Parameters
-        ----------
-        v : numpy array
-            The 1D vector of gate parameters.  Length
-            must == num_params().
-
-        close : bool, optional
-            Whether `v` is close to this Instrument's current
-            set of parameters.  Under some circumstances, when this
-            is true this call can be completed more quickly.
-
-        dirty_value : bool, optional
-            The value to set this object's "dirty flag" to before exiting this
-            call.  This is passed as an argument so it can be updated *recursively*.
-            Leave this set to `True` unless you know what you're doing.
-
-        Returns
-        -------
-        None
-        """
-        for gate in self.param_ops:
-            gate.from_vector(v[gate.gpindices], close, dirty_value)
-        for instGate in self.values():
-            instGate._construct_matrix()
-
-    def transform_inplace(self, s):
-        """
-        Update each Instrument element matrix `O` with `inv(s) * O * s`.
-
-        Parameters
-        ----------
-        s : GaugeGroupElement
-            A gauge group element which specifies the "s" matrix
-            (and it's inverse) used in the above similarity transform.
-
-        Returns
-        -------
-        None
-        """
-        #Note: since each Mi is a linear function of MT and the Di, we can just
-        # transform the MT and Di (self.param_ops) and re-init the elements.
-        for gate in self.param_ops:
-            gate.transform_inplace(s)
-
-        for element in self.values():
-            element._construct_matrix()  # construct from param gates
-        self.dirty = True
-
-    def depolarize(self, amount):
-        """
-        Depolarize this Instrument by the given `amount`.
-
-        Parameters
-        ----------
-        amount : float or tuple
-            The amount to depolarize by.  If a tuple, it must have length
-            equal to one less than the dimension of the gate. All but the
-            first element of each spam vector (often corresponding to the
-            identity element) are multiplied by `amount` (if a float) or
-            the corresponding `amount[i]` (if a tuple).
-
-        Returns
-        -------
-        None
-        """
-        #Note: since each Mi is a linear function of MT and the Di, we can just
-        # depolarize the MT and Di (self.param_ops) and re-init the elements.
-        for gate in self.param_ops:
-            gate.depolarize(amount)
-
-        for element in self.values():
-            element._construct_matrix()  # construct from param gates
-        self.dirty = True
-
-    def rotate(self, amount, mx_basis='gm'):
-        """
-        Rotate this instrument by the given `amount`.
-
-        Parameters
-        ----------
-        amount : tuple of floats, optional
-            Specifies the rotation "coefficients" along each of the non-identity
-            Pauli-product axes.  The gate's matrix `G` is composed with a
-            rotation operation `R`  (so `G` -> `dot(R, G)` ) where `R` is the
-            unitary superoperator corresponding to the unitary operator
-            `U = exp( sum_k( i * rotate[k] / 2.0 * Pauli_k ) )`.  Here `Pauli_k`
-            ranges over all of the non-identity un-normalized Pauli operators.
-
-        mx_basis : {'std', 'gm', 'pp', 'qt'} or Basis object
-            The source and destination basis, respectively.  Allowed
-            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-            and Qutrit (qt) (or a custom basis object).
-
-        Returns
-        -------
-        None
-        """
-        #Note: since each Mi is a linear function of MT and the Di, we can just
-        # rotate the MT and Di (self.param_ops) and re-init the elements.
-        for gate in self.param_ops:
-            gate.rotate(amount, mx_basis)
-
-        for element in self.values():
-            element._construct_matrix()  # construct from param gates
-        self.dirty = True
-
-    def __str__(self):
-        s = "TPInstrument with elements:\n"
-        for lbl, element in self.items():
-            s += "%s:\n%s\n" % (lbl, _mt.mx_to_string(element.base, width=4, prec=2))
+            s += "%s:\n%s\n" % (lbl, _mt.mx_to_string(element.to_dense(), width=4, prec=2))
         return s

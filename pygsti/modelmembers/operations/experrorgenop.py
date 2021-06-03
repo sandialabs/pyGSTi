@@ -80,7 +80,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         #Finish initialization based on evolution type
         self.dense_rep = dense_rep
         if self.dense_rep:
-            rep = evotype.create_dense_rep(None, state_space)
+            rep = evotype.create_dense_superop_rep(None, state_space)
 
             # Cache values - for later work with dense rep
             self.exp_err_gen = None   # used for dense_rep=True mode to cache qty needed in deriv_wrt_params
@@ -170,7 +170,8 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
             self.base_deriv = None
             self.base_hessian = None
         elif not close:
-            self._rep.errgenrep_has_changed()
+            self._rep.errgenrep_has_changed(self.errorgen.onenorm_upperbound())
+
 
     def set_gpindices(self, gpindices, parent, memo=None):
         """
@@ -310,6 +311,11 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         numpy array
             Array of derivatives, shape == (dimension^2, num_params)
         """
+        if not self.dense_rep:
+            #raise NotImplementedError("deriv_wrt_params(...) can only be used when a dense representation is used!")
+            _warnings.warn("Using finite differencing to compute ExpErrogenOp derivative!")
+            return super(ExpErrorgenOp, self).deriv_wrt_params(wrt_filter)
+
         if self.base_deriv is None:
             d2 = self.dim
 
@@ -376,9 +382,9 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
             Hessian with shape (dimension^2, num_params1, num_params2)
         """
         if not self.dense_rep:
-            raise NotImplementedError("hessian_wrt_params is only implemented for *dense-rep* LindbladOps")
-            # because we need self.unitary_postfactor to be a dense operation below (and it helps to
-            # have self.exp_err_gen cached)
+            #raise NotImplementedError("hessian_wrt_params is only implemented for *dense-rep* LindbladOps")
+            _warnings.warn("Using finite differencing to compute ExpErrogenOp Hessian!")
+            return super(ExpErrorgenOp, self).hessian_wrt_params(wrt_filter1, wrt_filter2)
 
         if self.base_hessian is None:
             d2 = self.dim

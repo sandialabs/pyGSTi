@@ -132,6 +132,7 @@ class ModelMember(ModelChild):
         self._state_space = state_space
         self._evotype = evotype
         self._gpindices = gpindices
+        self._submember_rpindices = ()  # parameter indices relative to this object's parameters
         self._paramlbls = None  # signals auto-generation of "unknown" parameter labels
         self._dirty = False  # True when there's any *possibility* that this
         # gate's parameters have been changed since the
@@ -325,12 +326,15 @@ class ModelMember(ModelChild):
         if my_old_gpindices is not None:
             # update submembers if our gpindices were previously
             # set and are getting reset to something else.
-            for i, subm in enumerate(self.submembers()):
+            for i, (subm, subm_rpindices) in enumerate(zip(self.submembers(), self._submember_rpindices)):
                 if id(subm) in memo: continue  # already processed
-                rel_subm_gpindices = _decompose_gpindices(
-                    my_old_gpindices, subm.gpindices)
+                #REMOVE
+                #rel_subm_gpindices = _decompose_gpindices(
+                #    my_old_gpindices, subm.gpindices)
+                #new_subm_gpindices = _compose_gpindices(
+                #    gpindices, rel_subm_gpindices)
                 new_subm_gpindices = _compose_gpindices(
-                    gpindices, rel_subm_gpindices)
+                    gpindices, subm_rpindices)
                 subm.set_gpindices(new_subm_gpindices, parent, memo)
 
         self._set_only_my_gpindices(gpindices, parent)
@@ -393,6 +397,12 @@ class ModelMember(ModelChild):
             self._set_only_my_gpindices(
                 _slct.list_to_slice(all_gpindices, array_ok=True, require_contiguous=True),
                 parent)
+
+            #parameter index allocation also freezes the relative indices
+            # between this object's parameter indices and those of its submembers
+            self._submember_rpindices = tuple([_decompose_gpindices(
+                self.gpindices, subm.gpindices) for subm in self.submembers()])
+            
             return tot_new_params
 
         else:  # no sub-members

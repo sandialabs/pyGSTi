@@ -23,6 +23,7 @@ from ...evotypes import Evotype as _Evotype
 from ...models import statespace as _statespace
 from ...tools import listtools as _lt
 from ...tools import matrixtools as _mt
+from ...tools import slicetools as _slct
 
 from ...objects.basis import ExplicitBasis as _ExplicitBasis
 
@@ -78,7 +79,7 @@ class ComposedOp(_LinearOperator):
 
         #Create representation object
         if dense_rep:
-            rep = evotype.create_dense_rep(None, state_space)
+            rep = evotype.create_dense_superop_rep(None, state_space)
         else:
             factor_op_reps = [op._rep for op in self.factorops]
             rep = evotype.create_composed_rep(factor_op_reps, state_space)
@@ -176,7 +177,7 @@ class ComposedOp(_LinearOperator):
         elif self._rep is not None:
             self._rep.reinit_factor_op_reps([op._rep for op in self.factorops])
         if self.parent:  # need to alert parent that *number* (not just value)
-            self.parent._mark_for_rebuild(self)  # of our params may have changed
+            self.parent._mark_for_rebuild(self)  # if our params may have changed
 
     def remove(self, *factorop_indices):
         """
@@ -258,11 +259,28 @@ class ComposedOp(_LinearOperator):
         """
         An array of labels (usually strings) describing this model member's parameters.
         """
+        plabels_per_local_index = _collections.defaultdict(list)
+        for operation, factorgate_local_inds in zip(self.factorops, self._submember_rpindices):
+            #factorgate_local_inds = _modelmember._decompose_gpindices(
+            #    self.gpindices, operation.gpindices)
+            for i, plbl in zip(_slct.to_array(factorgate_local_inds), operation.parameter_labels):
+                plabels_per_local_index[i].append(plbl)
+
         vl = _np.empty(self.num_params, dtype=object)
-        for operation in self.factorops:
-            factorgate_local_inds = _modelmember._decompose_gpindices(
-                self.gpindices, operation.gpindices)
-            vl[factorgate_local_inds] = operation.parameter_labels
+        for i in range(self.num_params):
+            vl[i] = ', '.join(plabels_per_local_index[i])
+
+        #REMOVE (OLD)
+        #gpa = self.gpindices_as_array()
+        #for i, gpi in zip(range(self.num_params), gpa):
+            #num_duplicates = len(vl[gpa == gpi])  # number of repetitions of this global param index in this composedop
+            #if num_duplicates > 1 and num_duplicates == len(plabels_per_local_index[i]):
+            #    # Special behavior for labeling convenience - when there are duplicate gpindices in
+            #    # both this composed op and the factors, just serialize the labels.
+            #    vl[gpa == gpi] = plabels_per_local_index[i]
+            #else:  # just combine the factorop label names with commas
+            #    vl[gpa == gpi] = ', '.join(plabels_per_local_index[i])
+
         return vl
 
     @property
@@ -288,9 +306,9 @@ class ComposedOp(_LinearOperator):
         """
         assert(self.gpindices is not None), "Must set a ComposedOp's .gpindices before calling to_vector"
         v = _np.empty(self.num_params, 'd')
-        for operation in self.factorops:
-            factorgate_local_inds = _modelmember._decompose_gpindices(
-                self.gpindices, operation.gpindices)
+        for operation, factorgate_local_inds in zip(self.factorops, self._submember_rpindices):
+            #factorgate_local_inds = _modelmember._decompose_gpindices(
+            #    self.gpindices, operation.gpindices)
             v[factorgate_local_inds] = operation.to_vector()
         return v
 
@@ -319,9 +337,9 @@ class ComposedOp(_LinearOperator):
         None
         """
         assert(self.gpindices is not None), "Must set a ComposedOp's .gpindices before calling from_vector"
-        for operation in self.factorops:
-            factorgate_local_inds = _modelmember._decompose_gpindices(
-                self.gpindices, operation.gpindices)
+        for operation, factorgate_local_inds in zip(self.factorops, self._submember_rpindices):
+            #factorgate_local_inds = _modelmember._decompose_gpindices(
+            #    self.gpindices, operation.gpindices)
             operation.from_vector(v[factorgate_local_inds], close, dirty_value)
         if self.dense_rep: self._update_denserep()
         self.dirty = dirty_value
@@ -350,7 +368,8 @@ class ComposedOp(_LinearOperator):
         derivMx = _np.zeros((self.dim, self.dim, self.num_params), typ)
 
         #Product rule to compute jacobian
-        for i, op in enumerate(self.factorops):  # loop over the operation we differentiate wrt
+        # loop over the operation we differentiate wrt
+        for i, (op, factorgate_local_inds) in enumerate(zip(self.factorops, self._submember_rpindices)):
             if op.num_params == 0: continue  # no contribution
             deriv = op.deriv_wrt_params(None)  # TODO: use filter?? / make relative to this operation...
             deriv.shape = (self.dim, self.dim, op.num_params)
@@ -369,8 +388,8 @@ class ComposedOp(_LinearOperator):
                 #deriv = _np.einsum("ij,jka->ika", post, deriv )
                 deriv = _np.tensordot(post, deriv, (1, 0))
 
-            factorgate_local_inds = _modelmember._decompose_gpindices(
-                self.gpindices, op.gpindices)
+            #factorgate_local_inds = _modelmember._decompose_gpindices(
+            #    self.gpindices, op.gpindices)
             derivMx[:, :, factorgate_local_inds] += deriv
 
         derivMx.shape = (self.dim**2, self.num_params)
@@ -564,9 +583,9 @@ class ComposedOp(_LinearOperator):
         opmags = [f.total_term_magnitude for f in self.factorops]
         product = _np.product(opmags)
         ret = _np.zeros(self.num_params, 'd')
-        for opmag, f in zip(opmags, self.factorops):
-            f_local_inds = _modelmember._decompose_gpindices(
-                self.gpindices, f.gpindices)  # HERE - need factors *reps* to have gpindices??
+        for opmag, f, f_local_inds in zip(opmags, self.factorops, self._submember_rpindices):
+            #f_local_inds = _modelmember._decompose_gpindices(
+            #    self.gpindices, f.gpindices)
             local_deriv = product / opmag * f.total_term_magnitude_deriv
             ret[f_local_inds] += local_deriv
         return ret

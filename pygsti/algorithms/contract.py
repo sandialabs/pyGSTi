@@ -13,6 +13,8 @@ GST contraction algorithms
 import numpy as _np
 import warnings as _warnings
 
+from ..modelmembers import operations as _op
+from ..modelmembers import povms as _povm
 from .. import objects as _objs
 from .. import tools as _tools
 from .. import optimize as _opt
@@ -284,7 +286,7 @@ def _contract_to_cp_direct(model, verbosity, tp_also=False, maxiter=100000, tol=
             it += 1
             if it > maxiter: break
 
-        mdl.operations[opLabel] = _objs.FullDenseOp(new_op)
+        mdl.operations[opLabel] = _op.FullDenseOp(new_op, mdl.evotype, mdl.state_space)
 
         if it > maxiter:
             printer.warning("Max iterations exceeded in contract_to_cp_direct")
@@ -375,7 +377,7 @@ def _contract_to_valid_spam(model, verbosity=0):
                 for ELabel, EVec in mdl.povms[povmLbl].items():
                     scaled_effects.append((ELabel, EVec / r))
                 # Note: always creates an unconstrained POVM
-                mdl.povms[povmLbl] = _objs.UnconstrainedPOVM(scaled_effects)
+                mdl.povms[povmLbl] = _povm.UnconstrainedPOVM(scaled_effects, mdl.evotype, mdl.state_space)
 
         mx = _tools.ppvec_to_stdmx(vec)
 
@@ -394,7 +396,7 @@ def _contract_to_valid_spam(model, verbosity=0):
     for povmLbl in list(mdl.povms.keys()):
         scaled_effects = []
         for ELabel, EVec in mdl.povms[povmLbl].items():
-            #if isinstance(EVec, _objs.ComplementSPAMVec):
+            #if isinstance(EVec, _povm.ComplementPOVMEffect):
             #    continue #don't contract complement vectors
             evals, evecs = _np.linalg.eig(_tools.ppvec_to_stdmx(EVec))
             if(min(evals) < 0.0 or max(evals) > 1.0):
@@ -412,7 +414,8 @@ def _contract_to_valid_spam(model, verbosity=0):
             else:
                 scaled_effects.append((ELabel, EVec))  # no scaling
 
-        mdl.povms[povmLbl] = _objs.UnconstrainedPOVM(scaled_effects)  # Note: always creates an unconstrained POVM
+        mdl.povms[povmLbl] = _povm.UnconstrainedPOVM(scaled_effects, mdl.evotype, mdl.state_space)
+        # Note: always creates an unconstrained POVM
 
     #mdl.log("Contract to valid SPAM")
     #printer.log('', 2)

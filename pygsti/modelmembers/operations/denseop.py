@@ -18,7 +18,10 @@ from .linearop import LinearOperator as _LinearOperator
 from ...evotypes import Evotype as _Evotype
 from ...models import statespace as _statespace
 from ...tools import matrixtools as _mt
+from ...tools import basistools as _bt
+from ...tools import optools as _ot
 from ...objects.basis import Basis as _Basis
+from ...objects import gaugegroup as _gaugegroup
 
 
 def finite_difference_deriv_wrt_params(operation, wrt_filter, eps=1e-7):
@@ -124,17 +127,6 @@ def check_deriv_wrt_params(operation, deriv_to_check=None, wrt_filter=None, eps=
 class DenseOperatorInterface(object):
     """
     Adds a numpy-array-mimicing interface onto an operation object.
-
-    The object's ._rep must be a *dense* representation (with a
-    .base that is a numpy array).
-
-    This class is distinct from DenseOperator because there are some
-    operators, e.g. LindbladOp, that *can* but don't *always* have
-    a dense representation.  With such types, a base class allows
-    a 'dense_rep' argument to its constructor and a derived class
-    sets this to True *and* inherits from DenseOperatorInterface.
-    If would not be appropriate to inherit from DenseOperator because
-    this is a standalone operator with it's own (dense) ._rep, etc.
     """
 
     def __init__(self):
@@ -142,34 +134,21 @@ class DenseOperatorInterface(object):
 
     @property
     def _ptr(self):
-        return self._rep.base
+        raise NotImplementedError("Derived classes must implement the _ptr property!")
 
-    def deriv_wrt_params(self, wrt_filter=None):
+    def _ptr_has_changed(self):
+        """ Derived classes should override this function to handle rep updates
+            when the `_ptr` property is changed. """
+        pass
+
+    def to_array(self):
         """
-        The element-wise derivative this operation.
+        Return the array used to identify this operation within its range of possible values.
 
-        Constructs a matrix whose columns are the vectorized
-        derivatives of the flattened operation matrix with respect to a
-        single operation parameter.  Thus, each column is of length
-        op_dim^2 and there is one column per operation parameter. An
-        empty 2D array in the StaticDenseOp case (num_params == 0).
-
-        Parameters
-        ----------
-        wrt_filter : list or numpy.ndarray
-            List of parameter indices to take derivative with respect to.
-            (None means to use all the this operation's parameters.)
-
-        Returns
-        -------
-        numpy array
-            Array of derivatives with shape (dimension^2, num_params)
-        """
-        return finite_difference_deriv_wrt_params(self, wrt_filter, eps=1e-7)
-
-    def to_dense(self):
-        """
-        Return this operation as a dense matrix.
+        For instance, if the operation is a unitary operation, this returns a
+        unitary matrix regardless of the evolution type.  The related :method:`to_dense`
+        method, in contrast, returns the dense representation of the operation, which
+        varies by evolution type.
 
         Note: for efficiency, this doesn't copy the underlying data, so
         the caller should copy this data before modifying it.
@@ -228,9 +207,15 @@ class DenseOperatorInterface(object):
 
     def __getattr__(self, attr):
         #use __dict__ so no chance for recursive __getattr__
-        ret = getattr(self.__dict__['_rep'].base, attr)
+        #ret = getattr(self.__dict__['_rep'].base, attr)
+        ret = getattr(self._ptr, attr)
         self.dirty = True
         return ret
+
+    def __str__(self):
+        s = "%s with shape %s\n" % (self.__class__.__name__, str(self._ptr.shape))
+        s += _mt.mx_to_string(self._ptr, width=4, prec=2)
+        return s
 
     #Mimic array behavior
     def __pos__(self): return self._ptr
@@ -255,22 +240,23 @@ class DenseOperatorInterface(object):
     def __complex__(self): return complex(self._ptr)
 
 
-class BasedDenseOperatorInterface(DenseOperatorInterface):
-    """
-    A DenseOperatorInterface that uses self.base instead of self._rep.base as the "base pointer" to data.
+#REMOVE
+#class BasedDenseOperatorInterface(DenseOperatorInterface):
+#    """
+#    A DenseOperatorInterface that uses self.base instead of self._rep.base as the "base pointer" to data.
+#
+#    This is used by the TPDenseOp class, for example, which has a .base
+#    that is different from its ._rep.base.
+#    """
+#    def __init__(self, base):
+#        self.base = base
+#
+#    @property
+#    def _ptr(self):
+#        return self.base
 
-    This is used by the TPDenseOp class, for example, which has a .base
-    that is different from its ._rep.base.
-    """
-    def __init__(self, base):
-        self.base = base
 
-    @property
-    def _ptr(self):
-        return self.base
-
-
-class DenseOperator(BasedDenseOperatorInterface, _LinearOperator):
+class DenseOperator(DenseOperatorInterface, _LinearOperator):
     """
     TODO: update docstring
     An operator that behaves like a dense operation matrix.
@@ -298,23 +284,38 @@ class DenseOperator(BasedDenseOperatorInterface, _LinearOperator):
 
     def __init__(self, mx, evotype, state_space):
         """ Initialize a new LinearOperator """
+        mx = _LinearOperator.convert_to_matrix(mx)
         state_space = _statespace.default_space_for_dim(mx.shape[0]) if (state_space is None) \
             else _statespace.StateSpace.cast(state_space)
         evotype = _Evotype.cast(evotype)
-        rep = evotype.create_dense_rep(mx, state_space)
+        rep = evotype.create_dense_superop_rep(mx, state_space)
         _LinearOperator.__init__(self, rep, evotype)
-        BasedDenseOperatorInterface.__init__(self, self._rep.base)
-        # "Based" interface requires this and derived classes to have a .base attribute
-        # or property that points to the data to interface with.  This gives derived classes
-        # flexibility in defining something other than self._rep.base to be used (see TPDenseOp).
+        DenseOperatorInterface.__init__(self)
 
-    def __str__(self):
-        s = "%s with shape %s\n" % (self.__class__.__name__, str(self.base.shape))
-        s += _mt.mx_to_string(self.base, width=4, prec=2)
-        return s
+    @property
+    def _ptr(self):
+        return self._rep.base
+
+    def _ptr_has_changed(self):
+        """ Derived classes should override this function to handle rep updates
+            when the `_ptr` property is changed. """
+        self._rep.base_has_changed()
+
+    def to_dense(self):
+        """
+        Return the dense array used to represent this operation within its evolution type.
+
+        Note: for efficiency, this doesn't copy the underlying data, so
+        the caller should copy this data before modifying it.
+
+        Returns
+        -------
+        numpy.ndarray
+        """
+        return self._rep.to_dense()  # both types of possible reps implement 'to_dense'
 
 
-class DenseUnitaryOperator(BasedDenseOperatorInterface, _LinearOperator):
+class DenseUnitaryOperator(DenseOperatorInterface, _LinearOperator):
     """
     TODO: update docstring
     An operator that behaves like a dense operation matrix.
@@ -346,18 +347,135 @@ class DenseUnitaryOperator(BasedDenseOperatorInterface, _LinearOperator):
 
     def __init__(self, mx, basis, evotype, state_space):
         """ Initialize a new LinearOperator """
-        state_space = _statespace.default_space_for_dim(mx.shape[0]) if (state_space is None) \
+        mx = _LinearOperator.convert_to_matrix(mx)
+        state_space = _statespace.default_space_for_udim(mx.shape[0]) if (state_space is None) \
             else _statespace.StateSpace.cast(state_space)
         basis = _Basis.cast(basis, state_space.dim)  # basis for Hilbert-Schmidt (superop) space
-        rep = evotype.create_denseunitary_rep(mx, basis, state_space)
         evotype = _Evotype.cast(evotype)
-        _LinearOperator.__init__(self, rep, evotype)
-        BasedDenseOperatorInterface.__init__(self, self._rep.base)
-        # "Based" interface requires this and derived classes to have a .base attribute
-        # or property that points to the data to interface with.  This gives derived classes
-        # flexibility in defining something other than self._rep.base to be used (see TPDenseOp).
 
-    def __str__(self):
-        s = "%s with shape %s\n" % (self.__class__.__name__, str(self.base.shape))
-        s += _mt.mx_to_string(self.base, width=4, prec=2)
-        return s
+        #Try to create a dense unitary rep.  If this fails, see if a dense superop rep
+        # can be created, as this type of rep can also hold arbitrary unitary ops.
+        try:
+            rep = evotype.create_dense_unitary_rep(mx, basis, state_space)
+            self._reptype = 'unitary'
+            self._unitary = None
+        except Exception:
+            superop_mx = _bt.change_basis(_ot.unitary_to_process_mx(mx), 'std', basis)
+            rep = evotype.create_dense_superop_rep(superop_mx, state_space)
+            self._reptype = 'superop'
+            self._unitary = mx
+        self._basis = basis
+
+        _LinearOperator.__init__(self, rep, evotype)
+        DenseOperatorInterface.__init__(self)
+
+    @property
+    def _ptr(self):
+        """Gives a handle/pointer to the base numpy array that this object can be accessed as"""
+        return self._rep.base if self._reptype == 'unitary' else self._unitary
+
+    def _ptr_has_changed(self):
+        """ Derived classes should override this function to handle rep updates
+            when the `_ptr` property is changed. """
+        if self._reptype == 'superop':
+            self._rep.base[:, :] = _bt.change_basis(_ot.unitary_to_process_mx(self._unitary), 'std', self._basis)
+        self._rep.base_has_changed()
+
+    def to_dense(self):
+        """
+        Return the dense array used to represent this operation within its evolution type.
+
+        Note: for efficiency, this doesn't copy the underlying data, so
+        the caller should copy this data before modifying it.
+
+        Returns
+        -------
+        numpy.ndarray
+        """
+        return self._rep.to_dense()  # both types of possible reps implement 'to_dense'
+
+    def transform_inplace(self, s):
+        """
+        Update operation matrix `O` with `inv(s) * O * s`.
+
+        Generally, the transform function updates the *parameters* of
+        the operation such that the resulting operation matrix is altered as
+        described above.  If such an update cannot be done (because
+        the operation parameters do not allow for it), ValueError is raised.
+
+        Parameters
+        ----------
+        s : GaugeGroupElement
+            A gauge group element which specifies the "s" matrix
+            (and it's inverse) used in the above similarity transform.
+
+        Returns
+        -------
+        None
+        """
+        if isinstance(s, _gaugegroup.UnitaryGaugeGroupElement) or \
+           isinstance(s, _gaugegroup.TPSpamGaugeGroupElement):
+
+            #Just to this the brute force way for now - there should be a more elegant & faster way!
+            U = s.transform_matrix
+            Uinv = s.transform_matrix_inverse
+
+            my_superop_mx = _bt.change_basis(_ot.unitary_to_process_mx(self._ptr), 'std', self._basis)  # to_dense()?
+            my_superop_mx = _mt.safe_dot(Uinv, _mt.safe_dot(my_superop_mx, U))
+
+            self._ptr[:, :] = _ot.process_mx_to_unitary(_bt.change_basis(my_superop_mx, self._basis, 'std'))
+            self._ptr_has_changed()
+            self.dirty = True
+        else:
+            raise ValueError("Invalid transform for this DenseUnitaryOperation: type %s" % str(type(s)))
+
+    def spam_transform_inplace(self, s, typ):
+        """
+        Update operation matrix `O` with `inv(s) * O` OR `O * s`, depending on the value of `typ`.
+
+        This functions as `transform_inplace(...)` but is used when this
+        Lindblad-parameterized operation is used as a part of a SPAM
+        vector.  When `typ == "prep"`, the spam vector is assumed
+        to be `rho = dot(self, <spamvec>)`, which transforms as
+        `rho -> inv(s) * rho`, so `self -> inv(s) * self`. When
+        `typ == "effect"`, `e.dag = dot(e.dag, self)` (not that
+        `self` is NOT `self.dag` here), and `e.dag -> e.dag * s`
+        so that `self -> self * s`.
+
+        Parameters
+        ----------
+        s : GaugeGroupElement
+            A gauge group element which specifies the "s" matrix
+            (and it's inverse) used in the above similarity transform.
+
+        typ : { 'prep', 'effect' }
+            Which type of SPAM vector is being transformed (see above).
+
+        Returns
+        -------
+        None
+        """
+        assert(typ in ('prep', 'effect')), "Invalid `typ` argument: %s" % typ
+
+        if isinstance(s, _gaugegroup.UnitaryGaugeGroupElement) or \
+           isinstance(s, _gaugegroup.TPSpamGaugeGroupElement):
+            U = s.transform_matrix
+            Uinv = s.transform_matrix_inverse
+
+            #Just to this the brute force way for now - there should be a more elegant & faster way!
+            U = s.transform_matrix
+            Uinv = s.transform_matrix_inverse
+
+            my_superop_mx = _bt.change_basis(_ot.unitary_to_process_mx(self._ptr), 'std', self._basis)  # to_dense()?
+
+            #Note: this code may need to be tweaked to work with sparse matrices
+            if typ == "prep":
+                my_superop_mx = _mt.safe_dot(Uinv, my_superop_mx)
+            else:
+                my_superop_mx = _mt.safe_dot(my_superop_mx, U)
+
+            self._ptr[:, :] = _ot.process_mx_to_unitary(_bt.change_basis(my_superop_mx, self._basis, 'std'))
+            self._ptr_has_changed()
+            self.dirty = True
+        else:
+            raise ValueError("Invalid transform for this DenseUnitaryOperation: type %s" % str(type(s)))

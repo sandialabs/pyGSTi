@@ -17,10 +17,16 @@ from ...models.statespace import StateSpace as _StateSpace
 
 
 cdef class StateRep(_basereps_cython.StateRep):
-    def __cinit__(self, _np.ndarray[_np.int64_t, ndim=2, mode='c'] smatrix,
-                  _np.ndarray[_np.int64_t, ndim=2, mode='c'] pvectors,
-                  _np.ndarray[_np.complex128_t, ndim=1, mode='c'] amps,
-                  state_space):
+
+    def __cinit__(self):
+        self.smatrix = self.pvectors = self.amps = None
+        self.c_state = NULL
+        self.state_space = None
+
+    def _cinit_base(self, _np.ndarray[_np.int64_t, ndim=2, mode='c'] smatrix,
+                    _np.ndarray[_np.int64_t, ndim=2, mode='c'] pvectors,
+                    _np.ndarray[_np.complex128_t, ndim=1, mode='c'] amps,
+                    state_space):
         self.smatrix = smatrix
         self.pvectors = pvectors
         self.amps = amps
@@ -32,7 +38,7 @@ cdef class StateRep(_basereps_cython.StateRep):
                                      self.state_space.num_qubits)
 
     def __reduce__(self):
-        return (StateRep, (self.smatrix, self.pvectors, self.amps, self.state_space))
+        return (StateRep, ())
 
     @property
     def nqubits(self):
@@ -61,7 +67,7 @@ cdef class StateRepComputational(StateRep):
     cdef object zvals
     cdef object basis
     
-    def __init__(self, zvals, basis, state_space):
+    def __cinit__(self, zvals, basis, state_space):
 
         nqubits = len(zvals)
         state_s = _np.fliplr(_np.identity(2 * nqubits, int))  # flip b/c stab cols are *first*
@@ -75,7 +81,7 @@ cdef class StateRepComputational(StateRep):
         a = _np.ones(1, complex)  # all == 1.0 by default
         
         self.basis = basis
-        super(StateRepComputational, self).__init__(s, ps, a, state_space)
+        self._cinit_base(s, ps, a, state_space)
 
     #TODO: copy methods from StabilizerFrame or StateCRep - or maybe do this for base StateRep class? ----------------------------
 
@@ -84,10 +90,10 @@ cdef class StateRepComputational(StateRep):
 
 
 cdef class StateRepComposed(StateRep):
-    def __init__(self, state_rep, op_rep, state_space):
+    def __cinit__(self, state_rep, op_rep, state_space):
         self.state_rep = state_rep
         self.op_rep = op_rep
-        super(StateRepComposed, self).__init__(state_rep.smatrix, state_rep.pvectors, state_rep.amps, state_space)
+        self._cinit_base(state_rep.smatrix, state_rep.pvectors, state_rep.amps, state_space)
         self.reps_have_changed()
 
     def reps_have_changed(self):
@@ -101,15 +107,14 @@ cdef class StateRepComposed(StateRep):
 
 
 cdef class StateRepTensorProduct(StateRep):
-    def __init__(self, factor_state_reps, state_space):
+    def __cinit__(self, factor_state_reps, state_space):
         self.factor_reps = factor_state_reps
         n = sum([sf.nqubits for sf in self.factor_reps])  # total number of qubits
         np = int(_np.product([len(sf.pvectors) for sf in self.factor_reps]))
-        
-        super(StateRepTensorProduct, self).__init__(_np.zeros((2 * n, 2 * n), int),
-                                                    _np.zeros((np, 2 * n), int),
-                                                    _np.ones(np, complex),
-                                                    state_space)
+        self._cinit_base(_np.zeros((2 * n, 2 * n), int),
+                         _np.zeros((np, 2 * n), int),
+                         _np.ones(np, complex),
+                         state_space)
         self.reps_have_changed()
 
     def reps_have_changed(self):

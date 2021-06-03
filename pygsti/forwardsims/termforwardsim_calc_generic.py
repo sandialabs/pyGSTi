@@ -9,7 +9,17 @@
 #***************************************************************************************************
 
 import time as _time
+import math as _math
 import numpy as _np
+import itertools as _itertools
+import functools as _functools
+
+from ..tools import listtools as _lt
+
+SMALL = 1e-5
+# a number which is used in place of zero within the
+# product of term magnitudes to keep a running path
+# magnitude from being zero (and losing memory of terms).
 
 
 #Base case which works for both SV and SB evolution types thanks to Python's duck typing
@@ -225,7 +235,7 @@ def prs_as_polys(fwdsim, rholabel, elabels, circuit, polynomial_vindices_per_int
 
 
 def prs_directly(fwdsim, rholabel, elabels, circuit, repcache, comm=None, mem_limit=None, fastmode=True, wt_tol=0.0,
-                    reset_term_weights=True, debug=None):
+                 reset_term_weights=True, debug=None):
     #return _prs_directly(fwdsim, rholabel, elabels, circuit, comm, mem_limit, fastmode)
     raise NotImplementedError("No direct mode yet")
 

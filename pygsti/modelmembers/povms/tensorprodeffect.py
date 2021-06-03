@@ -1,3 +1,15 @@
+"""
+The TensorProductPOVMEffect class and supporting functionality.
+"""
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
+
 import itertools as _itertools
 import functools as _functools
 
@@ -37,7 +49,7 @@ class TensorProductPOVMEffect(_POVMEffect):
         self.effectLbls = _np.array(povm_effect_lbls)
 
         evotype = self.factors[0]._evotype
-        rep = evotype.create_tensor_product_effect(factors, self.effectLbls, state_space)
+        rep = evotype.create_tensorproduct_effect_rep(factors, self.effectLbls, state_space)
 
         _POVMEffect.__init__(self, rep, evotype)
         self._rep.factor_effects_have_changed()  # initializes rep data
@@ -279,17 +291,22 @@ class TensorProductPOVMEffect(_POVMEffect):
         numpy array
             Array of derivatives, shape == (dimension, num_params)
         """
-        assert(self._evotype in ("statevec", "densitymx"))
-        typ = complex if self._evotype == "statevec" else 'd'
-        derivMx = _np.zeros((self.dim, self.num_params), typ)
+        typ = self.factors[0].to_dense().dtype if len(self.factors) > 0 else 'd'
+
+        #HACK to deal with fact that output of to_dense is really what is differentiated
+        # but this may not match self.dim == self.state_space.dim, e.g. for pure state vecs.
+        dims = [len(fct.to_dense()) for fct in self.factors]
+        dim = int(_np.product(dims))
+
+        derivMx = _np.zeros((dim, self.num_params), typ)
 
         #Product rule to compute jacobian
-        for i, fct in enumerate(self.factors):  # loop over the spamvec/povm we differentiate wrt
-            vec = fct if (self._prep_or_effect == "prep") else fct[self.effectLbls[i]]
+        for i, (fct, fct_dim) in enumerate(zip(self.factors, dims)):  # loop over the spamvec/povm we differentiate wrt
+            vec = fct[self.effectLbls[i]]
 
             if vec.num_params == 0: continue  # no contribution
             deriv = vec.deriv_wrt_params(None)  # TODO: use filter?? / make relative to this gate...
-            deriv.shape = (vec.dim, vec.num_params)
+            deriv.shape = (fct_dim, vec.num_params)
 
             if i > 0:  # factors before ith
                 pre = self.factors[0][self.effectLbls[0]].to_dense()
@@ -311,7 +328,7 @@ class TensorProductPOVMEffect(_POVMEffect):
                 "Error: gpindices has not been initialized for factor %d - cannot compute derivative!" % i
             derivMx[:, local_inds] += deriv
 
-        derivMx.shape = (self.dim, self.num_params)  # necessary?
+        derivMx.shape = (dim, self.num_params)  # necessary?
         if wrt_filter is None:
             return derivMx
         else:

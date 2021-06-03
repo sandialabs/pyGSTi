@@ -21,7 +21,11 @@ import collections as _collections
 from .. import optimize as _opt
 from .. import tools as _tools
 from .. import objects as _objs
+from .. import models as _models
 from .. import construction as _pc
+from ..modelmembers import states as _state
+from ..modelmembers import operations as _op
+from ..modelmembers import povms as _povm
 from ..objects import objectivefns as _objfns
 from ..objects.profiler import DummyProfiler as _DummyProfiler
 from ..objects.circuitlist import CircuitList as _CircuitList
@@ -193,11 +197,11 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
     assert(len((_np.isnan(invABMat_p)).nonzero()[0]) == 0)
 
     if svd_truncate_to is None or svd_truncate_to == target_model.dim:  # use target sslbls and basis
-        lgstModel = _objs.ExplicitOpModel(target_model.state_space, target_model.basis)
+        lgstModel = _models.ExplicitOpModel(target_model.state_space, target_model.basis)
     else:  # construct a default basis for the requested dimension
         # - just act on diagonal density mx
         dumb_basis = _objs.DirectSumBasis([_objs.BuiltinBasis('gm', 1)] * svd_truncate_to)
-        lgstModel = _objs.ExplicitOpModel([('L%d' % i,) for i in range(svd_truncate_to)], dumb_basis)
+        lgstModel = _models.ExplicitOpModel([('L%d' % i,) for i in range(svd_truncate_to)], dumb_basis)
 
     for opLabel in op_labelsToEstimate:
         Xs = _construct_x_matrix(prep_fiducials, effect_fiducials, target_model, (opLabel,),
@@ -223,7 +227,7 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
         else:
             #Just a normal gae
             assert(len(X_ps) == 1); X_p = X_ps[0]  # shape (nESpecs, nRhoSpecs)
-            lgstModel.operations[opLabel] = _objs.FullDenseOp(_np.dot(invABMat_p, X_p))  # shape (trunc,trunc)
+            lgstModel.operations[opLabel] = _op.FullDenseOp(_np.dot(invABMat_p, X_p))  # shape (trunc,trunc)
 
         #print "DEBUG: X(%s) = \n" % opLabel,X
         #print "DEBUG: Evals(X) = \n",_np.linalg.eigvals(X)
@@ -244,7 +248,7 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
                 EVec[0, i] = dsRow_fractions[(effectLabel,)]
             EVec_p = _np.dot(_np.dot(EVec, Vd), Pj)  # truncate Evec => Evec', shape (1,trunc)
             povm_effects.append((effectLabel, _np.transpose(EVec_p)))
-        lgstModel.povms[povmLabel] = _objs.UnconstrainedPOVM(povm_effects)
+        lgstModel.povms[povmLabel] = _povm.UnconstrainedPOVM(povm_effects, evotype='default')
         # unconstrained POVM for now - wait until after guess gauge for TP-constraining)
 
     # Form rhoVecs
@@ -311,13 +315,13 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
             for opLabel in op_labelsToEstimate:
                 if opLabel in guess_model_for_gauge.operations:
                     new_op = guess_model_for_gauge.operations[opLabel].copy()
-                    _objs.operation.optimize_operation(new_op, lgstModel.operations[opLabel])
+                    _op.optimize_operation(new_op, lgstModel.operations[opLabel])
                     lgstModel.operations[opLabel] = new_op
 
             for prepLabel in rhoLabelsToEstimate:
                 if prepLabel in guess_model_for_gauge.preps:
                     new_vec = guess_model_for_gauge.preps[prepLabel].copy()
-                    _objs.spamvec.optimize_spamvec(new_vec, lgstModel.preps[prepLabel])
+                    _state.optimize_state(new_vec, lgstModel.preps[prepLabel])
                     lgstModel.preps[prepLabel] = new_vec
 
             for povmLabel in povmLabelsToEstimate:
@@ -325,11 +329,11 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
                     povm = guess_model_for_gauge.povms[povmLabel]
                     new_effects = []
 
-                    if isinstance(povm, _objs.TPPOVM):  # preserve *identity* of guess
+                    if isinstance(povm, _povm.TPPOVM):  # preserve *identity* of guess
                         for effectLabel, EVec in povm.items():
                             if effectLabel == povm.complement_label: continue
                             new_vec = EVec.copy()
-                            _objs.spamvec.optimize_spamvec(new_vec, lgstModel.povms[povmLabel][effectLabel])
+                            _povm.optimize_effect(new_vec, lgstModel.povms[povmLabel][effectLabel])
                             new_effects.append((effectLabel, new_vec))
 
                         # Construct identity vector for complement effect vector
@@ -343,14 +347,14 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
                             padded_identityVec = identity
                         comp_effect = padded_identityVec - sum([v for k, v in new_effects])
                         new_effects.append((povm.complement_label, comp_effect))  # add complement
-                        lgstModel.povms[povmLabel] = _objs.TPPOVM(new_effects)
+                        lgstModel.povms[povmLabel] = _povm.TPPOVM(new_effects)
 
                     else:  # just create an unconstrained POVM
                         for effectLabel, EVec in povm.items():
                             new_vec = EVec.copy()
-                            _objs.spamvec.optimize_spamvec(new_vec, lgstModel.povms[povmLabel][effectLabel])
+                            _povm.optimize_effect(new_vec, lgstModel.povms[povmLabel][effectLabel])
                             new_effects.append((effectLabel, new_vec))
-                        lgstModel.povms[povmLabel] = _objs.UnconstrainedPOVM(new_effects)
+                        lgstModel.povms[povmLabel] = _povm.UnconstrainedPOVM(new_effects, evotype='default')
 
             #Also convey default gauge group & simulator from guess_model_for_gauge
             lgstModel.default_gauge_group = \
@@ -466,8 +470,8 @@ def _construct_b(prep_fiducials, model):
         basis_E = _np.zeros((dim, 1), 'd')
         basis_E[i] = 1.0
         basis_Es.append(basis_E)
-    model.povms['M_LGST_tmp_povm'] = _objs.UnconstrainedPOVM(
-        [("E%d" % i, E) for i, E in enumerate(basis_Es)])
+    model.povms['M_LGST_tmp_povm'] = _povm.UnconstrainedPOVM(
+        [("E%d" % i, E) for i, E in enumerate(basis_Es)], evotype='default')
 
     for k, rhostr in enumerate(prep_fiducials):
         #Build fiducial | rho_k > := Circuit(prepSpec[0:-1]) | rhoVec[ prepSpec[-1] ] >

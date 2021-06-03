@@ -436,7 +436,7 @@ class LocalNoiseModel(_ImplicitOpModel):
         #    prep_layers['rho0'] = _state.ComputationalBasisState([0] * num_qubits, 'pp', 'stabilizer', state_space)
         #    povm_layers['Mdefault'] = _povm.ComputationalBasisPOVM(num_qubits, 'stabilizer', state_space=state_space)
 
-        elif parameterization in ("static", "static unitary"):  # should "static unitary" be a choice here?
+        elif parameterization in ("static", "static unitary", 'static clifford'):
             #static computational basis
             prep_layers['rho0'] = _state.ComputationalBasisState([0] * num_qubits, 'pp', evotype, state_space)
             povm_layers['Mdefault'] = _povm.ComputationalBasisPOVM(num_qubits, evotype, state_space=state_space)
@@ -452,12 +452,12 @@ class LocalNoiseModel(_ImplicitOpModel):
             prepPure = _state.ComputationalBasisState([0] * num_qubits, 'pp', evotype, state_space)
             prepNoiseMap = _cnm._build_nqn_global_noise(qubitGraph, maxSpamWeight, sparse_lindblad_basis,
                                                         sparse_lindblad_reps, simulator, parameterization,
-                                                        errcomp_type, verbosity)
+                                                        evotype, errcomp_type, verbosity)
             prep_layers['rho0'] = _state.ComposedState(prepPure, prepNoiseMap)
 
             povmNoiseMap = _cnm._build_nqn_global_noise(qubitGraph, maxSpamWeight, sparse_lindblad_basis,
                                                         sparse_lindblad_reps, simulator, parameterization,
-                                                        errcomp_type, verbosity)
+                                                        evotype, errcomp_type, verbosity)
             povm_layers['Mdefault'] = _povm.ComposedPOVM(povmNoiseMap, None, "pp")
 
         #OLD: when had a 'spamdict' arg: else:
@@ -483,6 +483,8 @@ class LocalNoiseModel(_ImplicitOpModel):
                     # assume gate dict contains a unitary gates, and convert as needed
                     if parameterization == "static unitary":  # assume gate dict is already unitary gates?
                         gate = _op.StaticUnitaryOp(gate, 'pp', evotype, state_space=None)
+                    elif parameterization == "static clifford":
+                        gate = _op.CliffordOp(gate, None, 'pp', evotype, state_space=None)
                     else:
                         #TODO - update this, currently all other parameterizations convert unitary -> superop matrix
                         # and we convert this to the desired parameterizatio
@@ -501,6 +503,8 @@ class LocalNoiseModel(_ImplicitOpModel):
                 # assume global_idle is a unitary mx
                 if parameterization == "static unitary":
                     global_idle = _op.StaticUnitaryOp(global_idle, 'pp', evotype, state_space=None)
+                elif parameterization == "static clifford":
+                    global_idle = _op.CliffordOp(global_idle, None, 'pp', evotype, state_space=None)
                 else:
                     #TODO - update this, currently all other parameterizations convert unitary -> superop matrix
                     # and we convert this to the desired parameterization

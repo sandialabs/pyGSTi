@@ -46,8 +46,8 @@ cdef class EffectRepConjugatedState(EffectRep):
     def __cinit__(self, StateRep state_rep):
         self.state_rep = state_rep
         self.state_space = state_rep.state_space
-        self.c_effect = new EffectCRep_Dense(<double complex*>self.state_rep.base.data,
-                                             <INT>self.state_rep.base.shape[0])
+        self.c_effect = new EffectCRep_Dense(<double complex*>self.state_rep.data.data,
+                                             <INT>self.state_rep.data.shape[0])
 
     def __str__(self):
         return str([ (<EffectCRep_Dense*>self.c_effect)._dataptr[i] for i in range(self.c_effect._dim)])
@@ -80,7 +80,14 @@ cdef class EffectRepComputational(EffectRep):
     def __reduce__(self):
         return (EffectRepComputational, (self.zvals, self.basis, self.state_space))
 
-    #Add party & to_dense from slow version?
+    def to_dense(self, outvec, trust_outvec_sparsity=False):
+        # when trust_outvec_sparsity is True, assume we only need to fill in the
+        # non-zero elements of outvec (i.e. that outvec is already zero wherever
+        # this vector is zero).
+        if not trust_outvec_sparsity:
+            outvec[:] = 0  # reset everything to zero
+        outvec[self.nonzero_index] = 1.0
+        return outvec
 
 
 cdef class EffectRepTensorProduct(EffectRep):
@@ -91,11 +98,11 @@ cdef class EffectRepTensorProduct(EffectRep):
 
     def __init__(self, povm_factors, effect_labels, state_space):
         #Arrays for speeding up kron product in effect reps
-        cdef INT max_factor_dim = max(fct.dim for fct in povm_factors)
+        cdef INT max_factor_dim = max(fct.state_space.udim for fct in povm_factors)
         cdef _np.ndarray[double, ndim=2, mode='c'] kron_array = \
             _np.ascontiguousarray(_np.empty((len(povm_factors), max_factor_dim), 'd'))
         cdef _np.ndarray[_np.int64_t, ndim=1, mode='c'] factor_dims = \
-            _np.ascontiguousarray(_np.array([fct.dim for fct in povm_factors], _np.int64))
+            _np.ascontiguousarray(_np.array([fct.state_space.udim for fct in povm_factors], _np.int64))
 
         cdef INT dim = _np.product(factor_dims)
         cdef INT nfactors = len(self.povm_factors)

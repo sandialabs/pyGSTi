@@ -12,6 +12,7 @@ The EmbeddedErrorgen class and supporting functionality.
 
 import numpy as _np
 import collections as _collections
+import warnings as _warnings
 from .embeddedop import EmbeddedOp as _EmbeddedOp
 
 from ...objects.basis import Basis as _Basis, EmbeddedBasis as _EmbeddedBasis
@@ -341,7 +342,9 @@ class EmbeddedErrorgen(_EmbeddedOp):
         numpy array
             Array of derivatives, shape == (dimension^2, num_params)
         """
-        raise NotImplementedError("deriv_wrt_params is not implemented for EmbeddedErrorGen objects")
+        _warnings.warn("Using finite differencing to compute EmbeddedErrorGen derivative!")
+        #raise NotImplementedError("deriv_wrt_params is not implemented for EmbeddedErrorGen objects")
+        return super(EmbeddedErrorgen, self).deriv_wrt_params(wrt_filter)
 
     def hessian_wrt_params(self, wrt_filter1=None, wrt_filter2=None):
         """
@@ -366,7 +369,9 @@ class EmbeddedErrorgen(_EmbeddedOp):
         numpy array
             Hessian with shape (dimension^2, num_params1, num_params2)
         """
-        raise NotImplementedError("hessian_wrt_params is not implemented for EmbeddedErrorGen objects")
+        _warnings.warn("Using finite differencing to compute EmbeddedErrorGen hessian!")
+        #raise NotImplementedError("hessian_wrt_params is not implemented for EmbeddedErrorGen objects")
+        return super(EmbeddedErrorgen, self).hessian_wrt_params(wrt_filter1, wrt_filter2)
 
     def onenorm_upperbound(self):
         """

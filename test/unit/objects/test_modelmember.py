@@ -2,7 +2,8 @@ import numpy as np
 
 from ..util import BaseCase
 
-from pygsti.objects import modelmember as mm
+from pygsti.modelmembers import modelmember as mm
+from pygsti.models.statespace import StateSpace
 
 
 class ModelMemberUtilTester(BaseCase):
@@ -41,7 +42,8 @@ class ModelMemberUtilTester(BaseCase):
 
 class ModelMemberInstanceTester(BaseCase):
     def setUp(self):
-        self.member = mm.ModelMember(dim=4, evotype="densitymx")
+        state_space = StateSpace.cast(('Q0',))
+        self.member = mm.ModelMember(state_space, evotype="densitymx")
 
     def test_gpindices_read_only(self):
         with self.assertRaises(ValueError):

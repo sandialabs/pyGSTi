@@ -71,7 +71,7 @@ cdef class OpRepClifford(OpRep):
             self.smatrix, self.svector = symplecticrep
         else:
             # compute symplectic rep from unitary
-            self.smatrix, self.svector = _symp.unitary_to_symplectic(self.unitary, flagnonclifford=True)
+            self.smatrix, self.svector = _symp.unitary_to_symplectic(unitarymx, flagnonclifford=True)
 
         self.smatrix_inv, self.svector_inv = _symp.inverse_clifford(
             self.smatrix, self.svector)  # cache inverse since it's expensive

@@ -35,10 +35,5 @@ class StaticDenseOp(_DenseOperator):
     """
 
     def __init__(self, m, evotype="default", state_space=None):
-        m = _LinearOperator.convert_to_matrix(m)
         _DenseOperator.__init__(self, m, evotype, state_space)
         #(default DenseOperator/LinearOperator methods implement an object with no parameters)
-
-        #if self._evotype == "svterm": # then we need to extract unitary
-        #    op_std = _bt.change_basis(operation, basis, 'std')
-        #    U = _gt.process_mx_to_unitary(self)

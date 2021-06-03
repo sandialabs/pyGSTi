@@ -19,6 +19,7 @@ from .effect import POVMEffect
 from .fulleffect import FullPOVMEffect
 from .fullpureeffect import FullPOVMPureEffect
 from .staticeffect import StaticPOVMEffect
+from .staticpureeffect import StaticPOVMPureEffect
 from .tensorprodeffect import TensorProductPOVMEffect
 
 from .composedpovm import ComposedPOVM
@@ -71,7 +72,7 @@ def convert(povm, to_type, basis, extra=None):
     if to_type in ("full", "static", "static unitary"):
         converted_effects = [(lbl, convert_effect(vec, to_type, basis))
                              for lbl, vec in povm.items()]
-        return UnconstrainedPOVM(converted_effects)
+        return UnconstrainedPOVM(converted_effects, povm.evotype, povm.state_space)
 
     elif to_type == "TP":
         if isinstance(povm, TPPOVM):
@@ -79,37 +80,32 @@ def convert(povm, to_type, basis, extra=None):
         else:
             converted_effects = [(lbl, convert_effect(vec, "full", basis))
                                  for lbl, vec in povm.items()]
-            return TPPOVM(converted_effects)
+            return TPPOVM(converted_effects, povm.evotype, povm.state_space)
 
     elif _ot.is_valid_lindblad_paramtype(to_type):
+        from ..operations import LindbladErrorgen as _LindbladErrorgen, ExpErrorgenOp as _ExpErrorgenOp
 
-        # A LindbladPOVM needs a *static* base/reference POVM
-        #  with the appropriate evotype.  If we can convert `povm` to such a
-        #  thing we win.  (the error generator is initialized as just the identity below)
-
-        nQubits = int(round(_np.log2(povm.dim) / 2.0))  # Linblad ops always work on density-matrices, never states
-        bQubits = bool(_np.isclose(nQubits, _np.log2(povm.dim) / 2.0))  # integer # of qubits?
-        proj_basis = "pp" if (basis == "pp" or bQubits) else basis
-
-        _, evotype = _ot.split_lindblad_paramtype(to_type)
-
+        #Construct a static "base" POVM
         if isinstance(povm, ComputationalBasisPOVM):  # special easy case
-            assert(povm.nqubits == nQubits)
-            base_povm = ComputationalBasisPOVM(nQubits, evotype)
+            base_povm = ComputationalBasisPOVM(povm.state_space.num_qubits, povm.evotype)  # just copy it?
         else:
-            base_items = [(lbl, _convert_to_static_effect(Evec, evotype, basis))
-                          for lbl, Evec in povm.items()]
-            base_povm = UnconstrainedPOVM(base_items)
+            base_items = [(lbl, convert_effect(vec, 'static', basis)) for lbl, vec in povm.items()]
+            base_povm = UnconstrainedPOVM(base_items, povm.evotype, povm.state_space)
 
-        # purevecs = extra if (extra is not None) else None # UNUSED
-        cls = _op.LindbladDenseOp if (povm.dim <= 64 and evotype == "densitymx") \
-            else _op.LindbladOp
-        povmNoiseMap = cls.from_operation_obj(_np.identity(povm.dim, 'd'), to_type,
-                                              None, proj_basis, basis, truncate=True)
-        return ComposedPOVM(povmNoiseMap, base_povm, basis)
+        proj_basis = 'pp' if povm.state_space.is_entirely_qubits else basis
+        nonham_mode, param_mode, use_ham_basis, use_nonham_basis = \
+            _LindbladErrorgen.decomp_paramtype(to_type)
+        ham_basis = proj_basis if use_ham_basis else None
+        nonham_basis = proj_basis if use_nonham_basis else None
 
-    elif to_type == "clifford":
-        if isinstance(povm, ComputationalBasisPOVM) and povm._evotype == "stabilizer":
+        errorgen = _LindbladErrorgen.from_error_generator(_np.zeros((povm.state_space.dim,
+                                                                     povm.state_space.dim), 'd'),
+                                                          ham_basis, nonham_basis, param_mode, nonham_mode,
+                                                          basis, truncate=True, evotype=povm.evotype)
+        return ComposedPOVM(_ExpErrorgenOp(errorgen), base_povm, mx_basis=basis)
+
+    elif to_type == "static clifford":
+        if isinstance(povm, ComputationalBasisPOVM):
             return povm
 
         #OLD
@@ -138,27 +134,28 @@ def convert(povm, to_type, basis, extra=None):
         raise ValueError("Invalid to_type argument: %s" % to_type)
 
 
-def _convert_to_static_effect(effect, new_evotype, mx_basis="pp"):
-    """
-    Attempts to convert `vec` to a static (0 params) SPAMVec with
-    evoution type `new_evotype`.  Used to convert spam vecs to
-    being LindbladSPAMVec objects.
-    """
-    if effect.evotype == new_evotype and effect.num_params == 0:
-        return effect  # no conversion necessary
-
-    #First, check if it's a computational effect, which is easy to convert evotypes of:
-    if isinstance(effect, ComputationalBasisPOVMEffect):
-        return ComputationalBasisPOVMEffect(effect._zvals, new_evotype)
-
-    #Next, try to construct a pure-state if possible
-    #if isinstance(effect, ConjugatedStatePOVMEffect):
-    try:
-        dmvec = _bt.change_basis(effect.to_dense(), mx_basis, 'std')
-        purevec = _ot.dmvec_to_state(dmvec)
-        return StaticPOVMPureEffect(purevec, new_evotype)
-    except:
-        return StaticPOVMEffect(effect.to_dense(), new_evotype)
+#REMOVE (UNUSED) - but an example of evotype-changing code...
+#def _convert_to_static_effect(effect, new_evotype, mx_basis="pp"):
+#    """
+#    Attempts to convert `vec` to a static (0 params) SPAMVec with
+#    evoution type `new_evotype`.  Used to convert spam vecs to
+#    being LindbladSPAMVec objects.
+#    """
+#    if effect.evotype == new_evotype and effect.num_params == 0:
+#        return effect  # no conversion necessary
+#
+#    #First, check if it's a computational effect, which is easy to convert evotypes of:
+#    if isinstance(effect, ComputationalBasisPOVMEffect):
+#        return ComputationalBasisPOVMEffect(effect._zvals, new_evotype)
+#
+#    #Next, try to construct a pure-state if possible
+#    #if isinstance(effect, ConjugatedStatePOVMEffect):
+#    try:
+#        dmvec = _bt.change_basis(effect.to_dense(), mx_basis, 'std')
+#        purevec = _ot.dmvec_to_state(dmvec)
+#        return StaticPOVMPureEffect(purevec, new_evotype)
+#    except:
+#        return StaticPOVMEffect(effect.to_dense(), new_evotype)
 
 
 def convert_effect(effect, to_type, basis, extra=None):
@@ -197,44 +194,95 @@ def convert_effect(effect, to_type, basis, extra=None):
         if isinstance(effect, FullPOVMEffect):
             return effect  # no conversion necessary
         else:
-            return FullPOVMEffect(effect.to_dense())
+            return FullPOVMEffect(effect.to_dense(), effect.evotype, effect.state_space)
 
     elif to_type == "static":
         if isinstance(effect, StaticPOVMEffect):
             return effect  # no conversion necessary
         else:
-            return StaticPOVMEffect(effect.to_dense())
+            return StaticPOVMEffect(effect.to_dense(), effect.evotype, effect.state_space)
 
     elif to_type == "static unitary":
         dmvec = _bt.change_basis(effect.to_dense(), basis, 'std')
         purevec = _ot.dmvec_to_state(dmvec)
-        return StaticPOVMPureEffect(purevec)
+        return StaticPOVMPureEffect(purevec, basis, effect.evotype, effect.state_space)
 
     elif _ot.is_valid_lindblad_paramtype(to_type):
 
-        if extra is None:
-            purevec = effect  # right now, we don't try to extract a "closest pure vec"
-            # to effect - below will fail if effect isn't pure.
-        else:
-            purevec = extra  # assume extra info is a pure vector
+        from ..operations import LindbladErrorgen as _LindbladErrorgen, ExpErrorgenOp as _ExpErrorgenOp
+        from ..states import FullState as _FullState, TPState as _TPState, StaticState as _StaticState
+        from ..states import StaticPureState as _StaticPureState
 
-        nQubits = _np.log2(effect.dim) / 2.0
-        bQubits = bool(abs(nQubits - round(nQubits)) < 1e-10)  # integer # of qubits?
-        proj_basis = "pp" if (basis == "pp" or bQubits) else basis
-        typ = effect._prep_or_effect if isinstance(effect, POVMEffect) else "prep"
+        pureeffect = None
+        if isinstance(effect, ConjugatedStatePOVMEffect) \
+           and isinstance(effect.state, (_FullState, _TPState, _StaticState)):
+            #Similar to conversion for states
+            state = effect.state
+            try:
+                dmvec = _bt.change_basis(state.to_dense(), basis, 'std')
+                purevec = _ot.dmvec_to_state(dmvec)  # raises error if dmvec does not correspond to a pure state
+                pureeffect = ConjugatedStatePOVMEffect(_StaticPureState(purevec, basis,
+                                                                        state.evotype, state.state_space))
+            except ValueError:
+                pureeffect = None
 
-        return ComposedPOVMEffect._from_effect_obj(
-            effect, typ, to_type, None, proj_basis, basis,
-            truncate=True, lazy=True)  # TODO ----------------------------------------------------------------------------------
+        if pureeffect is not None:
+            static_effect = pureeffect
+        elif effect.num_params > 0:  # then we need to convert to a static state
+            static_effect = StaticPOVMEffect(effect.to_dense(), effect.evotype, effect.state_space)
+        else:  # state.num_params == 0 so it's already static
+            static_effect = effect
 
-    # "clifford" is more of an evotype than a parameterization...
-    #elif to_type == "clifford":
-    #    if isinstance(effect, StabilizerEffect):
-    #        return effect  # no conversion necessary
-    #
-    #    purevec = effect.flatten()  # assume a pure state (otherwise would
-    #    # need to change Model dim)
-    #    return StabilizerEffect.from_dense_purevec(purevec)
+        proj_basis = 'pp' if state.state_space.is_entirely_qubits else basis
+        nonham_mode, param_mode, use_ham_basis, use_nonham_basis = \
+            _LindbladErrorgen.decomp_paramtype(to_type)
+        ham_basis = proj_basis if use_ham_basis else None
+        nonham_basis = proj_basis if use_nonham_basis else None
+
+        errorgen = _LindbladErrorgen.from_error_generator(_np.zeros((effect.state_space.dim,
+                                                                     effect.state_space.dim), 'd'),
+                                                          ham_basis, nonham_basis, param_mode, nonham_mode,
+                                                          basis, truncate=True, evotype=effect.evotype)
+        return ComposedPOVMEffect(static_effect, _ExpErrorgenOp(errorgen))
+
+    elif to_type == "static clifford":
+        if isinstance(effect, ComputationalBasisPOVMEffect):
+            return effect  # no conversion necessary
+
+        purevec = effect.to_dense().flatten()  # assume a pure state (otherwise would need to change Model dim)
+        return ComputationalBasisPOVMEffect.from_dense_purevec(purevec)
 
     else:
         raise ValueError("Invalid to_type argument: %s" % to_type)
+
+
+def optimize_effect(vec_to_optimize, target_vec):
+    """
+    Optimize the parameters of vec_to_optimize.
+
+    The optimization is performed so that the the resulting SPAM vector is as
+    close as possible to target_vec.
+
+    This is trivial for the case of FullSPAMVec instances, but for other types
+    of parameterization this involves an iterative optimization over all the
+    parameters of vec_to_optimize.
+
+    Parameters
+    ----------
+    vec_to_optimize : SPAMVec
+        The vector to optimize. This object gets altered.
+
+    target_vec : SPAMVec
+        The SPAM vector used as the target.
+
+    Returns
+    -------
+    None
+    """
+
+    if not isinstance(vec_to_optimize, ConjugatedStatePOVMEffect):
+        return  # we don't know how to deal with anything but a conjuated state effect...
+
+    from ..states import optimize_state as _optimize_state
+    _optimize_state(vec_to_optimize.state, target_vec)
+    vec_to_optimize.from_vector(vec_to_optimize.state.to_vector())  # make sure effect is updated

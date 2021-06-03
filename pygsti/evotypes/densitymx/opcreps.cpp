@@ -485,20 +485,20 @@ namespace CReps {
       delete init_state;
       return out_state;
     }
-
+    
     double* F = out_state->_dataptr; //will be output
     double* scratch = new double[N];
     double* B = init_state->_dataptr;
     double tol = 1e-16; // 2^-53 (=Scipy default) -- TODO: make into an arg...
-
+    
     // F = expm(A)*B
     expm_multiply_simple_core_rep(_errgen_rep, B, N, _mu,
 				  _m_star, _s, tol, _eta, F, scratch);
-
+    
     //cleanup what we allocated
     delete [] scratch;
     delete init_state;
-
+    
     DEBUG(out_state->print("OUTPUT"));
     return out_state;
   }
@@ -657,46 +657,46 @@ namespace CReps {
     
     for(i=0; i<s; i++) {
       if(m_star > 0) { //added by EGN
-	//c1 = vec_inf_norm(B) #_exact_inf_norm(B)
-	c1 = 0.0;
-	for(k=0; k<N; k++) {
-	  a = (B[k] >= 0) ? B[k] : -B[k]; // abs(B[k])
-	  if(a > c1) c1 = a;
-	}
+          //c1 = vec_inf_norm(B) #_exact_inf_norm(B)
+          c1 = 0.0;
+          for(k=0; k<N; k++) {
+              a = (B[k] >= 0) ? B[k] : -B[k]; // abs(B[k])
+              if(a > c1) c1 = a;
+          }
       }
       
       for(j=0; j<m_star; j++) {
-	coeff = 1.0 / (s*(j+1)); // t == 1.0
+          coeff = 1.0 / (s*(j+1)); // t == 1.0
 	
-	// B = coeff * A.dot(B)
-	A_rep->acton(&B_st,&scratch_st); // scratch = A.dot(B)
-
-	// if(j % 3 == 0) {...   // every == 3 TODO: work on this?
-	c2 = 0.0;
-	normF = 0.0;
-	for(k=0; k<N; k++) {
-	  B[k] = coeff * scratch[k]; //finishes B = coeff * A.dot(B) 
-	  F[k] += B[k]; //F += B
-        
-	  a = (B[k] >= 0)? B[k] : -B[k]; //abs(B[k])
-	  if(a > c2) c2 = a; // c2 = vec_inf_norm(B) // _exact_inf_norm(B)
-	  a = (F[k] >= 0)? F[k] : -F[k]; //abs(F[k])
-	  if(a > normF) normF = a; // normF = vec_inf_norm(F) // _exact_inf_norm(F)
-	}
-
-        // print("Iter %d,%d of %d,%d: %g+%g=%g < %g?" % (i,j,s,m_star,c1,c2,c1+c2,tol*normF))
-	if(c1 + c2 <= tol * normF) {
-	  // print(" --> YES - break early at %d of %d" % (i+1,s))
-	  break;
-	}
-	c1 = c2;
+          // B = coeff * A.dot(B)
+          A_rep->acton(&B_st,&scratch_st); // scratch = A.dot(B)
+    
+          // if(j % 3 == 0) {...   // every == 3 TODO: work on this?
+          c2 = 0.0;
+          normF = 0.0;
+          for(k=0; k<N; k++) {
+              B[k] = coeff * scratch[k]; //finishes B = coeff * A.dot(B) 
+              F[k] += B[k]; //F += B
+              
+              a = (B[k] >= 0)? B[k] : -B[k]; //abs(B[k])
+              if(a > c2) c2 = a; // c2 = vec_inf_norm(B) // _exact_inf_norm(B)
+              a = (F[k] >= 0)? F[k] : -F[k]; //abs(F[k])
+              if(a > normF) normF = a; // normF = vec_inf_norm(F) // _exact_inf_norm(F)
+          }
+          
+          // print("Iter %d,%d of %d,%d: %g+%g=%g < %g?" % (i,j,s,m_star,c1,c2,c1+c2,tol*normF))
+          if(c1 + c2 <= tol * normF) {
+              // print(" --> YES - break early at %d of %d" % (i+1,s))
+              break;
+          }
+          c1 = c2;
       }
-
+      
       // F *= eta
       // B = F
       for(k=0; k<N; k++) {
-	F[k] *= eta;
-	B[k] = F[k];
+          F[k] *= eta;
+          B[k] = F[k];
       }
     }
     // output value is in F upon returning

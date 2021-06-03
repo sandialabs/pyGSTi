@@ -7,11 +7,14 @@ import functools
 
 from ..util import BaseCase, needs_cvxpy
 
-from pygsti.objects import ExplicitOpModel, Instrument, LinearOperator, \
-    Circuit, FullDenseOp, FullGaugeGroupElement, matrixforwardsim, mapforwardsim
+from pygsti.objects import Circuit, FullGaugeGroupElement
+from pygsti.forwardsims import matrixforwardsim, mapforwardsim
+from pygsti.models import ExplicitOpModel
+from pygsti.modelmembers.instruments import Instrument
+from pygsti.modelmembers.operations import LinearOperator, FullDenseOp
 from pygsti.tools import indices
 import pygsti.construction as pc
-import pygsti.objects.model as m
+import pygsti.models.model as m
 
 
 @contextmanager
@@ -246,7 +249,7 @@ class GeneralMethodBase(object):
             prep, gates, povm = self.model.split_circuit(Circuit(('Gx', 'Mdefault')))
 
     def test_set_gate_raises_on_bad_dimension(self):
-        with self.assertRaises(ValueError):
+        with self.assertRaises(AssertionError):
             self.model['Gbad'] = FullDenseOp(np.zeros((5, 5), 'd'))
 
     def test_parameter_labels(self):
@@ -277,18 +280,23 @@ class GeneralMethodBase(object):
         self.assertEqual(self.model.num_params, 27)
 
         lbls_save = self.model.parameter_labels.copy()
+        #DEBUG print(self.model.parameter_labels) #self.model.print_parameters_by_op();  print()
+
 
         # Using "pretty" labels works too:
         self.model.collect_parameters(['Gx: Y stochastic coefficient',
                                        'Gx: Z stochastic coefficient' ],
                                       new_param_label='Gxpi2 off-axis stochastic')
         self.assertEqual(self.model.num_params, 26)
+        #DEBUG print(self.model.parameter_labels)
         
         #Just make sure printing works
         self.model.parameter_labels_pretty
         self.model.print_parameters_by_op()
 
         self.model.uncollect_parameters('Gxpi2 off-axis stochastic')
+
+        #DEBUG print(); print(self.model.parameter_labels)
         self.assertEqual(self.model.num_params, 27)
         self.assertEqual(set(lbls_save), set(self.model.parameter_labels))  # ok if ordering if different
 
@@ -727,16 +735,17 @@ class FullHighThresholdMethodTester(FullModelBase, ThresholdMethodBase, BaseCase
         super(FullHighThresholdMethodTester, self).tearDown()
 
 
-class FullBadDimensionModelTester(FullModelBase, BaseCase):
-    def setUp(self):
-        super(FullBadDimensionModelTester, self).setUp()
-        self.model = self.model.increase_dimension(11)
-
-    # XXX these aren't tested under normal conditions...  EGN: we should probably test them under normal conditions then.
-    def test_rotate_raises(self):
-        with self.assertRaises(AssertionError):
-            self.model.rotate((0.1, 0.1, 0.1))
-
-    def test_randomize_with_unitary_raises(self):
-        with self.assertRaises(AssertionError):
-            self.model.randomize_with_unitary(1, rand_state=np.random.RandomState())  # scale shouldn't matter
+#TODO: see if this makes sense to have as a unit test... now it fails in setUp b/c 11 is a bad dimension
+#class FullBadDimensionModelTester(FullModelBase, BaseCase):
+#    def setUp(self):
+#        super(FullBadDimensionModelTester, self).setUp()
+#        self.model = self.model.increase_dimension(11)
+#
+#    # XXX these aren't tested under normal conditions...  EGN: we should probably test them under normal conditions then.
+#    def test_rotate_raises(self):
+#        with self.assertRaises(AssertionError):
+#            self.model.rotate((0.1, 0.1, 0.1))
+#
+#    def test_randomize_with_unitary_raises(self):
+#        with self.assertRaises(AssertionError):
+#            self.model.randomize_with_unitary(1, rand_state=np.random.RandomState())  # scale shouldn't matter

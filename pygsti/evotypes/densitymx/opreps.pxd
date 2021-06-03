@@ -20,7 +20,7 @@ cimport numpy as _np
 cimport cython
 
 from .. cimport basereps_cython as _basereps_cython
-from .statereps cimport StateRep, StateCRep
+from .statereps cimport StateRep, StateCRep, StateRepDense
 
 
 #Use 64-bit integers

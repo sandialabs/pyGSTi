@@ -1,4 +1,22 @@
-class TPInstrumentOp(DenseOperator):
+"""
+The TPInstrumentOp class and supporting functionality.
+"""
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
+
+import numpy as _np
+from .. import modelmember as _mm
+from ..operations import DenseOperator as _DenseOperator
+from ...tools import slicetools as _slct
+
+
+class TPInstrumentOp(_DenseOperator):
     """
     An element of a :class:`TPInstrument`.
 
@@ -39,8 +57,8 @@ class TPInstrumentOp(DenseOperator):
         """
         self.param_ops = param_ops
         self.index = index
-        DenseOperator.__init__(self, _np.identity(param_ops[0].dim, 'd'),
-                               "densitymx")  # Note: sets self.gpindices; TP assumed real
+        _DenseOperator.__init__(self, _np.identity(param_ops[0].dim, 'd'), param_ops[0].evotype,
+                                param_ops[0].state_space)  # Note: sets self.gpindices; TP assumed real
         self._construct_matrix()
 
         #Set our own parent and gpindices based on param_ops
@@ -62,18 +80,19 @@ class TPInstrumentOp(DenseOperator):
            = -(n-2)*MT-sum(Di) = -(n-2)*MT-[(MT-Mi)-n*MT] for i == (n-1)
         """
         nEls = len(self.param_ops)
-        self.base.flags.writeable = True
+        self._ptr.flags.writeable = True
         if self.index < nEls - 1:
-            self.base[:, :] = _np.asarray(self.param_ops[self.index + 1]
+            self._ptr[:, :] = _np.asarray(self.param_ops[self.index + 1]
                                           + self.param_ops[0])
         else:
             assert(self.index == nEls - 1), \
                 "Invalid index %d > %d" % (self.index, nEls - 1)
-            self.base[:, :] = _np.asarray(-sum(self.param_ops)
+            self._ptr[:, :] = _np.asarray(-sum(self.param_ops)
                                           - (nEls - 3) * self.param_ops[0])
 
-        assert(self.base.shape == (self.dim, self.dim))
-        self.base.flags.writeable = False
+        assert(self._ptr.shape == (self.dim, self.dim))
+        self._ptr.flags.writeable = False
+        self._ptr_has_changed()
 
     def deriv_wrt_params(self, wrt_filter=None):
         """
@@ -191,7 +210,7 @@ class TPInstrumentOp(DenseOperator):
         if self.index < len(self.param_ops) - 1:  # final element doesn't need to init any param operations
             for i in self.dependents:  # re-init all my dependents (may be redundant)
                 if i == 0 and self.index > 0: continue  # 0th param-operation already init by index==0 element
-                paramop_local_inds = _modelmember._decompose_gpindices(
+                paramop_local_inds = _mm._decompose_gpindices(
                     self.gpindices, self.param_ops[i].gpindices)
                 self.param_ops[i].from_vector(v[paramop_local_inds], close, dirty_value)
 

@@ -128,15 +128,15 @@ class ComputationalBasisPOVMEffect(_POVMEffect):
                           "cannot construct StabilizerEffectVec"))
 
     def __init__(self, zvals, basis='pp', evotype="default", state_space=None):
-        self._zvals = _np.ascontiguousarray(_np.array(zvals, _np.int64))
+        zvals = _np.ascontiguousarray(_np.array(zvals, _np.int64))
 
-        state_space = _statespace.default_space_for_num_qubits(len(self._zvals)) if (state_space is None) \
+        state_space = _statespace.default_space_for_num_qubits(len(zvals)) if (state_space is None) \
             else _statespace.StateSpace.cast(state_space)
         basis = _Basis.cast(basis, state_space.dim)  # basis for Hilbert-Schmidt (superop) space
 
         evotype = _Evotype.cast(evotype)
         self._evotype = evotype  # set this before call to _State.__init__ so self.to_dense() can work...
-        rep = evotype.create_computational_effect(zvals, basis, state_space)
+        rep = evotype.create_computational_effect_rep(zvals, basis, state_space)
         _POVMEffect.__init__(self, rep, evotype)
 
     def to_dense(self, scratch=None):
@@ -154,7 +154,7 @@ class ComputationalBasisPOVMEffect(_POVMEffect):
         -------
         numpy.ndarray
         """
-        self._rep.to_dense()
+        return self._rep.to_dense()
 
     def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
         """
@@ -198,7 +198,7 @@ class ComputationalBasisPOVMEffect(_POVMEffect):
         """
         if order == 0:  # only 0-th order term exists
             #REMOVE term_evotype = self._evotype.term_evotype
-            #REMOVE effect = ComputationalBasisPOVMEffect(self._zvals, term_evotype)
+            #REMOVE effect = ComputationalBasisPOVMEffect(self._rep.zvals, term_evotype)
             coeff = _Polynomial({(): 1.0}, max_polynomial_vars)
             terms = [_term.RankOnePolynomialEffectTerm.create_from(coeff, self, self,
                                                                    self._evotype, self.state_space)]
@@ -266,8 +266,8 @@ class ComputationalBasisPOVMEffect(_POVMEffect):
         assert(len(v) == 0)  # should be no parameters, and nothing to do
 
     def __str__(self):
-        nQubits = len(self._zvals)
-        s = "Computational Z-basis SPAM vec for %d qubits w/z-values: %s" % (nQubits, str(self._zvals))
+        nQubits = len(self._rep.zvals)
+        s = "Computational Z-basis SPAM vec for %d qubits w/z-values: %s" % (nQubits, str(self._rep.zvals))
         return s
 
 #REMOVE:

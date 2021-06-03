@@ -14,6 +14,7 @@ import numpy as _np
 #import functools as _functools
 from .. import basereps as _basereps
 from ...models.statespace import StateSpace as _StateSpace
+from ...tools import matrixtools as _mt
 
 
 class EffectRep(_basereps.EffectRep):
@@ -35,7 +36,7 @@ class EffectRepConjugatedState(EffectRep):
 
     def probability(self, state):
         # can assume state is a StateRep and self.state_rep is
-        return _np.dot(self.state_rep.base, state.base)  # not vdot b/c *real* data
+        return _np.dot(self.state_rep.data, state.data)  # not vdot b/c *real* data
 
     def to_dense(self):
         return self.state_rep.to_dense()
@@ -67,92 +68,13 @@ class EffectRepComputational(EffectRep):
     def __reduce__(self):
         return (EffectRepComputational, (self.zvals, self.basis, self.state_space))
 
-    def parity(self, x):
-        """recursively divide the (64-bit) integer into two equal
-           halves and take their XOR until only 1 bit is left """
-        x = (x & 0x00000000FFFFFFFF) ^ (x >> 32)
-        x = (x & 0x000000000000FFFF) ^ (x >> 16)
-        x = (x & 0x00000000000000FF) ^ (x >> 8)
-        x = (x & 0x000000000000000F) ^ (x >> 4)
-        x = (x & 0x0000000000000003) ^ (x >> 2)
-        x = (x & 0x0000000000000001) ^ (x >> 1)
-        return x & 1  # return the last bit (0 or 1)
-
-    def to_dense(self, outvec, trust_outvec_sparsity=False):
-        # when trust_outvec_sparsity is True, assume we only need to fill in the
-        # non-zero elements of outvec (i.e. that outvec is already zero wherever
-        # this vector is zero).
-        if not trust_outvec_sparsity:
-            outvec[:] = 0  # reset everything to zero
-
-        N = self.nfactors
-
-        # there are nQubits factors
-        # each factor (4-element, 1Q dmvec) has 2 zero elements and 2 nonzero ones
-        # loop is over all non-zero elements of the final outvec by looping over
-        #  all the sets of *entirely* nonzero elements from the factors.
-
-        # Let the two possible nonzero elements of the k-th factor be represented
-        # by the k-th bit of `finds` below, which ranges from 0 to 2^nFactors-1
-        for finds in range(2**N):
-
-            #Create the final index (within outvec) corresponding to finds
-            # assume, like tensorprod, that factor ordering == kron ordering
-            # so outvec = kron( factor[0], factor[1], ... factor[N-1] ).
-            # Let factorDim[k] == 4**(N-1-k) be the stride associated with the k-th index
-            # Whenever finds[bit k] == 0 => finalIndx += 0*factorDim[k]
-            #          finds[bit k] == 1 => finalIndx += 3*factorDim[k] (3 b/c factor's 2nd nonzero el is at index 3)
-            finalIndx = sum([3 * (4**(N - 1 - k)) for k in range(N) if bool(finds & (1 << k))])
-
-            #Determine the sign of this element (the element is either +/- (1/sqrt(2))^N )
-            # A minus sign is picked up whenever finds[bit k] == 1 (which means we're looking
-            # at the index=3 element of the factor vec) AND self.zvals_int[bit k] == 1
-            # (which means it's a [1 0 0 -1] state rather than a [1 0 0 1] state).
-            # Since we only care whether the number of minus signs is even or odd, we can
-            # BITWISE-AND finds with self.zvals_int (giving an integer whose binary-expansion's
-            # number of 1's == the number of minus signs) and compute the parity of this.
-            minus_sign = self.parity(finds & self.zvals_int)
-
-            outvec[finalIndx] = -self.abs_elval if minus_sign else self.abs_elval
-
-        return outvec
-
     def probability(self, state):
         scratch = _np.empty(self.dim, 'd')
         Edense = self.to_dense(scratch)
-        return _np.dot(Edense, state.base)  # not vdot b/c data is *real*
+        return _np.dot(Edense, state.data)  # not vdot b/c data is *real*
 
-#    def alt_to_dense(self):  # Useful
-#        if self._evotype == "densitymx":
-#            factor_dim = 4
-#            v0 = 1.0 / _np.sqrt(2) * _np.array((1, 0, 0, 1), 'd')  # '0' qubit state as Pauli dmvec
-#            v1 = 1.0 / _np.sqrt(2) * _np.array((1, 0, 0, -1), 'd')  # '1' qubit state as Pauli dmvec
-#        elif self._evotype in ("statevec", "stabilizer", "chp"):
-#            factor_dim = 2
-#            v0 = _np.array((1, 0), complex)  # '0' qubit state as complex state vec
-#            v1 = _np.array((0, 1), complex)  # '1' qubit state as complex state vec
-#        elif self._evotype in ("svterm", "cterm"):
-#            raise NotImplementedError("to_dense() is not implemented for evotype %s!" %
-#                                      self._evotype)
-#        else: raise ValueError("Invalid `evotype`: %s" % self._evotype)
-#
-#        v = (v0, v1)
-#
-#        if _fastcalc is None:  # do it the slow way using numpy
-#            return _functools.reduce(_np.kron, [v[i] for i in self._zvals])
-#        else:
-#            typ = 'd' if self._evotype == "densitymx" else complex
-#            fast_kron_array = _np.ascontiguousarray(
-#                _np.empty((len(self._zvals), factor_dim), typ))
-#            fast_kron_factordims = _np.ascontiguousarray(_np.array([factor_dim] * len(self._zvals), _np.int64))
-#            for i, zi in enumerate(self._zvals):
-#                fast_kron_array[i, :] = v[zi]
-#            ret = _np.ascontiguousarray(_np.empty(factor_dim**len(self._zvals), typ))
-#            if self._evotype == "densitymx":
-#                _fastcalc.fast_kron(ret, fast_kron_array, fast_kron_factordims)
-#            else:
-#                _fastcalc.fast_kron_complex(ret, fast_kron_array, fast_kron_factordims)
-#            return ret
+    def to_dense(self, outvec=None):
+        return _mt.zvals_int64_to_dense(self.zvals_int, self.nfactors, outvec, False, self.abs_elval)
 
 
 class EffectRepTensorProduct(EffectRep):
@@ -163,7 +85,7 @@ class EffectRepTensorProduct(EffectRep):
         kron_array = _np.ascontiguousarray(
             _np.empty((len(povm_factors), max_factor_dim), 'd'))
         factordims = _np.ascontiguousarray(
-            _np.array([fct.dim for fct in povm_factors], _np.int64))
+            _np.array([fct.state_space.dim for fct in povm_factors], _np.int64))
 
         #REMOVE
         #rep = replib.DMEffectRepTensorProd(self._fast_kron_array, self._fast_kron_factordims,
@@ -176,7 +98,6 @@ class EffectRepTensorProduct(EffectRep):
         self.effect_labels = effect_labels
         self.kron_array = kron_array
         self.factor_dims = factordims
-        self.nfactors = len(self.povm_factors)
         self.max_factor_dim = max_factor_dim  # Unused
         state_space = _StateSpace.cast(state_space)
         assert(_np.product(factordims) == state_space.dim)
@@ -188,10 +109,15 @@ class EffectRepTensorProduct(EffectRep):
     #    return (EffectRepTensorProduct,
     #            (self.kron_array, self.factor_dims, self.nfactors, self.max_factor_dim, self.dim))
 
-    def to_dense(self, outvec):
-        N = self.dim
+    def to_dense(self, outvec=None):
+
+        if outvec is None:
+            outvec = _np.zeros(self.state_space.dim, 'd')
+
+        N = self.state_space.dim
+        nfactors = len(self.povm_factors)
         #Put last factor at end of outvec
-        k = self.nfactors - 1  # last factor
+        k = nfactors - 1  # last factor
         off = N - self.factor_dims[k]  # offset into outvec
         for i in range(self.factor_dims[k]):
             outvec[off + i] = self.kron_array[k, i]
@@ -200,7 +126,7 @@ class EffectRepTensorProduct(EffectRep):
         #Repeatedly scale&copy last "sz" elements of outputvec forward
         # (as many times as there are elements in the current factor array)
         # - but multiply *in-place* the last "sz" elements.
-        for k in range(self.nfactors - 2, -1, -1):  # for all but the last factor
+        for k in range(nfactors - 2, -1, -1):  # for all but the last factor
             off = N - sz * self.factor_dims[k]
             endoff = N - sz
 
@@ -224,7 +150,7 @@ class EffectRepTensorProduct(EffectRep):
     def probability(self, state):  # allow scratch to be passed in?
         scratch = _np.empty(self.dim, 'd')
         Edense = self.to_dense(scratch)
-        return _np.dot(Edense, state.base)  # not vdot b/c data is *real*
+        return _np.dot(Edense, state.data)  # not vdot b/c data is *real*
 
     def _fill_fast_kron(self):
         """ Fills in self._fast_kron_array based on current self.factors """

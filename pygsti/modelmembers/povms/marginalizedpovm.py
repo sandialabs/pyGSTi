@@ -15,7 +15,7 @@ import collections as _collections
 #from .. import modelmember as _mm
 from .povm import POVM as _POVM
 from .staticeffect import StaticPOVMEffect as _StaticPOVMEffect
-from ...models import labeldicts as _ld
+from ...models.statespace import StateSpace as _StateSpace
 from ...objects.label import Label as _Label
 
 
@@ -62,9 +62,10 @@ class MarginalizedPOVM(_POVM):
         """
         self.povm_to_marginalize = povm_to_marginalize
 
-        if isinstance(all_sslbls, _ld.StateSpaceLabels):
-            assert(len(all_sslbls.labels) == 1), "all_sslbls should only have a single tensor product block!"
-            all_sslbls = all_sslbls.labels[0]
+        if isinstance(all_sslbls, _StateSpace):
+            assert(all_sslbls.num_tensor_product_blocks == 1), \
+                "all_sslbls should only have a single tensor product block!"
+            all_sslbls = all_sslbls.tensor_product_block_labels(0)
 
         #now all_sslbls is a tuple of labels, like sslbls_after_marginalizing
         self.sslbls_to_marginalize = all_sslbls
@@ -81,7 +82,7 @@ class MarginalizedPOVM(_POVM):
             else:
                 elements_to_sum[mk] = [k]
         self._elements_to_sum = {k: tuple(v) for k, v in elements_to_sum.items()}  # convert to tuples
-        super(MarginalizedPOVM, self).__init__(self.povm_to_marginalize.dim, self.povm_to_marginalize._evotype)
+        super(MarginalizedPOVM, self).__init__(self.povm_to_marginalize.state_space, self.povm_to_marginalize.evotype)
 
     def marginalize_effect_label(self, elbl):
         """

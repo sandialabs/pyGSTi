@@ -28,6 +28,9 @@ cdef extern from "statecreps.h" namespace "CReps":
 
 cdef class StateRep(_basereps_cython.StateRep):
     cdef StateCRep* c_state
-    cdef public _np.ndarray base
+    cdef public _np.ndarray data
     cdef public object state_space
     #cdef double [:] data_view # alt way to hold a reference
+
+cdef class StateRepDense(StateRep):
+    pass

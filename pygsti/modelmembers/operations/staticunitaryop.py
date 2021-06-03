@@ -12,7 +12,7 @@ The StaticPureOp class and supporting functionality.
 
 import numpy as _np
 from .linearop import LinearOperator as _LinearOperator
-from .denseop import DenseOperator as _DenseUnitaryOperator
+from .denseop import DenseUnitaryOperator as _DenseUnitaryOperator
 from ...objects import term as _term
 from ...objects.polynomial import Polynomial as _Polynomial
 
@@ -41,13 +41,8 @@ class StaticUnitaryOp(_DenseUnitaryOperator):
     """
 
     def __init__(self, m, basis='pp', evotype="default", state_space=None):
-        m = _LinearOperator.convert_to_matrix(m)
         _DenseUnitaryOperator.__init__(self, m, basis, evotype, state_space)
         #(default DenseOperator/LinearOperator methods implement an object with no parameters)
-
-        #if self._evotype == "svterm": # then we need to extract unitary
-        #    op_std = _bt.change_basis(operation, basis, 'std')
-        #    U = _gt.process_mx_to_unitary(self)
 
     def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
         """

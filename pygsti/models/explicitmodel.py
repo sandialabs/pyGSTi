@@ -458,7 +458,7 @@ class ExplicitOpModel(_mdl.OpModel):
         elif typ == 'CPTP':
             self.default_gauge_group = _gg.UnitaryGaugeGroup(self.state_space, basis, self.evotype)
         else:  # typ in ('static','H+S','S', 'H+S terms', ...)
-            self.default_gauge_group = _gg.TrivialGaugeGroup(self.state_space, self.evotype)
+            self.default_gauge_group = _gg.TrivialGaugeGroup(self.state_space)
 
     def __setstate__(self, state_dict):
 

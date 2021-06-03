@@ -28,32 +28,36 @@ class StateRep(_basereps.StateRep):
     def __init__(self, data, state_space):
         #vec = _np.asarray(vec, dtype='d')
         assert(data.dtype == _np.dtype('d'))
-        self.base = _np.require(data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
+        self.data = _np.require(data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
         self.state_space = _StateSpace.cast(state_space)
-        assert(len(self.base) == self.state_space.dim)
+        assert(len(self.data) == self.state_space.dim)
 
     def __reduce__(self):
-        return (StateRep, (self.base, self.state_space), (self.base.flags.writeable,))
+        return (StateRep, (self.data, self.state_space), (self.data.flags.writeable,))
 
     def __setstate__(self, state):
         writeable, = state
-        self.base.flags.writeable = writeable
+        self.data.flags.writeable = writeable
 
     def copy_from(self, other):
-        self.base = other.base.copy()
+        self.data[:] = other.data
 
     def to_dense(self):
-        return self.base
+        return self.data
 
     @property
     def dim(self):
         return self.state_space.dim
 
     def __str__(self):
-        return str(self.base)
+        return str(self.data)
 
 
 class StateRepDense(StateRep):
+    @property
+    def base(self):
+        return self.data
+
     def base_has_changed(self):
         pass
 
@@ -61,20 +65,20 @@ class StateRepDense(StateRep):
         return (StateRepDense, (self.base, self.state_space), (self.base.flags.writeable,))
 
 
-class StateRepPure(StateRep):
+class StateRepDensePure(StateRep):
     def __init__(self, purevec, basis, state_space):
         assert(purevec.dtype == _np.dtype(complex))
-        self.purebase = _np.require(purevec.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
+        self.base = _np.require(purevec.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
         self.basis = basis
-        dmVec_std = _ot.state_to_dmvec(self.purebase)
-        super(StateRepPure, self).__init__(_bt.change_basis(dmVec_std, 'std', self.basis), state_space)
+        dmVec_std = _ot.state_to_dmvec(self.base)
+        super(StateRepDensePure, self).__init__(_bt.change_basis(dmVec_std, 'std', self.basis), state_space)
 
-    def purebase_has_changed(self):
-        dmVec_std = _ot.state_to_dmvec(self.purebase)
-        self.base[:] = _bt.change_basis(dmVec_std, 'std', self.basis)
+    def base_has_changed(self):
+        dmVec_std = _ot.state_to_dmvec(self.base)
+        self.data[:] = _bt.change_basis(dmVec_std, 'std', self.basis)
 
     def __reduce__(self):
-        return (StateRepPure, (self.base, self.basis, self.state_space), (self.base.flags.writeable,))
+        return (StateRepDensePure, (self.base, self.basis, self.state_space), (self.base.flags.writeable,))
 
 
 class StateRepComputational(StateRep):

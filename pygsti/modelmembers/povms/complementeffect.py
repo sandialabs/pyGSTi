@@ -34,8 +34,7 @@ class ComplementPOVMEffect(_ConjugatedStatePOVMEffect):
     def __init__(self, identity, other_effects):
         evotype = other_effects[0]._evotype
         state_space = other_effects[0].state_space
-        self.identity_vec = identity.copy()
-        identity_state = _FullState(
+        self.identity = _FullState(
             _State._to_vector(identity), evotype, state_space)  # so easy to transform or depolarize by parent POVM
 
         self.other_effects = other_effects
@@ -44,15 +43,16 @@ class ComplementPOVMEffect(_ConjugatedStatePOVMEffect):
         # 2) set the gpindices of the elements of other_spamvecs so
         #    that they index into our local parameter vector.
 
-        _ConjugatedStatePOVMEffect.__init__(self, identity_state)
+        _ConjugatedStatePOVMEffect.__init__(self, self.identity.copy())
         self._construct_vector()  # reset's self.base
 
     def _construct_vector(self):
         #Note: assumes other effects are also ConjugatedStatePOVMEffect objects
-        base1d = self.state.base
+        base1d = self.state._ptr
         base1d.flags.writeable = True
-        base1d[:] = self.identity_vec - sum([vec.state.base for vec in self.other_effects])
+        base1d[:] = self.identity.to_dense() - sum([vec.state.to_dense() for vec in self.other_effects])
         base1d.flags.writeable = False
+        self._ptr_has_changed()
 
     @property
     def num_params(self):
@@ -102,7 +102,7 @@ class ComplementPOVMEffect(_ConjugatedStatePOVMEffect):
         -------
         None
         """
-        #Rely on prior .from_vector initialization of self.other_vecs, so
+        #Rely on prior .from_vector initialization of self.other_effects, so
         # we just construct our vector based on them.
         #Note: this is needed for finite-differencing in map-based calculator
         self._construct_vector()
@@ -127,10 +127,10 @@ class ComplementPOVMEffect(_ConjugatedStatePOVMEffect):
         numpy array
             Array of derivatives, shape == (dimension, num_params)
         """
-        if len(self.other_vecs) == 0: return _np.zeros((self.dim, 0), 'd')  # Complement vecs assumed real
+        if len(self.other_effects) == 0: return _np.zeros((self.dim, 0), 'd')  # Complement vecs assumed real
         Np = len(self.gpindices_as_array())
         neg_deriv = _np.zeros((self.dim, Np), 'd')
-        for ovec in self.other_vecs:
+        for ovec in self.other_effects:
             local_inds = _modelmember._decompose_gpindices(
                 self.gpindices, ovec.gpindices)
             #Note: other_vecs are not copies but other *sibling* effect vecs

@@ -452,6 +452,7 @@ class OpModel(Model):
         self._need_to_rebuild = True  # whether we call _rebuild_paramvec() in to_vector() or num_params()
         self.dirty = False  # indicates when objects and _paramvec may be out of sync
         self.sim = simulator  # property setter does nontrivial initialization (do this *last*)
+        self._reinit_opcaches()
 
     def __setstate__(self, state_dict):
         self.__dict__.update(state_dict)
@@ -538,7 +539,7 @@ class OpModel(Model):
             self._state_space = lbls
         else:
             #Maybe change to a different default?
-            self._state_space = _statespace.CustomStateSpace(lbls, evotype=self._evotype)
+            self._state_space = _statespace.ExplicitStateSpace(lbls)
         self.basis = basis  # invokes basis setter to set self._basis
 
         #Operator dimension of this Model
@@ -1476,6 +1477,7 @@ class OpModel(Model):
         the new model (`copy_into`) and its members.
         """
         copy_into._sim.model = copy_into  # set copy's `.model` link
+        copy_into._reinit_opcaches()
         super(OpModel, self)._post_copy(copy_into, memo)
 
     def copy(self):

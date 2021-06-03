@@ -70,11 +70,14 @@ class _BasePOVM(_POVM):
         paramlbls = []
         for k, v in items:
             if k == self.complement_label: continue
-            effect = v if isinstance(v, _POVMEffect) else \
-                _FullPOVMEffect(v, evotype, state_space)
+            if isinstance(v, _POVMEffect):
+                effect = v
+            else:
+                assert(evotype is not None), "Must specify `evotype` when effect vectors are not POVMEffect objects!"
+                effect = _FullPOVMEffect(v, evotype, state_space)
 
             if evotype is None: evotype = effect.evotype
-            else: assert(evotype == effect.evotype), \
+            else: assert(evotype == effect.evotype or evotype == "default"), \
                 "All effect vectors must have the same evolution type"
 
             if state_space is None: state_space = effect.state_space

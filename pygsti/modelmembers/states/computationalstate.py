@@ -88,6 +88,46 @@ class ComputationalBasisState(_State):
         raise ValueError(("Given `vec` is not a z-basis product state - "
                           "cannot construct ComputatinoalSPAMVec"))
 
+    @classmethod
+    def from_dense_purevec(cls, purevec, basis='pp', evotype="default", state_space=None):
+        """
+        Create a new ComputationalBasisState from a pure-state vector.
+
+        Currently, purevec must be a single computational basis state (it
+        cannot be a superpostion of multiple of them).
+
+        Parameters
+        ----------
+        purevec : numpy.ndarray
+            A complex-valued state vector specifying a pure state in the
+            standard computational basis.  This vector has length 2^n for
+            n qubits.
+
+        basis : Basis or {'pp','gm','std'}, optional
+            The basis of `vec` as a super-ket.
+
+        evotype : Evotype or str, optional
+            The evolution type of the resulting effect vector.  The special
+            value `"default"` is equivalent to specifying the value of
+            `pygsti.evotypes.Evotype.default_evotype`.
+
+        state_space : StateSpace, optional
+            The state space for this operation.  If `None` a default state space
+            with the appropriate number of qubits is used.
+
+        Returns
+        -------
+        ComputationalBasisState
+        """
+        nqubits = int(round(_np.log2(len(purevec))))
+        v = (_np.array([1, 0], 'd'), _np.array([0, 1], 'd'))  # (v0,v1)
+        for zvals in _itertools.product(*([(0, 1)] * nqubits)):
+            testvec = _functools.reduce(_np.kron, [v[i] for i in zvals])
+            if _np.allclose(testvec, purevec.flat):
+                return cls(zvals, basis, evotype, state_space)
+        raise ValueError(("Given `purevec` must be a z-basis product state - "
+                          "cannot construct ComputationalBasisState"))
+
     def __init__(self, zvals, basis='pp', evotype="default", state_space=None):
         self._zvals = _np.ascontiguousarray(_np.array(zvals, _np.int64))
 

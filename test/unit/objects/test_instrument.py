@@ -5,7 +5,8 @@ from ..util import BaseCase
 
 from pygsti.modelpacks.legacy import std1Q_XYI as std
 
-from pygsti.objects import instrument as inst, FullGaugeGroupElement
+from pygsti.objects import FullGaugeGroupElement
+from pygsti.modelmembers import instruments as inst
 
 
 class InstrumentMethodBase(object):
@@ -35,7 +36,7 @@ class InstrumentMethodBase(object):
 
     def test_constructor_raises_on_non_none_param_conflict(self):
         with self.assertRaises(AssertionError):
-            self.constructor(["Non-none-matrices"], ["Non-none-items"])  # can't both be non-None
+            self.constructor(["Non-none-matrices"], 'default', None, ["Non-none-items"])  # can't both be non-None
 
     def test_constructor_raises_on_bad_op_matrices_type(self):
         with self.assertRaises(ValueError):

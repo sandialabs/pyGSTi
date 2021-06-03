@@ -11,10 +11,10 @@
 import time as _time
 import numpy as _np
 
-from ...tools import mpitools as _mpit
-from ...tools import slicetools as _slct
-from ...tools import sharedmemtools as _smt
-from ...tools.matrixtools import _fas
+from ..tools import mpitools as _mpit
+from ..tools import slicetools as _slct
+from ..tools import sharedmemtools as _smt
+from ..tools.matrixtools import _fas
 
 
 def propagate_staterep(staterep, operationreps):

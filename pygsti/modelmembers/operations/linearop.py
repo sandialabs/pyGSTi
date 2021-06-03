@@ -454,9 +454,9 @@ class LinearOperator(_modelmember.ModelMember):
         float
         """
         if transform is None and inv_transform is None:
-            return _gt.frobeniusdist_squared(self.to_dense(), other_op.to_dense())
+            return _ot.frobeniusdist_squared(self.to_dense(), other_op.to_dense())
         else:
-            return _gt.frobeniusdist_squared(_np.dot(
+            return _ot.frobeniusdist_squared(_np.dot(
                 inv_transform, _np.dot(self.to_dense(), transform)),
                 other_op.to_dense())
 
@@ -539,9 +539,9 @@ class LinearOperator(_modelmember.ModelMember):
         float
         """
         if transform is None and inv_transform is None:
-            return _gt.jtracedist(self.to_dense(), other_op.to_dense())
+            return _ot.jtracedist(self.to_dense(), other_op.to_dense())
         else:
-            return _gt.jtracedist(_np.dot(
+            return _ot.jtracedist(_np.dot(
                 inv_transform, _np.dot(self.to_dense(), transform)),
                 other_op.to_dense())
 
@@ -568,9 +568,9 @@ class LinearOperator(_modelmember.ModelMember):
         float
         """
         if transform is None and inv_transform is None:
-            return _gt.diamonddist(self.to_dense(), other_op.to_dense())
+            return _ot.diamonddist(self.to_dense(), other_op.to_dense())
         else:
-            return _gt.diamonddist(_np.dot(
+            return _ot.diamonddist(_np.dot(
                 inv_transform, _np.dot(self.to_dense(), transform)),
                 other_op.to_dense())
 
@@ -660,7 +660,7 @@ class LinearOperator(_modelmember.ModelMember):
         -------
         None
         """
-        rotnMx = _gt.rotation_gate_mx(amount, mx_basis)
+        rotnMx = _ot.rotation_gate_mx(amount, mx_basis)
         self.set_dense(_np.dot(rotnMx, self.to_dense()))
 
     def deriv_wrt_params(self, wrt_filter=None):
@@ -684,16 +684,14 @@ class LinearOperator(_modelmember.ModelMember):
         numpy array
             Array of derivatives with shape (dimension^2, num_params)
         """
-        if(self.num_params != 0):
-            raise NotImplementedError("Default deriv_wrt_params is only for 0-parameter (default) case (%s)"
-                                      % str(self.__class__.__name__))
-
-        dtype = complex if self._evotype == 'statevec' else 'd'
-        derivMx = _np.zeros((self.size, 0), dtype)
-        if wrt_filter is None:
-            return derivMx
+        if self.num_params == 0:
+            derivMx = _np.zeros((self.size, 0), 'd')
+            if wrt_filter is None:
+                return derivMx
+            else:
+                return _np.take(derivMx, wrt_filter, axis=1)
         else:
-            return _np.take(derivMx, wrt_filter, axis=1)
+            return finite_difference_deriv_wrt_params(self, wrt_filter)
 
     def has_nonzero_hessian(self):
         """
@@ -733,9 +731,8 @@ class LinearOperator(_modelmember.ModelMember):
         """
         if not self.has_nonzero_hessian():
             return _np.zeros((self.size, self.num_params, self.num_params), 'd')
-
-        # FUTURE: create a finite differencing hessian method?
-        raise NotImplementedError("hessian_wrt_params(...) is not implemented for %s objects" % self.__class__.__name__)
+        else:
+            return finite_difference_hessian_wrt_params(self, wrt_filter1, wrt_filter2)
 
     ##Pickle plumbing
 
@@ -823,3 +820,103 @@ class LinearOperator(_modelmember.ModelMember):
             s += op_str + '\n'
 
         return s
+
+
+def finite_difference_deriv_wrt_params(operation, wrt_filter, eps=1e-7):
+    """
+    Computes a finite-difference Jacobian for a LinearOperator object.
+
+    The returned value is a matrix whose columns are the vectorized
+    derivatives of the flattened operation matrix with respect to a single
+    operation parameter, matching the format expected from the operation's
+    `deriv_wrt_params` method.
+
+    Parameters
+    ----------
+    operation : LinearOperator
+        The operation object to compute a Jacobian for.
+
+    wrt_filter : list or numpy.ndarray
+        List of parameter indices to filter the result by (as though
+        derivative is only taken with respect to these parameters).
+
+    eps : float, optional
+        The finite difference step to use.
+
+    Returns
+    -------
+    numpy.ndarray
+        An M by N matrix where M is the number of operation elements and
+        N is the number of operation parameters.
+    """
+    dense_operation = operation.to_dense()
+    dim = dense_operation.shape[0]
+    #operation.from_vector(operation.to_vector()) #ensure we call from_vector w/close=False first
+    op2 = operation.copy()
+    p = operation.to_vector()
+    fd_deriv = _np.empty((dim, dim, operation.num_params), dense_operation.dtype)
+
+
+    for i in range(operation.num_params):
+        p_plus_dp = p.copy()
+        p_plus_dp[i] += eps
+        op2.from_vector(p_plus_dp)
+        fd_deriv[:, :, i] = (op2.to_dense() - dense_operation) / eps
+
+    fd_deriv.shape = [dim**2, operation.num_params]
+    if wrt_filter is None:
+        return fd_deriv
+    else:
+        return _np.take(fd_deriv, wrt_filter, axis=1)
+
+
+def finite_difference_hessian_wrt_params(operation, wrt_filter1, wrt_filter2, eps=1e-4):
+    """
+    Computes a finite-difference Hessian for a LinearOperator object.
+
+    The returned value is a tensor whose leading dimension corresponds to
+    the elements of the flattened operation matrix, and whose remaining
+    two dimensions correspond to derivatives with respect to the operations
+    parameters (potentially filtered).  This matches the format expected
+    from the operation's `hessian_wrt_params` method.
+
+    Parameters
+    ----------
+    operation : LinearOperator
+        The operation object to compute a Hessian for.
+
+    wrt_filter1 : list or numpy.ndarray
+        List of parameter indices to filter the result by (as though
+        the 1st derivative is only taken with respect to these parameters).
+
+    wrt_filter2 : list or numpy.ndarray
+        List of parameter indices to filter the result by (as though
+        the 2nd derivative is only taken with respect to these parameters).
+
+    eps : float, optional
+        The finite difference step to use.
+
+    Returns
+    -------
+    numpy.ndarray
+        An M by N1 by N2 tensor where M is the number of operation elements and
+        N1 and N2 are numbers of operation parameters.
+    """
+    #operation.from_vector(operation.to_vector()) #ensure we call from_vector w/close=False first
+    dense_operation = operation.to_dense()
+    fd_deriv0 = finite_difference_deriv_wrt_params(operation, wrt_filter1, eps=eps)
+
+    dim = dense_operation.shape[0]
+    fd_hessian = _np.empty((dim**2, fd_deriv0.shape[1], operation.num_params), dense_operation.dtype)
+    p = operation.to_vector()
+    op2 = operation.copy()
+
+    for i in range(operation.num_params):
+        p_plus_dp = p.copy(); p_plus_dp[i] += eps
+        op2.from_vector(p_plus_dp)
+        fd_hessian[:, :, i] = (finite_difference_deriv_wrt_params(op2, wrt_filter2, eps=eps) - fd_deriv0) / eps
+
+    if wrt_filter2 is None:
+        return fd_hessian
+    else:
+        return _np.take(fd_hessian, wrt_filter2, axis=2)

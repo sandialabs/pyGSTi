@@ -143,7 +143,7 @@ class ComposedPOVM(_POVM):
         elif key in self:  # calls __contains__ to efficiently check for membership
             #create effect vector now that it's been requested (lazy creation)
             pureVec = self.base_povm[key]
-            effect = _ComposedPOVMEffect(pureVec, self.error_map)   # ------------------------------ evotype ???????????????????????
+            effect = _ComposedPOVMEffect(pureVec, self.error_map)
             effect.set_gpindices(self.error_map.gpindices, self.parent)
             # initialize gpindices of "child" effect (should be in simplify_effects?)
             _collections.OrderedDict.__setitem__(self, key, effect)

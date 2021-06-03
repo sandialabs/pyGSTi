@@ -104,7 +104,7 @@ class ComputationalBasisPOVM(_POVM):
             #create effect vector now that it's been requested (lazy creation)
             # decompose key into separate factor-effect labels
             outcomes = [(0 if letter == '0' else 1) for letter in key]
-            effect = _ComputationalBasisPOVMEffect(outcomes, self._evotype, self.state_space)
+            effect = _ComputationalBasisPOVMEffect(outcomes, 'pp', self._evotype, self.state_space)
             effect.set_gpindices(slice(0, 0, None), self.parent)  # computational vecs have no params
             _collections.OrderedDict.__setitem__(self, key, effect)
             return effect

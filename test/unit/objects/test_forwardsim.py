@@ -6,10 +6,10 @@ from unittest import mock
 from ..util import BaseCase
 
 import pygsti.construction as pc
-from pygsti.objects import ExplicitOpModel, Label as L
-from pygsti.objects import Circuit
-from pygsti.objects.forwardsim import ForwardSimulator
-from pygsti.objects.mapforwardsim import MapForwardSimulator
+from pygsti.models import ExplicitOpModel
+from pygsti.objects import Circuit, Label as L
+from pygsti.forwardsims.forwardsim import ForwardSimulator
+from pygsti.forwardsims.mapforwardsim import MapForwardSimulator
 
 
 def Ls(*args):
@@ -67,6 +67,7 @@ class ForwardSimBase(object):
 
     def test_bulk_fill_probs(self):
         pmx = np.empty(self.nEls, 'd')
+        print(self.fwdsim.model._opcaches)
         self.fwdsim.bulk_fill_probs(pmx, self.layout)
         # TODO assert correctness
 

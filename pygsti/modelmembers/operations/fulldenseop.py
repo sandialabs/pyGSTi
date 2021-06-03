@@ -37,11 +37,8 @@ class FullDenseOp(_DenseOperator):
     """
 
     def __init__(self, m, evotype="default", state_space=None):
-        m = _LinearOperator.convert_to_matrix(m)
         _DenseOperator.__init__(self, m, evotype, state_space)
-
-        d = self.dim
-        self._paramlbls = _np.array(["MxElement %d,%d" % (i, j) for i in range(d) for j in range(d)],
+        self._paramlbls = _np.array(["MxElement %d,%d" % (i, j) for i in range(self.dim) for j in range(self.dim)],
                                     dtype=object)
 
     def set_dense(self, m):
@@ -65,7 +62,8 @@ class FullDenseOp(_DenseOperator):
         if(mx.shape != (self.dim, self.dim)):
             raise ValueError("Argument must be a (%d,%d) matrix!"
                              % (self.dim, self.dim))
-        self.base[:, :] = _np.array(mx)
+        self._ptr[:, :] = _np.array(mx)
+        self._ptr_has_changed()
         self.dirty = True
 
     @property
@@ -89,7 +87,7 @@ class FullDenseOp(_DenseOperator):
         numpy array
             The operation parameters as a 1D array with length num_params().
         """
-        return self.base.flatten()
+        return self._ptr.flatten()
 
     def from_vector(self, v, close=False, dirty_value=True):
         """
@@ -115,8 +113,9 @@ class FullDenseOp(_DenseOperator):
         -------
         None
         """
-        assert(self.base.shape == (self.dim, self.dim))
-        self.base[:, :] = v.reshape((self.dim, self.dim))
+        assert(self._ptr.shape == (self.dim, self.dim))
+        self._ptr[:, :] = v.reshape((self.dim, self.dim))
+        self._ptr_has_changed()
         self.dirty = dirty_value
 
     def deriv_wrt_params(self, wrt_filter=None):
@@ -139,7 +138,7 @@ class FullDenseOp(_DenseOperator):
         numpy array
             Array of derivatives with shape (dimension^2, num_params)
         """
-        derivMx = _np.identity(self.dim**2, self.base.dtype)
+        derivMx = _np.identity(self.dim**2, self._ptr.dtype)
 
         if wrt_filter is None:
             return derivMx

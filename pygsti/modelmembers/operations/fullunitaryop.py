@@ -41,12 +41,10 @@ class FullUnitaryOp(_DenseUnitaryOperator):
     """
 
     def __init__(self, m, basis='pp', evotype="default", state_space=None):
-        m = _LinearOperator.convert_to_matrix(m)
-        _DenseUnitaryOperator.__init__(self, m, basis, evotype, state_space)
-        d = self.dim
-        self._paramlbls = _np.array(["MxElement Re(%d,%d)" % (i, j) for i in range(d) for j in range(d)]
-                                    + ["MxElement Im(%d,%d)" % (i, j) for i in range(d) for j in range(d)],
-                                    dtype=object)
+        _DenseUnitaryOperator.__init__(m, basis, evotype, state_space)
+        self._paramlbls = _np.array(["MxElement Re(%d,%d)" % (i, j) for i in range(self.dim) for j in range(self.dim)]
+                                    + ["MxElement Im(%d,%d)" % (i, j) for i in range(self.dim)
+                                       for j in range(self.dim)], dtype=object)
 
     def set_dense(self, m):
         """
@@ -69,7 +67,8 @@ class FullUnitaryOp(_DenseUnitaryOperator):
         if(mx.shape != (self.dim, self.dim)):
             raise ValueError("Argument must be a (%d,%d) matrix!"
                              % (self.dim, self.dim))
-        self.base[:, :] = _np.array(mx)
+        self._ptr[:, :] = _np.array(mx)
+        self._ptr_has_changed()
         self.dirty = True
 
     @property
@@ -93,7 +92,7 @@ class FullUnitaryOp(_DenseUnitaryOperator):
         numpy array
             The operation parameters as a 1D array with length num_params().
         """
-        return _np.concatenate((self.base.real.flatten(), self.base.imag.flatten()), axis=0)
+        return _np.concatenate((self._ptr.real.flatten(), self._ptr.imag.flatten()), axis=0)
 
     def from_vector(self, v, close=False, dirty_value=True):
         """
@@ -119,9 +118,10 @@ class FullUnitaryOp(_DenseUnitaryOperator):
         -------
         None
         """
-        assert(self.base.shape == (self.dim, self.dim))
-        self.base[:, :] = v[0:self.dim**2].reshape((self.dim, self.dim)) + \
+        assert(self._ptr.shape == (self.dim, self.dim))
+        self._ptr[:, :] = v[0:self.dim**2].reshape((self.dim, self.dim)) + \
             1j * v[self.dim**2:].reshape((self.dim, self.dim))
+        self._ptr_has_changed()
         self.dirty = dirty_value
 
     def deriv_wrt_params(self, wrt_filter=None):

@@ -158,14 +158,12 @@ class ExplicitOpModelCalc(object):
 
             for lbl, rhoV in self.preps.items():
                 wt = item_weights.get(lbl, spamWeight)
-                d += wt * rhoV.frobeniusdist_squared(other_calc.preps[lbl],
-                                                     'prep', T, Ti)
+                d += wt * rhoV.frobeniusdist_squared(other_calc.preps[lbl], T, Ti)
                 nSummands += wt * rhoV.dim
 
             for lbl, Evec in self.effects.items():
                 wt = item_weights.get(lbl, spamWeight)
-                d += wt * Evec.frobeniusdist_squared(other_calc.effects[lbl],
-                                                     'effect', T, Ti)
+                d += wt * Evec.frobeniusdist_squared(other_calc.effects[lbl], T, Ti)
                 nSummands += wt * Evec.dim
 
         else:
@@ -176,12 +174,12 @@ class ExplicitOpModelCalc(object):
 
             for lbl, rhoV in self.preps.items():
                 wt = item_weights.get(lbl, spamWeight)
-                d += wt * rhoV.frobeniusdist_squared(other_calc.preps[lbl], 'prep')
+                d += wt * rhoV.frobeniusdist_squared(other_calc.preps[lbl])
                 nSummands += wt * rhoV.dim
 
             for lbl, Evec in self.effects.items():
                 wt = item_weights.get(lbl, spamWeight)
-                d += wt * Evec.frobeniusdist_squared(other_calc.effects[lbl], 'effect')
+                d += wt * Evec.frobeniusdist_squared(other_calc.effects[lbl])
                 nSummands += wt * Evec.dim
 
         #Temporary: check that this function can be computed by
@@ -252,15 +250,13 @@ class ExplicitOpModelCalc(object):
             for lbl, rhoV in self.preps.items():
                 wt = sqrt_itemWeights.get(lbl, spamWeight)
                 resids.append(
-                    wt * rhoV.residuals(other_calc.preps[lbl],
-                                        'prep', T, Ti))
+                    wt * rhoV.residuals(other_calc.preps[lbl], T, Ti))
                 nSummands += wt**2 * rhoV.dim
 
             for lbl, Evec in self.effects.items():
                 wt = sqrt_itemWeights.get(lbl, spamWeight)
                 resids.append(
-                    wt * Evec.residuals(other_calc.effects[lbl],
-                                        'effect', T, Ti))
+                    wt * Evec.residuals(other_calc.effects[lbl], T, Ti))
 
                 nSummands += wt**2 * Evec.dim
 
@@ -327,13 +323,11 @@ class ExplicitOpModelCalc(object):
             # doesn't really make sense
             if include_spam:
                 for lbl, rhoV in self.preps.items():
-                    d += rhoV.frobeniusdist_squared(other_calc.preps[lbl],
-                                                    'prep', T, Ti)
+                    d += rhoV.frobeniusdist_squared(other_calc.preps[lbl], T, Ti)
                     nSummands += rhoV.dim
 
                 for lbl, Evec in self.effects.items():
-                    d += Evec.frobeniusdist_squared(other_calc.effects[lbl],
-                                                    'effect', T, Ti)
+                    d += Evec.frobeniusdist_squared(other_calc.effects[lbl], T, Ti)
                     nSummands += Evec.dim
 
         else:
@@ -344,13 +338,11 @@ class ExplicitOpModelCalc(object):
             # doesn't really make sense
             if include_spam:
                 for lbl, rhoV in self.preps.items():
-                    d += rhoV.frobeniusdist_squared(other_calc.preps[lbl],
-                                                    'prep')
+                    d += rhoV.frobeniusdist_squared(other_calc.preps[lbl])
                     nSummands += rhoV.dim
 
                 for lbl, Evec in self.effects.items():
-                    d += Evec.frobeniusdist_squared(other_calc.effects[lbl],
-                                                    'effect')
+                    d += Evec.frobeniusdist_squared(other_calc.effects[lbl])
                     nSummands += Evec.dim
 
         spamVal = _np.sqrt(d / nSummands) if (nSummands > 0) else 0
@@ -396,13 +388,11 @@ class ExplicitOpModelCalc(object):
             # doesn't really make sense
             if include_spam:
                 for lbl, rhoV in self.preps.items():
-                    d += rhoV.frobeniusdist_squared(other_calc.preps[lbl],
-                                                    'prep', T, Ti)
+                    d += rhoV.frobeniusdist_squared(other_calc.preps[lbl], T, Ti)
                     nSummands += rhoV.dim
 
                 for lbl, Evec in self.effects.items():
-                    d += Evec.frobeniusdist_squared(other_calc.effects[lbl],
-                                                    'effect', T, Ti)
+                    d += Evec.frobeniusdist_squared(other_calc.effects[lbl], T, Ti)
                     nSummands += Evec.dim
 
         else:
@@ -413,13 +403,11 @@ class ExplicitOpModelCalc(object):
             # doesn't really make sense
             if include_spam:
                 for lbl, rhoV in self.preps.items():
-                    d += rhoV.frobeniusdist_squared(other_calc.preps[lbl],
-                                                    'prep')
+                    d += rhoV.frobeniusdist_squared(other_calc.preps[lbl])
                     nSummands += rhoV.dim
 
                 for lbl, Evec in self.effects.items():
-                    d += Evec.frobeniusdist_squared(other_calc.effects[lbl],
-                                                    'effect')
+                    d += Evec.frobeniusdist_squared(other_calc.effects[lbl])
                     nSummands += Evec.dim
 
         spamVal = _np.sqrt(d / nSummands) if (nSummands > 0) else 0

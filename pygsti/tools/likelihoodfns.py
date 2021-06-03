@@ -970,7 +970,7 @@ def prep_penalty(rho_vec, basis):
     rho_mx = _bt.vec_to_stdmx(_np.asarray(rho_vec), basis)
     evals = _np.linalg.eigvals(rho_mx)  # could use eigvalsh, but wary of this since eigh can be wrong...
     sum_of_neg = sum([-ev.real for ev in evals if ev.real < 0])
-    trace_penalty = abs(rho_vec[0, 0] - (1.0 / _np.sqrt(rho_mx.shape[0])))
+    trace_penalty = abs(rho_vec[0] - (1.0 / _np.sqrt(rho_mx.shape[0])))
     # 0th el is coeff of I(dxd)/sqrt(d) which has trace sqrt(d)
     #print "Sum of neg = ",sumOfNeg  #DEBUG
     #print "Trace Penalty = ",tracePenalty  #DEBUG
@@ -1038,8 +1038,8 @@ def cptp_penalty(model, include_spam_penalty=True):
     ret = _jam.sum_of_negative_choi_eigenvalues(model)
     if include_spam_penalty:
         b = model.basis
-        ret += sum([prep_penalty(r, b) for r in model.preps.values()])
-        ret += sum([effect_penalty(e, b) for povm in model.povms.values()
+        ret += sum([prep_penalty(r.to_dense(), b) for r in model.preps.values()])
+        ret += sum([effect_penalty(e.to_dense(), b) for povm in model.povms.values()
                     for e in povm.values()])
     return ret
 

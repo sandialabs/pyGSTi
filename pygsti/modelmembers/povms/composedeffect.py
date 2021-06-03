@@ -354,7 +354,7 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
         #assert(evotype in ("densitymx", "svterm", "cterm")), \
         #    "Invalid evotype: %s for %s" % (evotype, self.__class__.__name__)
 
-        if not isinstance(static_effect, _State):
+        if not isinstance(static_effect, _POVMEffect):
             static_effect = _StaticState(static_effect, evotype)  # assume spamvec is just a vector
 
         assert(static_effect._evotype == evotype), \
@@ -452,7 +452,7 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
         #Note: self.error_map is the
         # map that acts on the *state* vector before dmVec acts
         # as an effect:  E.T -> dot(E.T,errmap) ==> E -> dot(errmap.T,E)
-        return _np.dot(self.error_map.to_dense().conjugate().T, self.state_vec.to_dense())
+        return _np.dot(self.error_map.to_dense().conjugate().T, self.effect_vec.to_dense())
 
     def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
         """
@@ -500,7 +500,7 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
             #    raise ValueError("Invalid evolution type %s for calling `taylor_order_terms`" % self._evotype)
             assert(self.gpindices is not None), "ComposedPOVMEffect must be added to a Model before use!"
 
-            state_terms = self.state_vec.taylor_order_terms(0, max_polynomial_vars); assert(len(state_terms) == 1)
+            state_terms = self.effect_vec.taylor_order_terms(0, max_polynomial_vars); assert(len(state_terms) == 1)
             stateTerm = state_terms[0]
             err_terms, cpolys = self.error_map.taylor_order_terms(order, max_polynomial_vars, True)
 
@@ -546,7 +546,7 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
         -------
         list
         """
-        state_terms = self.state_vec.taylor_order_terms(0, max_polynomial_vars); assert(len(state_terms) == 1)
+        state_terms = self.effect_vec.taylor_order_terms(0, max_polynomial_vars); assert(len(state_terms) == 1)
         stateTerm = state_terms[0]
         stateTerm = stateTerm.copy_with_magnitude(1.0)
         #assert(stateTerm.coeff == Polynomial_1.0) # TODO... so can assume local polys are same as for errorgen
@@ -617,7 +617,7 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
         numpy array
             Array of derivatives, shape == (dimension, num_params)
         """
-        dmVec = self.state_vec.to_dense()
+        dmVec = self.effect_vec.to_dense()
 
         derrgen = self.error_map.deriv_wrt_params(wrt_filter)  # shape (dim*dim, n_params)
         derrgen.shape = (self.dim, self.dim, derrgen.shape[1])  # => (dim,dim,n_params)
@@ -650,7 +650,7 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
         numpy array
             Hessian with shape (dimension, num_params1, num_params2)
         """
-        dmVec = self.state_vec.to_dense()
+        dmVec = self.effect_vec.to_dense()
 
         herrgen = self.error_map.hessian_wrt_params(wrt_filter1, wrt_filter2)  # shape (dim*dim, nParams1, nParams2)
         herrgen.shape = (self.dim, self.dim, herrgen.shape[1], herrgen.shape[2])  # => (dim,dim,nParams1, nParams2)

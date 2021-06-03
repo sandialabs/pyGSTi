@@ -282,7 +282,7 @@ class EigenvalueParamDenseOp(_DenseOperator):
         #Finish LinearOperator construction
         mx = _np.empty(matrix.shape, "d")
         _DenseOperator.__init__(self, mx, evotype, state_space)
-        self.base.flags.writeable = False  # only _construct_matrix can change array
+        self._ptr.flags.writeable = False  # only _construct_matrix can change array
         self._construct_matrix()  # construct base from the parameters
 
         #Set parameter labels
@@ -299,9 +299,9 @@ class EigenvalueParamDenseOp(_DenseOperator):
         matrix = _np.dot(self.B, _np.dot(base_diag, self.Bi))
         assert(_np.linalg.norm(matrix.imag) < IMAG_TOL)
         assert(matrix.shape == (self.dim, self.dim))
-        self.base.flags.writeable = True
-        self.base[:, :] = matrix.real
-        self.base.flags.writeable = False
+        self._ptr.flags.writeable = True
+        self._ptr[:, :] = matrix.real
+        self._ptr.flags.writeable = False
 
     @property
     def num_params(self):

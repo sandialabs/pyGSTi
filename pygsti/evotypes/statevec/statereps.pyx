@@ -19,23 +19,23 @@ from ...tools import fastcalc as _fastcalc
 
 cdef class StateRep(_basereps_cython.StateRep):
     def __cinit__(self, _np.ndarray[_np.complex128_t, ndim=1, mode='c'] data, state_space):
-        self.base = _np.require(data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
-        self.c_state = new StateCRep(<double complex*>self.base.data,<INT>self.base.shape[0],<bool>0)
+        self.data = _np.require(data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
+        self.c_state = new StateCRep(<double complex*>self.data.data,<INT>self.data.shape[0],<bool>0)
         self.state_space = _StateSpace.cast(state_space)
-        assert(len(self.base) == self.state_space.udim)
+        assert(len(self.data) == self.state_space.udim)
 
     def __reduce__(self):
-        return (StateRep, (self.base, self.state_space), (self.base.flags.writeable,))
+        return (StateRep, (self.data, self.state_space), (self.data.flags.writeable,))
 
     def __setstate__(self, state):
         writeable, = state
-        self.base.flags.writeable = writeable
+        self.data.flags.writeable = writeable
 
     def copy_from(self, other):
-        self.base[:] = other.base[:]
+        self.data[:] = other.data[:]
 
     def to_dense(self):
-        return self.base
+        return self.data
 
     @property
     def dim(self):
@@ -48,16 +48,20 @@ cdef class StateRep(_basereps_cython.StateRep):
         return str([self.c_state._dataptr[i] for i in range(self.c_state._dim)])
 
 
-cdef class StateRepPure(StateRep):
+cdef class StateRepDensePure(StateRep):
     def __init__(self, purevec, basis, state_space):
         self.basis = basis
-        super(StateRepPure, self).__init__(purevec, state_space)
+        super(StateRepDensePure, self).__init__(purevec, state_space)
 
-    def purebase_has_changed(self):
+    @property
+    def base(self):
+        return self.data
+
+    def base_has_changed(self):
         pass
 
     def __reduce__(self):
-        return (StateRepPure, (self.base, self.basis, self.state_space), (self.base.flags.writeable,))
+        return (StateRepDensePure, (self.base, self.basis, self.state_space), (self.base.flags.writeable,))
 
 
 cdef class StateRepComputational(StateRep):

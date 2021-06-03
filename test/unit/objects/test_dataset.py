@@ -5,7 +5,8 @@ import pickle
 from ..util import BaseCase
 
 import pygsti.construction as pc
-from pygsti.objects import DataSet, labeldicts as ld, Circuit
+from pygsti.objects import DataSet, Circuit
+from pygsti.models import labeldicts as ld
 
 
 class DataSetTester(BaseCase):

@@ -133,7 +133,7 @@ class LinearlyParamDenseOp(_DenseOperator):
 
         #Note: dense op reps *always* own their own data so setting writeable flag is OK
         _DenseOperator.__init__(self, mx, evotype, state_space)
-        self.base.flags.writeable = False  # only _construct_matrix can change array
+        self._ptr.flags.writeable = False  # only _construct_matrix can change array
         self._construct_matrix()  # construct base from the parameters
 
     def _construct_matrix(self):
@@ -155,9 +155,9 @@ class LinearlyParamDenseOp(_DenseOperator):
 
         #Note: dense op reps *always* own their own data so setting writeable flag is OK
         assert(matrix.shape == (self.dim, self.dim))
-        self.base.flags.writeable = True
-        self.base[:, :] = matrix
-        self.base.flags.writeable = False
+        self._ptr.flags.writeable = True
+        self._ptr[:, :] = matrix
+        self._ptr.flags.writeable = False
 
     @property
     def num_params(self):
@@ -265,8 +265,8 @@ class LinearlyParamDenseOp(_DenseOperator):
 
     def __str__(self):
         s = "Linearly Parameterized operation with shape %s, num params = %d\n" % \
-            (str(self.base.shape), self.numParams)
-        s += _mt.mx_to_string(self.base, width=5, prec=1)
+            (str(self._ptr.shape), self.numParams)
+        s += _mt.mx_to_string(self._ptr, width=5, prec=1)
         s += "\nParameterization:"
         for (i, j), terms in self.elementExpressions.items():
             tStr = ' + '.join(['*'.join(["p%d" % p for p in term.paramIndices])

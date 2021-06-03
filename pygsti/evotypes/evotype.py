@@ -45,16 +45,18 @@ class Evotype(object):
     def __eq__(self, other_evotype):
         if isinstance(other_evotype, Evotype):
             return self.name == other_evotype.name
+        elif other_evotype == "default":
+            return self.name == self.default_evotype
         else:
             return self.name == str(other_evotype)
 
     def __str__(self):
         return self.name
 
-    def create_dense_rep(self, mx, state_space):  # process_mx=None,
+    def create_dense_superop_rep(self, mx, state_space):  # process_mx=None,
         return self.module.OpRepDense(mx, state_space)
 
-    def create_denseunitary_rep(self, mx, super_basis, state_space):  # process_mx=None,
+    def create_dense_unitary_rep(self, mx, super_basis, state_space):  # process_mx=None,
         return self.module.OpRepDenseUnitary(mx, super_basis, state_space)
 
     def create_composed_rep(self, factor_op_reps, state_space):

@@ -1,3 +1,15 @@
+"""
+The StaticState class and supporting functionality.
+"""
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
+
 import numpy as _np
 from .state import State as _State
 from .densestate import DenseState as _DenseState
@@ -25,14 +37,4 @@ class StaticState(_DenseState):
     """
 
     def __init__(self, vec, evotype="default", state_space=None):
-        vec = _State._to_vector(vec)
-
-        state_space = _statespace.default_space_for_dim(vec.shape[0]) if (state_space is None) \
-            else _statespace.StateSpace.cast(state_space)
-
-        evotype = _Evotype.cast(evotype)
-        rep = evotype.create_dense_state_rep(vec, state_space)
-        _DenseState.__init__(self, rep, evotype, rep.base)
-
-    def _base_1d_has_changed(self):
-        self._rep.base_has_changed()
+        _DenseState.__init__(self, vec, evotype, state_space)

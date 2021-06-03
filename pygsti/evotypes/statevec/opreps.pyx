@@ -77,6 +77,12 @@ cdef class OpRepDenseUnitary(OpRep):
         self.state_space = state_space
         self.basis = basis
 
+    def base_has_changed(self):
+        pass
+
+    def to_dense(self):
+        return self.base
+
     def __reduce__(self):
         # because serialization of numpy array flags is borked (around Numpy v1.16), we need to copy data
         # (so self.base *owns* it's data) and manually convey the writeable flag.

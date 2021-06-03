@@ -15,6 +15,7 @@
 import sys
 import numpy as _np
 from ...models.statespace import StateSpace as _StateSpace
+from ...tools import matrixtools as _mt
 
 
 cdef class EffectRep(_basereps_cython.EffectRep):
@@ -43,8 +44,8 @@ cdef class EffectRepConjugatedState(EffectRep):
 
     def __cinit__(self, StateRep state_rep):
         self.state_rep = state_rep
-        self.c_effect = new EffectCRep_Dense(<double*>self.state_rep.base.data,
-                                               <INT>self.state_rep.base.shape[0])
+        self.c_effect = new EffectCRep_Dense(<double*>self.state_rep.data.data,
+                                               <INT>self.state_rep.data.shape[0])
         self.state_space = state_rep.state_space
 
     def __str__(self):
@@ -80,7 +81,10 @@ cdef class EffectRepComputational(EffectRep):
     def __reduce__(self):
         return (EffectRepComputational, (self.zvals, self.state_space))
 
-    #Add party & to_dense from slow version?
+    def to_dense(self, outvec=None):
+        return _mt.zvals_int64_to_dense((<EffectCRep_Computational*>self.c_effect)._zvals_int,
+                                        self.zvals.shape[0], outvec, False,
+                                        (<EffectCRep_Computational*>self.c_effect)._abs_elval)
 
 
 cdef class EffectRepTensorProduct(EffectRep):
@@ -91,14 +95,14 @@ cdef class EffectRepTensorProduct(EffectRep):
 
     def __init__(self, povm_factors, effect_labels, state_space):
         #Arrays for speeding up kron product in effect reps
-        cdef INT max_factor_dim = max(fct.dim for fct in povm_factors)
+        cdef INT max_factor_dim = max(fct.state_space.dim for fct in povm_factors)
         cdef _np.ndarray[double, ndim=2, mode='c'] kron_array = \
             _np.ascontiguousarray(_np.empty((len(povm_factors), max_factor_dim), 'd'))
         cdef _np.ndarray[_np.int64_t, ndim=1, mode='c'] factor_dims = \
-            _np.ascontiguousarray(_np.array([fct.dim for fct in povm_factors], _np.int64))
+            _np.ascontiguousarray(_np.array([fct.state_space.dim for fct in povm_factors], _np.int64))
 
         cdef INT dim = _np.product(factor_dims)
-        cdef INT nfactors = len(self.povm_factors)
+        cdef INT nfactors = len(povm_factors)
         self.povm_factors = povm_factors
         self.effect_labels = effect_labels
         self.kron_array = kron_array
@@ -116,12 +120,48 @@ cdef class EffectRepTensorProduct(EffectRep):
     def _fill_fast_kron(self):
         """ Fills in self._fast_kron_array based on current self.factors """
         for i, (factor_dim, Elbl) in enumerate(zip(self.factor_dims, self.effect_labels)):
-                self.kron_array[i][0:factor_dim] = self.povm_factors[i][Elbl].to_dense()
+            self.kron_array[i][0:factor_dim] = self.povm_factors[i][Elbl].to_dense()
 
     def factor_effects_have_changed(self):
         self._fill_fast_kron()  # updates effect reps
 
-    #TODO: Take to_dense from slow version?
+    def to_dense(self, outvec=None):  # taken from slow version - CONSOLIDATE?
+
+        if outvec is None:
+            outvec = _np.zeros(self.state_space.dim, 'd')
+
+        N = self.state_space.dim
+        nfactors = len(self.povm_factors)
+        #Put last factor at end of outvec
+        k = nfactors - 1  # last factor
+        off = N - self.factor_dims[k]  # offset into outvec
+        for i in range(self.factor_dims[k]):
+            outvec[off + i] = self.kron_array[k, i]
+        sz = self.factor_dims[k]
+
+        #Repeatedly scale&copy last "sz" elements of outputvec forward
+        # (as many times as there are elements in the current factor array)
+        # - but multiply *in-place* the last "sz" elements.
+        for k in range(nfactors - 2, -1, -1):  # for all but the last factor
+            off = N - sz * self.factor_dims[k]
+            endoff = N - sz
+
+            #For all but the final element of self.kron_array[k,:],
+            # mult&copy final sz elements of outvec into position
+            for j in range(self.factor_dims[k] - 1):
+                mult = self.kron_array[k, j]
+                for i in range(sz):
+                    outvec[off + i] = mult * outvec[endoff + i]
+                off += sz
+
+            #Last element: in-place mult
+            #assert(off == endoff)
+            mult = self.kron_array[k, self.factor_dims[k] - 1]
+            for i in range(sz):
+                outvec[endoff + i] *= mult
+            sz *= self.factor_dims[k]
+
+        return outvec
 
 
 cdef class EffectRepComposed(EffectRep):

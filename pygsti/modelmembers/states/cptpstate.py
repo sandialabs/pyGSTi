@@ -68,16 +68,12 @@ class CPTPState(_DenseState):
         #scratch space
         self.Lmx = _np.zeros((self.dmDim, self.dmDim), 'complex')
 
-        state_space = _statespace.default_space_for_dim(self.dmDim) if (state_space is None) \
+        state_space = _statespace.default_space_for_dim(len(vector)) if (state_space is None) \
             else _statespace.StateSpace.cast(state_space)
 
         evotype = _Evotype.cast(evotype)
-        rep = evotype.create_dense_state_rep(vector, state_space)
-        _DenseState.__init__(self, rep, evotype, rep.base)
+        _DenseState.__init__(self, vector,  evotype, state_space)
         self._paramlbls = _np.array(labels, dtype=object)
-
-    def _base_1d_has_changed(self):
-        self._rep.base_has_changed()
 
     def _set_params_from_vector(self, vector, truncate):
         density_mx = _np.dot(self.basis_mxs, vector)
@@ -158,9 +154,9 @@ class CPTPState(_DenseState):
         assert(_np.linalg.norm(_np.imag(vec)) < IMAG_TOL)
         vec = _np.real(vec)
 
-        self._base_1d.flags.writeable = True
-        self._base_1d[:] = vec[:]  # so shape is (dim,1) - the convention for spam vectors
-        self._base_1d.flags.writeable = False
+        self._ptr.flags.writeable = True
+        self._ptr[:] = vec[:]  # so shape is (dim,1) - the convention for spam vectors
+        self._ptr.flags.writeable = False
 
     def set_dense(self, vec):
         """

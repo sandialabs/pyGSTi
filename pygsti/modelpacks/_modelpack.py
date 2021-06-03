@@ -428,7 +428,7 @@ class GSTModelPack(ModelPack):
         assert(len(qubit_labels) == len(self._sslbls)), \
             "Expected %d qubit labels and got: %s!" % (len(self._sslbls), str(qubit_labels))
 
-        lists = _make_lsgst_lists(self._target_model(qubit_labels),  # Note: only need gate names here
+        lists = _make_lsgst_lists(self._target_model(qubit_labels, evotype='default'),  # Note: only need gate names
                                   self.prep_fiducials(qubit_labels),
                                   self.meas_fiducials(qubit_labels),
                                   self.germs(qubit_labels, lite),

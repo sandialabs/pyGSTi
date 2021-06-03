@@ -32,14 +32,14 @@ class EffectRepConjugatedState(EffectRep):
         super(EffectRepConjugatedState, self).__init__(state_rep.state_space)
 
     def __str__(self):
-        return str(self.state_rep.base)
+        return str(self.state_rep.data)
 
     def to_dense(self):
         return self.state_rep.to_dense()
 
     def amplitude(self, state):
         # can assume state is a StateRep
-        return _np.vdot(self.state_rep.base, state.base)
+        return _np.vdot(self.state_rep.data, state.data)
 
 
 class EffectRepComputational(EffectRep):
@@ -79,7 +79,7 @@ class EffectRepComputational(EffectRep):
     def amplitude(self, state):  # allow scratch to be passed in?
         scratch = _np.empty(self.dim, complex)
         Edense = self.to_dense(scratch)
-        return _np.vdot(Edense, state.base)
+        return _np.vdot(Edense, state.data)
 
 
 class EffectRepTensorProduct(EffectRep):
@@ -90,9 +90,9 @@ class EffectRepTensorProduct(EffectRep):
         kron_array = _np.ascontiguousarray(
             _np.empty((len(povm_factors), max_factor_dim), complex))
         factordims = _np.ascontiguousarray(
-            _np.array([fct.dim for fct in povm_factors], _np.int64))
+            _np.array([fct.state_space.udim for fct in povm_factors], _np.int64))
 
-        dim = _np.product(factordims)
+        #dim = _np.product(factordims)
         self.povm_factors = povm_factors
         self.effect_labels = effect_labels
         self.kron_array = kron_array
@@ -160,4 +160,4 @@ class EffectRepTensorProduct(EffectRep):
     def amplitude(self, state):  # allow scratch to be passed in?
         scratch = _np.empty(self.dim, complex)
         Edense = self.to_dense(scratch)
-        return _np.vdot(Edense, state.base)
+        return _np.vdot(Edense, state.data)

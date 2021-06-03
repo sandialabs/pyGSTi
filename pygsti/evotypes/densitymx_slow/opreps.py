@@ -62,6 +62,12 @@ class OpRepDense(OpRep):
         self.base = _np.require(mx, requirements=['OWNDATA', 'C_CONTIGUOUS'])
         super(OpRepDense, self).__init__(state_space)
 
+    def base_has_changed(self):
+        pass
+
+    def to_dense(self):
+        return self.base
+
     def acton(self, state):
         return _StateRep(_np.dot(self.base, state.base))
 
@@ -70,6 +76,9 @@ class OpRepDense(OpRep):
 
     def __str__(self):
         return "OpRepDense:\n" + str(self.base)
+
+    def copy(self):
+        return OpRepDense(self.base.copy(), self.state_space)
 
 
 class OpRepSparse(OpRep):
@@ -139,7 +148,7 @@ class OpRepStochastic(OpRepDense):
 
     def to_dense(self):  # TODO - put this in all reps?  - used in stochastic op...
         # DEFAULT: raise NotImplementedError('No to_dense implemented for evotype "%s"' % self._evotype)
-        return self._rep.base  # copy?
+        return self.base  # copy?
 
 
 #class OpRepClifford(OpRep):  # TODO?
@@ -349,11 +358,11 @@ class OpRepExpErrorgen(OpRep):
         self.s = 0
         super(OpRepExpErrorgen, self).__init__(state_space)
 
-    def errgenrep_has_changed(self):
+    def errgenrep_has_changed(self, onenorm_upperbound):
         # don't reset matrix exponential params (based on operator norm) when vector hasn't changed much
         mu, m_star, s, eta = _mt.expop_multiply_prep(
             self.errorgen_rep.aslinearoperator(),
-            a_1_norm=self.errorgen_rep.onenorm_upperbound())  # need to add ths to rep class from op TODO!!!
+            a_1_norm=onenorm_upperbound)
         self.set_exp_params(mu, eta, m_star, s)
 
     def set_exp_params(self, mu, eta, m_star, s):

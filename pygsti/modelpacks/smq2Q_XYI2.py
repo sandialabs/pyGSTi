@@ -90,11 +90,11 @@ class _Module(GSTModelPack, RBModelPack):
         (('Gxpi2', 1), ('Gxpi2', 1), ('Gypi2', 1)): [(1, 3), (1, 4), (3, 5), (5, 0), (5, 4), (5, 5)]
     }
 
-    def _target_model(self, sslbls):  # Note: same as smq2Q_XYI1 -- (this entire module may be redundant)
+    def _target_model(self, sslbls, evotype):  # Note: same as smq2Q_XYI1 -- (this entire module may be redundant)
         return self._build_explicit_target_model(
             sslbls, [(), ('Gxpi2', 1), ('Gypi2', 1)],
             ['I({0})', 'X(pi/2,{0})', 'Y(pi/2,{0})'],
-            effect_labels=['0', '1'], effect_expressions=['0', '1'])
+            effect_labels=['0', '1'], effect_expressions=['0', '1'], evotype=evotype)
 
 
 import sys

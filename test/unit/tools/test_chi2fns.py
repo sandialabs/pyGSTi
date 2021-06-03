@@ -15,7 +15,7 @@ class Chi2LogLTester(BaseCase):
 
     def test_chi2(self):
         # TODO rather than faking expensive calls this should really use a simpler dataset
-        with mock.patch('pygsti.objects.matrixforwardsim.MatrixForwardSimulator._compute_hproduct_cache') as mock_hproduct_cache:
+        with mock.patch('pygsti.forwardsims.matrixforwardsim.MatrixForwardSimulator._compute_hproduct_cache') as mock_hproduct_cache:
             mock_hproduct_cache.return_value = np.zeros((868, 60, 60, 4, 4))
 
             chi2fns.chi2(std.target_model(), self.dataset)

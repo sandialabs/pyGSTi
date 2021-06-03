@@ -51,11 +51,11 @@ class DepolarizeOp(_StochasticNoiseOp):
         #    basis = _Basis.cast(basis, 2**dim, sparse=False)
         #else:
         state_space = _statespace.StateSpace.cast(state_space)
-        basis = _Basis.cast(basis, state_space.dim, sparse=False)
+        self.basis = _Basis.cast(basis, state_space.dim, sparse=False)
 
-        num_rates = basis.size - 1
+        num_rates = self.basis.size - 1
         initial_sto_rates = [initial_rate / num_rates] * num_rates
-        _StochasticNoiseOp.__init__(self, state_space, basis, evotype, initial_sto_rates, seed_or_state)
+        _StochasticNoiseOp.__init__(self, state_space, self.basis, evotype, initial_sto_rates, seed_or_state)
 
         # For DepolarizeOp, set params to only first element
         self.params = _np.array([self.params[0]])

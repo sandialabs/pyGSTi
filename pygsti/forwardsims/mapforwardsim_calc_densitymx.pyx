@@ -523,7 +523,7 @@ def mapfill_TDterms(fwdsim, objective, array_to_fill, dest_indices, num_outcomes
                     else:
                         op = model._circuit_layer_operator(gl, 'op')  # add explicit cache check (would increase performance)
                         op.set_time(t); op_rep = op._rep
-                        local_repcache[(gl,t)] = op_rep.copy()  # need to *copy* here
+                        local_repcache[(gl, t)] = op_rep.copy()  # need to *copy* here
                     t += gl.time  # time in gate label == gate duration?
                     rho = op_rep.acton(rho)
 

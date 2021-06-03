@@ -57,6 +57,12 @@ class OpRepDenseUnitary(OpRep):
         self.base = _np.require(mx, requirements=['OWNDATA', 'C_CONTIGUOUS'])
         super(OpRep, self).__init__(self.base.shape[0])
 
+    def base_has_changed(self):
+        pass
+
+    def to_dense(self):
+        return self.base
+
     def acton(self, state):
         return _StateRep(_np.dot(self.base, state.base))
 

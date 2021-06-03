@@ -420,7 +420,7 @@ class TimeDependentMDSObjectiveFunctionTester(ObjectiveFunctionData):
 
     def setUp(self):
         super().setUp()
-        self.model.sim = pygsti.objects.MapForwardSimulator(model=self.model, max_cache_size=0)
+        self.model.sim = pygsti.forwardsims.MapForwardSimulator(model=self.model, max_cache_size=0)
         self.objfns = self.build_objfns()
 
     def test_lsvec(self):

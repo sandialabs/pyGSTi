@@ -17,6 +17,7 @@ import scipy.sparse as _sps
 import scipy.sparse.linalg as _spsl
 import warnings as _warnings
 import itertools as _itertools
+import functools as _functools
 
 from .basistools import change_basis
 
@@ -2038,3 +2039,145 @@ def project_onto_antikite(mx, kite):
         k0 += k
     assert(k0 == dim), "Invalid kite %d-dimensional matrix: %s" % (dim, str(kite))
     return mx
+
+
+def zvals_to_dense(self, zvals, superket=True):
+    """
+    Construct the dense operator or superoperator representation of a computational basis state.
+
+    Parameters
+    ----------
+    zvals : list or numpy.ndarray
+        The z-values, each 0 or 1, defining the computational basis state.
+
+    superket : bool, optional
+        If `True`, the super-ket representation of the state is returned.  If `False`,
+        then the complex ket representation is returned.
+
+    Returns
+    -------
+    numpy.ndarray
+    """
+    if superket:
+        factor_dim = 4
+        v0 = 1.0 / _np.sqrt(2) * _np.array((1, 0, 0, 1), 'd')  # '0' qubit state as Pauli dmvec
+        v1 = 1.0 / _np.sqrt(2) * _np.array((1, 0, 0, -1), 'd')  # '1' qubit state as Pauli dmvec
+    else:
+        factor_dim = 2
+        v0 = _np.array((1, 0), complex)  # '0' qubit state as complex state vec
+        v1 = _np.array((0, 1), complex)  # '1' qubit state as complex state vec
+    v = (v0, v1)
+
+    if _fastcalc is None:  # do it the slow way using numpy
+        return _functools.reduce(_np.kron, [v[i] for i in zvals])
+    else:
+        fast_kron_array = _np.ascontiguousarray(
+            _np.empty((len(self._zvals), factor_dim), v0.dtype))
+        fast_kron_factordims = _np.ascontiguousarray(_np.array([factor_dim] * len(self._zvals), _np.int64))
+        for i, zi in enumerate(self._zvals):
+            fast_kron_array[i, :] = v[zi]
+        ret = _np.ascontiguousarray(_np.empty(factor_dim**len(self._zvals), v0.dtype))
+        if superket:
+            _fastcalc.fast_kron(ret, fast_kron_array, fast_kron_factordims)
+        else:
+            _fastcalc.fast_kron_complex(ret, fast_kron_array, fast_kron_factordims)
+        return ret
+
+
+def int64_parity(x):
+    """
+    Compute the partity of x.
+
+    Recursively divide a (64-bit) integer (x) into two equal
+    halves and take their XOR until only 1 bit is left.
+
+    Parameters
+    ----------
+    x : int64
+
+    Returns
+    -------
+    int64
+    """
+    x = (x & 0x00000000FFFFFFFF) ^ (x >> 32)
+    x = (x & 0x000000000000FFFF) ^ (x >> 16)
+    x = (x & 0x00000000000000FF) ^ (x >> 8)
+    x = (x & 0x000000000000000F) ^ (x >> 4)
+    x = (x & 0x0000000000000003) ^ (x >> 2)
+    x = (x & 0x0000000000000001) ^ (x >> 1)
+    return x & 1  # return the last bit (0 or 1)
+
+
+def zvals_int64_to_dense(zvals_int, nqubits, outvec=None, trust_outvec_sparsity=False, abs_elval=None):
+    """
+    Fills a dense array with the super-ket representation of a computational basis state.
+
+    Parameters
+    ----------
+    zvals_int : int64
+        The array of (up to 64) z-values, encoded as the 0s and 1s in the binary representation
+        of this integer.
+
+    nqubits : int
+        The number of z-values (up to 64)
+
+    outvec : numpy.ndarray, optional
+        The output array, which must be a 1D array of length 4**nqubits or `None`, in
+        which case a new array is allocated.
+
+    trust_outvec_sparsity : bool, optional
+        When `True`, it is assumed that the provided `outvec` starts as all zeros
+        and so only non-zero elements of outvec need to be set.
+
+    abs_elval : float
+        the value `1 / (sqrt(2)**nqubits)`, which can be passed here so that
+        it doesn't need to be recomputed on every call to this function.  If
+        `None`, then we just compute the value.
+
+    Returns
+    -------
+    numpy.ndarray
+    """
+
+    if outvec is None:
+        outvec = _np.zeros(4**nqubits, 'd')
+    if abs_elval is None:
+        abs_elval = 1 / (_np.sqrt(2)**nqubits)
+
+    # when trust_outvec_sparsity is True, assume we only need to fill in the
+    # non-zero elements of outvec (i.e. that outvec is already zero wherever
+    # this vector is zero).
+    if not trust_outvec_sparsity:
+        outvec[:] = 0  # reset everything to zero
+
+    N = nqubits
+
+    # there are nQubits factors
+    # each factor (4-element, 1Q dmvec) has 2 zero elements and 2 nonzero ones
+    # loop is over all non-zero elements of the final outvec by looping over
+    #  all the sets of *entirely* nonzero elements from the factors.
+
+    # Let the two possible nonzero elements of the k-th factor be represented
+    # by the k-th bit of `finds` below, which ranges from 0 to 2^nFactors-1
+    for finds in range(2**N):
+
+        #Create the final index (within outvec) corresponding to finds
+        # assume, like tensorprod, that factor ordering == kron ordering
+        # so outvec = kron( factor[0], factor[1], ... factor[N-1] ).
+        # Let factorDim[k] == 4**(N-1-k) be the stride associated with the k-th index
+        # Whenever finds[bit k] == 0 => finalIndx += 0*factorDim[k]
+        #          finds[bit k] == 1 => finalIndx += 3*factorDim[k] (3 b/c factor's 2nd nonzero el is at index 3)
+        finalIndx = sum([3 * (4**(N - 1 - k)) for k in range(N) if bool(finds & (1 << k))])
+
+        #Determine the sign of this element (the element is either +/- (1/sqrt(2))^N )
+        # A minus sign is picked up whenever finds[bit k] == 1 (which means we're looking
+        # at the index=3 element of the factor vec) AND zvals_int[bit k] == 1
+        # (which means it's a [1 0 0 -1] state rather than a [1 0 0 1] state).
+        # Since we only care whether the number of minus signs is even or odd, we can
+        # BITWISE-AND finds with zvals_int (giving an integer whose binary-expansion's
+        # number of 1's == the number of minus signs) and compute the parity of this.
+        minus_sign = int64_parity(finds & zvals_int)
+
+        outvec[finalIndx] = -abs_elval if minus_sign else abs_elval
+
+    return outvec

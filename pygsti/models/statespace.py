@@ -48,6 +48,13 @@ class StateSpace(object):
             return QubitSpace(obj)
         return ExplicitStateSpace(obj)
 
+    def is_entirely_qubits(self):
+        try:
+            self.num_qubits
+            return True
+        except Exception:
+            return False
+
     @property
     def udim(self):
         raise NotImplementedError("Derived classes should implement this!")
@@ -447,14 +454,14 @@ class ExplicitStateSpace(StateSpace):
     #    -------
     #    None
     #    """
-    #    for lbl in self.labeldims:
+    #    for lbl in self.label_dims:
     #        if self.labeltypes[lbl] == 'Q':
-    #            self.labeldims[lbl] = int(_np.sqrt(self.labeldims[lbl]))
+    #            self.label_dims[lbl] = int(_np.sqrt(self.label_dims[lbl]))
     #
     #    #update tensor-product-block dims and overall dim too:
     #    self.tpb_dims = []
     #    for iTPB, tpbLabels in enumerate(self.labels):
-    #        self.tpb_dims.append(int(_np.product([self.labeldims[lbl] for lbl in tpbLabels])))
+    #        self.tpb_dims.append(int(_np.product([self.label_dims[lbl] for lbl in tpbLabels])))
     #        self.tpb_index.update({lbl: iTPB for lbl in tpbLabels})
     #    self.dim = sum(self.tpb_dims)
 
@@ -554,12 +561,12 @@ class ExplicitStateSpace(StateSpace):
     #    -------
     #    int
     #    """
-    #    return int(_np.product([self.labeldims[l] for l in labels]))
+    #    return int(_np.product([self.label_dims[l] for l in labels]))
 
     def __str__(self):
         if len(self.labels) == 0: return "ZeroDimSpace"
         return ' + '.join(
-            ['*'.join(["%s(%d%s)" % (lbl, self.labeldims[lbl], 'c' if (self.labeltypes[lbl] == 'C') else '')
+            ['*'.join(["%s(%d%s)" % (lbl, self.label_dims[lbl], 'c' if (self.labeltypes[lbl] == 'C') else '')
                        for lbl in tpb]) for tpb in self.labels])
 
 

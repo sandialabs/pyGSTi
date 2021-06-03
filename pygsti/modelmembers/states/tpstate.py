@@ -1,3 +1,16 @@
+"""
+The TPState class and supporting functionality.
+"""
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
+
+
 import numpy as _np
 from .state import State as _State
 from .densestate import DenseState as _DenseState
@@ -45,24 +58,16 @@ class TPState(_DenseState):
             raise ValueError("Cannot create TPSPAMVec: "
                              "first element must equal %g!" % firstEl)
 
-        state_space = _statespace.default_space_for_dim(vec.shape[0]) if (state_space is None) \
-            else _statespace.StateSpace.cast(state_space)
-
-        evotype = _Evotype.cast(evotype)
-        rep = evotype.create_dense_state_rep(vector, state_space)
-        _DenseState.__init__(self, rep, evotype, rep.base)
-        assert(isinstance(self.base, _ProtectedArray))
+        _DenseState.__init__(self, vector, evotype, state_space)
+        assert(isinstance(self.columnvec, _ProtectedArray))
         self._paramlbls = _np.array(["VecElement %d" % i for i in range(1, self.dim)], dtype=object)
 
-    def _base_1d_has_changed(self):
-        self._rep.base_has_changed()
-
     @property
-    def base(self):
+    def columnvec(self):
         """
         Direct access the the underlying data as column vector, i.e, a (dim,1)-shaped array.
         """
-        bv = self._base_1d.view()
+        bv = self._ptr.view()
         bv.shape = (bv.size, 1)
         return _ProtectedArray(bv, indices_to_protect=(0, 0))
 
@@ -90,8 +95,8 @@ class TPState(_DenseState):
         if not _np.isclose(vec[0], firstEl):
             raise ValueError("Cannot create TPSPAMVec: "
                              "first element must equal %g!" % firstEl)
-        self._base_1d[1:] = vec[1:]
-        self._base_1d_has_changed()
+        self._ptr[1:] = vec[1:]
+        self._ptr_has_changed()
         self.dirty = True
 
     @property
@@ -115,7 +120,7 @@ class TPState(_DenseState):
         numpy array
             The parameters as a 1D array with length num_params().
         """
-        return self._base_1d[1:]  # .real in case of complex matrices?
+        return self._ptr[1:]  # .real in case of complex matrices?
 
     def from_vector(self, v, close=False, dirty_value=True):
         """
@@ -141,9 +146,9 @@ class TPState(_DenseState):
         -------
         None
         """
-        #assert(_np.isclose(self._base_1d[0], (self.dim)**-0.25))  # takes too much time!
-        self._base_1d[1:] = v
-        self._base_1d_has_changed()
+        #assert(_np.isclose(self._ptr[0], (self.dim)**-0.25))  # takes too much time!
+        self._ptr[1:] = v
+        self._ptr_has_changed()
         self.dirty = dirty_value
 
     def deriv_wrt_params(self, wrt_filter=None):

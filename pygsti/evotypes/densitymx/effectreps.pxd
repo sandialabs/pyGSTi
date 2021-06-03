@@ -67,6 +67,8 @@ cdef extern from "effectcreps.h" namespace "CReps":
         double probability(StateCRep* state)
         double probability_using_cache(StateCRep* state, StateCRep* precomp_state, INT& precomp_id)
         INT _dim
+        INT _zvals_int
+        double _abs_elval
 
     cdef cppclass EffectCRep_Composed(EffectCRep):
         EffectCRep_Composed() except +

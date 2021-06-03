@@ -19,6 +19,7 @@ from .fullstate import FullState
 #from .purestate #TODO??
 from .state import State
 from .staticstate import StaticState
+from .staticpurestate import StaticPureState
 from .tensorprodstate import TensorProductState
 from .tpstate import TPState
 
@@ -64,57 +65,70 @@ def convert(state, to_type, basis, extra=None):
         if isinstance(state, FullState):
             return state  # no conversion necessary
         else:
-            return FullState(state.to_dense())
+            return FullState(state.to_dense(), state.evotype, state.state_space)
 
     elif to_type == "TP":
         if isinstance(state, TPState):
             return state  # no conversion necessary
         else:
-            return TPState(state.to_dense())
+            return TPState(state.to_dense(), state.evotype, state.state_space)
             # above will raise ValueError if conversion cannot be done
 
     elif to_type == "TrueCPTP":  # a non-lindbladian CPTP state that hasn't worked well...
         if isinstance(state, CPTPState):
             return state  # no conversion necessary
         else:
-            return CPTPState(state, basis)
+            truncate = False
+            return CPTPState(state.to_dense(), basis, truncate, state.evotype, state.state_space)
             # above will raise ValueError if conversion cannot be done
 
     elif to_type == "static":
         if isinstance(state, StaticState):
             return state  # no conversion necessary
         else:
-            return StaticState(state)
+            return StaticState(state.to_dense(), state.evotype, state.state_space)
 
     elif to_type == "static unitary":
         dmvec = _bt.change_basis(state.to_dense(), basis, 'std')
         purevec = _ot.dmvec_to_state(dmvec)
-        return StaticPureState(purevec, "statevec", state._prep_or_effect)
+        return StaticPureState(purevec, basis, state.evotype, state.state_space)
 
     elif _ot.is_valid_lindblad_paramtype(to_type):
 
-        if extra is None:
-            purevec = state  # right now, we don't try to extract a "closest pure vec"
-            # to state - below will fail if state isn't pure.
-        else:
-            purevec = extra  # assume extra info is a pure vector
+        from ..operations import LindbladErrorgen as _LindbladErrorgen, ExpErrorgenOp as _ExpErrorgenOp
+        purevec = None
+        if isinstance(state, (FullState, TPState, StaticState)):
+            try:
+                dmvec = _bt.change_basis(state.to_dense(), basis, 'std')
+                purevec = _ot.dmvec_to_state(dmvec)  # raises error if dmvec does not correspond to a pure state
+            except ValueError:
+                purevec = None
 
-        nQubits = _np.log2(state.dim) / 2.0
-        bQubits = bool(abs(nQubits - round(nQubits)) < 1e-10)  # integer # of qubits?
-        proj_basis = "pp" if (basis == "pp" or bQubits) else basis
-        typ = state._prep_or_effect if isinstance(state, State) else "prep"
+        if purevec is not None:
+            static_state = StaticPureState(purevec, basis, state.evotype, state.state_space)
+        elif state.num_params > 0:  # then we need to convert to a static state
+            static_state = StaticState(state.to_dense(), state.evotype, state.state_space)
+        else:  # state.num_params == 0 so it's already static
+            static_state = state
 
-        return LindbladState._from_state_obj(
-            state, typ, to_type, None, proj_basis, basis,
-            truncate=True, lazy=True)
+        proj_basis = 'pp' if state.state_space.is_entirely_qubits else basis
+        nonham_mode, param_mode, use_ham_basis, use_nonham_basis = \
+            _LindbladErrorgen.decomp_paramtype(to_type)
+        ham_basis = proj_basis if use_ham_basis else None
+        nonham_basis = proj_basis if use_nonham_basis else None
 
-    elif to_type == "clifford":
-        if isinstance(state, StabilizerState):
+        errorgen = _LindbladErrorgen.from_error_generator(_np.zeros((state.state_space.dim,
+                                                                     state.state_space.dim), 'd'),
+                                                          ham_basis, nonham_basis, param_mode, nonham_mode,
+                                                          basis, truncate=True, evotype=state.evotype)
+        return ComposedState(static_state, _ExpErrorgenOp(errorgen))
+
+    elif to_type == "static clifford":
+        if isinstance(state, ComputationalBasisState):
             return state  # no conversion necessary
 
-        purevec = state.flatten()  # assume a pure state (otherwise would
-        # need to change Model dim)
-        return StabilizerState.from_dense_purevec(purevec)
+        purevec = state.to_dense().flatten()  # assume a pure state (otherwise would need to change Model dim)
+        return ComputationalBasisState.from_dense_purevec(purevec)
 
     else:
         raise ValueError("Invalid to_type argument: %s" % to_type)
@@ -218,3 +232,54 @@ def check_deriv_wrt_params(spamvec, deriv_to_check=None, wrt_filter=None, eps=1e
         raise ValueError("Failed check of deriv_wrt_params:\n"
                          " norm diff = %g" %
                          _np.linalg.norm(fd_deriv - deriv_to_check))
+
+
+def optimize_state(vec_to_optimize, target_vec):
+    """
+    Optimize the parameters of vec_to_optimize.
+
+    The optimization is performed so that the the resulting SPAM vector is as
+    close as possible to target_vec.
+
+    This is trivial for the case of FullSPAMVec instances, but for other types
+    of parameterization this involves an iterative optimization over all the
+    parameters of vec_to_optimize.
+
+    Parameters
+    ----------
+    vec_to_optimize : SPAMVec
+        The vector to optimize. This object gets altered.
+
+    target_vec : SPAMVec
+        The SPAM vector used as the target.
+
+    Returns
+    -------
+    None
+    """
+
+    #TODO: cleanup this code:
+    if isinstance(vec_to_optimize, StaticState):
+        return  # nothing to optimize
+
+    if isinstance(vec_to_optimize, FullState):
+        if(target_vec.dim != vec_to_optimize.dim):  # special case: gates can have different overall dimension
+            vec_to_optimize.dim = target_vec.dim  # this is a HACK to allow model selection code to work correctly
+        vec_to_optimize.set_dense(target_vec.to_dense())  # just copy entire overall matrix since fully parameterized
+        return
+
+    from ... import optimize as _opt
+    from ...tools import matrixtools as _mt
+    assert(target_vec.dim == vec_to_optimize.dim)  # vectors must have the same overall dimension
+    targetVector = _np.asarray(target_vec)
+
+    def _objective_func(param_vec):
+        vec_to_optimize.from_vector(param_vec)
+        return _mt.frobeniusnorm(vec_to_optimize.to_dense() - targetVector.to_dense())
+
+    x0 = vec_to_optimize.to_vector()
+    minSol = _opt.minimize(_objective_func, x0, method='BFGS', maxiter=10000, maxfev=10000,
+                           tol=1e-6, callback=None)
+
+    vec_to_optimize.from_vector(minSol.x)
+    #print("DEBUG: optimized vector to min frobenius distance %g" % _mt.frobeniusnorm(vec_to_optimize-targetVector))

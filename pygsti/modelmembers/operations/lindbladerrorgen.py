@@ -457,11 +457,11 @@ class LindbladErrorgen(_LinearOperator):
         self.other_basis_size = len(self.other_basis)
 
         # Determine whether bases we've been given are sparse
-        if self.ham_basis_size > 0: self.sparse = _sps.issparse(self.ham_basis[0])
-        elif self.other_basis_size > 0: self.sparse = _sps.issparse(self.other_basis[0])
-        else: self.sparse = False
+        if self.ham_basis_size > 0: self._sparse_bases = _sps.issparse(self.ham_basis[0])
+        elif self.other_basis_size > 0: self._sparse_bases = _sps.issparse(self.other_basis[0])
+        else: self._sparse_bases = False
 
-        self.matrix_basis = _Basis.cast(mx_basis, dim, sparse=self.sparse)
+        self.matrix_basis = _Basis.cast(mx_basis, dim, sparse=self._sparse_bases)
 
         self.paramvals = _ot.lindblad_projections_to_paramvals(
             hamC, otherC, self.param_mode, self.nonham_mode, truncate)
@@ -481,10 +481,9 @@ class LindbladErrorgen(_LinearOperator):
         evotype = _Evotype.cast(evotype)
         try:
             rep = evotype.create_lindblad_errorgen_rep(lindblad_term_dict, basis, state_space)
-            self._native_lindblad_rep = True
+            self._rep_type = 'lindblad'
         except Exception:
             #Otherwise try to create a sparse or dense matrix representation
-            self._native_lindblad_rep = False
             self.hamGens, self.otherGens = self._init_generators(dim)
 
             if self.hamGens is not None:
@@ -501,7 +500,7 @@ class LindbladErrorgen(_LinearOperator):
             bsO = self.other_basis_size
             self.Lmx = _np.zeros((bsO - 1, bsO - 1), 'complex') if bsO > 0 else None
 
-            if self.sparse:
+            if self._sparse_bases:  # then construct a sparse-matrix representation
                 #Precompute for faster CSR sums in _construct_errgen
                 all_csr_matrices = []
                 if self.hamGens is not None:
@@ -531,8 +530,10 @@ class LindbladErrorgen(_LinearOperator):
                                                 _np.ascontiguousarray(indices, _np.int64),
                                                 _np.ascontiguousarray(indptr, _np.int64),
                                                 state_space)
+                self._rep_type = 'sparse'
             else:
-                rep = evotype.create_dense_rep(None, state_space)
+                rep = evotype.create_dense_superop_rep(None, state_space)
+                self._rep_type = 'dense'
 
         _LinearOperator.__init__(self, rep, evotype)  # sets self.dim
         self._update_rep()  # updates _rep whether it's a dense or sparse matrix
@@ -547,7 +548,7 @@ class LindbladErrorgen(_LinearOperator):
 
         # Get basis transfer matrix
         mxBasisToStd = self.matrix_basis.create_transform_matrix(
-            _BuiltinBasis("std", self.matrix_basis.dim, self.sparse))
+            _BuiltinBasis("std", self.matrix_basis.dim, self._sparse_bases))
         # use BuiltinBasis("std") instead of just "std" in case matrix_basis is a TensorProdBasis
         leftTrans = _spsl.inv(mxBasisToStd.tocsc()).tocsr() if _sps.issparse(mxBasisToStd) \
             else _np.linalg.inv(mxBasisToStd)
@@ -565,10 +566,10 @@ class LindbladErrorgen(_LinearOperator):
 
         if hamGens is not None:
             bsH = len(hamGens) + 1  # projection-basis size (not nec. == dim)
-            _ot._assert_shape(hamGens, (bsH - 1, dim, dim), self.sparse)
+            _ot._assert_shape(hamGens, (bsH - 1, dim, dim), self._sparse_bases)
 
             # apply basis change now, so we don't need to do so repeatedly later
-            if self.sparse:
+            if self._sparse_bases:
                 hamGens = [_mt.safe_real(_mt.safe_dot(leftTrans, _mt.safe_dot(mx, rightTrans)),
                                          inplace=True, check=True) for mx in hamGens]
                 for mx in hamGens: mx.sort_indices()
@@ -585,10 +586,10 @@ class LindbladErrorgen(_LinearOperator):
 
             if self.nonham_mode == "diagonal":
                 bsO = len(otherGens) + 1  # projection-basis size (not nec. == dim)
-                _ot._assert_shape(otherGens, (bsO - 1, dim, dim), self.sparse)
+                _ot._assert_shape(otherGens, (bsO - 1, dim, dim), self._sparse_bases)
 
                 # apply basis change now, so we don't need to do so repeatedly later
-                if self.sparse:
+                if self._sparse_bases:
                     otherGens = [_mt.safe_real(_mt.safe_dot(leftTrans, _mt.safe_dot(mx, rightTrans)),
                                                inplace=True, check=True) for mx in otherGens]
                     for mx in otherGens: mx.sort_indices()
@@ -601,10 +602,10 @@ class LindbladErrorgen(_LinearOperator):
             elif self.nonham_mode == "diag_affine":
                 # projection-basis size (not nec. == dim) [~shape[1] but works for lists too]
                 bsO = len(otherGens[0]) + 1
-                _ot._assert_shape(otherGens, (2, bsO - 1, dim, dim), self.sparse)
+                _ot._assert_shape(otherGens, (2, bsO - 1, dim, dim), self._sparse_bases)
 
                 # apply basis change now, so we don't need to do so repeatedly later
-                if self.sparse:
+                if self._sparse_bases:
                     otherGens = [[_mt.safe_dot(leftTrans, _mt.safe_dot(mx, rightTrans))
                                   for mx in mxRow] for mxRow in otherGens]
 
@@ -619,10 +620,10 @@ class LindbladErrorgen(_LinearOperator):
 
             else:
                 bsO = len(otherGens) + 1  # projection-basis size (not nec. == dim)
-                _ot._assert_shape(otherGens, (bsO - 1, bsO - 1, dim, dim), self.sparse)
+                _ot._assert_shape(otherGens, (bsO - 1, bsO - 1, dim, dim), self._sparse_bases)
 
                 # apply basis change now, so we don't need to do so repeatedly later
-                if self.sparse:
+                if self._sparse_bases:
                     otherGens = [[_mt.safe_dot(leftTrans, _mt.safe_dot(mx, rightTrans))
                                   for mx in mxRow] for mxRow in otherGens]
                     #Note: complex OK here, as only linear combos of otherGens (like (i,j) + (j,i)
@@ -822,7 +823,7 @@ class LindbladErrorgen(_LinearOperator):
             _ot.lindblad_errorgen_projections(
                 errgen, self.ham_basis, self.other_basis, self.matrix_basis, normalize=False,
                 return_generators=False, other_mode=self.nonham_mode,
-                sparse=self.sparse)  # in std basis
+                sparse=self._sparse_bases)  # in std basis
 
         self.paramvals = _ot.lindblad_projections_to_paramvals(
             hamC, otherC, self.param_mode, self.nonham_mode, truncate)
@@ -835,8 +836,7 @@ class LindbladErrorgen(_LinearOperator):
         error generator matrix using the current parameters and updates self._rep
         accordingly (by rewriting its data).
         """
-
-        if self._native_lindblad_rep:
+        if self._rep_type == 'lindblad':
             # the code below is for updating sparse or dense matrix representations.  If our
             # evotype has a native Lindblad representation, maybe in the FUTURE we should
             # call an update method of it here?
@@ -849,7 +849,7 @@ class LindbladErrorgen(_LinearOperator):
         onenorm = 0.0
 
         #Finally, build operation matrix from generators and coefficients:
-        if self.sparse:
+        if self._sparse_bases:
             coeffs = None
             data = self._data_scratch
             data.fill(0.0)  # data starts at zero
@@ -933,34 +933,33 @@ class LindbladErrorgen(_LinearOperator):
         -------
         numpy.ndarray
         """
-        if self.sparse:
+        if self._rep_type == 'lindblad':
+            #Then we need to do similar things to __init__ for a dense rep - maybe consolidate?
+            hamCoeffs, otherCoeffs = _ot.paramvals_to_lindblad_projections(
+                self.paramvals, self.ham_basis_size, self.other_basis_size,
+                self.param_mode, self.nonham_mode)
+
+            hamGens, otherGens = self._init_generators(self.dim)
+
+            if hamCoeffs is not None:
+                lnd_error_gen = _np.tensordot(hamCoeffs, hamGens, (0, 0))
+            else:
+                lnd_error_gen = _np.zeros((self.dim, self.dim), 'complex')
+
+            if otherCoeffs is not None:
+                if self.nonham_mode == "diagonal":
+                    lnd_error_gen += _np.tensordot(otherCoeffs, otherGens, (0, 0))
+                else:  # nonham_mode in ("diag_affine", "all")
+                    lnd_error_gen += _np.tensordot(otherCoeffs, otherGens, ((0, 1), (0, 1)))
+
+            assert(_np.isclose(_np.linalg.norm(lnd_error_gen.imag), 0)), \
+                "Imaginary error gen norm: %g" % _np.linalg.norm(lnd_error_gen.imag)
+            return lnd_error_gen.real
+
+        elif self._rep_type == 'sparse':
             return self.to_sparse().toarray()
-        else:
-            if self._evotype in ("svterm", "cterm"):
-                #Need to do similar things to __init__ - maybe consolidate?
-                hamCoeffs, otherCoeffs = _ot.paramvals_to_lindblad_projections(
-                    self.paramvals, self.ham_basis_size, self.other_basis_size,
-                    self.param_mode, self.nonham_mode)
-
-                hamGens, otherGens = self._init_generators(self.dim)
-
-                if hamCoeffs is not None:
-                    lnd_error_gen = _np.tensordot(hamCoeffs, hamGens, (0, 0))
-                else:
-                    lnd_error_gen = _np.zeros((self.dim, self.dim), 'complex')
-
-                if otherCoeffs is not None:
-                    if self.nonham_mode == "diagonal":
-                        lnd_error_gen += _np.tensordot(otherCoeffs, otherGens, (0, 0))
-                    else:  # nonham_mode in ("diag_affine", "all")
-                        lnd_error_gen += _np.tensordot(otherCoeffs, otherGens, ((0, 1), (0, 1)))
-
-                assert(_np.isclose(_np.linalg.norm(lnd_error_gen.imag), 0)), \
-                    "Imaginary error gen norm: %g" % _np.linalg.norm(lnd_error_gen.imag)
-                return lnd_error_gen.real
-
-            else:  # dense rep
-                return self._rep.base
+        else:  # dense rep
+            return self._rep.to_dense()
 
     def to_sparse(self):
         """
@@ -973,33 +972,31 @@ class LindbladErrorgen(_LinearOperator):
         _warnings.warn(("Constructing the sparse matrix of a LindbladDenseOp."
                         "  Usually this is *NOT* a sparse matrix (the exponential of a"
                         " sparse matrix isn't generally sparse)!"))
-        if self.sparse:
-            if self._evotype in ("svterm", "cterm"):
-                #Need to do similar things to __init__ - maybe consolidate?
-                hamCoeffs, otherCoeffs = _ot.paramvals_to_lindblad_projections(
-                    self.paramvals, self.ham_basis_size, self.other_basis_size,
-                    self.param_mode, self.nonham_mode)
+        if self._rep_type == 'lindblad':
+            #Need to do similar things to __init__ - maybe consolidate?
+            hamCoeffs, otherCoeffs = _ot.paramvals_to_lindblad_projections(
+                self.paramvals, self.ham_basis_size, self.other_basis_size,
+                self.param_mode, self.nonham_mode)
 
-                hamGens, otherGens = self._init_generators(self.dim)
+            hamGens, otherGens = self._init_generators(self.dim)
 
-                if hamCoeffs is not None:
-                    lnd_error_gen = sum([c * gen for c, gen in zip(hamCoeffs, hamGens)])
-                else:
-                    lnd_error_gen = _sps.csr_matrix((self.dim, self.dim))
-
-                if otherCoeffs is not None:
-                    if self.nonham_mode == "diagonal":
-                        lnd_error_gen += sum([c * gen for c, gen in zip(otherCoeffs, otherGens)])
-                    else:  # nonham_mode in ("diag_affine", "all")
-                        lnd_error_gen += sum([c * gen for cRow, genRow in zip(otherCoeffs, otherGens)
-                                              for c, gen in zip(cRow, genRow)])
-
-                return lnd_error_gen
+            if hamCoeffs is not None:
+                lnd_error_gen = sum([c * gen for c, gen in zip(hamCoeffs, hamGens)])
             else:
-                return _sps.csr_matrix((self._rep.data, self._rep.indices, self._rep.indptr),
-                                       shape=(self.dim, self.dim))
+                lnd_error_gen = _sps.csr_matrix((self.dim, self.dim))
 
-        else:
+            if otherCoeffs is not None:
+                if self.nonham_mode == "diagonal":
+                    lnd_error_gen += sum([c * gen for c, gen in zip(otherCoeffs, otherGens)])
+                else:  # nonham_mode in ("diag_affine", "all")
+                    lnd_error_gen += sum([c * gen for cRow, genRow in zip(otherCoeffs, otherGens)
+                                          for c, gen in zip(cRow, genRow)])
+
+            return lnd_error_gen
+        elif self._rep_type == 'sparse':
+            return _sps.csr_matrix((self._rep.data, self._rep.indices, self._rep.indptr),
+                                   shape=(self.dim, self.dim))
+        else:  # dense rep
             return _sps.csr_matrix(self.to_dense())
 
     #def torep(self):
@@ -1014,7 +1011,7 @@ class LindbladErrorgen(_LinearOperator):
     #    OpRep
     #    """
     #    if self._evotype == "densitymx":
-    #        if self.sparse:
+    #        if self._sparse_bases:
     #            A = self.err_gen_mx
     #            return replib.DMOpRepSparse(
     #                _np.ascontiguousarray(A.data),
@@ -1485,7 +1482,7 @@ class LindbladErrorgen(_LinearOperator):
             Uinv = s.transform_matrix_inverse
 
             #conjugate Lindbladian exponent by U:
-            err_gen_mx = self.to_sparse() if self.sparse else self.to_dense()
+            err_gen_mx = self.to_sparse() if self._rep_type == 'sparse' else self.to_dense()
             err_gen_mx = _mt.safe_dot(Uinv, _mt.safe_dot(err_gen_mx, U))
             trunc = bool(isinstance(s, _gaugegroup.UnitaryGaugeGroupElement))
             self._set_params_from_matrix(err_gen_mx, truncate=trunc)
@@ -1532,7 +1529,7 @@ class LindbladErrorgen(_LinearOperator):
            isinstance(s, _gaugegroup.TPSpamGaugeGroupElement):
             U = s.transform_matrix
             Uinv = s.transform_matrix_inverse
-            err_gen_mx = self.to_sparse() if self.sparse else self.to_dense()
+            err_gen_mx = self.to_sparse() if self._rep_type == 'sparse' else self.to_dense()
 
             #just act on postfactor and Lindbladian exponent:
             if typ == "prep":
@@ -1755,8 +1752,11 @@ class LindbladErrorgen(_LinearOperator):
         numpy array
             Array of derivatives, shape == (dimension^2, num_params)
         """
-        assert(not self.sparse), \
-            "LindbladErrorgen.deriv_wrt_params(...) can only be called when using *dense* basis elements!"
+        if self._rep_type == 'sparse':
+            #raise NotImplementedError(("LindbladErrorgen.deriv_wrt_params(...) can only be called "
+            #                           "when using *dense* basis elements!"))
+            _warnings.warn("Using finite differencing to compute LindbladErrorGen derivative!")
+            return super(LindbladErrorgen, self).deriv_wrt_params(wrt_filter)
 
         dim = self.dim
         bsH = self.ham_basis_size
@@ -1808,8 +1808,9 @@ class LindbladErrorgen(_LinearOperator):
         numpy array
             Hessian with shape (dimension^2, num_params1, num_params2)
         """
-        assert(not self.sparse), \
-            "LindbladErrorgen.hessian_wrt_params(...) can only be called when using *dense* basis elements!"
+        if self._sparse_bases:
+            raise NotImplementedError(("LindbladErrorgen.hessian_wrt_params(...) can only be called when using *dense*"
+                                       " basis elements!")) # needed because the _d2_odp2 function assumes dense mxs
 
         dim = self.dim
         bsH = self.ham_basis_size
@@ -1826,8 +1827,8 @@ class LindbladErrorgen(_LinearOperator):
         #Deriv wrt other params
         if bsO > 0:  # if there are any "other" params
             nP = nTotParams - nHam  # num "other" params, e.g. (bsO-1) or (bsO-1)**2
-            dimOdp2 = self._dim_odp2()
-            dimOdp2 = dimOdp2.reshape((dim**2, nP, nP))
+            d2Odp2 = self._d2_odp2()
+            d2Odp2 = d2Odp2.reshape((dim**2, nP, nP))
 
             #d2Odp2 has been reshape so index as [iFlattenedOp,iDeriv1,iDeriv2]
             assert(_np.linalg.norm(_np.imag(d2Odp2)) < IMAG_TOL)

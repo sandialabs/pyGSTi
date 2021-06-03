@@ -62,16 +62,14 @@ class TPDenseOp(_DenseOperator):
                 and _np.allclose(mx[0, 1:], 0.0)):
             raise ValueError("Cannot create TPDenseOp: "
                              "invalid form for 1st row!")
-        raw = _np.require(mx, requirements=['OWNDATA', 'C_CONTIGUOUS'])
-
-        _DenseOperator.__init__(self, raw, evotype, state_space)
+        _DenseOperator.__init__(self, mx, evotype, state_space)
         assert(self._rep.base.flags['C_CONTIGUOUS'] and self._rep.base.flags['OWNDATA'])
-        assert(isinstance(self.base, _ProtectedArray))
+        assert(isinstance(self._ptr, _ProtectedArray))
         self._paramlbls = _np.array(["MxElement %d,%d" % (i, j) for i in range(1, self.dim) for j in range(self.dim)],
                                     dtype=object)
 
     @property
-    def base(self):
+    def _ptr(self):
         """
         The underlying dense process matrix.
         """
@@ -102,7 +100,8 @@ class TPDenseOp(_DenseOperator):
             raise ValueError("Cannot set TPDenseOp: "
                              "invalid form for 1st row!")
             #For further debugging:  + "\n".join([str(e) for e in mx[0,:]])
-        self.base[1:, :] = mx[1:, :]
+        self._ptr[1:, :] = mx[1:, :]
+        self._ptr_has_changed()
         self.dirty = True
 
     @property
@@ -126,7 +125,7 @@ class TPDenseOp(_DenseOperator):
         numpy array
             The operation parameters as a 1D array with length num_params().
         """
-        return self.base.flatten()[self.dim:]  # .real in case of complex matrices?
+        return self._ptr.flatten()[self.dim:]  # .real in case of complex matrices?
 
     def from_vector(self, v, close=False, dirty_value=True):
         """
@@ -152,10 +151,11 @@ class TPDenseOp(_DenseOperator):
         -------
         None
         """
-        #assert(self.base.shape == (self.dim, self.dim))
-        #self.base[1:, :] = v.reshape((self.dim - 1, self.dim))
+        #assert(self._ptr.shape == (self.dim, self.dim))
+        #self._ptr[1:, :] = v.reshape((self.dim - 1, self.dim))
         #self._rep.base[1:, :] = v.reshape((self.dim - 1, self.dim))  # faster than line above
         self._rep.base.flat[self.dim:] = v  # faster still
+        self._ptr_has_changed()  # because _rep.base == _ptr (same memory)
         self.dirty = dirty_value
 
     def deriv_wrt_params(self, wrt_filter=None):

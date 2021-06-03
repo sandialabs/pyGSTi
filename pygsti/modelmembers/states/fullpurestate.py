@@ -1,12 +1,12 @@
 import numpy as _np
 from .state import State as _State
-from .densestate import DenseState as _DenseState
+from .densestate import DensePureState as _DensePureState
 from ...evotypes import Evotype as _Evotype
 from ...models import statespace as _statespace
 from ...objects.basis import Basis as _Basis
 
 
-class FullPureState(_DenseState):
+class FullPureState(_DensePureState):
     """
     A "fully parameterized" state vector where each element is an independent parameter.
 
@@ -30,20 +30,9 @@ class FullPureState(_DenseState):
     """
 
     def __init__(self, purevec, basis="pp", evotype="default", state_space=None):
-        purevec = _State._to_vector(purevec)
-
-        state_space = _statespace.default_space_for_udim(purevec.shape[0]) if (state_space is None) \
-            else _statespace.StateSpace.cast(state_space)
-
-        evotype = _Evotype.cast(evotype)
-        basis = _Basis.cast(basis, state_space.dim)  # basis for Hilbert-Schmidt (superop) space
-        rep = evotype.create_pure_state_rep(purevec, basis, state_space)
-        _DenseState.__init__(self, rep, evotype, rep.purebase)
-        self._paramlbls = _np.array(["VecElement Re(%d)" % i for i in range(self.dim)]
-                                    + ["VecElement Im(%d)" % i for i in range(self.dim)], dtype=object)
-
-    def _base_1d_has_changed(self):
-        self._rep.purebase_has_changed()
+        _DensePureState.__init__(self, purevec, basis, evotype, state_space)
+        self._paramlbls = _np.array(["VecElement Re(%d)" % i for i in range(self.state_space.udim)]
+                                    + ["VecElement Im(%d)" % i for i in range(self.state_space.udim)], dtype=object)
 
     #Cannot set to arbitrary vector
     #def set_dense(self, vec):
@@ -66,7 +55,7 @@ class FullPureState(_DenseState):
     #    vec = State._to_vector(vec)
     #    if(vec.size != self.dim):
     #        raise ValueError("Argument must be length %d" % self.dim)
-    #    self._base_1d[:] = vec
+    #    self._ptr[:] = vec
     #    self.dirty = True
 
     @property
@@ -79,7 +68,7 @@ class FullPureState(_DenseState):
         int
             the number of independent parameters.
         """
-        return 2 * self.size
+        return 2 * self.state_space.udim
 
     def to_vector(self):
         """
@@ -91,7 +80,7 @@ class FullPureState(_DenseState):
             The parameters as a 1D array with length num_params().
         """
         #TODO: what if _base_1d isn't implemented - use init_from_dense_purevec?
-        return _np.concatenate((self._base_1d.real, self._base_1d.imag), axis=0)
+        return _np.concatenate((self._ptr.real, self._ptr.imag), axis=0)
 
     def from_vector(self, v, close=False, dirty_value=True):
         """
@@ -117,8 +106,8 @@ class FullPureState(_DenseState):
         -------
         None
         """
-        self._base_1d[:] = v[0:self.dim] + 1j * v[self.dim:]
-        self._base_1d_has_changed()
+        self._ptr[:] = v[0:self.state_space.udim] + 1j * v[self.state_space.udim:]
+        self._ptr_has_changed()
         self.dirty = dirty_value
 
     def deriv_wrt_params(self, wrt_filter=None):
@@ -140,8 +129,8 @@ class FullPureState(_DenseState):
         numpy array
             Array of derivatives, shape == (dimension, num_params)
         """
-        derivMx = _np.concatenate((_np.identity(self.dim, complex),
-                                   1j * _np.identity(self.dim, complex)), axis=1)
+        derivMx = _np.concatenate((_np.identity(self.state_space.udim, complex),
+                                   1j * _np.identity(self.state_space.udim, complex)), axis=1)
         if wrt_filter is None:
             return derivMx
         else:

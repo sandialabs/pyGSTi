@@ -921,7 +921,7 @@ def _get_experrgen_factory(simulator, parameterization, errcomp_type, sparse_lin
                 _op.LindbladErrorgen.decomp_paramtype(p)
             ham_basis = proj_basis if use_ham_basis else None
             nonham_basis = proj_basis if use_nonham_basis else None
-            errorgen = _op.LinbladErrorgen.from_operation_matrix(op_matrix, ham_basis, nonham_basis, param_mode,
+            errorgen = _op.LindbladErrorgen.from_operation_matrix(op_matrix, ham_basis, nonham_basis, param_mode,
                                                                  nonham_mode, True, mx_basis, evotype)  # truncate=True
             return ExpErrorgenOp(errorgen)
         return _f
@@ -961,7 +961,7 @@ def _get_experrgen_factory(simulator, parameterization, errcomp_type, sparse_lin
 #        assert(isinstance(simulator, _TermFSim))
 #
 #        def _f(op_matrix, mx_basis="pp"):
-#            errorgen = _op.LinbladErrorgen.from_operation_matrix(
+#            errorgen = _op.LindbladErrorgen.from_operation_matrix(
 #                op_matrix, None, None, mx_basis=mx_basis, evotype=evotype)
 #            # a LindbladErrorgen with None as ham_basis and nonham_basis => no parameters
 #            return _op.ExpErrorgenOp(errorgen)

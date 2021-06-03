@@ -4,8 +4,8 @@ from ..util import BaseCase
 
 from pygsti.objects.circuit import Circuit
 from pygsti.objects.label import Label
-from pygsti.objects.localnoisemodel import LocalNoiseModel
-from pygsti.objects.operation import ComposedDenseOp, EmbeddedDenseOp, StaticDenseOp
+from pygsti.models.localnoisemodel import LocalNoiseModel
+from pygsti.modelmembers.operations import ComposedDenseOp, EmbeddedDenseOp, StaticDenseOp
 
 
 class LocalNoiseModelInstanceTester(BaseCase):
@@ -64,14 +64,14 @@ class LocalNoiseModelInstanceTester(BaseCase):
         op = mdl_local.circuit_layer_operator(Label('Gx', 'qb1'))
         ref_op = ComposedDenseOp([
             ComposedDenseOp([
-                EmbeddedDenseOp(mdl_local.state_space_labels, ('qb0',), mdl_local.operation_blks['gates']['1QGlobalIdle']),
-                EmbeddedDenseOp(mdl_local.state_space_labels, ('qb1',), mdl_local.operation_blks['gates']['1QGlobalIdle']),
+                EmbeddedDenseOp(mdl_local.state_space, ('qb0',), mdl_local.operation_blks['gates']['1QGlobalIdle']),
+                EmbeddedDenseOp(mdl_local.state_space, ('qb1',), mdl_local.operation_blks['gates']['1QGlobalIdle']),
             ]), # Global idle
-            EmbeddedDenseOp(mdl_local.state_space_labels, ('qb1',), mdl_local.operation_blks['gates']['Gx']) # Gx operation
+            EmbeddedDenseOp(mdl_local.state_space, ('qb1',), mdl_local.operation_blks['gates']['Gx']) # Gx operation
         ])
         ref_op2 = ComposedDenseOp([
             mdl_local.operation_blks['layers']['globalIdle'], # Global idle
-            EmbeddedDenseOp(mdl_local.state_space_labels, ('qb1',), mdl_local.operation_blks['gates']['Gx']) # Gx operation
+            EmbeddedDenseOp(mdl_local.state_space, ('qb1',), mdl_local.operation_blks['gates']['Gx']) # Gx operation
         ])
         self.assertEqual(str(op), str(ref_op))
         self.assertEqual(str(op), str(ref_op2))
@@ -98,7 +98,7 @@ class LocalNoiseModelInstanceTester(BaseCase):
         op = mdl_local.circuit_layer_operator(Label('Gx', 'qb1'))
         ref_op = ComposedDenseOp([
             mdl_local.operation_blks['layers'][Label('globalIdle')], # Global idle
-            EmbeddedDenseOp(mdl_local.state_space_labels, ('qb1',), mdl_local.operation_blks['gates']['Gx']) # Gx operation
+            EmbeddedDenseOp(mdl_local.state_space, ('qb1',), mdl_local.operation_blks['gates']['Gx']) # Gx operation
         ])
         self.assertEqual(str(op), str(ref_op))
 
