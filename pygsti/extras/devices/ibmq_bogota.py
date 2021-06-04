@@ -1,4 +1,4 @@
-""" Exteneral Device Specifications Sub-package """
+""" Specification of IBM Q Bogota """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -8,24 +8,15 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from .devcore import *
-# from . import ibmq_athens
-# from . import ibmq_belem
-# from . import ibmq_burlington
-# from . import ibmq_cambrige
-# from . import ibmq_essex
-# from . import ibmq_gaudalupe
-# from . import ibmq_london
-# from . import ibmq_manhattan
-# from . import ibmq_melbourne
-# from . import ibmq_ourense
-# from . import ibmq_rueschlikon
-# from . import ibmq_sydney
-# from . import ibmq_tenerife
-# from . import ibmq_toronto
-# from . import ibmq_vigo
-# from . import ibmq_yorktown
-# from . import rigetti_agave
-# from . import rigetti_aspen4
-# from . import rigetti_aspen6
-# from . import rigetti_aspen7
+qubits = ['Q' + str(x) for x in range(5)]
+
+two_qubit_gate = 'Gcnot'
+
+edgelist = [
+    ('Q0', 'Q1'), ('Q1', 'Q0'),
+    ('Q1', 'Q2'), ('Q2', 'Q1'),
+    ('Q2', 'Q3'), ('Q3', 'Q2'),
+    ('Q3', 'Q4'), ('Q4', 'Q3'),
+]
+
+spec_format = 'ibmq_v2019'
