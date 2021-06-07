@@ -122,10 +122,10 @@ class EffectRepTensorProduct(EffectRep):
         #return ret
 
         if scratch is None:
-            scratch = _np.empty(self.dim, complex)
+            scratch = _np.empty(self.udim, complex)
         outvec = scratch
 
-        N = self.dim
+        N = self.udim
         #Put last factor at end of outvec
         k = self.nfactors - 1  # last factor
         off = N - self.factor_dims[k]  # offset into outvec

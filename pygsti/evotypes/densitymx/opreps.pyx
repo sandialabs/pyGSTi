@@ -68,7 +68,7 @@ cdef class OpRep(_basereps_cython.OpRep):
         return ScipyLinearOperator((dim,dim), matvec=mv, rmatvec=rmv, dtype='d') # transpose, adjoint, dot, matmat?
 
 
-cdef class OpRepDense(OpRep):
+cdef class OpRepDenseSuperop(OpRep):
     cdef public _np.ndarray base
 
     def __init__(self, mx, state_space):
@@ -92,7 +92,7 @@ cdef class OpRepDense(OpRep):
     def __reduce__(self):
         # because serialization of numpy array flags is borked (around Numpy v1.16), we need to copy data
         # (so self.base *owns* it's data) and manually convey the writeable flag.
-        return (OpRepDense.__new__, (self.__class__,), (self.state_space, self.base, self.base.flags.writeable))
+        return (OpRepDenseSuperop.__new__, (self.__class__,), (self.state_space, self.base, self.base.flags.writeable))
 
     def __setstate__(self, state):
         assert(self.c_rep == NULL)
@@ -118,7 +118,7 @@ cdef class OpRepDense(OpRep):
         return s
 
     def copy(self):
-        return OpRepDense(self.base.copy(), self.state_space)
+        return OpRepDenseSuperop(self.base.copy(), self.state_space)
 
 
 cdef class OpRepSparse(OpRep):
@@ -149,7 +149,7 @@ cdef class OpRepSparse(OpRep):
         return OpRepSparse(self.data.copy(), self.indices.copy(), self.indptr.copy(), self.state_space.copy())
 
 
-cdef class OpRepStandard(OpRepDense):
+cdef class OpRepStandard(OpRepDenseSuperop):
     cdef public object name
     cdef public object basis
 
@@ -171,7 +171,7 @@ cdef class OpRepStandard(OpRepDense):
         return (OpRepStandard, (self.name, self.basis, self.state_space))
 
 
-cdef class OpRepStochastic(OpRepDense):
+cdef class OpRepStochastic(OpRepDenseSuperop):
     cdef public object basis
     cdef public object stochastic_superops
 

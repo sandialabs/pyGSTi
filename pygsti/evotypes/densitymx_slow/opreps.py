@@ -52,7 +52,7 @@ class OpRep(_basereps.OpRep):
         return LinearOperator((self.dim, self.dim), matvec=mv, rmatvec=rmv)  # transpose, adjoint, dot, matmat?
 
 
-class OpRepDense(OpRep):
+class OpRepDenseSuperop(OpRep):
     def __init__(self, mx, state_space):
         state_space = _StateSpace.cast(state_space)
         if mx is None:
@@ -60,7 +60,7 @@ class OpRepDense(OpRep):
         assert(mx.ndim == 2 and mx.shape[0] == state_space.dim)
 
         self.base = _np.require(mx, requirements=['OWNDATA', 'C_CONTIGUOUS'])
-        super(OpRepDense, self).__init__(state_space)
+        super(OpRepDenseSuperop, self).__init__(state_space)
 
     def base_has_changed(self):
         pass
@@ -75,10 +75,10 @@ class OpRepDense(OpRep):
         return _StateRep(_np.dot(self.base.T, state.base))  # no conjugate b/c *real* data
 
     def __str__(self):
-        return "OpRepDense:\n" + str(self.base)
+        return "OpRepDenseSuperop:\n" + str(self.base)
 
     def copy(self):
-        return OpRepDense(self.base.copy(), self.state_space)
+        return OpRepDenseSuperop(self.base.copy(), self.state_space)
 
 
 class OpRepSparse(OpRep):
@@ -111,7 +111,7 @@ class OpRepSparse(OpRep):
         return _StateRep(Aadj.dot(state.base))
 
 
-class OpRepStandard(OpRepDense):
+class OpRepStandard(OpRepDenseSuperop):
     def __init__(self, name, basis, state_space):
         std_unitaries = _itgs.standard_gatename_unitaries()
         if self.name not in std_unitaries:
@@ -125,7 +125,7 @@ class OpRepStandard(OpRepDense):
         super(OpRepStandard, self).__init__(LinearOperator.convert_to_matrix(superop), state_space)
 
 
-class OpRepStochastic(OpRepDense):
+class OpRepStochastic(OpRepDenseSuperop):
 
     def __init__(self, basis, rate_poly_dicts, initial_rates, seed_or_state, state_space):
         self.basis = basis

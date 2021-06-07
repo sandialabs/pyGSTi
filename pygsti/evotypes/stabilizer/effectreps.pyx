@@ -14,11 +14,17 @@
 import sys
 import numpy as _np
 from ...models.statespace import StateSpace as _StateSpace
+from ...tools import matrixtools as _mt
 
 
 cdef class EffectRep(_basereps_cython.EffectRep):
 
-    def __cinit__(self, _np.ndarray[_np.int64_t, ndim=1, mode='c'] zvals, state_space):
+    def __cinit__(self):
+        self.zvals = None
+        self.c_effect = NULL
+        self.state_space = None
+
+    def _cinit_base(self, _np.ndarray[_np.int64_t, ndim=1, mode='c'] zvals, state_space):
         self.zvals = zvals
         self.c_effect = new EffectCRep(<INT*>zvals.data,
                                        <INT>zvals.shape[0])
@@ -54,11 +60,10 @@ cdef class EffectRep(_basereps_cython.EffectRep):
 cdef class EffectRepComputational(EffectRep):
 
     def __cinit__(self, _np.ndarray[_np.int64_t, ndim=1, mode='c'] zvals, state_space):
-        self.zvals = zvals
-        self.c_effect = new EffectCRep(<INT*>zvals.data,
-                                       <INT>zvals.shape[0])
-        self.state_space = _StateSpace.cast(state_space)
-        assert(self.state_space.num_qubits == len(self.zvals))
+        self._cinit_base(zvals, state_space)
 
     def __reduce__(self):
         return (EffectRepComputational, (self.zvals, self.state_space))
+
+    def to_dense(self, outvec=None):
+        return _mt.zvals_to_dense(self.zvals, superket=False)

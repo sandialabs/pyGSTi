@@ -16,9 +16,17 @@ import functools as _functools
 from ...models.statespace import StateSpace as _StateSpace
 from ...tools import fastcalc as _fastcalc
 
+from .opreps cimport OpRep
+
 
 cdef class StateRep(_basereps_cython.StateRep):
-    def __cinit__(self, _np.ndarray[_np.complex128_t, ndim=1, mode='c'] data, state_space):
+
+    def __cinit__(self):
+        self.data = None
+        self.c_state = NULL
+        self.state_space = None
+
+    def _cinit_base(self, _np.ndarray[_np.complex128_t, ndim=1, mode='c'] data, state_space):
         self.data = _np.require(data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
         self.c_state = new StateCRep(<double complex*>self.data.data,<INT>self.data.shape[0],<bool>0)
         self.state_space = _StateSpace.cast(state_space)
@@ -49,9 +57,11 @@ cdef class StateRep(_basereps_cython.StateRep):
 
 
 cdef class StateRepDensePure(StateRep):
-    def __init__(self, purevec, basis, state_space):
+    cdef public object basis
+
+    def __cinit__(self, purevec, basis, state_space):
         self.basis = basis
-        super(StateRepDensePure, self).__init__(purevec, state_space)
+        self._cinit_base(purevec, state_space)
 
     @property
     def base(self):
@@ -61,13 +71,14 @@ cdef class StateRepDensePure(StateRep):
         pass
 
     def __reduce__(self):
-        return (StateRepDensePure, (self.base, self.basis, self.state_space), (self.base.flags.writeable,))
+        return (StateRepDensePure, (self.data, self.basis, self.state_space), (self.data.flags.writeable,))
 
 
 cdef class StateRepComputational(StateRep):
-    cdef object zvals
+    cdef public object zvals
+    cdef public object basis
 
-    def __init__(self, zvals, basis, state_space):
+    def __cinit__(self, zvals, basis, state_space):
 
         #Convert zvals to dense vec:
         factor_dim = 2
@@ -89,32 +100,37 @@ cdef class StateRepComputational(StateRep):
 
         self.zvals = zvals
         self.basis = basis
-        super(StateRepComputational, self).__init__(vec, state_space)
+        self._cinit_base(vec, state_space)
 
     def __reduce__(self):
-        return (StateRepComputational, (self.zvals, self.basis, self.state_space), (self.base.flags.writeable,))
+        return (StateRepComputational, (self.zvals, self.basis, self.state_space), (self.data.flags.writeable,))
 
 
 cdef class StateRepComposed(StateRep):
+    cdef public StateRep state_rep
+    cdef public OpRep op_rep
+
     def __init__(self, state_rep, op_rep, state_space):
         self.state_rep = state_rep
         self.op_rep = op_rep
-        super(StateRepComposed, self).__init__(state_rep.to_dense(), self.state_space)
+        self._cinit_base(state_rep.to_dense(), self.state_space)
         self.reps_have_changed()
 
     def reps_have_changed(self):
         rep = self.op_rep.acton(self.state_rep)
-        self.base[:] = rep.base[:]
+        self.data[:] = rep.data[:]
 
     def __reduce__(self):
-        return (StateRepComposed, (self.state_rep, self.op_rep, self.state_space), (self.base.flags.writeable,))
+        return (StateRepComposed, (self.state_rep, self.op_rep, self.state_space), (self.data.flags.writeable,))
 
 
 cdef class StateRepTensorProduct(StateRep):
+    cdef public object factor_reps
+
     def __init__(self, factor_state_reps, state_space):
         self.factor_reps = factor_state_reps
         dim = _np.product([fct.dim for fct in self.factor_reps])
-        super(StateRepTensorProduct, self).__init__(_np.zeros(dim, complex), state_space)
+        self._cinit_base(_np.zeros(dim, complex), state_space)
         self.reps_have_changed()
 
     def reps_have_changed(self):
@@ -124,7 +140,7 @@ cdef class StateRepTensorProduct(StateRep):
             vec = self.factor_reps[0].to_dense()
             for i in range(1, len(self.factors_reps)):
                 vec = _np.kron(vec, self.factor_reps[i].to_dense())
-        self.base[:] = vec
+        self.data[:] = vec
 
     def __reduce__(self):
-        return (StateRepTensorProduct, (self.factor_state_reps, self.state_space), (self.base.flags.writeable,))
+        return (StateRepTensorProduct, (self.factor_state_reps, self.state_space), (self.data.flags.writeable,))

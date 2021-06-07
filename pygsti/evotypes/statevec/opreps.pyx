@@ -117,7 +117,9 @@ cdef class OpRepDenseUnitary(OpRep):
         return OpRepDenseUnitary(self.base.copy(), self.basis, self.state_space)
 
 
-class OpRepStandard(OpRepDenseUnitary):
+cdef class OpRepStandard(OpRepDenseUnitary):
+    cdef public object name
+
     def __init__(self, name, basis, state_space):
         std_unitaries = _itgs.standard_gatename_unitaries()
         self.name = name
@@ -167,7 +169,7 @@ cdef class OpRepComposed(OpRep):
 
 
 cdef class OpRepSum(OpRep):
-    cdef public object factor_reps # list of OpRep objs?
+    cdef public object factor_reps  # list of OpRep objs?
 
     def __cinit__(self, factor_reps, state_space):
         self.factor_reps = factor_reps
@@ -334,8 +336,15 @@ cdef class OpRepRepeated(OpRep):
 
 
 cdef class OpRepLindbladErrorgen(OpRep):
-    def __init__(self, lindblad_term_dict, basis, state_space):
+    cdef public object Lterms
+    cdef public object Lterm_coeffs
+    cdef public object LtermdictAndBasis
+
+    def __cinit__(self, lindblad_term_dict, basis, state_space):
         super(OpRepLindbladErrorgen, self).__init__(state_space)
         self.Lterms = None
         self.Lterm_coeffs = None
         self.LtermdictAndBasis = (lindblad_term_dict, basis)
+
+    def __reduce__(self):
+        return (OpRepLindbladErrorgen, (self.LtermdictAndBasis[0], self.LtermdictAndBasis[1], self.state_space))

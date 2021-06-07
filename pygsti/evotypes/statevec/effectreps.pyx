@@ -128,4 +128,39 @@ cdef class EffectRepTensorProduct(EffectRep):
     def factor_effects_have_changed(self):
         self._fill_fast_kron()  # updates effect reps
 
-    #TODO: Take to_dense from slow version?
+    def to_dense(self, scratch=None):  # taken from slow version - CONSOLIDATE?
+        if scratch is None:
+            scratch = _np.empty(self.udim, complex)
+        outvec = scratch
+
+        N = self.udim
+        #Put last factor at end of outvec
+        k = self.nfactors - 1  # last factor
+        off = N - self.factor_dims[k]  # offset into outvec
+        for i in range(self.factor_dims[k]):
+            outvec[off + i] = self.kron_array[k, i]
+        sz = self.factor_dims[k]
+
+        #Repeatedly scale&copy last "sz" elements of outputvec forward
+        # (as many times as there are elements in the current factor array)
+        # - but multiply *in-place* the last "sz" elements.
+        for k in range(self.nfactors - 2, -1, -1):  # for all but the last factor
+            off = N - sz * self.factor_dims[k]
+            endoff = N - sz
+
+            #For all but the final element of self.kron_array[k,:],
+            # mult&copy final sz elements of outvec into position
+            for j in range(self.factor_dims[k] - 1):
+                mult = self.kron_array[k, j]
+                for i in range(sz):
+                    outvec[off + i] = mult * outvec[endoff + i]
+                off += sz
+
+            #Last element: in-place mult
+            #assert(off == endoff)
+            mult = self.kron_array[k, self.factor_dims[k] - 1]
+            for i in range(sz):
+                outvec[endoff + i] *= mult
+            sz *= self.factor_dims[k]
+
+        return outvec

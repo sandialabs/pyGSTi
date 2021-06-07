@@ -54,7 +54,7 @@ class Evotype(object):
         return self.name
 
     def create_dense_superop_rep(self, mx, state_space):  # process_mx=None,
-        return self.module.OpRepDense(mx, state_space)
+        return self.module.OpRepDenseSuperop(mx, state_space)
 
     def create_dense_unitary_rep(self, mx, super_basis, state_space):  # process_mx=None,
         return self.module.OpRepDenseUnitary(mx, super_basis, state_space)
