@@ -41,16 +41,16 @@ class ComposedOp(_LinearOperator):
         convention as operation sequences in pyGSTi.  Note that this is
         *opposite* from standard matrix multiplication order.
 
-    state_space : StateSpace or "auto"
-        State space of this error generator.  Can be set to `"auto"` to take
-        the state space from `errgens_to_compose[0]` *if* there's at least one
-        error generator being composed.
-
     evotype : Evotype or str, optional
         The evolution type.  The special value `"default"` is equivalent
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
         The special value `"auto"` is equivalent to the evolution type
         of `ops_to_compose[0]` *if* there's at least one operation being composed.
+
+    state_space : StateSpace or "auto"
+        State space of this error generator.  Can be set to `"auto"` to take
+        the state space from `errgens_to_compose[0]` *if* there's at least one
+        error generator being composed.
 
     dense_rep : bool, optional
         Whether this operator should be internally represented using a dense
@@ -58,7 +58,7 @@ class ComposedOp(_LinearOperator):
         the default value unless you know what you're doing.
     """
 
-    def __init__(self, ops_to_compose, state_space="auto", evotype="auto", dense_rep=False):
+    def __init__(self, ops_to_compose, evotype="auto", state_space="auto", dense_rep=False):
         assert(len(ops_to_compose) > 0 or state_space != "auto"), \
             "Must compose at least one operation when state_space='auto'!"
         self.factorops = list(ops_to_compose)
@@ -219,7 +219,7 @@ class ComposedOp(_LinearOperator):
         # parent reset correctly.
         if memo is not None and id(self) in memo: return memo[id(self)]
         cls = self.__class__  # so that this method works for derived classes too
-        copyOfMe = cls([g.copy(parent, memo) for g in self.factorops], self.state_space, self._evotype)
+        copyOfMe = cls([g.copy(parent, memo) for g in self.factorops], self._evotype, self.state_space)
         return self._copy_gpindices(copyOfMe, parent, memo)
 
     def to_sparse(self):
@@ -809,19 +809,19 @@ class ComposedDenseOp(ComposedOp, _DenseOperatorInterface):
         convention as operation sequences in pyGSTi.  Note that this is
         *opposite* from standard matrix multiplication order.
 
-    state_space : StateSpace or "auto"
-        State space of this error generator.  Can be set to `"auto"` to take
-        the state space from `ops_to_compose[0]` *if* there's at least one
-        error generator being composed.
-
     evotype : Evotype or str, optional
         The evolution type of this operation.  Can be set to `"auto"` to take
         the evolution type of `ops_to_compose[0]` *if* there's at least
         one operation being composed.
+
+    state_space : StateSpace or "auto"
+        State space of this error generator.  Can be set to `"auto"` to take
+        the state space from `ops_to_compose[0]` *if* there's at least one
+        error generator being composed.
     """
 
-    def __init__(self, ops_to_compose, state_space="auto", evotype="auto"):
-        ComposedOp.__init__(self, ops_to_compose, state_space, evotype, dense_rep=True)
+    def __init__(self, ops_to_compose, evotype="auto", state_space="auto"):
+        ComposedOp.__init__(self, ops_to_compose, evotype, state_space, dense_rep=True)
         _DenseOperatorInterface.__init__(self)
 
     @property

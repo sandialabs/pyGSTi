@@ -694,7 +694,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                         #Make a single ComposedDenseOp *here*, for *only this* embedding
                         # Don't copy gate here, as we assume it's ok to be shared when we
                         #  have independent composed gates
-                        base_gate = Composed([gate], state_space="auto", evotype="auto")  # to make adding factors easy
+                        base_gate = Composed([gate], evotype="auto", state_space="auto")  # to make adding factors easy
                     else:  # want independent params but not a composed gate, so .copy()
                         base_gate = gate.copy()  # so independent parameters
 
@@ -841,7 +841,7 @@ class _SimpleCompLayerRules(_LayerRules):
             #Note: OK if len(components) == 0, as it's ok to have a composed gate with 0 factors
             ret = Composed(gblIdle + [self._layer_component_operation(model, l, caches['op-layers'], dense)
                                       for l in components],
-                           state_space=model.state_space, evotype=model.evotype)
+                           evotype=model.evotype, state_space=model.state_space)
             model._init_virtual_obj(ret)  # so ret's gpindices get set
 
         caches['complete-layers'][layerlbl] = ret  # cache the final label value

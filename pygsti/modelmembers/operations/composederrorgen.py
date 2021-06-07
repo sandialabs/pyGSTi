@@ -36,19 +36,19 @@ class ComposedErrorgen(_LinearOperator):
         List of `LinearOperator`-derived objects that are summed together (composed)
         to form this error generator.
 
-    state_space : StateSpace or "auto"
-        State space of this error generator.  Can be set to `"auto"` to take
-        the state space from `errgens_to_compose[0]` *if* there's at least one
-        error generator being composed.
-
     evotype : Evotype or str, optional
         The evolution type.  The special value `"default"` is equivalent
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
         The special value `"auto"` is equivalent to the evolution type
         of `ops_to_compose[0]` *if* there's at least one operation being composed.
+
+    state_space : StateSpace or "auto"
+        State space of this error generator.  Can be set to `"auto"` to take
+        the state space from `errgens_to_compose[0]` *if* there's at least one
+        error generator being composed.
     """
 
-    def __init__(self, errgens_to_compose, state_space="auto", evotype="auto"):
+    def __init__(self, errgens_to_compose, evotype="auto", state_space="auto"):
         assert(len(errgens_to_compose) > 0 or state_space != "auto"), \
             "Must compose at least one error generator when state_space='auto'!"
         self.factors = errgens_to_compose
@@ -482,7 +482,7 @@ class ComposedErrorgen(_LinearOperator):
         # parent reset correctly.
         if memo is not None and id(self) in memo: return memo[id(self)]
         cls = self.__class__  # so that this method works for derived classes too
-        copyOfMe = cls([f.copy(parent, memo) for f in self.factors], self.state_space, self._evotype)
+        copyOfMe = cls([f.copy(parent, memo) for f in self.factors], self._evotype, self.state_space)
         return self._copy_gpindices(copyOfMe, parent, memo)
 
     def to_sparse(self):

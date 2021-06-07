@@ -750,7 +750,7 @@ def create_cloud_crosstalk_model(num_qubits, gate_names, nonstd_gate_unitaries={
                 if return_what == "stencil":
                     new_stencil = _collections.OrderedDict()  # return an empty stencil
                     return new_stencil
-                errgen = _op.ComposedErrorgen([], state_space, evotype)
+                errgen = _op.ComposedErrorgen([], evotype, state_space)
             else:
                 # stencil is valid: apply it to create errgen
                 embedded_errgens = []
@@ -762,7 +762,7 @@ def create_cloud_crosstalk_model(num_qubits, gate_names, nonstd_gate_unitaries={
                     #REMOVE print("DB: Applying stencil: ",state_space, error_sslbls,op_to_embed.dim)
                     embedded_errgen = _op.EmbeddedErrorgen(state_space, error_sslbls, op_to_embed)
                     embedded_errgens.append(embedded_errgen)
-                errgen = _op.ComposedErrorgen(embedded_errgens, state_space, evotype)
+                errgen = _op.ComposedErrorgen(embedded_errgens, evotype, state_space)
         else:
             #We need to build a stencil (which may contain QubitGraph directions) or an effective stencil
             assert(stencil is None)  # checked by above assert too
@@ -857,7 +857,7 @@ def create_cloud_crosstalk_model(num_qubits, gate_names, nonstd_gate_unitaries={
                 #REMOVE print("DB: Creating from stencil: ",state_space, error_sslbls)
                 embedded_errgen = _op.EmbeddedErrorgen(state_space, error_sslbls, lind_errgen)
                 embedded_errgens.append(embedded_errgen)
-            errgen = _op.ComposedErrorgen(embedded_errgens, state_space, evotype)
+            errgen = _op.ComposedErrorgen(embedded_errgens, evotype, state_space)
 
         #If we get here, we've created errgen, which we either return or package into a map:
         if return_what == "errmap":

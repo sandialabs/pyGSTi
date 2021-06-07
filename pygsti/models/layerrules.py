@@ -77,12 +77,12 @@ class LayerRules(object):
         Composed = _op.ComposedDenseOp if dense else _op.ComposedOp
         if len(circuitlbl.components) != 1:  # works for 0 components too
             subCircuitOp = Composed([model.circuit_layer_operator(l, 'op') for l in circuitlbl.components],
-                                    dim=model.dim, evotype=model.evotype)
+                                    evotype=model.evotype, state_space=model.state_space)
         else:
             subCircuitOp = model.circuit_layer_operator(circuitlbl.components[0], 'op')
         if circuitlbl.reps != 1:
             #finalOp = Composed([subCircuitOp]*circuitlbl.reps,
-            #                   dim=model.dim, evotype=model.evotype)
+            #                   evotype=model.evotype, state_space=model.state_space)
             finalOp = _op.RepeatedOp(subCircuitOp, circuitlbl.reps, evotype=model.evotype)
         else:
             finalOp = subCircuitOp

@@ -1335,7 +1335,7 @@ class CloudNoiseLayerRules(_LayerRules):
         # to the perfect (embedded) target ops in op_blks
         if len(components) > 1:
             targetOp = Composed([self._layer_component_targetop(model, l, caches['op-layers']) for l in components],
-                                state_space=model.state_space, evotype=model.evotype)
+                                evotype=model.evotype, state_space=model.state_space)
         else: targetOp = self._layer_component_targetop(model, components[0], caches['op-layers'])
         ops_to_compose = [targetOp]
 
@@ -1345,7 +1345,7 @@ class CloudNoiseLayerRules(_LayerRules):
             if len(component_cloudnoise_ops) > 0:
                 if len(component_cloudnoise_ops) > 1:
                     localErr = Composed(component_cloudnoise_ops,
-                                        state_space=model.state_space, evotype=model.evotype)
+                                        evotype=model.evotype, state_space=model.state_space)
                 else:
                     localErr = component_cloudnoise_ops[0]
                 ops_to_compose.append(localErr)
@@ -1366,7 +1366,7 @@ class CloudNoiseLayerRules(_LayerRules):
         else:
             raise ValueError("Invalid errcomp_type in CloudNoiseLayerRules: %s" % str(self.errcomp_type))
 
-        ret = Composed(ops_to_compose, state_space=model.state_space, evotype=model.evotype)
+        ret = Composed(ops_to_compose, evotype=model.evotype, state_space=model.state_space)
         model._init_virtual_obj(ret)  # so ret's gpindices get set
         caches['complete-layers'][layerlbl] = ret  # cache the final label value
         return ret

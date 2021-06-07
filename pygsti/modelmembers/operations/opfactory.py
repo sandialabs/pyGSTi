@@ -591,7 +591,7 @@ class ComposedOpFactory(OpFactory):
         """
         Composed = _ComposedDenseOp if self.dense else _ComposedOp
         ops_to_compose = [f.create_op(args, sslbls) if is_f else f for is_f, f in zip(self.is_factory, self.factors)]
-        op = Composed(ops_to_compose, self.state_space, self._evotype)
+        op = Composed(ops_to_compose, self.evotype, self.state_space)
         op.set_gpindices(self.gpindices, self.parent)  # Overkill, since composed ops already have indices set?
         return op
 
