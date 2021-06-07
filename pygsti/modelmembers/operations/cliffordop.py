@@ -51,3 +51,11 @@ class CliffordOp(_LinearOperator):
     def __str__(self):
         """ Return string representation """
         return str(self._rep)
+
+    @property
+    def smatrix(self):
+        return self._rep.smatrix
+
+    @property
+    def svector(self):
+        return self._rep.svector

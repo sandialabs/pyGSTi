@@ -143,6 +143,16 @@ class ModelMember(ModelChild):
     def state_space(self):
         return self._state_space
 
+    # Need to work on this, since submembers shouldn't necessarily be updated to the same state space -- maybe a
+    # replace_state_space_labels(...) member would be better?
+    #@state_space.setter
+    #def state_space(self, state_space):
+    #    assert(self._state_space.is_compatible_with(state_space), "Cannot change to an incompatible state space!"
+    #    for subm in self.submembers():
+    #        subm.state_space = state_space
+    #    return self._state_space = state_space
+
+
     @property
     def evotype(self):
         return self._evotype
@@ -402,7 +412,7 @@ class ModelMember(ModelChild):
             # between this object's parameter indices and those of its submembers
             self._submember_rpindices = tuple([_decompose_gpindices(
                 self.gpindices, subm.gpindices) for subm in self.submembers()])
-            
+
             return tot_new_params
 
         else:  # no sub-members
@@ -538,6 +548,10 @@ class ModelMember(ModelChild):
         #op_obj.set_gpindices(gpindices_copy, parent) #don't do this, as
         # this routines doesn't copy sub-member indices yet -- copy(...) methods
         # of derived classes do this.
+
+        #copy the relative indices between this object's parameter indices and those of its submembers
+        op_obj._submember_rpindices = tuple([rinds if isinstance(rinds, slice) else rinds.copy()
+                                             for rinds in self._submember_rpindices])
 
         #For convenience, also perform the memo update here, so derived classes don't need to repeat logic
         if memo is not None:

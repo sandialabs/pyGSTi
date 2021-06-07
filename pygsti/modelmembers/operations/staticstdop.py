@@ -66,6 +66,19 @@ class StaticStandardOp(_LinearOperator):
 #        else:
 #            raise NotImplementedError('No base available for evotype "%s"' % self._evotype)
 
+    def to_dense(self):
+        """
+        Return the dense array used to represent this operation within its evolution type.
+
+        Note: for efficiency, this doesn't copy the underlying data, so
+        the caller should copy this data before modifying it.
+
+        Returns
+        -------
+        numpy.ndarray
+        """
+        return self._rep.to_dense()  # standard rep needs to implement this
+
     def __str__(self):
         s = "%s with name %s and evotype %s\n" % (self.__class__.__name__, self.name, self._evotype)
         #TODO: move this to __str__ methods of reps??

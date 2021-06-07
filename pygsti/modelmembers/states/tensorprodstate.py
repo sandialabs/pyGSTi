@@ -27,7 +27,7 @@ class TensorProductState(_State):
         assert(len(factors) > 0), "Must have at least one factor!"
 
         self.factors = factors  # do *not* copy - needs to reference common objects
-        self.Np = sum([fct.num_params for fct in factors])
+        #self.Np = sum([fct.num_params for fct in factors])
 
         evotype = self.factors[0]._evotype
         rep = evotype.create_tensorproduct_state_rep(factors, state_space)
@@ -44,8 +44,12 @@ class TensorProductState(_State):
         off = 0
         for fct in factors:
             assert(isinstance(fct, _State)), "Factors must be State objects!"
-            N = fct.num_params
-            fct.set_gpindices(slice(off, off + N), self); off += N
+            if fct.gpindices is None:
+                off += fct.allocate_gpindices(off, None)
+            else:
+                N = fct.num_params
+                fct.set_gpindices(slice(off, off + N), self); off += N
+        self.Np = sum([fct.num_params for fct in factors])
         assert(off == self.Np)
 
     #REMOVE

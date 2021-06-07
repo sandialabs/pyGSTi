@@ -42,7 +42,7 @@ class TensorProductPOVM(_POVM):
     """
 
     def __init__(self, factor_povms, evotype="auto", state_space=None):
-        dim = _np.product([povm.dim for povm in factor_povms])
+        dim = _np.product([povm.state_space.dim for povm in factor_povms])
         if state_space is None:
             state_space = _statespace.default_space_for_dim(dim)
         else:
@@ -55,8 +55,11 @@ class TensorProductPOVM(_POVM):
 
         off = 0
         for povm in self.factorPOVMs:
-            N = povm.num_params
-            povm.set_gpindices(slice(off, off + N), self); off += N
+            if povm.gpindices is None:
+                off += povm.allocate_gpindices(off, None)
+            else:
+                N = povm.num_params
+                povm.set_gpindices(slice(off, off + N), self); off += N
 
             if evotype == 'auto': evotype = povm._evotype
             else: assert(evotype == povm._evotype), \
@@ -122,7 +125,7 @@ class TensorProductPOVM(_POVM):
             for fkeys, lbllen in zip(self._factor_keys, self._factor_lbllens):
                 elbls.append(key[i:i + lbllen]); i += lbllen
             # infers parent & gpindices from factor_povms
-            effect = _TensorProductPOVMEffect(self.factorPOVMs, elbls)
+            effect = _TensorProductPOVMEffect(self.factorPOVMs, elbls, self.state_space)
             _collections.OrderedDict.__setitem__(self, key, effect)
             return effect
         else: raise KeyError("%s is not an outcome label of this TensorProdPOVM" % key)
@@ -169,7 +172,7 @@ class TensorProductPOVM(_POVM):
         # Currently simplify *all* the effects, creating those that haven't been yet (lazy creation)
         if prefix: prefix += "_"
         simplified = _collections.OrderedDict(
-            [(prefix + k, _TensorProductPOVMEffect(factorPOVMs_simplified, self[k].effectLbls))
+            [(prefix + k, _TensorProductPOVMEffect(factorPOVMs_simplified, self[k].effectLbls, self.state_space))
              for k in self.keys()])
         return simplified
 

@@ -21,6 +21,7 @@ from ..tools import slicetools as _slct
 from ..tools import sharedmemtools as _smt
 
 from .. import objects as _objs
+from ..modelmembers.operations import EigenvalueParamDenseOp as _EigenvalueParamDenseOp
 
 
 def _nCr(n, r):                                                                           # noqa
@@ -393,7 +394,7 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
             gsGerm = target_model.copy()
             gsGerm.set_all_parameterizations("static")
             germMx = gsGerm.sim.product(germ)
-            gsGerm.operations["Ggerm"] = _objs.EigenvalueParamDenseOp(
+            gsGerm.operations["Ggerm"] = _EigenvalueParamDenseOp(
                 germMx, True, constrain_to_tp)
 
             printer.show_progress(i, len(germs),

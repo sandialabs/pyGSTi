@@ -1,7 +1,7 @@
 from ..util import BaseCase
 from . import fixtures
 
-from pygsti.objects import UnconstrainedPOVM
+from pygsti.modelmembers.povms import UnconstrainedPOVM
 from pygsti.algorithms.contract import contract
 
 
@@ -113,10 +113,10 @@ class VSPAMContractLGSTTester(ContractFunctionBase, ContractLGSTModelBase, BaseC
     target = "vSPAM"
 
     def test_contract_with_bad_effect(self):
-        self.model.povms['Mdefault'] = UnconstrainedPOVM([('0', [100.0, 0, 0, 0])])  # E eigvals all > 1.0
+        self.model.povms['Mdefault'] = UnconstrainedPOVM([('0', [100.0, 0, 0, 0])], evotype='default')  # E eigvals all > 1.0
         result = contract(self.model, self.target, **self.options)
         # TODO assert correctness
-        self.model.povms['Mdefault'] = UnconstrainedPOVM([('0', [-100.0, 0, 0, 0])])  # E eigvals all < 0
+        self.model.povms['Mdefault'] = UnconstrainedPOVM([('0', [-100.0, 0, 0, 0])], evotype='default')  # E eigvals all < 0
         result = contract(self.model, self.target, **self.options)
         # TODO assert correctness
 

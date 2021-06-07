@@ -29,6 +29,7 @@ from ..tools.legacytools import deprecate as _deprecated_fn
 from ..models import model as _mdl
 from ..models import labeldicts as _ld
 from ..models import statespace as _statespace
+from ..models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
 from ..models.cloudnoisemodel import CloudNoiseModel as _CloudNoiseModel
 from ..modelmembers import operations as _op
 from ..modelmembers import states as _state
@@ -46,6 +47,7 @@ from ..objects.label import Label as _Lbl
 from ..objects.polynomial import Polynomial as _Polynomial
 from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
 from ..objects.circuitstructure import GermFiducialPairPlaquette as _GermFiducialPairPlaquette
+from ..evotypes import Evotype as _Evotype
 from ..io import CircuitParser as _CircuitParser
 
 from . import circuitconstruction as _gsc
@@ -838,7 +840,7 @@ def create_cloud_crosstalk_model(num_qubits, gate_names, nonstd_gate_unitaries={
 
                 parameterization = _parameterization_from_errgendict(local_errs_for_these_sslbls)
                 #REMOVE print("DB: Param from ", local_errs_for_these_sslbls, " = ",parameterization)
-                nonham_mode, param_mode, _, _ = _op.LinbladErrorgen.decomp_paramtype(parameterization)
+                nonham_mode, param_mode, _, _ = _op.LindbladErrorgen.decomp_paramtype(parameterization)
                 lind_errgen = _op.LindbladErrorgen(local_state_space, local_errs_for_these_sslbls, basis, param_mode,
                                                    nonham_mode, truncate=False, mx_basis="pp", evotype=evotype)
                 #REMOVE print("DB: Adding to stencil: ",error_sslbls,lind_errgen.dim,local_state_space)
@@ -3917,22 +3919,34 @@ def stdmodule_to_smqmodule(std_module):
     out_module['gates'] = [find_replace_labels.get(nm, nm) for nm in std_module.gates]
 
     #Fully-parameterized target model (update labels)
-    new_target_model = _objs.ExplicitOpModel(sslbls, std_target_model.basis.copy())
+    state_space = _statespace.ExplicitStateSpace(sslbls)
+    new_target_model = _ExplicitOpModel(state_space, std_target_model.basis.copy())
     new_target_model._evotype = std_target_model._evotype
     new_target_model._default_gauge_group = std_target_model._default_gauge_group
 
+    #Note: setting object ._state_space is a bit of a hack here, and assumes
+    # that these are "simple" objects that don't contain other sub-members that
+    # need to have their state spaces updated too.
     for lbl, obj in std_target_model.preps.items():
         new_lbl = find_replace_labels.get(lbl, lbl)
-        new_target_model.preps[new_lbl] = obj.copy()
+        new_obj = obj.copy(); new_obj._state_space = state_space
+        new_target_model.preps[new_lbl] = new_obj
     for lbl, obj in std_target_model.povms.items():
         new_lbl = find_replace_labels.get(lbl, lbl)
-        new_target_model.povms[new_lbl] = obj.copy()
+        new_obj = obj.copy(); new_obj._state_space = state_space
+        for effect in new_obj.values():
+            effect._state_space = state_space
+        new_target_model.povms[new_lbl] = new_obj
     for lbl, obj in std_target_model.operations.items():
         new_lbl = find_replace_labels.get(lbl, lbl)
-        new_target_model.operations[new_lbl] = obj.copy()
+        new_obj = obj.copy(); new_obj._state_space = state_space
+        new_target_model.operations[new_lbl] = new_obj
     for lbl, obj in std_target_model.instruments.items():
         new_lbl = find_replace_labels.get(lbl, lbl)
-        new_target_model.instruments[new_lbl] = obj.copy()
+        new_obj = obj.copy(); new_obj._state_space = state_space
+        for member in new_obj.values():
+            member._state_space = state_space
+        new_target_model.instruments[new_lbl] = new_obj
     out_module['_target_model'] = new_target_model
 
     # _stdtarget and _gscache need to be *locals* as well so target_model(...) works

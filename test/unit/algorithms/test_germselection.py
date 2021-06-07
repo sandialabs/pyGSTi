@@ -3,7 +3,7 @@ import numpy as np
 from ..util import BaseCase
 from . import fixtures
 
-from pygsti.objects import StaticDenseOp
+from pygsti.modelmembers.operations import StaticDenseOp
 import pygsti.construction as pc
 from pygsti.algorithms import germselection as germsel, scoring
 

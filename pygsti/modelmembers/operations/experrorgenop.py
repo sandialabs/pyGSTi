@@ -786,30 +786,23 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         -------
         None
         """
-        if isinstance(s, _gaugegroup.UnitaryGaugeGroupElement) or \
-           isinstance(s, _gaugegroup.TPSpamGaugeGroupElement):
-            U = s.transform_matrix
-            Uinv = s.transform_matrix_inverse
-            #assert(_np.allclose(U, _np.linalg.inv(Uinv)))
+        #assert(_np.allclose(U, _np.linalg.inv(Uinv)))
 
-            #just conjugate postfactor and Lindbladian exponent by U:
-            #REMOVE
-            #if self.unitary_postfactor is not None:
-            #    self.unitary_postfactor = _mt.safe_dot(Uinv, _mt.safe_dot(self.unitary_postfactor, U))
-            self.errorgen.transform_inplace(s)
-            self._update_rep()  # needed to rebuild exponentiated error gen
-            self.dirty = True
+        #just conjugate postfactor and Lindbladian exponent by U:
+        #REMOVE
+        #if self.unitary_postfactor is not None:
+        #    self.unitary_postfactor = _mt.safe_dot(Uinv, _mt.safe_dot(self.unitary_postfactor, U))
+        self.errorgen.transform_inplace(s)
+        self._update_rep()  # needed to rebuild exponentiated error gen
+        self.dirty = True
 
-            #CHECK WITH OLD (passes) TODO move to unit tests?
-            #tMx = _np.dot(Uinv,_np.dot(self.base, U)) #Move above for checking
-            #tOp = LindbladDenseOp(tMx,self.unitary_postfactor,
-            #                                self.ham_basis, self.other_basis,
-            #                                self.cptp,self.nonham_diagonal_only,
-            #                                True, self.matrix_basis)
-            #assert(_np.linalg.norm(tOp.paramvals - self.paramvals) < 1e-6)
-        else:
-            raise ValueError("Invalid transform for this LindbladDenseOp: type %s"
-                             % str(type(s)))
+        #CHECK WITH OLD (passes) TODO move to unit tests?
+        #tMx = _np.dot(Uinv,_np.dot(self.base, U)) #Move above for checking
+        #tOp = LindbladDenseOp(tMx,self.unitary_postfactor,
+        #                                self.ham_basis, self.other_basis,
+        #                                self.cptp,self.nonham_diagonal_only,
+        #                                True, self.matrix_basis)
+        #assert(_np.linalg.norm(tOp.paramvals - self.paramvals) < 1e-6)
 
     def spam_transform_inplace(self, s, typ):
         """
@@ -843,41 +836,27 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
            isinstance(s, _gaugegroup.TPSpamGaugeGroupElement):
             U = s.transform_matrix
             Uinv = s.transform_matrix_inverse
+            mx = self.to_dense if self.dense_rep else self.to_sparse()
 
-            #Note: this code may need to be tweaked to work with sparse matrices
+            #just act on postfactor and Lindbladian exponent:
             if typ == "prep":
-                tMx = _mt.safe_dot(Uinv, self.to_dense())
+                mx = _mt.safe_dot(Uinv, mx)
             else:
-                tMx = _mt.safe_dot(self.to_dense(), U)
-            trunc = bool(isinstance(s, _gaugegroup.UnitaryGaugeGroupElement))
-            #TODO: update this -- need a way to initialize a exp(errorgen) from a matrix... 
-            tOp = ExpErrorgenOp.from_operation_matrix(tMx, self.unitary_postfactor,
-                                                      self.errorgen.ham_basis, self.errorgen.other_basis,
-                                                      self.errorgen.param_mode, self.errorgen.nonham_mode,
-                                                      trunc, self.errorgen.matrix_basis)
-            self.from_vector(tOp.to_vector())
-            #Note: truncate=True above for unitary transformations because
-            # while this trunctation should never be necessary (unitaries map CPTP -> CPTP)
-            # sometimes a unitary transform can modify eigenvalues to be negative beyond
-            # the tight tolerances checked when truncate == False. Maybe we should be able
-            # to give a tolerance as `truncate` in the future?
+                mx = _mt.safe_dot(mx, U)
 
-            #NOTE: This *doesn't* work as it does in the 'operation' case b/c this isn't a
-            # similarity transformation!
-            ##just act on postfactor and Lindbladian exponent:
-            #if typ == "prep":
-            #    if self.unitary_postfactor is not None:
-            #        self.unitary_postfactor = _mt.safe_dot(Uinv, self.unitary_postfactor)
-            #else:
-            #    if self.unitary_postfactor is not None:
-            #        self.unitary_postfactor = _mt.safe_dot(self.unitary_postfactor, U)
-            #
-            #self.errorgen.spam_transform(s, typ)
-            #self._update_rep()  # needed to rebuild exponentiated error gen
-            #self.dirty = True
-        else:
-            raise ValueError("Invalid transform for this LindbladDenseOp: type %s"
-                             % str(type(s)))
+            errgen_cls = self.errorgen.__class__
+            #Note: this only really works for LindbladErrorGen objects now... make more general in FUTURE?
+            truncate = True  # because of finite precision errors
+            transformed_errgen = errgen_cls.from_operation_matrix(mx, self.errorgen.ham_basis,
+                                                                  self.errorgen.other_basis,
+                                                                  self.errorgen.param_mode,
+                                                                  self.errorgen.nonham_mode,
+                                                                  truncate, self.errorgen.matrix_basis,
+                                                                  self.errorgen.evotype)
+            self.errorgen.from_vector(transformed_errgen.to_vector())
+
+        self._update_rep()  # needed to rebuild exponentiated error gen
+        self.dirty = True
 
     def __str__(self):
         s = "Lindblad Parameterized operation map with dim = %d, num params = %d\n" % \

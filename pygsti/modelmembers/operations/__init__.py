@@ -30,6 +30,8 @@ from .staticunitaryop import StaticUnitaryOp
 from .stochasticop import StochasticNoiseOp
 from .tpdenseop import TPDenseOp
 
+from .opfactory import OpFactory
+
 from .linearop import finite_difference_deriv_wrt_params, finite_difference_hessian_wrt_params
 
 
@@ -249,11 +251,11 @@ def optimize_operation(op_to_optimize, target_op):
     from ... import optimize as _opt
     from ...tools import matrixtools as _mt
     assert(target_op.dim == op_to_optimize.dim)  # operations must have the same overall dimension
-    targetMatrix = _np.asarray(target_op)
+    targetMatrix = target_op.to_dense() if isinstance(target_op, LinearOperator) else target_op
 
     def _objective_func(param_vec):
         op_to_optimize.from_vector(param_vec)
-        return _mt.frobeniusnorm(op_to_optimize.to_dense() - targetMatrix.to_dense())
+        return _mt.frobeniusnorm(op_to_optimize.to_dense() - targetMatrix)
 
     x0 = op_to_optimize.to_vector()
     minSol = _opt.minimize(_objective_func, x0, method='BFGS', maxiter=10000, maxfev=10000,

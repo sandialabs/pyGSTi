@@ -271,11 +271,11 @@ def optimize_state(vec_to_optimize, target_vec):
     from ... import optimize as _opt
     from ...tools import matrixtools as _mt
     assert(target_vec.dim == vec_to_optimize.dim)  # vectors must have the same overall dimension
-    targetVector = _np.asarray(target_vec)
+    targetVector = target_vec.to_dense() if isinstance(target_vec, State) else target_vec
 
     def _objective_func(param_vec):
         vec_to_optimize.from_vector(param_vec)
-        return _mt.frobeniusnorm(vec_to_optimize.to_dense() - targetVector.to_dense())
+        return _mt.frobeniusnorm(vec_to_optimize.to_dense() - targetVector)
 
     x0 = vec_to_optimize.to_vector()
     minSol = _opt.minimize(_objective_func, x0, method='BFGS', maxiter=10000, maxfev=10000,

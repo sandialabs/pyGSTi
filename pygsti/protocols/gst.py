@@ -43,6 +43,8 @@ from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocati
 from ..objects.objectivefns import ModelDatasetCircuitsStore as _ModelDatasetCircuitStore
 from ..forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
 from ..layouts.distlayout import DistributableCOPALayout as _DistributableCOPALayout
+from .. import models as _models
+from ..modelmembers import operations as _op
 
 
 #For results object:
@@ -791,6 +793,7 @@ class GateSetTomography(_proto.Protocol):
         target_model = data.edesign.target_model if isinstance(data.edesign, HasTargetModel) else None
         estimate = _Estimate.create_gst_estimate(ret, target_model, mdl_start, mdl_lsgst_list, parameters)
         ret.add_estimate(estimate, estimate_key=self.name)
+
         return _add_gaugeopt_and_badfit(ret, self.name, target_model,
                                         self.gaugeopt_suite, self.gaugeopt_target, self.unreliable_ops,
                                         self.badfit_options, self.optimizer, resource_alloc, printer)
@@ -881,9 +884,9 @@ class LinearGateSetTomography(_proto.Protocol):
             raise ValueError("There must be at exactly one circuit list in the input experiment design!")
 
         target_model = self.target_model if (self.target_model is not None) else edesign.target_model
-        if isinstance(target_model, _objs.ExplicitOpModel):
-            if not all([(isinstance(g, _objs.FullDenseOp)
-                         or isinstance(g, _objs.TPDenseOp))
+        if isinstance(target_model, _models.ExplicitOpModel):
+            if not all([(isinstance(g, _op.FullDenseOp)
+                         or isinstance(g, _op.TPDenseOp))
                         for g in target_model.operations.values()]):
                 raise ValueError("LGST can only be applied to explicit models with dense operators")
         else:

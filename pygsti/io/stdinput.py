@@ -24,6 +24,7 @@ from ..modelmembers import operations as _op
 from ..modelmembers import states as _state
 from ..modelmembers import povms as _povm
 from ..modelmembers import instruments as _instrument
+from ..models import statespace as _statespace
 
 from .. import objects as _objs
 from .. import tools as _tools
@@ -1005,12 +1006,13 @@ def parse_model(filename):
     -------
     Model
     """
+    from ..models import ExplicitOpModel as _ExplicitOpModel
     basis = 'pp'  # default basis to load as
 
     basis_abbrev = "pp"  # default assumed basis
     basis_dim = None
     gaugegroup_name = None
-    state_space_labels = None
+    state_space = None
 
     #First try to find basis:
     with open(filename) as inputfile:
@@ -1032,19 +1034,19 @@ def parse_model(filename):
                     _warnings.warn(("Unknown GAUGEGROUP name %s.  Default gauge"
                                     "group will be set to None") % gaugegroup_name)
             elif line.startswith("STATESPACE:"):
-                tpbs_lbls = []; tpbs_dims = []
+                tpbs_lbls = []; tpbs_udims = []
                 tensor_prod_blk_strs = line[len("STATESPACE:"):].split("+")
                 for tpb_str in tensor_prod_blk_strs:
-                    tpb_lbls = []; tpb_dims = []
+                    tpb_lbls = []; tpb_udims = []
                     for lbl_and_dim in tpb_str.split("*"):
                         start = lbl_and_dim.index('(')
                         end = lbl_and_dim.rindex(')')
                         lbl, dim = lbl_and_dim[:start], lbl_and_dim[start + 1:end]
                         tpb_lbls.append(lbl.strip())
-                        tpb_dims.append(int(dim.strip()))
+                        tpb_udims.append(int(_np.sqrt(int(dim.strip()))))
                     tpbs_lbls.append(tuple(tpb_lbls))
-                    tpbs_dims.append(tuple(tpb_dims))
-                state_space_labels = _objs.StateSpaceLabels(tpbs_lbls, tpbs_dims)
+                    tpbs_udims.append(tuple(tpb_udims))
+                state_space = _statespace.ExplicitStateSpace(tpbs_lbls, tpbs_udims)
 
     if basis_dim is not None:
         # then specfy a dimensionful basis at the outset
@@ -1052,17 +1054,17 @@ def parse_model(filename):
         basis = _objs.BuiltinBasis(basis_abbrev, basis_dim)
     else:
         # otherwise we'll try to infer one from state space labels
-        if state_space_labels is not None:
-            basis = _objs.Basis.cast(basis_abbrev, state_space_labels.dim)
+        if state_space is not None:
+            basis = _objs.Basis.cast(basis_abbrev, state_space.dim)
         else:
             raise ValueError("Cannot infer basis dimension!")
 
-    if state_space_labels is None:
+    if state_space is None:
         assert(basis_dim is not None)  # b/c of logic above
-        state_space_labels = _objs.StateSpaceLabels(['*'], [basis_dim])
+        state_space = _statespace.ExplicitStateSpace(['*'], [basis_dim])
         # special '*' state space label w/entire dimension inferred from BASIS line
 
-    mdl = _objs.ExplicitOpModel(state_space_labels, basis)
+    mdl = _ExplicitOpModel(state_space, basis)
 
     state = "look for label or property"
     cur_obj = None

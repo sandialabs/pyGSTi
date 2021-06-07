@@ -713,7 +713,7 @@ class ComposedState(_State):  # , _ErrorMapContainer
         self._update_rep()
         self.dirty = dirty_value
 
-    def transform_inplace(self, s, typ):
+    def transform_inplace(self, s):
         """
         Update SPAM (column) vector V as inv(s) * V or s^T * V for preparation or  effect SPAM vectors, respectively.
 
@@ -732,9 +732,6 @@ class ComposedState(_State):  # , _ErrorMapContainer
             A gauge group element which specifies the "s" matrix
             (and it's inverse) used in the above similarity transform.
 
-        typ : { 'prep', 'effect' }
-            Which type of SPAM vector is being transformed (see above).
-
         Returns
         -------
         None
@@ -743,7 +740,7 @@ class ComposedState(_State):  # , _ErrorMapContainer
         # `spam_tranform` function, which applies either
         # error_map -> inv(s) * error_map ("prep" case) OR
         # error_map -> error_map * s      ("effect" case)
-        self.error_map.spam_transform_inplace(s, typ)
+        self.error_map.spam_transform_inplace(s, 'prep')
         self._update_rep()
         self.dirty = True
 

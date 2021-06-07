@@ -673,7 +673,10 @@ class ComposedOp(_LinearOperator):
         constant_basis = None  # the single same Basis used for every factor with a nonempty basis
 
         for op in self.factorops:
-            factor_coeffs = op.errorgen_coefficients(return_basis, logscale_nonham)
+            try:
+                factor_coeffs = op.errorgen_coefficients(return_basis, logscale_nonham)
+            except AttributeError:
+                continue  # just skip members that don't implemnt errorgen_coefficients (?)
 
             if return_basis:
                 ltdict, factor_basis = factor_coeffs

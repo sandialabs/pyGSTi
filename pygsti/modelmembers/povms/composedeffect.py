@@ -378,6 +378,10 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
         _POVMEffect.__init__(self, rep, evotype)  # sets self.dim
         #_ErrorMapContainer.__init__(self, self.error_map)
 
+    @property
+    def size(self):
+        return self.effect_vec.size
+        
     def submembers(self):
         """
         Get the ModelMember-derived objects contained in this one.
@@ -717,7 +721,7 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
         self.error_map.from_vector(v, close, dirty_value)
         self.dirty = dirty_value
 
-    def transform_inplace(self, s, typ):
+    def transform_inplace(self, s):
         """
         Update SPAM (column) vector V as inv(s) * V or s^T * V for preparation or  effect SPAM vectors, respectively.
 
@@ -736,9 +740,6 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
             A gauge group element which specifies the "s" matrix
             (and it's inverse) used in the above similarity transform.
 
-        typ : { 'prep', 'effect' }
-            Which type of SPAM vector is being transformed (see above).
-
         Returns
         -------
         None
@@ -747,7 +748,7 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
         # `spam_tranform` function, which applies either
         # error_map -> inv(s) * error_map ("prep" case) OR
         # error_map -> error_map * s      ("effect" case)
-        self.error_map.spam_transform_inplace(s, typ)
+        self.error_map.spam_transform_inplace(s, 'effect')
         self.dirty = True
 
     def depolarize(self, amount):

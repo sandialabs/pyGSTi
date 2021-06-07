@@ -16,6 +16,9 @@ from scipy import linalg as _linalg
 from .. import objects as _objs
 from ..tools import unitary_to_process_mx, change_basis
 from ..models import statespace as _statespace
+from ..models import ExplicitOpModel as _ExplicitOpModel
+from ..modelmembers.operations import FullDenseOp as _FullDenseOp
+from ..modelmembers.povms import UnconstrainedPOVM as _UnconstrainedPOVM
 
 
 #Define 2 qubit to symmetric (+) antisymmetric space transformation A:
@@ -282,16 +285,16 @@ def create_qutrit_model(error_scale, x_angle=_np.pi / 2, y_angle=_np.pi / 2,
     E1final = change_basis(_np.reshape(E1, (9, 1)), "std", basis)
     E2final = change_basis(_np.reshape(E2, (9, 1)), "std", basis)
 
-    state_space = _statespace.ExplicitStateSpace(['QT'], [9])
-    qutritMDL = _objs.ExplicitOpModel(state_space, _objs.Basis.cast(basis, 9), evotype=evotype)
+    state_space = _statespace.ExplicitStateSpace(['QT'], [3])
+    qutritMDL = _ExplicitOpModel(state_space, _objs.Basis.cast(basis, 9), evotype=evotype)
     qutritMDL.preps['rho0'] = rho0final
-    qutritMDL.povms['Mdefault'] = _objs.UnconstrainedPOVM([('0bright', E0final),
-                                                           ('1bright', E1final),
-                                                           ('2bright', E2final)])
-    qutritMDL.operations['Gi'] = _objs.FullDenseOp(arrType(gateISOfinal), evotype, state_space)
-    qutritMDL.operations['Gx'] = _objs.FullDenseOp(arrType(gateXSOfinal), evotype, state_space)
-    qutritMDL.operations['Gy'] = _objs.FullDenseOp(arrType(gateYSOfinal), evotype, state_space)
-    qutritMDL.operations['Gm'] = _objs.FullDenseOp(arrType(gateMSOfinal), evotype, state_space)
+    qutritMDL.povms['Mdefault'] = _UnconstrainedPOVM([('0bright', E0final),
+                                                      ('1bright', E1final),
+                                                      ('2bright', E2final)], evotype=evotype)
+    qutritMDL.operations['Gi'] = _FullDenseOp(arrType(gateISOfinal), evotype, state_space)
+    qutritMDL.operations['Gx'] = _FullDenseOp(arrType(gateXSOfinal), evotype, state_space)
+    qutritMDL.operations['Gy'] = _FullDenseOp(arrType(gateYSOfinal), evotype, state_space)
+    qutritMDL.operations['Gm'] = _FullDenseOp(arrType(gateMSOfinal), evotype, state_space)
     qutritMDL.default_gauge_group = _objs.gaugegroup.FullGaugeGroup(state_space, evotype)
 
     return qutritMDL

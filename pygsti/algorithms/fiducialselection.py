@@ -17,6 +17,7 @@ from .. import objects as _objs
 from .. import construction as _constr
 from . import grasp as _grasp
 from . import scoring as _scoring
+from ..modelmembers.povms import ComplementPOVMEffect as _ComplementPOVMEffect
 
 
 def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
@@ -295,7 +296,7 @@ def create_meas_mxs(model, meas_fid_list):
     outputMatList = []
     for povm in model.povms.values():
         for E in povm.values():
-            if isinstance(E, _objs.ComplementSPAMVec): continue  # complement is dependent on others
+            if isinstance(E, _ComplementPOVMEffect): continue  # complement is dependent on others
             outputMat = _np.zeros([dimE, numFid], float)
             for i, measFid in enumerate(meas_fid_list):
                 outputMat[:, i] = _np.dot(E.T, model.sim.product(measFid))[0, :]

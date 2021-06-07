@@ -679,7 +679,7 @@ class OpModel(Model):
     def _print_gpindices(self, max_depth=100):
         print("PRINTING MODEL GPINDICES!!!")
         for lbl, obj in self._iter_parameterized_objs():
-            obj._print_gpindices("", str(lbl), max_depth)
+            obj._print_gpindices("", str(lbl), max_depth=max_depth)
 
     def print_parameters_by_op(self, max_depth=0):
         plbls = {i: lbl for i, lbl in enumerate(self.parameter_labels)}

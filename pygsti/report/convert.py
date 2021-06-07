@@ -18,8 +18,10 @@ from . import python
 
 import numpy as _np
 import functools
-from .. import objects as _objs
 from ..objects.reportableqty import ReportableQty as _ReportableQty
+from ..modelmembers import operations as _op
+from ..modelmembers import states as _state
+from ..modelmembers import povms as _povm
 
 
 def functions_in(module):
@@ -79,9 +81,7 @@ def item_type(x):
     """
     if isinstance(x, _ReportableQty):
         return 'reportable'
-    if isinstance(x, _np.ndarray) or \
-       isinstance(x, _objs.LinearOperator) or \
-       isinstance(x, _objs.SPAMVec):
+    if isinstance(x, (_np.ndarray, _op.LinearOperator, _state.State, _povm.POVMEffect)):
         d = calc_dim(x)
         if d == 0: return 'value'
         if d == 1: return 'vector'
@@ -119,9 +119,7 @@ def convert(x, specs, fmt):
     """
 
     #Squeeze arrays before formatting
-    if isinstance(x, _np.ndarray) or \
-       isinstance(x, _objs.LinearOperator) or \
-       isinstance(x, _objs.SPAMVec):
+    if isinstance(x, (_np.ndarray, _op.LinearOperator, _state.State, _povm.POVMEffect)):
         x = _np.squeeze(x)
 
     t = item_type(x)
