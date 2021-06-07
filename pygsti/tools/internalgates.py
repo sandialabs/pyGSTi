@@ -256,10 +256,18 @@ def standard_gatename_unitaries():
                                        0., 1., 0., 0.], [0., 0., 0., 1.]], complex)
 
     def Gzr(theta):
-        if theta is None: return _np.array([[1., 0.], [0., 1.]])
+        if theta is None: return _np.array([[1., 0.], [0., 1.]], complex)
         else: return _np.array([[1., 0.], [0., _np.exp(-1j * float(theta[0]))]])
 
     std_unitaries['Gzr'] = Gzr
+
+    def Gczr(theta):
+        if theta is None: return _np.array([[1., 0., 0., 0.], [0., 1., 0., 0.],
+                                            [0., 0., 1., 0.], [0., 0., 0., 1.]], complex)
+        else: return _np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.],
+                                [0., 0., 0., _np.exp(-1j * float(theta[0]))]], complex)
+
+    std_unitaries['Gczr'] = Gczr
 
     return std_unitaries
 
@@ -470,9 +478,26 @@ def standard_gatenames_openqasm_conversions(version='u3'):
     has, say, defined 'Gh' to be something other than the Hadamard gate this
     conversion dictionary will be incorrect.
 
+    Parameters
+    ----------
+    version : string, optional
+        Either 'u3' or 'x-sx-rz'. Specifies the naming convention for the QASM
+        gates. With 'u3', all single-qubit gates are specified in terms of the
+        'u3' gate, used by IBM and QisKit until ~2021 (see the qasm_u3 function).
+        With 'x-sx-rz', all single-gates are specified in terms of 'x' (an x pi
+        rotation), 'sx' (an x pi/2 rotation) and 'rz' (a parameterized rotation
+        around z by an angle theta).
+
     Returns
     -------
-    dict mapping strings to strings.
+    dict
+        mapping strings (representing pyGSTi standard gate names) to strings (
+        representing QASM gate names).
+
+    dict
+        mapping strings (representing pyGSTi standard gate names) to functions
+        that map the parameters of a pyGSTi gate to a string to be combined
+        with the QASM name to specify the specific gate, in QASM.
     """
     if version == 'u3':
         std_gatenames_to_qasm = {}
@@ -523,11 +548,15 @@ def standard_gatenames_openqasm_conversions(version='u3'):
         std_gatenames_to_qasm['Gc23'] = 'u3(0, 0, 4.71238898038469)'  # [0, 0, 3] * pi/2 (this is Gzmpi2 / Gpdag)
 
         std_gatenames_to_qasm['Gzr'] = 'u3'
+        std_gatenames_to_qasm['Gczr'] = 'czr'
 
         def Gz_theta_map(gatearg):
             return '(0, 0, ' + gatearg[0] + ')'
+        def Gczr_theta_map(gatearg):
+            return '(' + gatearg[0] + ')'
         std_gatenames_to_argmap = {}
         std_gatenames_to_argmap['Gzr'] = Gz_theta_map
+        std_gatenames_to_argmap['Gczr'] = Gczr_theta_map
 
     elif version == 'x-sx-rz':
         std_gatenames_to_qasm = {}
@@ -576,12 +605,13 @@ def standard_gatenames_openqasm_conversions(version='u3'):
         std_gatenames_to_qasm['Gtdag'] = ['rz(5.497787143782138)']
 
         std_gatenames_to_qasm['Gzr'] = 'rz'
+        std_gatenames_to_qasm['Gczr'] = 'crz'
 
         def Gz_theta_map(gatearg):
             return '(' + gatearg[0] + ')'
         std_gatenames_to_argmap = {}
         std_gatenames_to_argmap['Gzr'] = Gz_theta_map
-
+        std_gatenames_to_argmap['Gczr'] = Gz_theta_map
     else:
         raise ValueError("Unknown version!")
 

@@ -1,10 +1,17 @@
 import numpy as np
+import unittest
 
 from ..util import BaseCase
 
 import pygsti
 from pygsti.tools import matrixmod2
+from pygsti.objects.label import Label
 import pygsti.tools.symplectic as symplectic
+
+try:
+    from pygsti.tools import fastcalc as _fastcalc
+except ImportError:
+    _fastcalc = None
 
 
 class SymplecticBase(object):
@@ -115,7 +122,66 @@ class SymplecticBase(object):
         s, p  = symplectic.symplectic_rep_of_clifford_circuit(HZHcirc, srep_dict=srep_custom)
         self.assertArraysAlmostEqual(s, np.eye(4))
         self.assertArraysAlmostEqual(p, np.zeros(4))
+    
+    @unittest.skipIf(_fastcalc is None, "Skipping fast compose test since no fastcalc compiled")
+    def test_fast_compose_cliffords(self):
+        srep_dict = symplectic.compute_internal_gate_symplectic_representations()
 
+        # Seems like a good idea to test different embeddings
+        # This creates the StateSpaceLabels so that symplectic_rep_of_clifford_layer can work properly
+        def sp_offset_embedding(gate, offset, gate_qubits, total_qubits):
+            layer_lbl = Label(gate, state_space_labels=list(range(offset, offset+gate_qubits)))
+            return symplectic.symplectic_rep_of_clifford_layer(layer_lbl, total_qubits, add_internal_sreps=False)
+
+        # Do all pairwise composes
+        for g1 in srep_dict.keys():
+            s1, p1 = srep_dict[g1]
+            g1qubits = len(p1) // 2
+
+            for g2 in srep_dict.keys():
+                s2, p2 = srep_dict[g2]
+                g2qubits = len(p2) // 2
+
+                # Try all pairwise offsets in larger space
+                for offset1 in range(self.n - g1qubits):
+                    s1_embed, p1_embed = sp_offset_embedding(g1, offset1, g1qubits, self.n)
+
+                    for offset2 in range(self.n - g2qubits):
+                        s2_embed, p2_embed = sp_offset_embedding(g2, offset2, g2qubits, self.n)
+
+                        # Actually try and compare clifford composes
+                        s12_slow, p12_slow = symplectic.compose_cliffords(s1_embed, p1_embed,
+                                                                          s2_embed, p2_embed,
+                                                                          do_checks=False)
+                        s12_fast, p12_fast = _fastcalc.fast_compose_cliffords(s1_embed, p1_embed,
+                                                                              s2_embed, p2_embed)
+                        
+                        # Guard output just so for easier debugging...
+                        if not np.allclose(s12_slow, s12_fast) or not np.allclose(p12_slow, p12_fast):
+                            print(f'Error detected in {g1} x {g2} with offsets {offset1} and {offset2}')
+
+                            print(f'{g1} s:\n{s1}')
+                            print(f'{g1} s embedded with offset {offset1}:\n{s1_embed}')
+                            print(f'{g2} s:\n{s2}')
+                            print(f'{g2} s embedded with offset {offset2}:\n{s2_embed}')
+
+                            print(f'{g1} p: {p1}')
+                            print(f'{g1} p embedded with offset {offset1}: {p1_embed}')
+                            print(f'{g2} p : {p2}')
+                            print(f'{g2} p embedded with offset {offset2}: {p2_embed}')
+
+                            if not np.allclose(s12_slow, s12_fast):
+                                print('\nError in s matrices!')
+                                print(f'Python s1_embed x s2_embed:\n{s12_slow}')
+                                print(f'Cython s1_embed x s2_embed:\n{s12_fast}')
+                            
+                            if not np.allclose(p12_slow, p12_fast):
+                                print('\nError in p vectors')
+                                print(f'Python s1_embed x s2_embed: {p12_slow}')
+                                print(f'Cython s1_embed x s2_embed: {p12_fast}')
+                        
+                        self.assertArraysAlmostEqual(s12_slow, s12_fast)
+                        self.assertArraysAlmostEqual(p12_slow, p12_fast)
 
 class SymplecticEvenDimTester(SymplecticBase, BaseCase):
     n = 4
