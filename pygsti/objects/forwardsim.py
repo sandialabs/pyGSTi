@@ -201,7 +201,7 @@ class ForwardSimulator(object):
             try:
                 return self._compute_sparse_circuit_outcome_probabilities(circuit, resource_alloc, time)
             except NotImplementedError:
-                pass # continue on to create full layout and calcualte all outcomes
+                pass # continue on to create full layout and calculate all outcomes
         
         copa_layout = self.create_layout([circuit], array_types=('e',), resource_alloc=resource_alloc)
         probs_array = _np.empty(copa_layout.num_elements, 'd')
