@@ -87,6 +87,26 @@ class Basis(object):
     or matrix units, so one can rightly view the "std" pyGSTi basis as the
     "standard" basis for a that particular dimension.
 
+    The arguments below describe the basic properties of all basis
+    objects in pyGSTi.  It is important to remember that the
+    `vector_elements` of a basis are different from its `elements`
+    (see the :class:`Basis` docstring), and that `dim` refers
+    to the vector elements whereas elshape refers to the elements.
+
+    For example, consider a 2-element Basis containing the I and X Pauli
+    matrices.  The `size` of this basis is `2`, as there are two elements
+    (and two vector elements).  Since vector elements are the length-4
+    flattened Pauli matrices, the dimension (`dim`) is `4`.  Since the
+    elements are 2x2 Pauli matrices, the `elshape` is `(2,2)`.
+
+    As another example consider a basis which spans all the diagonal
+    2x2 matrices.  The elements of this basis are the two matrix units
+    with a 1 in the (0,0) or (1,1) location.  The vector elements,
+    however, are the length-2 [1,0] and [0,1] vectors obtained by extracting
+    just the diagonal entries from each basis element.  Thus, for this
+    basis, `size=2`, `dim=2`, and `elshape=(2,2)` - so the dimension is
+    not just the product of `elshape` entries (equivalently, `elsize`).
+
     Parameters
     ----------
     name : string
@@ -97,20 +117,6 @@ class Basis(object):
 
     longname : string
         A more descriptive name for the basis.
-
-    dim : int
-        The dimension of the vector space this basis fully or partially
-        spans.  Equivalently, the length of the `vector_elements` of the
-        basis.
-
-    size : int
-        The number of elements (or vector-elements) in the basis.
-
-    elshape : tuple
-        The shape of each element.  Typically either a length-1 or length-2
-        tuple, corresponding to vector or matrix elements, respectively.
-        Note that *vector elements* always have shape `(dim,)` (or `(dim,1)`
-        in the sparse case).
 
     real : bool
         Elements and vector elements are always allowed to have complex
@@ -126,9 +132,22 @@ class Basis(object):
         Whether the elements of `.elements` for this Basis are stored (when
         they are stored at all) as sparse matrices or vectors.
 
-
     Attributes
     ----------
+    dim : int
+        The dimension of the vector space this basis fully or partially
+        spans.  Equivalently, the length of the `vector_elements` of the
+        basis.
+
+    size : int
+        The number of elements (or vector-elements) in the basis.
+
+    elshape : int
+        The shape of each element.  Typically either a length-1 or length-2
+        tuple, corresponding to vector or matrix elements, respectively.
+        Note that *vector elements* always have shape `(dim,)` (or `(dim,1)`
+        in the sparse case).
+
     elndim : int
         The number of element dimensions, i.e. `len(self.elshape)`
 
@@ -191,9 +210,10 @@ class Basis(object):
             if dim is not None:
                 if isinstance(dim, _StateSpace):
                     state_space = dim
-                    assert(state_space.dim == basis.dim or state_space.dim == basis.elsize), \
-                        "Basis object has unexpected dimension: %d != %d or %d" % (state_space.dim,
-                                                                                   basis.dim, basis.elsize)
+                    if hasattr(basis, 'state_space'):  # TODO - should *all* basis objects have a state_space?
+                        assert(state_space.is_compatible_with(basis.state_space)), \
+                            "Basis object has incompatible state space: %s != %s" % (str(state_space),
+                                                                                     str(basis.state_space))
                 else:  # assume dim is an integer
                     assert(dim == basis.dim or dim == basis.elsize), \
                         "Basis object has unexpected dimension: %d != %d or %d" % (dim, basis.dim, basis.elsize)
@@ -205,14 +225,22 @@ class Basis(object):
             if isinstance(dim, _StateSpace):
                 state_space = dim
                 tpbBases = []
-                for tpbLabels in state_space.tensor_product_blocks_labels:
-                    if len(tpbLabels) == 1:
-                        nm = name if (state_space.label_type(tpbLabels[0]) == 'Q') else classical_name
-                        tpbBases.append(BuiltinBasis(nm, state_space.label_dimension(tpbLabels[0]), sparse))
-                    else:
-                        tpbBases.append(TensorProdBasis([
-                            BuiltinBasis(name if (state_space.label_type(l) == 'Q') else classical_name,
-                                         state_space.label_dimension(l), sparse) for l in tpbLabels]))
+                if len(state_space.tensor_product_blocks_labels) == 1 \
+                   and len(state_space.tensor_product_blocks_labels[0]) == 1:
+                    #Special case when we can actually pipe state_space to the BuiltinBasis constructor
+                    lbl = state_space.tensor_product_blocks_labels[0][0]
+                    nm = name if (state_space.label_type(lbl) == 'Q') else classical_name
+                    tpbBases.append(BuiltinBasis(nm, state_space, sparse))
+                else:
+                    #TODO: add methods to StateSpace that can extract a sub-*StateSpace* object for a given label.
+                    for tpbLabels in state_space.tensor_product_blocks_labels:
+                        if len(tpbLabels) == 1:
+                            nm = name if (state_space.label_type(tpbLabels[0]) == 'Q') else classical_name
+                            tpbBases.append(BuiltinBasis(nm, state_space.label_dimension(tpbLabels[0]), sparse))
+                        else:
+                            tpbBases.append(TensorProdBasis([
+                                BuiltinBasis(name if (state_space.label_type(l) == 'Q') else classical_name,
+                                             state_space.label_dimension(l), sparse) for l in tpbLabels]))
                 if len(tpbBases) == 1:
                     return tpbBases[0]
                 else:
@@ -247,78 +275,40 @@ class Basis(object):
         else:
             raise ValueError("Can't cast %s to be a basis!" % str(type(name_or_basis_or_matrices)))
 
-    def __init__(self, name, longname, dim, size, elshape, real, sparse):
-        """
-        Create a new Basis (base class) object.
-
-        The arguments below describe the basic properties of all basis
-        objects in pyGSTi.  It is important to remember that the
-        `vector_elements` of a basis are different from its `elements`
-        (see the :class:`Basis` docstring), and that `dim` refers
-        to the vector elements whereas elshape refers to the elements.
-
-        For example, consider a 2-element Basis containing the I and X Pauli
-        matrices.  The `size` of this basis is `2`, as there are two elements
-        (and two vector elements).  Since vector elements are the length-4
-        flattened Pauli matrices, the dimension (`dim`) is `4`.  Since the
-        elements are 2x2 Pauli matrices, the `elshape` is `(2,2)`.
-
-        As another example consider a basis which spans all the diagonal
-        2x2 matrices.  The elements of this basis are the two matrix units
-        with a 1 in the (0,0) or (1,1) location.  The vector elements,
-        however, are the length-2 [1,0] and [0,1] vectors obtained by extracting
-        just the diagonal entries from each basis element.  Thus, for this
-        basis, `size=2`, `dim=2`, and `elshape=(2,2)` - so the dimension is
-        not just the product of `elshape` entries (equivalently, `elsize`).
-
-
-        Parameters
-        ----------
-        name : string
-            The name of the basis.  This can be anything, but is
-            usually short and abbreviated.  There are several
-            types of bases built into pyGSTi that can be constructed by
-            this name.
-
-        longname : string
-            A more descriptive name for the basis.
-
-        dim : int
-            The dimension of the vector space this basis fully or partially
-            spans.  Equivalently, the length of the `vector_elements` of the
-            basis.
-
-        size : int
-            The number of elements (or vector-elements) in the basis.
-
-        elshape : tuple
-            The shape of each element.  Typically either a length-1 or length-2
-            tuple, corresponding to vector or matrix elements, respectively.
-            Note that *vector elements* always have shape `(dim,)` (or `(dim,1)`
-            in the sparse case).
-
-        real : bool
-            Elements and vector elements are always allowed to have complex
-            entries.  This argument indicates whether the coefficients in the
-            expression of an arbitrary vector in this basis must be real.  For
-            example, if `real=True`, then when pyGSTi transforms a vector in
-            some other basis to a vector in *this* basis, it will demand that
-            the values of that vector (i.e. the coefficients which multiply
-            this basis's elements to obtain a vector in the "standard" basis)
-            are real.
-
-        sparse : bool
-            Whether the elements of `.elements` for this Basis are stored (when
-            they are stored at all) as sparse matrices or vectors.
-        """
+    def __init__(self, name, longname, real, sparse):
         self.name = name
         self.longname = longname
-        self.dim = dim  # dimension of vector space this basis fully or partially spans
-        self.size = size  # number of elements (== dim if a *full* basis)
-        self.elshape = tuple(elshape)  # shape of "natural" elements - size may be > self.dim (to display naturally)
-        # whether coefficients must be real (*not* whether elements are real - they're always complex)
-        self.real = real
+        self.real = real  # whether coefficients must be real (*not* whether elements are real - they're always complex)
         self.sparse = sparse  # whether elements are stored as sparse vectors/matrices
+
+    @property
+    def dim(self):
+        """
+        The dimension of the vector space this basis fully or partially
+        spans.  Equivalently, the length of the `vector_elements` of the
+        basis.
+        """
+        # dimension of vector space this basis fully or partially spans
+        raise NotImplementedError("Derived classes must implement this!")
+
+    @property
+    def size(self):
+        """
+        The number of elements (or vector-elements) in the basis.
+        """
+        # number of elements (== dim if a *full* basis)
+        raise NotImplementedError("Derived classes must implement this!")
+
+    @property
+    def elshape(self):
+        """
+        The shape of each element.  Typically either a length-1 or length-2
+        tuple, corresponding to vector or matrix elements, respectively.
+        Note that *vector elements* always have shape `(dim,)` (or `(dim,1)`
+        in the sparse case).
+        """
+        # shape of "natural" elements - size may be > self.dim (to display naturally)
+        raise NotImplementedError("Derived classes must implement this!")
 
     @property
     def elndim(self):
@@ -707,20 +697,6 @@ class LazyBasis(Basis):
     longname : string
         A more descriptive name for the basis.
 
-    dim : int
-        The dimension of the vector space this basis fully or partially
-        spans.  Equivalently, the length of the `vector_elements` of the
-        basis.
-
-    size : int
-        The number of elements (or vector-elements) in the basis.
-
-    elshape : tuple
-        The shape of each element.  Typically either a length-1 or length-2
-        tuple, corresponding to vector or matrix elements, respectively.
-        Note that *vector elements* always have shape `(dim,)` (or `(dim,1)`
-        in the sparse case).
-
     real : bool
         Elements and vector elements are always allowed to have complex
         entries.  This argument indicates whether the coefficients in the
@@ -748,7 +724,7 @@ class LazyBasis(Basis):
         The basis labels
     """
 
-    def __init__(self, name, longname, dim, size, elshape, real, sparse):
+    def __init__(self, name, longname, real, sparse):
         """
         Creates a new LazyBasis.  Parameters are the same as those to
         :method:`Basis.__init__`.
@@ -756,7 +732,7 @@ class LazyBasis(Basis):
         self._elements = None        # "natural-shape" elements - can be vecs or matrices
         self._labels = None          # element labels
         self._ellookup = None        # fast element lookup
-        super(LazyBasis, self).__init__(name, longname, dim, size, elshape, real, sparse)
+        super(LazyBasis, self).__init__(name, longname, real, sparse)
 
     def _lazy_build_elements(self):
         raise NotImplementedError("Derived classes must implement this function!")
@@ -919,8 +895,40 @@ class ExplicitBasis(Basis):
                 self.elements.append(el)
             dim = int(_np.product(elshape))
         self.ellookup = {lbl: el for lbl, el in zip(self.labels, self.elements)}  # fast by-label element lookup
+        self._dim = dim
+        self._size = size
+        self._elshape = elshape
 
-        super(ExplicitBasis, self).__init__(name, longname, dim, size, elshape, real, sparse)
+        super(ExplicitBasis, self).__init__(name, longname, real, sparse)
+
+    @property
+    def dim(self):
+        """
+        The dimension of the vector space this basis fully or partially
+        spans.  Equivalently, the length of the `vector_elements` of the
+        basis.
+        """
+        # dimension of vector space this basis fully or partially spans
+        return self._dim
+
+    @property
+    def size(self):
+        """
+        The number of elements (or vector-elements) in the basis.
+        """
+        # number of elements (== dim if a *full* basis)
+        return self._size
+
+    @property
+    def elshape(self):
+        """
+        The shape of each element.  Typically either a length-1 or length-2
+        tuple, corresponding to vector or matrix elements, respectively.
+        Note that *vector elements* always have shape `(dim,)` (or `(dim,1)`
+        in the sparse case).
+        """
+        # shape of "natural" elements - size may be > self.dim (to display naturally)
+        return self._elshape
 
     def __hash__(self):
         return hash((self.name, self.dim, self.elshape, self.sparse))  # better?
@@ -945,58 +953,82 @@ class BuiltinBasis(LazyBasis):
         the state-vector (`name="sv"`) case and dimension 4 when
         constructing a density-matrix basis (e.g. `name="pp"`).
 
+    dim_or_statespace : int or StateSpace
+        The dimension of the basis to be created or the state space for which a
+        basis should be created.  Note that when this is an integer it is the
+        dimension of the *vectors*, which correspond to flattened elements
+        in simple cases.  Thus, a 1-qubit basis would have dimension 2 in
+        the state-vector (`name="sv"`) case and dimension 4 when
+        constructing a density-matrix basis (e.g. `name="pp"`).
+
     sparse : bool, optional
         Whether basis elements should be stored as SciPy CSR sparse matrices
         or dense numpy arrays (the default).
     """
 
-    def __init__(self, name, dim, sparse=False):
-        '''
-        Create a new BuiltinBasis object.
-
-        Parameters
-        ----------
-        name : {"pp", "gm", "std", "qt", "id", "cl", "sv"}
-            Name of the basis to be created.
-
-        dim : int
-            The dimension of the basis to be created.  Note that this is the
-            dimension of the *vectors*, which correspond to flattened elements
-            in simple cases.  Thus, a 1-qubit basis would have dimension 2 in
-            the state-vector (`name="sv"`) case and dimension 4 when
-            constructing a density-matrix basis (e.g. `name="pp"`).
-
-        sparse : bool, optional
-            Whether basis elements should be stored as SciPy CSR sparse matrices
-            or dense numpy arrays (the default).
-        '''
+    def __init__(self, name, dim_or_statespace, sparse=False):
+        from ..models import statespace as _statespace
         assert(name in _basis_constructor_dict), "Unknown builtin basis name '%s'!" % name
         if sparse is None: sparse = False  # choose dense matrices by default (when sparsity is "unspecified")
-        self.cargs = {'dim': dim, 'sparse': sparse}
+        self.state_space = dim_or_statespace if isinstance(dim_or_statespace, _statespace.StateSpace) \
+            else _statespace.default_space_for_dim(dim_or_statespace)
 
         longname = _basis_constructor_dict[name].longname
         real = _basis_constructor_dict[name].real
-        size, dim, elshape = _basis_constructor_dict[name].sizes(**self.cargs)
-        super(BuiltinBasis, self).__init__(name, longname, dim, size, elshape, real, sparse)
+
+        super(BuiltinBasis, self).__init__(name, longname, real, sparse)
+
+    @property
+    def dim(self):
+        """
+        The dimension of the vector space this basis fully or partially
+        spans.  Equivalently, the length of the `vector_elements` of the
+        basis.
+        """
+        size, dim, elshape = _basis_constructor_dict[self.name].sizes(dim=self.state_space.dim, sparse=self.sparse)
+        return dim
+
+    @property
+    def size(self):
+        """
+        The number of elements (or vector-elements) in the basis.
+        """
+        size, dim, elshape = _basis_constructor_dict[self.name].sizes(dim=self.state_space.dim, sparse=self.sparse)
+        return size
+
+    @property
+    def elshape(self):
+        """
+        The shape of each element.  Typically either a length-1 or length-2
+        tuple, corresponding to vector or matrix elements, respectively.
+        Note that *vector elements* always have shape `(dim,)` (or `(dim,1)`
+        in the sparse case).
+        """
+        size, dim, elshape = _basis_constructor_dict[self.name].sizes(dim=self.state_space.dim, sparse=self.sparse)
 
         #Check that sparse is True only when elements are *matrices*
-        assert(not self.sparse or self.elndim == 2), "`sparse == True` is only allowed for *matrix*-valued bases!"
+        assert(not self.sparse or len(elshape) == 2), "`sparse == True` is only allowed for *matrix*-valued bases!"
+
+        return elshape
 
     def __hash__(self):
-        return hash((self.name, self.dim, self.sparse))
+        return hash((self.name, self.state_space, self.sparse))
 
     def _lazy_build_elements(self):
         f = _basis_constructor_dict[self.name].constructor
-        self._elements = _np.array(f(**self.cargs))  # a list of (dense) mxs -> ndarray (possibly sparse in future?)
+        cargs = {'dim': self.state_space.dim, 'sparse': self.sparse}
+        self._elements = _np.array(f(**cargs))  # a list of (dense) mxs -> ndarray (possibly sparse in future?)
         assert(len(self._elements) == self.size), "Logic error: wrong number of elements were created!"
 
     def _lazy_build_labels(self):
         f = _basis_constructor_dict[self.name].labeler
-        self._labels = f(**self.cargs)
+        cargs = {'dim': self.state_space.dim, 'sparse': self.sparse}
+        self._labels = f(**cargs)
 
     def __eq__(self, other):
         if isinstance(other, BuiltinBasis):  # then can compare quickly
-            return (self.name == other.name) and (self.cargs == other.cargs) and (self.sparse == other.sparse)
+            return ((self.name == other.name) and (self.state_space == other.state_space)
+                    and (self.sparse == other.sparse))
         elif isinstance(other, str):
             return self.name == other  # see if other is a string equal to our name
         else:
@@ -1079,13 +1111,36 @@ class DirectSumBasis(LazyBasis):
         assert(all([c.sparse == sparse for c in self.component_bases])), "Inconsistent sparsity among component bases!"
 
         #Init everything but elements and labels & their number/size
-        dim = sum([c.dim for c in self.component_bases])
+        super(DirectSumBasis, self).__init__(name, longname, real, sparse)
+
+    @property
+    def dim(self):
+        """
+        The dimension of the vector space this basis fully or partially
+        spans.  Equivalently, the length of the `vector_elements` of the
+        basis.
+        """
+        return sum([c.dim for c in self.component_bases])
+
+    @property
+    def size(self):
+        """
+        The number of elements (or vector-elements) in the basis.
+        """
+        return sum([c.size for c in self.component_bases])
+
+    @property
+    def elshape(self):
+        """
+        The shape of each element.  Typically either a length-1 or length-2
+        tuple, corresponding to vector or matrix elements, respectively.
+        Note that *vector elements* always have shape `(dim,)` (or `(dim,1)`
+        in the sparse case).
+        """
         elndim = len(self.component_bases[0].elshape)
         assert(all([len(c.elshape) == elndim for c in self.component_bases])
                ), "Inconsistent element ndims among component bases!"
-        elshape = [sum([c.elshape[k] for c in self.component_bases]) for k in range(elndim)]
-        size = sum([c.size for c in self.component_bases])
-        super(DirectSumBasis, self).__init__(name, longname, dim, size, elshape, real, sparse)
+        return tuple([sum([c.elshape[k] for c in self.component_bases]) for k in range(elndim)])
 
     def __hash__(self):
         return hash(tuple((hash(comp) for comp in self.component_bases)))
@@ -1347,7 +1402,17 @@ class TensorProdBasis(LazyBasis):
         assert(all([c.sparse == sparse for c in self.component_bases])), "Inconsistent sparsity among component bases!"
         assert(sparse is False), "Sparse matrices are not supported within TensorProductBasis objects yet"
 
+        super(TensorProdBasis, self).__init__(name, longname, real, sparse)
+
+    @property
+    def dim(self):
+        """
+        The dimension of the vector space this basis fully or partially
+        spans.  Equivalently, the length of the `vector_elements` of the
+        basis.
+        """
         dim = int(_np.product([c.dim for c in self.component_bases]))
+
         #NOTE: this is actually to restrictive -- what we need is a test/flag for whether the elements of a
         # basis are in their "natrual" representation where it makes sense to take tensor products.  For
         # example, a direct-sum basis may hold elements in a compact way that violate this... but I'm not sure if they
@@ -1357,15 +1422,30 @@ class TensorProdBasis(LazyBasis):
         # because we use the natural representation to take tensor (kronecker) products.
         # Note: this assertion also means dim == product(component_elsizes) == elsize, so basis is *simple*
 
-        size = int(_np.product([c.size for c in self.component_bases]))
+        return dim
+
+    @property
+    def size(self):
+        """
+        The number of elements (or vector-elements) in the basis.
+        """
+        return int(_np.product([c.size for c in self.component_bases]))
+
+    @property
+    def elshape(self):
+        """
+        The shape of each element.  Typically either a length-1 or length-2
+        tuple, corresponding to vector or matrix elements, respectively.
+        Note that *vector elements* always have shape `(dim,)` (or `(dim,1)`
+        in the sparse case).
+        """
         elndim = max([c.elndim for c in self.component_bases])
         elshape = [1] * elndim
         for c in self.component_bases:
             off = elndim - c.elndim
             for k, d in enumerate(c.elshape):
                 elshape[k + off] *= d
-
-        super(TensorProdBasis, self).__init__(name, longname, dim, size, elshape, real, sparse)
+        return tuple(elshape)
 
     def __hash__(self):
         return hash(tuple((hash(comp) for comp in self.component_bases)))
@@ -1569,36 +1649,60 @@ class EmbeddedBasis(LazyBasis):
             A longer description of this basis.  If `None`, then a long name is
             automatically generated.
         '''
+        from ..models.statespace import StateSpace as _StateSpace
         self.embedded_basis = basis_to_embed
         self.target_labels = target_labels
-        self.state_space = state_space
+        self.state_space = _StateSpace.cast(state_space)
 
         if name is None:
             name = ':'.join((basis_to_embed.name,) + tuple(map(str, target_labels)))
         if longname is None:
             longname = "Embedded %s basis as %s within %s" % \
-                (basis_to_embed.name, ':'.join(map(str, target_labels)), str(state_space_labels))
+                (basis_to_embed.name, ':'.join(map(str, target_labels)), str(self.state_space))
 
         real = basis_to_embed.real
         sparse = basis_to_embed.sparse
-        dim = state_space_labels.dim
-        size = basis_to_embed.size
-        elndim = basis_to_embed.elndim
 
+        super(EmbeddedBasis, self).__init__(name, longname, real, sparse)
+
+    @property
+    def dim(self):
+        """
+        The dimension of the vector space this basis fully or partially
+        spans.  Equivalently, the length of the `vector_elements` of the
+        basis.
+        """
+        return self.state_space.dim
+
+    @property
+    def size(self):
+        """
+        The number of elements (or vector-elements) in the basis.
+        """
+        return self.embedded_basis.size
+
+    @property
+    def elshape(self):
+        """
+        The shape of each element.  Typically either a length-1 or length-2
+        tuple, corresponding to vector or matrix elements, respectively.
+        Note that *vector elements* always have shape `(dim,)` (or `(dim,1)`
+        in the sparse case).
+        """
+        elndim = self.embedded_basis.elndim
         if elndim == 2:  # a "matrix" basis
-            d = int(_np.sqrt(dim))
-            assert(d**2 == dim), \
-                "Dimension of `state_space_labels` must be a perfect square when embedding a matrix basis"
+            d = int(_np.sqrt(self.dim))
+            assert(d**2 == self.dim), \
+                "Dimension of state_space must be a perfect square when embedding a matrix basis"
             elshape = (d, d)
         elif elndim == 1:
-            elshape = (dim,)
+            elshape = (self.dim,)
         else:
             raise ValueError("Can only embed bases with .elndim == 1 or 2 (received %d)!" % elndim)
-
-        super(EmbeddedBasis, self).__init__(name, longname, dim, size, elshape, real, sparse)
+        return elshape
 
     def __hash__(self):
-        return hash(tuple(hash(self.embedded_basis), self.target_labels, self.state_space.tensor_product_blocks_labels))
+        return hash(tuple(hash(self.embedded_basis), self.target_labels, self.state_space))
 
     def _lazy_build_elements(self):
         """ Take a dense or sparse basis matrix and embed it. """

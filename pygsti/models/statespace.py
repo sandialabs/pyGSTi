@@ -186,6 +186,19 @@ class StateSpace(object):
     def __repr__(self):
         return self.__class__.__name__ + "[" + str(self) + "]"
 
+    def __hash__(self):
+        return hash((self.tensor_product_blocks_labels,
+                     self.tensor_product_blocks_dimensions,
+                     self.tensor_product_blocks_types))
+
+    def __eq__(self, other_statespace):
+        if isinstance(other_statespace, StateSpace):
+            return (self.tensor_product_blocks_labels == other_statespace.tensor_product_blocks_labels
+                    and self.tensor_product_blocks_dimensions == other_statespace.tensor_product_blocks_dimensions
+                    and self.tensor_product_blocks_types == other_statespace.tensor_product_blocks_types)
+        else:
+            return False  # this state space is not equal to anything that isn't another state space
+
 
 class QubitSpace(StateSpace):
     """
