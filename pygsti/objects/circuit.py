@@ -3750,9 +3750,17 @@ class Circuit(object):
 
         Parameters
         ----------
-        num_qubits : in, optional
+        num_qubits : int, optional
             The number of qubits for the openqasm file.  If None, then this is assumed
             to equal the number of line labels in this circuit.
+
+        version : string, optional
+            Either 'u3' or 'x-sx-rz'. Specifies the naming convention for the QASM
+            gates. With 'u3', all single-qubit gates are specified in terms of the
+            'u3' gate, used by IBM and QisKit until ~2021 (see the qasm_u3 function).
+            With 'x-sx-rz', all single-gates are specified in terms of 'x' (an x pi
+            rotation), 'sx' (an x pi/2 rotation) and 'rz' (a parameterized rotation
+            around z by an angle theta).
 
         gatename_conversion : dict, optional
             If not None, a dictionary that converts the gatenames in the circuit to the
@@ -3772,6 +3780,14 @@ class Circuit(object):
             When `True`, add in a barrier after every circuit layer.  Including such barriers
             can be important for QCVV testing, as this can help reduce the "behind-the-scenes"
             compilation (beyond necessary conversion to native instructions) experience by the circuit.
+
+        gateargs_map : dict, optional
+            If not None, a dict that maps strings (representing pyGSTi standard gate names) to
+            functions that map the parameters of a pyGSTi gate to a string to be combined
+            with the QASM name to specify the specific gate, in QASM. If only standard pyGSTi names
+            are used (e.g., 'Gh', 'Gzr', 'Gczr, etc) or none of the gates are parameterized,
+            this dictionary need not be specified, and an automatic conversion to the standard
+            openqasm format will be implemented.
 
         Returns
         -------

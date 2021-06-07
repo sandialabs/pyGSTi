@@ -1274,11 +1274,10 @@ def fast_compose_cliffords(np.ndarray[INT, ndim=2] s1, np.ndarray[INT, ndim=1] p
     for i in range(N):
         for j in range(N):
             for k in range(N):
-                inner[i, j]     += s2[k, i+N] * s2[k, j]     # C^10^T C00
-                inner[i, j+N]   += s2[k, i+N] * s2[k, j+N]   # C^10^T C^01
+                inner[i, j]     += s2[k+N, i] * s2[k, j]     # C^10^T C00
+                inner[i, j+N]   += s2[k+N, i] * s2[k, j+N]   # C^10^T C^01
                 inner[i+N, j]   += s2[k+N, i+N] * s2[k, j]   # C^11^T C^00
                 inner[i+N, j+N] += s2[k+N, i+N] * s2[k, j+N] # C^11^T C^01
-    
     
     # 2P_upps(C'^T U C') + P_diag(C'^T U C') in-place (now equivalent to matrix in Python version)
     for i in range(2*N):
