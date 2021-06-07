@@ -166,7 +166,7 @@ cdef class OpRepEmbedded(OpRep):
         # how to embed cliffords on qubits...
         state_space = _StateSpace.cast(state_space)
         assert(state_space.num_tensor_product_blocks == 1
-               and all([state_space.label_dimension(l) == 2 for l in state_space.tensor_product_block_labels(0)])), \
+               and all([state_space.label_udimension(l) == 2 for l in state_space.tensor_product_block_labels(0)])), \
             "All state space labels must correspond to *qubits*"
         if isinstance(embedded_rep, OpRepClifford):
             assert(len(target_labels) == len(embedded_rep.svector) // 2), \

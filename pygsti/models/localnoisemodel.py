@@ -728,8 +728,8 @@ class LocalNoiseModel(_ImplicitOpModel):
                         if inds == tuple(qubit_labels):  # then no need to embed
                             embedded_op = base_gate
                         else:
-                            EmbeddedOp = _op.EmbeddedDenseOp if isinstance(simulator, _MatrixFSim) else _op.EmbeddedOp
-                            embedded_op = EmbeddedOp(state_space, inds, base_gate)
+                            #REMOVE EmbeddedOp = _op.EmbeddedDenseOp if isinstance(simulator, _MatrixFSim) else _op.EmbeddedOp
+                            embedded_op = _op.EmbeddedOp(state_space, inds, base_gate)
                         self.operation_blks['layers'][_Lbl(gateName, inds)] = embedded_op
 
                 except Exception as e:

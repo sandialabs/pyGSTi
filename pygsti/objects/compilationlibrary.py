@@ -490,7 +490,7 @@ class CompilationLibrary(_collections.OrderedDict):
         -------
         None
         """
-        nQ = int(round(_np.log2(self.model.dim)))  # assumes *unitary* mode (OK?)
+        nQ = self.model.state_space.num_qubits
         assert(self.model.state_space.num_tensor_product_blocks == 1), "Only single-TPB state spaces are supported"
         qubit_labels = self.model.state_space.tensor_product_block_labels(0)
         d = {qlbl: i for i, qlbl in enumerate(qubit_labels)}
@@ -660,7 +660,7 @@ class CompilationLibrary(_collections.OrderedDict):
             s, p = _symp.symplectic_rep_of_clifford_circuit(circuit, sreps)
 
             # Construct the symplectic rep of CNOT between this pair of qubits, to compare to s.
-            nQ = int(round(_np.log2(self.model.dim)))  # assumes *unitary* mode (OK?)
+            nQ = self.model.state_space.num_qubits
             iq1 = line_labels.index(q1)  # assumes single tensor-prod term
             iq2 = line_labels.index(q2)  # assumes single tensor-prod term
             s_cnot, p_cnot = _symp.symplectic_rep_of_clifford_layer(_Label('CNOT', (iq1, iq2)), nQ)

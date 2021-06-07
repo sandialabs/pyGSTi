@@ -3980,7 +3980,7 @@ class Circuit(object):
         #sslInds = {sslbl: i for i, sslbl in enumerate(model.state_space.tensor_product_block_labels(0))}
         # Note: we ignore all but the first tensor product block of the state space.
 
-        assert(model.state_space.num_tensor_prod_blocks == 1), "Only supports single-TPB state spaces currently"
+        assert(model.state_space.num_tensor_product_blocks == 1), "Only supports single-TPB state spaces currently"
         ssls = model.state_space.tensor_product_block_labels(0)
         reduced_ssls = [ssl for ssl in ssls if ssl in self.line_labels]
         ll_to_sslInds = {ll: reduced_ssls.index(ll) for ll in self.line_labels}
