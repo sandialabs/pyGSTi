@@ -925,15 +925,24 @@ class LindbladErrorgen(_LinearOperator):
             self._rep.base[:, :] = lnd_error_gen.real
         self._onenorm_upbound = onenorm
 
-    def to_dense(self):
+    def to_dense(self, on_space='minimal'):
         """
         Return this error generator as a dense matrix.
+
+        Parameters
+        ----------
+        on_space : {'minimal', 'Hilbert', 'HilbertSchmidt'}
+            The space that the returned dense operation acts upon.  For unitary matrices and bra/ket vectors,
+            use `'Hilbert'`.  For superoperator matrices and super-bra/super-ket vectors use `'HilbertSchmidt'`.
+            `'minimal'` means that `'Hilbert'` is used if possible given this operator's evolution type, and
+            otherwise `'HilbertSchmidt'` is used.
 
         Returns
         -------
         numpy.ndarray
         """
         if self._rep_type == 'lindblad':
+            assert(on_space in ('minimal', 'HilbertSchmidt'))
             #Then we need to do similar things to __init__ for a dense rep - maybe consolidate?
             hamCoeffs, otherCoeffs = _ot.paramvals_to_lindblad_projections(
                 self.paramvals, self.ham_basis_size, self.other_basis_size,
@@ -957,11 +966,11 @@ class LindbladErrorgen(_LinearOperator):
             return lnd_error_gen.real
 
         elif self._rep_type == 'sparse':
-            return self.to_sparse().toarray()
+            return self.to_sparse(on_space).toarray()
         else:  # dense rep
-            return self._rep.to_dense()
+            return self._rep.to_dense(on_space)
 
-    def to_sparse(self):
+    def to_sparse(self, on_space='minimal'):
         """
         Return the error generator as a sparse matrix.
 
@@ -973,6 +982,7 @@ class LindbladErrorgen(_LinearOperator):
                         "  Usually this is *NOT* a sparse matrix (the exponential of a"
                         " sparse matrix isn't generally sparse)!"))
         if self._rep_type == 'lindblad':
+            assert(on_space in ('minimal', 'HilbertSchmidt'))
             #Need to do similar things to __init__ - maybe consolidate?
             hamCoeffs, otherCoeffs = _ot.paramvals_to_lindblad_projections(
                 self.paramvals, self.ham_basis_size, self.other_basis_size,
@@ -994,10 +1004,11 @@ class LindbladErrorgen(_LinearOperator):
 
             return lnd_error_gen
         elif self._rep_type == 'sparse':
+            assert(on_space in ('minimal', 'HilbertSchmidt'))
             return _sps.csr_matrix((self._rep.data, self._rep.indices, self._rep.indptr),
                                    shape=(self.dim, self.dim))
         else:  # dense rep
-            return _sps.csr_matrix(self.to_dense())
+            return _sps.csr_matrix(self.to_dense(on_space))
 
     #def torep(self):
     #    """

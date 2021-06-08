@@ -116,15 +116,23 @@ class StochasticNoiseOp(_LinearOperator):
         return self._copy_gpindices(copyOfMe, parent, memo)
 
     #to_dense / to_sparse?
-    def to_dense(self):
+    def to_dense(self, on_space='minimal'):
         """
         Return this operation as a dense matrix.
+
+        Parameters
+        ----------
+        on_space : {'minimal', 'Hilbert', 'HilbertSchmidt'}
+            The space that the returned dense operation acts upon.  For unitary matrices and bra/ket vectors,
+            use `'Hilbert'`.  For superoperator matrices and super-bra/super-ket vectors use `'HilbertSchmidt'`.
+            `'minimal'` means that `'Hilbert'` is used if possible given this operator's evolution type, and
+            otherwise `'HilbertSchmidt'` is used.
 
         Returns
         -------
         numpy.ndarray
         """
-        return self._rep.to_dense()
+        return self._rep.to_dense(on_space)
 
     @property
     def num_params(self):

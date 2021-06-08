@@ -116,7 +116,8 @@ def spam_dotprods(rho_vecs, povms):
         j = 0
         for povm in povms:
             for EVec in povm.values():
-                ret[i, j] = _np.vdot(EVec.to_dense(), rhoVec.to_dense()); j += 1
+                ret[i, j] = _np.vdot(EVec.to_dense(on_space='HilbertSchmidt'),
+                                     rhoVec.to_dense(on_space='HilbertSchmidt')); j += 1
                 # to_dense() gives a 1D array, so no need to transpose EVec
     return ret
 
@@ -223,7 +224,7 @@ class GateEigenvalues(_modf.ModelFunction):
         -------
         numpy.ndarray
         """
-        evals, evecs = _np.linalg.eig(model.operations[self.oplabel].to_dense())
+        evals, evecs = _np.linalg.eig(model.operations[self.oplabel].to_dense(on_space='HilbertSchmidt'))
 
         ev_list = list(enumerate(evals))
         ev_list.sort(key=lambda tup: abs(tup[1]), reverse=True)
@@ -1007,7 +1008,7 @@ def angles_btwn_rotn_axes(model):
     angles_btwn_rotn_axes = _np.zeros((len(opLabels), len(opLabels)), 'd')
 
     for i, gl in enumerate(opLabels):
-        decomp = _tools.decompose_gate_matrix(model.operations[gl].to_dense())
+        decomp = _tools.decompose_gate_matrix(model.operations[gl].to_dense(on_space='HilbertSchmidt'))
         rotnAngle = decomp.get('pi rotations', 'X')
         axisOfRotn = decomp.get('axis of rotation', None)
 
@@ -1197,7 +1198,7 @@ if _CVXPY_AVAILABLE:
 
         def __init__(self, model_a, model_b, oplabel):
             self.oplabel = oplabel
-            self.B = model_b.operations[oplabel].to_dense()
+            self.B = model_b.operations[oplabel].to_dense(on_space='HilbertSchmidt')
             self.d = int(round(_np.sqrt(model_a.dim)))
             _modf.ModelFunction.__init__(self, model_a, [("gate", oplabel)])
 
@@ -1215,7 +1216,7 @@ if _CVXPY_AVAILABLE:
             float
             """
             gl = self.oplabel
-            dm, W = _tools.diamonddist(model.operations[gl].to_dense(),
+            dm, W = _tools.diamonddist(model.operations[gl].to_dense(on_space='HilbertSchmidt'),
                                        self.B, model.basis, return_x=True)
             self.W = W
             return 0.5 * dm
@@ -1235,7 +1236,7 @@ if _CVXPY_AVAILABLE:
             """
             gl = self.oplabel; mxBasis = nearby_model.basis
             JAstd = self.d * _tools.fast_jamiolkowski_iso_std(
-                nearby_model.operations[gl].to_dense(), mxBasis)
+                nearby_model.operations[gl].to_dense(on_space='HilbertSchmidt'), mxBasis)
             JBstd = self.d * _tools.fast_jamiolkowski_iso_std(self.B, mxBasis)
             Jt = (JBstd - JAstd).T
             return 0.5 * _np.trace(_np.dot(Jt.real, self.W.real) + _np.dot(Jt.imag, self.W.imag))
@@ -2058,8 +2059,8 @@ def general_decomposition(model_a, model_b):
     mxBasis = model_b.basis  # B is usually the target which has a well-defined basis
 
     for gl in opLabels:
-        gate = model_a.operations[gl].to_dense()
-        targetOp = model_b.operations[gl].to_dense()
+        gate = model_a.operations[gl].to_dense(on_space='HilbertSchmidt')
+        targetOp = model_b.operations[gl].to_dense(on_space='HilbertSchmidt')
         gl = str(gl)  # Label -> str for decomp-dict keys
 
         target_evals = _np.linalg.eigvals(targetOp)
@@ -2500,8 +2501,8 @@ def instrument_half_diamond_norm(a, b, mx_basis):
         aa, bb = i * a.dim, (i + 1) * a.dim
         for j in range(nComps):
             cc, dd = j * a.dim, (j + 1) * a.dim
-            composite_op[aa:bb, cc:dd] = a[clbl].to_dense()
-            composite_top[aa:bb, cc:dd] = b[clbl].to_dense()
+            composite_op[aa:bb, cc:dd] = a[clbl].to_dense(on_space='HilbertSchmidt')
+            composite_top[aa:bb, cc:dd] = b[clbl].to_dense(on_space='HilbertSchmidt')
     return half_diamond_norm(composite_op, composite_top, sumbasis)
 
     #TODO: REMOVE

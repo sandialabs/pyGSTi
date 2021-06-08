@@ -75,7 +75,7 @@ class EmbeddedPureState(_State):
         #Create representation
         _State.__init__(self, rep, evotype)
 
-    def to_dense(self, scratch=None):
+    def to_dense(self, on_space='minimal', scratch=None):
         """
         Return this SPAM vector as a (dense) numpy array.
 
@@ -83,6 +83,12 @@ class EmbeddedPureState(_State):
 
         Parameters
         ----------
+        on_space : {'minimal', 'Hilbert', 'HilbertSchmidt'}
+            The space that the returned dense operation acts upon.  For unitary matrices and bra/ket vectors,
+            use `'Hilbert'`.  For superoperator matrices and super-bra/super-ket vectors use `'HilbertSchmidt'`.
+            `'minimal'` means that `'Hilbert'` is used if possible given this operator's evolution type, and
+            otherwise `'HilbertSchmidt'` is used.
+
         scratch : numpy.ndarray, optional
             scratch space available for use.
 
@@ -90,7 +96,8 @@ class EmbeddedPureState(_State):
         -------
         numpy.ndarray
         """
-        dmVec_std = _ot.state_to_dmvec(self.pure_state.to_dense())
+        assert(on_space in ('minimal', 'HilbertSchmidt'))
+        dmVec_std = _ot.state_to_dmvec(self.pure_state.to_dense(on_space='Hilbert'))
         return _bt.change_basis(dmVec_std, 'std', self.basis)
 
     def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):

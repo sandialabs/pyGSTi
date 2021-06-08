@@ -66,18 +66,26 @@ class StaticStandardOp(_LinearOperator):
 #        else:
 #            raise NotImplementedError('No base available for evotype "%s"' % self._evotype)
 
-    def to_dense(self):
+    def to_dense(self, on_space='minimal'):
         """
         Return the dense array used to represent this operation within its evolution type.
 
         Note: for efficiency, this doesn't copy the underlying data, so
         the caller should copy this data before modifying it.
 
+        Parameters
+        ----------
+        on_space : {'minimal', 'Hilbert', 'HilbertSchmidt'}
+            The space that the returned dense operation acts upon.  For unitary matrices and bra/ket vectors,
+            use `'Hilbert'`.  For superoperator matrices and super-bra/super-ket vectors use `'HilbertSchmidt'`.
+            `'minimal'` means that `'Hilbert'` is used if possible given this operator's evolution type, and
+            otherwise `'HilbertSchmidt'` is used.
+
         Returns
         -------
         numpy.ndarray
         """
-        return self._rep.to_dense()  # standard rep needs to implement this
+        return self._rep.to_dense(on_space)  # standard rep needs to implement this
 
     def __str__(self):
         s = "%s with name %s and evotype %s\n" % (self.__class__.__name__, self.name, self._evotype)

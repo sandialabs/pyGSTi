@@ -147,9 +147,17 @@ class LinearOperator(_modelmember.ModelMember):
     #    self.set_time(t)
     #    return self._rep
 
-    def to_dense(self):
+    def to_dense(self, on_space='minimal'):
         """
         Return this operation as a dense matrix.
+
+        Parameters
+        ----------
+        on_space : {'minimal', 'Hilbert', 'HilbertSchmidt'}
+            The space that the returned dense operation acts upon.  For unitary matrices and bra/ket vectors,
+            use `'Hilbert'`.  For superoperator matrices and super-bra/super-ket vectors use `'HilbertSchmidt'`.
+            `'minimal'` means that `'Hilbert'` is used if possible given this operator's evolution type, and
+            otherwise `'HilbertSchmidt'` is used.
 
         Returns
         -------
@@ -178,13 +186,10 @@ class LinearOperator(_modelmember.ModelMember):
         #Perform actual 'acton' operation
         output_rep = self._rep.acton(state._rep)
 
-        #Build a SPAMVec around output_rep
-        #TODO: make this into a single Static state vec class.
-        if self._evotype in ("densitymx", "statevec"):
-            return _sv.StaticSPAMVec(output_rep.to_dense(), self._evotype, 'prep')
-        else:  # self._evotype == "stabilizer"
-            return _sv.StabilizerSPAMVec(sframe=_stabilizer.StabilizerFrame(
-                output_rep.smatrix, output_rep.pvectors, output_rep.amps))
+        #Build a State around output_rep
+        return _sv.StaticState(output_rep.to_dense(on_space='minimal'), self._evotype, self.state_space)
+        #return _sv.StabilizerSPAMVec(sframe=_stabilizer.StabilizerFrame(
+        #        output_rep.smatrix, output_rep.pvectors, output_rep.amps))
 
     #TODO REMOVE - no need to do anything beyond base class version
     #@property
@@ -217,7 +222,7 @@ class LinearOperator(_modelmember.ModelMember):
     #    self._cachedrep = None  # deepcopy in ModelMember.copy can't copy CReps!
     #    return _modelmember.ModelMember.copy(self, parent, memo)
 
-    def to_sparse(self):
+    def to_sparse(self, on_space='minimal'):
         """
         Return this operation as a sparse matrix.
 
@@ -454,11 +459,11 @@ class LinearOperator(_modelmember.ModelMember):
         float
         """
         if transform is None and inv_transform is None:
-            return _ot.frobeniusdist_squared(self.to_dense(), other_op.to_dense())
+            return _ot.frobeniusdist_squared(self.to_dense(on_space='minimal'), other_op.to_dense(on_space='minimal'))
         else:
             return _ot.frobeniusdist_squared(_np.dot(
-                inv_transform, _np.dot(self.to_dense(), transform)),
-                other_op.to_dense())
+                inv_transform, _np.dot(self.to_dense(on_space='minimal'), transform)),
+                other_op.to_dense(on_space='minimal'))
 
     def frobeniusdist(self, other_op, transform=None, inv_transform=None):
         """
@@ -510,11 +515,11 @@ class LinearOperator(_modelmember.ModelMember):
             A 1D-array of size equal to that of the flattened operation matrix.
         """
         if transform is None and inv_transform is None:
-            return _ot.residuals(self.to_dense(), other_op.to_dense())
+            return _ot.residuals(self.to_dense(on_space='minimal'), other_op.to_dense(on_space='minimal'))
         else:
             return _ot.residuals(_np.dot(
-                inv_transform, _np.dot(self.to_dense(), transform)),
-                other_op.to_dense())
+                inv_transform, _np.dot(self.to_dense(on_space='minimal'), transform)),
+                other_op.to_dense(on_space='minimal'))
 
     def jtracedist(self, other_op, transform=None, inv_transform=None):
         """
@@ -539,11 +544,11 @@ class LinearOperator(_modelmember.ModelMember):
         float
         """
         if transform is None and inv_transform is None:
-            return _ot.jtracedist(self.to_dense(), other_op.to_dense())
+            return _ot.jtracedist(self.to_dense(on_space='minimal'), other_op.to_dense(on_space='minimal'))
         else:
             return _ot.jtracedist(_np.dot(
-                inv_transform, _np.dot(self.to_dense(), transform)),
-                other_op.to_dense())
+                inv_transform, _np.dot(self.to_dense(on_space='minimal'), transform)),
+                other_op.to_dense(on_space='minimal'))
 
     def diamonddist(self, other_op, transform=None, inv_transform=None):
         """
@@ -568,11 +573,11 @@ class LinearOperator(_modelmember.ModelMember):
         float
         """
         if transform is None and inv_transform is None:
-            return _ot.diamonddist(self.to_dense(), other_op.to_dense())
+            return _ot.diamonddist(self.to_dense(on_space='minimal'), other_op.to_dense(on_space='minimal'))
         else:
             return _ot.diamonddist(_np.dot(
-                inv_transform, _np.dot(self.to_dense(), transform)),
-                other_op.to_dense())
+                inv_transform, _np.dot(self.to_dense(on_space='minimal'), transform)),
+                                   other_op.to_dense(on_space='minimal'))
 
     def transform_inplace(self, s):
         """
@@ -598,7 +603,7 @@ class LinearOperator(_modelmember.ModelMember):
         """
         Smx = s.transform_matrix
         Si = s.transform_matrix_inverse
-        self.set_dense(_np.dot(Si, _np.dot(self.to_dense(), Smx)))
+        self.set_dense(_np.dot(Si, _np.dot(self.to_dense(on_space='minimal'), Smx)))
 
     def depolarize(self, amount):
         """
@@ -630,7 +635,7 @@ class LinearOperator(_modelmember.ModelMember):
         else:
             assert(len(amount) == self.dim - 1)
             D = _np.diag([1] + list(1.0 - _np.array(amount, 'd')))
-        self.set_dense(_np.dot(D, self.to_dense()))
+        self.set_dense(_np.dot(D, self.to_dense(on_space='minimal')))
 
     def rotate(self, amount, mx_basis="gm"):
         """
@@ -661,7 +666,7 @@ class LinearOperator(_modelmember.ModelMember):
         None
         """
         rotnMx = _ot.rotation_gate_mx(amount, mx_basis)
-        self.set_dense(_np.dot(rotnMx, self.to_dense()))
+        self.set_dense(_np.dot(rotnMx, self.to_dense(on_space='minimal')))
 
     def deriv_wrt_params(self, wrt_filter=None):
         """
@@ -849,7 +854,7 @@ def finite_difference_deriv_wrt_params(operation, wrt_filter, eps=1e-7):
         An M by N matrix where M is the number of operation elements and
         N is the number of operation parameters.
     """
-    dense_operation = operation.to_dense()
+    dense_operation = operation.to_dense(on_space='minimal')
     dim = dense_operation.shape[0]
     #operation.from_vector(operation.to_vector()) #ensure we call from_vector w/close=False first
     op2 = operation.copy()
@@ -861,7 +866,7 @@ def finite_difference_deriv_wrt_params(operation, wrt_filter, eps=1e-7):
         p_plus_dp = p.copy()
         p_plus_dp[i] += eps
         op2.from_vector(p_plus_dp)
-        fd_deriv[:, :, i] = (op2.to_dense() - dense_operation) / eps
+        fd_deriv[:, :, i] = (op2.to_dense(on_space='minimal') - dense_operation) / eps
 
     fd_deriv.shape = [dim**2, operation.num_params]
     if wrt_filter is None:
@@ -903,7 +908,7 @@ def finite_difference_hessian_wrt_params(operation, wrt_filter1, wrt_filter2, ep
         N1 and N2 are numbers of operation parameters.
     """
     #operation.from_vector(operation.to_vector()) #ensure we call from_vector w/close=False first
-    dense_operation = operation.to_dense()
+    dense_operation = operation.to_dense(on_space='minimal')
     fd_deriv0 = finite_difference_deriv_wrt_params(operation, wrt_filter1, eps=eps)
 
     dim = dense_operation.shape[0]

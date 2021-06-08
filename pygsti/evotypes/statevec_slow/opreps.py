@@ -18,6 +18,8 @@ from .. import basereps as _basereps
 from .statereps import StateRep as _StateRep
 from ...models.statespace import StateSpace as _StateSpace
 from ...tools import internalgates as _itgs
+from ...tools import basistools as _bt
+from ...tools import optools as _ot
 
 
 class OpRep(_basereps.OpRep):
@@ -38,12 +40,12 @@ class OpRep(_basereps.OpRep):
         def mv(v):
             if v.ndim == 2 and v.shape[1] == 1: v = v[:, 0]
             in_state = _StateRep(_np.ascontiguousarray(v, complex))
-            return self.acton(in_state).to_dense()
+            return self.acton(in_state).to_dense('Hilbert')
 
         def rmv(v):
             if v.ndim == 2 and v.shape[1] == 1: v = v[:, 0]
             in_state = _StateRep(_np.ascontiguousarray(v, complex))
-            return self.adjoint_acton(in_state).to_dense()
+            return self.adjoint_acton(in_state).to_dense('Hilbert')
         return LinearOperator((self.dim, self.dim), matvec=mv, rmatvec=rmv)  # transpose, adjoint, dot, matmat?
 
 
@@ -60,8 +62,13 @@ class OpRepDenseUnitary(OpRep):
     def base_has_changed(self):
         pass
 
-    def to_dense(self):
-        return self.base
+    def to_dense(self, on_space):
+        if on_space in ('minimal', 'Hilbert'):
+            return self.base
+        elif on_space == 'HilbertSchmidt':
+            return _bt.change_basis(_ot.unitary_to_process_mx(self.base), 'std', self.basis)
+        else:
+            raise ValueError("Invalid `on_space` argument: %s" % str(on_space))
 
     def acton(self, state):
         return _StateRep(_np.dot(self.base, state.base))

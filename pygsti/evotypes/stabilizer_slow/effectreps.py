@@ -15,6 +15,7 @@ import functools as _functools
 
 from .. import basereps as _basereps
 from ...models.statespace import StateSpace as _StateSpace
+from ...tools import matrixtools as _mt
 
 
 class EffectRep(_basereps.EffectRep):
@@ -37,25 +38,31 @@ class EffectRep(_basereps.EffectRep):
     def amplitude(self, state):
         return state.sframe.extract_amplitude(self.zvals)
 
-    def to_dense(self):
-        """
-        Return this SPAM vector as a (dense) numpy array.
+    def to_dense(self, on_space):
+        return _mt.zvals_to_dense(self.zvals, superket=bool(on_space not in ('minimal', 'Hilbert')))
 
-        The memory in `scratch` maybe used when it is not-None.
-
-        Parameters
-        ----------
-        scratch : numpy.ndarray, optional
-            scratch space available for use.
-
-        Returns
-        -------
-        numpy.ndarray
-        """
-        v = (_np.array([1, 0], 'd'), _np.array([0, 1], 'd'))  # (v0,v1) - eigenstates of sigma_z
-        statevec = _functools.reduce(_np.kron, [v[i] for i in self.zvals])
-        statevec.shape = (statevec.size, 1)
-        return statevec
+#OLD REMOVE:
+#    def to_dense(self, on_space):
+#        """
+#        Return this SPAM vector as a (dense) numpy array.
+#
+#        The memory in `scratch` maybe used when it is not-None.
+#
+#        Parameters
+#        ----------
+#        scratch : numpy.ndarray, optional
+#            scratch space available for use.
+#
+#        Returns
+#        -------
+#        numpy.ndarray
+#        """
+#        if on_space not in ('minimal', 'Hilbert'):
+#            raise ValueError('stabilizer evotype cannot (yet) generate dense Hilbert-Schmidt effect vectors')
+#        v = (_np.array([1, 0], 'd'), _np.array([0, 1], 'd'))  # (v0,v1) - eigenstates of sigma_z
+#        statevec = _functools.reduce(_np.kron, [v[i] for i in self.zvals])
+#        statevec.shape = (statevec.size, 1)
+#        return statevec
 
 
 #class EffectRepConjugatedState(EffectRep):
@@ -82,3 +89,7 @@ class EffectRepComputational(EffectRep):
         nQubits = len(self.zvals)
         s = "Stabilizer effect vector for %d qubits with outcome %s" % (nQubits, str(self.zvals))
         return s
+
+    def to_dense(self, on_space, outvec=None):
+        return _mt.zvals_to_dense(self.zvals, superket=bool(on_space not in ('minimal', 'Hilbert')))
+

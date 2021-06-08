@@ -139,7 +139,7 @@ class ComputationalBasisPOVMEffect(_POVMEffect):
         rep = evotype.create_computational_effect_rep(zvals, basis, state_space)
         _POVMEffect.__init__(self, rep, evotype)
 
-    def to_dense(self, scratch=None):
+    def to_dense(self, on_space='minimal', scratch=None):
         """
         Return this SPAM vector as a (dense) numpy array.
 
@@ -147,6 +147,12 @@ class ComputationalBasisPOVMEffect(_POVMEffect):
 
         Parameters
         ----------
+        on_space : {'minimal', 'Hilbert', 'HilbertSchmidt'}
+            The space that the returned dense operation acts upon.  For unitary matrices and bra/ket vectors,
+            use `'Hilbert'`.  For superoperator matrices and super-bra/super-ket vectors use `'HilbertSchmidt'`.
+            `'minimal'` means that `'Hilbert'` is used if possible given this operator's evolution type, and
+            otherwise `'HilbertSchmidt'` is used.
+
         scratch : numpy.ndarray, optional
             scratch space available for use.
 
@@ -154,7 +160,7 @@ class ComputationalBasisPOVMEffect(_POVMEffect):
         -------
         numpy.ndarray
         """
-        return self._rep.to_dense()
+        return self._rep.to_dense(on_space)
 
     def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
         """

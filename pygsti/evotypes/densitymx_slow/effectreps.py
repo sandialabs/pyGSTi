@@ -38,8 +38,8 @@ class EffectRepConjugatedState(EffectRep):
         # can assume state is a StateRep and self.state_rep is
         return _np.dot(self.state_rep.data, state.data)  # not vdot b/c *real* data
 
-    def to_dense(self):
-        return self.state_rep.to_dense()
+    def to_dense(self, on_space):
+        return self.state_rep.to_dense(on_space)
 
 
 class EffectRepComputational(EffectRep):
@@ -70,10 +70,12 @@ class EffectRepComputational(EffectRep):
 
     def probability(self, state):
         scratch = _np.empty(self.dim, 'd')
-        Edense = self.to_dense(scratch)
+        Edense = self.to_dense('HilbertSchmidt', scratch)
         return _np.dot(Edense, state.data)  # not vdot b/c data is *real*
 
-    def to_dense(self, outvec=None):
+    def to_dense(self, on_space, outvec=None):
+        if on_space not in ('minimal', 'HilbertSchmidt'):
+            raise ValueError("'densitymx' evotype cannot produce Hilbert-space ops!")
         return _mt.zvals_int64_to_dense(self.zvals_int, self.nfactors, outvec, False, self.abs_elval)
 
 
@@ -109,7 +111,10 @@ class EffectRepTensorProduct(EffectRep):
     #    return (EffectRepTensorProduct,
     #            (self.kron_array, self.factor_dims, self.nfactors, self.max_factor_dim, self.dim))
 
-    def to_dense(self, outvec=None):
+    def to_dense(self, on_space, outvec=None):
+
+        if on_space not in ('minimal', 'HilbertSchmidt'):
+            raise ValueError("'densitymx' evotype cannot produce Hilbert-space ops!")
 
         if outvec is None:
             outvec = _np.zeros(self.state_space.dim, 'd')
@@ -149,13 +154,13 @@ class EffectRepTensorProduct(EffectRep):
 
     def probability(self, state):  # allow scratch to be passed in?
         scratch = _np.empty(self.dim, 'd')
-        Edense = self.to_dense(scratch)
+        Edense = self.to_dense('HilbertSchmidt', scratch)
         return _np.dot(Edense, state.data)  # not vdot b/c data is *real*
 
     def _fill_fast_kron(self):
         """ Fills in self._fast_kron_array based on current self.factors """
         for i, (factor_dim, Elbl) in enumerate(zip(self.factor_dims, self.effect_labels)):
-            self.kron_array[i][0:factor_dim] = self.povm_factors[i][Elbl].to_dense()
+            self.kron_array[i][0:factor_dim] = self.povm_factors[i][Elbl].to_dense('HilbertSchmidt')
 
     def factor_effects_have_changed(self):
         self._fill_fast_kron()  # updates effect reps

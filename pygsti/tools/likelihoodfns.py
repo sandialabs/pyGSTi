@@ -1038,8 +1038,8 @@ def cptp_penalty(model, include_spam_penalty=True):
     ret = _jam.sum_of_negative_choi_eigenvalues(model)
     if include_spam_penalty:
         b = model.basis
-        ret += sum([prep_penalty(r.to_dense(), b) for r in model.preps.values()])
-        ret += sum([effect_penalty(e.to_dense(), b) for povm in model.povms.values()
+        ret += sum([prep_penalty(r.to_dense(on_space='minimal'), b) for r in model.preps.values()])
+        ret += sum([effect_penalty(e.to_dense(on_space='minimal'), b) for povm in model.povms.values()
                     for e in povm.values()])
     return ret
 

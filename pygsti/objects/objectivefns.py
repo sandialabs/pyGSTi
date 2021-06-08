@@ -5961,11 +5961,11 @@ def _spam_penalty(mdl, prefactor, op_basis):
     return prefactor * (_np.sqrt(
         _np.array([
             _tools.tracenorm(
-                _tools.vec_to_stdmx(prepvec.to_dense(), op_basis)
+                _tools.vec_to_stdmx(prepvec.to_dense(on_space='minimal'), op_basis)
             ) for prepvec in mdl.preps.values()
         ] + [
             _tools.tracenorm(
-                _tools.vec_to_stdmx(mdl.povms[plbl][elbl].to_dense(), op_basis)
+                _tools.vec_to_stdmx(mdl.povms[plbl][elbl].to_dense(on_space='minimal'), op_basis)
             ) for plbl in mdl.povms for elbl in mdl.povms[plbl]], 'd')
     ))
 

@@ -69,7 +69,7 @@ class EmbeddedOp(_LinearOperator):
     def _update_denserep(self):
         """Performs additional update for the case when we use a dense underlying representation."""
         self._rep.base.flags.writeable = True
-        self._rep.base[:, :] = self.to_dense()
+        self._rep.base[:, :] = self.to_dense(on_space='minimal')
         self._rep.base.flags.writeable = False
 
     def __getstate__(self):
@@ -222,7 +222,7 @@ class EmbeddedOp(_LinearOperator):
                     self._iter_elements_cache.append(item)
                     yield item
 
-    def to_sparse(self):
+    def to_sparse(self, on_space='minimal'):
         """
         Return the operation as a sparse matrix
 
@@ -230,7 +230,7 @@ class EmbeddedOp(_LinearOperator):
         -------
         scipy.sparse.csr_matrix
         """
-        embedded_sparse = self.embedded_op.to_sparse().tolil()
+        embedded_sparse = self.embedded_op.to_sparse(on_space).tolil()
         finalOp = _sps.identity(self.dim, embedded_sparse.dtype, format='lil')
 
         #fill in embedded_op contributions (always overwrites the diagonal
@@ -239,9 +239,17 @@ class EmbeddedOp(_LinearOperator):
             finalOp[i, j] = embedded_sparse[gi, gj]
         return finalOp.tocsr()
 
-    def to_dense(self):
+    def to_dense(self, on_space='minimal'):
         """
         Return the operation as a dense matrix
+
+        Parameters
+        ----------
+        on_space : {'minimal', 'Hilbert', 'HilbertSchmidt'}
+            The space that the returned dense operation acts upon.  For unitary matrices and bra/ket vectors,
+            use `'Hilbert'`.  For superoperator matrices and super-bra/super-ket vectors use `'HilbertSchmidt'`.
+            `'minimal'` means that `'Hilbert'` is used if possible given this operator's evolution type, and
+            otherwise `'HilbertSchmidt'` is used.
 
         Returns
         -------
@@ -259,7 +267,7 @@ class EmbeddedOp(_LinearOperator):
         #                                            self.embedded_op.svector,
         #                                            self.qubit_indices,len(qubitLabels))
 
-        embedded_dense = self.embedded_op.to_dense()
+        embedded_dense = self.embedded_op.to_dense(on_space)
         # operates on entire state space (direct sum of tensor prod. blocks)
         finalOp = _np.identity(self.dim, embedded_dense.dtype)
 

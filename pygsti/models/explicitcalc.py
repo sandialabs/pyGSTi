@@ -449,11 +449,13 @@ class ExplicitOpModelCalc(object):
         from ..modelmembers.povms.complementeffect import ComplementPOVMEffect as _ComplementPOVMEffect
         # ** See comments at the beginning of nongauge_projector for explanation **
 
+        on_space = 'minimal'
         try:
-            self_operations = _collections.OrderedDict([(lbl, gate.to_dense())
+            self_operations = _collections.OrderedDict([(lbl, gate.to_dense(on_space=on_space))
                                                         for lbl, gate in self.operations.items()])
-            self_preps = _collections.OrderedDict([(lbl, vec.to_dense()[:, None]) for lbl, vec in self.preps.items()])
-            self_effects = _collections.OrderedDict([(lbl, vec.to_dense()[:, None])
+            self_preps = _collections.OrderedDict([(lbl, vec.to_dense(on_space=on_space)[:, None])
+                                                   for lbl, vec in self.preps.items()])
+            self_effects = _collections.OrderedDict([(lbl, vec.to_dense(on_space=on_space)[:, None])
                                                      for lbl, vec in self.effects.items()])
         except:
             raise NotImplementedError(("Cannot (yet) extract gauge/non-gauge "
@@ -483,7 +485,7 @@ class ExplicitOpModelCalc(object):
             self = newSelf  # HACK!!! replacing self for remainder of this fn with version without Ecs
 
             #recompute effects in case we deleted any ComplementSPAMVecs
-            self_effects = _collections.OrderedDict([(lbl, vec.to_dense()[:, None])
+            self_effects = _collections.OrderedDict([(lbl, vec.to_dense(on_space=on_space)[:, None])
                                                      for lbl, vec in self.effects.items()])
 
         #Use a Model object to hold & then vectorize the derivatives wrt each gauge transform basis element (each ij)

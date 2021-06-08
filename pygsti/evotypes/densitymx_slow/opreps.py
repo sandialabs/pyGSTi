@@ -43,12 +43,12 @@ class OpRep(_basereps.OpRep):
         def mv(v):
             if v.ndim == 2 and v.shape[1] == 1: v = v[:, 0]
             in_state = _StateRep(_np.ascontiguousarray(v, 'd'))
-            return self.acton(in_state).to_dense()
+            return self.acton(in_state).to_dense(on_space='HilbertSchmidt')
 
         def rmv(v):
             if v.ndim == 2 and v.shape[1] == 1: v = v[:, 0]
             in_state = _StateRep(_np.ascontiguousarray(v, 'd'))
-            return self.adjoint_acton(in_state).to_dense()
+            return self.adjoint_acton(in_state).to_dense(on_space='HilbertSchmidt')
         return LinearOperator((self.dim, self.dim), matvec=mv, rmatvec=rmv)  # transpose, adjoint, dot, matmat?
 
 
@@ -65,7 +65,9 @@ class OpRepDenseSuperop(OpRep):
     def base_has_changed(self):
         pass
 
-    def to_dense(self):
+    def to_dense(self, on_space):
+        if on_space not in ('minimal', 'HilbertSchmidt'):
+            raise ValueError("'densitymx' evotype cannot produce Hilbert-space ops!")
         return self.base
 
     def acton(self, state):
@@ -145,10 +147,6 @@ class OpRepStochastic(OpRepDenseSuperop):
         for rate, ss in zip(rates, self.stochastic_superops):
             errormap += rate * ss
         self.base[:, :] = errormap
-
-    def to_dense(self):  # TODO - put this in all reps?  - used in stochastic op...
-        # DEFAULT: raise NotImplementedError('No to_dense implemented for evotype "%s"' % self._evotype)
-        return self.base  # copy?
 
 
 #class OpRepClifford(OpRep):  # TODO?

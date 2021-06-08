@@ -850,23 +850,24 @@ class ExplicitOpModel(_mdl.OpModel):
         else:
             raise ValueError("Invalid `metric` argument: %s" % metric)
 
+        on_space = 'HilbertSchmidt'
         s = "Model Difference:\n"
         s += " Preps:\n"
         for lbl in self.preps:
             s += "  %s = %g\n" % \
-                (str(lbl), vecdist(self.preps[lbl].to_dense(), other_model.preps[lbl].to_dense()))
+                (str(lbl), vecdist(self.preps[lbl].to_dense(on_space), other_model.preps[lbl].to_dense(on_space)))
 
         s += " POVMs:\n"
         for povm_lbl, povm in self.povms.items():
             s += "  %s: " % str(povm_lbl)
             for lbl in povm:
                 s += "    %s = %g\n" % \
-                     (lbl, vecdist(povm[lbl].to_dense(), other_model.povms[povm_lbl][lbl].to_dense()))
+                     (lbl, vecdist(povm[lbl].to_dense(on_space), other_model.povms[povm_lbl][lbl].to_dense(on_space)))
 
         s += " Gates:\n"
         for lbl in self.operations:
             s += "  %s = %g\n" % \
-                (str(lbl), dist(self.operations[lbl].to_dense(), other_model.operations[lbl].to_dense()))
+                (str(lbl), dist(self.operations[lbl].to_dense(on_space), other_model.operations[lbl].to_dense(on_space)))
 
         if len(self.instruments) > 0:
             s += " Instruments:\n"
@@ -874,7 +875,7 @@ class ExplicitOpModel(_mdl.OpModel):
                 s += "  %s: " % str(inst_lbl)
                 for lbl in inst:
                     s += "    %s = %g\n" % (str(lbl), dist(
-                        inst[lbl].to_dense(), other_model.instruments[inst_lbl][lbl].to_dense()))
+                        inst[lbl].to_dense(on_space), other_model.instruments[inst_lbl][lbl].to_dense(on_space)))
 
         #Note: no way to different factories easily
 

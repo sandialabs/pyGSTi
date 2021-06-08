@@ -442,7 +442,7 @@ class GatesTable(WorkspaceTable):
                     row_data.append(op)
                     row_formatters.append('Brackets')
                 elif display_as == "boxes":
-                    fig = _wp.GateMatrixPlot(self.ws, op.to_dense(),
+                    fig = _wp.GateMatrixPlot(self.ws, op.to_dense(on_space='HilbertSchmidt'),
                                              colorbar=False,
                                              mx_basis=basis)
 
@@ -749,8 +749,8 @@ class GaugeRobustModelTable(WorkspaceTable):
         op_decomps = {}
         for gl in opLabels:
             try:
-                op_decomps[gl] = get_gig_decomp(model.operations[gl].to_dense(),
-                                                target_model.operations[gl].to_dense())
+                op_decomps[gl] = get_gig_decomp(model.operations[gl].to_dense(on_space='HilbertSchmidt'),
+                                                target_model.operations[gl].to_dense(on_space='HilbertSchmidt'))
                 M = max(M, max(_np.abs((op_decomps[gl][1] - I).flat)))  # update max
             except Exception as e:
                 _warnings.warn("Failed gauge-robust decomposition of %s op:\n%s" % (gl, str(e)))
@@ -930,8 +930,8 @@ class GaugeRobustMetricTable(WorkspaceTable):
         mdl_in_best_gauge = []
         target_mdl_in_best_gauge = []
         for lbl in opLabels:
-            gate_mx = orig_model.operations[lbl].to_dense()
-            target_gate_mx = target_model.operations[lbl].to_dense()
+            gate_mx = orig_model.operations[lbl].to_dense(on_space='HilbertSchmidt')
+            target_gate_mx = target_model.operations[lbl].to_dense(on_space='HilbertSchmidt')
             Ugauge = _tools.compute_best_case_gauge_transform(gate_mx, target_gate_mx)
             Ugg = _objs.FullGaugeGroupElement(_np.linalg.inv(Ugauge))  # transforms gates as Ugauge * gate * Ugauge_inv
 
@@ -2466,7 +2466,8 @@ class GateEigenvalueTable(WorkspaceTable):
                 #TODO: move this to a reportable qty to get error bars?
 
                 if isinstance(gl, _objs.Label) or isinstance(gl, str):
-                    target_evals = _np.linalg.eigvals(target_model.operations[gl].to_dense())  # no error bars
+                    # no error bars
+                    target_evals = _np.linalg.eigvals(target_model.operations[gl].to_dense(on_space='HilbertSchmidt'))
                 else:
                     target_evals = _np.linalg.eigvals(target_model.sim.product(gl))  # no error bars
 
@@ -2581,11 +2582,11 @@ class GateEigenvalueTable(WorkspaceTable):
                 row_formatters = [None]
 
                 #FUTURE: use reportables to get instrument eigenvalues
-                evals = _objs.reportableqty.ReportableQty(_np.linalg.eigvals(comp.to_dense()))
+                evals = _objs.reportableqty.ReportableQty(_np.linalg.eigvals(comp.to_dense(on_space='HilbertSchmidt')))
                 evals = evals.reshape(evals.size, 1)
 
                 if target_model is not None:
-                    target_evals = _np.linalg.eigvals(tcomp.to_dense())  # no error bars
+                    target_evals = _np.linalg.eigvals(tcomp.to_dense(on_space='HilbertSchmidt'))  # no error bars
                     #Note: no support for relative eigenvalues of instruments (yet)
 
                     # permute target eigenvalues according to min-weight matching

@@ -55,8 +55,8 @@ cdef class EffectRepConjugatedState(EffectRep):
     def __reduce__(self):
         return (EffectRepConjugatedState, (self.state_rep,))
 
-    def to_dense(self):
-        return self.state_rep.to_dense()
+    def to_dense(self, on_space):
+        return self.state_rep.to_dense(on_space)
 
 
 cdef class EffectRepComputational(EffectRep):
@@ -80,10 +80,12 @@ cdef class EffectRepComputational(EffectRep):
     def __reduce__(self):
         return (EffectRepComputational, (self.zvals, self.basis, self.state_space))
 
-    def to_dense(self, outvec, trust_outvec_sparsity=False):
+    def to_dense(self, on_space, outvec, trust_outvec_sparsity=False):
         # when trust_outvec_sparsity is True, assume we only need to fill in the
         # non-zero elements of outvec (i.e. that outvec is already zero wherever
         # this vector is zero).
+        if on_space not in ('minimal', 'Hilbert'):
+            raise ValueError('statevec evotype cannot (yet) generate dense Hilbert-Schmidt effect vectors')
         if not trust_outvec_sparsity:
             outvec[:] = 0  # reset everything to zero
         outvec[self.nonzero_index] = 1.0
@@ -123,12 +125,14 @@ cdef class EffectRepTensorProduct(EffectRep):
     def _fill_fast_kron(self):
         """ Fills in self._fast_kron_array based on current self.factors """
         for i, (factor_dim, Elbl) in enumerate(zip(self.factor_dims, self.effect_labels)):
-                self.kron_array[i][0:factor_dim] = self.povm_factors[i][Elbl].to_dense()
+                self.kron_array[i][0:factor_dim] = self.povm_factors[i][Elbl].to_dense('Hilbert')
 
     def factor_effects_have_changed(self):
         self._fill_fast_kron()  # updates effect reps
 
-    def to_dense(self, scratch=None):  # taken from slow version - CONSOLIDATE?
+    def to_dense(self, on_space, scratch=None):  # taken from slow version - CONSOLIDATE?
+        if on_space not in ('minimal', 'Hilbert'):
+            raise ValueError('statevec evotype cannot (yet) generate dense Hilbert-Schmidt effect vectors')
         if scratch is None:
             scratch = _np.empty(self.udim, complex)
         outvec = scratch

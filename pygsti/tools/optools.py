@@ -3561,8 +3561,8 @@ def project_to_target_eigenspace(model, target_model, eps=1e-6):
         #Essentially, we want to replace the eigenvalues of `tgt_gate`
         # (and *only* the eigenvalues) with those of `gate`.  This is what
         # a "best gate gauge transform does" (by definition)
-        gate_mx = gate.to_dense()
-        Ugauge = compute_best_case_gauge_transform(gate_mx, tgt_gate.to_dense())
+        gate_mx = gate.to_dense(on_space='minimal')
+        Ugauge = compute_best_case_gauge_transform(gate_mx, tgt_gate.to_dense(on_space='minimal'))
         Ugauge_inv = _np.linalg.inv(Ugauge)
 
         epgate = _np.dot(Ugauge, _np.dot(gate_mx, Ugauge_inv))

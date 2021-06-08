@@ -157,7 +157,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         """
         if self.dense_rep:
             # compute matrix-exponential explicitly
-            self.exp_err_gen = _spl.expm(self.errorgen.to_dense())  # used in deriv_wrt_params
+            self.exp_err_gen = _spl.expm(self.errorgen.to_dense(on_space='HilbertSchmidt'))  # used in deriv_wrt_params
 
             #TODO REMOVE
             #if self.unitary_postfactor is not None:
@@ -199,7 +199,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         #TODO REMOVE self.direct_terms = {}
         #TODO REMOVE self.direct_term_poly_coeffs = {}
 
-    def to_dense(self):
+    def to_dense(self, on_space='minimal'):
         """
         Return this operation as a dense matrix.
 
@@ -213,7 +213,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
 
         else:
             # Construct a dense version from scratch (more time consuming)
-            exp_errgen = _spl.expm(self.errorgen.to_dense())
+            exp_errgen = _spl.expm(self.errorgen.to_dense(on_space))
 
             #TODO REMOVE
             #if self.unitary_postfactor is not None:
@@ -233,9 +233,17 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
             return dense
 
     #FUTURE: maybe remove this function altogether, as it really shouldn't be called
-    def to_sparse(self):
+    def to_sparse(self, on_space='minimal'):
         """
         Return the operation as a sparse matrix.
+
+        Parameters
+        ----------
+        on_space : {'minimal', 'Hilbert', 'HilbertSchmidt'}
+            The space that the returned dense operation acts upon.  For unitary matrices and bra/ket vectors,
+            use `'Hilbert'`.  For superoperator matrices and super-bra/super-ket vectors use `'HilbertSchmidt'`.
+            `'minimal'` means that `'Hilbert'` is used if possible given this operator's evolution type, and
+            otherwise `'HilbertSchmidt'` is used.
 
         Returns
         -------
@@ -245,9 +253,9 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
                         "  Usually this is *NOT* acutally sparse (the exponential of a"
                         " sparse matrix isn't generally sparse)!"))
         if self.dense_rep:
-            return _sps.csr_matrix(self.to_dense())
+            return _sps.csr_matrix(self.to_dense(on_space))
         else:
-            exp_err_gen = _spsl.expm(self.errorgen.to_sparse().tocsc()).tocsr()
+            exp_err_gen = _spsl.expm(self.errorgen.to_sparse(on_space).tocsc()).tocsr()
             #TODO REMOVE
             #if self.unitary_postfactor is not None:
             #    return exp_err_gen.dot(self.unitary_postfactor)
@@ -322,7 +330,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
             #Deriv wrt hamiltonian params
             derrgen = self.errorgen.deriv_wrt_params(None)  # apply filter below; cache *full* deriv
             derrgen.shape = (d2, d2, -1)  # separate 1st d2**2 dim to (d2,d2)
-            dexpL = _d_exp_x(self.errorgen.to_dense(), derrgen, self.exp_err_gen)
+            dexpL = _d_exp_x(self.errorgen.to_dense(on_space='minimal'), derrgen, self.exp_err_gen)
             derivMx = dexpL.reshape(d2**2, self.num_params)  # [iFlattenedOp,iParam]
 
             assert(_np.linalg.norm(_np.imag(derivMx)) < IMAG_TOL), \
@@ -397,7 +405,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
             dEdp.shape = (d2, d2, nP)  # separate 1st d2**2 dim to (d2,d2)
             d2Edp2.shape = (d2, d2, nP, nP)  # ditto
 
-            series, series2 = _d2_exp_series(self.errorgen.to_dense(), dEdp, d2Edp2)
+            series, series2 = _d2_exp_series(self.errorgen.to_dense(on_space='minimal'), dEdp, d2Edp2)
             term1 = series2
             term2 = _np.einsum("ija,jkq->ikaq", series, series)
             d2expL = _np.einsum("ikaq,kj->ijaq", term1 + term2,
@@ -836,7 +844,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
            isinstance(s, _gaugegroup.TPSpamGaugeGroupElement):
             U = s.transform_matrix
             Uinv = s.transform_matrix_inverse
-            mx = self.to_dense if self.dense_rep else self.to_sparse()
+            mx = self.to_dense(on_space='minimal') if self.dense_rep else self.to_sparse(on_space='minimal')
 
             #just act on postfactor and Lindbladian exponent:
             if typ == "prep":

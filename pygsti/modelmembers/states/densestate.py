@@ -121,7 +121,7 @@ class DenseStateInterface(object):
 
     def __str__(self):
         s = "%s with dimension %d\n" % (self.__class__.__name__, self.dim)
-        s += _mt.mx_to_string(self.to_dense(), width=4, prec=2)
+        s += _mt.mx_to_string(self.to_dense(on_space='minimal'), width=4, prec=2)
         return s
 
 
@@ -171,7 +171,7 @@ class DenseState(DenseStateInterface, _State):
             when the `_ptr` property is changed. """
         self._rep.base_has_changed()
 
-    def to_dense(self, scratch=None):
+    def to_dense(self, on_space='minimal', scratch=None):
         """
         Return the dense array used to represent this state within its evolution type.
 
@@ -179,6 +179,12 @@ class DenseState(DenseStateInterface, _State):
 
         Parameters
         ----------
+        on_space : {'minimal', 'Hilbert', 'HilbertSchmidt'}
+            The space that the returned dense operation acts upon.  For unitary matrices and bra/ket vectors,
+            use `'Hilbert'`.  For superoperator matrices and super-bra/super-ket vectors use `'HilbertSchmidt'`.
+            `'minimal'` means that `'Hilbert'` is used if possible given this operator's evolution type, and
+            otherwise `'HilbertSchmidt'` is used.
+
         scratch : numpy.ndarray, optional
             scratch space available for use.
 
@@ -187,7 +193,7 @@ class DenseState(DenseStateInterface, _State):
         numpy.ndarray
         """
         #don't use scratch since we already have memory allocated
-        return self._rep.to_dense()  # both types of possible state reps implement 'to_dense'
+        return self._rep.to_dense(on_space)  # both types of possible state reps implement 'to_dense'
 
 
 class DensePureState(DenseStateInterface, _State):
@@ -229,7 +235,7 @@ class DensePureState(DenseStateInterface, _State):
             self._rep.base[:] = _bt.change_basis(_ot.state_to_dmvec(self._purevec), 'std', self._basis)
         self._rep.base_has_changed()
 
-    def to_dense(self, scratch=None):
+    def to_dense(self, on_space='minimal', scratch=None):
         """
         Return the dense array used to represent this state within its evolution type.
 
@@ -237,6 +243,12 @@ class DensePureState(DenseStateInterface, _State):
 
         Parameters
         ----------
+        on_space : {'minimal', 'Hilbert', 'HilbertSchmidt'}
+            The space that the returned dense operation acts upon.  For unitary matrices and bra/ket vectors,
+            use `'Hilbert'`.  For superoperator matrices and super-bra/super-ket vectors use `'HilbertSchmidt'`.
+            `'minimal'` means that `'Hilbert'` is used if possible given this operator's evolution type, and
+            otherwise `'HilbertSchmidt'` is used.
+
         scratch : numpy.ndarray, optional
             scratch space available for use.
 
@@ -245,4 +257,4 @@ class DensePureState(DenseStateInterface, _State):
         numpy.ndarray
         """
         #don't use scratch since we already have memory allocated
-        return self._rep.to_dense()  # both types of possible state reps implement 'to_dense'
+        return self._rep.to_dense(on_space)  # both types of possible state reps implement 'to_dense'

@@ -442,7 +442,7 @@ class ComposedState(_State):  # , _ErrorMapContainer
         # TODO REMOVE self.direct_term_poly_coeffs = {}
         _modelmember.ModelMember.set_gpindices(self, gpindices, parent, memo)
 
-    def to_dense(self, scratch=None):
+    def to_dense(self, on_space='minimal', scratch=None):
         """
         Return this SPAM vector as a (dense) numpy array.
 
@@ -450,6 +450,12 @@ class ComposedState(_State):  # , _ErrorMapContainer
 
         Parameters
         ----------
+        on_space : {'minimal', 'Hilbert', 'HilbertSchmidt'}
+            The space that the returned dense operation acts upon.  For unitary matrices and bra/ket vectors,
+            use `'Hilbert'`.  For superoperator matrices and super-bra/super-ket vectors use `'HilbertSchmidt'`.
+            `'minimal'` means that `'Hilbert'` is used if possible given this operator's evolution type, and
+            otherwise `'HilbertSchmidt'` is used.
+
         scratch : numpy.ndarray, optional
             scratch space available for use.
 
@@ -458,7 +464,7 @@ class ComposedState(_State):  # , _ErrorMapContainer
         numpy.ndarray
         """
         #error map acts on dmVec
-        return _np.dot(self.error_map.to_dense(), self.state_vec.to_dense())
+        return _np.dot(self.error_map.to_dense(on_space), self.state_vec.to_dense(on_space))
 
     def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
         """
@@ -614,7 +620,7 @@ class ComposedState(_State):  # , _ErrorMapContainer
         numpy array
             Array of derivatives, shape == (dimension, num_params)
         """
-        dmVec = self.state_vec.to_dense()
+        dmVec = self.state_vec.to_dense(on_space='minimal')
 
         derrgen = self.error_map.deriv_wrt_params(wrt_filter)  # shape (dim*dim, n_params)
         derrgen.shape = (self.dim, self.dim, derrgen.shape[1])  # => (dim,dim,n_params)
@@ -646,7 +652,7 @@ class ComposedState(_State):  # , _ErrorMapContainer
         numpy array
             Hessian with shape (dimension, num_params1, num_params2)
         """
-        dmVec = self.state_vec.to_dense()
+        dmVec = self.state_vec.to_dense(on_space='minimal')
 
         herrgen = self.error_map.hessian_wrt_params(wrt_filter1, wrt_filter2)  # shape (dim*dim, nParams1, nParams2)
         herrgen.shape = (self.dim, self.dim, herrgen.shape[1], herrgen.shape[2])  # => (dim,dim,nParams1, nParams2)

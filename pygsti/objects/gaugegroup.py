@@ -411,7 +411,7 @@ class OpGaugeGroupElement(GaugeGroupElement):
         -------
         numpy.ndarray
         """
-        return self._operation.to_dense()
+        return self._operation.to_dense(on_space='minimal')
 
     @property
     def transform_matrix_inverse(self):
@@ -423,7 +423,7 @@ class OpGaugeGroupElement(GaugeGroupElement):
         numpy.ndarray
         """
         if self._inv_matrix is None:
-            self._inv_matrix = _np.linalg.inv(self._operation.to_dense())
+            self._inv_matrix = _np.linalg.inv(self._operation.to_dense(on_space='minimal'))
         return self._inv_matrix
 
     def deriv_wrt_params(self, wrt_filter=None):

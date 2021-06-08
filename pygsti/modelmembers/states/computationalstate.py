@@ -140,7 +140,7 @@ class ComputationalBasisState(_State):
         rep = evotype.create_computational_state_rep(zvals, basis, state_space)
         _State.__init__(self, rep, evotype)
 
-    def to_dense(self, scratch=None):
+    def to_dense(self, on_space='minimal', scratch=None):
         """
         Return this SPAM vector as a (dense) numpy array.
 
@@ -148,6 +148,12 @@ class ComputationalBasisState(_State):
 
         Parameters
         ----------
+        on_space : {'minimal', 'Hilbert', 'HilbertSchmidt'}
+            The space that the returned dense operation acts upon.  For unitary matrices and bra/ket vectors,
+            use `'Hilbert'`.  For superoperator matrices and super-bra/super-ket vectors use `'HilbertSchmidt'`.
+            `'minimal'` means that `'Hilbert'` is used if possible given this operator's evolution type, and
+            otherwise `'HilbertSchmidt'` is used.
+
         scratch : numpy.ndarray, optional
             scratch space available for use.
 
@@ -155,6 +161,7 @@ class ComputationalBasisState(_State):
         -------
         numpy.ndarray
         """
+        #TODO HERE - maybe create a static state from a purevec and use its to_dense to get these?
         if self._evotype == "densitymx":
             factor_dim = 4
             v0 = 1.0 / _np.sqrt(2) * _np.array((1, 0, 0, 1), 'd')  # '0' qubit state as Pauli dmvec
@@ -378,7 +385,7 @@ class StabilizerState(_State):
         rep = self.sframe.to_rep()  # dim == 2**nqubits
         _State.__init__(self, rep, "stabilizer")
 
-    def to_dense(self, scratch=None):
+    def to_dense(self, on_space='minimal', scratch=None):
         """
         Return this SPAM vector as a (dense) numpy array.
 
@@ -393,6 +400,7 @@ class StabilizerState(_State):
         -------
         numpy.ndarray
         """
+        assert(on_space in ('minimal', 'Hilbert'))
         statevec = self.sframe.to_statevec()
         statevec.shape = (statevec.size, 1)
         return statevec

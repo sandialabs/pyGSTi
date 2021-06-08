@@ -54,8 +54,8 @@ cdef class EffectRepConjugatedState(EffectRep):
     def __reduce__(self):
         return (EffectRepConjugatedState, (self.state_rep,))
 
-    def to_dense(self):
-        return self.state_rep.to_dense()
+    def to_dense(self, on_space):
+        return self.state_rep.to_dense(on_space)
 
 
 cdef class EffectRepComputational(EffectRep):
@@ -81,7 +81,9 @@ cdef class EffectRepComputational(EffectRep):
     def __reduce__(self):
         return (EffectRepComputational, (self.zvals, self.state_space))
 
-    def to_dense(self, outvec=None):
+    def to_dense(self, on_space, outvec=None):
+        if on_space not in ('minimal', 'HilbertSchmidt'):
+            raise ValueError("'densitymx' evotype cannot produce Hilbert-space ops!")
         return _mt.zvals_int64_to_dense((<EffectCRep_Computational*>self.c_effect)._zvals_int,
                                         self.zvals.shape[0], outvec, False,
                                         (<EffectCRep_Computational*>self.c_effect)._abs_elval)
@@ -120,12 +122,12 @@ cdef class EffectRepTensorProduct(EffectRep):
     def _fill_fast_kron(self):
         """ Fills in self._fast_kron_array based on current self.factors """
         for i, (factor_dim, Elbl) in enumerate(zip(self.factor_dims, self.effect_labels)):
-            self.kron_array[i][0:factor_dim] = self.povm_factors[i][Elbl].to_dense()
+            self.kron_array[i][0:factor_dim] = self.povm_factors[i][Elbl].to_dense('HilbertSchmidt')
 
     def factor_effects_have_changed(self):
         self._fill_fast_kron()  # updates effect reps
 
-    def to_dense(self, outvec=None):  # taken from slow version - CONSOLIDATE?
+    def to_dense(self, on_space, outvec=None):  # taken from slow version - CONSOLIDATE?
 
         if outvec is None:
             outvec = _np.zeros(self.state_space.dim, 'd')

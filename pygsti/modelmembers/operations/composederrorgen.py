@@ -485,7 +485,7 @@ class ComposedErrorgen(_LinearOperator):
         copyOfMe = cls([f.copy(parent, memo) for f in self.factors], self._evotype, self.state_space)
         return self._copy_gpindices(copyOfMe, parent, memo)
 
-    def to_sparse(self):
+    def to_sparse(self, on_space='minimal'):
         """
         Return this error generator as a sparse matrix
 
@@ -495,14 +495,22 @@ class ComposedErrorgen(_LinearOperator):
         """
         if len(self.factors) == 0:
             return _sps.csr_matrix((self.dim, self.dim), dtype='d')
-        mx = self.factors[0].to_sparse()
+        mx = self.factors[0].to_sparse(on_space)
         for eg in self.factors[1:]:
-            mx += eg.to_sparse()
+            mx += eg.to_sparse(on_space)
         return mx
 
-    def to_dense(self):
+    def to_dense(self, on_space='minimal'):
         """
         Return this error generator as a dense matrix
+
+        Parameters
+        ----------
+        on_space : {'minimal', 'Hilbert', 'HilbertSchmidt'}
+            The space that the returned dense operation acts upon.  For unitary matrices and bra/ket vectors,
+            use `'Hilbert'`.  For superoperator matrices and super-bra/super-ket vectors use `'HilbertSchmidt'`.
+            `'minimal'` means that `'Hilbert'` is used if possible given this operator's evolution type, and
+            otherwise `'HilbertSchmidt'` is used.
 
         Returns
         -------
@@ -510,9 +518,9 @@ class ComposedErrorgen(_LinearOperator):
         """
         if len(self.factors) == 0:
             return _np.zeros((self.dim, self.dim), 'd')
-        mx = self.factors[0].to_dense()
+        mx = self.factors[0].to_dense(on_space)
         for eg in self.factors[1:]:
-            mx += eg.to_dense()
+            mx += eg.to_dense(on_space)
         return mx
 
     @property

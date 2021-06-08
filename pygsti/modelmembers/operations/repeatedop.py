@@ -85,7 +85,7 @@ class RepeatedOp(_LinearOperator):
         copyOfMe = cls(self.repeated_op.copy(parent, memo), self.num_repetitions, self._evotype)
         return self._copy_gpindices(copyOfMe, parent, memo)
 
-    def to_sparse(self):
+    def to_sparse(self, on_space='minimal'):
         """
         Return the operation as a sparse matrix
 
@@ -96,21 +96,29 @@ class RepeatedOp(_LinearOperator):
         if self.num_repetitions == 0:
             return _sps.identity(self.dim, dtype=_np.dtype('d'), format='csr')
 
-        op = self.repeated_op.to_sparse()
+        op = self.repeated_op.to_sparse(on_space)
         mx = op.copy()
         for i in range(self.num_repetitions - 1):
             mx = mx.dot(op)
         return mx
 
-    def to_dense(self):
+    def to_dense(self, on_space='minimal'):
         """
         Return this operation as a dense matrix.
+
+        Parameters
+        ----------
+        on_space : {'minimal', 'Hilbert', 'HilbertSchmidt'}
+            The space that the returned dense operation acts upon.  For unitary matrices and bra/ket vectors,
+            use `'Hilbert'`.  For superoperator matrices and super-bra/super-ket vectors use `'HilbertSchmidt'`.
+            `'minimal'` means that `'Hilbert'` is used if possible given this operator's evolution type, and
+            otherwise `'HilbertSchmidt'` is used.
 
         Returns
         -------
         numpy.ndarray
         """
-        op = self.repeated_op.to_dense()
+        op = self.repeated_op.to_dense(on_space)
         return _np.linalg.matrix_power(op, self.num_repetitions)
 
     #def torep(self):
@@ -215,7 +223,7 @@ class RepeatedOp(_LinearOperator):
         numpy array
             Array of derivatives with shape (dimension^2, num_params)
         """
-        mx = self.repeated_op.to_dense()
+        mx = self.repeated_op.to_dense(on_space='minimal')
 
         mx_powers = {0: _np.identity(self.dim, 'd'), 1: mx}
         for i in range(2, self.num_repetitions):

@@ -160,15 +160,23 @@ class DenseOperatorInterface(object):
         return _np.asarray(self._ptr)
         # *must* be a numpy array for Cython arg conversion
 
-    def to_sparse(self):
+    def to_sparse(self, on_space='minimal'):
         """
         Return the operation as a sparse matrix.
+
+        Parameters
+        ----------
+        on_space : {'minimal', 'Hilbert', 'HilbertSchmidt'}
+            The space that the returned dense operation acts upon.  For unitary matrices and bra/ket vectors,
+            use `'Hilbert'`.  For superoperator matrices and super-bra/super-ket vectors use `'HilbertSchmidt'`.
+            `'minimal'` means that `'Hilbert'` is used if possible given this operator's evolution type, and
+            otherwise `'HilbertSchmidt'` is used.
 
         Returns
         -------
         scipy.sparse.csr_matrix
         """
-        return _sps.csr_matrix(self.to_dense())
+        return _sps.csr_matrix(self.to_dense(on_space))
 
     def __copy__(self):
         # We need to implement __copy__ because we defer all non-existing
@@ -301,18 +309,26 @@ class DenseOperator(DenseOperatorInterface, _LinearOperator):
             when the `_ptr` property is changed. """
         self._rep.base_has_changed()
 
-    def to_dense(self):
+    def to_dense(self, on_space='minimal'):
         """
         Return the dense array used to represent this operation within its evolution type.
 
         Note: for efficiency, this doesn't copy the underlying data, so
         the caller should copy this data before modifying it.
 
+        Parameters
+        ----------
+        on_space : {'minimal', 'Hilbert', 'HilbertSchmidt'}
+            The space that the returned dense operation acts upon.  For unitary matrices and bra/ket vectors,
+            use `'Hilbert'`.  For superoperator matrices and super-bra/super-ket vectors use `'HilbertSchmidt'`.
+            `'minimal'` means that `'Hilbert'` is used if possible given this operator's evolution type, and
+            otherwise `'HilbertSchmidt'` is used.
+
         Returns
         -------
         numpy.ndarray
         """
-        return self._rep.to_dense()  # both types of possible reps implement 'to_dense'
+        return self._rep.to_dense(on_space)  # both types of possible reps implement 'to_dense'
 
 
 class DenseUnitaryOperator(DenseOperatorInterface, _LinearOperator):
@@ -381,18 +397,26 @@ class DenseUnitaryOperator(DenseOperatorInterface, _LinearOperator):
             self._rep.base[:, :] = _bt.change_basis(_ot.unitary_to_process_mx(self._unitary), 'std', self._basis)
         self._rep.base_has_changed()
 
-    def to_dense(self):
+    def to_dense(self, on_space='minimal'):
         """
         Return the dense array used to represent this operation within its evolution type.
 
         Note: for efficiency, this doesn't copy the underlying data, so
         the caller should copy this data before modifying it.
 
+        Parameters
+        ----------
+        on_space : {'minimal', 'Hilbert', 'HilbertSchmidt'}
+            The space that the returned dense operation acts upon.  For unitary matrices and bra/ket vectors,
+            use `'Hilbert'`.  For superoperator matrices and super-bra/super-ket vectors use `'HilbertSchmidt'`.
+            `'minimal'` means that `'Hilbert'` is used if possible given this operator's evolution type, and
+            otherwise `'HilbertSchmidt'` is used.
+
         Returns
         -------
         numpy.ndarray
         """
-        return self._rep.to_dense()  # both types of possible reps implement 'to_dense'
+        return self._rep.to_dense(on_space)  # both types of possible reps implement 'to_dense'
 
     def transform_inplace(self, s):
         """

@@ -42,7 +42,9 @@ class StateRep(_basereps.StateRep):
     def copy_from(self, other):
         self.data[:] = other.data
 
-    def to_dense(self):
+    def to_dense(self, on_space):
+        if on_space not in ('minimal', 'HilbertSchmidt'):
+            raise ValueError("'densitymx' evotype cannot produce Hilbert-space ops!")
         return self.data
 
     @property
@@ -114,7 +116,7 @@ class StateRepComposed(StateRep):
     def __init__(self, state_rep, op_rep, state_space):
         self.state_rep = state_rep
         self.op_rep = op_rep
-        super(StateRepComposed, self).__init__(state_rep.to_dense(), state_space)
+        super(StateRepComposed, self).__init__(state_rep.to_dense('HilbertSchmidt'), state_space)
         self.reps_have_changed()
 
     def reps_have_changed(self):
@@ -137,9 +139,9 @@ class StateRepTensorProduct(StateRep):
         if len(self.factor_reps) == 0:
             vec = _np.empty(0, 'd')
         else:
-            vec = self.factor_reps[0].to_dense()
+            vec = self.factor_reps[0].to_dense('HilbertSchmidt')
             for i in range(1, len(self.factors_reps)):
-                vec = _np.kron(vec, self.factor_reps[i].to_dense())
+                vec = _np.kron(vec, self.factor_reps[i].to_dense('HilbertSchmidt'))
         self.base[:] = vec
 
     def __reduce__(self):

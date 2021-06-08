@@ -149,7 +149,7 @@ class ConjugatedStatePOVMEffect(DenseEffectInterface, _POVMEffect):
         """
         return self.state.parameter_labels
 
-    def to_dense(self, scratch=None):
+    def to_dense(self, on_space='minimal', scratch=None):
         """
         Return this SPAM vector as a (dense) numpy array.
 
@@ -157,6 +157,12 @@ class ConjugatedStatePOVMEffect(DenseEffectInterface, _POVMEffect):
 
         Parameters
         ----------
+        on_space : {'minimal', 'Hilbert', 'HilbertSchmidt'}
+            The space that the returned dense operation acts upon.  For unitary matrices and bra/ket vectors,
+            use `'Hilbert'`.  For superoperator matrices and super-bra/super-ket vectors use `'HilbertSchmidt'`.
+            `'minimal'` means that `'Hilbert'` is used if possible given this operator's evolution type, and
+            otherwise `'HilbertSchmidt'` is used.
+
         scratch : numpy.ndarray, optional
             scratch space available for use.
 
@@ -165,7 +171,7 @@ class ConjugatedStatePOVMEffect(DenseEffectInterface, _POVMEffect):
         numpy.ndarray
         """
         #don't use scratch since we already have memory allocated
-        return self._rep.to_dense()  # conjugate?
+        return self._rep.to_dense(on_space)  # conjugate?
 
     @property
     def _ptr(self):
@@ -182,7 +188,7 @@ class ConjugatedStatePOVMEffect(DenseEffectInterface, _POVMEffect):
 
     def __str__(self):
         s = "%s with dimension %d\n" % (self.__class__.__name__, self.dim)
-        s += _mt.mx_to_string(self.to_dense(), width=4, prec=2)
+        s += _mt.mx_to_string(self.to_dense(on_space='minimal'), width=4, prec=2)
         return s
 
     def submembers(self):

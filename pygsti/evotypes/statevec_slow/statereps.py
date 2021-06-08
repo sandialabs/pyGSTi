@@ -15,6 +15,8 @@ import functools as _functools
 
 from .. import basereps as _basereps
 from ...models.statespace import StateSpace as _StateSpace
+from ...tools import basistools as _bt
+from ...tools import optools as _ot
 
 try:
     from ...tools import fastcalc as _fastcalc
@@ -23,14 +25,15 @@ except ImportError:
 
 
 class StateRep(_basereps.StateRep):
-    def __init__(self, data, state_space):
+    def __init__(self, data, state_space, basis):
         assert(data.dtype == _np.dtype(complex))
         self.data = _np.require(data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
         self.state_space = _StateSpace.cast(state_space)
+        self.basis = basis
         assert(len(self.data) == self.state_space.udim)
 
     def __reduce__(self):
-        return (StateRep, (self.data, self.state_space), (self.data.flags.writeable,))
+        return (StateRep, (self.data, self.state_space, self.basis), (self.data.flags.writeable,))
 
     def __setstate__(self, state):
         writeable, = state
@@ -39,8 +42,13 @@ class StateRep(_basereps.StateRep):
     def copy_from(self, other):
         self.data[:] = other.data
 
-    def to_dense(self):
-        return self.data
+    def to_dense(self, on_space):
+        if on_space in ('minimal', 'Hilbert'):
+            return self.data
+        elif on_space == 'HilbertSchmidt':
+            return _bt.change_basis(_ot.state_to_dmvec(self.data), 'std', self.basis)
+        else:
+            raise ValueError("Invalid `on_space` argument: %s" % str(on_space))
 
     @property
     def dim(self):
@@ -52,8 +60,7 @@ class StateRep(_basereps.StateRep):
 
 class StateRepDensePure(StateRep):
     def __init__(self, purevec, basis, state_space):
-        self.basis = basis
-        super(StateRepDensePure, self).__init__(purevec, state_space)
+        super(StateRepDensePure, self).__init__(purevec, state_space, basis)
 
     @property
     def base(self):
@@ -85,15 +92,14 @@ class StateRepComputational(StateRep):
             _fastcalc.fast_kron_complex(vec, fast_kron_array, fast_kron_factordims)
 
         self.zvals = zvals
-        self.basis = basis
-        super(StateRepComputational, self).__init__(vec, state_space)
+        super(StateRepComputational, self).__init__(vec, state_space, basis)
 
 
 class StateRepComposed(StateRep):
     def __init__(self, state_rep, op_rep, state_space):
         self.state_rep = state_rep
         self.op_rep = op_rep
-        super(StateRepComposed, self).__init__(state_rep.to_dense(), state_space)
+        super(StateRepComposed, self).__init__(state_rep.to_dense('Hilbert'), state_space, self.state_rep.basis)
         self.reps_have_changed()
 
     def reps_have_changed(self):
@@ -105,14 +111,14 @@ class StateRepTensorProduct(StateRep):
     def __init__(self, factor_state_reps, state_space):
         self.factor_reps = factor_state_reps
         dim = _np.product([fct.dim for fct in self.factor_reps])
-        super(StateRepTensorProduct, self).__init__(_np.zeros(dim, complex), state_space)
+        super(StateRepTensorProduct, self).__init__(_np.zeros(dim, complex), state_space, None)  # TODO: compute a tensorprod basis?
         self.reps_have_changed()
 
     def reps_have_changed(self):
         if len(self.factor_reps) == 0:
             vec = _np.empty(0, complex)
         else:
-            vec = self.factor_reps[0].to_dense()
+            vec = self.factor_reps[0].to_dense('Hilbert')
             for i in range(1, len(self.factors_reps)):
-                vec = _np.kron(vec, self.factor_reps[i].to_dense())
+                vec = _np.kron(vec, self.factor_reps[i].to_dense('Hilbert'))
         self.base[:] = vec

@@ -91,7 +91,7 @@ class State(_modelmember.ModelMember):
         """
         pass
 
-    def to_dense(self, scratch=None):
+    def to_dense(self, on_space='minimal', scratch=None):
         """
         Return this SPAM vector as a (dense) numpy array.
 
@@ -99,6 +99,12 @@ class State(_modelmember.ModelMember):
 
         Parameters
         ----------
+        on_space : {'minimal', 'Hilbert', 'HilbertSchmidt'}
+            The space that the returned dense operation acts upon.  For unitary matrices and bra/ket vectors,
+            use `'Hilbert'`.  For superoperator matrices and super-bra/super-ket vectors use `'HilbertSchmidt'`.
+            `'minimal'` means that `'Hilbert'` is used if possible given this operator's evolution type, and
+            otherwise `'HilbertSchmidt'` is used.
+
         scratch : numpy.ndarray, optional
             scratch space available for use.
 
@@ -301,12 +307,12 @@ class State(_modelmember.ModelMember):
         -------
         float
         """
-        vec = self.to_dense()
+        vec = self.to_dense(on_space='minimal')
         if inv_transform is None:
-            return _ot.frobeniusdist_squared(vec, other_spam_vec.to_dense())
+            return _ot.frobeniusdist_squared(vec, other_spam_vec.to_dense(on_space='minimal'))
         else:
             return _ot.frobeniusdist_squared(_np.dot(inv_transform, vec),
-                                             other_spam_vec.to_dense())
+                                             other_spam_vec.to_dense(on_space='minimal'))
 
     def residuals(self, other_spam_vec, transform=None, inv_transform=None):
         """
@@ -330,12 +336,12 @@ class State(_modelmember.ModelMember):
         -------
         float
         """
-        vec = self.to_dense()
+        vec = self.to_dense(on_space='minimal')
         if inv_transform is None:
-            return _ot.residuals(vec, other_spam_vec.to_dense())
+            return _ot.residuals(vec, other_spam_vec.to_dense(on_space='minimal'))
         else:
             return _ot.residuals(_np.dot(inv_transform, vec),
-                                 other_spam_vec.to_dense())
+                                 other_spam_vec.to_dense(on_space='minimal'))
 
     def transform_inplace(self, s):
         """
@@ -360,7 +366,7 @@ class State(_modelmember.ModelMember):
         None
         """
         Si = s.transform_matrix_inverse
-        self.set_dense(_np.dot(Si, self.to_dense()))
+        self.set_dense(_np.dot(Si, self.to_dense(on_space='minimal')))
 
     def depolarize(self, amount):
         """
@@ -389,7 +395,7 @@ class State(_modelmember.ModelMember):
         else:
             assert(len(amount) == self.dim - 1)
             D = _np.diag([1] + list(1.0 - _np.array(amount, 'd')))
-        self.set_dense(_np.dot(D, self.to_dense()))
+        self.set_dense(_np.dot(D, self.to_dense(on_space='minimal')))
 
     @property
     def num_params(self):
@@ -524,7 +530,7 @@ class State(_modelmember.ModelMember):
         numpy array
         """
         if isinstance(v, State):
-            vector = v.to_dense().copy()
+            vector = v.to_dense(on_space='minimal').copy()
             vector.shape = (vector.size, 1)
         elif isinstance(v, _np.ndarray):
             vector = v.copy()

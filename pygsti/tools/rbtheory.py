@@ -325,7 +325,8 @@ def L_matrix(model, target_model, weights=None):  # noqa N802
     normalizer = _np.sum(_np.array([weights[key] for key in list(target_model.operations.keys())]))
     L_matrix = (1 / normalizer) * _np.sum(
         weights[key] * _np.kron(
-            model.operations[key].to_dense().T, _np.linalg.inv(target_model.operations[key].to_dense())
+            model.operations[key].to_dense(on_space='HilbertSchmidt').T,
+            _np.linalg.inv(target_model.operations[key].to_dense(on_space='HilbertSchmidt'))
         ) for key in target_model.operations.keys())
 
     return L_matrix

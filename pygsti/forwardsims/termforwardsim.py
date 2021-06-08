@@ -625,7 +625,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
     # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good
     def find_minimal_paths_set(self, layout, exit_after_this_many_failures=0):
         """
-        Find a good, i.e. minimial, path set for the current model-parameter space point.
+        Find a good, i.e. minimal, path set for the current model-parameter space point.
 
         Parameters
         ----------

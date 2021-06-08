@@ -52,6 +52,9 @@ cdef class EffectRep(_basereps_cython.EffectRep):
     def amplitude(self, StateRep state not None):
         return self.c_effect.amplitude(state.c_state)
 
+    def to_dense(self, on_space, outvec=None):
+        return _mt.zvals_to_dense(self.zvals, superket=(on_space not in ('minimal', 'Hilbert')))
+
 
 #cdef class EffectRepConjugatedState(EffectRep):
 #    pass  # TODO - this should be possible
@@ -64,6 +67,3 @@ cdef class EffectRepComputational(EffectRep):
 
     def __reduce__(self):
         return (EffectRepComputational, (self.zvals, self.state_space))
-
-    def to_dense(self, outvec=None):
-        return _mt.zvals_to_dense(self.zvals, superket=False)

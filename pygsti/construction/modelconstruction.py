@@ -408,7 +408,7 @@ def _basis_create_operation(state_space, op_expr, basis="gm", parameterization="
         else _op.ComposedDenseOp(list(reversed(opTermsInFinalBasis)))
     #Note: expressions are listed in "matrix composition order" (reverse for ComposedDenseOp)
 
-    finalOpMx = opInFinalBasis.to_dense()
+    finalOpMx = opInFinalBasis.to_dense(on_space='HilbertSchmidt')
     if basis.real:
         assert(_np.linalg.norm(finalOpMx.imag) < 1e-6), "Operation matrix should be real but isn't!"
         finalOpMx = _np.real(finalOpMx)

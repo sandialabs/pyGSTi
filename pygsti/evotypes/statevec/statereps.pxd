@@ -30,4 +30,5 @@ cdef class StateRep(_basereps_cython.StateRep):
     cdef StateCRep* c_state
     cdef public _np.ndarray data
     cdef public object state_space
+    cdef public object basis
     #cdef double [:] data_view # alt way to hold a reference

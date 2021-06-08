@@ -44,7 +44,12 @@ cdef class StateRep(_basereps_cython.StateRep):
     def copy_from(self, other):
         self.data[:] = other.data[:]
 
-    def to_dense(self):
+    def to_dense(self, on_space):
+        if on_space not in ('minimal', 'HilbertSchmidt'):
+            raise ValueError("'densitymx' evotype cannot produce Hilbert-space ops!")
+        return self.to_dense_superket()
+
+    def to_dense_superket(self):
         return self.data
 
     @property
@@ -135,7 +140,7 @@ cdef class StateRepComposed(StateRep):
     def __cinit__(self, StateRep state_rep, OpRep op_rep, state_space):
         self.state_rep = state_rep
         self.op_rep = op_rep
-        self._cinit_base(state_rep.to_dense(), state_space)
+        self._cinit_base(state_rep.to_dense_superket(), state_space)
         self.reps_have_changed()
 
     def reps_have_changed(self):
@@ -159,9 +164,9 @@ cdef class StateRepTensorProduct(StateRep):
         if len(self.factor_reps) == 0:
             vec = _np.empty(0, 'd')
         else:
-            vec = self.factor_reps[0].to_dense()
+            vec = self.factor_reps[0].to_dense_superket()
             for i in range(1, len(self.factor_reps)):
-                vec = _np.kron(vec, self.factor_reps[i].to_dense())
+                vec = _np.kron(vec, self.factor_reps[i].to_dense_superket())
         self.data[:] = vec
 
     def __reduce__(self):

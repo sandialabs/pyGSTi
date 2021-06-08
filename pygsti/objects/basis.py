@@ -1722,8 +1722,9 @@ class EmbeddedBasis(LazyBasis):
             else:
                 self._elements = _np.zeros((self.size,) + self.elshape, 'complex')
                 for i, mx in enumerate(self.embedded_basis.elements):
-                    self._elements[i] = EmbeddedOp(sslbls, self.target_labels,
-                                                   StaticDenseOp(mx, evotype='statevec')).to_dense()
+                    self._elements[i] = EmbeddedOp(
+                        sslbls, self.target_labels, StaticDenseOp(mx, evotype='statevec')
+                    ).to_dense(on_space='HilbertSchmidt')
         else:
             # we need to perform embedding using vectors rather than matrices - doable, but
             # not needed yet, so defer implementation to later.

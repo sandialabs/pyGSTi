@@ -30,7 +30,7 @@ class TensorProductState(_State):
         #self.Np = sum([fct.num_params for fct in factors])
 
         evotype = self.factors[0]._evotype
-        rep = evotype.create_tensorproduct_state_rep(factors, state_space)
+        rep = evotype.create_tensorproduct_state_rep([f._rep for f in factors], state_space)
 
         _State.__init__(self, rep, evotype)
         self._update_rep()  # initializes rep data
@@ -99,7 +99,7 @@ class TensorProductState(_State):
             vl[off:off + N] = fct.parameter_labels; off += N
         return vl
 
-    def to_dense(self, scratch=None):
+    def to_dense(self, on_space='minimal', scratch=None):
         """
         Return this SPAM vector as a (dense) numpy array.
 
@@ -107,6 +107,12 @@ class TensorProductState(_State):
 
         Parameters
         ----------
+        on_space : {'minimal', 'Hilbert', 'HilbertSchmidt'}
+            The space that the returned dense operation acts upon.  For unitary matrices and bra/ket vectors,
+            use `'Hilbert'`.  For superoperator matrices and super-bra/super-ket vectors use `'HilbertSchmidt'`.
+            `'minimal'` means that `'Hilbert'` is used if possible given this operator's evolution type, and
+            otherwise `'HilbertSchmidt'` is used.
+
         scratch : numpy.ndarray, optional
             scratch space available for use.
 
@@ -114,7 +120,7 @@ class TensorProductState(_State):
         -------
         numpy.ndarray
         """
-        return self._rep.to_dense()
+        return self._rep.to_dense(on_space)
 
     def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
         """
@@ -292,11 +298,11 @@ class TensorProductState(_State):
         numpy array
             Array of derivatives, shape == (dimension, num_params)
         """
-        typ = self.factors[0].to_dense().dtype if len(self.factors) > 0 else 'd'
+        typ = self.factors[0].to_dense(on_space='minimal').dtype if len(self.factors) > 0 else 'd'
 
         #HACK to deal with fact that output of to_dense is really what is differentiated
         # but this may not match self.dim == self.state_space.dim, e.g. for pure state vecs.
-        dims = [len(fct.to_dense()) for fct in self.factors]
+        dims = [len(fct.to_dense(on_space='minimal')) for fct in self.factors]
         dim = int(_np.product(dims))
 
         derivMx = _np.zeros((dim, self.num_params), typ)
@@ -310,15 +316,15 @@ class TensorProductState(_State):
             deriv.shape = (fct_dim, vec.num_params)
 
             if i > 0:  # factors before ith
-                pre = self.factors[0].to_dense()
+                pre = self.factors[0].to_dense(on_space='minimal')
                 for vecA in self.factors[1:i]:
-                    pre = _np.kron(pre, vecA.to_dense())
+                    pre = _np.kron(pre, vecA.to_dense(on_space='minimal'))
                 deriv = _np.kron(pre[:, None], deriv)  # add a dummy 1-dim to 'pre' and do kron properly...
 
             if i + 1 < len(self.factors):  # factors after ith
-                post = self.factors[i + 1].to_dense()
+                post = self.factors[i + 1].to_dense(on_space='minimal')
                 for vecA in self.factors[i + 2:]:
-                    post = _np.kron(post, vecA.to_dense())
+                    post = _np.kron(post, vecA.to_dense(on_space='minimal'))
                 deriv = _np.kron(deriv, post[:, None])  # add a dummy 1-dim to 'post' and do kron properly...
 
             local_inds = fct.gpindices  # factor vectors hold local indices
@@ -349,5 +355,5 @@ class TensorProductState(_State):
         #s += _mt.mx_to_string(ar, width=4, prec=2)
 
         # factors are just other SPAMVecs
-        s += " x ".join([_mt.mx_to_string(fct.to_dense(), width=4, prec=2) for fct in self.factors])
+        s += " x ".join([_mt.mx_to_string(fct.to_dense(on_space='minimal'), width=4, prec=2) for fct in self.factors])
         return s

@@ -15,6 +15,8 @@ import numpy as _np
 import functools as _functools
 from ...models.statespace import StateSpace as _StateSpace
 from ...tools import fastcalc as _fastcalc
+from ...tools import basistools as _bt
+from ...tools import optools as _ot
 
 from .opreps cimport OpRep
 
@@ -25,15 +27,17 @@ cdef class StateRep(_basereps_cython.StateRep):
         self.data = None
         self.c_state = NULL
         self.state_space = None
-
-    def _cinit_base(self, _np.ndarray[_np.complex128_t, ndim=1, mode='c'] data, state_space):
+        self.basis = None
+        
+    def _cinit_base(self, _np.ndarray[_np.complex128_t, ndim=1, mode='c'] data, state_space, basis):
         self.data = _np.require(data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
         self.c_state = new StateCRep(<double complex*>self.data.data,<INT>self.data.shape[0],<bool>0)
         self.state_space = _StateSpace.cast(state_space)
+        self.basis = basis
         assert(len(self.data) == self.state_space.udim)
 
     def __reduce__(self):
-        return (StateRep, (self.data, self.state_space), (self.data.flags.writeable,))
+        return (StateRep, (), (self.data.flags.writeable,))
 
     def __setstate__(self, state):
         writeable, = state
@@ -42,8 +46,13 @@ cdef class StateRep(_basereps_cython.StateRep):
     def copy_from(self, other):
         self.data[:] = other.data[:]
 
-    def to_dense(self):
-        return self.data
+    def to_dense(self, on_space):
+        if on_space in ('minimal', 'Hilbert'):
+            return self.data
+        elif on_space == 'HilbertSchmidt':
+            return _bt.change_basis(_ot.state_to_dmvec(self.data), 'std', self.basis)
+        else:
+            raise ValueError("Invalid `on_space` argument: %s" % str(on_space))
 
     @property
     def dim(self):
@@ -57,11 +66,9 @@ cdef class StateRep(_basereps_cython.StateRep):
 
 
 cdef class StateRepDensePure(StateRep):
-    cdef public object basis
 
     def __cinit__(self, purevec, basis, state_space):
-        self.basis = basis
-        self._cinit_base(purevec, state_space)
+        self._cinit_base(purevec, state_space, basis)
 
     @property
     def base(self):
@@ -76,7 +83,6 @@ cdef class StateRepDensePure(StateRep):
 
 cdef class StateRepComputational(StateRep):
     cdef public object zvals
-    cdef public object basis
 
     def __cinit__(self, zvals, basis, state_space):
 
@@ -99,8 +105,7 @@ cdef class StateRepComputational(StateRep):
             _fastcalc.fast_kron_complex(vec, fast_kron_array, fast_kron_factordims)
 
         self.zvals = zvals
-        self.basis = basis
-        self._cinit_base(vec, state_space)
+        self._cinit_base(vec, state_space, basis)
 
     def __reduce__(self):
         return (StateRepComputational, (self.zvals, self.basis, self.state_space), (self.data.flags.writeable,))
@@ -113,7 +118,7 @@ cdef class StateRepComposed(StateRep):
     def __init__(self, state_rep, op_rep, state_space):
         self.state_rep = state_rep
         self.op_rep = op_rep
-        self._cinit_base(state_rep.to_dense(), self.state_space)
+        self._cinit_base(state_rep.to_dense('Hilbert'), self.state_space, self.state_rep.basis)
         self.reps_have_changed()
 
     def reps_have_changed(self):
@@ -130,16 +135,16 @@ cdef class StateRepTensorProduct(StateRep):
     def __init__(self, factor_state_reps, state_space):
         self.factor_reps = factor_state_reps
         dim = _np.product([fct.dim for fct in self.factor_reps])
-        self._cinit_base(_np.zeros(dim, complex), state_space)
+        self._cinit_base(_np.zeros(dim, complex), state_space, None)  # TODO: compute a tensorprod basis?
         self.reps_have_changed()
 
     def reps_have_changed(self):
         if len(self.factor_reps) == 0:
             vec = _np.empty(0, complex)
         else:
-            vec = self.factor_reps[0].to_dense()
+            vec = self.factor_reps[0].to_dense('Hilbert')
             for i in range(1, len(self.factors_reps)):
-                vec = _np.kron(vec, self.factor_reps[i].to_dense())
+                vec = _np.kron(vec, self.factor_reps[i].to_dense('Hilbert'))
         self.data[:] = vec
 
     def __reduce__(self):

@@ -18,6 +18,9 @@ import copy as _copy
 import itertools as _itertools
 from ...models.statespace import StateSpace as _StateSpace
 from ...tools import internalgates as _itgs
+from ...tools import basistools as _bt
+from ...tools import optools as _ot
+
 from scipy.sparse.linalg import LinearOperator
 
 
@@ -51,11 +54,11 @@ cdef class OpRep(_basereps_cython.OpRep):
         def mv(v):
             if v.ndim == 2 and v.shape[1] == 1: v = v[:,0]
             in_state = StateRep(_np.ascontiguousarray(v, _np.complex128))
-            return self.acton(in_state).to_dense()
+            return self.acton(in_state).to_dense('Hilbert')
         def rmv(v):
             if v.ndim == 2 and v.shape[1] == 1: v = v[:,0]
             in_state = StateRep(_np.ascontiguousarray(v, _np.complex128))
-            return self.adjoint_acton(in_state).to_dense()
+            return self.adjoint_acton(in_state).to_dense('Hilbert')
         dim = self.c_rep._dim
         return LinearOperator((dim,dim), matvec=mv, rmatvec=rmv, dtype=_np.complex128)
 
@@ -80,8 +83,13 @@ cdef class OpRepDenseUnitary(OpRep):
     def base_has_changed(self):
         pass
 
-    def to_dense(self):
-        return self.base
+    def to_dense(self, on_space):
+        if on_space in ('minimal', 'Hilbert'):
+            return self.base
+        elif on_space == 'HilbertSchmidt':
+            return _bt.change_basis(_ot.unitary_to_process_mx(self.base), 'std', self.basis)
+        else:
+            raise ValueError("Invalid `on_space` argument: %s" % str(on_space))
 
     def __reduce__(self):
         # because serialization of numpy array flags is borked (around Numpy v1.16), we need to copy data
