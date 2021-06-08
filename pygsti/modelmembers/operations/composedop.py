@@ -51,18 +51,12 @@ class ComposedOp(_LinearOperator):
         State space of this error generator.  Can be set to `"auto"` to take
         the state space from `errgens_to_compose[0]` *if* there's at least one
         error generator being composed.
-
-    dense_rep : bool, optional
-        Whether this operator should be internally represented using a dense
-        matrix.  This is expert-level functionality, and you should leave their
-        the default value unless you know what you're doing.
     """
 
-    def __init__(self, ops_to_compose, evotype="auto", state_space="auto", dense_rep=False):
+    def __init__(self, ops_to_compose, evotype="auto", state_space="auto"):
         assert(len(ops_to_compose) > 0 or state_space != "auto"), \
             "Must compose at least one operation when state_space='auto'!"
         self.factorops = list(ops_to_compose)
-        self.dense_rep = dense_rep
 
         if state_space == "auto":
             state_space = ops_to_compose[0].state_space
@@ -78,18 +72,33 @@ class ComposedOp(_LinearOperator):
         evotype = _Evotype.cast(evotype)
 
         #Create representation object
-        if dense_rep:
-            rep = evotype.create_dense_superop_rep(None, state_space)
-        else:
-            factor_op_reps = [op._rep for op in self.factorops]
-            rep = evotype.create_composed_rep(factor_op_reps, state_space)
+        rep_type_order = ('dense', 'composed') if evotype.prefer_dense_reps else ('composed', 'dense')
+        rep = None
+        for rep_type in rep_type_order:
+            try:
+                if rep_type == 'composed':
+                    factor_op_reps = [op._rep for op in self.factorops]
+                    rep = evotype.create_composed_rep(factor_op_reps, state_space)
+                elif rep_type == 'dense':
+                    rep = evotype.create_dense_superop_rep(None, state_space)
+                else:
+                    assert(False), "Logic error!"
+
+                self._rep_type = rep_type
+                break
+
+            except AttributeError:
+                pass  # just go to the next rep_type
+
+        if rep is None:
+            raise ValueError("Unable to construct representation with evotype: %s" % str(evotype))
 
         # caches in case terms are used
         self.terms = {}
         self.local_term_poly_coeffs = {}
 
         _LinearOperator.__init__(self, rep, evotype)
-        if self.dense_rep: self._update_denserep()  # update dense rep if needed
+        if self._rep_type == 'dense': self._update_denserep()  # update dense rep if needed
 
     def _update_denserep(self):
         """Performs additional update for the case when we use a dense underlying representation."""
@@ -172,7 +181,7 @@ class ComposedOp(_LinearOperator):
         None
         """
         self.factorops.extend(factorops_to_add)
-        if self.dense_rep:
+        if self._rep_type == 'dense':
             self._update_denserep()
         elif self._rep is not None:
             self._rep.reinit_factor_op_reps([op._rep for op in self.factorops])
@@ -194,7 +203,7 @@ class ComposedOp(_LinearOperator):
         """
         for i in sorted(factorop_indices, reverse=True):
             del self.factorops[i]
-        if self.dense_rep:
+        if self._rep_type == 'dense':
             self._update_denserep()
         elif self._rep is not None:
             self._rep.reinit_factor_op_reps([op._rep for op in self.factorops])
@@ -251,7 +260,7 @@ class ComposedOp(_LinearOperator):
         -------
         numpy.ndarray
         """
-        if self.dense_rep:
+        if self._rep_type == 'dense':
             #We already have a dense version stored
             return self._rep.to_dense(on_space)
         elif len(self.factorops) == 0:
@@ -349,7 +358,7 @@ class ComposedOp(_LinearOperator):
             #factorgate_local_inds = _modelmember._decompose_gpindices(
             #    self.gpindices, operation.gpindices)
             operation.from_vector(v[factorgate_local_inds], close, dirty_value)
-        if self.dense_rep: self._update_denserep()
+        if self._rep_type == 'dense': self._update_denserep()
         self.dirty = dirty_value
 
     def deriv_wrt_params(self, wrt_filter=None):
@@ -803,36 +812,3 @@ class ComposedOp(_LinearOperator):
             s += "Factor %d:\n" % i
             s += str(operation)
         return s
-
-
-class ComposedDenseOp(ComposedOp, _DenseOperatorInterface):
-    """
-    An operation that is the composition of a number of matrix factors (possibly other operations).
-
-    Parameters
-    ----------
-    ops_to_compose : list
-        A list of 2D numpy arrays (matrices) and/or `DenseOperator`-derived
-        objects that are composed to form this operation.  Elements are composed
-        with vectors  in  *left-to-right* ordering, maintaining the same
-        convention as operation sequences in pyGSTi.  Note that this is
-        *opposite* from standard matrix multiplication order.
-
-    evotype : Evotype or str, optional
-        The evolution type of this operation.  Can be set to `"auto"` to take
-        the evolution type of `ops_to_compose[0]` *if* there's at least
-        one operation being composed.
-
-    state_space : StateSpace or "auto"
-        State space of this error generator.  Can be set to `"auto"` to take
-        the state space from `ops_to_compose[0]` *if* there's at least one
-        error generator being composed.
-    """
-
-    def __init__(self, ops_to_compose, evotype="auto", state_space="auto"):
-        ComposedOp.__init__(self, ops_to_compose, evotype, state_space, dense_rep=True)
-        _DenseOperatorInterface.__init__(self)
-
-    @property
-    def parameter_labels(self):  # Needed because method resolution finds __getattr__ before base class property
-        return ComposedOp.parameter_labels.fget(self)

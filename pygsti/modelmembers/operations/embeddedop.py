@@ -42,29 +42,39 @@ class EmbeddedOp(_LinearOperator):
     operation_to_embed : LinearOperator
         The operation object that is to be contained within this operation, and
         that specifies the only non-trivial action of the EmbeddedOp.
-
-    dense_rep : bool, optional
-        Whether this operator should be internally represented using a dense
-        matrix.  This is expert-level functionality, and you should leave their
-        the default value unless you know what you're doing.
     """
 
-    def __init__(self, state_space, target_labels, operation_to_embed, dense_rep=False):
+    def __init__(self, state_space, target_labels, operation_to_embed):
         self.target_labels = target_labels
         self.embedded_op = operation_to_embed
-        self.dense_rep = dense_rep
         self._iter_elements_cache = None  # speeds up _iter_matrix_elements significantly
 
         evotype = operation_to_embed._evotype
 
         #Create representation
-        if dense_rep:
-            rep = evotype.create_dense_superop_rep(None, state_space)
-        else:
-            rep = evotype.create_embedded_rep(state_space, self.target_labels, self.embedded_op._rep)
+        #Create representation object
+        rep_type_order = ('dense', 'embedded') if evotype.prefer_dense_reps else ('embedded', 'dense')
+        rep = None
+        for rep_type in rep_type_order:
+            try:
+                if rep_type == 'embedded':
+                    rep = evotype.create_embedded_rep(state_space, self.target_labels, self.embedded_op._rep)
+                elif rep_type == 'dense':
+                    rep = evotype.create_dense_superop_rep(None, state_space)
+                else:
+                    assert(False), "Logic error!"
+
+                self._rep_type = rep_type
+                break
+
+            except AttributeError:
+                pass  # just go to the next rep_type
+
+        if rep is None:
+            raise ValueError("Unable to construct representation with evotype: %s" % str(evotype))
 
         _LinearOperator.__init__(self, rep, evotype)
-        if self.dense_rep: self._update_denserep()
+        if self._rep_type == 'dense': self._update_denserep()
 
     def _update_denserep(self):
         """Performs additional update for the case when we use a dense underlying representation."""
@@ -333,7 +343,7 @@ class EmbeddedOp(_LinearOperator):
         """
         assert(len(v) == self.num_params)
         self.embedded_op.from_vector(v, close, dirty_value)
-        if self.dense_rep: self._update_denserep()
+        if self._rep_type == 'dense': self._update_denserep()
         self.dirty = dirty_value
 
     def deriv_wrt_params(self, wrt_filter=None):
@@ -521,7 +531,7 @@ class EmbeddedOp(_LinearOperator):
         """
         # I think we could do this but extracting the approprate parts of the
         # s and Sinv matrices... but haven't needed it yet.
-        raise NotImplementedError("Cannot transform an EmbeddedDenseOp yet...")
+        raise NotImplementedError("Cannot transform an EmbeddedOp yet...")
 
     def errorgen_coefficients(self, return_basis=False, logscale_nonham=False):
         """
@@ -676,7 +686,7 @@ class EmbeddedOp(_LinearOperator):
         None
         """
         self.embedded_op.depolarize(amount)
-        if self.dense_rep: self._update_denserep()
+        if self._rep_type == 'dense': self._update_denserep()
 
     def rotate(self, amount, mx_basis="gm"):
         """
@@ -707,7 +717,7 @@ class EmbeddedOp(_LinearOperator):
         None
         """
         self.embedded_op.rotate(amount, mx_basis)
-        if self.dense_rep: self._update_denserep()
+        if self._rep_type == 'dense': self._update_denserep()
 
     def has_nonzero_hessian(self):
         """
@@ -728,35 +738,3 @@ class EmbeddedOp(_LinearOperator):
              % (self.embedded_op.dim, str(self.target_labels))
         s += str(self.embedded_op)
         return s
-
-
-class EmbeddedDenseOp(EmbeddedOp, _DenseOperatorInterface):
-    """
-    An operation containing a single lower (or equal) dimensional operation within it.
-
-    An EmbeddedDenseOp acts as the identity on all of its domain except the
-    subspace of its contained operation, where it acts as the contained operation does.
-
-    Parameters
-    ----------
-    state_space : StateSpace
-        Specifies the density matrix space upon which this operation acts.
-
-    target_labels : list of strs
-        The labels contained in `state_space_labels` which demarcate the
-        portions of the state space acted on by `operation_to_embed` (the
-        "contained" operation).
-
-    operation_to_embed : DenseOperator
-        The operation object that is to be contained within this operation, and
-        that specifies the only non-trivial action of the EmbeddedDenseOp.
-    """
-
-    def __init__(self, state_space, target_labels, operation_to_embed):
-        EmbeddedOp.__init__(self, state_space, target_labels,
-                            operation_to_embed, dense_rep=True)
-        _DenseOperatorInterface.__init__(self)
-
-    @property
-    def parameter_labels(self):  # Needed because method resolution finds __getattr__ before base class property
-        return EmbeddedOp.parameter_labels.fget(self)

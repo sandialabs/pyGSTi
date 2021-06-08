@@ -278,7 +278,7 @@ def _basis_create_operation(state_space, op_expr, basis="gm", parameterization="
             stateSpaceDim = int(_np.product([state_space.label_dimension(l) for l in labels]))
             # *real* 4x4 mx in Pauli-product basis -- still just the identity!
             pp_opMx = _op.StaticDenseOp(_np.identity(stateSpaceDim, 'd'), evotype=evotype)
-            opTermInFinalBasis = _op.EmbeddedDenseOp(state_space, labels, pp_opMx)
+            opTermInFinalBasis = _op.EmbeddedOp(state_space, labels, pp_opMx)
 
         elif opName == "D":
             # like 'I', but only parameterize the diagonal elements - so can be a depolarization-type map
@@ -316,7 +316,7 @@ def _basis_create_operation(state_space, op_expr, basis="gm", parameterization="
             operationMx = _gt.unitary_to_process_mx(Uop)
             # *real* 4x4 mx in Pauli-product basis -- better for parameterization
             pp_opMx = _op.StaticDenseOp(_bt.change_basis(operationMx, 'std', 'pp'), evotype, state_space=None)
-            opTermInFinalBasis = _op.EmbeddedDenseOp(state_space, [label], pp_opMx)
+            opTermInFinalBasis = _op.EmbeddedOp(state_space, [label], pp_opMx)
 
         elif opName == 'N':  # more general single-qubit gate
             assert(len(args) == 5)  # theta, sigmaX-coeff, sigmaY-coeff, sigmaZ-coeff, qubit-index
@@ -333,7 +333,7 @@ def _basis_create_operation(state_space, op_expr, basis="gm", parameterization="
             operationMx = _gt.unitary_to_process_mx(Uop)
             # *real* 4x4 mx in Pauli-product basis -- better for parameterization
             pp_opMx = _op.StaticDenseOp(_bt.change_basis(operationMx, 'std', 'pp'), evotype, state_space=None)
-            opTermInFinalBasis = _op.EmbeddedDenseOp(state_space, [label], pp_opMx)
+            opTermInFinalBasis = _op.EmbeddedOp(state_space, [label], pp_opMx)
 
         elif opName in ('CX', 'CY', 'CZ', 'CNOT', 'CPHASE'):  # two-qubit gate names
 
@@ -367,7 +367,7 @@ def _basis_create_operation(state_space, op_expr, basis="gm", parameterization="
             operationMx = _gt.unitary_to_process_mx(Uop)
             # *real* 16x16 mx in Pauli-product basis -- better for parameterization
             pp_opMx = _op.StaticDenseOp(_bt.change_basis(operationMx, 'std', 'pp'), evotype, state_space=None)
-            opTermInFinalBasis = _op.EmbeddedDenseOp(state_space, [label1, label2], pp_opMx)
+            opTermInFinalBasis = _op.EmbeddedOp(state_space, [label1, label2], pp_opMx)
 
         elif opName == "LX":  # TODO - better way to describe leakage?
             assert(len(args) == 3)  # theta, dmIndex1, dmIndex2 - X rotation between any two density matrix basis states
@@ -405,8 +405,8 @@ def _basis_create_operation(state_space, op_expr, basis="gm", parameterization="
         opTermsInFinalBasis.append(opTermInFinalBasis)
 
     opInFinalBasis = opTermsInFinalBasis[0] if len(opTermsInFinalBasis) == 1 \
-        else _op.ComposedDenseOp(list(reversed(opTermsInFinalBasis)))
-    #Note: expressions are listed in "matrix composition order" (reverse for ComposedDenseOp)
+        else _op.ComposedOp(list(reversed(opTermsInFinalBasis)))
+    #Note: expressions are listed in "matrix composition order" (reverse for ComposedOp)
 
     finalOpMx = opInFinalBasis.to_dense(on_space='HilbertSchmidt')
     if basis.real:
@@ -855,8 +855,7 @@ def create_localnoise_model(num_qubits, gate_names, nonstd_gate_unitaries=None, 
 
     ensure_composed_gates : bool, optional
         If True then the elements of the `operation_bks['gates']` will always
-        be either :class:`ComposedDenseOp` (with a "matrix" simulator) or
-        :class:`ComposedOp` (othewise) objects.  The purpose of this is to
+        be :class:`ComposedOp` objects.  The purpose of this is to
         facilitate modifying the gate operations after the model is created.
         If False, then the appropriately parameterized gate objects (often
         dense gates) are used directly.
@@ -1156,8 +1155,7 @@ def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}
 
     ensure_composed_gates : bool, optional
         If True then the elements of the `operation_bks['gates']` will always
-        be either :class:`ComposedDenseOp` (with a "matrix" simulator) or
-        :class:`ComposedOp` (othewise) objects.  The purpose of this is to
+        be :class:`ComposedOp` objects.  The purpose of this is to
         facilitate modifying the gate operations after the model is created.
         If False, then the appropriately parameterized gate objects (often
         dense gates) are used directly.

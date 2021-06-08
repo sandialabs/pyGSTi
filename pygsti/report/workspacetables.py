@@ -3479,7 +3479,7 @@ class MetadataTable(WorkspaceTable):
                 elif isinstance(gate, _op.TPDenseOp): paramTyp = "TP"
                 elif isinstance(gate, _op.LinearlyParamDenseOp): paramTyp = "linear"
                 elif isinstance(gate, _op.EigenvalueParamDenseOp): paramTyp = "eigenvalue"
-                elif isinstance(gate, _op.ComposedDenseOp): paramTyp = "Composed"
+                elif isinstance(gate, _op.ComposedOp): paramTyp = "Composed"
                 else: paramTyp = "unknown"  # pragma: no cover
                 table.add_row((gl + " parameterization", paramTyp), (None, 'Verbatim'))
 

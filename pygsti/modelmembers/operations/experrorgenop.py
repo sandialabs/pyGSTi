@@ -43,19 +43,9 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
     errorgen : LinearOperator
         The error generator for this operator.  That is, the `L` if this
         operator is `exp(L)`.
-
-    dense_rep : bool, optional
-        Whether to internally implement this operation as a dense matrix.
-        If `True` the error generator is rendered as a dense matrix and
-        exponentiation is "exact".  If `False`, then this operation
-        implements exponentiation in an approximate way that treats the
-        error generator as a sparse matrix and only uses its action (and
-        its adjoint's action) on a state.  Setting `dense_rep=False` is
-        typically more efficient when `errorgen` has a large dimension,
-        say greater than 100.
     """
 
-    def __init__(self, errorgen, dense_rep=False):
+    def __init__(self, errorgen):
         # Extract superop dimension from 'errorgen'
         state_space = errorgen.state_space
         self.errorgen = errorgen  # don't copy (allow object reuse)
@@ -77,18 +67,32 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         #    elif not self.dense_rep and not _sps.issparse(unitary_postfactor):
         #        unitary_postfactor = _sps.csr_matrix(_np.asarray(unitary_postfactor))  # dense -> sparse
 
-        #Finish initialization based on evolution type
-        self.dense_rep = dense_rep
-        if self.dense_rep:
-            rep = evotype.create_dense_superop_rep(None, state_space)
+        #Create representation object
+        rep_type_order = ('dense', 'experrgen') if evotype.prefer_dense_reps else ('experrgen', 'dense')
+        rep = None
+        for rep_type in rep_type_order:
+            try:
+                if rep_type == 'experrgen':
+                    # "sparse mode" => don't ever compute matrix-exponential explicitly
+                    rep = evotype.create_experrorgen_rep(self.errorgen._rep)
+                elif rep_type == 'dense':
+                    rep = evotype.create_dense_superop_rep(None, state_space)
 
-            # Cache values - for later work with dense rep
-            self.exp_err_gen = None   # used for dense_rep=True mode to cache qty needed in deriv_wrt_params
-            self.base_deriv = None
-            self.base_hessian = None
-        else:
-            # "sparse mode" => don't ever compute matrix-exponential explicitly
-            rep = evotype.create_experrorgen_rep(self.errorgen._rep)
+                    # Cache values - for later work with dense rep
+                    self.exp_err_gen = None   # used for dense_rep=True mode to cache qty needed in deriv_wrt_params
+                    self.base_deriv = None
+                    self.base_hessian = None
+                else:
+                    assert(False), "Logic error!"
+
+                self._rep_type = rep_type
+                break
+
+            except AttributeError:
+                pass  # just go to the next rep_type
+
+        if rep is None:
+            raise ValueError("Unable to construct representation with evotype: %s" % str(evotype))
 
         # Caches in case terms are used
         self.terms = {}
@@ -148,14 +152,14 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         #    upost = _bt.change_basis(op_std, 'std', self.errorgen.matrix_basis)
 
         cls = self.__class__  # so that this method works for derived classes too
-        copyOfMe = cls(self.errorgen.copy(parent, memo), self.dense_rep)
+        copyOfMe = cls(self.errorgen.copy(parent, memo))
         return self._copy_gpindices(copyOfMe, parent, memo)
 
     def _update_rep(self, close=False):
         """
         Updates self._rep as needed after parameters have changed.
         """
-        if self.dense_rep:
+        if self._rep_type == 'dense':
             # compute matrix-exponential explicitly
             self.exp_err_gen = _spl.expm(self.errorgen.to_dense(on_space='HilbertSchmidt'))  # used in deriv_wrt_params
 
@@ -207,7 +211,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         -------
         numpy.ndarray
         """
-        if self.dense_rep:
+        if self._rep_type == 'dense':
             # Then self._rep contains a dense version already
             return self._rep.base  # copy() unnecessary since we set to readonly
 
@@ -252,7 +256,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         _warnings.warn(("Constructing the sparse matrix of a LindbladDenseOp."
                         "  Usually this is *NOT* acutally sparse (the exponential of a"
                         " sparse matrix isn't generally sparse)!"))
-        if self.dense_rep:
+        if self._rep_type == 'dense':
             return _sps.csr_matrix(self.to_dense(on_space))
         else:
             exp_err_gen = _spsl.expm(self.errorgen.to_sparse(on_space).tocsc()).tocsr()
@@ -319,7 +323,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         numpy array
             Array of derivatives, shape == (dimension^2, num_params)
         """
-        if not self.dense_rep:
+        if not self._rep_type == 'dense':
             #raise NotImplementedError("deriv_wrt_params(...) can only be used when a dense representation is used!")
             _warnings.warn("Using finite differencing to compute ExpErrogenOp derivative!")
             return super(ExpErrorgenOp, self).deriv_wrt_params(wrt_filter)
@@ -389,7 +393,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         numpy array
             Hessian with shape (dimension^2, num_params1, num_params2)
         """
-        if not self.dense_rep:
+        if not self._rep_type == 'dense':
             #raise NotImplementedError("hessian_wrt_params is only implemented for *dense-rep* LindbladOps")
             _warnings.warn("Using finite differencing to compute ExpErrogenOp Hessian!")
             return super(ExpErrorgenOp, self).hessian_wrt_params(wrt_filter1, wrt_filter2)
@@ -844,7 +848,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
            isinstance(s, _gaugegroup.TPSpamGaugeGroupElement):
             U = s.transform_matrix
             Uinv = s.transform_matrix_inverse
-            mx = self.to_dense(on_space='minimal') if self.dense_rep else self.to_sparse(on_space='minimal')
+            mx = self.to_dense(on_space='minimal') if self._rep_type == 'dense' else self.to_sparse(on_space='minimal')
 
             #just act on postfactor and Lindbladian exponent:
             if typ == "prep":
@@ -870,37 +874,6 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         s = "Lindblad Parameterized operation map with dim = %d, num params = %d\n" % \
             (self.dim, self.num_params)
         return s
-
-
-class ExpErrorgenDenseOp(ExpErrorgenOp, _DenseOperatorInterface):
-    """
-    TODO: update docstring
-    An operation matrix that is parameterized by a Lindblad-form expression.
-
-    Specifically, each parameter multiplies a particular term in the Lindblad
-    form that is exponentiated to give the operation matrix up to an optional
-    unitary prefactor).  The basis used by the Lindblad form is referred to as
-    the "projection basis".
-
-    Parameters
-    ----------
-    errorgen : LinearOperator
-        The error generator for this operator.  That is, the `L` if this
-        operator is `exp(L)*unitary_postfactor`.
-
-    dense_rep : bool, optional
-        Whether the internal representation is dense.  This currently *must*
-        be set to `True`.
-    """
-
-    def __init__(self, errorgen, dense_rep=True):
-        assert(dense_rep), "LindbladDenseOp must be created with `dense_rep == True`"
-        #Note: cannot remove the evotype argument b/c we need to maintain the same __init__
-        # signature as LindbladOp so its @classmethods will work on us.
-
-        #Start with base class construction
-        ExpErrorgenOp.__init__(self, errorgen, dense_rep=True)
-        _DenseOperatorInterface.__init__(self)
 
 
 def _d_exp_series(x, dx):

@@ -51,38 +51,33 @@ class LayerRules(object):
     TODO: docstring
     """
 
-    def _create_op_for_circuitlabel(self, model, circuitlbl, dense):
+    def _create_op_for_circuitlabel(self, model, circuitlbl):
         """
         A helper method for derived classes used for processing :class:`CircuitLabel` labels.
 
         (:class:`CircuitLabel` labels encapsulate sub-circuits repeated some integer number of times).
 
         This method build an operator for `circuitlbl` by creating a composed-op
-        (using either :class:`ComposedOp` or :class:`ComposedDenseOp` depending
-        on the value of `dense`) of the sub-circuit that is exponentiated (using
-        :class:`ExponentiatedOp`) to the power `circuitlbl.reps`.
+        (using :class:`ComposedOp`) of the sub-circuit that is exponentiated (using
+        :class:`RepeatedOp`) to the power `circuitlbl.reps`.
 
         Parameters
         ----------
         circuitlbl : CircuitLabel
             The (sub-circuit)^power to create an operator for.
 
-        dense : boolean
-            Whether a dense composed-op should be created (see above).
-
         Returns
         -------
         LinearOperator
         """
-        Composed = _op.ComposedDenseOp if dense else _op.ComposedOp
         if len(circuitlbl.components) != 1:  # works for 0 components too
-            subCircuitOp = Composed([model.circuit_layer_operator(l, 'op') for l in circuitlbl.components],
-                                    evotype=model.evotype, state_space=model.state_space)
+            subCircuitOp = _op.ComposedOp([model.circuit_layer_operator(l, 'op') for l in circuitlbl.components],
+                                          evotype=model.evotype, state_space=model.state_space)
         else:
             subCircuitOp = model.circuit_layer_operator(circuitlbl.components[0], 'op')
         if circuitlbl.reps != 1:
-            #finalOp = Composed([subCircuitOp]*circuitlbl.reps,
-            #                   evotype=model.evotype, state_space=model.state_space)
+            #finalOp = _op.ComposedOp([subCircuitOp]*circuitlbl.reps,
+            #                         evotype=model.evotype, state_space=model.state_space)
             finalOp = _op.RepeatedOp(subCircuitOp, circuitlbl.reps, evotype=model.evotype)
         else:
             finalOp = subCircuitOp

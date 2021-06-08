@@ -14,8 +14,8 @@ import numpy as _np
 import warnings as _warnings
 
 from .staticunitaryop import StaticUnitaryOp as _StaticUnitaryOp
-from .embeddedop import EmbeddedOp as _EmbeddedOp, EmbeddedDenseOp as _EmbeddedDenseOp
-from .composedop import ComposedOp as _ComposedOp, ComposedDenseOp as _ComposedDenseOp
+from .embeddedop import EmbeddedOp as _EmbeddedOp
+from .composedop import ComposedOp as _ComposedOp
 from .cliffordop import CliffordOp
 
 from .. import modelmember as _gm
@@ -262,19 +262,12 @@ class EmbeddedOpFactory(OpFactory):
         The factory object that is to be contained within this factory,
         and that specifies the only non-trivial action of the operations
         this factory produces.
-
-    dense : bool, optional
-        Whether dense embedding operations (ops which hold their entire
-        "action" matrix in memory) should be created.  When `True`,
-        :class:`EmbeddedDenseOp` objects are created; when `False`,
-        :class:`EmbeddedOp` objects are.
     """
 
-    def __init__(self, state_space, target_labels, factory_to_embed, dense=False):
+    def __init__(self, state_space, target_labels, factory_to_embed):
         state_space = _statespace.StateSpace.cast(state_space)
         self.embedded_factory = factory_to_embed
         self.target_labels = target_labels
-        self.dense = dense
         super(EmbeddedOpFactory, self).__init__(state_space, factory_to_embed._evotype)
 
         #FUTURE: somehow do all the difficult embedded op computation once at construction so we
@@ -308,9 +301,8 @@ class EmbeddedOpFactory(OpFactory):
         assert(sslbls is None), ("EmbeddedOpFactory objects should not be asked to create "
                                  "operations with given `sslbls` (these are already fixed!)")
 
-        Embedded = _EmbeddedDenseOp if self.dense else _EmbeddedOp
         op = self.embedded_factory.create_op(args, sslbls)  # Note: will have its gpindices set already
-        embedded_op = Embedded(self.state_space, self.target_labels, op)
+        embedded_op = _EmbeddedOp(self.state_space, self.target_labels, op)
         embedded_op.set_gpindices(self.gpindices, self.parent)  # Overkill, since embedded op already has indices set?
         return embedded_op
 
@@ -397,12 +389,6 @@ class EmbeddingOpFactory(OpFactory):
         the embedding-factory's `create_op` method, but the `sslbls` are
         always set to `None` (as they are processed by the embedding
 
-    dense : bool, optional
-        Whether dense embedding operations (ops which hold their entire
-        "action" matrix in memory) should be created.  When `True`,
-        :class:`EmbeddedDenseOp` objects are created; when `False`,
-        :class:`EmbeddedOp` objects are.
-
     num_target_labels : int, optional
         If not `None`, the number of target labels that should be expected
         (usually equal to the number of qubits the contained gate acts
@@ -410,11 +396,10 @@ class EmbeddingOpFactory(OpFactory):
         factory's `create_op` method is not checked at all.
     """
 
-    def __init__(self, state_space, factory_or_op_to_embed, dense=False, num_target_labels=None):
+    def __init__(self, state_space, factory_or_op_to_embed, num_target_labels=None):
         state_space = _statespace.StateSpace.cast(state_space)
         self.embedded_factory_or_op = factory_or_op_to_embed
         self.embeds_factory = isinstance(factory_or_op_to_embed, OpFactory)
-        self.dense = dense
         self.num_target_labels = num_target_labels
         super(EmbeddingOpFactory, self).__init__(state_space, factory_or_op_to_embed._evotype)
 
@@ -446,12 +431,11 @@ class EmbeddingOpFactory(OpFactory):
             ("EmbeddingFactory.create_op called with the wrong number (%s) of target labels!"
              " (expected %d)") % (len(sslbls), self.num_target_labels)
 
-        Embedded = _EmbeddedDenseOp if self.dense else _EmbeddedOp
         if self.embeds_factory:
             op = self.embedded_factory_or_op.create_op(args, None)  # Note: will have its gpindices set already
         else:
             op = self.embedded_factory_or_op
-        embedded_op = Embedded(self.state_space, sslbls, op)
+        embedded_op = _EmbeddedOp(self.state_space, sslbls, op)
         embedded_op.set_gpindices(self.gpindices, self.parent)  # Overkill, since embedded op already has indices set?
         return embedded_op
 
@@ -589,9 +573,8 @@ class ComposedOpFactory(OpFactory):
             Can be any type of operation, e.g. a LinearOperator, SPAMVec,
             Instrument, or POVM, depending on the label requested.
         """
-        Composed = _ComposedDenseOp if self.dense else _ComposedOp
         ops_to_compose = [f.create_op(args, sslbls) if is_f else f for is_f, f in zip(self.is_factory, self.factors)]
-        op = Composed(ops_to_compose, self.evotype, self.state_space)
+        op = _ComposedOp(ops_to_compose, self.evotype, self.state_space)
         op.set_gpindices(self.gpindices, self.parent)  # Overkill, since composed ops already have indices set?
         return op
 

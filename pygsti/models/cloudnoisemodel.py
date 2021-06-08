@@ -22,6 +22,7 @@ from ..modelmembers import operations as _op
 from ..modelmembers import states as _state
 from ..modelmembers import povms as _povm
 from ..modelmembers.operations import opfactory as _opfactory
+from ..evotypes import Evotype as _Evotype
 from ..objects import qubitgraph as _qgraph
 from . import labeldicts as _ld
 from ..tools import optools as _gt
@@ -682,6 +683,9 @@ class CloudNoiseModel(_ImplicitOpModel):
         state_space = _statespace.QubitSpace(qubit_labels)
         assert(state_space.num_qubits == num_qubits), "Number of qubit labels != `num_qubits`!"
 
+        prefer_dense_reps = isinstance(simulator, _MatrixFSim)
+        evotype = _Evotype.cast(evotype, prefer_dense_reps)
+
         # Build gate dictionaries. A value of `gatedict` can be an array, a LinearOperator, or an OpFactory.
         # For later processing, we'll create mm_gatedict to contain each item as a ModelMember.  For cloud-
         # noise models, these gate operations should be *static* (no parameters) as they represent the target
@@ -795,8 +799,6 @@ class CloudNoiseModel(_ImplicitOpModel):
             self.availability[gateName] = tuple(availList)
             gates_and_avail[gateName] = (gate, availList)
 
-        EmbeddedDenseOp = _op.EmbeddedDenseOp if isinstance(simulator, _MatrixFSim) else _op.EmbeddedOp
-
         for gn, (gate, availList) in gates_and_avail.items():
             #Note: gate was taken from mm_gatedict, and so is a static op or factory
             gate_is_factory = isinstance(gate, _opfactory.OpFactory)
@@ -813,7 +815,7 @@ class CloudNoiseModel(_ImplicitOpModel):
                     printer.log("Creating %dQ %s gate on arbitrary qubits!!" % (inds[1], gn))
 
                     self.factories['layers'][_Lbl(gn)] = _opfactory.EmbeddingOpFactory(
-                        state_space, gate, dense=isinstance(simulator, _MatrixFSim), num_target_labels=inds[1])
+                        state_space, gate, num_target_labels=inds[1])
                     # add any primitive ops for this embedding factory?
                 else:
                     printer.log("Creating %dQ %s gate on qubits %s!!" % (len(inds), gn, inds))
@@ -824,10 +826,10 @@ class CloudNoiseModel(_ImplicitOpModel):
 
                     if gate_is_factory:
                         self.factories['layers'][_Lbl(gn, inds)] = _opfactory.EmbeddedOpFactory(
-                            state_space, inds, gate, dense=isinstance(simulator, _MatrixFSim))
+                            state_space, inds, gate)
                         # add any primitive ops for this factory?
                     else:
-                        self.operation_blks['layers'][_Lbl(gn, inds)] = EmbeddedDenseOp(
+                        self.operation_blks['layers'][_Lbl(gn, inds)] = _op.EmbeddedOp(
                             state_space, inds, gate)
 
                 #Cloudnoise operation
@@ -902,12 +904,12 @@ class CloudNoiseModel(_ImplicitOpModel):
         return self._clouds
 
 
-def _get_experrgen_factory(simulator, parameterization, errcomp_type, sparse_lindblad_reps, evotype):
+def _get_experrgen_factory(simulator, parameterization, errcomp_type, evotype):
     """ Returns a function that creates a ExpErrorgen-type gate appropriate
         given the simulation type and parameterization """
 
     if errcomp_type == "gates":
-        ExpErrorgenOp = _op.ExpErrorgenOp if sparse_lindblad_reps else _op.ExpErrorgenDenseOp
+        ExpErrorgenOp = _op.ExpErrorgenOp
 
         #Just call from_operation_matrix with appropriate evotype
         def _f(op_matrix, proj_basis="pp", mx_basis="pp", relative=False):
@@ -922,7 +924,7 @@ def _get_experrgen_factory(simulator, parameterization, errcomp_type, sparse_lin
             ham_basis = proj_basis if use_ham_basis else None
             nonham_basis = proj_basis if use_nonham_basis else None
             errorgen = _op.LindbladErrorgen.from_operation_matrix(op_matrix, ham_basis, nonham_basis, param_mode,
-                                                                 nonham_mode, True, mx_basis, evotype)  # truncate=True
+                                                                  nonham_mode, True, mx_basis, evotype)  # truncate=True
             return ExpErrorgenOp(errorgen)
         return _f
 
@@ -998,9 +1000,7 @@ def _build_nqn_global_noise(qubit_graph, max_weight, sparse_lindblad_basis=False
 
     simulator : ForwardSimulator
         The forward simulation (probability computation) being used by
-        the model this gate is destined for.  This affects what type of
-        gate objects (e.g. `ComposedDenseOp` vs `ComposedOp`) are created.
-        `None` means a :class:`MatrixForwardSimulator`.
+        the model this gate is destined for. `None` means a :class:`MatrixForwardSimulator`.
 
     parameterization : str
         The type of parameterizaton for the constructed gate. E.g. "H+S",
@@ -1024,20 +1024,17 @@ def _build_nqn_global_noise(qubit_graph, max_weight, sparse_lindblad_basis=False
     assert(max_weight <= 2), "Only `max_weight` equal to 0, 1, or 2 is supported"
     if simulator is None: simulator = _MatrixFSim()
 
-    use_dense_reps = isinstance(simulator, _MatrixFSim)
+    prefer_dense_reps = isinstance(simulator, _MatrixFSim)
+    evotype = _Evotype.cast(evotype, prefer_dense_reps)
 
     if errcomp_type == "gates":
-        if use_dense_reps:
-            Composed = _op.ComposedDenseOp
-            Embedded = _op.EmbeddedDenseOp
-        else:
-            Composed = _op.ComposedOp
-            Embedded = _op.EmbeddedOp
+        Composed = _op.ComposedOp
+        Embedded = _op.EmbeddedOp
     elif errcomp_type == "errorgens":
         Composed = _op.ComposedErrorgen
         Embedded = _op.EmbeddedErrorgen
     else: raise ValueError("Invalid `errcomp_type`: %s" % errcomp_type)
-    ExpErrorgen = _get_experrgen_factory(simulator, parameterization, errcomp_type, sparse_lindblad_reps, evotype)
+    ExpErrorgen = _get_experrgen_factory(simulator, parameterization, errcomp_type, evotype)
     #constructs a gate or errorgen based on value of errcomp_type
 
     printer = _VerbosityPrinter.create_printer(verbosity)
@@ -1089,10 +1086,9 @@ def _build_nqn_global_noise(qubit_graph, max_weight, sparse_lindblad_basis=False
         return Composed(termops)
     elif errcomp_type == "errorgens":
         errgen = Composed(termops)
-        assert(not(sparse_lindblad_reps and isinstance(simulator, _MatrixFSim))), \
-            "Cannot use sparse ExpErrorgen-op reps with a MatrixForwardSimulator!"
-        ExpErrorgenOp = _op.ExpErrorgenOp if sparse_lindblad_reps else _op.ExpErrorgenDenseOp
-        return ExpErrorgenOp(None, errgen)
+        #assert(not(sparse_lindblad_reps and isinstance(simulator, _MatrixFSim))), \
+        #    "Cannot use sparse ExpErrorgen-op reps with a MatrixForwardSimulator!"
+        return _op.ExpErrorgenOp(None, errgen)
     else: assert(False)
 
 
@@ -1145,9 +1141,7 @@ def _build_nqn_cloud_noise(target_qubit_inds, qubit_graph, weight_maxhops_tuples
 
     simulator : ForwardSimulator
         The forward simulation (probability computation) being used by
-        the model this gate is destined for.  This affects what type of
-        gate objects (e.g. `ComposedDenseOp` vs `ComposedOp`) are created.
-        `None` means a :class:`MatrixForwardSimulator`.
+        the model this gate is destined for. `None` means a :class:`MatrixForwardSimulator`.
 
     parameterization : str
         The type of parameterizaton for the constructed gate. E.g. "H+S",
@@ -1165,21 +1159,18 @@ def _build_nqn_cloud_noise(target_qubit_inds, qubit_graph, weight_maxhops_tuples
     LinearOperator
     """
     if simulator is None: simulator = _MatrixFSim()
-    if isinstance(simulator, _MatrixFSim):
-        ComposedDenseOp = _op.ComposedDenseOp
-        EmbeddedDenseOp = _op.EmbeddedDenseOp
-    else:
-        ComposedDenseOp = _op.ComposedOp
-        EmbeddedDenseOp = _op.EmbeddedOp
+
+    prefer_dense_reps = isinstance(simulator, _MatrixFSim)
+    evotype = _Evotype.cast(evotype, prefer_dense_reps)
 
     if errcomp_type == "gates":
-        Composed = ComposedDenseOp
-        Embedded = EmbeddedDenseOp
+        Composed = _op.ComposedOp
+        Embedded = _op.EmbeddedOp
     elif errcomp_type == "errorgens":
         Composed = _op.ComposedErrorgen
         Embedded = _op.EmbeddedErrorgen
     else: raise ValueError("Invalid `errcomp_type`: %s" % errcomp_type)
-    ExpErrorgen = _get_experrgen_factory(simulator, parameterization, errcomp_type, sparse_lindblad_reps, evotype)
+    ExpErrorgen = _get_experrgen_factory(simulator, parameterization, errcomp_type, evotype)
     #constructs a gate or errorgen based on value of errcomp_type
 
     printer = _VerbosityPrinter.create_printer(verbosity)
@@ -1311,18 +1302,18 @@ class CloudNoiseLayerRules(_LayerRules):
         """
         #Note: cache uses 'op-layers' for *simple target* layers, not complete ones
         if layerlbl in caches['complete-layers']: return caches['complete-layers'][layerlbl]
-        assert(not(self.sparse_lindblad_reps and isinstance(model._sim, _MatrixFSim))), \
-            "Cannot use sparse ExpErrorgen-op reps with a MatrixForwardSimulator!"
-        dense_lindblad_reps = not self.sparse_lindblad_reps
-        dense_composed_reps = dense_lindblad_reps  # whether dense matrix gates should be created
+        #assert(not(self.sparse_lindblad_reps and isinstance(model._sim, _MatrixFSim))), \
+        #    "Cannot use sparse ExpErrorgen-op reps with a MatrixForwardSimulator!"
+        #dense_lindblad_reps = not self.sparse_lindblad_reps
+        #dense_composed_reps = dense_lindblad_reps  # whether dense matrix gates should be created
 
         if isinstance(layerlbl, _CircuitLabel):
-            op = self._create_op_for_circuitlabel(model, layerlbl, dense_composed_reps)
+            op = self._create_op_for_circuitlabel(model, layerlbl)
             caches['complete-layers'][layerlbl] = op
             return op
 
-        Composed = _op.ComposedDenseOp if dense_composed_reps else _op.ComposedOp
-        ExpErrorgen = _op.ExpErrorgenDenseOp if dense_lindblad_reps else _op.ExpErrorgenOp
+        Composed = _op.ComposedOp
+        ExpErrorgen = _op.ExpErrorgenOp
         Sum = _op.ComposedErrorgen
         #print("DB: CloudNoiseLayerLizard building gate %s for %s w/comp-type %s" %
         #      (('matrix' if dense else 'map'), str(oplabel), self.errcomp_type) )
@@ -1358,10 +1349,9 @@ class CloudNoiseLayerRules(_LayerRules):
             errorGens.extend(self._layer_component_cloudnoises(model, components, caches['op-cloudnoise']))
             if len(errorGens) > 0:
                 if len(errorGens) > 1:
-                    error = ExpErrorgen(Sum(errorGens, state_space=model.state_space, evotype=model.evotype),
-                                        dense_rep=dense_lindblad_reps)
+                    error = ExpErrorgen(Sum(errorGens, state_space=model.state_space, evotype=model.evotype))
                 else:
-                    error = ExpErrorgen(errorGens[0], dense_rep=dense_lindblad_reps)
+                    error = ExpErrorgen(errorGens[0])
                 ops_to_compose.append(error)
         else:
             raise ValueError("Invalid errcomp_type in CloudNoiseLayerRules: %s" % str(self.errcomp_type))

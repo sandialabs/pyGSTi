@@ -577,7 +577,7 @@ class LinearOperator(_modelmember.ModelMember):
         else:
             return _ot.diamonddist(_np.dot(
                 inv_transform, _np.dot(self.to_dense(on_space='minimal'), transform)),
-                                   other_op.to_dense(on_space='minimal'))
+                other_op.to_dense(on_space='minimal'))
 
     def transform_inplace(self, s):
         """

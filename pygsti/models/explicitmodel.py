@@ -227,10 +227,7 @@ class ExplicitOpModel(_mdl.OpModel):
         if op_val.state_space == self.state_space and not force:
             return op_val  # if gate operates on full dimension, no need to embed.
 
-        if isinstance(self._sim, _matrixfwdsim.MatrixForwardSimulator):
-            return _op.EmbeddedDenseOp(self.state_space, op_target_labels, op_val)
-        else:  # all other types, e.g. "map" and "termorder"
-            return _op.EmbeddedOp(self.state_space, op_target_labels, op_val)
+        return _op.EmbeddedOp(self.state_space, op_target_labels, op_val)
 
     @property
     def default_gauge_group(self):

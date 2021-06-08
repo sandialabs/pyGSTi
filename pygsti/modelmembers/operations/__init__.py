@@ -12,13 +12,13 @@ Sub-package holding model operation objects.
 
 from .cliffordop import CliffordOp
 from .composederrorgen import ComposedErrorgen
-from .composedop import ComposedOp, ComposedDenseOp
+from .composedop import ComposedOp
 from .denseop import DenseOperator, DenseOperatorInterface
 from .depolarizeop import DepolarizeOp
 from .eigpdenseop import EigenvalueParamDenseOp
 from .embeddederrorgen import EmbeddedErrorgen
-from .embeddedop import EmbeddedOp, EmbeddedDenseOp
-from .experrorgenop import ExpErrorgenOp, ExpErrorgenDenseOp
+from .embeddedop import EmbeddedOp
+from .experrorgenop import ExpErrorgenOp
 from .fulldenseop import FullDenseOp
 from .fullunitaryop import FullUnitaryOp
 from .lindbladerrorgen import LindbladErrorgen

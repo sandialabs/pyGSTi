@@ -861,7 +861,7 @@ def create_cloud_crosstalk_model(num_qubits, gate_names, nonstd_gate_unitaries={
 
         #If we get here, we've created errgen, which we either return or package into a map:
         if return_what == "errmap":
-            return _op.ExpErrorgenOp(errgen, dense_rep=not sparse_lindblad_reps)
+            return _op.ExpErrorgenOp(errgen)
         else:
             return errgen
 
@@ -2120,10 +2120,10 @@ def _compute_reps_for_synthetic_idle(model, germ_str, nqubits, core_qubits):
                 # embedded gate acts on entire core-qubit space:
                 return g.embedded_op
             else:
-                return _objs.EmbeddedDenseOp(ss, g.targetLabels, g.embedded_op)
+                return _objs.EmbeddedOp(ss, g.targetLabels, g.embedded_op)
 
         elif isinstance(g, _objs.ComposedOp):
-            return _objs.ComposedDenseOp([extract_gate(f) for f in g.factorops])
+            return _objs.ComposedOp([extract_gate(f) for f in g.factorops])
         else:
             raise ValueError("Cannot extract core contrib from %s" % str(type(g)))
 

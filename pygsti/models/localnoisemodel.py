@@ -22,6 +22,7 @@ from ..modelmembers import operations as _op
 from ..modelmembers import states as _state
 from ..modelmembers import povms as _povm
 from ..modelmembers.operations import opfactory as _opfactory
+from ..evotypes import Evotype as _Evotype
 from ..objects import qubitgraph as _qgraph
 from . import labeldicts as _ld
 from ..tools import optools as _gt
@@ -160,8 +161,7 @@ class LocalNoiseModel(_ImplicitOpModel):
 
     ensure_composed_gates : bool, optional
         If True then the elements of the `operation_bks['gates']` will always
-        be either :class:`ComposedDenseOp` (with a "matrix" forward simulator) or
-        :class:`ComposedOp` (othewise) objects.  The purpose of this is to
+        be :class:`ComposedOp` objects.  The purpose of this is to
         facilitate modifying the gate operations after the model is created.
         If False, then the appropriately parameterized gate objects (often
         dense gates) are used directly.
@@ -328,8 +328,7 @@ class LocalNoiseModel(_ImplicitOpModel):
 
         ensure_composed_gates : bool, optional
             If True then the elements of the `operation_bks['gates']` will always
-            be either :class:`ComposedDenseOp` (with a "matrix" forward simulator)
-            or :class:`ComposedOp` (othewise) objects.  The purpose of this is to
+            be :class:`ComposedOp` objects.  The purpose of this is to
             facilitate modifying the gate operations after the model is created.
             If False, then the appropriately parameterized gate objects (often
             dense gates) are used directly.
@@ -545,6 +544,9 @@ class LocalNoiseModel(_ImplicitOpModel):
         state_space = _statespace.QubitSpace(qubit_labels)
         assert(state_space.num_qubits == num_qubits), "Number of qubit labels != `num_qubits`!"
 
+        prefer_dense_reps = isinstance(simulator, _MatrixFSim)
+        evotype = _Evotype.cast(evotype, prefer_dense_reps)
+
         # Build gate dictionaries. A value of `gatedict` can be an array, a LinearOperator, or an OpFactory.
         # For later processing, we'll create mm_gatedict to contain each item as a ModelMember.  In local noise
         # models, these gates can be parameterized however the user desires - the LocalNoiseModel just embeds these
@@ -630,8 +632,6 @@ class LocalNoiseModel(_ImplicitOpModel):
             for i, layerop in enumerate(povm_layers):
                 self.povm_blks['layers'][_Lbl("M%d" % i)] = layerop
 
-        Composed = _op.ComposedDenseOp if isinstance(simulator, _MatrixFSim) else _op.ComposedOp
-
         for gateName, gate in mm_gatedict.items():  # gate is a ModelMember - either LinearOperator, or an OpFactory
             if _Lbl(gateName).sslbls is not None: continue
             # only process gate labels w/out sslbls (e.g. "Gx", not "Gx:0") - we'll check for the
@@ -659,10 +659,10 @@ class LocalNoiseModel(_ImplicitOpModel):
 
             gate_is_factory = isinstance(gate, _opfactory.OpFactory)
             if not independent_gates:  # then get our "template" gate ready
-                if ensure_composed_gates and not isinstance(gate, Composed) and not gate_is_factory:
-                    #Make a single ComposedDenseOp *here*, which is used
+                if ensure_composed_gates and not isinstance(gate, _op.ComposedOp) and not gate_is_factory:
+                    #Make a single ComposedOp *here*, which is used
                     # in all the embeddings for different target qubits
-                    gate = Composed([gate], state_space="auto", evotype="auto")  # to make adding more factors easy
+                    gate = _op.ComposedOp([gate], state_space="auto", evotype="auto")  # to make adding more factors easy
 
                 if gate_is_factory:
                     self.factories['gates'][_Lbl(gateName)] = gate
@@ -691,10 +691,10 @@ class LocalNoiseModel(_ImplicitOpModel):
 
                 elif independent_gates:  # then we need to ~copy `gate` so it has indep params
                     if ensure_composed_gates and not gate_is_factory:
-                        #Make a single ComposedDenseOp *here*, for *only this* embedding
+                        #Make a single ComposedOp *here*, for *only this* embedding
                         # Don't copy gate here, as we assume it's ok to be shared when we
                         #  have independent composed gates
-                        base_gate = Composed([gate], evotype="auto", state_space="auto")  # to make adding factors easy
+                        base_gate = _op.ComposedOp([gate], evotype="auto", state_space="auto")  # to make adding factors easy
                     else:  # want independent params but not a composed gate, so .copy()
                         base_gate = gate.copy()  # so independent parameters
 
@@ -713,7 +713,6 @@ class LocalNoiseModel(_ImplicitOpModel):
                     # when just ordering doesn't align (e.g. Gcnot:1:0 on 2-qubits needs to embed)
                     if inds[0] == '*':
                         embedded_op = _opfactory.EmbeddingOpFactory(state_space, base_gate,
-                                                                    dense=isinstance(simulator, _MatrixFSim),
                                                                     num_target_labels=inds[1])
                         self.factories['layers'][_Lbl(gateName)] = embedded_op
 
@@ -721,14 +720,12 @@ class LocalNoiseModel(_ImplicitOpModel):
                         if inds == tuple(qubit_labels):  # then no need to embed
                             embedded_op = base_gate
                         else:
-                            embedded_op = _opfactory.EmbeddedOpFactory(state_space, inds, base_gate,
-                                                                       dense=isinstance(simulator, _MatrixFSim))
+                            embedded_op = _opfactory.EmbeddedOpFactory(state_space, inds, base_gate)
                         self.factories['layers'][_Lbl(gateName, inds)] = embedded_op
                     else:
                         if inds == tuple(qubit_labels):  # then no need to embed
                             embedded_op = base_gate
                         else:
-                            #REMOVE EmbeddedOp = _op.EmbeddedDenseOp if isinstance(simulator, _MatrixFSim) else _op.EmbeddedOp
                             embedded_op = _op.EmbeddedOp(state_space, inds, base_gate)
                         self.operation_blks['layers'][_Lbl(gateName, inds)] = embedded_op
 
@@ -746,9 +743,8 @@ class LocalNoiseModel(_ImplicitOpModel):
 
             if num_qubits > 1 and global_idle_nQubits == 1:  # auto create tensor-prod 1Q global idle
                 self.operation_blks['gates'][_Lbl('1QGlobalIdle')] = global_idle
-                Embedded = _op.EmbeddedDenseOp if isinstance(simulator, _MatrixFSim) else _op.EmbeddedOp
-                global_idle = Composed([Embedded(state_space, (qlbl,), global_idle)
-                                        for qlbl in qubit_labels])
+                global_idle = _op.ComposedOp([_op.EmbeddedOp(state_space, (qlbl,), global_idle)
+                                              for qlbl in qubit_labels])
 
             global_idle_nQubits = global_idle.state_space.num_qubits
             assert(global_idle_nQubits == num_qubits), \
@@ -823,8 +819,6 @@ class _SimpleCompLayerRules(_LayerRules):
         LinearOperator
         """
         if layerlbl in caches['complete-layers']: return caches['complete-layers'][layerlbl]
-        dense = isinstance(model._sim, _MatrixFSim)  # whether dense matrix gates should be created
-        Composed = _op.ComposedDenseOp if dense else _op.ComposedOp
         components = layerlbl.components
         bHasGlobalIdle = bool(_Lbl('globalIdle') in model.operation_blks['layers'])
 
@@ -834,20 +828,20 @@ class _SimpleCompLayerRules(_LayerRules):
             return op
 
         if len(components) == 1 and not bHasGlobalIdle:
-            ret = self._layer_component_operation(model, components[0], caches['op-layers'], dense)
+            ret = self._layer_component_operation(model, components[0], caches['op-layers'])
         else:
             gblIdle = [model.operation_blks['layers'][_Lbl('globalIdle')]] if bHasGlobalIdle else []
 
             #Note: OK if len(components) == 0, as it's ok to have a composed gate with 0 factors
-            ret = Composed(gblIdle + [self._layer_component_operation(model, l, caches['op-layers'], dense)
-                                      for l in components],
-                           evotype=model.evotype, state_space=model.state_space)
+            ret = _op.ComposedOp(gblIdle + [self._layer_component_operation(model, l, caches['op-layers'])
+                                            for l in components],
+                                 evotype=model.evotype, state_space=model.state_space)
             model._init_virtual_obj(ret)  # so ret's gpindices get set
 
         caches['complete-layers'][layerlbl] = ret  # cache the final label value
         return ret
 
-    def _layer_component_operation(self, model, complbl, cache, dense):
+    def _layer_component_operation(self, model, complbl, cache):
         """
         Retrieves the operation corresponding to one component of a layer operation.
 
@@ -855,9 +849,6 @@ class _SimpleCompLayerRules(_LayerRules):
         ----------
         complbl : Label
             A component label of a larger layer label.
-
-        dense : bool
-            Whether to create dense operators or not.
 
         Returns
         -------
@@ -869,7 +860,7 @@ class _SimpleCompLayerRules(_LayerRules):
         #Note: currently we don't cache complbl because it's not the final
         # label being created, but we could if it would improve performance.
         if isinstance(complbl, _CircuitLabel):
-            ret = self._create_op_for_circuitlabel(model, complbl, dense)
+            ret = self._create_op_for_circuitlabel(model, complbl)
         elif complbl in model.operation_blks['layers']:
             ret = model.operation_blks['layers'][complbl]
         else:

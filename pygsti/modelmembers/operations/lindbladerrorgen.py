@@ -482,7 +482,7 @@ class LindbladErrorgen(_LinearOperator):
         try:
             rep = evotype.create_lindblad_errorgen_rep(lindblad_term_dict, basis, state_space)
             self._rep_type = 'lindblad'
-        except Exception:
+        except AttributeError:
             #Otherwise try to create a sparse or dense matrix representation
             self.hamGens, self.otherGens = self._init_generators(dim)
 

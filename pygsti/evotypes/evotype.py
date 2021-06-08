@@ -8,19 +8,30 @@ class Evotype(object):
 
     Provides an interface for creating representations.  The `create_*` methods specify an API used by the
     operation classes so they can create the representation they need.
+
+    Parameters
+    ----------
+    name : str
+        The (module) name of the evolution type
+
+    prefer_dense_reps : bool, optional
+        Whether the dense representation provided by this evolution type should be preferred
+        over more specific types, such as those for composed, embedded, and exponentiated
+        operations.  Most often this is set to `True` when using a :class:`MatrixForwardSimulator`
+        in order to get a performance gain.
     """
     defaut_evotype = None
 
     @classmethod
-    def cast(cls, obj):
+    def cast(cls, obj, default_prefer_dense_reps=False):
         if isinstance(obj, Evotype):
             return obj
         elif obj == "default":
-            return Evotype(cls.default_evotype)
+            return Evotype(cls.default_evotype, default_prefer_dense_reps)
         else:  # assume obj is a string naming an evotype
-            return Evotype(str(obj))
+            return Evotype(str(obj), default_prefer_dense_reps)
 
-    def __init__(self, name):
+    def __init__(self, name, prefer_dense_reps=False):
         self.name = name
         #REMOVE - and get rid of module_name variable
         #if ':' in name:
@@ -31,6 +42,7 @@ class Evotype(object):
         module_name = name
 
         self.module = _importlib.import_module("pygsti.evotypes." + module_name)
+        self.prefer_dense_reps = prefer_dense_reps
         #REMOVE self.sub_evotype = Evotype(sub_evotype_name) if (sub_evotype_name is not None) else None
 
     def __getstate__(self):
