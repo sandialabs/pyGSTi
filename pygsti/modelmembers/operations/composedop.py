@@ -278,6 +278,7 @@ class ComposedOp(_LinearOperator):
         """
         plabels_per_local_index = _collections.defaultdict(list)
         for operation, factorgate_local_inds in zip(self.factorops, self._submember_rpindices):
+            #REMOVE
             #factorgate_local_inds = _modelmember._decompose_gpindices(
             #    self.gpindices, operation.gpindices)
             for i, plbl in zip(_slct.to_array(factorgate_local_inds), operation.parameter_labels):
