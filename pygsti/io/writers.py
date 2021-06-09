@@ -387,9 +387,9 @@ def write_model(model, filename, title=None):
 
         for label, gate in model.operations.items():
             props = None
-            if isinstance(gate, _op.FullDenseOp): typ = "GATE"
-            elif isinstance(gate, _op.TPDenseOp): typ = "TP-GATE"
-            elif isinstance(gate, _op.StaticDenseOp): typ = "STATIC-GATE"
+            if isinstance(gate, _op.FullArbitraryOp): typ = "GATE"
+            elif isinstance(gate, _op.FullTPOp): typ = "TP-GATE"
+            elif isinstance(gate, _op.StaticArbitraryOp): typ = "STATIC-GATE"
             elif isinstance(gate, _op.LindbladDenseOp):  # TODO - change to ComposedOp ?? -------------------------------------------
                 typ = "CPTP-GATE"
                 props = [("LiouvilleMx", gate.to_dense(on_space='HilbertSchmidt'))]
@@ -422,9 +422,9 @@ def write_model(model, filename, title=None):
             output.write(typ + ": " + str(instLabel) + '\n\n')
 
             for label, gate in inst.items():
-                if isinstance(gate, _op.FullDenseOp): typ = "IGATE"
+                if isinstance(gate, _op.FullArbitraryOp): typ = "IGATE"
                 elif isinstance(gate, _instrument.TPInstrumentOp): typ = "IGATE"  # ok b/c instrument is marked as TP
-                elif isinstance(gate, _op.StaticDenseOp): typ = "STATIC-IGATE"
+                elif isinstance(gate, _op.StaticArbitraryOp): typ = "STATIC-IGATE"
                 else:
                     _warnings.warn(
                         ("Non-standard gate of type {typ} cannot be described by"

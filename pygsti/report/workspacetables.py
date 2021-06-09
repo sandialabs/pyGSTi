@@ -18,6 +18,7 @@ from .. import construction as _cnst
 from .. import tools as _tools
 from .. import objects as _objs
 
+from .. import models as _models
 from ..modelmembers import operations as _op
 from ..modelmembers import states as _state
 from ..modelmembers import povms as _povm
@@ -460,7 +461,7 @@ class GatesTable(WorkspaceTable):
                     op_dim = models[-1].dim
                     basis = models[-1].basis
                     intervalMx = intervalVec.reshape(op_dim, op_dim)
-                elif isinstance(per_model_ops[-1], _objs.TPDenseOp):
+                elif isinstance(per_model_ops[-1], _op.FullTPOp):
                     #then we know how to reshape into a matrix
                     op_dim = models[-1].dim
                     basis = models[-1].basis
@@ -1686,7 +1687,7 @@ class NQubitErrgenTable(WorkspaceTable):
     The gates are assumed to have a particular structure.
 
     Specifically, gates must be :class:`LindbladOp` or
-    :class:`StaticDenseOp` objects wrapped within :class:`EmbeddedOp` and/or
+    :class:`StaticArbitraryOp` objects wrapped within :class:`EmbeddedOp` and/or
     :class:`ComposedOp` objects (this is consistent with the operation
     blocks of a :class:`CloudNoiseModel`).  As such, error rates
     are read directly from the gate objects rather than being computed by
@@ -1722,7 +1723,7 @@ class NQubitErrgenTable(WorkspaceTable):
 
         The gates in `model` are assumed to have a particular structure,
         namely: they must be :class:`LindbladOp` or
-        :class:`StaticDenseOp` objects wrapped within :class:`EmbeddedOp`
+        :class:`StaticArbitraryOp` objects wrapped within :class:`EmbeddedOp`
         and/or :class:`ComposedOp` objects.
 
         Error rates are organized by order of composition and which qubits
@@ -1802,14 +1803,14 @@ class NQubitErrgenTable(WorkspaceTable):
         pre_rows = []; displayed_params = set()
 
         def process_gate(lbl, gate, comppos_prefix, sslbls):
-            if isinstance(gate, _objs.ComposedOp):
+            if isinstance(gate, _op.ComposedOp):
                 for i, fgate in enumerate(gate.factorops):
                     process_gate(lbl, fgate, comppos_prefix + (i,), sslbls)
-            elif isinstance(gate, _objs.EmbeddedOp):
+            elif isinstance(gate, _op.EmbeddedOp):
                 process_gate(lbl, gate.embedded_op, comppos_prefix, gate.targetLabels)
-            elif isinstance(gate, _objs.StaticDenseOp):
+            elif isinstance(gate, _op.StaticArbitraryOp):
                 pass  # no error coefficients associated w/static gates
-            elif isinstance(gate, _objs.LindbladOp):
+            elif isinstance(gate, _op.LindbladOp):  # TODO - change to ComposedOP --------------------------------------------------------
 
                 # Only display coeffs for gates that correspond to *new*
                 # (not yet displayed) parameters.
@@ -1852,13 +1853,13 @@ class NQubitErrgenTable(WorkspaceTable):
             return _np.array([coeffs]), xlabels, ylabels
 
         #Do computation, so shared color scales can be computed
-        if isinstance(model, _objs.ExplicitOpModel):
+        if isinstance(model, _models.ExplicitOpModel):
             for gl in opLabels:
                 process_gate(gl, model.operations[gl], (), None)
-        elif isinstance(model, _objs.LocalNoiseModel):  # process primitive op error
+        elif isinstance(model, _models.LocalNoiseModel):  # process primitive op error
             for gl in opLabels:
                 process_gate(gl, model.operation_blks['layers'][gl], (), None)
-        elif isinstance(model, _objs.CloudNoiseModel):  # process primitive op error
+        elif isinstance(model, _models.CloudNoiseModel):  # process primitive op error
             for gl in opLabels:
                 process_gate(gl, model.operation_blks['cloudnoise'][gl], (), None)
         else:
@@ -2131,7 +2132,7 @@ class OldGateDecompTable(WorkspaceTable):
         colHeadings = ('Gate', 'Eigenvalues', 'Fixed pt', 'Rotn. axis', 'Diag. decay', 'Off-diag. decay')
         formatters = [None] * 6
 
-        assert(isinstance(model, _objs.ExplicitOpModel)), "OldGateDecompTable only works with explicit models"
+        assert(isinstance(model, _models.ExplicitOpModel)), "OldGateDecompTable only works with explicit models"
         decomps = [_reportables.decomposition(model.operations[gl]) for gl in opLabels]
         decompNames = ('fixed point',
                        'axis of rotation',
@@ -2207,7 +2208,7 @@ class OldRotationAxisTable(WorkspaceTable):
 
         opLabels = model.primitive_op_labels
 
-        assert(isinstance(model, _objs.ExplicitOpModel)), "OldRotationAxisTable only works with explicit models"
+        assert(isinstance(model, _models.ExplicitOpModel)), "OldRotationAxisTable only works with explicit models"
         decomps = [_reportables.decomposition(model.operations[gl]) for gl in opLabels]
 
         colHeadings = ("Gate", "Angle") + tuple(["RAAW(%s)" % gl for gl in opLabels])
@@ -2367,7 +2368,7 @@ class GateEigenvalueTable(WorkspaceTable):
                 virtual_ops):
 
         opLabels = model.primitive_op_labels  # operation labels
-        assert(isinstance(model, _objs.ExplicitOpModel)), "GateEigenvalueTable only works with explicit models"
+        assert(isinstance(model, _models.ExplicitOpModel)), "GateEigenvalueTable only works with explicit models"
 
         colHeadings = ['Gate'] if (virtual_ops is None) else ['Gate or Germ']
         formatters = [None]
@@ -3169,7 +3170,7 @@ class GatesSingleMetricTable(WorkspaceTable):
         row_formatters = [None] + ['Normal'] * len(titles)
 
         if rowtitles is None:
-            assert(isinstance(target_models[0], _objs.ExplicitOpModel)
+            assert(isinstance(target_models[0], _models.ExplicitOpModel)
                    ), "%s only works with explicit models" % str(type(self))
             for gl in target_models[0].operations:  # use first target's operation labels
                 row_data = [gl]
@@ -3451,7 +3452,7 @@ class MetadataTable(WorkspaceTable):
                 val = params_dict[key]
             table.add_row((key, str(val)), (None, 'Verbatim'))
 
-        if isinstance(self, _objs.ExplicitOpModel):
+        if isinstance(self, _models.ExplicitOpModel):
             for lbl, vec in model.preps.items():
                 if isinstance(vec, _state.StaticState): paramTyp = "static"
                 elif isinstance(vec, _state.FullState): paramTyp = "full"
@@ -3474,10 +3475,10 @@ class MetadataTable(WorkspaceTable):
                     table.add_row(("> " + lbl + " parameterization", paramTyp), (None, 'Verbatim'))
 
             for gl, gate in model.operations.items():
-                if isinstance(gate, _op.StaticDenseOp): paramTyp = "static"
-                elif isinstance(gate, _op.FullDenseOp): paramTyp = "full"
-                elif isinstance(gate, _op.TPDenseOp): paramTyp = "TP"
-                elif isinstance(gate, _op.LinearlyParamDenseOp): paramTyp = "linear"
+                if isinstance(gate, _op.StaticArbitraryOp): paramTyp = "static"
+                elif isinstance(gate, _op.FullArbitraryOp): paramTyp = "full"
+                elif isinstance(gate, _op.FullTPOp): paramTyp = "TP"
+                elif isinstance(gate, _op.LinearlyParamArbitraryOp): paramTyp = "linear"
                 elif isinstance(gate, _op.EigenvalueParamDenseOp): paramTyp = "eigenvalue"
                 elif isinstance(gate, _op.ComposedOp): paramTyp = "Composed"
                 else: paramTyp = "unknown"  # pragma: no cover

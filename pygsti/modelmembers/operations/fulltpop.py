@@ -1,5 +1,5 @@
 """
-The TPDenseOp class and supporting functionality.
+The FullTPOp class and supporting functionality.
 """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -16,7 +16,7 @@ from .denseop import DenseOperator as _DenseOperator
 from ...objects.protectedarray import ProtectedArray as _ProtectedArray
 
 
-class TPDenseOp(_DenseOperator):
+class FullTPOp(_DenseOperator):
     """
     A trace-preserving operation matrix.
 
@@ -47,7 +47,7 @@ class TPDenseOp(_DenseOperator):
 
     def __init__(self, m, evotype="default", state_space=None):
         """
-        Initialize a TPDenseOp object.
+        Initialize a FullTPOp object.
 
         Parameters
         ----------
@@ -57,10 +57,10 @@ class TPDenseOp(_DenseOperator):
         """
         #LinearOperator.__init__(self, LinearOperator.convert_to_matrix(m))
         mx = _LinearOperator.convert_to_matrix(m)
-        assert(_np.isrealobj(mx)), "TPDenseOp must have *real* values!"
+        assert(_np.isrealobj(mx)), "FullTPOp must have *real* values!"
         if not (_np.isclose(mx[0, 0], 1.0)
                 and _np.allclose(mx[0, 1:], 0.0)):
-            raise ValueError("Cannot create TPDenseOp: "
+            raise ValueError("Cannot create FullTPOp: "
                              "invalid form for 1st row!")
         _DenseOperator.__init__(self, mx, evotype, state_space)
         assert(self._rep.base.flags['C_CONTIGUOUS'] and self._rep.base.flags['OWNDATA'])
@@ -97,7 +97,7 @@ class TPDenseOp(_DenseOperator):
             raise ValueError("Argument must be a (%d,%d) matrix!"
                              % (self.dim, self.dim))
         if not (_np.isclose(mx[0, 0], 1.0) and _np.allclose(mx[0, 1:], 0.0)):
-            raise ValueError("Cannot set TPDenseOp: "
+            raise ValueError("Cannot set FullTPOp: "
                              "invalid form for 1st row!")
             #For further debugging:  + "\n".join([str(e) for e in mx[0,:]])
         self._ptr[1:, :] = mx[1:, :]

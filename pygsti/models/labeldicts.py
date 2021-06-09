@@ -268,7 +268,7 @@ class OrderedMemberDict(_PrefixOrderedDict, _mm.ModelChild):
             obj = _state.StaticState(value, evotype, state_space)
             obj = _state.convert(obj, self.default_param, basis)
         elif self.flags['cast_to_type'] == "operation":
-            obj = _op.StaticDenseOp(value, evotype, state_space)
+            obj = _op.StaticArbitraryOp(value, evotype, state_space)
             obj = _op.convert(obj, self.default_param, basis)
         # FUTURE: handle "povm", "instrument" and "factory"?
         return obj

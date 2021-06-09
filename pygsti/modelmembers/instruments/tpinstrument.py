@@ -95,13 +95,13 @@ class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
                 else _statespace.StateSpace.cast(state_space)
 
             # Create gate objects that are used to parameterize this instrument
-            MT = _op.TPDenseOp(sum([v for k, v in matrix_list]), evotype, state_space)
+            MT = _op.FullTPOp(sum([v for k, v in matrix_list]), evotype, state_space)
             MT.set_gpindices(slice(0, MT.num_params), self)
             self.param_ops.append(MT)
 
             dim = MT.dim; off = MT.num_params
             for k, v in matrix_list[:-1]:
-                Di = _op.FullDenseOp(v - MT, evotype, state_space)
+                Di = _op.FullArbitraryOp(v - MT, evotype, state_space)
                 Di.set_gpindices(slice(off, off + Di.num_params), self)
                 assert(Di.dim == dim)
                 self.param_ops.append(Di); off += Di.num_params

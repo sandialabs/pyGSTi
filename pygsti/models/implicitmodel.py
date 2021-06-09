@@ -176,7 +176,7 @@ class ImplicitOpModel(_mdl.OpModel):
         """
         Constructs a dictionary of the symplectic representations for all the Clifford gates in this model.
 
-        Non-:class:`CliffordOp` gates will be ignored and their entries omitted
+        Non-:class:`StaticCliffordOp` gates will be ignored and their entries omitted
         from the returned dictionary.
 
         Parameters
@@ -202,12 +202,12 @@ class ImplicitOpModel(_mdl.OpModel):
             if (gfilter is not None) and (gl not in gfilter): continue
 
             if isinstance(gate, _op.EmbeddedOp):
-                assert(isinstance(gate.embedded_op, _op.CliffordOp)), \
-                    "EmbeddedClifforGate contains a non-CliffordOp!"
+                assert(isinstance(gate.embedded_op, _op.StaticCliffordOp)), \
+                    "EmbeddedClifforGate contains a non-StaticCliffordOp!"
                 lbl = gl.name  # strip state space labels off since this is a
                 # symplectic rep for the *embedded* gate
                 srep = (gate.embedded_op.smatrix, gate.embedded_op.svector)
-            elif isinstance(gate, _op.CliffordOp):
+            elif isinstance(gate, _op.StaticCliffordOp):
                 lbl = gl.name
                 srep = (gate.smatrix, gate.svector)
             else:

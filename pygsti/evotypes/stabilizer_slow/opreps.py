@@ -151,7 +151,7 @@ class OpRepEmbedded(OpRep):
             "All state space labels must correspond to *qubits*"
 
         # Just a sanity check...  TODO REMOVE?
-        #if isinstance(self.embedded_op, CliffordOp):
+        #if isinstance(self.embedded_op, StaticCliffordOp):
         #    assert(len(target_labels) == len(self.embedded_op.svector) // 2), \
         #        "Inconsistent number of qubits in `target_labels` and Clifford `embedded_op`"
 

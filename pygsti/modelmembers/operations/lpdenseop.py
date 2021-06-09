@@ -1,5 +1,5 @@
 """
-The LinearlyParamDenseOp class and supporting functionality.
+The LinearlyParamArbitraryOp class and supporting functionality.
 """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -19,7 +19,7 @@ IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 
 class LinearlyParameterizedElementTerm(object):
     """
-    Encapsulates a single term within a LinearlyParamDenseOp.
+    Encapsulates a single term within a LinearlyParamArbitraryOp.
 
     Parameters
     ----------
@@ -58,7 +58,7 @@ class LinearlyParameterizedElementTerm(object):
         return LinearlyParameterizedElementTerm(self.coeff, self.paramIndices[:])
 
 
-class LinearlyParamDenseOp(_DenseOperator):
+class LinearlyParamArbitraryOp(_DenseOperator):
     """
     An operation matrix parameterized such that each element depends only linearly on any parameter.
 

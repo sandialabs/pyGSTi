@@ -17,7 +17,7 @@ from .. import objects as _objs
 from ..tools import unitary_to_process_mx, change_basis
 from ..models import statespace as _statespace
 from ..models import ExplicitOpModel as _ExplicitOpModel
-from ..modelmembers.operations import FullDenseOp as _FullDenseOp
+from ..modelmembers.operations import FullArbitraryOp as _FullArbitraryOp
 from ..modelmembers.povms import UnconstrainedPOVM as _UnconstrainedPOVM
 
 
@@ -291,10 +291,10 @@ def create_qutrit_model(error_scale, x_angle=_np.pi / 2, y_angle=_np.pi / 2,
     qutritMDL.povms['Mdefault'] = _UnconstrainedPOVM([('0bright', E0final),
                                                       ('1bright', E1final),
                                                       ('2bright', E2final)], evotype=evotype)
-    qutritMDL.operations['Gi'] = _FullDenseOp(arrType(gateISOfinal), evotype, state_space)
-    qutritMDL.operations['Gx'] = _FullDenseOp(arrType(gateXSOfinal), evotype, state_space)
-    qutritMDL.operations['Gy'] = _FullDenseOp(arrType(gateYSOfinal), evotype, state_space)
-    qutritMDL.operations['Gm'] = _FullDenseOp(arrType(gateMSOfinal), evotype, state_space)
+    qutritMDL.operations['Gi'] = _FullArbitraryOp(arrType(gateISOfinal), evotype, state_space)
+    qutritMDL.operations['Gx'] = _FullArbitraryOp(arrType(gateXSOfinal), evotype, state_space)
+    qutritMDL.operations['Gy'] = _FullArbitraryOp(arrType(gateYSOfinal), evotype, state_space)
+    qutritMDL.operations['Gm'] = _FullArbitraryOp(arrType(gateMSOfinal), evotype, state_space)
     qutritMDL.default_gauge_group = _objs.gaugegroup.FullGaugeGroup(state_space, evotype)
 
     return qutritMDL

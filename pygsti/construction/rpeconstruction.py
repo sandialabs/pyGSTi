@@ -15,6 +15,7 @@ from . import datasetconstruction as _dsc
 
 from .. import objects as _objs
 from .. import tools as _tools
+from ..modelmembers import operations as _op
 
 
 def make_parameterized_rpe_gate_set(alpha_true, epsilon_true, y_rot, spam_depol,
@@ -79,7 +80,7 @@ def make_parameterized_rpe_gate_set(alpha_true, epsilon_true, y_rot, spam_depol,
             effect_labels=["E0", "Ec"], effect_expressions=["0", "complement"],
             spamdefs={'0': ('rho0', 'E0'), '1': ('rho0', 'Ec')})
 
-        outputModel.operations['Gx'] = _objs.FullDenseOp(
+        outputModel.operations['Gx'] = _op.FullArbitraryOp(
             _np.dot(_np.dot(_np.linalg.inv(modelAux1.operations['Gy']),
                             outputModel.operations['Gx']), modelAux1.operations['Gy']))
 
@@ -379,7 +380,7 @@ def rpe_ensemble_test(alpha_true, epsilon_true, y_rot, spam_depol, log2k_max, n,
                                             effect_labels=["E0", "Ec"], effect_expressions=["0", "complement"],
                                             spamdefs={'0': ('rho0', 'E0'), '1': ('rho0', 'Ec')})
 
-    simModel.operations['Gx'] = _objs.FullDenseOp(
+    simModel.operations['Gx'] = _op.FullArbitraryOp(
         _np.dot(_np.dot(_np.linalg.inv(modelAux1.operations['Gy']), simModel.operations['Gx']),
                 modelAux1.operations['Gy']))
 

@@ -143,9 +143,9 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         #    #self.unitary_postfactor is actually the *unitary* not the postfactor
         #    termtype = "dense" if self._evotype == "svterm" else "clifford"
         #
-        #    # automatically "up-convert" operation to CliffordOp if needed
+        #    # automatically "up-convert" operation to StaticCliffordOp if needed
         #    if termtype == "clifford":
-        #        assert(isinstance(self.unitary_postfactor, CliffordOp))  # see __init__
+        #        assert(isinstance(self.unitary_postfactor, StaticCliffordOp))  # see __init__
         #        U = self.unitary_postfactor.unitary
         #    else: U = self.unitary_postfactor
         #    op_std = _gt.unitary_to_process_mx(U)
@@ -222,7 +222,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
             #if self.unitary_postfactor is not None:
             #    if self._evotype in ("svterm", "cterm"):
             #        if self._evotype == "cterm":
-            #            assert(isinstance(self.unitary_postfactor, CliffordOp))  # see __init__
+            #            assert(isinstance(self.unitary_postfactor, StaticCliffordOp))  # see __init__
             #            U = self.unitary_postfactor.unitary
             #        else: U = self.unitary_postfactor
             #        op_std = _gt.unitary_to_process_mx(U)

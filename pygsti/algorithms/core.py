@@ -227,7 +227,7 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
         else:
             #Just a normal gae
             assert(len(X_ps) == 1); X_p = X_ps[0]  # shape (nESpecs, nRhoSpecs)
-            lgstModel.operations[opLabel] = _op.FullDenseOp(_np.dot(invABMat_p, X_p))  # shape (trunc,trunc)
+            lgstModel.operations[opLabel] = _op.FullArbitraryOp(_np.dot(invABMat_p, X_p))  # shape (trunc,trunc)
 
         #print "DEBUG: X(%s) = \n" % opLabel,X
         #print "DEBUG: Evals(X) = \n",_np.linalg.eigvals(X)

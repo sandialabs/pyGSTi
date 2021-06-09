@@ -102,7 +102,7 @@ class TPInstrumentOp(_DenseOperator):
         derivatives of the flattened operation matrix with respect to a
         single operation parameter.  Thus, each column is of length
         op_dim^2 and there is one column per operation parameter. An
-        empty 2D array in the StaticDenseOp case (num_params == 0).
+        empty 2D array in the StaticArbitraryOp case (num_params == 0).
 
         Parameters
         ----------

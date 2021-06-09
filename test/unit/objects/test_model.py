@@ -11,7 +11,7 @@ from pygsti.objects import Circuit, FullGaugeGroupElement
 from pygsti.forwardsims import matrixforwardsim, mapforwardsim
 from pygsti.models import ExplicitOpModel
 from pygsti.modelmembers.instruments import Instrument
-from pygsti.modelmembers.operations import LinearOperator, FullDenseOp
+from pygsti.modelmembers.operations import LinearOperator, FullArbitraryOp
 from pygsti.tools import indices
 import pygsti.construction as pc
 import pygsti.models.model as m
@@ -155,7 +155,7 @@ class GeneralMethodBase(object):
         self.model["Gi"] = Gi_test_matrix  # set operation matrix
         self.assertArraysAlmostEqual(self.model['Gi'], Gi_test_matrix)
 
-        Gi_test_dense_op = FullDenseOp(Gi_test_matrix)
+        Gi_test_dense_op = FullArbitraryOp(Gi_test_matrix)
         self.model["Gi"] = Gi_test_dense_op  # set gate object
         self.assertArraysAlmostEqual(self.model['Gi'], Gi_test_matrix)
 
@@ -250,7 +250,7 @@ class GeneralMethodBase(object):
 
     def test_set_gate_raises_on_bad_dimension(self):
         with self.assertRaises(AssertionError):
-            self.model['Gbad'] = FullDenseOp(np.zeros((5, 5), 'd'))
+            self.model['Gbad'] = FullArbitraryOp(np.zeros((5, 5), 'd'))
 
     def test_parameter_labels(self):
         self.model.set_all_parameterizations("H+s")
@@ -645,17 +645,17 @@ class FullModelTester(FullModelBase, StandardMethodBase, BaseCase):
         # are already initialized.  Since this isn't allowed currently
         # (a future functionality), we need to do some hacking
         mdl = self.model.copy()
-        mdl.operations['Gnew1'] = FullDenseOp(np.identity(4, 'd'))
+        mdl.operations['Gnew1'] = FullArbitraryOp(np.identity(4, 'd'))
         del mdl.operations['Gnew1']
 
         v = mdl.to_vector()
         Np = mdl.num_params
-        gate_with_gpindices = FullDenseOp(np.identity(4, 'd'))
+        gate_with_gpindices = FullArbitraryOp(np.identity(4, 'd'))
         gate_with_gpindices[0, :] = v[0:4]
         gate_with_gpindices.set_gpindices(np.concatenate(
             (np.arange(0, 4), np.arange(Np, Np + 12))), mdl)  # manually set gpindices
         mdl.operations['Gnew2'] = gate_with_gpindices
-        mdl.operations['Gnew3'] = FullDenseOp(np.identity(4, 'd'))
+        mdl.operations['Gnew3'] = FullArbitraryOp(np.identity(4, 'd'))
         del mdl.operations['Gnew3']  # this causes update of Gnew2 indices
         del mdl.operations['Gnew2']
         # TODO assert correctness
@@ -681,7 +681,7 @@ class StaticModelTester(StaticModelBase, StandardMethodBase, BaseCase):
     def test_set_operation_matrix(self):
         # TODO no random
         Gi_test_matrix = np.random.random((4, 4))
-        Gi_test_dense_op = FullDenseOp(Gi_test_matrix)
+        Gi_test_dense_op = FullArbitraryOp(Gi_test_matrix)
         self.model["Gi"] = Gi_test_dense_op  # set gate object
         self.assertArraysAlmostEqual(self.model['Gi'], Gi_test_matrix)
 

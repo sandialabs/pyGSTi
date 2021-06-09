@@ -253,7 +253,7 @@ class DenseOperatorInterface(object):
 #    """
 #    A DenseOperatorInterface that uses self.base instead of self._rep.base as the "base pointer" to data.
 #
-#    This is used by the TPDenseOp class, for example, which has a .base
+#    This is used by the FullTPOp class, for example, which has a .base
 #    that is different from its ._rep.base.
 #    """
 #    def __init__(self, base):

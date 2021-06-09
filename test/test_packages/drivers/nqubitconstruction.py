@@ -440,7 +440,7 @@ def create_global_idle(qubitGraph, maxWeight, sparse=False, verbosity=0):
 #    if mode == "no-embedding":     
 #        fullTargetOp = EmbeddedDenseOp(ssAllQ, ['Q%d'%i for i in target_qubit_inds],
 #                                    target_op, basisAllQ) 
-#        fullTargetOp = StaticDenseOp( fullTargetOp ) #Make static
+#        fullTargetOp = StaticArbitraryOp( fullTargetOp ) #Make static
 #        fullLocalErr = LindbladDenseOp(fullTargetOp, fullTargetOp,
 #                         ham_basis=errbasis, nonham_basis=errbasis, cptp=True,
 #                         nonham_diagonal_only=True, truncate=True, mx_basis=basisAllQ)
@@ -452,7 +452,7 @@ def create_global_idle(qubitGraph, maxWeight, sparse=False, verbosity=0):
 #        
 #        ssLocQ = ['Q%d'%i for i in range(nPossible)]
 #        basisLocQ = pygsti.objects.Basis('pp', 2**nPossible)
-#        locTargetOp = StaticDenseOp( EmbeddedDenseOp(ssLocQ, ['Q%d'%i for i in loc_target_inds],
+#        locTargetOp = StaticArbitraryOp( EmbeddedDenseOp(ssLocQ, ['Q%d'%i for i in loc_target_inds],
 #                                    target_op, basisLocQ) )
 #        localErr = LindbladDenseOp(locTargetOp, locTargetOp,
 #                         ham_basis=errbasis, nonham_basis=errbasis, cptp=True,

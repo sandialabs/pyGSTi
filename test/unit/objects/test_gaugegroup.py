@@ -79,7 +79,7 @@ class OpGaugeGroupTester(GaugeGroupBase, BaseCase):
 
     def setUp(self):
         GaugeGroupBase.setUp(self)
-        self.gg = ggrp.OpGaugeGroup(op.FullDenseOp(np.identity(4, 'd'), state_space=self.state_space),
+        self.gg = ggrp.OpGaugeGroup(op.FullArbitraryOp(np.identity(4, 'd'), state_space=self.state_space),
                                     ggrp.OpGaugeGroupElement, 'myGateGaugeGroupName')
 
 

@@ -14,7 +14,7 @@ Functions for generating Direct-(LGST, MC2GST, MLGST) models
 from .. import tools as _tools
 from .. import construction as _construction
 from .. import objects as _objs
-from ..modelmembers.operations import FullDenseOp as _FullDenseOp
+from ..modelmembers.operations import FullArbitraryOp as _FullArbitraryOp
 from . import core as _core
 
 
@@ -633,7 +633,7 @@ def focused_mc2gst_model(circuit_to_estimate, circuit_label, dataset,
                                                 objective_function_builder=obuilder, resource_alloc=None,
                                                 verbosity=verbosity)
 
-    focused_lsgst.operations[circuit_label] = _FullDenseOp(
+    focused_lsgst.operations[circuit_label] = _FullArbitraryOp(
         focused_lsgst.sim.product(circuit_to_estimate))  # add desired string as a separate labeled gate
     return focused_lsgst
 

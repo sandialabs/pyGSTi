@@ -90,8 +90,8 @@ class EmbeddedErrorgen(_EmbeddedOp):
     #TODO REMOVE (UNUSED)
     #def _embed_basis_mx(self, mx):
     #    """ Take a dense or sparse basis matrix and embed it. """
-    #    mxAsGate = StaticDenseOp(mx) if isinstance(mx, _np.ndarray) \
-    #        else StaticDenseOp(mx.todense())  # assume mx is a sparse matrix
+    #    mxAsGate = StaticArbitraryOp(mx) if isinstance(mx, _np.ndarray) \
+    #        else StaticArbitraryOp(mx.todense())  # assume mx is a sparse matrix
     #    return EmbeddedOp(self.state_space, self.targetLabels,
     #                      mxAsGate).tosparse()  # always convert to *sparse* basis els
 

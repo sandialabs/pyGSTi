@@ -1262,10 +1262,10 @@ def parse_model(filename):
             else: assert(False), "Logic error!"
 
         elif cur_typ == "GATE":
-            mdl.operations[cur_label] = _op.FullDenseOp(
+            mdl.operations[cur_label] = _op.FullArbitraryOp(
                 get_liouville_mx(obj))
         elif cur_typ == "TP-GATE":
-            mdl.operations[cur_label] = _op.TPDenseOp(
+            mdl.operations[cur_label] = _op.FullTPOp(
                 get_liouville_mx(obj))
         elif cur_typ == "CPTP-GATE":
             qty = get_liouville_mx(obj)
@@ -1282,14 +1282,14 @@ def parse_model(filename):
                      qty, proj_basis, proj_basis, truncate=False, mx_basis=basis))))
 
         elif cur_typ == "STATIC-GATE":
-            mdl.operations[cur_label] = _op.StaticDenseOp(get_liouville_mx(obj))
+            mdl.operations[cur_label] = _op.StaticArbitraryOp(get_liouville_mx(obj))
 
         elif cur_typ in ("Instrument", "TP-Instrument"):
             matrices = []
             for sub_obj in obj['objects']:
                 sub_typ = sub_obj['type']
                 qty = get_liouville_mx(sub_obj)
-                mxOrOp = _op.StaticDenseOp(qty) if cur_typ == "STATIC-IGATE" \
+                mxOrOp = _op.StaticArbitraryOp(qty) if cur_typ == "STATIC-IGATE" \
                     else qty  # just add numpy array `qty` to matrices list
                 # and it will be made into a fully-param gate.
                 matrices.append((sub_obj['label'], mxOrOp))

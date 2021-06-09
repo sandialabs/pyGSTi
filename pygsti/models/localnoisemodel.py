@@ -484,12 +484,12 @@ class LocalNoiseModel(_ImplicitOpModel):
                     if parameterization == "static unitary":  # assume gate dict is already unitary gates?
                         gate = _op.StaticUnitaryOp(gate, 'pp', evotype, state_space=None)
                     elif parameterization == "static clifford":
-                        gate = _op.CliffordOp(gate, None, 'pp', evotype, state_space=None)
+                        gate = _op.StaticCliffordOp(gate, None, 'pp', evotype, state_space=None)
                     else:
                         #TODO - update this, currently all other parameterizations convert unitary -> superop matrix
                         # and we convert this to the desired parameterizatio
                         ptm = _bt.change_basis(_gt.unitary_to_process_mx(gate), "std", "pp")
-                        gate = _op.convert(_op.StaticDenseOp(ptm), parameterization, "pp")
+                        gate = _op.convert(_op.StaticArbitraryOp(ptm), parameterization, "pp")
                 except Exception as e:
                     if on_construction_error == 'warn':
                         _warnings.warn("Failed to create %s gate %s. Dropping it." %
@@ -504,12 +504,12 @@ class LocalNoiseModel(_ImplicitOpModel):
                 if parameterization == "static unitary":
                     global_idle = _op.StaticUnitaryOp(global_idle, 'pp', evotype, state_space=None)
                 elif parameterization == "static clifford":
-                    global_idle = _op.CliffordOp(global_idle, None, 'pp', evotype, state_space=None)
+                    global_idle = _op.StaticCliffordOp(global_idle, None, 'pp', evotype, state_space=None)
                 else:
                     #TODO - update this, currently all other parameterizations convert unitary -> superop matrix
                     # and we convert this to the desired parameterization
                     ptm = _bt.change_basis(_gt.unitary_to_process_mx(global_idle), "std", "pp")
-                    global_idle = _op.convert(_op.StaticDenseOp(global_idle), parameterization, "pp")
+                    global_idle = _op.convert(_op.StaticArbitraryOp(global_idle), parameterization, "pp")
 
         return cls(num_qubits, gatedict, prep_layers, povm_layers, availability,
                    qubit_labels, geometry, evotype, simulator, on_construction_error,
@@ -563,7 +563,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                 mm_gatedict[gn] = gate
             else:  # presumably a numpy array or something like it.
                 #REMOVE self.gatedict[gn] = _np.array(gate)
-                mm_gatedict[gn] = _op.StaticDenseOp(gate, evotype, state_space)  # static gates by default
+                mm_gatedict[gn] = _op.StaticArbitraryOp(gate, evotype, state_space)  # static gates by default
 
         self.availability = availability.copy()  # create a local copy because we may update it below
         self.geometry = geometry
@@ -738,7 +738,7 @@ class LocalNoiseModel(_ImplicitOpModel):
 
         if global_idle is not None:
             if not isinstance(global_idle, _op.LinearOperator):
-                global_idle = _op.StaticDenseOp(global_idle, evotype, state_space)  # static gates by default
+                global_idle = _op.StaticArbitraryOp(global_idle, evotype, state_space)  # static gates by default
 
             global_idle_nQubits = global_idle.state_space.num_qubits
 

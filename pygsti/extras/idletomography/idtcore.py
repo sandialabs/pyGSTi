@@ -594,7 +594,7 @@ def determine_paulidicts(model):
             # them, & make sub-labels?
             return extract_action(g.embedded_op, lbls, ql)
 
-        # StaticDenseOp, LindbladDenseOp, other gates...
+        # StaticArbitraryOp, LindbladDenseOp, other gates...
         if len(cur_sslbls) == 1 and cur_sslbls[0] == ql:
             mx = g.to_dense()
             assert(mx.shape == (4, 4))

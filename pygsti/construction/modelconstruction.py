@@ -210,9 +210,9 @@ def _basis_create_operation(state_space, op_expr, basis="gm", parameterization="
     parameterization : {"full","TP","static"}, optional
         How to parameterize the resulting gate.
 
-        - "full" = return a FullDenseOp.
-        - "TP" = return a TPDenseOp.
-        - "static" = return a StaticDenseOp.
+        - "full" = return a FullArbitraryOp.
+        - "TP" = return a FullTPOp.
+        - "static" = return a StaticArbitraryOp.
 
     evotype : Evotype or str, optional
         The evolution type of this operation, describing how states are
@@ -277,7 +277,7 @@ def _basis_create_operation(state_space, op_expr, basis="gm", parameterization="
             labels = to_labels(args)
             stateSpaceDim = int(_np.product([state_space.label_dimension(l) for l in labels]))
             # *real* 4x4 mx in Pauli-product basis -- still just the identity!
-            pp_opMx = _op.StaticDenseOp(_np.identity(stateSpaceDim, 'd'), evotype=evotype)
+            pp_opMx = _op.StaticArbitraryOp(_np.identity(stateSpaceDim, 'd'), evotype=evotype)
             opTermInFinalBasis = _op.EmbeddedOp(state_space, labels, pp_opMx)
 
         elif opName == "D":
@@ -315,7 +315,7 @@ def _basis_create_operation(state_space, op_expr, basis="gm", parameterization="
             # complex 4x4 mx operating on vectorized 1Q densty matrix in std basis
             operationMx = _gt.unitary_to_process_mx(Uop)
             # *real* 4x4 mx in Pauli-product basis -- better for parameterization
-            pp_opMx = _op.StaticDenseOp(_bt.change_basis(operationMx, 'std', 'pp'), evotype, state_space=None)
+            pp_opMx = _op.StaticArbitraryOp(_bt.change_basis(operationMx, 'std', 'pp'), evotype, state_space=None)
             opTermInFinalBasis = _op.EmbeddedOp(state_space, [label], pp_opMx)
 
         elif opName == 'N':  # more general single-qubit gate
@@ -332,7 +332,7 @@ def _basis_create_operation(state_space, op_expr, basis="gm", parameterization="
             # complex 4x4 mx operating on vectorized 1Q densty matrix in std basis
             operationMx = _gt.unitary_to_process_mx(Uop)
             # *real* 4x4 mx in Pauli-product basis -- better for parameterization
-            pp_opMx = _op.StaticDenseOp(_bt.change_basis(operationMx, 'std', 'pp'), evotype, state_space=None)
+            pp_opMx = _op.StaticArbitraryOp(_bt.change_basis(operationMx, 'std', 'pp'), evotype, state_space=None)
             opTermInFinalBasis = _op.EmbeddedOp(state_space, [label], pp_opMx)
 
         elif opName in ('CX', 'CY', 'CZ', 'CNOT', 'CPHASE'):  # two-qubit gate names
@@ -366,7 +366,7 @@ def _basis_create_operation(state_space, op_expr, basis="gm", parameterization="
             # complex 16x16 mx operating on vectorized 2Q densty matrix in std basis
             operationMx = _gt.unitary_to_process_mx(Uop)
             # *real* 16x16 mx in Pauli-product basis -- better for parameterization
-            pp_opMx = _op.StaticDenseOp(_bt.change_basis(operationMx, 'std', 'pp'), evotype, state_space=None)
+            pp_opMx = _op.StaticArbitraryOp(_bt.change_basis(operationMx, 'std', 'pp'), evotype, state_space=None)
             opTermInFinalBasis = _op.EmbeddedOp(state_space, [label1, label2], pp_opMx)
 
         elif opName == "LX":  # TODO - better way to describe leakage?
@@ -398,7 +398,7 @@ def _basis_create_operation(state_space, op_expr, basis="gm", parameterization="
                                                         embedded_std_basis, std_basis)
 
             opMxInFinalBasis = _bt.change_basis(opTermInReducedStdBasis, std_basis, basis)
-            opTermInFinalBasis = _op.FullDenseOp(opMxInFinalBasis, evotype, state_space)
+            opTermInFinalBasis = _op.FullArbitraryOp(opMxInFinalBasis, evotype, state_space)
 
         else: raise ValueError("Invalid gate name: %s" % opName)
 
@@ -414,11 +414,11 @@ def _basis_create_operation(state_space, op_expr, basis="gm", parameterization="
         finalOpMx = _np.real(finalOpMx)
 
     if parameterization == "full":
-        return _op.FullDenseOp(finalOpMx, evotype, state_space)
+        return _op.FullArbitraryOp(finalOpMx, evotype, state_space)
     if parameterization == "static":
-        return _op.StaticDenseOp(finalOpMx, evotype, state_space)
+        return _op.StaticArbitraryOp(finalOpMx, evotype, state_space)
     if parameterization == "TP":
-        return _op.TPDenseOp(finalOpMx, evotype, state_space)
+        return _op.FullTPOp(finalOpMx, evotype, state_space)
 
     raise ValueError("Invalid 'parameterization' parameter: "
                      "%s (must by 'full', 'TP', 'static')"

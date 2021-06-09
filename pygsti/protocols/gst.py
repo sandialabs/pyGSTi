@@ -885,8 +885,8 @@ class LinearGateSetTomography(_proto.Protocol):
 
         target_model = self.target_model if (self.target_model is not None) else edesign.target_model
         if isinstance(target_model, _models.ExplicitOpModel):
-            if not all([(isinstance(g, _op.FullDenseOp)
-                         or isinstance(g, _op.TPDenseOp))
+            if not all([(isinstance(g, _op.FullArbitraryOp)
+                         or isinstance(g, _op.FullTPOp))
                         for g in target_model.operations.values()]):
                 raise ValueError("LGST can only be applied to explicit models with dense operators")
         else:

@@ -81,8 +81,8 @@ class ModelConstructionTester(BaseCase):
             [('Gi', 0), ('Gi', 1), ('Gx', 0), ('Gx', 1), ('Gy', 0), ('Gy', 1), ('Gcnot', 0, 1), ('Gcnot', 1, 0)]))
         self.assertEqual(mdl.num_params, 0)
 
-        addlErr = pygsti.modelmembers.operations.TPDenseOp(np.identity(4, 'd'))  # adds 12 params
-        addlErr2 = pygsti.modelmembers.operations.TPDenseOp(np.identity(4, 'd'))  # adds 12 params
+        addlErr = pygsti.modelmembers.operations.FullTPOp(np.identity(4, 'd'))  # adds 12 params
+        addlErr2 = pygsti.modelmembers.operations.FullTPOp(np.identity(4, 'd'))  # adds 12 params
 
         mdl.operation_blks['gates']['Gx'].append(addlErr)
         mdl.operation_blks['gates']['Gy'].append(addlErr2)
@@ -288,7 +288,7 @@ class ModelConstructionTester(BaseCase):
                                     [0,   1,   0,   0],
                                     [0,   0,   c,  -b],
                                     [0,   0,   b,   c]],'d')
-                return pygsti.modelmembers.operations.StaticDenseOp(superop, self.evotype, self.state_space)
+                return pygsti.modelmembers.operations.StaticArbitraryOp(superop, self.evotype, self.state_space)
 
         xrot_fact = XRotationOpFactory()
     

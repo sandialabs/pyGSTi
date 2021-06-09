@@ -1155,7 +1155,7 @@ class ExplicitOpModel(_mdl.OpModel):
             randOp = _gt.unitary_to_process_mx(randUnitary)  # in std basis
             randOp = _bt.change_basis(randOp, "std", self.basis)
 
-            mdl_randomized.operations[opLabel] = _op.FullDenseOp(
+            mdl_randomized.operations[opLabel] = _op.FullArbitraryOp(
                 _np.dot(randOp, gate))
 
         #Note: this function does NOT randomize instruments
@@ -1223,7 +1223,7 @@ class ExplicitOpModel(_mdl.OpModel):
             newOp = _np.zeros((new_dimension, new_dimension))
             newOp[0:curDim, 0:curDim] = gate[:, :]
             for i in range(curDim, new_dimension): newOp[i, i] = 1.0
-            new_model.operations[opLabel] = _op.FullDenseOp(newOp)
+            new_model.operations[opLabel] = _op.FullArbitraryOp(newOp)
 
         for instLabel, inst in self.instruments.items():
             inst_ops = []
@@ -1231,7 +1231,7 @@ class ExplicitOpModel(_mdl.OpModel):
                 newOp = _np.zeros((new_dimension, new_dimension))
                 newOp[0:curDim, 0:curDim] = gate[:, :]
                 for i in range(curDim, new_dimension): newOp[i, i] = 1.0
-                inst_ops.append((outcomeLbl, _op.FullDenseOp(newOp)))
+                inst_ops.append((outcomeLbl, _op.FullArbitraryOp(newOp)))
             new_model.instruments[instLabel] = _instrument.Instrument(inst_ops)
 
         if len(self.factories) > 0:
@@ -1292,14 +1292,14 @@ class ExplicitOpModel(_mdl.OpModel):
             assert(gate.shape == (curDim, curDim))
             newOp = _np.zeros((new_dimension, new_dimension))
             newOp[:, :] = gate[0:new_dimension, 0:new_dimension]
-            new_model.operations[opLabel] = _op.FullDenseOp(newOp)
+            new_model.operations[opLabel] = _op.FullArbitraryOp(newOp)
 
         for instLabel, inst in self.instruments.items():
             inst_ops = []
             for outcomeLbl, gate in inst.items():
                 newOp = _np.zeros((new_dimension, new_dimension))
                 newOp[:, :] = gate[0:new_dimension, 0:new_dimension]
-                inst_ops.append((outcomeLbl, _op.FullDenseOp(newOp)))
+                inst_ops.append((outcomeLbl, _op.FullArbitraryOp(newOp)))
             new_model.instruments[instLabel] = _instrument.Instrument(inst_ops)
 
         if len(self.factories) > 0:
@@ -1336,7 +1336,7 @@ class ExplicitOpModel(_mdl.OpModel):
         rndm = _np.random.RandomState(seed)
         for opLabel, gate in self.operations.items():
             delta = absmag * 2.0 * (rndm.random_sample(gate.shape) - 0.5) + bias
-            kicked_gs.operations[opLabel] = _op.FullDenseOp(
+            kicked_gs.operations[opLabel] = _op.FullArbitraryOp(
                 kicked_gs.operations[opLabel] + delta)
 
         #Note: does not alter intruments!
@@ -1346,7 +1346,7 @@ class ExplicitOpModel(_mdl.OpModel):
         """
         Constructs a dictionary of the symplectic representations for all the Clifford gates in this model.
 
-        Non-:class:`CliffordOp` gates will be ignored and their entries omitted
+        Non-:class:`StaticCliffordOp` gates will be ignored and their entries omitted
         from the returned dictionary.
 
         Parameters
@@ -1371,12 +1371,12 @@ class ExplicitOpModel(_mdl.OpModel):
             if (gfilter is not None) and (gl not in gfilter): continue
 
             if isinstance(gate, _op.EmbeddedOp):
-                assert(isinstance(gate.embedded_op, _op.CliffordOp)), \
-                    "EmbeddedClifforGate contains a non-CliffordOp!"
+                assert(isinstance(gate.embedded_op, _op.StaticCliffordOp)), \
+                    "EmbeddedClifforGate contains a non-StaticCliffordOp!"
                 lbl = gl.name  # strip state space labels off since this is a
                 # symplectic rep for the *embedded* gate
                 srep = (gate.embedded_op.smatrix, gate.embedded_op.svector)
-            elif isinstance(gate, _op.CliffordOp):
+            elif isinstance(gate, _op.StaticCliffordOp):
                 lbl = gl.name
                 srep = (gate.smatrix, gate.svector)
             else:

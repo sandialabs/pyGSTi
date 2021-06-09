@@ -1,5 +1,5 @@
 """
-The StaticDenseOp class and supporting functionality.
+The StaticArbitraryOp class and supporting functionality.
 """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -15,7 +15,7 @@ from .linearop import LinearOperator as _LinearOperator
 from .denseop import DenseOperator as _DenseOperator
 
 
-class StaticDenseOp(_DenseOperator):
+class StaticArbitraryOp(_DenseOperator):
     """
     An operation matrix that is completely fixed, or "static" (i.e. that posesses no parameters).
 

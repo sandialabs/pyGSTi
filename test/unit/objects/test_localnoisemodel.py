@@ -5,7 +5,7 @@ from ..util import BaseCase
 from pygsti.objects.circuit import Circuit
 from pygsti.objects.label import Label
 from pygsti.models.localnoisemodel import LocalNoiseModel
-from pygsti.modelmembers.operations import ComposedOp, EmbeddedOp, StaticDenseOp
+from pygsti.modelmembers.operations import ComposedOp, EmbeddedOp, StaticArbitraryOp
 
 
 class LocalNoiseModelInstanceTester(BaseCase):

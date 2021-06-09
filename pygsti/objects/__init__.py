@@ -19,10 +19,10 @@ from .dataset import DataSet
 from .freedataset import FreeformDataSet
 #from .operation import LinearOperator
 #from .operation import DenseOperator
-#from .operation import LinearlyParamDenseOp
-#from .operation import FullDenseOp
-#from .operation import TPDenseOp
-#from .operation import StaticDenseOp
+#from .operation import LinearlyParamArbitraryOp
+#from .operation import FullArbitraryOp
+#from .operation import FullTPOp
+#from .operation import StaticArbitraryOp
 #from .operation import EigenvalueParamDenseOp
 #from .operation import LindbladDenseOp
 #from .operation import LindbladOp
@@ -32,7 +32,7 @@ from .freedataset import FreeformDataSet
 #from .operation import ComposedOp
 #from .operation import ComposedDenseOp
 #from .operation import ExponentiatedOp
-#from .operation import CliffordOp
+#from .operation import StaticCliffordOp
 #from .operation import LindbladErrorgen
 #from .operation import ComposedErrorgen
 #from .operation import EmbeddedErrorgen

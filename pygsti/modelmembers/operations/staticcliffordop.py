@@ -6,7 +6,7 @@ from ...evotypes import Evotype as _Evotype
 from ...models import statespace as _statespace
 
 
-class CliffordOp(_LinearOperator):
+class StaticCliffordOp(_LinearOperator):
     """
     A Clifford operation, represented via a symplectic matrix.
 

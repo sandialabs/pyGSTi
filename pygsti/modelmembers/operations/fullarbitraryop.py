@@ -1,5 +1,5 @@
 """
-The FullDenseOp class and supporting functionality.
+The FullArbitraryOp class and supporting functionality.
 """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -15,7 +15,7 @@ from .linearop import LinearOperator as _LinearOperator
 from .denseop import DenseOperator as _DenseOperator
 
 
-class FullDenseOp(_DenseOperator):
+class FullArbitraryOp(_DenseOperator):
     """
     An operation matrix that is fully parameterized.
 

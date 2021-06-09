@@ -10,7 +10,7 @@ Sub-package holding model operation objects.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from .cliffordop import CliffordOp
+from .staticcliffordop import StaticCliffordOp
 from .composederrorgen import ComposedErrorgen
 from .composedop import ComposedOp
 from .denseop import DenseOperator, DenseOperatorInterface
@@ -19,16 +19,16 @@ from .eigpdenseop import EigenvalueParamDenseOp
 from .embeddederrorgen import EmbeddedErrorgen
 from .embeddedop import EmbeddedOp
 from .experrorgenop import ExpErrorgenOp
-from .fulldenseop import FullDenseOp
+from .fullarbitraryop import FullArbitraryOp
 from .fullunitaryop import FullUnitaryOp
 from .lindbladerrorgen import LindbladErrorgen
 from .linearop import LinearOperator
-from .lpdenseop import LinearlyParamDenseOp
-from .staticdenseop import StaticDenseOp
+from .lpdenseop import LinearlyParamArbitraryOp
+from .staticarbitraryop import StaticArbitraryOp
 from .staticstdop import StaticStandardOp
 from .staticunitaryop import StaticUnitaryOp
 from .stochasticop import StochasticNoiseOp
-from .tpdenseop import TPDenseOp
+from .fulltpop import FullTPOp
 
 from .opfactory import OpFactory
 
@@ -72,34 +72,34 @@ def convert(operation, to_type, basis, extra=None):
         object from the operation object passed as input.
     """
     if to_type == "full":
-        if isinstance(operation, FullDenseOp):
+        if isinstance(operation, FullArbitraryOp):
             return operation  # no conversion necessary
         else:
-            return FullDenseOp(operation.to_dense(), operation.evotype, operation.state_space)
+            return FullArbitraryOp(operation.to_dense(), operation.evotype, operation.state_space)
 
     elif to_type == "TP":
-        if isinstance(operation, TPDenseOp):
+        if isinstance(operation, FullTPOp):
             return operation  # no conversion necessary
         else:
-            return TPDenseOp(operation.to_dense(), operation.evotype, operation.state_space)
+            return FullTPOp(operation.to_dense(), operation.evotype, operation.state_space)
             # above will raise ValueError if conversion cannot be done
 
     elif to_type == "linear":
-        if isinstance(operation, LinearlyParamDenseOp):
+        if isinstance(operation, LinearlyParamArbitraryOp):
             return operation  # no conversion necessary
-        elif isinstance(operation, StaticDenseOp):
+        elif isinstance(operation, StaticArbitraryOp):
             real = _np.isclose(_np.linalg.norm(operation.imag), 0)
-            return LinearlyParamDenseOp(operation.to_dense(), _np.array([]), {}, real,
-                                        operation.evotype, operation.state_space)
+            return LinearlyParamArbitraryOp(operation.to_dense(), _np.array([]), {}, real,
+                                            operation.evotype, operation.state_space)
         else:
-            raise ValueError("Cannot convert type %s to LinearlyParamDenseOp"
+            raise ValueError("Cannot convert type %s to LinearlyParamArbitraryOp"
                              % type(operation))
 
     elif to_type == "static":
-        if isinstance(operation, StaticDenseOp):
+        if isinstance(operation, StaticArbitraryOp):
             return operation  # no conversion necessary
         else:
-            return StaticDenseOp(operation.to_dense(), operation.evotype, operation.state_space)
+            return StaticArbitraryOp(operation.to_dense(), operation.evotype, operation.state_space)
 
     elif to_type == "static unitary":
         op_std = _bt.change_basis(operation, basis, 'std')
@@ -116,7 +116,7 @@ def convert(operation, to_type, basis, extra=None):
         #    LindbladDenseOp
 
         unitary_postfactor = None
-        if isinstance(operation, (FullDenseOp, TPDenseOp, StaticDenseOp)):
+        if isinstance(operation, (FullArbitraryOp, FullTPOp, StaticArbitraryOp)):
             from ...tools import jamiolkowski as _jt
             RANK_TOL = 1e-6
             J = _jt.fast_jamiolkowski_iso_std(operation.to_dense(), op_mx_basis=basis)  # Choi mx basis doesn't matter
@@ -148,12 +148,12 @@ def convert(operation, to_type, basis, extra=None):
         return ret
 
     elif to_type == "static clifford":
-        if isinstance(operation, CliffordOp):
+        if isinstance(operation, StaticCliffordOp):
             return operation  # no conversion necessary
 
         # assume operation represents a unitary op (otherwise
         #  would need to change Model dim, which isn't allowed)
-        return CliffordOp(operation)
+        return StaticCliffordOp(operation)
 
     else:
         raise ValueError("Invalid to_type argument: %s" % to_type)
@@ -220,7 +220,7 @@ def optimize_operation(op_to_optimize, target_op):
     Optimization is performed so that the the resulting operation matrix
     is as close as possible to target_op's matrix.
 
-    This is trivial for the case of FullDenseOp
+    This is trivial for the case of FullArbitraryOp
     instances, but for other types of parameterization
     this involves an iterative optimization over all the
     parameters of op_to_optimize.
@@ -239,10 +239,10 @@ def optimize_operation(op_to_optimize, target_op):
     """
 
     #TODO: cleanup this code:
-    if isinstance(op_to_optimize, StaticDenseOp):
+    if isinstance(op_to_optimize, StaticArbitraryOp):
         return  # nothing to optimize
 
-    if isinstance(op_to_optimize, FullDenseOp):
+    if isinstance(op_to_optimize, FullArbitraryOp):
         if(target_op.dim != op_to_optimize.dim):  # special case: operations can have different overall dimension
             op_to_optimize.dim = target_op.dim  # this is a HACK to allow model selection code to work correctly
         op_to_optimize.set_dense(target_op.to_dense())  # just copy entire overall matrix since fully parameterized

@@ -98,7 +98,7 @@ sys.modules[__name__] = _RPEconfig(rpeconfig_gxpi2_gypi2_00_dict)
 #            rhoExpressions=["0"], EExpressions=["1"],
 #            spamLabelDict={'plus': (0,0), 'minus': (0,-1) })
 #
-#        outputModel.set_gate('Gy',_objs.FullDenseOp(
+#        outputModel.set_gate('Gy',_objs.FullArbitraryOp(
 #                _np.dot( _np.dot(_np.linalg.inv(modelAux1['Gz']),
 #                               outputModel['Gy']),modelAux1['Gz'])) )
 #

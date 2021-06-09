@@ -696,9 +696,9 @@ class CloudNoiseModel(_ImplicitOpModel):
             if isinstance(gate, _op.LinearOperator):
                 assert(gate.num_params == 0), "Only *static* ideal operators are allowed in `gatedict`!"
                 #REMOVE self.gatedict[gn] = gate.to_dense()
-                #if gate._evotype != evotype and isinstance(gate, _op.StaticDenseOp):
+                #if gate._evotype != evotype and isinstance(gate, _op.StaticArbitraryOp):
                 #    # special case: we'll convert static ops to the right evotype (convenient)
-                #    mm_gatedict[gn] = StaticDenseOp(gate, "pp")
+                #    mm_gatedict[gn] = StaticArbitraryOp(gate, "pp")
                 #else:
                 mm_gatedict[gn] = gate
             elif isinstance(gate, _opfactory.OpFactory):
@@ -707,7 +707,7 @@ class CloudNoiseModel(_ImplicitOpModel):
                 mm_gatedict[gn] = gate
             else:  # presumably a numpy array or something like it:
                 #REMOVE self.gatedict[gn] = _np.array(gate)
-                mm_gatedict[gn] = _op.StaticDenseOp(gate, evotype, state_space=None)  # use default state space
+                mm_gatedict[gn] = _op.StaticArbitraryOp(gate, evotype, state_space=None)  # use default state space
             assert(mm_gatedict[gn]._evotype == evotype)
 
         #Set other members
@@ -955,9 +955,9 @@ def _get_experrgen_factory(simulator, parameterization, errcomp_type, evotype):
 #        given the simulation and parameterization """
 #    if evotype == "densitymx":
 #        if isinstance(simulator, _MatrixFSim):
-#            return lambda g, b: _op.StaticDenseOp(g, evotype)
+#            return lambda g, b: _op.StaticArbitraryOp(g, evotype)
 #        else:  # e.g. "map"-type forward simes
-#            return lambda g, b: _op.StaticDenseOp(g, evotype)  # TODO: create StaticGateMap?
+#            return lambda g, b: _op.StaticArbitraryOp(g, evotype)  # TODO: create StaticGateMap?
 #
 #    elif evotype in ("svterm", "cterm"):
 #        assert(isinstance(simulator, _TermFSim))

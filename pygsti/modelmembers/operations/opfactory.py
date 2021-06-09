@@ -16,7 +16,7 @@ import warnings as _warnings
 from .staticunitaryop import StaticUnitaryOp as _StaticUnitaryOp
 from .embeddedop import EmbeddedOp as _EmbeddedOp
 from .composedop import ComposedOp as _ComposedOp
-from .cliffordop import CliffordOp
+from .staticcliffordop import StaticCliffordOp
 
 from .. import modelmember as _gm
 from .. import instruments as _instrument
@@ -656,7 +656,7 @@ class UnitaryOpFactory(OpFactory):
     An operation factory based on a unitary-matrix-producing function.
 
     Converts a function, `f(arg_tuple)`, that outputs a unitary matrix (operation)
-    into a factory that produces a :class:`StaticDenseOp` superoperator.
+    into a factory that produces a :class:`StaticArbitraryOp` superoperator.
 
     Parameters
     ----------

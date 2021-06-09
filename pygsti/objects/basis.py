@@ -1708,22 +1708,22 @@ class EmbeddedBasis(LazyBasis):
         """ Take a dense or sparse basis matrix and embed it. """
         #LAZY building of elements (in case we never need them)
         if self.elndim == 2:  # then use EmbeddedOp to do matrix
-            from .operation import StaticDenseOp
-            from .operation import EmbeddedOp
+            from ..modelmembers.operations import StaticArbitraryOp
+            from ..modelmembers.operations import EmbeddedOp
             sslbls = self.state_space.copy()
             sslbls.reduce_dims_densitymx_to_state_inplace()  # because we're working with basis matrices not gates
 
             if self.sparse:
                 self._elements = []
                 for spmx in self.embedded_basis.elements:
-                    mxAsOp = StaticDenseOp(spmx.to_dense(), evotype='statevec')
+                    mxAsOp = StaticArbitraryOp(spmx.to_dense(), evotype='statevec')
                     self._elements.append(EmbeddedOp(sslbls, self.target_labels,
                                                      mxAsOp).to_sparse())
             else:
                 self._elements = _np.zeros((self.size,) + self.elshape, 'complex')
                 for i, mx in enumerate(self.embedded_basis.elements):
                     self._elements[i] = EmbeddedOp(
-                        sslbls, self.target_labels, StaticDenseOp(mx, evotype='statevec')
+                        sslbls, self.target_labels, StaticArbitraryOp(mx, evotype='statevec')
                     ).to_dense(on_space='HilbertSchmidt')
         else:
             # we need to perform embedding using vectors rather than matrices - doable, but
