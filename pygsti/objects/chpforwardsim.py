@@ -128,7 +128,7 @@ class CHPForwardSimulator(_WeakForwardSimulator):
                 assert rho._evotype == 'chp', \
                     "ComposedSPAMVec must have `chp` evotype for noise op"
                 process_computational_spamvec(rho.state_vec, target_offset)
-                nqubits = (rho.noise_op.dim - 1).bit_length()
+                nqubits = rho.noise_op._rep.nqubits # TODO: Probably doesn't work...
                 targets = _np.array(range(nqubits)) + target_offset
                 file_handle.write(rho.noise_op.get_chp_str(targets))
             else:
@@ -138,7 +138,7 @@ class CHPForwardSimulator(_WeakForwardSimulator):
         target_offset = 0
         if isinstance(rho, TensorProdSPAMVec):
             for rho_factor in rho.factors:
-                nqubits = (rho_factor.noise_op.dim - 1).bit_length()
+                nqubits = rho_factor.noise_op._rep.nqubits
                 process_composed_spamvec(rho_factor, target_offset)
                 target_offset += nqubits
         else:
@@ -185,7 +185,7 @@ class CHPForwardSimulator(_WeakForwardSimulator):
                 assert povm._evotype == 'chp', \
                     "ComposedPOVM must have `chp` evotype for noise op"
                 
-                nqubits = (povm.noise_op.dim - 1).bit_length()
+                nqubits = povm.base_povm.nqubits
                 targets = _np.array(range(nqubits)) + target_offset
                 file_handle.write(povm.noise_op.get_chp_str(targets))
 
@@ -197,7 +197,7 @@ class CHPForwardSimulator(_WeakForwardSimulator):
         target_offset = 0
         if isinstance(povm, TensorProdPOVM):
             for povm_factor in povm.factors:
-                nqubits = (povm_factor.noise_op.dim - 1).bit_length()
+                nqubits = povm_factor.noise_op._rep.nqubits
                 process_composed_povm(povm_factor, qubit_indices, target_offset)
                 target_offset += nqubits
         else:

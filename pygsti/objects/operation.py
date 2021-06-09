@@ -430,7 +430,7 @@ class LinearOperator(_modelmember.ModelMember):
 
     def __init__(self, rep, evotype):
         """ Initialize a new LinearOperator """
-        if isinstance(rep, int):  # For operators that have no representation themselves (term ops)
+        if isinstance(rep, int) or rep == _np.inf:  # For operators that have no representation themselves (term ops)
             dim = rep             # allow passing an integer as `rep`.
             rep = None
         else:
