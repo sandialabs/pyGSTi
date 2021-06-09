@@ -17,7 +17,7 @@ from .. import modelmember as _mm
 #Thoughts:
 # what are POVM objs needed for?
 # - construction of Effect vectors: allocating a pool of
-#    shared parameters that multiple SPAMVecs use
+#    shared parameters that multiple POVMEffects use
 #    - how should Model add items?
 #      "default allocator" inserts new params into _paramvec when gpindices is None
 #       (or is made None b/c parent is different) and sets gpindices accordingly
@@ -39,8 +39,8 @@ from .. import modelmember as _mm
 #             POVM assigned to a Model => Model allocates POVM & calls POVM.allocated_callback()
 #             POVM.allocated_callback() allocates (on behalf of Model b/c POVM owns those indices?) its member effects -
 #               maybe needs to add them to Model.effects so they're accounted for later & calls
-#               SPAMVec.allocated_callback()
-#             SPAMVec.allocated_callback() does nothing.
+#               POVMEffect.allocated_callback()
+#             POVMEffect.allocated_callback() does nothing.
 #    - it seems good for Model to keep track directly of allocated preps, gates, & effects OR else it will need to alert
 #      objects when they're allocated indices shift so they can shift their member's
 #      indices... (POVM.shifted_callback())
@@ -50,7 +50,7 @@ from .. import modelmember as _mm
 #    over (just holding the names seems sufficient)
 
 # Conclusions/philosphy: 12/8/2017
-# - povms and instruments will hold their members, but member SPAMVec or LinearOperator objects
+# - povms and instruments will hold their members, but member POVMEffect or LinearOperator objects
 #   will have the Model as their parent, and have gpindices which reference the Model.
 # - it is the parent object's (e.g. a Model, POVM, or Instrument) which is responsible
 #   for setting the gpindices of its members.  The gpindices is set via a property or method
@@ -218,7 +218,7 @@ class POVM(_mm.ModelMember, _collections.OrderedDict):
 
         Parameters
         ----------
-        state : SPAMVec
+        state : State
             The state to act on
 
         Returns

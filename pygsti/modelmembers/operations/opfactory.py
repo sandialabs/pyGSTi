@@ -295,7 +295,7 @@ class EmbeddedOpFactory(OpFactory):
         Returns
         -------
         ModelMember
-            Can be any type of operation, e.g. a LinearOperator, SPAMVec,
+            Can be any type of operation, e.g. a LinearOperator, State,
             Instrument, or POVM, depending on the label requested.
         """
         assert(sslbls is None), ("EmbeddedOpFactory objects should not be asked to create "
@@ -422,7 +422,7 @@ class EmbeddingOpFactory(OpFactory):
         Returns
         -------
         ModelMember
-            Can be any type of operation, e.g. a LinearOperator, SPAMVec,
+            Can be any type of operation, e.g. a LinearOperator, State,
             Instrument, or POVM, depending on the label requested.
         """
         assert(sslbls is not None), ("EmbeddedOpFactory objects should be asked to create "
@@ -570,7 +570,7 @@ class ComposedOpFactory(OpFactory):
         Returns
         -------
         ModelMember
-            Can be any type of operation, e.g. a LinearOperator, SPAMVec,
+            Can be any type of operation, e.g. a LinearOperator, State,
             Instrument, or POVM, depending on the label requested.
         """
         ops_to_compose = [f.create_op(args, sslbls) if is_f else f for is_f, f in zip(self.is_factory, self.factors)]
@@ -707,7 +707,7 @@ class UnitaryOpFactory(OpFactory):
         Returns
         -------
         ModelMember
-            Can be any type of operation, e.g. a LinearOperator, SPAMVec,
+            Can be any type of operation, e.g. a LinearOperator, State,
             Instrument, or POVM, depending on the label requested.
         """
         assert(sslbls is None), "UnitaryOpFactory.create_object must be called with `sslbls=None`!"

@@ -85,7 +85,7 @@ def _basis_create_spam_vector(vec_expr, basis):
     vecInSimpleStdBasis = _np.zeros(std_basis.elshape, 'd')  # a matrix, but flattened it is our spamvec
     vecInSimpleStdBasis[index, index] = 1.0  # now a matrix with just a single 1 on the diag
     vecInReducedStdBasis = _np.dot(std_basis.from_elementstd_transform_matrix, vecInSimpleStdBasis.flatten())
-    # translates the density matrx / SPAMVec to the std basis with our desired block structure
+    # translates the density matrix / state vector to the std basis with our desired block structure
 
     #TODO REMOVE
     #start = 0; vecIndex = 0
@@ -693,7 +693,7 @@ def create_explicit_alias_model(mdl_primitives, alias_dict):
     The new model is created by composing the gates of an existing `Model`,
     `mdl_primitives`, according to a dictionary of `Circuit`s, `alias_dict`.
     The keys of `alias_dict` are the operation labels of the returned `Model`.
-    SPAM vectors are unaltered, and simply copied from `mdl_primitives`.
+    state preparations and POVMs are unaltered, and simply copied from `mdl_primitives`.
 
     Parameters
     ----------

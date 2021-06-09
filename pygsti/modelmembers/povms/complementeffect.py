@@ -1,3 +1,14 @@
+"""
+The ComplementPOVMEffect class and supporting functionality.
+"""
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
 
 import numpy as _np
 from .conjugatedeffect import ConjugatedStatePOVMEffect as _ConjugatedStatePOVMEffect
@@ -11,24 +22,24 @@ class ComplementPOVMEffect(_ConjugatedStatePOVMEffect):
     TODO: docstring
     A POVM effect vector that ensures that all the effects of a POVM sum to the identity.
 
-    This SPAM vector is paramterized as `I - sum(other_spam_vecs)` where `I` is
+    This POVM effect vector is paramterized as `I - sum(other_spam_vecs)` where `I` is
     a (static) identity element and `other_param_vecs` is a list of other spam
     vectors in the same parent :class:`POVM`.  This only *partially* implements
-    the SPAMVec interface (some methods such as `to_vector` and `from_vector`
+    the model-member interface (some methods such as `to_vector` and `from_vector`
     will thunk down to base class versions which raise `NotImplementedError`),
     as instances are meant to be contained within a :class:`POVM` which takes
     care of vectorization.
 
     Parameters
     ----------
-    identity : array_like or SPAMVec
+    identity : array_like or POVMEffect
         a 1D numpy array representing the static identity operation from
         which the sum of the other vectors is subtracted.
 
-    other_spamvecs : list of SPAMVecs
-        A list of the "other" parameterized SPAM vectors which are
+    other_spamvecs : list of POVMEffects
+        A list of the "other" parameterized POVM effect vectors which are
         subtracted from `identity` to compute the final value of this
-        "complement" SPAM vector.
+        "complement" POVM effect vector.
     """
 
     def __init__(self, identity, other_effects):
@@ -57,7 +68,7 @@ class ComplementPOVMEffect(_ConjugatedStatePOVMEffect):
     @property
     def num_params(self):
         """
-        Get the number of independent parameters which specify this SPAM vector.
+        Get the number of independent parameters which specify this POVM effect vector.
 
         Returns
         -------
@@ -68,28 +79,28 @@ class ComplementPOVMEffect(_ConjugatedStatePOVMEffect):
 
     def to_vector(self):
         """
-        Get the SPAM vector parameters as an array of values.
+        Get the POVM effect vector parameters as an array of values.
 
         Returns
         -------
         numpy array
             The parameters as a 1D array with length num_params().
         """
-        raise ValueError(("ComplementSPAMVec.to_vector() should never be called"
+        raise ValueError(("ComplementPOVMEffect.to_vector() should never be called"
                           " - use TPPOVM.to_vector() instead"))
 
     def from_vector(self, v, close=False, dirty_value=True):
         """
-        Initialize the SPAM vector using a 1D array of parameters.
+        Initialize the POVM effect vector using a 1D array of parameters.
 
         Parameters
         ----------
         v : numpy array
-            The 1D vector of SPAM vector parameters.  Length
+            The 1D vector of POVM effect vector parameters.  Length
             must == num_params()
 
         close : bool, optional
-            Whether `v` is close to this SPAM vector's current
+            Whether `v` is close to this POVM effect vector's current
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
@@ -110,11 +121,11 @@ class ComplementPOVMEffect(_ConjugatedStatePOVMEffect):
 
     def deriv_wrt_params(self, wrt_filter=None):
         """
-        The element-wise derivative this SPAM vector.
+        The element-wise derivative this POVM effect vector.
 
-        Construct a matrix whose columns are the derivatives of the SPAM vector
+        Construct a matrix whose columns are the derivatives of the POVM effect vector
         with respect to a single param.  Thus, each column is of length
-        dimension and there is one column per SPAM vector parameter.
+        dimension and there is one column per POVM effect vector parameter.
 
         Parameters
         ----------
@@ -146,7 +157,7 @@ class ComplementPOVMEffect(_ConjugatedStatePOVMEffect):
 
     def has_nonzero_hessian(self):
         """
-        Whether this SPAM vector has a non-zero Hessian with respect to its parameters.
+        Whether this POVM effect vector has a non-zero Hessian with respect to its parameters.
 
         Returns
         -------

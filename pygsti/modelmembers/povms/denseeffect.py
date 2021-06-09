@@ -11,7 +11,7 @@
 #    Parameters
 #    ----------
 #    vec : numpy.ndarray
-#        The SPAM vector as a dense numpy array.
+#        The effect vector as a dense numpy array.
 #
 #    evotype : EvoType
 #        The evolution type.
@@ -38,7 +38,7 @@
 #
 #    def to_dense(self, scratch=None):
 #        """
-#        Return this SPAM vector as a (dense) numpy array.
+#        Return this effect vector as a (dense) numpy array.
 #
 #        The memory in `scratch` maybe used when it is not-None.
 #

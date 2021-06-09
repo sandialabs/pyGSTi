@@ -121,7 +121,7 @@ class ConjugatedStatePOVMEffect(DenseEffectInterface, _POVMEffect):
     Parameters
     ----------
     vec : numpy.ndarray
-        The SPAM vector as a dense numpy array.
+        The POVM effect vector as a dense numpy array.
 
     evotype : {"statevec", "densitymx"}
         The evolution type.
@@ -151,7 +151,7 @@ class ConjugatedStatePOVMEffect(DenseEffectInterface, _POVMEffect):
 
     def to_dense(self, on_space='minimal', scratch=None):
         """
-        Return this SPAM vector as a (dense) numpy array.
+        Return this POVM effect vector as a (dense) numpy array.
 
         The memory in `scratch` maybe used when it is not-None.
 
@@ -204,7 +204,7 @@ class ConjugatedStatePOVMEffect(DenseEffectInterface, _POVMEffect):
     @property
     def num_params(self):
         """
-        Get the number of independent parameters which specify this SPAM vector.
+        Get the number of independent parameters which specify this POVM effect vector.
 
         Returns
         -------
@@ -215,7 +215,7 @@ class ConjugatedStatePOVMEffect(DenseEffectInterface, _POVMEffect):
 
     def to_vector(self):
         """
-        Get the SPAM vector parameters as an array of values.
+        Get the POVM effect vector parameters as an array of values.
 
         Returns
         -------
@@ -226,16 +226,16 @@ class ConjugatedStatePOVMEffect(DenseEffectInterface, _POVMEffect):
 
     def from_vector(self, v, close=False, dirty_value=True):
         """
-        Initialize the SPAM vector using a 1D array of parameters.
+        Initialize the POVM effect vector using a 1D array of parameters.
 
         Parameters
         ----------
         v : numpy array
-            The 1D vector of SPAM vector parameters.  Length
+            The 1D vector of POVM effect vector parameters.  Length
             must == num_params()
 
         close : bool, optional
-            Whether `v` is close to this SPAM vector's current
+            Whether `v` is close to this POVM effect vector's current
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
@@ -253,12 +253,11 @@ class ConjugatedStatePOVMEffect(DenseEffectInterface, _POVMEffect):
 
     def deriv_wrt_params(self, wrt_filter=None):
         """
-        The element-wise derivative this SPAM vector.
+        The element-wise derivative this POVM effect vector.
 
-        Construct a matrix whose columns are the derivatives of the SPAM vector
+        Construct a matrix whose columns are the derivatives of the POVM effect vector
         with respect to a single param.  Thus, each column is of length
-        dimension and there is one column per SPAM vector parameter.
-        An empty 2D array in the StaticSPAMVec case (num_params == 0).
+        dimension and there is one column per POVM effect parameter.
 
         Parameters
         ----------
@@ -275,7 +274,7 @@ class ConjugatedStatePOVMEffect(DenseEffectInterface, _POVMEffect):
 
     def has_nonzero_hessian(self):
         """
-        Whether this SPAM vector has a non-zero Hessian with respect to its parameters.
+        Whether this POVM effect vector has a non-zero Hessian with respect to its parameters.
 
         Returns
         -------
@@ -286,7 +285,7 @@ class ConjugatedStatePOVMEffect(DenseEffectInterface, _POVMEffect):
 
     def hessian_wrt_params(self, wrt_filter1=None, wrt_filter2=None):
         """
-        Construct the Hessian of this SPAM vector with respect to its parameters.
+        Construct the Hessian of this POVM effect vector with respect to its parameters.
 
         This function returns a tensor whose first axis corresponds to the
         flattened operation matrix and whose 2nd and 3rd axes correspond to the

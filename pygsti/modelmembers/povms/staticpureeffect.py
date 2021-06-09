@@ -17,13 +17,13 @@ from ..states.staticpurestate import StaticPureState as _StaticPureState
 class StaticPOVMPureEffect(_ConjugatedStatePOVMEffect):
     """
     TODO: docstring
-    A SPAM vector that is completely fixed, or "static" (i.e. that posesses no parameters).
+    A state vector that is completely fixed, or "static" (i.e. that posesses no parameters).
 
     Parameters
     ----------
-    vec : array_like or SPAMVec
-        a 1D numpy array representing the SPAM operation.  The
-        shape of this array sets the dimension of the SPAM op.
+    vec : array_like or POVMEffect
+        a 1D numpy array representing the state.  The
+        shape of this array sets the dimension of the state.
 
     basis : Basis or {'pp','gm','std'}, optional
         The basis used to construct the Hilbert-Schmidt space representation

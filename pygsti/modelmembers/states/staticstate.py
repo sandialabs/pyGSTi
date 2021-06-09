@@ -19,13 +19,13 @@ from ...models import statespace as _statespace
 
 class StaticState(_DenseState):
     """
-    A SPAM vector that is completely fixed, or "static" (i.e. that posesses no parameters).
+    A state vector that is completely fixed, or "static" (i.e. that posesses no parameters).
 
     Parameters
     ----------
-    vec : array_like or SPAMVec
-        a 1D numpy array representing the SPAM operation.  The
-        shape of this array sets the dimension of the SPAM op.
+    vec : array_like or State
+        a 1D numpy array representing the state.  The
+        shape of this array sets the dimension of the state.
 
     evotype : Evotype or str, optional
         The evolution type.  The special value `"default"` is equivalent

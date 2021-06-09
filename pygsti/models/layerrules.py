@@ -96,7 +96,7 @@ class LayerRules(object):
 
         Returns
         -------
-        POVM or SPAMVec
+        State
         """
         #raise KeyError(f"Cannot create operator for non-primitive prep layer: {layerlbl}")
         raise KeyError("Cannot create operator for non-primitive prep layer: %s" % str(layerlbl))
@@ -112,7 +112,7 @@ class LayerRules(object):
 
         Returns
         -------
-        POVM or SPAMVec
+        POVM or POVMEffect
         """
         #raise KeyError(f"Cannot create operator for non-primitive prep layer: {layerlbl}")
         raise KeyError("Cannot create operator for non-primitive prep layer: %s" % str(layerlbl))

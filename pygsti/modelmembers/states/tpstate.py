@@ -23,17 +23,17 @@ class TPState(_DenseState):
     """
     A fixed-unit-trace state vector.
 
-    This SPAM vector is fully parameterized except for the first element, which
-    is frozen to be 1/(d**0.25).  This is so that, when the SPAM vector is
+    This state vector is fully parameterized except for the first element, which
+    is frozen to be 1/(d**0.25).  This is so that, when the state vector is
     interpreted in the Pauli or Gell-Mann basis, the represented density matrix
     has trace == 1.  This restriction is frequently used in conjuction with
     trace-preserving (TP) gates, hence its name.
 
     Parameters
     ----------
-    vec : array_like or SPAMVec
-        a 1D numpy array representing the SPAM operation.  The
-        shape of this array sets the dimension of the SPAM op.
+    vec : array_like or State
+        a 1D numpy array representing the state.  The
+        shape of this array sets the dimension of the state.
 
     evotype : Evotype or str, optional
         The evolution type.  The special value `"default"` is equivalent
@@ -55,7 +55,7 @@ class TPState(_DenseState):
         vector = _State._to_vector(vec)
         firstEl = len(vector)**-0.25
         if not _np.isclose(vector[0], firstEl):
-            raise ValueError("Cannot create TPSPAMVec: "
+            raise ValueError("Cannot create TPState: "
                              "first element must equal %g!" % firstEl)
 
         _DenseState.__init__(self, vector, evotype, state_space)
@@ -73,16 +73,16 @@ class TPState(_DenseState):
 
     def set_dense(self, vec):
         """
-        Set the dense-vector value of this SPAM vector.
+        Set the dense-vector value of this state vector.
 
-        Attempts to modify this SPAM vector's parameters so that the raw
-        SPAM vector becomes `vec`.  Will raise ValueError if this operation
+        Attempts to modify this state vector's parameters so that the raw
+        state vector becomes `vec`.  Will raise ValueError if this operation
         is not possible.
 
         Parameters
         ----------
-        vec : array_like or SPAMVec
-            A numpy array representing a SPAM vector, or a SPAMVec object.
+        vec : array_like or State
+            A numpy array representing a state vector, or a State object.
 
         Returns
         -------
@@ -93,7 +93,7 @@ class TPState(_DenseState):
         if(vec.size != self.dim):
             raise ValueError("Argument must be length %d" % self.dim)
         if not _np.isclose(vec[0], firstEl):
-            raise ValueError("Cannot create TPSPAMVec: "
+            raise ValueError("Cannot create TPState: "
                              "first element must equal %g!" % firstEl)
         self._ptr[1:] = vec[1:]
         self._ptr_has_changed()
@@ -102,7 +102,7 @@ class TPState(_DenseState):
     @property
     def num_params(self):
         """
-        Get the number of independent parameters which specify this SPAM vector.
+        Get the number of independent parameters which specify this state vector.
 
         Returns
         -------
@@ -113,7 +113,7 @@ class TPState(_DenseState):
 
     def to_vector(self):
         """
-        Get the SPAM vector parameters as an array of values.
+        Get the state vector parameters as an array of values.
 
         Returns
         -------
@@ -124,16 +124,16 @@ class TPState(_DenseState):
 
     def from_vector(self, v, close=False, dirty_value=True):
         """
-        Initialize the SPAM vector using a 1D array of parameters.
+        Initialize the state vector using a 1D array of parameters.
 
         Parameters
         ----------
         v : numpy array
-            The 1D vector of SPAM vector parameters.  Length
+            The 1D vector of state vector parameters.  Length
             must == num_params()
 
         close : bool, optional
-            Whether `v` is close to this SPAM vector's current
+            Whether `v` is close to this state vector's current
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
@@ -153,11 +153,11 @@ class TPState(_DenseState):
 
     def deriv_wrt_params(self, wrt_filter=None):
         """
-        The element-wise derivative this SPAM vector.
+        The element-wise derivative this state vector.
 
-        Construct a matrix whose columns are the derivatives of the SPAM vector
+        Construct a matrix whose columns are the derivatives of the state vector
         with respect to a single param.  Thus, each column is of length
-        dimension and there is one column per SPAM vector parameter.
+        dimension and there is one column per state vector parameter.
 
         Parameters
         ----------
@@ -179,7 +179,7 @@ class TPState(_DenseState):
 
     def has_nonzero_hessian(self):
         """
-        Whether this SPAM vector has a non-zero Hessian with respect to its parameters.
+        Whether this state vector has a non-zero Hessian with respect to its parameters.
 
         Returns
         -------

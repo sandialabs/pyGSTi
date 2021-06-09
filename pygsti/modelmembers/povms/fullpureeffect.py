@@ -22,8 +22,8 @@ class FullPOVMPureEffect(_ConjugatedStatePOVMEffect):
     Parameters
     ----------
     vec : array_like or POVMEffect
-        a 1D numpy array representing the SPAM operation.  The
-        shape of this array sets the dimension of the SPAM op.
+        a 1D numpy array representing the POVM effect.  The
+        shape of this array sets the dimension of the POVM effect.
 
     evotype : Evotype or str, optional
         The evolution type.  The special value `"default"` is equivalent
@@ -35,16 +35,16 @@ class FullPOVMPureEffect(_ConjugatedStatePOVMEffect):
 
     def set_dense(self, vec):
         """
-        Set the dense-vector value of this SPAM vector.
+        Set the dense-vector value of this POVM effect vector.
 
-        Attempts to modify this SPAM vector's parameters so that the raw
-        SPAM vector becomes `vec`.  Will raise ValueError if this operation
+        Attempts to modify this POVM effect vector's parameters so that the raw
+        POVM effect vector becomes `vec`.  Will raise ValueError if this operation
         is not possible.
 
         Parameters
         ----------
-        vec : array_like or SPAMVec
-            A numpy array representing a SPAM vector, or a SPAMVec object.
+        vec : array_like or POVMEffect
+            A numpy array representing a POVM effect vector, or a POVMEffect object.
 
         Returns
         -------

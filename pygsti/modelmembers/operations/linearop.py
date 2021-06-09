@@ -171,12 +171,12 @@ class LinearOperator(_modelmember.ModelMember):
 
         Parameters
         ----------
-        state : SPAMVec
+        state : State
             The state to act on
 
         Returns
         -------
-        SPAMVec
+        State
             The output state
         """
         from . import spamvec as _sv  # can we move this to top?
@@ -188,6 +188,7 @@ class LinearOperator(_modelmember.ModelMember):
 
         #Build a State around output_rep
         return _sv.StaticState(output_rep.to_dense(on_space='minimal'), self._evotype, self.state_space)
+        #REMOVE
         #return _sv.StabilizerSPAMVec(sframe=_stabilizer.StabilizerFrame(
         #        output_rep.smatrix, output_rep.pvectors, output_rep.amps))
 

@@ -19,7 +19,7 @@ class UnconstrainedPOVM(_BasePOVM):
 
     Parameters
     ----------
-    effects : dict of SPAMVecs or array-like
+    effects : dict of POVMEffects or array-like
         A dict (or list of key,value pairs) of the effect vectors.
 
     evotype : Evotype or str, optional

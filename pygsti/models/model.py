@@ -1354,7 +1354,7 @@ class OpModel(Model):
 
         Returns
         -------
-        LinearOperator or SPAMVec
+        LinearOperator or State or POVM
         """
         self._clean_paramvec()
         return self._circuit_layer_operator(layerlbl, typ)

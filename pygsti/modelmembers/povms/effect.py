@@ -1,3 +1,14 @@
+"""
+The POVMEffect class and supporting functionality.
+"""
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
 
 import numpy as _np
 from .. import modelmember as _modelmember
@@ -10,7 +21,7 @@ class POVMEffect(_modelmember.ModelMember):
     A parameterized state preparation OR POVM effect vector (operator).
 
     This class is the  common base class for all specific
-    parameterizations of a SPAM vector.
+    parameterizations of a POVM effect vector.
 
     Parameters
     ----------
@@ -23,18 +34,18 @@ class POVMEffect(_modelmember.ModelMember):
     Attributes
     ----------
     size : int
-        The number of independent elements in this SPAM vector (when viewed as a dense array).
+        The number of independent elements in this POVM effect vector (when viewed as a dense array).
     """
 
     def __init__(self, rep, evotype):
-        """ Initialize a new SPAM Vector """
+        """ Initialize a new POVM effect Vector """
         super(POVMEffect, self).__init__(rep.state_space, evotype)
         self._rep = rep
 
     @property
     def outcomes(self):
         """
-        The z-value outcomes corresponding to this effect SPAM vector.
+        The z-value outcomes corresponding to this effect POVM effect vector.
 
         (Used in the context of a stabilizer-state simulation.)
 
@@ -57,16 +68,16 @@ class POVMEffect(_modelmember.ModelMember):
 
     def set_dense(self, vec):
         """
-        Set the dense-vector value of this SPAM vector.
+        Set the dense-vector value of this POVM effect vector.
 
-        Attempts to modify this SPAM vector's parameters so that the raw
-        SPAM vector becomes `vec`.  Will raise ValueError if this operation
+        Attempts to modify this POVM effect vector's parameters so that the raw
+        POVM effect vector becomes `vec`.  Will raise ValueError if this operation
         is not possible.
 
         Parameters
         ----------
-        vec : array_like or SPAMVec
-            A numpy array representing a SPAM vector, or a SPAMVec object.
+        vec : array_like or POVMEffect
+            A numpy array representing a POVM effect vector, or a POVMEffect object.
 
         Returns
         -------
@@ -103,7 +114,7 @@ class POVMEffect(_modelmember.ModelMember):
 
         Parameters
         ----------
-        other_spam_vec : SPAMVec
+        other_spam_vec : POVMEffect
             The other spam vector
 
         transform : numpy.ndarray, optional
@@ -132,7 +143,7 @@ class POVMEffect(_modelmember.ModelMember):
 
         Parameters
         ----------
-        other_spam_vec : SPAMVec
+        other_spam_vec : POVMEffect
             The other spam vector
 
         transform : numpy.ndarray, optional
@@ -160,7 +171,7 @@ class POVMEffect(_modelmember.ModelMember):
         being mapped as `E^T -> E^T * s`.
 
         Generally, the transform function updates the *parameters* of
-        the SPAM vector such that the resulting vector is altered as
+        the POVM effect vector such that the resulting vector is altered as
         described above.  If such an update cannot be done (because
         the gate parameters do not allow for it), ValueError is raised.
 
@@ -171,7 +182,7 @@ class POVMEffect(_modelmember.ModelMember):
             (and it's inverse) used in the above similarity transform.
 
         typ : { 'prep', 'effect' }
-            Which type of SPAM vector is being transformed (see above).
+            Which type of POVM effect vector is being transformed (see above).
 
         Returns
         -------
@@ -184,7 +195,7 @@ class POVMEffect(_modelmember.ModelMember):
     @property
     def num_params(self):
         """
-        Get the number of independent parameters which specify this SPAM vector.
+        Get the number of independent parameters which specify this POVM effect vector.
 
         Returns
         -------
@@ -195,7 +206,7 @@ class POVMEffect(_modelmember.ModelMember):
 
     def to_vector(self):
         """
-        Get the SPAM vector parameters as an array of values.
+        Get the POVM effect vector parameters as an array of values.
 
         Returns
         -------
@@ -206,16 +217,16 @@ class POVMEffect(_modelmember.ModelMember):
 
     def from_vector(self, v, close=False, dirty_value=True):
         """
-        Initialize the SPAM vector using a 1D array of parameters.
+        Initialize the POVM effect vector using a 1D array of parameters.
 
         Parameters
         ----------
         v : numpy array
-            The 1D vector of SPAM vector parameters.  Length
+            The 1D vector of POVM effect vector parameters.  Length
             must == num_params()
 
         close : bool, optional
-            Whether `v` is close to this SPAM vector's current
+            Whether `v` is close to this POVM effect vector's current
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
@@ -232,12 +243,11 @@ class POVMEffect(_modelmember.ModelMember):
 
     def deriv_wrt_params(self, wrt_filter=None):
         """
-        The element-wise derivative this SPAM vector.
+        The element-wise derivative this POVM effect vector.
 
-        Construct a matrix whose columns are the derivatives of the SPAM vector
+        Construct a matrix whose columns are the derivatives of the POVM effect vector
         with respect to a single param.  Thus, each column is of length
-        dimension and there is one column per SPAM vector parameter.
-        An empty 2D array in the StaticSPAMVec case (num_params == 0).
+        dimension and there is one column per POVM effect vector parameter.
 
         Parameters
         ----------
@@ -259,7 +269,7 @@ class POVMEffect(_modelmember.ModelMember):
 
     def has_nonzero_hessian(self):
         """
-        Whether this SPAM vector has a non-zero Hessian with respect to its parameters.
+        Whether this POVM effect vector has a non-zero Hessian with respect to its parameters.
 
         Returns
         -------
@@ -270,7 +280,7 @@ class POVMEffect(_modelmember.ModelMember):
 
     def hessian_wrt_params(self, wrt_filter1=None, wrt_filter2=None):
         """
-        Construct the Hessian of this SPAM vector with respect to its parameters.
+        Construct the Hessian of this POVM effect vector with respect to its parameters.
 
         This function returns a tensor whose first axis corresponds to the
         flattened operation matrix and whose 2nd and 3rd axes correspond to the

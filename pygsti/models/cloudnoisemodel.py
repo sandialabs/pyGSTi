@@ -1248,7 +1248,7 @@ class CloudNoiseLayerRules(_LayerRules):
 
         Returns
         -------
-        POVM or SPAMVec
+        State
         """
         #No cache for preps
         return model.prep_blks['layers'][layerlbl]  # prep_blks['layer'] are full prep ops
@@ -1264,7 +1264,7 @@ class CloudNoiseLayerRules(_LayerRules):
 
         Returns
         -------
-        POVM or SPAMVec
+        POVM or POVMEffect
         """
         # caches['povm-layers'] *are* just complete layers
         if layerlbl in caches['povm-layers']: return caches['povm-layers'][layerlbl]

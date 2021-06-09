@@ -1,3 +1,15 @@
+"""
+The ComputationalBasisPOVMEffect class and supporting functionality.
+"""
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
+
 
 import numpy as _np
 import itertools as _itertools
@@ -45,7 +57,7 @@ class ComputationalBasisPOVMEffect(_POVMEffect):
     @classmethod
     def from_dense_vec(cls, vec, basis='pp', evotype="default", state_space=None):
         """
-        Create a new ComputationalSPAMVec from a dense vector.
+        Create a new ComputationalBasisPOVMEffect from a dense vector.
 
         Parameters
         ----------
@@ -67,7 +79,7 @@ class ComputationalBasisPOVMEffect(_POVMEffect):
 
         Returns
         -------
-        ComputationalSPAMVec
+        ComputationalBasisPOVMEffect
         """
         #if evotype in ('stabilizer', 'statevec'):
         #    nqubits = int(round(_np.log2(len(vec))))
@@ -84,7 +96,7 @@ class ComputationalBasisPOVMEffect(_POVMEffect):
             if _np.allclose(testvec, vec.flat):
                 return cls(zvals, basis, evotype, state_space)
         raise ValueError(("Given `vec` is not a z-basis product state - "
-                          "cannot construct ComputatinoalSPAMVec"))
+                          "cannot construct ComputationalBasisPOVMEffect"))
 
     @classmethod
     def from_dense_purevec(cls, purevec, basis='pp', evotype="default", state_space=None):
@@ -116,7 +128,7 @@ class ComputationalBasisPOVMEffect(_POVMEffect):
 
         Returns
         -------
-        StabilizerSPAMVec
+        ComputationalBasisPOVMEffect
         """
         nqubits = int(round(_np.log2(len(purevec))))
         v = (_np.array([1, 0], 'd'), _np.array([0, 1], 'd'))  # (v0,v1)
@@ -141,7 +153,7 @@ class ComputationalBasisPOVMEffect(_POVMEffect):
 
     def to_dense(self, on_space='minimal', scratch=None):
         """
-        Return this SPAM vector as a (dense) numpy array.
+        Return this POVM effect vector as a (dense) numpy array.
 
         The memory in `scratch` maybe used when it is not-None.
 
@@ -164,7 +176,7 @@ class ComputationalBasisPOVMEffect(_POVMEffect):
 
     def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
         """
-        Get the `order`-th order Taylor-expansion terms of this SPAM vector.
+        Get the `order`-th order Taylor-expansion terms of this POVM effect vector.
 
         This function either constructs or returns a cached list of the terms at
         the given order.  Each term is "rank-1", meaning that it is a state
@@ -174,9 +186,9 @@ class ComputationalBasisPOVMEffect(_POVMEffect):
         `rho -> A rho B`
 
         The coefficients of these terms are typically polynomials of the
-        SPAMVec's parameters, where the polynomial's variable indices index the
-        *global* parameters of the SPAMVec's parent (usually a :class:`Model`)
-        , not the SPAMVec's local parameter array (i.e. that returned from
+        POVMEffect's parameters, where the polynomial's variable indices index the
+        *global* parameters of the POVMEffect's parent (usually a :class:`Model`)
+        , not the POVMEffect's local parameter array (i.e. that returned from
         `to_vector`).
 
         Parameters
@@ -225,7 +237,7 @@ class ComputationalBasisPOVMEffect(_POVMEffect):
     @property
     def num_params(self):
         """
-        Get the number of independent parameters which specify this SPAM vector.
+        Get the number of independent parameters which specify this POVM effect vector.
 
         Returns
         -------
@@ -236,7 +248,7 @@ class ComputationalBasisPOVMEffect(_POVMEffect):
 
     def to_vector(self):
         """
-        Get the SPAM vector parameters as an array of values.
+        Get the POVM effect vector parameters as an array of values.
 
         Returns
         -------
@@ -247,16 +259,16 @@ class ComputationalBasisPOVMEffect(_POVMEffect):
 
     def from_vector(self, v, close=False, dirty_value=True):
         """
-        Initialize the SPAM vector using a 1D array of parameters.
+        Initialize the POVM effect vector using a 1D array of parameters.
 
         Parameters
         ----------
         v : numpy array
-            The 1D vector of SPAM vector parameters.  Length
+            The 1D vector of POVM effect vector parameters.  Length
             must == num_params()
 
         close : bool, optional
-            Whether `v` is close to this SPAM vector's current
+            Whether `v` is close to this POVM effect vector's current
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
@@ -273,7 +285,7 @@ class ComputationalBasisPOVMEffect(_POVMEffect):
 
     def __str__(self):
         nQubits = len(self._rep.zvals)
-        s = "Computational Z-basis SPAM vec for %d qubits w/z-values: %s" % (nQubits, str(self._rep.zvals))
+        s = "Computational Z-basis POVM effect vec for %d qubits w/z-values: %s" % (nQubits, str(self._rep.zvals))
         return s
 
 #REMOVE:

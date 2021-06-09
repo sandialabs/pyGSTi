@@ -31,7 +31,7 @@ class ComposedPOVM(_POVM):
         The error generator action and parameterization, encapsulated in
         a gate object.  Usually a :class:`LindbladOp`
         or :class:`ComposedOp` object.  (This argument is *not* copied,
-        to allow LindbladSPAMVecs to share error generator
+        to allow ComposedPOVMEffects to share error generator
         parameters with other gates and spam vectors.)
 
     povm : POVM, optional
@@ -59,7 +59,7 @@ class ComposedPOVM(_POVM):
             The error generator action and parameterization, encapsulated in
             a gate object.  Usually a :class:`LindbladOp`
             or :class:`ComposedOp` object.  (This argument is *not* copied,
-            to allow LindbladSPAMVecs to share error generator
+            to allow ComposedPOVMEffects to share error generator
             parameters with other gates and spam vectors.)
 
         povm : POVM, optional
@@ -257,7 +257,7 @@ class ComposedPOVM(_POVM):
         """
         Creates a dictionary of simplified effect vectors.
 
-        Returns a dictionary of effect SPAMVecs that belong to the POVM's parent
+        Returns a dictionary of effect POVMEffects that belong to the POVM's parent
         `Model` - that is, whose `gpindices` are set to all or a subset of
         this POVM's gpindices.  Such effect vectors are used internally within
         computations involving the parent `Model`.
@@ -270,7 +270,7 @@ class ComposedPOVM(_POVM):
 
         Returns
         -------
-        OrderedDict of SPAMVecs
+        OrderedDict of POVMEffects
         """
         # Create "simplified" effect vectors, which infer their parent and
         # gpindices from the set of "factor-POVMs" they're constructed with.

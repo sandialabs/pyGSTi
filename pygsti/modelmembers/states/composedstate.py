@@ -1,3 +1,16 @@
+"""
+The ComposedState class and supporting functionality.
+"""
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
+
+
 import numpy as _np
 from .state import State as _State
 from .densestate import DenseState as _DenseState
@@ -11,24 +24,24 @@ from ...objects import term as _term
 class ComposedState(_State):  # , _ErrorMapContainer
     """
     TODO: update docstring
-    A Lindblad-parameterized SPAMVec (that is also expandable into terms).
+    A Lindblad-parameterized State (that is also expandable into terms).
 
     Parameters
     ----------
-    pure_vec : numpy array or SPAMVec
-        An array or SPAMVec in the *full* density-matrix space (this
+    pure_vec : numpy array or State
+        An array or State in the *full* density-matrix space (this
         vector will have dimension 4 in the case of a single qubit) which
         represents a pure-state preparation or projection.  This is used as
         the "base" preparation or projection that is followed or preceded
         by, respectively, the parameterized Lindblad-form error generator.
-        (This argument is *not* copied if it is a SPAMVec.  A numpy array
-         is converted to a new StaticSPAMVec.)
+        (This argument is *not* copied if it is a State.  A numpy array
+         is converted to a new StaticState.)
 
     errormap : MapOperator
         The error generator action and parameterization, encapsulated in
         a gate object.  Usually a :class:`LindbladOp`
         or :class:`ComposedOp` object.  (This argument is *not* copied,
-        to allow LindbladSPAMVecs to share error generator
+        to allow ComposedStates to share error generator
         parameters with other gates and spam vectors.)
     """
 
@@ -444,7 +457,7 @@ class ComposedState(_State):  # , _ErrorMapContainer
 
     def to_dense(self, on_space='minimal', scratch=None):
         """
-        Return this SPAM vector as a (dense) numpy array.
+        Return this state vector as a (dense) numpy array.
 
         The memory in `scratch` maybe used when it is not-None.
 
@@ -468,7 +481,7 @@ class ComposedState(_State):  # , _ErrorMapContainer
 
     def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
         """
-        Get the `order`-th order Taylor-expansion terms of this SPAM vector.
+        Get the `order`-th order Taylor-expansion terms of this state vector.
 
         This function either constructs or returns a cached list of the terms at
         the given order.  Each term is "rank-1", meaning that it is a state
@@ -478,9 +491,9 @@ class ComposedState(_State):  # , _ErrorMapContainer
         `rho -> A rho B`
 
         The coefficients of these terms are typically polynomials of the
-        SPAMVec's parameters, where the polynomial's variable indices index the
-        *global* parameters of the SPAMVec's parent (usually a :class:`Model`)
-        , not the SPAMVec's local parameter array (i.e. that returned from
+        State's parameters, where the polynomial's variable indices index the
+        *global* parameters of the State's parent (usually a :class:`Model`)
+        , not the State's local parameter array (i.e. that returned from
         `to_vector`).
 
         Parameters
@@ -509,7 +522,7 @@ class ComposedState(_State):  # , _ErrorMapContainer
         if order not in self.terms:
             if self._evotype not in ('svterm', 'cterm'):
                 raise ValueError("Invalid evolution type %s for calling `taylor_order_terms`" % self._evotype)
-            assert(self.gpindices is not None), "LindbladSPAMVec must be added to a Model before use!"
+            assert(self.gpindices is not None), "ComposedSstate must be added to a Model before use!"
 
             state_terms = self.state_vec.taylor_order_terms(0, max_polynomial_vars); assert(len(state_terms) == 1)
             stateTerm = state_terms[0]
@@ -527,7 +540,7 @@ class ComposedState(_State):  # , _ErrorMapContainer
 
     def taylor_order_terms_above_mag(self, order, max_polynomial_vars, min_term_mag):
         """
-        Get the `order`-th order Taylor-expansion terms of this SPAM vector that have magnitude above `min_term_mag`.
+        Get the `order`-th order Taylor-expansion terms of this state vector that have magnitude above `min_term_mag`.
 
         This function constructs the terms at the given order which have a magnitude (given by
         the absolute value of their coefficient) that is greater than or equal to `min_term_mag`.
@@ -563,7 +576,7 @@ class ComposedState(_State):  # , _ErrorMapContainer
         #else:  # "effect"
         #    # Effect terms are special in that all their pre/post ops act in order on the *state* before the final
         #    # effect is used to compute a probability.  Thus, constructing the same "terms" as above works here
-        #    # too - the difference comes when this SPAMVec is used as an effect rather than a prep.
+        #    # too - the difference comes when this State is used as an effect rather than a prep.
         #    terms = [_term.compose_terms((stateTerm, t)) for t in err_terms]  # t ops occur *after* stateTerm's
         terms = [_term.compose_terms_with_mag((stateTerm, t), stateTerm.magnitude * t.magnitude)
                  for t in err_terms]  # t ops occur *after* stateTerm's
@@ -572,12 +585,12 @@ class ComposedState(_State):  # , _ErrorMapContainer
     @property
     def total_term_magnitude(self):
         """
-        Get the total (sum) of the magnitudes of all this SPAM vector's terms.
+        Get the total (sum) of the magnitudes of all this state vector's terms.
 
         The magnitude of a term is the absolute value of its coefficient, so
         this function returns the number you'd get from summing up the
         absolute-coefficients of all the Taylor terms (at all orders!) you
-        get from expanding this SPAM vector in a Taylor series.
+        get from expanding this state vector in a Taylor series.
 
         Returns
         -------
@@ -589,10 +602,10 @@ class ComposedState(_State):  # , _ErrorMapContainer
     @property
     def total_term_magnitude_deriv(self):
         """
-        The derivative of the sum of *all* this SPAM vector's terms.
+        The derivative of the sum of *all* this state vector's terms.
 
         Get the derivative of the total (sum) of the magnitudes of all this
-        SPAM vector's terms with respect to the operators (local) parameters.
+        state vector's terms with respect to the operators (local) parameters.
 
         Returns
         -------
@@ -603,11 +616,11 @@ class ComposedState(_State):  # , _ErrorMapContainer
 
     def deriv_wrt_params(self, wrt_filter=None):
         """
-        The element-wise derivative this SPAM vector.
+        The element-wise derivative this state vector.
 
-        Construct a matrix whose columns are the derivatives of the SPAM vector
+        Construct a matrix whose columns are the derivatives of the state vector
         with respect to a single param.  Thus, each column is of length
-        dimension and there is one column per SPAM vector parameter.
+        dimension and there is one column per state vector parameter.
 
         Parameters
         ----------
@@ -631,7 +644,7 @@ class ComposedState(_State):  # , _ErrorMapContainer
 
     def hessian_wrt_params(self, wrt_filter1=None, wrt_filter2=None):
         """
-        Construct the Hessian of this SPAM vector with respect to its parameters.
+        Construct the Hessian of this state vector with respect to its parameters.
 
         This function returns a tensor whose first axis corresponds to the
         flattened operation matrix and whose 2nd and 3rd axes correspond to the
@@ -671,7 +684,7 @@ class ComposedState(_State):  # , _ErrorMapContainer
     @property
     def num_params(self):
         """
-        Get the number of independent parameters which specify this SPAM vector.
+        Get the number of independent parameters which specify this state vector.
 
         Returns
         -------
@@ -693,16 +706,16 @@ class ComposedState(_State):  # , _ErrorMapContainer
 
     def from_vector(self, v, close=False, dirty_value=True):
         """
-        Initialize the SPAM vector using a 1D array of parameters.
+        Initialize the state vector using a 1D array of parameters.
 
         Parameters
         ----------
         v : numpy array
-            The 1D vector of SPAM vector parameters.  Length
+            The 1D vector of state vector parameters.  Length
             must == num_params()
 
         close : bool, optional
-            Whether `v` is close to this SPAM vector's current
+            Whether `v` is close to this state vector's current
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
@@ -721,14 +734,14 @@ class ComposedState(_State):  # , _ErrorMapContainer
 
     def transform_inplace(self, s):
         """
-        Update SPAM (column) vector V as inv(s) * V or s^T * V for preparation or  effect SPAM vectors, respectively.
+        Update state (column) vector V as inv(s) * V or s^T * V for preparation or  effect state vectors, respectively.
 
         Note that this is equivalent to state preparation vectors getting
         mapped: `rho -> inv(s) * rho` and the *transpose* of effect vectors
         being mapped as `E^T -> E^T * s`.
 
         Generally, the transform function updates the *parameters* of
-        the SPAM vector such that the resulting vector is altered as
+        the state vector such that the resulting vector is altered as
         described above.  If such an update cannot be done (because
         the gate parameters do not allow for it), ValueError is raised.
 
@@ -752,10 +765,10 @@ class ComposedState(_State):  # , _ErrorMapContainer
 
     def depolarize(self, amount):
         """
-        Depolarize this SPAM vector by the given `amount`.
+        Depolarize this state vector by the given `amount`.
 
         Generally, the depolarize function updates the *parameters* of
-        the SPAMVec such that the resulting vector is depolarized.  If
+        the State such that the resulting vector is depolarized.  If
         such an update cannot be done (because the gate parameters do not
         allow for it), ValueError is raised.
 

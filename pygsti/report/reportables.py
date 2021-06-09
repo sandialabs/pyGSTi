@@ -99,7 +99,7 @@ def spam_dotprods(rho_vecs, povms):
     Parameters
     ----------
     rho_vecs : list
-        A list of state-preparation :class:`SPAMVec` objects.
+        A list of :class:`State` objects.
 
     povms : list
         A list of :class:`POVM` objects.
@@ -2169,7 +2169,7 @@ Predicted_rb_number = _modf.modelfn_factory(predicted_rb_number)
 
 def vec_fidelity(a, b, mx_basis):
     """
-    State fidelity between SPAM vectors a and b
+    State fidelity between state vectors a and b
 
     Parameters
     ----------
@@ -2197,7 +2197,7 @@ Vec_fidelity = _modf.vecsfn_factory(vec_fidelity)
 
 def vec_infidelity(a, b, mx_basis):
     """
-    State infidelity fidelity between SPAM vectors a and b
+    State infidelity fidelity between state vectors a and b
 
     Parameters
     ----------
@@ -2225,7 +2225,7 @@ Vec_infidelity = _modf.vecsfn_factory(vec_infidelity)
 
 def vec_trace_diff(a, b, mx_basis):  # assume vary model1, model2 fixed
     """
-    Trace distance between SPAM vectors a and b
+    Trace distance between state vectors a and b
 
     Parameters
     ----------
@@ -2253,12 +2253,12 @@ Vec_tr_diff = _modf.vecsfn_factory(vec_trace_diff)
 
 def vec_as_stdmx(vec, mx_basis):
     """
-    SPAM vectors as a standard density matrix
+    State vector as a standard density matrix
 
     Parameters
     ----------
     vec : numpy.ndarray
-        SPAM vector as a 1D dense array.
+        state vector as a 1D dense array.
 
     mx_basis : Basis or {'pp', 'gm', 'std'}
         the basis that `vec` is in.
@@ -2277,12 +2277,12 @@ Vec_as_stdmx = _modf.vecfn_factory(vec_as_stdmx)
 
 def vec_as_stdmx_eigenvalues(vec, mx_basis):
     """
-    Eigenvalues of the density matrix corresponding to a SPAM vector
+    Eigenvalues of the density matrix corresponding to a state vector
 
     Parameters
     ----------
     vec : numpy.ndarray
-        SPAM vector as a 1D dense array.
+        state vector as a 1D dense array.
 
     mx_basis : Basis or {'pp', 'gm', 'std'}
         the basis that `vec` is in.

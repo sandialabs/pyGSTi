@@ -69,7 +69,7 @@ class OrderedMemberDict(_PrefixOrderedDict, _mm.ModelChild):
     An ordered dictionary whose keys must begin with a given prefix.
 
     This class also ensure that every value is an object of the appropriate Model
-    member type (e.g. :class:`SPAMVec`- or :class:`LinearOperator`-derived object) by converting any
+    member type (e.g. :class:`State`- or :class:`LinearOperator`-derived object) by converting any
     values into that type upon assignment and raising an error if this is not possible.
 
     Parameters

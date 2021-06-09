@@ -1,3 +1,16 @@
+"""
+The TensorProductState class and supporting functionality.
+"""
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
+
+
 import numpy as _np
 import itertools as _itertools
 import functools as _functools
@@ -101,7 +114,7 @@ class TensorProductState(_State):
 
     def to_dense(self, on_space='minimal', scratch=None):
         """
-        Return this SPAM vector as a (dense) numpy array.
+        Return this state vector as a (dense) numpy array.
 
         The memory in `scratch` maybe used when it is not-None.
 
@@ -124,7 +137,7 @@ class TensorProductState(_State):
 
     def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
         """
-        Get the `order`-th order Taylor-expansion terms of this SPAM vector.
+        Get the `order`-th order Taylor-expansion terms of this state vector.
 
         This function either constructs or returns a cached list of the terms at
         the given order.  Each term is "rank-1", meaning that it is a state
@@ -134,9 +147,9 @@ class TensorProductState(_State):
         `rho -> A rho B`
 
         The coefficients of these terms are typically polynomials of the
-        SPAMVec's parameters, where the polynomial's variable indices index the
-        *global* parameters of the SPAMVec's parent (usually a :class:`Model`)
-        , not the SPAMVec's local parameter array (i.e. that returned from
+        State's parameters, where the polynomial's variable indices index the
+        *global* parameters of the State's parent (usually a :class:`Model`)
+        , not the State's local parameter array (i.e. that returned from
         `to_vector`).
 
         Parameters
@@ -171,8 +184,8 @@ class TensorProductState(_State):
             factor_lists = [self.factors[i].taylor_order_terms(pi, max_polynomial_vars) for i, pi in enumerate(p)]
 
             # When possible, create COLLAPSED factor_lists so each factor has just a single
-            # (SPAMVec) pre & post op, which can be formed into the new terms'
-            # TensorProdSPAMVec ops.
+            # (State) pre & post op, which can be formed into the new terms'
+            # TensorProdState ops.
             # - DON'T collapse stabilizer states & clifford ops - can't for POVMs
             collapsible = False  # bool(self._evotype =="svterm") # need to use reps for collapsing now... TODO?
 
@@ -180,11 +193,11 @@ class TensorProductState(_State):
                 factor_lists = [[t.collapse_vec() for t in fterms] for fterms in factor_lists]
 
             for factors in _itertools.product(*factor_lists):
-                # create a term with a TensorProdSPAMVec - Note we always create
+                # create a term with a TensorProdState - Note we always create
                 # "prep"-mode vectors, since even when self._prep_or_effect == "effect" these
-                # vectors are created with factor (prep- or effect-type) SPAMVecs not factor POVMs
+                # vectors are created with factor (prep- or effect-type) States not factor POVMs
                 # we workaround this by still allowing such "prep"-mode
-                # TensorProdSPAMVecs to be represented as effects (i.e. in torep('effect'...) works)
+                # TensorProdStates to be represented as effects (i.e. in torep('effect'...) works)
                 coeff = _functools.reduce(lambda x, y: x.mult(y), [f.coeff for f in factors])
                 pre_rep = self._evotype.create_tensorproduct_state_rep(
                     [f.pre_state for f in factors if (f.pre_state is not None)], self.state_space)
@@ -227,7 +240,7 @@ class TensorProductState(_State):
     @property
     def num_params(self):
         """
-        Get the number of independent parameters which specify this SPAM vector.
+        Get the number of independent parameters which specify this state vector.
 
         Returns
         -------
@@ -238,7 +251,7 @@ class TensorProductState(_State):
 
     def to_vector(self):
         """
-        Get the SPAM vector parameters as an array of values.
+        Get the state vector parameters as an array of values.
 
         Returns
         -------
@@ -249,16 +262,16 @@ class TensorProductState(_State):
 
     def from_vector(self, v, close=False, dirty_value=True):
         """
-        Initialize the SPAM vector using a 1D array of parameters.
+        Initialize the state vector using a 1D array of parameters.
 
         Parameters
         ----------
         v : numpy array
-            The 1D vector of SPAM vector parameters.  Length
+            The 1D vector of state vector parameters.  Length
             must == num_params()
 
         close : bool, optional
-            Whether `v` is close to this SPAM vector's current
+            Whether `v` is close to this state vector's current
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
@@ -280,12 +293,12 @@ class TensorProductState(_State):
 
     def deriv_wrt_params(self, wrt_filter=None):
         """
-        The element-wise derivative this SPAM vector.
+        The element-wise derivative this state vector.
 
-        Construct a matrix whose columns are the derivatives of the SPAM vector
+        Construct a matrix whose columns are the derivatives of the state vector
         with respect to a single param.  Thus, each column is of length
-        dimension and there is one column per SPAM vector parameter.
-        An empty 2D array in the StaticSPAMVec case (num_params == 0).
+        dimension and there is one column per state vector parameter.
+        An empty 2D array in the StaticState case (num_params == 0).
 
         Parameters
         ----------
@@ -341,7 +354,7 @@ class TensorProductState(_State):
 
     def has_nonzero_hessian(self):
         """
-        Whether this SPAM vector has a non-zero Hessian with respect to its parameters.
+        Whether this state vector has a non-zero Hessian with respect to its parameters.
 
         Returns
         -------
@@ -354,6 +367,6 @@ class TensorProductState(_State):
         #ar = self.to_dense()
         #s += _mt.mx_to_string(ar, width=4, prec=2)
 
-        # factors are just other SPAMVecs
+        # factors are just other States
         s += " x ".join([_mt.mx_to_string(fct.to_dense(on_space='minimal'), width=4, prec=2) for fct in self.factors])
         return s

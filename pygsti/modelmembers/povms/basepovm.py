@@ -30,7 +30,7 @@ class _BasePOVM(_POVM):
 
         Parameters
         ----------
-        effects : dict of SPAMVecs or array-like
+        effects : dict of POVMEffects or array-like
             A dict (or list of key,value pairs) of the effect vectors.
 
         evotype : Evotype or str, optional
@@ -46,7 +46,7 @@ class _BasePOVM(_POVM):
         preserve_sum : bool, optional
             If true, the sum of `effects` is taken to be a constraint
             and so the final effect vector is made into a
-            :class:`ComplementSPAMVec`.
+            :class:`ComplementPOVMEffect`.
         """
         self.Np = 0
 
@@ -158,7 +158,7 @@ class _BasePOVM(_POVM):
         """
         Creates a dictionary of simplified effect vectors.
 
-        Returns a dictionary of effect SPAMVecs that belong to the POVM's parent
+        Returns a dictionary of effect POVMEffects that belong to the POVM's parent
         `Model` - that is, whose `gpindices` are set to all or a subset of
         this POVM's gpindices.  Such effect vectors are used internally within
         computations involving the parent `Model`.
@@ -171,7 +171,7 @@ class _BasePOVM(_POVM):
 
         Returns
         -------
-        OrderedDict of SPAMVecs
+        OrderedDict of POVMEffects
         """
         if prefix: prefix = prefix + "_"
         simplified = _collections.OrderedDict()

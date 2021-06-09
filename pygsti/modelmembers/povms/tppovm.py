@@ -19,10 +19,10 @@ class TPPOVM(_BasePOVM):
 
     Parameters
     ----------
-    effects : dict of SPAMVecs or array-like
+    effects : dict of POVMEffects or array-like
         A dict (or list of key,value pairs) of the effect vectors.  The
         final effect vector will be stripped of any existing
-        parameterization and turned into a ComplementSPAMVec which has
+        parameterization and turned into a ComplementPOVMEffect which has
         no additional parameters and is always equal to
         `identity - sum(other_effects`, where `identity` is the sum of
         `effects` when this __init__ call is made.

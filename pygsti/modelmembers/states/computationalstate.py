@@ -21,7 +21,7 @@ except ImportError:
 
 class ComputationalBasisState(_State):
     """
-    A static SPAM vector that is tensor product of 1-qubit Z-eigenstates.
+    A static state vector that is tensor product of 1-qubit Z-eigenstates.
 
     This is called a "computational basis state" in many contexts.
 
@@ -48,7 +48,7 @@ class ComputationalBasisState(_State):
     @classmethod
     def from_dense_vec(cls, vec, basis='pp', evotype='default', state_space=None):
         """
-        Create a new ComputationalSPAMVec from a dense vector.
+        Create a new ComputationalBasisState from a dense vector.
 
         Parameters
         ----------
@@ -69,7 +69,7 @@ class ComputationalBasisState(_State):
 
         Returns
         -------
-        ComputationalSPAMVec
+        ComputationalBasisState
         """
         if evotype in ('stabilizer', 'statevec'):
             nqubits = int(round(_np.log2(len(vec))))
@@ -86,7 +86,7 @@ class ComputationalBasisState(_State):
             if _np.allclose(testvec, vec.flat):
                 return cls(zvals, basis, evotype, state_space)
         raise ValueError(("Given `vec` is not a z-basis product state - "
-                          "cannot construct ComputatinoalSPAMVec"))
+                          "cannot construct ComputationalBasisState"))
 
     @classmethod
     def from_dense_purevec(cls, purevec, basis='pp', evotype="default", state_space=None):
@@ -142,7 +142,7 @@ class ComputationalBasisState(_State):
 
     def to_dense(self, on_space='minimal', scratch=None):
         """
-        Return this SPAM vector as a (dense) numpy array.
+        Return this state vector as a (dense) numpy array.
 
         The memory in `scratch` maybe used when it is not-None.
 
@@ -195,7 +195,7 @@ class ComputationalBasisState(_State):
 
     def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
         """
-        Get the `order`-th order Taylor-expansion terms of this SPAM vector.
+        Get the `order`-th order Taylor-expansion terms of this state vector.
 
         This function either constructs or returns a cached list of the terms at
         the given order.  Each term is "rank-1", meaning that it is a state
@@ -205,9 +205,9 @@ class ComputationalBasisState(_State):
         `rho -> A rho B`
 
         The coefficients of these terms are typically polynomials of the
-        SPAMVec's parameters, where the polynomial's variable indices index the
-        *global* parameters of the SPAMVec's parent (usually a :class:`Model`)
-        , not the SPAMVec's local parameter array (i.e. that returned from
+        State's parameters, where the polynomial's variable indices index the
+        *global* parameters of the State's parent (usually a :class:`Model`)
+        , not the State's local parameter array (i.e. that returned from
         `to_vector`).
 
         Parameters
@@ -258,7 +258,7 @@ class ComputationalBasisState(_State):
     @property
     def num_params(self):
         """
-        Get the number of independent parameters which specify this SPAM vector.
+        Get the number of independent parameters which specify this state vector.
 
         Returns
         -------
@@ -269,7 +269,7 @@ class ComputationalBasisState(_State):
 
     def to_vector(self):
         """
-        Get the SPAM vector parameters as an array of values.
+        Get the state vector parameters as an array of values.
 
         Returns
         -------
@@ -280,16 +280,16 @@ class ComputationalBasisState(_State):
 
     def from_vector(self, v, close=False, dirty_value=True):
         """
-        Initialize the SPAM vector using a 1D array of parameters.
+        Initialize the state vector using a 1D array of parameters.
 
         Parameters
         ----------
         v : numpy array
-            The 1D vector of SPAM vector parameters.  Length
+            The 1D vector of state vector parameters.  Length
             must == num_params()
 
         close : bool, optional
-            Whether `v` is close to this SPAM vector's current
+            Whether `v` is close to this state vector's current
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
@@ -306,106 +306,107 @@ class ComputationalBasisState(_State):
 
     def __str__(self):
         nQubits = len(self._zvals)
-        s = "Computational Z-basis SPAM vec for %d qubits w/z-values: %s" % (nQubits, str(self._zvals))
+        s = "Computational Z-basis state vec for %d qubits w/z-values: %s" % (nQubits, str(self._zvals))
         return s
 
 
-class StabilizerState(_State):
-    """
-    A stabilizer state preparation.
-
-    This is represented internally using a compact representation of its stabilizer group.
-
-    Parameters
-    ----------
-    nqubits : int
-        Number of qubits
-
-    zvals : iterable, optional
-        An iterable over anything that can be cast as True/False
-        to indicate the 0/1 value of each qubit in the Z basis.
-        If None, the all-zeros state is created.
-
-    sframe : StabilizerFrame, optional
-        A complete stabilizer frame to initialize this state from.
-        If this is not None, then `nqubits` and `zvals` must be None.
-    """
-
-    @classmethod
-    def from_dense_purevec(cls, purevec):
-        """
-        Create a new StabilizerSPAMVec from a pure-state vector.
-
-        Currently, purevec must be a single computational basis state (it
-        cannot be a superpostion of multiple of them).
-
-        Parameters
-        ----------
-        purevec : numpy.ndarray
-            A complex-valued state vector specifying a pure state in the
-            standard computational basis.  This vector has length 2^n for
-            n qubits.
-
-        Returns
-        -------
-        StabilizerSPAMVec
-        """
-        nqubits = int(round(_np.log2(len(purevec))))
-        v = (_np.array([1, 0], 'd'), _np.array([0, 1], 'd'))  # (v0,v1)
-        for zvals in _itertools.product(*([(0, 1)] * nqubits)):
-            testvec = _functools.reduce(_np.kron, [v[i] for i in zvals])
-            if _np.allclose(testvec, purevec.flat):
-                return cls(nqubits, zvals)
-        raise ValueError(("Given `purevec` must be a z-basis product state - "
-                          "cannot construct StabilizerSPAMVec"))
-
-    def __init__(self, nqubits, zvals=None, sframe=None):
-        """
-        Initialize a StabilizerSPAMVec object.
-
-        Parameters
-        ----------
-        nqubits : int
-            Number of qubits
-
-        zvals : iterable, optional
-            An iterable over anything that can be cast as True/False
-            to indicate the 0/1 value of each qubit in the Z basis.
-            If None, the all-zeros state is created.
-
-        sframe : StabilizerFrame, optional
-            A complete stabilizer frame to initialize this state from.
-            If this is not None, then `nqubits` and `zvals` must be None.
-        """
-        if sframe is not None:
-            assert(nqubits is None and zvals is None), "`nqubits` and `zvals` must be None when `sframe` isn't!"
-            self.sframe = sframe
-        else:
-            self.sframe = _stabilizer.StabilizerFrame.from_zvals(nqubits, zvals)
-        rep = self.sframe.to_rep()  # dim == 2**nqubits
-        _State.__init__(self, rep, "stabilizer")
-
-    def to_dense(self, on_space='minimal', scratch=None):
-        """
-        Return this SPAM vector as a (dense) numpy array.
-
-        The memory in `scratch` maybe used when it is not-None.
-
-        Parameters
-        ----------
-        scratch : numpy.ndarray, optional
-            scratch space available for use.
-
-        Returns
-        -------
-        numpy.ndarray
-        """
-        assert(on_space in ('minimal', 'Hilbert'))
-        statevec = self.sframe.to_statevec()
-        statevec.shape = (statevec.size, 1)
-        return statevec
-
-    def __str__(self):
-        s = "Stabilizer spam vector for %d qubits with rep:\n" % (self.sframe.nqubits)
-        s += str(self.sframe)
-        return s
+#REMOVE
+#class StabilizerState(_State):
+#    """
+#    A stabilizer state preparation.
+#
+#    This is represented internally using a compact representation of its stabilizer group.
+#
+#    Parameters
+#    ----------
+#    nqubits : int
+#        Number of qubits
+#
+#    zvals : iterable, optional
+#        An iterable over anything that can be cast as True/False
+#        to indicate the 0/1 value of each qubit in the Z basis.
+#        If None, the all-zeros state is created.
+#
+#    sframe : StabilizerFrame, optional
+#        A complete stabilizer frame to initialize this state from.
+#        If this is not None, then `nqubits` and `zvals` must be None.
+#    """
+#
+#    @classmethod
+#    def from_dense_purevec(cls, purevec):
+#        """
+#        Create a new ComputationalBasisState from a pure-state vector.
+#
+#        Currently, purevec must be a single computational basis state (it
+#        cannot be a superpostion of multiple of them).
+#
+#        Parameters
+#        ----------
+#        purevec : numpy.ndarray
+#            A complex-valued state vector specifying a pure state in the
+#            standard computational basis.  This vector has length 2^n for
+#            n qubits.
+#
+#        Returns
+#        -------
+#        ComputationalBasisState
+#        """
+#        nqubits = int(round(_np.log2(len(purevec))))
+#        v = (_np.array([1, 0], 'd'), _np.array([0, 1], 'd'))  # (v0,v1)
+#        for zvals in _itertools.product(*([(0, 1)] * nqubits)):
+#            testvec = _functools.reduce(_np.kron, [v[i] for i in zvals])
+#            if _np.allclose(testvec, purevec.flat):
+#                return cls(nqubits, zvals)
+#        raise ValueError(("Given `purevec` must be a z-basis product state - "
+#                          "cannot construct ComputationalBasisState"))
+#
+#    def __init__(self, nqubits, zvals=None, sframe=None):
+#        """
+#        Initialize a ComputationalBasisState object.
+#
+#        Parameters
+#        ----------
+#        nqubits : int
+#            Number of qubits
+#
+#        zvals : iterable, optional
+#            An iterable over anything that can be cast as True/False
+#            to indicate the 0/1 value of each qubit in the Z basis.
+#            If None, the all-zeros state is created.
+#
+#        sframe : StabilizerFrame, optional
+#            A complete stabilizer frame to initialize this state from.
+#            If this is not None, then `nqubits` and `zvals` must be None.
+#        """
+#        if sframe is not None:
+#            assert(nqubits is None and zvals is None), "`nqubits` and `zvals` must be None when `sframe` isn't!"
+#            self.sframe = sframe
+#        else:
+#            self.sframe = _stabilizer.StabilizerFrame.from_zvals(nqubits, zvals)
+#        rep = self.sframe.to_rep()  # dim == 2**nqubits
+#        _State.__init__(self, rep, "stabilizer")
+#
+#    def to_dense(self, on_space='minimal', scratch=None):
+#        """
+#        Return this state vector as a (dense) numpy array.
+#
+#        The memory in `scratch` maybe used when it is not-None.
+#
+#        Parameters
+#        ----------
+#        scratch : numpy.ndarray, optional
+#            scratch space available for use.
+#
+#        Returns
+#        -------
+#        numpy.ndarray
+#        """
+#        assert(on_space in ('minimal', 'Hilbert'))
+#        statevec = self.sframe.to_statevec()
+#        statevec.shape = (statevec.size, 1)
+#        return statevec
+#
+#    def __str__(self):
+#        s = "Stabilizer spam vector for %d qubits with rep:\n" % (self.sframe.nqubits)
+#        s += str(self.sframe)
+#        return s

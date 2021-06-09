@@ -1,3 +1,16 @@
+"""
+The FullPureState class and supporting functionality.
+"""
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
+
+
 import numpy as _np
 from .state import State as _State
 from .densestate import DensePureState as _DensePureState
@@ -12,9 +25,9 @@ class FullPureState(_DensePureState):
 
     Parameters
     ----------
-    vec : array_like or SPAMVec
-        a 1D numpy array representing the SPAM operation.  The
-        shape of this array sets the dimension of the SPAM op.
+    vec : array_like or State
+        a 1D numpy array representing the state operation.  The
+        shape of this array sets the dimension of the state op.
 
     basis : Basis or {'pp','gm','std'}, optional
         The basis used to construct the Hilbert-Schmidt space representation
@@ -34,6 +47,7 @@ class FullPureState(_DensePureState):
         self._paramlbls = _np.array(["VecElement Re(%d)" % i for i in range(self.state_space.udim)]
                                     + ["VecElement Im(%d)" % i for i in range(self.state_space.udim)], dtype=object)
 
+    #REMOVE
     #Cannot set to arbitrary vector
     #def set_dense(self, vec):
     #    """
@@ -45,8 +59,8 @@ class FullPureState(_DensePureState):
     #
     #    Parameters
     #    ----------
-    #    vec : array_like or SPAMVec
-    #        A numpy array representing a SPAM vector, or a SPAMVec object.
+    #    vec : array_like or State
+    #        A numpy array representing a SPAM vector, or a State object.
     #
     #    Returns
     #    -------
@@ -61,7 +75,7 @@ class FullPureState(_DensePureState):
     @property
     def num_params(self):
         """
-        Get the number of independent parameters which specify this SPAM vector.
+        Get the number of independent parameters which specify this state vector.
 
         Returns
         -------
@@ -72,7 +86,7 @@ class FullPureState(_DensePureState):
 
     def to_vector(self):
         """
-        Get the SPAM vector parameters as an array of values.
+        Get the state vector parameters as an array of values.
 
         Returns
         -------
@@ -84,16 +98,16 @@ class FullPureState(_DensePureState):
 
     def from_vector(self, v, close=False, dirty_value=True):
         """
-        Initialize the SPAM vector using a 1D array of parameters.
+        Initialize the state vector using a 1D array of parameters.
 
         Parameters
         ----------
         v : numpy array
-            The 1D vector of SPAM vector parameters.  Length
+            The 1D vector of state vector parameters.  Length
             must == num_params()
 
         close : bool, optional
-            Whether `v` is close to this SPAM vector's current
+            Whether `v` is close to this state vector's current
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
@@ -112,11 +126,11 @@ class FullPureState(_DensePureState):
 
     def deriv_wrt_params(self, wrt_filter=None):
         """
-        The element-wise derivative this SPAM vector.
+        The element-wise derivative this state vector.
 
-        Construct a matrix whose columns are the derivatives of the SPAM vector
+        Construct a matrix whose columns are the derivatives of the state vector
         with respect to a single param.  Thus, each column is of length
-        dimension and there is one column per SPAM vector parameter.
+        dimension and there is one column per state vector parameter.
 
         Parameters
         ----------
@@ -138,7 +152,7 @@ class FullPureState(_DensePureState):
 
     def has_nonzero_hessian(self):
         """
-        Whether this SPAM vector has a non-zero Hessian with respect to its parameters.
+        Whether this state vector has a non-zero Hessian with respect to its parameters.
 
         Returns
         -------

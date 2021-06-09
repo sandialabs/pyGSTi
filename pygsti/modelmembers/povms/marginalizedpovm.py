@@ -117,7 +117,7 @@ class MarginalizedPOVM(_POVM):
 
     def values(self):
         """
-        An iterator over the effect SPAM vectors of this POVM.
+        An iterator over the effect POVM effect vectors of this POVM.
         """
         for k in self.keys():
             yield self[k]
@@ -135,7 +135,7 @@ class MarginalizedPOVM(_POVM):
             return _collections.OrderedDict.__getitem__(self, key)
         elif key in self:  # calls __contains__ to efficiently check for membership
             #create effect vector now that it's been requested (lazy creation)
-            #FUTURE: maybe have a "SumSPAMVec" that can add spamvecs to preserve paramterization and avoid dense reps
+            #FUTURE: maybe have a "SumPOVMEffect" that can add spamvecs to preserve paramterization and avoid dense reps
             effect_vec = None  # Note: currently all marginalized POVMs are *static*, since
             # we don't have a good general way to add parameterized effect vectors.
 
@@ -250,7 +250,7 @@ class MarginalizedPOVM(_POVM):
         """
         Creates a dictionary of simplified effect vectors.
 
-        Returns a dictionary of effect SPAMVecs that belong to the POVM's parent
+        Returns a dictionary of effect POVMEffects that belong to the POVM's parent
         `Model` - that is, whose `gpindices` are set to all or a subset of
         this POVM's gpindices.  Such effect vectors are used internally within
         computations involving the parent `Model`.
@@ -263,7 +263,7 @@ class MarginalizedPOVM(_POVM):
 
         Returns
         -------
-        OrderedDict of SPAMVecs
+        OrderedDict of POVMEffects
         """
         # Create "simplified" effect vectors, which infer their parent and
         # gpindices from the set of "factor-POVMs" they're constructed with.

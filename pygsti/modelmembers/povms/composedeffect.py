@@ -1,3 +1,15 @@
+"""
+The ComposedPOVMEffect class and supporting functionality.
+"""
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
+
 
 import numpy as _np
 from .effect import POVMEffect as _POVMEffect
@@ -10,24 +22,24 @@ from ...objects import term as _term
 class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
     """
     TODO: update docstring
-    A Lindblad-parameterized SPAMVec (that is also expandable into terms).
+    A Lindblad-parameterized POVMEffect (that is also expandable into terms).
 
     Parameters
     ----------
-    pure_vec : numpy array or SPAMVec
-        An array or SPAMVec in the *full* density-matrix space (this
+    pure_vec : numpy array or POVMEffect
+        An array or POVMEffect in the *full* density-matrix space (this
         vector will have dimension 4 in the case of a single qubit) which
         represents a pure-state preparation or projection.  This is used as
         the "base" preparation or projection that is followed or preceded
         by, respectively, the parameterized Lindblad-form error generator.
-        (This argument is *not* copied if it is a SPAMVec.  A numpy array
-         is converted to a new StaticSPAMVec.)
+        (This argument is *not* copied if it is a POVMEffect.  A numpy array
+         is converted to a new static POVM effect.)
 
     errormap : MapOperator
         The error generator action and parameterization, encapsulated in
         a gate object.  Usually a :class:`LindbladOp`
         or :class:`ComposedOp` object.  (This argument is *not* copied,
-        to allow LindbladSPAMVecs to share error generator
+        to allow ComposedPOVMEffects to share error generator
         parameters with other gates and spam vectors.)
     """
 
@@ -440,7 +452,7 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
 
     def to_dense(self, on_space='minimal', scratch=None):
         """
-        Return this SPAM vector as a (dense) numpy array.
+        Return this POVM effect vector as a (dense) numpy array.
 
         The memory in `scratch` maybe used when it is not-None.
 
@@ -466,7 +478,7 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
 
     def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
         """
-        Get the `order`-th order Taylor-expansion terms of this SPAM vector.
+        Get the `order`-th order Taylor-expansion terms of this POVM effect vector.
 
         This function either constructs or returns a cached list of the terms at
         the given order.  Each term is "rank-1", meaning that it is a state
@@ -476,9 +488,9 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
         `rho -> A rho B`
 
         The coefficients of these terms are typically polynomials of the
-        SPAMVec's parameters, where the polynomial's variable indices index the
-        *global* parameters of the SPAMVec's parent (usually a :class:`Model`)
-        , not the SPAMVec's local parameter array (i.e. that returned from
+        POVMEffect's parameters, where the polynomial's variable indices index the
+        *global* parameters of the POVMEffect's parent (usually a :class:`Model`)
+        , not the POVMEffect's local parameter array (i.e. that returned from
         `to_vector`).
 
         Parameters
@@ -516,7 +528,7 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
 
             # Effect terms are special in that all their pre/post ops act in order on the *state* before the final
             # effect is used to compute a probability.  Thus, constructing the same "terms" as above works here
-            # too - the difference comes when this SPAMVec is used as an effect rather than a prep.
+            # too - the difference comes when this POVMEffect is used as an effect rather than a prep.
             terms = [_term.compose_terms((stateTerm, t)) for t in err_terms]  # t ops occur *after* stateTerm's
 
             #OLD: now this is done within calculator when possible b/c not all terms can be collapsed
@@ -534,7 +546,7 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
 
     def taylor_order_terms_above_mag(self, order, max_polynomial_vars, min_term_mag):
         """
-        Get the `order`-th order Taylor-expansion terms of this SPAM vector that have magnitude above `min_term_mag`.
+        Get the `order`-th order Taylor-expansion terms of this POVM effect vector that have magnitude above `min_term_mag`.
 
         This function constructs the terms at the given order which have a magnitude (given by
         the absolute value of their coefficient) that is greater than or equal to `min_term_mag`.
@@ -570,7 +582,7 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
         #else:  # "effect"
         #    # Effect terms are special in that all their pre/post ops act in order on the *state* before the final
         #    # effect is used to compute a probability.  Thus, constructing the same "terms" as above works here
-        #    # too - the difference comes when this SPAMVec is used as an effect rather than a prep.
+        #    # too - the difference comes when this POVMEffect is used as an effect rather than a prep.
         #    terms = [_term.compose_terms((stateTerm, t)) for t in err_terms]  # t ops occur *after* stateTerm's
         terms = [_term.compose_terms_with_mag((stateTerm, t), stateTerm.magnitude * t.magnitude)
                  for t in err_terms]  # t ops occur *after* stateTerm's
@@ -579,12 +591,12 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
     @property
     def total_term_magnitude(self):
         """
-        Get the total (sum) of the magnitudes of all this SPAM vector's terms.
+        Get the total (sum) of the magnitudes of all this POVM effect vector's terms.
 
         The magnitude of a term is the absolute value of its coefficient, so
         this function returns the number you'd get from summing up the
         absolute-coefficients of all the Taylor terms (at all orders!) you
-        get from expanding this SPAM vector in a Taylor series.
+        get from expanding this POVM effect vector in a Taylor series.
 
         Returns
         -------
@@ -596,10 +608,10 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
     @property
     def total_term_magnitude_deriv(self):
         """
-        The derivative of the sum of *all* this SPAM vector's terms.
+        The derivative of the sum of *all* this POVM effect vector's terms.
 
         Get the derivative of the total (sum) of the magnitudes of all this
-        SPAM vector's terms with respect to the operators (local) parameters.
+        POVM effect vector's terms with respect to the operators (local) parameters.
 
         Returns
         -------
@@ -610,11 +622,11 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
 
     def deriv_wrt_params(self, wrt_filter=None):
         """
-        The element-wise derivative this SPAM vector.
+        The element-wise derivative this POVM effect vector.
 
-        Construct a matrix whose columns are the derivatives of the SPAM vector
+        Construct a matrix whose columns are the derivatives of the POVM effect vector
         with respect to a single param.  Thus, each column is of length
-        dimension and there is one column per SPAM vector parameter.
+        dimension and there is one column per POVM effect vector parameter.
 
         Parameters
         ----------
@@ -639,7 +651,7 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
 
     def hessian_wrt_params(self, wrt_filter1=None, wrt_filter2=None):
         """
-        Construct the Hessian of this SPAM vector with respect to its parameters.
+        Construct the Hessian of this POVM effect vector with respect to its parameters.
 
         This function returns a tensor whose first axis corresponds to the
         flattened operation matrix and whose 2nd and 3rd axes correspond to the
@@ -680,7 +692,7 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
     @property
     def num_params(self):
         """
-        Get the number of independent parameters which specify this SPAM vector.
+        Get the number of independent parameters which specify this POVM effect vector.
 
         Returns
         -------
@@ -702,16 +714,16 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
 
     def from_vector(self, v, close=False, dirty_value=True):
         """
-        Initialize the SPAM vector using a 1D array of parameters.
+        Initialize the POVM effect vector using a 1D array of parameters.
 
         Parameters
         ----------
         v : numpy array
-            The 1D vector of SPAM vector parameters.  Length
+            The 1D vector of POVM effect vector parameters.  Length
             must == num_params()
 
         close : bool, optional
-            Whether `v` is close to this SPAM vector's current
+            Whether `v` is close to this POVM effect vector's current
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
@@ -729,14 +741,14 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
 
     def transform_inplace(self, s):
         """
-        Update SPAM (column) vector V as inv(s) * V or s^T * V for preparation or  effect SPAM vectors, respectively.
+        Update POVM effect (column) vector V as inv(s) * V or s^T * V for preparation or  effect POVM effect vectors, respectively.
 
         Note that this is equivalent to state preparation vectors getting
         mapped: `rho -> inv(s) * rho` and the *transpose* of effect vectors
         being mapped as `E^T -> E^T * s`.
 
         Generally, the transform function updates the *parameters* of
-        the SPAM vector such that the resulting vector is altered as
+        the POVM effect vector such that the resulting vector is altered as
         described above.  If such an update cannot be done (because
         the gate parameters do not allow for it), ValueError is raised.
 
@@ -759,10 +771,10 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
 
     def depolarize(self, amount):
         """
-        Depolarize this SPAM vector by the given `amount`.
+        Depolarize this POVM effect vector by the given `amount`.
 
         Generally, the depolarize function updates the *parameters* of
-        the SPAMVec such that the resulting vector is depolarized.  If
+        the POVMEffect such that the resulting vector is depolarized.  If
         such an update cannot be done (because the gate parameters do not
         allow for it), ValueError is raised.
 

@@ -388,7 +388,7 @@ class RankOneTerm(object):
     # not vice versa (right now the post effect is preceded
     # by the *pre* ops, and vice versa).  If the reverse
     # were true we'd need to conjugate the terms created
-    # for effect-type LindbladSPAMVec objects, for example.
+    # for ComposedPOVMEffect objects, for example.
     #def conjugate(self):
     #    return self.__class__(self._rep.conjugate())
 

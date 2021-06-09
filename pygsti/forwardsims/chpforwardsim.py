@@ -55,7 +55,7 @@ class CHPForwardSimulator(_WeakForwardSimulator):
                 tmp.write('#\n')
 
                 # Prep
-                # TODO: Make sure this works with SPAMVec
+                # TODO: Make sure this works with State objects
                 rho = self.model.circuit_layer_operator(complete_circuit[0], 'prep')
                 tmp.write(rho.chp_str())
 

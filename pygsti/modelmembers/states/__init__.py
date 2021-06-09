@@ -34,13 +34,13 @@ def convert(state, to_type, basis, extra=None):
     TODO: update docstring
     Convert SPAM vector to a new type of parameterization.
 
-    This potentially creates a new SPAMVec object.
+    This potentially creates a new State object.
     Raises ValueError for invalid conversions.
 
     Parameters
     ----------
-    state : SPAMVec
-        SPAM vector to convert
+    state : State
+        State vector to convert
 
     to_type : {"full","TP","static","static unitary","clifford",LINDBLAD}
         The type of parameterizaton to convert to.  "LINDBLAD" is a placeholder
@@ -57,8 +57,8 @@ def convert(state, to_type, basis, extra=None):
 
     Returns
     -------
-    SPAMVec
-        The converted SPAM vector, usually a distinct
+    State
+        The converted State vector, usually a distinct
         object from the object passed as input.
     """
     if to_type == "full":
@@ -134,9 +134,9 @@ def convert(state, to_type, basis, extra=None):
         raise ValueError("Invalid to_type argument: %s" % to_type)
 
 
-def finite_difference_deriv_wrt_params(spamvec, wrt_filter=None, eps=1e-7):
+def finite_difference_deriv_wrt_params(state, wrt_filter=None, eps=1e-7):
     """
-    Computes a finite-difference Jacobian for a SPAMVec object.
+    Computes a finite-difference Jacobian for a State object.
 
     The returned value is a matrix whose columns are the vectorized
     derivatives of the spam vector with respect to a single
@@ -145,7 +145,7 @@ def finite_difference_deriv_wrt_params(spamvec, wrt_filter=None, eps=1e-7):
 
     Parameters
     ----------
-    spamvec : SPAMVec
+    state : State
         The spam vector object to compute a Jacobian for.
 
     wrt_filter : list or numpy.ndarray
@@ -161,41 +161,41 @@ def finite_difference_deriv_wrt_params(spamvec, wrt_filter=None, eps=1e-7):
         An M by N matrix where M is the number of gate elements and
         N is the number of gate parameters.
     """
-    dim = spamvec.dim
-    spamvec2 = spamvec.copy()
-    p = spamvec.to_vector()
-    fd_deriv = _np.empty((dim, spamvec.num_params), 'd')  # assume real (?)
+    dim = state.dim
+    state2 = state.copy()
+    p = state.to_vector()
+    fd_deriv = _np.empty((dim, state.num_params), 'd')  # assume real (?)
 
-    for i in range(spamvec.num_params):
+    for i in range(state.num_params):
         p_plus_dp = p.copy()
         p_plus_dp[i] += eps
-        spamvec2.from_vector(p_plus_dp, close=True)
-        fd_deriv[:, i:i + 1] = (spamvec2 - spamvec) / eps
+        state2.from_vector(p_plus_dp, close=True)
+        fd_deriv[:, i:i + 1] = (state2 - state) / eps
 
-    fd_deriv.shape = [dim, spamvec.num_params]
+    fd_deriv.shape = [dim, state.num_params]
     if wrt_filter is None:
         return fd_deriv
     else:
         return _np.take(fd_deriv, wrt_filter, axis=1)
 
 
-def check_deriv_wrt_params(spamvec, deriv_to_check=None, wrt_filter=None, eps=1e-7):
+def check_deriv_wrt_params(state, deriv_to_check=None, wrt_filter=None, eps=1e-7):
     """
-    Checks the `deriv_wrt_params` method of a SPAMVec object.
+    Checks the `deriv_wrt_params` method of a State object.
 
     This routine is meant to be used as an aid in testing and debugging
-    SPAMVec classes by comparing the finite-difference Jacobian that
-    *should* be returned by `spamvec.deriv_wrt_params` with the one that
+    State classes by comparing the finite-difference Jacobian that
+    *should* be returned by `state.deriv_wrt_params` with the one that
     actually is.  A ValueError is raised if the two do not match.
 
     Parameters
     ----------
-    spamvec : SPAMVec
+    state : State
         The gate object to test.
 
     deriv_to_check : numpy.ndarray or None, optional
         If not None, the Jacobian to compare against the finite difference
-        result.  If None, `spamvec.deriv_wrt_parms()` is used.  Setting this
+        result.  If None, `state.deriv_wrt_parms()` is used.  Setting this
         argument can be useful when the function is called *within* a LinearOperator
         class's `deriv_wrt_params()` method itself as a part of testing.
 
@@ -210,9 +210,9 @@ def check_deriv_wrt_params(spamvec, deriv_to_check=None, wrt_filter=None, eps=1e
     -------
     None
     """
-    fd_deriv = finite_difference_deriv_wrt_params(spamvec, wrt_filter, eps)
+    fd_deriv = finite_difference_deriv_wrt_params(state, wrt_filter, eps)
     if deriv_to_check is None:
-        deriv_to_check = spamvec.deriv_wrt_params()
+        deriv_to_check = state.deriv_wrt_params()
 
     #print("Deriv shapes = %s and %s" % (str(fd_deriv.shape),
     #                                    str(deriv_to_check.shape)))
@@ -238,20 +238,20 @@ def optimize_state(vec_to_optimize, target_vec):
     """
     Optimize the parameters of vec_to_optimize.
 
-    The optimization is performed so that the the resulting SPAM vector is as
+    The optimization is performed so that the the resulting State vector is as
     close as possible to target_vec.
 
-    This is trivial for the case of FullSPAMVec instances, but for other types
+    This is trivial for the case of FullState instances, but for other types
     of parameterization this involves an iterative optimization over all the
     parameters of vec_to_optimize.
 
     Parameters
     ----------
-    vec_to_optimize : SPAMVec
-        The vector to optimize. This object gets altered.
+    vec_to_optimize : State
+        The state vector to optimize. This object gets altered.
 
-    target_vec : SPAMVec
-        The SPAM vector used as the target.
+    target_vec : State
+        The state vector used as the target.
 
     Returns
     -------

@@ -1,3 +1,15 @@
+"""
+The State class and supporting functionality.
+"""
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
+
 
 import numpy as _np
 from .. import modelmember as _modelmember
@@ -12,7 +24,7 @@ class State(_modelmember.ModelMember):
     A parameterized state preparation OR POVM effect vector (operator).
 
     This class is the  common base class for all specific
-    parameterizations of a SPAM vector.
+    parameterizations of a state vector.
 
     Parameters
     ----------
@@ -25,11 +37,11 @@ class State(_modelmember.ModelMember):
     Attributes
     ----------
     size : int
-        The number of independent elements in this SPAM vector (when viewed as a dense array).
+        The number of independent elements in this state vector (when viewed as a dense array).
     """
 
     def __init__(self, rep, evotype):
-        """ Initialize a new SPAM Vector """
+        """ Initialize a new state Vector """
         super(State, self).__init__(rep.state_space, evotype)
         self._rep = rep
 
@@ -57,16 +69,16 @@ class State(_modelmember.ModelMember):
 
     def set_dense(self, vec):
         """
-        Set the dense-vector value of this SPAM vector.
+        Set the dense-vector value of this state vector.
 
-        Attempts to modify this SPAM vector's parameters so that the raw
-        SPAM vector becomes `vec`.  Will raise ValueError if this operation
+        Attempts to modify this state vector's parameters so that the raw
+        state vector becomes `vec`.  Will raise ValueError if this operation
         is not possible.
 
         Parameters
         ----------
-        vec : array_like or SPAMVec
-            A numpy array representing a SPAM vector, or a SPAMVec object.
+        vec : array_like or State
+            A numpy array representing a state vector, or a State object.
 
         Returns
         -------
@@ -93,7 +105,7 @@ class State(_modelmember.ModelMember):
 
     def to_dense(self, on_space='minimal', scratch=None):
         """
-        Return this SPAM vector as a (dense) numpy array.
+        Return this state vector as a (dense) numpy array.
 
         The memory in `scratch` maybe used when it is not-None.
 
@@ -116,7 +128,7 @@ class State(_modelmember.ModelMember):
 
     def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
         """
-        Get the `order`-th order Taylor-expansion terms of this SPAM vector.
+        Get the `order`-th order Taylor-expansion terms of this state vector.
 
         This function either constructs or returns a cached list of the terms at
         the given order.  Each term is "rank-1", meaning that it is a state
@@ -126,9 +138,9 @@ class State(_modelmember.ModelMember):
         `rho -> A rho B`
 
         The coefficients of these terms are typically polynomials of the
-        SPAMVec's parameters, where the polynomial's variable indices index the
-        *global* parameters of the SPAMVec's parent (usually a :class:`Model`)
-        , not the SPAMVec's local parameter array (i.e. that returned from
+        State's parameters, where the polynomial's variable indices index the
+        *global* parameters of the State's parent (usually a :class:`Model`)
+        , not the State's local parameter array (i.e. that returned from
         `to_vector`).
 
         Parameters
@@ -162,14 +174,14 @@ class State(_modelmember.ModelMember):
         """
         Get terms with magnitude above `min_term_mag`.
 
-        Get the terms (from a Taylor expansion of this SPAM vector) that have
+        Get the terms (from a Taylor expansion of this state vector) that have
         magnitude above `min_term_mag` (the magnitude of a term is taken to
         be the absolute value of its coefficient), considering only those
         terms up to some maximum Taylor expansion order, `max_taylor_order`.
 
         Note that this function also *sets* the magnitudes of the returned
         terms (by calling `term.set_magnitude(...)`) based on the current
-        values of this SPAM vector's parameters.  This is an essential step
+        values of this state vector's parameters.  This is an essential step
         to using these terms in pruned-path-integral calculations later on.
 
         Parameters
@@ -205,7 +217,7 @@ class State(_modelmember.ModelMember):
             we're forcing these terms to always be present).
         """
         #NOTE: SAME as for LinearOperator class -- TODO consolidate in FUTURE
-        #print("DB: SPAM get_high_magnitude_terms")
+        #print("DB: state get_high_magnitude_terms")
         v = self.to_vector()
         taylor_order = 0
         terms = []; last_len = -1; first_order_magmax = 1.0
@@ -255,7 +267,7 @@ class State(_modelmember.ModelMember):
 
     def taylor_order_terms_above_mag(self, order, max_polynomial_vars, min_term_mag):
         """
-        Get the `order`-th order Taylor-expansion terms of this SPAM vector that have magnitude above `min_term_mag`.
+        Get the `order`-th order Taylor-expansion terms of this state vector that have magnitude above `min_term_mag`.
 
         This function constructs the terms at the given order which have a magnitude (given by
         the absolute value of their coefficient) that is greater than or equal to `min_term_mag`.
@@ -294,7 +306,7 @@ class State(_modelmember.ModelMember):
 
         Parameters
         ----------
-        other_spam_vec : SPAMVec
+        other_spam_vec : State
             The other spam vector
 
         transform : numpy.ndarray, optional
@@ -323,7 +335,7 @@ class State(_modelmember.ModelMember):
 
         Parameters
         ----------
-        other_spam_vec : SPAMVec
+        other_spam_vec : State
             The other spam vector
 
         transform : numpy.ndarray, optional
@@ -351,7 +363,7 @@ class State(_modelmember.ModelMember):
         mapped: `rho -> inv(s) * rho`.
 
         Generally, the transform function updates the *parameters* of
-        the SPAM vector such that the resulting vector is altered as
+        the state vector such that the resulting vector is altered as
         described above.  If such an update cannot be done (because
         the gate parameters do not allow for it), ValueError is raised.
 
@@ -370,10 +382,10 @@ class State(_modelmember.ModelMember):
 
     def depolarize(self, amount):
         """
-        Depolarize this SPAM vector by the given `amount`.
+        Depolarize this state vector by the given `amount`.
 
         Generally, the depolarize function updates the *parameters* of
-        the SPAMVec such that the resulting vector is depolarized.  If
+        the State such that the resulting vector is depolarized.  If
         such an update cannot be done (because the gate parameters do not
         allow for it), ValueError is raised.
 
@@ -400,7 +412,7 @@ class State(_modelmember.ModelMember):
     @property
     def num_params(self):
         """
-        Get the number of independent parameters which specify this SPAM vector.
+        Get the number of independent parameters which specify this state vector.
 
         Returns
         -------
@@ -411,7 +423,7 @@ class State(_modelmember.ModelMember):
 
     def to_vector(self):
         """
-        Get the SPAM vector parameters as an array of values.
+        Get the state vector parameters as an array of values.
 
         Returns
         -------
@@ -422,16 +434,16 @@ class State(_modelmember.ModelMember):
 
     def from_vector(self, v, close=False, dirty_value=True):
         """
-        Initialize the SPAM vector using a 1D array of parameters.
+        Initialize the state vector using a 1D array of parameters.
 
         Parameters
         ----------
         v : numpy array
-            The 1D vector of SPAM vector parameters.  Length
+            The 1D vector of state vector parameters.  Length
             must == num_params()
 
         close : bool, optional
-            Whether `v` is close to this SPAM vector's current
+            Whether `v` is close to this state vector's current
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
@@ -448,12 +460,11 @@ class State(_modelmember.ModelMember):
 
     def deriv_wrt_params(self, wrt_filter=None):
         """
-        The element-wise derivative this SPAM vector.
+        The element-wise derivative this state vector.
 
-        Construct a matrix whose columns are the derivatives of the SPAM vector
+        Construct a matrix whose columns are the derivatives of the state vector
         with respect to a single param.  Thus, each column is of length
-        dimension and there is one column per SPAM vector parameter.
-        An empty 2D array in the StaticSPAMVec case (num_params == 0).
+        dimension and there is one column per state vector parameter.
 
         Parameters
         ----------
@@ -475,7 +486,7 @@ class State(_modelmember.ModelMember):
 
     def has_nonzero_hessian(self):
         """
-        Whether this SPAM vector has a non-zero Hessian with respect to its parameters.
+        Whether this state vector has a non-zero Hessian with respect to its parameters.
 
         Returns
         -------
@@ -486,7 +497,7 @@ class State(_modelmember.ModelMember):
 
     def hessian_wrt_params(self, wrt_filter1=None, wrt_filter2=None):
         """
-        Construct the Hessian of this SPAM vector with respect to its parameters.
+        Construct the Hessian of this state vector with respect to its parameters.
 
         This function returns a tensor whose first axis corresponds to the
         flattened operation matrix and whose 2nd and 3rd axes correspond to the

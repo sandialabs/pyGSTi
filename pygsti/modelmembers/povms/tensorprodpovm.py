@@ -139,7 +139,7 @@ class TensorProductPOVM(_POVM):
         """
         Creates a dictionary of simplified effect vectors.
 
-        Returns a dictionary of effect SPAMVecs that belong to the POVM's parent
+        Returns a dictionary of effect POVMEffects that belong to the POVM's parent
         `Model` - that is, whose `gpindices` are set to all or a subset of
         this POVM's gpindices.  Such effect vectors are used internally within
         computations involving the parent `Model`.
@@ -152,7 +152,7 @@ class TensorProductPOVM(_POVM):
 
         Returns
         -------
-        OrderedDict of SPAMVecs
+        OrderedDict of POVMEffects
         """
         #Note: calling from_vector(...) on the simplified effect vectors (in
         # order) - e.g. within the finite differencing in MapForwardSimulator -  must

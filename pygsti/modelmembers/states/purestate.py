@@ -1,3 +1,16 @@
+"""
+The EmbeddedPureState class and supporting functionality.
+"""
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
+
+
 import numpy as _np
 import itertools as _itertools
 import functools as _functools
@@ -17,19 +30,19 @@ from ...objects.polynomial import Polynomial as _Polynomial
 class EmbeddedPureState(_State):
     """
     TODO: update docstring
-    A SPAM vector that is a rank-1 density matrix.
+    A state vector that is a rank-1 density matrix.
 
     This is essentially a pure state that evolves according to one of the
     density matrix evolution types ("denstiymx", "svterm", and "cterm").  It is
-    parameterized by a contained pure-state SPAMVec which evolves according to a
+    parameterized by a contained pure-state State which evolves according to a
     state vector evolution type ("statevec" or "stabilizer").
 
     Parameters
     ----------
-    pure_state_vec : array_like or SPAMVec
+    pure_state_vec : array_like or State
         a 1D numpy array or object representing the pure state.  This object
-        sets the parameterization and dimension of this SPAM vector (if
-        `pure_state_vec`'s dimension is `d`, then this SPAM vector's
+        sets the parameterization and dimension of this state vector (if
+        `pure_state_vec`'s dimension is `d`, then this state vector's
         dimension is `d^2`).  Assumed to be a complex vector in the
         standard computational basis.
 
@@ -42,7 +55,7 @@ class EmbeddedPureState(_State):
         allowed value is `"cterm"`.
 
     dm_basis : {'std', 'gm', 'pp', 'qt'} or Basis object
-        The basis for this SPAM vector - that is, for the *density matrix*
+        The basis for this state vector - that is, for the *density matrix*
         corresponding to `pure_state_vec`.  Allowed values are Matrix-unit
         (std),  Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt)
         (or a custom basis object).
@@ -77,7 +90,7 @@ class EmbeddedPureState(_State):
 
     def to_dense(self, on_space='minimal', scratch=None):
         """
-        Return this SPAM vector as a (dense) numpy array.
+        Return this state vector as a (dense) numpy array.
 
         The memory in `scratch` maybe used when it is not-None.
 
@@ -102,7 +115,7 @@ class EmbeddedPureState(_State):
 
     def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
         """
-        Get the `order`-th order Taylor-expansion terms of this SPAM vector.
+        Get the `order`-th order Taylor-expansion terms of this state vector.
 
         This function either constructs or returns a cached list of the terms at
         the given order.  Each term is "rank-1", meaning that it is a state
@@ -112,9 +125,9 @@ class EmbeddedPureState(_State):
         `rho -> A rho B`
 
         The coefficients of these terms are typically polynomials of the
-        SPAMVec's parameters, where the polynomial's variable indices index the
-        *global* parameters of the SPAMVec's parent (usually a :class:`Model`)
-        , not the SPAMVec's local parameter array (i.e. that returned from
+        State's parameters, where the polynomial's variable indices index the
+        *global* parameters of the State's parent (usually a :class:`Model`)
+        , not the State's local parameter array (i.e. that returned from
         `to_vector`).
 
         Parameters
@@ -141,7 +154,7 @@ class EmbeddedPureState(_State):
             output of :method:`Polynomial.compact`.
         """
         if self.num_params > 0:
-            raise ValueError(("PureStateSPAMVec.taylor_order_terms(...) is only "
+            raise ValueError(("EmbeddedPureState.taylor_order_terms(...) is only "
                               "implemented for the case when its underlying "
                               "pure state vector has 0 parameters (is static)"))
 
@@ -207,7 +220,7 @@ class EmbeddedPureState(_State):
     @property
     def num_params(self):
         """
-        Get the number of independent parameters which specify this SPAM vector.
+        Get the number of independent parameters which specify this state vector.
 
         Returns
         -------
@@ -218,7 +231,7 @@ class EmbeddedPureState(_State):
 
     def to_vector(self):
         """
-        Get the SPAM vector parameters as an array of values.
+        Get the state vector parameters as an array of values.
 
         Returns
         -------
@@ -229,16 +242,16 @@ class EmbeddedPureState(_State):
 
     def from_vector(self, v, close=False, dirty_value=True):
         """
-        Initialize the SPAM vector using a 1D array of parameters.
+        Initialize the state vector using a 1D array of parameters.
 
         Parameters
         ----------
         v : numpy array
-            The 1D vector of SPAM vector parameters.  Length
+            The 1D vector of state vector parameters.  Length
             must == num_params()
 
         close : bool, optional
-            Whether `v` is close to this SPAM vector's current
+            Whether `v` is close to this state vector's current
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
@@ -256,12 +269,11 @@ class EmbeddedPureState(_State):
 
     def deriv_wrt_params(self, wrt_filter=None):
         """
-        The element-wise derivative this SPAM vector.
+        The element-wise derivative this state vector.
 
-        Construct a matrix whose columns are the derivatives of the SPAM vector
+        Construct a matrix whose columns are the derivatives of the state vector
         with respect to a single param.  Thus, each column is of length
-        dimension and there is one column per SPAM vector parameter.
-        An empty 2D array in the StaticSPAMVec case (num_params == 0).
+        dimension and there is one column per state vector parameter.
 
         Parameters
         ----------
@@ -274,11 +286,11 @@ class EmbeddedPureState(_State):
         numpy array
             Array of derivatives, shape == (dimension, num_params)
         """
-        raise NotImplementedError("Still need to work out derivative calculation of PureStateSPAMVec")
+        raise NotImplementedError("Still need to work out derivative calculation of EmbeddedPureState")
 
     def has_nonzero_hessian(self):
         """
-        Whether this SPAM vector has a non-zero Hessian with respect to its parameters.
+        Whether this state vector has a non-zero Hessian with respect to its parameters.
 
         Returns
         -------

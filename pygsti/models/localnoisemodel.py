@@ -459,6 +459,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                                                         evotype, errcomp_type, verbosity)
             povm_layers['Mdefault'] = _povm.ComposedPOVM(povmNoiseMap, None, "pp")
 
+        #REMOVE
         #OLD: when had a 'spamdict' arg: else:
         #spamdict : dict
         #    A dictionary (an `OrderedDict` if you care about insertion order) which
@@ -765,7 +766,7 @@ class _SimpleCompLayerRules(_LayerRules):
 
         Returns
         -------
-        POVM or SPAMVec
+        State
         """
         #No cache for preps
         return model.prep_blks['layers'][layerlbl]  # prep_blks['layer'] are full prep ops
@@ -781,7 +782,7 @@ class _SimpleCompLayerRules(_LayerRules):
 
         Returns
         -------
-        POVM or SPAMVec
+        POVM or POVMEffect
         """
         # caches['povm-layers'] *are* just complete layers
         if layerlbl in caches['povm-layers']: return caches['povm-layers'][layerlbl]

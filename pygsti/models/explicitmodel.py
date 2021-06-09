@@ -256,7 +256,7 @@ class ExplicitOpModel(_mdl.OpModel):
 
         Returns
         -------
-        SPAMVec
+        State
         """
         if len(self.preps) != 1:
             raise ValueError("'.prep' can only be used on models"
@@ -267,13 +267,13 @@ class ExplicitOpModel(_mdl.OpModel):
     @property
     def effects(self):
         """
-        The unique POVM in this model, if one exists.
+        The effect vectors from the unique POVM in this model, if one exists.
 
         If not, a ValueError is raised.
 
         Returns
         -------
-        POVM
+        list of POVMEffects
         """
         if len(self.povms) != 1:
             raise ValueError("'.effects' can only be used on models"
@@ -283,16 +283,16 @@ class ExplicitOpModel(_mdl.OpModel):
 
     def __setitem__(self, label, value):
         """
-        Set an operator or SPAM vector associated with a given label.
+        Set an operator, state, or POVM associated with a given label.
 
         Parameters
         ----------
         label : string
             the gate or SPAM vector label.
 
-        value : numpy array or LinearOperator or SPAMVec
-            a operation matrix, SPAM vector, or object, which must have the
-            appropriate dimension for the Model and appropriate type
+        value : numpy array or LinearOperator or State or POVM
+            a operation matrix, state vector, or POVM, which must have the
+            appropriate state space for the Model and appropriate type
             given the prefix of the label.
         """
         if ExplicitOpModel._strict:
@@ -315,12 +315,12 @@ class ExplicitOpModel(_mdl.OpModel):
 
     def __getitem__(self, label):
         """
-        Get an operation or SPAM vector associated with a given label.
+        Get an operation, state, or POVM associated with a given label.
 
         Parameters
         ----------
         label : string
-            the gate or SPAM vector label.
+            the gate, state vector, or POVM label.
         """
         if ExplicitOpModel._strict:
             raise KeyError("Strict-mode: invalid key %s" % label)
@@ -342,16 +342,16 @@ class ExplicitOpModel(_mdl.OpModel):
 
     def set_all_parameterizations(self, parameterization_type, extra=None):
         """
-        Convert all gates and SPAM vectors to a specific parameterization type.
+        Convert all gates, states, and POVMs to a specific parameterization type.
 
         Parameters
         ----------
         parameterization_type : string
-            The gate and SPAM vector parameterization type.  Allowed
+            The gate, state, and POVM parameterization type.  Allowed
             values are (where '*' means " terms" and " clifford terms"
             evolution-type suffixes are allowed):
 
-            - "full" : each gate / SPAM element is an independent parameter
+            - "full" : each gate / state / POVM effect element is an independent parameter
             - "TP" : Trace-Preserving gates and state preps
             - "static" : no parameters
             - "static unitary" : no parameters; convert superops to unitaries
@@ -367,13 +367,13 @@ class ExplicitOpModel(_mdl.OpModel):
             - "D+A*" : Depolarization and Affine errors
             - "D*" : Depolarization errors
             - Any of the above with "S" replaced with "s" or "D" replaced with
-              "d". This removes the CPTP constraint on the Gates and SPAM (and
-              as such is seldom used).
+              "d". This removes the CPTP constraint on the gates and SPAM
+              operations (and as such is seldom used).
 
         extra : dict, optional
             For `"H+S terms"` type, this may specify a dictionary
             of unitary gates and pure state vectors to be used
-            as the *ideal* operation of each gate/SPAM vector.
+            as the *ideal* operation of each gate/SPAM operation.
 
         Returns
         -------
@@ -753,7 +753,7 @@ class ExplicitOpModel(_mdl.OpModel):
 
         include_spam : bool, optional
             Whether to add to the max-trace-distance the frobenius distances
-            between corresponding SPAM vectors.
+            between corresponding SPAM operations.
 
         Returns
         -------
@@ -782,7 +782,7 @@ class ExplicitOpModel(_mdl.OpModel):
 
         include_spam : bool, optional
             Whether to add to the max-diamond-distance the frobenius distances
-            between corresponding SPAM vectors.
+            between corresponding SPAM operations.
 
         Returns
         -------
@@ -950,9 +950,9 @@ class ExplicitOpModel(_mdl.OpModel):
 
         spam_noise : float, optional
             apply depolarizing noise of strength ``1-spam_noise`` to all SPAM
-            vectors in the model. (Multiplies the non-identity part of each
-            assumed-Pauli-basis state preparation vector and measurement vector
-            by ``(1.0-spam_noise)``).
+            opeations (state and POVM effects) in the model. (Multiplies the
+            non-identity part of each assumed-Pauli-basis state preparation
+            vector and measurement vector by ``(1.0-spam_noise)``).
 
         max_op_noise : float, optional
             specified instead of `op_noise`; apply a random depolarization
@@ -961,8 +961,8 @@ class ExplicitOpModel(_mdl.OpModel):
 
         max_spam_noise : float, optional
             specified instead of `spam_noise`; apply a random depolarization
-            with maximum strength ``1-max_spam_noise`` to SPAM vector in the
-            model.
+            with maximum strength ``1-max_spam_noise`` to each state preparation
+            and POVM in the model.
 
         seed : int, optional
             if not ``None``, seed numpy's random number generator with this value
@@ -1473,7 +1473,7 @@ class ExplicitLayerRules(_LayerRules):
 
         Returns
         -------
-        POVM or SPAMVec
+        State
         """
         # No need for caching preps
         return model.preps[layerlbl]  # don't cache this - it's not a new operator
@@ -1489,7 +1489,7 @@ class ExplicitLayerRules(_LayerRules):
 
         Returns
         -------
-        POVM or SPAMVec
+        POVM or POVMEffect
         """
         if layerlbl in caches['povm-layers']: return caches['povm-layers'][layerlbl]
         return model.povms[layerlbl]  # don't cache this - it's not a new operator

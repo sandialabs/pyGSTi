@@ -462,6 +462,7 @@ class ExplicitOpModelCalc(object):
                                        "parameters for Models with non-dense "
                                        "member representations"))
 
+        #REMOVE
         #if any([not isinstance(gate,_op.DenseOperator) for gate in self.operations.values()]) or \
         #   any([not isinstance(vec,_sv.DenseSPAMVec) for vec in self.preps.values()]) or \
         #   any([not isinstance(vec,_sv.DenseSPAMVec) for vec in self.effects.values()]):
@@ -474,7 +475,7 @@ class ExplicitOpModelCalc(object):
         # this seems somewhat wrong.  Not skipping them will alter the
         # number of "gauge params" since a complement Evec has a *fixed*
         # identity from the perspective of the Model params (which
-        # *varied* in gauge optimization, even though it's not a SPAMVec
+        # *varied* in gauge optimization, even though it's not a POVMEffect
         # param, creating a weird inconsistency...) SKIP
         if bSkipEcs:
             newSelf = self.copy()
@@ -484,7 +485,7 @@ class ExplicitOpModelCalc(object):
                     del newSelf.effects[effectlbl]
             self = newSelf  # HACK!!! replacing self for remainder of this fn with version without Ecs
 
-            #recompute effects in case we deleted any ComplementSPAMVecs
+            #recompute effects in case we deleted any ComplementPOVMEffects
             self_effects = _collections.OrderedDict([(lbl, vec.to_dense(on_space=on_space)[:, None])
                                                      for lbl, vec in self.effects.items()])
 

@@ -161,15 +161,15 @@ def convert(povm, to_type, basis, extra=None):
 def convert_effect(effect, to_type, basis, extra=None):
     """
     TODO: update docstring
-    Convert SPAM vector to a new type of parameterization.
+    Convert POVM effect vector to a new type of parameterization.
 
-    This potentially creates a new SPAMVec object.
+    This potentially creates a new POVMEffect object.
     Raises ValueError for invalid conversions.
 
     Parameters
     ----------
-    spamvec : SPAMVec
-        SPAM vector to convert
+    effect : POVMEffect
+        POVM effect vector to convert
 
     to_type : {"full","TP","static","static unitary","clifford",LINDBLAD}
         The type of parameterizaton to convert to.  "LINDBLAD" is a placeholder
@@ -186,8 +186,8 @@ def convert_effect(effect, to_type, basis, extra=None):
 
     Returns
     -------
-    SPAMVec
-        The converted SPAM vector, usually a distinct
+    POVMEffect
+        The converted POVM effect vector, usually a distinct
         object from the object passed as input.
     """
     if to_type == "full":
@@ -260,20 +260,16 @@ def optimize_effect(vec_to_optimize, target_vec):
     """
     Optimize the parameters of vec_to_optimize.
 
-    The optimization is performed so that the the resulting SPAM vector is as
+    The optimization is performed so that the the resulting POVM effect is as
     close as possible to target_vec.
-
-    This is trivial for the case of FullSPAMVec instances, but for other types
-    of parameterization this involves an iterative optimization over all the
-    parameters of vec_to_optimize.
 
     Parameters
     ----------
-    vec_to_optimize : SPAMVec
-        The vector to optimize. This object gets altered.
+    vec_to_optimize : POVMEffect
+        The effect vector to optimize. This object gets altered.
 
-    target_vec : SPAMVec
-        The SPAM vector used as the target.
+    target_vec : POVMEffect
+        The effect vector used as the target.
 
     Returns
     -------

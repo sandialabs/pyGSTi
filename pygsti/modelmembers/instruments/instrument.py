@@ -401,7 +401,7 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
 
         Parameters
         ----------
-        state : SPAMVec
+        state : State
             The state to act on
 
         Returns

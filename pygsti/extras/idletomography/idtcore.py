@@ -19,6 +19,7 @@ from ... import objects as _objs
 from ... import tools as _tools
 from ...objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from ...construction import modelconstruction as _modelconstruction
+from ...modelmembers.states as _state
 
 from . import pauliobjs as _pobjs
 from . import idttools as _idttools
@@ -566,15 +567,15 @@ def determine_paulidicts(model):
         prepLbls = list(model.prep_blks['layers'].keys())
         prep = model.prep_blks['layers'][prepLbls[0]]
 
-    if isinstance(prep, _objs.ComputationalSPAMVec):
+    if isinstance(prep, _state.ComputationalBasisState):
         if any([b != 0 for b in prep._zvals]): return None
-    elif isinstance(prep, _objs.LindbladSPAMVec):
+    elif isinstance(prep, _objs.LindbladSPAMVec):  # TODO: ---------------------------- change to ComposedState ------------------
         if isinstance(prep.state_vec, _objs.ComputationalSPAMVec):
             if any([b != 0 for b in prep.state_vec._zvals]): return None
         if any([abs(v) > 1e-6 for v in prep.to_vector()]): return None
     else:
         nqubits = int(round(_np.log2(model.dim) / 2))
-        cmp = _objs.ComputationalSPAMVec([0] * nqubits, model._evotype).to_dense()
+        cmp = _state.ComputationalBasisState([0] * nqubits, model._evotype).to_dense()
         if _np.linalg.norm(prep.to_dense() - cmp) > 1e-6: return None
 
     def extract_action(g, cur_sslbls, ql):

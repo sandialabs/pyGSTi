@@ -1,3 +1,15 @@
+"""
+The CPTPState class and supporting functionality.
+"""
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
+
 
 import numpy as _np
 from .state import State as _State
@@ -12,20 +24,20 @@ IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 class CPTPState(_DenseState):
     """
     TODO: update docstring
-    A SPAM vector constrained to correspond ot a positive density matrix.
+    A state vector constrained to correspond ot a positive density matrix.
 
-    This SPAM vector that is parameterized through the Cholesky decomposition of
+    This state vector that is parameterized through the Cholesky decomposition of
     it's standard-basis representation as a density matrix (not a Liouville
-    vector).  The resulting SPAM vector thus represents a positive density
+    vector).  The resulting state vector thus represents a positive density
     matrix, and additional constraints on the parameters also guarantee that the
-    trace == 1.  This SPAM vector is meant for use with CPTP processes, hence
+    trace == 1.  This state vector is meant for use with CPTP processes, hence
     the name.
 
     Parameters
     ----------
-    vec : array_like or SPAMVec
-        a 1D numpy array representing the SPAM operation.  The
-        shape of this array sets the dimension of the SPAM op.
+    vec : array_like or State
+        a 1D numpy array representing the state operation.  The
+        shape of this array sets the dimension of the state.
 
     basis : {"std", "gm", "pp", "qt"} or Basis
         The basis `vec` is in.  Needed because this parameterization
@@ -160,16 +172,16 @@ class CPTPState(_DenseState):
 
     def set_dense(self, vec):
         """
-        Set the dense-vector value of this SPAM vector.
+        Set the dense-vector value of this state vector.
 
-        Attempts to modify this SPAM vector's parameters so that the raw
-        SPAM vector becomes `vec`.  Will raise ValueError if this operation
+        Attempts to modify this state vector's parameters so that the raw
+        state vector becomes `vec`.  Will raise ValueError if this operation
         is not possible.
 
         Parameters
         ----------
-        vec : array_like or SPAMVec
-            A numpy array representing a SPAM vector, or a SPAMVec object.
+        vec : array_like or State
+            A numpy array representing a state vector, or a State object.
 
         Returns
         -------
@@ -180,12 +192,12 @@ class CPTPState(_DenseState):
             self.dirty = True
         except AssertionError as e:
             raise ValueError("Error initializing the parameters of this "
-                             "CPTPSPAMVec object: " + str(e))
+                             "CPTPState object: " + str(e))
 
     @property
     def num_params(self):
         """
-        Get the number of independent parameters which specify this SPAM vector.
+        Get the number of independent parameters which specify this state vector.
 
         Returns
         -------
@@ -197,7 +209,7 @@ class CPTPState(_DenseState):
 
     def to_vector(self):
         """
-        Get the SPAM vector parameters as an array of values.
+        Get the state vector parameters as an array of values.
 
         Returns
         -------
@@ -208,16 +220,16 @@ class CPTPState(_DenseState):
 
     def from_vector(self, v, close=False, dirty_value=True):
         """
-        Initialize the SPAM vector using a 1D array of parameters.
+        Initialize the state vector using a 1D array of parameters.
 
         Parameters
         ----------
         v : numpy array
-            The 1D vector of SPAM vector parameters.  Length
+            The 1D vector of state vector parameters.  Length
             must == num_params()
 
         close : bool, optional
-            Whether `v` is close to this SPAM vector's current
+            Whether `v` is close to this state vector's current
             set of parameters.  Under some circumstances, when this
             is true this call can be completed more quickly.
 
@@ -237,11 +249,11 @@ class CPTPState(_DenseState):
 
     def deriv_wrt_params(self, wrt_filter=None):
         """
-        The element-wise derivative this SPAM vector.
+        The element-wise derivative this state vector.
 
-        Construct a matrix whose columns are the derivatives of the SPAM vector
+        Construct a matrix whose columns are the derivatives of the state vector
         with respect to a single param.  Thus, each column is of length
-        dimension and there is one column per SPAM vector parameter.
+        dimension and there is one column per state vector parameter.
 
         Parameters
         ----------
@@ -311,7 +323,7 @@ class CPTPState(_DenseState):
 
     def has_nonzero_hessian(self):
         """
-        Whether this SPAM vector has a non-zero Hessian with respect to its parameters.
+        Whether this state vector has a non-zero Hessian with respect to its parameters.
 
         Returns
         -------
@@ -321,7 +333,7 @@ class CPTPState(_DenseState):
 
     def hessian_wrt_params(self, wrt_filter1=None, wrt_filter2=None):
         """
-        Construct the Hessian of this SPAM vector with respect to its parameters.
+        Construct the Hessian of this state vector with respect to its parameters.
 
         This function returns a tensor whose first axis corresponds to the
         flattened operation matrix and whose 2nd and 3rd axes correspond to the
@@ -342,4 +354,4 @@ class CPTPState(_DenseState):
         numpy array
             Hessian with shape (dimension, num_params1, num_params2)
         """
-        raise NotImplementedError("TODO: add hessian computation for CPTPSPAMVec")
+        raise NotImplementedError("TODO: add hessian computation for CPTPState")

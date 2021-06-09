@@ -573,6 +573,7 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
                     ps = _np.real(_np.dot(Es, _np.dot(G, rho)))
             array_to_fill[indices] = ps.flat
 
+    #REMOVE - but MOVE somewhere
     #TODO: move _dpr and _hpr into a unit test?  They're not really needed here, as
     # using the default finite differencing should be fine, and it's rare that we want
     # the derivative of a single circuit anyway, so this is rarely used.
@@ -1367,7 +1368,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
         rholabel, elabel = spam_tuple
         rhoVec = self.model.circuit_layer_operator(rholabel, 'prep')  # distinct from rho,e b/c rho,e are
-        EVec = self.model.circuit_layer_operator(elabel, 'povm')   # arrays, these are SPAMVecs
+        EVec = self.model.circuit_layer_operator(elabel, 'povm')   # arrays, these are State/POVMEffect objects
         nCircuits = gs.shape[0]
         rho_wrtFilter, rho_gpindices = self._process_wrt_filter(
             wrt_slice, self.model.circuit_layer_operator(rholabel, 'prep'))
@@ -1426,7 +1427,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
         rholabel, elabel = spam_tuple
         rhoVec = self.model.circuit_layer_operator(rholabel, 'prep')  # distinct from rho,e b/c rho,e are
-        EVec = self.model.circuit_layer_operator(elabel, 'povm')   # arrays, these are SPAMVecs
+        EVec = self.model.circuit_layer_operator(elabel, 'povm')   # arrays, these are State/POVMEffect objects
         nCircuits = gs.shape[0]
 
         rho_wrtFilter1, rho_gpindices1 = self._process_wrt_filter(
