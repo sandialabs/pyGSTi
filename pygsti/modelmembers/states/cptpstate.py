@@ -84,7 +84,7 @@ class CPTPState(_DenseState):
             else _statespace.StateSpace.cast(state_space)
 
         evotype = _Evotype.cast(evotype)
-        _DenseState.__init__(self, vector,  evotype, state_space)
+        _DenseState.__init__(self, vector, evotype, state_space)
         self._paramlbls = _np.array(labels, dtype=object)
 
     def _set_params_from_vector(self, vector, truncate):

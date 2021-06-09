@@ -324,7 +324,8 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         nP2 = _slct.length(param_indices2) if isinstance(param_indices2, slice) else len(param_indices2)
         dprobs, shm = _smt.create_shared_ndarray(resource_alloc, (nEls, nP2), 'd')
         dprobs2, shm2 = _smt.create_shared_ndarray(resource_alloc, (nEls, nP2), 'd')
-        self.calclib.mapfill_dprobs_atom(self, dprobs, slice(0, nEls), None, layout_atom, param_indices2, resource_alloc)
+        self.calclib.mapfill_dprobs_atom(self, dprobs, slice(0, nEls), None, layout_atom, param_indices2,
+                                         resource_alloc)
 
         orig_vec = self.model.to_vector().copy()
         for i in range(self.model.num_params):
@@ -603,7 +604,8 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
                     dataset_rows, wrt_slice, fill_comm):
             return self.calclib.mapfill_TDdloglpp_terms(self, array_to_fill, dest_indices, dest_param_indices,
                                                         num_tot_outcomes, layout_atom, dataset_rows, min_prob_clip,
-                                                        radius, prob_clip_interval, wrt_slice, fill_comm, outcomes_cache)
+                                                        radius, prob_clip_interval, wrt_slice, fill_comm,
+                                                        outcomes_cache)
 
         def loglpp(array_to_fill, dest_indices, num_tot_outcomes, layout_atom, dataset_rows, fill_comm):
             return self.calclib.mapfill_TDloglpp_terms(self, array_to_fill, dest_indices, num_tot_outcomes, layout_atom,

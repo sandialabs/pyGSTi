@@ -748,7 +748,7 @@ class ComposedErrorgen(_LinearOperator):
     def onenorm_upperbound(self):
         """
         Returns an upper bound on the 1-norm for this error generator (viewed as a matrix).
-    
+
         Returns
         -------
         float

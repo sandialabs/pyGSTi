@@ -19,7 +19,7 @@ from ... import objects as _objs
 from ... import tools as _tools
 from ...objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from ...construction import modelconstruction as _modelconstruction
-from ...modelmembers.states as _state
+from ...modelmembers import states as _state
 
 from . import pauliobjs as _pobjs
 from . import idttools as _idttools

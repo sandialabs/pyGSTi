@@ -57,4 +57,3 @@ def convert(instrument, to_type, basis, extra=None):
         return Instrument(gate_list, instrument.evotype, instrument.state_space)
     else:
         raise ValueError("Cannot convert an instrument to type %s" % to_type)
-

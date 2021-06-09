@@ -112,7 +112,8 @@ class StochasticNoiseOp(_LinearOperator):
             A copy of this object.
         """
         if memo is not None and id(self) in memo: return memo[id(self)]
-        copyOfMe = StochasticNoiseOp(self.state_space, self.basis, self._evotype, self._params_to_rates(self.to_vector()))
+        copyOfMe = StochasticNoiseOp(self.state_space, self.basis, self._evotype,
+                                     self._params_to_rates(self.to_vector()))
         return self._copy_gpindices(copyOfMe, parent, memo)
 
     #to_dense / to_sparse?

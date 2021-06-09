@@ -86,7 +86,7 @@ class EmbeddedPureState(_State):
         #    raise ValueError("`pure_state_vec` evotype must be 'statevec' or 'stabilizer' (not '%s')" % pure_evo)
 
         #Create representation
-        _State.__init__(self, rep, evotype)
+        #_State.__init__(self, rep, evotype)
 
     def to_dense(self, on_space='minimal', scratch=None):
         """

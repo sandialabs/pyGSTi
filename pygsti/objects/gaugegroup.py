@@ -329,7 +329,7 @@ class OpGaugeGroup(GaugeGroup):
             gauge optimization was performed.
         """
         if not isinstance(operation, _op.LinearOperator):
-            operation = _op.StaticDenseOp(operation)     # -------------------- Evotype ????????????????????????? ------------
+            operation = _op.StaticDenseOp(operation, evotype='default', state_space=None)
         self._operation = operation
         self.element = elementcls
         GaugeGroup.__init__(self, name)
@@ -397,7 +397,7 @@ class OpGaugeGroupElement(GaugeGroupElement):
             information and the gauge transformation matrix itself.
         """
         if not isinstance(operation, _op.LinearOperator):
-            operation = _op.StaticDenseOp(operation)   # ------------------------------- Evotype ????????????????????????????????
+            operation = _op.StaticDenseOp(operation, evotype='default', state_space=None)
         self._operation = operation
         self._inv_matrix = None
         GaugeGroupElement.__init__(self)

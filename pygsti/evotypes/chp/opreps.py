@@ -45,7 +45,7 @@ class OpRep(_basereps.OpRep):
         else:
             op_str = '\n'.join(self.chp_ops)
 
-        if len(op_str) > 0:  op_str += '\n'
+        if len(op_str) > 0: op_str += '\n'
         return op_str
 
 
@@ -72,7 +72,7 @@ class OpRepStandard(OpRep):
 
         state_space = _StateSpace.cast(state_space)
         assert(nqubits == state_space.num_qubits), \
-            "State space of {0} qubits doesn't match {1} expected qubits for the standard {1} gate".format(
+            "State space of {0} qubits doesn't match {1} expected qubits for the standard {2} gate".format(
                 state_space.num_qubits, nqubits, name)
 
         self.basis = basis
@@ -230,11 +230,11 @@ class OpRepStochastic(OpRep):
 #               and all([ld == 2 for ld in state_space_labels.labeldims.values()])), \
 #            "All state space labels must correspond to *qubits*"
 #
-#        #TODO: enfore this another way? 
+#        #TODO: enfore this another way?
 #        #assert(self.embedded_op._evotype == 'chp'), \
 #        #    "Embedded op must also have CHP evotype instead of %s" % self.embedded_op._evotype
 #        assert(isinstance(embedded_rep, OpRepBase))  # needs to point to chp.OpRep class??
-#        
+#
 #        op_nqubits = (embedded_rep.dim - 1).bit_length()
 #        assert(len(target_labels) == op_nqubits), \
 #            "Inconsistent number of qubits in `target_labels` ({0}) and CHP `embedded_op` ({1})".format(
@@ -271,7 +271,7 @@ class OpRepStochastic(OpRep):
 #        """
 #        target_indices = list(self.target_indices)
 #
-#        # Targets are for the full embedded operation so we need to map these to the actual targets of the CHP operation
+#        # Targets are for the full embedded operation so we need to map these to the actual targets of the CHP op
 #        if targets is not None:
 #            assert len(targets) == self.state_space_labels.nqubits, \
 #                "Got {0} targets instead of required {1}".format(len(targets), self.state_space_labels.nqubits)

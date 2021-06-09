@@ -393,7 +393,7 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
     @property
     def size(self):
         return self.effect_vec.size
-        
+
     def submembers(self):
         """
         Get the ModelMember-derived objects contained in this one.
@@ -546,7 +546,7 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
 
     def taylor_order_terms_above_mag(self, order, max_polynomial_vars, min_term_mag):
         """
-        Get the `order`-th order Taylor-expansion terms of this POVM effect vector that have magnitude above `min_term_mag`.
+        Get the `order`-th order Taylor-expansion terms of this POVM effect that have magnitude above `min_term_mag`.
 
         This function constructs the terms at the given order which have a magnitude (given by
         the absolute value of their coefficient) that is greater than or equal to `min_term_mag`.
@@ -741,7 +741,7 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
 
     def transform_inplace(self, s):
         """
-        Update POVM effect (column) vector V as inv(s) * V or s^T * V for preparation or  effect POVM effect vectors, respectively.
+        Update POVM effect (column) vector V as inv(s) * V or s^T * V
 
         Note that this is equivalent to state preparation vectors getting
         mapped: `rho -> inv(s) * rho` and the *transpose* of effect vectors

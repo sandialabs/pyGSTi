@@ -274,7 +274,7 @@ class StaticStdOpTester(BaseCase):
         for name, U in std_unitaries.items():
             if callable(U): continue  # skip unitary functions (create factories)
             svop = op.StaticStandardOp(name, 'pp', 'statevec', state_space=None)
-            self.assertArraysAlmostEqual(svop._rep.to_dense(), U)
+            self.assertArraysAlmostEqual(svop._rep.to_dense('Hilbert'), U)
 
     def test_densitymx_svterm_cterm(self):
         std_unitaries = itgs.standard_gatename_unitaries()
@@ -283,7 +283,7 @@ class StaticStdOpTester(BaseCase):
             for name, U in std_unitaries.items():
                 if callable(U): continue  # skip unitary functions (create factories)
                 dmop = op.StaticStandardOp(name, 'pp', evotype, state_space=None)
-                self.assertArraysAlmostEqual(dmop._rep.to_dense(), gt.unitary_to_pauligate(U))
+                self.assertArraysAlmostEqual(dmop._rep.to_dense('HilbertSchmidt'), gt.unitary_to_pauligate(U))
 
     def test_chp(self):
         std_chp_ops = itgs.standard_gatenames_chp_conversions()

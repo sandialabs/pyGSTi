@@ -13,6 +13,8 @@ The LinearOperator class and supporting functionality.
 import numpy as _np
 from .. import modelmember as _modelmember
 from ...tools import optools as _ot
+from ...objects.opcalc import bulk_eval_compact_polynomials_complex as _bulk_eval_compact_polynomials_complex
+
 
 #Note on initialization sequence of Operations within a Model:
 # 1) a Model is constructed (empty)
@@ -179,7 +181,7 @@ class LinearOperator(_modelmember.ModelMember):
         State
             The output state
         """
-        from . import spamvec as _sv  # can we move this to top?
+        from .. import states as _state  # can we move this to top?
         assert(self._rep is not None), "Internal Error: representation is None!"
         assert(state._evotype == self._evotype), "Evolution type mismatch: %s != %s" % (self._evotype, state._evotype)
 
@@ -187,7 +189,7 @@ class LinearOperator(_modelmember.ModelMember):
         output_rep = self._rep.acton(state._rep)
 
         #Build a State around output_rep
-        return _sv.StaticState(output_rep.to_dense(on_space='minimal'), self._evotype, self.state_space)
+        return _state.StaticState(output_rep.to_dense(on_space='minimal'), self._evotype, self.state_space)
         #REMOVE
         #return _sv.StabilizerSPAMVec(sframe=_stabilizer.StabilizerFrame(
         #        output_rep.smatrix, output_rep.pvectors, output_rep.amps))
@@ -434,7 +436,7 @@ class LinearOperator(_modelmember.ModelMember):
         #        import bpdb; bpdb.set_trace()
 
         return [t for t in terms_at_order if t.magnitude >= min_term_mag]
-    
+
     def frobeniusdist_squared(self, other_op, transform=None, inv_transform=None):
         """
         Return the squared frobenius difference between this operation and `other_op`
@@ -861,7 +863,6 @@ def finite_difference_deriv_wrt_params(operation, wrt_filter, eps=1e-7):
     op2 = operation.copy()
     p = operation.to_vector()
     fd_deriv = _np.empty((dim, dim, operation.num_params), dense_operation.dtype)
-
 
     for i in range(operation.num_params):
         p_plus_dp = p.copy()

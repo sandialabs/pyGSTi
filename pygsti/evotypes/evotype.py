@@ -101,8 +101,7 @@ class Evotype(object):
     def create_lindblad_errorgen_rep(self, lindblad_term_dict, basis, state_space):
         return self.module.OpRepLindbladErrorgen(lindblad_term_dict, basis, state_space)
 
-
-
+    # STATE REPS
     def create_dense_state_rep(self, vec, state_space):
         return self.module.StateRepDense(vec, state_space)
 
@@ -118,8 +117,7 @@ class Evotype(object):
     def create_tensorproduct_state_rep(self, factor_state_reps, state_space):
         return self.module.StateRepTensorProduct(factor_state_reps, state_space)
 
-
-
+    # EFFECT REPS
     def create_conjugatedstate_effect_rep(self, state_rep):
         return self.module.EffectRepConjugatedState(state_rep)
 
@@ -132,7 +130,7 @@ class Evotype(object):
     def create_composed_effect_rep(self, errmap_rep, effect_rep, errmap_name, state_space):
         return self.module.EffectRepComposed(errmap_rep, effect_rep, errmap_name, state_space)
 
-
+    # TERM REPS
     def create_term_rep(self, coeff, mag, logmag, pre_state, post_state,
                         pre_effect, post_effect, pre_ops, post_ops):
         try:  # see if module implements its own term rep, otherwise use "stock" version

@@ -18,6 +18,7 @@ import tempfile as _tf
 #from . import povm as _povm
 from ..objects.label import Label as _Label
 from ..models.labeldicts import OutcomeLabelDict as _OutcomeLabelDict
+from ..modelmembers import povms as _povm
 from .weakforwardsim import WeakForwardSimulator as _WeakForwardSimulator
 
 
@@ -47,7 +48,7 @@ class CHPForwardSimulator(_WeakForwardSimulator):
         assert(time is None), "CHPForwardSimulator cannot be used to simulate time-dependent circuits yet"
 
         complete_circuit = self.model.complete_circuit(circuit)
-        
+
         # Use temporary file as per https://stackoverflow.com/a/8577225
         fd, path = _tf.mkstemp()
         try:
@@ -63,7 +64,7 @@ class CHPForwardSimulator(_WeakForwardSimulator):
                 for op_label in complete_circuit[1:-1]:
                     op = self.model.circuit_layer_operator(op_label, 'op')
                     tmp.write(op.chp_str())
-                
+
                 # POVM (sort of, actually using it more like a straight PVM)
                 povm_label = complete_circuit[-1]
                 povm = self.model.circuit_layer_operator(_Label(povm_label.name), 'povm')
@@ -78,7 +79,7 @@ class CHPForwardSimulator(_WeakForwardSimulator):
                     qubit_indices = [flat_sslbls.index(q) for q in povm_label.sslbls]
                 else:
                     qubit_indices = range(povm.nqubits)
-                    
+
                 for qind in qubit_indices:
                     tmp.write(f'm {qind}\n')
 
@@ -98,5 +99,5 @@ class CHPForwardSimulator(_WeakForwardSimulator):
         # TODO: Make sure this handles intermediate measurements
         outcome = ''.join([qo[1] for qo in sorted(qubit_outcomes)])
         outcome_label = _OutcomeLabelDict.to_outcome(outcome)
-        
+
         return outcome_label

@@ -26,6 +26,7 @@ from ...tools.matrixtools import _fas
 
 from scipy.sparse.linalg import LinearOperator
 
+
 # TODO: Shift to base class (either ExternalOpRep or pushed up for all OpReps)
 # Also maybe check we don't see a performance hit with the inheritance
 # Representations for external simulators do not need to have acton methods
@@ -43,6 +44,3 @@ class CHPOpRep(ExternalOpRep):
         self.chp_ops = ops
         self.nqubits = nqubits
         self.dim = 2**nqubits
-
-    
-

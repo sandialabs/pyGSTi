@@ -176,7 +176,6 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         elif not close:
             self._rep.errgenrep_has_changed(self.errorgen.onenorm_upperbound())
 
-
     def set_gpindices(self, gpindices, parent, memo=None):
         """
         Set the parent and indices into the parent's parameter vector that are used by this ModelMember object.
@@ -592,7 +591,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
 
         assert(self.gpindices is not None), "LindbladOp must be added to a Model before use!"
         mpv = max_polynomial_vars
-                
+
         #Note: for now, *all* of an error generator's terms are considered 0-th order,
         # so the below call to taylor_order_terms just gets all of them.  In the FUTURE
         # we might want to allow a distinction among the error generator terms, in which
@@ -683,7 +682,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
 
         #evaluate errgen_terms' coefficients using their local vector of parameters
         # (which happends to be the same as our paramvec in this case)
-        egvec = self.errorgen.to_vector()   # HERE - pass vector in?  we need errorgen's vector (usually not in rep) to perform evaluation...
+        egvec = self.errorgen.to_vector()   # we need errorgen's vector (usually not in rep) to perform evaluation
         errgen_terms = [egt.copy_with_magnitude(abs(egt.coeff.evaluate(egvec))) for egt in errgen_terms]
 
         #DEBUG!!!  REMOVE

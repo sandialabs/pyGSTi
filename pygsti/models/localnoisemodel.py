@@ -339,7 +339,7 @@ class LocalNoiseModel(_ImplicitOpModel):
             If a 1-qubit operator is given and `num_qubits > 1` the global idle
             is the parallel application of this operator on each qubit line.
             Otherwise the given operator must act on all `num_qubits` qubits.
-        
+
         Returns
         -------
         LocalNoiseModel
@@ -417,7 +417,7 @@ class LocalNoiseModel(_ImplicitOpModel):
             basis1Q = _BuiltinBasis("pp", 4)
             v0 = _basis_create_spam_vector("0", basis1Q)
             v1 = _basis_create_spam_vector("1", basis1Q)
-            
+
             for i in range(num_qubits):
                 prep_factors.append(
                     _state.convert(_state.StaticState(v0, evotype, state_space=None), "TP", basis1Q))
@@ -568,18 +568,18 @@ class LocalNoiseModel(_ImplicitOpModel):
         self.availability = availability.copy()  # create a local copy because we may update it below
         self.geometry = geometry
 
-        #REMoVE
+        #REMOVE
         #self.nQubits = num_qubits
         #self.qubit_labels = qubit_labels
         #self.parameterization = parameterization
         #self.independent_gates = independent_gates
         ##Note - evotype="auto" not allowed here b/c no parameterization to infer from
-        #if evotype in ("densitymx", "svterm", "cterm"):   # TODO: make automatic based on Evotype -----------------------------------------------------
+        #if evotype in ("densitymx", "svterm", "cterm"):   # TODO: make automatic based on Evotype
         #    basis1Q = _BuiltinBasis("pp", 4)
         #else:
         #    basis1Q = _BuiltinBasis("sv", 2)
         #    assert(evotype in ("stabilizer", "statevec", "chp")), "Invalid evolution type: %s" % evotype
-        
+
         if simulator == "auto":
             simulator = _MapFSim() if num_qubits > 2 else _MatrixFSim()
         elif simulator == "map":
@@ -588,8 +588,8 @@ class LocalNoiseModel(_ImplicitOpModel):
             simulator = _MatrixFSim()
         assert(isinstance(simulator, _FSim)), "`simulator` must be a ForwardSimulator instance!"
 
-        #REMoVE
-        #qubit_dim = 2 if evotype in ('statevec', 'stabilizer', 'chp') else 4   # TODO FIX based on Evotype ---------------------------
+        #REMOVE
+        #qubit_dim = 2 if evotype in ('statevec', 'stabilizer', 'chp') else 4
         #if not isinstance(qubit_labels, _ld.StateSpaceLabels):  # allow user to specify a StateSpaceLabels object
         #    qubit_sslbls = _ld.StateSpaceLabels(qubit_labels, (qubit_dim,) * len(qubit_labels), evotype=evotype)
         #else:
@@ -663,7 +663,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                 if ensure_composed_gates and not isinstance(gate, _op.ComposedOp) and not gate_is_factory:
                     #Make a single ComposedOp *here*, which is used
                     # in all the embeddings for different target qubits
-                    gate = _op.ComposedOp([gate], state_space="auto", evotype="auto")  # to make adding more factors easy
+                    gate = _op.ComposedOp([gate], state_space="auto", evotype="auto")  # to make adding factors easy
 
                 if gate_is_factory:
                     self.factories['gates'][_Lbl(gateName)] = gate
@@ -695,7 +695,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                         #Make a single ComposedOp *here*, for *only this* embedding
                         # Don't copy gate here, as we assume it's ok to be shared when we
                         #  have independent composed gates
-                        base_gate = _op.ComposedOp([gate], evotype="auto", state_space="auto")  # to make adding factors easy
+                        base_gate = _op.ComposedOp([gate], evotype="auto", state_space="auto")  # to ease adding factors
                     else:  # want independent params but not a composed gate, so .copy()
                         base_gate = gate.copy()  # so independent parameters
 
@@ -824,7 +824,7 @@ class _SimpleCompLayerRules(_LayerRules):
         bHasGlobalIdle = bool(_Lbl('globalIdle') in model.operation_blks['layers'])
 
         if isinstance(layerlbl, _CircuitLabel):
-            op = self._create_op_for_circuitlabel(model, layerlbl, dense)
+            op = self._create_op_for_circuitlabel(model, layerlbl)
             caches['complete-layers'][layerlbl] = op
             return op
 

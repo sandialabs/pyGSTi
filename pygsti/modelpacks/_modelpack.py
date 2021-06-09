@@ -116,7 +116,6 @@ class ModelPack(_ABC):
             # finally cache result
             self._gscache[(parameterization_type, simulator, qubit_labels, evotype)] = mdl
 
-        test = self._gscache[(parameterization_type, simulator, qubit_labels, evotype)]
         return self._gscache[(parameterization_type, simulator, qubit_labels, evotype)].copy()
 
     def _get_cachefile_names(self, param_type, simulator):

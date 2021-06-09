@@ -138,7 +138,8 @@ class ExplicitOpModel(_mdl.OpModel):
         #if basis == "auto":
         #    evotype = _Evotype.cast(evotype)
         #    basis = "pp" if evotype in ("densitymx", "svterm", "cterm") \
-        #        else "sv"  # ( if evotype in ("statevec","stabilizer") )  # TODO - change this based on evotype dimension in FUTURE ????
+        #        else "sv"  # ( if evotype in ("statevec","stabilizer") )
+        # TODO - change this based on evotype dimension in FUTURE ????
 
         super(ExplicitOpModel, self).__init__(state_space, basis, evotype, ExplicitLayerRules(), simulator)
 
@@ -387,13 +388,13 @@ class ExplicitOpModel(_mdl.OpModel):
         #                                 'static unitary'))
 
         #Update dim and evolution type so that setting converted elements works correctly
-        baseType = typ  # the default - only updated if a lindblad param type
+        #baseType = typ  # the default - only updated if a lindblad param type
 
         #Resets sim - don't do this automatically now
         #if typ == 'static unitary':
         #    assert(self._evotype == "densitymx"), \
         #        "Can only convert to 'static unitary' from a density-matrix evolution type."
-        #    #self._evotype = _Evotype.cast("statevec")  # don't change evotype - just change parameterization TODO FIX ?????????????????
+        #    #self._evotype = _Evotype.cast("statevec")  # don't change evotype - just change parameterization
         #    self._dim = int(round(_np.sqrt(self.dim)))  # reduce dimension d -> sqrt(d)
         #    if not isinstance(self._sim, (_matrixfwdsim.MatrixForwardSimulator, _mapfwdsim.MapForwardSimulator)):
         #        self._sim = _matrixfwdsim.MatrixForwardSimulator(self) if self.dim <= 4 else \
@@ -407,7 +408,8 @@ class ExplicitOpModel(_mdl.OpModel):
         #elif _gt.is_valid_lindblad_paramtype(typ):
         #    baseType = typ
         #    #baseType, evotype = _gt.split_lindblad_paramtype(typ)
-        #    #self._evotype = _Evotype.cast(evotype)              #self._evotype = _Evotype.cast("statevec")  # don't change evotype - just change parameterization TODO
+        #    #self._evotype = _Evotype.cast(evotype)
+        #    #self._evotype = _Evotype.cast("statevec")  # don't change evotype - just change parameterization TODO
         #
         #    #Resets sim - don't do this automatically now
         #    #if evotype == "densitymx":
@@ -418,7 +420,7 @@ class ExplicitOpModel(_mdl.OpModel):
         #    #    if not isinstance(self._sim, _termfwdsim.TermForwardSimulator):
         #    #        self._sim = _termfwdsim.TermForwardSimulator(self)
         #
-        #elif typ in ('static', 'full', 'TP', 'CPTP', 'linear'):  # assume all other parameterizations are densitymx type
+        #elif typ in ('static', 'full', 'TP', 'CPTP', 'linear'):  # assume all other parameterizations are densitymx
         #    self._evotype = _Evotype.cast("densitymx")
         #    if not isinstance(self._sim, (_matrixfwdsim.MatrixForwardSimulator, _mapfwdsim.MapForwardSimulator)):
         #        self._sim = _matrixfwdsim.MatrixForwardSimulator(self) if self.dim <= 16 else \
@@ -864,7 +866,8 @@ class ExplicitOpModel(_mdl.OpModel):
         s += " Gates:\n"
         for lbl in self.operations:
             s += "  %s = %g\n" % \
-                (str(lbl), dist(self.operations[lbl].to_dense(on_space), other_model.operations[lbl].to_dense(on_space)))
+                (str(lbl), dist(self.operations[lbl].to_dense(on_space),
+                                other_model.operations[lbl].to_dense(on_space)))
 
         if len(self.instruments) > 0:
             s += " Instruments:\n"
@@ -1273,7 +1276,7 @@ class ExplicitOpModel(_mdl.OpModel):
         for lbl, rhoVec in self.preps.items():
             assert(len(rhoVec) == curDim)
             new_model.preps[lbl] = \
-                _state.FullState(rhoVec[0:new_dimension, :])     # evotype ??????????????????? TODO ----------------------------
+                _state.FullState(rhoVec[0:new_dimension, :], self.evotype)
 
         for lbl, povm in self.povms.items():
             assert(povm.state_space.dim == curDim)

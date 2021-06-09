@@ -72,7 +72,7 @@ class StateRepComputational(StateRep):
         self.basis = basis
         super(StateRepComputational, self).__init__(state_s, ps, a, state_space)
 
-    #TODO: copy methods from StabilizerFrame or StateCRep - or maybe do this for base StateRep class? ----------------------------
+    #TODO: copy methods from StabilizerFrame or StateCRep - or maybe do this for base StateRep class?
 
 
 class StateRepComposed(StateRep):

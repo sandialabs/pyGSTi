@@ -551,11 +551,11 @@ class OpModel(Model):
     def dim(self):
         """
         The dimension of the model.
-    
+
         This equals d when the gate (or, more generally, circuit-layer) matrices
         would have shape d x d and spam vectors would have shape d x 1 (if they
         were computed).
-    
+
         Returns
         -------
         int

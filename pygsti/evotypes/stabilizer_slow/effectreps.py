@@ -92,4 +92,3 @@ class EffectRepComputational(EffectRep):
 
     def to_dense(self, on_space, outvec=None):
         return _mt.zvals_to_dense(self.zvals, superket=bool(on_space not in ('minimal', 'Hilbert')))
-

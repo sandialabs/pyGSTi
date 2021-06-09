@@ -423,7 +423,7 @@ def write_model(model, filename, title=None):
 
             for label, gate in inst.items():
                 if isinstance(gate, _op.FullDenseOp): typ = "IGATE"
-                elif isinstance(gate, _instrument.TPInstrumentOp): typ = "IGATE"  # ok b/c instrument itself is marked as TP
+                elif isinstance(gate, _instrument.TPInstrumentOp): typ = "IGATE"  # ok b/c instrument is marked as TP
                 elif isinstance(gate, _op.StaticDenseOp): typ = "STATIC-IGATE"
                 else:
                     _warnings.warn(

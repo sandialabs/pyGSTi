@@ -16,6 +16,7 @@ import time as _time
 import itertools as _itertools
 import functools as _functools
 import operator as _operator
+import importlib as _importlib
 
 from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
@@ -753,7 +754,8 @@ class TermForwardSimulator(_DistributableForwardSimulator):
             # compute SOPM for layout_atom
             elInds = layout_atom.element_slice
             # MEM debug_prof.print_memory("_bulk_achieved_and_max_sop1", True)
-            self.calclib.refresh_magnitudes_in_repcache(layout_atom.pathset.highmag_termrep_cache, self.model.to_vector())
+            self.calclib.refresh_magnitudes_in_repcache(layout_atom.pathset.highmag_termrep_cache,
+                                                        self.model.to_vector())
             # MEM debug_prof.print_memory("_bulk_achieved_and_max_sop2", True)
             achieved, maxx = self._achieved_and_max_sopm_atom(layout_atom)
             # MEM debug_prof.print_memory("_bulk_achieved_and_max_sop3", True)
@@ -994,7 +996,8 @@ class TermForwardSimulator(_DistributableForwardSimulator):
 
         for layout_atom in layout.atoms:
             elInds = layout_atom.element_slice
-            self.calclib.refresh_magnitudes_in_repcache(layout_atom.pathset.highmag_termrep_cache, self.model.to_vector())
+            self.calclib.refresh_magnitudes_in_repcache(layout_atom.pathset.highmag_termrep_cache,
+                                                        self.model.to_vector())
             gap_jacs = self._sopm_gaps_jacobian_atom(layout_atom)
             #gap_jacs[ _np.where(gaps < self.pathmagnitude_gap) ] = 0.0  # set deriv to zero where gap was clipped to 0
             _fas(termgap_penalty_jac, [elInds], gap_jacs)

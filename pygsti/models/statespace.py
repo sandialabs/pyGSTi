@@ -121,7 +121,7 @@ class StateSpace(object):
         tuple of tuples
         """
         raise NotImplementedError("Derived classes should implement this!")
-    
+
     def label_dimension(self, label):
         raise NotImplementedError("Derived classes should implement this!")
 
@@ -163,7 +163,7 @@ class StateSpace(object):
         tuple
         """
         return self.tensor_product_blocks_dimensions[i_tpb]
-        
+
     def copy(self):
         """
         Return a copy of this StateSpace.
@@ -277,7 +277,7 @@ class QubitSpace(StateSpace):
         tuple of tuples
         """
         return (('Q',) * self.num_qubits,)
-    
+
     def label_dimension(self, label):
         if label in self.qubit_labels:
             return 4
@@ -289,7 +289,7 @@ class QubitSpace(StateSpace):
             return 2
         else:
             raise KeyError("Invalid qubit label: %s" % label)
-        
+
     def label_tensor_product_block_index(self, label):
         if label in self.qubit_labels:
             return 0
@@ -461,7 +461,7 @@ class ExplicitStateSpace(StateSpace):
     #REMOVE - this shouldn't be needed anymore
     #def reduce_dims_densitymx_to_state_inplace(self):
     #    """
-    #    Reduce all state space dimensions appropriately for moving from a density-matrix to state-vector representation.
+    #    Reduce all state space dimensions appropriately for moving from a density-matrix to state-vector rep
     #
     #    Returns
     #    -------
@@ -477,7 +477,6 @@ class ExplicitStateSpace(StateSpace):
     #        self.tpb_dims.append(int(_np.product([self.label_dims[lbl] for lbl in tpbLabels])))
     #        self.tpb_index.update({lbl: iTPB for lbl in tpbLabels})
     #    self.dim = sum(self.tpb_dims)
-
 
     @property
     def udim(self):
@@ -527,7 +526,7 @@ class ExplicitStateSpace(StateSpace):
         return tuple([tuple([self.label_dims[lbl] for lbl in tpb_labels]) for tpb_labels in self.labels])
 
     @property
-    def tensor_product_blocks_dimensions(self):
+    def tensor_product_blocks_udimensions(self):
         """
         Get the unitary operator dimensions for all the tensor-product blocks.
 

@@ -164,7 +164,9 @@ class LindbladErrorgen(_LinearOperator):
         else:
             raise ValueError("Unrecognized base type in `param_type`=%s" % param_type)
 
-        use_ham_basis = True if (("H" == param_type) or ("H+" in param_type) or param_type in ("CPTP", "GLND")) else False
+        use_ham_basis = True if (("H" == param_type)
+                                 or ("H+" in param_type)
+                                 or param_type in ("CPTP", "GLND")) else False
         use_nonham_basis = False if param_type == "H" else True
 
         return nonham_mode, param_mode, use_ham_basis, use_nonham_basis
@@ -236,9 +238,9 @@ class LindbladErrorgen(_LinearOperator):
 
         #Compute an errorgen from the given op_matrix. Works with both
         # dense and sparse matrices.
-    
+
         sparseOp = _sps.issparse(op_matrix)
-    
+
         #Init base from error generator: sets basis members and ultimately
         # the parameters in self.paramvals
         if sparseOp:
@@ -438,7 +440,7 @@ class LindbladErrorgen(_LinearOperator):
         # - could add standard basis dict items so labels like "X", "XY", etc. are understood?
 
         state_space = _statespace.StateSpace.cast(state_space)
-        
+
         # Store superop dimension
         dim = state_space.dim
         #d = int(round(_np.sqrt(d2))) #OLD TODO REMOVE
@@ -1822,7 +1824,7 @@ class LindbladErrorgen(_LinearOperator):
         """
         if self._sparse_bases:
             raise NotImplementedError(("LindbladErrorgen.hessian_wrt_params(...) can only be called when using *dense*"
-                                       " basis elements!")) # needed because the _d2_odp2 function assumes dense mxs
+                                       " basis elements!"))  # needed because the _d2_odp2 function assumes dense mxs
 
         dim = self.dim
         bsH = self.ham_basis_size

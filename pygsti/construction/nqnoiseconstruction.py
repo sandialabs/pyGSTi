@@ -2870,7 +2870,8 @@ def create_cloudnoise_circuits(num_qubits, max_lengths, single_q_fiducials,
     assert(sparse_lindblad_reps is True), "Must set sparse_lindblad_reps=True` when creating cloudnoise circuits!"
     # b/c we need to avoid dense reps when using the term simulator
 
-    ptermstype = paramroot + " terms"
+    #REMOVE?  (wait until we get terms working again)
+    #ptermstype = paramroot + " terms"
     #the parameterization type used for constructing Models
     # that will be used to construct 1st order prob polynomials.
 

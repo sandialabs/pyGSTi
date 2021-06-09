@@ -165,7 +165,7 @@ class ForwardSimulator(object):
 
     def _compute_circuit_outcome_probabilities(self, array_to_fill, circuit, outcomes, resource_alloc, time=None):
         raise NotImplementedError("Derived classes should implement this!")
-    
+
     def _compute_sparse_circuit_outcome_probabilities(self, circuit, resource_alloc, time=None):
         raise NotImplementedError("Derived classes should implement this to provide sparse (non-zero) probabilites!")
 
@@ -191,7 +191,7 @@ class ForwardSimulator(object):
 
         time : float, optional
             The *start* time at which `circuit` is evaluated.
-        
+
         resource_alloc : ResourceAllocation, optional
             The resources available for computing circuit outcome probabilities.
 
@@ -206,8 +206,8 @@ class ForwardSimulator(object):
             try:
                 return self._compute_sparse_circuit_outcome_probabilities(circuit, resource_alloc, time)
             except NotImplementedError:
-                pass # continue on to create full layout and calcualte all outcomes
-        
+                pass  # continue on to create full layout and calcualte all outcomes
+
         copa_layout = self.create_layout([circuit], array_types=('e',), resource_alloc=resource_alloc)
         probs_array = _np.empty(copa_layout.num_elements, 'd')
         if time is None:
@@ -233,7 +233,7 @@ class ForwardSimulator(object):
         ----------
         circuit : Circuit or tuple of operation labels
             The sequence of operation labels specifying the circuit.
-        
+
         resource_alloc : ResourceAllocation, optional
             The resources available for computing circuit outcome probability derivatives.
 
@@ -262,7 +262,7 @@ class ForwardSimulator(object):
         ----------
         circuit : Circuit or tuple of operation labels
             The sequence of operation labels specifying the circuit.
-        
+
         resource_alloc : ResourceAllocation, optional
             The resources available for computing circuit outcome probability Hessians.
 

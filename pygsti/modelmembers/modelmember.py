@@ -152,7 +152,6 @@ class ModelMember(ModelChild):
     #        subm.state_space = state_space
     #    return self._state_space = state_space
 
-
     @property
     def evotype(self):
         return self._evotype

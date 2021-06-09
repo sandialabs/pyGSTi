@@ -496,7 +496,7 @@ class RankOnePrepTerm(RankOneTerm, _NoMagnitude):
         """
         evotype = _Evotype.cast(evotype)
         default_basis = 'pp'
-        
+
         if isinstance(pre_state, _mm.ModelMember):
             pre_rep = pre_state._rep
         elif isinstance(pre_state, _StateRep):
@@ -510,7 +510,7 @@ class RankOnePrepTerm(RankOneTerm, _NoMagnitude):
             post_rep = post_state
         else:
             post_rep = evotype.create_pure_state_rep(post_state, default_basis, state_space)
-            
+
         rep = evotype.create_term_rep(cls._coeff_rep(coeff), 1.0, 0.0,
                                       pre_rep, post_rep, None, None, [], [])
         return cls(rep, evotype)
@@ -585,7 +585,7 @@ class RankOneEffectTerm(RankOneTerm, _NoMagnitude):
             post_rep = post_effect
         else:
             post_rep = evotype.create_pure_state_rep(post_effect, default_basis, state_space)
-                
+
         rep = evotype.create_term_rep(cls._coeff_rep(coeff), 1.0, 0.0,
                                       None, None, pre_rep, post_rep, [], [])
         return cls(rep, evotype)

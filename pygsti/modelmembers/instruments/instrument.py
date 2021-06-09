@@ -96,7 +96,7 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
             if len(items) > 0:  # HACK so that OrderedDict.copy() works, which creates a new object with only items...
                 if state_space is None: state_space = items[0][1].state_space
                 if evotype is None: evotype = items[0][1].evotype
-                    
+
             assert(state_space is not None), "`state_space` cannot be `None` when there are no members!"
             assert(evotype is not None), "`evotype` cannot be `None` when there are no members!"
 

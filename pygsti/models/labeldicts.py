@@ -171,7 +171,7 @@ class OrderedMemberDict(_PrefixOrderedDict, _mm.ModelChild):
     def _check_state_space(self, obj):
         if not self.flags['match_parent_statespace']: return  # no check
         if self.parent is None: return  # no check
-        
+
         if isinstance(obj, _mm.ModelMember):
             if not self.parent.state_space.is_compatible_with(obj.state_space):
                 raise ValueError("Cannot add object with state space "

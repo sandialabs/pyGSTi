@@ -462,6 +462,7 @@ class PolynomialRep(dict):
     #        (self.max_num_vars, len(self), actual_max_order)
     #
 
+
 LARGE = 1000000000
 # a large number such that LARGE is
 # a very high term weight which won't help (at all) a
@@ -523,5 +524,6 @@ class StockTermRep(TermRep):
         return TermRep(self.coeff.copy(), self.magnitude, self.logmagnitude,
                        self.pre_state, self.post_state, self.pre_effect, self.post_effect,
                        self.pre_ops, self.post_ops)
+
 
 StockTermDirectRep = StockTermRep

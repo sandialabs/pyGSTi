@@ -54,14 +54,14 @@ class WeakForwardSimulator(_ForwardSimulator):
 
         time : float, optional
             The *start* time at which `circuit` is evaluated.
-        
+
         Returns
         -------
         outcome_label: tuple
             An outcome label for the single shot sampled
         """
         raise NotImplementedError("WeakForwardSimulator-derived classes should implement this!")
-    
+
     def _compute_sparse_circuit_outcome_probabilities(self, circuit, resource_alloc, time=None):
         probs = _ld.OutcomeLabelDict()
 
@@ -72,7 +72,7 @@ class WeakForwardSimulator(_ForwardSimulator):
                 probs[outcome] += 1.0 / self.shots
             else:
                 probs[outcome] = 1.0 / self.shots
-        
+
         return probs
 
     # For WeakForwardSimulator, provide "bulk" interface based on the sparse interface
@@ -84,6 +84,3 @@ class WeakForwardSimulator(_ForwardSimulator):
 
         for i, outcome in enumerate(outcomes):
             array_to_fill[i] = sparse_probs[outcome]
-
-
-

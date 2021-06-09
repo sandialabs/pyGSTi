@@ -127,7 +127,6 @@ class StateRepComposed(StateRep):
         return (StateRepComposed, (self.state_rep, self.op_rep, self.state_space), (self.base.flags.writeable,))
 
 
-
 class StateRepTensorProduct(StateRep):
     def __init__(self, factor_state_reps, state_space):
         self.factor_reps = factor_state_reps
@@ -152,8 +151,6 @@ class StateRepTensorProduct(StateRep):
     #    """ Fills in self._fast_kron_array based on current self.factors """
     #    for i, factor_dim in enumerate(self._fast_kron_factordims):
     #        self._fast_kron_array[i][0:factor_dim] = self.factors[i].to_dense()
-
-
 
 #        if self._evotype in ("statevec", "densitymx"):
 #            if self._prep_or_effect == "prep":
@@ -198,11 +195,9 @@ class StateRepTensorProduct(StateRep):
 #
 #
 #
-#
-#    
 #    def init_from_dense_vec(self, vec):
 #
-#        
+#
 #        pass
 #
 #    def init_from_dense_purevec(self, purevec):
@@ -244,7 +239,7 @@ class StateRepTensorProduct(StateRep):
 #    def copy_from(self, other_state_rep):
 #        pass
 #
-#    
+#
 #
 #        dtype = complex if evotype == "statevec" else 'd'
 #        if evotype == "statevec":
@@ -299,5 +294,3 @@ class StateRepTensorProduct(StateRep):
 #                self._rep.pvectors[:, :] = new_rep.pvectors[:, :]
 #                self._rep.amps[:, :] = new_rep.amps[:, :]
 #            else:
-
-
