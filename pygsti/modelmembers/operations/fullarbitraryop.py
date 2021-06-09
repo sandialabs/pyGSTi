@@ -11,8 +11,9 @@ The FullArbitraryOp class and supporting functionality.
 #***************************************************************************************************
 
 import numpy as _np
-from .linearop import LinearOperator as _LinearOperator
+
 from .denseop import DenseOperator as _DenseOperator
+from .linearop import LinearOperator as _LinearOperator
 
 
 class FullArbitraryOp(_DenseOperator):

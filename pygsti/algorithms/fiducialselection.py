@@ -12,12 +12,13 @@ Functions for selecting a complete set of fiducials for a GST analysis.
 
 import numpy as _np
 import scipy
-from ..tools import frobeniusdist_squared
-from .. import objects as _objs
-from .. import construction as _constr
+
 from . import grasp as _grasp
 from . import scoring as _scoring
+from .. import construction as _constr
+from .. import baseobjs as _baseobjs
 from ..modelmembers.povms import ComplementPOVMEffect as _ComplementPOVMEffect
+from ..tools import frobeniusdist_squared
 
 
 def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
@@ -85,7 +86,7 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
     measFidList : list of Circuits
         A list containing the circuits for the measurement fiducials.
     """
-    printer = _objs.VerbosityPrinter.create_printer(verbosity)
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
     if ops_to_omit is None:
         ops_to_omit = []
 
@@ -634,7 +635,7 @@ def _find_fiducials_integer_slack(model, fid_list, prep_or_meas=None,
         Only returned if `return_all=True`.  The internal dictionary
         mapping weights (as a tuple) to scores.
     """
-    printer = _objs.VerbosityPrinter.create_printer(verbosity)
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
 
     if not xor(fixed_slack, slack_frac):
         raise ValueError("One and only one of fixed_slack or slack_frac should "
@@ -943,7 +944,7 @@ def _find_fiducials_grasp(model, fids_list, prep_or_meas, alpha,
         Only returned if `return_all=True`.  A list of the best solution
         (a solution is a list of fiducial circuits) for each grasp iteration.
     """
-    printer = _objs.VerbosityPrinter.create_printer(verbosity)
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
 
     if prep_or_meas not in ['prep', 'meas']:
         raise ValueError("'{}' is an invalid value for prep_or_meas (must be "

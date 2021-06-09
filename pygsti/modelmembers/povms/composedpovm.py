@@ -10,14 +10,13 @@ Defines the ComposedPOVM class
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as _np
 import collections as _collections
 
-from .. import modelmember as _mm
-from .. import operations as _op
-from .povm import POVM as _POVM
 from .composedeffect import ComposedPOVMEffect as _ComposedPOVMEffect
 from .computationalpovm import ComputationalBasisPOVM as _ComputationalBasisPOVM
+from .povm import POVM as _POVM
+from .. import modelmember as _mm
+from .. import operations as _op
 
 
 class ComposedPOVM(_POVM):

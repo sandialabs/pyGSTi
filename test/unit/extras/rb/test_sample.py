@@ -1,6 +1,7 @@
+from pygsti.objects import ProcessorSpec, Label
 from ...util import BaseCase
 
-from pygsti.objects import ProcessorSpec, Label
+
 #from pygsti.extras.rb import sample
 
 

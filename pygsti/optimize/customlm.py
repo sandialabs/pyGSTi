@@ -10,16 +10,17 @@ Custom implementation of the Levenberg-Marquardt Algorithm
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import signal as _signal
 import time as _time
+
 import numpy as _np
 import scipy as _scipy
-import signal as _signal
-#from scipy.optimize import OptimizeResult as _optResult
 
-from ..tools import mpitools as _mpit
-from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from . import arraysinterface as _ari
 from .customsolve import custom_solve as _custom_solve
+from ..baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+
+# from scipy.optimize import OptimizeResult as _optResult
 
 #Make sure SIGINT will generate a KeyboardInterrupt (even if we're launched in the background)
 _signal.signal(_signal.SIGINT, _signal.default_int_handler)
@@ -452,7 +453,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
     printer = _VerbosityPrinter.create_printer(verbosity, comm)
     ari = arrays_interface  # shorthand
 
-    # MEM from ..objects.profiler import Profiler
+    # MEM from ..baseobjs.profiler import Profiler
     # MEM debug_prof = Profiler(comm, True)
     # MEM profiler = debug_prof
 

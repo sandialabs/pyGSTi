@@ -10,23 +10,22 @@ Sub-package holding model state preparation objects.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import numpy as _np
+
 from .composedstate import ComposedState
 from .computationalstate import ComputationalBasisState
 from .cptpstate import CPTPState
-#from .densestate  REMOVE?
+# from .densestate  REMOVE?
 from .fullpurestate import FullPureState
 from .fullstate import FullState
-#from .purestate #TODO??
+# from .purestate #TODO??
 from .state import State
-from .staticstate import StaticState
 from .staticpurestate import StaticPureState
+from .staticstate import StaticState
 from .tensorprodstate import TensorProductState
 from .tpstate import TPState
-
-
-import numpy as _np
-from ...tools import optools as _ot
 from ...tools import basistools as _bt
+from ...tools import optools as _ot
 
 
 def convert(state, to_type, basis, extra=None):

@@ -1,11 +1,10 @@
 import numpy as np
 
-from ..util import BaseCase
-from . import fixtures
-
-from pygsti.modelmembers.operations import StaticArbitraryOp
 import pygsti.construction as pc
-from pygsti.algorithms import germselection as germsel, scoring
+from pygsti.algorithms import germselection as germsel
+from pygsti.modelmembers.operations import StaticArbitraryOp
+from . import fixtures
+from ..util import BaseCase
 
 _SEED = 2019
 

@@ -12,11 +12,10 @@ The ComposedPOVMEffect class and supporting functionality.
 
 
 import numpy as _np
+
 from .effect import POVMEffect as _POVMEffect
-from ..states.state import State as _State
+from .. import modelmember as _modelmember, term as _term
 from ..states.staticstate import StaticState as _StaticState
-from .. import modelmember as _modelmember
-from ...objects import term as _term
 
 
 class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer

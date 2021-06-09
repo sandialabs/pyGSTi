@@ -11,10 +11,10 @@ The StaticPureOp class and supporting functionality.
 #***************************************************************************************************
 
 import numpy as _np
-from .linearop import LinearOperator as _LinearOperator
+
 from .denseop import DenseUnitaryOperator as _DenseUnitaryOperator
-from ...objects import term as _term
-from ...objects.polynomial import Polynomial as _Polynomial
+from .. import term as _term
+from ...baseobjs.polynomial import Polynomial as _Polynomial
 
 
 class StaticUnitaryOp(_DenseUnitaryOperator):

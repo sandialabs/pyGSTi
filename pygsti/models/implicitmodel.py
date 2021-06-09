@@ -10,43 +10,14 @@ Defines the ImplicitOpModel class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as _np
-import scipy as _scipy
-import itertools as _itertools
 import collections as _collections
-import warnings as _warnings
-import time as _time
+import itertools as _itertools
 import uuid as _uuid
-import bisect as _bisect
-import copy as _copy
-
-from ..tools import matrixtools as _mt
-from ..tools import optools as _gt
-from ..tools import slicetools as _slct
-from ..tools import likelihoodfns as _lf
-from ..tools import jamiolkowski as _jt
-from ..tools import basistools as _bt
-from ..tools import listtools as _lt
-from ..tools import symplectic as _symp
 
 from . import model as _mdl
-from ..modelmembers import modelmember as _gm
-from ..objects import circuit as _cir
 from ..modelmembers import operations as _op
 from ..modelmembers import povms as _povm
-from ..modelmembers import instruments as _instrument
-
-from . import labeldicts as _ld
-from ..objects import gaugegroup as _gg
-from ..forwardsims import matrixforwardsim as _matrixfwdsim
-from ..forwardsims import mapforwardsim as _mapfwdsim
-from ..forwardsims import termforwardsim as _termfwdsim
-from . import explicitcalc as _explicitcalc
-
-from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from ..objects.basis import BuiltinBasis as _BuiltinBasis, DirectSumBasis as _DirectSumBasis
-from ..objects.label import Label as _Label, CircuitLabel as _CircuitLabel
-from .layerrules import LayerRules as _LayerRules
+from ..baseobjs.label import Label as _Label
 
 
 class ImplicitOpModel(_mdl.OpModel):

@@ -1,13 +1,10 @@
-import pickle
-
-from ..util import BaseCase, Namespace
-from . import fixtures as pkg
-
-from pygsti.protocols.gst import ModelEstimateResults
-from pygsti.protocols import Protocol, ProtocolData, CircuitListsDesign
-from pygsti.objects import CircuitList
 from pygsti.modelpacks.legacy import std1Q_XYI as std
+from pygsti.objects import CircuitList
+from pygsti.protocols import Protocol, ProtocolData, CircuitListsDesign
 from pygsti.protocols import estimate
+from pygsti.protocols.gst import ModelEstimateResults
+from . import fixtures as pkg
+from ..util import BaseCase
 
 
 class ResultsBase(object):

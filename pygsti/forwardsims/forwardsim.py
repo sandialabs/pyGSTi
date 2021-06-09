@@ -10,23 +10,16 @@ Defines the ForwardSimulator calculator class
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as _np
-import numpy.linalg as _nla
 import collections as _collections
-import itertools as _itertools
 import warnings as _warnings
 
-from ..tools import slicetools as _slct
-from ..tools import basistools as _bt
-from ..tools import matrixtools as _mt
-from ..tools import mpitools as _mpit
-from ..tools import sharedmemtools as _smt
-from ..models import labeldicts as _ld
-from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
-from ..layouts.copalayout import CircuitOutcomeProbabilityArrayLayout as _CircuitOutcomeProbabilityArrayLayout
-from ..layouts.distlayout import DistributableCOPALayout as _DistributableCOPALayout
+import numpy as _np
+
 from ..layouts.cachedlayout import CachedCOPALayout as _CachedCOPALayout
-from ..objects.circuit import Circuit as _Circuit
+from ..layouts.copalayout import CircuitOutcomeProbabilityArrayLayout as _CircuitOutcomeProbabilityArrayLayout
+from ..baseobjs import labeldicts as _ld
+from ..baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
+from ..tools import slicetools as _slct
 
 
 class ForwardSimulator(object):

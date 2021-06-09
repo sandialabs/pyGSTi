@@ -11,9 +11,10 @@ POVM effect representation classes for the `densitymx_slow` evolution type.
 #***************************************************************************************************
 
 import numpy as _np
-#import functools as _functools
+
+# import functools as _functools
 from .. import basereps as _basereps
-from ...models.statespace import StateSpace as _StateSpace
+from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from ...tools import matrixtools as _mt
 
 

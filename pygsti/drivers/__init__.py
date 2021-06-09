@@ -10,7 +10,7 @@ pyGSTi High-Level Drivers Python Package
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-#Import the most important/useful routines of each module/sub-package
+from .bootstrap import *
+# Import the most important/useful routines of each module/sub-package
 # into the package namespace
 from .longsequence import *
-from .bootstrap import *

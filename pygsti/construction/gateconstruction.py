@@ -13,10 +13,9 @@ Functions for creating gates
 import numpy as _np
 import scipy.linalg as _spl
 
-from ..tools.optools import unitary_to_pauligate
-
 ## Pauli basis matrices
-from ..tools.basisconstructors import sqrt2, id2x2, sigmax, sigmay, sigmaz
+from ..tools.basisconstructors import id2x2, sigmax, sigmay, sigmaz
+from ..tools.optools import unitary_to_pauligate
 
 sigmaii = _np.kron(id2x2, id2x2)
 sigmaix = _np.kron(id2x2, sigmax)

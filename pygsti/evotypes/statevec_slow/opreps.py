@@ -10,15 +10,16 @@ Operation representation classes for the `statevec_slow` evolution type.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as _np
 import itertools as _itertools
+
+import numpy as _np
 from scipy.sparse.linalg import LinearOperator
 
-from .. import basereps as _basereps
 from .statereps import StateRep as _StateRep
-from ...models.statespace import StateSpace as _StateSpace
-from ...tools import internalgates as _itgs
+from .. import basereps as _basereps
+from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from ...tools import basistools as _bt
+from ...tools import internalgates as _itgs
 from ...tools import optools as _ot
 
 

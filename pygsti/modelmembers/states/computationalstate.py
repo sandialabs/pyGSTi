@@ -1,17 +1,14 @@
-import numpy as _np
-import itertools as _itertools
 import functools as _functools
+import itertools as _itertools
+
+import numpy as _np
 
 from .state import State as _State
-from .densestate import DenseState as _DenseState
-from .staticstate import StaticState as _StaticState
-from .. import modelmember as _modelmember
-from ..errorgencontainer import ErrorMapContainer as _ErrorMapContainer
+from .. import term as _term
 from ...evotypes import Evotype as _Evotype
-from ...objects import term as _term
-from ...objects.polynomial import Polynomial as _Polynomial
-from ...models import statespace as _statespace
-from ...objects.basis import Basis as _Basis
+from ...baseobjs import statespace as _statespace
+from ...baseobjs.basis import Basis as _Basis
+from ...baseobjs.polynomial import Polynomial as _Polynomial
 
 try:
     from ...tools import fastcalc as _fastcalc

@@ -10,14 +10,15 @@ Defines the TensorProductPOVM class
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as _np
 import collections as _collections
 import itertools as _itertools
 
-from .. import modelmember as _mm
+import numpy as _np
+
 from .povm import POVM as _POVM
 from .tensorprodeffect import TensorProductPOVMEffect as _TensorProductPOVMEffect
-from ...models import statespace as _statespace
+from .. import modelmember as _mm
+from ...baseobjs import statespace as _statespace
 
 
 class TensorProductPOVM(_POVM):

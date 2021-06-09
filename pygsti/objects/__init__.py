@@ -14,9 +14,6 @@ pyGSTi Objects Python Package
 # the package namespace
 
 #Import Objects at package level
-from .confidenceregionfactory import ConfidenceRegionFactory
-from .dataset import DataSet
-from .freedataset import FreeformDataSet
 #from .operation import LinearOperator
 #from .operation import DenseOperator
 #from .operation import LinearlyParamArbitraryOp
@@ -62,40 +59,5 @@ from .freedataset import FreeformDataSet
 #from .opfactory import EmbeddedOpFactory
 #from .opfactory import EmbeddingOpFactory
 
-from .circuitstructure import CircuitPlaquette, FiducialPairPlaquette, GermFiducialPairPlaquette
-from .circuitstructure import PlaquetteGridCircuitStructure
-from .circuit import Circuit
-from .multidataset import MultiDataSet
-from .datacomparator import DataComparator
-from .compilationlibrary import CompilationLibrary
-from .processorspec import ProcessorSpec
-from .stabilizer import StabilizerFrame
-from .qubitgraph import QubitGraph
-from .hypothesistest import HypothesisTest
-
-from .gaugegroup import FullGaugeGroup, FullGaugeGroupElement
-from .gaugegroup import TPGaugeGroup, TPGaugeGroupElement
-from .gaugegroup import DiagGaugeGroup, DiagGaugeGroupElement
-from .gaugegroup import TPDiagGaugeGroup, TPDiagGaugeGroupElement
-from .gaugegroup import UnitaryGaugeGroup, UnitaryGaugeGroupElement
-from .gaugegroup import SpamGaugeGroup, SpamGaugeGroupElement
-from .gaugegroup import TPSpamGaugeGroup, TPSpamGaugeGroupElement
-from .gaugegroup import TrivialGaugeGroup, TrivialGaugeGroupElement
-
-from .circuitlist import CircuitList
-from .resourceallocation import ResourceAllocation
-from .objectivefns import ObjectiveFunctionBuilder, \
-    ObjectiveFunction, RawChi2Function, RawChiAlphaFunction, RawFreqWeightedChi2Function, \
-    RawPoissonPicDeltaLogLFunction, RawDeltaLogLFunction, RawMaxLogLFunction, RawTVDFunction, \
-    Chi2Function, ChiAlphaFunction, FreqWeightedChi2Function, PoissonPicDeltaLogLFunction, DeltaLogLFunction, \
-    MaxLogLFunction, TVDFunction, TimeDependentChi2Function, TimeDependentPoissonPicLogLFunction, LogLWildcardFunction
-
-from .objectivefns import ModelDatasetCircuitsStore, EvaluatedModelDatasetCircuitsStore
-
 #from .results import Results  # REMOVE
 #from .operation import compose, optimize_operation, finite_difference_deriv_wrt_params
-from .smartcache import SmartCache
-from .verbosityprinter import VerbosityPrinter
-from .profiler import Profiler
-from .basis import Basis, BuiltinBasis, ExplicitBasis, TensorProdBasis, DirectSumBasis
-from .label import Label, CircuitLabel

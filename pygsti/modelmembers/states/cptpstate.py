@@ -12,11 +12,12 @@ The CPTPState class and supporting functionality.
 
 
 import numpy as _np
-from .state import State as _State
+
 from .densestate import DenseState as _DenseState
+from .state import State as _State
 from ...evotypes import Evotype as _Evotype
-from ...objects.basis import Basis as _Basis
-from ...models import statespace as _statespace
+from ...baseobjs import statespace as _statespace
+from ...baseobjs.basis import Basis as _Basis
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 

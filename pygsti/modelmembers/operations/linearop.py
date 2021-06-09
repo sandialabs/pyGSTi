@@ -11,9 +11,10 @@ The LinearOperator class and supporting functionality.
 #***************************************************************************************************
 
 import numpy as _np
+
+from pygsti.baseobjs.opcalc import bulk_eval_compact_polynomials_complex as _bulk_eval_compact_polynomials_complex
 from .. import modelmember as _modelmember
 from ...tools import optools as _ot
-from ...objects.opcalc import bulk_eval_compact_polynomials_complex as _bulk_eval_compact_polynomials_complex
 
 
 #Note on initialization sequence of Operations within a Model:

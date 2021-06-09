@@ -10,18 +10,18 @@ The DenseOperator class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import copy as _copy
+
 import numpy as _np
 import scipy.sparse as _sps
-import copy as _copy
-from .linearop import LinearOperator as _LinearOperator
 
+from .linearop import LinearOperator as _LinearOperator
 from ...evotypes import Evotype as _Evotype
-from ...models import statespace as _statespace
-from ...tools import matrixtools as _mt
+from ...baseobjs import statespace as _statespace
+from ...baseobjs.basis import Basis as _Basis
 from ...tools import basistools as _bt
+from ...tools import matrixtools as _mt
 from ...tools import optools as _ot
-from ...objects.basis import Basis as _Basis
-from ...objects import gaugegroup as _gaugegroup
 
 
 def finite_difference_deriv_wrt_params(operation, wrt_filter, eps=1e-7):
@@ -437,6 +437,7 @@ class DenseUnitaryOperator(DenseOperatorInterface, _LinearOperator):
         -------
         None
         """
+        from ...models import gaugegroup as _gaugegroup
         if isinstance(s, _gaugegroup.UnitaryGaugeGroupElement) or \
            isinstance(s, _gaugegroup.TPSpamGaugeGroupElement):
 
@@ -481,6 +482,7 @@ class DenseUnitaryOperator(DenseOperatorInterface, _LinearOperator):
         """
         assert(typ in ('prep', 'effect')), "Invalid `typ` argument: %s" % typ
 
+        from ...models import gaugegroup as _gaugegroup
         if isinstance(s, _gaugegroup.UnitaryGaugeGroupElement) or \
            isinstance(s, _gaugegroup.TPSpamGaugeGroupElement):
             U = s.transform_matrix

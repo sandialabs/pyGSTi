@@ -12,11 +12,9 @@ State representations for "stabilizer_slow" evolution type.
 
 
 import numpy as _np
-import functools as _functools
 
-from .. import basereps as _basereps
-from ...objects import stabilizer as _stabilizer
-from ...models.statespace import StateSpace as _StateSpace
+from .. import basereps as _basereps, stabilizer as _stabilizer
+from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 
 
 class StateRep(_basereps.StateRep):
@@ -104,7 +102,7 @@ class StateRepTensorProduct(StateRep):
     def reps_have_changed(self):
         # Similar to symplectic_kronecker and stabilizer.sframe_kronecker for each factor
         sframe_factors = [state_rep.sframe for state_rep in self.factor_reps]  # StabilizerFrame for each factor
-        new_rep = _stabilizer.sframe_kronecker(sframe_factors).to_rep()
+        new_rep = _stabilizer.sframe_kronecker(sframe_factors).to_rep(self.state_space)
         self.smatrix[:, :] = new_rep.smatrix[:, :]
         self.pvectors[:, :] = new_rep.pvectors[:, :]
         self.amps[:, :] = new_rep.amps[:, :]

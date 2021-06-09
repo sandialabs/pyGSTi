@@ -11,10 +11,11 @@ Variables for working with the a model containing X(pi/2) and Y(pi/2) gates.
 """
 
 import sys as _sys
+from collections import OrderedDict as _OrderedDict
+
 from ...construction import circuitconstruction as _strc
 from ...construction import modelconstruction as _setc
 from ...construction import stdtarget as _stdtarget
-from collections import OrderedDict as _OrderedDict
 
 description = "X(pi/2) and Y(pi/2) gates"
 

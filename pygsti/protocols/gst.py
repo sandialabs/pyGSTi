@@ -10,42 +10,33 @@ GST Protocol objects
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import time as _time
-import os as _os
-import numpy as _np
-import pickle as _pickle
 import collections as _collections
-import warnings as _warnings
-import itertools as _itertools
 import copy as _copy
-import scipy.optimize as _spo
+import os as _os
+import pickle as _pickle
+import time as _time
+import warnings as _warnings
+
+import numpy as _np
 from scipy.stats import chi2 as _chi2
 
+from pygsti.baseobjs.profiler import DummyProfiler as _DummyProfiler
+from pygsti.protocols.estimate import Estimate as _Estimate
 from . import protocol as _proto
-from ..models import Model as _Model
 from .modeltest import ModelTest as _ModelTest
-from .. import objects as _objs
 from .. import algorithms as _alg
 from .. import construction as _construction
 from .. import io as _io
-from .. import tools as _tools
-from .. import optimize as _opt
-
-from ..objects import wildcardbudget as _wild
-from ..objects.profiler import DummyProfiler as _DummyProfiler
-from ..objects import objectivefns as _objfns
-from pygsti.protocols.estimate import Estimate as _Estimate
-from ..objects.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
-from ..objects.gaugegroup import TrivialGaugeGroup as _TrivialGaugeGroup
-from ..objects.gaugegroup import TrivialGaugeGroupElement as _TrivialGaugeGroupElement
-from ..objects.circuitlist import CircuitList as _CircuitList
-from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
-from ..objects.objectivefns import ModelDatasetCircuitsStore as _ModelDatasetCircuitStore
-from ..forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
-from ..layouts.distlayout import DistributableCOPALayout as _DistributableCOPALayout
 from .. import models as _models
+from .. import optimize as _opt
+from .. import tools as _tools
+from .. import baseobjs as _baseobjs
+from ..forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
 from ..modelmembers import operations as _op
-
+from ..models import Model as _Model
+from ..objectivefns import objectivefns as _objfns, wildcardbudget as _wild
+from ..circuits.circuitlist import CircuitList as _CircuitList
+from ..baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 
 #For results object:
 
@@ -740,11 +731,11 @@ class GateSetTomography(_proto.Protocol):
 
         profile = self.profile
         if profile == 0: profiler = _DummyProfiler()
-        elif profile == 1: profiler = _objs.Profiler(comm, False)
-        elif profile == 2: profiler = _objs.Profiler(comm, True)
+        elif profile == 1: profiler = _baseobjs.Profiler(comm, False)
+        elif profile == 2: profiler = _baseobjs.Profiler(comm, True)
         else: raise ValueError("Invalid value for 'profile' argument (%s)" % profile)
 
-        printer = _objs.VerbosityPrinter.create_printer(self.verbosity, comm)
+        printer = _baseobjs.VerbosityPrinter.create_printer(self.verbosity, comm)
         if self.record_output and not printer.is_recording():
             printer.start_recording()
 
@@ -925,11 +916,11 @@ class LinearGateSetTomography(_proto.Protocol):
 
         profile = self.profile
         if profile == 0: profiler = _DummyProfiler()
-        elif profile == 1: profiler = _objs.Profiler(comm, False)
-        elif profile == 2: profiler = _objs.Profiler(comm, True)
+        elif profile == 1: profiler = _baseobjs.Profiler(comm, False)
+        elif profile == 2: profiler = _baseobjs.Profiler(comm, True)
         else: raise ValueError("Invalid value for 'profile' argument (%s)" % profile)
 
-        printer = _objs.VerbosityPrinter.create_printer(self.verbosity, comm)
+        printer = _baseobjs.VerbosityPrinter.create_printer(self.verbosity, comm)
         if self.record_output and not printer.is_recording():
             printer.start_recording()
 
@@ -946,8 +937,8 @@ class LinearGateSetTomography(_proto.Protocol):
         mdl_lgst = _alg.run_lgst(ds, edesign.prep_fiducials, edesign.meas_fiducials, target_model,
                                  op_labels, svd_truncate_to=target_model.dim,
                                  op_label_aliases=aliases, verbosity=printer)
-        final_store = _objs.ModelDatasetCircuitsStore(mdl_lgst, ds, circuit_list, resource_alloc,
-                                                      array_types=('E',), verbosity=printer)
+        final_store = _objfns.ModelDatasetCircuitsStore(mdl_lgst, ds, circuit_list, resource_alloc,
+                                                        array_types=('E',), verbosity=printer)
 
         parameters = _collections.OrderedDict()
         parameters['protocol'] = self  # Estimates can hold sub-Protocols <=> sub-results
@@ -1091,7 +1082,7 @@ class StandardGST(_proto.Protocol):
         -------
         ProtocolResults
         """
-        printer = _objs.VerbosityPrinter.create_printer(self.verbosity, comm)
+        printer = _baseobjs.VerbosityPrinter.create_printer(self.verbosity, comm)
 
         modes = self.modes
         models_to_test = self.models_to_test
@@ -1197,7 +1188,7 @@ def gaugeopt_suite_to_dictionary(gaugeopt_suite, model, unreliable_ops=(), verbo
         dictionaries of arguments to :func:`gaugeopt_to_target` (or lists
         of such dictionaries for a multi-stage gauge optimization).
     """
-    printer = _objs.VerbosityPrinter.create_printer(verbosity)
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
 
     if gaugeopt_suite is None:
         gaugeopt_suite = {}
@@ -1234,7 +1225,7 @@ def _update_gaugeopt_dict_from_suitename(gaugeopt_suite_dict, root_lbl, suite_na
 
         stages = []  # multi-stage gauge opt
         gg = model.default_gauge_group
-        if isinstance(gg, _objs.TrivialGaugeGroup):
+        if isinstance(gg, _models.TrivialGaugeGroup):
             if suite_name == "stdgaugeopt-unreliable2Q" and model.dim == 16:
                 if any([gl in model.operations.keys() for gl in unreliable_ops]):
                     gaugeopt_suite_dict[root_lbl] = {'verbosity': printer}
@@ -1260,15 +1251,15 @@ def _update_gaugeopt_dict_from_suitename(gaugeopt_suite_dict, root_lbl, suite_na
                 {
                     'gates_metric': metric, 'spam_metric': metric,
                     'item_weights': {'gates': 1.0, 'spam': 0.0},
-                    'gauge_group': _objs.UnitaryGaugeGroup(model.state_space, model.basis, model.evotype),
+                    'gauge_group': _models.UnitaryGaugeGroup(model.state_space, model.basis, model.evotype),
                     'verbosity': printer
                 })
 
             #Stage 3: spam gauge opt that fixes spam scaling at expense of
             #         non-unital parts of gates (but shouldn't affect these
             #         elements much since they should be small from Stage 2).
-            s3gg = _objs.SpamGaugeGroup if (gg.name == "Full") else \
-                _objs.TPSpamGaugeGroup
+            s3gg = _models.SpamGaugeGroup if (gg.name == "Full") else \
+                _models.TPSpamGaugeGroup
             stages.append(
                 {
                     'gates_metric': metric, 'spam_metric': metric,
@@ -1373,7 +1364,7 @@ def _load_fiducials_and_germs(prep_fiducial_list_or_filename,
 
 def _load_dataset(data_filename_or_set, comm, verbosity):
     """Loads a DataSet from the data_filename_or_set argument of functions in this module."""
-    printer = _objs.VerbosityPrinter.create_printer(verbosity, comm)
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm)
     if isinstance(data_filename_or_set, str):
         if comm is None or comm.Get_rank() == 0:
             if _os.path.splitext(data_filename_or_set)[1] == ".pkl":
@@ -1431,7 +1422,7 @@ def _add_gaugeopt_and_badfit(results, estlbl, target_model, gaugeopt_suite, gaug
 #    if needed and opt_args is not None - i.e. only for
 #    run_long_sequence_gst).
 #    """
-#    printer = _objs.VerbosityPrinter.create_printer(verbosity, comm)
+#    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm)
 #    tref = _time.time()
 #    callerName = callerProtocol.name
 #
@@ -1523,7 +1514,7 @@ def _add_gauge_opt(results, base_est_label, gaugeopt_suite, target_model, starti
     -------
     None
     """
-    printer = _objs.VerbosityPrinter.create_printer(verbosity, comm)
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm)
 
     #Get gauge optimization dictionary
     gaugeopt_suite_dict = gaugeopt_suite_to_dictionary(gaugeopt_suite, starting_model,
@@ -1612,7 +1603,7 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options,
 
     ralloc = mdc_objfn.resource_alloc
     comm = ralloc.comm if ralloc else None
-    printer = _objs.VerbosityPrinter.create_printer(verbosity, ralloc)
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, ralloc)
 
     if badfit_options.threshold is not None and \
        base_estimate.misfit_sigma(ralloc) <= badfit_options.threshold:
@@ -1804,7 +1795,7 @@ def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options,
     -------
     PrimitiveOpsWildcardBudget
     """
-    printer = _objs.VerbosityPrinter.create_printer(verbosity, mdc_objfn.resource_alloc)
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, mdc_objfn.resource_alloc)
     badfit_options = GSTBadFitOptions.cast(badfit_options)
     model = mdc_objfn.model
     ds = mdc_objfn.dataset
@@ -2067,7 +2058,7 @@ def _reoptimize_with_weights(mdc_objfn, circuit_weights_dict, optimizer, verbosi
     Model
         The re-optimized model, potentially the *same* object as `model`.
     """
-    printer = _objs.VerbosityPrinter.create_printer(verbosity)
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
     printer.log("--- Re-optimizing after robust data scaling ---")
     circuit_list = mdc_objfn.circuits
     circuit_weights = _np.array([circuit_weights_dict.get(c, 1.0) for c in circuit_list], 'd')

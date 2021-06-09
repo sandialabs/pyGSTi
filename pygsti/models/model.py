@@ -10,43 +10,25 @@ Defines the Model class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as _np
-import scipy as _scipy
-import itertools as _itertools
-import collections as _collections
-import warnings as _warnings
-import time as _time
-import uuid as _uuid
 import bisect as _bisect
 import copy as _copy
+import itertools as _itertools
+import uuid as _uuid
+import warnings as _warnings
 
-from ..tools import matrixtools as _mt
-from ..tools import optools as _gt
-from ..tools import slicetools as _slct
-from ..tools import likelihoodfns as _lf
-from ..tools import jamiolkowski as _jt
-from ..tools import basistools as _bt
-from ..tools import listtools as _lt
-from ..tools import symplectic as _symp
+import numpy as _np
 
-from ..modelmembers import modelmember as _gm
-from ..evotypes import Evotype as _Evotype
-
-from . import explicitcalc as _explicitcalc
-from . import statespace as _statespace
-from ..objects import gaugegroup as _gg
-from ..objects import circuit as _cir
-from ..forwardsims import forwardsim as _fwdsim
-from ..forwardsims import matrixforwardsim as _matrixfwdsim
-from ..forwardsims import mapforwardsim as _mapfwdsim
-from ..forwardsims import termforwardsim as _termfwdsim
-
-from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from ..objects.basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis
-from ..objects.label import Label as _Label
-from ..objects.circuitlist import CircuitList as _CircuitList
-from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
+from ..baseobjs import statespace as _statespace
 from .layerrules import LayerRules as _LayerRules
+from ..evotypes import Evotype as _Evotype
+from ..forwardsims import forwardsim as _fwdsim
+from ..forwardsims import mapforwardsim as _mapfwdsim
+from ..forwardsims import matrixforwardsim as _matrixfwdsim
+from ..modelmembers import modelmember as _gm
+from ..baseobjs.basis import Basis as _Basis
+from ..baseobjs.label import Label as _Label
+from ..baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
+from ..tools import slicetools as _slct
 
 MEMLIMIT_FOR_NONGAUGE_PARAMS = None
 

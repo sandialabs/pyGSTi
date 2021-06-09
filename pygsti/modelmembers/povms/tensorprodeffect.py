@@ -10,18 +10,17 @@ The TensorProductPOVMEffect class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import itertools as _itertools
 import functools as _functools
+import itertools as _itertools
 
 import numpy as _np
+
 from .effect import POVMEffect as _POVMEffect
-from .. import modelmember as _modelmember
-from ..states.tensorprodstate import TensorProductState as _TensorProductState
-from ...models import statespace as _statespace
-from ...tools import slicetools as _slct
+from .. import modelmember as _modelmember, term as _term
+from ...baseobjs import statespace as _statespace
 from ...tools import listtools as _lt
 from ...tools import matrixtools as _mt
-from ...objects import term as _term
+from ...tools import slicetools as _slct
 
 
 class TensorProductPOVMEffect(_POVMEffect):

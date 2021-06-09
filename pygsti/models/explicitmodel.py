@@ -10,45 +10,30 @@ Defines the ExplicitOpModel class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import collections as _collections
+import itertools as _itertools
+import uuid as _uuid
+import warnings as _warnings
+
 import numpy as _np
 import scipy as _scipy
-import itertools as _itertools
-import collections as _collections
-import warnings as _warnings
-import time as _time
-import uuid as _uuid
-import bisect as _bisect
-import copy as _copy
 
+from . import explicitcalc as _explicitcalc
+from . import model as _mdl, gaugegroup as _gg
+from .memberdict import OrderedMemberDict as _OrderedMemberDict
+from .layerrules import LayerRules as _LayerRules
+from ..forwardsims import matrixforwardsim as _matrixfwdsim
+from ..modelmembers import instruments as _instrument
+from ..modelmembers import operations as _op
+from ..modelmembers import povms as _povm
+from ..modelmembers import states as _state
+from ..modelmembers.operations import opfactory as _opfactory
+from ..baseobjs.basis import BuiltinBasis as _BuiltinBasis, DirectSumBasis as _DirectSumBasis
+from ..baseobjs.label import Label as _Label, CircuitLabel as _CircuitLabel
+from ..tools import basistools as _bt
+from ..tools import jamiolkowski as _jt
 from ..tools import matrixtools as _mt
 from ..tools import optools as _gt
-from ..tools import slicetools as _slct
-from ..tools import likelihoodfns as _lf
-from ..tools import jamiolkowski as _jt
-from ..tools import basistools as _bt
-from ..tools import listtools as _lt
-from ..tools import symplectic as _symp
-
-from . import model as _mdl
-from ..modelmembers import modelmember as _gm
-from ..modelmembers import operations as _op
-from ..modelmembers import states as _state
-from ..modelmembers import povms as _povm
-from ..modelmembers import instruments as _instrument
-from ..modelmembers.operations import opfactory as _opfactory
-from ..evotypes import Evotype as _Evotype
-from . import labeldicts as _ld
-from ..objects import circuit as _cir
-from ..objects import gaugegroup as _gg
-from ..forwardsims import matrixforwardsim as _matrixfwdsim
-from ..forwardsims import mapforwardsim as _mapfwdsim
-from ..forwardsims import termforwardsim as _termfwdsim
-from . import explicitcalc as _explicitcalc
-
-from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from ..objects.basis import BuiltinBasis as _BuiltinBasis, DirectSumBasis as _DirectSumBasis
-from ..objects.label import Label as _Label, CircuitLabel as _CircuitLabel
-from .layerrules import LayerRules as _LayerRules
 
 
 class ExplicitOpModel(_mdl.OpModel):
@@ -126,11 +111,11 @@ class ExplicitOpModel(_mdl.OpModel):
         def flagfn(typ): return {'auto_embed': True, 'match_parent_statespace': True,
                                  'match_parent_evotype': True, 'cast_to_type': typ}
 
-        self.preps = _ld.OrderedMemberDict(self, default_param, prep_prefix, flagfn("state"))
-        self.povms = _ld.OrderedMemberDict(self, default_param, povm_prefix, flagfn("povm"))
-        self.operations = _ld.OrderedMemberDict(self, default_param, gate_prefix, flagfn("operation"))
-        self.instruments = _ld.OrderedMemberDict(self, default_param, instrument_prefix, flagfn("instrument"))
-        self.factories = _ld.OrderedMemberDict(self, default_param, gate_prefix, flagfn("factory"))
+        self.preps = _OrderedMemberDict(self, default_param, prep_prefix, flagfn("state"))
+        self.povms = _OrderedMemberDict(self, default_param, povm_prefix, flagfn("povm"))
+        self.operations = _OrderedMemberDict(self, default_param, gate_prefix, flagfn("operation"))
+        self.instruments = _OrderedMemberDict(self, default_param, instrument_prefix, flagfn("instrument"))
+        self.factories = _OrderedMemberDict(self, default_param, gate_prefix, flagfn("factory"))
         self.effects_prefix = effect_prefix
         self._default_gauge_group = None
 
@@ -484,7 +469,7 @@ class ExplicitOpModel(_mdl.OpModel):
             state_dict['state_space'] = state_dict['state_space_labels']; del state_dict['state_space_labels']
         if 'factories' not in state_dict:
             ops = state_dict['operations']
-            state_dict['factories'] = _ld.OrderedMemberDict(self, ops.default_param, ops._prefix, ops.flags)
+            state_dict['factories'] = _OrderedMemberDict(self, ops.default_param, ops._prefix, ops.flags)
 
         super().__setstate__(state_dict)  # ~ self.__dict__.update(state_dict)
 

@@ -1,8 +1,7 @@
 """Shared test fixtures for pygsti.objects unit tests"""
-from ..util import Namespace
-
 import pygsti
 from pygsti.modelpacks.legacy import std1Q_XYI as std
+from ..util import Namespace
 
 ns = Namespace()
 ns.model = std.target_model()
@@ -10,7 +9,7 @@ ns.opLabels = list(ns.model.operations.keys())
 ns.fiducials = std.fiducials
 ns.germs = std.germs
 ns.maxLengthList = [1, 2]
-ns.CM = pygsti.objects.profiler._get_mem_usage()
+ns.CM = pygsti.baseobjs.profiler._get_mem_usage()
 
 
 @ns.memo

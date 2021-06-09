@@ -10,36 +10,27 @@ Defines the LocalNoiseModel class and supporting functions
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as _np
-import copy as _copy
-import itertools as _itertools
 import collections as _collections
-import scipy.sparse as _sps
+import itertools as _itertools
 import warnings as _warnings
 
-from . import statespace as _statespace
-from ..modelmembers import operations as _op
-from ..modelmembers import states as _state
-from ..modelmembers import povms as _povm
-from ..modelmembers.operations import opfactory as _opfactory
-from ..evotypes import Evotype as _Evotype
-from ..objects import qubitgraph as _qgraph
-from . import labeldicts as _ld
-from ..tools import optools as _gt
-from ..tools import basistools as _bt
-from ..tools import internalgates as _itgs
 from .implicitmodel import ImplicitOpModel as _ImplicitOpModel
 from .layerrules import LayerRules as _LayerRules
+from .memberdict import OrderedMemberDict as _OrderedMemberDict
+from ..baseobjs import qubitgraph as _qgraph, statespace as _statespace
+from ..evotypes import Evotype as _Evotype
 from ..forwardsims.forwardsim import ForwardSimulator as _FSim
-from ..forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
 from ..forwardsims.mapforwardsim import MapForwardSimulator as _MapFSim
-from ..forwardsims.termforwardsim import TermForwardSimulator as _TermFSim
-
-from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from ..objects.basis import BuiltinBasis as _BuiltinBasis
-from ..objects.label import Label as _Lbl, CircuitLabel as _CircuitLabel
-
-from ..tools.basisconstructors import sqrt2, id2x2, sigmax, sigmay, sigmaz
+from ..forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
+from ..modelmembers import operations as _op
+from ..modelmembers import povms as _povm
+from ..modelmembers import states as _state
+from ..modelmembers.operations import opfactory as _opfactory
+from ..baseobjs.basis import BuiltinBasis as _BuiltinBasis
+from ..baseobjs.label import Label as _Lbl, CircuitLabel as _CircuitLabel
+from ..tools import basistools as _bt
+from ..tools import internalgates as _itgs
+from ..tools import optools as _gt
 
 
 class LocalNoiseModel(_ImplicitOpModel):
@@ -602,13 +593,13 @@ class LocalNoiseModel(_ImplicitOpModel):
 
         flags = {'auto_embed': False, 'match_parent_statespace': False,
                  'match_parent_evotype': True, 'cast_to_type': None}
-        self.prep_blks['layers'] = _ld.OrderedMemberDict(self, None, None, flags)
-        self.povm_blks['layers'] = _ld.OrderedMemberDict(self, None, None, flags)
-        self.operation_blks['layers'] = _ld.OrderedMemberDict(self, None, None, flags)
-        self.operation_blks['gates'] = _ld.OrderedMemberDict(self, None, None, flags)
-        self.instrument_blks['layers'] = _ld.OrderedMemberDict(self, None, None, flags)
-        self.factories['gates'] = _ld.OrderedMemberDict(self, None, None, flags)
-        self.factories['layers'] = _ld.OrderedMemberDict(self, None, None, flags)
+        self.prep_blks['layers'] = _OrderedMemberDict(self, None, None, flags)
+        self.povm_blks['layers'] = _OrderedMemberDict(self, None, None, flags)
+        self.operation_blks['layers'] = _OrderedMemberDict(self, None, None, flags)
+        self.operation_blks['gates'] = _OrderedMemberDict(self, None, None, flags)
+        self.instrument_blks['layers'] = _OrderedMemberDict(self, None, None, flags)
+        self.factories['gates'] = _OrderedMemberDict(self, None, None, flags)
+        self.factories['layers'] = _OrderedMemberDict(self, None, None, flags)
 
         #SPAM (same as for cloud noise model)
         if prep_layers is None:

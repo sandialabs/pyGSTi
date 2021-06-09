@@ -1,10 +1,9 @@
-from notebookstestcase import _PYGSTI_ROOT, notebooks_in_path, _make_test
-from nose.plugins.attrib import attr
+import logging
+import shutil
 from pathlib import Path
 from tempfile import TemporaryDirectory
-import shutil
-import logging
 
+from notebookstestcase import _PYGSTI_ROOT, notebooks_in_path, _make_test
 
 # All tutorials to be tested are under this directory
 _TUTORIALS_ROOT = _PYGSTI_ROOT / 'jupyter_notebooks' / 'Tutorials'

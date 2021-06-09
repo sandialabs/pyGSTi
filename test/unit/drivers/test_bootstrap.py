@@ -1,10 +1,8 @@
-from ..util import BaseCase
-from . import fixtures as pkg
-
 from pygsti import algorithms as alg, construction as pc
-from pygsti.objects import DataSet
-from pygsti.modelpacks.legacy import std1Q_XYI as std
 from pygsti.drivers import bootstrap as bs
+from pygsti.modelpacks.legacy import std1Q_XYI as std
+from . import fixtures as pkg
+from ..util import BaseCase
 
 
 class BootstrapBase(BaseCase):

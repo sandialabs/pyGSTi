@@ -1,12 +1,11 @@
-import scipy
 import numpy as np
-
-from ..util import BaseCase
+import scipy
 
 import pygsti
 import pygsti.construction.modelconstruction as mc
 import pygsti.modelmembers.operations as op
 import pygsti.tools.basistools as bt
+from ..util import BaseCase
 
 
 class ModelConstructionTester(BaseCase):

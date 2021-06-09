@@ -10,27 +10,20 @@ Defines the MapForwardSimulator calculator class
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import warnings as _warnings
-import numpy as _np
-import time as _time
-import itertools as _itertools
 import importlib as _importlib
 
-from ..tools import mpitools as _mpit
-from ..tools import slicetools as _slct
-from ..tools.matrixtools import _fas
-from ..tools import symplectic as _symp
-from ..tools import sharedmemtools as _smt
-from ..objects.profiler import DummyProfiler as _DummyProfiler
-from ..objects.label import Label as _Label
-from ..layouts.maplayout import MapCOPALayout as _MapCOPALayout
+import numpy as _np
+
+from .distforwardsim import DistributableForwardSimulator as _DistributableForwardSimulator
 from .forwardsim import ForwardSimulator as _ForwardSimulator
 from .forwardsim import _bytes_for_array_types
-from .distforwardsim import DistributableForwardSimulator as _DistributableForwardSimulator
-from ..layouts.distlayout import DistributableCOPALayout as _DistributableCOPALayout
-from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
-from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-
+from ..layouts.maplayout import MapCOPALayout as _MapCOPALayout
+from ..baseobjs.profiler import DummyProfiler as _DummyProfiler
+from ..baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
+from ..baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from ..tools import sharedmemtools as _smt
+from ..tools import slicetools as _slct
+from ..tools.matrixtools import _fas
 
 _dummy_profiler = _DummyProfiler()
 

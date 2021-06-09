@@ -12,47 +12,41 @@ Defines classes which represent gates, as well as supporting functions
 
 import collections as _collections
 import itertools as _itertools
-import numpy as _np
-import scipy as _scipy
-import scipy.sparse as _sps
 import warnings as _warnings
 
-from .. import objects as _objs
-from ..tools import basistools as _bt
-from ..tools import matrixtools as _mt
-from ..tools import optools as _gt
-from ..tools import slicetools as _slct
-from ..tools import listtools as _lt
-from ..tools import internalgates as _itgs
-from ..tools import mpitools as _mpit
-from ..tools.legacytools import deprecate as _deprecated_fn
-from ..models import model as _mdl
-from ..models import labeldicts as _ld
-from ..models import statespace as _statespace
-from ..models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
-from ..models.cloudnoisemodel import CloudNoiseModel as _CloudNoiseModel
-from ..modelmembers import operations as _op
-from ..modelmembers import states as _state
-from ..modelmembers import povms as _povm
-from ..modelmembers.operations import opfactory as _opfactory
-
-from ..forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
-from ..forwardsims.mapforwardsim import MapForwardSimulator as _MapFSim
-from ..forwardsims.termforwardsim import TermForwardSimulator as _TermFSim
-
-from ..objects import qubitgraph as _qgraph
-from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from ..objects.basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis
-from ..objects.label import Label as _Lbl
-from ..objects.polynomial import Polynomial as _Polynomial
-from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
-from ..objects.circuitstructure import GermFiducialPairPlaquette as _GermFiducialPairPlaquette
-from ..evotypes import Evotype as _Evotype
-from ..io import CircuitParser as _CircuitParser
+import numpy as _np
+import scipy as _scipy
 
 from . import circuitconstruction as _gsc
-from .modelconstruction import _basis_create_spam_vector as _basis_build_vector
 from .modelconstruction import _parameterization_from_errgendict
+from .. import baseobjs as _baseobjs
+from ..baseobjs import qubitgraph as _qgraph, statespace as _statespace
+from ..evotypes import Evotype as _Evotype
+from ..forwardsims.mapforwardsim import MapForwardSimulator as _MapFSim
+from ..forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
+from ..forwardsims.termforwardsim import TermForwardSimulator as _TermFSim
+from ..io import CircuitParser as _CircuitParser
+from ..modelmembers import operations as _op
+from ..modelmembers import povms as _povm
+from ..modelmembers import states as _state
+from ..modelmembers.operations import opfactory as _opfactory
+from ..models.cloudnoisemodel import CloudNoiseModel as _CloudNoiseModel
+from ..models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
+from ..circuits.circuit import Circuit as _Circuit
+from ..circuits.circuitstructure import GermFiducialPairPlaquette as _GermFiducialPairPlaquette, \
+    PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
+from ..baseobjs.basis import BuiltinBasis as _BuiltinBasis
+from ..baseobjs.label import Label as _Lbl
+from ..baseobjs.polynomial import Polynomial as _Polynomial
+from ..baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
+from ..baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from ..tools import basistools as _bt
+from ..tools import internalgates as _itgs
+from ..tools import listtools as _lt
+from ..tools import mpitools as _mpit
+from ..tools import optools as _gt
+from ..tools import slicetools as _slct
+from ..tools.legacytools import deprecate as _deprecated_fn
 
 RANK_TOL = 1e-9
 
@@ -129,7 +123,7 @@ def _nparams_xycnot_cloudnoise_model(num_qubits, geometry="line", max_idle_weigh
     printer = _VerbosityPrinter.create_printer(verbosity)
     printer.log("Computing parameters for a %d-qubit %s model" % (num_qubits, geometry))
 
-    qubitGraph = _objs.QubitGraph.common_graph(num_qubits, geometry, directed=True, all_directions=True)
+    qubitGraph = _baseobjs.QubitGraph.common_graph(num_qubits, geometry, directed=True, all_directions=True)
     #printer.log("Created qubit graph:\n"+str(qubitGraph))
 
     def idle_count_nparams(max_weight):
@@ -964,7 +958,7 @@ def create_cloud_crosstalk_model(num_qubits, gate_names, nonstd_gate_unitaries={
 def _onqubit(s, i_qubit):
     """ Takes `s`, a tuple of gate *names* and creates a Circuit
         where those names act on the `i_qubit`-th qubit """
-    return _objs.Circuit([_Lbl(nm, i_qubit) for nm in s], line_labels=(i_qubit,))  # set line labels in case s is empty
+    return _Circuit([_Lbl(nm, i_qubit) for nm in s], line_labels=(i_qubit,))  # set line labels in case s is empty
 
 
 def _find_amped_polynomials_for_syntheticidle(qubit_filter, idle_str, model, single_q_fiducials=None,
@@ -1167,7 +1161,7 @@ def _find_amped_polynomials_for_syntheticidle(qubit_filter, idle_str, model, sin
                 #print("DB: Rank %d: running itr=%d" % (comm.Get_rank(), itr))
 
                 printer.show_progress(loc_itr - 1, nLocIters, prefix='--- Finding amped-polys for idle: ')
-                prepFid = _objs.Circuit((), line_labels=idle_str.line_labels)
+                prepFid = _Circuit((), line_labels=idle_str.line_labels)
                 for i, el in enumerate(prep):
                     prepFid = prepFid + _onqubit(el, qubit_filter[i])
 
@@ -1184,7 +1178,7 @@ def _find_amped_polynomials_for_syntheticidle(qubit_filter, idle_str, model, sin
                         # if all are not the same or all are not different, skip
                         if not (all(cmp) or not any(cmp)): continue
 
-                    measFid = _objs.Circuit((), line_labels=idle_str.line_labels)
+                    measFid = _Circuit((), line_labels=idle_str.line_labels)
                     for i, el in enumerate(meas):
                         measFid = measFid + _onqubit(el, qubit_filter[i])
 
@@ -1568,7 +1562,7 @@ def _find_amped_polynomials_for_clifford_syntheticidle(qubit_filter, core_filter
         #        prep[ qubit_filter.index(core_ql) ] = prep_core[i]
         #    prep = tuple(prep)
 
-        prepFid = _objs.Circuit(())
+        prepFid = _Circuit(())
         for i, el in enumerate(prep):
             prepFid = prepFid + _onqubit(el, qubit_filter[i])
 
@@ -1582,7 +1576,7 @@ def _find_amped_polynomials_for_clifford_syntheticidle(qubit_filter, core_filter
         #        #    meas[ qubit_filter.index(core_ql) ] = meas_core[i]
         #        meas = tuple(meas)
 
-        measFid = _objs.Circuit(())
+        measFid = _Circuit(())
         for i, el in enumerate(meas):
             measFid = measFid + _onqubit(el, qubit_filter[i])
 
@@ -1778,7 +1772,7 @@ def _get_fidpairs_needed_to_access_amped_polynomials(qubit_filter, core_filter, 
                     prep[qubit_filter.index(core_ql)] = prep_core[i]
                 prep = tuple(prep)
 
-            prepFid = _objs.Circuit(())
+            prepFid = _Circuit(())
             for i, el in enumerate(prep):
                 prepFid = prepFid + _onqubit(el, qubit_filter[i])
 
@@ -1795,7 +1789,7 @@ def _get_fidpairs_needed_to_access_amped_polynomials(qubit_filter, core_filter, 
                         meas[qubit_filter.index(core_ql)] = meas_core[i]
                     meas = tuple(meas)
 
-                measFid = _objs.Circuit(())
+                measFid = _Circuit(())
                 for i, el in enumerate(meas):
                     measFid = measFid + _onqubit(el, qubit_filter[i])
                 #print("CONSIDER: ",prep,"-",meas)
@@ -1931,8 +1925,8 @@ def _tile_idle_fidpairs(qubit_labels, idle_gatename_fidpair_lists, max_idle_weig
                 merge_into_1q(prep_gates, prep_gatenames, qubit_labels[iQubit])
                 merge_into_1q(meas_gates, meas_gatenames, qubit_labels[iQubit])
 
-            final_fidpairs.append((_objs.Circuit(prep_gates, line_labels=qubit_labels),
-                                   _objs.Circuit(meas_gates, line_labels=qubit_labels)))
+            final_fidpairs.append((_Circuit(prep_gates, line_labels=qubit_labels),
+                                   _Circuit(meas_gates, line_labels=qubit_labels)))
 
     _lt.remove_duplicates_in_place(final_fidpairs)
     return final_fidpairs
@@ -2063,11 +2057,11 @@ def _tile_cloud_fidpairs(template_gatename_fidpair_lists, template_germpower, ma
                 merge_into(germStr, germStr_qubits, germ)
                 merge_into(germPowerStr, germPowerStr_qubits, germPower)
 
-            germs.append(_objs.Circuit(germStr, line_labels=qubit_labels))
-            sequences.append((_objs.Circuit(prepStr + germPowerStr + measStr, line_labels=qubit_labels),
+            germs.append(_Circuit(germStr, line_labels=qubit_labels))
+            sequences.append((_Circuit(prepStr + germPowerStr + measStr, line_labels=qubit_labels),
                               max_len, germs[-1],
-                              _objs.Circuit(prepStr, line_labels=qubit_labels),
-                              _objs.Circuit(measStr, line_labels=qubit_labels)))
+                              _Circuit(prepStr, line_labels=qubit_labels),
+                              _Circuit(measStr, line_labels=qubit_labels)))
             # circuit, max_len, germ, prepFidIndex, measFidIndex??
 
     # return a list of circuits (duplicates removed)
@@ -2105,7 +2099,7 @@ def _compute_reps_for_synthetic_idle(model, germ_str, nqubits, core_qubits):
     # Note: only works with one level of embedding...
     def extract_gate(g):
         """ Get the gate action as a dense gate on core_qubits """
-        if isinstance(g, _objs.EmbeddedOp):
+        if isinstance(g, _op.EmbeddedOp):
             assert(g.state_space.num_tensor_product_blocks == 1)  # 1 tensor product block
             assert(len(g.state_space.tensor_product_block_labels(0)) == nqubits)  # expected qubit count
             qubit_labels = g.state_space.tensor_product_block_labels(0)
@@ -2120,10 +2114,10 @@ def _compute_reps_for_synthetic_idle(model, germ_str, nqubits, core_qubits):
                 # embedded gate acts on entire core-qubit space:
                 return g.embedded_op
             else:
-                return _objs.EmbeddedOp(ss, g.targetLabels, g.embedded_op)
+                return _op.EmbeddedOp(ss, g.targetLabels, g.embedded_op)
 
-        elif isinstance(g, _objs.ComposedOp):
-            return _objs.ComposedOp([extract_gate(f) for f in g.factorops])
+        elif isinstance(g, _op.ComposedOp):
+            return _op.ComposedOp([extract_gate(f) for f in g.factorops])
         else:
             raise ValueError("Cannot extract core contrib from %s" % str(type(g)))
 
@@ -2878,10 +2872,10 @@ def create_cloudnoise_circuits(num_qubits, max_lengths, single_q_fiducials,
     printer = _VerbosityPrinter.create_printer(verbosity, comm)
     printer.log("Creating full model")
 
-    if isinstance(geometry, _objs.QubitGraph):
+    if isinstance(geometry, _baseobjs.QubitGraph):
         qubitGraph = geometry
     else:
-        qubitGraph = _objs.QubitGraph.common_graph(num_qubits, geometry, directed=False)
+        qubitGraph = _baseobjs.QubitGraph.common_graph(num_qubits, geometry, directed=False)
         printer.log("Created qubit graph:\n" + str(qubitGraph))
     all_qubit_labels = qubitGraph.node_names
 
@@ -2919,7 +2913,7 @@ def create_cloudnoise_circuits(num_qubits, max_lengths, single_q_fiducials,
     # for testing for synthetic idles - so no " terms"
 
     Np = model.num_params
-    idle_op_str = _objs.Circuit(idle_op_str, num_lines=num_qubits)
+    idle_op_str = _Circuit(idle_op_str, num_lines=num_qubits)
     prepLbl = _Lbl("rho0")
     effectLbls = [_Lbl("Mdefault_%s" % l) for l in model._effect_labels_for_povm('Mdefault')]
 
@@ -3000,7 +2994,7 @@ def create_cloudnoise_circuits(num_qubits, max_lengths, single_q_fiducials,
             assert((L, idle_op_str) not in plaquettes), "L-values should be different!"
             plaquettes[(L, idle_op_str)] = _GermFiducialPairPlaquette(idle_op_str, power, fidpairs, None, None)
 
-        return _objs.PlaquetteGridCircuitStructure(plaquettes, Ls, germList, "L", "germ", name=None)
+        return _PlaquetteGridCircuitStructure(plaquettes, Ls, germList, "L", "germ", name=None)
 
     #Compute "true-idle" fidpairs for checking synthetic idle errors for 1 & 2Q gates (HARDCODED OK?)
     # NOTE: this works when ideal gates are cliffords and Gi has same type of errors as gates...
@@ -3180,9 +3174,9 @@ def create_cloudnoise_circuits(num_qubits, max_lengths, single_q_fiducials,
                 template_edges.append((cloud_to_template_map[edge[0]],
                                        cloud_to_template_map[edge[1]]))
 
-            template_graph = _objs.QubitGraph(list(range(nQubits)),
-                                              initial_edges=template_edges,
-                                              directed=graph.directed)
+            template_graph = _baseobjs.QubitGraph(list(range(nQubits)),
+                                                  initial_edges=template_edges,
+                                                  directed=graph.directed)
             cloud_template = (template_glabels, template_graph, {})
             template_to_cloud_map = {t: c for c, t in cloud_to_template_map.items()}
             return cloud_template, template_to_cloud_map
@@ -3401,7 +3395,7 @@ def create_cloudnoise_circuits(num_qubits, max_lengths, single_q_fiducials,
             power = _gsc.repeat_count_with_max_length(serial_germ, L)
             plaquettes[(L, germ)] = _GermFiducialPairPlaquette(germ, power, fidpairs, None, None)
 
-    return _objs.PlaquetteGridCircuitStructure(plaquettes, Ls, germList, "L", "germ", name=None)
+    return _PlaquetteGridCircuitStructure(plaquettes, Ls, germList, "L", "germ", name=None)
 
 
 def _get_kcoverage_template_k2(n):
@@ -3763,8 +3757,8 @@ def _gatename_fidpair_list_to_fidpairs(gatename_fidpair_list):
             prepnames, measnames = gatenames
             prepStr.extend([_Lbl(name, iQubit) for name in prepnames])
             measStr.extend([_Lbl(name, iQubit) for name in measnames])
-        fidpair = (_objs.Circuit(prepStr, num_lines=nQubits),
-                   _objs.Circuit(measStr, num_lines=nQubits))
+        fidpair = (_Circuit(prepStr, num_lines=nQubits),
+                   _Circuit(measStr, num_lines=nQubits))
         fidpairs.append(fidpair)
     return fidpairs
 

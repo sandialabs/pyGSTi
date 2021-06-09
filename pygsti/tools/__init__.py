@@ -10,25 +10,25 @@ pyGSTi Tools Python Package
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-#Import the most important/useful routines of each module into
+from .basistools import *
+from .chi2fns import *
+from .hypothesis import *
+# Import the most important/useful routines of each module into
 # the package namespace
 from .jamiolkowski import *
-from .listtools import *
-from .matrixtools import *
-from .lindbladtools import *
-from .likelihoodfns import *
-from .chi2fns import *
-from .basistools import *
-from .optools import *
-from .slicetools import *
 from .legacytools import *
+from .likelihoodfns import *
+from .lindbladtools import *
+from .listtools import *
+from .matrixmod2 import *
+from .matrixtools import *
 from .mpitools import parallel_apply, mpi4py_comm
 from .mptools import starmap_with_kwargs
-from .symplectic import *
-from .matrixmod2 import *
-from .hypothesis import *
-from .opttools import *
 from .nameddict import NamedDict
-from .typeddict import TypedDict
+from .optools import *
+from .opttools import *
 from .pdftools import *
 from .rbtheory import *
+from .slicetools import *
+from .symplectic import *
+from .typeddict import TypedDict

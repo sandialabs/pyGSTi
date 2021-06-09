@@ -7,21 +7,19 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as _np
 import ast as _ast
-import warnings as _warnings
-import pickle as _pickle
-import os as _os
 import json as _json
+import os as _os
+import pickle as _pickle
+import warnings as _warnings
 
-# todo : update
-from . import analysis as _results
-from . import sample as _sample
-from . import dataset as _dataset
 from . import benchmarker as _benchmarker
+from . import dataset as _dataset
+# todo : update
+from . import sample as _sample
 from ... import io as _io
-from ...objects import circuit as _cir
-from ...objects import multidataset as _mds
+from ...circuits import circuit as _cir
+from ...datasets import multidataset as _mds
 
 
 #def load_benchmarking_data(basedir):

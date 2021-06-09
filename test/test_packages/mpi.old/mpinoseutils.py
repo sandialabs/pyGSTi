@@ -1,10 +1,10 @@
-import sys
 import contextlib
 import functools
 import inspect
+import sys
 
-from mpi4py import MPI
 import numpy as np
+from mpi4py import MPI
 
 __all__ = ['wait_for_turn', 'mprint', 'meq_', 'assert_eq_across_ranks',
            'mpitest']
@@ -124,7 +124,7 @@ class MpiWorkers:
 def _mpi_worker(addr):
     import importlib
     import zmq
-    from pickle import loads, dumps
+    from pickle import loads
 
     rank = MPI.COMM_WORLD.Get_rank()
     if rank == 0:
@@ -189,11 +189,9 @@ def mpitest(nprocs):
 
         @functools.wraps(func)
         def replacement_func(_return_status=False):
-            from pickle import dumps
 
             n = MPI.COMM_WORLD.Get_size()
             rank = MPI.COMM_WORLD.Get_rank()
-            import os
             if n == 1:
                 # spawn workers for module if not done already
                 mpi_workers = getattr(mod, 'mpi_workers', None)

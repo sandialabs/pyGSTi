@@ -12,6 +12,7 @@ The standard unitaries and gate names, used internal compilers and short-hand mo
 
 import numpy as _np
 import scipy.linalg as _spl
+
 from . import optools as _gts
 from . import symplectic as _symp
 

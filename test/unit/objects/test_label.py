@@ -1,10 +1,10 @@
 import pickle
 
-from ..util import BaseCase
-
-from pygsti.objects import Circuit
-from pygsti.io import jsoncodec
 from pygsti.objects.label import Label as L
+
+from pygsti.io import jsoncodec
+from pygsti.objects import Circuit
+from ..util import BaseCase
 
 
 def test_label_methods():
@@ -100,7 +100,7 @@ class LabelTester(BaseCase):
 
     def test_label_rep_evalulation(self):
         """ Make sure Label reps evaluate back to the correct Label """
-        from pygsti.objects import Label, CircuitLabel
+        from pygsti.objects import Label
         labels_to_test = []
         l = Label(('Gx', 0)); labels_to_test.append(l)
         l = Label('Gx', (0,)); labels_to_test.append(l)

@@ -10,9 +10,9 @@ pyGSTi Forward Simulators Python Package
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from .chpforwardsim import CHPForwardSimulator
 from .forwardsim import ForwardSimulator
-from .matrixforwardsim import SimpleMatrixForwardSimulator, MatrixForwardSimulator
 from .mapforwardsim import SimpleMapForwardSimulator, MapForwardSimulator
+from .matrixforwardsim import SimpleMatrixForwardSimulator, MatrixForwardSimulator
 from .termforwardsim import TermForwardSimulator
 from .weakforwardsim import WeakForwardSimulator
-from .chpforwardsim import CHPForwardSimulator

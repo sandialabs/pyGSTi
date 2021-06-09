@@ -12,13 +12,11 @@ The ComposedState class and supporting functionality.
 
 
 import numpy as _np
+
 from .state import State as _State
-from .densestate import DenseState as _DenseState
 from .staticstate import StaticState as _StaticState
-from .. import modelmember as _modelmember
+from .. import modelmember as _modelmember, term as _term
 from ..errorgencontainer import ErrorMapContainer as _ErrorMapContainer
-from ...evotypes import Evotype as _Evotype
-from ...objects import term as _term
 
 
 class ComposedState(_State):  # , _ErrorMapContainer

@@ -1,13 +1,13 @@
-import numpy as np
 import unittest
 
+import numpy as np
+from pygsti.objects.polynomial import Polynomial
+
+from pygsti.baseobjs.opcalc import slowopcalc
 from ..util import BaseCase
 
-from pygsti.objects.polynomial import Polynomial
-from pygsti.objects.opcalc import slowopcalc
-
 try:
-    from pygsti.objects.opcalc import fastopcalc
+    from pygsti.baseobjs.opcalc import fastopcalc
     _FASTOPCALC_LOADED = True
 except ImportError:
     _FASTOPCALC_LOADED = False

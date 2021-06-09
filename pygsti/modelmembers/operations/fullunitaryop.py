@@ -11,8 +11,9 @@ The FullUnitaryOp class and supporting functionality.
 #***************************************************************************************************
 
 import numpy as _np
-from .linearop import LinearOperator as _LinearOperator
+
 from .denseop import DenseOperator as _DenseUnitaryOperator
+from .linearop import LinearOperator as _LinearOperator
 
 
 class FullUnitaryOp(_DenseUnitaryOperator):

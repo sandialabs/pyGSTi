@@ -1,8 +1,7 @@
-from ..util import BaseCase
-from . import fixtures
-
-from pygsti.modelmembers.povms import UnconstrainedPOVM
 from pygsti.algorithms.contract import contract
+from pygsti.modelmembers.povms import UnconstrainedPOVM
+from . import fixtures
+from ..util import BaseCase
 
 
 class ContractFunctionBase(object):

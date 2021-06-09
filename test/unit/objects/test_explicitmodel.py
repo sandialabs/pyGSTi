@@ -1,10 +1,9 @@
 import numpy as np
 
-from ..util import BaseCase
-
-from pygsti.modelpacks.legacy import std1Q_XYI as std
-from pygsti.construction.modelconstruction import create_explicit_model, _create_operation
 import pygsti.models.explicitmodel as mdl
+from pygsti.construction.modelconstruction import create_explicit_model, _create_operation
+from pygsti.modelpacks.legacy import std1Q_XYI as std
+from ..util import BaseCase
 
 
 class ExplicitOpModelStrictAccessTester(BaseCase):

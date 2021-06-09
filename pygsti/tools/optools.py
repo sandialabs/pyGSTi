@@ -10,20 +10,20 @@ Utility functions operating on operation matrices
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import collections as _collections
+import warnings as _warnings
+
 import numpy as _np
 import scipy.linalg as _spl
 import scipy.sparse as _sps
 import scipy.sparse.linalg as _spsl
-import warnings as _warnings
-import collections as _collections
 
-from . import jamiolkowski as _jam
-from . import matrixtools as _mt
-from . import lindbladtools as _lt
 from . import basistools as _bt
-from ..objects.basis import Basis as _Basis, ExplicitBasis as _ExplicitBasis, DirectSumBasis as _DirectSumBasis
-from ..objects.label import Label as _Label
-
+from . import jamiolkowski as _jam
+from . import lindbladtools as _lt
+from . import matrixtools as _mt
+from ..baseobjs.basis import Basis as _Basis, ExplicitBasis as _ExplicitBasis, DirectSumBasis as _DirectSumBasis
+from ..baseobjs.label import Label as _Label
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 

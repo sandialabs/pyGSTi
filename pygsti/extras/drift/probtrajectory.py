@@ -8,19 +8,11 @@
 #***************************************************************************************************
 """Functions for Fourier analysis of equally spaced time-series data"""
 
-from . import signal as _sig
+import copy as _copy
+import time as _tm
 
 import numpy as _np
-import time as _tm
-import warnings as _warnings
-import copy as _copy
 from scipy.optimize import minimize as _minimize
-
-
-from scipy.fftpack import dct as _dct
-from scipy.fftpack import idct as _idct
-from scipy.fftpack import fft as _fft
-from scipy.fftpack import ifft as _ifft
 
 try:
     from astropy.stats import LombScargle as _LombScargle

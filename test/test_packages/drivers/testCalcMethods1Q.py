@@ -14,10 +14,9 @@ from pygsti.modelpacks.legacy import std1Q_XY
 from pygsti.objects import Label as L, Circuit
 from pygsti.io import json
 
-import sys
 import os
 
-from ..testutils import BaseTestCase, compare_files, temp_files, regenerate_references
+from ..testutils import BaseTestCase, compare_files, regenerate_references
 
 #Mimics a function that used to be in pyGSTi, replaced with create_cloudnoise_model_from_hops_and_weights
 def build_XYCNOT_cloudnoise_model(nQubits, geometry="line", cnot_edges=None,

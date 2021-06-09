@@ -10,10 +10,11 @@ Wildcard budget fitting routines
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as _np
 import pickle as _pickle
-from ..objects.wildcardbudget import update_circuit_probs as _update_circuit_probs
-from ..tools import sharedmemtools as _smt
+
+import numpy as _np
+
+from pygsti.objectivefns.wildcardbudget import update_circuit_probs as _update_circuit_probs
 from .optimize import minimize as _minimize
 
 

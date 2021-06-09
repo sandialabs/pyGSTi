@@ -4,7 +4,6 @@ mpl_logger = logging.getLogger('matplotlib')
 mpl_logger.setLevel(logging.WARNING)
 
 import unittest
-import os
 import sys
 import numpy as np
 import pickle
@@ -16,7 +15,7 @@ import pygsti.io.json as json
 import pygsti.io.msgpack as msgpack
 from pygsti.objects.label import CircuitLabel
 
-from ..testutils import BaseTestCase, compare_files, temp_files
+from ..testutils import BaseTestCase, temp_files
 
 
 class ObjDerivedFromStdType(list):

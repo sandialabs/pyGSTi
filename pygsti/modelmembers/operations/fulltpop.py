@@ -11,9 +11,10 @@ The FullTPOp class and supporting functionality.
 #***************************************************************************************************
 
 import numpy as _np
-from .linearop import LinearOperator as _LinearOperator
+
 from .denseop import DenseOperator as _DenseOperator
-from ...objects.protectedarray import ProtectedArray as _ProtectedArray
+from .linearop import LinearOperator as _LinearOperator
+from ...baseobjs.protectedarray import ProtectedArray as _ProtectedArray
 
 
 class FullTPOp(_DenseOperator):

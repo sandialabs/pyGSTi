@@ -1,9 +1,8 @@
 import numpy as np
 
-from ..util import BaseCase
-
-from pygsti.optimize import customlm as lm
 from pygsti.optimize import arraysinterface as _ari
+from pygsti.optimize import customlm as lm
+from ..util import BaseCase
 
 
 def f(x):

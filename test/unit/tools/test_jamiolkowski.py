@@ -1,16 +1,13 @@
-import os
 import numpy as np
 
-from ..util import BaseCase
-
-
-from pygsti.modelpacks.legacy import std1Q_XYI as std1Q
-from pygsti.construction.modelconstruction import _basis_create_operation
 import pygsti.tools.basistools as bt
+from pygsti.construction.modelconstruction import _basis_create_operation
+from pygsti.modelpacks.legacy import std1Q_XYI as std1Q
+from pygsti.models import ExplicitOpModel
+from pygsti.baseobjs import statespace
 from pygsti.objects import Basis
-from pygsti.models import ExplicitOpModel, statespace
-
 from pygsti.tools import jamiolkowski as j
+from ..util import BaseCase
 
 
 class JamiolkowskiBasisTester(BaseCase):

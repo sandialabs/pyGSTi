@@ -10,8 +10,8 @@ Utility functions related to Gram matrix construction.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from .. import construction as _construction
 from .core import gram_rank_and_eigenvalues as _gram_rank_and_evals
+from .. import construction as _construction
 
 
 ########################################################

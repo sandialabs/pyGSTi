@@ -10,14 +10,15 @@ Matrix related utility functions
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import functools as _functools
+import itertools as _itertools
+import warnings as _warnings
+
 import numpy as _np
 import scipy.linalg as _spl
 import scipy.optimize as _spo
 import scipy.sparse as _sps
 import scipy.sparse.linalg as _spsl
-import warnings as _warnings
-import itertools as _itertools
-import functools as _functools
 
 from .basistools import change_basis
 

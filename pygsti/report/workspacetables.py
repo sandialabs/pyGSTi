@@ -11,31 +11,27 @@ Classes corresponding to tables within a Workspace context.
 #***************************************************************************************************
 
 import warnings as _warnings
+
 import numpy as _np
-import scipy.sparse as _sps
 
-from .. import construction as _cnst
-from .. import tools as _tools
-from .. import objects as _objs
-
-from .. import models as _models
-from ..modelmembers import operations as _op
-from ..modelmembers import states as _state
-from ..modelmembers import povms as _povm
-
-from . import reportables as _reportables
-from .reportables import evaluate as _ev
-from ..objects.label import Label as _Lbl
-from ..objects.basis import DirectSumBasis as _DirectSumBasis
-from ..objects import objectivefns as _objfns
-from ..objects import MatrixForwardSimulator as _MatrixFSim
-from ..algorithms import gaugeopt as _gopt
-
-from .table import ReportTable as _ReportTable
-
-from .workspace import WorkspaceTable
-from . import workspaceplots as _wp
 from . import plothelpers as _ph
+from . import reportables as _reportables
+from . import workspaceplots as _wp
+from .reportables import evaluate as _ev
+from .table import ReportTable as _ReportTable
+from .workspace import WorkspaceTable
+from .reportableqty import ReportableQty as _ReportableQty, minimum as _rqty_minimum
+from .. import construction as _cnst
+from .. import models as _models
+from .. import baseobjs as _baseobjs
+from .. import tools as _tools
+from ..algorithms import gaugeopt as _gopt
+from ..modelmembers import operations as _op
+from ..modelmembers import povms as _povm
+from ..modelmembers import states as _state
+from ..objectivefns import objectivefns as _objfns
+from ..forwardsims import MatrixForwardSimulator as _MatrixFSim
+from ..circuits.circuit import Circuit as _Circuit
 
 
 class BlankTable(WorkspaceTable):
@@ -125,7 +121,7 @@ class SpamTable(WorkspaceTable):
     def _create(self, models, titles, display_as, confidence_region_info,
                 include_hs_vec):
 
-        if isinstance(models, _objs.Model):
+        if isinstance(models, _models.Model):
             models = [models]
 
         rhoLabels = list(models[0].preps.keys())  # use labels of 1st model
@@ -292,7 +288,7 @@ class SpamParametersTable(WorkspaceTable):
 
     def _create(self, models, titles, confidence_region_info):
 
-        if isinstance(models, _objs.Model):
+        if isinstance(models, _models.Model):
             models = [models]
         if titles is None:
             titles = [''] * len(models)
@@ -396,12 +392,12 @@ class GatesTable(WorkspaceTable):
 
     def _create(self, models, titles, display_as, confidence_region_info):
 
-        if isinstance(models, _objs.Model):
+        if isinstance(models, _models.Model):
             models = [models]
 
         opLabels = models[0].primitive_op_labels  # use labels of 1st model
         instLabels = list(models[0].instruments.keys())  # requires an explicit model!
-        assert(isinstance(models[0], _objs.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
+        assert(isinstance(models[0], _models.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
 
         if titles is None:
             titles = [''] * len(models)
@@ -456,7 +452,7 @@ class GatesTable(WorkspaceTable):
                 intervalVec = confidence_region_info.retrieve_profile_likelihood_confidence_intervals(
                     lbl, comp_lbl)[:, None]
 
-                if isinstance(per_model_ops[-1], _objs.FullDenseOp):
+                if isinstance(per_model_ops[-1], _op.FullDenseOp):
                     #then we know how to reshape into a matrix
                     op_dim = models[-1].dim
                     basis = models[-1].basis
@@ -559,11 +555,11 @@ class ChoiTable(WorkspaceTable):
                                         confidence_region_info, display)
 
     def _create(self, models, titles, confidence_region_info, display):
-        if isinstance(models, _objs.Model):
+        if isinstance(models, _models.Model):
             models = [models]
 
         opLabels = models[0].primitive_op_labels  # use labels of 1st model
-        assert(isinstance(models[0], _objs.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
+        assert(isinstance(models[0], _models.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
 
         if titles is None:
             titles = [''] * len(models)
@@ -710,7 +706,7 @@ class GaugeRobustModelTable(WorkspaceTable):
 
     def _create(self, model, target_model, display_as, confidence_region_info):
 
-        assert(isinstance(model, _objs.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
+        assert(isinstance(model, _models.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
         opLabels = model.primitive_op_labels  # use labels of 1st model
 
         colHeadings = ['Gate', 'M - I'] + ['FinvF(%s) - I' % str(lbl) for lbl in opLabels]
@@ -782,7 +778,7 @@ class GaugeRobustModelTable(WorkspaceTable):
                 else:
                     raise ValueError("Invalid 'display_as' argument: %s" % display_as)
             else:
-                row_data.append(_objs.reportableqty.ReportableQty(_np.nan))
+                row_data.append(_ReportableQty(_np.nan))
                 row_formatters.append('Normal')
 
             for j, lbl2 in enumerate(opLabels):
@@ -803,7 +799,7 @@ class GaugeRobustModelTable(WorkspaceTable):
                     else:
                         raise ValueError("Invalid 'display_as' argument: %s" % display_as)
                 else:
-                    row_data.append(_objs.reportableqty.ReportableQty(_np.nan))
+                    row_data.append(_ReportableQty(_np.nan))
                     row_formatters.append('Normal')
 
             table.add_row(row_data, row_formatters)
@@ -894,7 +890,7 @@ class GaugeRobustMetricTable(WorkspaceTable):
 
     def _create(self, model, target_model, metric, confidence_region_info):
 
-        assert(isinstance(model, _objs.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
+        assert(isinstance(model, _models.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
         opLabels = model.primitive_op_labels
 
         colHeadings = [''] + ['%s' % str(lbl) for lbl in opLabels]
@@ -934,7 +930,8 @@ class GaugeRobustMetricTable(WorkspaceTable):
             gate_mx = orig_model.operations[lbl].to_dense(on_space='HilbertSchmidt')
             target_gate_mx = target_model.operations[lbl].to_dense(on_space='HilbertSchmidt')
             Ugauge = _tools.compute_best_case_gauge_transform(gate_mx, target_gate_mx)
-            Ugg = _objs.FullGaugeGroupElement(_np.linalg.inv(Ugauge))  # transforms gates as Ugauge * gate * Ugauge_inv
+            Ugg = _models.gaugegrop.FullGaugeGroupElement(_np.linalg.inv(Ugauge))
+            # transforms gates as Ugauge * gate * Ugauge_inv
 
             mdl = orig_model.copy()
             mdl.transform_inplace(Ugg)
@@ -971,14 +968,14 @@ class GaugeRobustMetricTable(WorkspaceTable):
 
             for j, lbl2 in enumerate(opLabels):
                 if i > j:  # leave lower diagonal blank
-                    el = _objs.reportableqty.ReportableQty(_np.nan)
+                    el = _ReportableQty(_np.nan)
                 elif i == j:  # diagonal element
                     try:
                         el = _reportables.evaluate_opfn_by_name(
                             metric, mdl_in_best_gauge[i], target_model, lbl, confidence_region_info)
                     except Exception:
                         _warnings.warn("Error computing %s for %s op in gauge-robust metrics table!" % (metric, lbl))
-                        el = _objs.reportableqty.ReportableQty(_np.nan)
+                        el = _ReportableQty(_np.nan)
                 else:  # off-diagonal element
                     try:
                         el1 = _reportables.evaluate_opfn_by_name(
@@ -987,11 +984,11 @@ class GaugeRobustMetricTable(WorkspaceTable):
                         el2 = _reportables.evaluate_opfn_by_name(
                             metric, target_mdl_in_best_gauge[i], target_mdl_in_best_gauge[j], lbl,
                             confidence_region_info)
-                        el = _objs.reportableqty.minimum(el1, el2)
+                        el = _rqty_minimum(el1, el2)
                     except Exception:
                         _warnings.warn("Error computing %s for %s,%s ops in gauge-robust metrics table!" %
                                        (metric, lbl, lbl2))
-                        el = _objs.reportableqty.ReportableQty(_np.nan)
+                        el = _ReportableQty(_np.nan)
 
                 row_data.append(el)
                 row_formatters.append('Normal')
@@ -1191,7 +1188,7 @@ class GatesVsTargetTable(WorkspaceTable):
 
         opLabels = model.primitive_op_labels  # operation labels
         instLabels = list(model.instruments.keys())  # requires an explicit model!
-        assert(isinstance(model, _objs.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
+        assert(isinstance(model, _models.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
 
         colHeadings = ['Gate'] if (virtual_ops is None) else ['Gate or Germ']
         tooltips = ['Gate'] if (virtual_ops is None) else ['Gate or Germ']
@@ -1223,14 +1220,14 @@ class GatesVsTargetTable(WorkspaceTable):
             for disp in display:
                 if disp == "unmodeled":  # a special case for now
                     if wildcard:
-                        row_data.append(_objs.reportableqty.ReportableQty(
+                        row_data.append(_ReportableQty(
                             wildcard.budget_for(gl)))
                     continue  # Note: don't append anything if 'not wildcard'
 
                 #import time as _time #DEBUG
                 #tStart = _time.time() #DEBUG
                 if target_model is None:
-                    qty = _objs.reportableqty.ReportableQty(_np.nan)
+                    qty = _ReportableQty(_np.nan)
                 else:
                     qty = _reportables.evaluate_opfn_by_name(
                         disp, model, target_model, gl, confidence_region_info)
@@ -1249,12 +1246,11 @@ class GatesVsTargetTable(WorkspaceTable):
             for disp in display:
                 if disp == "unmodeled":  # a special case for now
                     if wildcard:
-                        row_data.append(_objs.reportableqty.ReportableQty(
-                            wildcard.budget_for(il)))
+                        row_data.append(_ReportableQty(wildcard.budget_for(il)))
                     continue  # Note: don't append anything if 'not wildcard'
 
                 if target_model is None:
-                    qty = _objs.reportableqty.ReportableQty(_np.nan)
+                    qty = _ReportableQty(_np.nan)
                 else:
                     qty = _reportables.evaluate_instrumentfn_by_name(
                         disp, model, target_model, il, confidence_region_info)
@@ -1329,7 +1325,7 @@ class SpamVsTargetTable(WorkspaceTable):
         prepTraceDists = [_ev(_reportables.Vec_tr_diff(model, target_model, l,
                                                        'prep'), confidence_region_info)
                           for l in prepLabels]
-        prepDiamondDists = [_objs.reportableqty.ReportableQty(_np.nan)] * len(prepLabels)
+        prepDiamondDists = [_ReportableQty(_np.nan)] * len(prepLabels)
         for rowData in zip(prepLabels, prepInfidelities, prepTraceDists,
                            prepDiamondDists):
             table.add_row(rowData, formatters)
@@ -1647,7 +1643,7 @@ class GaugeRobustErrgenTable(WorkspaceTable):
                                                      gen_type)
 
     def _create(self, model, target_model, confidence_region_info, gen_type):
-        assert(isinstance(model, _objs.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
+        assert(isinstance(model, _models.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
 
         colHeadings = ['Error rates', 'Value']
 
@@ -1823,7 +1819,7 @@ class NQubitErrgenTable(WorkspaceTable):
 
                     #Try to find good labels for these basis elements
                     # (so far, just try to match with "pp" basis els)
-                    ref_basis = _objs.BuiltinBasis("pp", gate.dim, sparse=sparse)
+                    ref_basis = _baseobjs.BuiltinBasis("pp", gate.dim, sparse=sparse)
                     basisLbls = {}
                     for bl1, mx in zip(basis.labels, basis.elements):
                         for bl2, mx2 in zip(ref_basis.labels, ref_basis.elements):
@@ -2452,7 +2448,7 @@ class GateEigenvalueTable(WorkspaceTable):
             #import time as _time #DEBUG
             #tStart = _time.time() #DEBUG
             fn = _reportables.GateEigenvalues if \
-                isinstance(gl, _objs.Label) or isinstance(gl, str) else \
+                isinstance(gl, _baseobjs.Label) or isinstance(gl, str) else \
                 _reportables.CircuitEigenvalues
             evals = _ev(fn(model, gl), confidence_region_info)
             #tm = _time.time() - tStart #DEBUG
@@ -2466,14 +2462,14 @@ class GateEigenvalueTable(WorkspaceTable):
             if target_model is not None:
                 #TODO: move this to a reportable qty to get error bars?
 
-                if isinstance(gl, _objs.Label) or isinstance(gl, str):
+                if isinstance(gl, _baseobjs.Label) or isinstance(gl, str):
                     # no error bars
                     target_evals = _np.linalg.eigvals(target_model.operations[gl].to_dense(on_space='HilbertSchmidt'))
                 else:
                     target_evals = _np.linalg.eigvals(target_model.sim.product(gl))  # no error bars
 
                 if any([(x in display) for x in ('rel', 'log-rel', 'relpolar')]):
-                    if isinstance(gl, _objs.Label) or isinstance(gl, str):
+                    if isinstance(gl, _baseobjs.Label) or isinstance(gl, str):
                         rel_evals = _ev(_reportables.Rel_gate_eigenvalues(model, target_model, gl),
                                         confidence_region_info)
                     else:
@@ -2538,7 +2534,7 @@ class GateEigenvalueTable(WorkspaceTable):
                 elif disp == "evdm":
                     if target_model is not None:
                         fn = _reportables.Eigenvalue_diamondnorm if \
-                            isinstance(gl, _objs.Label) or isinstance(gl, str) else \
+                            isinstance(gl, _baseobjs.Label) or isinstance(gl, str) else \
                             _reportables.Circuit_eigenvalue_diamondnorm
                         gidm = _ev(fn(model, target_model, gl), confidence_region_info)
                         row_data.append(gidm)
@@ -2547,7 +2543,7 @@ class GateEigenvalueTable(WorkspaceTable):
                 elif disp == "evinf":
                     if target_model is not None:
                         fn = _reportables.Eigenvalue_entanglement_infidelity if \
-                            isinstance(gl, _objs.Label) or isinstance(gl, str) else \
+                            isinstance(gl, _baseobjs.Label) or isinstance(gl, str) else \
                             _reportables.Circuit_eigenvalue_entanglement_infidelity
                         giinf = _ev(fn(model, target_model, gl), confidence_region_info)
                         row_data.append(giinf)
@@ -2583,7 +2579,7 @@ class GateEigenvalueTable(WorkspaceTable):
                 row_formatters = [None]
 
                 #FUTURE: use reportables to get instrument eigenvalues
-                evals = _objs.reportableqty.ReportableQty(_np.linalg.eigvals(comp.to_dense(on_space='HilbertSchmidt')))
+                evals = _ReportableQty(_np.linalg.eigvals(comp.to_dense(on_space='HilbertSchmidt')))
                 evals = evals.reshape(evals.size, 1)
 
                 if target_model is not None:
@@ -2937,7 +2933,7 @@ class CircuitTable(WorkspaceTable):
 
         if len(circuit_lists) == 0:
             circuit_lists = [[]]
-        elif isinstance(circuit_lists[0], _objs.Circuit) or \
+        elif isinstance(circuit_lists[0], _Circuit) or \
                 (isinstance(circuit_lists[0], tuple) and isinstance(circuit_lists[0][0], str)):
             circuit_lists = [circuit_lists]
 
@@ -3176,7 +3172,7 @@ class GatesSingleMetricTable(WorkspaceTable):
                 row_data = [gl]
                 for mdl, gsTarget in zip(models, target_models):
                     if mdl is None or gsTarget is None:
-                        qty = _objs.reportableqty.ReportableQty(_np.nan)
+                        qty = _ReportableQty(_np.nan)
                     else:
                         qty = _reportables.evaluate_opfn_by_name(
                             metric, mdl, gsTarget, gl, confidence_region_info)
@@ -3187,7 +3183,7 @@ class GatesSingleMetricTable(WorkspaceTable):
                 row_data = [rowtitle]
                 for mdl, gsTarget in zip(gsList, tgsList):
                     if mdl is None or gsTarget is None:
-                        qty = _objs.reportableqty.ReportableQty(_np.nan)
+                        qty = _ReportableQty(_np.nan)
                     else:
                         qty = _reportables.evaluate_opfn_by_name(
                             metric, mdl, gsTarget, op_label, confidence_region_info)

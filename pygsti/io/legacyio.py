@@ -10,14 +10,13 @@ Functions for allowing old-vesion objects to unpickle load.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import sys as _sys
-import numpy as _np
 import numbers as _numbers
-from types import ModuleType as _ModuleType
+import sys as _sys
 from contextlib import contextmanager as _contextmanager
+from types import ModuleType as _ModuleType
 
 from .. import objects as _objs
-from ..objects import circuit as _circuit
+from ..circuits import circuit as _circuit
 from ..objects.replib import slowreplib as _slow
 
 
@@ -271,10 +270,10 @@ def enable_old_object_unpickling(old_version="0.9.6"):
         #_objs.basis.saved_Basis = _objs.basis.Basis
         #_objs.basis.Basis = dummy_Basis
         _objs.basis.Basis.__setstate__ = Basis_setstate
-        _objs.circuit.Circuit.__setstate__ = Circuit_setstate
+        pygsti.circuits.circuit.Circuit.__setstate__ = Circuit_setstate
         _objs.labeldicts.StateSpaceLabels.__setstate__ = StateSpaceLabels_setstate
-        _objs.circuit.CompressedCircuit.saved_expand = _objs.circuit.CompressedCircuit.expand
-        _objs.circuit.CompressedCircuit.expand = Hack_CompressedCircuit_expand
+        pygsti.circuits.circuit.CompressedCircuit.saved_expand = pygsti.circuits.circuit.CompressedCircuit.expand
+        pygsti.circuits.circuit.CompressedCircuit.expand = Hack_CompressedCircuit_expand
         _objs.spamvec.SPAMVec.__setstate__ = SPAMVec_setstate
 
     if old_version < totup("0.9.9"):
@@ -299,9 +298,9 @@ def enable_old_object_unpickling(old_version="0.9.6"):
         # Compatibility with refactored `baseobjs` API
         _sys.modules['pygsti.baseobjs.smartcache'] = _objs.smartcache
         _sys.modules['pygsti.baseobjs.verbosityprinter'] = _objs.verbosityprinter
-        _sys.modules['pygsti.baseobjs.profiler'] = _objs.profiler
+        _sys.modules['pygsti.baseobjs.profiler'] = pygsti.baseobjs.profiler
         _sys.modules['pygsti.baseobjs.protectedarray'] = _objs.protectedarray
-        _sys.modules['pygsti.baseobjs.objectivefns'] = _objs.objectivefns
+        _sys.modules['pygsti.baseobjs.objectivefns'] = pygsti.objectivefns.objectivefns
         _sys.modules['pygsti.baseobjs.basis'] = _objs.basis
         _sys.modules['pygsti.baseobjs.label'] = _objs.label
 
@@ -359,8 +358,8 @@ def enable_old_object_unpickling(old_version="0.9.6"):
         delattr(_objs.labeldicts.StateSpaceLabels, '__setstate__')
         if hasattr(_objs.Circuit, '__setstate__'):  # b/c above block may have already deleted this
             delattr(_objs.Circuit, '__setstate__')
-        _objs.circuit.CompressedCircuit.expand = _objs.circuit.CompressedCircuit.saved_expand
-        delattr(_objs.circuit.CompressedCircuit, 'saved_expand')
+        pygsti.circuits.circuit.CompressedCircuit.expand = pygsti.circuits.circuit.CompressedCircuit.saved_expand
+        delattr(pygsti.circuits.circuit.CompressedCircuit, 'saved_expand')
         delattr(_objs.spamvec.SPAMVec, '__setstate__')
 
     if old_version < totup("0.9.9"):

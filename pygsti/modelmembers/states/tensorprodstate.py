@@ -11,16 +11,16 @@ The TensorProductState class and supporting functionality.
 #***************************************************************************************************
 
 
-import numpy as _np
-import itertools as _itertools
 import functools as _functools
+import itertools as _itertools
+
+import numpy as _np
 
 from .state import State as _State
-from .. import modelmember as _modelmember
-from ...models import statespace as _statespace
-from ...objects import term as _term
-from ...tools import matrixtools as _mt
+from .. import modelmember as _modelmember, term as _term
+from ...baseobjs import statespace as _statespace
 from ...tools import listtools as _lt
+from ...tools import matrixtools as _mt
 
 
 class TensorProductState(_State):

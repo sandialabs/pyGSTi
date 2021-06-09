@@ -1,13 +1,15 @@
 import collections as _collections
 import itertools as _itertools
+
 import numpy as _np
 import scipy as _scipy
 import scipy.sparse as _sps
 
 import pygsti
+import pygsti.objects as _objs
 from pygsti.modelpacks.legacy import std1Q_XY
 from pygsti.modelpacks.legacy import std2Q_XYICNOT
-import pygsti.objects as _objs
+
 
 class QubitGraph(object):
     """ Graph data structure """

@@ -10,38 +10,32 @@ Report generation functions.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import pickle as _pickle
+import collections as _collections
 import os as _os
 import time as _time
-import collections as _collections
 import warnings as _warnings
 import zipfile as _zipfile
+
 import numpy as _np
 
-from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from ..objects import DataComparator as _DataComparator
-from ..objects import objectivefns as _objfns
-from ..tools import timed_block as _timed_block
-
-from ..tools.mpitools import distribute_indices as _distribute_indices
-from ..tools.legacytools import deprecate as _deprecated_fn
-
-from .. import tools as _tools
-from .. import objects as _objs
-from .. import _version
-
-from . import workspace as _ws
+from . import Report as _Report
 from . import autotitle as _autotitle
 from . import merge_helpers as _merge
 from . import reportables as _reportables
-from . import Report as _Report
 from . import section as _section
-from .notebook import Notebook as _Notebook
-from ..objects.label import Label as _Lbl
+from . import workspace as _ws
+from .. import _version
+from .. import tools as _tools
+from ..models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
 from ..modelpacks import RBModelPack as _RBModelPack
-from ..objects.circuitlist import CircuitList as _CircuitList
-from ..objects.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
-from ..models.statespace import StateSpace as _StateSpace
+from pygsti.baseobjs.statespace import StateSpace as _StateSpace
+from ..objectivefns import objectivefns as _objfns
+from ..circuits.circuit import Circuit as _Circuit
+from ..circuits.circuitlist import CircuitList as _CircuitList
+from ..circuits.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
+from ..baseobjs.label import Label as _Lbl
+from ..baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from ..tools.legacytools import deprecate as _deprecated_fn
 
 #maybe import these from drivers.longsequence so they stay synced?
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]  # ".wildcard" (not a separate estimate anymore)
@@ -478,7 +472,7 @@ def _construct_idtresults(idt_idle_op, idt_pauli_dicts, gst_results_dict, printe
         return {}
 
     idt_results_dict = {}
-    GiStr = _objs.Circuit((idt_idle_op,))
+    GiStr = _Circuit((idt_idle_op,))
 
     from ..extras import idletomography as _idt
     autodict = bool(idt_pauli_dicts == "auto")
@@ -1049,7 +1043,7 @@ def find_std_clifford_compilation(model, verbosity=0):
         The Clifford compilation dictionary (if one can be found).
     """
     printer = _VerbosityPrinter.create_printer(verbosity)
-    if not isinstance(model, _objs.ExplicitOpModel):
+    if not isinstance(model, _ExplicitOpModel):
         return None  # only match explicit models
 
     import importlib
@@ -1590,7 +1584,6 @@ def create_drift_report(results, title='auto', ws=None, verbosity=1):
     Report : A constructed report object
     """
     from ..protocols import StabilityAnalysisResults as _StabilityAnalysisResults
-    from ..extras.drift.stabilityanalyzer import StabilityAnalyzer
     from ..extras.drift import driftreport
     assert(isinstance(results, _StabilityAnalysisResults)), \
         "Support for multiple results as a Dict is not yet included!"

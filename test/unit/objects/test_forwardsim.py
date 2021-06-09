@@ -1,15 +1,15 @@
 # XXX rewrite or remove
 
-import numpy as np
 from unittest import mock
 
-from ..util import BaseCase
+import numpy as np
 
 import pygsti.construction as pc
-from pygsti.models import ExplicitOpModel
-from pygsti.objects import Circuit, Label as L
 from pygsti.forwardsims.forwardsim import ForwardSimulator
 from pygsti.forwardsims.mapforwardsim import MapForwardSimulator
+from pygsti.models import ExplicitOpModel
+from pygsti.objects import Circuit, Label as L
+from ..util import BaseCase
 
 
 def Ls(*args):

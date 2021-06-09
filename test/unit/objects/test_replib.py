@@ -1,9 +1,9 @@
-import numpy as np
 import unittest
-from ..util import BaseCase
 
-from pygsti.modelpacks.legacy import std1Q_XYI as std
+import numpy as np
+
 from pygsti.objects.replib import slowreplib
+from ..util import BaseCase
 
 try:
     from pygsti.objects.replib import fastreplib

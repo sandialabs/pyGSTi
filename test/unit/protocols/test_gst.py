@@ -1,15 +1,14 @@
-from ..util import BaseCase
-
-from pygsti.modelpacks.legacy import std1Q_XYI, std2Q_XYICNOT
+from pygsti.construction import simulate_data
 from pygsti.modelpacks import smq1Q_XYI
+from pygsti.modelpacks.legacy import std1Q_XYI, std2Q_XYICNOT
+from pygsti.objectivefns.objectivefns import PoissonPicDeltaLogLFunction
 from pygsti.objects import TrivialGaugeGroup, FreqWeightedChi2Function
-from pygsti.objects.objectivefns import PoissonPicDeltaLogLFunction
-from pygsti.protocols import gst
-from pygsti.protocols.protocol import ProtocolData, Protocol
-from pygsti.protocols.estimate import Estimate
-from pygsti.construction import simulate_data, create_lsgst_circuits
-from pygsti.tools import two_delta_logl_nsigma, two_delta_logl
 from pygsti.optimize.customlm import CustomLMOptimizer
+from pygsti.protocols import gst
+from pygsti.protocols.estimate import Estimate
+from pygsti.protocols.protocol import ProtocolData, Protocol
+from pygsti.tools import two_delta_logl
+from ..util import BaseCase
 
 
 class GSTUtilTester(BaseCase):

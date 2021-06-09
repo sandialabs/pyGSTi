@@ -15,18 +15,19 @@ Named quantities as well as their confidence-region error bars are
  used primarily in reports, so we refer to these quantities as
  "reportables".
 """
-import numpy as _np
-import scipy.linalg as _spl
+import pkgutil
 import warnings as _warnings
 
-from .. import tools as _tools
-from .. import algorithms as _alg
-from ..objects.basis import Basis as _Basis, DirectSumBasis as _DirectSumBasis, TensorProdBasis as _TensorProdBasis
-from ..objects.label import Label as _Lbl
-from ..objects.reportableqty import ReportableQty as _ReportableQty
-from ..objects import modelfunction as _modf
+import numpy as _np
+import scipy.linalg as _spl
 
-import pkgutil
+from pygsti.report.reportableqty import ReportableQty as _ReportableQty
+from . import modelfunction as _modf
+from .. import algorithms as _alg
+from .. import tools as _tools
+from ..baseobjs.basis import Basis as _Basis, DirectSumBasis as _DirectSumBasis
+from ..baseobjs.label import Label as _Lbl
+
 _CVXPY_AVAILABLE = pkgutil.find_loader('cvxpy') is not None
 
 FINITE_DIFF_EPS = 1e-7

@@ -1,10 +1,9 @@
 # XXX rewrite and optimize
-from ..util import BaseCase
-from . import fixtures
-
-from pygsti.objects import TPGaugeGroup
 import pygsti.algorithms as alg
 import pygsti.algorithms.gaugeopt as go
+from pygsti.objects import TPGaugeGroup
+from . import fixtures
+from ..util import BaseCase
 
 
 class GaugeOptMethodBase(object):

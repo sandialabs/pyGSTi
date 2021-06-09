@@ -9,23 +9,17 @@ Defines the Factory class
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
-import collections as _collections
 import numpy as _np
-import warnings as _warnings
 
 from .staticunitaryop import StaticUnitaryOp as _StaticUnitaryOp
 from .embeddedop import EmbeddedOp as _EmbeddedOp
 from .composedop import ComposedOp as _ComposedOp
-from .staticcliffordop import StaticCliffordOp
 
 from .. import modelmember as _gm
 from .. import instruments as _instrument
 from .. import povms as _povm
-from ...objects.label import Label as _Lbl
-from ...tools import optools as _gt
-from ...tools import basistools as _bt
-from ...tools import matrixtools as _mt
-from ...models import statespace as _statespace
+from ...baseobjs.label import Label as _Lbl
+from ...baseobjs import statespace as _statespace
 from ...evotypes import Evotype as _Evotype
 
 

@@ -11,12 +11,8 @@ State representations for "stabilizer_slow" evolution type.
 #***************************************************************************************************
 
 
-import numpy as _np
-import functools as _functools
-
 from .. import basereps as _basereps
-from ...objects import stabilizer as _stabilizer
-from ...models.statespace import StateSpace as _StateSpace
+from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 
 
 def _update_chp_op(chp_op, old_to_new_qubit_index):

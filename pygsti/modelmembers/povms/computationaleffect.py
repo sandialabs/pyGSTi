@@ -11,16 +11,17 @@ The ComputationalBasisPOVMEffect class and supporting functionality.
 #***************************************************************************************************
 
 
-import numpy as _np
-import itertools as _itertools
 import functools as _functools
+import itertools as _itertools
+
+import numpy as _np
 
 from .effect import POVMEffect as _POVMEffect
+from .. import term as _term
 from ...evotypes import Evotype as _Evotype
-from ...objects import term as _term
-from ...objects.polynomial import Polynomial as _Polynomial
-from ...models import statespace as _statespace
-from ...objects.basis import Basis as _Basis
+from ...baseobjs import statespace as _statespace
+from ...baseobjs.basis import Basis as _Basis
+from ...baseobjs.polynomial import Polynomial as _Polynomial
 
 try:
     from ...tools import fastcalc as _fastcalc

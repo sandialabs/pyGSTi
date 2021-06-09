@@ -10,17 +10,14 @@ A object representing the indexing into a (flat) array of circuit outcome probab
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as _np
 import collections as _collections
-import itertools as _it
 import copy as _copy
-from functools import reduce as _reduce
-from operator import add as _add
+import itertools as _it
 
-from ..objects.circuitlist import CircuitList as _CircuitList
-from ..objects.label import Label as _Label
-from ..objects.circuit import Circuit as _Circuit
-from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
+import numpy as _np
+
+from ..circuits.circuitlist import CircuitList as _CircuitList
+from ..baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from ..tools import listtools as _lt
 from ..tools import slicetools as _slct
 
@@ -100,6 +97,7 @@ class CircuitOutcomeProbabilityArrayLayout(object):
 
     @classmethod
     def _compute_unique_circuits(cls, circuits):
+        from ..circuits.circuit import Circuit as _Circuit
         first_copy = _collections.OrderedDict(); to_unique = {}
         nUnique = 0
         for i, c in enumerate(circuits):

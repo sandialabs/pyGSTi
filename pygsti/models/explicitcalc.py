@@ -11,14 +11,14 @@ Defines the ExplicitOpModelCalc class and supporting functionality.
 #***************************************************************************************************
 
 
-import numpy as _np
-import itertools as _itertools
 import collections as _collections
+import itertools as _itertools
 import warnings as _warnings
+
+import numpy as _np
 
 from ..tools import basisconstructors as _bc
 from ..tools import matrixtools as _mt
-
 
 # Tolerace for matrix_rank when finding rank of a *normalized* projection
 # matrix.  This is a legitimate tolerace since a normalized projection matrix

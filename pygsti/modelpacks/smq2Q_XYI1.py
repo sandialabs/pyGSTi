@@ -13,8 +13,6 @@ Variables for working with the a model containing Idle, X(pi/2) and Y(pi/2) gate
 #***************************************************************************************************
 
 from collections import OrderedDict
-from pygsti.construction import circuitconstruction as _strc
-from pygsti.construction import modelconstruction as _setc
 
 from pygsti.modelpacks._modelpack import GSTModelPack, RBModelPack
 

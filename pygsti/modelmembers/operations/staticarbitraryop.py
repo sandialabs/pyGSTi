@@ -10,8 +10,6 @@ The StaticArbitraryOp class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as _np
-from .linearop import LinearOperator as _LinearOperator
 from .denseop import DenseOperator as _DenseOperator
 
 

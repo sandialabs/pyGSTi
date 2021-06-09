@@ -10,6 +10,6 @@ A pure python (and thus slower) stabilizer-state, evolution type.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from .statereps import *
-from .opreps import *
 from .effectreps import *
+from .opreps import *
+from .statereps import *

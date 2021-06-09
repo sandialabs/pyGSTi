@@ -1,12 +1,9 @@
 import numpy as np
-import pickle
 
-from ..util import BaseCase
-
-from pygsti.modelpacks.legacy import std1Q_XYI as std
-
-from pygsti.objects import FullGaugeGroupElement
 from pygsti.modelmembers import instruments as inst
+from pygsti.modelpacks.legacy import std1Q_XYI as std
+from pygsti.objects import FullGaugeGroupElement
+from ..util import BaseCase
 
 
 class InstrumentMethodBase(object):

@@ -3,11 +3,11 @@ Note that the resulting source code may require minor adjustment and reformattin
 """
 
 import argparse
-import importlib
-from pprint import pformat
-import astor
 import ast as _ast
+import importlib
 from functools import lru_cache
+
+import astor
 
 from pygsti.objects import Circuit
 

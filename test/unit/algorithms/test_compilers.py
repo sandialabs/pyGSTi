@@ -1,10 +1,9 @@
 import numpy as np
 
-from ..util import BaseCase, Namespace
-
+from pygsti.algorithms import compilers
 from pygsti.objects import Circuit, ProcessorSpec, Label
 from pygsti.tools import symplectic
-from pygsti.algorithms import compilers
+from ..util import BaseCase, Namespace
 
 ## Immutable test fixture data
 fixture_1Q = Namespace(

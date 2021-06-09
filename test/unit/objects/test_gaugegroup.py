@@ -1,10 +1,9 @@
 import numpy as np
 
-from ..util import BaseCase
-
-from pygsti.objects import gaugegroup as ggrp
 from pygsti.modelmembers import operations as op
-from pygsti.models.statespace import QubitSpace
+from pygsti.models import gaugegroup as ggrp
+from pygsti.baseobjs.statespace import QubitSpace
+from ..util import BaseCase
 
 
 class GaugeGroupBase(object):

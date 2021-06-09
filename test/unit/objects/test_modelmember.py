@@ -1,9 +1,8 @@
 import numpy as np
 
-from ..util import BaseCase
-
 from pygsti.modelmembers import modelmember as mm
-from pygsti.models.statespace import StateSpace
+from pygsti.baseobjs.statespace import StateSpace
+from ..util import BaseCase
 
 
 class ModelMemberUtilTester(BaseCase):

@@ -11,6 +11,7 @@ The POVMEffect class and supporting functionality.
 #***************************************************************************************************
 
 import numpy as _np
+
 from .. import modelmember as _modelmember
 from ...tools import optools as _ot
 

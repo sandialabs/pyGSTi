@@ -11,16 +11,12 @@ Utility functions for working with Basis objects
 #***************************************************************************************************
 
 from functools import partial
-from itertools import product
-
-import numbers as _numbers
-import collections as _collections
 
 import numpy as _np
 
-# from ..objects.basis import Basis, BuiltinBasis, DirectSumBasis
-from ..objects import basis as _basis
 from .basisconstructors import _basis_constructor_dict
+# from ..baseobjs.basis import Basis, BuiltinBasis, DirectSumBasis
+from ..baseobjs import basis as _basis
 
 
 def basis_matrices(name_or_basis, dim, sparse=False):

@@ -1,10 +1,8 @@
-from ..util import BaseCase
-
-from pygsti.objects import Circuit, Label
-from pygsti.modelpacks.legacy import std1Q_XYI as std
-
 import pygsti.construction.circuitconstruction as cc
 import pygsti.construction.datasetconstruction as dc
+from pygsti.modelpacks.legacy import std1Q_XYI as std
+from pygsti.objects import Circuit, Label
+from ..util import BaseCase
 
 
 class CircuitConstructionTester(BaseCase):

@@ -1,15 +1,13 @@
-from ..util import BaseCase, with_temp_path
-from . import fixtures as pkg
-
 from io import BytesIO
-from pygsti import io
+
 import pygsti.construction as pc
-from pygsti.modelpacks.legacy import std1Q_XYI as std
-from pygsti.modelpacks.legacy import std2Q_XYICNOT as std2Q
-from pygsti.objects import DataSet, UnitaryGaugeGroup, TrivialGaugeGroup
-from pygsti.modelmembers import operations as operation
-from pygsti.forwardsims import mapforwardsim
+from pygsti import io
 from pygsti.drivers import longsequence as ls
+from pygsti.forwardsims import mapforwardsim
+from pygsti.modelmembers import operations as operation
+from pygsti.objects import UnitaryGaugeGroup
+from . import fixtures as pkg
+from ..util import BaseCase, with_temp_path
 
 
 # TODO optimize everything

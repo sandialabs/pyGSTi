@@ -11,25 +11,15 @@ End-to-end functions for performing long-sequence GST
 #***************************************************************************************************
 
 import os as _os
-import warnings as _warnings
-import numpy as _np
-import time as _time
-import collections as _collections
 import pickle as _pickle
-import scipy.optimize as _spo
-from scipy.stats import chi2 as _chi2
 
-from .. import protocols as _proto
-from .. import algorithms as _alg
 from .. import construction as _construction
-from .. import objects as _objs
 from .. import io as _io
-from .. import tools as _tools
-from ..objects import wildcardbudget as _wild
-from ..objects.profiler import DummyProfiler as _DummyProfiler
-from ..objects import objectivefns as _objfns
-from ..objects.advancedoptions import GSTAdvancedOptions as _GSTAdvancedOptions
+from .. import baseobjs as _baseobjs
+from .. import protocols as _proto
 from ..forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
+from ..objectivefns import objectivefns as _objfns
+from ..baseobjs.advancedoptions import GSTAdvancedOptions as _GSTAdvancedOptions
 
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]
 DEFAULT_BAD_FIT_THRESHOLD = 2.0
@@ -128,7 +118,7 @@ def run_model_test(model_filename_or_object,
     -------
     Results
     """
-    printer = _objs.VerbosityPrinter.create_printer(verbosity, comm)
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm)
     ds = _load_dataset(data_filename_or_set, comm, printer)
     advanced_options = _GSTAdvancedOptions(advanced_options or {})
 
@@ -239,7 +229,7 @@ def run_linear_gst(data_filename_or_set, target_model_filename_or_object,
     -------
     Results
     """
-    printer = _objs.VerbosityPrinter.create_printer(verbosity, comm)
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm)
     advanced_options = _GSTAdvancedOptions(advanced_options or {})
     ds = _load_dataset(data_filename_or_set, comm, printer)
 
@@ -405,7 +395,7 @@ def run_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
     -------
     Results
     """
-    printer = _objs.VerbosityPrinter.create_printer(verbosity, comm)
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm)
     advanced_options = _GSTAdvancedOptions(advanced_options or {})
     ds = _load_dataset(data_filename_or_set, comm, printer)
 
@@ -519,7 +509,7 @@ def run_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_ob
     -------
     Results
     """
-    printer = _objs.VerbosityPrinter.create_printer(verbosity, comm)
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm)
     advanced_options = advanced_options or {}
 
     exp_design = _proto.GateSetTomographyDesign(target_model_filename_or_object, lsgst_lists)
@@ -665,7 +655,7 @@ def run_stdpractice_gst(data_filename_or_set, target_model_filename_or_object,
     -------
     Results
     """
-    printer = _objs.VerbosityPrinter.create_printer(verbosity, comm)
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm)
     if advanced_options and 'all' in advanced_options and len(advanced_options) == 1:
         advanced_options = advanced_options['all']  # backward compatibility
     advanced_options = _GSTAdvancedOptions(advanced_options or {})
@@ -706,7 +696,7 @@ def _load_model(model_filename_or_object):
 
 def _load_dataset(data_filename_or_set, comm, verbosity):
     """Loads a DataSet from the data_filename_or_set argument of functions in this module."""
-    printer = _objs.VerbosityPrinter.create_printer(verbosity, comm)
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm)
     if isinstance(data_filename_or_set, str):
         if comm is None or comm.Get_rank() == 0:
             if _os.path.splitext(data_filename_or_set)[1] == ".pkl":

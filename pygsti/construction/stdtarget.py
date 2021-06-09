@@ -12,18 +12,19 @@ Helper functions for standard model modules.
 
 # XXX this module should probably be deprecated with the new `pygsti.modelpacks` API
 
-import time as _time
+import gzip as _gzip
+import itertools as _itertools
 import os as _os
 import pickle as _pickle
 import sys as _sys
-import gzip as _gzip
+import time as _time
+
 import numpy as _np
-import itertools as _itertools
 
 from . import stdlists as _stdlists
-from .. import objects as _objs
-from ..tools import mpitools as _mpit
+from ..baseobjs import polynomial as _polynomial
 from ..forwardsims.termforwardsim import TermForwardSimulator as _TermFSim
+from ..tools import mpitools as _mpit
 
 
 def _get_cachefile_names(std_module, param_type, simulator, py_version):
@@ -292,7 +293,7 @@ def _load_calccache(key_fn, val_fn):
     with _gzip.open(key_fn, "rb") as f:
         keys = _pickle.load(f)
     npfile = _np.load(val_fn)
-    vals = _objs.polynomial.bulk_load_compact_polynomials(npfile['vtape'], npfile['ctape'], keep_compact=True)
+    vals = _polynomial.bulk_load_compact_polynomials(npfile['vtape'], npfile['ctape'], keep_compact=True)
     calc_cache = {k: v for k, v in zip(keys, vals)}
     #print("Done in %.1fs" % (_time.time()-t0))
     return calc_cache

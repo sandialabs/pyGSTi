@@ -1,9 +1,6 @@
-
-
-import numpy as _np
 from .linearop import LinearOperator as _LinearOperator
 from ...evotypes import Evotype as _Evotype
-from ...models import statespace as _statespace
+from ...baseobjs import statespace as _statespace
 
 
 class StaticCliffordOp(_LinearOperator):

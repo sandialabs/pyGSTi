@@ -12,8 +12,9 @@ Utility functions relevant to Lindblad forms and projections
 
 import numpy as _np
 import scipy.sparse as _sps
-from .basistools import basis_matrices
+
 from . import matrixtools as _mt
+from .basistools import basis_matrices
 
 
 def hamiltonian_to_lindbladian(hamiltonian, sparse=False):

@@ -8,22 +8,26 @@
 #***************************************************************************************************
 """ Core Idle Tomography routines """
 
-import numpy as _np
+import collections as _collections
 import itertools as _itertools
 import time as _time
-import collections as _collections
 import warnings as _warnings
 
-from ... import construction as _cnst
-from ... import objects as _objs
+import numpy as _np
+
+from . import idttools as _idttools
+from . import pauliobjs as _pobjs
+from .idtresults import IdleTomographyResults as _IdleTomographyResults
+from ... import baseobjs as _baseobjs
+from ... import models as _models
 from ... import tools as _tools
-from ...objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from ...construction import modelconstruction as _modelconstruction
 from ...modelmembers import states as _state
+from ...modelmembers import povms as _povm
+from ...modelmembers import operations as _op
+from ...baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from ...circuits.circuit import Circuit as _Circuit
 
-from . import pauliobjs as _pobjs
-from . import idttools as _idttools
-from .idtresults import IdleTomographyResults as _IdleTomographyResults
 
 # This module implements idle tomography, which deals only with
 # many-qubit idle gates (on some number of qubits) and single-
@@ -569,8 +573,8 @@ def determine_paulidicts(model):
 
     if isinstance(prep, _state.ComputationalBasisState):
         if any([b != 0 for b in prep._zvals]): return None
-    elif isinstance(prep, _objs.LindbladSPAMVec):  # TODO: ---------------------------- change to ComposedState ------------------
-        if isinstance(prep.state_vec, _objs.ComputationalSPAMVec):
+    elif isinstance(prep, _state.LindbladSPAMVec):  # TODO: ---------------------------- change to ComposedState ------------------
+        if isinstance(prep.state_vec, _state.ComputationalBasisState):
             if any([b != 0 for b in prep.state_vec._zvals]): return None
         if any([abs(v) > 1e-6 for v in prep.to_vector()]): return None
     else:
@@ -581,13 +585,13 @@ def determine_paulidicts(model):
     def extract_action(g, cur_sslbls, ql):
         """ Note: assumes cur_sslbs is just a list of labels (of first "sector"
             of a real StateSpaceLabels struct) """
-        if isinstance(g, _objs.ComposedOp):
+        if isinstance(g, _op.ComposedOp):
             action = _np.identity(4, 'd')
             for fg in g.factorops:
                 action = _np.dot(extract_action(fg, cur_sslbls, ql), action)
             return action
 
-        if isinstance(g, _objs.EmbeddedOp):
+        if isinstance(g, _op.EmbeddedOp):
             #Note: an embedded gate need not use the *same* state space labels as the model
             lbls = [cur_sslbls[g.state_space_labels.labels[0].index(locLbl)] for locLbl in g.targetLabels]
             # TODO: add to StateSpaceLabels functionality to make sure two are compatible, and to translate between
@@ -608,7 +612,7 @@ def determine_paulidicts(model):
                 raise ValueError("LinearOperator acts nontrivially on a space other than that in its label!")
 
     #Get several standard 1-qubit pi/2 rotations in Pauli basis:
-    pp = _objs.BuiltinBasis('pp', 4)
+    pp = _baseobjs.BuiltinBasis('pp', 4)
     Gx = _modelconstruction._basis_create_operation(
         [('Q0',)], "X(pi/2,Q0)", basis=pp, parameterization="static"
     ).to_dense()
@@ -619,7 +623,7 @@ def determine_paulidicts(model):
     #try to find 1-qubit pi/2 rotations
     found = {}
     for gl in model.primitive_op_labels:
-        if isinstance(model, _objs.ExplicitOpModel):
+        if isinstance(model, _models.ExplicitOpModel):
             gate = model.operations[gl]
         else:
             gate = model.operation_blks['layers'][gl]
@@ -719,7 +723,7 @@ def make_idle_tomography_list(nqubits, max_lenghts, pauli_basis_dicts, maxweight
     if preferred_meas_basis_signs == "auto":
         preferred_meas_basis_signs = preferred_signs_from_paulidict(measDict)
 
-    GiStr = _objs.Circuit(idle_string, num_lines=nqubits)
+    GiStr = _Circuit(idle_string, num_lines=nqubits)
 
     pauli_fidpairs = idle_tomography_fidpairs(
         nqubits, maxweight, include_hamiltonian, include_stochastic,
@@ -804,7 +808,7 @@ def make_idle_tomography_lists(nqubits, max_lenghts, pauli_basis_dicts, maxweigh
     if preferred_meas_basis_signs == "auto":
         preferred_meas_basis_signs = preferred_signs_from_paulidict(measDict)
 
-    GiStr = _objs.Circuit(idle_string, num_lines=nqubits)
+    GiStr = _Circuit(idle_string, num_lines=nqubits)
 
     pauli_fidpairs = idle_tomography_fidpairs(
         nqubits, maxweight, include_hamiltonian, include_stochastic,
@@ -1112,9 +1116,9 @@ def do_idle_tomography(nqubits, dataset, max_lenghts, pauli_basis_dicts, maxweig
             line_labels = first_circuit.line_labels
         else:
             line_labels = (0,)
-        GiStr = _objs.Circuit(idle_string, line_labels=line_labels)
+        GiStr = _Circuit(idle_string, line_labels=line_labels)
     else:
-        GiStr = _objs.Circuit(idle_string, num_lines=nqubits)
+        GiStr = _Circuit(idle_string, num_lines=nqubits)
 
     jacmode = advanced_options.get("jacobian mode", "separate")
     sto_aff_jac = None; sto_aff_obs_err_rates = None

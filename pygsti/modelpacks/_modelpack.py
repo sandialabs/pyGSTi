@@ -10,19 +10,20 @@ Base of the object-oriented model for modelpacks
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from abc import ABC as _ABC, abstractmethod as _abstractmethod
-from pathlib import Path as _Path
-import numpy as _np
 import gzip as _gzip
 import pickle as _pickle
+from abc import ABC as _ABC, abstractmethod as _abstractmethod
+from pathlib import Path as _Path
 
-from ..objects.polynomial import bulk_load_compact_polynomials as _bulk_load_compact_polys
-from ..objects.circuit import Circuit as _Circuit
-from ..objects.label import Label as _Label
-from ..forwardsims.termforwardsim import TermForwardSimulator as _TermFSim
+import numpy as _np
+
+from pygsti.circuits.circuit import Circuit as _Circuit
 from ..construction.circuitconstruction import to_circuits as _circuit_list
 from ..construction.modelconstruction import create_explicit_model as _build_explicit_model
 from ..construction.stdlists import create_lsgst_circuit_lists as _make_lsgst_lists
+from ..forwardsims.termforwardsim import TermForwardSimulator as _TermFSim
+from ..baseobjs.label import Label as _Label
+from ..baseobjs.polynomial import bulk_load_compact_polynomials as _bulk_load_compact_polys
 from ..protocols import gst as _gst
 
 

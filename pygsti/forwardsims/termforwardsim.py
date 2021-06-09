@@ -10,35 +10,29 @@ Defines the TermForwardSimulator calculator class
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import warnings as _warnings
-import numpy as _np
-import time as _time
-import itertools as _itertools
-import functools as _functools
-import operator as _operator
 import importlib as _importlib
+import warnings as _warnings
 
+import numpy as _np
+
+from ..baseobjs.opcalc import compact_deriv as _compact_deriv, \
+    bulk_eval_compact_polynomials as _bulk_eval_compact_polynomials, \
+    bulk_eval_compact_polynomials_derivs as _bulk_eval_compact_polynomials_derivs
+from .distforwardsim import DistributableForwardSimulator as _DistributableForwardSimulator
+from ..layouts.termlayout import TermCOPALayout as _TermCOPALayout
+from ..baseobjs.polynomial import Polynomial as _Polynomial
+from ..baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
+from ..baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
-from ..tools import listtools as _lt
 from ..tools.matrixtools import _fas
-from ..objects.label import Label as _Label
-from ..layouts.termlayout import TermCOPALayout as _TermCOPALayout
-from .forwardsim import ForwardSimulator as _ForwardSimulator
-from .distforwardsim import DistributableForwardSimulator as _DistributableForwardSimulator
-from ..objects.polynomial import Polynomial as _Polynomial
-from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
-from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-#from . import replib
 
+
+# from . import replib
 # For debug: sometimes helpful as it prints (python-only) tracebacks from segfaults
-#import faulthandler
-#faulthandler.enable()
+# import faulthandler
+# faulthandler.enable()
 
-from ..objects.opcalc import compact_deriv as _compact_deriv, \
-    bulk_eval_compact_polynomials as _bulk_eval_compact_polynomials, \
-    bulk_eval_compact_polynomials_derivs as _bulk_eval_compact_polynomials_derivs, \
-    bulk_eval_compact_polynomials_complex as _bulk_eval_compact_polynomials_complex
 
 # MEM from .profiler import Profiler
 

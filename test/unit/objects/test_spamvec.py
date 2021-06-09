@@ -1,16 +1,16 @@
-import numpy as np
 import pickle
 
+import numpy as np
+
+import pygsti.modelmembers.povms as povms
+import pygsti.modelmembers.states as states
+import pygsti.baseobjs.statespace as statespace
+from pygsti.evotypes import Evotype
+from pygsti.modelmembers.povms import TPPOVM, UnconstrainedPOVM
+from pygsti.models import ExplicitOpModel
+from pygsti.objects import FullGaugeGroupElement, Basis
 from ..util import BaseCase
 
-from pygsti.objects import FullGaugeGroupElement, Basis
-from pygsti.models import ExplicitOpModel
-from pygsti.modelmembers.povms import TPPOVM, UnconstrainedPOVM
-import pygsti.construction as pc
-import pygsti.modelmembers.states as states
-import pygsti.modelmembers.povms as povms
-import pygsti.models.statespace as statespace
-from pygsti.evotypes import Evotype
 
 class StateUtilTester(BaseCase):
     def test_convert_to_vector_raises_on_bad_input(self):

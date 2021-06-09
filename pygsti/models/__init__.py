@@ -11,12 +11,11 @@ pyGSTi Models Python Package
 #***************************************************************************************************
 
 
-from .statespace import StateSpace, QubitSpace, ExplicitStateSpace
-from .model import Model
+from .cloudnoisemodel import CloudNoiseModel
 from .explicitmodel import ExplicitOpModel
 from .explicitmodel import ExplicitOpModel as GateSet  # alias
 from .implicitmodel import ImplicitOpModel
 from .localnoisemodel import LocalNoiseModel
-from .cloudnoisemodel import CloudNoiseModel
+from .model import Model
 from .oplessmodel import OplessModel
 from .oplessmodel import SuccessFailModel

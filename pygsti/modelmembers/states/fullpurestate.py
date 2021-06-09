@@ -12,11 +12,8 @@ The FullPureState class and supporting functionality.
 
 
 import numpy as _np
-from .state import State as _State
+
 from .densestate import DensePureState as _DensePureState
-from ...evotypes import Evotype as _Evotype
-from ...models import statespace as _statespace
-from ...objects.basis import Basis as _Basis
 
 
 class FullPureState(_DensePureState):

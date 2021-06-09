@@ -1,8 +1,5 @@
-from collections import defaultdict
-
-from ..util import BaseCase
-
 from pygsti.report.table import ReportTable
+from ..util import BaseCase
 
 
 class TableInstanceTester(BaseCase):

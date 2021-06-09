@@ -14,8 +14,6 @@ I*X(pi/2), I*Y(pi/2), X(pi/2)*I, Y(pi/2)*I, and CPHASE.
 #***************************************************************************************************
 
 from collections import OrderedDict
-from pygsti.construction import circuitconstruction as _strc
-from pygsti.construction import modelconstruction as _setc
 
 from pygsti.modelpacks._modelpack import GSTModelPack
 

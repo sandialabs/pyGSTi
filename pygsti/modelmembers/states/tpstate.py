@@ -12,11 +12,10 @@ The TPState class and supporting functionality.
 
 
 import numpy as _np
-from .state import State as _State
+
 from .densestate import DenseState as _DenseState
-from ...evotypes import Evotype as _Evotype
-from ...models import statespace as _statespace
-from ...objects.protectedarray import ProtectedArray as _ProtectedArray
+from .state import State as _State
+from ...baseobjs.protectedarray import ProtectedArray as _ProtectedArray
 
 
 class TPState(_DenseState):

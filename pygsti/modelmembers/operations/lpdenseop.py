@@ -11,9 +11,11 @@ The LinearlyParamArbitraryOp class and supporting functionality.
 #***************************************************************************************************
 
 import numpy as _np
-from .linearop import LinearOperator as _LinearOperator
+
 from .denseop import DenseOperator as _DenseOperator
+from .linearop import LinearOperator as _LinearOperator
 from ...tools import matrixtools as _mt
+
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 
 

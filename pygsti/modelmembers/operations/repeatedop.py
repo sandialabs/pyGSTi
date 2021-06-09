@@ -1,6 +1,7 @@
 
 import numpy as _np
 import scipy.sparse as _sps
+
 from .linearop import LinearOperator as _LinearOperator
 from ...evotypes import Evotype as _Evotype
 

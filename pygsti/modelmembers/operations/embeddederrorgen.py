@@ -10,12 +10,12 @@ The EmbeddedErrorgen class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as _np
 import collections as _collections
 import warnings as _warnings
-from .embeddedop import EmbeddedOp as _EmbeddedOp
 
-from ...objects.basis import Basis as _Basis, EmbeddedBasis as _EmbeddedBasis
+from .embeddedop import EmbeddedOp as _EmbeddedOp
+from ...baseobjs.basis import Basis as _Basis, EmbeddedBasis as _EmbeddedBasis
+
 
 # Idea:
 # Op = exp(Errgen); Errgen is an error just on 2nd qubit (and say we have 3 qubits)

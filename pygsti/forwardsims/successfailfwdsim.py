@@ -10,14 +10,8 @@ Defines the OplessForwardSimulator calculator class
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as _np
-
-from ..models.labeldicts import OutcomeLabelDict as _OutcomeLabelDict
-from ..layouts.cachedlayout import CachedCOPALayout as _CachedCOPALayout
 from .forwardsim import CacheForwardSimulator as _CacheForwardSimulator
-from ..objects.opcalc import compact_deriv as _compact_deriv, float_product as prod, \
-    bulk_eval_compact_polynomials as _bulk_eval_compact_polynomials
-from ..tools import slicetools as _slct
+from ..layouts.cachedlayout import CachedCOPALayout as _CachedCOPALayout
 
 
 class SuccessFailForwardSimulator(_CacheForwardSimulator):

@@ -2,10 +2,10 @@ import copy
 import pickle
 import unittest
 
-from ..util import BaseCase
-
+from pygsti.circuits import circuit
+from pygsti.objects import ProcessorSpec, Label, CircuitLabel
 from pygsti.tools import symplectic
-from pygsti.objects import circuit, ProcessorSpec, Label, CircuitLabel
+from ..util import BaseCase
 
 
 class CircuitTester(BaseCase):

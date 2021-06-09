@@ -11,17 +11,17 @@ The ComposedErrorgen class and supporting functionality.
 #***************************************************************************************************
 
 
+import collections as _collections
+
 import numpy as _np
 import scipy.sparse as _sps
-import collections as _collections
+
 from .linearop import LinearOperator as _LinearOperator
-
 from .. import modelmember as _modelmember
-
 from ...evotypes import Evotype as _Evotype
-from ...models import statespace as _statespace
+from ...baseobjs import statespace as _statespace
+from ...baseobjs.basis import ExplicitBasis as _ExplicitBasis
 from ...tools import matrixtools as _mt
-from ...objects.basis import ExplicitBasis as _ExplicitBasis
 
 
 class ComposedErrorgen(_LinearOperator):

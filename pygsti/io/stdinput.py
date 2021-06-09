@@ -10,26 +10,28 @@ Text-parsing classes and functions to read input files.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import re as _re
+import ast as _ast
 import os as _os
+import re as _re
 import sys as _sys
 import time as _time
-import numpy as _np
-import ast as _ast
 import warnings as _warnings
-from scipy.linalg import expm as _expm
 from collections import OrderedDict as _OrderedDict
 
-from ..modelmembers import operations as _op
-from ..modelmembers import states as _state
-from ..modelmembers import povms as _povm
-from ..modelmembers import instruments as _instrument
-from ..models import statespace as _statespace
-
-from .. import objects as _objs
-from .. import tools as _tools
+import numpy as _np
+from scipy.linalg import expm as _expm
 
 from . import CircuitParser as _CircuitParser
+from .. import baseobjs as _baseobjs
+from .. import tools as _tools
+from ..modelmembers import instruments as _instrument
+from ..modelmembers import operations as _op
+from ..modelmembers import povms as _povm
+from ..modelmembers import states as _state
+from ..baseobjs import statespace as _statespace
+from ..models import gaugegroup as _gaugegroup
+from ..circuits.circuit import Circuit as _Circuit
+from ..datasets import DataSet as _DataSet, MultiDataSet as _MultiDataSet
 
 # A dictionary mapping qubit string representations into created
 # :class:`Circuit` objects, which can improve performance by reducing
@@ -116,12 +118,12 @@ class StdInputParser(object):
         if circuit is None:  # wasn't in cache
             layer_tuple, line_lbls, occurrence_id = self.parse_circuit_raw(s, lookup, create_subcircuits)
             if line_lbls is None:  # if there are no line labels then we need to use "auto" and do a full init
-                circuit = _objs.Circuit(layer_tuple, stringrep=s, line_labels="auto",
-                                        expand_subcircuits=False, check=False, occurrence=occurrence_id)
+                circuit = _Circuit(layer_tuple, stringrep=s, line_labels="auto",
+                                   expand_subcircuits=False, check=False, occurrence=occurrence_id)
                 #Note: never expand subcircuits since parse_circuit_raw already does this w/create_subcircuits arg
             else:
-                circuit = _objs.Circuit._fastinit(layer_tuple, line_lbls, editable=False,
-                                                  name='', stringrep=s, occurrence=occurrence_id)
+                circuit = _Circuit._fastinit(layer_tuple, line_lbls, editable=False,
+                                             name='', stringrep=s, occurrence=occurrence_id)
 
             if self.use_global_parse_cache:
                 _global_parse_cache[create_subcircuits][s] = circuit
@@ -300,9 +302,9 @@ class StdInputParser(object):
                         parsed_line_lbls = line_labels  # default to the passed-in argument
                         #nlines = num_lines
                     #else: nlines = None  # b/c we've got a valid line_lbls
-                    circuit = _objs.Circuit._fastinit(layer_lbls, parsed_line_lbls, editable=False,
-                                                      name='', stringrep=line.strip(), occurrence=occurrence_id)
-                    #circuit = _objs.Circuit(layer_lbls, stringrep=line.strip(),
+                    circuit = _Circuit._fastinit(layer_lbls, parsed_line_lbls, editable=False,
+                                                 name='', stringrep=line.strip(), occurrence=occurrence_id)
+                    #circuit = _Circuit(layer_lbls, stringrep=line.strip(),
                     #                        line_labels=parsed_line_lbls, num_lines=nlines,
                     #                        expand_subcircuits=False, check=False, occurrence=occurrence_id)
                     ##Note: never expand subcircuits since parse_circuit_raw already does this w/create_subcircuits arg
@@ -330,8 +332,8 @@ class StdInputParser(object):
                 if len(line) == 0 or line[0] == '#': continue
                 label, tup, s, lineLbls, occurrence_id = self.parse_dictline(line)
                 if lineLbls is None: lineLbls = "auto"
-                lookupDict[label] = _objs.Circuit(tup, stringrep=s, line_labels=lineLbls,
-                                                  check=False, occurrence=occurrence_id)
+                lookupDict[label] = _Circuit(tup, stringrep=s, line_labels=lineLbls,
+                                             check=False, occurrence=occurrence_id)
         return lookupDict
 
     def parse_datafile(self, filename, show_progress=True,
@@ -425,8 +427,8 @@ class StdInputParser(object):
             _os.chdir(orig_cwd)
 
         #Read data lines of data file
-        dataset = _objs.DataSet(outcome_labels=outcomeLabels, collision_action=collision_action,
-                                comment="\n".join(preamble_comments))
+        dataset = _DataSet(outcome_labels=outcomeLabels, collision_action=collision_action,
+                           comment="\n".join(preamble_comments))
 
         if outcome_labels_specified_in_preamble and (fixed_column_outcome_labels is not None):
             fixed_column_outcome_indices = [dataset.olIndex[ol] for ol in fixed_column_outcome_labels]
@@ -492,7 +494,7 @@ class StdInputParser(object):
                     try:
                         circuit, valueList = \
                             self.parse_dataline(dataline, lookupDict, nDataCols,
-                                                create_subcircuits=not _objs.Circuit.default_expand_subcircuits)
+                                                create_subcircuits=not _Circuit.default_expand_subcircuits)
 
                         commentDict = parse_comment(comment, filename, iLine)
 
@@ -732,8 +734,8 @@ class StdInputParser(object):
         #Read data lines of data file
         datasets = _OrderedDict()
         for dsLabel, outcomeLabels in dsOutcomeLabels.items():
-            datasets[dsLabel] = _objs.DataSet(outcome_labels=outcomeLabels,
-                                              collision_action=collision_action)
+            datasets[dsLabel] = _DataSet(outcome_labels=outcomeLabels,
+                                         collision_action=collision_action)
 
         dsCountDicts = _OrderedDict()
         for dsLabel in dsOutcomeLabels: dsCountDicts[dsLabel] = {}
@@ -745,7 +747,7 @@ class StdInputParser(object):
 
         display_progress = _create_display_progress_fn(show_progress)
         warnings = []  # to display *after* display progress
-        mds = _objs.MultiDataSet(comment="\n".join(preamble_comments))
+        mds = _MultiDataSet(comment="\n".join(preamble_comments))
 
         with open(filename, 'r') as inputfile:
             for (iLine, line) in enumerate(inputfile):
@@ -762,7 +764,7 @@ class StdInputParser(object):
                 try:
                     circuit, valueList = \
                         self.parse_dataline(dataline, lookupDict, nDataCols,
-                                            create_subcircuits=not _objs.Circuit.default_expand_subcircuits)
+                                            create_subcircuits=not _Circuit.default_expand_subcircuits)
 
                     commentDict = {}
                     comment = comment.strip()
@@ -950,7 +952,7 @@ class StdInputParser(object):
         outcomeLabels = outcomeLabelAbbrevs.values()
 
         #Read data lines of data file
-        dataset = _objs.DataSet(outcome_labels=outcomeLabels)
+        dataset = _DataSet(outcome_labels=outcomeLabels)
         with open(filename, 'r') as f:
             nLines = sum(1 for line in f)
         nSkip = int(nLines / 100.0)
@@ -1051,11 +1053,11 @@ def parse_model(filename):
     if basis_dim is not None:
         # then specfy a dimensionful basis at the outset
         # basis_dims should be just a single int now that the *vector-space* dimension
-        basis = _objs.BuiltinBasis(basis_abbrev, basis_dim)
+        basis = _baseobjs.BuiltinBasis(basis_abbrev, basis_dim)
     else:
         # otherwise we'll try to infer one from state space labels
         if state_space is not None:
-            basis = _objs.Basis.cast(basis_abbrev, state_space.dim)
+            basis = _baseobjs.Basis.cast(basis_abbrev, state_space.dim)
         else:
             raise ValueError("Cannot infer basis dimension!")
 
@@ -1109,8 +1111,9 @@ def parse_model(filename):
 
                 elif len(parts) >= 2:  # then this is a '<type>: <label>' line => new cur_obj
                     typ = parts[0].strip()
-                    label = _objs.Label(name=parts[1].strip() if parts[1].strip() != "[]" else (),
-                                        state_space_labels=tuple(map(to_int, parts[2:])) if len(parts) > 2 else None)
+                    label = _baseobjs.Label(name=parts[1].strip() if parts[1].strip() != "[]" else (),
+                                            state_space_labels=tuple(map(to_int, parts[2:]))
+                                            if len(parts) > 2 else None)
 
                     # place any existing cur_obj
                     if cur_obj is not None:
@@ -1305,11 +1308,11 @@ def parse_model(filename):
     #Add default gauge group -- the full group because
     # we add FullyParameterizedGates above.
     if gaugegroup_name == "Full":
-        mdl.default_gauge_group = _objs.FullGaugeGroup(mdl.state_space, mdl.evotype)
+        mdl.default_gauge_group = _gaugegroup.FullGaugeGroup(mdl.state_space, mdl.evotype)
     elif gaugegroup_name == "TP":
-        mdl.default_gauge_group = _objs.TPGaugeGroup(mdl.state_space, mdl.evotype)
+        mdl.default_gauge_group = _gaugegroup.TPGaugeGroup(mdl.state_space, mdl.evotype)
     elif gaugegroup_name == "Unitary":
-        mdl.default_gauge_group = _objs.UnitaryGaugeGroup(mdl.state_space, mdl.basis, mdl.evotype)
+        mdl.default_gauge_group = _gaugegroup.UnitaryGaugeGroup(mdl.state_space, mdl.basis, mdl.evotype)
     else:
         mdl.default_gauge_group = None
 

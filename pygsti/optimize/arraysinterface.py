@@ -11,6 +11,7 @@ Implements the ArraysInterface object and supporting functionality.
 #***************************************************************************************************
 
 import numpy as _np
+
 from ..tools import sharedmemtools as _smt
 
 

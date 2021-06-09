@@ -10,27 +10,27 @@ Classes corresponding to plots within a Workspace context.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as _np
-import scipy as _scipy
-import warnings as _warnings
 import collections as _collections
+import warnings as _warnings
 
-from scipy.stats import chi2 as _chi2
-
-from .. import algorithms as _alg
-from .. import tools as _tools
-from .. import objects as _objs
-from ..objects import objectivefns as _objfns
-
-from .workspace import WorkspacePlot
-from .figure import ReportFigure
-from . import colormaps as _colormaps
-from . import plothelpers as _ph
+import numpy as _np
 import plotly
 import plotly.graph_objs as go
-from ..objects.circuitlist import CircuitList as _CircuitList
-from ..objects.objectivefns import ModelDatasetCircuitsStore as _ModelDatasetCircuitStore
-from ..objects.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
+import scipy as _scipy
+from scipy.stats import chi2 as _chi2
+
+from pygsti.objectivefns.objectivefns import ModelDatasetCircuitsStore as _ModelDatasetCircuitStore
+from . import colormaps as _colormaps
+from . import plothelpers as _ph
+from .figure import ReportFigure
+from .workspace import WorkspacePlot
+from .. import algorithms as _alg
+from .. import baseobjs as _baseobjs
+from ..objectivefns import objectivefns as _objfns
+from ..circuits.circuit import Circuit as _Circuit
+from ..circuits.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure, \
+    GermFiducialPairPlaquette as _GermFiducialPairPlaquette
+from ..datasets import DataSet as _DataSet
 
 #Plotly v3 changes heirarchy of graph objects
 # Do this to avoid deprecation warning is plotly 3+
@@ -366,7 +366,7 @@ def _summable_color_boxplot(sub_mxs, xlabels, ylabels, xlabel, ylabel,
         """filter to latex-ify circuits.  Later add filter as a possible parameter"""
         formatted_vals = []
         for val in vals:
-            if isinstance(val, _objs.Circuit):
+            if isinstance(val, _Circuit):
                 if len(val) == 0:
                     #formatted_vals.append(r"$\{\}$")
                     formatted_vals.append(r"{}")
@@ -925,14 +925,14 @@ def _opmatrix_color_boxplot(op_matrix, color_min, color_max, mx_basis=None, mx_b
 
     if isinstance(mx_basis, str):
         if mx_basis_y is None:
-            mx_basis_y = _objs.BuiltinBasis(mx_basis, op_matrix.shape[0])
-        mx_basis = _objs.BuiltinBasis(mx_basis, op_matrix.shape[1])
+            mx_basis_y = _baseobjs.BuiltinBasis(mx_basis, op_matrix.shape[0])
+        mx_basis = _baseobjs.BuiltinBasis(mx_basis, op_matrix.shape[1])
     else:
         if mx_basis_y is None and op_matrix.shape[0] == op_matrix.shape[1]:
             mx_basis_y = mx_basis  # can use mx_basis, whatever it is
 
     if isinstance(mx_basis_y, str):
-        mx_basis_y = _objs.BuiltinBasis(mx_basis_y, op_matrix.shape[0])
+        mx_basis_y = _baseobjs.BuiltinBasis(mx_basis_y, op_matrix.shape[0])
 
     if mx_basis is not None:
         xlabels = [("<i>%s</i>" % x) if len(x) else "" for x in mx_basis.labels]
@@ -1270,7 +1270,7 @@ class BoxKeyPlot(WorkspacePlot):
             """filter to latex-ify circuits.  Later add filter as a possible parameter"""
             formatted_vals = []
             for val in vals:
-                if isinstance(val, _objs.Circuit):
+                if isinstance(val, _Circuit):
                     if len(val) == 0:
                         #formatted_vals.append(r"$\{\}$")
                         formatted_vals.append(r"{}")
@@ -1732,7 +1732,7 @@ class ColorBoxPlot(WorkspacePlot):
                 #                     # extracting # degrees of freedom below)
                 #     if isinstance(dscomparator.dataset_list_or_multidataset,list):
                 #         dataset = dscomparator.dataset_list_or_multidataset[0]
-                #     elif isinstance(dscomparator.dataset_list_or_multidataset,_objs.MultiDataSet):
+                #     elif isinstance(dscomparator.dataset_list_or_multidataset,_datasets.MultiDataSet):
                 #         key0 = list(dscomparator.dataset_list_or_multidataset.keys())[0]
                 #         dataset = dscomparator.dataset_list_or_multidataset[key0]
 
@@ -1957,8 +1957,8 @@ def _mx_fn_blank(plaq, x, y, unused):
 
 
 def _mx_fn_errorrate(plaq, x, y, direct_gst_models):  # error rate as 1x1 matrix which we have plotting function sum up
-    base_circuit = plaq.base if isinstance(plaq, _objs.circuitstructure.GermFiducialPairPlaquette) \
-        else _objs.Circuit(())
+    base_circuit = plaq.base if isinstance(plaq, _GermFiducialPairPlaquette) \
+        else _Circuit(())
     return _np.array([[_ph.small_eigenvalue_err_rate(base_circuit, direct_gst_models)]])
 
 
@@ -2640,8 +2640,8 @@ class ProjectionsBoxPlot(WorkspacePlot):
         xd = projections.shape[1]  # x-basis-dim
         yd = projections.shape[0]  # y-basis-dim
 
-        if isinstance(projection_basis, _objs.Basis):
-            if isinstance(projection_basis, _objs.TensorProdBasis) and len(projection_basis.component_bases) == 2 \
+        if isinstance(projection_basis, _baseobjs.Basis):
+            if isinstance(projection_basis, _baseobjs.TensorProdBasis) and len(projection_basis.component_bases) == 2 \
                and xd == projection_basis.component_bases[0].dim and yd == projection_basis.component_bases[1].dim:
                 basis_for_xlabels = projection_basis.component_bases[0]
                 basis_for_ylabels = projection_basis.component_bases[1]
@@ -2653,14 +2653,14 @@ class ProjectionsBoxPlot(WorkspacePlot):
                 basis_for_ylabels = projection_basis
             else:
                 try:
-                    basis_for_xlabels = _objs.BuiltinBasis(projection_basis.name, xd)
-                    basis_for_ylabels = _objs.BuiltinBasis(projection_basis.name, yd)
+                    basis_for_xlabels = _baseobjs.BuiltinBasis(projection_basis.name, xd)
+                    basis_for_ylabels = _baseobjs.BuiltinBasis(projection_basis.name, yd)
                 except:
                     basis_for_xlabels = basis_for_ylabels = None
         else:
             try:
-                basis_for_xlabels = _objs.BuiltinBasis(projection_basis, xd)
-                basis_for_ylabels = _objs.BuiltinBasis(projection_basis, yd)
+                basis_for_xlabels = _baseobjs.BuiltinBasis(projection_basis, xd)
+                basis_for_ylabels = _baseobjs.BuiltinBasis(projection_basis, yd)
             except:
                 basis_for_xlabels = basis_for_ylabels = None
 
@@ -3014,7 +3014,7 @@ class FitComparisonBarPlot(WorkspacePlot):
             np_by_x = [mdl.num_modeltest_params if (mdl is not None) else 0
                        for mdl in model_by_x]  # Note: models can be None => N/A
 
-        if isinstance(dataset_by_x, _objs.DataSet):
+        if isinstance(dataset_by_x, _DataSet):
             dataset_by_x = [dataset_by_x] * len(model_by_x)
 
         for X, mdl, circuits, dataset, Np in zip(x_names, model_by_x, circuits_by_x, dataset_by_x, np_by_x):

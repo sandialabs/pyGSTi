@@ -1,8 +1,7 @@
 import numpy as np
 
-from ..util import BaseCase, needs_matplotlib
-
 from pygsti.report import colormaps as cmap
+from ..util import BaseCase, needs_matplotlib
 
 
 class ColormapHelperTester(BaseCase):

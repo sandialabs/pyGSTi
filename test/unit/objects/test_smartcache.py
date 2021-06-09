@@ -1,8 +1,9 @@
-from ..util import BaseCase
-import pygsti
 import pickle
 import time
+
+import pygsti
 from pygsti.objects import smartcache as sc
+from ..util import BaseCase
 
 
 @sc.smart_cached

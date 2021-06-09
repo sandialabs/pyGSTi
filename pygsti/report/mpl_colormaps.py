@@ -10,11 +10,12 @@ Plotly-to-Matplotlib conversion functions.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as _np
 import gc as _gc
-from .. import objects as _objs
+
+import numpy as _np
 
 from .plothelpers import _eformat
+from ..circuits.circuit import Circuit as _Circuit
 
 try:
     import matplotlib as _matplotlib
@@ -655,7 +656,7 @@ def special_keyplot(pygsti_fig, save_to, fontsize):
     def _val_filter(vals):  # filter to latex-ify circuits.  Later add filter as a possible parameter
         formatted_vals = []
         for val in vals:
-            if type(val) in (tuple, _objs.Circuit) and all([type(el) == str for el in val]):
+            if type(val) in (tuple, _Circuit) and all([type(el) == str for el in val]):
                 if len(val) == 0:
                     formatted_vals.append(r"$\{\}$")
                 else:

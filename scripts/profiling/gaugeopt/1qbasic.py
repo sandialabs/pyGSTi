@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-from pygsti.construction import std1Q_XYI
-from pygsti.algorithms   import gaugeopt_to_target
-from pygsti.tools        import timed_block
-
 from mpi4py import MPI
+
+from pygsti.algorithms import gaugeopt_to_target
+from pygsti.construction import std1Q_XYI
+from pygsti.tools import timed_block
+
 comm = MPI.COMM_WORLD
 #comm = None
 

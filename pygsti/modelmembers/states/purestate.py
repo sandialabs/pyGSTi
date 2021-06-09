@@ -12,17 +12,14 @@ The EmbeddedPureState class and supporting functionality.
 
 
 import numpy as _np
-import itertools as _itertools
-import functools as _functools
 
 from .state import State as _State
 from .staticstate import StaticState as _StaticState
-from .. import modelmember as _modelmember
+from .. import term as _term
 from ...evotype import Evotype as _Evotype
-from ...objects import term as _term
-from ...tools import optools as _ot
+from ...baseobjs.polynomial import Polynomial as _Polynomial
 from ...tools import basistools as _bt
-from ...objects.polynomial import Polynomial as _Polynomial
+from ...tools import optools as _ot
 
 
 #TODO: figure out what to do with this class when we wire up term calcs??

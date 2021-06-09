@@ -1,10 +1,9 @@
 import pickle
 
-from ..util import BaseCase
-
+import pygsti.baseobjs.labeldicts as ld
 from pygsti.construction.modelconstruction import create_explicit_model
 from pygsti.models import ExplicitOpModel
-import pygsti.models.labeldicts as ld
+from ..util import BaseCase
 
 
 class LabelDictTester(BaseCase):

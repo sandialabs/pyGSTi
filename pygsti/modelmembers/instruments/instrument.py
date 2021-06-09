@@ -16,9 +16,9 @@ from .. import modelmember as _mm
 from .. import operations as _op
 from .. import states as _state
 from ...evotypes import Evotype as _Evotype
-from ...models import statespace as _statespace
+from ...baseobjs import statespace as _statespace
 from ...tools import matrixtools as _mt
-from ...objects.label import Label as _Label
+from ...baseobjs.label import Label as _Label
 
 
 class Instrument(_mm.ModelMember, _collections.OrderedDict):

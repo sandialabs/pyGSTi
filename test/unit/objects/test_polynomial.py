@@ -1,9 +1,8 @@
 import numpy as np
 
-from ..util import BaseCase
-
+from pygsti.baseobjs.opcalc import compact_deriv
 from pygsti.objects import polynomial as poly
-from pygsti.objects.opcalc import compact_deriv
+from ..util import BaseCase
 
 
 class CompactPolynomialTester(BaseCase):

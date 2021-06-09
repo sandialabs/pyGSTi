@@ -10,18 +10,21 @@ Functions for writing GST objects to text files.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import warnings as _warnings
-import numpy as _np
 import pathlib as _pathlib
+import warnings as _warnings
+
+import numpy as _np
+
+from . import loaders as _loaders
+from .. import circuits as _circuits
+from .. import models as _models
 
 # from . import stdinput as _stdinput
 from .. import tools as _tools
-from .. import objects as _objs
-from ..modelmembers import operations as _op
-from ..modelmembers import states as _state
-from ..modelmembers import povms as _povm
 from ..modelmembers import instruments as _instrument
-from . import loaders as _loaders
+from ..modelmembers import operations as _op
+from ..modelmembers import povms as _povm
+from ..modelmembers import states as _state
 
 
 def write_empty_dataset(filename, circuits,
@@ -55,7 +58,7 @@ def write_empty_dataset(filename, circuits,
     None
     """
 
-    if len(circuits) > 0 and not isinstance(circuits[0], _objs.Circuit):
+    if len(circuits) > 0 and not isinstance(circuits[0], _circuits.Circuit):
         raise ValueError("Argument circuits must be a list of Circuit objects!")
 
     if num_zero_cols is None:  # TODO: cleaner way to extract number of columns from header_string?
@@ -116,7 +119,7 @@ def write_dataset(filename, dataset, circuits=None,
     None
     """
     if circuits is not None:
-        if len(circuits) > 0 and not isinstance(circuits[0], _objs.Circuit):
+        if len(circuits) > 0 and not isinstance(circuits[0], _circuits.Circuit):
             raise ValueError("Argument circuits must be a list of Circuit objects!")
     else:
         circuits = list(dataset.keys())
@@ -215,7 +218,7 @@ def write_multidataset(filename, multidataset, circuits=None, outcome_label_orde
     """
 
     if circuits is not None:
-        if len(circuits) > 0 and not isinstance(circuits[0], _objs.Circuit):
+        if len(circuits) > 0 and not isinstance(circuits[0], _circuits.Circuit):
             raise ValueError("Argument circuits must be a list of Circuit objects!")
     else:
         circuits = list(multidataset.cirIndex.keys())  # TODO: make access function for circuits?
@@ -277,7 +280,7 @@ def write_circuit_list(filename, circuits, header=None):
     -------
     None
     """
-    if len(circuits) > 0 and not isinstance(circuits[0], _objs.Circuit):
+    if len(circuits) > 0 and not isinstance(circuits[0], _circuits.Circuit):
         raise ValueError("Argument circuits must be a list of Circuit objects!")
 
     with open(str(filename), 'w') as output:
@@ -452,11 +455,11 @@ def write_model(model, filename, title=None):
             else:
                 output.write("BASIS: %s %d\n" % (model.basis.name, basisdim))
 
-        if isinstance(model.default_gauge_group, _objs.FullGaugeGroup):
+        if isinstance(model.default_gauge_group, _models.FullGaugeGroup):
             output.write("GAUGEGROUP: Full\n")
-        elif isinstance(model.default_gauge_group, _objs.TPGaugeGroup):
+        elif isinstance(model.default_gauge_group, _models.TPGaugeGroup):
             output.write("GAUGEGROUP: TP\n")
-        elif isinstance(model.default_gauge_group, _objs.UnitaryGaugeGroup):
+        elif isinstance(model.default_gauge_group, _models.UnitaryGaugeGroup):
             output.write("GAUGEGROUP: Unitary\n")
 
 

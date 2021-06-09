@@ -14,9 +14,9 @@ Defines the ComputationalBasisPOVM class
 import collections as _collections
 import itertools as _itertools
 
-from .povm import POVM as _POVM
 from .computationaleffect import ComputationalBasisPOVMEffect as _ComputationalBasisPOVMEffect
-from ...models import statespace as _statespace
+from .povm import POVM as _POVM
+from ...baseobjs import statespace as _statespace
 
 
 class ComputationalBasisPOVM(_POVM):

@@ -8,11 +8,11 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import time as _time
-import math as _math
-import numpy as _np
-import itertools as _itertools
 import functools as _functools
+import itertools as _itertools
+import math as _math
+
+import numpy as _np
 
 from ..tools import listtools as _lt
 

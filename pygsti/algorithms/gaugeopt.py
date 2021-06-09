@@ -10,13 +10,14 @@ GST gauge optimization algorithms
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as _np
-import warnings as _warnings
 import time as _time
+import warnings as _warnings
 
-from .. import objects as _objs
-from .. import tools as _tools
+import numpy as _np
+
+from .. import baseobjs as _baseobjs
 from .. import optimize as _opt
+from .. import tools as _tools
 from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
 
@@ -235,7 +236,7 @@ def gaugeopt_custom(model, objective_fn, gauge_group=None,
         final gauge-transformed model.
     """
 
-    printer = _objs.VerbosityPrinter.create_printer(verbosity, comm)
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm)
     tStart = _time.time()
 
     if comm is not None:
@@ -254,7 +255,7 @@ def gaugeopt_custom(model, objective_fn, gauge_group=None,
         if gauge_group is None or gauge_group.num_params == 0 or \
            model.num_params == 0:
             if return_all:
-                trivialEl = _objs.TrivialGaugeGroupElement(model.dim)
+                trivialEl = _baseobjs.TrivialGaugeGroupElement(model.dim)
                 return None, trivialEl, model.copy()
             else:
                 return model.copy()
@@ -280,7 +281,7 @@ def gaugeopt_custom(model, objective_fn, gauge_group=None,
         #                            max_nfev=maxfev, ftol=tol)
         #solnX = minSol.x
         assert(_call_jacobian_fn is not None), "Cannot use 'ls' method unless jacobian is available"
-        ralloc = _objs.ResourceAllocation(comm)  # FUTURE: plumb up a resource alloc object?
+        ralloc = _baseobjs.ResourceAllocation(comm)  # FUTURE: plumb up a resource alloc object?
         test_f = _call_objective_fn(x0)
         solnX, converged, msg, _, _, _, _, _ = _opt.custom_leastsq(
             _call_objective_fn, _call_jacobian_fn, x0, f_norm2_tol=tol,
@@ -675,7 +676,7 @@ def _cptp_penalty_size(mdl):
     """
     Helper function - *same* as that in core.py.
     """
-    from ..objects.objectivefns import _cptp_penalty_size as _core_cptp_penalty_size
+    from pygsti.objectivefns.objectivefns import _cptp_penalty_size as _core_cptp_penalty_size
     return _core_cptp_penalty_size(mdl)
 
 
@@ -683,7 +684,7 @@ def _spam_penalty_size(mdl):
     """
     Helper function - *same* as that in core.py.
     """
-    from ..objects.objectivefns import _spam_penalty_size as _core_spam_penalty_size
+    from pygsti.objectivefns.objectivefns import _spam_penalty_size as _core_spam_penalty_size
     return _core_spam_penalty_size(mdl)
 
 
@@ -699,7 +700,7 @@ def _cptp_penalty(mdl, prefactor, op_basis):
     numpy array
         a (real) 1D array of length len(mdl.operations).
     """
-    from ..objects.objectivefns import _cptp_penalty as _core_cptp_penalty
+    from pygsti.objectivefns.objectivefns import _cptp_penalty as _core_cptp_penalty
     return _core_cptp_penalty(mdl, prefactor, op_basis)
 
 
@@ -715,7 +716,7 @@ def _spam_penalty(mdl, prefactor, op_basis):
     numpy array
         a (real) 1D array of length _spam_penalty_size(mdl)
     """
-    from ..objects.objectivefns import _spam_penalty as _core_spam_penalty
+    from pygsti.objectivefns.objectivefns import _spam_penalty as _core_spam_penalty
     return _core_spam_penalty(mdl, prefactor, op_basis)
 
 

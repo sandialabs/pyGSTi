@@ -12,13 +12,13 @@ Defines JSON-format encoding and decoding functions
 
 # XXX this module should certainly be rewritten as a custom `json.JSONEncoder`
 
-import types as _types
-import importlib as _importlib
 import base64 as _base64
-import numpy as _np
-import uuid as _uuid
 import collections as _collections
-import pygsti.objects
+import importlib as _importlib
+import types as _types
+import uuid as _uuid
+
+import numpy as _np
 
 
 def _class_hasattr(instance, attr):

@@ -1,8 +1,7 @@
-from ..util import BaseCase
-
 import pygsti.construction as pc
-from pygsti.objects import DataSet
 from pygsti.algorithms import grammatrix as gm
+from pygsti.objects import DataSet
+from ..util import BaseCase
 
 
 class DataSetInstance(object):

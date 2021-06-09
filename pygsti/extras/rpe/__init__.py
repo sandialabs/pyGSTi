@@ -8,8 +8,8 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from .rpetools import *
-from .rpeconfig import *
 from . import rpeconfig_GxPi2_GyPi2_00
 from . import rpeconfig_GxPi2_GyPi2_UpDn
+from .rpeconfig import *
 from .rpeconstruction import *
+from .rpetools import *

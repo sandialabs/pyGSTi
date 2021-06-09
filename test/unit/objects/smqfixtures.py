@@ -1,10 +1,8 @@
 """Shared test fixtures for pygsti.objects unit tests"""
-from ..util import Namespace
-
 import pygsti
 from pygsti.modelpacks import smq1Q_XYI as smq
 from pygsti.objects import Label, Circuit, CircuitList
-
+from ..util import Namespace
 
 ns = Namespace()
 ns.model = smq.target_model('TP')

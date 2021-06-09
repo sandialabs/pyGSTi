@@ -10,6 +10,7 @@
 Profiler utilities.
 """
 import cProfile
+
 from mpi4py import MPI
 
 

@@ -1,10 +1,10 @@
 import numpy as np
-from ..util import BaseCase
-from . import smqfixtures
 
 import pygsti
-import pygsti.objects.objectivefns as _objfns
-from pygsti.objects.wildcardbudget import PrimitiveOpsWildcardBudget as _PrimitiveOpsWildcardBudget
+import pygsti.objectivefns.objectivefns as _objfns
+from pygsti.objectivefns.wildcardbudget import PrimitiveOpsWildcardBudget as _PrimitiveOpsWildcardBudget
+from . import smqfixtures
+from ..util import BaseCase
 
 
 class ObjectiveFunctionData(object):

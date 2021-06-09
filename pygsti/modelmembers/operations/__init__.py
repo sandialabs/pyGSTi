@@ -10,7 +10,8 @@ Sub-package holding model operation objects.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from .staticcliffordop import StaticCliffordOp
+import numpy as _np
+
 from .composederrorgen import ComposedErrorgen
 from .composedop import ComposedOp
 from .denseop import DenseOperator, DenseOperatorInterface
@@ -20,22 +21,18 @@ from .embeddederrorgen import EmbeddedErrorgen
 from .embeddedop import EmbeddedOp
 from .experrorgenop import ExpErrorgenOp
 from .fullarbitraryop import FullArbitraryOp
+from .fulltpop import FullTPOp
 from .fullunitaryop import FullUnitaryOp
 from .lindbladerrorgen import LindbladErrorgen
 from .linearop import LinearOperator
+from .linearop import finite_difference_deriv_wrt_params, finite_difference_hessian_wrt_params
 from .lpdenseop import LinearlyParamArbitraryOp
+from .opfactory import OpFactory
 from .staticarbitraryop import StaticArbitraryOp
+from .staticcliffordop import StaticCliffordOp
 from .staticstdop import StaticStandardOp
 from .staticunitaryop import StaticUnitaryOp
 from .stochasticop import StochasticNoiseOp
-from .fulltpop import FullTPOp
-
-from .opfactory import OpFactory
-
-from .linearop import finite_difference_deriv_wrt_params, finite_difference_hessian_wrt_params
-
-
-import numpy as _np
 from ...tools import basistools as _bt
 from ...tools import optools as _ot
 

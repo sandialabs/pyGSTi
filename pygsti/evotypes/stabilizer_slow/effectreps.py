@@ -10,11 +10,8 @@ POVM effect representation classes for the `stabilizer_slow` evolution type.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as _np
-import functools as _functools
-
 from .. import basereps as _basereps
-from ...models.statespace import StateSpace as _StateSpace
+from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from ...tools import matrixtools as _mt
 
 

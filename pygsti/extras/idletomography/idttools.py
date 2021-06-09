@@ -8,14 +8,16 @@
 #***************************************************************************************************
 """ Idle Tomography utility routines """
 
-import numpy as _np
 import itertools as _itertools
 
-from ... import objects as _objs
-from ... import tools as _tools
-from ...construction import nqnoiseconstruction as _nqn
+import numpy as _np
 
 from . import pauliobjs as _pobjs
+from ... import tools as _tools
+from ...modelmembers import operations as _op
+from ...construction import nqnoiseconstruction as _nqn
+
+
 # maybe need to restructure in future - "tools" usually doesn't import "objects"
 
 
@@ -207,7 +209,7 @@ def set_idle_errors(nqubits, model, errdict, rand_default=None,
     # each factor applies to some set of the qubits (of size 1 to the max-error-weight)
     for i, factor in enumerate(model.operation_blks['layers']['globalIdle'].factorops):
         #print("Factor %d: target = %s, gpindices=%s" % (i,str(factor.targetLabels),str(factor.gpindices)))
-        assert(isinstance(factor, _objs.EmbeddedOp)), "Expected Gi to be a composition of embedded gates!"
+        assert(isinstance(factor, _op.EmbeddedOp)), "Expected Gi to be a composition of embedded gates!"
         sub_v = v[factor.gpindices]
         bsH = factor.embedded_op.errorgen.ham_basis_size
         bsO = factor.embedded_op.errorgen.other_basis_size
@@ -301,7 +303,7 @@ def get_idle_errors(nqubits, model, hamiltonian=True, stochastic=True, affine=Tr
         # each factor applies to some set of the qubits (of size 1 to the max-error-weight)
 
         #print("Factor %d: target = %s, gpindices=%s" % (i,str(factor.targetLabels),str(factor.gpindices)))
-        assert(isinstance(factor, _objs.EmbeddedOp)), "Expected Gi to be a composition of embedded gates!"
+        assert(isinstance(factor, _op.EmbeddedOp)), "Expected Gi to be a composition of embedded gates!"
         sub_v = v[factor.gpindices]
         bsH = factor.embedded_op.errorgen.ham_basis_size
         bsO = factor.embedded_op.errorgen.other_basis_size
@@ -378,7 +380,7 @@ def predicted_intrinsic_rates(nqubits, maxweight, model,
     idleop = model.operation_blks['layers']['globalIdle']  # assumes this is a composed op of embedded lindblad ops
     for i, factor in enumerate(idleop.factorops):
         #print("Factor %d: target = %s, gpindices=%s" % (i,str(factor.targetLabels),str(factor.gpindices)))
-        assert(isinstance(factor, _objs.EmbeddedOp)), "Expected global idle to be a composition of embedded gates!"
+        assert(isinstance(factor, _op.EmbeddedOp)), "Expected global idle to be a composition of embedded gates!"
         errgen_coeffs = factor.embedded_op.errorgen_coefficients()
         nTargetQubits = len(factor.targetLabels)
 

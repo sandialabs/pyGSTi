@@ -1,11 +1,10 @@
-from time import sleep
 import numbers
 from collections import defaultdict
+from time import sleep
 from unittest import mock
 
-from ..util import BaseCase
-
 from pygsti.tools import opttools as opt
+from ..util import BaseCase
 
 
 class TestTimedBlock(BaseCase):

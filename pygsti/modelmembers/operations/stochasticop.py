@@ -11,14 +11,13 @@ The StochasticNoiseOp class and supporting functionality.
 #***************************************************************************************************
 
 import numpy as _np
-from .linearop import LinearOperator as _LinearOperator
 
-from .. import modelmember as _modelmember
-from ...objects.basis import Basis as _Basis
-from ...objects.polynomial import Polynomial as _Polynomial
+from .linearop import LinearOperator as _LinearOperator
+from .. import modelmember as _modelmember, term as _term
 from ...evotypes import Evotype as _Evotype
-from ...objects import term as _term
-from ...models import statespace as _statespace
+from ...baseobjs import statespace as _statespace
+from ...baseobjs.basis import Basis as _Basis
+from ...baseobjs.polynomial import Polynomial as _Polynomial
 
 
 class StochasticNoiseOp(_LinearOperator):

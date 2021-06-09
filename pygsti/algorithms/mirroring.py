@@ -10,17 +10,18 @@ circuit mirroring functions.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from ..objects import circuit as _cir
-from ..objects import label as _lbl
-from ..tools import symplectic as _symp
-#from .. import construction as _cnst
-from .. import objects as _objs
-#from .. import io as _io
-from .. import tools as _tools
-#from ..tools import group as _rbobjs
-
 import numpy as _np
-import copy as _copy
+
+from ..circuits import circuit as _cir
+from ..baseobjs import label as _lbl
+from ..tools import symplectic as _symp
+
+
+# from .. import construction as _cnst
+# from .. import io as _io
+# from ..tools import group as _rbobjs
+
+
 #import itertools as _itertools
 
 

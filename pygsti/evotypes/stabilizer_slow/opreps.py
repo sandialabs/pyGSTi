@@ -13,10 +13,10 @@ Operation representation classes for the `stabilizer_slow` evolution type.
 import numpy as _np
 
 from .. import basereps as _basereps
-from ...models.statespace import StateSpace as _StateSpace
-from ...tools import symplectic as _symp
-from ...tools import matrixtools as _mt
+from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from ...tools import internalgates as _itgs
+from ...tools import matrixtools as _mt
+from ...tools import symplectic as _symp
 
 
 class OpRep(_basereps.OpRep):

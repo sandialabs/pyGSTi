@@ -1,12 +1,10 @@
 #!/usr/bin/env python
 
-import cProfile
-from io import StringIO
 import json
 from pathlib import Path
-import pstats
 
 import matplotlib as mpl
+
 mpl.use('Agg') # For non-interactive like on remote cluster
 import matplotlib.pyplot as plt
 

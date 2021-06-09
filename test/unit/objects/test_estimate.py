@@ -1,15 +1,12 @@
 import pickle
-from unittest import mock
-
-from ..util import BaseCase
-from . import fixtures as pkg
 
 from pygsti.modelpacks.legacy import std1Q_XYI as std
-from pygsti.protocols.gst import ModelEstimateResults
-from pygsti.protocols import Protocol, ProtocolData, CircuitListsDesign
 from pygsti.objects import CircuitList
+from pygsti.protocols import Protocol, ProtocolData, CircuitListsDesign
 from pygsti.protocols import estimate
-
+from pygsti.protocols.gst import ModelEstimateResults
+from . import fixtures as pkg
+from ..util import BaseCase
 
 
 class EstimateBase(object):

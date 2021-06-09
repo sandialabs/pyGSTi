@@ -11,10 +11,11 @@ The ComplementPOVMEffect class and supporting functionality.
 #***************************************************************************************************
 
 import numpy as _np
+
 from .conjugatedeffect import ConjugatedStatePOVMEffect as _ConjugatedStatePOVMEffect
-from ..states.state import State as _State
-from ..states.fullstate import FullState as _FullState
 from .. import modelmember as _modelmember
+from ..states.fullstate import FullState as _FullState
+from ..states.state import State as _State
 
 
 class ComplementPOVMEffect(_ConjugatedStatePOVMEffect):

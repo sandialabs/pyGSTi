@@ -10,15 +10,16 @@ Defines the MatrixCOPALayout class.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from ..tools import slicetools as _slct
-from ..tools import listtools as _lt
-from ..objects.circuitlist import CircuitList as _CircuitList
-from .distlayout import _DistributableAtom
-from .distlayout import DistributableCOPALayout as _DistributableCOPALayout
-from .evaltree import EvalTree as _EvalTree
+import collections as _collections
 
 import numpy as _np
-import collections as _collections
+
+from .distlayout import DistributableCOPALayout as _DistributableCOPALayout
+from .distlayout import _DistributableAtom
+from .evaltree import EvalTree as _EvalTree
+from ..circuits.circuitlist import CircuitList as _CircuitList
+from ..tools import listtools as _lt
+from ..tools import slicetools as _slct
 
 
 class _MatrixCOPALayoutAtom(_DistributableAtom):

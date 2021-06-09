@@ -12,8 +12,9 @@ Parallel rountines as latex.py has for latex conversion.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as _np
 import cmath
+
+import numpy as _np
 
 '''
 table() and cell() functions are used by table.py in table creation

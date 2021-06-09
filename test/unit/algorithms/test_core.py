@@ -1,12 +1,11 @@
 import numpy as np
 
-from ..util import BaseCase
-from . import fixtures
-
 import pygsti.construction as pc
+from pygsti.algorithms import core
 from pygsti.objects import Circuit, Label, Chi2Function, FreqWeightedChi2Function, \
     PoissonPicDeltaLogLFunction, CircuitList
-from pygsti.algorithms import core
+from . import fixtures
+from ..util import BaseCase
 
 
 class CoreStdData(object):

@@ -10,14 +10,14 @@ Serialization routines to/from a meta.json based directory
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import json as _json
-import pickle as _pickle
-import pathlib as _pathlib
 import importlib as _importlib
+import json as _json
+import pathlib as _pathlib
+import pickle as _pickle
 
-from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from . import loaders as _load
 from . import writers as _write
+from ..baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 
 QUICK_LOAD_MAX_SIZE = 10 * 1024  # 10 kilobytes
 

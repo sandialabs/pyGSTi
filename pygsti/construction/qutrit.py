@@ -13,13 +13,12 @@ Routines for building qutrit gates and models
 import numpy as _np
 from scipy import linalg as _linalg
 
-from .. import objects as _objs
-from ..tools import unitary_to_process_mx, change_basis
-from ..models import statespace as _statespace
-from ..models import ExplicitOpModel as _ExplicitOpModel
+from ..baseobjs import Basis as _Basis, statespace as _statespace
+from ..models.gaugegroup import FullGaugeGroup as _FullGaugeGroup
 from ..modelmembers.operations import FullArbitraryOp as _FullArbitraryOp
 from ..modelmembers.povms import UnconstrainedPOVM as _UnconstrainedPOVM
-
+from ..models import ExplicitOpModel as _ExplicitOpModel
+from ..tools import unitary_to_process_mx, change_basis
 
 #Define 2 qubit to symmetric (+) antisymmetric space transformation A:
 A = _np.matrix([[1, 0, 0, 0],
@@ -286,7 +285,7 @@ def create_qutrit_model(error_scale, x_angle=_np.pi / 2, y_angle=_np.pi / 2,
     E2final = change_basis(_np.reshape(E2, (9, 1)), "std", basis)
 
     state_space = _statespace.ExplicitStateSpace(['QT'], [3])
-    qutritMDL = _ExplicitOpModel(state_space, _objs.Basis.cast(basis, 9), evotype=evotype)
+    qutritMDL = _ExplicitOpModel(state_space, _Basis.cast(basis, 9), evotype=evotype)
     qutritMDL.preps['rho0'] = rho0final
     qutritMDL.povms['Mdefault'] = _UnconstrainedPOVM([('0bright', E0final),
                                                       ('1bright', E1final),
@@ -295,6 +294,6 @@ def create_qutrit_model(error_scale, x_angle=_np.pi / 2, y_angle=_np.pi / 2,
     qutritMDL.operations['Gx'] = _FullArbitraryOp(arrType(gateXSOfinal), evotype, state_space)
     qutritMDL.operations['Gy'] = _FullArbitraryOp(arrType(gateYSOfinal), evotype, state_space)
     qutritMDL.operations['Gm'] = _FullArbitraryOp(arrType(gateMSOfinal), evotype, state_space)
-    qutritMDL.default_gauge_group = _objs.gaugegroup.FullGaugeGroup(state_space, evotype)
+    qutritMDL.default_gauge_group = _FullGaugeGroup(state_space, evotype)
 
     return qutritMDL

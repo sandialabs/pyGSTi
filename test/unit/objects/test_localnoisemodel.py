@@ -1,11 +1,10 @@
 import numpy as np
-
-from ..util import BaseCase
-
-from pygsti.objects.circuit import Circuit
 from pygsti.objects.label import Label
+
+from pygsti.circuits.circuit import Circuit
+from pygsti.modelmembers.operations import ComposedOp, EmbeddedOp
 from pygsti.models.localnoisemodel import LocalNoiseModel
-from pygsti.modelmembers.operations import ComposedOp, EmbeddedOp, StaticArbitraryOp
+from ..util import BaseCase
 
 
 class LocalNoiseModelInstanceTester(BaseCase):

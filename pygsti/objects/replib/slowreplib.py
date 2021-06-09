@@ -8,23 +8,20 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import sys
-import time as _time
+import functools as _functools
+import itertools as _itertools
 import math as _math
+
 import numpy as _np
 import scipy.sparse as _sps
-import itertools as _itertools
-import functools as _functools
-
-from ...tools import mpitools as _mpit
-from ...tools import slicetools as _slct
-from ...tools import matrixtools as _mt
-from ...tools import listtools as _lt
-from ...tools import optools as _gt
-from ...tools import sharedmemtools as _smt
-from ...tools.matrixtools import _fas
-
 from scipy.sparse.linalg import LinearOperator
+
+from ...tools import listtools as _lt
+from ...tools import matrixtools as _mt
+from ...tools import mpitools as _mpit
+from ...tools import sharedmemtools as _smt
+from ...tools import slicetools as _slct
+from ...tools.matrixtools import _fas
 
 LARGE = 1000000000
 # a large number such that LARGE is
@@ -897,7 +894,7 @@ class SVOpRepExponentiated(SVOpRep):
 # Stabilizer state (SB) propagation wrapper classes
 class SBStateRep(object):
     def __init__(self, smatrix, pvectors, amps):
-        from ..stabilizer import StabilizerFrame as _StabilizerFrame
+        from pygsti.evotypes.stabilizer import StabilizerFrame as _StabilizerFrame
         self.sframe = _StabilizerFrame(smatrix, pvectors, amps)
         # just rely on StabilizerFrame class to do all the heavy lifting...
 
@@ -2213,7 +2210,7 @@ def SB_prs_directly(fwdsim, rholabel, elabels, circuit, repcache, comm=None, mem
 
 
 def SV_refresh_magnitudes_in_repcache(repcache, paramvec):
-    from ..opcalc import bulk_eval_compact_polynomials_complex as _bulk_eval_compact_polynomials_complex
+    from pygsti.baseobjs.opcalc import bulk_eval_compact_polynomials_complex as _bulk_eval_compact_polynomials_complex
     for repcel in repcache.values():
         #repcel = <RepCacheEl?>repcel
         for termrep in repcel[0]:  # first element of tuple contains list of term-reps

@@ -10,32 +10,31 @@ Sub-package holding model POVM and POVM effect objects.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import functools as _functools
+import itertools as _itertools
+
+import numpy as _np
+
 from .complementeffect import ComplementPOVMEffect
 from .composedeffect import ComposedPOVMEffect
+from .composedpovm import ComposedPOVM
 from .computationaleffect import ComputationalBasisPOVMEffect
+from .computationalpovm import ComputationalBasisPOVM
 from .conjugatedeffect import ConjugatedStatePOVMEffect
-#from .denseeffect.py  # REMOVE
+# from .denseeffect.py  # REMOVE
 from .effect import POVMEffect
 from .fulleffect import FullPOVMEffect
 from .fullpureeffect import FullPOVMPureEffect
+from .marginalizedpovm import MarginalizedPOVM
+from .povm import POVM
 from .staticeffect import StaticPOVMEffect
 from .staticpureeffect import StaticPOVMPureEffect
 from .tensorprodeffect import TensorProductPOVMEffect
-
-from .composedpovm import ComposedPOVM
-from .computationalpovm import ComputationalBasisPOVM
-from .marginalizedpovm import MarginalizedPOVM
-from .povm import POVM
 from .tensorprodpovm import TensorProductPOVM
 from .tppovm import TPPOVM
 from .unconstrainedpovm import UnconstrainedPOVM
-
-
-import numpy as _np
-import itertools as _itertools
-import functools as _functools
-from ...tools import optools as _ot
 from ...tools import basistools as _bt
+from ...tools import optools as _ot
 
 
 def convert(povm, to_type, basis, extra=None):

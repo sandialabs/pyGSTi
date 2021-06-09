@@ -15,7 +15,7 @@ from numpy.random import RandomState as _RandomState
 
 from .statereps import _update_chp_op
 from .. import basereps as _basereps
-from ...models.statespace import StateSpace as _StateSpace
+from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from ...tools import internalgates as _itgs
 
 

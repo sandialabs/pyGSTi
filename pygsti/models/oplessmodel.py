@@ -11,19 +11,14 @@ Defines the OplessModel class
 #***************************************************************************************************
 
 import numpy as _np
-import collections as _collections
 
 from .model import Model as _Model
-from .labeldicts import OutcomeLabelDict as _OutcomeLabelDict
-from ..objects.circuit import Circuit as _Circuit
-from ..objects.label import Label as _Label
-from ..objects.polynomial import Polynomial as _Polynomial
-from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
+from ..baseobjs.opcalc import float_product as prod
+from ..circuits.circuit import Circuit as _Circuit
 from ..forwardsims.successfailfwdsim import SuccessFailForwardSimulator as _SuccessFailForwardSimulator
+from ..baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from ..tools import slicetools as _slct
 
-from ..objects.opcalc import compact_deriv as _compact_deriv, float_product as prod, \
-    bulk_eval_compact_polynomials as _bulk_eval_compact_polynomials
 
 #REMOVE
 #class OplessModelTree(_EvalTree):

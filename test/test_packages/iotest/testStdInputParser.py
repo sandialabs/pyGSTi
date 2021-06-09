@@ -1,9 +1,9 @@
 import unittest
-import warnings
-import pygsti
+
 import numpy as np
-import os
-from ..testutils import BaseTestCase, compare_files, temp_files
+
+import pygsti
+from ..testutils import BaseTestCase, temp_files
 
 
 class TestStdInputParser(BaseTestCase):
@@ -110,7 +110,6 @@ class TestStdInputParser(BaseTestCase):
 
         std = pygsti.io.StdInputParser()
 
-        from pygsti.objects import Label as L
         from pygsti.objects import CircuitLabel as CL
 
         self.assertEqual( std.parse_dataline(dataline_tests[0],expected_counts=2), (['G1', 'G2', 'G3'], [0.1, 100.0]))

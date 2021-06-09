@@ -9,17 +9,27 @@ Defines the CHPForwardSimulator calculator class
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
+
+#from . import povm as _povm
+from ..baseobjs.label import Label as _Label
+# ***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+# ***************************************************************************************************
 import os as _os
-from pathlib import Path as _Path
 import re as _re
 import subprocess as _sp
 import tempfile as _tf
+from pathlib import Path as _Path
 
-#from . import povm as _povm
-from ..objects.label import Label as _Label
-from ..models.labeldicts import OutcomeLabelDict as _OutcomeLabelDict
-from ..modelmembers import povms as _povm
 from .weakforwardsim import WeakForwardSimulator as _WeakForwardSimulator
+from ..modelmembers import povms as _povm
+from pygsti.baseobjs.labeldicts import OutcomeLabelDict as _OutcomeLabelDict
+# from . import povm as _povm
 
 
 class CHPForwardSimulator(_WeakForwardSimulator):

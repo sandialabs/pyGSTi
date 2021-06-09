@@ -1,21 +1,20 @@
 import pickle
+
 import numpy as np
 import scipy.sparse as sps
 
-from ..util import BaseCase, needs_cvxpy
-
-from pygsti.objects import FullGaugeGroupElement, UnitaryGaugeGroupElement, Basis
-from pygsti.models import ExplicitOpModel, statespace
-from pygsti.modelmembers.states import FullState
-from pygsti.modelmembers.instruments import TPInstrument
-from pygsti.tools import basisconstructors as bc
-import pygsti.construction as pc
-from pygsti.construction.modelconstruction import _create_spam_vector, _create_operation
 import pygsti.modelmembers.operations as op
 import pygsti.tools.internalgates as itgs
 import pygsti.tools.optools as gt
+from pygsti.construction.modelconstruction import _create_spam_vector, _create_operation
 from pygsti.evotypes import Evotype
-from pygsti.models import statespace
+from pygsti.modelmembers.instruments import TPInstrument
+from pygsti.modelmembers.states import FullState
+from pygsti.models import ExplicitOpModel
+from pygsti.baseobjs import statespace
+from pygsti.objects import FullGaugeGroupElement, UnitaryGaugeGroupElement, Basis
+from pygsti.tools import basisconstructors as bc
+from ..util import BaseCase, needs_cvxpy
 
 
 class OpBase(object):

@@ -10,26 +10,26 @@ The LindbladErrorgen class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import warnings as _warnings
+
 import numpy as _np
 import scipy.sparse as _sps
 import scipy.sparse.linalg as _spsl
-import warnings as _warnings
 
-from .linearop import LinearOperator as _LinearOperator
-
-from ...objects import term as _term
-from ...objects import gaugegroup as _gaugegroup
-from ...objects.polynomial import Polynomial as _Polynomial
-from ...objects.basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis
-from ...tools import optools as _ot
-from ...tools import matrixtools as _mt
-from ...tools import basistools as _bt
-from ...evotypes import Evotype as _Evotype
-from ...models import statespace as _statespace
-
-from ...objects.opcalc import compact_deriv as _compact_deriv, \
+from pygsti.baseobjs.opcalc import compact_deriv as _compact_deriv, \
     bulk_eval_compact_polynomials_complex as _bulk_eval_compact_polynomials_complex, \
     abs_sum_bulk_eval_compact_polynomials_complex as _abs_sum_bulk_eval_compact_polynomials_complex
+from .linearop import LinearOperator as _LinearOperator
+from .. import term as _term
+from ...evotypes import Evotype as _Evotype
+from ...models import gaugegroup as _gaugegroup
+from ...baseobjs import statespace as _statespace
+from ...baseobjs.basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis
+from ...baseobjs.polynomial import Polynomial as _Polynomial
+from ...tools import basistools as _bt
+from ...tools import matrixtools as _mt
+from ...tools import optools as _ot
+
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 
 

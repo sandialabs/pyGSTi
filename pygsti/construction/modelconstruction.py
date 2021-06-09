@@ -10,33 +10,29 @@ Functions for the construction of new models.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as _np
-import itertools as _itertools
 import collections as _collections
-import scipy.linalg as _spl
-import scipy.sparse as _sps
+import itertools as _itertools
 import warnings as _warnings
 
+import numpy as _np
+import scipy.linalg as _spl
 
-from ..tools import optools as _gt
+from ..evotypes import Evotype as _Evotype
+from ..modelmembers import operations as _op
+from ..modelmembers import povms as _povm
+from ..modelmembers import states as _state
+from ..modelmembers.operations import opfactory as _opfactory
+from ..models import explicitmodel as _emdl
+from ..models import gaugegroup as _gg
+from ..models.localnoisemodel import LocalNoiseModel as _LocalNoiseModel
+from ..baseobjs import label as _label, statespace as _statespace
+from ..baseobjs.basis import Basis as _Basis
+from ..baseobjs.basis import BuiltinBasis as _BuiltinBasis
+from ..baseobjs.basis import DirectSumBasis as _DirectSumBasis
 from ..tools import basistools as _bt
 from ..tools import internalgates as _itgs
+from ..tools import optools as _gt
 from ..tools.basisconstructors import sigmax, sigmay, sigmaz
-from ..modelmembers import operations as _op
-from ..modelmembers import states as _state
-from ..modelmembers import povms as _povm
-from ..modelmembers.operations import opfactory as _opfactory
-from ..models import labeldicts as _ld
-from ..models import explicitmodel as _emdl
-from ..models import statespace as _statespace
-from ..models.localnoisemodel import LocalNoiseModel as _LocalNoiseModel
-from ..objects import gaugegroup as _gg
-from ..objects import qubitgraph as _qubitgraph
-from ..objects import label as _label
-from ..objects.basis import Basis as _Basis
-from ..objects.basis import DirectSumBasis as _DirectSumBasis
-from ..objects.basis import BuiltinBasis as _BuiltinBasis
-from ..evotypes import Evotype as _Evotype
 from ..tools.legacytools import deprecate as _deprecated_fn
 
 
@@ -97,7 +93,7 @@ def _basis_create_spam_vector(vec_expr, basis):
     #                break
     #            vecIndex += 1
     #    start += blockDim
-    #from ..objects.basis import BuiltinBasis
+    #from ..baseobjs.basis import BuiltinBasis
     #hackstd = BuiltinBasis('std',opDim)
     #return _bt.change_basis(vecInReducedStdBasis, hackstd, basis)
 

@@ -1,11 +1,5 @@
-from pygsti.modelpacks.legacy import std1Q_XYI as std
 import pygsti
-import pygsti.algorithms.germselection as germsel
-import pygsti.algorithms.scoring as scoring
-
-import numpy as np
-import sys, os
-
+from pygsti.modelpacks.legacy import std1Q_XYI as std
 from ..algorithms.algorithmsTestCase import AlgorithmTestCase
 
 

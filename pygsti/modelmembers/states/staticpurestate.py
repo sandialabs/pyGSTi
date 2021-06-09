@@ -10,12 +10,7 @@ The StaticPureState class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as _np
-from .state import State as _State
 from .densestate import DensePureState as _DensePureState
-from ...evotypes import Evotype as _Evotype
-from ...models import statespace as _statespace
-from ...objects.basis import Basis as _Basis
 
 
 class StaticPureState(_DensePureState):

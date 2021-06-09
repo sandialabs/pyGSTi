@@ -1,12 +1,12 @@
-import numpy as np
 import unittest
 
-from ..util import BaseCase
+import numpy as np
+from pygsti.objects.label import Label
 
 import pygsti
-from pygsti.tools import matrixmod2
-from pygsti.objects.label import Label
 import pygsti.tools.symplectic as symplectic
+from pygsti.tools import matrixmod2
+from ..util import BaseCase
 
 try:
     from pygsti.tools import fastcalc as _fastcalc

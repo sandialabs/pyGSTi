@@ -1,9 +1,8 @@
-from ..util import BaseCase
-from . import fixtures
-
+import pygsti.algorithms.fiducialpairreduction as fpr
 import pygsti.construction as pc
 from pygsti.objects import Circuit
-import pygsti.algorithms.fiducialpairreduction as fpr
+from . import fixtures
+from ..util import BaseCase
 
 _SEED = 1234
 

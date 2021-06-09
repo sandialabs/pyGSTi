@@ -10,23 +10,20 @@ The ExpErrorgenOp class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as _np
-import scipy.sparse as _sps
-import scipy.linalg as _spl
-import scipy.sparse.linalg as _spsl
 import warnings as _warnings
-from .linearop import LinearOperator as _LinearOperator
-from .denseop import DenseOperatorInterface as _DenseOperatorInterface
 
-from .. import modelmember as _modelmember
+import numpy as _np
+import scipy.linalg as _spl
+import scipy.sparse as _sps
+import scipy.sparse.linalg as _spsl
+
+from .linearop import LinearOperator as _LinearOperator
+from .. import modelmember as _modelmember, term as _term
 from ..errorgencontainer import ErrorGeneratorContainer as _ErrorGeneratorContainer
-from ...tools import optools as _ot
-from ...tools import jamiolkowski as _jt
+from ...models import gaugegroup as _gaugegroup
+from ...baseobjs.polynomial import Polynomial as _Polynomial
 from ...tools import matrixtools as _mt
-from ...objects.basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis
-from ...objects import term as _term
-from ...objects.polynomial import Polynomial as _Polynomial
-from ...objects import gaugegroup as _gaugegroup
+
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 MAX_EXPONENT = _np.log(_np.finfo('d').max) - 10.0  # so that exp(.) doesn't overflow
 

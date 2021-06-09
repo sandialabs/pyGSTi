@@ -1,20 +1,18 @@
 # XXX rewrite/refactor forward-simulator tests
 
-import numpy as np
 import pickle
 from contextlib import contextmanager
-import functools
 
-from ..util import BaseCase, needs_cvxpy
+import numpy as np
 
-from pygsti.objects import Circuit, FullGaugeGroupElement
-from pygsti.forwardsims import matrixforwardsim, mapforwardsim
-from pygsti.models import ExplicitOpModel
-from pygsti.modelmembers.instruments import Instrument
-from pygsti.modelmembers.operations import LinearOperator, FullArbitraryOp
-from pygsti.tools import indices
 import pygsti.construction as pc
 import pygsti.models.model as m
+from pygsti.forwardsims import matrixforwardsim, mapforwardsim
+from pygsti.modelmembers.instruments import Instrument
+from pygsti.modelmembers.operations import LinearOperator, FullArbitraryOp
+from pygsti.models import ExplicitOpModel
+from pygsti.objects import Circuit, FullGaugeGroupElement
+from ..util import BaseCase, needs_cvxpy
 
 
 @contextmanager

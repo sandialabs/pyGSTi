@@ -1,13 +1,12 @@
-
-import numpy as _np
 import copy as _copy
+
 from .state import State as _State
 from ...evotypes import Evotype as _Evotype
-from ...models import statespace as _statespace
-from ...tools import matrixtools as _mt
+from ...baseobjs import statespace as _statespace
+from ...baseobjs.basis import Basis as _Basis
 from ...tools import basistools as _bt
+from ...tools import matrixtools as _mt
 from ...tools import optools as _ot
-from ...objects.basis import Basis as _Basis
 
 
 class DenseStateInterface(object):

@@ -10,16 +10,15 @@ The EmbeddedOp class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import collections as _collections
+import itertools as _itertools
+
 import numpy as _np
 import scipy.sparse as _sps
-import itertools as _itertools
-import collections as _collections
 
 from .linearop import LinearOperator as _LinearOperator
-from .denseop import DenseOperatorInterface as _DenseOperatorInterface
-
 from .. import modelmember as _modelmember
-from ...objects.basis import EmbeddedBasis as _EmbeddedBasis
+from ...baseobjs.basis import EmbeddedBasis as _EmbeddedBasis
 
 
 class EmbeddedOp(_LinearOperator):

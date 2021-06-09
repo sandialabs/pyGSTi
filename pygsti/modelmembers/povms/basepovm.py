@@ -11,14 +11,15 @@ Defines the _BasePOVM class (a base class for other POVMs, not to be used indepe
 #***************************************************************************************************
 
 
-import numpy as _np
 import collections as _collections
 
-from .. import modelmember as _mm
-from .povm import POVM as _POVM
+import numpy as _np
+
+from .complementeffect import ComplementPOVMEffect as _ComplementPOVMEffect
 from .effect import POVMEffect as _POVMEffect
 from .fulleffect import FullPOVMEffect as _FullPOVMEffect
-from .complementeffect import ComplementPOVMEffect as _ComplementPOVMEffect
+from .povm import POVM as _POVM
+from .. import modelmember as _mm
 
 
 class _BasePOVM(_POVM):

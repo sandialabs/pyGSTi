@@ -12,10 +12,11 @@ I*X(pi/2), I*Y(pi/2), X(pi/2)*I, Y(pi/2)*I, and CPHASE.
 """
 
 import sys as _sys
+from collections import OrderedDict as _OrderedDict
+
 from ...construction import circuitconstruction as _strc
 from ...construction import modelconstruction as _setc
 from ...construction import stdtarget as _stdtarget
-from collections import OrderedDict as _OrderedDict
 
 description = "I*I, I*X(pi/2), I*Y(pi/2), X(pi/2)*I, and Y(pi/2)*I gates"
 
