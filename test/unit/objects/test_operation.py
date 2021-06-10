@@ -273,7 +273,10 @@ class StaticStdOpTester(BaseCase):
 
         for name, U in std_unitaries.items():
             if callable(U): continue  # skip unitary functions (create factories)
-            svop = op.StaticStandardOp(name, 'pp', 'statevec', state_space=None)
+            try:
+                svop = op.StaticStandardOp(name, 'pp', 'statevec', state_space=None)
+            except ModuleNotFoundError:  # if 'statevec' isn't built (no cython)
+                svop = op.StaticStandardOp(name, 'pp', 'statevec_slow', state_space=None)
             self.assertArraysAlmostEqual(svop._rep.to_dense('Hilbert'), U)
 
     def test_densitymx_svterm_cterm(self):

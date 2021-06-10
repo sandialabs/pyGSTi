@@ -58,7 +58,7 @@ class OpRepDenseUnitary(OpRep):
         assert(mx.ndim == 2 and mx.shape[0] == state_space.udim)
         self.basis = basis
         self.base = _np.require(mx, requirements=['OWNDATA', 'C_CONTIGUOUS'])
-        super(OpRep, self).__init__(self.base.shape[0])
+        super(OpRepDenseUnitary, self).__init__(state_space)
 
     def base_has_changed(self):
         pass

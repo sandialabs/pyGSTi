@@ -374,6 +374,14 @@ class ProcessorSpec(object):
                 "Clifford model must use 'static clifford' parameterizations"
             assert(simulator in ('auto', 'map') or isinstance(simulator, _MapFSim)), \
                 "Clifford model must use 'map' simulation type"
+
+            # TODO: don't use default evotype - HARDCODED evotype!
+            try:
+                from ..evotypes import stabilizer as _dummy
+                clifford_evotype = 'stabilizer'
+            except ImportError:
+                clifford_evotype = 'stabilizer_slow'
+
             model = _LocalNoiseModel.from_parameterization(
                 self.number_of_qubits,
                 self.root_gate_names,
@@ -381,7 +389,7 @@ class ProcessorSpec(object):
                 self.availability,
                 self.qubit_labels,
                 parameterization='static clifford',
-                evotype='stabilizer',  # don't use default evotype - HARDCODED evotype!
+                evotype=clifford_evotype,
                 simulator=simulator,
                 on_construction_error='warn',  # *drop* gates that aren't cliffords
                 independent_gates=False,

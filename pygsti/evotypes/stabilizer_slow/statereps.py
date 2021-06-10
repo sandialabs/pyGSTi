@@ -13,7 +13,9 @@ State representations for "stabilizer_slow" evolution type.
 
 import numpy as _np
 
-from .. import basereps as _basereps, stabilizer as _stabilizer
+from . import stabilizer as _stabilizer
+from .. import basereps as _basereps
+
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 
 
