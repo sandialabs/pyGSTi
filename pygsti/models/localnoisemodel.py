@@ -65,8 +65,8 @@ class LocalNoiseModel(_ImplicitOpModel):
         If a dict, then the keys are labels and the values are layer operators.
         If a list, then the elements are layer operators and the labels will be
         assigned as "rhoX" where X is an integer starting at 0.  If a single
-        layer operation is given, then this is used as the sole prep and is
-        assigned the label "rho0".
+        layer operation of type :class:`State` is given, then this is used as
+        the sole prep and is assigned the label "rho0".
 
     povm_layers : None or operator or dict or list
         The state preparateion operations as n-qubit layer operations.  If
@@ -74,8 +74,8 @@ class LocalNoiseModel(_ImplicitOpModel):
         then the keys are labels and the values are layer operators.  If a list,
         then the elements are layer operators and the labels will be assigned as
         "MX" where X is an integer starting at 0.  If a single layer operation
-        is given, then this is used as the sole POVM and is assigned the label
-        "Mdefault".
+        of type :class:`POVM` is given, then this is used as the sole POVM and
+        is assigned the label "Mdefault".
 
     availability : dict, optional
         A dictionary whose keys are the same gate names as in
