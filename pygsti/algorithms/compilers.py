@@ -13,6 +13,8 @@ Clifford circuit, CNOT circuit, and stabilizer state/measurement generation comp
 import numpy as _np
 import copy as _copy
 
+from scipy.sparse.construct import rand
+
 from ..objects.circuit import Circuit as _Circuit
 from ..objects.label import Label as _Label
 from ..tools import symplectic as _symp
@@ -66,7 +68,8 @@ def _create_standard_costfunction(name):
 
 
 def compile_clifford(s, p, pspec=None, qubit_labels=None, iterations=20, algorithm='ROGGE', aargs=[],
-                     costfunction='2QGC:10:depth:1', prefixpaulis=False, paulirandomize=False):
+                     costfunction='2QGC:10:depth:1', prefixpaulis=False, paulirandomize=False,
+                     rand_state=None):
     """
     Compiles an n-qubit Clifford gate into a circuit over a given model.
 
@@ -169,6 +172,9 @@ def compile_clifford(s, p, pspec=None, qubit_labels=None, iterations=20, algorit
         That is, this Pauli-frame-randomizes / Pauli-twirls the internal layers of this Clifford circuit. This can
         be useful for preventing coherent addition of errors in the circuit.
 
+    rand_state: RandomState, optional
+        A np.random.RandomState object for seeding RNG
+
     Returns
     -------
     Circuit
@@ -190,11 +196,15 @@ def compile_clifford(s, p, pspec=None, qubit_labels=None, iterations=20, algorit
         assert(qubit_labels is None), "qubit_labels can only be specified if `pspec` is not None!"
         #qubit_labels = list(range(n))  #EGN commented this out b/c it leads to assertion error in compile_simplectic
 
+    if rand_state is None:
+        rand_state = _np.random.RandomState()
+
     # Create a circuit that implements a Clifford with symplectic matrix s. This is the core
     # of this compiler, and is the part that can be implemented with different algorithms.
     circuit = compile_symplectic(s, pspec=pspec, qubit_labels=qubit_labels, iterations=iterations,
                                  algorithms=[algorithm], costfunction=costfunction,
-                                 paulirandomize=paulirandomize, aargs={'algorithm': aargs}, check=False)
+                                 paulirandomize=paulirandomize, aargs={'algorithm': aargs},
+                                 check=False, rand_state=rand_state)
     circuit = circuit.copy(editable=True)
 
     temp_s, temp_p = _symp.symplectic_rep_of_clifford_circuit(circuit, pspec=pspec)
@@ -228,7 +238,7 @@ def compile_clifford(s, p, pspec=None, qubit_labels=None, iterations=20, algorit
 
 
 def compile_symplectic(s, pspec=None, qubit_labels=None, iterations=20, algorithms=['ROGGE'],
-                       costfunction='2QGC:10:depth:1', paulirandomize=False, aargs={}, check=True):
+                       costfunction='2QGC:10:depth:1', paulirandomize=False, aargs={}, check=True, rand_state=None):
     """
     Creates a :class:`Circuit` that implements a Clifford gate given in the symplectic representation.
 
@@ -322,6 +332,9 @@ def compile_symplectic(s, pspec=None, qubit_labels=None, iterations=20, algorith
         Whether to check that the output circuit implements the correct symplectic matrix (i.e., tests for algorithm
         success).
 
+    rand_state: RandomState, optional
+        A np.random.RandomState object for seeding RNG
+
     Returns
     -------
     Circuit
@@ -342,6 +355,9 @@ def compile_symplectic(s, pspec=None, qubit_labels=None, iterations=20, algorith
             import bpdb; bpdb.set_trace()
             pass
         assert(qubit_labels is None), "qubit_labels can only be specified if `pspec` is not None!"
+    
+    if rand_state is None:
+        rand_state = _np.random.RandomState()
 
     all_algorithms = ['BGGE', 'ROGGE', 'iAGvGE']  # Future: ['AGvGE','AGvPMH','iAGvPMH']
     assert(set(algorithms).issubset(set(all_algorithms))), "One or more algorithms names are invalid!"
@@ -371,7 +387,7 @@ def compile_symplectic(s, pspec=None, qubit_labels=None, iterations=20, algorith
     if 'ROGGE' in algorithms:
         circuit = _compile_symplectic_using_rogge_algorithm(s, pspec=pspec, qubit_labels=qubit_labels, ctype='basic',
                                                             costfunction=costfunction, iterations=iterations,
-                                                            check=False)
+                                                            check=False, rand_state=rand_state)
         circuits.append(circuit)
 
     # Future:
@@ -399,7 +415,7 @@ def compile_symplectic(s, pspec=None, qubit_labels=None, iterations=20, algorith
         # randomization).
         circuit = _compile_symplectic_using_riag_algoritm(s, pspec, qubit_labels=qubit_labels, iterations=iterations,
                                                           cnotalg='COiCAGE', cargs=[], costfunction=costfunction,
-                                                          check=False)
+                                                          check=False, rand_state=rand_state)
         circuits.append(circuit)
 
     # Future
@@ -428,16 +444,16 @@ def compile_symplectic(s, pspec=None, qubit_labels=None, iterations=20, algorith
         for i in range(0, d + 1):
             # Different labelling depending on qubit_labels and pspec.
             if pspec is None:
-                pcircuit = _Circuit(layer_labels=[_Label(paulilist[_np.random.randint(4)], k)
+                pcircuit = _Circuit(layer_labels=[_Label(paulilist[rand_state.randint(4)], k)
                                                   for k in range(n)], num_lines=n, identity='I')
             else:
                 # Map the circuit to the correct qubit labels
                 if qubit_labels is not None:
-                    pcircuit = _Circuit(layer_labels=[_Label(paulilist[_np.random.randint(4)], qubit_labels[k])
+                    pcircuit = _Circuit(layer_labels=[_Label(paulilist[rand_state.randint(4)], qubit_labels[k])
                                                       for k in range(n)],
                                         line_labels=qubit_labels, editable=True)  # , identity=pspec.identity)
                 else:
-                    pcircuit = _Circuit(layer_labels=[_Label(paulilist[_np.random.randint(4)], pspec.qubit_labels[k])
+                    pcircuit = _Circuit(layer_labels=[_Label(paulilist[rand_state.randint(4)], pspec.qubit_labels[k])
                                                       for k in range(n)],
                                         line_labels=pspec.qubit_labels, editable=True)  # , identity=pspec.identity)
                 # Compile the circuit into the native model, using an "absolute" compilation -- Pauli-equivalent is
@@ -455,7 +471,7 @@ def compile_symplectic(s, pspec=None, qubit_labels=None, iterations=20, algorith
 
 
 def _compile_symplectic_using_rogge_algorithm(s, pspec=None, qubit_labels=None, ctype='basic',
-                                              costfunction='2QGC:10:depth:1', iterations=10, check=True):
+                                              costfunction='2QGC:10:depth:1', iterations=10, check=True, rand_state=None):
     """
     Creates a :class:`Circuit` that implements a Clifford gate using the ROGGE algorithm.
 
@@ -513,6 +529,9 @@ def _compile_symplectic_using_rogge_algorithm(s, pspec=None, qubit_labels=None, 
     check : bool, optional
         Whether to check that the output circuit implements the correct symplectic matrix (i.e., tests for algorithm
         success).
+    
+    rand_state: RandomState, optional
+        A np.random.RandomState object for seeding RNG
 
     Returns
     -------
@@ -525,6 +544,9 @@ def _compile_symplectic_using_rogge_algorithm(s, pspec=None, qubit_labels=None, 
     if isinstance(costfunction, str):
         costfunction = _create_standard_costfunction(costfunction)
 
+    if rand_state is None:
+        rand_state = _np.random.RandomState()
+
     # The elimination order in terms of qubit *index*, which is randomized below.
     if qubit_labels is not None:
         eliminationorder = list(range(len(qubit_labels)))
@@ -536,7 +558,7 @@ def _compile_symplectic_using_rogge_algorithm(s, pspec=None, qubit_labels=None, 
     lowestcost = _np.inf
     for i in range(0, iterations):
         # Pick a random order to attempt the elimination in
-        _np.random.shuffle(eliminationorder)
+        rand_state.shuffle(eliminationorder)
         # Call the re-ordered global Gaussian elimination, which is wrap-around for the GE algorithms to deal
         # with qubit relabeling. Check is False avoids multiple checks of success, when only the last check matters.
         circuit = _compile_symplectic_using_ogge_algorithm(
@@ -959,7 +981,7 @@ def _compile_symplectic_using_ag_algorithm(s, pspec=None, qubit_labels=None, cno
 
 
 def _compile_symplectic_using_riag_algoritm(s, pspec, qubit_labels=None, iterations=20, cnotalg='COiCAGE',
-                                            cargs=[], costfunction='2QGC:10:depth:1', check=True):
+                                            cargs=[], costfunction='2QGC:10:depth:1', check=True, rand_state=None):
     """
     Creates a :class:`Circuit` that implements a Clifford gate using the RIAG algorithm.
 
@@ -1027,6 +1049,9 @@ def _compile_symplectic_using_riag_algoritm(s, pspec, qubit_labels=None, iterati
         Whether to check that the output circuit implements the correct symplectic matrix (i.e., tests for algorithm
         success).
 
+    rand_state: RandomState, optional
+        A np.random.RandomState object for seeding RNG
+
     Returns
     -------
     Circuit
@@ -1035,10 +1060,13 @@ def _compile_symplectic_using_riag_algoritm(s, pspec, qubit_labels=None, iterati
     # If the costfunction is a string, create the relevant "standard" costfunction function.
     if isinstance(costfunction, str): costfunction = _create_standard_costfunction(costfunction)
 
+    if rand_state is None:
+        rand_state = _np.random.RandomState()
+
     mincost = _np.inf
     for i in range(iterations):
         circuit = _compile_symplectic_using_iag_algorithm(
-            s, pspec, qubit_labels=qubit_labels, cnotalg=cnotalg, cargs=cargs, check=False)
+            s, pspec, qubit_labels=qubit_labels, cnotalg=cnotalg, cargs=cargs, check=False, rand_state=rand_state)
 
         # Change to the native gate library
         if pspec is not None:  # Currently pspec is not optional, so this always happens.
@@ -1065,7 +1093,7 @@ def _compile_symplectic_using_riag_algoritm(s, pspec, qubit_labels=None, iterati
     return bestcircuit
 
 
-def _compile_symplectic_using_iag_algorithm(s, pspec, qubit_labels=None, cnotalg='COCAGE', cargs=[], check=True):
+def _compile_symplectic_using_iag_algorithm(s, pspec, qubit_labels=None, cnotalg='COCAGE', cargs=[], check=True, rand_state=None):
     """
     Creates a :class:`Circuit` that implements a Clifford gate using the IAG algorithm.
 
@@ -1099,6 +1127,9 @@ def _compile_symplectic_using_iag_algorithm(s, pspec, qubit_labels=None, cnotalg
     check : bool, optional
         Whether to check that the generated circuit does implement `s`.
 
+    rand_state: RandomState, optional
+        A np.random.RandomState object for seeding RNG
+
     Returns
     -------
     Circuit
@@ -1115,12 +1146,15 @@ def _compile_symplectic_using_iag_algorithm(s, pspec, qubit_labels=None, cnotalg
         assert(len(qubit_labels) == n), \
             ("The number of qubits is inconsisent with the size of `s`! "
              "If `s` is over a subset, `qubit_labels` must be specified!")
+    
+    if rand_state is None:
+        rand_state = _np.random.RandomState()
 
     # A matrix to keep track of the current state of s.
     sout = s.copy()
 
     # Stage 1: Hadamard gates from the LHS to make the UR submatrix of s invertible.
-    sout, LHS1_Hsome_layer = _make_submatrix_invertable_using_hadamards(sout, 'row', 'UR', qubit_labels)
+    sout, LHS1_Hsome_layer = _make_submatrix_invertable_using_hadamards(sout, 'row', 'UR', qubit_labels, rand_state=rand_state)
     assert(_symp.check_symplectic(sout))
     # Stage 2: CNOT circuit from the RHS to map the UR submatrix of s to I.
     sout, RHS1A_CNOTs, success = _submatrix_gaussian_elimination_using_cnots(sout, 'column', 'UR', qubit_labels)
@@ -1179,11 +1213,11 @@ def _compile_symplectic_using_iag_algorithm(s, pspec, qubit_labels=None, cnotalg
 
     # clname is set to None so that the function doesn't change the circuit into the native gate library.
     circuit_1_cnots = compile_cnot_circuit(cnot1_s, pspec, qubit_labels=qubit_labels,
-                                           algorithm=cnotalg, clname=None, check=False, aargs=cargs)
+                                           algorithm=cnotalg, clname=None, check=False, aargs=cargs, rand_state=rand_state)
     circuit_2_cnots = compile_cnot_circuit(cnot2_s, pspec, qubit_labels=qubit_labels,
-                                           algorithm=cnotalg, clname=None, check=False, aargs=cargs)
+                                           algorithm=cnotalg, clname=None, check=False, aargs=cargs, rand_state=rand_state)
     circuit_3_cnots = compile_cnot_circuit(cnot3_s, pspec, qubit_labels=qubit_labels,
-                                           algorithm=cnotalg, clname=None, check=False, aargs=cargs)
+                                           algorithm=cnotalg, clname=None, check=False, aargs=cargs, rand_state=rand_state)
 
     circuit = circuit_1_cnots.copy(editable=True)
     circuit.append_circuit_inplace(circuit_1_local)
@@ -1200,7 +1234,7 @@ def _compile_symplectic_using_iag_algorithm(s, pspec, qubit_labels=None, cnotalg
     return circuit
 
 
-def compile_cnot_circuit(s, pspec, qubit_labels=None, algorithm='COiCAGE', clname=None, check=True, aargs=[]):
+def compile_cnot_circuit(s, pspec, qubit_labels=None, algorithm='COiCAGE', clname=None, check=True, aargs=[], rand_state=None):
     """
     A CNOT circuit compiler.
 
@@ -1273,6 +1307,9 @@ def compile_cnot_circuit(s, pspec, qubit_labels=None, algorithm='COiCAGE', clnam
         to the algorithm as the arguments after the optional `qubit_labels` and `check` arguments (the first of which is
         set by the input `qubit_labels` in this function).
 
+    rand_state: RandomState, optional
+        A np.random.RandomState object for seeding RNG
+
     Returns
     -------
     Circuit
@@ -1288,6 +1325,9 @@ def compile_cnot_circuit(s, pspec, qubit_labels=None, algorithm='COiCAGE', clnam
     assert(_np.array_equal(s[n:2 * n, :n], _np.zeros((n, n), int))
            ), "`s` is not block-diagonal and so does not rep. a valid CNOT circuit!"
     assert(_symp.check_symplectic(s)), "`s` is not symplectic, so it does not rep. a valid CNOT circuit!"
+
+    if rand_state is None:
+        rand_state = _np.random.RandomState()
 
     # basic GE
     if algorithm == 'BGE': circuit = _compile_cnot_circuit_using_bge_algorithm(s, pspec, qubit_labels=qubit_labels)
@@ -1335,7 +1375,7 @@ def compile_cnot_circuit(s, pspec, qubit_labels=None, algorithm='COiCAGE', clnam
     elif algorithm == 'ROCAGE':
         # future : add an iterations option?
         qubitorder = _copy.copy(qubits)
-        _np.random.shuffle(qubitorder)
+        rand_state.shuffle(qubitorder)
         if algorithm == 'ROCAGE':
             circuit = _compile_cnot_circuit_using_ocage_algorithm(
                 s, pspec, qubitorder, qubit_labels=qubit_labels, check=True, *aargs)
@@ -1950,7 +1990,8 @@ def _compile_cnot_circuit_using_oicage_algorithm(s, pspec, qubitorder, qubit_lab
 
 
 def compile_stabilizer_state(s, p, pspec, qubit_labels=None, iterations=20, paulirandomize=False,
-                             algorithm='COiCAGE', aargs=[], costfunction='2QGC:10:depth:1'):
+                             algorithm='COiCAGE', aargs=[], costfunction='2QGC:10:depth:1',
+                             rand_state=None):
     """
     Generates a circuit to create the stabilizer state from the standard input state |0,0,0,...>.
 
@@ -2026,6 +2067,9 @@ def compile_stabilizer_state(s, p, pspec, qubit_labels=None, iterations=20, paul
             - 'depth' : the cost of the circuit is the depth of the circuit.
             - '2QGC:x:depth:y' : the cost of the circuit is x * the number of 2-qubit gates in the circuit +
                 y * the depth of the circuit, where x and y are integers.
+    
+    rand_state: RandomState, optional
+        A np.random.RandomState object for seeding RNG
 
     Returns
     -------
@@ -2035,6 +2079,9 @@ def compile_stabilizer_state(s, p, pspec, qubit_labels=None, iterations=20, paul
     assert(_symp.check_valid_clifford(s, p)), "The input s and p are not a valid clifford."
 
     if qubit_labels is None: qubit_labels = pspec.qubit_labels
+
+    if rand_state is None:
+        rand_state = _np.random.RandomState()
 
     n = _np.shape(s)[0] // 2
     assert(n == len(qubit_labels)), \
@@ -2054,7 +2101,7 @@ def compile_stabilizer_state(s, p, pspec, qubit_labels=None, iterations=20, paul
 
         try:
             tc, tcc = compile_conditional_symplectic(
-                s, pspec, qubit_labels=qubit_labels, calg=algorithm, cargs=aargs, check=False)
+                s, pspec, qubit_labels=qubit_labels, calg=algorithm, cargs=aargs, check=False, rand_state=rand_state)
             tc = tc.copy(editable=True)
             i += 1
             # Do the depth-compression *before* changing gate library
@@ -2077,7 +2124,7 @@ def compile_stabilizer_state(s, p, pspec, qubit_labels=None, iterations=20, paul
         paulilist = ['I', 'X', 'Y', 'Z']
         d = circuit.depth
         for i in range(1, d + 1):
-            pcircuit = _Circuit(layer_labels=[_Label(paulilist[_np.random.randint(4)], qubit_labels[k])
+            pcircuit = _Circuit(layer_labels=[_Label(paulilist[rand_state.randint(4)], qubit_labels[k])
                                               for k in range(n)],
                                 line_labels=qubit_labels, editable=True)
             pcircuit.change_gate_library(pspec.compilations['absolute'])  # ,identity=pspec.identity)
@@ -2110,7 +2157,7 @@ def compile_stabilizer_state(s, p, pspec, qubit_labels=None, iterations=20, paul
 
 
 def compile_stabilizer_measurement(s, p, pspec, qubit_labels=None, iterations=20, paulirandomize=False,
-                                   algorithm='COCAGE', aargs=[], costfunction='2QGC:10:depth:1'):
+                                   algorithm='COCAGE', aargs=[], costfunction='2QGC:10:depth:1', rand_state=None):
     """
     Generates a circuit to map the stabilizer state to the standard state |0,0,0,...>.
 
@@ -2189,6 +2236,9 @@ def compile_stabilizer_measurement(s, p, pspec, qubit_labels=None, iterations=20
             - 'depth' : the cost of the circuit is the depth of the circuit.
             - '2QGC:x:depth:y' : the cost of the circuit is x * the number of 2-qubit gates in the circuit +
                 y * the depth of the circuit, where x and y are integers.
+    
+    rand_state: RandomState, optional
+        A np.random.RandomState object for seeding RNG
 
     Returns
     -------
@@ -2203,6 +2253,9 @@ def compile_stabilizer_measurement(s, p, pspec, qubit_labels=None, iterations=20
     n = _np.shape(s)[0] // 2
     assert(n == len(qubit_labels)), \
         "The input `s` is the wrong size for the number of qubits specified by `pspec` or `qubit_labels`!"
+    
+    if rand_state is None:
+        rand_state = _np.random.RandomState()
 
     # Because we're compiling a measurement, we need a circuit to implement s inverse
     sin, pin = _symp.inverse_clifford(s, p)
@@ -2223,7 +2276,7 @@ def compile_stabilizer_measurement(s, p, pspec, qubit_labels=None, iterations=20
             # Find a circuit to conditionally implement s, then reverse it to conditionally implement sin (all gates are
             # self-inverse up to Paulis in CNOT, H, and P).
             tc, tcc = compile_conditional_symplectic(
-                s, pspec, qubit_labels=qubit_labels, calg=algorithm, cargs=aargs, check=False)
+                s, pspec, qubit_labels=qubit_labels, calg=algorithm, cargs=aargs, check=False, rand_state=rand_state)
             tc = tc.copy(editable=True)
             tc.reverse_inplace()
             # Do the depth-compression *after* the circuit is reversed (after this, reversing circuit doesn't implement
@@ -2248,7 +2301,7 @@ def compile_stabilizer_measurement(s, p, pspec, qubit_labels=None, iterations=20
         paulilist = ['I', 'X', 'Y', 'Z']
         d = circuit.depth
         for i in range(0, d):
-            pcircuit = _Circuit(layer_labels=[_Label(paulilist[_np.random.randint(4)], qubit_labels[k])
+            pcircuit = _Circuit(layer_labels=[_Label(paulilist[rand_state.randint(4)], qubit_labels[k])
                                               for k in range(n)],
                                 line_labels=qubit_labels, editable=True)
             pcircuit.change_gate_library(pspec.compilations['absolute'])  # ,identity=pspec.identity)
@@ -2499,7 +2552,7 @@ def _submatrix_gaussian_elimination_using_cnots(s, optype, position, qubit_label
     return sout, instruction_list, True
 
 
-def _make_submatrix_invertable_using_hadamards(s, optype, position, qubit_labels):
+def _make_submatrix_invertable_using_hadamards(s, optype, position, qubit_labels, rand_state=None):
     """
     Uses row-action or column-action Hadamard gates to make a submatrix of `s` invertable.
 
@@ -2523,6 +2576,9 @@ def _make_submatrix_invertable_using_hadamards(s, optype, position, qubit_labels
         The qubit labels corresponding to the indices of `s`. This is required because othewise
         it is ambigious as to what the 'name' of a qubit associated with each indices is, so it
         is not possible to return a suitable list of CNOTs.
+    
+    rand_state: RandomState, optional
+        A np.random.RandomState object for seeding RNG
 
     Returns
     -------
@@ -2541,6 +2597,9 @@ def _make_submatrix_invertable_using_hadamards(s, optype, position, qubit_labels
     # A list of the qubits on which to do Hadamards.
     h_list = []
 
+    if rand_state is None:
+        rand_state = _np.random.RandomState()
+
     while not success:
 
         iteration += 1
@@ -2550,7 +2609,7 @@ def _make_submatrix_invertable_using_hadamards(s, optype, position, qubit_labels
         # If this didn't succed, the matrix isn't currently invertable
         if not success:
             # Pick a random qubit.
-            hqubit = _np.random.randint(n)
+            hqubit = rand_state.randint(n)
             # Update sout with the action of Hadamard on this qubit.
             _symp.apply_internal_gate_to_symplectic(sout, 'H', (hqubit,), optype=optype)
             # If hqubit was already in the list, we remove it.
@@ -2823,7 +2882,7 @@ def _apply_hadamard_to_all_qubits(s, optype, qubit_labels):
     return sout, instructions
 
 
-def compile_conditional_symplectic(s, pspec, qubit_labels=None, calg='COiCAGE', cargs=[], check=True):
+def compile_conditional_symplectic(s, pspec, qubit_labels=None, calg='COiCAGE', cargs=[], check=True, rand_state=None):
     """
     Finds circuits that partially (conditional on the input) implement the Clifford given by `s`.
 
@@ -2876,6 +2935,9 @@ def compile_conditional_symplectic(s, pspec, qubit_labels=None, calg='COiCAGE', 
     check : bool, optional
         Whether to check that the output is correct.
 
+    rand_state: RandomState, optional
+        A np.random.RandomState object for seeding RNG
+
     Returns
     -------
     Circuit
@@ -2894,11 +2956,14 @@ def compile_conditional_symplectic(s, pspec, qubit_labels=None, calg='COiCAGE', 
             ("The number of qubits is inconsisent with the size of `s`! "
              "If `s` is over a subset, `qubit_labels` must be specified!")
 
+    if rand_state is None:
+        rand_state = _np.random.RandomState()
+
     # A matrix to keep track of the current state of s.
     sout = s.copy()
 
     # Stage 1: Hadamard gates from the LHS to make the UR submatrix of s invertible.
-    sout, Hsome_layer = _make_submatrix_invertable_using_hadamards(sout, 'row', 'UR', qubit_labels)
+    sout, Hsome_layer = _make_submatrix_invertable_using_hadamards(sout, 'row', 'UR', qubit_labels, rand_state=rand_state)
 
     if n > 1:
         # Stage 2: CNOT circuit from the RHS to map the UR submatrix of s to I.
@@ -2946,7 +3011,7 @@ def compile_conditional_symplectic(s, pspec, qubit_labels=None, calg='COiCAGE', 
                 _Circuit(layer_labels=CNOTs, line_labels=qubit_labels).parallelize())
             # clname is set to None so that the function doesn't change the circuit into the native gate library.
             circuit = compile_cnot_circuit(cnot_s, pspec, qubit_labels=qubit_labels,
-                                           algorithm=calg, clname=None, check=False, aargs=cargs)
+                                           algorithm=calg, clname=None, check=False, aargs=cargs, rand_state=rand_state)
         circuit = circuit.copy(editable=True)
     else:
         circuit = _Circuit(layer_labels=[], line_labels=qubit_labels, editable=True)

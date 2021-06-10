@@ -14,19 +14,16 @@ import itertools as _itertools
 import multiprocessing as _mp
 
 # Modified from https://stackoverflow.com/a/53173433
-def starmap_with_kwargs(fn, num_runs, num_processors, *args, **kwargs):
+def starmap_with_kwargs(fn, num_runs, num_processors, args_list, kwargs_list):
     # If only one processor, run serial (makes it easier to profile and avoids any Pool overhead)
     if num_processors == 1:
-        r = []
-        for _ in range(num_runs):
-            r.append(fn(*args, **kwargs))
-        return r
+        return [fn(*args_list[i], **kwargs_list[i]) for i in range(num_runs)]
 
     with _mp.Pool(num_processors) as pool:
         args_for_starmap = zip(
             _itertools.repeat(fn, num_runs),
-            _itertools.repeat(args, num_runs),
-            _itertools.repeat(kwargs, num_runs))
+            args_list,
+            kwargs_list)
         return pool.starmap(_apply_args_and_kwargs, args_for_starmap)
 
 def _apply_args_and_kwargs(fn, args, kwargs):
