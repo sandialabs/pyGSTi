@@ -83,3 +83,32 @@ class WeakForwardSimulator(_ForwardSimulator):
 
         for i, outcome in enumerate(outcomes):
             array_to_fill[i] = sparse_probs[outcome]
+
+    def bulk_probs(self, circuits, clip_to=None, resource_alloc=None, smartc=None):
+        """
+        Construct a dictionary containing the probabilities for an entire list of circuits.
+
+        Parameters
+        ----------
+        circuits : list of Circuits
+            The list of circuits.  May also be a :class:`CircuitOutcomeProbabilityArrayLayout`
+            object containing pre-computed quantities that make this function run faster.
+
+        clip_to : 2-tuple, optional
+            (min,max) to clip return value if not None.
+
+        resource_alloc : ResourceAllocation, optional
+            A resource allocation object describing the available resources and a strategy
+            for partitioning them.
+
+        smartc : SmartCache, optional
+            A cache object to cache & use previously cached values inside this
+            function.
+
+        Returns
+        -------
+        probs : dictionary
+            A dictionary such that `probs[circuit]` is an ordered dictionary of
+            outcome probabilities whose keys are outcome labels.
+        """
+        return {circ: self._compute_sparse_circuit_outcome_probabilities(circ, resource_alloc) for circ in circuits}

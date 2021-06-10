@@ -107,10 +107,11 @@ class StateRepComputational(StateRep):
             vec = _np.ascontiguousarray(_np.empty(factor_dim**len(zvals), typ))
             _fastcalc.fast_kron(vec, fast_kron_array, fast_kron_factordims)
 
+        self.zvals = zvals
         super(StateRepComputational, self).__init__(vec, state_space)
 
     def __reduce__(self):
-        return (StateRepComputational, (self.zvals, self.basis, self.state_space), (self.base.flags.writeable,))
+        return (StateRepComputational, (self.zvals, self.basis, self.state_space), (self.data.flags.writeable,))
 
 
 class StateRepComposed(StateRep):

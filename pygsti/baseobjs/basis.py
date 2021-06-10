@@ -168,7 +168,7 @@ class Basis(object):
             - `list`: an `ExplicitBasis` if given matrices/vectors or a
                      `DirectSumBasis` if given a `(name, dim)` pairs.
 
-        dim : int or StateSpaceLabels, optional
+        dim : int or StateSpace, optional
             The dimension of the basis to create.  Sometimes this can be
             inferred based on `name_or_basis_or_matrices`, other times it must
             be supplied.  This is the dimension of the space that this basis
