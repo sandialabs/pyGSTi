@@ -277,7 +277,7 @@ class ModelConstructionTester(BaseCase):
         class XRotationOpFactory(pygsti.modelmembers.operations.OpFactory):
             def __init__(self):
                 ss = pygsti.baseobjs.statespace.QubitSpace(1)
-                pygsti.modelmembers.operations.OpFactory.__init__(self, state_space=ss, evotype="densitymx")
+                pygsti.modelmembers.operations.OpFactory.__init__(self, state_space=ss, evotype="default")
 
             def create_object(self, args=None, sslbls=None):
                 theta = float(args[0])/2.0

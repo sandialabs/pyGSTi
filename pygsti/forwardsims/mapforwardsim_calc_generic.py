@@ -100,8 +100,8 @@ def mapfill_dprobs_atom(fwdsim, mx_to_fill, dest_indices, dest_param_indices, la
     #Note: no real need for using shared memory here except so that we can pass
     # `resource_alloc` to mapfill_probs_block and have it potentially use multiple procs.
     nEls = layout_atom.num_elements
-    probs, shm = _smt.create_shared_ndarray(resource_alloc, (nEls,), 'd', track_memory=False)
-    probs2, shm2 = _smt.create_shared_ndarray(resource_alloc, (nEls,), 'd', track_memory=False)
+    probs, shm = _smt.create_shared_ndarray(resource_alloc, (nEls,), 'd', memory_tracker=None)
+    probs2, shm2 = _smt.create_shared_ndarray(resource_alloc, (nEls,), 'd', memory_tracker=None)
     mapfill_probs_atom(fwdsim, probs, slice(0, nEls), layout_atom, resource_alloc)  # probs != shared
 
     for i in range(fwdsim.model.num_params):

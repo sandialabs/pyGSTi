@@ -43,12 +43,12 @@ class OpRep(_basereps.OpRep):
     def aslinearoperator(self):
         def mv(v):
             if v.ndim == 2 and v.shape[1] == 1: v = v[:, 0]
-            in_state = _StateRep(_np.ascontiguousarray(v, 'd'))
+            in_state = _StateRep(_np.ascontiguousarray(v, 'd'), self.state_space)
             return self.acton(in_state).to_dense(on_space='HilbertSchmidt')
 
         def rmv(v):
             if v.ndim == 2 and v.shape[1] == 1: v = v[:, 0]
-            in_state = _StateRep(_np.ascontiguousarray(v, 'd'))
+            in_state = _StateRep(_np.ascontiguousarray(v, 'd'), self.state_space)
             return self.adjoint_acton(in_state).to_dense(on_space='HilbertSchmidt')
         return LinearOperator((self.dim, self.dim), matvec=mv, rmatvec=rmv)  # transpose, adjoint, dot, matmat?
 
@@ -72,10 +72,10 @@ class OpRepDenseSuperop(OpRep):
         return self.base
 
     def acton(self, state):
-        return _StateRep(_np.dot(self.base, state.base))
+        return _StateRep(_np.dot(self.base, state.data), state.state_space)
 
     def adjoint_acton(self, state):
-        return _StateRep(_np.dot(self.base.T, state.base))  # no conjugate b/c *real* data
+        return _StateRep(_np.dot(self.base.T, state.data), state.state_space)  # no conjugate b/c *real* data
 
     def __str__(self):
         return "OpRepDenseSuperop:\n" + str(self.base)
@@ -106,17 +106,20 @@ class OpRepSparse(OpRep):
 
     def acton(self, state):
         """ Act this gate map on an input state """
-        return _StateRep(self.A.dot(state.base))
+        return _StateRep(self.A.dot(state.data), state.state_space)
 
     def adjoint_acton(self, state):
         """ Act the adjoint of this operation matrix on an input state """
         Aadj = self.A.conjugate(copy=True).transpose()
-        return _StateRep(Aadj.dot(state.base))
+        return _StateRep(Aadj.dot(state.data), state.state_space)
 
 
 class OpRepStandard(OpRepDenseSuperop):
     def __init__(self, name, basis, state_space):
         std_unitaries = _itgs.standard_gatename_unitaries()
+        self.name = name
+        self.basis = basis
+
         if self.name not in std_unitaries:
             raise ValueError("Name '%s' not in standard unitaries" % self.name)
 
@@ -125,7 +128,7 @@ class OpRepStandard(OpRepDenseSuperop):
         state_space = _StateSpace.cast(state_space)
         assert(superop.shape[0] == state_space.dim)
 
-        super(OpRepStandard, self).__init__(LinearOperator.convert_to_matrix(superop), state_space)
+        super(OpRepStandard, self).__init__(superop, state_space)
 
 
 class OpRepStochastic(OpRepDenseSuperop):
@@ -189,16 +192,16 @@ class OpRepSum(OpRep):
 
     def acton(self, state):
         """ Act this gate map on an input state """
-        output_state = _StateRep(_np.zeros(state.base.shape, 'd'))
+        output_state = _StateRep(_np.zeros(state.data.shape, 'd'), state.state_space)
         for f in self.factor_reps:
-            output_state.base += f.acton(state).base
+            output_state.data += f.acton(state).data
         return output_state
 
     def adjoint_acton(self, state):
         """ Act the adjoint of this operation matrix on an input state """
-        output_state = _StateRep(_np.zeros(state.base.shape, 'd'))
+        output_state = _StateRep(_np.zeros(state.data.shape, 'd'), state.state_space)
         for f in self.factor_reps:
-            output_state.base += f.adjoint_acton(state).base
+            output_state.data += f.adjoint_acton(state).data
         return output_state
 
 
@@ -266,11 +269,11 @@ class OpRepEmbedded(OpRep):
         offset = 0
         for iBlk, blockSize in enumerate(self.blocksizes):
             if iBlk != self.active_block_index:
-                output_state.base[offset:offset + blockSize] = state.base[offset:offset + blockSize]  # identity op
+                output_state.data[offset:offset + blockSize] = state.data[offset:offset + blockSize]  # identity op
             offset += blockSize
 
     def acton(self, state):
-        output_state = _StateRep(_np.zeros(state.base.shape, 'd'))
+        output_state = _StateRep(_np.zeros(state.data.shape, 'd'), state.state_space)
         offset = self.offset  # if rel_to_block else self.offset (rel_to_block == False here)
 
         #print("DB REPLIB ACTON: ",self.basisInds_noop_blankaction)
@@ -285,9 +288,9 @@ class OpRepEmbedded(OpRep):
                     #b[i] = bInd #don't need to do this; just update vec_index:
                     vec_index += self.multipliers[i] * bInd
                 inds.append(offset + vec_index)
-            embedded_instate = _StateRep(state.base[inds])
+            embedded_instate = _StateRep(state.data[inds], state.state_space)
             embedded_outstate = self.embedded.acton(embedded_instate)
-            output_state.base[inds] += embedded_outstate.base
+            output_state.data[inds] += embedded_outstate.data
 
         #act on other blocks trivially:
         self._acton_other_blocks_trivially(output_state, state)
@@ -296,7 +299,7 @@ class OpRepEmbedded(OpRep):
     def adjoint_acton(self, state):
         """ Act the adjoint of this gate map on an input state """
         #NOTE: Same as acton except uses 'adjoint_acton(...)' below
-        output_state = _StateRep(_np.zeros(state.base.shape, 'd'))
+        output_state = _StateRep(_np.zeros(state.data.shape, 'd'), state.state_space)
         offset = self.offset  # if rel_to_block else self.offset (rel_to_block == False here)
 
         for b in _itertools.product(*self.basisInds_noop_blankaction):  # zeros in all action-index locations
@@ -308,9 +311,9 @@ class OpRepEmbedded(OpRep):
                     #b[i] = bInd #don't need to do this; just update vec_index:
                     vec_index += self.multipliers[i] * bInd
                 inds.append(offset + vec_index)
-            embedded_instate = _StateRep(state.base[inds])
+            embedded_instate = _StateRep(state.data[inds], state.state_space)
             embedded_outstate = self.embedded.adjoint_acton(embedded_instate)
-            output_state.base[inds] += embedded_outstate.base
+            output_state.data[inds] += embedded_outstate.data
 
         #act on other blocks trivially:
         self._acton_other_blocks_trivially(output_state, state)
@@ -386,15 +389,15 @@ class OpRepExpErrorgen(OpRep):
         """ Act this gate map on an input state """
         #TODO REMOVE
         #if self.unitary_postfactor is not None:
-        #    statedata = self.unitary_postfactor.dot(state.base)
+        #    statedata = self.unitary_postfactor.dot(state.data)
         #else:
-        statedata = state.base
+        statedata = state.data
 
         tol = 1e-16  # 2^-53 (=Scipy default) -- TODO: make into an arg?
         A = self.errorgen_rep.aslinearoperator()  # ~= a sparse matrix for call below
         statedata = _mt._custom_expm_multiply_simple_core(
             A, statedata, self.mu, self.m_star, self.s, tol, self.eta)
-        return _StateRep(statedata)
+        return _StateRep(statedata, state.state_space)
 
     def adjoint_acton(self, state):
         """ Act the adjoint of this operation matrix on an input state """

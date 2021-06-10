@@ -122,10 +122,10 @@ class StateRepComposed(StateRep):
 
     def reps_have_changed(self):
         rep = self.op_rep.acton(self.state_rep)
-        self.base[:] = rep.base[:]
+        self.data[:] = rep.data[:]
 
     def __reduce__(self):
-        return (StateRepComposed, (self.state_rep, self.op_rep, self.state_space), (self.base.flags.writeable,))
+        return (StateRepComposed, (self.state_rep, self.op_rep, self.state_space), (self.data.flags.writeable,))
 
 
 class StateRepTensorProduct(StateRep):
@@ -142,10 +142,10 @@ class StateRepTensorProduct(StateRep):
             vec = self.factor_reps[0].to_dense('HilbertSchmidt')
             for i in range(1, len(self.factor_reps)):
                 vec = _np.kron(vec, self.factor_reps[i].to_dense('HilbertSchmidt'))
-        self.base[:] = vec
+        self.data[:] = vec
 
     def __reduce__(self):
-        return (StateRepTensorProduct, (self.factor_state_reps, self.state_space), (self.base.flags.writeable,))
+        return (StateRepTensorProduct, (self.factor_reps, self.state_space), (self.data.flags.writeable,))
 
     #REMOVE - or do something with this for a to_dense method?
     #def _fill_fast_kron(self):

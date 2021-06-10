@@ -536,8 +536,9 @@ class ExplicitOpModel(_mdl.OpModel):
         int
             the number of gauge model parameters.
         """
-        if self._evotype not in ("densitymx", "statevec"):
-            return 0  # punt on computing number of gauge parameters for other evotypes
+        #REMOVE - but maybe we need some way for some evotypes to punt here? (TODO)
+        #if self._evotype not in ("densitymx", "statevec"):
+        #    return 0  # punt on computing number of gauge parameters for other evotypes
         if self.num_params == 0:
             return 0  # save the trouble of getting gauge params when there are no params to begin with
         dPG = self._excalc()._buildup_dpg()

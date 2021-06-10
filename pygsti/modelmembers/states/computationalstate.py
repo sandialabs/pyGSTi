@@ -158,19 +158,24 @@ class ComputationalBasisState(_State):
         -------
         numpy.ndarray
         """
-        #TODO HERE - maybe create a static state from a purevec and use its to_dense to get these?
-        if self._evotype == "densitymx":
-            factor_dim = 4
-            v0 = 1.0 / _np.sqrt(2) * _np.array((1, 0, 0, 1), 'd')  # '0' qubit state as Pauli dmvec
-            v1 = 1.0 / _np.sqrt(2) * _np.array((1, 0, 0, -1), 'd')  # '1' qubit state as Pauli dmvec
-        elif self._evotype in ("statevec", "stabilizer", "chp"):
-            factor_dim = 2
-            v0 = _np.array((1, 0), complex)  # '0' qubit state as complex state vec
-            v1 = _np.array((0, 1), complex)  # '1' qubit state as complex state vec
-        elif self._evotype in ("svterm", "cterm"):
-            raise NotImplementedError("to_dense() is not implemented for evotype %s!" %
-                                      self._evotype)
-        else: raise ValueError("Invalid `evotype`: %s" % self._evotype)
+        from .staticpurestate import StaticPureState as _StaticPureState
+        v0 = _StaticPureState(_np.array((1, 0), complex), basis='pp', evotype=self._evotype).to_dense('minimal')
+        v1 = _StaticPureState(_np.array((0, 1), complex), basis='pp', evotype=self._evotype).to_dense('minimal')
+        factor_dim = len(v0)
+
+        #OLD REMOVE
+        #if self._evotype == "densitymx":
+        #    factor_dim = 4
+        #    v0 = 1.0 / _np.sqrt(2) * _np.array((1, 0, 0, 1), 'd')  # '0' qubit state as Pauli dmvec
+        #    v1 = 1.0 / _np.sqrt(2) * _np.array((1, 0, 0, -1), 'd')  # '1' qubit state as Pauli dmvec
+        #elif self._evotype in ("statevec", "stabilizer", "chp"):
+        #    factor_dim = 2
+        #    v0 = _np.array((1, 0), complex)  # '0' qubit state as complex state vec
+        #    v1 = _np.array((0, 1), complex)  # '1' qubit state as complex state vec
+        #elif self._evotype in ("svterm", "cterm"):
+        #    raise NotImplementedError("to_dense() is not implemented for evotype %s!" %
+        #                              self._evotype)
+        #else: raise ValueError("Invalid `evotype`: %s" % self._evotype)
 
         v = (v0, v1)
 

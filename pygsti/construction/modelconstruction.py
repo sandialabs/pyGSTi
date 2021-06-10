@@ -431,7 +431,7 @@ def _create_operation(state_space_dims, state_space_labels, op_expr, basis="gm",
         udims.append(tuple([int(_np.sqrt(d)) for d in tpbdims]))
     sslbls = _statespace.ExplicitStateSpace(state_space_labels, udims)
     return _basis_create_operation(sslbls, op_expr, _Basis.cast(basis, state_space_dims),
-                                   parameterization, evotype='densitymx')
+                                   parameterization, evotype='default')
 
 
 def basis_create_explicit_model(state_space, basis,

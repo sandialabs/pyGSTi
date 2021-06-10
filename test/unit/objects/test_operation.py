@@ -279,7 +279,7 @@ class StaticStdOpTester(BaseCase):
     def test_densitymx_svterm_cterm(self):
         std_unitaries = itgs.standard_gatename_unitaries()
 
-        for evotype in ['densitymx']:  # , 'svterm', 'cterm'
+        for evotype in ['default']:  # 'densitymx', 'svterm', 'cterm'
             for name, U in std_unitaries.items():
                 if callable(U): continue  # skip unitary functions (create factories)
                 dmop = op.StaticStandardOp(name, 'pp', evotype, state_space=None)
