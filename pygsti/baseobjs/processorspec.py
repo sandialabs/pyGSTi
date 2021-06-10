@@ -15,15 +15,15 @@ import itertools as _itertools
 
 import numpy as _np
 
-from pygsti.baseobjs.qubitgraph import QubitGraph as _QubitGraph
-from pygsti.circuits.compilationlibrary import CompilationError as _CompilationError
-from pygsti.circuits.compilationlibrary import CompilationLibrary as _CompilationLibrary
-from pygsti.forwardsims.mapforwardsim import MapForwardSimulator as _MapFSim
-from pygsti.models.localnoisemodel import LocalNoiseModel as _LocalNoiseModel
-from pygsti.tools import internalgates as _itgs
-from pygsti.tools import optools as _gt
-from pygsti.tools import symplectic as _symp
 from .label import Label as _Label
+from .qubitgraph import QubitGraph as _QubitGraph
+from ..circuits.compilationlibrary import CompilationError as _CompilationError
+from ..circuits.compilationlibrary import CompilationLibrary as _CompilationLibrary
+from ..forwardsims.mapforwardsim import MapForwardSimulator as _MapFSim
+from ..models.localnoisemodel import LocalNoiseModel as _LocalNoiseModel
+from ..tools import internalgates as _itgs
+from ..tools import optools as _gt
+from ..tools import symplectic as _symp
 
 IDENT = 'I'  # internal 1Q-identity-gate name used for compilation
 # MUST be the same as in compilationlibrary.py
