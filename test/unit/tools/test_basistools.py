@@ -1,6 +1,6 @@
 import numpy as np
 import scipy
-from pygsti.objects.basis import Basis
+from pygsti.baseobjs.basis import Basis
 
 import pygsti.tools.basistools as bt
 from ..util import BaseCase

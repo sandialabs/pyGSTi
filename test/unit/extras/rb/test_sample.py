@@ -1,4 +1,4 @@
-from pygsti.objects import ProcessorSpec, Label
+from pygsti.baseobjs import ProcessorSpec, Label
 from ...util import BaseCase
 
 

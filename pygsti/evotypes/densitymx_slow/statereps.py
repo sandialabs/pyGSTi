@@ -140,7 +140,7 @@ class StateRepTensorProduct(StateRep):
             vec = _np.empty(0, 'd')
         else:
             vec = self.factor_reps[0].to_dense('HilbertSchmidt')
-            for i in range(1, len(self.factors_reps)):
+            for i in range(1, len(self.factor_reps)):
                 vec = _np.kron(vec, self.factor_reps[i].to_dense('HilbertSchmidt'))
         self.base[:] = vec
 

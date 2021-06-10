@@ -13,7 +13,7 @@
 
 import sys
 import numpy as _np
-from ...models.statespace import StateSpace as _StateSpace
+from ...baseobjs.statespace import StateSpace as _StateSpace
 
 
 cdef class EffectRep(_basereps_cython.EffectRep):

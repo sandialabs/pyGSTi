@@ -3,7 +3,7 @@ from contextlib import contextmanager
 from io import StringIO
 from unittest import mock
 
-from pygsti.objects import verbosityprinter as vbp
+from pygsti.baseobjs import verbosityprinter as vbp
 from ..util import BaseCase
 
 warn_message = 'This might go badly'

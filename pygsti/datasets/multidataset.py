@@ -18,7 +18,7 @@ from collections import defaultdict as _defaultdict
 import numpy as _np
 
 from pygsti.circuits import circuit as _cir
-from ..baseobjs import labeldicts as _ld
+from ..baseobjs import outcomelabeldict as _ld
 from .dataset import DataSet as _DataSet
 
 

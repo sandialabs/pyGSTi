@@ -11,7 +11,7 @@ Defines the WeakForwardSimulator calculator class
 #***************************************************************************************************
 
 from .forwardsim import ForwardSimulator as _ForwardSimulator
-from ..baseobjs import labeldicts as _ld
+from ..baseobjs import outcomelabeldict as _ld
 
 
 class WeakForwardSimulator(_ForwardSimulator):

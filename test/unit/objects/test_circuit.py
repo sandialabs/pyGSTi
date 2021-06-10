@@ -3,7 +3,7 @@ import pickle
 import unittest
 
 from pygsti.circuits import circuit
-from pygsti.objects import ProcessorSpec, Label, CircuitLabel
+from pygsti.baseobjs import ProcessorSpec, Label, CircuitLabel
 from pygsti.tools import symplectic
 from ..util import BaseCase
 

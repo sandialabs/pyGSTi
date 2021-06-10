@@ -100,7 +100,8 @@ class ModelTest(_proto.Protocol):
 
         if set_trivial_gauge_group:
             model_to_test = model_to_test.copy()
-            model_to_test.default_gauge_group = _models.TrivialGaugeGroup(model_to_test.state_space)  # ==  no gauge opt
+            model_to_test.default_gauge_group = _models.gaugegroup.TrivialGaugeGroup(model_to_test.state_space)
+            # ==  no gauge opt
 
         super().__init__(name)
         self.model_to_test = model_to_test

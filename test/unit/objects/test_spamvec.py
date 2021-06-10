@@ -8,7 +8,8 @@ import pygsti.baseobjs.statespace as statespace
 from pygsti.evotypes import Evotype
 from pygsti.modelmembers.povms import TPPOVM, UnconstrainedPOVM
 from pygsti.models import ExplicitOpModel
-from pygsti.objects import FullGaugeGroupElement, Basis
+from pygsti.baseobjs import Basis
+from pygsti.models.gaugegroup import FullGaugeGroupElement
 from ..util import BaseCase
 
 

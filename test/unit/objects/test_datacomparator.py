@@ -1,7 +1,7 @@
 import pygsti.construction as pc
 import pygsti.datasets.datacomparator as dc
 from pygsti.modelpacks.legacy import std1Q_XYI
-from pygsti.objects import DataSet, MultiDataSet
+from pygsti.datasets import DataSet, MultiDataSet
 from ..util import BaseCase
 
 

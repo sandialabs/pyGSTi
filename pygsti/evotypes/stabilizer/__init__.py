@@ -10,7 +10,8 @@ The stabilizer-frame, or "stabilizer" evolution type, which uses Cython for spee
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from .effectreps import *
-from .opreps import *
 from .statereps import *
+from .opreps import *
+from .effectreps import *
+
 from .termreps import *

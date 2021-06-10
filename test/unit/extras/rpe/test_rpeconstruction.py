@@ -1,5 +1,5 @@
 import pygsti.extras.rpe.rpeconstruction as rc
-from pygsti.objects import Circuit
+from pygsti.circuits import Circuit
 from ...util import BaseCase
 
 

@@ -1,7 +1,8 @@
 import numpy as np
 
 from pygsti.algorithms import compilers
-from pygsti.objects import Circuit, ProcessorSpec, Label
+from pygsti.baseobjs import ProcessorSpec, Label
+from pygsti.circuits import Circuit
 from pygsti.tools import symplectic
 from ..util import BaseCase, Namespace
 

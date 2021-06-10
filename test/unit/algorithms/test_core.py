@@ -2,8 +2,10 @@ import numpy as np
 
 import pygsti.construction as pc
 from pygsti.algorithms import core
-from pygsti.objects import Circuit, Label, Chi2Function, FreqWeightedChi2Function, \
-    PoissonPicDeltaLogLFunction, CircuitList
+from pygsti.baseobjs import Label
+from pygsti.circuits import Circuit, CircuitList
+from pygsti.objectivefns import Chi2Function, FreqWeightedChi2Function, \
+    PoissonPicDeltaLogLFunction
 from . import fixtures
 from ..util import BaseCase
 

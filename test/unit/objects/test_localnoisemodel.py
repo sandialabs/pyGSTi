@@ -1,5 +1,5 @@
 import numpy as np
-from pygsti.objects.label import Label
+from pygsti.baseobjs.label import Label
 
 from pygsti.circuits.circuit import Circuit
 from pygsti.modelmembers.operations import ComposedOp, EmbeddedOp

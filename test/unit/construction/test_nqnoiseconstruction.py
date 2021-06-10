@@ -3,7 +3,8 @@ import scipy
 
 import pygsti.construction.nqnoiseconstruction as nc
 from pygsti.modelpacks.legacy import std1Q_XYI, std2Q_XXYYII, std2Q_XYICNOT
-from pygsti.objects import DataSet, Circuit
+from pygsti.circuits import Circuit
+from pygsti.datasets import DataSet
 from ..util import BaseCase
 
 
@@ -52,7 +53,7 @@ class Std2Q_XYICNOTTester(StdModuleBase, BaseCase):
         ds.add_count_dict(('Gxi',), {'00': 55, '10': 45})
         ds.add_count_dict(('Gyi',), {'00': 40, '10': 60})
 
-        from pygsti.objects import Circuit as C
+        from pygsti.circuits import Circuit as C
         ds2 = ds.copy()
         newmod = nc.stdmodule_to_smqmodule(self.std)
         newmod.upgrade_dataset(ds2)

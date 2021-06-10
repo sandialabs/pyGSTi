@@ -5,7 +5,7 @@ from pygsti.construction.modelconstruction import _basis_create_operation
 from pygsti.modelpacks.legacy import std1Q_XYI as std1Q
 from pygsti.models import ExplicitOpModel
 from pygsti.baseobjs import statespace
-from pygsti.objects import Basis
+from pygsti.baseobjs import Basis
 from pygsti.tools import jamiolkowski as j
 from ..util import BaseCase
 

@@ -1225,7 +1225,7 @@ def _update_gaugeopt_dict_from_suitename(gaugeopt_suite_dict, root_lbl, suite_na
 
         stages = []  # multi-stage gauge opt
         gg = model.default_gauge_group
-        if isinstance(gg, _models.TrivialGaugeGroup):
+        if isinstance(gg, _models.gaugegroup.TrivialGaugeGroup):
             if suite_name == "stdgaugeopt-unreliable2Q" and model.dim == 16:
                 if any([gl in model.operations.keys() for gl in unreliable_ops]):
                     gaugeopt_suite_dict[root_lbl] = {'verbosity': printer}
@@ -1251,15 +1251,15 @@ def _update_gaugeopt_dict_from_suitename(gaugeopt_suite_dict, root_lbl, suite_na
                 {
                     'gates_metric': metric, 'spam_metric': metric,
                     'item_weights': {'gates': 1.0, 'spam': 0.0},
-                    'gauge_group': _models.UnitaryGaugeGroup(model.state_space, model.basis, model.evotype),
+                    'gauge_group': _models.gaugegroup.UnitaryGaugeGroup(model.state_space, model.basis, model.evotype),
                     'verbosity': printer
                 })
 
             #Stage 3: spam gauge opt that fixes spam scaling at expense of
             #         non-unital parts of gates (but shouldn't affect these
             #         elements much since they should be small from Stage 2).
-            s3gg = _models.SpamGaugeGroup if (gg.name == "Full") else \
-                _models.TPSpamGaugeGroup
+            s3gg = _models.gaugegroup.SpamGaugeGroup if (gg.name == "Full") else \
+                _models.gaugegroup.TPSpamGaugeGroup
             stages.append(
                 {
                     'gates_metric': metric, 'spam_metric': metric,

@@ -23,7 +23,7 @@ from collections import defaultdict as _defaultdict
 import numpy as _np
 
 from pygsti.circuits import circuit as _cir
-from pygsti.baseobjs import labeldicts as _ld
+from pygsti.baseobjs import outcomelabeldict as _ld
 from pygsti.tools import NamedDict as _NamedDict
 from pygsti.tools import compattools as _compat
 from pygsti.tools import listtools as _lt

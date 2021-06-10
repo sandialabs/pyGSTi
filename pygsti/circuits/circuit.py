@@ -17,7 +17,7 @@ import warnings as _warnings
 import numpy as _np
 from pygsti.baseobjs.label import Label as _Label, CircuitLabel as _CircuitLabel
 
-from pygsti.baseobjs import labeldicts as _ld
+from pygsti.baseobjs import outcomelabeldict as _ld
 from pygsti.tools import compattools as _compat
 from pygsti.tools import internalgates as _itgs
 from pygsti.tools import slicetools as _slct

@@ -84,7 +84,7 @@ class EffectRepTensorProduct(EffectRep):
 
     def __init__(self, povm_factors, effect_labels, state_space):
         #Arrays for speeding up kron product in effect reps
-        max_factor_dim = max(fct.dim for fct in povm_factors)
+        max_factor_dim = max(fct.state_space.dim for fct in povm_factors)
         kron_array = _np.ascontiguousarray(
             _np.empty((len(povm_factors), max_factor_dim), 'd'))
         factordims = _np.ascontiguousarray(

@@ -1,5 +1,5 @@
 """
-Defines OrderedDict-derived classes used to store specific pyGSTi objects
+Defines the OutcomeLabelDict class
 """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).

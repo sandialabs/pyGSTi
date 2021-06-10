@@ -2,7 +2,7 @@ import numpy as np
 
 from pygsti.modelmembers import instruments as inst
 from pygsti.modelpacks.legacy import std1Q_XYI as std
-from pygsti.objects import FullGaugeGroupElement
+from pygsti.models.gaugegroup import FullGaugeGroupElement
 from ..util import BaseCase
 
 

@@ -19,7 +19,7 @@ import numpy.random as _rndm
 
 from . import circuitconstruction as _gstrc
 from ..datasets import dataset as _ds
-from ..baseobjs import label as _lbl, labeldicts as _ld
+from ..baseobjs import label as _lbl, outcomelabeldict as _ld
 from ..protocols import ExperimentDesign as _ExperimentDesign
 
 

@@ -92,8 +92,8 @@ class RPEToolsFuncBase(object):
 
 
 class RPETools00ConfigTester(RPEToolsFuncBase, BaseCase):
-    pass
+    from pygsti.extras.rpe import rpeconfig_GxPi2_GyPi2_00 as config
 
 
 class RPEToolsUpDnConfigTester(RPEToolsFuncBase, BaseCase):
-    pass
+    from pygsti.extras.rpe import rpeconfig_GxPi2_GyPi2_UpDn as config

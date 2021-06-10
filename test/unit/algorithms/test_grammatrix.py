@@ -1,6 +1,6 @@
 import pygsti.construction as pc
 from pygsti.algorithms import grammatrix as gm
-from pygsti.objects import DataSet
+from pygsti.datasets import DataSet
 from ..util import BaseCase
 
 

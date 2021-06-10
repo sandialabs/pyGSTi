@@ -8,7 +8,8 @@ import pygsti.construction as pc
 from pygsti.forwardsims.forwardsim import ForwardSimulator
 from pygsti.forwardsims.mapforwardsim import MapForwardSimulator
 from pygsti.models import ExplicitOpModel
-from pygsti.objects import Circuit, Label as L
+from pygsti.circuits import Circuit
+from pygsti.baseobjs import Label as L
 from ..util import BaseCase
 
 

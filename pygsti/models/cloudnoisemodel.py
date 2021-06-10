@@ -32,6 +32,7 @@ from ..modelmembers.operations import opfactory as _opfactory
 from ..baseobjs.basis import BuiltinBasis as _BuiltinBasis, ExplicitBasis as _ExplicitBasis
 from ..baseobjs.label import Label as _Lbl, CircuitLabel as _CircuitLabel
 from ..baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from ..baseobjs.qubitgraph import QubitGraph as _QubitGraph
 from ..tools import basistools as _bt
 from ..tools import internalgates as _itgs
 from ..tools import optools as _gt
@@ -415,15 +416,15 @@ class CloudNoiseModel(_ImplicitOpModel):
         if not independent_clouds:
             raise NotImplementedError("Non-independent noise clounds are not supported yet!")
 
-        if isinstance(geometry, _qgraph.QubitGraph):
+        if isinstance(geometry, _QubitGraph):
             qubitGraph = geometry
             if qubit_labels is None:
                 qubit_labels = qubitGraph.node_names
         else:
             if qubit_labels is None:
                 qubit_labels = tuple(range(num_qubits))
-            qubitGraph = _qgraph.QubitGraph.common_graph(num_qubits, geometry, directed=False,
-                                                         qubit_labels=qubit_labels)
+            qubitGraph = _QubitGraph.common_graph(num_qubits, geometry, directed=False,
+                                                  qubit_labels=qubit_labels)
             printer.log("Created qubit graph:\n" + str(qubitGraph))
 
         state_space = _statespace.QubitSpace(qubit_labels)
@@ -749,14 +750,14 @@ class CloudNoiseModel(_ImplicitOpModel):
         self.factories['cloudnoise'] = _OrderedMemberDict(self, None, None, flags)
 
         printer = _VerbosityPrinter.create_printer(verbosity)
-        geometry_name = "custom" if isinstance(geometry, _qgraph.QubitGraph) else geometry
+        geometry_name = "custom" if isinstance(geometry, _QubitGraph) else geometry
         printer.log("Creating a %d-qubit cloud-noise %s model" % (num_qubits, geometry_name))
 
-        if isinstance(geometry, _qgraph.QubitGraph):
+        if isinstance(geometry, _QubitGraph):
             qubitGraph = geometry
         else:
-            qubitGraph = _qgraph.QubitGraph.common_graph(num_qubits, geometry, directed=False,
-                                                         qubit_labels=qubit_labels)
+            qubitGraph = _QubitGraph.common_graph(num_qubits, geometry, directed=False,
+                                                  qubit_labels=qubit_labels)
             printer.log("Created qubit graph:\n" + str(qubitGraph))
 
         if global_idle_layer is None:

@@ -1,7 +1,7 @@
 import unittest
 
 import numpy as np
-from pygsti.objects.label import Label
+from pygsti.baseobjs.label import Label
 
 import pygsti
 import pygsti.tools.symplectic as symplectic
@@ -111,13 +111,13 @@ class SymplecticBase(object):
 
         # Dummy circuit where HZHX = I
         # Running on qubit 1 of two to ensure proper indexing of operations into full matrix
-        HZHcirc = pygsti.obj.Circuit([('H', 1), ('Z', 1), ('H', 1), ('X', 1)], num_lines=2)
+        HZHcirc = pygsti.circuits.Circuit([('H', 1), ('Z', 1), ('H', 1), ('X', 1)], num_lines=2)
         s, p  = symplectic.symplectic_rep_of_clifford_circuit(HZHcirc)
         self.assertArraysAlmostEqual(s, np.eye(4))
         self.assertArraysAlmostEqual(p, np.zeros(4))
 
         # Also test with non-hardcoded names
-        HZHcirc = pygsti.obj.Circuit([('Gh', 1), ('Gzpi', 1), ('Gh', 1), ('Gxpi', 1)], num_lines=2)
+        HZHcirc = pygsti.circuits.Circuit([('Gh', 1), ('Gzpi', 1), ('Gh', 1), ('Gxpi', 1)], num_lines=2)
         srep_custom = {'Gh': srep_dict['H'], 'Gzpi': srep_dict['Z'], 'Gxpi': srep_dict['X']}
         s, p  = symplectic.symplectic_rep_of_clifford_circuit(HZHcirc, srep_dict=srep_custom)
         self.assertArraysAlmostEqual(s, np.eye(4))

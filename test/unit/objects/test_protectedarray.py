@@ -1,5 +1,5 @@
 import numpy as np
-import pygsti.objects.protectedarray as pa
+import pygsti.baseobjs.protectedarray as pa
 
 from ..util import BaseCase
 

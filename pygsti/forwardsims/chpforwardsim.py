@@ -28,7 +28,7 @@ from pathlib import Path as _Path
 
 from .weakforwardsim import WeakForwardSimulator as _WeakForwardSimulator
 from ..modelmembers import povms as _povm
-from pygsti.baseobjs.labeldicts import OutcomeLabelDict as _OutcomeLabelDict
+from pygsti.baseobjs.outcomelabeldict import OutcomeLabelDict as _OutcomeLabelDict
 # from . import povm as _povm
 
 

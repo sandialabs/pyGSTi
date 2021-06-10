@@ -4,7 +4,7 @@ import numpy as np
 import scipy
 
 from pygsti.baseobjs.processorspec import ProcessorSpec
-from pygsti.objects import Circuit
+from pygsti.circuits import Circuit
 from ..util import BaseCase
 
 

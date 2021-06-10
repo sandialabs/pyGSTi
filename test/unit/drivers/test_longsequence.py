@@ -5,7 +5,7 @@ from pygsti import io
 from pygsti.drivers import longsequence as ls
 from pygsti.forwardsims import mapforwardsim
 from pygsti.modelmembers import operations as operation
-from pygsti.objects import UnitaryGaugeGroup
+from pygsti.models.gaugegroup import UnitaryGaugeGroup
 from . import fixtures as pkg
 from ..util import BaseCase, with_temp_path
 

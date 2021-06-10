@@ -12,7 +12,8 @@ from pygsti.modelmembers.instruments import TPInstrument
 from pygsti.modelmembers.states import FullState
 from pygsti.models import ExplicitOpModel
 from pygsti.baseobjs import statespace
-from pygsti.objects import FullGaugeGroupElement, UnitaryGaugeGroupElement, Basis
+from pygsti.models.gaugegroup import FullGaugeGroupElement, UnitaryGaugeGroupElement
+from pygsti.baseobjs import Basis
 from pygsti.tools import basisconstructors as bc
 from ..util import BaseCase, needs_cvxpy
 

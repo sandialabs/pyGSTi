@@ -20,6 +20,7 @@ from .. import optimize as _opt
 from .. import tools as _tools
 from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
+from ..models.gaugegroup import TrivialGaugeGroupElement as _TrivialGaugeGroupElement
 
 
 def gaugeopt_to_target(model, target_model, item_weights=None,
@@ -255,7 +256,7 @@ def gaugeopt_custom(model, objective_fn, gauge_group=None,
         if gauge_group is None or gauge_group.num_params == 0 or \
            model.num_params == 0:
             if return_all:
-                trivialEl = _baseobjs.TrivialGaugeGroupElement(model.dim)
+                trivialEl = _TrivialGaugeGroupElement(model.dim)
                 return None, trivialEl, model.copy()
             else:
                 return model.copy()

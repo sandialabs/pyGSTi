@@ -13,7 +13,7 @@
 
 import numpy as _np
 import functools as _functools
-from ...models.statespace import StateSpace as _StateSpace
+from ...baseobjs.statespace import StateSpace as _StateSpace
 from ...tools import basistools as _bt
 from ...tools import optools as _ot
 from ...tools import fastcalc as _fastcalc

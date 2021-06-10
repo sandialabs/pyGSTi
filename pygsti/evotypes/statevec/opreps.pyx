@@ -16,7 +16,7 @@ import numpy as _np
 import copy as _copy
 
 import itertools as _itertools
-from ...models.statespace import StateSpace as _StateSpace
+from ...baseobjs.statespace import StateSpace as _StateSpace
 from ...tools import internalgates as _itgs
 from ...tools import basistools as _bt
 from ...tools import optools as _ot

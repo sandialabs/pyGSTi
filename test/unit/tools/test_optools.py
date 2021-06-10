@@ -3,7 +3,7 @@ from unittest import mock
 
 import numpy as np
 import scipy
-from pygsti.objects.basis import Basis
+from pygsti.baseobjs.basis import Basis
 
 import pygsti.tools.basistools as bt
 import pygsti.tools.lindbladtools as lt

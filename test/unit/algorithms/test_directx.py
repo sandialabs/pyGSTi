@@ -1,6 +1,6 @@
 import pygsti.construction as pc
 from pygsti.algorithms import directx
-from pygsti.objects import Label as L
+from pygsti.baseobjs import Label as L
 from . import fixtures
 from ..util import BaseCase
 

@@ -1,7 +1,7 @@
 import unittest
 
 import numpy as np
-from pygsti.objects.polynomial import Polynomial
+from pygsti.baseobjs.polynomial import Polynomial
 
 from pygsti.baseobjs.opcalc import slowopcalc
 from ..util import BaseCase

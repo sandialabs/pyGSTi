@@ -20,7 +20,7 @@ class ModelConstructionTester(BaseCase):
             ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"]
         )
         modelB = mc.basis_create_explicit_model(
-            [('Q0',)], pygsti.Basis.cast('gm', 4),
+            [('Q0',)], pygsti.baseobjs.Basis.cast('gm', 4),
             ['Gi', 'Gx', 'Gy'], ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"]
         )
         self.assertAlmostEqual(modelA.frobeniusdist(modelB), 0)
@@ -265,7 +265,7 @@ class ModelConstructionTester(BaseCase):
         cfmdl = mc.create_crosstalk_free_model(nQubits, ('Gx', 'Gy', 'Gcnot', 'Ga'),
                                               nonstd_gate_unitaries={'Ga': fn})
 
-        c = pygsti.obj.Circuit("Gx:1Ga;0.3:1Gx:1@(0,1)")
+        c = pygsti.circuits.Circuit("Gx:1Ga;0.3:1Gx:1@(0,1)")
         p = cfmdl.probabilities(c)
 
         self.assertAlmostEqual(p['00'], 0.08733219254516078)
@@ -276,7 +276,7 @@ class ModelConstructionTester(BaseCase):
 
         class XRotationOpFactory(pygsti.modelmembers.operations.OpFactory):
             def __init__(self):
-                ss = pygsti.models.statespace.QubitSpace(1)
+                ss = pygsti.baseobjs.statespace.QubitSpace(1)
                 pygsti.modelmembers.operations.OpFactory.__init__(self, state_space=ss, evotype="densitymx")
 
             def create_object(self, args=None, sslbls=None):
@@ -294,12 +294,12 @@ class ModelConstructionTester(BaseCase):
         cfmdl = mc.create_crosstalk_free_model(nQubits, ('Gi', 'Gxr'),
                                                custom_gates={'Gxr': xrot_fact})
 
-        c = pygsti.obj.Circuit("Gxr;3.1415926536:1@(0,1)")
+        c = pygsti.circuits.Circuit("Gxr;3.1415926536:1@(0,1)")
         p = cfmdl.probabilities(c)
 
         self.assertAlmostEqual(p['01'], 1.0)
 
-        c = pygsti.obj.Circuit("Gxr;1.5707963268:1@(0,1)")
+        c = pygsti.circuits.Circuit("Gxr;1.5707963268:1@(0,1)")
         p = cfmdl.probabilities(c)
         
         self.assertAlmostEqual(p['00'], 0.5)

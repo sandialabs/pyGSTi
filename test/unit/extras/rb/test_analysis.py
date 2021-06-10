@@ -1,5 +1,6 @@
 from ...util import BaseCase
 
+from pygsti.modelpacks.legacy import std1Q_Cliffords as stdC
 from pygsti.tools import average_gate_infidelity, entanglement_infidelity
 from ...util import BaseCase
 

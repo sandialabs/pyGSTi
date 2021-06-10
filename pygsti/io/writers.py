@@ -17,7 +17,7 @@ import numpy as _np
 
 from . import loaders as _loaders
 from .. import circuits as _circuits
-from .. import models as _models
+from ..models import gaugegroup as _gaugegroup
 
 # from . import stdinput as _stdinput
 from .. import tools as _tools
@@ -455,11 +455,11 @@ def write_model(model, filename, title=None):
             else:
                 output.write("BASIS: %s %d\n" % (model.basis.name, basisdim))
 
-        if isinstance(model.default_gauge_group, _models.FullGaugeGroup):
+        if isinstance(model.default_gauge_group, _gaugegroup.FullGaugeGroup):
             output.write("GAUGEGROUP: Full\n")
-        elif isinstance(model.default_gauge_group, _models.TPGaugeGroup):
+        elif isinstance(model.default_gauge_group, _gaugegroup.TPGaugeGroup):
             output.write("GAUGEGROUP: TP\n")
-        elif isinstance(model.default_gauge_group, _models.UnitaryGaugeGroup):
+        elif isinstance(model.default_gauge_group, _gaugegroup.UnitaryGaugeGroup):
             output.write("GAUGEGROUP: Unitary\n")
 
 

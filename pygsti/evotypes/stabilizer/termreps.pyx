@@ -16,7 +16,7 @@ import numpy as _np
 import copy as _copy
 
 import itertools as _itertools
-from ...models.statespace import StateSpace as _StateSpace
+from ...baseobjs.statespace import StateSpace as _StateSpace
 from scipy.sparse.linalg import LinearOperator
 
 

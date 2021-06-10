@@ -1,7 +1,7 @@
 import pickle
 
 from pygsti.modelpacks.legacy import std1Q_XYI as std
-from pygsti.objects import CircuitList
+from pygsti.circuits import CircuitList
 from pygsti.protocols import Protocol, ProtocolData, CircuitListsDesign
 from pygsti.protocols import estimate
 from pygsti.protocols.gst import ModelEstimateResults

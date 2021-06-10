@@ -17,7 +17,7 @@ import numpy as _np
 
 from ..layouts.cachedlayout import CachedCOPALayout as _CachedCOPALayout
 from ..layouts.copalayout import CircuitOutcomeProbabilityArrayLayout as _CircuitOutcomeProbabilityArrayLayout
-from ..baseobjs import labeldicts as _ld
+from ..baseobjs import outcomelabeldict as _ld
 from ..baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from ..tools import slicetools as _slct
 

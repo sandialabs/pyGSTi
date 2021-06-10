@@ -4,8 +4,9 @@ from collections import OrderedDict
 import numpy as np
 
 import pygsti.construction as pc
-from pygsti.baseobjs import labeldicts as ld
-from pygsti.objects import DataSet, Circuit
+from pygsti.baseobjs import outcomelabeldict as ld
+from pygsti.circuits import Circuit
+from pygsti.datasets import DataSet
 from ..util import BaseCase
 
 

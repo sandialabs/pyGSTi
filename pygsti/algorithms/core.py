@@ -307,7 +307,7 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
             ggEl = _models.FullGaugeGroupElement(_np.linalg.inv(BMat_p_padded))
             lgstModel.transform_inplace(ggEl)
         else:
-            ggEl = _models.FullGaugeGroupElement(_np.linalg.inv(BMat_p))
+            ggEl = _models.gaugegroup.FullGaugeGroupElement(_np.linalg.inv(BMat_p))
             lgstModel.transform_inplace(ggEl)
 
         # Force lgstModel to have gates, preps, & effects parameterized in the same way as those in
@@ -663,7 +663,7 @@ def run_gst_fit(mdc_store, optimizer, objective_function_builder, verbosity=0):
     #MEM debug_prof.print_memory("run_gst_fit1", True)
 
     if objective_function_builder is not None:
-        objective_function_builder = _baseobjs.ObjectiveFunctionBuilder.cast(objective_function_builder)
+        objective_function_builder = _objfns.ObjectiveFunctionBuilder.cast(objective_function_builder)
         #MEM debug_prof.print_memory("run_gst_fit2", True)
         objective = objective_function_builder.build_from_store(mdc_store, printer)  # (objective is *also* a store)
         #MEM debug_prof.print_memory("run_gst_fit3", True)

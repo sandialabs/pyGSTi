@@ -2,7 +2,8 @@ from pygsti.construction import simulate_data
 from pygsti.modelpacks import smq1Q_XYI
 from pygsti.modelpacks.legacy import std1Q_XYI, std2Q_XYICNOT
 from pygsti.objectivefns.objectivefns import PoissonPicDeltaLogLFunction
-from pygsti.objects import TrivialGaugeGroup, FreqWeightedChi2Function
+from pygsti.models.gaugegroup import TrivialGaugeGroup
+from pygsti.objectivefns import FreqWeightedChi2Function
 from pygsti.optimize.customlm import CustomLMOptimizer
 from pygsti.protocols import gst
 from pygsti.protocols.estimate import Estimate

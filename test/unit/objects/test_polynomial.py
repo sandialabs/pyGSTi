@@ -1,7 +1,7 @@
 import numpy as np
 
 from pygsti.baseobjs.opcalc import compact_deriv
-from pygsti.objects import polynomial as poly
+from pygsti.baseobjs import polynomial as poly
 from ..util import BaseCase
 
 

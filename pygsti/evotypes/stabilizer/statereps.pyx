@@ -13,7 +13,7 @@
 
 import numpy as _np
 import itertools as _itertools
-from ...models.statespace import StateSpace as _StateSpace
+from ...baseobjs.statespace import StateSpace as _StateSpace
 
 
 cdef class StateRep(_basereps_cython.StateRep):

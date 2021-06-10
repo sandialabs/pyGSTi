@@ -11,7 +11,8 @@ from pygsti.forwardsims import matrixforwardsim, mapforwardsim
 from pygsti.modelmembers.instruments import Instrument
 from pygsti.modelmembers.operations import LinearOperator, FullArbitraryOp
 from pygsti.models import ExplicitOpModel
-from pygsti.objects import Circuit, FullGaugeGroupElement
+from pygsti.circuits import Circuit
+from pygsti.models.gaugegroup import FullGaugeGroupElement
 from ..util import BaseCase, needs_cvxpy
 
 

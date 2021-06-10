@@ -2,7 +2,7 @@ import pickle
 import time
 
 import pygsti
-from pygsti.objects import smartcache as sc
+from pygsti.baseobjs import smartcache as sc
 from ..util import BaseCase
 
 
@@ -40,10 +40,10 @@ class SmartCacheTester(BaseCase):
         cache.low_overhead_cached_compute(slow_fib, (20,))
 
     def test_status(self):
-        printer = pygsti.objects.VerbosityPrinter(1)
+        printer = pygsti.baseobjs.VerbosityPrinter(1)
         fib.cache.status(printer)
         slow_fib.cache.status(printer)
-        printer = pygsti.objects.VerbosityPrinter(0)
+        printer = pygsti.baseobjs.VerbosityPrinter(0)
         sc.SmartCache.global_status(printer)
 
     def test_pickle(self):
