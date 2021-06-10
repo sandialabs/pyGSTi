@@ -1,16 +1,13 @@
 """Utilities shared by unit tests"""
-import sys
-import numpy as np
-import numbers
 import functools
-import types
-from contextlib import contextmanager
 import os
-import warnings
-from pathlib import Path
-from unittest import mock
-from tempfile import TemporaryDirectory
 import unittest
+import warnings
+from contextlib import contextmanager
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+import numpy as np
 
 
 def needs_cvxpy(fn):

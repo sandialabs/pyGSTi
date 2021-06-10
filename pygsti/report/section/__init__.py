@@ -82,16 +82,16 @@ class Section:
         }
 
 
-from .summary import SummarySection
-from .help import HelpSection
-from .meta import InputSection, MetaSection
-from .goodness import GoodnessSection, GoodnessColorBoxPlotSection, GoodnessScalingSection, GoodnessUnmodeledSection
+from .datacomparison import DataComparisonSection
+from .drift import DriftSection
 from .gauge import (
     GaugeInvariantsGatesSection, GaugeInvariantsGermsSection,
     GaugeVariantSection, GaugeVariantsDecompSection,
     GaugeVariantsErrorGenSection, GaugeVariantsErrorGenNQubitSection,
     GaugeVariantsRawSection
 )
+from .goodness import GoodnessSection, GoodnessColorBoxPlotSection, GoodnessScalingSection, GoodnessUnmodeledSection
+from .help import HelpSection
 from .idle import IdleTomographySection
-from .datacomparison import DataComparisonSection
-from .drift import DriftSection
+from .meta import InputSection, MetaSection
+from .summary import SummarySection

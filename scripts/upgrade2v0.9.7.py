@@ -1,5 +1,10 @@
 from __future__ import print_function
-import sys, re, shutil, os
+
+import os
+import re
+import shutil
+import sys
+
 
 def build_regex(repls):
     regex_els = []

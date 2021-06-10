@@ -1,7 +1,5 @@
-from ..util import BaseCase
-
-import pygsti
 from pygsti.construction import qutrit
+from ..util import BaseCase
 
 
 class QutritConstructionTester(BaseCase):

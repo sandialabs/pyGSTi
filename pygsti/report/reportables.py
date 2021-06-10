@@ -15,18 +15,19 @@ Named quantities as well as their confidence-region error bars are
  used primarily in reports, so we refer to these quantities as
  "reportables".
 """
-import numpy as _np
-import scipy.linalg as _spl
+import pkgutil
 import warnings as _warnings
 
-from .. import tools as _tools
-from .. import algorithms as _alg
-from ..objects.basis import Basis as _Basis, DirectSumBasis as _DirectSumBasis, TensorProdBasis as _TensorProdBasis
-from ..objects.label import Label as _Lbl
-from ..objects.reportableqty import ReportableQty as _ReportableQty
-from ..objects import modelfunction as _modf
+import numpy as _np
+import scipy.linalg as _spl
 
-import pkgutil
+from pygsti.report.reportableqty import ReportableQty as _ReportableQty
+from . import modelfunction as _modf
+from .. import algorithms as _alg
+from .. import tools as _tools
+from ..baseobjs.basis import Basis as _Basis, DirectSumBasis as _DirectSumBasis
+from ..baseobjs.label import Label as _Lbl
+
 _CVXPY_AVAILABLE = pkgutil.find_loader('cvxpy') is not None
 
 FINITE_DIFF_EPS = 1e-7
@@ -99,7 +100,7 @@ def spam_dotprods(rho_vecs, povms):
     Parameters
     ----------
     rho_vecs : list
-        A list of state-preparation :class:`SPAMVec` objects.
+        A list of :class:`State` objects.
 
     povms : list
         A list of :class:`POVM` objects.
@@ -116,7 +117,8 @@ def spam_dotprods(rho_vecs, povms):
         j = 0
         for povm in povms:
             for EVec in povm.values():
-                ret[i, j] = _np.vdot(EVec.to_dense(), rhoVec.to_dense()); j += 1
+                ret[i, j] = _np.vdot(EVec.to_dense(on_space='HilbertSchmidt'),
+                                     rhoVec.to_dense(on_space='HilbertSchmidt')); j += 1
                 # to_dense() gives a 1D array, so no need to transpose EVec
     return ret
 
@@ -223,7 +225,7 @@ class GateEigenvalues(_modf.ModelFunction):
         -------
         numpy.ndarray
         """
-        evals, evecs = _np.linalg.eig(model.operations[self.oplabel].to_dense())
+        evals, evecs = _np.linalg.eig(model.operations[self.oplabel].to_dense(on_space='HilbertSchmidt'))
 
         ev_list = list(enumerate(evals))
         ev_list.sort(key=lambda tup: abs(tup[1]), reverse=True)
@@ -1007,7 +1009,7 @@ def angles_btwn_rotn_axes(model):
     angles_btwn_rotn_axes = _np.zeros((len(opLabels), len(opLabels)), 'd')
 
     for i, gl in enumerate(opLabels):
-        decomp = _tools.decompose_gate_matrix(model.operations[gl].to_dense())
+        decomp = _tools.decompose_gate_matrix(model.operations[gl].to_dense(on_space='HilbertSchmidt'))
         rotnAngle = decomp.get('pi rotations', 'X')
         axisOfRotn = decomp.get('axis of rotation', None)
 
@@ -1197,7 +1199,7 @@ if _CVXPY_AVAILABLE:
 
         def __init__(self, model_a, model_b, oplabel):
             self.oplabel = oplabel
-            self.B = model_b.operations[oplabel].to_dense()
+            self.B = model_b.operations[oplabel].to_dense(on_space='HilbertSchmidt')
             self.d = int(round(_np.sqrt(model_a.dim)))
             _modf.ModelFunction.__init__(self, model_a, [("gate", oplabel)])
 
@@ -1215,7 +1217,7 @@ if _CVXPY_AVAILABLE:
             float
             """
             gl = self.oplabel
-            dm, W = _tools.diamonddist(model.operations[gl].to_dense(),
+            dm, W = _tools.diamonddist(model.operations[gl].to_dense(on_space='HilbertSchmidt'),
                                        self.B, model.basis, return_x=True)
             self.W = W
             return 0.5 * dm
@@ -1235,7 +1237,7 @@ if _CVXPY_AVAILABLE:
             """
             gl = self.oplabel; mxBasis = nearby_model.basis
             JAstd = self.d * _tools.fast_jamiolkowski_iso_std(
-                nearby_model.operations[gl].to_dense(), mxBasis)
+                nearby_model.operations[gl].to_dense(on_space='HilbertSchmidt'), mxBasis)
             JBstd = self.d * _tools.fast_jamiolkowski_iso_std(self.B, mxBasis)
             Jt = (JBstd - JAstd).T
             return 0.5 * _np.trace(_np.dot(Jt.real, self.W.real) + _np.dot(Jt.imag, self.W.imag))
@@ -2058,8 +2060,8 @@ def general_decomposition(model_a, model_b):
     mxBasis = model_b.basis  # B is usually the target which has a well-defined basis
 
     for gl in opLabels:
-        gate = model_a.operations[gl].to_dense()
-        targetOp = model_b.operations[gl].to_dense()
+        gate = model_a.operations[gl].to_dense(on_space='HilbertSchmidt')
+        targetOp = model_b.operations[gl].to_dense(on_space='HilbertSchmidt')
         gl = str(gl)  # Label -> str for decomp-dict keys
 
         target_evals = _np.linalg.eigvals(targetOp)
@@ -2168,7 +2170,7 @@ Predicted_rb_number = _modf.modelfn_factory(predicted_rb_number)
 
 def vec_fidelity(a, b, mx_basis):
     """
-    State fidelity between SPAM vectors a and b
+    State fidelity between state vectors a and b
 
     Parameters
     ----------
@@ -2196,7 +2198,7 @@ Vec_fidelity = _modf.vecsfn_factory(vec_fidelity)
 
 def vec_infidelity(a, b, mx_basis):
     """
-    State infidelity fidelity between SPAM vectors a and b
+    State infidelity fidelity between state vectors a and b
 
     Parameters
     ----------
@@ -2224,7 +2226,7 @@ Vec_infidelity = _modf.vecsfn_factory(vec_infidelity)
 
 def vec_trace_diff(a, b, mx_basis):  # assume vary model1, model2 fixed
     """
-    Trace distance between SPAM vectors a and b
+    Trace distance between state vectors a and b
 
     Parameters
     ----------
@@ -2252,12 +2254,12 @@ Vec_tr_diff = _modf.vecsfn_factory(vec_trace_diff)
 
 def vec_as_stdmx(vec, mx_basis):
     """
-    SPAM vectors as a standard density matrix
+    State vector as a standard density matrix
 
     Parameters
     ----------
     vec : numpy.ndarray
-        SPAM vector as a 1D dense array.
+        state vector as a 1D dense array.
 
     mx_basis : Basis or {'pp', 'gm', 'std'}
         the basis that `vec` is in.
@@ -2276,12 +2278,12 @@ Vec_as_stdmx = _modf.vecfn_factory(vec_as_stdmx)
 
 def vec_as_stdmx_eigenvalues(vec, mx_basis):
     """
-    Eigenvalues of the density matrix corresponding to a SPAM vector
+    Eigenvalues of the density matrix corresponding to a state vector
 
     Parameters
     ----------
     vec : numpy.ndarray
-        SPAM vector as a 1D dense array.
+        state vector as a 1D dense array.
 
     mx_basis : Basis or {'pp', 'gm', 'std'}
         the basis that `vec` is in.
@@ -2500,8 +2502,8 @@ def instrument_half_diamond_norm(a, b, mx_basis):
         aa, bb = i * a.dim, (i + 1) * a.dim
         for j in range(nComps):
             cc, dd = j * a.dim, (j + 1) * a.dim
-            composite_op[aa:bb, cc:dd] = a[clbl].to_dense()
-            composite_top[aa:bb, cc:dd] = b[clbl].to_dense()
+            composite_op[aa:bb, cc:dd] = a[clbl].to_dense(on_space='HilbertSchmidt')
+            composite_top[aa:bb, cc:dd] = b[clbl].to_dense(on_space='HilbertSchmidt')
     return half_diamond_norm(composite_op, composite_top, sumbasis)
 
     #TODO: REMOVE

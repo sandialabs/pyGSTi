@@ -11,13 +11,14 @@ Utility functions for creating and acting on lists of circuits.
 #***************************************************************************************************
 
 import itertools as _itertools
+
 import numpy as _np
 import numpy.random as _rndm
 
+from ..circuits import circuit as _cir
+from ..models import Model as _Model
+from ..baseobjs.label import Label as _Lbl
 from ..tools import listtools as _lt
-from ..objects import circuit as _cir
-from ..objects import Model as _Model
-from ..objects.label import Label as _Lbl
 
 
 def _run_expression(str_expression, my_locals):

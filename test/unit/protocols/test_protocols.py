@@ -1,8 +1,8 @@
-from ..util import BaseCase, with_temp_path
+import pathlib
 
 import pygsti
-import pathlib
 from pygsti.modelpacks import smq1Q_XYI as std
+from ..util import BaseCase, with_temp_path
 
 
 class ExperimentDesignTester(BaseCase):

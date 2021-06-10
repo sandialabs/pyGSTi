@@ -8,7 +8,7 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from ...objects import label as _lbl
+from ...baseobjs import label as _lbl
 
 
 def _to_int_or_strip(x):

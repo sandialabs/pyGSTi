@@ -11,11 +11,11 @@ Functions for generating bootstrapped error bars
 #***************************************************************************************************
 
 import numpy as _np
-#import matplotlib as _mpl #REMOVED
+
+# import matplotlib as _mpl #REMOVED
 from . import longsequence as _longseq
-from .. import objects as _obj
 from .. import algorithms as _alg
-from .. import tools as _tools
+from ..datasets.dataset import DataSet as _DataSet
 
 
 def create_bootstrap_dataset(input_data_set, generation_method, input_model=None,
@@ -83,8 +83,8 @@ def create_bootstrap_dataset(input_data_set, generation_method, input_model=None
     assert(all([ol in possibleOutcomeLabels for ol in outcome_labels]))
 
     #create new dataset
-    simDS = _obj.DataSet(outcome_labels=outcome_labels,
-                         collision_action=input_data_set.collisionAction)
+    simDS = _DataSet(outcome_labels=outcome_labels,
+                     collision_action=input_data_set.collisionAction)
     circuit_list = list(input_data_set.keys())
     probs = input_model.sim.bulk_probs(circuit_list) \
         if generation_method == 'parametric' else None

@@ -11,8 +11,8 @@ Tools for general compatibility.
 #***************************************************************************************************
 
 import numbers as _numbers
-from contextlib import contextmanager as _contextmanager
 import uuid as _uuid
+from contextlib import contextmanager as _contextmanager
 
 
 def isint(x):

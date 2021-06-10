@@ -10,30 +10,14 @@ RB Protocol objects
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import time as _time
-import os as _os
 import numpy as _np
-import pickle as _pickle
-import collections as _collections
-import warnings as _warnings
-import copy as _copy
-import scipy.optimize as _spo
-from scipy.stats import chi2 as _chi2
 
 from . import protocol as _proto
 from . import vb as _vb
-from .modeltest import ModelTest as _ModelTest
-from .. import objects as _objs
-from .. import algorithms as _alg
-from .. import construction as _construction
-from .. import io as _io
 from .. import tools as _tools
-
-from ..objects import wildcardbudget as _wild
-from ..objects.profiler import DummyProfiler as _DummyProfiler
-from ..objects import objectivefns as _objfns
 from ..algorithms import randomcircuit as _rc
 from ..algorithms import rbfit as _rbfit
+
 
 class CliffordRBDesign(_vb.BenchmarkingDesign):
     """
@@ -281,7 +265,7 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
 
         verbosity : int, optional
             If > 0 the number of circuits generated so far is shown.
-        
+
         num_processes : int, optional
             Number of processes to parallelize circuit creation over. Defaults to 1
 
@@ -300,9 +284,10 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
                 print('- Sampling {} circuits at CRB length {} ({} of {} depths)'.format(circuits_per_depth, l,
                                                                                          lnum + 1, len(depths)))
 
-            results = _tools.mptools.starmap_with_kwargs(_rc.create_clifford_rb_circuit, circuits_per_depth, num_processes,
-                                                         pspec, l, qubit_labels=qubit_labels, randomizeout=randomizeout,
-                                                         citerations=citerations, compilerargs=compilerargs,
+            results = _tools.mptools.starmap_with_kwargs(_rc.create_clifford_rb_circuit, circuits_per_depth,
+                                                         num_processes, pspec, l, qubit_labels=qubit_labels,
+                                                         randomizeout=randomizeout, citerations=citerations,
+                                                         compilerargs=compilerargs,
                                                          interleaved_circuit=interleaved_circuit)
 
             circuits_at_depth = []
@@ -697,7 +682,7 @@ class DirectRBDesign(_vb.BenchmarkingDesign):
 
         verbosity : int, optional
             If > 0 the number of circuits generated so far is shown.
-        
+
         num_processes : int, optional
             Number of processes to parallelize circuit creation over. Defaults to 1
 
@@ -716,11 +701,11 @@ class DirectRBDesign(_vb.BenchmarkingDesign):
             if verbosity > 0:
                 print('- Sampling {} circuits at DRB length {} ({} of {} depths)'.format(circuits_per_depth, l,
                                                                                          lnum + 1, len(depths)))
-            
 
-            results = _tools.mptools.starmap_with_kwargs(_rc.create_direct_rb_circuit, circuits_per_depth, num_processes,
-                                                         pspec, l, qubit_labels=qubit_labels, sampler=sampler, samplerargs=samplerargs,
-                                                         addlocal=addlocal, lsargs=lsargs, randomizeout=randomizeout,
+            results = _tools.mptools.starmap_with_kwargs(_rc.create_direct_rb_circuit, circuits_per_depth,
+                                                         num_processes, pspec, l, qubit_labels=qubit_labels,
+                                                         sampler=sampler, samplerargs=samplerargs, addlocal=addlocal,
+                                                         lsargs=lsargs, randomizeout=randomizeout,
                                                          cliffordtwirl=cliffordtwirl, conditionaltwirl=conditionaltwirl,
                                                          citerations=citerations, compilerargs=compilerargs,
                                                          partitioned=partitioned)
@@ -1012,10 +997,10 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
         add_default_protocol : bool, optional
             Whether to add a default RB protocol to the experiment design, which can be run
             later (once data is taken) by using a :class:`DefaultProtocolRunner` object.
-        
+
         num_processes : int, optional
             Number of processes to parallelize circuit creation over. Defaults to 1
-        
+
         verbosity : int, optional
             If > 0 the number of depths for which circuits have been generated so far.
 
@@ -1032,10 +1017,10 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
                 print('- Sampling {} circuits at MRB length {} ({} of {} depths)'.format(circuits_per_depth, l,
                                                                                          lnum + 1, len(depths)))
 
-            results = _tools.mptools.starmap_with_kwargs(_rc.create_mirror_rb_circuit, circuits_per_depth, num_processes,
-                                                         pspec, l, qubit_labels=qubit_labels, sampler=sampler,
-                                                         samplerargs=samplerargs, localclifford=localclifford,
-                                                         paulirandomize=paulirandomize)
+            results = _tools.mptools.starmap_with_kwargs(_rc.create_mirror_rb_circuit, circuits_per_depth,
+                                                         num_processes, pspec, l, qubit_labels=qubit_labels,
+                                                         sampler=sampler, samplerargs=samplerargs,
+                                                         localclifford=localclifford, paulirandomize=paulirandomize)
 
             circuits_at_depth = []
             idealouts_at_depth = []

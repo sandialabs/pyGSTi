@@ -1,10 +1,12 @@
-from ..testutils import BaseTestCase, compare_files, temp_files
 import unittest
+
 import numpy as np
 
 import pygsti
+from ..testutils import BaseTestCase, compare_files, temp_files
+
+
 #from pygsti.extras import rb
-from pygsti.objects import Label
 
 class RBTestCase(BaseTestCase):
     @unittest.skip("Need to update RB unit tests since major code update")

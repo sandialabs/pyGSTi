@@ -6,14 +6,12 @@ import unittest
 import pygsti
 import numpy as np
 from pygsti.modelpacks.legacy import std1Q_XY
-from pygsti.modelpacks.legacy import std2Q_XYICNOT
 from pygsti.objects import Label as L
 from pygsti.objects import Circuit
 import pygsti.construction as pc
-import sys
 import warnings
 
-from ..testutils import BaseTestCase, compare_files, temp_files, regenerate_references
+from ..testutils import BaseTestCase, compare_files, regenerate_references
 from pygsti.construction import modelconstruction, nqnoiseconstruction
 
 #from .nqubitconstruction import *

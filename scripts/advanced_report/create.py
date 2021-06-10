@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-import numpy as np
-import pygsti
 import pickle
+
+import pygsti
 from pygsti.construction import std1Q_XYI
 
 #The usual GST setup: we're going to run GST on the standard XYI 1-qubit gateset

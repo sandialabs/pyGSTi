@@ -1,8 +1,7 @@
 """Shared test fixtures for pygsti.objects unit tests"""
-from ..util import Namespace
-
 import pygsti
 from pygsti.modelpacks.legacy import std1Q_XYI as std
+from ..util import Namespace
 
 ns = Namespace()
 ns.model = std.target_model()
@@ -10,7 +9,7 @@ ns.opLabels = list(ns.model.operations.keys())
 ns.fiducials = std.fiducials
 ns.germs = std.germs
 ns.maxLengthList = [1, 2]
-ns.CM = pygsti.objects.profiler._get_mem_usage()
+ns.CM = pygsti.baseobjs.profiler._get_mem_usage()
 
 
 @ns.memo
@@ -66,7 +65,7 @@ def lsgstStructs(self):
 
 @ns.memo
 def mdl_lsgst(self):
-    chi2_builder = pygsti.obj.Chi2Function.builder(
+    chi2_builder = pygsti.objectivefns.Chi2Function.builder(
         regularization={'min_prob_clip_for_weighting': 1e-6},
         penalties={'prob_clip_interval': (-1e6, 1e6)})
     models, _, _ = pygsti.algorithms.core.run_iterative_gst(

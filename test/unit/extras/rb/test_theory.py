@@ -1,9 +1,10 @@
 import numpy as np
 
+from pygsti.modelpacks.legacy import std1Q_Cliffords, std1Q_XY, std1Q_XYI
+from pygsti.tools import optools as ot
 from ...util import BaseCase
 
-from pygsti.tools import optools as ot
-from pygsti.modelpacks.legacy import std1Q_Cliffords, std1Q_XY, std1Q_XYI
+
 #from pygsti.extras import rb
 
 

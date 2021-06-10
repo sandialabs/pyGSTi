@@ -1,5 +1,7 @@
+import os
+import subprocess
 from contextlib import contextmanager
-import subprocess, os, sys
+
 
 # Get decoded output of a command, even if it fails!
 def get_output(commands):

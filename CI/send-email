@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-from email.mime.text import MIMEText
-import smtplib
 import os
+import smtplib
+from email.mime.text import MIMEText
+
 
 def send_email(message, sender, recievers):
     message = MIMEText(message)

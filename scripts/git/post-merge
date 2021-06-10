@@ -1,6 +1,9 @@
 #!/usr/bin/python
 from __future__ import print_function
-import subprocess, os, sys
+
+import os
+import subprocess
+import sys
 
 print('Runnning post-merge hook - updating git hooks')
 

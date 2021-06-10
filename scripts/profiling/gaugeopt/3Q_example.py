@@ -3,10 +3,10 @@
 
 # In[1]:
 
-import pygsti
 import pickle
 import time
 
+import pygsti
 
 # In[2]:
 

@@ -1,5 +1,5 @@
-from ..util import BaseCase
 from pygsti.tools import pdftools
+from ..util import BaseCase
 
 
 class PDFToolsTester(BaseCase):

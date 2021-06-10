@@ -13,9 +13,12 @@ Routines for building qutrit gates and models
 import numpy as _np
 from scipy import linalg as _linalg
 
-from .. import objects as _objs
+from ..baseobjs import Basis as _Basis, statespace as _statespace
+from ..models.gaugegroup import FullGaugeGroup as _FullGaugeGroup
+from ..modelmembers.operations import FullArbitraryOp as _FullArbitraryOp
+from ..modelmembers.povms import UnconstrainedPOVM as _UnconstrainedPOVM
+from ..models import ExplicitOpModel as _ExplicitOpModel
 from ..tools import unitary_to_process_mx, change_basis
-
 
 #Define 2 qubit to symmetric (+) antisymmetric space transformation A:
 A = _np.matrix([[1, 0, 0, 0],
@@ -183,7 +186,7 @@ def _random_rot(scale, rand_state, arr_type=_np.array):
 
 def create_qutrit_model(error_scale, x_angle=_np.pi / 2, y_angle=_np.pi / 2,
                         ms_global=_np.pi / 2, ms_local=0,
-                        similarity=False, seed=None, basis='qt'):
+                        similarity=False, seed=None, basis='qt', evotype='default'):
     """
     Constructs a standard qutrit :class:`Model`.
 
@@ -219,6 +222,10 @@ def create_qutrit_model(error_scale, x_angle=_np.pi / 2, y_angle=_np.pi / 2,
         The string abbreviation of the basis of the returned vector.  Allowed
         values are Matrix-unit (std), Gell-Mann (gm) and Qutrit (qt).  A `Basis`
         object may also be used.
+
+    evotype : Evotype or str, optional
+        The evolution type.  The special value `"default"` is equivalent
+        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
 
     Returns
     -------
@@ -277,16 +284,16 @@ def create_qutrit_model(error_scale, x_angle=_np.pi / 2, y_angle=_np.pi / 2,
     E1final = change_basis(_np.reshape(E1, (9, 1)), "std", basis)
     E2final = change_basis(_np.reshape(E2, (9, 1)), "std", basis)
 
-    sslbls = _objs.StateSpaceLabels(['QT'], [9])
-    qutritMDL = _objs.ExplicitOpModel(sslbls, _objs.Basis.cast(basis, 9))
+    state_space = _statespace.ExplicitStateSpace(['QT'], [3])
+    qutritMDL = _ExplicitOpModel(state_space, _Basis.cast(basis, 9), evotype=evotype)
     qutritMDL.preps['rho0'] = rho0final
-    qutritMDL.povms['Mdefault'] = _objs.UnconstrainedPOVM([('0bright', E0final),
-                                                           ('1bright', E1final),
-                                                           ('2bright', E2final)])
-    qutritMDL.operations['Gi'] = _objs.FullDenseOp(arrType(gateISOfinal))
-    qutritMDL.operations['Gx'] = _objs.FullDenseOp(arrType(gateXSOfinal))
-    qutritMDL.operations['Gy'] = _objs.FullDenseOp(arrType(gateYSOfinal))
-    qutritMDL.operations['Gm'] = _objs.FullDenseOp(arrType(gateMSOfinal))
-    qutritMDL.default_gauge_group = _objs.gaugegroup.FullGaugeGroup(qutritMDL.dim)
+    qutritMDL.povms['Mdefault'] = _UnconstrainedPOVM([('0bright', E0final),
+                                                      ('1bright', E1final),
+                                                      ('2bright', E2final)], evotype=evotype)
+    qutritMDL.operations['Gi'] = _FullArbitraryOp(arrType(gateISOfinal), evotype, state_space)
+    qutritMDL.operations['Gx'] = _FullArbitraryOp(arrType(gateXSOfinal), evotype, state_space)
+    qutritMDL.operations['Gy'] = _FullArbitraryOp(arrType(gateYSOfinal), evotype, state_space)
+    qutritMDL.operations['Gm'] = _FullArbitraryOp(arrType(gateMSOfinal), evotype, state_space)
+    qutritMDL.default_gauge_group = _FullGaugeGroup(state_space, evotype)
 
     return qutritMDL

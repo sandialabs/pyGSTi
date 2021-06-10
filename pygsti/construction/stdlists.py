@@ -10,20 +10,21 @@ Circuit list creation functions using repeated-germs limited by a max-length.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy.random as _rndm
+import collections as _collections
 import itertools as _itertools
 import warnings as _warnings
-import collections as _collections
+
+import numpy.random as _rndm
+
+from . import circuitconstruction as _gsc
+from ..models.model import OpModel as _OpModel
+from ..circuits.circuit import Circuit as _Circuit
+from ..circuits.circuitstructure import FiducialPairPlaquette as _FiducialPairPlaquette
+from ..circuits.circuitstructure import GermFiducialPairPlaquette as _GermFiducialPairPlaquette
+from ..circuits.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
+from ..baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from ..tools import listtools as _lt
 from ..tools.legacytools import deprecate as _deprecated_fn
-from ..objects.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
-from ..objects.circuitstructure import FiducialPairPlaquette as _FiducialPairPlaquette
-from ..objects.circuitstructure import GermFiducialPairPlaquette as _GermFiducialPairPlaquette
-from ..objects.model import OpModel as _OpModel
-from ..objects import Circuit as _Circuit
-from ..objects import CircuitList as _CircuitList
-from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from . import circuitconstruction as _gsc
 
 
 def _create_raw_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_length_list,

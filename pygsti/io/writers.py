@@ -10,14 +10,21 @@ Functions for writing GST objects to text files.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import warnings as _warnings
-import numpy as _np
 import pathlib as _pathlib
+import warnings as _warnings
+
+import numpy as _np
+
+from . import loaders as _loaders
+from .. import circuits as _circuits
+from ..models import gaugegroup as _gaugegroup
 
 # from . import stdinput as _stdinput
 from .. import tools as _tools
-from .. import objects as _objs
-from . import loaders as _loaders
+from ..modelmembers import instruments as _instrument
+from ..modelmembers import operations as _op
+from ..modelmembers import povms as _povm
+from ..modelmembers import states as _state
 
 
 def write_empty_dataset(filename, circuits,
@@ -51,7 +58,7 @@ def write_empty_dataset(filename, circuits,
     None
     """
 
-    if len(circuits) > 0 and not isinstance(circuits[0], _objs.Circuit):
+    if len(circuits) > 0 and not isinstance(circuits[0], _circuits.Circuit):
         raise ValueError("Argument circuits must be a list of Circuit objects!")
 
     if num_zero_cols is None:  # TODO: cleaner way to extract number of columns from header_string?
@@ -112,7 +119,7 @@ def write_dataset(filename, dataset, circuits=None,
     None
     """
     if circuits is not None:
-        if len(circuits) > 0 and not isinstance(circuits[0], _objs.Circuit):
+        if len(circuits) > 0 and not isinstance(circuits[0], _circuits.Circuit):
             raise ValueError("Argument circuits must be a list of Circuit objects!")
     else:
         circuits = list(dataset.keys())
@@ -211,7 +218,7 @@ def write_multidataset(filename, multidataset, circuits=None, outcome_label_orde
     """
 
     if circuits is not None:
-        if len(circuits) > 0 and not isinstance(circuits[0], _objs.Circuit):
+        if len(circuits) > 0 and not isinstance(circuits[0], _circuits.Circuit):
             raise ValueError("Argument circuits must be a list of Circuit objects!")
     else:
         circuits = list(multidataset.cirIndex.keys())  # TODO: make access function for circuits?
@@ -273,7 +280,7 @@ def write_circuit_list(filename, circuits, header=None):
     -------
     None
     """
-    if len(circuits) > 0 and not isinstance(circuits[0], _objs.Circuit):
+    if len(circuits) > 0 and not isinstance(circuits[0], _circuits.Circuit):
         raise ValueError("Argument circuits must be a list of Circuit objects!")
 
     with open(str(filename), 'w') as output:
@@ -327,13 +334,13 @@ def write_model(model, filename, title=None):
 
         for prepLabel, rhoVec in model.preps.items():
             props = None
-            if isinstance(rhoVec, _objs.FullSPAMVec): typ = "PREP"
-            elif isinstance(rhoVec, _objs.TPSPAMVec): typ = "TP-PREP"
-            elif isinstance(rhoVec, _objs.StaticSPAMVec): typ = "STATIC-PREP"
-            elif isinstance(rhoVec, _objs.LindbladSPAMVec):
+            if isinstance(rhoVec, _state.FullState): typ = "PREP"
+            elif isinstance(rhoVec, _state.TPState): typ = "TP-PREP"
+            elif isinstance(rhoVec, _state.StaticState): typ = "STATIC-PREP"
+            elif isinstance(rhoVec, _state.LindbladSPAMVec):  # TODO - change to ComposedState
                 typ = "CPTP-PREP"
-                props = [("PureVec", rhoVec.state_vec.to_dense()),
-                         ("ErrgenMx", rhoVec.error_map.to_dense())]
+                props = [("PureVec", rhoVec.state_vec.to_dense(on_space='HilbertSchmidt')),
+                         ("ErrgenMx", rhoVec.error_map.to_dense(on_space='HilbertSchmidt'))]
             else:
                 _warnings.warn(
                     ("Non-standard prep of type {typ} cannot be described by"
@@ -341,18 +348,18 @@ def write_model(model, filename, title=None):
                      "fully parameterized spam vector").format(typ=str(type(rhoVec))))
                 typ = "PREP"
 
-            if props is None: props = [("LiouvilleVec", rhoVec.to_dense())]
+            if props is None: props = [("LiouvilleVec", rhoVec.to_dense(on_space='HilbertSchmidt'))]
             output.write("%s: %s\n" % (typ, prepLabel))
             for lbl, val in props:
                 writeprop(output, lbl, val)
 
         for povmLabel, povm in model.povms.items():
             props = None; povm_to_write = povm
-            if isinstance(povm, _objs.UnconstrainedPOVM): povmType = "POVM"
-            elif isinstance(povm, _objs.TPPOVM): povmType = "TP-POVM"
-            elif isinstance(povm, _objs.LindbladPOVM):
+            if isinstance(povm, _povm.UnconstrainedPOVM): povmType = "POVM"
+            elif isinstance(povm, _povm.TPPOVM): povmType = "TP-POVM"
+            elif isinstance(povm, _povm.LindbladPOVM):  # TODO - change to ComposedPOVM
                 povmType = "CPTP-POVM"
-                props = [("ErrgenMx", povm.error_map.to_dense())]
+                props = [("ErrgenMx", povm.error_map.to_dense(on_space='HilbertSchmidt'))]
                 povm_to_write = povm.base_povm
             else:
                 _warnings.warn(
@@ -367,10 +374,9 @@ def write_model(model, filename, title=None):
                     writeprop(output, lbl, val)
 
             for ELabel, EVec in povm_to_write.items():
-                if isinstance(EVec, _objs.FullSPAMVec): typ = "EFFECT"
-                elif isinstance(EVec, _objs.ComplementSPAMVec): typ = "EFFECT"  # ok
-                elif isinstance(EVec, _objs.TPSPAMVec): typ = "TP-EFFECT"
-                elif isinstance(EVec, _objs.StaticSPAMVec): typ = "STATIC-EFFECT"
+                if isinstance(EVec, _povm.FullPOVMEffect): typ = "EFFECT"
+                elif isinstance(EVec, _povm.ComplementPOVMEffect): typ = "EFFECT"  # ok
+                elif isinstance(EVec, _povm.StaticPOVMEffect): typ = "STATIC-EFFECT"
                 else:
                     _warnings.warn(
                         ("Non-standard effect of type {typ} cannot be described by"
@@ -378,23 +384,19 @@ def write_model(model, filename, title=None):
                          "fully parameterized spam vector").format(typ=str(type(EVec))))
                     typ = "EFFECT"
                 output.write("%s: %s\n" % (typ, ELabel))
-                writeprop(output, "LiouvilleVec", EVec.to_dense())
+                writeprop(output, "LiouvilleVec", EVec.to_dense(on_space='HilbertSchmidt'))
 
             output.write("END POVM\n\n")
 
         for label, gate in model.operations.items():
             props = None
-            if isinstance(gate, _objs.FullDenseOp): typ = "GATE"
-            elif isinstance(gate, _objs.TPDenseOp): typ = "TP-GATE"
-            elif isinstance(gate, _objs.StaticDenseOp): typ = "STATIC-GATE"
-            elif isinstance(gate, _objs.LindbladDenseOp):
-                typ = "CPTP-GATE"
-                props = [("LiouvilleMx", gate.to_dense())]
-                if gate.unitary_postfactor is not None:
-                    upost = gate.unitary_postfactor.to_dense() \
-                        if isinstance(gate.unitary_postfactor, _objs.LinearOperator) \
-                        else gate.unitary_postfactor
-                    props.append(("RefLiouvilleMx", upost))
+            if isinstance(gate, _op.FullArbitraryOp): typ = "GATE"
+            elif isinstance(gate, _op.FullTPOp): typ = "TP-GATE"
+            elif isinstance(gate, _op.StaticArbitraryOp): typ = "STATIC-GATE"
+            elif isinstance(gate, _op.ComposedOp):
+                typ = "COMPOSED-GATE"
+                props = [("%dLiouvilleMx" % i, factor.to_dense(on_space='HilbertSchmidt'))
+                         for i, factor in enumerate(gate.factorops)]
             else:
                 _warnings.warn(
                     ("Non-standard gate of type {typ} cannot be described by"
@@ -402,14 +404,14 @@ def write_model(model, filename, title=None):
                      "fully parameterized gate").format(typ=str(type(gate))))
                 typ = "GATE"
 
-            if props is None: props = [("LiouvilleMx", gate.to_dense())]
+            if props is None: props = [("LiouvilleMx", gate.to_dense(on_space='HilbertSchmidt'))]
             output.write(typ + ": " + str(label) + '\n')
             for lbl, val in props:
                 writeprop(output, lbl, val)
 
         for instLabel, inst in model.instruments.items():
-            if isinstance(inst, _objs.Instrument): typ = "Instrument"
-            elif isinstance(inst, _objs.TPInstrument): typ = "TP-Instrument"
+            if isinstance(inst, _instrument.Instrument): typ = "Instrument"
+            elif isinstance(inst, _instrument.TPInstrument): typ = "TP-Instrument"
             else:
                 _warnings.warn(
                     ("Non-standard Instrument of type {typ} cannot be described by"
@@ -419,9 +421,9 @@ def write_model(model, filename, title=None):
             output.write(typ + ": " + str(instLabel) + '\n\n')
 
             for label, gate in inst.items():
-                if isinstance(gate, _objs.FullDenseOp): typ = "IGATE"
-                elif isinstance(gate, _objs.TPInstrumentOp): typ = "IGATE"  # ok b/c instrument itself is marked as TP
-                elif isinstance(gate, _objs.StaticDenseOp): typ = "STATIC-IGATE"
+                if isinstance(gate, _op.FullArbitraryOp): typ = "IGATE"
+                elif isinstance(gate, _instrument.TPInstrumentOp): typ = "IGATE"  # ok b/c instrument is marked as TP
+                elif isinstance(gate, _op.StaticArbitraryOp): typ = "STATIC-IGATE"
                 else:
                     _warnings.warn(
                         ("Non-standard gate of type {typ} cannot be described by"
@@ -429,11 +431,11 @@ def write_model(model, filename, title=None):
                          "fully parameterized gate").format(typ=str(type(gate))))
                     typ = "IGATE"
                 output.write(typ + ": " + str(label) + '\n')
-                writeprop(output, "LiouvilleMx", gate.to_dense())
+                writeprop(output, "LiouvilleMx", gate.to_dense(on_space='HilbertSchmidt'))
             output.write("END Instrument\n\n")
 
-        if model.state_space_labels is not None:
-            output.write("STATESPACE: " + str(model.state_space_labels) + "\n")
+        if model.state_space is not None:
+            output.write("STATESPACE: " + str(model.state_space) + "\n")
             # StateSpaceLabels.__str__ formats the output properly
 
         basisdim = model.basis.dim
@@ -442,18 +444,18 @@ def write_model(model, filename, title=None):
             output.write("BASIS: %s\n" % model.basis.name)
         else:
             if model.basis.name not in ('std', 'pp', 'gm', 'qt'):  # a "fancy" basis
-                assert(model.state_space_labels is not None), \
+                assert(model.state_space is not None), \
                     "Must set a Model's state space labels when using fancy a basis!"
                 # don't write the dim - the state space labels will cover this.
                 output.write("BASIS: %s\n" % model.basis.name)
             else:
                 output.write("BASIS: %s %d\n" % (model.basis.name, basisdim))
 
-        if isinstance(model.default_gauge_group, _objs.FullGaugeGroup):
+        if isinstance(model.default_gauge_group, _gaugegroup.FullGaugeGroup):
             output.write("GAUGEGROUP: Full\n")
-        elif isinstance(model.default_gauge_group, _objs.TPGaugeGroup):
+        elif isinstance(model.default_gauge_group, _gaugegroup.TPGaugeGroup):
             output.write("GAUGEGROUP: TP\n")
-        elif isinstance(model.default_gauge_group, _objs.UnitaryGaugeGroup):
+        elif isinstance(model.default_gauge_group, _gaugegroup.UnitaryGaugeGroup):
             output.write("GAUGEGROUP: Unitary\n")
 
 

@@ -1,5 +1,7 @@
 import subprocess
+
 from ..automation_tools import directory
+
 
 def get_pylint_output(commands, filename):
     # pyGSTi directory

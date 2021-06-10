@@ -1,15 +1,16 @@
 
 import unittest
-import pygsti
+
 import numpy as np
 import scipy.sparse as sps
 
+import pygsti
 from pygsti.modelpacks.legacy import std1Q_XYI
 from pygsti.modelpacks.legacy import std2Q_XYICNOT
 from pygsti.objects import LindbladDenseOp, ComposedDenseOp, EmbeddedDenseOp, StaticDenseOp
 from pygsti.objects import LindbladOp
+from ..testutils import BaseTestCase
 
-from ..testutils import BaseTestCase, compare_files, temp_files
 
 class AdvancedParameterizationTestCase(BaseTestCase):
 

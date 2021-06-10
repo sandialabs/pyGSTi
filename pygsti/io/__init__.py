@@ -10,16 +10,16 @@ pyGSTi Input/Output Python Package
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-#Import the most important/useful routines of each module into
+from . import json
+# Import the most important/useful routines of each module into
 # the package namespace
 from .circuitparser import CircuitParser
+#from .legacyio import enable_no_cython_unpickling
+#from .legacyio import enable_old_object_unpickling  # , disable_old_object_unpickling
 from .loaders import *
-from .writers import *
 from .metadir import *
 from .stdinput import *
-from . import json
-from .legacyio import enable_old_object_unpickling  # , disable_old_object_unpickling
-from .legacyio import enable_no_cython_unpickling
+from .writers import *
 
 #Users may not have msgpack, which is fine.
 try: from . import msgpack

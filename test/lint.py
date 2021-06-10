@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-from helpers.pylint           import get_score, look_for, find_warnings, find_errors, run_adjustables, lint_all
-from helpers.automation_tools import read_json, write_json
-import sys
 import argparse
+import sys
+
+from helpers.automation_tools import read_json, write_json
+from helpers.pylint import get_score, look_for, find_warnings, find_errors, run_adjustables, lint_all
+
 
 # See pyGSTi/doc/pylint.md!
 

@@ -11,19 +11,15 @@ Defines interpolated gate and factory classes
 #***************************************************************************************************
 
 
-import numpy as _np
-import pickle as _pickle
-from scipy.interpolate import LinearNDInterpolator as _linND
-from scipy.linalg import logm as _logm, expm as _expm
 import itertools as _itertools
-import copy as _copy
-import pathlib as _pathlib
 
-from ...tools.basistools import change_basis as _change_basis
+import numpy as _np
+from scipy.interpolate import LinearNDInterpolator as _linND
+
+from ...modelmembers.operations import DenseOperator as _DenseOperator
+from ...modelmembers.operations.opfactory import OpFactory as _OpFactory
+from ...baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from ...tools import optools as _ot
-from ...objects.operation import DenseOperator as _DenseOperator
-from ...objects.opfactory import OpFactory as _OpFactory
-from ...objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 
 
 #TODO move elsewhere?

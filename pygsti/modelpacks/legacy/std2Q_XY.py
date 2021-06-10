@@ -12,6 +12,7 @@ I*X(pi/2), I*Y(pi/2), X(pi/2)*I, Y(pi/2)*I, and CPHASE.
 """
 
 import sys as _sys
+
 from ...construction import circuitconstruction as _strc
 from ...construction import modelconstruction as _setc
 from ...construction import stdtarget as _stdtarget

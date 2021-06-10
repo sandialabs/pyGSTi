@@ -10,22 +10,21 @@ Defines the Estimate class.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as _np
 import collections as _collections
-import warnings as _warnings
 import copy as _copy
+import warnings as _warnings
 
-from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+import numpy as _np
+
 from pygsti import tools as _tools
-from ..objects import objectivefns as _objfns
-from ..objects.confidenceregionfactory import ConfidenceRegionFactory as _ConfidenceRegionFactory
-from ..objects.circuit import Circuit as _Circuit
-from ..objects.explicitmodel import ExplicitOpModel as _ExplicitOpModel
-from ..objects.circuitlist import CircuitList as _CircuitList
-from ..objects.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
-from ..objects.objectivefns import TimeIndependentMDCObjectiveFunction as _TIMDCObjFn
-from ..objects.objectivefns import CachedObjectiveFunction as _CachedObjectiveFunction
-from ..objects.objectivefns import ModelDatasetCircuitsStore as _ModelDatasetCircuitStore
+from pygsti.objectivefns.objectivefns import CachedObjectiveFunction as _CachedObjectiveFunction
+from pygsti.objectivefns.objectivefns import ModelDatasetCircuitsStore as _ModelDatasetCircuitStore
+from pygsti.protocols.confidenceregionfactory import ConfidenceRegionFactory as _ConfidenceRegionFactory
+from ..models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
+from ..objectivefns import objectivefns as _objfns
+from ..circuits.circuitlist import CircuitList as _CircuitList
+from ..circuits.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
+from ..baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 
 #Class for holding confidence region factory keys
 CRFkey = _collections.namedtuple('CRFkey', ['model', 'circuit_list'])

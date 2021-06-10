@@ -1,13 +1,13 @@
-import unittest
 import collections
-import pickle
-import pygsti
-import numpy as np
-import warnings
 import os
-from pygsti.modelpacks.legacy import std1Q_XYI as std
+import pickle
+import unittest
 
+import numpy as np
+
+import pygsti
 from ..testutils import BaseTestCase, compare_files, temp_files, regenerate_references
+
 
 class TestDataSetMethods(BaseTestCase):
 

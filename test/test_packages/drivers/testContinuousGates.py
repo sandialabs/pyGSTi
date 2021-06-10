@@ -6,12 +6,9 @@ import unittest
 import pygsti
 import numpy as np
 from pygsti.modelpacks.legacy import std1Q_XYI
-from pygsti.modelpacks.legacy import std2Q_XYICNOT
-from pygsti.objects import Label as L
 import pygsti.construction as pc
-import sys, os, warnings
 
-from ..testutils import BaseTestCase, compare_files, temp_files
+from ..testutils import BaseTestCase
 
 
 #Note: these are the same sample factory classes used elsewhere in the unit tests - TODO: consolidate

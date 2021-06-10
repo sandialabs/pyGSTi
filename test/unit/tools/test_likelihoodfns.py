@@ -1,11 +1,10 @@
-from ..util import BaseCase
-from . import fixtures as pkg
 import numpy as _np
 
-from pygsti.tools import likelihoodfns as lfn
-from pygsti.objects.dataset import DataSet
-from pygsti.modelpacks.legacy import std1Q_XYI as std
 from pygsti import construction
+from pygsti.modelpacks.legacy import std1Q_XYI as std
+from pygsti.tools import likelihoodfns as lfn
+from . import fixtures as pkg
+from ..util import BaseCase
 
 
 class LikelihoodFunctionsBase(BaseCase):

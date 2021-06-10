@@ -8,25 +8,27 @@
 #***************************************************************************************************
 """ A Python implementation of LinearOperator Set Tomography """
 
-#Import the most important/useful routines of each module/sub-package
-# into the package namespace
-from ._version import __version__
-
+from . import baseobjs
 from . import algorithms as alg
 from . import construction as cst
-from . import objects as obj
-from . import report as rpt
+from . import circuits
+from . import datasets
+from . import models
+from . import modelmembers
+from . import forwardsims
 from . import protocols
-
+from . import report as rpt
+# Import the most important/useful routines of each module/sub-package
+# into the package namespace
+from ._version import __version__
+from .algorithms.contract import *
 from .algorithms.core import *
 from .algorithms.gaugeopt import *
-from .algorithms.contract import *
 from .algorithms.grammatrix import *
 from .construction.gateconstruction import *  # *_qubit_gate fns
-from .objects import Basis
-from .tools import *
 from .drivers import *
-
-#NUMPY BUG FIX (imported from tools)
+from .tools import *
+# NUMPY BUG FIX (imported from tools)
 from .tools.compattools import _numpy14einsumfix
+
 _numpy14einsumfix()

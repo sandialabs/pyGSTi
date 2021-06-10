@@ -1,15 +1,10 @@
 import unittest
-import pygsti
-import sys, os
 
-import pygsti.algorithms.germselection as germsel
 import pygsti.algorithms.fiducialselection as fidsel
+import pygsti.algorithms.germselection as germsel
 import pygsti.construction as constr
+from ..testutils import BaseTestCase
 
-
-from pygsti.modelpacks.legacy import std1Q_XYI as std
-
-from ..testutils import BaseTestCase, compare_files, temp_files
 
 class AutoExperimentDesignTestCase(BaseTestCase):
 

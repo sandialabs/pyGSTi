@@ -1,11 +1,11 @@
 
-from ..testutils import BaseTestCase, temp_files, compare_files
-import unittest
-import pygsti as gst
 import numpy as np
-from pygsti.modelpacks.legacy import std1Q_XY as Std1Q_XY
 
+import pygsti as gst
 from pygsti.extras import rpe
+from pygsti.modelpacks.legacy import std1Q_XY as Std1Q_XY
+from ..testutils import BaseTestCase, compare_files
+
 RPE = rpe
 RPEConstr = rpe.rpeconstruction
 rpeconfig_GxPi2_GyPi2_00 = rpe.rpeconfig_GxPi2_GyPi2_00

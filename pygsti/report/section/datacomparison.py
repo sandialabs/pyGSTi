@@ -9,8 +9,8 @@
 #***************************************************************************************************
 
 from . import Section as _Section
+from ...datasets import DataComparator as _DataComparator
 from ...tools.mpitools import distribute_indices as _distribute_indices
-from ...objects import DataComparator as _DataComparator
 
 
 class DataComparisonSection(_Section):

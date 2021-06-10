@@ -9,8 +9,10 @@
 """ Pauli state/operation/outcome objects for Idle Tomography """
 
 import numpy as _np
-from ... import objects as _objs
-from ...objects.label import Label as _Lbl
+
+from ...circuits.circuit import Circuit as _Circuit
+from ...baseobjs.label import Label as _Lbl
+
 
 #Helper function
 
@@ -167,7 +169,7 @@ class NQPauliState(object):
                                  % (key, str(list(pauli_basis_dict.keys()))))
             opstr.extend([_Lbl(opname, i) for opname in pauli_basis_dict[key]])
             # pauli_basis_dict just has 1Q gate *names* -- need to make into labels
-        return _objs.Circuit(opstr, num_lines=nQubits).parallelize()
+        return _Circuit(opstr, num_lines=nQubits).parallelize()
 
 
 class NQPauliOp(object):

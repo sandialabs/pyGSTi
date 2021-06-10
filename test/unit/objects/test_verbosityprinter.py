@@ -1,12 +1,10 @@
 import pickle
-import sys
-from io import StringIO
 from contextlib import contextmanager
+from io import StringIO
 from unittest import mock
 
+from pygsti.baseobjs import verbosityprinter as vbp
 from ..util import BaseCase
-
-from pygsti.objects import verbosityprinter as vbp
 
 warn_message = 'This might go badly'
 error_message = 'Something terrible happened'

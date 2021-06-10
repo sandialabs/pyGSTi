@@ -8,7 +8,6 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from .devcore import *
 from . import ibmq_burlington
 from . import ibmq_essex
 from . import ibmq_london
@@ -22,3 +21,4 @@ from . import rigetti_agave
 from . import rigetti_aspen4
 from . import rigetti_aspen6
 from . import rigetti_aspen7
+from .devcore import *
