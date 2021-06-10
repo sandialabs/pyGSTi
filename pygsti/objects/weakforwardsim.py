@@ -65,14 +65,41 @@ class WeakForwardSimulator(_ForwardSimulator):
     def _compute_sparse_circuit_outcome_probabilities(self, circuit, resource_alloc, time=None):
         probs = _ld.OutcomeLabelDict()
 
-        # TODO: For parallelization, block over this for loop
-        for _ in range(self.shots):
-            outcome = self._compute_circuit_outcome_for_shot(circuit, resource_alloc, time)
-            if outcome in probs:
-                probs[outcome] += 1.0 / self.shots
-            else:
-                probs[outcome] = 1.0 / self.shots
-        
+        comm = None if resource_alloc is None else resource_alloc.comm
+        if comm is None:
+            # No MPI, just serial execution
+            for _ in range(self.shots):
+                outcome = self._compute_circuit_outcome_for_shot(circuit, resource_alloc, time)
+                if outcome in probs:
+                    probs[outcome] += 1.0 / self.shots
+                else:
+                    probs[outcome] = 1.0 / self.shots   
+        else:
+            # Have a comm, so use MPI to parallelize over shots
+            rank = comm.Get_rank()
+            size = comm.Get_size()
+
+            shots_per_rank = self.shots // size
+            # Take care of any leftover shots
+            if rank < self.shots % size:
+                shots_per_rank += 1
+            
+            # Each rank runs their set of shots (with no resource alloc since we are using it at this level)
+            outcomes_per_rank = [self._compute_circuit_outcome_for_shot(circuit, None, time) for _ in range(shots_per_rank)]
+
+            # Collect all outcomes
+            outcomes = comm.gather(outcomes_per_rank, root=0)
+            if rank == 0:
+                for opr in outcomes:
+                    for outcome in opr:
+                        if outcome in probs:
+                            probs[outcome] += 1.0 / self.shots
+                        else:
+                            probs[outcome] = 1.0 / self.shots
+            
+            # Distribute final probabilities
+            probs = comm.bcast(probs, root=0)
+            
         return probs
 
     # For WeakForwardSimulator, provide "bulk" interface based on the sparse interface
