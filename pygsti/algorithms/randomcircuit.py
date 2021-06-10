@@ -10,7 +10,6 @@ Random circuit sampling functions.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from scipy.sparse.construct import rand
 from . import compilers as _cmpl
 from ..objects import circuit as _cir
 from ..objects import label as _lbl
