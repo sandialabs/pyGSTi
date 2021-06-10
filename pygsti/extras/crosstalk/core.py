@@ -16,6 +16,8 @@ from gsq.ci_tests import ci_test_dis
 
 from . import objects as _obj
 from ... import io as _pygio
+from ...circuits.circuit import Circuit as _Circuit
+from ...datasets.dataset import DataSet as _DataSet
 
 
 def tuple_replace_at_index(tup, ix, val):
@@ -63,7 +65,7 @@ def flatten(l):
 
 def form_ct_data_matrix(ds, number_of_regions, settings, filter_lengths=[]):
     # This converts a DataSet to an array since the code below uses arrays
-    if type(ds) == pygsti.datasets.dataset.DataSet:
+    if type(ds) == _DataSet:
 
         opstr = ds.keys()[0]
         temp = ds.auxInfo[opstr]['settings']
@@ -218,7 +220,7 @@ def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.9
     # -------------------------- #
 
     # This converts a DataSet to an array since the code below uses arrays
-    if type(ds) == pygsti.datasets.dataset.DataSet:
+    if type(ds) == _DataSet:
 
         opstr = ds.keys()[0]
         temp = ds.auxInfo[opstr]['settings']
@@ -347,7 +349,7 @@ def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.9
     # Records input information into the results object.
     results.name = name
     results.data = data
-    if type(ds) == pygsti.datasets.dataset.DataSet:
+    if type(ds) == _DataSet:
         results.pygsti_ds = dscopy
     results.number_of_regions = number_of_regions
     results.settings = settings
@@ -870,7 +872,7 @@ def crosstalk_detection_experiment2(pspec, lengths, circuits_per_length, circuit
                 # generate "multiplier" number of random circuits on the other qubits with qr setting
                 #  on the central qubit
                 for m in range(0, multiplier):
-                    circuit = pygsti.circuits.circuit.Circuit(num_lines=0, editable=True)
+                    circuit = _Circuit(num_lines=0, editable=True)
                     settings = {}
 
                     for q1 in range(0, n):
@@ -884,7 +886,7 @@ def crosstalk_detection_experiment2(pspec, lengths, circuits_per_length, circuit
 
                         settings[(q1,)] = lnum * (circuit_population_sz + 1) + r + 1
 
-                        singleQcircuit = pygsti.circuits.circuit.Circuit(num_lines=1, line_labels=[q1], editable=True)
+                        singleQcircuit = _Circuit(num_lines=1, line_labels=[q1], editable=True)
                         for layer in range(0, l):
                             singleQcircuit.insert_layer(circuit_menu[q1][r][layer], layer)
                         singleQcircuit.done_editing()

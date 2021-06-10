@@ -1806,7 +1806,7 @@ class NQubitErrgenTable(WorkspaceTable):
                 process_gate(lbl, gate.embedded_op, comppos_prefix, gate.targetLabels)
             elif isinstance(gate, _op.StaticArbitraryOp):
                 pass  # no error coefficients associated w/static gates
-            elif isinstance(gate, _op.LindbladOp):  # TODO - change to ComposedOP --------------------------------------------------------
+            elif isinstance(gate, _op.ComposedOp):
 
                 # Only display coeffs for gates that correspond to *new*
                 # (not yet displayed) parameters.
@@ -1814,7 +1814,7 @@ class NQubitErrgenTable(WorkspaceTable):
                 if not params.issubset(displayed_params):
                     displayed_params.update(params)
 
-                    Ldict, basis = gate.errorgen_coefficients(return_basis=True)
+                    Ldict, basis = gate.errorgen_coefficients(return_basis=True)  # does this work w/ComposedOp?
                     sparse = basis.sparse
 
                     #Try to find good labels for these basis elements

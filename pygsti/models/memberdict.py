@@ -15,6 +15,7 @@ import copy as _copy
 from ..baseobjs.label import Label as _Label
 from ..modelmembers import modelmember as _mm
 
+
 class _PrefixOrderedDict(_collections.OrderedDict):
     """
     Base class ordered dictionaries whose keys *must* be strings which begin with a given prefix.
@@ -53,8 +54,8 @@ class _PrefixOrderedDict(_collections.OrderedDict):
     :class:`LinearOperator`-derived object by converting any non-`LinearOperator` values into
     `LinearOperator`s upon assignment and raising an error if this is not possible.
     """
-    
-    
+
+
 class OrderedMemberDict(_PrefixOrderedDict, _mm.ModelChild):
     """
     An ordered dictionary whose keys must begin with a given prefix.
@@ -254,16 +255,28 @@ class OrderedMemberDict(_PrefixOrderedDict, _mm.ModelChild):
         state_space = self.parent.state_space
         obj = None
 
-        #TODO: update this - now states & effects are different types, and is conversion still a good idea? -------------------------
         from ..modelmembers import states as _state
         from ..modelmembers import operations as _op
+        from ..modelmembers import instruments as _inst
+        from ..modelmembers import povms as _povm
         if self.flags['cast_to_type'] == "state":
             obj = _state.StaticState(value, evotype, state_space)
             obj = _state.convert(obj, self.default_param, basis)
         elif self.flags['cast_to_type'] == "operation":
             obj = _op.StaticArbitraryOp(value, evotype, state_space)
             obj = _op.convert(obj, self.default_param, basis)
-        # FUTURE: handle "povm", "instrument" and "factory"?
+        elif self.flags['cast_to_type'] == "povm":
+            obj = _povm.UnconstrainedPOVM(
+                [_povm.StaticPOVMEffect(v, evotype, state_space) for v in value],
+                evotype, state_space)
+            obj = _povm.convert(obj, self.default_param, basis)
+        elif self.flags['cast_to_type'] == "instrument":
+            members = []
+            for v in value:
+                m = _op.StaticArbitraryOp(v, evotype, state_space)
+                members.append(_op.convert(m, self.default_param, basis))
+            obj = _inst.Instrument(members, evotype, state_space)
+
         return obj
 
     def __setitem__(self, key, value):

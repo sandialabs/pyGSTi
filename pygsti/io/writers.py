@@ -393,14 +393,10 @@ def write_model(model, filename, title=None):
             if isinstance(gate, _op.FullArbitraryOp): typ = "GATE"
             elif isinstance(gate, _op.FullTPOp): typ = "TP-GATE"
             elif isinstance(gate, _op.StaticArbitraryOp): typ = "STATIC-GATE"
-            elif isinstance(gate, _op.LindbladDenseOp):  # TODO - change to ComposedOp ?? -------------------------------------------
-                typ = "CPTP-GATE"
-                props = [("LiouvilleMx", gate.to_dense(on_space='HilbertSchmidt'))]
-                if gate.unitary_postfactor is not None:
-                    upost = gate.unitary_postfactor.to_dense(on_space='HilbertSchmidt') \
-                        if isinstance(gate.unitary_postfactor, _op.LinearOperator) \
-                        else gate.unitary_postfactor
-                    props.append(("RefLiouvilleMx", upost))
+            elif isinstance(gate, _op.ComposedOp):
+                typ = "COMPOSED-GATE"
+                props = [("%dLiouvilleMx" % i, factor.to_dense(on_space='HilbertSchmidt'))
+                         for i, factor in enumerate(gate.factorops)]
             else:
                 _warnings.warn(
                     ("Non-standard gate of type {typ} cannot be described by"

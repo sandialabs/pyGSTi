@@ -161,7 +161,8 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         -------
         MapForwardSimulator
         """
-        return MapForwardSimulator(self.model, self._max_cache_size)   # TODO - FIX THIS --------------------------------------------------------
+        return MapForwardSimulator(self.model, self._max_cache_size, self._num_atoms,
+                                   self._processor_grid, self._pblk_sizes)
 
     def create_layout(self, circuits, dataset=None, resource_alloc=None, array_types=('E',),
                       derivative_dimension=None, verbosity=0):

@@ -199,9 +199,8 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         """ Called when the evotype being used (defined by the parent model) changes.
             `evotype` will be `None` when the current model is None"""
         if evotype is not None:
-            #TODO: assert evotype has a path-evotype? ---------------------------------------------------------------------------------
             try:
-                self.calclib = _importlib.import_module("pygsti.forwardsims.termforwardsim_calc_" + evotype.path_evotype.name)
+                self.calclib = _importlib.import_module("pygsti.forwardsims.termforwardsim_calc_" + evotype.name)
             except ImportError:
                 self.calclib = _importlib.import_module("pygsti.forwardsims.termforwardsim_calc_generic")
         else:

@@ -1270,19 +1270,24 @@ def parse_model(filename):
         elif cur_typ == "TP-GATE":
             mdl.operations[cur_label] = _op.FullTPOp(
                 get_liouville_mx(obj))
-        elif cur_typ == "CPTP-GATE":
-            qty = get_liouville_mx(obj)
-            try:
-                unitary_post = get_liouville_mx(obj, "Ref")
-            except ValueError:
-                unitary_post = None
-            nQubits = _np.log2(qty.shape[0]) / 2.0
-            bQubits = bool(abs(nQubits - round(nQubits)) < 1e-10)  # integer # of qubits?
-            proj_basis = "pp" if (basis == "pp" or bQubits) else basis
+        elif cur_typ == "COMPOSED-GATE":
+            i = 0; qtys = []
+            while True:
+                try:
+                    qtys.append(get_liouville_mx(obj, '%d' % i))
+                except Exception:
+                    break
+                i += 1
+
             mdl.operations[cur_label] = _op.ComposedOp(
-                (_op.StaticOp(unitary_post),
-                 _op.ExpErrogenOp(_op.LinbladErrorgen.from_operation_matrix(
-                     qty, proj_basis, proj_basis, truncate=False, mx_basis=basis))))
+                [_op.StaticArbitraryOp(qty, evotype='default') for qty in qtys])
+
+            #Utilize this when we fix this:
+            #nQubits = _np.log2(qty.shape[0]) / 2.0
+            #bQubits = bool(abs(nQubits - round(nQubits)) < 1e-10)  # integer # of qubits?
+            #proj_basis = "pp" if (basis == "pp" or bQubits) else basis
+            #_op.ExpErrogenOp(_op.LinbladErrorgen.from_operation_matrix(
+            #qty, proj_basis, proj_basis, truncate=False, mx_basis=basis))
 
         elif cur_typ == "STATIC-GATE":
             mdl.operations[cur_label] = _op.StaticArbitraryOp(get_liouville_mx(obj))

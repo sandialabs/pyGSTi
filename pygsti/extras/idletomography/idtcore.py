@@ -573,7 +573,7 @@ def determine_paulidicts(model):
 
     if isinstance(prep, _state.ComputationalBasisState):
         if any([b != 0 for b in prep._zvals]): return None
-    elif isinstance(prep, _state.LindbladSPAMVec):  # TODO: ---------------------------- change to ComposedState ------------------
+    elif isinstance(prep, _state.ComposedState):
         if isinstance(prep.state_vec, _state.ComputationalBasisState):
             if any([b != 0 for b in prep.state_vec._zvals]): return None
         if any([abs(v) > 1e-6 for v in prep.to_vector()]): return None

@@ -30,7 +30,6 @@ from ..modelmembers import operations as _op
 from ..modelmembers import povms as _povm
 from ..modelmembers import instruments as _instrument
 from ..modelmembers import states as _state
-from ..objectivefns import objectivefns as _objfns
 from ..circuits.circuitlist import CircuitList as _CircuitList
 from ..baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from ..optimize.customlm import CustomLMOptimizer as _CustomLMOptimizer

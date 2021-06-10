@@ -33,7 +33,7 @@ except ImportError:
     class PolynomialRep(dict):
         """
         Representation class for a polynomial.
-    
+
         This is similar to a full Polynomial
         dictionary, but lacks some functionality and is optimized for computation
         speed.  In particular, the keys of this dict are not tuples of variable
@@ -41,36 +41,36 @@ except ImportError:
         To perform this mapping, one must specify a maximum order and number of
         variables.
         """
-    
+
         def __init__(self, int_coeff_dict, max_num_vars, vindices_per_int):
             """
             Create a new PolynomialRep object.
-    
+
             Parameters
             ----------
             int_coeff_dict : dict
                 A dictionary of coefficients whose keys are already-encoded
                 integers corresponding to variable-index-tuples (i.e poly
                 terms).
-    
+
             max_num_vars : int
                 The maximum number of variables allowed.  For example, if
                 set to 2, then only "x0" and "x1" are allowed to appear
                 in terms.
             """
-    
+
             self.max_num_vars = max_num_vars
             self.vindices_per_int = vindices_per_int
-    
+
             super(PolynomialRep, self).__init__()
             if int_coeff_dict is not None:
                 self.update(int_coeff_dict)
-    
+
         def reinit(self, int_coeff_dict):
             """ TODO: docstring """
             self.clear()
             self.update(int_coeff_dict)
-    
+
         def mapvec_indices_inplace(self, mapfn_as_vector):
             new_items = {}
             for k, v in self.items():
@@ -78,33 +78,33 @@ except ImportError:
                 new_items[self._vinds_to_int(new_vinds)] = v
             self.clear()
             self.update(new_items)
-    
+
         def copy(self):
             """
             Make a copy of this polynomial representation.
-    
+
             Returns
             -------
             PolynomialRep
             """
             return PolynomialRep(self, self.max_num_vars, self.vindices_per_int)  # construct expects "int" keys
-    
+
         def abs(self):
             """
             Return a polynomial whose coefficents are the absolute values of this PolynomialRep's coefficients.
-    
+
             Returns
             -------
             PolynomialRep
             """
             result = {k: abs(v) for k, v in self.items()}
             return PolynomialRep(result, self.max_num_vars, self.vindices_per_int)
-    
+
         @property
         def int_coeffs(self):  # so we can convert back to python Polys
             """ The coefficient dictionary (with encoded integer keys) """
             return dict(self)  # for compatibility w/C case which can't derive from dict...
-    
+
         #UNUSED TODO REMOVE
             #def map_indices_inplace(self, mapfn):
         #    """
@@ -146,11 +146,11 @@ except ImportError:
         #    int_coeffs = {self._vinds_to_int(k): v for k, v in coeffs.items()}
         #    self.clear()
         #    self.update(int_coeffs)
-    
+
         def _vinds_to_int(self, vinds):
             """ Maps tuple of variable indices to encoded int """
             ints_in_key = int(_np.ceil(len(vinds) / self.vindices_per_int))
-    
+
             ret_tup = []
             for k in range(ints_in_key):
                 ret = 0; m = 1
@@ -162,7 +162,7 @@ except ImportError:
                 assert(ret >= 0), "vinds = %s -> %d!!" % (str(vinds), ret)
                 ret_tup.append(ret)
             return tuple(ret_tup)
-    
+
         def _int_to_vinds(self, indx_tup):
             """ Maps encoded "int" to tuple of variable indices """
             ret = []
@@ -174,9 +174,10 @@ except ImportError:
                     ret.append(i - 1)
                     indx = nxt
                     #DB: cnt += 1
-                    #DB: if cnt > 50: print("VINDS iter %d - indx=%d (orig=%d, nv=%d)" % (cnt,indx,orig,self.max_num_vars))
+                    #DB: if cnt > 50:
+                    #DB:    print("VINDS iter %d - indx=%d (orig=%d, nv=%d)" % (cnt,indx,orig,self.max_num_vars))
             return tuple(sorted(ret))
-    
+
         #UNUSED TODO REMOVE
         #def deriv(self, wrt_param):
         #    """
@@ -203,7 +204,7 @@ except ImportError:
         #            dcoeffs[tuple(l)] = cnt * coeff
         #    int_dcoeffs = {self._vinds_to_int(k): v for k, v in dcoeffs.items()}
         #    return PolynomialRep(int_dcoeffs, self.max_num_vars, self.vindices_per_int)
-    
+
         #def evaluate(self, variable_values):
         #    """
         #    Evaluate this polynomial at the given variable values.
@@ -225,17 +226,17 @@ except ImportError:
         #        ivar = self._int_to_vinds(i)
         #        ret += coeff * _np.product([variable_values[i] for i in ivar])
         #    return ret
-    
+
         def compact_complex(self):
             """
             Returns a compact representation of this polynomial as a
             `(variable_tape, coefficient_tape)` 2-tuple of 1D nupy arrays.
             The coefficient tape is *always* a complex array, even if
             none of the polynomial's coefficients are complex.
-    
+
             Such compact representations are useful for storage and later
             evaluation, but not suited to polynomial manipulation.
-    
+
             Returns
             -------
             vtape : numpy.ndarray
@@ -248,7 +249,7 @@ except ImportError:
             nVarIndices = sum(map(len, vinds.values()))
             vtape = _np.empty(1 + nTerms + nVarIndices, _np.int64)  # "variable" tape
             ctape = _np.empty(nTerms, complex)  # "coefficient tape"
-    
+
             i = 0
             vtape[i] = nTerms; i += 1
             for iTerm, k in enumerate(sorted(self.keys())):
@@ -259,17 +260,17 @@ except ImportError:
                 vtape[i:i + l] = v; i += l
             assert(i == len(vtape)), "Logic Error!"
             return vtape, ctape
-    
+
         def compact_real(self):
             """
             Returns a real representation of this polynomial as a
             `(variable_tape, coefficient_tape)` 2-tuple of 1D nupy arrays.
             The coefficient tape is *always* a complex array, even if
             none of the polynomial's coefficients are complex.
-    
+
             Such compact representations are useful for storage and later
             evaluation, but not suited to polynomial manipulation.
-    
+
             Returns
             -------
             vtape : numpy.ndarray
@@ -282,7 +283,7 @@ except ImportError:
             nVarIndices = sum(map(len, vinds.values()))
             vtape = _np.empty(1 + nTerms + nVarIndices, _np.int64)  # "variable" tape
             ctape = _np.empty(nTerms, complex)  # "coefficient tape"
-    
+
             i = 0
             vtape[i] = nTerms; i += 1
             for iTerm, k in enumerate(sorted(self.keys())):
@@ -293,15 +294,15 @@ except ImportError:
                 vtape[i:i + l] = v; i += l
             assert(i == len(vtape)), "Logic Error!"
             return vtape, ctape
-    
+
         def mult(self, x):
             """
             Returns `self * x` where `x` is another polynomial representation.
-    
+
             Parameters
             ----------
             x : PolynomialRep
-    
+
             Returns
             -------
             PolynomialRep
@@ -316,15 +317,15 @@ except ImportError:
                     else: newpoly[k] = v1 * v2
             assert(newpoly.degree <= self.degree + x.degree)
             return newpoly
-    
+
         def scale(self, x):
             """
             Performs `self = self * x` where `x` is a scalar.
-    
+
             Parameters
             ----------
             x : float or complex
-    
+
             Returns
             -------
             None
@@ -332,15 +333,15 @@ except ImportError:
             # assume a scalar that can multiply values
             for k in self:
                 self[k] *= x
-    
+
         def add_inplace(self, other):
             """
             Adds `other` into this PolynomialRep.
-    
+
             Parameters
             ----------
             other : PolynomialRep
-    
+
             Returns
             -------
             PolynomialRep
@@ -351,15 +352,15 @@ except ImportError:
                 except KeyError:
                     self[k] = v
             return self
-    
+
         def add_scalar_to_all_coeffs_inplace(self, x):
             """
             Adds `x` to all of the coefficients in this PolynomialRep.
-    
+
             Parameters
             ----------
             x : float or complex
-    
+
             Returns
             -------
             PolynomialRep
@@ -367,7 +368,7 @@ except ImportError:
             for k in self:
                 self[k] += x
             return self
-    
+
         #UNUSED TODO REMOVE
         #def scalar_mult(self, x):
         #    """
@@ -385,14 +386,14 @@ except ImportError:
         #    newpoly = self.copy()
         #    newpoly.scale(x)
         #    return newpoly
-    
+
         def __str__(self):
             def fmt(x):
                 if abs(_np.imag(x)) > 1e-6:
                     if abs(_np.real(x)) > 1e-6: return "(%.3f+%.3fj)" % (x.real, x.imag)
                     else: return "(%.3fj)" % x.imag
                 else: return "%.3f" % x.real
-    
+
             termstrs = []
             sorted_keys = sorted(list(self.keys()))
             for k in sorted_keys:
@@ -411,15 +412,15 @@ except ImportError:
             if len(termstrs) > 0:
                 return " + ".join(termstrs)
             else: return "0"
-    
+
         def __repr__(self):
             return "PolynomialRep[ " + str(self) + " ]"
-    
+
         @property
         def degree(self):
             """ Used for debugging in slowreplib routines only"""
             return max([len(self._int_to_vinds(k)) for k in self.keys()])
-    
+
         #UNUSED TODO REMOVE
         #def __add__(self, x):
         #    newpoly = self.copy()
