@@ -256,3 +256,6 @@ def compact_deriv(vtape, ctape, wrt_params):
         i = j  # update location in vtape after processing poly - actually could just use i instead of j it seems??
 
     return _np.array(result_vtape, _np.int64), _np.array(result_ctape, complex)
+
+def float_product(ar):
+    return _np.product(ar)

@@ -14,8 +14,8 @@ from . import json
 # Import the most important/useful routines of each module into
 # the package namespace
 from .circuitparser import CircuitParser
-from .legacyio import enable_no_cython_unpickling
-from .legacyio import enable_old_object_unpickling  # , disable_old_object_unpickling
+#from .legacyio import enable_no_cython_unpickling
+#from .legacyio import enable_old_object_unpickling  # , disable_old_object_unpickling
 from .loaders import *
 from .metadir import *
 from .stdinput import *
