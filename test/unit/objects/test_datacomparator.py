@@ -1,9 +1,8 @@
-from ..util import BaseCase
-
-from pygsti.modelpacks.legacy import std1Q_XYI
 import pygsti.construction as pc
-from pygsti.objects import DataSet, MultiDataSet
-import pygsti.objects.datacomparator as dc
+import pygsti.datasets.datacomparator as dc
+from pygsti.modelpacks.legacy import std1Q_XYI
+from pygsti.datasets import DataSet, MultiDataSet
+from ..util import BaseCase
 
 
 class DataComparatorTester(BaseCase):

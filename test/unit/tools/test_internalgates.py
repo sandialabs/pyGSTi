@@ -1,8 +1,8 @@
-from ..util import BaseCase
 import numpy as np
 
-#from pygsti.extras import rb
+# from pygsti.extras import rb
 from pygsti.tools import internalgates, optools as ot, basistools as bt
+from ..util import BaseCase
 
 
 class InternalGatesTester(BaseCase):

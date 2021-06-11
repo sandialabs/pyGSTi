@@ -10,10 +10,11 @@ Optimization (minimization) functions
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as _np
-import time as _time
-import sys as _sys
 import os as _os
+import sys as _sys
+import time as _time
+
+import numpy as _np
 import scipy.optimize as _spo
 
 try:
@@ -22,7 +23,7 @@ except:
     from scipy.optimize import OptimizeResult as _optResult  # for later scipy versions
 
 from .customcg import fmax_cg
-from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from ..baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 
 
 def minimize(fn, x0, method='cg', callback=None,

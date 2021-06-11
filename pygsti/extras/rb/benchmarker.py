@@ -8,15 +8,15 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as _np
 import copy as _copy
 import warnings as _warnings
 from itertools import cycle as _cycle
-from . import dataset as _dataset
-from ...objects import oplessmodel as _oplessmodel
-from ...objects import dataset as _stdds
-from ...objects import multidataset as _multids
-from ...objects import datacomparator as _dcomp
+
+import numpy as _np
+
+from ...datasets import dataset as _stdds, multidataset as _multids, datacomparator as _dcomp
+from ...models import oplessmodel as _oplessmodel
+
 #from . import analysis as _analysis
 _analysis = None  # MOVED - and this module is deprecated & broken now, so just set to None
 

@@ -32,7 +32,7 @@ cimport cython
 #cdef extern from "Python.h":
 #    Py_UCS4* PyUnicode_4BYTE_DATA(PyObject* o)
 
-from ...objects import label as _lbl
+from ...baseobjs import label as _lbl
 
 
 #Use 64-bit integers

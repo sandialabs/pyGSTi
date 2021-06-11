@@ -10,12 +10,14 @@ Functions for working with MPI processor distributions
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as _np
-import warnings as _warnings
 import itertools as _itertools
-from . import slicetools as _slct
+import warnings as _warnings
+
+import numpy as _np
+
 from . import compattools as _compat
 from . import sharedmemtools as _smt
+from . import slicetools as _slct
 from .matrixtools import _fas, _findx, _findx_shape
 from .matrixtools import prime_factors as _prime_factors
 
@@ -63,7 +65,7 @@ def distribute_indices(indices, comm, allow_split_comm=True):
         If `loc_indices` is unique to the current processor, or if
         `allow_split_comm` is False, None is returned.
     """
-    from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
+    from ..baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
     if isinstance(comm, _ResourceAllocation):
         ralloc = comm
         comm = ralloc.comm
@@ -311,7 +313,7 @@ def distribute_slice(s, comm, allow_split_comm=True):
         splitting `comm`.  If `loc_slice` is unique to the current processor,
         or if `allow_split_comm` is False, None is returned.
     """
-    from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
+    from ..baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
     if isinstance(comm, _ResourceAllocation):
         ralloc = comm
         comm = ralloc.comm
@@ -414,7 +416,7 @@ def gather_slices(slices, slice_owners, ar_to_fill,
     -------
     None
     """
-    from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
+    from ..baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
     if isinstance(comm, _ResourceAllocation):
         ralloc = comm
         comm = ralloc.comm
@@ -841,7 +843,7 @@ def distribute_for_dot(a_shape, b_shape, comm):
         for the ranks in this processor's inter-host communication group.  This should
         be passed as the `slice_tuples_by_rank` argument of :func:`mpidot`.
     """
-    from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
+    from ..baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
     if isinstance(comm, _ResourceAllocation):
         ralloc = comm; comm = ralloc.comm
     else:
@@ -925,7 +927,7 @@ def mpidot(a, b, loc_row_slice, loc_col_slice, slice_tuples_by_rank, comm,
         :function:`cleanup_shared_ndarray` to ensure `ar` is deallocated properly.
     """
     # R_ij = sum_k A_ik * B_kj
-    from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
+    from ..baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
     if isinstance(comm, _ResourceAllocation):
         ralloc = comm
         comm = ralloc.comm

@@ -1,6 +1,5 @@
-from ..util import BaseCase
-
 from pygsti.tools import legacytools
+from ..util import BaseCase
 
 
 class LegacyTestCase(BaseCase):

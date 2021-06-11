@@ -15,8 +15,8 @@ source in development mode, i.e. using `pip install -e .`, your pyGSTi
 installation may now be broken.
 """
 
-from pathlib import Path
 import warnings
+from pathlib import Path
 
 pygsti_root = Path(__file__).absolute().parent.parent.parent
 

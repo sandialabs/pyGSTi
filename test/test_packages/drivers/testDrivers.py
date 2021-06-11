@@ -1,10 +1,11 @@
 import unittest
-import pygsti
-from pygsti.modelpacks.legacy import std1Q_XYI as std
-from pygsti.modelpacks.legacy import std2Q_XYICNOT as std2Q
+
 from pygsti.objects.mapforwardsim import MapForwardSimulator
 
+import pygsti
+from pygsti.modelpacks.legacy import std1Q_XYI as std
 from ..testutils import BaseTestCase, compare_files, temp_files, regenerate_references
+
 
 class DriversTestCase(BaseTestCase):
 

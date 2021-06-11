@@ -10,8 +10,8 @@ Classes corresponding to text blocks within a Workspace context.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from .workspace import WorkspaceText
 from .textblock import ReportText as _ReportText
+from .workspace import WorkspaceText
 
 
 class StdoutText(WorkspaceText):

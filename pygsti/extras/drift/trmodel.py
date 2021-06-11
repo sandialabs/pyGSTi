@@ -8,14 +8,12 @@
 #***************************************************************************************************
 """Functions for Fourier analysis of equally spaced time-series data"""
 
-from . import signal as _sig
-from . import probtrajectory as _ptraj
-
-import numpy as _np
-import time as _tm
 import copy as _copy
+import time as _tm
 
 from scipy.optimize import minimize as _minimize
+
+from . import probtrajectory as _ptraj
 
 
 class TimeResolvedModel(object):

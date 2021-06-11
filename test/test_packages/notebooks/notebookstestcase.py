@@ -1,10 +1,10 @@
 import os
-import nbformat
-from nbconvert.preprocessors import ExecutePreprocessor
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from nose.plugins.attrib import attr
 
+import nbformat
+from nbconvert.preprocessors import ExecutePreprocessor
+from nose.plugins.attrib import attr
 
 _DEFAULT_IPYNB_VERSION = 4
 _DEFAULT_TIMEOUT = 60 * 20  # 20 minutes

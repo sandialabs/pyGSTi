@@ -1,9 +1,7 @@
-import unittest
-import pygsti
 from pygsti.objects import ProcessorSpec
-import numpy as np
 
-from ..testutils import BaseTestCase, compare_files, temp_files
+from ..testutils import BaseTestCase
+
 
 class ProcessorSpecCase(BaseTestCase):
 

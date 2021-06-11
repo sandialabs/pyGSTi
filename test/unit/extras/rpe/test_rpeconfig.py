@@ -1,6 +1,5 @@
-from ...util import BaseCase
-
 from pygsti.extras import rpe
+from ...util import BaseCase
 
 
 class RPEConfigTester(BaseCase):

@@ -1,7 +1,8 @@
+import os
+import pickle
+
 import pygsti
 from pygsti.modelpacks.legacy import std1Q_XYI
-import pickle
-import os
 
 pv = pygsti.__version__
 if len(pv.split('.')) > 3:

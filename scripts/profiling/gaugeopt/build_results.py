@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-import time
 import pickle
+import time
+
 import pygsti
 from pygsti.construction import std2Q_XYCNOT
 

@@ -1,10 +1,9 @@
-from ..util import BaseCase
 import numpy as np
 import scipy.linalg as spl
 import scipy.sparse as sps
-import warnings
 
 import pygsti.tools.matrixtools as mt
+from ..util import BaseCase
 
 
 class MatrixToolsTester(BaseCase):

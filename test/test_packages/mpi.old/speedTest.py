@@ -1,10 +1,6 @@
-import unittest
 import time
-import sys
-from mpinoseutils import *
 
 import pygsti
-
 
 bUseMPI = True
 

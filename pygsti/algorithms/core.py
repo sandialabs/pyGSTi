@@ -11,24 +11,30 @@ Core GST algorithms
 #***************************************************************************************************
 
 
+import collections as _collections
+import time as _time
+
 import numpy as _np
 import scipy.optimize as _spo
 import scipy.stats as _stats
-import warnings as _warnings
-import time as _time
-import collections as _collections
 
-from .. import optimize as _opt
-from .. import tools as _tools
-from .. import objects as _objs
+from pygsti.baseobjs.profiler import DummyProfiler as _DummyProfiler
 from .. import construction as _pc
-from ..objects import objectivefns as _objfns
-from ..objects.profiler import DummyProfiler as _DummyProfiler
-from ..objects.circuitlist import CircuitList as _CircuitList
-from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
-from ..objects.termforwardsim import TermForwardSimulator as _TermFSim
-from ..optimize.customlm import Optimizer as _Optimizer
+from .. import models as _models
+from .. import baseobjs as _baseobjs
+from .. import tools as _tools
+from .. import circuits as _circuits
+from .. import objectivefns as _objfns
+from ..forwardsims.termforwardsim import TermForwardSimulator as _TermFSim
+from ..modelmembers import operations as _op
+from ..modelmembers import povms as _povm
+from ..modelmembers import instruments as _instrument
+from ..modelmembers import states as _state
+from ..circuits.circuitlist import CircuitList as _CircuitList
+from ..baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from ..optimize.customlm import CustomLMOptimizer as _CustomLMOptimizer
+from ..optimize.customlm import Optimizer as _Optimizer
+
 _dummy_profiler = _DummyProfiler()
 
 
@@ -127,7 +133,7 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
     # A       = (nESpecs, gsDim)
     # B       = (gsDim, nRhoSpecs)
 
-    printer = _objs.VerbosityPrinter.create_printer(verbosity)
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
     if target_model is None:
         raise ValueError("Must specify a target model for LGST!")
 
@@ -193,11 +199,11 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
     assert(len((_np.isnan(invABMat_p)).nonzero()[0]) == 0)
 
     if svd_truncate_to is None or svd_truncate_to == target_model.dim:  # use target sslbls and basis
-        lgstModel = _objs.ExplicitOpModel(target_model.state_space_labels, target_model.basis)
+        lgstModel = _models.ExplicitOpModel(target_model.state_space, target_model.basis)
     else:  # construct a default basis for the requested dimension
         # - just act on diagonal density mx
-        dumb_basis = _objs.DirectSumBasis([_objs.BuiltinBasis('gm', 1)] * svd_truncate_to)
-        lgstModel = _objs.ExplicitOpModel([('L%d' % i,) for i in range(svd_truncate_to)], dumb_basis)
+        dumb_basis = _baseobjs.DirectSumBasis([_baseobjs.BuiltinBasis('gm', 1)] * svd_truncate_to)
+        lgstModel = _models.ExplicitOpModel([('L%d' % i,) for i in range(svd_truncate_to)], dumb_basis)
 
     for opLabel in op_labelsToEstimate:
         Xs = _construct_x_matrix(prep_fiducials, effect_fiducials, target_model, (opLabel,),
@@ -217,13 +223,13 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
 
         if opLabel in target_model.instruments:
             #Note: we assume leading dim of X matches instrument element ordering
-            lgstModel.instruments[opLabel] = _objs.Instrument(
+            lgstModel.instruments[opLabel] = _instrument.Instrument(
                 [(lbl, _np.dot(invABMat_p, X_ps[i]))
                  for i, lbl in enumerate(target_model.instruments[opLabel])])
         else:
             #Just a normal gae
             assert(len(X_ps) == 1); X_p = X_ps[0]  # shape (nESpecs, nRhoSpecs)
-            lgstModel.operations[opLabel] = _objs.FullDenseOp(_np.dot(invABMat_p, X_p))  # shape (trunc,trunc)
+            lgstModel.operations[opLabel] = _op.FullArbitraryOp(_np.dot(invABMat_p, X_p))  # shape (trunc,trunc)
 
         #print "DEBUG: X(%s) = \n" % opLabel,X
         #print "DEBUG: Evals(X) = \n",_np.linalg.eigvals(X)
@@ -235,7 +241,7 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
         for effectLabel in target_model.povms[povmLabel]:
             EVec = _np.zeros((1, nRhoSpecs))
             for i, rhostr in enumerate(prep_fiducials):
-                circuit = rhostr + _objs.Circuit((povmLabel,), line_labels=rhostr.line_labels)
+                circuit = rhostr + _circuits.Circuit((povmLabel,), line_labels=rhostr.line_labels)
                 if circuit not in dataset and len(target_model.povms) == 1:
                     # try without povmLabel since it will be the default
                     circuit = rhostr
@@ -244,14 +250,14 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
                 EVec[0, i] = dsRow_fractions[(effectLabel,)]
             EVec_p = _np.dot(_np.dot(EVec, Vd), Pj)  # truncate Evec => Evec', shape (1,trunc)
             povm_effects.append((effectLabel, _np.transpose(EVec_p)))
-        lgstModel.povms[povmLabel] = _objs.UnconstrainedPOVM(povm_effects)
+        lgstModel.povms[povmLabel] = _povm.UnconstrainedPOVM(povm_effects, evotype='default')
         # unconstrained POVM for now - wait until after guess gauge for TP-constraining)
 
     # Form rhoVecs
     for prepLabel in rhoLabelsToEstimate:
         rhoVec = _np.zeros((nESpecs, 1)); eoff = 0
         for i, (estr, povmLbl, povmLen) in enumerate(zip(effect_fiducials, povmLbls, povmLens)):
-            circuit = _objs.Circuit((prepLabel,), line_labels=estr.line_labels) + estr
+            circuit = _circuits.Circuit((prepLabel,), line_labels=estr.line_labels) + estr
             if circuit not in dataset and len(target_model.preps) == 1:
                 # try without prepLabel since it will be the default
                 circuit = estr
@@ -297,10 +303,10 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
             BMat_p_padded[0:guessTrunc, 0:guessTrunc] = BMat_p
             for i in range(guessTrunc, trunc):
                 BMat_p_padded[i, i] = _np.sqrt(s[i])  # set diagonal as sqrt of actual AB matrix's singular values
-            ggEl = _objs.FullGaugeGroupElement(_np.linalg.inv(BMat_p_padded))
+            ggEl = _models.FullGaugeGroupElement(_np.linalg.inv(BMat_p_padded))
             lgstModel.transform_inplace(ggEl)
         else:
-            ggEl = _objs.FullGaugeGroupElement(_np.linalg.inv(BMat_p))
+            ggEl = _models.gaugegroup.FullGaugeGroupElement(_np.linalg.inv(BMat_p))
             lgstModel.transform_inplace(ggEl)
 
         # Force lgstModel to have gates, preps, & effects parameterized in the same way as those in
@@ -311,13 +317,13 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
             for opLabel in op_labelsToEstimate:
                 if opLabel in guess_model_for_gauge.operations:
                     new_op = guess_model_for_gauge.operations[opLabel].copy()
-                    _objs.operation.optimize_operation(new_op, lgstModel.operations[opLabel])
+                    _op.optimize_operation(new_op, lgstModel.operations[opLabel])
                     lgstModel.operations[opLabel] = new_op
 
             for prepLabel in rhoLabelsToEstimate:
                 if prepLabel in guess_model_for_gauge.preps:
                     new_vec = guess_model_for_gauge.preps[prepLabel].copy()
-                    _objs.spamvec.optimize_spamvec(new_vec, lgstModel.preps[prepLabel])
+                    _state.optimize_state(new_vec, lgstModel.preps[prepLabel])
                     lgstModel.preps[prepLabel] = new_vec
 
             for povmLabel in povmLabelsToEstimate:
@@ -325,11 +331,11 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
                     povm = guess_model_for_gauge.povms[povmLabel]
                     new_effects = []
 
-                    if isinstance(povm, _objs.TPPOVM):  # preserve *identity* of guess
+                    if isinstance(povm, _povm.TPPOVM):  # preserve *identity* of guess
                         for effectLabel, EVec in povm.items():
                             if effectLabel == povm.complement_label: continue
                             new_vec = EVec.copy()
-                            _objs.spamvec.optimize_spamvec(new_vec, lgstModel.povms[povmLabel][effectLabel])
+                            _povm.optimize_effect(new_vec, lgstModel.povms[povmLabel][effectLabel])
                             new_effects.append((effectLabel, new_vec))
 
                         # Construct identity vector for complement effect vector
@@ -343,14 +349,14 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
                             padded_identityVec = identity
                         comp_effect = padded_identityVec - sum([v for k, v in new_effects])
                         new_effects.append((povm.complement_label, comp_effect))  # add complement
-                        lgstModel.povms[povmLabel] = _objs.TPPOVM(new_effects)
+                        lgstModel.povms[povmLabel] = _povm.TPPOVM(new_effects)
 
                     else:  # just create an unconstrained POVM
                         for effectLabel, EVec in povm.items():
                             new_vec = EVec.copy()
-                            _objs.spamvec.optimize_spamvec(new_vec, lgstModel.povms[povmLabel][effectLabel])
+                            _povm.optimize_effect(new_vec, lgstModel.povms[povmLabel][effectLabel])
                             new_effects.append((effectLabel, new_vec))
-                        lgstModel.povms[povmLabel] = _objs.UnconstrainedPOVM(new_effects)
+                        lgstModel.povms[povmLabel] = _povm.UnconstrainedPOVM(new_effects, evotype='default')
 
             #Also convey default gauge group & simulator from guess_model_for_gauge
             lgstModel.default_gauge_group = \
@@ -415,7 +421,7 @@ def _construct_x_matrix(prep_fiducials, effect_fiducials, model, op_label_tuple,
     eoff = 0  # effect-dimension offset
     for i, (estr, povmLen) in enumerate(zip(effect_fiducials, povmLens)):
         for j, rhostr in enumerate(prep_fiducials):
-            opLabelString = rhostr + _objs.Circuit(op_label_tuple, line_labels=rhostr.line_labels) + estr
+            opLabelString = rhostr + _circuits.Circuit(op_label_tuple, line_labels=rhostr.line_labels) + estr
             dsStr = opLabelString.replace_layers_with_aliases(op_label_aliases)
             expd_circuit_outcomes = opLabelString.expand_instruments_and_separate_povm(model)
             dsRow_fractions = dataset[dsStr].fractions
@@ -445,7 +451,7 @@ def _construct_a(effect_fiducials, model):
         for i in range(dim):  # propagate each basis initial state
             basis_st[i] = 1.0
             model.preps['rho_LGST_tmp'] = basis_st
-            probs = model.probabilities(_objs.Circuit(('rho_LGST_tmp',), line_labels=estr.line_labels) + estr)
+            probs = model.probabilities(_circuits.Circuit(('rho_LGST_tmp',), line_labels=estr.line_labels) + estr)
             A[eoff:eoff + povmLen, i] = [probs[(ol,)] for ol in model.povms[povmLbl]]  # CHECK will this work?
             del model.preps['rho_LGST_tmp']
             basis_st[i] = 0.0
@@ -466,13 +472,13 @@ def _construct_b(prep_fiducials, model):
         basis_E = _np.zeros((dim, 1), 'd')
         basis_E[i] = 1.0
         basis_Es.append(basis_E)
-    model.povms['M_LGST_tmp_povm'] = _objs.UnconstrainedPOVM(
-        [("E%d" % i, E) for i, E in enumerate(basis_Es)])
+    model.povms['M_LGST_tmp_povm'] = _povm.UnconstrainedPOVM(
+        [("E%d" % i, E) for i, E in enumerate(basis_Es)], evotype='default')
 
     for k, rhostr in enumerate(prep_fiducials):
         #Build fiducial | rho_k > := Circuit(prepSpec[0:-1]) | rhoVec[ prepSpec[-1] ] >
         # B[:,k] = st[:,0] # rho_k == kth column of B
-        probs = model.probabilities(rhostr + _objs.Circuit(('M_LGST_tmp_povm',), line_labels=rhostr.line_labels))
+        probs = model.probabilities(rhostr + _circuits.Circuit(('M_LGST_tmp_povm',), line_labels=rhostr.line_labels))
         B[:, k] = [probs[("E%d" % i,)] for i in range(dim)]  # CHECK will this work?
 
     del model.povms['M_LGST_tmp_povm']
@@ -591,12 +597,12 @@ def run_gst_fit_simple(dataset, start_model, circuits, optimizer, objective_func
         the best-fit model.
     """
     optimizer = optimizer if isinstance(optimizer, _Optimizer) else _CustomLMOptimizer.cast(optimizer)
-    objective_function_builder = _objs.ObjectiveFunctionBuilder.cast(objective_function_builder)
+    objective_function_builder = _objfns.ObjectiveFunctionBuilder.cast(objective_function_builder)
     array_types = optimizer.array_types + \
         objective_function_builder.compute_array_types(optimizer.called_objective_methods, start_model.sim)
 
-    mdc_store = _objs.ModelDatasetCircuitsStore(start_model, dataset, circuits, resource_alloc,
-                                                array_types=array_types, verbosity=verbosity)
+    mdc_store = _objfns.ModelDatasetCircuitsStore(start_model, dataset, circuits, resource_alloc,
+                                                  array_types=array_types, verbosity=verbosity)
     result, mdc_store = run_gst_fit(mdc_store, optimizer, objective_function_builder, verbosity)
     return result, mdc_store.model
 
@@ -640,7 +646,7 @@ def run_gst_fit(mdc_store, optimizer, objective_function_builder, verbosity=0):
     optimizer = optimizer if isinstance(optimizer, _Optimizer) else _CustomLMOptimizer.cast(optimizer)
     comm = mdc_store.resource_alloc.comm
     profiler = mdc_store.resource_alloc.profiler
-    printer = _objs.VerbosityPrinter.create_printer(verbosity, comm)
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm)
 
     tStart = _time.time()
 
@@ -651,12 +657,12 @@ def run_gst_fit(mdc_store, optimizer, objective_function_builder, verbosity=0):
             raise ValueError("MPI ERROR: *different* MC2GST start models"
                              " given to different processors!")                   # pragma: no cover
 
-    #MEM from ..objects.profiler import Profiler
+    #MEM from ..baseobjs.profiler import Profiler
     #MEM debug_prof = Profiler(comm)
     #MEM debug_prof.print_memory("run_gst_fit1", True)
 
     if objective_function_builder is not None:
-        objective_function_builder = _objs.ObjectiveFunctionBuilder.cast(objective_function_builder)
+        objective_function_builder = _objfns.ObjectiveFunctionBuilder.cast(objective_function_builder)
         #MEM debug_prof.print_memory("run_gst_fit2", True)
         objective = objective_function_builder.build_from_store(mdc_store, printer)  # (objective is *also* a store)
         #MEM debug_prof.print_memory("run_gst_fit3", True)
@@ -745,7 +751,7 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
     optimizer = optimizer if isinstance(optimizer, _Optimizer) else _CustomLMOptimizer.cast(optimizer)
     comm = resource_alloc.comm
     profiler = resource_alloc.profiler
-    printer = _objs.VerbosityPrinter.create_printer(verbosity, comm)
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm)
 
     models = []; optimums = []
     mdl = start_model.copy(); nIters = len(circuit_lists)
@@ -753,8 +759,8 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
     tRef = tStart
     final_objfn = None
 
-    iteration_objfn_builders = [_objs.ObjectiveFunctionBuilder.cast(ofb) for ofb in iteration_objfn_builders]
-    final_objfn_builders = [_objs.ObjectiveFunctionBuilder.cast(ofb) for ofb in final_objfn_builders]
+    iteration_objfn_builders = [_objfns.ObjectiveFunctionBuilder.cast(ofb) for ofb in iteration_objfn_builders]
+    final_objfn_builders = [_objfns.ObjectiveFunctionBuilder.cast(ofb) for ofb in final_objfn_builders]
 
     def _max_array_types(artypes_list):  # get the maximum number of each array type and return as an array-types tuple
         max_cnts = {}
@@ -783,8 +789,8 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
             array_types = optimizer.array_types + \
                 _max_array_types([builder.compute_array_types(method_names, mdl.sim)
                                   for builder in iteration_objfn_builders + final_objfn_builders])
-            initial_mdc_store = _objs.ModelDatasetCircuitsStore(mdl, dataset, circuitsToEstimate, resource_alloc,
-                                                                array_types=array_types, verbosity=printer - 1)
+            initial_mdc_store = _objfns.ModelDatasetCircuitsStore(mdl, dataset, circuitsToEstimate, resource_alloc,
+                                                                  array_types=array_types, verbosity=printer - 1)
             mdc_store = initial_mdc_store
 
             for j, obj_fn_builder in enumerate(iteration_objfn_builders):
@@ -908,7 +914,7 @@ def _do_term_runopt(objective, optimizer, printer):
     mdl = objective.model
     fwdsim = mdl.sim
 
-    #MEM from ..objects.profiler import Profiler
+    #MEM from ..baseobjs.profiler import Profiler
     #MEM debug_prof = Profiler(objective.resource_alloc.comm)
     #MEM debug_prof.print_memory("do_term_runopt1", True)
 

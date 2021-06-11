@@ -14,9 +14,11 @@ import os as _os
 import pathlib as _pathlib
 import warnings as _warnings
 
-from . import stdinput as _stdinput
-from .. import objects as _objs
 from . import metadir as _metadir
+from . import stdinput as _stdinput
+from .. import baseobjs as _baseobjs
+from .. import circuits as _circuits
+from .. import datasets as _datasets
 
 
 def load_dataset(filename, cache=False, collision_action="aggregate",
@@ -77,10 +79,10 @@ def load_dataset(filename, cache=False, collision_action="aggregate",
     DataSet
     """
 
-    printer = _objs.VerbosityPrinter.create_printer(verbosity)
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
     try:
         # a saved Dataset object is ok
-        ds = _objs.DataSet(file_to_load_from=filename)
+        ds = _datasets.DataSet(file_to_load_from=filename)
     except:
 
         #Parser functions don't take a VerbosityPrinter yet, and so
@@ -94,7 +96,7 @@ def load_dataset(filename, cache=False, collision_action="aggregate",
                _os.path.getmtime(filename) < _os.path.getmtime(cache_filename):
                 try:
                     printer.log("Loading from cache file: %s" % cache_filename)
-                    ds = _objs.DataSet(file_to_load_from=cache_filename)
+                    ds = _datasets.DataSet(file_to_load_from=cache_filename)
                     return ds
                 except: print("WARNING: Failed to load from cache file")  # pragma: no cover
             else:
@@ -165,10 +167,10 @@ def load_multidataset(filename, cache=False, collision_action="aggregate",
     MultiDataSet
     """
 
-    printer = _objs.VerbosityPrinter.create_printer(verbosity)
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
     try:
         # a saved MultiDataset object is ok
-        mds = _objs.MultiDataSet(file_to_load_from=filename)
+        mds = _datasets.MultiDataSet(file_to_load_from=filename)
     except:
 
         #Parser functions don't take a VerbosityPrinter yet, and so
@@ -182,7 +184,7 @@ def load_multidataset(filename, cache=False, collision_action="aggregate",
                _os.path.getmtime(filename) < _os.path.getmtime(cache_filename):
                 try:
                     printer.log("Loading from cache file: %s" % cache_filename)
-                    mds = _objs.MultiDataSet(file_to_load_from=cache_filename)
+                    mds = _datasets.MultiDataSet(file_to_load_from=cache_filename)
                     return mds
                 except: print("WARNING: Failed to load from cache file")  # pragma: no cover
             else:
@@ -231,7 +233,7 @@ def load_time_dependent_dataset(filename, cache=False, record_zero_counts=True):
     DataSet
     """
     parser = _stdinput.StdInputParser()
-    create_subcircuits = not _objs.Circuit.default_expand_subcircuits
+    create_subcircuits = not _circuits.Circuit.default_expand_subcircuits
     tdds = parser.parse_tddatafile(filename, record_zero_counts=record_zero_counts,
                                    create_subcircuits=create_subcircuits)
     return tdds
@@ -307,7 +309,7 @@ def load_circuit_list(filename, read_raw_strings=False, line_labels='auto', num_
                 rawList.append(line.strip())
         return rawList
     else:
-        create_subcircuits = not _objs.Circuit.default_expand_subcircuits
+        create_subcircuits = not _circuits.Circuit.default_expand_subcircuits
         std = _stdinput.StdInputParser()
         return std.parse_stringfile(filename, line_labels, num_lines, create_subcircuits)
 

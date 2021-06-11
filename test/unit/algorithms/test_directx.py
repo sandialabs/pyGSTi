@@ -1,9 +1,8 @@
-from ..util import BaseCase
-from . import fixtures
-
 import pygsti.construction as pc
-from pygsti.objects import Label as L
 from pygsti.algorithms import directx
+from pygsti.baseobjs import Label as L
+from . import fixtures
+from ..util import BaseCase
 
 _SEED = 1234
 

@@ -1,8 +1,7 @@
 import numpy as np
 
-from ..util import BaseCase
-
 from pygsti.algorithms import grasp
+from ..util import BaseCase
 
 
 # Helper functions to parameterize grasp.run_grasp

@@ -10,19 +10,17 @@ Functions for creating datasets
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as _np
-import numpy.random as _rndm
-import warnings as _warnings
 import collections as _collections
 import itertools as _itertools
+import warnings as _warnings
 
-from ..objects import dataset as _ds
-from ..objects import labeldicts as _ld
-from ..objects import label as _lbl
-from ..protocols import ExperimentDesign as _ExperimentDesign
+import numpy as _np
+import numpy.random as _rndm
+
 from . import circuitconstruction as _gstrc
-
-from pprint import pprint
+from ..datasets import dataset as _ds
+from ..baseobjs import label as _lbl, outcomelabeldict as _ld
+from ..protocols import ExperimentDesign as _ExperimentDesign
 
 
 def simulate_data(model_or_dataset, circuit_list, num_samples,

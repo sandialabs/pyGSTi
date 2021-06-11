@@ -1,8 +1,7 @@
 import numpy as np
 
-from ..util import BaseCase
-
 import pygsti.tools.basisconstructors as bc
+from ..util import BaseCase
 
 
 class BasisConstructorsTester(BaseCase):

@@ -1,12 +1,10 @@
 #!/usr/bin/env python
 
 import cProfile
-from mpi4py import MPI
-import numpy as np
 import os
 import pickle
-import sys
-import time
+
+from mpi4py import MPI
 
 import pygsti
 from pygsti.modelpacks import smq2Q_XYICNOT as std

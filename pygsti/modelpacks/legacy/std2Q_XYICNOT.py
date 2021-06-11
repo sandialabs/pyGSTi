@@ -11,12 +11,11 @@ Variables for working with the 2-qubit model containing the gates
 I*X(pi/2), I*Y(pi/2), X(pi/2)*I, Y(pi/2)*I, and CNOT.
 """
 
-import numpy as _np
 import sys as _sys
+
 from ...construction import circuitconstruction as _strc
 from ...construction import modelconstruction as _setc
 from ...construction import stdtarget as _stdtarget
-from ...tools import optools as _gt
 
 description = "I*X(pi/2), I*Y(pi/2), X(pi/2)*I, Y(pi/2)*I, and CNOT gates"
 

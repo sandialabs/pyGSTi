@@ -9,11 +9,14 @@
 #***************************************************************************************************
 
 import os as _os
-import numpy as _np
 import time as _time
+
+import numpy as _np
+
+from ...baseobjs.label import Label as _Lbl
+from ...datasets.dataset import DataSet as _DataSet
 from ...tools import symplectic as _symp
-from ...objects.label import Label as _Lbl
-from ... import objects as _obj
+
 #from . import sample as _samp
 _samp = None  # MOVED - and this module is deprecated & broken now, so just set to None
 
@@ -316,7 +319,7 @@ def depolarizing_errors_circuit_simulator(circuitlist, shots, errormodel, gate_t
 
     """
     if returnds:
-        ds = _obj.DataSet(collision_action=collision_action)
+        ds = _DataSet(collision_action=collision_action)
     else:
         ds = []
     assert(_os.path.isfile("chp")), "This simulator uses the chp.c code.\n" + \

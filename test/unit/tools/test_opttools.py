@@ -1,11 +1,10 @@
-from time import sleep
 import numbers
 from collections import defaultdict
+from time import sleep
 from unittest import mock
 
-from ..util import BaseCase
-
 from pygsti.tools import opttools as opt
+from ..util import BaseCase
 
 
 class TestTimedBlock(BaseCase):
@@ -52,7 +51,7 @@ class TestTimedBlock(BaseCase):
             sleep(duration)
 
         self.assertGreaterEqual(timeDict['time'], duration)
-        tolerance = 0.01  # this should deliberately be large, for repeatability
+        tolerance = 0.015  # this should deliberately be large, for repeatability
         self.assertLessEqual(timeDict['time'], duration + tolerance, "timed block result is greater than {} seconds off".format(tolerance))
 
 

@@ -13,13 +13,13 @@ pyGSTi Object Construction Python Package
 import importlib as _importlib
 import sys as _sys
 
-from .gateconstruction import *
-from .modelconstruction import *
 from .circuitconstruction import *
 from .datasetconstruction import *
+from .gateconstruction import *
+from .modelconstruction import *
 from .nqnoiseconstruction import *
-from .stdlists import *
 from .qutrit import create_qutrit_model
+from .stdlists import *
 
 _modelpack_names = [
     "std1Q_Cliffords",

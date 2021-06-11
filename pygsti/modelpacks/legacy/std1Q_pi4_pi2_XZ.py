@@ -11,6 +11,7 @@ Variables for working with the a model containing X(pi/4) and Z(pi/2) gates.
 """
 
 import sys as _sys
+
 from ...construction import circuitconstruction as _strc
 from ...construction import modelconstruction as _setc
 from ...construction import stdtarget as _stdtarget
