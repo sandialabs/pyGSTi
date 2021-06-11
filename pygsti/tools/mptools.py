@@ -13,6 +13,7 @@ Functions for working with Python multiprocessing (more than just map)
 import itertools as _itertools
 import multiprocessing as _mp
 
+
 # Modified from https://stackoverflow.com/a/53173433
 def starmap_with_kwargs(fn, num_runs, num_processors, args_list, kwargs_list):
     # If only one processor, run serial (makes it easier to profile and avoids any Pool overhead)
@@ -25,6 +26,7 @@ def starmap_with_kwargs(fn, num_runs, num_processors, args_list, kwargs_list):
             args_list,
             kwargs_list)
         return pool.starmap(_apply_args_and_kwargs, args_for_starmap)
+
 
 def _apply_args_and_kwargs(fn, args, kwargs):
     return fn(*args, **kwargs)

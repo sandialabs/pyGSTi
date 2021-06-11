@@ -11,6 +11,7 @@ Implements the ArraysInterface object and supporting functionality.
 #***************************************************************************************************
 
 import numpy as _np
+
 from ..tools import sharedmemtools as _smt
 
 
@@ -594,7 +595,7 @@ class DistributedArraysInterface(ArraysInterface):
     """
 
     def __init__(self, dist_layout, extra_elements=0):
-        from ..objects.distlayout import DistributableCOPALayout as _DL
+        from ..layouts.distlayout import DistributableCOPALayout as _DL
         assert(isinstance(dist_layout, _DL))
         self.layout = dist_layout
         self.resource_alloc = self.layout.resource_alloc()

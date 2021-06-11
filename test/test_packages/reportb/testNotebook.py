@@ -1,8 +1,8 @@
-import unittest
-import pygsti
 import time
+import unittest
+
 from pygsti.report import Notebook
-from ..testutils import BaseTestCase, compare_files, temp_files
+from ..testutils import BaseTestCase, temp_files
 
 example_python = """\
 import numpy as np

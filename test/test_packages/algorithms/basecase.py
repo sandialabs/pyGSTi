@@ -1,13 +1,8 @@
-import unittest
 import pygsti
 from pygsti.modelpacks.legacy import std1Q_XYI as std
 from pygsti.objects import Basis
 
-import numpy as np
-from scipy import polyfit
-import sys
-
-from ..testutils import BaseTestCase, compare_files, temp_files, regenerate_references
+from ..testutils import BaseTestCase, compare_files, regenerate_references
 
 class AlgorithmsBase(BaseTestCase):
     def setUp(self):

@@ -1,7 +1,7 @@
-from ..util import BaseCase
+import pygsti.circuits.circuitstructure as cs
 
-import pygsti.objects.circuitstructure as cs
-from pygsti.objects import Circuit
+from pygsti.circuits import Circuit
+from ..util import BaseCase
 
 
 class LSGermsStructureTester(BaseCase):

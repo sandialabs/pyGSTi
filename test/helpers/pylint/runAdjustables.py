@@ -1,6 +1,6 @@
+from .helpers import get_pylint_output
 from ..automation_tools import read_json
-from .helpers           import get_pylint_output
-import sys
+
 
 # A function that lets us adjust the value of the adjustable when linting
 def build_commands(adjustable, setting, value):

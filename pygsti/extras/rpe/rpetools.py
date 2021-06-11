@@ -10,7 +10,9 @@
 
 import numpy as _np
 from scipy import optimize as _opt
+
 from ...tools import decompose_gate_matrix as _decompose_gate_matrix
+
 
 #from rpe_models import rpeInstanceDict
 

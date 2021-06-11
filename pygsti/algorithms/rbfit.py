@@ -15,6 +15,7 @@ from scipy.optimize import curve_fit as _curve_fit
 
 from ..tools import rbtools as _rbt
 
+
 # Obsolute function to be deleted.
 # def std_practice_analysis(RBSdataset, seed=[0.8, 0.95], bootstrap_samples=200, asymptote='std', rtype='EI',
 #                           datatype='auto'):

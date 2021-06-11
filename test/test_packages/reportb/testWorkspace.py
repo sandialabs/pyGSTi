@@ -1,16 +1,14 @@
 import os
-import unittest
 import pickle
-import copy
-import pygsti.protocols.estimate
-from pygsti.extras import drift
-from pygsti.modelpacks.legacy import stdQT_XYIMS
-
-from ..testutils import compare_files, temp_files
+import unittest
 
 import numpy as np
 
+import pygsti.protocols.estimate
+from pygsti.extras import drift
+from pygsti.modelpacks.legacy import stdQT_XYIMS
 from ..report.reportBaseCase import ReportBaseCase
+from ..testutils import compare_files, temp_files
 
 bLatex = bool('PYGSTI_LATEX_TESTING' in os.environ and
               os.environ['PYGSTI_LATEX_TESTING'].lower() in ("yes","1","true"))

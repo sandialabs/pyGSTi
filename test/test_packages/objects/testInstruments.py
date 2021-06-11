@@ -1,14 +1,13 @@
-import unittest
 import pygsti
-import numpy as np
-import warnings
 import pickle
-import os
 
-from pygsti.modelpacks.legacy import std1Q_XYI as std
+import numpy as np
+
+import pygsti
 from pygsti.construction import modelconstruction
+from pygsti.modelpacks.legacy import std1Q_XYI as std
+from ..testutils import BaseTestCase, temp_files
 
-from ..testutils import BaseTestCase, compare_files, temp_files
 
 # This class is for unifying some models that get used in this file and in testGateSets2.py
 class InstrumentTestCase(BaseTestCase):

@@ -1,12 +1,13 @@
-from ..testutils import BaseTestCase, compare_files, temp_files, regenerate_references
-import unittest
-import numpy as np
 import pickle
 import time
+import unittest
 import warnings
+
+import numpy as np
 
 import pygsti
 from pygsti.extras import idletomography as idt
+from ..testutils import BaseTestCase, compare_files, temp_files, regenerate_references
 
 #Helper functions
 #Global dicts describing how to prep and measure in various bases

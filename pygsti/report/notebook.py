@@ -10,14 +10,13 @@ Defines the Notebook class
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from .notebookcell import NotebookCell
-
-import os as _os
 import json as _json
-import webbrowser as _browser
+import os as _os
 import textwrap as _textwrap
-
+import webbrowser as _browser
 from subprocess import call as _call
+
+from .notebookcell import NotebookCell
 
 
 class Notebook(object):

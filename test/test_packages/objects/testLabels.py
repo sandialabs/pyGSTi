@@ -1,16 +1,13 @@
 import unittest
-import pygsti
-import numpy as np
-import warnings
-import pickle
-import os
 
+from pygsti.objects.label import Label as L
+
+import pygsti
 import pygsti.construction as pc
 from pygsti.io import jsoncodec
 from pygsti.objects import label
-from pygsti.objects.label import Label as L
+from ..testutils import BaseTestCase, temp_files
 
-from ..testutils import BaseTestCase, compare_files, temp_files
 
 class LabelTestCase(BaseTestCase):
 

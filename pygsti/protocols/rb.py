@@ -10,30 +10,14 @@ RB Protocol objects
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import time as _time
-import os as _os
 import numpy as _np
-import pickle as _pickle
-import collections as _collections
-import warnings as _warnings
-import copy as _copy
-import scipy.optimize as _spo
-from scipy.stats import chi2 as _chi2
 
 from . import protocol as _proto
 from . import vb as _vb
-from .modeltest import ModelTest as _ModelTest
-from .. import objects as _objs
-from .. import algorithms as _alg
-from .. import construction as _construction
-from .. import io as _io
 from .. import tools as _tools
-
-from ..objects import wildcardbudget as _wild
-from ..objects.profiler import DummyProfiler as _DummyProfiler
-from ..objects import objectivefns as _objfns
 from ..algorithms import randomcircuit as _rc
 from ..algorithms import rbfit as _rbfit
+
 
 class CliffordRBDesign(_vb.BenchmarkingDesign):
     """
@@ -282,7 +266,7 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
 
         verbosity : int, optional
             If > 0 the number of circuits generated so far is shown.
-        
+
         num_processes : int, optional
             Number of processes to parallelize circuit creation over. Defaults to 1
 
@@ -703,7 +687,7 @@ class DirectRBDesign(_vb.BenchmarkingDesign):
 
         verbosity : int, optional
             If > 0 the number of circuits generated so far is shown.
-        
+
         num_processes : int, optional
             Number of processes to parallelize circuit creation over. Defaults to 1
 
@@ -1027,10 +1011,10 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
         add_default_protocol : bool, optional
             Whether to add a default RB protocol to the experiment design, which can be run
             later (once data is taken) by using a :class:`DefaultProtocolRunner` object.
-        
+
         num_processes : int, optional
             Number of processes to parallelize circuit creation over. Defaults to 1
-        
+
         verbosity : int, optional
             If > 0 the number of depths for which circuits have been generated so far.
 

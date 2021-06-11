@@ -1,7 +1,7 @@
-from ..util import BaseCase
 import numpy as np
 
 from pygsti.tools.slicetools import *
+from ..util import BaseCase
 
 N = 100
 slices = []

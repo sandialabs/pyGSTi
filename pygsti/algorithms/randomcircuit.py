@@ -10,19 +10,16 @@ Random circuit sampling functions.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from . import compilers as _cmpl
-from ..objects import circuit as _cir
-from ..objects import label as _lbl
-from ..tools import symplectic as _symp
-from .. import construction as _cnst
-from .. import objects as _objs
-from .. import io as _io
-from .. import tools as _tools
-from ..tools import group as _rbobjs
-
-import numpy as _np
 import copy as _copy
 import itertools as _itertools
+
+import numpy as _np
+
+from . import compilers as _cmpl
+from ..circuits import circuit as _cir
+from ..baseobjs import label as _lbl
+from ..tools import group as _rbobjs
+from ..tools import symplectic as _symp
 
 
 def find_all_sets_of_compatible_two_q_gates(edgelist, n, gatename='Gcnot', aslabel=False):
@@ -2649,9 +2646,9 @@ def sample_one_q_generalized_rb_circuit(m, group_or_model, inverse=True, random_
             random_string = [group.labels[i] for i in rndm_indices]
 
     if not random_pauli:
-        return _objs.Circuit(random_string)
+        return _cir.Circuit(random_string)
     if random_pauli:
-        return _objs.Circuit(random_string), bitflip
+        return _cir.Circuit(random_string), bitflip
 
 
 def create_random_germ(pspec, depths, interacting_qs_density, qubit_labels, rand_state=None):
@@ -2835,7 +2832,7 @@ def create_random_germpower_circuits(pspec, depths, interacting_qs_density, qubi
                                      rand_state=None):
 
     #import numpy as _np
-    #from pygsti.objects import circuit as _cir
+    #from pygsti.circuits import circuit as _cir
 
     """
     <TODO summary>

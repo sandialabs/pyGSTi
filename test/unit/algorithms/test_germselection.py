@@ -1,11 +1,10 @@
 import numpy as np
 
-from ..util import BaseCase
-from . import fixtures
-
-from pygsti.objects import StaticDenseOp
 import pygsti.construction as pc
-from pygsti.algorithms import germselection as germsel, scoring
+from pygsti.algorithms import germselection as germsel
+from pygsti.modelmembers.operations import StaticArbitraryOp
+from . import fixtures
+from ..util import BaseCase
 
 _SEED = 2019
 
@@ -101,7 +100,7 @@ class GermSelectionTester(GermSelectionData, BaseCase):
         gs3.set_all_parameterizations("full")
         gs4.set_all_parameterizations("full")
         gs3.operations['Gi2'] = np.identity(4, 'd')  # adds non-gauge params but not gauge params
-        gs4.operations['Gi2'] = StaticDenseOp(np.identity(4, 'd'))  # keeps param counts the same but adds gate
+        gs4.operations['Gi2'] = StaticArbitraryOp(np.identity(4, 'd'))  # keeps param counts the same but adds gate
 
         with self.assertRaises(ValueError):
             germsel._get_model_params([gs1, gs2])  # different number of gauge params

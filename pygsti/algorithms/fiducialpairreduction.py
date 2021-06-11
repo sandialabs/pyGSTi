@@ -11,16 +11,19 @@ Functions for reducing the number of required fiducial pairs for analysis.
 #***************************************************************************************************
 
 
-import numpy as _np
 import itertools as _itertools
 import random as _random
+
+import numpy as _np
 import scipy.special as _spspecial
+
+from .. import baseobjs as _baseobjs
+from .. import circuits as _circuits
+
 from ..construction import circuitconstruction as _gsc
+from ..modelmembers.operations import EigenvalueParamDenseOp as _EigenvalueParamDenseOp
 from ..tools import remove_duplicates as _remove_duplicates
 from ..tools import slicetools as _slct
-from ..tools import sharedmemtools as _smt
-
-from .. import objects as _objs
 
 
 def _nCr(n, r):                                                                           # noqa
@@ -131,7 +134,7 @@ def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials,
         A list of (prepfid_index,measfid_index) tuples of integers, specifying a list
         of fiducial pairs (indices are into `prep_fiducials` and `meas_fiducials`).
     """
-    printer = _objs.VerbosityPrinter.create_printer(verbosity)
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
     #trim LSGST list of all f1+germ^exp+f2 strings to just those needed to get full rank jacobian. (compressed sensing
     #like)
 
@@ -140,7 +143,7 @@ def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials,
         firstRho = list(target_model.preps.keys())[0]
         firstPOVM = list(target_model.povms.keys())[0]
         prep_povm_tuples = [(firstRho, firstPOVM)]
-    prep_povm_tuples = [(_objs.Circuit((prepLbl,)), _objs.Circuit((povmLbl,)))
+    prep_povm_tuples = [(_circuits.Circuit((prepLbl,)), _circuits.Circuit((povmLbl,)))
                         for prepLbl, povmLbl in prep_povm_tuples]
 
     def get_derivs(length):
@@ -159,7 +162,7 @@ def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials,
                 "pp[0]+f0+expGerm+f1+pp[1]", f0=prep_fiducials, f1=meas_fiducials,
                 expGerm=expGerm, pp=prep_povm_tuples, order=('f0', 'f1', 'pp'))
 
-            resource_alloc = _objs.ResourceAllocation(comm=None, mem_limit=mem_limit)
+            resource_alloc = _baseobjs.ResourceAllocation(comm=None, mem_limit=mem_limit)
             layout = target_model.sim.create_layout(lst, None, resource_alloc, array_types=('ep',), verbosity=0)
             #FUTURE: assert that no instruments are allowed?
 
@@ -186,7 +189,7 @@ def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials,
 
     def get_number_amplified(m0, m1, len0, len1, verb):
         """ Return the number of amplified parameters """
-        printer = _objs.VerbosityPrinter.create_printer(verb)
+        printer = _baseobjs.VerbosityPrinter.create_printer(verb)
         L_ratio = float(len1) / float(len0)
         try:
             s0 = _np.linalg.svd(m0, compute_uv=False)
@@ -372,13 +375,13 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
         `prep_fiducials` and `meas_fiducials`).
     """
 
-    printer = _objs.VerbosityPrinter.create_printer(verbosity)
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
 
     if pre_povm_tuples == "first":
         firstRho = list(target_model.preps.keys())[0]
         firstPOVM = list(target_model.povms.keys())[0]
         pre_povm_tuples = [(firstRho, firstPOVM)]
-    pre_povm_tuples = [(_objs.Circuit((prepLbl,)), _objs.Circuit((povmLbl,)))
+    pre_povm_tuples = [(_circuits.Circuit((prepLbl,)), _circuits.Circuit((povmLbl,)))
                        for prepLbl, povmLbl in pre_povm_tuples]
 
     pairListDict = {}  # dict of lists of 2-tuples: one pair list per germ
@@ -393,7 +396,7 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
             gsGerm = target_model.copy()
             gsGerm.set_all_parameterizations("static")
             germMx = gsGerm.sim.product(germ)
-            gsGerm.operations["Ggerm"] = _objs.EigenvalueParamDenseOp(
+            gsGerm.operations["Ggerm"] = _EigenvalueParamDenseOp(
                 germMx, True, constrain_to_tp)
 
             printer.show_progress(i, len(germs),
@@ -409,10 +412,10 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
             #  (i.e. the parameters of the gsGerm model).
             lst = _gsc.create_circuits(
                 "pp[0]+f0+germ+f1+pp[1]", f0=prep_fiducials, f1=meas_fiducials,
-                germ=_objs.Circuit(("Ggerm",)), pp=pre_povm_tuples,
+                germ=_circuits.Circuit(("Ggerm",)), pp=pre_povm_tuples,
                 order=('f0', 'f1', 'pp'))
 
-            resource_alloc = _objs.ResourceAllocation(comm=None, mem_limit=mem_limit)
+            resource_alloc = _baseobjs.ResourceAllocation(comm=None, mem_limit=mem_limit)
             layout = gsGerm.sim.create_layout(lst, None, resource_alloc, array_types=('ep',), verbosity=0)
 
             elIndicesForPair = [[] for i in range(len(prep_fiducials) * len(meas_fiducials))]
@@ -568,13 +571,13 @@ def test_fiducial_pairs(fid_pairs, target_model, prep_fiducials, meas_fiducials,
     -------
     numAmplified : int
     """
-    printer = _objs.VerbosityPrinter.create_printer(verbosity)
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
 
     if pre_povm_tuples == "first":
         firstRho = list(target_model.preps.keys())[0]
         firstPOVM = list(target_model.povms.keys())[0]
         pre_povm_tuples = [(firstRho, firstPOVM)]
-    pre_povm_tuples = [(_objs.Circuit((prepLbl,)), _objs.Circuit((povmLbl,)))
+    pre_povm_tuples = [(_circuits.Circuit((prepLbl,)), _circuits.Circuit((povmLbl,)))
                        for prepLbl, povmLbl in pre_povm_tuples]
 
     def get_derivs(length):
@@ -590,7 +593,7 @@ def test_fiducial_pairs(fid_pairs, target_model, prep_fiducials, meas_fiducials,
                                              pp=pre_povm_tuples, expGerm=expGerm, order=['p', 'pp'])
         circuits = _remove_duplicates(circuits)
 
-        resource_alloc = _objs.ResourceAllocation(comm=None, mem_limit=mem_limit)
+        resource_alloc = _baseobjs.ResourceAllocation(comm=None, mem_limit=mem_limit)
         layout = target_model.sim.create_layout(circuits, None, resource_alloc, array_types=('ep',), verbosity=0)
 
         local_dP = layout.allocate_local_array('ep', 'd')

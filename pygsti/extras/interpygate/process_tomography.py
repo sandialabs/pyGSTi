@@ -1,10 +1,11 @@
 """ Perform process tomography on a simulated quantum process. """
 
+import itertools as _itertools
 from functools import reduce
 
 import numpy as _np
 import numpy.linalg as _lin
-import itertools as _itertools
+
 from pygsti.tools.basistools import change_basis
 
 

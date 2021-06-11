@@ -12,6 +12,7 @@ The standard unitaries and gate names, used internal compilers and short-hand mo
 
 import numpy as _np
 import scipy.linalg as _spl
+
 from . import optools as _gts
 from . import symplectic as _symp
 
@@ -387,6 +388,7 @@ def standard_gatenames_quil_conversions():
 
     return std_gatenames_to_quil
 
+
 def standard_gatenames_chp_conversions():
     """
     A dictionary converting the gates with standard names to CHP native operations.
@@ -410,22 +412,22 @@ def standard_gatenames_chp_conversions():
     std_gatenames_to_chp = {}
 
     # Native gates for CHP
-    std_gatenames_to_chp['h']  = ['h 0']
-    std_gatenames_to_chp['p']  = ['p 0']
-    std_gatenames_to_chp['c']  = ['c 0 1']
-    std_gatenames_to_chp['m']  = ['m 0']
+    std_gatenames_to_chp['h'] = ['h 0']
+    std_gatenames_to_chp['p'] = ['p 0']
+    std_gatenames_to_chp['c'] = ['c 0 1']
+    std_gatenames_to_chp['m'] = ['m 0']
 
     # Cliffords
-    std_gatenames_to_chp['Gc0']  = []
-    std_gatenames_to_chp['Gc1']  = ['h 0', 'p 0', 'h 0', 'p 0']
-    std_gatenames_to_chp['Gc2']  = ['h 0', 'p 0']
-    std_gatenames_to_chp['Gc3']  = ['h 0', 'p 0', 'p 0', 'h 0']
-    std_gatenames_to_chp['Gc4']  = ['p 0', 'h 0', 'p 0', 'p 0']
-    std_gatenames_to_chp['Gc5']  = ['h 0', 'p 0', 'p 0', 'p 0']
-    std_gatenames_to_chp['Gc6']  = ['h 0', 'p 0', 'p 0', 'h 0', 'p 0', 'p 0']
-    std_gatenames_to_chp['Gc7']  = ['h 0', 'p 0', 'h 0', 'p 0', 'p 0', 'p 0']
-    std_gatenames_to_chp['Gc8']  = ['h 0', 'p 0', 'h 0', 'p 0', 'p 0', 'h 0']
-    std_gatenames_to_chp['Gc9']  = ['p 0', 'p 0']
+    std_gatenames_to_chp['Gc0'] = []
+    std_gatenames_to_chp['Gc1'] = ['h 0', 'p 0', 'h 0', 'p 0']
+    std_gatenames_to_chp['Gc2'] = ['h 0', 'p 0']
+    std_gatenames_to_chp['Gc3'] = ['h 0', 'p 0', 'p 0', 'h 0']
+    std_gatenames_to_chp['Gc4'] = ['p 0', 'h 0', 'p 0', 'p 0']
+    std_gatenames_to_chp['Gc5'] = ['h 0', 'p 0', 'p 0', 'p 0']
+    std_gatenames_to_chp['Gc6'] = ['h 0', 'p 0', 'p 0', 'h 0', 'p 0', 'p 0']
+    std_gatenames_to_chp['Gc7'] = ['h 0', 'p 0', 'h 0', 'p 0', 'p 0', 'p 0']
+    std_gatenames_to_chp['Gc8'] = ['h 0', 'p 0', 'h 0', 'p 0', 'p 0', 'h 0']
+    std_gatenames_to_chp['Gc9'] = ['p 0', 'p 0']
     std_gatenames_to_chp['Gc10'] = ['p 0', 'h 0']
     std_gatenames_to_chp['Gc11'] = ['p 0', 'p 0', 'h 0', 'p 0']
     std_gatenames_to_chp['Gc12'] = ['h 0']
@@ -552,6 +554,7 @@ def standard_gatenames_openqasm_conversions(version='u3'):
 
         def Gz_theta_map(gatearg):
             return '(0, 0, ' + gatearg[0] + ')'
+
         def Gczr_theta_map(gatearg):
             return '(' + gatearg[0] + ')'
         std_gatenames_to_argmap = {}

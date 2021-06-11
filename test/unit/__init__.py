@@ -1,6 +1,7 @@
 """Unit test coverage for pyGSTi"""
-import os
 import logging
+import os
+
 logging.getLogger('matplotlib').setLevel(logging.WARNING)
 
 # Suppress pygsti backwards-compatibility warning

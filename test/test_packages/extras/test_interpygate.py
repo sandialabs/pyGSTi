@@ -1,18 +1,11 @@
-from ..testutils import BaseTestCase, compare_files, temp_files, regenerate_references
-import unittest
-import numpy as np
-import pickle
-import time
-import warnings
+import numpy as _np
+from scipy.linalg import expm as _expm
 
 import pygsti
 from pygsti.extras import interpygate as interp
-from pygsti.tools import change_basis
 from pygsti.extras.interpygate.process_tomography import run_process_tomography, vec, unvec
-
-from scipy.linalg import logm as _logm, expm as _expm
-import numpy as _np
-import scipy as _sp
+from pygsti.tools import change_basis
+from ..testutils import BaseTestCase
 
 try:
     from mpi4py import MPI

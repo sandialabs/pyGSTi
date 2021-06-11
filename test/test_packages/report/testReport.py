@@ -1,18 +1,16 @@
-import unittest
-import warnings
 import collections
-import pickle
-import pygsti
 import os
 import shutil
 import subprocess
-from pygsti.modelpacks.legacy import std1Q_XYI as std
-from ..testutils import compare_files, temp_files
+import unittest
 
 import numpy as np
 
+import pygsti
+from pygsti.modelpacks.legacy import std1Q_XYI as std
 # Inherit setup from here
 from .reportBaseCase import ReportBaseCase
+from ..testutils import compare_files, temp_files
 
 bLatex = bool('PYGSTI_LATEX_TESTING' in os.environ and
               os.environ['PYGSTI_LATEX_TESTING'].lower() in ("yes","1","true"))

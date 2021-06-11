@@ -1,13 +1,9 @@
 import numpy as np
 import scipy
-from functools import partial
-
-from ..util import BaseCase
+from pygsti.baseobjs.basis import Basis
 
 import pygsti.tools.basistools as bt
-import pygsti.tools.lindbladtools as lindbladtools
-
-from pygsti.objects.basis import Basis, ExplicitBasis, DirectSumBasis
+from ..util import BaseCase
 
 
 class BasisToolsTester(BaseCase):

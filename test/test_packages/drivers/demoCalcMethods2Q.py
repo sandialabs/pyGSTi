@@ -1,15 +1,16 @@
+import os
 import unittest
+
 import numpy as np
 
 import pygsti
 import pygsti.construction as pc
-from pygsti.modelpacks.legacy import std2Q_XYCNOT as std
-from pygsti.modelpacks.legacy import std1Q_XY
-from pygsti.objects import Label as L
 from pygsti.io import json
-import sys, os
+from pygsti.modelpacks.legacy import std1Q_XY
+from pygsti.modelpacks.legacy import std2Q_XYCNOT as std
+from pygsti.objects import Label as L
+from ..testutils import BaseTestCase, compare_files
 
-from ..testutils import BaseTestCase, compare_files, temp_files
 
 class CalcMethods2QTestCase(BaseTestCase):
 

@@ -1,8 +1,13 @@
 #!/usr/bin/python
-from __future__       import print_function
+from __future__ import print_function
+
+import os
+import subprocess
+import sys
+
 from automation_tools import get_branchname, run_pylint, get_output, directory
-from hooksettings     import generates_pylint_report, updates_git_pages
-import subprocess, os, sys
+
+from hooksettings import generates_pylint_report, updates_git_pages
 
 if __name__ == '__main__':
 

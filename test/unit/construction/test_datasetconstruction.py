@@ -1,10 +1,8 @@
 import numpy as np
 
-from ..util import BaseCase
-
 import pygsti.construction as pc
 from pygsti.tools import listtools as lt
-import pygsti.construction.datasetconstruction as dc
+from ..util import BaseCase
 
 
 class DataSetConstructionTester(BaseCase):

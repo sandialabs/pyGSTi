@@ -1,12 +1,12 @@
-from ..testutils import BaseTestCase, compare_files, temp_files
 import unittest
-import pygsti
+
 import numpy as np
 
-import pygsti.extras.rpe as rpe
+import pygsti
 import pygsti.extras.rpe.rpeconstruction as rc
-from pygsti.extras.rpe import rpeconfig_GxPi2_GyPi2_UpDn
 from pygsti.extras.rpe import rpeconfig_GxPi2_GyPi2_00
+from pygsti.extras.rpe import rpeconfig_GxPi2_GyPi2_UpDn
+from ..testutils import BaseTestCase
 
 
 class TestRPEObjectMethods(BaseTestCase):

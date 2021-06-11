@@ -17,7 +17,7 @@ html = converter('html')  # Retrieve low-level formatters
 latex = converter('latex')
 
 from .formatter import Formatter as _Formatter
-from ..objects.reportableqty import ReportableQty as _ReportableQty
+from pygsti.report.reportableqty import ReportableQty as _ReportableQty
 
 import numpy as _np
 import numbers as _numbers

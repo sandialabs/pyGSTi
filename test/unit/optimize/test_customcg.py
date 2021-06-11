@@ -1,6 +1,5 @@
-from ..util import BaseCase
-
 from pygsti.optimize import customcg as cg
+from ..util import BaseCase
 
 
 class CustomCGTester(BaseCase):

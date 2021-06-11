@@ -1,12 +1,9 @@
 #!/usr/bin/env python3
 import pygsti
+from load import load_3q
 from pygsti.algorithms import gaugeopt_to_target
 from pygsti.tools import timed_block
 
-import pickle
-from contextlib import contextmanager
-
-from load import load_3q
 
 def main():
     gs_target = pygsti.construction.build_gateset(

@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
 import pygsti
+from load import load
 from pygsti.tools import timed_block
 
-import pickle
-from contextlib import contextmanager
-
-from load import load
 
 def main():
     gs, gs_target = load()

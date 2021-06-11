@@ -8,6 +8,6 @@
 #***************************************************************************************************
 """ Container for beyond-GST sub-packages """
 
-#from . import rb  # temporarily removed until RB analysis is fixed
-from . import rpe
 from . import drift
+# from . import rb  # temporarily removed until RB analysis is fixed
+from . import rpe

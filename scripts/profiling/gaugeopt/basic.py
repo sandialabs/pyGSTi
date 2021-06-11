@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
-from pygsti.algorithms import gaugeopt_to_target, contract
-from pygsti.tools import timed_block
-from pygsti.construction import std2Q_XYICNOT
-
-import pickle
-from contextlib import contextmanager
-
 from mpi4py import MPI
+
+from pygsti.algorithms import gaugeopt_to_target, contract
+from pygsti.construction import std2Q_XYICNOT
+from pygsti.tools import timed_block
+
 comm = MPI.COMM_WORLD
 #comm = None
 

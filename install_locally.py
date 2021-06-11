@@ -1,5 +1,5 @@
-from pathlib import Path
 import site
+from pathlib import Path
 
 myPackagePath = Path(__file__).parent.absolute()
 

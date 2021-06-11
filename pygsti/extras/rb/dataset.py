@@ -8,8 +8,9 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as _np
 import copy as _copy
+
+import numpy as _np
 
 #from . import analysis as _analysis  # Doesn't exist!
 _analysis = None  # TODO - fix or remove this dependency

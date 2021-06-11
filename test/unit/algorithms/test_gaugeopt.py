@@ -1,10 +1,9 @@
 # XXX rewrite and optimize
-from ..util import BaseCase
-from . import fixtures
-
-from pygsti.objects import TPGaugeGroup
 import pygsti.algorithms as alg
 import pygsti.algorithms.gaugeopt as go
+from pygsti.models.gaugegroup import TPGaugeGroup
+from . import fixtures
+from ..util import BaseCase
 
 
 class GaugeOptMethodBase(object):
@@ -67,7 +66,7 @@ class GaugeOptWithGaugeGroupInstance(GaugeOptInstanceBase):
     @classmethod
     def setUpClass(cls):
         super(GaugeOptWithGaugeGroupInstance, cls).setUpClass()
-        cls.gauge_group = TPGaugeGroup(fixtures.mdl_lgst.dim)
+        cls.gauge_group = TPGaugeGroup(fixtures.mdl_lgst.state_space)
 
     def test_gaugeopt_with_gauge_group(self):
         go_result = go.gaugeopt_to_target(

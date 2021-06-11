@@ -1,9 +1,11 @@
 import unittest
-from ..util import BaseCase
 
-from pygsti.objects import Circuit, Label, DataSet
-from pygsti.modelpacks.legacy import std1Q_XY
 from pygsti.construction import stdlists, circuitconstruction as cc
+from pygsti.modelpacks.legacy import std1Q_XY
+from pygsti.baseobjs import Label
+from pygsti.circuits import Circuit
+from pygsti.datasets import DataSet
+from ..util import BaseCase
 
 
 class StdListTester(BaseCase):

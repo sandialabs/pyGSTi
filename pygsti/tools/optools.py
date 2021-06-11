@@ -10,20 +10,20 @@ Utility functions operating on operation matrices
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import collections as _collections
+import warnings as _warnings
+
 import numpy as _np
 import scipy.linalg as _spl
 import scipy.sparse as _sps
 import scipy.sparse.linalg as _spsl
-import warnings as _warnings
-import collections as _collections
 
-from . import jamiolkowski as _jam
-from . import matrixtools as _mt
-from . import lindbladtools as _lt
 from . import basistools as _bt
-from ..objects.basis import Basis as _Basis, ExplicitBasis as _ExplicitBasis, DirectSumBasis as _DirectSumBasis
-from ..objects.label import Label as _Label
-
+from . import jamiolkowski as _jam
+from . import lindbladtools as _lt
+from . import matrixtools as _mt
+from ..baseobjs.basis import Basis as _Basis, ExplicitBasis as _ExplicitBasis, DirectSumBasis as _DirectSumBasis
+from ..baseobjs.label import Label as _Label
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 
@@ -3561,8 +3561,8 @@ def project_to_target_eigenspace(model, target_model, eps=1e-6):
         #Essentially, we want to replace the eigenvalues of `tgt_gate`
         # (and *only* the eigenvalues) with those of `gate`.  This is what
         # a "best gate gauge transform does" (by definition)
-        gate_mx = gate.to_dense()
-        Ugauge = compute_best_case_gauge_transform(gate_mx, tgt_gate.to_dense())
+        gate_mx = gate.to_dense(on_space='minimal')
+        Ugauge = compute_best_case_gauge_transform(gate_mx, tgt_gate.to_dense(on_space='minimal'))
         Ugauge_inv = _np.linalg.inv(Ugauge)
 
         epgate = _np.dot(Ugauge, _np.dot(gate_mx, Ugauge_inv))
@@ -3616,38 +3616,35 @@ def is_valid_lindblad_paramtype(typ):
     -------
     bool
     """
-    try:
-        baseTyp, _ = split_lindblad_paramtype(typ)
-    except ValueError:
-        return False  # if can't even split `typ`
-    return baseTyp in ("CPTP", "H+S", "S", "H+S+A", "S+A", "H+D", "D", "H+D+A", "D+A",
-                       "GLND", "H+s", "s", "H+s+A", "s+A", "H+d", "d", "H+d+A", "d+A", "H")
+    return typ in ("CPTP", "H+S", "S", "H+S+A", "S+A", "H+D", "D", "H+D+A", "D+A",
+                   "GLND", "H+s", "s", "H+s+A", "s+A", "H+d", "d", "H+d+A", "d+A", "H")
 
 
-def split_lindblad_paramtype(typ):
-    """
-    Splits a Lindblad-gate parameteriation type into a base-type (e.g. "H+S") and an evolution-type string.
-
-    Parameters
-    ----------
-    typ : str
-        The parameterization type, e.g. "H+S terms".
-
-    Returns
-    -------
-    base_type : str
-        The "base-parameterization" part of `typ`.
-    evotype : str
-        The evolution type corresponding to `typ`.
-    """
-    bTyp = typ.split()[0]  # "base" type
-    evostr = " ".join(typ.split()[1:])
-
-    if evostr == "": evotype = "densitymx"
-    elif evostr == "terms": evotype = "svterm"
-    elif evostr == "clifford terms": evotype = "cterm"
-    else: raise ValueError("Unrecognized evotype in `typ`=%s" % typ)
-    return bTyp, evotype
+#REMOVE
+#def split_lindblad_paramtype(typ):
+#    """
+#    Splits a Lindblad-gate parameteriation type into a base-type (e.g. "H+S") and an evolution-type string.
+#
+#    Parameters
+#    ----------
+#    typ : str
+#        The parameterization type, e.g. "H+S terms".
+#
+#    Returns
+#    -------
+#    base_type : str
+#        The "base-parameterization" part of `typ`.
+#    evotype : str
+#        The evolution type corresponding to `typ`.
+#    """
+#    bTyp = typ.split()[0]  # "base" type
+#    evostr = " ".join(typ.split()[1:])
+#
+#    if evostr == "": evotype = "densitymx"
+#    elif evostr == "terms": evotype = "svterm"
+#    elif evostr == "clifford terms": evotype = "cterm"
+#    else: raise ValueError("Unrecognized evotype in `typ`=%s" % typ)
+#    return bTyp, evotype
 
 
 def effect_label_to_outcome(povm_and_effect_lbl):

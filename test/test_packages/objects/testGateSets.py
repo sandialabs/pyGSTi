@@ -4,10 +4,8 @@ mpl_logger.setLevel(logging.WARNING)
 
 import unittest
 import itertools
-import collections
 import pygsti
 import numpy as np
-import warnings
 import pickle
 import os
 

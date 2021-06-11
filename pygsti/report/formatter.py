@@ -13,7 +13,7 @@ Defines the Formatter class
 import re as _re
 from copy import deepcopy
 
-from ..objects.reportableqty import ReportableQty as _ReportableQty
+from pygsti.report.reportableqty import ReportableQty as _ReportableQty
 
 
 class Formatter(object):

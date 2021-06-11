@@ -1,12 +1,7 @@
-import unittest
-import pygsti
-import numpy as np
-import warnings
 import pickle
 
 from pygsti.modelpacks.legacy import std1Q_XYI as std
-
-from ..testutils import BaseTestCase, compare_files, temp_files, regenerate_references
+from ..testutils import BaseTestCase, compare_files, regenerate_references
 
 try:
     from pygsti.objects import fastreplib as replib

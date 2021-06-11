@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-import subprocess, sys
+import subprocess
+import sys
+
 
 def main(args):
     assert len(args) == 2
