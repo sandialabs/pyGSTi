@@ -309,7 +309,7 @@ class SummaryStatistics(_proto.Protocol):
     """
     summary_statistics = ('success_counts', 'total_counts', 'hamming_distance_counts',
                           'success_probabilities', 'polarization', 'adjusted_success_probabilities')
-    circuit_statistics = ('twoQgate_count', 'circuit_depth', 'idealout', 'circuit_index', 'circuit_width')
+    circuit_statistics = ('two_q_gate_count', 'depth', 'idealout', 'circuit_index', 'width')
     # dscmp_statistics = ('tvds', 'pvals', 'jsds', 'llrs', 'sstvds')
 
     def __init__(self, name):
@@ -340,13 +340,16 @@ class SummaryStatistics(_proto.Protocol):
                 for outcome_lbl, counts in dsrow.counts.items():
                     outbitstring = outcome_lbl[-1]
                     hamming_distance_counts[_tools.rbtools.hamming_distance(outbitstring, idealout[-1])] += counts
-            return list(hamming_distance_counts)  # why a list?
+            return hamming_distance_counts
 
         def adjusted_success_probability(hamming_distance_counts):
             """ TODO: docstring """
-            hamming_distance_pdf = _np.array(hamming_distance_counts) / _np.sum(hamming_distance_counts)
-            adjSP = _np.sum([(-1 / 2)**n * hamming_distance_pdf[n] for n in range(len(hamming_distance_pdf))])
-            return adjSP
+            if _np.sum(hamming_distance_counts) == 0.:
+                return 0.
+            else:
+                hamming_distance_pdf = _np.array(hamming_distance_counts) / _np.sum(hamming_distance_counts)
+                adjSP = _np.sum([(-1 / 2)**n * hamming_distance_pdf[n] for n in range(len(hamming_distance_pdf))])
+                return adjSP
 
         def get_summary_values(icirc, circ, dsrow, idealout):
             sc = success_counts(dsrow, circ, idealout)
@@ -380,11 +383,11 @@ class SummaryStatistics(_proto.Protocol):
         NamedDict
         """
         def get_circuit_values(icirc, circ, dsrow, idealout):
-            ret = {'twoQgate_count': circ.two_q_gate_count(),
-                   'circuit_depth': circ.depth,
+            ret = {'two_q_gate_count': circ.two_q_gate_count(),
+                   'depth': circ.depth,
                    'idealout': idealout,
                    'circuit_index': icirc,
-                   'circuit_width': len(circ.line_labels)}
+                   'width': len(circ.line_labels)}
             ret.update(dsrow.aux)  # note: will only get aux data from *first* pass in multi-pass data
             return ret
 
@@ -606,8 +609,8 @@ class ByDepthSummaryStatistics(SummaryStatistics):
     statistics_to_compute : tuple, optional
         A sequence of the statistic names to compute. Allowed names are:
        'success_counts', 'total_counts', 'hamming_distance_counts', 'success_probabilities', 'polarization',
-       'adjusted_success_probabilities', 'twoQgate_count', 'circuit_depth', 'idealout', 'circuit_index',
-       and 'circuit_width'.
+       'adjusted_success_probabilities', 'two_q_gate_count', 'depth', 'idealout', 'circuit_index',
+       and 'width'.
 
     names_to_compute : tuple, optional
         A sequence of user-defined names for the statistics in `statistics_to_compute`.  If `None`, then
