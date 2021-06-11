@@ -1,12 +1,13 @@
-from ..testutils import BaseTestCase, compare_files, temp_files, regenerate_references
-import unittest
-import numpy as np
 import pickle
 import time
+import unittest
 import warnings
+
+import numpy as np
 
 import pygsti
 from pygsti.extras import idletomography as idt
+from ..testutils import BaseTestCase, compare_files, temp_files, regenerate_references
 
 #Helper functions
 #Global dicts describing how to prep and measure in various bases
@@ -47,7 +48,7 @@ def get_fileroot(nQubits, maxMaxLen, errMag, spamMag, nSamples, simulator, idleE
              simulator, 'idleErrInFids' if idleErrorInFiducials else 'noIdleErrInFids')
 
 def make_idle_tomography_data(nQubits, maxLengths=(0,1,2,4), errMags=(0.01,0.001), spamMag=0,
-                              nSamplesList=(100,'inf'), simulator="map"):
+                              nSamplesList=(100,'inf'), simulator="map", sparsereps=False):
 
     base_param = []
     if hamiltonian: base_param.append('H')
@@ -58,10 +59,12 @@ def make_idle_tomography_data(nQubits, maxLengths=(0,1,2,4), errMags=(0.01,0.001
 
     gateset_idleInFids = build_XYCNOT_cloudnoise_model(nQubits, "line", [], min(2,nQubits), 1,
                                       simulator=simulator, parameterization=parameterization,
-                                      roughNoise=None, addIdleNoiseToAllGates=True)
+                                      roughNoise=None, addIdleNoiseToAllGates=True,
+                                      sparse_lindblad_basis=False, sparse_lindblad_reps=sparsereps)
     gateset_noIdleInFids = build_XYCNOT_cloudnoise_model(nQubits, "line", [], min(2,nQubits), 1,
                                       simulator=simulator, parameterization=parameterization,
-                                      roughNoise=None, addIdleNoiseToAllGates=False)
+                                      roughNoise=None, addIdleNoiseToAllGates=False,
+                                      sparse_lindblad_basis=False, sparse_lindblad_reps=sparsereps)
 
     listOfExperiments = idt.make_idle_tomography_list(nQubits, maxLengths, (prepDict,measDict), maxweight=min(2,nQubits),
                     include_hamiltonian=hamiltonian, include_stochastic=stochastic, include_affine=affine)
@@ -199,7 +202,7 @@ class IDTTestCase(BaseTestCase):
         # able to fit *exactly* (with any errMags, so be pick a big one).
         termsim = pygsti.objects.TermForwardSimulator(mode='taylor-order', max_order=1)
         make_idle_tomography_data(nQ, maxLengths=(0,1,2,4), errMags=(0.01,), spamMag=0,
-                                  nSamplesList=('inf',), simulator=termsim)  # how specify order
+                                  nSamplesList=('inf',), simulator=termsim, sparsereps=True)  # how specify order
 
         # Note: no spam error, as accounting for this isn't build into idle tomography yet.
         maxH, maxS, maxA = helper_idle_tomography(nQ, maxLengths=(1,2,4), file_maxLen=4,
@@ -216,7 +219,7 @@ class IDTTestCase(BaseTestCase):
         nQ = 2
         termsim = pygsti.objects.TermForwardSimulator(mode='taylor-order', max_order=1)
         make_idle_tomography_data(nQ, maxLengths=(0,1,2,4), errMags=(0.01,), spamMag=0,
-                                  nSamplesList=('inf',), simulator=termsim)  #How specify order?
+                                  nSamplesList=('inf',), simulator=termsim, sparsereps=True)  #How specify order?
         maxH, maxS, maxA = helper_idle_tomography(nQ, maxLengths=(1,2,4), file_maxLen=4,
                                                 errMag=0.01, spamMag=0, nSamples='inf',
                                                   idleErrorInFiducials=False, fitOrder=1, simulator=termsim)  # how specify order?

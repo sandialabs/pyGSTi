@@ -1,10 +1,10 @@
-from ..util import BaseCase
-from . import fixtures as pkg
+import numpy as _np
 
-from pygsti.tools import likelihoodfns as lfn
-from pygsti.objects.dataset import DataSet
-from pygsti.modelpacks.legacy import std1Q_XYI as std
 from pygsti import construction
+from pygsti.modelpacks.legacy import std1Q_XYI as std
+from pygsti.tools import likelihoodfns as lfn
+from . import fixtures as pkg
+from ..util import BaseCase
 
 
 class LikelihoodFunctionsBase(BaseCase):
@@ -85,4 +85,5 @@ class LogLTester(LikelihoodFunctionsBase):
         self.assertAlmostEqual(L1, -21393568.52986, 2)
 
         L2 = lfn.logl_max(model, self.ds)
+        L2 = _np.array(L2)  # convert from LocalNumpyArray => ndarray so __round__ works (?)
         self.assertAlmostEqual(L2, -14028782.1039, 2)

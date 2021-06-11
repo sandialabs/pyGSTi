@@ -1,19 +1,16 @@
+import pickle
 import unittest
-import warnings
-import pygsti
-from pygsti.modelpacks.legacy import std1Q_XYI as stdxyi
-from pygsti.modelpacks.legacy import std1Q_XY as stdxy
-from pygsti.objects import modelfunction as gsf
-from pygsti.objects.mapforwardsim import MapForwardSimulator
-from pygsti.objects import Label as L
-from pygsti import protocols as proto
 
 import numpy as np
-import sys
-import os
-import pickle
+from pygsti.objects.mapforwardsim import MapForwardSimulator
 
-from ..testutils import BaseTestCase, compare_files, temp_files
+import pygsti
+from pygsti import protocols as proto
+from pygsti.modelpacks.legacy import std1Q_XY as stdxy
+from pygsti.modelpacks.legacy import std1Q_XYI as stdxyi
+from pygsti.objects import Label as L
+from pygsti.report import modelfunction as gsf
+from ..testutils import BaseTestCase, compare_files
 
 
 class TestHessianMethods(BaseTestCase):

@@ -1,8 +1,7 @@
-from ..util import BaseCase
-
 from copy import deepcopy
 
 import pygsti.tools.listtools as lt
+from ..util import BaseCase
 
 
 class ListToolsTester(BaseCase):

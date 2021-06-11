@@ -8,27 +8,27 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from ...objects import oplessmodel as _oplessmodel
-from ...objects import processorspec as _pspec
-from ...objects import povm as _povm
-from ...construction import modelconstruction as _mconst
-from ...tools import rbtools as _anl
+import numpy as _np
 
+from . import ibmq_burlington
+from . import ibmq_essex
+from . import ibmq_london
+from . import ibmq_manhattan
 from . import ibmq_melbourne
 from . import ibmq_ourense
 from . import ibmq_rueschlikon
 from . import ibmq_tenerife
 from . import ibmq_vigo
-from . import ibmq_essex
-from . import ibmq_burlington
-from . import ibmq_london
 from . import ibmq_yorktown
 from . import rigetti_agave
 from . import rigetti_aspen4
 from . import rigetti_aspen6
 from . import rigetti_aspen7
-
-import numpy as _np
+from ...baseobjs import processorspec as _pspec
+from ...construction import modelconstruction as _mconst
+from ...models import oplessmodel as _oplessmodel
+from ...modelmembers.povms import povm as _povm
+from ...tools import rbtools as _anl
 
 
 def get_device_specs(devname):
@@ -50,6 +50,7 @@ def _get_dev_specs(devname):
     elif devname == 'rigetti_aspen4': dev = rigetti_aspen4
     elif devname == 'rigetti_aspen6': dev = rigetti_aspen6
     elif devname == 'rigetti_aspen7': dev = rigetti_aspen7
+    elif devname == 'ibmq_manhattan': dev = ibmq_manhattan
     else:
         raise ValueError("This device name is not known!")
 
@@ -107,7 +108,7 @@ def create_processor_spec(device, one_qubit_gates, qubitsubset=None, removeedges
 
 
 def create_error_rates_model(caldata, device, one_qubit_gates, one_qubit_gates_to_native={}, calformat=None,
-                             model_type='TwirledLayers', idlename=None):
+                             model_type='TwirledLayers', idle_name=None):
     """
     calformat: 'ibmq-v2018', 'ibmq-v2019', 'rigetti', 'native'.
     """
@@ -116,10 +117,10 @@ def create_error_rates_model(caldata, device, one_qubit_gates, one_qubit_gates_t
     two_qubit_gate = specs.two_qubit_gate
     if 'Gc0' in one_qubit_gates:
         assert('Gi' not in one_qubit_gates), "Cannot ascertain idle gate name!"
-        idlename = 'Gc0'
+        idle_name = 'Gc0'
     elif 'Gi' in one_qubit_gates:
         assert('Gc0' not in one_qubit_gates), "Cannot ascertain idle gate name!"
-        idlename = 'Gi'
+        idle_name = 'Gi'
     else:
         if model_type == 'dict':
             pass
@@ -149,7 +150,7 @@ def create_error_rates_model(caldata, device, one_qubit_gates, one_qubit_gates_t
         for dct in caldata['multiQubitGates']:
 
             # Converts to our gate name convention.
-            gatename = two_qubit_gate + ':Q' + str(dct['qubits'][0]) + ':Q' + str(dct['qubits'][1])
+            gatename = (two_qubit_gate, 'Q' + str(dct['qubits'][0]), 'Q' + str(dct['qubits'][1]))
             # Assumes that the error rate is an average gate infidelity (as stated in qiskit docs).
             agi = dct['gateError']['value']
             # Maps the AGI to an entanglement infidelity.
@@ -169,7 +170,7 @@ def create_error_rates_model(caldata, device, one_qubit_gates, one_qubit_gates_t
         # gate on each qubit to that qubits label (the error rates key in error_rates['gates'])
         alias_dict = {}
         for q in specs.qubits:
-            alias_dict.update({oneQgate + ':' + q: q for oneQgate in one_qubit_gates})
+            alias_dict.update({(oneQgate, q): q for oneQgate in one_qubit_gates})
 
     elif calformat == 'ibmq-v2019':
 
@@ -189,7 +190,7 @@ def create_error_rates_model(caldata, device, one_qubit_gates, one_qubit_gates_t
 
         alias_dict = {}
         for q in specs.qubits:
-            alias_dict.update({oneQgate + ':' + q: one_qubit_gates_to_native[oneQgate] + ':' + q
+            alias_dict.update({(oneQgate, q): (one_qubit_gates_to_native[oneQgate], q)
                                for oneQgate in one_qubit_gates})
 
         # Loop through all the gates, and record the error rates that we use in our error model.
@@ -200,7 +201,7 @@ def create_error_rates_model(caldata, device, one_qubit_gates, one_qubit_gates_t
                 # The qubits the gate is on, in the IBM Q notation
                 qubits = gatecal['qubits']
                 # Converts to our gate name convention.
-                gatename = two_qubit_gate + ':Q' + str(qubits[0]) + ':Q' + str(qubits[1])
+                gatename = (two_qubit_gate, 'Q' + str(qubits[0]), 'Q' + str(qubits[1]))
                 # Assumes that the error rate is an average gate infidelity (as stated in qiskit docs).
                 agi = gatecal['parameters'][0]['value']
                 # Maps the AGI to an entanglement infidelity.
@@ -211,7 +212,7 @@ def create_error_rates_model(caldata, device, one_qubit_gates, one_qubit_gates_t
                 # The qubits the gate is on, in the IBM Q notation
                 qubits = gatecal['qubits']
                 # Converts to pyGSTi-like gate name convention, but using the IBM Q name.
-                gatename = gatecal['gate'] + ':Q' + str(qubits[0])
+                gatename = (gatecal['gate'], 'Q' + str(qubits[0]))
                 # Assumes that the error rate is an average gate infidelity (as stated in qiskit docs).
                 agi = gatecal['parameters'][0]['value']
                 # Maps the AGI to an entanglement infidelity.
@@ -234,8 +235,8 @@ def create_error_rates_model(caldata, device, one_qubit_gates, one_qubit_gates_t
             qslist = qs.split('-')
             # Converts to our gate name convention. Do both orderings of the qubits as symmetric and we
             # are not necessarily consistent with Rigetti's ordering in the cal dict.
-            gatename1 = two_qubit_gate + ':Q' + qslist[0] + ':Q' + qslist[1]
-            gatename2 = two_qubit_gate + ':Q' + qslist[1] + ':Q' + qslist[0]
+            gatename1 = (two_qubit_gate, 'Q' + qslist[0], 'Q' + qslist[1])
+            gatename2 = (two_qubit_gate, 'Q' + qslist[1], 'Q' + qslist[0])
 
             # We use the controlled-Z fidelity if available, and the Bell state fidelity otherwise.
             # Here we are assuming that this is an average gate fidelity (as stated in the pyQuil docs)
@@ -268,7 +269,7 @@ def create_error_rates_model(caldata, device, one_qubit_gates, one_qubit_gates_t
         # gate on each qubit to that qubits label (the error rates key in error_rates['gates'])
         alias_dict = {}
         for q in specs.qubits:
-            alias_dict.update({oneQgate + ':' + q: q for oneQgate in one_qubit_gates})
+            alias_dict.update({(oneQgate, q): q for oneQgate in one_qubit_gates})
 
     elif calformat == 'native':
         error_rates = caldata['error_rates'].copy()
@@ -283,16 +284,16 @@ def create_error_rates_model(caldata, device, one_qubit_gates, one_qubit_gates_t
 
     elif model_type == 'TwirledLayers':
         model = _oplessmodel.TwirledLayersModel(error_rates, nQubits, state_space_labels=specs.qubits,
-                                                alias_dict=alias_dict, idlename=idlename)
+                                                alias_dict=alias_dict, idle_name=idle_name)
     elif model_type == 'TwirledGates':
         model = _oplessmodel.TwirledGatesModel(error_rates, nQubits, state_space_labels=specs.qubits,
-                                               alias_dict=alias_dict, idlename=idlename)
+                                               alias_dict=alias_dict, idle_name=idle_name)
     elif model_type == 'AnyErrorCausesFailure':
         model = _oplessmodel.AnyErrorCausesFailureModel(error_rates, nQubits, state_space_labels=specs.qubits,
-                                                        alias_dict=alias_dict, idlename=idlename)
+                                                        alias_dict=alias_dict, idle_name=idle_name)
     elif model_type == 'AnyErrorCausesRandomOutput':
         model = _oplessmodel.AnyErrorCausesRandomOutputModel(error_rates, nQubits, state_space_labels=specs.qubits,
-                                                             alias_dict=alias_dict, idlename=idlename)
+                                                             alias_dict=alias_dict, idle_name=idle_name)
     else:
         raise ValueError("Model type not understood!")
 

@@ -10,15 +10,17 @@ RB-related functions of gates and models
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from . import rbtools as _rbtls
-from . import optools as _optls
-from . import matrixtools as _mtls
-from .. import objects as _objs
-from .. import construction as _cnst
-from .. import algorithms as _algs
+import warnings as _warnings
 
 import numpy as _np
-import warnings as _warnings
+
+from . import matrixtools as _mtls
+from . import optools as _optls
+from . import rbtools as _rbtls
+
+
+# from .. import construction as _cnst
+# from .. import algorithms as _algs
 
 
 def predicted_rb_number(model, target_model, weights=None, d=None, rtype='EI'):
@@ -271,10 +273,11 @@ def transform_to_rb_gauge(model, target_model, weights=None, mx_basis=None, eige
     model_in_RB_gauge : Model
         The model `model` transformed into the "RB gauge".
     """
+    from ..models.gaugegroup import FullGaugeGroupElement as _FullGaugeGroupElement
     l = rb_gauge(model, target_model, weights=weights, mx_basis=mx_basis,
                  eigenvector_weighting=eigenvector_weighting)
     model_in_RB_gauge = model.copy()
-    S = _objs.FullGaugeGroupElement(_np.linalg.inv(l))
+    S = _FullGaugeGroupElement(_np.linalg.inv(l))
     model_in_RB_gauge.transform_inplace(S)
     return model_in_RB_gauge
 
@@ -325,7 +328,8 @@ def L_matrix(model, target_model, weights=None):  # noqa N802
     normalizer = _np.sum(_np.array([weights[key] for key in list(target_model.operations.keys())]))
     L_matrix = (1 / normalizer) * _np.sum(
         weights[key] * _np.kron(
-            model.operations[key].to_dense().T, _np.linalg.inv(target_model.operations[key].to_dense())
+            model.operations[key].to_dense(on_space='HilbertSchmidt').T,
+            _np.linalg.inv(target_model.operations[key].to_dense(on_space='HilbertSchmidt'))
         ) for key in target_model.operations.keys())
 
     return L_matrix
@@ -457,250 +461,254 @@ def R_matrix(model, group, group_to_model=None, weights=None):  # noqa N802
 
     return R
 
+### COMMENTED OUT SO THAT THIS FILE DOESN'T NEED "from .. import construction as _cnst".
+### THIS SHOULD BE ADDED BACK IN AT SOME POINT.
+# def exact_rb_asps(model, group, m_max, m_min=0, m_step=1, success_outcomelabel=('0',),
+#                   group_to_model=None, weights=None, compilation=None, group_twirled=False):
+#     """
+#     Calculates the exact RB average success probablilites (ASP).
 
-def exact_rb_asps(model, group, m_max, m_min=0, m_step=1, success_outcomelabel=('0',),
-                  group_to_model=None, weights=None, compilation=None, group_twirled=False):
-    """
-    Calculates the exact RB average success probablilites (ASP).
+#     Uses some generalizations of the formula given Proctor et al
+#     Phys. Rev. Lett. 119, 130502 (2017). This formula does not scale well with
+#     group size and qubit number, and for the Clifford group it is likely only
+#     practical for a single qubit.
 
-    Uses some generalizations of the formula given Proctor et al
-    Phys. Rev. Lett. 119, 130502 (2017). This formula does not scale well with
-    group size and qubit number, and for the Clifford group it is likely only
-    practical for a single qubit.
+#     Parameters
+#     ----------
+#     model : Model
+#         The noisy model (e.g., the Cliffords) to calculate the R matrix of.
+#         The correpsonding `target` model (not required in this function)
+#         must be equal to or a subset of (a faithful rep of) the group `group`.
+#         If group_to_model is None, the labels of the gates in model should be
+#         the same as the labels of the corresponding group elements in `group`.
+#         For Clifford RB `model` should be the clifford model; for direct RB
+#         this should be the native model.
 
-    Parameters
-    ----------
-    model : Model
-        The noisy model (e.g., the Cliffords) to calculate the R matrix of.
-        The correpsonding `target` model (not required in this function)
-        must be equal to or a subset of (a faithful rep of) the group `group`.
-        If group_to_model is None, the labels of the gates in model should be
-        the same as the labels of the corresponding group elements in `group`.
-        For Clifford RB `model` should be the clifford model; for direct RB
-        this should be the native model.
+#     group : MatrixGroup
+#         The group that the `model` model contains gates from. For Clifford RB
+#         or direct RB, this would be the Clifford group.
 
-    group : MatrixGroup
-        The group that the `model` model contains gates from. For Clifford RB
-        or direct RB, this would be the Clifford group.
+#     m_max : int
+#         The maximal sequence length of the random gates, not including the
+#         inversion gate.
 
-    m_max : int
-        The maximal sequence length of the random gates, not including the
-        inversion gate.
+#     m_min : int, optional
+#         The minimal sequence length. Defaults to the smallest valid value of 0.
 
-    m_min : int, optional
-        The minimal sequence length. Defaults to the smallest valid value of 0.
+#     m_step : int, optional
+#         The step size between sequence lengths. Defaults to the smallest valid
+#         value of 1.
 
-    m_step : int, optional
-        The step size between sequence lengths. Defaults to the smallest valid
-        value of 1.
+#     success_outcomelabel : str or tuple, optional
+#         The outcome label associated with success.
 
-    success_outcomelabel : str or tuple, optional
-        The outcome label associated with success.
+#     group_to_model : dict, optional
+#         If not None, a dictionary that maps labels of group elements to labels
+#         of model. This is required if the labels of the gates in `model` are different
+#         from the labels of the corresponding group elements in `group`.
 
-    group_to_model : dict, optional
-        If not None, a dictionary that maps labels of group elements to labels
-        of model. This is required if the labels of the gates in `model` are different
-        from the labels of the corresponding group elements in `group`.
+#     weights : dict, optional
+#         If not None, a dictionary of floats, whereby the keys are the gates in model
+#         and the values are the unnormalized probabilities to apply each gate at
+#         for each layer of the RB protocol. If None, the weighting defaults to an
+#         equal weighting on all gates, as used in most RB protocols (e.g., Clifford
+#         RB).
 
-    weights : dict, optional
-        If not None, a dictionary of floats, whereby the keys are the gates in model
-        and the values are the unnormalized probabilities to apply each gate at
-        for each layer of the RB protocol. If None, the weighting defaults to an
-        equal weighting on all gates, as used in most RB protocols (e.g., Clifford
-        RB).
+#     compilation : dict, optional
+#         If `model` is not the full group `group` (with the same labels), then a
+#         compilation for the group elements, used to implement the inversion gate
+#         (and the initial randomgroup element, if `group_twirled` is True). This
+#         is a dictionary with the group labels as keys and a gate sequence of the
+#         elements of `model` as values.
 
-    compilation : dict, optional
-        If `model` is not the full group `group` (with the same labels), then a
-        compilation for the group elements, used to implement the inversion gate
-        (and the initial randomgroup element, if `group_twirled` is True). This
-        is a dictionary with the group labels as keys and a gate sequence of the
-        elements of `model` as values.
+#     group_twirled : bool, optional
+#         If True, the random sequence starts with a single uniformly random group
+#         element before the m random elements of `model`.
 
-    group_twirled : bool, optional
-        If True, the random sequence starts with a single uniformly random group
-        element before the m random elements of `model`.
+#     Returns
+#     -------
+#     m : float
+#         Array of sequence length values that the ASPs have been calculated for.
 
-    Returns
-    -------
-    m : float
-        Array of sequence length values that the ASPs have been calculated for.
+#     P_m : float
+#         Array containing ASP values for the specified sequence length values.
+#     """
+#     if compilation is None:
+#         for key in list(model.operations.keys()):
+#             assert(key in group.labels), "Gates labels are not in `group`, so `compilation must be specified."
+#         for label in group.labels:
+#             assert(label in list(model.operations.keys())
+#                    ), "Some group elements not in `model`, so `compilation must be specified."
 
-    P_m : float
-        Array containing ASP values for the specified sequence length values.
-    """
-    if compilation is None:
-        for key in list(model.operations.keys()):
-            assert(key in group.labels), "Gates labels are not in `group`, so `compilation must be specified."
-        for label in group.labels:
-            assert(label in list(model.operations.keys())
-                   ), "Some group elements not in `model`, so `compilation must be specified."
+#     i_max = _np.floor((m_max - m_min) / m_step).astype('int')
+#     m = _np.zeros(1 + i_max, int)
+#     P_m = _np.zeros(1 + i_max, float)
+#     group_dim = len(group)
+#     R = R_matrix(model, group, group_to_model=group_to_model, weights=weights)
+#     success_prepLabel = list(model.preps.keys())[0]  # just take first prep
+#     success_effectLabel = success_outcomelabel[-1] if isinstance(success_outcomelabel, tuple) \
+#         else success_outcomelabel
+#     extended_E = _np.kron(_mtls.column_basis_vector(0, group_dim).T, model.povms['Mdefault'][success_effectLabel].T)
+#     extended_rho = _np.kron(_mtls.column_basis_vector(0, group_dim), model.preps[success_prepLabel])
 
-    i_max = _np.floor((m_max - m_min) / m_step).astype('int')
-    m = _np.zeros(1 + i_max, int)
-    P_m = _np.zeros(1 + i_max, float)
-    group_dim = len(group)
-    R = R_matrix(model, group, group_to_model=group_to_model, weights=weights)
-    success_prepLabel = list(model.preps.keys())[0]  # just take first prep
-    success_effectLabel = success_outcomelabel[-1] if isinstance(success_outcomelabel, tuple) else success_outcomelabel
-    extended_E = _np.kron(_mtls.column_basis_vector(0, group_dim).T, model.povms['Mdefault'][success_effectLabel].T)
-    extended_rho = _np.kron(_mtls.column_basis_vector(0, group_dim), model.preps[success_prepLabel])
+#     if compilation is None:
+#         extended_E = group_dim * _np.dot(extended_E, R)
+#         if group_twirled is True:
+#             extended_rho = _np.dot(R, extended_rho)
+#     else:
+#         full_model = _cnst.create_explicit_alias_model(model, compilation)
+#         R_fullgroup = R_matrix(full_model, group)
+#         extended_E = group_dim * _np.dot(extended_E, R_fullgroup)
+#         if group_twirled is True:
+#             extended_rho = _np.dot(R_fullgroup, extended_rho)
 
-    if compilation is None:
-        extended_E = group_dim * _np.dot(extended_E, R)
-        if group_twirled is True:
-            extended_rho = _np.dot(R, extended_rho)
-    else:
-        full_model = _cnst.create_explicit_alias_model(model, compilation)
-        R_fullgroup = R_matrix(full_model, group)
-        extended_E = group_dim * _np.dot(extended_E, R_fullgroup)
-        if group_twirled is True:
-            extended_rho = _np.dot(R_fullgroup, extended_rho)
+#     Rstep = _np.linalg.matrix_power(R, m_step)
+#     Riterate = _np.linalg.matrix_power(R, m_min)
+#     for i in range(0, 1 + i_max):
+#         m[i] = m_min + i * m_step
+#         P_m[i] = _np.dot(extended_E, _np.dot(Riterate, extended_rho))
+#         Riterate = _np.dot(Rstep, Riterate)
 
-    Rstep = _np.linalg.matrix_power(R, m_step)
-    Riterate = _np.linalg.matrix_power(R, m_min)
-    for i in range(0, 1 + i_max):
-        m[i] = m_min + i * m_step
-        P_m[i] = _np.dot(extended_E, _np.dot(Riterate, extended_rho))
-        Riterate = _np.dot(Rstep, Riterate)
+#     return m, P_m
 
-    return m, P_m
+### COMMENTED OUT SO THAT THIS FILE DOESN'T NEED "from .. import construction as _cnst"
+### THIS SHOULD BE ADDED BACK IN AT SOME POINT.
+# def L_matrix_asps(model, target_model, m_max, m_min=0, m_step=1, success_outcomelabel=('0',),  # noqa N802
+#                   compilation=None, group_twirled=False, weights=None, gauge_optimize=True,
+#                   return_error_bounds=False, norm='diamond'):
+#     """
+#     Computes RB average survival probablities, as predicted by the 'L-matrix' theory.
 
+#     This theory was introduced in Proctor et al Phys. Rev. Lett. 119, 130502
+#     (2017). Within the function, the model is gauge-optimized to target_model. This is
+#     *not* optimized to the gauge specified by Proctor et al, but instead performs the
+#     standard pyGSTi gauge-optimization (using the frobenius distance). In most cases,
+#     this is likely to be a reasonable proxy for the gauge optimization perscribed by
+#     Proctor et al.
 
-def L_matrix_asps(model, target_model, m_max, m_min=0, m_step=1, success_outcomelabel=('0',),  # noqa N802
-                  compilation=None, group_twirled=False, weights=None, gauge_optimize=True,
-                  return_error_bounds=False, norm='diamond'):
-    """
-    Computes RB average survival probablities, as predicted by the 'L-matrix' theory.
+#     Parameters
+#     ----------
+#     model : Model
+#         The noisy model.
 
-    This theory was introduced in Proctor et al Phys. Rev. Lett. 119, 130502
-    (2017). Within the function, the model is gauge-optimized to target_model. This is
-    *not* optimized to the gauge specified by Proctor et al, but instead performs the
-    standard pyGSTi gauge-optimization (using the frobenius distance). In most cases,
-    this is likely to be a reasonable proxy for the gauge optimization perscribed by
-    Proctor et al.
+#     target_model : Model
+#         The target model.
 
-    Parameters
-    ----------
-    model : Model
-        The noisy model.
+#     m_max : int
+#         The maximal sequence length of the random gates, not including the inversion gate.
 
-    target_model : Model
-        The target model.
+#     m_min : int, optional
+#         The minimal sequence length. Defaults to the smallest valid value of 0.
 
-    m_max : int
-        The maximal sequence length of the random gates, not including the inversion gate.
+#     m_step : int, optional
+#         The step size between sequence lengths.
 
-    m_min : int, optional
-        The minimal sequence length. Defaults to the smallest valid value of 0.
+#     success_outcomelabel : str or tuple, optional
+#         The outcome label associated with success.
 
-    m_step : int, optional
-        The step size between sequence lengths.
+#     compilation : dict, optional
+#         If `model` is not the full group, then a compilation for the group elements,
+#         used to implement the inversion gate (and the initial random group element,
+#         if `group_twirled` is True). This is a dictionary with the group labels as
+#         keys and a gate sequence of the elements of `model` as values.
 
-    success_outcomelabel : str or tuple, optional
-        The outcome label associated with success.
+#     group_twirled : bool, optional
+#         If True, the random sequence starts with a single uniformly random group
+#         element before the m random elements of `model`.
 
-    compilation : dict, optional
-        If `model` is not the full group, then a compilation for the group elements,
-        used to implement the inversion gate (and the initial random group element,
-        if `group_twirled` is True). This is a dictionary with the group labels as
-        keys and a gate sequence of the elements of `model` as values.
+#     weights : dict, optional
+#         If not None, a dictionary of floats, whereby the keys are the gates in model
+#         and the values are the unnormalized probabilities to apply each gate at
+#         for each layer of the RB protocol. If None, the weighting defaults to an
+#         equal weighting on all gates, as used in most RB protocols (e.g., Clifford
+#         RB).
 
-    group_twirled : bool, optional
-        If True, the random sequence starts with a single uniformly random group
-        element before the m random elements of `model`.
+#     gauge_optimize : bool, optional
+#         If True a gauge-optimization to the target model is implemented before
+#         calculating all quantities. If False, no gauge optimization is performed.
+#         Whether or not a gauge optimization is performed does not affect the rate of
+#         decay but it will generally affect the exact form of the decay. E.g., if a
+#         perfect model is given to the function -- but in the "wrong" gauge -- no
+#         decay will be observed in the output P_m, but the P_m can be far from 1 (even
+#         for perfect SPAM) for all m. The gauge optimization is optional, as it is
+#         not guaranteed to always improve the accuracy of the reported P_m, although when
+#         gauge optimization is performed this limits the possible deviations of the
+#         reported P_m from the true P_m.
 
-    weights : dict, optional
-        If not None, a dictionary of floats, whereby the keys are the gates in model
-        and the values are the unnormalized probabilities to apply each gate at
-        for each layer of the RB protocol. If None, the weighting defaults to an
-        equal weighting on all gates, as used in most RB protocols (e.g., Clifford
-        RB).
+#     return_error_bounds : bool, optional
+#         Sets whether or not to return error bounds for how far the true ASPs can deviate
+#         from the values returned by this function.
 
-    gauge_optimize : bool, optional
-        If True a gauge-optimization to the target model is implemented before
-        calculating all quantities. If False, no gauge optimization is performed.
-        Whether or not a gauge optimization is performed does not affect the rate of
-        decay but it will generally affect the exact form of the decay. E.g., if a
-        perfect model is given to the function -- but in the "wrong" gauge -- no
-        decay will be observed in the output P_m, but the P_m can be far from 1 (even
-        for perfect SPAM) for all m. The gauge optimization is optional, as it is
-        not guaranteed to always improve the accuracy of the reported P_m, although when
-        gauge optimization is performed this limits the possible deviations of the
-        reported P_m from the true P_m.
+#     norm : str, optional
+#         The norm used in the error bound calculation. Either 'diamond' for the diamond
+#         norm (the default) or '1to1' for the Hermitian 1 to 1 norm.
 
-    return_error_bounds : bool, optional
-        Sets whether or not to return error bounds for how far the true ASPs can deviate
-        from the values returned by this function.
+#     Returns
+#     -------
+#     m : float
+#         Array of sequence length values that the ASPs have been calculated for.
+#     P_m : float
+#         Array containing predicted ASP values for the specified sequence length values.
+#     if error_bounds is True :
+#         lower_bound: float
+#             Array containing lower bounds on the possible ASP values
 
-    norm : str, optional
-        The norm used in the error bound calculation. Either 'diamond' for the diamond
-        norm (the default) or '1to1' for the Hermitian 1 to 1 norm.
+#         upper_bound: float
+#             Array containing upper bounds on the possible ASP values
+#     """
+#     d = int(round(_np.sqrt(model.dim)))
 
-    Returns
-    -------
-    m : float
-        Array of sequence length values that the ASPs have been calculated for.
-    P_m : float
-        Array containing predicted ASP values for the specified sequence length values.
-    if error_bounds is True :
-        lower_bound: float
-            Array containing lower bounds on the possible ASP values
+#     if gauge_optimize:
+#         model_go = _algs.gaugeopt_to_target(model, target_model)
+#     else:
+#         model_go = model.copy()
+#     L = L_matrix(model_go, target_model, weights=weights)
+#     success_prepLabel = list(model.preps.keys())[0]  # just take first prep
+#     success_effectLabel = success_outcomelabel[-1] if isinstance(success_outcomelabel, tuple) \
+#         else success_outcomelabel
+#     identity_vec = _mtls.vec(_np.identity(d**2, float))
 
-        upper_bound: float
-            Array containing upper bounds on the possible ASP values
-    """
-    d = int(round(_np.sqrt(model.dim)))
+#     if compilation is not None:
+#         model_group = _cnst.create_explicit_alias_model(model_go, compilation)
+#         model_target_group = _cnst.create_explicit_alias_model(target_model, compilation)
+#         delta = gate_dependence_of_errormaps(model_group, model_target_group, norm=norm)
+#         emaps = errormaps(model_group, model_target_group)
+#         E_eff = _np.dot(model_go.povms['Mdefault'][success_effectLabel].T, emaps.operations['Gavg'])
 
-    if gauge_optimize:
-        model_go = _algs.gaugeopt_to_target(model, target_model)
-    else:
-        model_go = model.copy()
-    L = L_matrix(model_go, target_model, weights=weights)
-    success_prepLabel = list(model.preps.keys())[0]  # just take first prep
-    success_effectLabel = success_outcomelabel[-1] if isinstance(success_outcomelabel, tuple) else success_outcomelabel
-    identity_vec = _mtls.vec(_np.identity(d**2, float))
+#         if group_twirled is True:
+#             L_group = L_matrix(model_group, model_target_group)
 
-    if compilation is not None:
-        model_group = _cnst.create_explicit_alias_model(model_go, compilation)
-        model_target_group = _cnst.create_explicit_alias_model(target_model, compilation)
-        delta = gate_dependence_of_errormaps(model_group, model_target_group, norm=norm)
-        emaps = errormaps(model_group, model_target_group)
-        E_eff = _np.dot(model_go.povms['Mdefault'][success_effectLabel].T, emaps.operations['Gavg'])
+#     if compilation is None:
+#         delta = gate_dependence_of_errormaps(model_go, target_model, norm=norm)
+#         emaps = errormaps(model_go, target_model)
+#         E_eff = _np.dot(model_go.povms['Mdefault'][success_effectLabel].T, emaps.operations['Gavg'])
 
-        if group_twirled is True:
-            L_group = L_matrix(model_group, model_target_group)
+#     i_max = _np.floor((m_max - m_min) / m_step).astype('int')
+#     m = _np.zeros(1 + i_max, int)
+#     P_m = _np.zeros(1 + i_max, float)
+#     upper_bound = _np.zeros(1 + i_max, float)
+#     lower_bound = _np.zeros(1 + i_max, float)
 
-    if compilation is None:
-        delta = gate_dependence_of_errormaps(model_go, target_model, norm=norm)
-        emaps = errormaps(model_go, target_model)
-        E_eff = _np.dot(model_go.povms['Mdefault'][success_effectLabel].T, emaps.operations['Gavg'])
-
-    i_max = _np.floor((m_max - m_min) / m_step).astype('int')
-    m = _np.zeros(1 + i_max, int)
-    P_m = _np.zeros(1 + i_max, float)
-    upper_bound = _np.zeros(1 + i_max, float)
-    lower_bound = _np.zeros(1 + i_max, float)
-
-    Lstep = _np.linalg.matrix_power(L, m_step)
-    Literate = _np.linalg.matrix_power(L, m_min)
-    for i in range(0, 1 + i_max):
-        m[i] = m_min + i * m_step
-        if group_twirled:
-            L_m_rdd = _mtls.unvec(_np.dot(L_group, _np.dot(Literate, identity_vec)))
-        else:
-            L_m_rdd = _mtls.unvec(_np.dot(Literate, identity_vec))
-        P_m[i] = _np.dot(E_eff, _np.dot(L_m_rdd, model_go.preps[success_prepLabel]))
-        Literate = _np.dot(Lstep, Literate)
-        upper_bound[i] = P_m[i] + delta / 2
-        lower_bound[i] = P_m[i] - delta / 2
-        if upper_bound[i] > 1:
-            upper_bound[i] = 1.
-        if lower_bound[i] < 0:
-            lower_bound[i] = 0.
-    if return_error_bounds:
-        return m, P_m, lower_bound, upper_bound
-    else:
-        return m, P_m
+#     Lstep = _np.linalg.matrix_power(L, m_step)
+#     Literate = _np.linalg.matrix_power(L, m_min)
+#     for i in range(0, 1 + i_max):
+#         m[i] = m_min + i * m_step
+#         if group_twirled:
+#             L_m_rdd = _mtls.unvec(_np.dot(L_group, _np.dot(Literate, identity_vec)))
+#         else:
+#             L_m_rdd = _mtls.unvec(_np.dot(Literate, identity_vec))
+#         P_m[i] = _np.dot(E_eff, _np.dot(L_m_rdd, model_go.preps[success_prepLabel]))
+#         Literate = _np.dot(Lstep, Literate)
+#         upper_bound[i] = P_m[i] + delta / 2
+#         lower_bound[i] = P_m[i] - delta / 2
+#         if upper_bound[i] > 1:
+#             upper_bound[i] = 1.
+#         if lower_bound[i] < 0:
+#             lower_bound[i] = 0.
+#     if return_error_bounds:
+#         return m, P_m, lower_bound, upper_bound
+#     else:
+#         return m, P_m
 
 
 def errormaps(model, target_model):

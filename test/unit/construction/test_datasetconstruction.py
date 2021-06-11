@@ -1,10 +1,8 @@
 import numpy as np
 
-from ..util import BaseCase
-
 import pygsti.construction as pc
 from pygsti.tools import listtools as lt
-import pygsti.construction.datasetconstruction as dc
+from ..util import BaseCase
 
 
 class DataSetConstructionTester(BaseCase):
@@ -55,9 +53,12 @@ class DataSetConstructionTester(BaseCase):
                                         sample_error='multinomial', seed=100)
 
         randState = np.random.RandomState(1234)
-        dataset = pc.simulate_data(dataset, self.circuit_list, num_samples=100,
+        dataset1 = pc.simulate_data(dataset, self.circuit_list, num_samples=100,
                                         sample_error='binomial', rand_state=randState)
-        # TODO assert correctness
+        dataset2 = pc.simulate_data(dataset, self.circuit_list, num_samples=100,
+                                        sample_error='binomial', seed=1234)
+        for dr1, dr2 in zip(dataset1.values(), dataset2.values()):
+            self.assertEqual(dr1.counts, dr2.counts)
 
     def test_generate_fake_data_raises_on_bad_sample_error(self):
         with self.assertRaises(ValueError):

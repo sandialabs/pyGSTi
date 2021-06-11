@@ -1,11 +1,9 @@
 import numpy as np
-import pickle
 
-from ..util import BaseCase
-
+from pygsti.modelmembers import instruments as inst
 from pygsti.modelpacks.legacy import std1Q_XYI as std
-
-from pygsti.objects import instrument as inst, FullGaugeGroupElement
+from pygsti.models.gaugegroup import FullGaugeGroupElement
+from ..util import BaseCase
 
 
 class InstrumentMethodBase(object):
@@ -35,7 +33,7 @@ class InstrumentMethodBase(object):
 
     def test_constructor_raises_on_non_none_param_conflict(self):
         with self.assertRaises(AssertionError):
-            self.constructor(["Non-none-matrices"], ["Non-none-items"])  # can't both be non-None
+            self.constructor(["Non-none-matrices"], 'default', None, ["Non-none-items"])  # can't both be non-None
 
     def test_constructor_raises_on_bad_op_matrices_type(self):
         with self.assertRaises(ValueError):

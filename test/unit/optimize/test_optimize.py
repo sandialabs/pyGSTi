@@ -1,8 +1,7 @@
 import numpy as np
 
-from ..util import BaseCase, needs_deap
-
 from pygsti.optimize import optimize as opt
+from ..util import BaseCase, needs_deap
 
 
 class OptimizeTester(BaseCase):

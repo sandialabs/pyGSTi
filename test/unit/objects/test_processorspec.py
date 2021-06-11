@@ -1,11 +1,11 @@
-import scipy
-import numpy as np
 import unittest
 
-from ..util import BaseCase
+import numpy as np
+import scipy
 
-from pygsti.objects import Circuit
-from pygsti.objects.processorspec import ProcessorSpec
+from pygsti.baseobjs.processorspec import ProcessorSpec
+from pygsti.circuits import Circuit
+from ..util import BaseCase
 
 
 class ProcessorSpecTester(BaseCase):

@@ -12,8 +12,9 @@ Utility functions relevant to Lindblad forms and projections
 
 import numpy as _np
 import scipy.sparse as _sps
-from .basistools import basis_matrices
+
 from . import matrixtools as _mt
+from .basistools import basis_matrices
 
 
 def hamiltonian_to_lindbladian(hamiltonian, sparse=False):
@@ -148,7 +149,8 @@ def affine_lindbladian(q, sparse=False):
 
     for i, rho0 in enumerate(basis_matrices('std', d**2)):  # rho0 == input density mx
         rho1 = q * _mt.safe_dot(Id, rho0.flatten())  # get |q>><Id|rho0
-        lindbladian[:, i] = rho1.to_dense().flatten().T if sparse else rho1.flatten()  # weird that need .T here
+        lindbladian[:, i] = rho1.to_dense(on_space='HilbertSchmidt').flatten().T \
+            if sparse else rho1.flatten()  # weird that need .T here
         # vectorize rho1 & set as linbladian column
 
     if sparse: lindbladian = lindbladian.tocsr()

@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
-import pygsti
 import pickle
+
+import pygsti
 from pygsti.construction import std1Q_XYI
+
 
 def main():
     gs_target = std1Q_XYI.gs_target

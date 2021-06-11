@@ -1,13 +1,13 @@
-from ..util import BaseCase, with_temp_path
-from . import fixtures as pkg
-
 from io import BytesIO
-from pygsti import io
+
 import pygsti.construction as pc
-from pygsti.modelpacks.legacy import std1Q_XYI as std
-from pygsti.modelpacks.legacy import std2Q_XYICNOT as std2Q
-from pygsti.objects import DataSet, operation, UnitaryGaugeGroup, TrivialGaugeGroup, mapforwardsim
+from pygsti import io
 from pygsti.drivers import longsequence as ls
+from pygsti.forwardsims import mapforwardsim
+from pygsti.modelmembers import operations as operation
+from pygsti.models.gaugegroup import UnitaryGaugeGroup
+from . import fixtures as pkg
+from ..util import BaseCase, with_temp_path
 
 
 # TODO optimize everything
@@ -303,7 +303,7 @@ class GLNDModelTester(LongSequenceGSTBase):
         super(GLNDModelTester, self).setUp()
         for lbl, gate in self.model.operations.items():
             self.model.operations[lbl] = operation.convert(gate, "GLND", "gm")
-        self.model.default_gauge_group = UnitaryGaugeGroup(self.model.dim, "gm")
+        self.model.default_gauge_group = UnitaryGaugeGroup(self.model.state_space, "gm")
 
 
 class MapCalcTester(LongSequenceGSTBase):

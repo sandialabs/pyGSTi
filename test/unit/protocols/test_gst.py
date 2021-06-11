@@ -1,15 +1,15 @@
-from ..util import BaseCase
-
-from pygsti.modelpacks.legacy import std1Q_XYI, std2Q_XYICNOT
+from pygsti.construction import simulate_data
 from pygsti.modelpacks import smq1Q_XYI
-from pygsti.objects import TrivialGaugeGroup, FreqWeightedChi2Function
-from pygsti.objects.objectivefns import PoissonPicDeltaLogLFunction
-from pygsti.protocols import gst
-from pygsti.protocols.protocol import ProtocolData, Protocol
-from pygsti.protocols.estimate import Estimate
-from pygsti.construction import simulate_data, create_lsgst_circuits
-from pygsti.tools import two_delta_logl_nsigma, two_delta_logl
+from pygsti.modelpacks.legacy import std1Q_XYI, std2Q_XYICNOT
+from pygsti.objectivefns.objectivefns import PoissonPicDeltaLogLFunction
+from pygsti.models.gaugegroup import TrivialGaugeGroup
+from pygsti.objectivefns import FreqWeightedChi2Function
 from pygsti.optimize.customlm import CustomLMOptimizer
+from pygsti.protocols import gst
+from pygsti.protocols.estimate import Estimate
+from pygsti.protocols.protocol import ProtocolData, Protocol
+from pygsti.tools import two_delta_logl
+from ..util import BaseCase
 
 
 class GSTUtilTester(BaseCase):
@@ -71,7 +71,8 @@ class GSTUtilTester(BaseCase):
         badfit_opts = gst.GSTBadFitOptions(threshold=-10, actions=("robust", "Robust", "robust+", "Robust+",
                                                                    "wildcard", "do nothing"))
         res = self.results.copy()
-        gst._add_badfit_estimates(res, 'test-estimate', badfit_opts, builder, opt)
+        res.estimates['test-estimate'].parameters['final_objfn_builder'] = builder
+        gst._add_badfit_estimates(res, 'test-estimate', badfit_opts, opt)
         estimate_names = set(res.estimates.keys())
         self.assertEqual(estimate_names, set(['test-estimate',
                                               'test-estimate.robust', 'test-estimate.Robust',

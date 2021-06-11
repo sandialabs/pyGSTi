@@ -1,5 +1,5 @@
 """
-RB circuit sampling functions
+Random circuit sampling functions.
 """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -10,19 +10,16 @@ RB circuit sampling functions
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from . import compilers as _cmpl
-from ..objects import circuit as _cir
-from ..objects import label as _lbl
-from ..tools import symplectic as _symp
-from .. import construction as _cnst
-from .. import objects as _objs
-from .. import io as _io
-from .. import tools as _tools
-from ..tools import group as _rbobjs
-
-import numpy as _np
 import copy as _copy
 import itertools as _itertools
+
+import numpy as _np
+
+from . import compilers as _cmpl
+from ..circuits import circuit as _cir
+from ..baseobjs import label as _lbl
+from ..tools import group as _rbobjs
+from ..tools import symplectic as _symp
 
 
 def find_all_sets_of_compatible_two_q_gates(edgelist, n, gatename='Gcnot', aslabel=False):
@@ -1963,7 +1960,8 @@ def create_simultaneous_direct_rb_experiment(pspec, depths, circuits_per_length,
     return experiment_dict
 
 
-def create_clifford_rb_circuit(pspec, length, qubit_labels=None, randomizeout=False, citerations=20, compilerargs=[]):
+def create_clifford_rb_circuit(pspec, length, qubit_labels=None, randomizeout=False, citerations=20, compilerargs=[],
+                               interleaved_circuit=None):
     """
     Generates a "Clifford randomized benchmarking" (CRB) circuit.
 
@@ -2066,6 +2064,10 @@ def create_clifford_rb_circuit(pspec, length, qubit_labels=None, randomizeout=Fa
         # Keeps track of the current composite Clifford
         s_composite, p_composite = _symp.compose_cliffords(s_composite, p_composite, s, p)
         full_circuit.append_circuit_inplace(circuit)
+        if interleaved_circuit is not None:
+            s, p = _symp.symplectic_rep_of_clifford_circuit(interleaved_circuit, pspec=pspec)
+            s_composite, p_composite = _symp.compose_cliffords(s_composite, p_composite, s, p)
+            full_circuit.append_circuit_inplace(interleaved_circuit)
 
     # Find the symplectic rep of the inverse clifford
     s_inverse, p_inverse = _symp.inverse_clifford(s_composite, p_composite)
@@ -2561,9 +2563,9 @@ def sample_one_q_generalized_rb_circuit(m, group_or_model, inverse=True, random_
             random_string = [group.labels[i] for i in rndm_indices]
 
     if not random_pauli:
-        return _objs.Circuit(random_string)
+        return _cir.Circuit(random_string)
     if random_pauli:
-        return _objs.Circuit(random_string), bitflip
+        return _cir.Circuit(random_string), bitflip
 
 
 def create_random_germ(pspec, depths, interacting_qs_density, qubit_labels):
@@ -2743,7 +2745,7 @@ def create_random_germ(pspec, depths, interacting_qs_density, qubit_labels):
 def create_random_germpower_circuits(pspec, depths, interacting_qs_density, qubit_labels, fixed_versus_depth=False):
 
     #import numpy as _np
-    #from pygsti.objects import circuit as _cir
+    #from pygsti.circuits import circuit as _cir
 
     """
     <TODO summary>

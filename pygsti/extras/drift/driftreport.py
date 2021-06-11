@@ -8,30 +8,18 @@
 #***************************************************************************************************
 """ Drift reporting and plotting functions """
 
-import time as _time
-import numpy as _np
-import itertools as _itertools
 import collections as _collections
-import warnings as _warnings
-import os as _os
 
-from ... import _version
-from ...objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from ...objects import Circuit as _Circuit
-from ...objects import DataComparator as _DataComparator
-from ...report import workspace as _ws
-from ...report import workspaceplots as _wp
-from ...report import table as _reporttable
-from ...report import figure as _reportfigure
-from ...report import merge_helpers as _merge
-from ...report import autotitle as _autotitle
-from ...report import colormaps as _cmaps
-from ...tools import timed_block as _timed_block
+import numpy as _np
+import plotly.graph_objs as go
 
 from . import signal as _sig
-from . import stabilityanalyzer as _sa
+from ...circuits import Circuit as _Circuit
+from ...report import colormaps as _cmaps
+from ...report import figure as _reportfigure
+from ...report import table as _reporttable
+from ...report import workspace as _ws
 
-import plotly.graph_objs as go
 #import seaborn as _sns
 
 #We don't want to import seaborn just for a colorscale, so pulled this matplotlib source (derived from _cm.py):

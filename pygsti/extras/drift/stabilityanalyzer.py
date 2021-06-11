@@ -8,16 +8,16 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from . import signal as _sig
-from . import probtrajectory as _ptraj
-
-from ... import objects as _obj
-from ...construction import datasetconstruction as _dsconst
-
-import numpy as _np
 import copy as _copy
 import itertools as _itertools
 import warnings as _warnings
+
+import numpy as _np
+
+from . import probtrajectory as _ptraj
+from . import signal as _sig
+from ... import datasets as _datasets
+from ...construction import datasetconstruction as _dsconst
 
 
 def compute_auto_tests(shape, ids=False):
@@ -316,9 +316,9 @@ class StabilityAnalyzer(object):
             analyzes to be implemented.
 
         """
-        assert(isinstance(ds, _obj.dataset.DataSet)), "The input data must be a pyGSTi DataSet!"
+        assert(isinstance(ds, _datasets.DataSet)), "The input data must be a pyGSTi DataSet!"
         tempds = ds.copy_nonstatic()  # Copy so that we can edit the dataset.
-        multids = _obj.MultiDataSet()  # This is where the formatted data is recorded
+        multids = _datasets.MultiDataSet()  # This is where the formatted data is recorded
 
         # We need the data to have the same number of total counts per-time for all the circuits.
         assert(tempds.has_constant_totalcounts_pertime), "Data must contain" \

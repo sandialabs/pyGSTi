@@ -10,29 +10,17 @@ ModelTest Protocol objects
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import time as _time
-import os as _os
-import numpy as _np
-import pickle as _pickle
 import collections as _collections
-import warnings as _warnings
-import scipy.optimize as _spo
-from scipy.stats import chi2 as _chi2
 
-from . import protocol as _proto
-from .. import objects as _objs
-from .. import algorithms as _alg
-from .. import construction as _construction
-from .. import io as _io
-from .. import tools as _tools
-
+from pygsti.baseobjs.profiler import DummyProfiler as _DummyProfiler
+from pygsti.objectivefns.objectivefns import ModelDatasetCircuitsStore as _ModelDatasetCircuitStore
 from pygsti.protocols.estimate import Estimate as _Estimate
-from ..objects import wildcardbudget as _wild
-from ..objects.profiler import DummyProfiler as _DummyProfiler
-from ..objects import objectivefns as _objfns
-from ..objects.circuitlist import CircuitList as _CircuitList
-from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
-from ..objects.objectivefns import ModelDatasetCircuitsStore as _ModelDatasetCircuitStore
+from . import protocol as _proto
+from .. import baseobjs as _baseobjs
+from .. import models as _models
+from ..objectivefns import objectivefns as _objfns
+from ..circuits.circuitlist import CircuitList as _CircuitList
+from ..baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 
 
 class ModelTest(_proto.Protocol):
@@ -112,7 +100,8 @@ class ModelTest(_proto.Protocol):
 
         if set_trivial_gauge_group:
             model_to_test = model_to_test.copy()
-            model_to_test.default_gauge_group = _objs.TrivialGaugeGroup(model_to_test.dim)  # so no gauge opt is done
+            model_to_test.default_gauge_group = _models.gaugegroup.TrivialGaugeGroup(model_to_test.state_space)
+            # ==  no gauge opt
 
         super().__init__(name)
         self.model_to_test = model_to_test
@@ -128,6 +117,7 @@ class ModelTest(_proto.Protocol):
         self.auxfile_types['target_model'] = 'pickle'
         self.auxfile_types['gaugeopt_suite'] = 'pickle'  # TODO - better later? - json?
         self.auxfile_types['gaugeopt_target'] = 'pickle'  # TODO - better later? - json?
+        self.auxfile_types['badfit_options'] = 'pickle'  # SS: Had issues using json, unclear what was not serializable
         self.auxfile_types['objfn_builders'] = 'pickle'
 
         #Advanced options that could be changed by users who know what they're doing
@@ -174,11 +164,11 @@ class ModelTest(_proto.Protocol):
         #Create profiler
         profile = self.profile
         if profile == 0: profiler = _DummyProfiler()
-        elif profile == 1: profiler = _objs.Profiler(comm, False)
-        elif profile == 2: profiler = _objs.Profiler(comm, True)
+        elif profile == 1: profiler = _baseobjs.Profiler(comm, False)
+        elif profile == 2: profiler = _baseobjs.Profiler(comm, True)
         else: raise ValueError("Invalid value for 'profile' argument (%s)" % profile)
 
-        printer = _objs.VerbosityPrinter.create_printer(self.verbosity, comm)
+        printer = _baseobjs.VerbosityPrinter.create_printer(self.verbosity, comm)
         resource_alloc = _ResourceAllocation(comm, memlimit, profiler, distribute_method='default')
 
         try:  # take lists if available
@@ -208,7 +198,7 @@ class ModelTest(_proto.Protocol):
         parameters['raw_objective_values'] = objfn_vals
         parameters['model_test_values'] = chi2k_distributed_vals
         parameters['final_objfn_builder'] = self.objfn_builders[-1]
-        parameters['final_objfn_store'] = mdc_store
+        parameters['final_mdc_store'] = mdc_store
         parameters['profiler'] = profiler
 
         from .gst import _add_gaugeopt_and_badfit
@@ -220,6 +210,6 @@ class ModelTest(_proto.Protocol):
         if target_model is not None:
             models['target'] = target_model
         ret.add_estimate(_Estimate(ret, models, parameters), estimate_key=self.name)
-        return _add_gaugeopt_and_badfit(ret, self.name, mdc_store, target_model, self.gaugeopt_suite,
+        return _add_gaugeopt_and_badfit(ret, self.name, target_model, self.gaugeopt_suite,
                                         self.gaugeopt_target, self.unreliable_ops, self.badfit_options,
-                                        self.objfn_builders[-1], None, resource_alloc, printer)
+                                        None, resource_alloc, printer)

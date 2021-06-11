@@ -10,20 +10,20 @@ Utility functions operating on operation matrices
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import collections as _collections
+import warnings as _warnings
+
 import numpy as _np
 import scipy.linalg as _spl
 import scipy.sparse as _sps
 import scipy.sparse.linalg as _spsl
-import warnings as _warnings
-import collections as _collections
 
-from . import jamiolkowski as _jam
-from . import matrixtools as _mt
-from . import lindbladtools as _lt
 from . import basistools as _bt
-from ..objects.basis import Basis as _Basis, ExplicitBasis as _ExplicitBasis, DirectSumBasis as _DirectSumBasis
-from ..objects.label import Label as _Label
-
+from . import jamiolkowski as _jam
+from . import lindbladtools as _lt
+from . import matrixtools as _mt
+from ..baseobjs.basis import Basis as _Basis, ExplicitBasis as _ExplicitBasis, DirectSumBasis as _DirectSumBasis
+from ..baseobjs.label import Label as _Label
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 
@@ -1214,7 +1214,7 @@ def spam_error_generator(spamvec, target_spamvec, mx_basis, typ="logGTi"):
     return _spl.logm(errgen)
 
 
-def error_generator(gate, target_op, mx_basis, typ="logG-logT"):
+def error_generator(gate, target_op, mx_basis, typ="logG-logT", logG_weight=None):
     """
     Construct the error generator from a gate and its target.
 
@@ -1242,6 +1242,13 @@ def error_generator(gate, target_op, mx_basis, typ="logG-logT"):
         - "logTiG" : errgen = log( dot(inv(target_op), gate) )
         - "logGTi" : errgen = log( dot(gate,inv(target_op)) )
 
+    logG_weight: float or None (default)
+        Regularization weight for logG-logT penalty of approximate logG.
+        If None, the default weight in :func:`approximate_matrix_log` is used.
+        Note that this will result in a logG close to logT, but G may not exactly equal exp(logG).
+        If self-consistency with func:`operation_from_error_generator` is desired,
+        consider testing lower (or zero) regularization weight.
+
     Returns
     -------
     errgen : ndarray
@@ -1254,7 +1261,11 @@ def error_generator(gate, target_op, mx_basis, typ="logG-logT"):
             logT = _mt.unitary_superoperator_matrix_log(target_op, mx_basis)
         except AssertionError:  # if not unitary, fall back to just taking the real log
             logT = _mt.real_matrix_log(target_op, "raise", TOL)  # make a fuss if this can't be done
-        logG = _mt.approximate_matrix_log(gate, logT)
+
+        if logG_weight is not None:
+            logG = _mt.approximate_matrix_log(gate, logT, target_weight=logG_weight)
+        else:
+            logG = _mt.approximate_matrix_log(gate, logT)
 
         # Both logG and logT *should* be real, so we just take the difference.
         if _np.linalg.norm(_np.imag(logG)) < TOL and \
@@ -1273,7 +1284,7 @@ def error_generator(gate, target_op, mx_basis, typ="logG-logT"):
             errgen = _mt.near_identity_matrix_log(_np.dot(target_op_inv, gate), TOL)
         except AssertionError:  # not near the identity, fall back to the real log
             _warnings.warn(("Near-identity matrix log failed; falling back "
-                            "to approximate log for logTiG error generator"))
+                            "to real matrix log for logTiG error generator"))
             errgen = _mt.real_matrix_log(_np.dot(target_op_inv, gate), "warn", TOL)
 
         if _np.linalg.norm(errgen.imag) > TOL:
@@ -1287,7 +1298,7 @@ def error_generator(gate, target_op, mx_basis, typ="logG-logT"):
             errgen = _mt.near_identity_matrix_log(_np.dot(gate, target_op_inv), TOL)
         except AssertionError as e:  # not near the identity, fall back to the real log
             _warnings.warn(("Near-identity matrix log failed; falling back "
-                            "to approximate log for logGTi error generator:\n%s") % str(e))
+                            "to real matrix log for logGTi error generator:\n%s") % str(e))
             errgen = _mt.real_matrix_log(_np.dot(gate, target_op_inv), "warn", TOL)
 
         if _np.linalg.norm(errgen.imag) > TOL:
@@ -1309,11 +1320,11 @@ def error_generator(gate, target_op, mx_basis, typ="logG-logT"):
     return _np.real(errgen)
 
 
-def operation_from_error_generator(error_gen, target_op, typ="logG-logT"):
+def operation_from_error_generator(error_gen, target_op, mx_basis, typ="logG-logT"):
     """
     Construct a gate from an error generator and a target gate.
 
-    Inverts the computation fone in :func:`error_generator` and
+    Inverts the computation done in :func:`error_generator` and
     returns the value of the gate given by
     gate = target_op * exp(error_gen).
 
@@ -1325,18 +1336,34 @@ def operation_from_error_generator(error_gen, target_op, typ="logG-logT"):
     target_op : ndarray
         The target operation matrix
 
-    typ : {"logG-logT", "logTiG"}
-        The type of error generator to compute.  Allowed values are:
+    mx_basis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The source and destination basis, respectively.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
 
-        - "logG-logT" : errgen = log(gate) - log(target_op)
-        - "logTiG" : errgen = log( dot(inv(target_op), gate) )
+    typ : {"logG-logT", "logG-logT-quick", "logTiG", "logGTi"}
+        The type of error generator to invert.  Allowed values are:
+
+        - "logG-logT" : gate = exp( errgen + log(target_op) ) using internal logm
+        - "logG-logT-quick" : gate = exp( errgen + log(target_op) ) using SciPy logm
+        - "logTiG" : gate = dot( target_op, exp(errgen) )
+        - "logGTi" : gate = dot( exp(errgen), target_op )
 
     Returns
     -------
     ndarray
         The operation matrix.
     """
+    TOL = 1e-8
+
     if typ == "logG-logT":
+        try:
+            logT = _mt.unitary_superoperator_matrix_log(target_op, mx_basis)
+        except AssertionError:
+            logT = _mt.real_matrix_log(target_op, "raise", TOL)
+
+        return _spl.expm(error_gen + logT)
+    elif typ == "logG-logT-quick":
         return _spl.expm(error_gen + _spl.logm(target_op))
     elif typ == "logTiG":
         return _np.dot(target_op, _spl.expm(error_gen))
@@ -2349,6 +2376,119 @@ def lindblad_terms_to_projections(lindblad_term_dict, basis, other_mode="all"):
     return hamProjs, otherProjs, ham_basis, other_basis
 
 
+def lindblad_param_labels(ham_basis, other_basis, param_mode="cptp", other_mode="all", dim=None):
+    """
+    Generate human-readable labels for the Lindblad parameters.
+
+    Computes labels corresponding to the parameters obtained via calls to
+    :function:`lindblad_errorgen_projections` and then :function:`lindblad_projections_to_paramvals`.
+    The arguments to this function must match those given to the above (where they overlap).
+
+    Parameters
+    ----------
+    ham_basis : {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
+        The basis used to construct the Hamiltonian-type lindblad error
+        Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt), list of numpy arrays, or a custom basis object.
+
+    other_basis : {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
+        The basis used to construct the Stochastic-type lindblad error
+        Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt), list of numpy arrays, or a custom basis object.
+
+    param_mode : {"unconstrained", "cptp", "depol", "reldepol"}
+        Describes how values in `ham_projs` and `otherProj` relate to the
+        returned parameter values.  Allowed values are:
+        `"unconstrained"` (projs are independent unconstrained parameters),
+        `"cptp"` (independent parameters but constrained so map is CPTP),
+        `"reldepol"` (all non-Ham. diagonal projs take the *same* value),
+        `"depol"` (same as `"reldepol"` but projs must be *positive*)
+
+    other_mode : {"diagonal", "diag_affine", "all"}
+        Which non-Hamiltonian Lindblad error projections `other_projs` includes.
+        Allowed values are: `"diagonal"` (only the diagonal Stochastic),
+        `"diag_affine"` (diagonal + affine generators), and `"all"`.
+
+    dim : int, optional
+        The dimension of the error generator matrix, used if the bases
+        are given as strings.
+
+    Returns
+    -------
+    param_labels : list
+        A list of strings that describe each parameter.
+    """
+
+    #Get a list of the labels in corresspondence with the specified basis elements.
+    if isinstance(ham_basis, _Basis):
+        hamBasisLbls = ham_basis.labels
+    elif isinstance(ham_basis, str):
+        assert(dim is not None), "Must specify `dim` argument when bases are given as strings!"
+        hamBasisLbls = _bt.basis_element_labels(ham_basis, dim)
+    elif ham_basis is None:
+        hamBasisLbls = []
+    else:
+        raise ValueError("`ham_basis` must be a Basis object or a string!")
+
+    if isinstance(other_basis, _Basis):
+        otherBasisLbls = other_basis.labels
+    elif isinstance(other_basis, str):
+        assert(dim is not None), "Must specify `dim` argument when bases are given as strings!"
+        otherBasisLbls = _bt.basis_element_labels(other_basis, dim)
+    elif other_basis is None:
+        otherBasisLbls = []
+    else:
+        raise ValueError("`other_basis` must be a Basis object or a string!")
+
+    labels = ["%s Hamiltonian error coefficient" % lbl for lbl in hamBasisLbls[1:]]
+    if len(otherBasisLbls) > 0:
+        if other_mode == "diagonal":
+            if param_mode in ("depol", "reldepol"):
+                if param_mode == "depol":
+                    labels.append("sqrt(common stochastic error coefficient for depolarization)")
+                else:  # "reldepol" -- no sqrt since not necessarily positive
+                    labels.append("common stochastic error coefficient for depolarization")
+
+            elif param_mode == "cptp":  # otherParams is a 1D vector of the sqrts of diagonal els
+                labels.extend(["sqrt(%s stochastic coefficient)" % lbl for lbl in otherBasisLbls[1:]])
+            else:  # "unconstrained": otherParams is a 1D vector of the real diagonal els of other_projs
+                labels.extend(["%s stochastic coefficient" % lbl for lbl in otherBasisLbls[1:]])
+
+        elif other_mode == "diag_affine":
+            if param_mode in ("depol", "reldepol"):  # otherParams is a single depol value + unconstrained affine coeffs
+                if param_mode == "depol":
+                    labels.append("sqrt(common stochastic error coefficient for depolarization)")
+                else:  # "reldepol" -- no sqrt
+                    labels.append("common stochastic error coefficient for depolarization")
+                labels.extend(["%s affine coefficient" % lbl for lbl in otherBasisLbls[1:]])
+
+            elif param_mode == "cptp":  # Note: does not constrained affine coeffs to CPTP
+                labels.extend(["sqrt(%s stochastic coefficient)" % lbl for lbl in otherBasisLbls[1:]])
+                labels.extend(["%s affine coefficient" % lbl for lbl in otherBasisLbls[1:]])
+
+            else:  # param_mode == "unconstrained": otherParams is a 1D vector of the real diagonal els of other_projs
+                labels.extend(["%s stochastic coefficient" % lbl for lbl in otherBasisLbls[1:]])
+                labels.extend(["%s affine coefficient" % lbl for lbl in otherBasisLbls[1:]])
+
+        else:  # other_mode == "all"
+            assert(param_mode != "depol"), "`depol` is not supported when `other_mode == 'all'`"
+
+            if param_mode == "cptp":  # otherParams mx stores Cholesky decomp
+                for i, ilbl in enumerate(otherBasisLbls[1:]):
+                    for j, jlbl in enumerate(otherBasisLbls[1:]):
+                        if i == j: labels.append("%s diagonal element of non-H coeff Cholesky decomp" % ilbl)
+                        elif j < i: labels.append("Re[(%s,%s) element of non-H coeff Cholesky decomp]" % (ilbl, jlbl))
+                        else: labels.append("Im[(%s,%s) element of non-H coeff Cholesky decomp]" % (ilbl, jlbl))
+
+            else:  # param_mode == "unconstrained": otherParams mx stores other_projs (hermitian) directly
+                for i, ilbl in enumerate(otherBasisLbls[1:]):
+                    for j, jlbl in enumerate(otherBasisLbls[1:]):
+                        if i == j: labels.append("%s diagonal element of non-H coeff matrix" % ilbl)
+                        elif j < i: labels.append("Re[(%s,%s) element of non-H coeff matrix]" % (ilbl, jlbl))
+                        else: labels.append("Im[(%s,%s) element of non-H coeff matrix]" % (ilbl, jlbl))
+    return labels
+
+
 def lindblad_projections_to_paramvals(ham_projs, other_projs, param_mode="cptp",
                                       other_mode="all", truncate=True):
     """
@@ -2396,7 +2536,7 @@ def lindblad_projections_to_paramvals(ham_projs, other_projs, param_mode="cptp",
 
     Returns
     -------
-    numpy.ndarray
+    param_vals : numpy.ndarray
         A 1D array of real parameter values consisting of d-1 Hamiltonian
         values followed by either (d-1)^2, 2*(d-1), or just d-1 non-Hamiltonian
         values for `other_mode` equal to `"all"`, `"diag_affine"`, or
@@ -2978,7 +3118,8 @@ def rotation_gate_mx(r, mx_basis="gm"):
 
 def project_model(model, target_model,
                   projectiontypes=('H', 'S', 'H+S', 'LND'),
-                  gen_type="logG-logT"):
+                  gen_type="logG-logT",
+                  logG_weight=None):
     """
     Construct a new model(s) by projecting the error generator of `model` onto some sub-space then reconstructing.
 
@@ -2990,7 +3131,7 @@ def project_model(model, target_model,
     target_model : Model
         The set of target (ideal) gates.
 
-    projectiontypes : tuple of {'H','S','H+S','LND','LNDCP'}
+    projectiontypes : tuple of {'H','S','H+S','LND','LNDF'}
         Which projections to use.  The length of this tuple gives the
         number of `Model` objects returned.  Allowed values are:
 
@@ -3000,11 +3141,13 @@ def project_model(model, target_model,
         - 'LND' = errgen projected to a normal (CPTP) Lindbladian
         - 'LNDF' = errgen projected to an unrestricted (full) Lindbladian
 
-    gen_type : {"logG-logT", "logTiG"}
-        The type of error generator to compute.  Allowed values are:
+    gen_type : {"logG-logT", "logTiG", "logGTi"}
+        The type of error generator to compute.
+        For more details, see func:`error_generator`.
 
-        - "logG-logT" : errgen = log(gate) - log(target_op)
-        - "logTiG" : errgen = log( dot(inv(target_op), gate) )
+    logG_weight: float or None (default)
+        Regularization weight for approximate logG in logG-logT generator.
+        For more details, see func:`error_generator`.
 
     Returns
     -------
@@ -3042,7 +3185,7 @@ def project_model(model, target_model,
 
     errgens = [error_generator(model.operations[gl],
                                target_model.operations[gl],
-                               target_model.basis, gen_type)
+                               target_model.basis, gen_type, logG_weight)
                for gl in opLabels]
 
     for gl, errgen in zip(opLabels, errgens):
@@ -3076,22 +3219,22 @@ def project_model(model, target_model,
 
         if 'H' in projectiontypes:
             gsDict['H'].operations[gl] = operation_from_error_generator(
-                ham_error_gen, targetOp, gen_type)
+                ham_error_gen, targetOp, basis, gen_type)
             NpDict['H'] += len(hamProj)
 
         if 'S' in projectiontypes:
             gsDict['S'].operations[gl] = operation_from_error_generator(
-                sto_error_gen, targetOp, gen_type)
+                sto_error_gen, targetOp, basis, gen_type)
             NpDict['S'] += len(stoProj)
 
         if 'H+S' in projectiontypes:
             gsDict['H+S'].operations[gl] = operation_from_error_generator(
-                ham_error_gen + sto_error_gen, targetOp, gen_type)
+                ham_error_gen + sto_error_gen, targetOp, basis, gen_type)
             NpDict['H+S'] += len(hamProj) + len(stoProj)
 
         if 'LNDF' in projectiontypes:
             gsDict['LNDF'].operations[gl] = operation_from_error_generator(
-                lnd_error_gen, targetOp, gen_type)
+                lnd_error_gen, targetOp, basis, gen_type)
             NpDict['LNDF'] += HProj.size + OProj.size
 
         if 'LND' in projectiontypes:
@@ -3106,7 +3249,7 @@ def project_model(model, target_model,
             lnd_error_gen_cp = _bt.change_basis(lnd_error_gen_cp, "std", basis)
 
             gsDict['LND'].operations[gl] = operation_from_error_generator(
-                lnd_error_gen_cp, targetOp, gen_type)
+                lnd_error_gen_cp, targetOp, basis, gen_type)
             NpDict['LND'] += HProj.size + OProj.size
 
         #Removed attempt to contract H+S to CPTP by removing positive stochastic projections,
@@ -3418,8 +3561,8 @@ def project_to_target_eigenspace(model, target_model, eps=1e-6):
         #Essentially, we want to replace the eigenvalues of `tgt_gate`
         # (and *only* the eigenvalues) with those of `gate`.  This is what
         # a "best gate gauge transform does" (by definition)
-        gate_mx = gate.to_dense()
-        Ugauge = compute_best_case_gauge_transform(gate_mx, tgt_gate.to_dense())
+        gate_mx = gate.to_dense(on_space='minimal')
+        Ugauge = compute_best_case_gauge_transform(gate_mx, tgt_gate.to_dense(on_space='minimal'))
         Ugauge_inv = _np.linalg.inv(Ugauge)
 
         epgate = _np.dot(Ugauge, _np.dot(gate_mx, Ugauge_inv))
@@ -3473,38 +3616,35 @@ def is_valid_lindblad_paramtype(typ):
     -------
     bool
     """
-    try:
-        baseTyp, _ = split_lindblad_paramtype(typ)
-    except ValueError:
-        return False  # if can't even split `typ`
-    return baseTyp in ("CPTP", "H+S", "S", "H+S+A", "S+A", "H+D", "D", "H+D+A", "D+A",
-                       "GLND", "H+s", "s", "H+s+A", "s+A", "H+d", "d", "H+d+A", "d+A", "H")
+    return typ in ("CPTP", "H+S", "S", "H+S+A", "S+A", "H+D", "D", "H+D+A", "D+A",
+                   "GLND", "H+s", "s", "H+s+A", "s+A", "H+d", "d", "H+d+A", "d+A", "H")
 
 
-def split_lindblad_paramtype(typ):
-    """
-    Splits a Lindblad-gate parameteriation type into a base-type (e.g. "H+S") and an evolution-type string.
-
-    Parameters
-    ----------
-    typ : str
-        The parameterization type, e.g. "H+S terms".
-
-    Returns
-    -------
-    base_type : str
-        The "base-parameterization" part of `typ`.
-    evotype : str
-        The evolution type corresponding to `typ`.
-    """
-    bTyp = typ.split()[0]  # "base" type
-    evostr = " ".join(typ.split()[1:])
-
-    if evostr == "": evotype = "densitymx"
-    elif evostr == "terms": evotype = "svterm"
-    elif evostr == "clifford terms": evotype = "cterm"
-    else: raise ValueError("Unrecognized evotype in `typ`=%s" % typ)
-    return bTyp, evotype
+#REMOVE
+#def split_lindblad_paramtype(typ):
+#    """
+#    Splits a Lindblad-gate parameteriation type into a base-type (e.g. "H+S") and an evolution-type string.
+#
+#    Parameters
+#    ----------
+#    typ : str
+#        The parameterization type, e.g. "H+S terms".
+#
+#    Returns
+#    -------
+#    base_type : str
+#        The "base-parameterization" part of `typ`.
+#    evotype : str
+#        The evolution type corresponding to `typ`.
+#    """
+#    bTyp = typ.split()[0]  # "base" type
+#    evostr = " ".join(typ.split()[1:])
+#
+#    if evostr == "": evotype = "densitymx"
+#    elif evostr == "terms": evotype = "svterm"
+#    elif evostr == "clifford terms": evotype = "cterm"
+#    else: raise ValueError("Unrecognized evotype in `typ`=%s" % typ)
+#    return bTyp, evotype
 
 
 def effect_label_to_outcome(povm_and_effect_lbl):

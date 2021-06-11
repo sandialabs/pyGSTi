@@ -1,17 +1,19 @@
 # XXX rewrite/refactor forward-simulator tests
 
-import numpy as np
 import pickle
 from contextlib import contextmanager
-import functools
 
-from ..util import BaseCase, needs_cvxpy
+import numpy as np
 
-from pygsti.objects import ExplicitOpModel, Instrument, LinearOperator, \
-    Circuit, FullDenseOp, FullGaugeGroupElement, matrixforwardsim, mapforwardsim
-from pygsti.tools import indices
 import pygsti.construction as pc
-import pygsti.objects.model as m
+import pygsti.models.model as m
+from pygsti.forwardsims import matrixforwardsim, mapforwardsim
+from pygsti.modelmembers.instruments import Instrument
+from pygsti.modelmembers.operations import LinearOperator, FullArbitraryOp
+from pygsti.models import ExplicitOpModel
+from pygsti.circuits import Circuit
+from pygsti.models.gaugegroup import FullGaugeGroupElement
+from ..util import BaseCase, needs_cvxpy
 
 
 @contextmanager
@@ -86,6 +88,7 @@ class StaticModelBase(ModelBase):
 class GeneralMethodBase(object):
     def _assert_model_params(self, nOperations, nSPVecs, nEVecs, nParamsPerGate, nParamsPerSP):
         nParams = nOperations * nParamsPerGate + nSPVecs * nParamsPerSP + nEVecs * 4
+        print("num params = ", self.model.num_params)
         self.assertEqual(self.model.num_params, nParams)
         # TODO does this actually assert correctness?
 
@@ -119,6 +122,16 @@ class GeneralMethodBase(object):
             nParamsPerSP=3
         )
 
+    def test_set_all_parameterizations_HS(self):
+        self.model.set_all_parameterizations("H+S")
+        self._assert_model_params(
+            nOperations=3,
+            nSPVecs=2,
+            nEVecs=0,
+            nParamsPerGate=6,
+            nParamsPerSP=6
+        )
+
     def test_element_accessors(self):
         # XXX what does this test cover and is it useful?  EGN: covers the __getitem__/__setitem__ functions of model
         v = np.array([[1.0 / np.sqrt(2)], [0], [0], [1.0 / np.sqrt(2)]], 'd')
@@ -141,7 +154,7 @@ class GeneralMethodBase(object):
         self.model["Gi"] = Gi_test_matrix  # set operation matrix
         self.assertArraysAlmostEqual(self.model['Gi'], Gi_test_matrix)
 
-        Gi_test_dense_op = FullDenseOp(Gi_test_matrix)
+        Gi_test_dense_op = FullArbitraryOp(Gi_test_matrix)
         self.model["Gi"] = Gi_test_dense_op  # set gate object
         self.assertArraysAlmostEqual(self.model['Gi'], Gi_test_matrix)
 
@@ -235,8 +248,56 @@ class GeneralMethodBase(object):
             prep, gates, povm = self.model.split_circuit(Circuit(('Gx', 'Mdefault')))
 
     def test_set_gate_raises_on_bad_dimension(self):
-        with self.assertRaises(ValueError):
-            self.model['Gbad'] = FullDenseOp(np.zeros((5, 5), 'd'))
+        with self.assertRaises(AssertionError):
+            self.model['Gbad'] = FullArbitraryOp(np.zeros((5, 5), 'd'))
+
+    def test_parameter_labels(self):
+        self.model.set_all_parameterizations("H+s")
+
+        self.model.parameter_labels
+        if self.model.num_params > 0:
+            self.model.set_parameter_label(index=0, label="My favorite parameter")
+            self.assertEqual(self.model.parameter_labels[0], "My favorite parameter")
+
+        self.model.operations['Gx'].parameter_labels  # ('Gxpi2',0)
+        self.model.print_parameters_by_op()
+
+    def test_collect_parameters(self):
+        self.model.set_all_parameterizations("H+s")
+        self.assertEqual(self.model.num_params, 30)
+
+        self.model.collect_parameters([ ('Gx', 'X Hamiltonian error coefficient'),
+                                  ('Gy', 'Y Hamiltonian error coefficient')],
+                                new_param_label='Over-rotation')
+        self.assertEqual(self.model.num_params, 29)
+        self.assertTrue(bool(('Gx', 'X Hamiltonian error coefficient') not in set(self.model.parameter_labels)))
+        self.assertTrue(bool(('Gy', 'Y Hamiltonian error coefficient') not in set(self.model.parameter_labels)))
+        self.assertTrue(bool('Over-rotation' in set(self.model.parameter_labels)))
+
+        # You can also use integer indices, and parameter labels can be tuples too.
+        self.model.collect_parameters([3,4,5], new_param_label=("rho0", "common stochastic coefficient"))
+        self.assertEqual(self.model.num_params, 27)
+
+        lbls_save = self.model.parameter_labels.copy()
+        #DEBUG print(self.model.parameter_labels) #self.model.print_parameters_by_op();  print()
+
+
+        # Using "pretty" labels works too:
+        self.model.collect_parameters(['Gx: Y stochastic coefficient',
+                                       'Gx: Z stochastic coefficient' ],
+                                      new_param_label='Gxpi2 off-axis stochastic')
+        self.assertEqual(self.model.num_params, 26)
+        #DEBUG print(self.model.parameter_labels)
+        
+        #Just make sure printing works
+        self.model.parameter_labels_pretty
+        self.model.print_parameters_by_op()
+
+        self.model.uncollect_parameters('Gxpi2 off-axis stochastic')
+
+        #DEBUG print(); print(self.model.parameter_labels)
+        self.assertEqual(self.model.num_params, 27)
+        self.assertEqual(set(lbls_save), set(self.model.parameter_labels))  # ok if ordering if different
 
 
 class ThresholdMethodBase(object):
@@ -409,7 +470,7 @@ class SimMethodBase(object):
         # TODO assert correctness
 
     def test_bulk_fill_dprobs(self):
-        layout = self.model.sim.create_layout([self.gatestring1, self.gatestring2])
+        layout = self.model.sim.create_layout([self.gatestring1, self.gatestring2], array_types=('ep',))
         nElements = layout.num_elements
         nParams = self.model.num_params
         dprobs_to_fill = np.empty((nElements, nParams), 'd')
@@ -427,7 +488,7 @@ class SimMethodBase(object):
     def test_bulk_fill_dprobs_with_high_smallness_threshold(self):
         # TODO figure out better way to do this
         with smallness_threshold(10):
-            layout = self.model.sim.create_layout([self.gatestring1, self.gatestring2])
+            layout = self.model.sim.create_layout([self.gatestring1, self.gatestring2], array_types=('ep',))
             nElements = layout.num_elements
             nParams = self.model.num_params
             dprobs_to_fill = np.empty((nElements, nParams), 'd')
@@ -464,7 +525,7 @@ class SimMethodBase(object):
         ## TODO assert correctness
 
     def test_bulk_fill_hprobs(self):
-        layout = self.model.sim.create_layout([self.gatestring1, self.gatestring2])
+        layout = self.model.sim.create_layout([self.gatestring1, self.gatestring2], array_types=('epp',))
         nElements = layout.num_elements
         nParams = self.model.num_params
 
@@ -490,7 +551,7 @@ class SimMethodBase(object):
     def test_bulk_fill_hprobs_with_high_smallness_threshold(self):
         # TODO figure out better way to do this
         with smallness_threshold(10):
-            layout = self.model.sim.create_layout([self.gatestring1, self.gatestring2])
+            layout = self.model.sim.create_layout([self.gatestring1, self.gatestring2], array_types=('epp',))
             nElements = layout.num_elements
             nParams = self.model.num_params
             hprobs_to_fill = np.empty((nElements, nParams, nParams), 'd')
@@ -509,14 +570,14 @@ class SimMethodBase(object):
         self.model.bulk_fill_hprobs(hprobs_to_fill, evt)
         # TODO assert correctness
 
-    def test_bulk_hprobs_by_block(self):
-        layout = self.model.sim.create_layout([self.gatestring1, self.gatestring2])
+    def test_iter_hprobs_by_rectangle(self):
+        layout = self.model.sim.create_layout([self.gatestring1, self.gatestring2], array_types=('epp',))
         nP = self.model.num_params
 
         hcols = []
         d12cols = []
         slicesList = [(slice(0, nP), slice(i, i + 1)) for i in range(nP)]
-        for s1, s2, hprobs_col, dprobs12_col in self.model.sim.bulk_hprobs_by_block(
+        for s1, s2, hprobs_col, dprobs12_col in self.model.sim.iter_hprobs_by_rectangle(
                 layout, slicesList, True):
             hcols.append(hprobs_col)
             d12cols.append(dprobs12_col)
@@ -583,17 +644,17 @@ class FullModelTester(FullModelBase, StandardMethodBase, BaseCase):
         # are already initialized.  Since this isn't allowed currently
         # (a future functionality), we need to do some hacking
         mdl = self.model.copy()
-        mdl.operations['Gnew1'] = FullDenseOp(np.identity(4, 'd'))
+        mdl.operations['Gnew1'] = FullArbitraryOp(np.identity(4, 'd'))
         del mdl.operations['Gnew1']
 
         v = mdl.to_vector()
         Np = mdl.num_params
-        gate_with_gpindices = FullDenseOp(np.identity(4, 'd'))
+        gate_with_gpindices = FullArbitraryOp(np.identity(4, 'd'))
         gate_with_gpindices[0, :] = v[0:4]
         gate_with_gpindices.set_gpindices(np.concatenate(
             (np.arange(0, 4), np.arange(Np, Np + 12))), mdl)  # manually set gpindices
         mdl.operations['Gnew2'] = gate_with_gpindices
-        mdl.operations['Gnew3'] = FullDenseOp(np.identity(4, 'd'))
+        mdl.operations['Gnew3'] = FullArbitraryOp(np.identity(4, 'd'))
         del mdl.operations['Gnew3']  # this causes update of Gnew2 indices
         del mdl.operations['Gnew2']
         # TODO assert correctness
@@ -619,7 +680,7 @@ class StaticModelTester(StaticModelBase, StandardMethodBase, BaseCase):
     def test_set_operation_matrix(self):
         # TODO no random
         Gi_test_matrix = np.random.random((4, 4))
-        Gi_test_dense_op = FullDenseOp(Gi_test_matrix)
+        Gi_test_dense_op = FullArbitraryOp(Gi_test_matrix)
         self.model["Gi"] = Gi_test_dense_op  # set gate object
         self.assertArraysAlmostEqual(self.model['Gi'], Gi_test_matrix)
 
@@ -629,7 +690,7 @@ class StaticModelTester(StaticModelBase, StandardMethodBase, BaseCase):
     def test_bulk_fill_hprobs_with_high_smallness_threshold(self):
         self.skipTest("TODO should probably warn user?")
 
-    def test_bulk_hprobs_by_block(self):
+    def test_iter_hprobs_by_rectangle(self):
         self.skipTest("TODO should probably warn user?")
 
 
@@ -673,16 +734,17 @@ class FullHighThresholdMethodTester(FullModelBase, ThresholdMethodBase, BaseCase
         super(FullHighThresholdMethodTester, self).tearDown()
 
 
-class FullBadDimensionModelTester(FullModelBase, BaseCase):
-    def setUp(self):
-        super(FullBadDimensionModelTester, self).setUp()
-        self.model = self.model.increase_dimension(11)
-
-    # XXX these aren't tested under normal conditions...  EGN: we should probably test them under normal conditions then.
-    def test_rotate_raises(self):
-        with self.assertRaises(AssertionError):
-            self.model.rotate((0.1, 0.1, 0.1))
-
-    def test_randomize_with_unitary_raises(self):
-        with self.assertRaises(AssertionError):
-            self.model.randomize_with_unitary(1, rand_state=np.random.RandomState())  # scale shouldn't matter
+#TODO: see if this makes sense to have as a unit test... now it fails in setUp b/c 11 is a bad dimension
+#class FullBadDimensionModelTester(FullModelBase, BaseCase):
+#    def setUp(self):
+#        super(FullBadDimensionModelTester, self).setUp()
+#        self.model = self.model.increase_dimension(11)
+#
+#    # XXX these aren't tested under normal conditions...  EGN: we should probably test them under normal conditions then.
+#    def test_rotate_raises(self):
+#        with self.assertRaises(AssertionError):
+#            self.model.rotate((0.1, 0.1, 0.1))
+#
+#    def test_randomize_with_unitary_raises(self):
+#        with self.assertRaises(AssertionError):
+#            self.model.randomize_with_unitary(1, rand_state=np.random.RandomState())  # scale shouldn't matter

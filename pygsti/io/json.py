@@ -12,8 +12,8 @@ Defines json package interface capable of encoding pyGSTi objects
 
 import json as _json
 
-from .jsoncodec import encode_obj
 from .jsoncodec import decode_obj
+from .jsoncodec import encode_obj
 
 
 class PygstiJSONEncoder(_json.JSONEncoder):

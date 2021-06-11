@@ -1,12 +1,8 @@
-import numpy as np
-
+from pygsti import io
+from pygsti.io import writers
 from . import IOBase, with_temp_path
 # from ..reference_gen import io_gen
 from .references import generator as io_gen
-
-from pygsti import io
-import pygsti.construction as pc
-from pygsti.io import writers
 
 
 class WriteDatasetTester(IOBase):

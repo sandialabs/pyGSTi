@@ -14,8 +14,6 @@ I*X(pi/2), I*Y(pi/2), X(pi/2)*I, Y(pi/2)*I, and CPHASE.
 #***************************************************************************************************
 
 from collections import OrderedDict
-from pygsti.construction import circuitconstruction as _strc
-from pygsti.construction import modelconstruction as _setc
 
 from pygsti.modelpacks._modelpack import GSTModelPack, RBModelPack
 
@@ -1155,7 +1153,7 @@ class _Module(GSTModelPack, RBModelPack):
             (15, 6)],
     }
 
-    def _target_model(self, sslbls):
+    def _target_model(self, sslbls, evotype):
         return self._build_explicit_target_model(
             sslbls,
             [(), ('Gxpi2', 1), ('Gypi2', 1), ('Gxpi2', 0), ('Gypi2', 0), (('Gxpi2', 0), ('Gxpi2', 1)),
@@ -1164,7 +1162,7 @@ class _Module(GSTModelPack, RBModelPack):
              'X(pi/2,{0}):X(pi/2,{1})', 'Y(pi/2,{0}):Y(pi/2,{1})',
              'X(pi/2,{0}):Y(pi/2,{1})', 'Y(pi/2,{0}):X(pi/2,{1})'],
             effect_labels=['00', '01', '10', '11'],
-            effect_expressions=['0', '1', '2', '3'])
+            effect_expressions=['0', '1', '2', '3'], evotype=evotype)
 
 
 import sys

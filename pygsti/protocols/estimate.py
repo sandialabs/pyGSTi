@@ -10,19 +10,21 @@ Defines the Estimate class.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as _np
 import collections as _collections
-import warnings as _warnings
 import copy as _copy
+import warnings as _warnings
 
-from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+import numpy as _np
+
 from pygsti import tools as _tools
-from ..objects import objectivefns as _objfns
-from ..objects.confidenceregionfactory import ConfidenceRegionFactory as _ConfidenceRegionFactory
-from ..objects.circuit import Circuit as _Circuit
-from ..objects.explicitmodel import ExplicitOpModel as _ExplicitOpModel
-from ..objects.circuitlist import CircuitList as _CircuitList
-from ..objects.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
+from pygsti.objectivefns.objectivefns import CachedObjectiveFunction as _CachedObjectiveFunction
+from pygsti.objectivefns.objectivefns import ModelDatasetCircuitsStore as _ModelDatasetCircuitStore
+from pygsti.protocols.confidenceregionfactory import ConfidenceRegionFactory as _ConfidenceRegionFactory
+from ..models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
+from ..objectivefns import objectivefns as _objfns
+from ..circuits.circuitlist import CircuitList as _CircuitList
+from ..circuits.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
+from ..baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 
 #Class for holding confidence region factory keys
 CRFkey = _collections.namedtuple('CRFkey', ['model', 'circuit_list'])
@@ -537,33 +539,61 @@ class Estimate(object):
             else:
                 return p.dataset
 
-    def misfit_sigma(self, comm=None):
+    def final_mdc_store(self, resource_alloc=None, array_types=('e', 'ep')):
+        """ TODO: docstring """
+        #Note: default array_types include 'ep' so, e.g. robust-stat re-optimization is possible.
+        if self.parameters.get('final_mdc_store', None) is None:
+            assert(self.parent is not None), "Estimate must be linked with parent before objectivefn can be created"
+            circuit_list = self.parent.circuit_lists['final']
+            mdl = self.models['final iteration estimate']
+            ds = self.parent.dataset
+            self.parameters['final_mdc_store'] = _ModelDatasetCircuitStore(mdl, ds, circuit_list, resource_alloc,
+                                                                           array_types)
+        return self.parameters['final_mdc_store']
+
+    def final_objective_fn(self, resource_alloc=None):
+        """ TODO: docstring """
+        if self.parameters.get('final_objfn', None) is None:
+            mdc_store = self.final_mdc_store(resource_alloc)
+            #objfn_builder = self.parameters['final_objfn_builder']
+            objfn_builder = self.parameters.get('final_objfn_builder', _objfns.PoissonPicDeltaLogLFunction.builder())
+            objfn = objfn_builder.build_from_store(mdc_store)
+            self.parameters['final_objfn'] = objfn
+        return self.parameters['final_objfn']
+
+    def final_objective_fn_cache(self, resource_alloc=None):
+        """ TODO: docstring """
+        if self.parameters.get('final_objfn_cache', None) is None:
+            objfn = self.final_objective_fn(resource_alloc)
+            self.parameters['final_objfn_cache'] = _CachedObjectiveFunction(objfn)
+        return self.parameters['final_objfn_cache']
+
+    def misfit_sigma(self, resource_alloc=None):
         """
         Returns the number of standard deviations (sigma) of model violation.
 
         Parameters
         ----------
-        use_accurate_np : bool, optional
-            Whether to use the more accurate number of *non-gauge* parameters
-            (but more expensive to compute), or just use the total number of
-            model parameters.
-
-        comm : mpi4py.MPI.Comm, optional
-            When not None, an MPI communicator for distributing the computation
-            across multiple processors.
+        resource_alloc : ResourceAllocation, optional
+            What resources are available for this computation.
 
         Returns
         -------
         float
         """
         p = self.parent
-
-        mdl = self.models['final iteration estimate']  # FUTURE: overrideable?
-        circuit_list = p.circuit_lists['final']  # FUTURE: overrideable?
         ds = self.create_effective_dataset()
-        objfn_builder = self.parameters.get('final_objfn_builder', _objfns.PoissonPicDeltaLogLFunction.builder())
-        objfn = objfn_builder.build(mdl, ds, circuit_list, {'comm': comm}, verbosity=0)
-        fitqty = objfn.chi2k_distributed_qty(objfn.fn())
+        mdl = self.models['final iteration estimate']
+        circuit_list = p.circuit_lists['final']
+
+        if ds == self.parent.dataset:  # no effective ds => we can use cached quantities
+            objfn_cache = self.final_objective_fn_cache(resource_alloc)  # creates cache if needed
+            fitqty = objfn_cache.chi2k_distributed_fn
+        else:
+            objfn_builder = self.parameters.get('final_objfn_builder', _objfns.PoissonPicDeltaLogLFunction.builder())
+            objfn = objfn_builder.build(mdl, ds, circuit_list, resource_alloc, verbosity=0)
+            fitqty = objfn.chi2k_distributed_qty(objfn.fn())
+
         aliases = circuit_list.op_label_aliases if isinstance(circuit_list, _CircuitList) else None
 
         ds_allstrs = _tools.apply_aliases_to_circuits(circuit_list, aliases)
@@ -665,6 +695,14 @@ class Estimate(object):
                         goparams_dict['comm'] = None
                     new_goparams.append(goparams_dict)
                 to_pickle['goparameters'][lbl] = new_goparams
+
+        # don't pickle MDC objective function or store objects b/c they might contain
+        #  comm objects (in their layouts)
+        to_pickle['parameters'] = self.parameters.copy()  # shallow copy
+        if 'final_mdc_store' in self.parameters:
+            del to_pickle['parameters']['final_mdc_store']
+        if 'final_objfn' in self.parameters:
+            del to_pickle['parameters']['final_objfn']
 
         # don't pickle parent (will create circular reference)
         del to_pickle['parent']

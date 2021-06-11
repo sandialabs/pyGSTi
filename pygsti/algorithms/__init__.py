@@ -13,11 +13,12 @@ LinearOperator Set Tomography Algorithms Python Package
 #Import the most important/useful routines of each module into
 # the package namespace
 
+from .compilers import compile_clifford, compile_stabilizer_state, compile_stabilizer_measurement, compile_cnot_circuit
+from .contract import *
 from .core import *
-from .grammatrix import *
-from .germselection import *
 from .fiducialpairreduction import *
 from .fiducialselection import *
 from .gaugeopt import *
-from .contract import *
-from .compilers import compile_clifford, compile_stabilizer_state, compile_stabilizer_measurement, compile_cnot_circuit
+from .germselection import *
+from .grammatrix import *
+from .mirroring import *

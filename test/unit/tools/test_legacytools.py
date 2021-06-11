@@ -1,6 +1,5 @@
-from ..util import BaseCase
-
 from pygsti.tools import legacytools
+from ..util import BaseCase
 
 
 class LegacyTestCase(BaseCase):
@@ -10,5 +9,5 @@ class LegacyTestCase(BaseCase):
         def oldFn(x):
             return x
 
-        oldFn(5)
-        # TODO assert correctness
+        with self.assertWarns(UserWarning):
+            oldFn(5)

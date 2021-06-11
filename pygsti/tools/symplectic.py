@@ -1,20 +1,24 @@
 """
 Symplectic representation utility functions
 """
-#***************************************************************************************************
+import numpy as _np
+
+from . import matrixmod2 as _mtx
+# ***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
-#***************************************************************************************************
-from ..objects.label import Label as _Label
-from ..objects.smartcache import smart_cached
-from . import matrixmod2 as _mtx
+# ***************************************************************************************************
+from ..baseobjs.label import Label as _Label
+from ..baseobjs.smartcache import smart_cached
 
-import numpy as _np
-import copy as _copy
+try:
+    from . import fastcalc as _fastcalc
+except ImportError:
+    _fastcalc = None
 
 
 def symplectic_form(n, convention='standard'):
@@ -420,7 +424,7 @@ def find_premultipled_pauli(s, p_implemented, p_target, qubit_labels=None):
     return pauli_layer
 
 
-def compose_cliffords(s1, p1, s2, p2):
+def compose_cliffords(s1, p1, s2, p2, do_checks=True):
     """
     Multiplies two cliffords in the symplectic representation.
 
@@ -443,6 +447,10 @@ def compose_cliffords(s1, p1, s2, p2):
     p2 : numpy array
         The 'phase vector' over the integers mod 4 representing the second Clifford
 
+    do_checks : bool
+        If True (default), check inputs and output are valid cliffords.
+        If False, these checks are skipped (for speed)
+
     Returns
     -------
     s : numpy array
@@ -451,8 +459,9 @@ def compose_cliffords(s1, p1, s2, p2):
         The 'phase vector' over the integers mod 4 representing the compsite Clifford
     """
     assert(_np.shape(s1) == _np.shape(s2)), "Input must be Cliffords acting on the same number of qubits!"
-    assert(check_valid_clifford(s1, p1)), "The first matrix-vector pair is not a valid Clifford!"
-    assert(check_valid_clifford(s2, p2)), "The second matrix-vector pair is not a valid Clifford!"
+    if do_checks:
+        assert(check_valid_clifford(s1, p1)), "The first matrix-vector pair is not a valid Clifford!"
+        assert(check_valid_clifford(s2, p2)), "The second matrix-vector pair is not a valid Clifford!"
 
     n = _np.shape(s1)[0] // 2
 
@@ -472,7 +481,8 @@ def compose_cliffords(s1, p1, s2, p2):
     p = p1 + vec1 + vec2 - vec3
     p = p % 4
 
-    assert(check_valid_clifford(s, p)), "The output is not a valid Clifford! Function has failed."
+    if do_checks:
+        assert(check_valid_clifford(s, p)), "The output is not a valid Clifford! Function has failed."
 
     return s, p
 
@@ -1063,8 +1073,11 @@ def symplectic_rep_of_clifford_circuit(circuit, srep_dict=None, pspec=None):
     n = circuit.num_lines
     depth = circuit.depth
 
+    if srep_dict is None:
+        srep_dict = {}
+    srep_dict.update(compute_internal_gate_symplectic_representations())
     if pspec is not None:
-        srep_dict = pspec.models['clifford'].compute_clifford_symplectic_reps()
+        srep_dict.update(pspec.models['clifford'].compute_clifford_symplectic_reps())
 
     # The initial action of the circuit before any layers are applied.
     s = _np.identity(2 * n, int)
@@ -1075,13 +1088,18 @@ def symplectic_rep_of_clifford_circuit(circuit, srep_dict=None, pspec=None):
         # not returned in the layer. Note that the layer contains each gate only once.
         layer = circuit.layer_label(i)
         # future : update so that we don't use this function, because it slower than necessary (possibly much slower).
-        layer_s, layer_p = symplectic_rep_of_clifford_layer(layer, n, circuit.line_labels, srep_dict)
-        s, p = compose_cliffords(s, p, layer_s, layer_p)
+        layer_s, layer_p = symplectic_rep_of_clifford_layer(layer, n, circuit.line_labels, srep_dict,
+                                                            add_internal_sreps=False)
+        #s, p = compose_cliffords(s, p, layer_s, layer_p, do_checks=False)
+        if _fastcalc is not None:
+            s, p = _fastcalc.fast_compose_cliffords(s, p, layer_s, layer_p)
+        else:
+            s, p = compose_cliffords(s, p, layer_s, layer_p, do_checks=False)
 
     return s, p
 
 
-def symplectic_rep_of_clifford_layer(layer, n=None, q_labels=None, srep_dict=None):
+def symplectic_rep_of_clifford_layer(layer, n=None, q_labels=None, srep_dict=None, add_internal_sreps=True):
     """
     Constructs the symplectic representation of the n-qubit Clifford implemented by a single quantum circuit layer.
 
@@ -1113,6 +1131,10 @@ def symplectic_rep_of_clifford_layer(layer, n=None, q_labels=None, srep_dict=Non
         standard gates it is not necesary to specify the symplectic represenation
         for those gates.
 
+    add_internal_sreps : bool, optional
+        If True, the symplectic reps for internal gates are calculated and added to srep_dict.
+        For speed, calculate these reps once, store them in srep_dict, and set this to False.
+
     Returns
     -------
     s : numpy array
@@ -1123,8 +1145,10 @@ def symplectic_rep_of_clifford_layer(layer, n=None, q_labels=None, srep_dict=Non
         circuit layer
     """
     # This method uses a brute-force matrix construction. Future: perhaps this should be updated.
-    sreps = compute_internal_gate_symplectic_representations()
-    if srep_dict is not None: sreps.update(srep_dict)
+    if srep_dict is None:
+        srep_dict = {}
+    if add_internal_sreps is True or len(srep_dict) == 0:
+        srep_dict.update(compute_internal_gate_symplectic_representations())
 
     if q_labels is None:
         assert(n is not None), "The number of qubits must be specified if `q_labels` is None!"
@@ -1142,7 +1166,7 @@ def symplectic_rep_of_clifford_layer(layer, n=None, q_labels=None, srep_dict=Non
         layer = _Label(layer)
 
     for sub_lbl in layer.components:
-        matrix, phase = sreps[sub_lbl.name]
+        matrix, phase = srep_dict[sub_lbl.name]
         nforgate = sub_lbl.number_of_qubits
         sub_lbl_qubits = sub_lbl.qubits if (sub_lbl.qubits is not None) else q_labels
         for ind1, qlabel1 in enumerate(sub_lbl_qubits):

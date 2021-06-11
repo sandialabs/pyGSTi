@@ -10,9 +10,9 @@ The TreeNode class
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import copy as _copy
 import json as _json
 import pathlib as _pathlib
-import copy as _copy
 
 from .. import io as _io
 

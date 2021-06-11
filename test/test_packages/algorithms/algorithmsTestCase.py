@@ -1,5 +1,6 @@
 from pygsti.modelpacks.legacy import std1Q_XYI as std
-from ..testutils         import BaseTestCase, compare_files, temp_files
+from ..testutils         import BaseTestCase
+
 
 class AlgorithmTestCase(BaseTestCase):
     def setUp(self):

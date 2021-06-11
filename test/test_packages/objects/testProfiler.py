@@ -1,14 +1,10 @@
-import unittest
-import pygsti
-import numpy as np
 import pickle
 import time
+import unittest
 
-from pygsti.modelpacks.legacy import std1Q_XYI
-import pygsti.construction as pc
-from pygsti.objects import profiler
+from pygsti.baseobjs import profiler
+from ..testutils import BaseTestCase
 
-from ..testutils import BaseTestCase, compare_files, temp_files
 
 class ProfilerTestCase(BaseTestCase):
 

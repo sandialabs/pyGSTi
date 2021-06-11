@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-import multiprocessing, subprocess, sys
+import multiprocessing
+import subprocess
+import sys
+
 
 def main(args):
     assert len(args) > 0

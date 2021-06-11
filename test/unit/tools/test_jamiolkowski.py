@@ -1,15 +1,13 @@
-import os
 import numpy as np
 
-from ..util import BaseCase
-
-
-from pygsti.modelpacks.legacy import std1Q_XYI as std1Q
-from pygsti.construction.modelconstruction import _create_operation
 import pygsti.tools.basistools as bt
-from pygsti.objects import ExplicitOpModel, Basis
-
+from pygsti.construction.modelconstruction import _basis_create_operation
+from pygsti.modelpacks.legacy import std1Q_XYI as std1Q
+from pygsti.models import ExplicitOpModel
+from pygsti.baseobjs import statespace
+from pygsti.baseobjs import Basis
 from pygsti.tools import jamiolkowski as j
+from ..util import BaseCase
 
 
 class JamiolkowskiBasisTester(BaseCase):
@@ -19,6 +17,7 @@ class JamiolkowskiBasisTester(BaseCase):
 
         # density matrix == 3x3 block diagonal matrix: a 2x2 block followed by a 1x1 block
         self.stateSpaceDims = [(4,), (1,)]
+        self.stateSpaceUDims = [(2,), (1,)]
         self.std = Basis.cast('std', 9)
         self.gm = Basis.cast('gm', 9)
         self.stdSmall = Basis.cast('std', [4, 1])
@@ -27,11 +26,11 @@ class JamiolkowskiBasisTester(BaseCase):
         #labels which give a tensor product interp. for the states within each density matrix block
         self.stateSpaceLabels = [('Qhappy',), ('Lsad',)]
 
+        # Adjust for deprecation of _create_operation
+        self.sslbls = statespace.ExplicitStateSpace(self.stateSpaceLabels, self.stateSpaceUDims)
+
         #Build a test gate   -- old # X(pi,Qhappy)*LX(pi,0,2)
-        self.testGate = _create_operation(self.stateSpaceDims,
-                                        self.stateSpaceLabels,
-                                        "LX(pi,0,2)",
-                                        "std")
+        self.testGate = _basis_create_operation(self.sslbls, "LX(pi,0,2)", self.stdSmall)
         self.testGateGM_mx = bt.change_basis(self.testGate, self.stdSmall, self.gmSmall)
         self.expTestGate_mx = bt.flexible_change_basis(self.testGate, self.stdSmall, self.std)
         self.expTestGateGM_mx = bt.change_basis(self.expTestGate_mx, self.std, self.gm)
@@ -42,7 +41,7 @@ class JamiolkowskiBasisTester(BaseCase):
                                   choi_mx_basis=cmb)
         Jmx2 = j.jamiolkowski_iso(self.testGateGM_mx, op_mx_basis=self.gmSmall,
                                   choi_mx_basis=cmb)
-        print("Jmx1.shape = ", Jmx1.shape)
+        #print("Jmx1.shape = ", Jmx1.shape)
 
         #Make sure these yield the same trace == 1 matrix
         self.assertArraysAlmostEqual(Jmx1, Jmx2)
@@ -51,7 +50,7 @@ class JamiolkowskiBasisTester(BaseCase):
         #Op on expanded gate in std and gm bases
         JmxExp1 = j.jamiolkowski_iso(self.expTestGate_mx, op_mx_basis=self.std, choi_mx_basis=cmb)
         JmxExp2 = j.jamiolkowski_iso(self.expTestGateGM_mx, op_mx_basis=self.gm, choi_mx_basis=cmb)
-        print("JmxExp1.shape = ", JmxExp1.shape)
+        #print("JmxExp1.shape = ", JmxExp1.shape)
 
         #Make sure these are the same as operating on the contracted basis
         self.assertArraysAlmostEqual(Jmx1, JmxExp1)
@@ -96,7 +95,7 @@ class JamiolkowskiOpsTester(BaseCase):
         self.assertAlmostEqual(sumOfNeg, 0.0)
 
         sumOfNegWt = j.sum_of_negative_choi_eigenvalues(std1Q.target_model(), {'Gx': 1.0, 'Gy': 0.5})
-        # TODO assert correctness
+        self.assertAlmostEqual(sumOfNegWt, 0.0)
 
         sumsOfNeg = j.sums_of_negative_choi_eigenvalues(std1Q.target_model())
         self.assertArraysAlmostEqual(sumsOfNeg, np.zeros(3, 'd'))  # 3 gates in std.target_model()
@@ -105,11 +104,12 @@ class JamiolkowskiOpsTester(BaseCase):
         self.assertArraysAlmostEqual(magsOfNeg, np.zeros(12, 'd'))  # 3 gates * 4 evals each = 12
 
     def test_fast_jamiolkowski_iso(self):
+        choiStd = j.jamiolkowski_iso(self.mxStd, self.std, self.std)
         fastChoiStd = j.fast_jamiolkowski_iso_std(self.mxStd, self.std)
         fastChoiStd2 = j.fast_jamiolkowski_iso_std(self.mxGM, self.gm)
         fastChoiStd3 = j.fast_jamiolkowski_iso_std(self.mxPP, self.pp)
 
-        # TODO assert correctness
+        self.assertArraysAlmostEqual(choiStd, fastChoiStd) # Test against standard call
         self.assertArraysAlmostEqual(fastChoiStd, fastChoiStd2)
         self.assertArraysAlmostEqual(fastChoiStd, fastChoiStd3)
 
@@ -117,7 +117,6 @@ class JamiolkowskiOpsTester(BaseCase):
         fastGateGM = j.fast_jamiolkowski_iso_std_inv(fastChoiStd, self.gm)
         fastGatePP = j.fast_jamiolkowski_iso_std_inv(fastChoiStd, self.pp)
 
-        # TODO assert correctness
         self.assertArraysAlmostEqual(fastGateStd, self.mxStd)
         self.assertArraysAlmostEqual(fastGateGM, self.mxGM)
         self.assertArraysAlmostEqual(fastGatePP, self.mxPP)
@@ -135,7 +134,17 @@ class JamiolkowskiOpsTester(BaseCase):
         choiPP2 = j.jamiolkowski_iso(self.mxGM, self.gm, self.pp)
         choiPP3 = j.jamiolkowski_iso(self.mxPP, self.pp, self.pp)
 
-        # TODO assert correctness
+        # Reconstruct standard matrix: GS = sum_ij Jij (BSi x BSj^*)
+        mxReconstruct = np.zeros_like(self.mxStd)
+        M = mxReconstruct.shape[0]
+        dmDim = int(round(np.sqrt(self.mxStd.shape[0]))) # Will need to undo renormalization
+        Bs = self.std.elements
+        for i in range(M):
+            for k in range(M):
+                term = choiStd[i, k] * np.kron(Bs[i], np.conjugate(Bs[k]))
+                mxReconstruct += term * dmDim
+        self.assertArraysAlmostEqual(mxReconstruct, self.mxStd)
+
         self.assertArraysAlmostEqual(choiStd, choiStd2)
         self.assertArraysAlmostEqual(choiStd, choiStd3)
         self.assertArraysAlmostEqual(choiGM, choiGM2)
@@ -155,7 +164,6 @@ class JamiolkowskiOpsTester(BaseCase):
         gatePP2 = j.jamiolkowski_iso_inv(choiGM, self.gm, self.pp)
         gatePP3 = j.jamiolkowski_iso_inv(choiPP, self.pp, self.pp)
 
-        # TODO assert correctness
         self.assertArraysAlmostEqual(gateStd, self.mxStd)
         self.assertArraysAlmostEqual(gateStd2, self.mxStd)
         self.assertArraysAlmostEqual(gateStd3, self.mxStd)

@@ -1,13 +1,13 @@
-import unittest
 import collections
-import pickle
-import pygsti
-import numpy as np
-import warnings
 import os
-from pygsti.modelpacks.legacy import std1Q_XYI as std
+import pickle
+import unittest
 
+import numpy as np
+
+import pygsti
 from ..testutils import BaseTestCase, compare_files, temp_files, regenerate_references
+
 
 class TestDataSetMethods(BaseTestCase):
 
@@ -104,11 +104,11 @@ Gx^4 20 80
         self.assertEqual(ds[('Gx','Gy')][('1',)], 60)
 
         dataset_txt2 = \
-"""## Columns = 0 frequency, count total
+"""## Columns = 0 count, 1 count
 {} 0 100
-Gx 0.1 100
-GxGy 0.4 100
-Gx^4 0.2 100
+Gx 10 90
+GxGy 40 60
+Gx^4 20 80
 """
         with open(temp_files + "/TinyDataset2.txt","w") as output:
             output.write(dataset_txt2)
@@ -161,22 +161,22 @@ Gx^4 0.2 100
 
     def test_multi_dataset(self):
         multi_dataset_txt = \
-"""## Columns = DS0 0 count, DS0 1 count, DS1 0 frequency, DS1 count total
+"""## Columns = DS0 0 count, DS0 1 count, DS1 0 count, DS1 1 count
 {} 0 100 0 100
-Gx 10 90 0.1 100
-GxGy 40 60 0.4 100
-Gx^4 20 80 0.2 100
+Gx 10 90 10 90
+GxGy 40 60 40 60
+Gx^4 20 80 20 80
 """
         with open(temp_files + "/TinyMultiDataset.txt","w") as output:
             output.write(multi_dataset_txt)
         multiDS = pygsti.io.load_multidataset(temp_files + "/TinyMultiDataset.txt", cache=True)
 
         bad_multi_dataset_txt = \
-"""## Columns = DS0 0 count, DS0 1 count, DS1 0 frequency, DS1 count total
+"""## Columns = DS0 0 count, DS0 1 count, DS1 0 count, DS1 1 count
 {} 0 100 0 100
-FooBar 10 90 0.1 100
-GxGy 40 60 0.4 100
-Gx^4 20 80 0.2 100
+FooBar 10 90 10 90
+GxGy 40 60 40 60
+Gx^4 20 80 20 80
 """
         with open(temp_files + "/BadTinyMultiDataset.txt","w") as output:
             output.write(bad_multi_dataset_txt)

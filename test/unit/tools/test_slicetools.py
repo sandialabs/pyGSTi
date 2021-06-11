@@ -1,7 +1,7 @@
-from ..util import BaseCase
 import numpy as np
 
 from pygsti.tools.slicetools import *
+from ..util import BaseCase
 
 N = 100
 slices = []
@@ -21,16 +21,14 @@ class SliceToolsTester(BaseCase):
     def test_indices(self):
         for s in slices:
             indices(s)
-        indices(slice(10))
-        # TODO assert correctness
+        self.assertEqual(indices(slice(10)), list(range(10)))
 
     def test_intersect(self):
-        intersect(slice(None, 10, 1), slice(1, 10, 1))
-        intersect(slice(1, 10, 1), slice(None, 10, 1))
-        intersect(slice(1, None, 1), slice(1, 10, 1))
-        intersect(slice(1, 10, 1), slice(1, None, 1))
-        intersect(slice(10, -10, 1), slice(10, -10, 1))
-        # TODO assert correctness
+        self.assertEqual(intersect(slice(None, 10, 1), slice(1, 10, 1)), slice(1,10,1))
+        self.assertEqual(intersect(slice(1, 10, 1), slice(None, 10, 1)), slice(1,10,1))
+        self.assertEqual(intersect(slice(1, None, 1), slice(1, 10, 1)), slice(1,10,1))
+        self.assertEqual(intersect(slice(1, 10, 1), slice(1, None, 1)), slice(1,10,1))
+        self.assertEqual(intersect(slice(10, -10, 1), slice(10, -10, 1)), slice(10,10,1))
 
     def test_list_to_slice(self):
         self.assertEqual(list_to_slice([]), slice(0, 0))

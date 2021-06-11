@@ -1,9 +1,8 @@
 import numpy as np
 
-from ..util import BaseCase
-
+import pygsti.report.modelfunction as mf
 from pygsti.modelpacks.legacy import std1Q_XYI as std
-import pygsti.objects.modelfunction as mf
+from ..util import BaseCase
 
 
 class ModelFunctionBase(object):

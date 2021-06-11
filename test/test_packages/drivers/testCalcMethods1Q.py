@@ -14,10 +14,9 @@ from pygsti.modelpacks.legacy import std1Q_XY
 from pygsti.objects import Label as L, Circuit
 from pygsti.io import json
 
-import sys
 import os
 
-from ..testutils import BaseTestCase, compare_files, temp_files, regenerate_references
+from ..testutils import BaseTestCase, compare_files, regenerate_references
 
 #Mimics a function that used to be in pyGSTi, replaced with create_cloudnoise_model_from_hops_and_weights
 def build_XYCNOT_cloudnoise_model(nQubits, geometry="line", cnot_edges=None,
@@ -110,7 +109,7 @@ class CalcMethods1QTestCase(BaseTestCase):
             cls.redmod_germs, cls.redmod_maxLs)
 
         #RUN BELOW FOR DATAGEN (SAVE)
-        if regenerate_references():
+        if True or regenerate_references():
             redmod_ds = pygsti.construction.simulate_data(cls.mdl_redmod_datagen, expList, 1000, "round", seed=1234)
             redmod_ds.save(compare_files + "/calcMethods1Q_redmod.dataset")
 

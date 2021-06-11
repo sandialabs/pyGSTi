@@ -32,7 +32,7 @@ cimport cython
 #cdef extern from "Python.h":
 #    Py_UCS4* PyUnicode_4BYTE_DATA(PyObject* o)
 
-from ...objects import label as _lbl
+from ...baseobjs import label as _lbl
 
 
 #Use 64-bit integers
@@ -77,7 +77,7 @@ def parse_circuit(unicode code, bool create_subcircuits, bool integerize_sslbls)
         result.extend(lbls_list)
         #print "Labels = ",result
 
-    return result, labels, occurrence_id
+    return tuple(result), labels, occurrence_id
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
@@ -120,7 +120,8 @@ cdef get_next_lbls(unicode s, INT start, INT end, bool create_subcircuits, bool 
             to_exponentiate = _lbl.LabelTupTup( () )
         elif len(lbls_list) > 1:
             time = max([l.time for l in lbls_list])
-            to_exponentiate = _lbl.LabelTupTup(tuple(lbls_list), time) #create a layer label - a label of the labels within square brackets
+            to_exponentiate = _lbl.LabelTupTup(tuple(lbls_list)) if (time == 0.0) \
+                else _lbl.LabelTupTupWithTime(tuple(lbls_list), time)  # create a layer label - a label of the labels within square brackets
         else:
             to_exponentiate = lbls_list[0]
         return [to_exponentiate] * exponent, i, segment
@@ -226,8 +227,10 @@ cdef get_next_simple_lbl(unicode s, INT start, INT end, bool integerize_sslbls, 
     if len(args) == 0:
         if len(sslbls) == 0:
             return [_lbl.LabelStr(name, time)], i, segment
+        elif time == 0.0:
+            return [_lbl.LabelTup((name,) + tuple(sslbls))], i, segment
         else:
-            return [_lbl.LabelTup((name,) + tuple(sslbls), time)], i, segment
+            return [_lbl.LabelTupWithTime((name,) + tuple(sslbls), time)], i, segment
     else:
         return [_lbl.LabelTupWithArgs((name, 2 + len(args)) + tuple(args) + tuple(sslbls), time)], i, segment
     #return _Label(name,sslbls,time,args), i

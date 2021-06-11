@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
+import time
+
 from pygsti.report import Notebook
 
-import time
 
 def main():
     nb = Notebook()

@@ -1,13 +1,10 @@
 import unittest
-import pickle
-import pygsti
-import numpy as np
-import warnings
-import os
-import collections
 
-from ..testutils import BaseTestCase, compare_files, temp_files
+import numpy as np
+
+import pygsti
 from pygsti.construction import modelconstruction
+from ..testutils import BaseTestCase
 
 
 class TestGateSetConstructionMethods(BaseTestCase):

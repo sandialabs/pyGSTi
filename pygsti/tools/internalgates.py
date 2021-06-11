@@ -12,6 +12,7 @@ The standard unitaries and gate names, used internal compilers and short-hand mo
 
 import numpy as _np
 import scipy.linalg as _spl
+
 from . import optools as _gts
 from . import symplectic as _symp
 
@@ -161,10 +162,9 @@ def standard_gatename_unitaries():
     - Clifford Gates:
 
       - 'Gi' : the 1Q idle operation.
-      - 'Gxpi2','Gypi2','Gzpi2' : 1Q pi/2 rotations around X, Y and Z.
       - 'Gxpi','Gypi','Gzpi' : 1Q pi rotations around X, Y and Z.
       - 'Gxpi2','Gypi2','Gzpi2' : 1Q pi/2 rotations around X, Y and Z.
-      - 'Gxpi2','Gypi2','Gzpi2' : 1Q pi/2 rotations around X, Y and Z.
+      - 'Gxmpi2','Gympi2','Gzmpi2' : 1Q -pi/2 rotations around X, Y and Z.
       - 'Gh' : Hadamard.
       - 'Gp', 'Gpdag' : phase and inverse phase (an alternative notation/name for Gzpi and Gzmpi2).
       - 'Gci' where i = 0, 1, ..., 23 : the 24 1-qubit Cliffor gates (all the gates above are included as one of these).
@@ -173,6 +173,7 @@ def standard_gatename_unitaries():
     - Non-Clifford gates:
 
       - 'Gt', 'Gtdag' : the T and inverse T gates (T is a Z rotation by pi/4).
+      - 'Gzr' : a parameterized gate that is a Z rotation by an angle, where when the angle = pi then it equals Z.
 
     Mostly, pyGSTi does not assume that a gate with one of these names is indeed
     the unitary specified here. Instead, these names are intended as short-hand
@@ -254,6 +255,20 @@ def standard_gatename_unitaries():
                                        0., 0., 0., 1.], [0., 0., 1., 0.]], complex)
     std_unitaries['Gswap'] = _np.array([[1., 0., 0., 0.], [0., 0., 1., 0.], [
                                        0., 1., 0., 0.], [0., 0., 0., 1.]], complex)
+
+    def Gzr(theta):
+        if theta is None: return _np.array([[1., 0.], [0., 1.]], complex)
+        else: return _np.array([[1., 0.], [0., _np.exp(-1j * float(theta[0]))]])
+
+    std_unitaries['Gzr'] = Gzr
+
+    def Gczr(theta):
+        if theta is None: return _np.array([[1., 0., 0., 0.], [0., 1., 0., 0.],
+                                            [0., 0., 1., 0.], [0., 0., 0., 1.]], complex)
+        else: return _np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.],
+                                [0., 0., 0., _np.exp(-1j * float(theta[0]))]], complex)
+
+    std_unitaries['Gczr'] = Gczr
 
     return std_unitaries
 
@@ -374,7 +389,87 @@ def standard_gatenames_quil_conversions():
     return std_gatenames_to_quil
 
 
-def standard_gatenames_openqasm_conversions():
+def standard_gatenames_chp_conversions():
+    """
+    A dictionary converting the gates with standard names to CHP native operations.
+
+    See :function:`standard_gatename_unitaries`.
+
+    Note that the native operations are assumed to act on qubit 0 or qubits 0 and 1,
+    depending on whether it is a one-qubit or two-qubit operation. It is recommended
+    to use ComposedOp and EmbeddedOp to get compositions/different target qubits
+    for CHP operations.
+
+    Note that throughout pyGSTi the standard gatenames (e.g., 'Gh' for Hadamard)
+    are not enforced to correspond to the expected unitaries. So, if the user
+    as, say, defined 'Gh' to be something other than the Hadamard gate this
+    conversion dictionary will be incorrect.
+
+    Returns
+    -------
+    dict mapping strings to string
+    """
+    std_gatenames_to_chp = {}
+
+    # Native gates for CHP
+    std_gatenames_to_chp['h'] = ['h 0']
+    std_gatenames_to_chp['p'] = ['p 0']
+    std_gatenames_to_chp['c'] = ['c 0 1']
+    std_gatenames_to_chp['m'] = ['m 0']
+
+    # Cliffords
+    std_gatenames_to_chp['Gc0'] = []
+    std_gatenames_to_chp['Gc1'] = ['h 0', 'p 0', 'h 0', 'p 0']
+    std_gatenames_to_chp['Gc2'] = ['h 0', 'p 0']
+    std_gatenames_to_chp['Gc3'] = ['h 0', 'p 0', 'p 0', 'h 0']
+    std_gatenames_to_chp['Gc4'] = ['p 0', 'h 0', 'p 0', 'p 0']
+    std_gatenames_to_chp['Gc5'] = ['h 0', 'p 0', 'p 0', 'p 0']
+    std_gatenames_to_chp['Gc6'] = ['h 0', 'p 0', 'p 0', 'h 0', 'p 0', 'p 0']
+    std_gatenames_to_chp['Gc7'] = ['h 0', 'p 0', 'h 0', 'p 0', 'p 0', 'p 0']
+    std_gatenames_to_chp['Gc8'] = ['h 0', 'p 0', 'h 0', 'p 0', 'p 0', 'h 0']
+    std_gatenames_to_chp['Gc9'] = ['p 0', 'p 0']
+    std_gatenames_to_chp['Gc10'] = ['p 0', 'h 0']
+    std_gatenames_to_chp['Gc11'] = ['p 0', 'p 0', 'h 0', 'p 0']
+    std_gatenames_to_chp['Gc12'] = ['h 0']
+    std_gatenames_to_chp['Gc13'] = ['p 0', 'h 0', 'p 0']
+    std_gatenames_to_chp['Gc14'] = ['p 0']
+    std_gatenames_to_chp['Gc15'] = ['h 0', 'p 0', 'p 0']
+    std_gatenames_to_chp['Gc16'] = ['h 0', 'p 0', 'h 0']
+    std_gatenames_to_chp['Gc17'] = ['h 0', 'p 0', 'p 0', 'h 0', 'p 0']
+    std_gatenames_to_chp['Gc18'] = ['p 0', 'p 0', 'h 0', 'p 0', 'p 0']
+    std_gatenames_to_chp['Gc19'] = ['p 0', 'h 0', 'p 0', 'p 0', 'p 0']
+    std_gatenames_to_chp['Gc20'] = ['p 0', 'h 0', 'p 0', 'p 0', 'h 0']
+    std_gatenames_to_chp['Gc21'] = ['p 0', 'p 0', 'h 0']
+    std_gatenames_to_chp['Gc22'] = ['h 0', 'p 0', 'h 0', 'p 0', 'p 0']
+    std_gatenames_to_chp['Gc23'] = ['p 0', 'p 0', 'p 0']
+
+    std_gatenames_to_chp['Gcnot'] = ['c 0 1']
+    std_gatenames_to_chp['Gcphase'] = ['h 0', 'c 0 1', 'h 0']
+
+    # Standard names
+    std_gatenames_to_chp['Gi'] = []
+
+    std_gatenames_to_chp['Gxpi'] = ['h 0', 'p 0', 'p 0', 'h 0']
+    # Shorter Y compilation is possible, up to global phase: p, p, h, p, p, h = ZX = iY
+    std_gatenames_to_chp['Gypi'] = ['p 0', 'h 0', 'p 0', 'p 0', 'h 0', 'p 0', 'p 0', 'p 0']
+    std_gatenames_to_chp['Gzpi'] = ['p 0', 'p 0']
+
+    std_gatenames_to_chp['Gxpi2'] = ['h 0', 'p 0', 'h 0']
+    std_gatenames_to_chp['Gypi2'] = ['p 0', 'h 0', 'p 0', 'h 0', 'p 0', 'p 0', 'p 0']
+    std_gatenames_to_chp['Gzpi2'] = ['p 0']
+
+    std_gatenames_to_chp['Gxmpi2'] = ['h 0', 'p 0', 'p 0', 'p 0', 'h 0']
+    std_gatenames_to_chp['Gympi2'] = ['p 0', 'h 0', 'p 0', 'p 0', 'p 0', 'h 0', 'p 0', 'p 0', 'p 0']
+    std_gatenames_to_chp['Gzmpi2'] = ['p 0', 'p 0', 'p 0']
+
+    std_gatenames_to_chp['Gh'] = ['h 0']
+    std_gatenames_to_chp['Gp'] = ['p 0']
+    std_gatenames_to_chp['Gpdag'] = ['p 0', 'p 0', 'p 0']
+
+    return std_gatenames_to_chp
+
+
+def standard_gatenames_openqasm_conversions(version='u3'):
     """
     A dictionary converting the gates with standard names to the QASM names for these gates.
 
@@ -385,59 +480,145 @@ def standard_gatenames_openqasm_conversions():
     has, say, defined 'Gh' to be something other than the Hadamard gate this
     conversion dictionary will be incorrect.
 
+    Parameters
+    ----------
+    version : string, optional
+        Either 'u3' or 'x-sx-rz'. Specifies the naming convention for the QASM
+        gates. With 'u3', all single-qubit gates are specified in terms of the
+        'u3' gate, used by IBM and QisKit until ~2021 (see the qasm_u3 function).
+        With 'x-sx-rz', all single-gates are specified in terms of 'x' (an x pi
+        rotation), 'sx' (an x pi/2 rotation) and 'rz' (a parameterized rotation
+        around z by an angle theta).
+
     Returns
     -------
-    dict mapping strings to strings.
+    dict
+        mapping strings (representing pyGSTi standard gate names) to strings (
+        representing QASM gate names).
+
+    dict
+        mapping strings (representing pyGSTi standard gate names) to functions
+        that map the parameters of a pyGSTi gate to a string to be combined
+        with the QASM name to specify the specific gate, in QASM.
     """
-    std_gatenames_to_qasm = {}
-    std_gatenames_to_qasm['Gi'] = 'id'
-    std_gatenames_to_qasm['Gxpi2'] = 'u3(1.570796326794897, 4.71238898038469, 1.570796326794897)'  # [1, 3, 1] * pi/2
-    std_gatenames_to_qasm['Gxmpi2'] = 'u3(1.570796326794897, 1.570796326794897, 4.71238898038469)'  # [1, 1, 3] * pi/2
-    std_gatenames_to_qasm['Gxpi'] = 'x'
-    std_gatenames_to_qasm['Gzpi2'] = 'u3(0, 0, 1.570796326794897)'  # [0, 0, 1] * pi/2
-    std_gatenames_to_qasm['Gzmpi2'] = 'u3(0, 0, 4.71238898038469)'  # [0, 0, 3] * pi/2
-    std_gatenames_to_qasm['Gzpi'] = 'z'
-    std_gatenames_to_qasm['Gypi2'] = 'u3(1.570796326794897, 0, 0)'  # [1, 0, 0] * pi/2
-    std_gatenames_to_qasm['Gympi2'] = 'u3(1.570796326794897, 3.141592653589793, 3.141592653589793)'  # [1, 2, 2] * pi/2
-    std_gatenames_to_qasm['Gypi'] = 'y'
-    std_gatenames_to_qasm['Gp'] = 's'
-    std_gatenames_to_qasm['Gpdag'] = 'sdg'
-    std_gatenames_to_qasm['Gh'] = 'h'
-    std_gatenames_to_qasm['Gt'] = 't'
-    std_gatenames_to_qasm['Gtdag'] = 'tdg'
-    std_gatenames_to_qasm['Gcphase'] = 'cz'
-    std_gatenames_to_qasm['Gcnot'] = 'cx'
-    std_gatenames_to_qasm['Gswap'] = 'swap'
+    if version == 'u3':
+        std_gatenames_to_qasm = {}
+        std_gatenames_to_qasm['Gi'] = 'id'
+        std_gatenames_to_qasm['Gxpi2'] = 'u3(1.570796326794897, 4.71238898038469, 1.570796326794897)'  # [1, 3, 1]*pi/2
+        std_gatenames_to_qasm['Gxmpi2'] = 'u3(1.570796326794897, 1.570796326794897, 4.71238898038469)'  # [1, 1, 3]*pi/2
+        std_gatenames_to_qasm['Gxpi'] = 'x'
+        std_gatenames_to_qasm['Gzpi2'] = 'u3(0, 0, 1.570796326794897)'  # [0, 0, 1] * pi/2
+        std_gatenames_to_qasm['Gzmpi2'] = 'u3(0, 0, 4.71238898038469)'  # [0, 0, 3] * pi/2
+        std_gatenames_to_qasm['Gzpi'] = 'z'
+        std_gatenames_to_qasm['Gypi2'] = 'u3(1.570796326794897, 0, 0)'  # [1, 0, 0] * pi/2
+        std_gatenames_to_qasm['Gympi2'] = 'u3(1.570796326794897, 3.141592653589793, 3.141592653589793)'  # [1,2,2]*pi/2
+        std_gatenames_to_qasm['Gypi'] = 'y'
+        std_gatenames_to_qasm['Gp'] = 's'
+        std_gatenames_to_qasm['Gpdag'] = 'sdg'
+        std_gatenames_to_qasm['Gh'] = 'h'
+        std_gatenames_to_qasm['Gt'] = 't'
+        std_gatenames_to_qasm['Gtdag'] = 'tdg'
+        std_gatenames_to_qasm['Gcphase'] = 'cz'
+        std_gatenames_to_qasm['Gcnot'] = 'cx'
+        std_gatenames_to_qasm['Gswap'] = 'swap'
+        std_gatenames_to_qasm['Gc0'] = 'u3(0, 0, 0)'  # [0, 0, 0] * pi/2 (thi is Gi)
+        std_gatenames_to_qasm['Gc1'] = 'u3(1.570796326794897, 0, 1.570796326794897)'  # [1, 0, 1] * pi/2
+        std_gatenames_to_qasm['Gc2'] = 'u3(1.570796326794897, 1.570796326794897, 3.141592653589793)'  # [1, 1, 2] * pi/2
+        std_gatenames_to_qasm['Gc3'] = 'u3(3.141592653589793, 0, 3.141592653589793)'  # [2, 0, 2] * pi/2 (this is Gxpi)
+        std_gatenames_to_qasm['Gc4'] = 'u3(1.570796326794897, 3.141592653589793, 4.71238898038469)'  # [1, 2, 3] * pi/2
+        std_gatenames_to_qasm['Gc5'] = 'u3(1.570796326794897, 4.71238898038469, 3.141592653589793)'  # [1, 3, 2] * pi/2
+        std_gatenames_to_qasm['Gc6'] = 'u3(3.141592653589793, 0, 0)'  # [2, 0, 0] * pi/2 (this is Gypi)
+        std_gatenames_to_qasm['Gc7'] = 'u3(1.570796326794897, 3.141592653589793, 1.570796326794897)'  # [1, 2, 1] * pi/2
+        std_gatenames_to_qasm['Gc8'] = 'u3(1.570796326794897, 4.71238898038469, 0.)'  # [1, 3, 0] * pi/2
+        std_gatenames_to_qasm['Gc9'] = 'u3(0, 0, 3.141592653589793)'  # [0, 0, 2] * pi/2 (this is Gzpi)
+        std_gatenames_to_qasm['Gc10'] = 'u3(1.570796326794897, 0, 4.71238898038469)'  # [1, 0, 3] * pi/2
+        std_gatenames_to_qasm['Gc11'] = 'u3(1.570796326794897, 1.570796326794897, 0.)'  # [1, 1, 0] * pi/2
+        std_gatenames_to_qasm['Gc12'] = 'u3(1.570796326794897, 0., 3.141592653589793)'  # [1, 0, 2] * pi/2 (this is Gh)
+        # [1, 1, 3] * pi/2 (this is Gxmpi2 )
+        std_gatenames_to_qasm['Gc13'] = 'u3(1.570796326794897, 1.570796326794897, 4.71238898038469)'
+        std_gatenames_to_qasm['Gc14'] = 'u3(0, 0, 1.570796326794897)'  # [0, 0, 1] * pi/2 (this is Gzpi2 / Gp)
+        # [1, 2, 2] * pi/2 (the is Gympi2)
+        std_gatenames_to_qasm['Gc15'] = 'u3(1.570796326794897, 3.141592653589793, 3.141592653589793)'
+        # [1, 3, 1] * pi/2 (this is Gxpi2 )
+        std_gatenames_to_qasm['Gc16'] = 'u3(1.570796326794897, 4.71238898038469, 1.570796326794897)'
+        std_gatenames_to_qasm['Gc17'] = 'u3(3.141592653589793, 0, 1.570796326794897)'  # [2, 0, 1] * pi/2
+        std_gatenames_to_qasm['Gc18'] = 'u3(1.570796326794897, 3.141592653589793, 0.)'  # [1, 2, 0] * pi/2
+        std_gatenames_to_qasm['Gc19'] = 'u3(1.570796326794897, 4.71238898038469, 4.71238898038469)'  # [1, 3, 3] * pi/2
+        std_gatenames_to_qasm['Gc20'] = 'u3(3.141592653589793, 0, 4.71238898038469)'  # [2, 0, 3] * pi/2
+        std_gatenames_to_qasm['Gc21'] = 'u3(1.570796326794897, 0, 0)'  # [1, 0, 0] * pi/2 (this is Gypi2)
+        std_gatenames_to_qasm['Gc22'] = 'u3(1.570796326794897, 1.570796326794897, 1.570796326794897)'  # [1, 1, 1]*pi/2
+        std_gatenames_to_qasm['Gc23'] = 'u3(0, 0, 4.71238898038469)'  # [0, 0, 3] * pi/2 (this is Gzmpi2 / Gpdag)
 
-    std_gatenames_to_qasm['Gc0'] = 'u3(0, 0, 0)'  # [0, 0, 0] * pi/2 (thi is Gi)
-    std_gatenames_to_qasm['Gc1'] = 'u3(1.570796326794897, 0, 1.570796326794897)'  # [1, 0, 1] * pi/2
-    std_gatenames_to_qasm['Gc2'] = 'u3(1.570796326794897, 1.570796326794897, 3.141592653589793)'  # [1, 1, 2] * pi/2
-    std_gatenames_to_qasm['Gc3'] = 'u3(3.141592653589793, 0, 3.141592653589793)'  # [2, 0, 2] * pi/2 (this is Gxpi)
-    std_gatenames_to_qasm['Gc4'] = 'u3(1.570796326794897, 3.141592653589793, 4.71238898038469)'  # [1, 2, 3] * pi/2
-    std_gatenames_to_qasm['Gc5'] = 'u3(1.570796326794897, 4.71238898038469, 3.141592653589793)'  # [1, 3, 2] * pi/2
-    std_gatenames_to_qasm['Gc6'] = 'u3(3.141592653589793, 0, 0)'  # [2, 0, 0] * pi/2 (this is Gypi)
-    std_gatenames_to_qasm['Gc7'] = 'u3(1.570796326794897, 3.141592653589793, 1.570796326794897)'  # [1, 2, 1] * pi/2
-    std_gatenames_to_qasm['Gc8'] = 'u3(1.570796326794897, 4.71238898038469, 0.)'  # [1, 3, 0] * pi/2
-    std_gatenames_to_qasm['Gc9'] = 'u3(0, 0, 3.141592653589793)'  # [0, 0, 2] * pi/2 (this is Gzpi)
-    std_gatenames_to_qasm['Gc10'] = 'u3(1.570796326794897, 0, 4.71238898038469)'  # [1, 0, 3] * pi/2
-    std_gatenames_to_qasm['Gc11'] = 'u3(1.570796326794897, 1.570796326794897, 0.)'  # [1, 1, 0] * pi/2
-    std_gatenames_to_qasm['Gc12'] = 'u3(1.570796326794897, 0., 3.141592653589793)'  # [1, 0, 2] * pi/2 (this is Gh)
-    # [1, 1, 3] * pi/2 (this is Gxmpi2 )
-    std_gatenames_to_qasm['Gc13'] = 'u3(1.570796326794897, 1.570796326794897, 4.71238898038469)'
-    std_gatenames_to_qasm['Gc14'] = 'u3(0, 0, 1.570796326794897)'  # [0, 0, 1] * pi/2 (this is Gzpi2 / Gp)
-    # [1, 2, 2] * pi/2 (the is Gympi2)
-    std_gatenames_to_qasm['Gc15'] = 'u3(1.570796326794897, 3.141592653589793, 3.141592653589793)'
-    # [1, 3, 1] * pi/2 (this is Gxpi2 )
-    std_gatenames_to_qasm['Gc16'] = 'u3(1.570796326794897, 4.71238898038469, 1.570796326794897)'
-    std_gatenames_to_qasm['Gc17'] = 'u3(3.141592653589793, 0, 1.570796326794897)'  # [2, 0, 1] * pi/2
-    std_gatenames_to_qasm['Gc18'] = 'u3(1.570796326794897, 3.141592653589793, 0.)'  # [1, 2, 0] * pi/2
-    std_gatenames_to_qasm['Gc19'] = 'u3(1.570796326794897, 4.71238898038469, 4.71238898038469)'  # [1, 3, 3] * pi/2
-    std_gatenames_to_qasm['Gc20'] = 'u3(3.141592653589793, 0, 4.71238898038469)'  # [2, 0, 3] * pi/2
-    std_gatenames_to_qasm['Gc21'] = 'u3(1.570796326794897, 0, 0)'  # [1, 0, 0] * pi/2 (this is Gypi2)
-    std_gatenames_to_qasm['Gc22'] = 'u3(1.570796326794897, 1.570796326794897, 1.570796326794897)'  # [1, 1, 1] * pi/2
-    std_gatenames_to_qasm['Gc23'] = 'u3(0, 0, 4.71238898038469)'  # [0, 0, 3] * pi/2 (this is Gzmpi2 / Gpdag)
+        std_gatenames_to_qasm['Gzr'] = 'u3'
+        std_gatenames_to_qasm['Gczr'] = 'czr'
 
-    return std_gatenames_to_qasm
+        def Gz_theta_map(gatearg):
+            return '(0, 0, ' + gatearg[0] + ')'
+
+        def Gczr_theta_map(gatearg):
+            return '(' + gatearg[0] + ')'
+        std_gatenames_to_argmap = {}
+        std_gatenames_to_argmap['Gzr'] = Gz_theta_map
+        std_gatenames_to_argmap['Gczr'] = Gczr_theta_map
+
+    elif version == 'x-sx-rz':
+        std_gatenames_to_qasm = {}
+        std_gatenames_to_qasm['Gcnot'] = 'cx'
+        std_gatenames_to_qasm['Gi'] = ['rz(0.)']
+        std_gatenames_to_qasm['Gx'] = ['sx']
+        std_gatenames_to_qasm['Gxpi2'] = ['sx']
+        std_gatenames_to_qasm['Gy'] = ['rz(4.71238898038469)', 'sx', 'rz(1.570796326794897)']
+        std_gatenames_to_qasm['Gypi2'] = ['rz(4.71238898038469)', 'sx', 'rz(1.570796326794897)']
+        std_gatenames_to_qasm['Gz'] = ['rz(1.570796326794897)']
+        std_gatenames_to_qasm['Gzpi2'] = ['rz(1.570796326794897)']
+        std_gatenames_to_qasm['Gxpi'] = ['x']
+        std_gatenames_to_qasm['Gypi'] = ['rz(3.141592653589793)', 'x']
+        std_gatenames_to_qasm['Gzpi'] = ['rz(3.141592653589793)']
+        std_gatenames_to_qasm['Gxmpi2'] = ['sx', 'x']
+        std_gatenames_to_qasm['Gympi2'] = ['rz(1.570796326794897)', 'sx', 'rz(4.71238898038469)']
+        std_gatenames_to_qasm['Gzmpi2'] = ['rz(4.71238898038469)']
+        std_gatenames_to_qasm['Gh'] = ['rz(1.570796326794897)', 'sx', 'rz(1.570796326794897)']
+        std_gatenames_to_qasm['Gp'] = ['rz(1.570796326794897)']
+        std_gatenames_to_qasm['Gpdag'] = ['rz(4.71238898038469)']
+        std_gatenames_to_qasm['Gc0'] = ['rz(0.)']
+        std_gatenames_to_qasm['Gc1'] = ['sx', 'rz(1.570796326794897)']
+        std_gatenames_to_qasm['Gc2'] = ['rz(1.570796326794897)', 'sx', 'rz(3.141592653589793)']
+        std_gatenames_to_qasm['Gc3'] = ['x']
+        std_gatenames_to_qasm['Gc4'] = ['rz(3.141592653589793)', 'sx', 'rz(4.71238898038469)']
+        std_gatenames_to_qasm['Gc5'] = ['rz(1.570796326794897)', 'sx']
+        std_gatenames_to_qasm['Gc6'] = ['rz(3.141592653589793)', 'x']
+        std_gatenames_to_qasm['Gc7'] = ['sx', 'rz(4.71238898038469)']
+        std_gatenames_to_qasm['Gc8'] = ['rz(4.71238898038469)', 'sx']
+        std_gatenames_to_qasm['Gc9'] = ['rz(3.141592653589793)']
+        std_gatenames_to_qasm['Gc10'] = ['rz(3.141592653589793)', 'sx', 'rz(1.570796326794897)']
+        std_gatenames_to_qasm['Gc11'] = ['rz(1.570796326794897)', 'sx', 'x']
+        std_gatenames_to_qasm['Gc12'] = ['rz(1.570796326794897)', 'sx', 'rz(1.570796326794897)']
+        std_gatenames_to_qasm['Gc13'] = ['sx', 'x']
+        std_gatenames_to_qasm['Gc14'] = ['rz(1.570796326794897)']
+        std_gatenames_to_qasm['Gc15'] = ['rz(1.570796326794897)', 'sx', 'rz(4.71238898038469)']
+        std_gatenames_to_qasm['Gc16'] = ['sx']
+        std_gatenames_to_qasm['Gc17'] = ['rz(4.71238898038469)', 'x']
+        std_gatenames_to_qasm['Gc18'] = ['rz(4.71238898038469)', 'sx', 'rz(4.71238898038469)']
+        std_gatenames_to_qasm['Gc19'] = ['rz(3.141592653589793)', 'sx']
+        std_gatenames_to_qasm['Gc20'] = ['rz(1.570796326794897)', 'x']
+        std_gatenames_to_qasm['Gc21'] = ['rz(4.71238898038469)', 'sx', 'rz(1.570796326794897)']
+        std_gatenames_to_qasm['Gc22'] = ['sx', 'rz(3.141592653589793)']
+        std_gatenames_to_qasm['Gc23'] = ['rz(4.71238898038469)']
+        std_gatenames_to_qasm['Gt'] = ['rz(0.7853981633974485)']
+        std_gatenames_to_qasm['Gtdag'] = ['rz(5.497787143782138)']
+
+        std_gatenames_to_qasm['Gzr'] = 'rz'
+        std_gatenames_to_qasm['Gczr'] = 'crz'
+
+        def Gz_theta_map(gatearg):
+            return '(' + gatearg[0] + ')'
+        std_gatenames_to_argmap = {}
+        std_gatenames_to_argmap['Gzr'] = Gz_theta_map
+        std_gatenames_to_argmap['Gczr'] = Gz_theta_map
+    else:
+        raise ValueError("Unknown version!")
+
+    return std_gatenames_to_qasm, std_gatenames_to_argmap
 
 
 def qasm_u3(theta, phi, lamb, output='unitary'):

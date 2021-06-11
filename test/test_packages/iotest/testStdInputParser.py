@@ -1,9 +1,9 @@
 import unittest
-import warnings
-import pygsti
+
 import numpy as np
-import os
-from ..testutils import BaseTestCase, compare_files, temp_files
+
+import pygsti
+from ..testutils import BaseTestCase, temp_files
 
 
 class TestStdInputParser(BaseTestCase):
@@ -48,7 +48,7 @@ class TestStdInputParser(BaseTestCase):
         #print "String Tests:"
         for s,expected in string_tests:
             #print("%s ==> " % s, expected)
-            result, line_labels, occurrence_id = std.parse_circuit(s, lookup=lkup)
+            result, line_labels, occurrence_id = std.parse_circuit_raw(s, lookup=lkup, create_subcircuits=False)
             self.assertEqual(line_labels, None)
             circuit_result = pygsti.obj.Circuit(result,line_labels="auto",expand_subcircuits=True)
               #use "auto" line labels since none are parsed.
@@ -68,7 +68,7 @@ class TestStdInputParser(BaseTestCase):
         std = pygsti.io.StdInputParser()
         
         cstr = "Gx;pi/1.2:0:2!1.0"
-        firstLbl = std.parse_circuit(cstr)[0][0]
+        firstLbl = std.parse_circuit(cstr)[0]
         self.assertEqual(firstLbl.time, 1.0)
         self.assertEqual(firstLbl.args, ('pi/1.2',))
         self.assertEqual(firstLbl.sslbls, (0, 2))
@@ -76,7 +76,7 @@ class TestStdInputParser(BaseTestCase):
         self.assertEqual(tuple(firstLbl), ('Gx', 3, 'pi/1.2', 0, 2))
 
         cstr = "rho0!1.21{}"
-        firstLbl = std.parse_circuit(cstr)[0][0]
+        firstLbl = std.parse_circuit(cstr)[0]
         self.assertEqual(firstLbl.time, 1.21)
         self.assertEqual(firstLbl.args, ())
         self.assertEqual(firstLbl.sslbls, None)
@@ -84,7 +84,7 @@ class TestStdInputParser(BaseTestCase):
         self.assertEqual(str(firstLbl), 'rho0!1.21')
 
         cstr = "{}M0!1.22"
-        firstLbl = std.parse_circuit(cstr)[0][0]
+        firstLbl = std.parse_circuit(cstr)[0]
         self.assertEqual(firstLbl.time, 1.22)
         self.assertEqual(firstLbl.args, ())
         self.assertEqual(firstLbl.sslbls, None)
@@ -110,14 +110,13 @@ class TestStdInputParser(BaseTestCase):
 
         std = pygsti.io.StdInputParser()
 
-        from pygsti.objects import Label as L
         from pygsti.objects import CircuitLabel as CL
 
-        self.assertEqual( std.parse_dataline(dataline_tests[0],expected_counts=2), (['G1', 'G2', 'G3'], 'G1G2G3', None, None, [0.1, 100.0]))
-        self.assertEqual( std.parse_dataline(dataline_tests[1],expected_counts=2), (['G1', 'G2', 'G3'], 'G1*G2*G3', None, None, [0.798, 100.0]))
-        self.assertEqual( std.parse_dataline(dataline_tests[2],expected_counts=2), (['G1', CL('',('G2', 'G3'),None,2), 'G4'], 'G1*(G2*G3)^2*G4', None, None, [1.0, 100.0]))
+        self.assertEqual( std.parse_dataline(dataline_tests[0],expected_counts=2), (['G1', 'G2', 'G3'], [0.1, 100.0]))
+        self.assertEqual( std.parse_dataline(dataline_tests[1],expected_counts=2), (['G1', 'G2', 'G3'], [0.798, 100.0]))
+        self.assertEqual( std.parse_dataline(dataline_tests[2],expected_counts=2), (['G1', CL('',('G2', 'G3'),None,2), 'G4'], [1.0, 100.0]))
         self.assertEqual( std.parse_dataline("G1G2G3 0.1 100 2.0", expected_counts=2),
-                          (['G1', 'G2', 'G3'], 'G1G2G3', None, None, [0.1, 100.0])) #extra col ignored
+                          (['G1', 'G2', 'G3'], [0.1, 100.0])) #extra col ignored
 
         with self.assertRaises(ValueError):
             std.parse_dataline("G1G2G3  1.0", expected_counts=2) #too few cols == error
@@ -125,8 +124,8 @@ class TestStdInputParser(BaseTestCase):
             std.parse_dataline("1.0 2.0") #just data cols (no circuit col!)
 
 
-        self.assertEqual( std.parse_dictline(dictline_tests[0]), ('1', ['G1', 'G2', 'G3'], 'G1G2G3', None, None))
-        self.assertEqual( std.parse_dictline(dictline_tests[1]), ('MyFav', [CL('',('G1', 'G2'),None,3),] , '(G1G2)^3', None, None))
+        self.assertEqual( std.parse_dictline(dictline_tests[0]), ('1', ('G1', 'G2', 'G3'), 'G1G2G3', None, None))
+        self.assertEqual( std.parse_dictline(dictline_tests[1]), ('MyFav', (CL('',('G1', 'G2'),None,3),) , '(G1G2)^3', None, None))
           # OLD (before subcircuit parsing) the above result should have been: ('G1', 'G2', 'G1', 'G2', 'G1', 'G2')
 
         #print "Dataline Tests:"
@@ -168,23 +167,23 @@ thatOne G1G2*G3
 """#My Data file
 #Get string lookup data from the file test.dict
 ## Lookup = sip_test.dict
-## Columns = 0 frequency, count total
-# OLD Columns = 0 count, 1 count
+## Columns = 0 count, 1 count
+# OLD Columns = 0 frequency, count total
 
 #empty string
-{}            1.0 100
+{}            1 99
 
 #simple sequences
-G1G2          0.098  100
-G2G3          0.2    100
-(G1)^4        0.1   1000
+G1G2          2  98
+G2G3          20    80
+(G1)^4        100   900
 
 #using lookups
-#G1 S<1>       0.9999 100
-#S<MyFav1>G2   0.23   100
-#G1S<2>^2      0.5     20
-#S<3>[0:4]     0.2      5
-G1G2G3G4      0.2      5
+#G1 S<1>       99    1
+#S<MyFav1>G2   23   77
+#G1S<2>^2      10   10
+#S<3>[0:4]     2     3
+G1G2G3G4       2     3
 
 #different ways to concatenate gates
 G_my_xG_my_y  0.5 24.0
@@ -205,11 +204,11 @@ G_my_xG_my_y 0.5 24.0
 
         datafile_test = \
 """#Data File with bad syntax
-## Columns = 0 frequency, count total
-{}            1.0 100
-G1            0.0 100
-FooBar        0.4 100
-G3            0.2 100
+## Columns = 0 count, 1 count
+{}            100 0
+G1            0   100
+FooBar        40  60
+G3            20  80
 """
         f = open(temp_files + "/sip_test3.data","w")
         f.write(datafile_test)
@@ -217,45 +216,46 @@ G3            0.2 100
 
         datafile_test = \
 """#Data File with zero counts
-## Columns = 0 frequency, count total
-{}            1.0 100
-G1            0.0 100
+## Columns = 0 count, 1 count
+{}            100 0
+G1            0   100
 G2            0   0
-G3            0.2 100
+G3            20  80
 """
         f = open(temp_files + "/sip_test4.data","w")
         f.write(datafile_test)
         f.close()
 
-        datafile_test = \
-"""#Data File with bad columns
-## Columns = 0 frequency, 1 frequency
-{}            1.0 0.0
-G1            0.0 1.0
-G2            0   1.0
-G3            0.2 0.8
-"""
-        f = open(temp_files + "/sip_test5.data","w")
-        f.write(datafile_test)
-        f.close()
+        #REMOVE - frequency columns no longer supported!
+#        datafile_test = \
+#"""#Data File with bad columns
+### Columns = 0 frequency, 1 frequency
+#{}            1.0 0.0
+#G1            0.0 1.0
+#G2            0   1.0
+#G3            0.2 0.8
+#"""
+#        f = open(temp_files + "/sip_test5.data","w")
+#        f.write(datafile_test)
+#        f.close()
+#
+#        datafile_test = \
+#"""#Data File with bad frequency
+### Columns = 1 frequency, count total
+#{}            1.0 100
+#G1            0.0 100
+#G2            3.4 100
+#G3            0.2 100
+#"""
+#        f = open(temp_files + "/sip_test6.data","w")
+#        f.write(datafile_test)
+#        f.close()
 
         datafile_test = \
-"""#Data File with bad frequency
-## Columns = 1 frequency, count total
-{}            1.0 100
-G1            0.0 100
-G2            3.4 100
-G3            0.2 100
-"""
-        f = open(temp_files + "/sip_test6.data","w")
-        f.write(datafile_test)
-        f.close()
-
-        datafile_test = \
-"""#Data File with bad counts
-## Columns = 0 count, count total
-{}            30  100
-G1            10  100
+"""#Data File with out-of-range counts
+## Columns = 0 count, 1 count
+{}            30  70
+G1            10  90
 G2            0.2 100
 G3            0.1 100
 """
@@ -265,8 +265,8 @@ G3            0.1 100
 
         datafile_test = \
 """#Data File with bad syntax
-## Columns = 0 count, count total
-{xx}            10  100
+## Columns = 0 count, 1 count
+{xx}            10  90
 """
         f = open(temp_files + "/sip_test8.data","w")
         f.write(datafile_test)
@@ -277,11 +277,11 @@ G3            0.1 100
         multidatafile_test = \
 """#Multi Data File
 ## Lookup = sip_test.dict
-## Columns = ds1 0 count, ds1 count total, ds2 0 count, ds2 count total
-{}            30  100  20 200
-G1            10  100  10 200
-G2            20  100  5  200
-G3            10  100  80 200
+## Columns = ds1 0 count, ds1 1 count, ds2 0 count, ds2 1 count
+{}            30  70   20 180
+G1            10  90   10 190
+G2            20  80   5  195
+G3            10  90   80 120
 """
         f = open(temp_files + "/sip_test.multidata","w")
         f.write(multidatafile_test)
@@ -308,34 +308,35 @@ G2            20  100
         f.write(multidatafile_test)
         f.close()
 
-        multidatafile_test = \
-"""#Multi Data File bad columns
-## Columns = ds1 0 frequency, ds1 1 frequency, ds2 1 count, ds2 count total
-{}            0.3  0.4  20 200
-G1            0.1  0.5  10 200
-G2            0.2  0.3  5  200
-"""
-        f = open(temp_files + "/sip_test4.multidata","w")
-        f.write(multidatafile_test)
-        f.close()
-
-        multidatafile_test = \
-"""#Multi Data File frequency out of range and count before frequency
-## Columns = ds1 count total, ds1 0 frequency, ds2 0 count, ds2 count total
-{}            100  0.3  20 200
-G1            100  10   10 200
-G2            100  0.2  5  200
-"""
-        f = open(temp_files + "/sip_test5.multidata","w")
-        f.write(multidatafile_test)
-        f.close()
+        #REMOVE - frequency columns no longer supported!
+#        multidatafile_test = \
+#"""#Multi Data File bad columns
+### Columns = ds1 0 frequency, ds1 1 frequency, ds2 1 count, ds2 count total
+#{}            0.3  0.4  20 200
+#G1            0.1  0.5  10 200
+#G2            0.2  0.3  5  200
+#"""
+#        f = open(temp_files + "/sip_test4.multidata","w")
+#        f.write(multidatafile_test)
+#        f.close()
+#
+#        multidatafile_test = \
+#"""#Multi Data File frequency out of range and count before frequency
+### Columns = ds1 count total, ds1 0 frequency, ds2 0 count, ds2 count total
+#{}            100  0.3  20 200
+#G1            100  10   10 200
+#G2            100  0.2  5  200
+#"""
+#        f = open(temp_files + "/sip_test5.multidata","w")
+#        f.write(multidatafile_test)
+#        f.close()
 
         multidatafile_test = \
 """#Multi Data File count out of range
-## Columns = ds1 0 count, ds1 count total, ds2 0 count, ds2 count total
-{}            0.3  100  20 200
-G1            0.1   100  10 200
-G2            20  100  5  200
+## Columns = ds1 0 count, ds1 1 count, ds2 0 count, ds2 1 count
+{}            0.3 100  20 180
+G1            0.1 100  10 190
+G2            20  80    5 195
 """
         f = open(temp_files + "/sip_test6.multidata","w")
         f.write(multidatafile_test)
@@ -343,7 +344,7 @@ G2            20  100  5  200
 
         multidatafile_test = \
 """#Multi Data File with bad syntax
-## Columns = ds1 0 count, ds1 count total, ds2 0 count, ds2 count total
+## Columns = ds1 0 count, ds1 1 count, ds2 0 count, ds2 1 count
 {xxx}         0.3  100  20 200
 """
         f = open(temp_files + "/sip_test7.multidata","w")
@@ -380,16 +381,18 @@ G2            20  100  5  200
         #test file with line(s) containing all zeros => ignore with warning
         self.assertWarns( std.parse_datafile, temp_files + "/sip_test4.data" )
 
-        #test file with frequency columns but no count total
-        with self.assertRaises(ValueError):
-            std.parse_datafile(temp_files + "/sip_test5.data")
+        #REMOVE - frequency columns no longer supported!
+        ##test file with frequency columns but no count total
+        #with self.assertRaises(ValueError):
+        #    std.parse_datafile(temp_files + "/sip_test5.data")
+        #
+        ##test file with out-of-range frequency
+        ##OLD with self.assertRaises(ValueError):
+        #self.assertWarns(std.parse_datafile, temp_files + "/sip_test6.data")
 
-        #test file with out-of-range frequency
-        #OLD with self.assertRaises(ValueError):
-        self.assertWarns(std.parse_datafile, temp_files + "/sip_test6.data")
-            
+        #OLD - for performance we don't warn user about float counts < 1...
         #test file with out-of-range counts
-        self.assertWarns(std.parse_datafile, temp_files + "/sip_test7.data")
+        #self.assertWarns(std.parse_datafile, temp_files + "/sip_test7.data")
 
         #test file with bad syntax
         with self.assertRaises(ValueError):
@@ -407,13 +410,14 @@ G2            20  100  5  200
         with self.assertRaises(ValueError):
             std.parse_multidatafile(temp_files + "/sip_test3.multidata")
 
-        #test file with frequency columns but no count total
-        with self.assertRaises(ValueError):
-            std.parse_multidatafile(temp_files + "/sip_test4.multidata")
-
-        #test file with out-of-range frequency
-        with self.assertRaises(ValueError):
-            std.parse_multidatafile(temp_files + "/sip_test5.multidata")
+        #REMOVE - frequency columns no longer supported!
+        ##test file with frequency columns but no count total
+        #with self.assertRaises(ValueError):
+        #    std.parse_multidatafile(temp_files + "/sip_test4.multidata")
+        #
+        ##test file with out-of-range frequency
+        #with self.assertRaises(ValueError):
+        #    std.parse_multidatafile(temp_files + "/sip_test5.multidata")
 
         #test file with out-of-range counts
         with self.assertRaises(ValueError):

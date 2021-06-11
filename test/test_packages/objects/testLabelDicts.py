@@ -1,13 +1,10 @@
-import unittest
 import pygsti
 import numpy as np
-import warnings
-import pickle
-import os
 
+import pygsti
 from pygsti.modelpacks.legacy import std1Q_XYI
+from ..testutils import BaseTestCase
 
-from ..testutils import BaseTestCase, compare_files, temp_files
 
 class LabelDictTestCase(BaseTestCase):
 

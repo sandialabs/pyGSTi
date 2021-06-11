@@ -1,13 +1,15 @@
 import collections as _collections
 import itertools as _itertools
+
 import numpy as _np
 import scipy as _scipy
 import scipy.sparse as _sps
 
 import pygsti
+import pygsti.objects as _objs
 from pygsti.modelpacks.legacy import std1Q_XY
 from pygsti.modelpacks.legacy import std2Q_XYICNOT
-import pygsti.objects as _objs
+
 
 class QubitGraph(object):
     """ Graph data structure """
@@ -440,7 +442,7 @@ def create_global_idle(qubitGraph, maxWeight, sparse=False, verbosity=0):
 #    if mode == "no-embedding":     
 #        fullTargetOp = EmbeddedDenseOp(ssAllQ, ['Q%d'%i for i in target_qubit_inds],
 #                                    target_op, basisAllQ) 
-#        fullTargetOp = StaticDenseOp( fullTargetOp ) #Make static
+#        fullTargetOp = StaticArbitraryOp( fullTargetOp ) #Make static
 #        fullLocalErr = LindbladDenseOp(fullTargetOp, fullTargetOp,
 #                         ham_basis=errbasis, nonham_basis=errbasis, cptp=True,
 #                         nonham_diagonal_only=True, truncate=True, mx_basis=basisAllQ)
@@ -452,7 +454,7 @@ def create_global_idle(qubitGraph, maxWeight, sparse=False, verbosity=0):
 #        
 #        ssLocQ = ['Q%d'%i for i in range(nPossible)]
 #        basisLocQ = pygsti.objects.Basis('pp', 2**nPossible)
-#        locTargetOp = StaticDenseOp( EmbeddedDenseOp(ssLocQ, ['Q%d'%i for i in loc_target_inds],
+#        locTargetOp = StaticArbitraryOp( EmbeddedDenseOp(ssLocQ, ['Q%d'%i for i in loc_target_inds],
 #                                    target_op, basisLocQ) )
 #        localErr = LindbladDenseOp(locTargetOp, locTargetOp,
 #                         ham_basis=errbasis, nonham_basis=errbasis, cptp=True,

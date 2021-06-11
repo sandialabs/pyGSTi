@@ -10,12 +10,12 @@
 Variables for working with the a qutrit model containing Idle, X(pi/2) and Y(pi/2) and Molmer-Sorenson gates.
 """
 import sys as _sys
-from ...construction import circuitconstruction as _strc
-from ...construction import modelconstruction as _setc
-from ...construction import stdtarget as _stdtarget
-from ...construction import qutrit as _qutrit
-from collections import OrderedDict as _OrderedDict
+
 from numpy import pi as _pi
+
+from ...construction import circuitconstruction as _strc
+from ...construction import qutrit as _qutrit
+from ...construction import stdtarget as _stdtarget
 
 description = "Idle, symmetric X(pi/2), symmetric Y(pi/2), and Molmer-Sorenson gates"
 

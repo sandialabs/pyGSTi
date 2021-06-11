@@ -11,12 +11,8 @@ Functions for creating the standard sets of matrices in the standard, Pauli, Gel
 #***************************************************************************************************
 import itertools as _itertools
 import numbers as _numbers
-import collections as _collections
 import numpy as _np
 import scipy.sparse as _sps
-
-from collections import namedtuple as _namedtuple
-import functools as _functools
 
 ## Pauli basis matrices
 sqrt2 = _np.sqrt(2)

@@ -10,27 +10,11 @@ Volumetric Benchmarking Protocol objects
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import time as _time
-import os as _os
 import numpy as _np
-import pickle as _pickle
-import collections as _collections
-import warnings as _warnings
-import copy as _copy
-import scipy.optimize as _spo
-from scipy.stats import chi2 as _chi2
 
 from . import protocol as _proto
-from .modeltest import ModelTest as _ModelTest
-from .. import objects as _objs
-from .. import algorithms as _alg
-from .. import construction as _construction
-from .. import io as _io
+from ..models.oplessmodel import SuccessFailModel as _SuccessFailModel
 from .. import tools as _tools
-
-from ..objects import wildcardbudget as _wild
-from ..objects.profiler import DummyProfiler as _DummyProfiler
-from ..objects import objectivefns as _objfns
 from ..algorithms import randomcircuit as _rc
 
 
@@ -271,7 +255,7 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
                 fixed_versus_depth=fixed_versus_depth)
             for ind in range(len(depths)):
                 circuit_lists[ind].append(circtemp[ind])
-                ideal_outs[ind].append(outtemp[ind])
+                ideal_outs[ind].append((''.join(map(str, outtemp[ind])),))
 
         self._init_foundation(depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
                               sampler, samplerargs, localclifford, paulirandomize, fixed_versus_depth, descriptor)
@@ -563,7 +547,10 @@ class SummaryStatistics(_proto.Protocol):
                     totalcounts = total_counts[depth][ind] if finitecounts else None
                     bcache['success_probabilities'][depth].append(sampledSP)
                     if finitecounts:
-                        bcache['success_counts'][depth].append(_np.random.binomial(totalcounts, sampledSP))
+                        if not _np.isnan(sampledSP):
+                            bcache['success_counts'][depth].append(_np.random.binomial(totalcounts, sampledSP))
+                        else:
+                            bcache['success_probabilities'][depth].append(sampledSP)
                         bcache['total_counts'][depth].append(totalcounts)
                     else:
                         bcache['success_counts'][depth].append(sampledSP)
@@ -574,8 +561,11 @@ class SummaryStatistics(_proto.Protocol):
                     sampledHDpdf = _np.array(sampledHDcounts) / _np.sum(sampledHDcounts)
 
                     if finitecounts:
-                        bcache['hamming_distance_counts'][depth].append(
-                            list(_np.random.multinomial(totalcounts, sampledHDpdf)))
+                        if not _np.isnan(sampledSP):
+                            bcache['hamming_distance_counts'][depth].append(
+                                list(_np.random.multinomial(totalcounts, sampledHDpdf)))
+                        else:
+                            bcache['hamming_distance_counts'][depth].append(sampledHDpdf)
                     else:
                         bcache['hamming_distance_counts'][depth].append(sampledHDpdf)
 
@@ -653,7 +643,7 @@ class ByDepthSummaryStatistics(SummaryStatistics):
 
             statistic_per_depth = data.cache[statistic]
 
-        elif isinstance(self.custom_data_src, _objs.SuccessFailModel):  # then simulate all the circuits in `data`
+        elif isinstance(self.custom_data_src, _SuccessFailModel):  # then simulate all the circuits in `data`
             assert(statistic in ('success_probabilities', 'polarization')), \
                 "Only success probabilities or polarizations can be simulated!"
             sfmodel = self.custom_data_src

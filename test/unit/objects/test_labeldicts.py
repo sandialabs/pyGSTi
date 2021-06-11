@@ -1,17 +1,19 @@
 import pickle
 
-from ..util import BaseCase
-
+import pygsti.baseobjs.outcomelabeldict as ld
+from pygsti.models.memberdict import OrderedMemberDict
 from pygsti.construction.modelconstruction import create_explicit_model
-from pygsti.objects import ExplicitOpModel
-import pygsti.objects.labeldicts as ld
+from pygsti.models import ExplicitOpModel
+from ..util import BaseCase
 
 
 class LabelDictTester(BaseCase):
     def test_ordered_member_dict(self):
         flags = {'auto_embed': True, 'match_parent_dim': True,
                  'match_parent_evotype': True, 'cast_to_type': "spamvec"}
-        d = ld.OrderedMemberDict(None, "foobar", "rho", flags)
+        d = OrderedMemberDict(None, "foobar", "rho", flags)
+        #print(d.items())
+        #assert False
         # TODO assert correctness
 
         with self.assertRaises(ValueError):

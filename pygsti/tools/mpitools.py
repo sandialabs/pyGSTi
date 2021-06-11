@@ -10,11 +10,14 @@ Functions for working with MPI processor distributions
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as _np
-import warnings as _warnings
 import itertools as _itertools
-from . import slicetools as _slct
+import warnings as _warnings
+
+import numpy as _np
+
 from . import compattools as _compat
+from . import sharedmemtools as _smt
+from . import slicetools as _slct
 from .matrixtools import _fas, _findx, _findx_shape
 from .matrixtools import prime_factors as _prime_factors
 
@@ -28,9 +31,11 @@ def distribute_indices(indices, comm, allow_split_comm=True):
     indices : list
         An array of items (any type) which are to be partitioned.
 
-    comm : mpi4py.MPI.Comm
+    comm : mpi4py.MPI.Comm or ResourceAllocation
         The communicator which specifies the number of processors and
-        which may be split into returned sub-communicators.
+        which may be split into returned sub-communicators.  If a
+        :class:`ResourceAllocation` object, node information is also
+        taken into account when available (for shared memory compatibility).
 
     allow_split_comm : bool
         If True, when there are more processors than indices,
@@ -54,20 +59,27 @@ def distribute_indices(indices, comm, allow_split_comm=True):
         processor rank "owns" the element, and is thus responsible for sharing
         the results.  This notion of ownership is useful when gathering the
         results.
-    loc_comm : mpi4py.MPI.Comm or None
+    loc_comm : mpi4py.MPI.Comm or ResourceAllocation or None
         The local communicator for the group of processors which have been
         given the same `loc_indices` to compute, obtained by splitting `comm`.
         If `loc_indices` is unique to the current processor, or if
         `allow_split_comm` is False, None is returned.
     """
+    from ..baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
+    if isinstance(comm, _ResourceAllocation):
+        ralloc = comm
+        comm = ralloc.comm
+    else:
+        ralloc = None
+
     if comm is None:
         nprocs, rank = 1, 0
     else:
         nprocs = comm.Get_size()
         rank = comm.Get_rank()
 
-    loc_indices, owners = distribute_indices_base(indices, nprocs, rank,
-                                                  allow_split_comm)
+    loc_indices, owners, _ = distribute_indices_base(indices, nprocs, rank,
+                                                     allow_split_comm)
 
     #Split comm into sub-comms when there are more procs than
     # indices, resulting in all procs getting only a
@@ -82,6 +94,12 @@ def distribute_indices(indices, comm, allow_split_comm=True):
         loc_comm = comm.Split(color=color, key=rank)
     else:
         loc_comm = None
+
+    if ralloc is not None:  # then return a ResourceAllocation instead of a comm
+        loc_comm = _ResourceAllocation(loc_comm, ralloc.mem_limit, ralloc.profiler,
+                                       ralloc.distribute_method, ralloc.allocated_memory)
+        if ralloc.host_comm is not None:
+            loc_comm.build_hostcomms()  # signals that we want to use shared intra-host memory
 
     return loc_indices, owners, loc_comm
 
@@ -133,19 +151,23 @@ def distribute_indices_base(indices, nprocs, rank, allow_split_comm=True):
     """
     nIndices = len(indices)
     if nIndices == 0:  # special case when == 0
-        return [], {}
+        return [], {}, ()
 
     if nprocs >= nIndices:
         if allow_split_comm:
             nloc_std = nprocs // nIndices  # this many processors per index, w/out any "extra"
             extra = nprocs - nloc_std * nIndices  # extra procs
             # indices 0 to extra-1 get (nloc_std+1) processors each
-            # incides extra to nIndices-1 get nloc_std processors each
+            # indices extra to nIndices-1 get nloc_std processors each
             if rank < extra * (nloc_std + 1):
-                loc_indices = [indices[rank // (nloc_std + 1)]]
+                k = rank // (nloc_std + 1)
+                loc_indices = [indices[k]]
+                peer_ranks = tuple(range(k * (nloc_std + 1), (k + 1) * (nloc_std + 1)))
             else:
-                loc_indices = [indices[
-                    extra + (rank - extra * (nloc_std + 1)) // nloc_std]]
+                k = (rank - extra * (nloc_std + 1)) // nloc_std
+                loc_indices = [indices[extra + k]]
+                peer_ranks = tuple(range(extra * (nloc_std + 1) + k * nloc_std,
+                                         extra * (nloc_std + 1) + (k + 1) * nloc_std))
 
             # owners dict gives rank of first (chief) processor for each index
             # (the "owner" of a given index is responsible for communicating
@@ -162,6 +184,7 @@ def distribute_indices_base(indices, nprocs, rank, allow_split_comm=True):
             else:
                 loc_indices = []  # extra procs do nothing
             owners = {indices[i]: i for i in range(nIndices)}
+            peer_ranks = ()
 
     else:
         nloc_std = nIndices // nprocs
@@ -170,7 +193,6 @@ def distribute_indices_base(indices, nprocs, rank, allow_split_comm=True):
         if rank < extra:
             nloc = nloc_std + 1
             nstart = rank * (nloc_std + 1)
-            loc_indices = [indices[rank // (nloc_std + 1)]]
         else:
             nloc = nloc_std
             nstart = extra * (nloc_std + 1) + (rank - extra) * nloc_std
@@ -185,8 +207,9 @@ def distribute_indices_base(indices, nprocs, rank, allow_split_comm=True):
             nstart = extra * (nloc_std + 1) + (r - extra) * nloc_std
             for i in range(nstart, nstart + nloc_std):
                 owners[indices[i]] = r
+        peer_ranks = ()
 
-    return loc_indices, owners
+    return loc_indices, owners, peer_ranks
 
 
 def slice_up_slice(slc, num_slices):
@@ -258,9 +281,11 @@ def distribute_slice(s, comm, allow_split_comm=True):
     s : slice
         The slice to be partitioned.
 
-    comm : mpi4py.MPI.Comm
+    comm : mpi4py.MPI.Comm or ResourceAllocation
         The communicator which specifies the number of processors and
-        which may be split into returned sub-communicators.
+        which may be split into returned sub-communicators.  If a
+        :class:`ResourceAllocation` object, node information is also
+        taken into account when available (for shared memory compatibility).
 
     allow_split_comm : bool
         If True, when there are more processors than slice indices,
@@ -282,12 +307,19 @@ def distribute_slice(s, comm, allow_split_comm=True):
     owners : dict
         A dictionary giving the owning rank of each slice.  Values are integer
         ranks and keys are integers into `slices`, specifying which slice.
-    loc_comm : mpi4py.MPI.Comm or None
-        The local communicator for the group of processors which have been
-        given the same `loc_slice` to compute, obtained by splitting `comm`.
-        If `loc_slice` is unique to the current processor, or if
-        `allow_split_comm` is False, None is returned.
+    loc_comm : mpi4py.MPI.Comm or ResourceAllocation or None
+        The local communicator/ResourceAllocation for the group of processors
+        which have been given the same `loc_slice` to compute, obtained by
+        splitting `comm`.  If `loc_slice` is unique to the current processor,
+        or if `allow_split_comm` is False, None is returned.
     """
+    from ..baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
+    if isinstance(comm, _ResourceAllocation):
+        ralloc = comm
+        comm = ralloc.comm
+    else:
+        ralloc = None
+
     if comm is None:
         nprocs, rank = 1, 0
     else:
@@ -296,7 +328,7 @@ def distribute_slice(s, comm, allow_split_comm=True):
 
     slices = slice_up_slice(s, min(nprocs, _slct.length(s)))
     assert(len(slices) <= nprocs)
-    loc_iSlices, slcOwners = \
+    loc_iSlices, slcOwners, _ = \
         distribute_indices_base(list(range(len(slices))), nprocs, rank,
                                 allow_split_comm)
     assert(len(loc_iSlices) <= 1)  # should not assign more than one slice to
@@ -313,10 +345,15 @@ def distribute_slice(s, comm, allow_split_comm=True):
             loc_comm = comm.Split(color=loc_iSlices[0], key=rank)
         else:
             loc_comm = None
-
-    else:
-        loc_slice = slice(None)
+    else:  # len(loc_iSlices) == 0 (nothing for this proc to do)
+        loc_slice = slice(0, 0)
         loc_comm = None
+
+    if ralloc is not None:  # then return a ResourceAllocation instead of a comm
+        loc_comm = _ResourceAllocation(loc_comm, ralloc.mem_limit, ralloc.profiler,
+                                       ralloc.distribute_method, ralloc.allocated_memory)
+        if ralloc.host_comm is not None:
+            loc_comm.build_hostcomms()  # signals that we want to use shared intra-host memory
 
     return slices, loc_slice, slcOwners, loc_comm
 
@@ -365,9 +402,11 @@ def gather_slices(slices, slice_owners, ar_to_fill,
         be equal to the number of slices (i.e. the tuple length) of each
         element of `slices`.
 
-    comm : mpi4py.MPI.Comm or None
+    comm : mpi4py.MPI.Comm or ResourceAllocation or None
         The communicator specifying the processors involved and used
-        to perform the gather operation.
+        to perform the gather operation.  If a :class:`ResourceAllocation`
+        is provided, then inter-host communication is used when available
+        to facilitate use of shared intra-host memory.
 
     max_buffer_size : int or None
         The maximum buffer size in bytes that is allowed to be used
@@ -377,15 +416,52 @@ def gather_slices(slices, slice_owners, ar_to_fill,
     -------
     None
     """
+    from ..baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
+    if isinstance(comm, _ResourceAllocation):
+        ralloc = comm
+        comm = ralloc.comm
+
+        #For use with shared intra-host (intra-node) memory:
+        # my_interhost_ranks = ranks of comm, 1 per host, that this processor uses to send/receive data between hosts
+        # broadcast_comm = the comm of my_interhost_ranks used to send/receive data.
+        if ralloc.interhost_ranks is not None:
+            my_interhost_ranks = set(ralloc.interhost_ranks)
+            broadcast_rank_map = {comm_rank: broadcast_comm_rank
+                                  for broadcast_comm_rank, comm_rank in enumerate(ralloc.interhost_ranks)}
+            broadcast_comm = ralloc.interhost_comm
+        else:
+            my_interhost_ranks = None
+            broadcast_rank_map = {i: i for i in range(comm.Get_size())} if (comm is not None) else {0: 0}  # trivial map
+            broadcast_comm = comm
+    else:
+        ralloc = None
+        my_interhost_ranks = None
+        broadcast_rank_map = {i: i for i in range(comm.Get_size())} if (comm is not None) else {0: 0}  # trivial map
+        broadcast_comm = comm
+
     if comm is None: return  # no gathering needed!
+
+    # To be safe, since use of broadcast_comm below means we don't always need to wait for all procs
+    # to finish what they were doing last, which could involve updating a shared ar_to_fill so that
+    # values accessed by the already-finished front-running processors are affected!
+    comm.barrier()
 
     #Perform broadcasts for each slice in order
     my_rank = comm.Get_rank()
-    arIndx = [slice(None, None)] * ar_to_fill.ndim
-    arIndx[0:len(ar_to_fill_inds)] = ar_to_fill_inds
 
     axes = (axes,) if _compat.isint(axes) else axes
 
+    #print("DB: Rank %d (%d): BEGIN GATHER SLICES: interhost=%s, group=%s" %
+    #      (my_rank, broadcast_comm.rank, str(my_interhost_ranks), str(broadcast_comm.Get_group())))
+
+    # # if ar_to_fill_inds only contains slices (or is empty), then we can slice ar_to_fill once up front
+    # # and not use generic arIndx in loop below (slower, especially with lots of procs)
+    # if all([isinstance(indx, slice) for indx in ar_to_fill_inds]):
+    #     ar_to_fill = ar_to_fill[tuple(ar_to_fill_inds)]  # Note: this *doesn't* reduce its .ndim
+    #     ar_to_fill_inds = ()  # now ar_to_fill requires no further indexing
+
+    arIndx = [slice(None, None)] * ar_to_fill.ndim
+    arIndx[0:len(ar_to_fill_inds)] = ar_to_fill_inds
     max_indices = [None] * len(axes)
     if max_buffer_size is not None:  # no maximum of buffer size
         chunkBytes = ar_to_fill.nbytes  # start with the entire array as the "chunk"
@@ -405,8 +481,56 @@ def gather_slices(slices, slice_owners, ar_to_fill,
         else:
             _warnings.warn("gather_slices: Could not achieve max_buffer_size")
 
+    #TEST TODO REMOVE:
+    # Tried doing something faster (Allgatherv) when slices elements are simple slices (not tuples of slices).
+    # This ultimately showed that our repeated use of Bcast isn't any slower than fewer calls to Allgatherv,
+    # and since the Allgatherv case complicates the code and ignores the memory limit, it's best to just drop it.
+    #from mpi4py import MPI  # not at top so can import pygsti on cluster login nodes
+    #nProcs = comm.Get_size()
+    #if len(slices) == nProcs and len(ar_to_fill_inds) == 0 and \
+    #   all([isinstance(slcOrSlcTup, slice) for slcOrSlcTup in slices]):
+    #    # see if we can find a single owned slice for each processors
+    #    owned_slices = {i: None for i in range(nProcs)}
+    #    for i, slc in enumerate(slices):
+    #        if owned_slices[slice_owners[i]] is None:
+    #            owned_slices[slice_owners[i]] = slc
+    #        else: break  # processor w/rank == slice_owners[i] owns more than 1 slice
+    #    else:
+    #        # each processor owns a single slice, given by owned_slice -- use Allgatherv instead of Bcast
+    #        assert(len(axes) == 1), "Logic error: simple slices given with multiple axes!"
+    #        axis = axes[0]
+    #        local_result = ar_to_fill.swapaxes(0, axis)[owned_slices[my_rank]].flatten()  # (flatten copies)
+    #        result = _np.empty(ar_to_fill.size, ar_to_fill.dtype)  # NOTE: this allocates a lot of memory!
+    #        stride = ar_to_fill.size // ar_to_fill.shape[axis]
+    #
+    #        sizes = _np.array([_slct.length(owned_slices[i]) * stride for i in range(nProcs)], int)
+    #        displacements = _np.array([owned_slices[i].start * stride for i in range(nProcs)], int)
+    #        assert(local_result.size == sizes[my_rank])
+    #        comm.Allgatherv([local_result, sizes[my_rank], MPI.F_DOUBLE], \
+    #                        [result, (sizes,displacements), MPI.F_DOUBLE])
+    #        gathered_shape = list(ar_to_fill.shape)  # we gathered with distributed index swapped to position 0
+    #        t = gathered_shape[0]; gathered_shape[0] = gathered_shape[axis]; gathered_shape[axis] = t
+    #        result.shape = tuple(gathered_shape)
+    #        ar_to_fill[tuple(arIndx)] = result.swapaxes(0, axis)
+    #        #if comm.Get_rank() == 0:
+    #        #    print("Sizes = ", sizes)
+    #        #    print("Displacements = ", displacements)
+    #        #    print("Gathered shape = ", gathered_shape)
+    #        #    print("ar_to_fill shape = ", ar_to_fill.shape)
+    #        #print("Local result shape = ",local_result.shape, " result shape = ",result.shape,
+    #        #      " tofill = ",ar_to_fill.shape)
+    #        #import sys
+    #        #sys.exit(0)
+    #        return
+    #If we can't use Allgatherv, broadcast slices one-by-one (slower, but more general):
+
     for iSlice, slcOrSlcTup in enumerate(slices):
         owner = slice_owners[iSlice]  # owner's rank
+        if my_interhost_ranks is not None and owner not in my_interhost_ranks:
+            # if the "source" (owner) of the data isn't a part of my "circle" of ranks, then we
+            # don't need to send or receive this data - other ranks on the same hosts will do it.
+            continue
+
         slcTup = (slcOrSlcTup,) if isinstance(slcOrSlcTup, slice) else slcOrSlcTup
         assert(len(slcTup) == len(axes))
 
@@ -428,9 +552,17 @@ def gather_slices(slices, slice_owners, ar_to_fill,
             #broadcast arIndx slice
             buf = _findx(ar_to_fill, arIndx, True) if (my_rank == owner) \
                 else _np.empty(_findx_shape(ar_to_fill, arIndx), ar_to_fill.dtype)
-            comm.Bcast(buf, root=owner)
-            if my_rank != owner: _fas(ar_to_fill, arIndx, buf)
+            if my_interhost_ranks is None or len(my_interhost_ranks) > 1:
+                #print("DB: Rank %d (%d) Broadcast: arIndx = %s, owner=%d root=%d" %
+                #      (my_rank, broadcast_comm.rank, str(arIndx), owner, broadcast_rank_map[owner]))
+                broadcast_comm.Bcast(buf, root=broadcast_rank_map[owner])
+                if my_rank != owner: _fas(ar_to_fill, arIndx, buf)
             buf = None  # free buffer mem asap
+    #print("DB: Rank %d: END GATHER SLICES" % my_rank)
+
+    # Important: wait for everything to finish before proceeding
+    #  (when broadcast_comm != comm some procs may run ahead - see comment above)
+    comm.barrier()
 
 
 def gather_slices_by_owner(current_slices, ar_to_fill, ar_to_fill_inds,
@@ -684,38 +816,72 @@ def gather_indices(indices, index_owners, ar_to_fill, ar_to_fill_inds,
             buf = None  # free buffer mem asap
 
 
-def distribute_for_dot(contracted_dim, comm):
+def distribute_for_dot(a_shape, b_shape, comm):
     """
-    Prepares for one or muliple distributed dot products given the dimension to be contracted.
+    Prepares for one or muliple distributed dot products given the dimensions to be dotted.
 
-    That is, the number of columns of A or rows of B in dot(A,B).  The returned
-    slice should be passed as `loc_slice` to :func:`mpidot`.
+    The returned values should be passed as `loc_slices` to :func:`mpidot`.
 
     Parameters
     ----------
-    contracted_dim : int
-        The dimension that will be contracted in ensuing :func:`mpidot`
+    a_shape, b_shape : tuple
+        The shapes of the arrays that will be dotted together in ensuing :func:`mpidot`
         calls (see above).
 
-    comm : mpi4py.MPI.Comm or None
+    comm : mpi4py.MPI.Comm or ResourceAllocation or None
         The communicator used to perform the distribution.
 
     Returns
     -------
-    slice
-        The "local" slice specifying the indices belonging to the current
-        processor.  Should be passed to :func:`mpidot` as `loc_slice`.
+    row_slice, col_slice : slice
+        The "local" row slice of "A" and column slice of "B" belonging to the current
+        processor, which computes result[row slice, col slice].  These should be passed
+        to :func:`mpidot`.
+    slice_tuples_by_rank : list
+        A list of the `(row_slice, col_slice)` owned by each processor, ordered by rank.
+        If a `ResourceAllocation` is given that utilizes shared memory, then this list is
+        for the ranks in this processor's inter-host communication group.  This should
+        be passed as the `slice_tuples_by_rank` argument of :func:`mpidot`.
     """
-    loc_indices, _, _ = distribute_indices(
-        list(range(contracted_dim)), comm, False)
+    from ..baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
+    if isinstance(comm, _ResourceAllocation):
+        ralloc = comm; comm = ralloc.comm
+    else:
+        ralloc = None
 
-    #Make sure local columns are contiguous
-    start, stop = loc_indices[0], loc_indices[-1] + 1
-    assert(loc_indices == list(range(start, stop)))
-    return slice(start, stop)  # local column range as a slice
+    if comm is None:  # then the single proc owns all rows & cols
+        loc_row_slice = slice(0, a_shape[0])
+        loc_col_slice = slice(0, b_shape[1])
+
+    elif b_shape[1] > comm.size:  # then there are enough procs to just distribute B's cols
+        loc_row_slice = slice(0, a_shape[0])
+        _, loc_col_slice, _, _ = distribute_slice(
+            slice(0, b_shape[1]), comm, False)  # local B-column range as a slice
+
+    else:  # below should work even when comm.size > a_shape[0] * b_shape[1]
+        #distribute rows
+        _, loc_row_slice, _, loc_row_comm = distribute_slice(
+            slice(0, a_shape[0]), comm, True)  # local A-row range as a slice
+
+        #distribute columns among procs in sub-comm
+        _, loc_col_slice, _, _ = distribute_slice(
+            slice(0, b_shape[1]), loc_row_comm, False)  # local B-column range as a slice
+
+    if ralloc is None:
+        broadcast_comm = comm  # the comm used to communicate results within mpidot(...)
+    else:
+        broadcast_comm = comm if (ralloc.interhost_comm is None) else ralloc.interhost_comm
+
+    if broadcast_comm is not None:
+        slice_tuples_by_rank = broadcast_comm.allgather((loc_row_slice, loc_col_slice))
+    else:
+        slice_tuples_by_rank = None
+
+    return loc_row_slice, loc_col_slice, slice_tuples_by_rank
 
 
-def mpidot(a, b, loc_slice, comm):
+def mpidot(a, b, loc_row_slice, loc_col_slice, slice_tuples_by_rank, comm,
+           out=None, out_shm=None):
     """
     Performs a distributed dot product, dot(a,b).
 
@@ -727,28 +893,102 @@ def mpidot(a, b, loc_slice, comm):
     b : numpy.ndarray
         Second array to dot together.
 
-    loc_slice : slice
-        A slice specifying the indices along the contracted dimension belonging
-        to this processor (obtained from :func:`distribute_for_dot`)
+    loc_row_slice, loc_col_slice : slice
+        Specify the row or column indices, respectively, of the
+        resulting dot product that are computed by this processor (the
+        rows of `a` and columns of `b` that are used). Obtained from
+        :func:`distribute_for_dot`.
 
-    comm : mpi4py.MPI.Comm or None
-        The communicator used to parallelize the dot product.
+    slice_tuples_by_rank : list
+        A list of (row_slice, col_slice) tuples, one per processor within this
+        processors broadcast group, ordered by rank.  Provided by :func:`distribute_for_dot`.
+
+    comm : mpi4py.MPI.Comm or ResourceAllocation or None
+        The communicator used to parallelize the dot product.  If a
+        :class:`ResourceAllocation` object is given, then a shared
+        memory result will be returned when appropriate.
+
+    out : numpy.ndarray, optional
+        If not None, the array to use for the result.  This should be the
+        same type of array (size, and whether it's shared or not) as this
+        function would have created if `out` were `None`.
+
+    out_shm : multiprocessing.shared_memory.SharedMemory, optinal
+        The shared memory object corresponding to `out` when it uses
+        shared memory.
 
     Returns
     -------
-    numpy.ndarray
+    result : numpy.ndarray
+        The resulting array
+    shm : multiprocessing.shared_memory.SharedMemory
+        A shared memory object needed to cleanup the shared memory.  If
+        a normal array is created, this is `None`.  Provide this to
+        :function:`cleanup_shared_ndarray` to ensure `ar` is deallocated properly.
     """
+    # R_ij = sum_k A_ik * B_kj
+    from ..baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
+    if isinstance(comm, _ResourceAllocation):
+        ralloc = comm
+        comm = ralloc.comm
+    else:
+        ralloc = None
+
     if comm is None or comm.Get_size() == 1:
-        assert(loc_slice == slice(0, b.shape[0]))
-        return _np.dot(a, b)
+        return _np.dot(a, b), None
 
-    from mpi4py import MPI  # not at top so can import pygsti on cluster login nodes
-    loc_dot = _np.dot(a[:, loc_slice], b[loc_slice, :])
-    result = _np.empty(loc_dot.shape, loc_dot.dtype)
-    comm.Allreduce(loc_dot, result, op=MPI.SUM)
+    if out is None:
+        if ralloc is None:
+            result, result_shm = _np.zeros((a.shape[0], b.shape[1]), a.dtype), None
+        else:
+            result, result_shm = _smt.create_shared_ndarray(ralloc, (a.shape[0], b.shape[1]), a.dtype,
+                                                            zero_out=True)
+    else:
+        result = out
+        result_shm = out_shm
 
-    #DEBUG: assert(_np.linalg.norm( _np.dot(a,b) - result ) < 1e-6)
-    return result
+    #REMOVE asave, bsave = a.copy(), b.copy()
+    rshape = (_slct.length(loc_row_slice), _slct.length(loc_col_slice))
+    loc_result_flat = _np.empty(rshape[0] * rshape[1], a.dtype)
+    loc_result = loc_result_flat.view(); loc_result.shape = rshape
+    loc_result[:, :] = _np.dot(a[loc_row_slice, :], b[:, loc_col_slice])
+    #if loc_result.size > 0:
+    #    assert(_np.linalg.norm( _np.dot(a,b)[loc_row_slice, loc_col_slice]-loc_result) /
+    #           (_np.linalg.norm(loc_result) + 1.0)<1e-6),\
+    #        "DIFFS with SAVE = %g, %g.  Other = %g, %g, %s, %s, %s" % (
+    #            _np.linalg.norm(a - asave), _np.linalg.norm(b - bsave),
+    #            _np.linalg.norm( _np.dot(a,b)[loc_row_slice, loc_col_slice] - loc_result ),
+    #                             _np.linalg.norm(loc_result),
+    #            str(loc_result.shape), str(a.shape), str(b.shape))
+
+    # broadcast_com defines the group of processors this processor communicates with.
+    # Without shared memory, this is *all* the other processors.  With shared memory, this
+    # is one processor on each host.  This code is identical to that in distribute_for_dot.
+    if ralloc is None:
+        broadcast_comm = comm
+    else:
+        broadcast_comm = comm if (ralloc.interhost_comm is None) else ralloc.interhost_comm
+
+    comm.barrier()  # wait for all ranks to do their work (get their loc_result)
+    for r, (cur_row_slice, cur_col_slice) in enumerate(slice_tuples_by_rank):
+        # for each member of the group that will communicate results
+        cur_shape = (_slct.length(cur_row_slice), _slct.length(cur_col_slice))
+        buf = loc_result_flat if (broadcast_comm.rank == r) else _np.empty(cur_shape[0] * cur_shape[1], a.dtype)
+        broadcast_comm.Bcast(buf, root=r)
+        if broadcast_comm.rank != r: buf.shape = cur_shape
+        else: buf = loc_result  # already of correct shape
+        result[cur_row_slice, cur_col_slice] = buf
+        #if buf.size > 0:
+        #    assert(_np.linalg.norm( _np.dot(a,b)[cur_row_slice, cur_col_slice] - result[cur_row_slice, cur_col_slice] )
+        #           / (_np.linalg.norm(result[cur_row_slice, cur_col_slice] + 1.0)) < 1e-6), \
+        #        "Rank %d: DIFF = %g, %g, %s, %s" % (comm.rank,
+        #        _np.linalg.norm( _np.dot(a,b)[cur_row_slice, cur_col_slice] - result[cur_row_slice, cur_col_slice] ),
+        #        _np.linalg.norm(result[cur_row_slice, cur_col_slice]), str(cur_row_slice), str(cur_col_slice))
+    comm.barrier()  # wait for all ranks to finish writing to result
+
+    #assert(_np.linalg.norm(_np.dot(a,b) - result)/(_np.linalg.norm(result) + result.size) < 1e-6),\
+    #    "DEBUG: %g, %g, %d" % (_np.linalg.norm(_np.dot(a,b) - result), _np.linalg.norm(result), result.size)
+    return result, result_shm
 
     #myNCols = loc_col_slice.stop - loc_col_slice.start
     ## Gather pieces of coulomb tensor together
@@ -890,3 +1130,21 @@ def sum_arrays(local_array, owners, comm):
     result = _np.empty(local_array.shape, local_array.dtype)
     comm.Allreduce(local_array, result, op=MPI.SUM)
     return result
+
+
+def closest_divisor(a, b):
+    """
+    Returns the divisor of `a` that is closest to `b`.
+
+    Parameters
+    ----------
+    a, b : int
+
+    Returns
+    -------
+    int
+    """
+    if b >= a or b == 0: return a  # b=0 is special case.
+    for test in range(b, 0, -1):
+        if a % test == 0: return test
+    assert(False), "Should never get here - a %% 1 == 0 always! (a=%s, b=%s)" % (str(a), str(b))

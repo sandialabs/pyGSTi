@@ -1,11 +1,10 @@
 import numpy as np
 
+import pygsti.construction as pc
+from pygsti import io
+from pygsti.io import loaders
 from . import IOBase, with_temp_path
 from .references import generator as io_gen
-
-from pygsti import io
-import pygsti.construction as pc
-from pygsti.io import loaders
 
 
 class LoadersTester(IOBase):

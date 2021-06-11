@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 import pickle
-import pygsti
 
+import pygsti
 from pygsti.tools import timed_block
+
 
 def main():
     with open('data/full_report_results.pkl', 'rb') as infile:

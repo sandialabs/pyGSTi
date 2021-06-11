@@ -1,7 +1,7 @@
-from ..util import BaseCase
+import pygsti.circuits.circuitstructure as cs
 
-import pygsti.objects.circuitstructure as cs
-from pygsti.objects import Circuit
+from pygsti.circuits import Circuit
+from ..util import BaseCase
 
 
 class LSGermsStructureTester(BaseCase):
@@ -17,9 +17,13 @@ class LSGermsStructureTester(BaseCase):
         self.gss = cs.PlaquetteGridCircuitStructure(plaquettes, self.xvals, self.yvals, 'xlabel', 'ylabel')
 
     def test_truncate(self):
-        self.gss.truncate(xs_to_keep=['x1'])
-        self.gss.truncate(ys_to_keep=['y1'])
-        # TODO assert correctness
+        truncx = self.gss.truncate(xs_to_keep=['x1'])
+        self.assertEqual(truncx.used_xs, ['x1'])
+        self.assertEqual(truncx.used_ys, ['y1', 'y2'])
+
+        truncy = self.gss.truncate(ys_to_keep=['y1'])
+        self.assertEqual(truncy.used_xs, ['x1', 'x2'])
+        self.assertEqual(truncy.used_ys, ['y1'])
 
     def test_xvals(self):
         self.assertEqual(self.gss.xs, self.xvals)

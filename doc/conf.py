@@ -12,10 +12,11 @@
 # All configuration values have a default; values that are commented out
 # serve to show the default.
 
-import sys
-import os
-from pkg_resources import get_distribution
 import logging
+import os
+import sys
+
+from pkg_resources import get_distribution
 
 # autoclass sometimes wants stubs that aren't needed, so suppress unneccessary log spam
 logging.getLogger('sphinx').addFilter(lambda r: not r.msg.startswith("autosummary: stub file not found"))

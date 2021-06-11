@@ -1,8 +1,8 @@
-from ..util import BaseCase
 import numpy as np
 
-#from pygsti.extras import rb
-from pygsti.tools import internalgates, optools as ot
+# from pygsti.extras import rb
+from pygsti.tools import internalgates, optools as ot, basistools as bt
+from ..util import BaseCase
 
 
 class InternalGatesTester(BaseCase):
@@ -24,4 +24,5 @@ class InternalGatesTester(BaseCase):
         # Checks the u3 unitary generator runs
         u = internalgates.qasm_u3(0., 0., 0., output='unitary')
         sup = internalgates.qasm_u3(0., 0., 0., output='superoperator')
-        # TODO assert correctness
+        sup_u = ot.process_mx_to_unitary(bt.change_basis(sup, 'pp', 'std')) # Backtransform to unitary
+        self.assertArraysAlmostEqual(u, sup_u)
