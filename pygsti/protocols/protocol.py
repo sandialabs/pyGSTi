@@ -1,32 +1,27 @@
 """
 Protocol object
 """
-#***************************************************************************************************
+import collections as _collections
+import copy as _copy
+# ***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
-#***************************************************************************************************
-import numpy as _np
+# ***************************************************************************************************
 import itertools as _itertools
-import os as _os
-import copy as _copy
-import json as _json
-import pickle as _pickle
 import pathlib as _pathlib
-import importlib as _importlib
-import collections as _collections
 
 from .treenode import TreeNode as _TreeNode
 from .. import construction as _cnst
-from .. import objects as _objs
 from .. import io as _io
-from ..objects import circuit as _cir
-from ..objects.circuitlist import CircuitList as _CircuitList
-from ..tools import listtools as _lt
+from .. import baseobjs as _baseobjs
+from .. import circuits as _circuits
+from .. import datasets as _datasets
 from ..tools import NamedDict as _NamedDict
+from ..tools import listtools as _lt
 
 
 class Protocol(object):
@@ -650,7 +645,7 @@ class ExperimentDesign(_TreeNode):
         # 'text-circuit-list' - a text circuit list file
         # 'json' - a json file
         # 'pickle' - a python pickle file (use only if really needed!)
-        typ = 'pickle' if isinstance(self.all_circuits_needing_data, _objs.CircuitList) else 'text-circuit-list'
+        typ = 'pickle' if isinstance(self.all_circuits_needing_data, _circuits.CircuitList) else 'text-circuit-list'
         self.auxfile_types = {'all_circuits_needing_data': typ,
                               'alt_actual_circuits_executed': 'text-circuit-list',
                               'default_protocols': 'dict-of-protocolobjs'}
@@ -790,9 +785,9 @@ class ExperimentDesign(_TreeNode):
         return base
 
     def _truncate_to_circuits_inplace(self, circuits_to_keep):
-        self.all_circuits_needing_data = _CircuitList.cast(self.all_circuits_needing_data)
+        self.all_circuits_needing_data = _circuits.CircuitList.cast(self.all_circuits_needing_data)
         if self.alt_actual_circuits_executed is not None:
-            self.alt_actual_circuits_executed = _CircuitList.cast(self.alt_actual_circuits_executed)
+            self.alt_actual_circuits_executed = _circuits.CircuitList.cast(self.alt_actual_circuits_executed)
 
             allc = []; actualc = []
             if isinstance(circuits_to_keep, set):
@@ -816,7 +811,7 @@ class ExperimentDesign(_TreeNode):
             sub_design._truncate_to_design_inplace(other_design)
 
     def _truncate_to_available_data_inplace(self, dataset):
-        self.all_circuits_needing_data = _CircuitList.cast(self.all_circuits_needing_data)
+        self.all_circuits_needing_data = _circuits.CircuitList.cast(self.all_circuits_needing_data)
         ds_circuits = self.all_circuits_needing_data.apply_aliases()
         circuits_to_keep = [c for c, ds_c in zip(self.all_circuits_needing_data, ds_circuits) if ds_c in dataset]
         self._truncate_to_circuits_inplace(circuits_to_keep)
@@ -1033,7 +1028,7 @@ class CircuitListsDesign(ExperimentDesign):
         CircuitListsDesign
         """
 
-        if isinstance(circuit_lists, _objs.PlaquetteGridCircuitStructure):
+        if isinstance(circuit_lists, _circuits.PlaquetteGridCircuitStructure):
             master = circuit_lists
             circuit_lists = [master.truncate(xs_to_keep=master.xs[0:i + 1]) for i in range(len(master.xs))]
             nested = True  # (by this construction)
@@ -1054,7 +1049,7 @@ class CircuitListsDesign(ExperimentDesign):
 
         super().__init__(all_circuits, qubit_labels)
         self.auxfile_types['circuit_lists'] = 'pickle' \
-            if any([isinstance(lst, _objs.CircuitList) for lst in circuit_lists]) else 'text-circuit-lists'
+            if any([isinstance(lst, _circuits.CircuitList) for lst in circuit_lists]) else 'text-circuit-lists'
 
     def truncate_to_lists(self, list_indices_to_keep):
         """
@@ -1074,7 +1069,7 @@ class CircuitListsDesign(ExperimentDesign):
                                   qubit_labels=self.qubit_labels, nested=self.nested)
 
     def _truncate_to_circuits_inplace(self, circuits_to_keep):
-        truncated_circuit_lists = [_CircuitList.cast(lst).truncate(circuits_to_keep)
+        truncated_circuit_lists = [_circuits.CircuitList.cast(lst).truncate(circuits_to_keep)
                                    for lst in self.circuit_lists]
         self.circuit_lists = truncated_circuit_lists
         self.nested = False  # we're not sure whether the truncated lists are nested
@@ -1086,7 +1081,7 @@ class CircuitListsDesign(ExperimentDesign):
         super()._truncate_to_design_inplace(other_design)
 
     def _truncate_to_available_data_inplace(self, dataset):
-        truncated_lists = [_CircuitList.cast(clist).truncate_to_dataset(dataset)
+        truncated_lists = [_circuits.CircuitList.cast(clist).truncate_to_dataset(dataset)
                            for clist in self.circuit_lists]
         self.circuit_lists = truncated_lists
         #self.nested = False
@@ -1387,7 +1382,7 @@ class SimultaneousExperimentDesign(ExperimentDesign):
 
             padded_circuit_lists = [list() for des in edesigns]
             for subcircuits in zip(*circuits_per_edesign):
-                c = _cir.Circuit(num_lines=0, editable=True)  # Creates a empty circuit over no wires
+                c = _circuits.Circuit(num_lines=0, editable=True)  # Creates a empty circuit over no wires
                 padded_subcircuits = pad(subcircuits)
                 for subc in padded_subcircuits:
                     if subc is not None:
@@ -1426,7 +1421,7 @@ class SimultaneousExperimentDesign(ExperimentDesign):
         -------
         ProtocolData
         """
-        if isinstance(dataset, _objs.MultiDataSet):
+        if isinstance(dataset, _datasets.MultiDataSet):
             raise NotImplementedError("SimultaneousExperimentDesigns don't work with multi-pass data yet.")
 
         all_circuits = self.all_circuits_needing_data
@@ -1490,7 +1485,7 @@ class FreeformDesign(ExperimentDesign):
         circuits = {}
         for index, row in df.iterrows():
             data = {k: v for k, v in row.items() if k != 'Circuit'}
-            circuits[_objs.Circuit(row['Circuit'])] = data
+            circuits[_circuits.Circuit(row['Circuit'])] = data
         return cls(circuits, qubit_labels)
 
     @classmethod
@@ -1627,7 +1622,7 @@ class ProtocolData(_TreeNode):
                 #FUTURE: use MultiDataSet, BUT in addition to init_from_dict we'll need to add truncate, filter, and
                 # process_circuits support for MultiDataSet objects -- for now (above) we just use dicts of DataSets.
                 #raise NotImplementedError("Need to implement MultiDataSet.init_from_dict!")
-                #dataset = _objs.MultiDataSet.init_from_dict(
+                #dataset = _datasets.MultiDataSet.init_from_dict(
                 #    {pth.name: _io.load_dataset(pth, verbosity=0) for pth in dataset_files})
 
         cache = _io.metadir._read_json_or_pkl_files_to_dict(data_dir / 'cache')
@@ -1664,7 +1659,7 @@ class ProtocolData(_TreeNode):
         self.cache = cache if (cache is not None) else {}
         self.tags = {}
 
-        if isinstance(self.dataset, (_objs.MultiDataSet, dict)):  # can be a dict of DataSets instead of a multidataset
+        if isinstance(self.dataset, (_datasets.MultiDataSet, dict)):  # can be dict of DataSets instead of a multi-ds
             for dsname in self.dataset:
                 if dsname not in self.cache: self.cache[dsname] = {}  # create separate caches for each pass
             self._passdatas = {dsname: ProtocolData(self.edesign, ds, self.cache[dsname])
@@ -1733,7 +1728,7 @@ class ProtocolData(_TreeNode):
         -------
         bool
         """
-        return isinstance(self.dataset, (_objs.MultiDataSet, dict))
+        return isinstance(self.dataset, (_datasets.MultiDataSet, dict))
 
     #def underlying_tree_paths(self):
     #    return self.edesign.get_tree_paths()
@@ -1806,7 +1801,7 @@ class ProtocolData(_TreeNode):
                 assert(len(list(data_dir.glob('*.txt'))) == 0), "There shouldn't be *.txt files in %s!" % str(data_dir)
             else:
                 data_dir.mkdir(exist_ok=True)
-                if isinstance(self.dataset, (_objs.MultiDataSet, dict)):
+                if isinstance(self.dataset, (_datasets.MultiDataSet, dict)):
                     for dsname, ds in self.dataset.items():
                         _io.write_dataset(data_dir / (dsname + '.txt'), ds)
                 else:
@@ -1865,7 +1860,7 @@ class ProtocolData(_TreeNode):
         pandas.DataFrame
         """
         cdict = _NamedDict('Circuit', None)
-        if isinstance(self.dataset, _objs.FreeformDataSet):
+        if isinstance(self.dataset, _datasets.FreeformDataSet):
             for cir, i in self.dataset.cirIndex.items():
                 d = _NamedDict('ValueName', 'category', items=self.dataset._info[i])
                 if isinstance(self.edesign, FreeformDesign):

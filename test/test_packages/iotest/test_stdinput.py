@@ -1,14 +1,13 @@
-import functools
-import numpy as np
 from pathlib import Path
 
-from . import IOBase, with_temp_path, with_temp_file
+import numpy as np
 
+import pygsti.construction as pc
+import pygsti.io.stdinput as stdin
+from pygsti import io
 from pygsti.modelpacks.legacy import std1Q_XYI as std
 from pygsti.objects import Circuit, CircuitLabel
-import pygsti.construction as pc
-from pygsti import io
-import pygsti.io.stdinput as stdin
+from . import IOBase, with_temp_path, with_temp_file
 
 
 class StdInputBase:

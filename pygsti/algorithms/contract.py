@@ -10,12 +10,15 @@ GST contraction algorithms
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as _np
 import warnings as _warnings
 
-from .. import objects as _objs
-from .. import tools as _tools
+import numpy as _np
+
+from .. import baseobjs as _baseobjs
 from .. import optimize as _opt
+from .. import tools as _tools
+from ..modelmembers import operations as _op
+from ..modelmembers import povms as _povm
 
 
 def contract(model, to_what, dataset=None, maxiter=1000000, tol=0.01, use_direct_cp=True, method="Nelder-Mead",
@@ -74,7 +77,7 @@ def contract(model, to_what, dataset=None, maxiter=1000000, tol=0.01, use_direct
         The contracted model
     """
 
-    printer = _objs.VerbosityPrinter.create_printer(verbosity)
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
 
     if to_what == 'CPTP':
         if use_direct_cp:
@@ -111,7 +114,7 @@ def _contract_to_xp(model, dataset, verbosity, method='Nelder-Mead',
 
     CLIFF = 10000
 
-    printer = _objs.VerbosityPrinter.create_printer(verbosity)
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
 
     #printer.log('', 2)
     printer.log("--- Contract to XP ---", 1)
@@ -148,7 +151,7 @@ def _contract_to_cp(model, verbosity, method='Nelder-Mead',
                     maxiter=100000, tol=1e-2):
 
     CLIFF = 10000
-    printer = _objs.VerbosityPrinter.create_printer(verbosity)
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
 
     #printer.log('', 2)
     printer.log("--- Contract to CP ---", 1)
@@ -183,7 +186,7 @@ def _contract_to_cp(model, verbosity, method='Nelder-Mead',
 #modifies gates only (not rhoVecs or EVecs = SPAM)
 def _contract_to_cp_direct(model, verbosity, tp_also=False, maxiter=100000, tol=1e-8):
 
-    printer = _objs.VerbosityPrinter.create_printer(verbosity)
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
 
     mdl = model.copy()  # working copy that we keep overwriting with vectorized data
     printer.log(("--- Contract to %s (direct) ---" % ("CPTP" if tp_also else "CP")), 1)
@@ -284,7 +287,7 @@ def _contract_to_cp_direct(model, verbosity, tp_also=False, maxiter=100000, tol=
             it += 1
             if it > maxiter: break
 
-        mdl.operations[opLabel] = _objs.FullDenseOp(new_op)
+        mdl.operations[opLabel] = _op.FullArbitraryOp(new_op, mdl.evotype, mdl.state_space)
 
         if it > maxiter:
             printer.warning("Max iterations exceeded in contract_to_cp_direct")
@@ -308,7 +311,7 @@ def _contract_to_cp_direct(model, verbosity, tp_also=False, maxiter=100000, tol=
 
 #modifies gates only (not rhoVecs or EVecs = SPAM)
 def _contract_to_tp(model, verbosity):
-    printer = _objs.VerbosityPrinter.create_printer(verbosity)
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
     #printer.log('', 2)
     printer.log("--- Contract to TP ---", 1)
     mdl = model.copy()
@@ -348,7 +351,7 @@ def _contract_to_valid_spam(model, verbosity=0):
         The contracted model
     """
 
-    printer = _objs.VerbosityPrinter.create_printer(verbosity)
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
 
     TOL = 1e-9
     mdl = model.copy()
@@ -375,7 +378,7 @@ def _contract_to_valid_spam(model, verbosity=0):
                 for ELabel, EVec in mdl.povms[povmLbl].items():
                     scaled_effects.append((ELabel, EVec / r))
                 # Note: always creates an unconstrained POVM
-                mdl.povms[povmLbl] = _objs.UnconstrainedPOVM(scaled_effects)
+                mdl.povms[povmLbl] = _povm.UnconstrainedPOVM(scaled_effects, mdl.evotype, mdl.state_space)
 
         mx = _tools.ppvec_to_stdmx(vec)
 
@@ -394,7 +397,7 @@ def _contract_to_valid_spam(model, verbosity=0):
     for povmLbl in list(mdl.povms.keys()):
         scaled_effects = []
         for ELabel, EVec in mdl.povms[povmLbl].items():
-            #if isinstance(EVec, _objs.ComplementSPAMVec):
+            #if isinstance(EVec, _povm.ComplementPOVMEffect):
             #    continue #don't contract complement vectors
             evals, evecs = _np.linalg.eig(_tools.ppvec_to_stdmx(EVec))
             if(min(evals) < 0.0 or max(evals) > 1.0):
@@ -412,7 +415,8 @@ def _contract_to_valid_spam(model, verbosity=0):
             else:
                 scaled_effects.append((ELabel, EVec))  # no scaling
 
-        mdl.povms[povmLbl] = _objs.UnconstrainedPOVM(scaled_effects)  # Note: always creates an unconstrained POVM
+        mdl.povms[povmLbl] = _povm.UnconstrainedPOVM(scaled_effects, mdl.evotype, mdl.state_space)
+        # Note: always creates an unconstrained POVM
 
     #mdl.log("Contract to valid SPAM")
     #printer.log('', 2)

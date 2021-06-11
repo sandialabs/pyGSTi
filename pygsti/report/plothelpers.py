@@ -10,14 +10,15 @@ Helper Functions for generating plots
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as _np
 import warnings as _warnings
 
+import numpy as _np
+
 from .. import tools as _tools
-from .. import objects as _objs
-from ..objects import objectivefns as _objfns
-from ..objects.smartcache import smart_cached
-from ..objects.circuitlist import CircuitList as _CircuitList
+from ..objectivefns import objectivefns as _objfns
+from ..circuits.circuitlist import CircuitList as _CircuitList
+from ..baseobjs.smartcache import smart_cached
+
 
 #TODO REMOVE
 #def total_count_matrix(gsplaq, dataset):

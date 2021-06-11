@@ -8,11 +8,8 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from ...objects import oplessmodel as _oplessmodel
-from ...objects import processorspec as _pspec
-from ...objects import povm as _povm
-from ...construction import modelconstruction as _mconst
-from ...tools import rbtools as _anl
+import numpy as _np
+
 
 from . import ibmq_athens
 from . import ibmq_belem
@@ -40,8 +37,11 @@ from . import rigetti_agave
 from . import rigetti_aspen4
 from . import rigetti_aspen6
 from . import rigetti_aspen7
-
-import numpy as _np
+from ...baseobjs import processorspec as _pspec
+from ...construction import modelconstruction as _mconst
+from ...models import oplessmodel as _oplessmodel
+from ...modelmembers.povms import povm as _povm
+from ...tools import rbtools as _anl
 
 
 def get_device_specs(devname):

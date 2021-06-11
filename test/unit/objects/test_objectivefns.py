@@ -1,10 +1,10 @@
 import numpy as np
-from ..util import BaseCase
-from . import smqfixtures
 
 import pygsti
-import pygsti.objects.objectivefns as _objfns
-from pygsti.objects.wildcardbudget import PrimitiveOpsWildcardBudget as _PrimitiveOpsWildcardBudget
+import pygsti.objectivefns.objectivefns as _objfns
+from pygsti.objectivefns.wildcardbudget import PrimitiveOpsWildcardBudget as _PrimitiveOpsWildcardBudget
+from . import smqfixtures
+from ..util import BaseCase
 
 
 class ObjectiveFunctionData(object):
@@ -420,7 +420,7 @@ class TimeDependentMDSObjectiveFunctionTester(ObjectiveFunctionData):
 
     def setUp(self):
         super().setUp()
-        self.model.sim = pygsti.objects.MapForwardSimulator(model=self.model, max_cache_size=0)
+        self.model.sim = pygsti.forwardsims.MapForwardSimulator(model=self.model, max_cache_size=0)
         self.objfns = self.build_objfns()
 
     def test_lsvec(self):

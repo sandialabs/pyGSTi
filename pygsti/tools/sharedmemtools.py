@@ -11,6 +11,7 @@ Utility functions for working with shared memory
 #***************************************************************************************************
 
 import os as _os
+
 import numpy as _np
 
 if _os.environ.get('PYGSTI_USE_SHARED_MEMORY', '1') in ('1', 'True', 'true'):

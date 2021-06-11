@@ -10,10 +10,10 @@ pyGSTi Optimization Python Package
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-#Import the most important/useful routines of each module into
-# the package namespace
-from .optimize import *
+from .arraysinterface import *
 from .customlm import *
 from .customsolve import *
+# Import the most important/useful routines of each module into
+# the package namespace
+from .optimize import *
 from .wildcardopt import *
-from .arraysinterface import *

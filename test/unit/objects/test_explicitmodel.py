@@ -1,10 +1,9 @@
 import numpy as np
 
-from ..util import BaseCase
-
-from pygsti.modelpacks.legacy import std1Q_XYI as std
+import pygsti.models.explicitmodel as mdl
 from pygsti.construction.modelconstruction import create_explicit_model, _create_operation
-import pygsti.objects.explicitmodel as mdl
+from pygsti.modelpacks.legacy import std1Q_XYI as std
+from ..util import BaseCase
 
 
 class ExplicitOpModelStrictAccessTester(BaseCase):
@@ -86,7 +85,7 @@ class ExplicitOpModelToolTester(BaseCase):
 
     def test_depolarize_with_spam_noise(self):
         gateset_spam = self.model.depolarize(spam_noise=0.1)
-        self.assertAlmostEqual(float(np.dot(self.model['Mdefault']['0'].T, self.model['rho0'])), 1.0)
+        self.assertAlmostEqual(float(np.dot(self.model['Mdefault']['0'].to_dense().T, self.model['rho0'].to_dense())), 1.0)
         # Since np.ndarray doesn't implement __round__... (assertAlmostEqual() doesn't work)
         # Compare the single element dot product result to 0.095 instead (coverting the array's contents ([[ 0.095 ]]) to a **python** float (0.095))
         # print("DEBUG gateset_spam = ")
@@ -96,11 +95,11 @@ class ExplicitOpModelToolTester(BaseCase):
         # print(gateset_spam['Mdefault']['0'].T)
         # print(gateset_spam['rho0'].T)
         # not 0.905 b/c effecs aren't depolarized now
-        self.assertAlmostEqual(np.dot(gateset_spam['Mdefault']['0'].T, gateset_spam['rho0']).reshape(-1,)[0], 0.95)
-        self.assertArraysAlmostEqual(gateset_spam['rho0'], 1 / np.sqrt(2) * np.array([1, 0, 0, 0.9]).reshape(-1, 1))
+        self.assertAlmostEqual(np.dot(gateset_spam['Mdefault']['0'].to_dense().T, gateset_spam['rho0'].to_dense()).reshape(-1,)[0], 0.95)
+        self.assertArraysAlmostEqual(gateset_spam['rho0'].to_dense(), 1 / np.sqrt(2) * np.array([1, 0, 0, 0.9]))
         #self.assertArraysAlmostEqual(gateset_spam['Mdefault']['0'], 1/np.sqrt(2)*np.array([1,0,0,0.9]).reshape(-1,1) ) #not depolarized now
-        self.assertArraysAlmostEqual(gateset_spam['Mdefault']['0'], 1 / np.sqrt(2)
-                                     * np.array([1, 0, 0, 1]).reshape(-1, 1))  # not depolarized now
+        print(gateset_spam['Mdefault']['0'].to_dense())
+        self.assertArraysAlmostEqual(gateset_spam['Mdefault']['0'].to_dense(), 1 / np.sqrt(2) * np.array([1, 0, 0, 1]))  # not depolarized now
 
     def test_random_rotate_1q(self):
         gateset_rand_rot = self.model.rotate(max_rotate=0.2)

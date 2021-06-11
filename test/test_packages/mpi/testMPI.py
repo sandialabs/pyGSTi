@@ -3,12 +3,11 @@
 # By wrapping asserts in comm.rank == 0, only rank 0 should fail (should help with output)
 # Can run with different number of procs, but 4 is minimum to test all modes (pure MPI, pure shared mem, and mixed)
 
-from io import StringIO
+import os
+
 import nose
 import numpy as np
 from mpi4py import MPI
-import os
-import sys
 
 import pygsti
 from pygsti.modelpacks import smq1Q_XYI as std

@@ -1,18 +1,17 @@
-import unittest
-import pygsti
-import numpy as np
-import pickle
 import itertools
+import pickle
+import unittest
 
-from numpy.random import random,seed
+import numpy as np
+from numpy.random import random, seed
 
-from pygsti.modelpacks.legacy import std1Q_XYI
-from  pygsti.objects import SPAMVec, DenseSPAMVec
+import pygsti
 import pygsti.construction as pc
 from pygsti.construction import modelconstruction
+from pygsti.modelpacks.legacy import std1Q_XYI
+from pygsti.objects import SPAMVec
+from ..testutils import BaseTestCase
 
-
-from ..testutils import BaseTestCase, compare_files, temp_files
 
 class SPAMVecTestCase(BaseTestCase):
     def test_cptp_spamvec(self):

@@ -8,13 +8,13 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-#Import the most important/useful routines of each module into
-# the package namespace
-#from .core import *
-#from .signal import DCT
-#from .core import *
-from .stabilityanalyzer import StabilityAnalyzer
 from . import driftreport as report
-from . import signal
 from . import probtrajectory
+from . import signal
 from . import trmodel
+# Import the most important/useful routines of each module into
+# the package namespace
+# from .core import *
+# from .signal import DCT
+# from .core import *
+from .stabilityanalyzer import StabilityAnalyzer

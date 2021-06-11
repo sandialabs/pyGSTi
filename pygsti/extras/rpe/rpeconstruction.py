@@ -9,10 +9,11 @@
 #***************************************************************************************************
 
 import numpy as _np
+
 from . import rpetools as _rpetools
 from ... import construction as _cnst
-from ... import objects as _objs
 from ... import tools as _tools
+from ...circuits.circuit import Circuit as _Circuit
 
 
 def create_parameterized_rpe_model(alpha_true, epsilon_true, aux_rot, spam_depol,
@@ -191,10 +192,10 @@ def create_rpe_angle_circuit_lists(k_list, angle_name, rpeconfig_inst):
     cosStrList = []
     sinStrList = []
     for k in k_list:
-        cosStrList += [_objs.Circuit(cos_prep_tuple + cos_germ_tuple * k + cos_meas_tuple,
-                                     stringrep=cos_prep_str + '(' + cos_germ_str + ')^' + str(k) + cos_meas_str)]
-        sinStrList += [_objs.Circuit(sin_prep_tuple + sin_germ_tuple * k + sin_meas_tuple,
-                                     stringrep=sin_prep_str + '(' + sin_germ_str + ')^' + str(k) + sin_meas_str)]
+        cosStrList += [_Circuit(cos_prep_tuple + cos_germ_tuple * k + cos_meas_tuple,
+                                stringrep=cos_prep_str + '(' + cos_germ_str + ')^' + str(k) + cos_meas_str)]
+        sinStrList += [_Circuit(sin_prep_tuple + sin_germ_tuple * k + sin_meas_tuple,
+                                stringrep=sin_prep_str + '(' + sin_germ_str + ')^' + str(k) + sin_meas_str)]
     return cosStrList, sinStrList
 
 

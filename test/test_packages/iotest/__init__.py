@@ -1,10 +1,8 @@
 """Tests for pygsti file IO"""
 
-import sys
 import functools
 import types
 from contextlib import contextmanager
-
 from pathlib import Path
 from tempfile import TemporaryDirectory
 

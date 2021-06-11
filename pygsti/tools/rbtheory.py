@@ -10,15 +10,17 @@ RB-related functions of gates and models
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from . import rbtools as _rbtls
-from . import optools as _optls
-from . import matrixtools as _mtls
-from .. import objects as _objs
-#from .. import construction as _cnst
-#from .. import algorithms as _algs
+import warnings as _warnings
 
 import numpy as _np
-import warnings as _warnings
+
+from . import matrixtools as _mtls
+from . import optools as _optls
+from . import rbtools as _rbtls
+
+
+# from .. import construction as _cnst
+# from .. import algorithms as _algs
 
 
 def predicted_rb_number(model, target_model, weights=None, d=None, rtype='EI'):
@@ -271,10 +273,11 @@ def transform_to_rb_gauge(model, target_model, weights=None, mx_basis=None, eige
     model_in_RB_gauge : Model
         The model `model` transformed into the "RB gauge".
     """
+    from ..models.gaugegroup import FullGaugeGroupElement as _FullGaugeGroupElement
     l = rb_gauge(model, target_model, weights=weights, mx_basis=mx_basis,
                  eigenvector_weighting=eigenvector_weighting)
     model_in_RB_gauge = model.copy()
-    S = _objs.FullGaugeGroupElement(_np.linalg.inv(l))
+    S = _FullGaugeGroupElement(_np.linalg.inv(l))
     model_in_RB_gauge.transform_inplace(S)
     return model_in_RB_gauge
 
@@ -325,7 +328,8 @@ def L_matrix(model, target_model, weights=None):  # noqa N802
     normalizer = _np.sum(_np.array([weights[key] for key in list(target_model.operations.keys())]))
     L_matrix = (1 / normalizer) * _np.sum(
         weights[key] * _np.kron(
-            model.operations[key].to_dense().T, _np.linalg.inv(target_model.operations[key].to_dense())
+            model.operations[key].to_dense(on_space='HilbertSchmidt').T,
+            _np.linalg.inv(target_model.operations[key].to_dense(on_space='HilbertSchmidt'))
         ) for key in target_model.operations.keys())
 
     return L_matrix

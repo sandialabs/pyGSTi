@@ -1,8 +1,7 @@
-from ...util import BaseCase
-
-from pygsti.modelpacks.legacy import std1Q_XYI as std, std1Q_XYI as stdXY
 import pygsti.construction as pc
 from pygsti.extras.rpe import rpetools as tools, rpeconstruction as rpc
+from pygsti.modelpacks.legacy import std1Q_XYI as std, std1Q_XYI as stdXY
+from ...util import BaseCase
 
 _SEED = 1969
 

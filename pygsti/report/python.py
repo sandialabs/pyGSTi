@@ -11,7 +11,8 @@ Routines for converting python objects to python.
 #***************************************************************************************************
 
 import collections as _collections
-from ..objects.reportableqty import ReportableQty as _ReportableQty
+
+from pygsti.report.reportableqty import ReportableQty as _ReportableQty
 
 '''
 table() and cell() functions are used by table.py in table creation

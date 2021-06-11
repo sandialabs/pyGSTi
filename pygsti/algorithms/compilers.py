@@ -10,13 +10,14 @@ Clifford circuit, CNOT circuit, and stabilizer state/measurement generation comp
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as _np
 import copy as _copy
 
-from ..objects.circuit import Circuit as _Circuit
-from ..objects.label import Label as _Label
-from ..tools import symplectic as _symp
+import numpy as _np
+
+from pygsti.circuits.circuit import Circuit as _Circuit
+from ..baseobjs.label import Label as _Label
 from ..tools import matrixmod2 as _mtx
+from ..tools import symplectic as _symp
 
 
 def _create_standard_costfunction(name):

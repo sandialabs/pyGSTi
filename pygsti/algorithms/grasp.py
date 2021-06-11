@@ -15,7 +15,8 @@ import random
 
 import numpy as _np
 
-from .. import objects as _objs
+from .. import baseobjs as _baseobjs
+from .. import circuits as _circuits
 
 
 def get_swap_neighbors(weights, forced_weights=None, shuffle=False):
@@ -330,13 +331,13 @@ def run_grasp_iteration(elements, greedy_score_fn, rcl_fn, local_score_fn,
     localSoln : list
         The sublist of `elements` given by the local search.
     """
-    printer = _objs.VerbosityPrinter.create_printer(verbosity)
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
 
     initialSoln = _grasp_construct_feasible_solution(elements, greedy_score_fn, rcl_fn,
                                                      feasible_threshold, feasible_fn,
                                                      initial_elements)
     printer.log('Initial construction:', 1)
-    def to_str(x): return x.str if isinstance(x, _objs.Circuit) else str(x)
+    def to_str(x): return x.str if isinstance(x, _circuits.Circuit) else str(x)
     printer.log(str([to_str(element) for element in initialSoln]), 1)
 
     localSoln = _grasp_local_search(initialSoln, local_score_fn, elements,
@@ -421,7 +422,7 @@ def run_grasp(elements, greedy_score_fn, rcl_fn, local_score_fn, get_neighbors_f
     list of Circuits
         The best germ set from all locally-optimal germ sets constructed.
     """
-    printer = _objs.VerbosityPrinter.create_printer(verbosity)
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
 
     bestSoln = None
     for iteration in range(iterations):

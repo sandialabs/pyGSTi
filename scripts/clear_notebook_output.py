@@ -4,8 +4,9 @@
 Modified from https://gist.github.com/damianavila/5305869
 """
 
-import sys
 import argparse
+import sys
+
 import nbformat
 
 _DEFAULT_VERSION = 4

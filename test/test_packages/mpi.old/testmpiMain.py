@@ -1,14 +1,14 @@
-import unittest
 import itertools
-import time
-import sys
 import pickle
+import time
+import unittest
+
 import numpy as np
-from mpinoseutils import *
 
 import pygsti
+from mpinoseutils import *
+from pygsti.baseobjs import profiler
 from pygsti.modelpacks.legacy import std1Q_XYI as std
-from pygsti.objects import profiler
 
 g_maxLengths = [1,2,4,8]
 g_numSubTrees = 3
@@ -467,7 +467,6 @@ def test_MPI_fills(comm):
 def test_MPI_compute_cache(comm):
     #try to run hard-to-reach cases where there are lots of processors compared to
     # the number of elements being computed:
-    from pygsti.modelpacks.legacy import std1Q_XY #nice b/c only 2 gates
 
     #Create some model
     mdl = std.target_model()

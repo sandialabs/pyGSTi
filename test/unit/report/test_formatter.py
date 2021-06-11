@@ -1,8 +1,7 @@
-from ..util import BaseCase
-
+import pygsti.report.formatters as fmt
 from pygsti.report.latex import value as latex_value
 from pygsti.report.table import ReportTable
-import pygsti.report.formatters as fmt
+from ..util import BaseCase
 
 
 def render_pair(heading, formatter, formattype='latex', **kwargs):

@@ -11,9 +11,6 @@ Defines the ReportText class
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from collections import OrderedDict as _OrderedDict
-from .row import Row
-
 
 class ReportText(object):
     """

@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
-from helpers.automation_tools    import directory, get_changed_packages
-import subprocess, argparse, shutil, sys, os
+import argparse
+import os
+import shutil
+import subprocess
+import sys
 import webbrowser
+
+from helpers.automation_tools import directory, get_changed_packages
 
 '''
 Script for running the test suite.

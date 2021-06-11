@@ -1,4 +1,4 @@
-from .helpers           import get_pylint_output, write_output
+from .helpers           import get_pylint_output
 from ..automation_tools import read_json
 
 def lint_all():

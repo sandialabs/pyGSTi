@@ -1,7 +1,6 @@
 import unittest
-from nose.tools import raises
 
-from ..util import BaseCase
+from nose.tools import raises
 
 from pygsti.io.circuitparser import slowcircuitparser
 

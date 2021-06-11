@@ -1,20 +1,19 @@
 """
 Symplectic representation utility functions
 """
-#***************************************************************************************************
+import numpy as _np
+
+from . import matrixmod2 as _mtx
+# ***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
-#***************************************************************************************************
-from ..objects.label import Label as _Label
-from ..objects.smartcache import smart_cached
-from . import matrixmod2 as _mtx
-
-import numpy as _np
-import copy as _copy
+# ***************************************************************************************************
+from ..baseobjs.label import Label as _Label
+from ..baseobjs.smartcache import smart_cached
 
 try:
     from . import fastcalc as _fastcalc
@@ -447,7 +446,7 @@ def compose_cliffords(s1, p1, s2, p2, do_checks=True):
 
     p2 : numpy array
         The 'phase vector' over the integers mod 4 representing the second Clifford
-    
+
     do_checks : bool
         If True (default), check inputs and output are valid cliffords.
         If False, these checks are skipped (for speed)
@@ -1089,7 +1088,8 @@ def symplectic_rep_of_clifford_circuit(circuit, srep_dict=None, pspec=None):
         # not returned in the layer. Note that the layer contains each gate only once.
         layer = circuit.layer_label(i)
         # future : update so that we don't use this function, because it slower than necessary (possibly much slower).
-        layer_s, layer_p = symplectic_rep_of_clifford_layer(layer, n, circuit.line_labels, srep_dict, add_internal_sreps=False)
+        layer_s, layer_p = symplectic_rep_of_clifford_layer(layer, n, circuit.line_labels, srep_dict,
+                                                            add_internal_sreps=False)
         #s, p = compose_cliffords(s, p, layer_s, layer_p, do_checks=False)
         if _fastcalc is not None:
             s, p = _fastcalc.fast_compose_cliffords(s, p, layer_s, layer_p)
@@ -1130,7 +1130,7 @@ def symplectic_rep_of_clifford_layer(layer, n=None, q_labels=None, srep_dict=Non
         may be None. Otherwise it must be specified. If the layer contains some
         standard gates it is not necesary to specify the symplectic represenation
         for those gates.
-    
+
     add_internal_sreps : bool, optional
         If True, the symplectic reps for internal gates are calculated and added to srep_dict.
         For speed, calculate these reps once, store them in srep_dict, and set this to False.

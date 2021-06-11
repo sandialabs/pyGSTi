@@ -4,15 +4,11 @@ mpl_logger.setLevel(logging.WARNING)
 
 import unittest
 import pygsti
-from pygsti.modelpacks.legacy import std1Q_XYI as std
-from pygsti.objects import Label as L, Basis
-from pygsti.objects import profiler
 
 import numpy as np
 from scipy import polyfit
-import sys
 
-from ..testutils import compare_files, temp_files, regenerate_references
+from ..testutils import compare_files, regenerate_references
 from .basecase import AlgorithmsBase
 
 class TestCoreMethods(AlgorithmsBase):
@@ -45,11 +41,11 @@ class TestCoreMethods(AlgorithmsBase):
 
     def test_LGST_no_sample_error(self):
         #change rep-count type so dataset can hold fractional counts for sampleError = 'none'
-        oldType = pygsti.objects.dataset.Repcount_type
-        pygsti.objects.dataset.Repcount_type = np.float64
+        oldType = pygsti.datasets.dataset.Repcount_type
+        pygsti.datasets.dataset.Repcount_type = np.float64
         ds = pygsti.construction.simulate_data(self.datagen_gateset, self.lgstStrings,
                                                     num_samples=10000, sample_error='none')
-        pygsti.objects.dataset.Repcount_type = oldType
+        pygsti.datasets.dataset.Repcount_type = oldType
 
         mdl_lgst = pygsti.run_lgst(ds, self.fiducials, self.fiducials, self.model, svd_truncate_to=4, verbosity=0)
         print("DATAGEN:")

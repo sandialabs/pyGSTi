@@ -61,9 +61,9 @@ except ImportError:
 
     from .slowcircuitparser import *
 
-import warnings as _warnings
 from ply import lex, yacc
-from ...objects import label as _lbl
+
+from ...baseobjs import label as _lbl
 
 
 class CircuitLexer:

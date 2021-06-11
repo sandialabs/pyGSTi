@@ -10,19 +10,15 @@ Internal model of a report during generation
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import time as _time
-import warnings as _warnings
-from pathlib import Path as _Path
-import shutil as _shutil
-from collections import defaultdict as _defaultdict, OrderedDict as _OrderedDict
 import pickle as _pickle
+import time as _time
+from collections import defaultdict as _defaultdict
+from pathlib import Path as _Path
 
-from . import autotitle as _autotitle
 from . import merge_helpers as _merge
-from .. import _version, tools as _tools
-from ..objects import VerbosityPrinter as _VerbosityPrinter, ExplicitOpModel as _ExplicitOpModel
 from . import workspace as _ws
 from .notebook import Notebook as _Notebook
+from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 
 
 # TODO this whole thing needs to be rewritten with different reports as derived classes

@@ -1,9 +1,10 @@
-from ..testutils import BaseTestCase, compare_files, temp_files
+import unittest
 
 import numpy as np
-import unittest
+
 import pygsti
-import pygsti.construction as pc
+from ..testutils import BaseTestCase
+
 
 class GateConstructionTestCase(BaseTestCase):
     def test_CNOT_convention(self):
