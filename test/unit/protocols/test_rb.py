@@ -13,7 +13,7 @@ class TestCliffordRBDesign(BaseCase):
         gate_names = ['Gxpi2', 'Gxmpi2', 'Gypi2', 'Gympi2', 'Gcphase']
         availability = {'Gcphase':[('Q'+str(i),'Q'+str((i+1) % self.num_qubits)) for i in range(self.num_qubits)]}
 
-        self.pspec = pygsti.obj.ProcessorSpec(self.num_qubits, gate_names, availability=availability,
+        self.pspec = pygsti.baseobjs.ProcessorSpec(self.num_qubits, gate_names, availability=availability,
             qubit_labels=self.qubit_labels, construct_models=('clifford',))
 
         # TODO: Test a lot of these, currently just the default from the tutorial
@@ -62,7 +62,7 @@ class TestDirectRBDesign(BaseCase):
         gate_names = ['Gxpi2', 'Gxmpi2', 'Gypi2', 'Gympi2', 'Gcphase']
         availability = {'Gcphase':[('Q'+str(i),'Q'+str((i+1) % self.num_qubits)) for i in range(self.num_qubits)]}
 
-        self.pspec = pygsti.obj.ProcessorSpec(self.num_qubits, gate_names, availability=availability,
+        self.pspec = pygsti.baseobjs.ProcessorSpec(self.num_qubits, gate_names, availability=availability,
             qubit_labels=self.qubit_labels, construct_models=('clifford',))
 
         # TODO: Test a lot of these, currently just the default from the tutorial
@@ -111,7 +111,7 @@ class TestMirrorRBDesign(BaseCase):
         gate_names = ['Gi', 'Gxpi2', 'Gxpi', 'Gxmpi2', 'Gypi2', 'Gypi', 'Gympi2', 'Gzpi2', 'Gzpi', 'Gzmpi2', 'Gcphase'] 
         availability = {'Gcphase':[('Q'+str(i),'Q'+str((i+1) % self.num_qubits)) for i in range(self.num_qubits)]}
 
-        self.pspec = pygsti.obj.ProcessorSpec(self.num_qubits, gate_names, availability=availability,
+        self.pspec = pygsti.baseobjs.ProcessorSpec(self.num_qubits, gate_names, availability=availability,
             construct_clifford_compilations={'absolute': ('paulis', '1Qcliffords')}, # SS: I think this is for speed, don't need paulieq for MirrorRB?
             qubit_labels=self.qubit_labels, construct_models=('clifford',))
 
