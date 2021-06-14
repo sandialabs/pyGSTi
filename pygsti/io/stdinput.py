@@ -522,7 +522,7 @@ class StdInputParser(object):
                                     dataset.add_outcome_labels(outcome_labels, update_ol=False)
                                     outcome_indices = [dataset.olIndex[ol] for ol in outcome_labels]
                             else:  # assume valueList is a list of (outcomeLabel, count) tuples -- see parse_dataline
-                                outcome_labels, count_values = zip(*valueList) if len(valueList) else [], []
+                                outcome_labels, count_values = zip(*valueList) if len(valueList) else ([], [])
                                 if not outcome_labels_specified_in_preamble:
                                     dataset.add_outcome_labels(outcome_labels, update_ol=False)
                                 outcome_indices = [dataset.olIndex[ol] for ol in outcome_labels]
