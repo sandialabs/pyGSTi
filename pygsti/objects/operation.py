@@ -1198,7 +1198,7 @@ class LinearOperator(_modelmember.ModelMember):
 
         return matrix
 
-    def get_chp_str(self, targets=None):
+    def get_chp_str(self, targets=None, rand_state=None):
         """Return a string suitable for printing to a CHP input file after
         probabilistically selecting operation.
 
@@ -1206,6 +1206,9 @@ class LinearOperator(_modelmember.ModelMember):
         ----------
         targets: list of int, optional
             Qubits to be applied to (if None, uses stored CHP strings directly)
+        
+        rand_state: RandomState, optional
+            RNG generator to use for probabilistic CHP operations
 
         Returns
         -------
@@ -2759,7 +2762,7 @@ class StochasticNoiseOp(LinearOperator):
     # Difficult to parameterize and maintain the p_i conditions - Initially just store positive p_i's
     # and don't bother restricting their sum to be < 1?
 
-    def __init__(self, dim, basis="pp", evotype="densitymx", initial_rates=None, seed_or_state=None):
+    def __init__(self, dim, basis="pp", evotype="densitymx", initial_rates=None):
         """
         Create a new StochasticNoiseOp, representing a stochastic noise
         channel with possibly asymmetric noise but only noise that is
@@ -2783,16 +2786,7 @@ class StochasticNoiseOp(LinearOperator):
             if not None, a list of `dim-1` initial error rates along each of
             the directions corresponding to each basis element.  If None,
             then all initial rates are zero.
-
-        seed_or_state : float or RandomState, optional
-            Random seed for RandomState (or directly provided RandomState)
-            for sampling stochastic superoperators with the 'chp' evotype.
         """
-        if isinstance(seed_or_state, _RandomState):
-            self.rand_state = seed_or_state
-        else:
-            self.rand_state = _RandomState(seed_or_state)
-
         if evotype in ['densitymx', 'cterm', 'svterm']:
             self.basis = _Basis.cast(basis, dim, sparse=False)  # sparse??
             assert(dim == self.basis.dim), "Dimension of `basis` must match the dimension (`dim`) of this op."
@@ -3028,13 +3022,16 @@ class StochasticNoiseOp(LinearOperator):
         # so d( sum(abs(rates)) )/dparam_i = 2*param_i
         return 2 * self.to_vector()
 
-    def get_chp_str(self, targets=None):
+    def get_chp_str(self, targets=None, rand_state=None):
         """Return a string suitable for printing to a CHP input file after stochastically selecting operation.
 
         Parameters
         ----------
         targets: list of int
             Qubits to be applied to (if None, uses stored CHP strings directly)
+        
+        rand_state: RandomState, optional
+            RNG generator to use for probabilistic CHP operations
 
         Returns
         -------
@@ -3043,9 +3040,12 @@ class StochasticNoiseOp(LinearOperator):
         """
         assert (self._evotype == 'chp'), "Must have 'chp' evotype to use get_chp_str"
 
+        if rand_state is None:
+            rand_state = _np.random.RandomState()
+
         rates = self._params_to_rates(self.to_vector())
         all_rates = [*rates, 1.0 - sum(rates)]  # Include identity so that probabilities are 1
-        index = self.rand_state.choice(self.basis.size, p=all_rates)
+        index = rand_state.choice(self.basis.size, p=all_rates)
 
         # If first entry, no operation selected
         if index == self.basis.size - 1:
@@ -3157,7 +3157,7 @@ class DepolarizeOp(StochasticNoiseOp):
             Random seed for RandomState (or directly provided RandomState)
             for sampling stochastic superoperators with the 'chp' evotype.
     """
-    def __init__(self, dim, basis="pp", evotype="densitymx", initial_rate=0, seed_or_state=None):
+    def __init__(self, dim, basis="pp", evotype="densitymx", initial_rate=0):
         """
         Create a new DepolarizeOp, representing a depolarizing channel.
 
@@ -3192,7 +3192,7 @@ class DepolarizeOp(StochasticNoiseOp):
 
         num_rates = basis.size - 1
         initial_sto_rates = [initial_rate / num_rates] * num_rates
-        StochasticNoiseOp.__init__(self, dim, basis, evotype, initial_sto_rates, seed_or_state)
+        StochasticNoiseOp.__init__(self, dim, basis, evotype, initial_sto_rates)
 
         # For DepolarizeOp, set params to only first element
         self.params = _np.array([self.params[0]])
@@ -5674,13 +5674,16 @@ class ComposedOp(LinearOperator):
         """
         return self.errorgen_coefficients(return_basis=False, logscale_nonham=True)
 
-    def get_chp_str(self, targets=None):
+    def get_chp_str(self, targets=None, rand_state=None):
         """Return a string suitable for printing to a CHP input file from all underlying operations.
 
         Parameters
         ----------
         targets: list of int
             Qubits to be applied to (if None, uses stored CHP strings directly)
+        
+        rand_state: RandomState, optional
+            RNG generator to use for probabilistic CHP operations
 
         Returns
         -------
@@ -5689,7 +5692,7 @@ class ComposedOp(LinearOperator):
         """
         s = ""
         for op in self.factorops:
-            s += op.get_chp_str(targets)
+            s += op.get_chp_str(targets, rand_state)
         return s
 
     def __str__(self):
@@ -6896,7 +6899,7 @@ class EmbeddedOp(LinearOperator):
         """
         return self.embedded_op.has_nonzero_hessian()
 
-    def get_chp_str(self, targets=None):
+    def get_chp_str(self, targets=None, rand_state=None):
         """Return a string suitable for printing to a CHP input file from the embedded operations.
 
         Just calls underlying get_chp_str but with an extra layer of target redirection.
@@ -6905,6 +6908,9 @@ class EmbeddedOp(LinearOperator):
         ----------
         targets: list of int
             Qubits to be applied to (if None, uses stored CHP strings directly).
+        
+        rand_state: RandomState, optional
+            RNG generator to use for probabilistic CHP operations
 
         Returns
         -------
@@ -6919,7 +6925,7 @@ class EmbeddedOp(LinearOperator):
                 "Got {0} targets instead of required {1}".format(len(targets), self.state_space_labels.nqubits)
             target_indices = [targets[ti] for ti in self.target_indices]
 
-        return self.embedded_op.get_chp_str(target_indices)
+        return self.embedded_op.get_chp_str(target_indices, rand_state)
 
     def __str__(self):
         """ Return string representation """
