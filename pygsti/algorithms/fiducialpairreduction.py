@@ -20,7 +20,7 @@ import scipy.special as _spspecial
 from pygsti import baseobjs as _baseobjs
 from pygsti import circuits as _circuits
 
-from pygsti.construction import circuitconstruction as _gsc
+from pygsti.circuits import circuitconstruction as _gsc
 from pygsti.modelmembers.operations import EigenvalueParamDenseOp as _EigenvalueParamDenseOp
 from pygsti.tools import remove_duplicates as _remove_duplicates
 from pygsti.tools import slicetools as _slct

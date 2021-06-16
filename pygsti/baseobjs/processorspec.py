@@ -22,7 +22,7 @@ from pygsti.circuits.compilationlibrary import CompilationLibrary as _Compilatio
 from pygsti.forwardsims.mapforwardsim import MapForwardSimulator as _MapFSim
 from pygsti.models.localnoisemodel import LocalNoiseModel as _LocalNoiseModel
 from pygsti.tools import internalgates as _itgs
-from pygsti.tools import optools as _gt
+from pygsti.tools import optools as _ot
 from pygsti.tools import symplectic as _symp
 
 IDENT = 'I'  # internal 1Q-identity-gate name used for compilation
@@ -627,7 +627,7 @@ class ProcessorSpec(object):
             if callable(self.root_gate_unitaries[gname]): continue  # can't pre-process factories
 
             # We convert to process matrices, to avoid global phase problems.
-            u = _gt.unitary_to_pauligate(self.root_gate_unitaries[gname])
+            u = _ot.unitary_to_pauligate(self.root_gate_unitaries[gname])
             if u.shape == (4, 4):
                 #assert(not _np.allclose(u,Id)), "Identity should *not* be included in root gate names!"
                 #if _np.allclose(u, Id):
@@ -671,11 +671,11 @@ class ProcessorSpec(object):
             if callable(self.root_gate_unitaries[gname1]): continue  # can't pre-process factories
 
             # We convert to process matrices, to avoid global phase problems.
-            u1 = _gt.unitary_to_pauligate(self.root_gate_unitaries[gname1])
+            u1 = _ot.unitary_to_pauligate(self.root_gate_unitaries[gname1])
             if _np.shape(u1) != (4, 4):
                 for gname2 in self.root_gate_names:
                     if callable(self.root_gate_unitaries[gname2]): continue  # can't pre-process factories
-                    u2 = _gt.unitary_to_pauligate(self.root_gate_unitaries[gname2])
+                    u2 = _ot.unitary_to_pauligate(self.root_gate_unitaries[gname2])
                     if _np.shape(u2) == _np.shape(u1):
                         ucombined = _np.dot(u2, u1)
                         if _np.allclose(ucombined, _np.identity(_np.shape(u2)[0], float)):

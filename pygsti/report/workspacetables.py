@@ -21,7 +21,7 @@ from pygsti.report.reportables import evaluate as _ev
 from pygsti.report.table import ReportTable as _ReportTable
 from pygsti.report.workspace import WorkspaceTable
 from pygsti.report.reportableqty import ReportableQty as _ReportableQty, minimum as _rqty_minimum
-from pygsti import construction as _cnst
+from pygsti import circuits as _circuits
 from pygsti import models as _models
 from pygsti import baseobjs as _baseobjs
 from pygsti import tools as _tools
@@ -1069,8 +1069,8 @@ class ModelVsTargetTable(WorkspaceTable):
         table.add_row(("Predicted primitive RB number", pRBnum), (None, 'Normal'))
 
         if clifford_compilation and isinstance(model.sim, _MatrixFSim):
-            clifford_model = _cnst.create_explicit_alias_model(model, clifford_compilation)
-            clifford_targetModel = _cnst.create_explicit_alias_model(target_model, clifford_compilation)
+            clifford_model = _models.create_explicit_alias_model(model, clifford_compilation)
+            clifford_targetModel = _models.create_explicit_alias_model(target_model, clifford_compilation)
 
             ##For clifford versions we don't have a confidence region - so no error bars
             #AGsI = _ev(_reportables.Average_gateset_infidelity(clifford_model, clifford_targetModel))
@@ -1655,13 +1655,13 @@ class GaugeRobustErrgenTable(WorkspaceTable):
 
         ## Construct synthetic idles
         maxPower = 4; maxLen = 6; Id = _np.identity(target_model.dim, 'd')
-        baseStrs = _cnst.list_all_circuits_without_powers_and_cycles(list(model.operations.keys()), maxLen)
+        baseStrs = _circuits.list_all_circuits_without_powers_and_cycles(list(model.operations.keys()), maxLen)
         for s in baseStrs:
             for i in range(1, maxPower):
                 if len(s**i) > 1 and _np.linalg.norm(target_model.sim.product(s**i) - Id) < 1e-6:
                     syntheticIdleStrs.append(s**i); break
-        #syntheticIdleStrs = _cnst.to_circuits([ ('Gx',)*4, ('Gy',)*4 ] ) #DEBUG!!!
-        #syntheticIdleStrs = _cnst.to_circuits([ ('Gx',)*4, ('Gy',)*4, ('Gy','Gx','Gx')*2] ) #DEBUG!!!
+        #syntheticIdleStrs = _circuits.to_circuits([ ('Gx',)*4, ('Gy',)*4 ] ) #DEBUG!!!
+        #syntheticIdleStrs = _circuits.to_circuits([ ('Gx',)*4, ('Gy',)*4, ('Gy','Gx','Gx')*2] ) #DEBUG!!!
         print("Using synthetic idles: \n", '\n'.join([str(opstr) for opstr in syntheticIdleStrs]))
 
         gaugeRobust_info = _ev(_reportables.Robust_LogGTi_and_projections(

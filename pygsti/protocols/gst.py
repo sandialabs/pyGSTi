@@ -25,7 +25,7 @@ from pygsti.protocols.estimate import Estimate as _Estimate
 from pygsti.protocols import protocol as _proto
 from pygsti.protocols.modeltest import ModelTest as _ModelTest
 from pygsti import algorithms as _alg
-from pygsti import construction as _construction
+from pygsti import circuits as _circuits
 from pygsti import io as _io
 from pygsti import models as _models
 from pygsti import optimize as _opt
@@ -233,7 +233,7 @@ class StandardGSTDesign(GateSetTomographyDesign):
 
         #TODO: add a line_labels arg to create_lsgst_circuit_lists and pass qubit_labels in?
         target_model = _load_model(target_model_filename_or_obj)
-        lists = _construction.create_lsgst_circuit_lists(
+        lists = _circuits.create_lsgst_circuit_lists(
             target_model, self.prep_fiducials, self.meas_fiducials, self.germs,
             self.maxlengths, self.fiducial_pairs, self.truncation_method, self.nested,
             self.fpr_keep_fraction, self.fpr_keep_seed, self.include_lgst,

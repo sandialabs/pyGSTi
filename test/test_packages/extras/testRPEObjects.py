@@ -18,7 +18,7 @@ class TestRPEObjectMethods(BaseTestCase):
 
         depol_gateset = model.depolarize(op_noise=0.1,spam_noise=0)
 
-        #test RPE datasets
+        #test RPE data
         rpeconfig_inst_list = [rpeconfig_GxPi2_GyPi2_UpDn,rpeconfig_GxPi2_GyPi2_00]
         for rpeconfig_inst in rpeconfig_inst_list:
             rpeGS  = rc.create_parameterized_rpe_model(np.pi/2, np.pi/4, 0, 0.1, 0.1, True, rpeconfig_inst=rpeconfig_inst)

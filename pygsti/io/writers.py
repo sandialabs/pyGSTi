@@ -611,9 +611,9 @@ def fill_in_empty_dataset_with_fake_data(model, dataset_filename, num_samples,
     DataSet
         The generated data set (also written in place of the template file).
     """
-    from ..construction import simulate_data as _generate_fake_data
+    from pygsti.data.datasetconstruction import simulate_data as _simulate_data
     ds_template = _loaders.load_dataset(dataset_filename, ignore_zero_count_lines=False, with_times=False, verbosity=0)
-    ds = _generate_fake_data(model, list(ds_template.keys()), num_samples,
+    ds = _simulate_data(model, list(ds_template.keys()), num_samples,
                              sample_error, seed, rand_state, alias_dict,
                              collision_action, record_zero_counts, comm,
                              mem_limit, times)

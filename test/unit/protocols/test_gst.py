@@ -1,4 +1,4 @@
-from pygsti.construction import simulate_data
+from pygsti.data import simulate_data
 from pygsti.modelpacks import smq1Q_XYI
 from pygsti.modelpacks.legacy import std1Q_XYI, std2Q_XYICNOT
 from pygsti.objectivefns.objectivefns import PoissonPicDeltaLogLFunction

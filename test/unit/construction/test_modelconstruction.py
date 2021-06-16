@@ -2,7 +2,7 @@ import numpy as np
 import scipy
 
 import pygsti
-import pygsti.construction.modelconstruction as mc
+import pygsti.models.modelconstruction as mc
 import pygsti.modelmembers.operations as op
 import pygsti.tools.basistools as bt
 from ..util import BaseCase

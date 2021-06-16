@@ -16,8 +16,7 @@ import warnings as _warnings
 
 import numpy.random as _rndm
 
-from pygsti.construction import circuitconstruction as _gsc
-from pygsti.models.model import OpModel as _OpModel
+from pygsti.circuits import circuitconstruction as _gsc
 from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.circuits.circuitstructure import FiducialPairPlaquette as _FiducialPairPlaquette
 from pygsti.circuits.circuitstructure import GermFiducialPairPlaquette as _GermFiducialPairPlaquette
@@ -41,10 +40,10 @@ def _create_raw_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max
     created with the form:
 
     Case: trunc_scheme == 'whole germ powers':
-      prepStr + pygsti.construction.repeat_with_max_length(germ,L) + effectStr
+      prepStr + pygsti.circuits.repeat_with_max_length(germ,L) + effectStr
 
     Case: trunc_scheme == 'truncated germ powers':
-      prepStr + pygsti.construction.repeat_and_truncate(germ,L) + effectStr
+      prepStr + pygsti.circuits.repeat_and_truncate(germ,L) + effectStr
 
     Case: trunc_scheme == 'length as exponent':
       prepStr + germ^L + effectStr
@@ -156,6 +155,7 @@ def _create_raw_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max
     [c.str for c in prep_strs]
     [c.str for c in effect_strs]
 
+    from pygsti.models.model import OpModel as _OpModel
     if isinstance(op_label_src, _OpModel):
         opLabels = op_label_src.primitive_op_labels + op_label_src.primitive_instrument_labels
     else: opLabels = op_label_src
@@ -273,10 +273,10 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
     circuits is created with the form:
 
     Case: trunc_scheme == 'whole germ powers':
-      prep_fiducial + pygsti.construction.repeat_with_max_length(germ,L) + meas_fiducial
+      prep_fiducial + pygsti.circuits.repeat_with_max_length(germ,L) + meas_fiducial
 
     Case: trunc_scheme == 'truncated germ powers':
-      prep_fiducial + pygsti.construction.repeat_and_truncate(germ,L) + meas_fiducial
+      prep_fiducial + pygsti.circuits.repeat_and_truncate(germ,L) + meas_fiducial
 
     Case: trunc_scheme == 'length as exponent':
       prep_fiducial + germ^L + meas_fiducial
@@ -473,6 +473,7 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
                        + " max-length list at 1 now."
                        + "")
 
+    from pygsti.models.model import OpModel as _OpModel
     if isinstance(op_label_src, _OpModel):
         opLabels = op_label_src.primitive_op_labels + op_label_src.primitive_instrument_labels
     else: opLabels = op_label_src
@@ -732,10 +733,10 @@ def create_elgst_lists(op_label_src, germ_list, max_length_list,
     created with the form:
 
     Case: trunc_scheme == 'whole germ powers':
-      pygsti.construction.repeat_with_max_length(germ,L)
+      pygsti.circuits.repeat_with_max_length(germ,L)
 
     Case: trunc_scheme == 'truncated germ powers':
-      pygsti.construction.repeat_and_truncate(germ,L)
+      pygsti.circuits.repeat_and_truncate(germ,L)
 
     Case: trunc_scheme == 'length as exponent':
       germ^L
@@ -795,6 +796,7 @@ def create_elgst_lists(op_label_src, germ_list, max_length_list,
         Note that a "0" maximum-length corresponds to the gate
         label strings.
     """
+    from pygsti.models.model import OpModel as _OpModel
     if isinstance(op_label_src, _OpModel):
         opLabels = op_label_src.primitive_op_labels + op_label_src.primitive_instrument_labels
     else: opLabels = op_label_src

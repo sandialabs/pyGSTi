@@ -16,7 +16,6 @@ import numpy as _np
 import numpy.random as _rndm
 
 from pygsti.circuits import circuit as _cir
-from pygsti.models import Model as _Model
 from pygsti.baseobjs.label import Label as _Lbl
 from pygsti.tools import listtools as _lt
 
@@ -51,7 +50,7 @@ def create_circuits(*args, **kwargs):
 
     Examples
     --------
-    >>> from pygsti.construction import create_circuits
+    >>> from pygsti.circuits import create_circuits
     >>> As = [('a1',), ('a2',)]
     >>> Bs = [('b1',), ('b2',)]
     >>> list1 = create_circuits('a', 'a+b', a=As, b=Bs)
@@ -495,6 +494,7 @@ def create_lgst_circuits(prep_fiducials, meas_fiducials, op_label_src):
     list of Circuit objects
         The list of required circuits, without duplicates.
     """
+    from pygsti.models import Model as _Model
     def tolabel(x): return x if isinstance(x, _Lbl) else _Lbl(x)
     if isinstance(op_label_src, _Model):
         opLabels = list(op_label_src.operations.keys()) + \

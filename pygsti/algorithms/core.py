@@ -19,7 +19,6 @@ import scipy.optimize as _spo
 import scipy.stats as _stats
 
 from pygsti.baseobjs.profiler import DummyProfiler as _DummyProfiler
-from pygsti import construction as _pc
 from pygsti import models as _models
 from pygsti.baseobjs import BuiltinBasis, VerbosityPrinter, DirectSumBasis
 from pygsti import tools as _tools
@@ -1020,9 +1019,9 @@ def find_closest_unitary_opmx(operation_mx):
     #def getu_1q(basisVec):  # 1 qubit version
     #    return _spl.expm( 1j * (basisVec[0]*_tools.sigmax + basisVec[1]*_tools.sigmay + basisVec[2]*_tools.sigmaz) )
     def _get_gate_mx_1q(basis_vec):  # 1 qubit version
-        return _pc.single_qubit_gate(basis_vec[0],
-                                     basis_vec[1],
-                                     basis_vec[2])
+        return _tools.single_qubit_gate(basis_vec[0],
+                                        basis_vec[1],
+                                        basis_vec[2])
 
     if operation_mx.shape[0] == 4:
         #bell = _np.transpose(_np.array( [[1,0,0,1]] )) / _np.sqrt(2)

@@ -494,7 +494,7 @@ class SummaryStatistics(_proto.Protocol):
 
     def _add_bootstrap_qtys(self, data_cache, num_qtys, finitecounts=True):
         """
-        Adds bootstrapped "summary datasets".
+        Adds bootstrapped "summary data".
 
         The bootstrap is over both the finite counts of each circuit and
         over the circuits at each length.
@@ -507,7 +507,7 @@ class SummaryStatistics(_proto.Protocol):
             A cache of already-existing bootstraps.
 
         num_qtys : int, optional
-            The number of bootstrapped datasets to construct.
+            The number of bootstrapped data to construct.
 
         finitecounts : bool, optional
             Whether finite counts should be used, i.e. whether the bootstrap samples

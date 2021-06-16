@@ -13,7 +13,7 @@ End-to-end functions for performing long-sequence GST
 import os as _os
 import pickle as _pickle
 
-from pygsti import construction as _construction
+from pygsti import circuits as _circuits
 from pygsti import io as _io
 from pygsti import baseobjs as _baseobjs
 from pygsti import protocols as _proto
@@ -234,7 +234,7 @@ def run_linear_gst(data_filename_or_set, target_model_filename_or_object,
     ds = _load_dataset(data_filename_or_set, comm, printer)
 
     target_model = _load_model(target_model_filename_or_object)
-    germs = _construction.to_circuits([()] + [(gl,) for gl in target_model.operations.keys()])  # just the single gates
+    germs = _circuits.to_circuits([()] + [(gl,) for gl in target_model.operations.keys()])  # just the single gates
     max_lengths = [1]  # we only need maxLength == 1 when doing LGST
 
     exp_design = _proto.StandardGSTDesign(target_model, prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,

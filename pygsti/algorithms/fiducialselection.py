@@ -15,7 +15,7 @@ import scipy
 
 from pygsti.algorithms import grasp as _grasp
 from pygsti.algorithms import scoring as _scoring
-from pygsti import construction as _constr
+from pygsti import circuits as _circuits
 from pygsti import baseobjs as _baseobjs
 from pygsti.modelmembers.povms import ComplementPOVMEffect as _ComplementPOVMEffect
 from pygsti.tools import frobeniusdist_squared
@@ -100,7 +100,7 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
             if frobeniusdist_squared(target_model.operations[gate], Identity) < eq_thresh:
                 fidOps.remove(gate)
 
-    availableFidList = _constr.list_all_circuits(fidOps, 0, max_fid_length)
+    availableFidList = _circuits.list_all_circuits(fidOps, 0, max_fid_length)
 
     if algorithm_kwargs is None:
         # Avoid danger of using empty dict for default value.

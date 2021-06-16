@@ -12,9 +12,9 @@ Variables for working with the a model containing Idle, Z(pi/2) and rot(X=pi/2, 
 
 import sys as _sys
 
-from ...construction import circuitconstruction as _strc
-from ...construction import modelconstruction as _setc
-from ...construction import stdtarget as _stdtarget
+from ...circuits import circuitconstruction as _strc
+from ...models import modelconstruction as _setc
+from .. import stdtarget as _stdtarget
 
 _target_model = _setc.create_explicit_model([('Q0',)], ['Gz', 'Gn'],
                                            ["Z(pi/2,Q0)", "N(pi/2, sqrt(3)/2, 0, -0.5, Q0)"])

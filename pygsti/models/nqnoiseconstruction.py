@@ -17,15 +17,14 @@ import warnings as _warnings
 import numpy as _np
 import scipy as _scipy
 
-from pygsti.construction import circuitconstruction as _gsc
-from pygsti.construction.modelconstruction import _parameterization_from_errgendict
+from pygsti.circuits import circuitconstruction as _gsc
+from pygsti.models.modelconstruction import _parameterization_from_errgendict
 from pygsti import baseobjs as _baseobjs
 from pygsti.baseobjs import qubitgraph as _qgraph, statespace as _statespace
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.forwardsims.mapforwardsim import MapForwardSimulator as _MapFSim
 from pygsti.forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
 from pygsti.forwardsims.termforwardsim import TermForwardSimulator as _TermFSim
-from pygsti.io import CircuitParser as _CircuitParser
 from pygsti.modelmembers import operations as _op
 from pygsti.modelmembers import povms as _povm
 from pygsti.modelmembers import states as _state
@@ -44,7 +43,7 @@ from pygsti.tools import basistools as _bt
 from pygsti.tools import internalgates as _itgs
 from pygsti.tools import listtools as _lt
 from pygsti.tools import mpitools as _mpit
-from pygsti.tools import optools as _gt
+from pygsti.tools import optools as _ot
 from pygsti.tools import slicetools as _slct
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
 
@@ -679,6 +678,8 @@ def create_cloud_crosstalk_model(num_qubits, gate_names, nonstd_gate_unitaries={
         printer.log("Created qubit graph:\n" + str(qubitGraph))
 
     orig_lindblad_error_coeffs = lindblad_error_coeffs.copy()
+
+    from pygsti.io import CircuitParser as _CircuitParser
     cparser = _CircuitParser()
     cparser.lookup = None  # lookup - functionality removed as it wasn't used
     for k, v in orig_lindblad_error_coeffs.items():
@@ -931,7 +932,7 @@ def create_cloud_crosstalk_model(num_qubits, gate_names, nonstd_gate_unitaries={
                 local_state_space = _statespace.default_space_for_udim(U0.shape[0])
                 gatedict[name] = _opfactory.UnitaryOpFactory(U, local_state_space, 'pp', evotype)
             else:
-                gatedict[name] = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", 'pp')
+                gatedict[name] = _bt.change_basis(_ot.unitary_to_process_mx(U), "std", 'pp')
                 # assume evotype is a densitymx or term type
 
     #Add anything from custom_gates directly if it wasn't added already
@@ -1251,7 +1252,7 @@ def _find_amped_polynomials_for_syntheticidle(qubit_filter, idle_str, model, sin
 
     #DEBUG
     #print("DB: J = ")
-    #_gt.print_mx(J)
+    #_ot.print_mx(J)
     #print("DB: svals of J for synthetic idle: ", _np.linalg.svd(J, compute_uv=False))
 
     return J, Jrank, selected_gatename_fidpair_lists
@@ -1832,7 +1833,7 @@ def _get_fidpairs_needed_to_access_amped_polynomials(qubit_filter, core_filter, 
     #_mt.print_mx(J)
     #print("SVals = ",_np.linalg.svd(J, compute_uv=False))
     #print("Nullspace = ")
-    #_gt.print_mx(pygsti.tools.nullspace(J))
+    #_ot.print_mx(pygsti.tools.nullspace(J))
 
     raise ValueError(("Could not find sufficient fiducial pairs to access "
                       "all the amplified directions - only %d of %d were accessible")
@@ -2204,7 +2205,7 @@ def _get_candidates_for_core(model, core_qubits, candidate_counts, seed_start):
     return candidate_germs
 
 
-@_deprecated_fn("Use pygsti.construction.create_standard_cloudnoise_circuits(...).")
+@_deprecated_fn("Use pygsti.circuits.create_standard_cloudnoise_circuits(...).")
 def _create_xycnot_cloudnoise_circuits(num_qubits, max_lengths, geometry, cnot_edges, max_idle_weight=1, maxhops=0,
                                        extra_weight_1_hops=0, extra_gate_weight=0, paramroot="H+S",
                                        sparse=False, verbosity=0, cache=None, idle_only=False,
@@ -2672,7 +2673,7 @@ def create_standard_cloudnoise_circuits(num_qubits, max_lengths, single_q_fiduci
         if U is None: raise KeyError("'%s' gate unitary needs to be provided by `nonstd_gate_unitaries` arg" % name)
         if callable(U):  # then assume a function: args -> unitary
             raise NotImplementedError("Factories are not allowed to passed to create_standard_cloudnoise_circuits yet")
-        gatedict[name] = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", "pp")
+        gatedict[name] = _bt.change_basis(_ot.unitary_to_process_mx(U), "std", "pp")
         # assume evotype is a densitymx or term type
 
     return create_cloudnoise_circuits(num_qubits, max_lengths, single_q_fiducials,
@@ -3819,8 +3820,8 @@ def stdmodule_to_smqmodule(std_module):
 
     PyGSTi provides a number of 1- and 2-qubit models corrsponding to commonly
     used gate sets, along with related meta-information.  Each such
-    model+metadata is stored in a "standard module" beneath `pygsti.construction`
-    (e.g. `pygsti.construction.std1Q_XYI` is the standard module for modeling a
+    model+metadata is stored in a "standard module" beneath `pygsti.modelpacks.legacy`
+    (e.g. `pygsti.modelpacks.legacy.std1Q_XYI` is the standard module for modeling a
     single-qubit quantum processor which can perform X(pi/2), Y(pi/2) and idle
     operations).  Because they deal with just 1- and 2-qubit models, multi-qubit
     labelling conventions are not used to improve readability.  For example, a
@@ -3945,7 +3946,7 @@ def stdmodule_to_smqmodule(std_module):
     out_module['_target_model'] = new_target_model
 
     # _stdtarget and _gscache need to be *locals* as well so target_model(...) works
-    _stdtarget = importlib.import_module('.stdtarget', 'pygsti.construction')
+    _stdtarget = importlib.import_module('.stdtarget', 'pygsti.modelpacks')
     _gscache = {("full", "auto"): new_target_model}
     out_module['_stdtarget'] = _stdtarget
     out_module['_gscache'] = _gscache

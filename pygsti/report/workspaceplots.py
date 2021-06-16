@@ -30,7 +30,7 @@ from pygsti.objectivefns import objectivefns as _objfns
 from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.circuits.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure, \
     GermFiducialPairPlaquette as _GermFiducialPairPlaquette
-from pygsti.datasets import DataSet as _DataSet
+from pygsti.data import DataSet as _DataSet
 
 #Plotly v3 changes heirarchy of graph objects
 # Do this to avoid deprecation warning is plotly 3+
@@ -3387,7 +3387,7 @@ class DatasetComparisonHistogramPlot(WorkspacePlot):
         The containing (parent) workspace.
 
     dsc : DataComparator
-        The data set comparator, which holds and compares the datasets.
+        The data set comparator, which holds and compares the data.
 
     nbins : int, optional
         Bins in the histogram.
@@ -3511,7 +3511,7 @@ class DatasetComparisonHistogramPlot(WorkspacePlot):
                 title += ';'
         if dsc.op_inclusions:
             title += ' ' + str(dsc.op_inclusions) + ' included'
-        title += '<br>Comparing datasets ' + str(datasetnames)
+        title += '<br>Comparing data ' + str(datasetnames)
         title += ' p=0 ' + str(pVals0) + ' times; ' + str(len(dsc.pVals)) + ' total sequences'
 
         layout = go.Layout(

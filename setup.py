@@ -100,7 +100,7 @@ def setup_with_extensions(extensions=None):
             'pygsti.baseobjs.opcalc',
             'pygsti.circuits',
             'pygsti.construction',
-            'pygsti.datasets',
+            'pygsti.data',
             'pygsti.drivers',
             'pygsti.evotypes',
             'pygsti.evotypes.densitymx',

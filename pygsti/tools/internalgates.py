@@ -13,7 +13,7 @@ The standard unitaries and gate names, used internal compilers and short-hand mo
 import numpy as _np
 import scipy.linalg as _spl
 
-from pygsti.tools import optools as _gts
+from pygsti.tools import optools as _ot
 from pygsti.tools import symplectic as _symp
 
 
@@ -111,8 +111,8 @@ def is_gate_this_standard_unitary(gate_unitary, standard_gate_name):
     if _np.shape(gate_unitary) != _np.shape(std_unitaries[standard_gate_name]):
         return False
     else:
-        pm_input = _gts.unitary_to_pauligate(gate_unitary)
-        pm_std = _gts.unitary_to_pauligate(std_unitaries[standard_gate_name])
+        pm_input = _ot.unitary_to_pauligate(gate_unitary)
+        pm_std = _ot.unitary_to_pauligate(std_unitaries[standard_gate_name])
         equal = _np.allclose(pm_input, pm_std)
         return equal
 
@@ -653,7 +653,7 @@ def qasm_u3(theta, phi, lamb, output='unitary'):
         return u3_unitary
 
     elif output == 'superoperator':
-        u3_superoperator = _gts.unitary_to_pauligate(u3_unitary)
+        u3_superoperator = _ot.unitary_to_pauligate(u3_unitary)
         return u3_superoperator
 
     else: raise ValueError("The `output` string is invalid!")

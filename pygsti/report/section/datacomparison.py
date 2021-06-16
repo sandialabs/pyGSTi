@@ -9,7 +9,7 @@
 #***************************************************************************************************
 
 from pygsti.report.section import Section as _Section
-from pygsti.datasets import DataComparator as _DataComparator
+from pygsti.data import DataComparator as _DataComparator
 from pygsti.tools.mpitools import distribute_indices as _distribute_indices
 
 

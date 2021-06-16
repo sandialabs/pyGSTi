@@ -1,5 +1,5 @@
 """
-Functions for creating datasets
+Functions for creating data
 """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -17,8 +17,8 @@ import warnings as _warnings
 import numpy as _np
 import numpy.random as _rndm
 
-from pygsti.construction import circuitconstruction as _gstrc
-from pygsti.datasets import dataset as _ds
+from pygsti.circuits import circuitconstruction as _gstrc
+from pygsti.data import dataset as _ds
 from pygsti.baseobjs import label as _lbl, outcomelabeldict as _ld
 from pygsti.protocols import ExperimentDesign as _ExperimentDesign
 

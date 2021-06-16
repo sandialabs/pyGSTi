@@ -7,7 +7,7 @@ from numpy.random import random, seed
 
 import pygsti
 import pygsti.construction as pc
-from pygsti.construction import modelconstruction
+from pygsti.models import modelconstruction
 from pygsti.modelpacks.legacy import std1Q_XYI
 from pygsti.objects import SPAMVec
 from ..testutils import BaseTestCase
@@ -76,7 +76,7 @@ class SPAMVecTestCase(BaseTestCase):
         E0 = model.povms['Mdefault']['0']
         E1 = model.povms['Mdefault']['1']
         Ec = pygsti.obj.ComplementSPAMVec(
-            modelconstruction._create_identity_vec([4],"pp"),
+            modelconstruction._create_identity_vec([4], "pp"),
             [E0])
         print(Ec.gpindices)
 

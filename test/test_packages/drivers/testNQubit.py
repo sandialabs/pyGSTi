@@ -12,7 +12,8 @@ import pygsti.construction as pc
 import warnings
 
 from ..testutils import BaseTestCase, compare_files, regenerate_references
-from pygsti.construction import modelconstruction, nqnoiseconstruction
+from pygsti.models import modelconstruction, nqnoiseconstruction
+
 
 #from .nqubitconstruction import *
 
@@ -288,7 +289,7 @@ class NQubitTestCase(BaseTestCase):
         basis1Q = pygsti.obj.Basis.cast("pp", 4)
         basisNQ = pygsti.obj.Basis.cast("pp", 4 ** nQubits)
         for i in range(nQubits):
-            effects = [ (l,modelconstruction._basis_create_spam_vector(l, basis1Q)) for l in ["0","1"] ]
+            effects = [(l, modelconstruction._basis_create_spam_vector(l, basis1Q)) for l in ["0", "1"]]
             factorPOVMs.append(pygsti.obj.TPPOVM(effects))
         povm = pygsti.obj.TensorProdPOVM(factorPOVMs)
         print(list(povm.keys()))

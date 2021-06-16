@@ -19,10 +19,6 @@ from pygsti.tools import optools as _optls
 from pygsti.tools import rbtools as _rbtls
 
 
-# from .. import construction as _cnst
-# from .. import algorithms as _algs
-
-
 def predicted_rb_number(model, target_model, weights=None, d=None, rtype='EI'):
     """
     Predicts the RB error rate from a model.

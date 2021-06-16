@@ -145,9 +145,9 @@ Gx^4 20 80
 
         bDeepTesting = bool( 'PYGSTI_DEEP_TESTING' in os.environ and
                              os.environ['PYGSTI_DEEP_TESTING'].lower() in ("yes","1","true") )
-          #Do not test *random* datasets for equality unless "deep testing", since different
+          #Do not test *random* data for equality unless "deep testing", since different
           # versions/installs of numpy give different random numbers and we don't expect
-          # datasets will be equal.
+          # data will be equal.
 
 
         saved_ds = pygsti.io.load_dataset(compare_files + "/Fake_Dataset_none.txt", cache=True)
@@ -220,7 +220,7 @@ Gx^4 20 80 20 80
                                                 outcome_labels=['0','1'])
 
 
-        #Create some datasets to test adding datasets to multidataset
+        #Create some data to test adding data to multidataset
         ds = pygsti.objects.DataSet(outcome_labels=['0', '1'])
         ds.add_count_dict( (), {'0': 10, '1': 90} )
         ds.add_count_dict( ('Gx',), {'0': 10, '1': 90} )

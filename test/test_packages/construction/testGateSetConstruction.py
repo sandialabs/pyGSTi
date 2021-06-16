@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 
 import pygsti
-from pygsti.construction import modelconstruction
+from pygsti.models import modelconstruction
 from ..testutils import BaseTestCase
 
 
@@ -54,8 +54,8 @@ class TestGateSetConstructionMethods(BaseTestCase):
 
         gateset_povm_first = pygsti.objects.ExplicitOpModel(['Q0']) #set effect vector first
         gateset_povm_first['Mdefault'] = pygsti.obj.TPPOVM(
-            [ ('0', modelconstruction._create_spam_vector(stateSpace,spaceLabels,"0")),
-              ('1', modelconstruction._create_spam_vector(stateSpace,spaceLabels,"1")) ] )
+            [('0', modelconstruction._create_spam_vector(stateSpace, spaceLabels, "0")),
+             ('1', modelconstruction._create_spam_vector(stateSpace, spaceLabels, "1"))] )
 
         with self.assertRaises(ValueError):
             gateset_povm_first['rhoBad'] =  np.array([1,2,3],'d') #wrong dimension

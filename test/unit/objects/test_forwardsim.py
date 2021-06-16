@@ -4,7 +4,7 @@ from unittest import mock
 
 import numpy as np
 
-import pygsti.construction as pc
+import pygsti.models as models
 from pygsti.forwardsims.forwardsim import ForwardSimulator
 from pygsti.forwardsims.mapforwardsim import MapForwardSimulator
 from pygsti.models import ExplicitOpModel
@@ -55,7 +55,7 @@ class ForwardSimBase(object):
     @classmethod
     def setUpClass(cls):
         ExplicitOpModel._strict = False
-        cls.model = pc.create_explicit_model(
+        cls.model = models.create_explicit_model(
             [('Q0',)], ['Gi', 'Gx', 'Gy'],
             ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"]
         )

@@ -13,3 +13,9 @@ A sub-package holding data set objects and supporting analysis objects
 from .dataset import DataSet
 from .multidataset import MultiDataSet
 from .datacomparator import DataComparator
+from .freedataset import FreeformDataSet
+from .hypothesistest import HypothesisTest
+
+from .datasetconstruction import *
+from .rpedata import make_rpe_data_set
+

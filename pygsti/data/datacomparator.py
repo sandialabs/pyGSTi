@@ -16,8 +16,8 @@ import numpy as _np
 import scipy as _scipy
 from scipy import stats as _stats
 
-from pygsti.datasets.hypothesistest import HypothesisTest as _HypothesisTest
-from pygsti.datasets.multidataset import MultiDataSet as _MultiDataSet
+from pygsti.data.hypothesistest import HypothesisTest as _HypothesisTest
+from pygsti.data.multidataset import MultiDataSet as _MultiDataSet
 
 
 def _xlogy(x, y):
@@ -49,7 +49,7 @@ def _loglikelihood(p_list, n_list):
         output += _xlogy(n_list[i], pVal)
     return output
 
-# Only used by the rectify datasets function, which is commented out,
+# Only used by the rectify data function, which is commented out,
 # so this is also commented out.
 # def loglikelihoodRatioObj(alpha,n_list_list,dof):
 #     return _np.abs(dof - _loglikelihood_ratio(alpha*n_list_list))
@@ -287,14 +287,14 @@ def _tvd(n_list_list):
 
 class DataComparator():
     """
-    A comparison between multiple datasets, presumably taken in different contexts.
+    A comparison between multiple data, presumably taken in different contexts.
 
     This object can be used to run all of the "context dependence detection" methods described
     in "Probing context-dependent errors in quantum processors", by Rudinger et al.
     (See that paper's supplemental material for explicit demonstrations of this object.)
 
     This object stores the p-values and log-_likelihood ratio values from a consistency comparison between
-    two or more datasets, and provides methods to:
+    two or more data, and provides methods to:
 
         - Perform a hypothesis test to decide which sequences contain statistically significant variation.
         - Plot p-value histograms and log-_likelihood ratio box plots.
@@ -398,13 +398,13 @@ class DataComparator():
             olIndexListBool = [ds.olIndex == (olIndex) for ds in dsList]
             ds_names = list(range(len(dataset_list_or_multidataset)))
             if not _np.all(olIndexListBool):
-                raise ValueError('Outcomes labels and order must be the same across datasets.')
+                raise ValueError('Outcomes labels and order must be the same across data.')
             if circuits == 'all':
                 circuitList = list(dsList[0].keys())
                 circuitsListBool = [list(ds.keys()) == circuitList for ds in dsList]
                 if not _np.all(circuitsListBool):
                     raise ValueError(
-                        'If circuits="all" is used, then datasets must contain identical circuits. (They do not.)')
+                        'If circuits="all" is used, then data must contain identical circuits. (They do not.)')
                 circuits = circuitList
 
         elif isinstance(dataset_list_or_multidataset, _MultiDataSet):
@@ -650,7 +650,7 @@ class DataComparator():
 
         if verbosity >= 1:
             if self.inconsistent_datasets_detected:
-                print("The datasets are INCONSISTENT at {0:.2f}% significance.".format(self.significance * 100))
+                print("The data are INCONSISTENT at {0:.2f}% significance.".format(self.significance * 100))
                 print("  - Details:")
                 print("    - The aggregate log-_likelihood ratio test is "
                       "significant at {0:.2f} standard deviations.".format(self._aggregate_nsigma))
@@ -666,7 +666,7 @@ class DataComparator():
                         print("    - The maximum SSTVD was observed for {}".format(max_SSTVD_gs))
             else:
                 print("Statistical hypothesis tests did NOT find inconsistency "
-                      "between the datasets at {0:.2f}% significance.".format(self.significance * 100))
+                      "between the data at {0:.2f}% significance.".format(self.significance * 100))
 
         return
 
@@ -692,7 +692,7 @@ class DataComparator():
             The TVD for the specified circuit.
         """
         try: assert len(self.dataset_list_or_multidataset) == 2
-        except: raise ValueError("The TVD is only defined for comparisons between two datasets!")
+        except: raise ValueError("The TVD is only defined for comparisons between two data!")
 
         return self.tvds[circuit]
 
@@ -719,7 +719,7 @@ class DataComparator():
             The SSTVD for the specified circuit.
         """
         try: assert len(self.dataset_list_or_multidataset) == 2
-        except: raise ValueError("Can only compute TVD between two datasets.")
+        except: raise ValueError("Can only compute TVD between two data.")
         assert(self.sstvds is not None), "The SSTVDS have not been calculated! Run the .run() method first!"
 
         return self.sstvds.get(circuit, None)
@@ -738,7 +738,7 @@ class DataComparator():
             The circuit associated with the maximum SSTVD, and the SSTVD of that circuit.
         """
         try: assert len(self.dataset_list_or_multidataset) == 2
-        except: raise ValueError("Can only compute TVD between two datasets.")
+        except: raise ValueError("Can only compute TVD between two data.")
         assert(self.sstvds is not None), "The SSTVDS have not been calculated! Run the .run() method first!"
 
         if len(self.sstvds) == 0:

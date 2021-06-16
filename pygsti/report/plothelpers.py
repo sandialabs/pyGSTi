@@ -607,7 +607,7 @@ def _compute_sub_mxs(gss, model, sub_mx_creation_fn, dataset=None, sub_mx_creati
 @smart_cached
 def dscompare_llr_matrices(gsplaq, dscomparator):
     """
-    Computes matrix of 2*log-likelihood-ratios comparing the datasets of `dscomparator`.
+    Computes matrix of 2*log-likelihood-ratios comparing the data of `dscomparator`.
 
     Parameters
     ----------

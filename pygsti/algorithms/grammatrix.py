@@ -11,7 +11,7 @@ Utility functions related to Gram matrix construction.
 #***************************************************************************************************
 
 from pygsti.algorithms.core import gram_rank_and_eigenvalues as _gram_rank_and_evals
-from pygsti import construction as _construction
+from pygsti import circuits as _circuits
 
 
 ########################################################
@@ -48,7 +48,7 @@ def max_gram_basis(op_labels, dataset, max_length=0):
     minLength = min([len(s) for s in datasetStrings])
     if max_length <= 0:
         max_length = max([len(s) for s in datasetStrings])
-    possibleStrings = _construction.iter_all_circuits(op_labels, (minLength + 1) // 2, max_length // 2)
+    possibleStrings = _circuits.iter_all_circuits(op_labels, (minLength + 1) // 2, max_length // 2)
 
     def _have_all_data(strings):
         for a in strings:

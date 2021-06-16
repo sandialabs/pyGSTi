@@ -35,7 +35,7 @@ from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrint
 from pygsti.baseobjs.qubitgraph import QubitGraph as _QubitGraph
 from pygsti.tools import basistools as _bt
 from pygsti.tools import internalgates as _itgs
-from pygsti.tools import optools as _gt
+from pygsti.tools import optools as _ot
 from pygsti.tools.basisconstructors import sqrt2, id2x2, sigmax, sigmay, sigmaz
 
 
@@ -406,7 +406,7 @@ class CloudNoiseModel(_ImplicitOpModel):
                     local_state_space = _statespace.default_space_for_udim(U0.shape[0])
                     gatedict[name] = _opfactory.UnitaryOpFactory(U, local_state_space, 'pp', evotype=evotype)
                 else:
-                    gatedict[name] = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", 'pp')
+                    gatedict[name] = _bt.change_basis(_ot.unitary_to_process_mx(U), "std", 'pp')
                     # assume evotype is a densitymx or term type
 
         #Add anything from custom_gates directly if it wasn't added already
@@ -462,7 +462,7 @@ class CloudNoiseModel(_ImplicitOpModel):
             basis1Q = _BuiltinBasis("pp", 4)
             prep_factors = []; povm_factors = []
 
-            from ..construction.modelconstruction import _basis_create_spam_vector
+            from pygsti.models.modelconstruction import _basis_create_spam_vector
 
             v0 = _basis_create_spam_vector("0", basis1Q)
             v1 = _basis_create_spam_vector("1", basis1Q)
@@ -1271,7 +1271,7 @@ class CloudNoiseLayerRules(_LayerRules):
             # See if this effect label could correspond to a *marginalized* POVM, and
             # if so, create the marginalized POVM and add its effects to model.effect_blks['layers']
             assert(isinstance(layerlbl, _Lbl))  # Sanity check (REMOVE?)
-            povmName = _gt.effect_label_to_povm(layerlbl)
+            povmName = _ot.effect_label_to_povm(layerlbl)
             if povmName in model.povm_blks['layers']:
                 # implicit creation of marginalized POVMs whereby an existing POVM name is used with sslbls that
                 # are not present in the stored POVM's label.

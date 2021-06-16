@@ -31,7 +31,7 @@ from pygsti.modelmembers import states as _state
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.models import gaugegroup as _gaugegroup
 from pygsti.circuits.circuit import Circuit as _Circuit
-from pygsti.datasets import DataSet as _DataSet, MultiDataSet as _MultiDataSet
+from pygsti.data import DataSet as _DataSet, MultiDataSet as _MultiDataSet
 
 # A dictionary mapping qubit string representations into created
 # :class:`Circuit` objects, which can improve performance by reducing

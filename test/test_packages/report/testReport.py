@@ -156,7 +156,7 @@ class TestReport(ReportBaseCase):
                                              verbosity=3)
         pygsti.report.create_report_notebook({'one': self.results_logL, 'two': self.results_logL},
                                              temp_files + "/report_notebook.ipynb", None,
-                                             verbosity=3) # multiple comparable datasets
+                                             verbosity=3) # multiple comparable data
 
 
     def test_inline_template(self):

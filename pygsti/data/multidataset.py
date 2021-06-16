@@ -19,7 +19,7 @@ import numpy as _np
 
 from pygsti.circuits import circuit as _cir
 from pygsti.baseobjs import outcomelabeldict as _ld
-from pygsti.datasets.dataset import DataSet as _DataSet
+from pygsti.data.dataset import DataSet as _DataSet
 
 
 class _MultiDataSetKVIterator(object):
@@ -390,7 +390,7 @@ class MultiDataSet(object):
         Returns
         -------
         DataSet
-            a single DataSet containing the summed counts of each of the datasets
+            a single DataSet containing the summed counts of each of the data
             named by the parameters.
         """
 
@@ -616,7 +616,7 @@ class MultiDataSet(object):
                     self.auxInfo[circuit].update(aux)
 
     def __str__(self):
-        s = "MultiDataSet containing: %d datasets, each with %d strings\n" % (
+        s = "MultiDataSet containing: %d data, each with %d strings\n" % (
             len(self), len(self.cirIndex) if self.cirIndex is not None else 0)
         s += " Dataset names = " + ", ".join(list(self.keys())) + "\n"
         s += " Outcome labels = " + ", ".join(map(str, self.olIndex.keys()) if self.olIndex is not None else [])

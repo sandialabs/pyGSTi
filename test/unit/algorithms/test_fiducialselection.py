@@ -1,7 +1,7 @@
 import numpy as np
 
 import pygsti.algorithms.fiducialselection as fs
-import pygsti.construction as pc
+import pygsti.circuits as pc
 from . import fixtures
 from ..util import BaseCase
 

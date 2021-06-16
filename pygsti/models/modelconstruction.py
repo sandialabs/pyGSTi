@@ -31,7 +31,7 @@ from pygsti.baseobjs.basis import BuiltinBasis as _BuiltinBasis
 from pygsti.baseobjs.basis import DirectSumBasis as _DirectSumBasis
 from pygsti.tools import basistools as _bt
 from pygsti.tools import internalgates as _itgs
-from pygsti.tools import optools as _gt
+from pygsti.tools import optools as _ot
 from pygsti.tools.basisconstructors import sigmax, sigmay, sigmaz
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
 
@@ -309,7 +309,7 @@ def _basis_create_operation(state_space, op_expr, basis="gm", parameterization="
 
             Uop = _spl.expm(ex)  # 2x2 unitary matrix operating on single qubit in [0,1] basis
             # complex 4x4 mx operating on vectorized 1Q densty matrix in std basis
-            operationMx = _gt.unitary_to_process_mx(Uop)
+            operationMx = _ot.unitary_to_process_mx(Uop)
             # *real* 4x4 mx in Pauli-product basis -- better for parameterization
             pp_opMx = _op.StaticArbitraryOp(_bt.change_basis(operationMx, 'std', 'pp'), evotype, state_space=None)
             opTermInFinalBasis = _op.EmbeddedOp(state_space, [label], pp_opMx)
@@ -326,7 +326,7 @@ def _basis_create_operation(state_space, op_expr, basis="gm", parameterization="
             ex = -1j * theta * (sxCoeff * sigmax / 2. + syCoeff * sigmay / 2. + szCoeff * sigmaz / 2.)
             Uop = _spl.expm(ex)  # 2x2 unitary matrix operating on single qubit in [0,1] basis
             # complex 4x4 mx operating on vectorized 1Q densty matrix in std basis
-            operationMx = _gt.unitary_to_process_mx(Uop)
+            operationMx = _ot.unitary_to_process_mx(Uop)
             # *real* 4x4 mx in Pauli-product basis -- better for parameterization
             pp_opMx = _op.StaticArbitraryOp(_bt.change_basis(operationMx, 'std', 'pp'), evotype, state_space=None)
             opTermInFinalBasis = _op.EmbeddedOp(state_space, [label], pp_opMx)
@@ -360,7 +360,7 @@ def _basis_create_operation(state_space, op_expr, basis="gm", parameterization="
                 "%s gate must act on qubits!" % opName
 
             # complex 16x16 mx operating on vectorized 2Q densty matrix in std basis
-            operationMx = _gt.unitary_to_process_mx(Uop)
+            operationMx = _ot.unitary_to_process_mx(Uop)
             # *real* 16x16 mx in Pauli-product basis -- better for parameterization
             pp_opMx = _op.StaticArbitraryOp(_bt.change_basis(operationMx, 'std', 'pp'), evotype, state_space=None)
             opTermInFinalBasis = _op.EmbeddedOp(state_space, [label1, label2], pp_opMx)
@@ -385,7 +385,7 @@ def _basis_create_operation(state_space, op_expr, basis="gm", parameterization="
             Utot[i2, i1] = Uop[1, 0]
             Utot[i2, i2] = Uop[1, 1]
             # dmDim^2 x dmDim^2 mx operating on vectorized total densty matrix
-            opTermInStdBasis = _gt.unitary_to_process_mx(Utot)
+            opTermInStdBasis = _ot.unitary_to_process_mx(Utot)
 
             # contract [3] to [2, 1]
             embedded_std_basis = _Basis.cast('std', 9)  # [2]

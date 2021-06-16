@@ -5,7 +5,8 @@ from contextlib import contextmanager
 
 import numpy as np
 
-import pygsti.construction as pc
+import pygsti.circuits as pc
+import pygsti.models as models
 import pygsti.models.model as m
 from pygsti.forwardsims import matrixforwardsim, mapforwardsim
 from pygsti.modelmembers.instruments import Instrument
@@ -42,7 +43,7 @@ class ModelBase(object):
         #OK for these tests, since we test user interface?
         #Set Model objects to "strict" mode for testing
         ExplicitOpModel._strict = False
-        cls._model = pc.create_explicit_model(
+        cls._model = models.create_explicit_model(
             [('Q0',)], ['Gi', 'Gx', 'Gy'],
             ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"],
             **cls.build_options)
@@ -159,7 +160,7 @@ class GeneralMethodBase(object):
         self.assertArraysAlmostEqual(self.model['Gi'], Gi_test_matrix)
 
     def test_strdiff(self):
-        other = pc.create_explicit_model(
+        other = models.create_explicit_model(
             [('Q0',)], ['Gi', 'Gx', 'Gy'],
             ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"],
             parameterization='TP'

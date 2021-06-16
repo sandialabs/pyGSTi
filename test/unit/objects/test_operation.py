@@ -6,7 +6,7 @@ import scipy.sparse as sps
 import pygsti.modelmembers.operations as op
 import pygsti.tools.internalgates as itgs
 import pygsti.tools.optools as gt
-from pygsti.construction.modelconstruction import _create_spam_vector, _create_operation
+from pygsti.models.modelconstruction import _create_spam_vector, _create_operation
 from pygsti.evotypes import Evotype
 from pygsti.modelmembers.instruments import TPInstrument
 from pygsti.modelmembers.states import FullState

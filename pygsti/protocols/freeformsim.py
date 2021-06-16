@@ -14,7 +14,7 @@ import numpy as _np
 
 from pygsti.protocols import protocol as _proto
 from pygsti.circuits.circuit import Circuit as _Circuit
-from pygsti.datasets.freedataset import FreeformDataSet as _FreeformDataSet
+from pygsti.data.freedataset import FreeformDataSet as _FreeformDataSet
 from pygsti.modelmembers import states as _state
 
 

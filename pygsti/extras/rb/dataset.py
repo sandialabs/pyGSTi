@@ -275,13 +275,13 @@ class RBSummaryDataset(object):
 
     def add_bootstrapped_datasets(self, samples=1000):
         """
-        Adds bootstrapped datasets. The bootstrap is over both the finite counts of each
+        Adds bootstrapped data. The bootstrap is over both the finite counts of each
         circuit and over the circuits at each length.
 
         Parameters
         ----------
         samples : int, optional
-            The number of bootstrapped datasets to construct.
+            The number of bootstrapped data to construct.
 
         Returns
         -------

@@ -1,6 +1,6 @@
 import numpy as np
 
-import pygsti.construction as pc
+import pygsti.circuits as pc
 from pygsti.algorithms import germselection as germsel
 from pygsti.modelmembers.operations import StaticArbitraryOp
 from . import fixtures

@@ -210,7 +210,7 @@ construction:
     build_localnoise_model: create_localnoise_model
     build_operation: _create_operation
     build_vector: _create_spam_vector
-    sigmax: null # XXX from gateconstruction.py -- if so, add underscores on import?
+    sigmax: null # XXX from gatetools.py -- if so, add underscores on import?
     sigmay: null
     sigmaz: null
   nqnoiseconstruction.py:

@@ -1,10 +1,9 @@
-import pygsti
 import pickle
 
 import numpy as np
 
 import pygsti
-from pygsti.construction import modelconstruction
+from pygsti.models import modelconstruction
 from pygsti.modelpacks.legacy import std1Q_XYI as std
 from ..testutils import BaseTestCase, temp_files
 

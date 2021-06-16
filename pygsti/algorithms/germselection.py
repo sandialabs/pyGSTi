@@ -17,7 +17,7 @@ import numpy.linalg as _nla
 
 from pygsti.algorithms import grasp as _grasp
 from pygsti.algorithms import scoring as _scoring
-from pygsti import construction as _constr
+from pygsti import circuits as _circuits
 from pygsti import baseobjs as _baseobjs
 from pygsti.tools import mpitools as _mpit
 
@@ -139,11 +139,11 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
     if candidate_germ_counts is None: candidate_germ_counts = {6: 'all upto'}
     for germLength, count in candidate_germ_counts.items():
         if count == "all upto":
-            availableGermsList.extend(_constr.list_all_circuits_without_powers_and_cycles(
+            availableGermsList.extend(_circuits.list_all_circuits_without_powers_and_cycles(
                 gates, max_length=germLength))
         else:
             seed = None if candidate_seed is None else candidate_seed + germLength
-            availableGermsList.extend(_constr.list_random_circuits_onelen(
+            availableGermsList.extend(_circuits.list_random_circuits_onelen(
                 gates, germLength, count, seed=seed))
 
     if algorithm_kwargs is None:

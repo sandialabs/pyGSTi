@@ -1,4 +1,4 @@
-import pygsti.construction as pc
+import pygsti.data as pdata
 from pygsti.extras.rpe import rpetools as tools, rpeconstruction as rpc
 from pygsti.modelpacks.legacy import std1Q_XYI as std, std1Q_XYI as stdXY
 from ...util import BaseCase
@@ -13,7 +13,7 @@ class RPEToolsFuncBase(object):
         self.target.operations['Gi'] = std.target_model().operations['Gi']  # need a Gi gate...
         self.stringListD = rpc.create_rpe_angle_circuits_dict(2, self.config)
         self.mdl_depolXZ = self.target.depolarize(op_noise=0.1, spam_noise=0.1, seed=_SEED)
-        self.ds = pc.simulate_data(self.mdl_depolXZ, self.stringListD['totalStrList'],
+        self.ds = pdata.simulate_data(self.mdl_depolXZ, self.stringListD['totalStrList'],
                                    num_samples=1000, sample_error='binomial', seed=_SEED)
 
     def test_extract_rotation_hat(self):

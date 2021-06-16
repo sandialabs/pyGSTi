@@ -18,9 +18,9 @@ from pathlib import Path as _Path
 import numpy as _np
 
 from pygsti.circuits.circuit import Circuit as _Circuit
-from pygsti.construction.circuitconstruction import to_circuits as _circuit_list
-from pygsti.construction.modelconstruction import create_explicit_model as _build_explicit_model
-from pygsti.construction.stdlists import create_lsgst_circuit_lists as _make_lsgst_lists
+from pygsti.circuits.circuitconstruction import to_circuits as _circuit_list
+from pygsti.models.modelconstruction import create_explicit_model as _build_explicit_model
+from pygsti.circuits.gstcircuits import create_lsgst_circuit_lists as _make_lsgst_lists
 from pygsti.forwardsims.termforwardsim import TermForwardSimulator as _TermFSim
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.polynomial import bulk_load_compact_polynomials as _bulk_load_compact_polys

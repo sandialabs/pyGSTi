@@ -21,7 +21,7 @@ import time as _time
 
 import numpy as _np
 
-from pygsti.construction import stdlists as _stdlists
+from pygsti.circuits import gstcircuits as _stdlists
 from pygsti.baseobjs import polynomial as _polynomial
 from pygsti.forwardsims.termforwardsim import TermForwardSimulator as _TermFSim
 from pygsti.tools import mpitools as _mpit
@@ -32,7 +32,7 @@ def _get_cachefile_names(std_module, param_type, simulator, py_version):
 
     if param_type == "H+S terms":
         cachePath = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
-                                  "caches")
+                                  "../construction/caches")
 
         assert(simulator == "auto" or isinstance(simulator, _TermFSim)), "Invalid `simulator` argument!"
         termOrder = 1 if simulator == "auto" else simulator.max_order

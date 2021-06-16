@@ -1,4 +1,4 @@
-from pygsti import algorithms as alg, construction as pc
+from pygsti import algorithms as alg, circuits as pc
 from pygsti.drivers import bootstrap as bs
 from pygsti.modelpacks.legacy import std1Q_XYI as std
 from . import fixtures as pkg

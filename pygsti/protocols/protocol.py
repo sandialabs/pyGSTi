@@ -15,10 +15,9 @@ import itertools as _itertools
 import pathlib as _pathlib
 
 from pygsti.protocols.treenode import TreeNode as _TreeNode
-from pygsti import construction as _cnst
 from pygsti import io as _io
 from pygsti import circuits as _circuits
-from pygsti import datasets as _datasets
+from pygsti import data as _data
 from pygsti.tools import NamedDict as _NamedDict
 from pygsti.tools import listtools as _lt
 
@@ -1420,7 +1419,7 @@ class SimultaneousExperimentDesign(ExperimentDesign):
         -------
         ProtocolData
         """
-        if isinstance(dataset, _datasets.MultiDataSet):
+        if isinstance(dataset, _data.MultiDataSet):
             raise NotImplementedError("SimultaneousExperimentDesigns don't work with multi-pass data yet.")
 
         all_circuits = self.all_circuits_needing_data
@@ -1430,10 +1429,10 @@ class SimultaneousExperimentDesign(ExperimentDesign):
         qubit_indices = [qubit_index[ql] for ql in qubit_labels]  # order determined by first circuit (see above)
 
         if isinstance(dataset, dict):  # then do filtration "element-wise"
-            filtered_ds = {k: _cnst.filter_dataset(ds, qubit_labels, qubit_indices) for k, ds in dataset.items()}
+            filtered_ds = {k: _data.filter_dataset(ds, qubit_labels, qubit_indices) for k, ds in dataset.items()}
             for fds in filtered_ds.values(): fds.add_std_nqubit_outcome_labels(len(qubit_labels))
         else:
-            filtered_ds = _cnst.filter_dataset(dataset, qubit_labels, qubit_indices)  # Marginalize dataset
+            filtered_ds = _data.filter_dataset(dataset, qubit_labels, qubit_indices)  # Marginalize dataset
             filtered_ds.add_std_nqubit_outcome_labels(len(qubit_labels))  # ensure filtered_ds has appropriate outcomes
 
         if sub_design.alt_actual_circuits_executed:
@@ -1621,7 +1620,7 @@ class ProtocolData(_TreeNode):
                 #FUTURE: use MultiDataSet, BUT in addition to init_from_dict we'll need to add truncate, filter, and
                 # process_circuits support for MultiDataSet objects -- for now (above) we just use dicts of DataSets.
                 #raise NotImplementedError("Need to implement MultiDataSet.init_from_dict!")
-                #dataset = _datasets.MultiDataSet.init_from_dict(
+                #dataset = _data.MultiDataSet.init_from_dict(
                 #    {pth.name: _io.load_dataset(pth, verbosity=0) for pth in dataset_files})
 
         cache = _io.metadir._read_json_or_pkl_files_to_dict(data_dir / 'cache')
@@ -1658,7 +1657,7 @@ class ProtocolData(_TreeNode):
         self.cache = cache if (cache is not None) else {}
         self.tags = {}
 
-        if isinstance(self.dataset, (_datasets.MultiDataSet, dict)):  # can be dict of DataSets instead of a multi-ds
+        if isinstance(self.dataset, (_data.MultiDataSet, dict)):  # can be dict of DataSets instead of a multi-ds
             for dsname in self.dataset:
                 if dsname not in self.cache: self.cache[dsname] = {}  # create separate caches for each pass
             self._passdatas = {dsname: ProtocolData(self.edesign, ds, self.cache[dsname])
@@ -1727,7 +1726,7 @@ class ProtocolData(_TreeNode):
         -------
         bool
         """
-        return isinstance(self.dataset, (_datasets.MultiDataSet, dict))
+        return isinstance(self.dataset, (_data.MultiDataSet, dict))
 
     #def underlying_tree_paths(self):
     #    return self.edesign.get_tree_paths()
@@ -1800,7 +1799,7 @@ class ProtocolData(_TreeNode):
                 assert(len(list(data_dir.glob('*.txt'))) == 0), "There shouldn't be *.txt files in %s!" % str(data_dir)
             else:
                 data_dir.mkdir(exist_ok=True)
-                if isinstance(self.dataset, (_datasets.MultiDataSet, dict)):
+                if isinstance(self.dataset, (_data.MultiDataSet, dict)):
                     for dsname, ds in self.dataset.items():
                         _io.write_dataset(data_dir / (dsname + '.txt'), ds)
                 else:
@@ -1859,7 +1858,7 @@ class ProtocolData(_TreeNode):
         pandas.DataFrame
         """
         cdict = _NamedDict('Circuit', None)
-        if isinstance(self.dataset, _datasets.FreeformDataSet):
+        if isinstance(self.dataset, _data.FreeformDataSet):
             for cir, i in self.dataset.cirIndex.items():
                 d = _NamedDict('ValueName', 'category', items=self.dataset._info[i])
                 if isinstance(self.edesign, FreeformDesign):
@@ -2694,7 +2693,7 @@ class DataCountsSimulator(DataSimulator):
         -------
         ProtocolData
         """
-        from ..construction.datasetconstruction import simulate_data as _simulate_data
+        from pygsti.data.datasetconstruction import simulate_data as _simulate_data
         ds = _simulate_data(self.model, edesign.all_circuits_needing_data, self.num_samples,
                             self.sample_error, self.seed, self.rand_state,
                             self.alias_dict, self.collision_action,

@@ -1053,7 +1053,7 @@ class DataSet(object):
                                 for i in self.cirIndex.values()]) <= maxOlIndex)
                     # self.oliData.shape[0] > maxIndex doesn't make sense since cirIndex holds slices
                 else:
-                    #Note: for non-static datasets, assume *all* data in self.oliData is "in" this data set, i.e.,
+                    #Note: for non-static data, assume *all* data in self.oliData is "in" this data set, i.e.,
                     # it can't be that this is a truncated dataset with pointers to more data than it actually owns.
                     maxIndex = max(self.cirIndex.values())
                     assert(len(self.oliData) > maxIndex)

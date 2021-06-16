@@ -1255,7 +1255,7 @@ def construct_standard_report(results, title="auto",
     if 'ShowUnmodeledError' in flags:
         sections.append(_section.GoodnessUnmodeledSection())
 
-    # Perform idle tomography on datasets if desired (need to do
+    # Perform idle tomography on data if desired (need to do
     #  this before creating main switchboard)
     printer.log("Running idle tomography")
     try:
@@ -1473,7 +1473,7 @@ def construct_nqnoise_report(results, title="auto",
     if 'ShowScaling' in flags:
         sections.append(_section.GoodnessScalingSection())
 
-    # Perform idle tomography on datasets if desired (need to do
+    # Perform idle tomography on data if desired (need to do
     #  this before creating main switchboard)
     printer.log("Running idle tomography")
     try:
