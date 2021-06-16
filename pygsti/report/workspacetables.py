@@ -930,7 +930,7 @@ class GaugeRobustMetricTable(WorkspaceTable):
             gate_mx = orig_model.operations[lbl].to_dense(on_space='HilbertSchmidt')
             target_gate_mx = target_model.operations[lbl].to_dense(on_space='HilbertSchmidt')
             Ugauge = _tools.compute_best_case_gauge_transform(gate_mx, target_gate_mx)
-            Ugg = _models.gaugegrop.FullGaugeGroupElement(_np.linalg.inv(Ugauge))
+            Ugg = _models.gaugegroup.FullGaugeGroupElement(_np.linalg.inv(Ugauge))
             # transforms gates as Ugauge * gate * Ugauge_inv
 
             mdl = orig_model.copy()

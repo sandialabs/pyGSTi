@@ -211,7 +211,9 @@ class DenseOperatorInterface(object):
 
     def __setitem__(self, key, val):
         self.dirty = True
-        return self._ptr.__setitem__(key, val)
+        ret = self._ptr.__setitem__(key, val)
+        self._ptr_has_changed()
+        return ret
 
     def __getattr__(self, attr):
         #use __dict__ so no chance for recursive __getattr__
@@ -267,7 +269,7 @@ class DenseOperatorInterface(object):
 class DenseOperator(DenseOperatorInterface, _LinearOperator):
     """
     TODO: update docstring
-    An operator that behaves like a dense operation matrix.
+    An operator that behaves like a dense super-operator matrix.
 
     This class is the common base class for more specific dense operators.
 
@@ -290,7 +292,7 @@ class DenseOperator(DenseOperatorInterface, _LinearOperator):
         Direct access to the underlying process matrix data.
     """
 
-    def __init__(self, mx, evotype, state_space):
+    def __init__(self, mx, evotype, state_space=None):
         """ Initialize a new LinearOperator """
         mx = _LinearOperator.convert_to_matrix(mx)
         state_space = _statespace.default_space_for_dim(mx.shape[0]) if (state_space is None) \
@@ -334,7 +336,7 @@ class DenseOperator(DenseOperatorInterface, _LinearOperator):
 class DenseUnitaryOperator(DenseOperatorInterface, _LinearOperator):
     """
     TODO: update docstring
-    An operator that behaves like a dense operation matrix.
+    An operator that behaves like a dense (unitary) operator matrix.
 
     This class is the common base class for more specific dense operators.
 

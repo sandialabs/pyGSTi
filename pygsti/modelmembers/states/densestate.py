@@ -127,7 +127,7 @@ class DenseStateInterface(object):
 class DenseState(DenseStateInterface, _State):
     """
     TODO: update docstring
-    A state preparation vector that behaves like a numpy array.
+    A state preparation vector that is interfaced/behaves as a dense super-ket (a numpy array).
 
     This class is the common base class for parameterizations of a state vector
     that have a dense representation and can be accessed like a numpy array.
@@ -197,7 +197,7 @@ class DenseState(DenseStateInterface, _State):
 
 class DensePureState(DenseStateInterface, _State):
     """
-    TODO: docstring - a state that is stored as a dense super-ket
+    TODO: docstring - a state that is interfaced as a dense ket
     """
 
     def __init__(self, purevec, basis, evotype, state_space):
