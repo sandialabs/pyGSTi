@@ -348,7 +348,7 @@ class InterpolatedDenseOp(_DenseOperator):
                     len(self._parameterized_indices), len(initial_point))
         self._paramvec = _np.array(initial_point, 'd')
 
-        super().__init__(_np.identity(dim, 'd'), evotype="densitymx")
+        super().__init__(_np.identity(dim, 'd'), evotype="densitymx", state_space=None)
 
         # initialize object
         self.from_vector(self._paramvec)
@@ -376,8 +376,9 @@ class InterpolatedDenseOp(_DenseOperator):
         fullv[self._parameterized_indices] = self._paramvec
         fullv[self._frozen_indices] = self._frozen_values
         errorgen = self.base_interpolator(fullv)
-        self.base[:, :] = _ot.operation_from_error_generator(errorgen, self.target_op.to_dense(), 'logGTi')
-
+        self._ptr[:, :] = _ot.operation_from_error_generator(errorgen, self.target_op.to_dense(), 'logGTi')
+        self._ptr_has_changed()
+            
         if self.aux_interpolator is not None:
             self.aux_info = self.aux_interpolator(fullv)
         self.dirty = dirty_value
