@@ -17,36 +17,36 @@ import warnings as _warnings
 import numpy as _np
 import scipy as _scipy
 
-from . import circuitconstruction as _gsc
-from .modelconstruction import _parameterization_from_errgendict
-from .. import baseobjs as _baseobjs
-from ..baseobjs import qubitgraph as _qgraph, statespace as _statespace
-from ..evotypes import Evotype as _Evotype
-from ..forwardsims.mapforwardsim import MapForwardSimulator as _MapFSim
-from ..forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
-from ..forwardsims.termforwardsim import TermForwardSimulator as _TermFSim
-from ..io import CircuitParser as _CircuitParser
-from ..modelmembers import operations as _op
-from ..modelmembers import povms as _povm
-from ..modelmembers import states as _state
-from ..modelmembers.operations import opfactory as _opfactory
-from ..models.cloudnoisemodel import CloudNoiseModel as _CloudNoiseModel
-from ..models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
-from ..circuits.circuit import Circuit as _Circuit
-from ..circuits.circuitstructure import GermFiducialPairPlaquette as _GermFiducialPairPlaquette, \
+from pygsti.construction import circuitconstruction as _gsc
+from pygsti.construction.modelconstruction import _parameterization_from_errgendict
+from pygsti import baseobjs as _baseobjs
+from pygsti.baseobjs import qubitgraph as _qgraph, statespace as _statespace
+from pygsti.evotypes import Evotype as _Evotype
+from pygsti.forwardsims.mapforwardsim import MapForwardSimulator as _MapFSim
+from pygsti.forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
+from pygsti.forwardsims.termforwardsim import TermForwardSimulator as _TermFSim
+from pygsti.io import CircuitParser as _CircuitParser
+from pygsti.modelmembers import operations as _op
+from pygsti.modelmembers import povms as _povm
+from pygsti.modelmembers import states as _state
+from pygsti.modelmembers.operations import opfactory as _opfactory
+from pygsti.models.cloudnoisemodel import CloudNoiseModel as _CloudNoiseModel
+from pygsti.models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
+from pygsti.circuits.circuit import Circuit as _Circuit
+from pygsti.circuits.circuitstructure import GermFiducialPairPlaquette as _GermFiducialPairPlaquette, \
     PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
-from ..baseobjs.basis import BuiltinBasis as _BuiltinBasis
-from ..baseobjs.label import Label as _Lbl
-from ..baseobjs.polynomial import Polynomial as _Polynomial
-from ..baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
-from ..baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from ..tools import basistools as _bt
-from ..tools import internalgates as _itgs
-from ..tools import listtools as _lt
-from ..tools import mpitools as _mpit
-from ..tools import optools as _gt
-from ..tools import slicetools as _slct
-from ..tools.legacytools import deprecate as _deprecated_fn
+from pygsti.baseobjs.basis import BuiltinBasis as _BuiltinBasis
+from pygsti.baseobjs.label import Label as _Lbl
+from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
+from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
+from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from pygsti.tools import basistools as _bt
+from pygsti.tools import internalgates as _itgs
+from pygsti.tools import listtools as _lt
+from pygsti.tools import mpitools as _mpit
+from pygsti.tools import optools as _gt
+from pygsti.tools import slicetools as _slct
+from pygsti.tools.legacytools import deprecate as _deprecated_fn
 
 RANK_TOL = 1e-9
 

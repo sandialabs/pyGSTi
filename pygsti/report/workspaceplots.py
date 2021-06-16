@@ -20,17 +20,17 @@ import scipy as _scipy
 from scipy.stats import chi2 as _chi2
 
 from pygsti.objectivefns.objectivefns import ModelDatasetCircuitsStore as _ModelDatasetCircuitStore
-from . import colormaps as _colormaps
-from . import plothelpers as _ph
-from .figure import ReportFigure
-from .workspace import WorkspacePlot
-from .. import algorithms as _alg
-from .. import baseobjs as _baseobjs
-from ..objectivefns import objectivefns as _objfns
-from ..circuits.circuit import Circuit as _Circuit
-from ..circuits.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure, \
+from pygsti.report import colormaps as _colormaps
+from pygsti.report import plothelpers as _ph
+from pygsti.report.figure import ReportFigure
+from pygsti.report.workspace import WorkspacePlot
+from pygsti import algorithms as _alg
+from pygsti import baseobjs as _baseobjs
+from pygsti.objectivefns import objectivefns as _objfns
+from pygsti.circuits.circuit import Circuit as _Circuit
+from pygsti.circuits.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure, \
     GermFiducialPairPlaquette as _GermFiducialPairPlaquette
-from ..datasets import DataSet as _DataSet
+from pygsti.datasets import DataSet as _DataSet
 
 #Plotly v3 changes heirarchy of graph objects
 # Do this to avoid deprecation warning is plotly 3+

@@ -12,11 +12,11 @@ RB Protocol objects
 
 import numpy as _np
 
-from . import protocol as _proto
-from . import vb as _vb
-from .. import tools as _tools
-from ..algorithms import randomcircuit as _rc
-from ..algorithms import rbfit as _rbfit
+from pygsti.protocols import protocol as _proto
+from pygsti.protocols import vb as _vb
+from pygsti import tools as _tools
+from pygsti.algorithms import randomcircuit as _rc
+from pygsti.algorithms import rbfit as _rbfit
 
 
 class CliffordRBDesign(_vb.BenchmarkingDesign):

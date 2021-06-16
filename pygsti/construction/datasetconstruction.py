@@ -17,10 +17,10 @@ import warnings as _warnings
 import numpy as _np
 import numpy.random as _rndm
 
-from . import circuitconstruction as _gstrc
-from ..datasets import dataset as _ds
-from ..baseobjs import label as _lbl, outcomelabeldict as _ld
-from ..protocols import ExperimentDesign as _ExperimentDesign
+from pygsti.construction import circuitconstruction as _gstrc
+from pygsti.datasets import dataset as _ds
+from pygsti.baseobjs import label as _lbl, outcomelabeldict as _ld
+from pygsti.protocols import ExperimentDesign as _ExperimentDesign
 
 
 def simulate_data(model_or_dataset, circuit_list, num_samples,

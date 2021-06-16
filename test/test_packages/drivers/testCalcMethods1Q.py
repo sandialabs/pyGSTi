@@ -74,7 +74,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         #RUN BELOW FOR DATAGEN (SAVE)
         if regenerate_references():
             ds = pygsti.construction.simulate_data(cls.mdl_datagen, cls.listOfExperiments,
-                                                        num_samples=1000, sample_error="multinomial", seed=1234)
+                                                   num_samples=1000, sample_error="multinomial", seed=1234)
             ds.save(compare_files + "/calcMethods1Q.dataset")
 
         #DEBUG TEST- was to make sure data files have same info -- seemed ultimately unnecessary
@@ -102,7 +102,7 @@ class CalcMethods1QTestCase(BaseTestCase):
                 fids1Q, [ ( (L('Gx'),) , (L('Gx',i),) ), ( (L('Gy'),) , (L('Gy',i),) ) ]) )
         #print(redmod_fiducials, "Fiducials")
 
-        cls.redmod_germs = pygsti.construction.to_circuits([ (gl,) for gl in op_labels ])
+        cls.redmod_germs = pygsti.construction.to_circuits([(gl,) for gl in op_labels])
         cls.redmod_maxLs = [1]
         expList = pygsti.construction.create_lsgst_circuits(
             op_labels, cls.redmod_fiducials, cls.redmod_fiducials,
@@ -125,9 +125,9 @@ class CalcMethods1QTestCase(BaseTestCase):
 
         #Circuit Simulation circuits
         cls.csim_nQubits=3
-        cls.circuit1 = pygsti.obj.Circuit(('Gx','Gy'))
+        cls.circuit1 = pygsti.obj.Circuit(('Gx', 'Gy'))
           # now Circuit adds qubit labels... pygsti.obj.Circuit(layer_labels=('Gx','Gy'), num_lines=1) # 1-qubit circuit
-        cls.circuit3 = pygsti.obj.Circuit(layer_labels=[ ('Gxpi',0), ('Gypi',1),('Gcnot',1,2)], num_lines=3) # 3-qubit circuit
+        cls.circuit3 = pygsti.obj.Circuit(layer_labels=[('Gxpi', 0), ('Gypi', 1), ('Gcnot', 1, 2)], num_lines=3) # 3-qubit circuit
 
         os.chdir(origDir) # return to original directory
 
@@ -146,7 +146,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         target_model.set_all_parameterizations("CPTP")
         target_model.sim = 'matrix' # the default for 1Q, so we could remove this line
         results = pygsti.run_long_sequence_gst(self.ds, target_model, std.prepStrs, std.effectStrs,
-                                              std.germs, self.maxLengths, verbosity=4)
+                                               std.germs, self.maxLengths, verbosity=4)
 
         #CHECK that copy gives identical models - this is checked by other
         # unit tests but here we're using a true "GST model" - so do it again:
@@ -179,7 +179,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         target_model.set_all_parameterizations("CPTP")
         target_model.sim = 'map'
         results = pygsti.run_long_sequence_gst(self.ds, target_model, std.prepStrs, std.effectStrs,
-                                              std.germs, self.maxLengths, verbosity=4)
+                                               std.germs, self.maxLengths, verbosity=4)
 
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 1.0, delta=2.0)
@@ -200,7 +200,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         target_model.set_all_parameterizations("H+S terms")
         target_model.sim = pygsti.objects.TermForwardSimulator(mode='taylor-order', max_order=1)  # this is the default set by set_all_parameterizations above
         results = pygsti.run_long_sequence_gst(self.ds, target_model, std.prepStrs, std.effectStrs,
-                                              std.germs, self.maxLengths, verbosity=1)
+                                               std.germs, self.maxLengths, verbosity=1)
 
         #RUN BELOW LINES TO SAVE GATESET (SAVE)
         if regenerate_references():
@@ -235,7 +235,7 @@ class CalcMethods1QTestCase(BaseTestCase):
                                                                allowed_perr=0.1, max_paths_per_outcome=1000,
                                                                perr_heuristic='meanscaled', max_term_stages=5)
         results = pygsti.run_long_sequence_gst(self.ds, target_model, std.prepStrs, std.effectStrs,
-                                              std.germs, self.maxLengths, verbosity=3)
+                                               std.germs, self.maxLengths, verbosity=3)
 
         #RUN BELOW LINES TO SAVE GATESET (SAVE)
         if regenerate_references():
@@ -270,8 +270,8 @@ class CalcMethods1QTestCase(BaseTestCase):
         print("Num params = ",target_model.num_params)
         target_model.from_vector(self.rand_start25)
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
-                                              self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
-                                              verbosity=4, advanced_options={'tolerance': 1e-3})
+                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
+                                               verbosity=4, advanced_options={'tolerance': 1e-3})
 
         #RUN BELOW LINES TO SAVE GATESET (SAVE)
         if regenerate_references():
@@ -293,8 +293,8 @@ class CalcMethods1QTestCase(BaseTestCase):
         print("Num params = ",target_model.num_params)
         target_model.from_vector(self.rand_start25)
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
-                                              self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
-                                              verbosity=4, advanced_options={'tolerance': 1e-3})
+                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
+                                               verbosity=4, advanced_options={'tolerance': 1e-3})
 
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 0.0, delta=1.0)
@@ -315,8 +315,8 @@ class CalcMethods1QTestCase(BaseTestCase):
         print("Num params = ",target_model.num_params)
         target_model.from_vector(self.rand_start25)
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
-                                              self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
-                                              verbosity=4, advanced_options={'tolerance': 1e-3})
+                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
+                                               verbosity=4, advanced_options={'tolerance': 1e-3})
 
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 0.0, delta=1.0)
@@ -331,12 +331,12 @@ class CalcMethods1QTestCase(BaseTestCase):
         print("Num params = ",target_model.num_params)
         target_model.from_vector(self.rand_start25)
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
-                                              self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
-                                              verbosity=4, advanced_options={'tolerance': 1e-3})
+                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
+                                               verbosity=4, advanced_options={'tolerance': 1e-3})
 
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 0.0, delta=1.0)
-        mdl_compare = pygsti.io.json.load( open(compare_files + "/test1Qcalc_redmod_exact.model"))
+        mdl_compare = pygsti.io.json.load(open(compare_files + "/test1Qcalc_redmod_exact.model"))
         self.assertAlmostEqual( np.linalg.norm(results.estimates[results.name].models['go0'].to_vector()
                                                - mdl_compare.to_vector()), 0, places=1)
           #Note: models aren't necessarily exactly equal given gauge freedoms that we don't know
@@ -353,8 +353,8 @@ class CalcMethods1QTestCase(BaseTestCase):
         print("Num params = ",target_model.num_params)
         target_model.from_vector(self.rand_start25)
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
-                                              self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
-                                              verbosity=4, advanced_options={'tolerance': 1e-3})
+                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
+                                               verbosity=4, advanced_options={'tolerance': 1e-3})
 
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 0.0, delta=1.0)
@@ -381,7 +381,7 @@ class CalcMethods1QTestCase(BaseTestCase):
 
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 0.0, delta=1.0)
-        mdl_compare = pygsti.io.json.load( open(compare_files + "/test1Qcalc_redmod_terms.model"))
+        mdl_compare = pygsti.io.json.load(open(compare_files + "/test1Qcalc_redmod_terms.model"))
         self.assertAlmostEqual( np.linalg.norm(results.estimates[results.name].models['go0'].to_vector()
                                                - mdl_compare.to_vector()), 0, places=3)
 
@@ -396,8 +396,8 @@ class CalcMethods1QTestCase(BaseTestCase):
         print("Num params = ",target_model.num_params)
         target_model.from_vector(self.rand_start36)
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
-                                              self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
-                                              verbosity=4, advanced_options={'tolerance': 1e-3})
+                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
+                                               verbosity=4, advanced_options={'tolerance': 1e-3})
 
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 0.0, delta=1.0)
@@ -418,8 +418,8 @@ class CalcMethods1QTestCase(BaseTestCase):
         print("Num params = ",target_model.num_params)
         target_model.from_vector(self.rand_start36)
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
-                                              self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
-                                              verbosity=4, advanced_options={'tolerance': 1e-3})
+                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
+                                               verbosity=4, advanced_options={'tolerance': 1e-3})
 
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 0.0, delta=1.0)
@@ -437,12 +437,12 @@ class CalcMethods1QTestCase(BaseTestCase):
         print("Num params = ",target_model.num_params)
         target_model.from_vector(self.rand_start36)
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
-                                              self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
-                                              verbosity=4, advanced_options={'tolerance': 1e-3})
+                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
+                                               verbosity=4, advanced_options={'tolerance': 1e-3})
 
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 0.0, delta=1.0)
-        mdl_compare = pygsti.io.json.load( open(compare_files + "/test1Qcalc_redmod_terms.model"))
+        mdl_compare = pygsti.io.json.load(open(compare_files + "/test1Qcalc_redmod_terms.model"))
         self.assertAlmostEqual( np.linalg.norm(results.estimates[results.name].models['go0'].to_vector()
                                                - mdl_compare.to_vector()), 0, places=1)  #TODO: why this isn't more similar to svterm case??
 
@@ -457,8 +457,8 @@ class CalcMethods1QTestCase(BaseTestCase):
         print("Num params = ",target_model.num_params)
         target_model.from_vector(self.rand_start36)
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
-                                              self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
-                                              verbosity=4, advanced_options={'tolerance': 1e-3})
+                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
+                                               verbosity=4, advanced_options={'tolerance': 1e-3})
 
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 0.0, delta=1.0)
@@ -523,14 +523,14 @@ class CalcMethods1QTestCase(BaseTestCase):
 
         #Create a model with unitary gates and state vectors (instead of the usual superoperators and density mxs)
         simple_matrix_sim = pygsti.objects.SimpleMatrixForwardSimulator()
-        mdl = pygsti.obj.ExplicitOpModel(['Q0'],evotype='statevec', simulator=simple_matrix_sim)
-        mdl.operations['Gi'] = pygsti.obj.StaticDenseOp( np.identity(2,'complex') )
-        mdl.operations['Gx'] = pygsti.obj.StaticDenseOp(Uop(np.pi/2 * sigmax))
-        mdl.operations['Gy'] = pygsti.obj.StaticDenseOp(Uop(np.pi/2 * sigmay))
-        mdl.preps['rho0'] = pygsti.obj.StaticSPAMVec( [1,0], 'statevec')
+        mdl = pygsti.obj.ExplicitOpModel(['Q0'], evotype='statevec', simulator=simple_matrix_sim)
+        mdl.operations['Gi'] = pygsti.obj.StaticDenseOp(np.identity(2, 'complex'))
+        mdl.operations['Gx'] = pygsti.obj.StaticDenseOp(Uop(np.pi / 2 * sigmax))
+        mdl.operations['Gy'] = pygsti.obj.StaticDenseOp(Uop(np.pi / 2 * sigmay))
+        mdl.preps['rho0'] = pygsti.obj.StaticSPAMVec([1, 0], 'statevec')
         mdl.povms['Mdefault'] = pygsti.obj.UnconstrainedPOVM(
-            {'0': pygsti.obj.StaticSPAMVec( [1,0], 'statevec', 'effect'),
-             '1': pygsti.obj.StaticSPAMVec( [0,1], 'statevec', 'effect')})
+            {'0': pygsti.obj.StaticSPAMVec([1, 0], 'statevec', 'effect'),
+             '1': pygsti.obj.StaticSPAMVec([0, 1], 'statevec', 'effect')})
 
         probs1 = mdl.probabilities(self.circuit1)
         #self.circuit1.simulate(mdl) # calls probs - same as above line
@@ -603,9 +603,9 @@ class CalcMethods1QTestCase(BaseTestCase):
     def test_circuitsim_stabilizer(self):
         # Stabilizer-state simulation (of Clifford gates) using map-based calc
         c0 = pygsti.obj.Circuit(layer_labels=(), num_lines=1) # 1-qubit circuit
-        c1 = pygsti.obj.Circuit(layer_labels=(('Gx',0),), num_lines=1)
-        c2 = pygsti.obj.Circuit(layer_labels=(('Gx',0),('Gx',0)), num_lines=1)
-        c3 = pygsti.obj.Circuit(layer_labels=(('Gx',0),('Gx',0),('Gx',0),('Gx',0)), num_lines=1)
+        c1 = pygsti.obj.Circuit(layer_labels=(('Gx', 0),), num_lines=1)
+        c2 = pygsti.obj.Circuit(layer_labels=(('Gx', 0), ('Gx', 0)), num_lines=1)
+        c3 = pygsti.obj.Circuit(layer_labels=(('Gx', 0), ('Gx', 0), ('Gx', 0), ('Gx', 0)), num_lines=1)
 
         cliffordsim = pygsti.objects.SimpleMapForwardSimulator()
         mdl = pygsti.construction.create_localnoise_model(
@@ -655,9 +655,9 @@ class CalcMethods1QTestCase(BaseTestCase):
     def test_circuitsim_cterm(self):
         # Density-matrix simulation (of superoperator gates) using stabilizer-based term calcs
         c0 = pygsti.obj.Circuit(layer_labels=(), num_lines=1) # 1-qubit circuit
-        c1 = pygsti.obj.Circuit(layer_labels=(('Gx',0),), num_lines=1)
-        c2 = pygsti.obj.Circuit(layer_labels=(('Gx',0),('Gx',0)), num_lines=1)
-        c3 = pygsti.obj.Circuit(layer_labels=(('Gx',0),('Gx',0),('Gx',0),('Gx',0)), num_lines=1)
+        c1 = pygsti.obj.Circuit(layer_labels=(('Gx', 0),), num_lines=1)
+        c2 = pygsti.obj.Circuit(layer_labels=(('Gx', 0), ('Gx', 0)), num_lines=1)
+        c3 = pygsti.obj.Circuit(layer_labels=(('Gx', 0), ('Gx', 0), ('Gx', 0), ('Gx', 0)), num_lines=1)
 
         termsim = pygsti.objects.TermForwardSimulator(mode='taylor-order', max_order=1) # 1st-order in error rates
         mdl = pygsti.construction.create_localnoise_model(

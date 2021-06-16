@@ -27,10 +27,10 @@ import tempfile as _tf
 import numpy as _np
 from pathlib import Path as _Path
 
-from .weakforwardsim import WeakForwardSimulator as _WeakForwardSimulator
-from ..modelmembers import states as _state
-from ..modelmembers import operations as _op
-from ..modelmembers import povms as _povm
+from pygsti.forwardsims.weakforwardsim import WeakForwardSimulator as _WeakForwardSimulator
+from pygsti.modelmembers import states as _state
+from pygsti.modelmembers import operations as _op
+from pygsti.modelmembers import povms as _povm
 from pygsti.baseobjs.outcomelabeldict import OutcomeLabelDict as _OutcomeLabelDict
 # from . import povm as _povm
 

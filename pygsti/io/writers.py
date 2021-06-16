@@ -15,16 +15,16 @@ import warnings as _warnings
 
 import numpy as _np
 
-from . import loaders as _loaders
-from .. import circuits as _circuits
-from ..models import gaugegroup as _gaugegroup
+from pygsti.io import loaders as _loaders
+from pygsti import circuits as _circuits
+from pygsti.models import gaugegroup as _gaugegroup
 
 # from . import stdinput as _stdinput
-from .. import tools as _tools
-from ..modelmembers import instruments as _instrument
-from ..modelmembers import operations as _op
-from ..modelmembers import povms as _povm
-from ..modelmembers import states as _state
+from pygsti import tools as _tools
+from pygsti.modelmembers import instruments as _instrument
+from pygsti.modelmembers import operations as _op
+from pygsti.modelmembers import povms as _povm
+from pygsti.modelmembers import states as _state
 
 
 def write_empty_dataset(filename, circuits,

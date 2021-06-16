@@ -13,9 +13,9 @@ Functions for generating bootstrapped error bars
 import numpy as _np
 
 # import matplotlib as _mpl #REMOVED
-from . import longsequence as _longseq
-from .. import algorithms as _alg
-from ..datasets.dataset import DataSet as _DataSet
+from pygsti.drivers import longsequence as _longseq
+from pygsti import algorithms as _alg
+from pygsti.datasets.dataset import DataSet as _DataSet
 
 
 def create_bootstrap_dataset(input_data_set, generation_method, input_model=None,

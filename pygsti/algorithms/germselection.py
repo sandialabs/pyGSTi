@@ -15,11 +15,11 @@ import warnings as _warnings
 import numpy as _np
 import numpy.linalg as _nla
 
-from . import grasp as _grasp
-from . import scoring as _scoring
-from .. import construction as _constr
-from .. import baseobjs as _baseobjs
-from ..tools import mpitools as _mpit
+from pygsti.algorithms import grasp as _grasp
+from pygsti.algorithms import scoring as _scoring
+from pygsti import construction as _constr
+from pygsti import baseobjs as _baseobjs
+from pygsti.tools import mpitools as _mpit
 
 FLOATSIZE = 8  # in bytes: TODO: a better way
 

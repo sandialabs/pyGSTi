@@ -14,9 +14,9 @@ from functools import partial
 
 import numpy as _np
 
-from .basisconstructors import _basis_constructor_dict
+from pygsti.tools.basisconstructors import _basis_constructor_dict
 # from ..baseobjs.basis import Basis, BuiltinBasis, DirectSumBasis
-from ..baseobjs import basis as _basis
+from pygsti.baseobjs import basis as _basis
 
 
 def basis_matrices(name_or_basis, dim, sparse=False):

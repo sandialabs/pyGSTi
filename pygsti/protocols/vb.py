@@ -12,10 +12,10 @@ Volumetric Benchmarking Protocol objects
 
 import numpy as _np
 
-from . import protocol as _proto
-from ..models.oplessmodel import SuccessFailModel as _SuccessFailModel
-from .. import tools as _tools
-from ..algorithms import randomcircuit as _rc
+from pygsti.protocols import protocol as _proto
+from pygsti.models.oplessmodel import SuccessFailModel as _SuccessFailModel
+from pygsti import tools as _tools
+from pygsti.algorithms import randomcircuit as _rc
 
 
 class ByDepthDesign(_proto.CircuitListsDesign):

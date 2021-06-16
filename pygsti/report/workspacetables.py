@@ -14,24 +14,24 @@ import warnings as _warnings
 
 import numpy as _np
 
-from . import plothelpers as _ph
-from . import reportables as _reportables
-from . import workspaceplots as _wp
-from .reportables import evaluate as _ev
-from .table import ReportTable as _ReportTable
-from .workspace import WorkspaceTable
-from .reportableqty import ReportableQty as _ReportableQty, minimum as _rqty_minimum
-from .. import construction as _cnst
-from .. import models as _models
-from .. import baseobjs as _baseobjs
-from .. import tools as _tools
-from ..algorithms import gaugeopt as _gopt
-from ..modelmembers import operations as _op
-from ..modelmembers import povms as _povm
-from ..modelmembers import states as _state
-from ..objectivefns import objectivefns as _objfns
-from ..forwardsims import MatrixForwardSimulator as _MatrixFSim
-from ..circuits.circuit import Circuit as _Circuit
+from pygsti.report import plothelpers as _ph
+from pygsti.report import reportables as _reportables
+from pygsti.report import workspaceplots as _wp
+from pygsti.report.reportables import evaluate as _ev
+from pygsti.report.table import ReportTable as _ReportTable
+from pygsti.report.workspace import WorkspaceTable
+from pygsti.report.reportableqty import ReportableQty as _ReportableQty, minimum as _rqty_minimum
+from pygsti import construction as _cnst
+from pygsti import models as _models
+from pygsti import baseobjs as _baseobjs
+from pygsti import tools as _tools
+from pygsti.algorithms import gaugeopt as _gopt
+from pygsti.modelmembers import operations as _op
+from pygsti.modelmembers import povms as _povm
+from pygsti.modelmembers import states as _state
+from pygsti.objectivefns import objectivefns as _objfns
+from pygsti.forwardsims import MatrixForwardSimulator as _MatrixFSim
+from pygsti.circuits.circuit import Circuit as _Circuit
 
 
 class BlankTable(WorkspaceTable):

@@ -16,15 +16,15 @@ import warnings as _warnings
 
 import numpy.random as _rndm
 
-from . import circuitconstruction as _gsc
-from ..models.model import OpModel as _OpModel
-from ..circuits.circuit import Circuit as _Circuit
-from ..circuits.circuitstructure import FiducialPairPlaquette as _FiducialPairPlaquette
-from ..circuits.circuitstructure import GermFiducialPairPlaquette as _GermFiducialPairPlaquette
-from ..circuits.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
-from ..baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from ..tools import listtools as _lt
-from ..tools.legacytools import deprecate as _deprecated_fn
+from pygsti.construction import circuitconstruction as _gsc
+from pygsti.models.model import OpModel as _OpModel
+from pygsti.circuits.circuit import Circuit as _Circuit
+from pygsti.circuits.circuitstructure import FiducialPairPlaquette as _FiducialPairPlaquette
+from pygsti.circuits.circuitstructure import GermFiducialPairPlaquette as _GermFiducialPairPlaquette
+from pygsti.circuits.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
+from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from pygsti.tools import listtools as _lt
+from pygsti.tools.legacytools import deprecate as _deprecated_fn
 
 
 def _create_raw_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_length_list,

@@ -12,11 +12,11 @@ Defines the MapCOPALayout class.
 
 import collections as _collections
 
-from .distlayout import DistributableCOPALayout as _DistributableCOPALayout
-from .distlayout import _DistributableAtom
-from .prefixtable import PrefixTable as _PrefixTable
-from ..circuits.circuitlist import CircuitList as _CircuitList
-from ..tools import listtools as _lt
+from pygsti.layouts.distlayout import DistributableCOPALayout as _DistributableCOPALayout
+from pygsti.layouts.distlayout import _DistributableAtom
+from pygsti.layouts.prefixtable import PrefixTable as _PrefixTable
+from pygsti.circuits.circuitlist import CircuitList as _CircuitList
+from pygsti.tools import listtools as _lt
 
 
 class _MapCOPALayoutAtom(_DistributableAtom):

@@ -41,7 +41,7 @@ class LabelTestCase(BaseTestCase):
 
     def test_loadsave(self):
         #test saving and loading "parallel" operation labels
-        gslist = pygsti.construction.to_circuits( [('Gx','Gy'), (('Gx',0),('Gy',1)), ((('Gx',0),('Gy',1)),('Gcnot',0,1)) ])
+        gslist = pygsti.construction.to_circuits([('Gx', 'Gy'), (('Gx', 0), ('Gy', 1)), ((('Gx', 0), ('Gy', 1)), ('Gcnot', 0, 1))])
 
         pygsti.io.write_circuit_list(temp_files + "/test_gslist.txt", gslist)
         gslist2 = pygsti.io.load_circuit_list(temp_files + "/test_gslist.txt")
@@ -65,7 +65,7 @@ class LabelTestCase(BaseTestCase):
         with self.assertRaises(KeyError):
             mdl.operation_blks[parallelLbl]
 
-        opstr = pygsti.obj.Circuit( (parallelLbl,) )
+        opstr = pygsti.obj.Circuit((parallelLbl,))
         probs = mdl.probabilities(opstr)
         print(probs)
 

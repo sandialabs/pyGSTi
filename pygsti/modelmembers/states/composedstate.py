@@ -13,10 +13,10 @@ The ComposedState class and supporting functionality.
 
 import numpy as _np
 
-from .state import State as _State
-from .staticstate import StaticState as _StaticState
-from .. import modelmember as _modelmember, term as _term
-from ..errorgencontainer import ErrorMapContainer as _ErrorMapContainer
+from pygsti.modelmembers.states.state import State as _State
+from pygsti.modelmembers.states.staticstate import StaticState as _StaticState
+from pygsti.modelmembers import modelmember as _modelmember, term as _term
+from pygsti.modelmembers.errorgencontainer import ErrorMapContainer as _ErrorMapContainer
 
 
 class ComposedState(_State):  # , _ErrorMapContainer

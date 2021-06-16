@@ -14,11 +14,11 @@ import os as _os
 import pathlib as _pathlib
 import warnings as _warnings
 
-from . import metadir as _metadir
-from . import stdinput as _stdinput
-from .. import baseobjs as _baseobjs
-from .. import circuits as _circuits
-from .. import datasets as _datasets
+from pygsti.io import metadir as _metadir
+from pygsti.io import stdinput as _stdinput
+from pygsti import baseobjs as _baseobjs
+from pygsti import circuits as _circuits
+from pygsti import datasets as _datasets
 
 
 def load_dataset(filename, cache=False, collision_action="aggregate",

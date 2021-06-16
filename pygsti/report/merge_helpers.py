@@ -18,8 +18,8 @@ import subprocess as _subprocess
 import webbrowser as _webbrowser
 from pathlib import Path
 
-from ..baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from ..tools import timed_block as _timed_block
+from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from pygsti.tools import timed_block as _timed_block
 
 try:
     from jinja2.runtime import Undefined as _Undefined

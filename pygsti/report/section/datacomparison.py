@@ -8,9 +8,9 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from . import Section as _Section
-from ...datasets import DataComparator as _DataComparator
-from ...tools.mpitools import distribute_indices as _distribute_indices
+from pygsti.report.section import Section as _Section
+from pygsti.datasets import DataComparator as _DataComparator
+from pygsti.tools.mpitools import distribute_indices as _distribute_indices
 
 
 class DataComparisonSection(_Section):

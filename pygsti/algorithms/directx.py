@@ -11,11 +11,11 @@ Functions for generating Direct-(LGST, MC2GST, MLGST) models
 #***************************************************************************************************
 
 
-from . import core as _core
-from .. import baseobjs as _baseobjs
-from .. import circuits as _circuits
-from .. import objectivefns as _objfns
-from ..modelmembers.operations import FullArbitraryOp as _FullArbitraryOp
+from pygsti.algorithms import core as _core
+from pygsti import baseobjs as _baseobjs
+from pygsti import circuits as _circuits
+from pygsti import objectivefns as _objfns
+from pygsti.modelmembers.operations import FullArbitraryOp as _FullArbitraryOp
 
 
 def model_with_lgst_circuit_estimates(

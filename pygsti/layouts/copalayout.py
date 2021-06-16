@@ -16,10 +16,10 @@ import itertools as _it
 
 import numpy as _np
 
-from ..circuits.circuitlist import CircuitList as _CircuitList
-from ..baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
-from ..tools import listtools as _lt
-from ..tools import slicetools as _slct
+from pygsti.circuits.circuitlist import CircuitList as _CircuitList
+from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
+from pygsti.tools import listtools as _lt
+from pygsti.tools import slicetools as _slct
 
 
 class CircuitOutcomeProbabilityArrayLayout(object):

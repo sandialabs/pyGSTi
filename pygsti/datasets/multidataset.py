@@ -18,8 +18,8 @@ from collections import defaultdict as _defaultdict
 import numpy as _np
 
 from pygsti.circuits import circuit as _cir
-from ..baseobjs import outcomelabeldict as _ld
-from .dataset import DataSet as _DataSet
+from pygsti.baseobjs import outcomelabeldict as _ld
+from pygsti.datasets.dataset import DataSet as _DataSet
 
 
 class _MultiDataSetKVIterator(object):

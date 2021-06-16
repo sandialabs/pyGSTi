@@ -11,11 +11,11 @@ Functions for creating RPE Models and Circuit lists
 """
 import numpy as _np
 
-from . import datasetconstruction as _dsc
-from . import modelconstruction as _setc
-from ..circuits.circuit import Circuit as _Circuit
-from .. import tools as _tools
-from ..modelmembers import operations as _op
+from pygsti.construction import datasetconstruction as _dsc
+from pygsti.construction import modelconstruction as _setc
+from pygsti.circuits.circuit import Circuit as _Circuit
+from pygsti import tools as _tools
+from pygsti.modelmembers import operations as _op
 
 
 def make_parameterized_rpe_gate_set(alpha_true, epsilon_true, y_rot, spam_depol,

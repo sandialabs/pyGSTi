@@ -21,10 +21,10 @@ import time as _time
 
 import numpy as _np
 
-from . import stdlists as _stdlists
-from ..baseobjs import polynomial as _polynomial
-from ..forwardsims.termforwardsim import TermForwardSimulator as _TermFSim
-from ..tools import mpitools as _mpit
+from pygsti.construction import stdlists as _stdlists
+from pygsti.baseobjs import polynomial as _polynomial
+from pygsti.forwardsims.termforwardsim import TermForwardSimulator as _TermFSim
+from pygsti.tools import mpitools as _mpit
 
 
 def _get_cachefile_names(std_module, param_type, simulator, py_version):

@@ -18,22 +18,22 @@ import warnings as _warnings
 import numpy as _np
 import scipy as _scipy
 
-from . import explicitcalc as _explicitcalc
-from . import model as _mdl, gaugegroup as _gg
-from .memberdict import OrderedMemberDict as _OrderedMemberDict
-from .layerrules import LayerRules as _LayerRules
-from ..forwardsims import matrixforwardsim as _matrixfwdsim
-from ..modelmembers import instruments as _instrument
-from ..modelmembers import operations as _op
-from ..modelmembers import povms as _povm
-from ..modelmembers import states as _state
-from ..modelmembers.operations import opfactory as _opfactory
-from ..baseobjs.basis import BuiltinBasis as _BuiltinBasis, DirectSumBasis as _DirectSumBasis
-from ..baseobjs.label import Label as _Label, CircuitLabel as _CircuitLabel
-from ..tools import basistools as _bt
-from ..tools import jamiolkowski as _jt
-from ..tools import matrixtools as _mt
-from ..tools import optools as _gt
+from pygsti.models import explicitcalc as _explicitcalc
+from pygsti.models import model as _mdl, gaugegroup as _gg
+from pygsti.models.memberdict import OrderedMemberDict as _OrderedMemberDict
+from pygsti.models.layerrules import LayerRules as _LayerRules
+from pygsti.forwardsims import matrixforwardsim as _matrixfwdsim
+from pygsti.modelmembers import instruments as _instrument
+from pygsti.modelmembers import operations as _op
+from pygsti.modelmembers import povms as _povm
+from pygsti.modelmembers import states as _state
+from pygsti.modelmembers.operations import opfactory as _opfactory
+from pygsti.baseobjs.basis import BuiltinBasis as _BuiltinBasis, DirectSumBasis as _DirectSumBasis
+from pygsti.baseobjs.label import Label as _Label, CircuitLabel as _CircuitLabel
+from pygsti.tools import basistools as _bt
+from pygsti.tools import jamiolkowski as _jt
+from pygsti.tools import matrixtools as _mt
+from pygsti.tools import optools as _gt
 
 
 class ExplicitOpModel(_mdl.OpModel):

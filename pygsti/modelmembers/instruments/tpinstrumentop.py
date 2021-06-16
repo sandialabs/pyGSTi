@@ -12,9 +12,9 @@ The TPInstrumentOp class and supporting functionality.
 
 import numpy as _np
 
-from .. import modelmember as _mm
-from ..operations import DenseOperator as _DenseOperator
-from ...tools import slicetools as _slct
+from pygsti.modelmembers import modelmember as _mm
+from pygsti.modelmembers.operations import DenseOperator as _DenseOperator
+from pygsti.tools import slicetools as _slct
 
 
 class TPInstrumentOp(_DenseOperator):

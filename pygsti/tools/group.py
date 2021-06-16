@@ -14,7 +14,7 @@ from functools import reduce as _reduce
 
 import numpy as _np
 
-from ..modelpacks.legacy import std1Q_Cliffords
+from pygsti.modelpacks.legacy import std1Q_Cliffords
 
 
 def is_integer(x):

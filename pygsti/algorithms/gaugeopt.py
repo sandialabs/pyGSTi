@@ -15,12 +15,12 @@ import warnings as _warnings
 
 import numpy as _np
 
-from .. import baseobjs as _baseobjs
-from .. import optimize as _opt
-from .. import tools as _tools
-from ..tools import mpitools as _mpit
-from ..tools import slicetools as _slct
-from ..models.gaugegroup import TrivialGaugeGroupElement as _TrivialGaugeGroupElement
+from pygsti import baseobjs as _baseobjs
+from pygsti import optimize as _opt
+from pygsti import tools as _tools
+from pygsti.tools import mpitools as _mpit
+from pygsti.tools import slicetools as _slct
+from pygsti.models.gaugegroup import TrivialGaugeGroupElement as _TrivialGaugeGroupElement
 
 
 def gaugeopt_to_target(model, target_model, item_weights=None,

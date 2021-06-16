@@ -17,13 +17,13 @@ import random as _random
 import numpy as _np
 import scipy.special as _spspecial
 
-from .. import baseobjs as _baseobjs
-from .. import circuits as _circuits
+from pygsti import baseobjs as _baseobjs
+from pygsti import circuits as _circuits
 
-from ..construction import circuitconstruction as _gsc
-from ..modelmembers.operations import EigenvalueParamDenseOp as _EigenvalueParamDenseOp
-from ..tools import remove_duplicates as _remove_duplicates
-from ..tools import slicetools as _slct
+from pygsti.construction import circuitconstruction as _gsc
+from pygsti.modelmembers.operations import EigenvalueParamDenseOp as _EigenvalueParamDenseOp
+from pygsti.tools import remove_duplicates as _remove_duplicates
+from pygsti.tools import slicetools as _slct
 
 
 def _nCr(n, r):                                                                           # noqa

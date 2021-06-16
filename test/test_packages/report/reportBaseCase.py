@@ -41,10 +41,10 @@ class ReportBaseCase(BaseTestCase):
         # RUN BELOW LINES TO GENERATE ANALYSIS DATASET (SAVE)
         if regenerate_references():
             ds = pygsti.construction.simulate_data(datagen_gateset, cls.lsgstStrings[-1], num_samples=1000,
-                                                        sample_error='binomial', seed=100)
+                                                   sample_error='binomial', seed=100)
             ds.save(compare_files + "/reportgen.dataset")
             ds2 = pygsti.construction.simulate_data(datagen_gateset2, cls.lsgstStrings[-1], num_samples=1000,
-                                                         sample_error='binomial', seed=100)
+                                                    sample_error='binomial', seed=100)
             ds2.save(compare_files + "/reportgen2.dataset")
 
 
@@ -106,8 +106,8 @@ class ReportBaseCase(BaseTestCase):
         cls.ds3.done_adding_data()
 
         cls.results_logL = pygsti.run_long_sequence_gst(cls.ds3, tp_target, std.fiducials, std.fiducials,
-                                                       std.germs, cls.maxLengthList, verbosity=0,
-                                                       advanced_options={'tolerance': 1e-6, 'starting_point': 'LGST',
+                                                        std.germs, cls.maxLengthList, verbosity=0,
+                                                        advanced_options={'tolerance': 1e-6, 'starting_point': 'LGST',
                                                                         'on_bad_fit': ["robust","Robust","robust+","Robust+"],
                                                                         'bad_fit_threshold': -1.0,
                                                                         'germ_length_limits': {('Gx','Gi','Gi'): 2} })

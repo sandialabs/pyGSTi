@@ -14,10 +14,10 @@ import warnings as _warnings
 
 import numpy as _np
 
-from .. import tools as _tools
-from ..objectivefns import objectivefns as _objfns
-from ..circuits.circuitlist import CircuitList as _CircuitList
-from ..baseobjs.smartcache import smart_cached
+from pygsti import tools as _tools
+from pygsti.objectivefns import objectivefns as _objfns
+from pygsti.circuits.circuitlist import CircuitList as _CircuitList
+from pygsti.baseobjs.smartcache import smart_cached
 
 
 #TODO REMOVE

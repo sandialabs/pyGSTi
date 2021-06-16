@@ -21,17 +21,17 @@ from collections import OrderedDict as _OrderedDict
 import numpy as _np
 from scipy.linalg import expm as _expm
 
-from . import CircuitParser as _CircuitParser
-from .. import baseobjs as _baseobjs
-from .. import tools as _tools
-from ..modelmembers import instruments as _instrument
-from ..modelmembers import operations as _op
-from ..modelmembers import povms as _povm
-from ..modelmembers import states as _state
-from ..baseobjs import statespace as _statespace
-from ..models import gaugegroup as _gaugegroup
-from ..circuits.circuit import Circuit as _Circuit
-from ..datasets import DataSet as _DataSet, MultiDataSet as _MultiDataSet
+from pygsti.io import CircuitParser as _CircuitParser
+from pygsti import baseobjs as _baseobjs
+from pygsti import tools as _tools
+from pygsti.modelmembers import instruments as _instrument
+from pygsti.modelmembers import operations as _op
+from pygsti.modelmembers import povms as _povm
+from pygsti.modelmembers import states as _state
+from pygsti.baseobjs import statespace as _statespace
+from pygsti.models import gaugegroup as _gaugegroup
+from pygsti.circuits.circuit import Circuit as _Circuit
+from pygsti.datasets import DataSet as _DataSet, MultiDataSet as _MultiDataSet
 
 # A dictionary mapping qubit string representations into created
 # :class:`Circuit` objects, which can improve performance by reducing

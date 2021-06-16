@@ -17,26 +17,26 @@ import warnings as _warnings
 import numpy as _np
 import scipy.sparse as _sps
 
-from ..baseobjs import statespace as _statespace
-from .implicitmodel import ImplicitOpModel as _ImplicitOpModel
-from .layerrules import LayerRules as _LayerRules
-from .memberdict import OrderedMemberDict as _OrderedMemberDict
-from ..evotypes import Evotype as _Evotype
-from ..forwardsims.forwardsim import ForwardSimulator as _FSim
-from ..forwardsims.mapforwardsim import MapForwardSimulator as _MapFSim
-from ..forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
-from ..modelmembers import operations as _op
-from ..modelmembers import povms as _povm
-from ..modelmembers import states as _state
-from ..modelmembers.operations import opfactory as _opfactory
-from ..baseobjs.basis import BuiltinBasis as _BuiltinBasis, ExplicitBasis as _ExplicitBasis
-from ..baseobjs.label import Label as _Lbl, CircuitLabel as _CircuitLabel
-from ..baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from ..baseobjs.qubitgraph import QubitGraph as _QubitGraph
-from ..tools import basistools as _bt
-from ..tools import internalgates as _itgs
-from ..tools import optools as _gt
-from ..tools.basisconstructors import sqrt2, id2x2, sigmax, sigmay, sigmaz
+from pygsti.baseobjs import statespace as _statespace
+from pygsti.models.implicitmodel import ImplicitOpModel as _ImplicitOpModel
+from pygsti.models.layerrules import LayerRules as _LayerRules
+from pygsti.models.memberdict import OrderedMemberDict as _OrderedMemberDict
+from pygsti.evotypes import Evotype as _Evotype
+from pygsti.forwardsims.forwardsim import ForwardSimulator as _FSim
+from pygsti.forwardsims.mapforwardsim import MapForwardSimulator as _MapFSim
+from pygsti.forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
+from pygsti.modelmembers import operations as _op
+from pygsti.modelmembers import povms as _povm
+from pygsti.modelmembers import states as _state
+from pygsti.modelmembers.operations import opfactory as _opfactory
+from pygsti.baseobjs.basis import BuiltinBasis as _BuiltinBasis, ExplicitBasis as _ExplicitBasis
+from pygsti.baseobjs.label import Label as _Lbl, CircuitLabel as _CircuitLabel
+from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from pygsti.baseobjs.qubitgraph import QubitGraph as _QubitGraph
+from pygsti.tools import basistools as _bt
+from pygsti.tools import internalgates as _itgs
+from pygsti.tools import optools as _gt
+from pygsti.tools.basisconstructors import sqrt2, id2x2, sigmax, sigmay, sigmaz
 
 
 def _iter_basis_inds(weight):

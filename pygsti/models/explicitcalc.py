@@ -17,8 +17,8 @@ import warnings as _warnings
 
 import numpy as _np
 
-from ..tools import basisconstructors as _bc
-from ..tools import matrixtools as _mt
+from pygsti.tools import basisconstructors as _bc
+from pygsti.tools import matrixtools as _mt
 
 # Tolerace for matrix_rank when finding rank of a *normalized* projection
 # matrix.  This is a legitimate tolerace since a normalized projection matrix

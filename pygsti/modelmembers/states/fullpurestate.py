@@ -13,7 +13,7 @@ The FullPureState class and supporting functionality.
 
 import numpy as _np
 
-from .densestate import DensePureState as _DensePureState
+from pygsti.modelmembers.states.densestate import DensePureState as _DensePureState
 
 
 class FullPureState(_DensePureState):

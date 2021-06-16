@@ -15,11 +15,11 @@ import warnings as _warnings
 
 import numpy as _np
 
-from . import compattools as _compat
-from . import sharedmemtools as _smt
-from . import slicetools as _slct
-from .matrixtools import _fas, _findx, _findx_shape
-from .matrixtools import prime_factors as _prime_factors
+from pygsti.tools import compattools as _compat
+from pygsti.tools import sharedmemtools as _smt
+from pygsti.tools import slicetools as _slct
+from pygsti.tools.matrixtools import _fas, _findx, _findx_shape
+from pygsti.tools.matrixtools import prime_factors as _prime_factors
 
 
 def distribute_indices(indices, comm, allow_split_comm=True):

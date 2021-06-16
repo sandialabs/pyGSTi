@@ -22,11 +22,11 @@ import numpy as _np
 import scipy.linalg as _spl
 
 from pygsti.report.reportableqty import ReportableQty as _ReportableQty
-from . import modelfunction as _modf
-from .. import algorithms as _alg
-from .. import tools as _tools
-from ..baseobjs.basis import Basis as _Basis, DirectSumBasis as _DirectSumBasis
-from ..baseobjs.label import Label as _Lbl
+from pygsti.report import modelfunction as _modf
+from pygsti import algorithms as _alg
+from pygsti import tools as _tools
+from pygsti.baseobjs.basis import Basis as _Basis, DirectSumBasis as _DirectSumBasis
+from pygsti.baseobjs.label import Label as _Lbl
 
 _CVXPY_AVAILABLE = pkgutil.find_loader('cvxpy') is not None
 

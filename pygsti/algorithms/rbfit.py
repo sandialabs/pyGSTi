@@ -13,7 +13,7 @@ Functions for analyzing RB data
 import numpy as _np
 from scipy.optimize import curve_fit as _curve_fit
 
-from ..tools import rbtools as _rbt
+from pygsti.tools import rbtools as _rbt
 
 
 # Obsolute function to be deleted.

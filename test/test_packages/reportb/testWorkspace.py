@@ -104,8 +104,8 @@ class TestWorkspace(ReportBaseCase):
         gsMultiSpam.povms['Msecondpovm'] = self.mdl.povms['Mdefault'].copy()
         gsTP = self.tgt.depolarize(0.01,0.01); gsTP.set_all_parameterizations("TP")
         gsCPTP = self.tgt.depolarize(0.01,0.01); gsCPTP.set_all_parameterizations("CPTP")
-        gsGM = self.mdl.depolarize(0.01,0.01); gsGM.basis = pygsti.obj.Basis.cast("gm",4)
-        gsSTD = self.mdl.depolarize(0.01,0.01); gsSTD.basis = pygsti.obj.Basis.cast("std",4)
+        gsGM = self.mdl.depolarize(0.01,0.01); gsGM.basis = pygsti.obj.Basis.cast("gm", 4)
+        gsSTD = self.mdl.depolarize(0.01,0.01); gsSTD.basis = pygsti.obj.Basis.cast("std", 4)
         gsQT = stdQT_XYIMS.target_model().depolarize(0.01,0.01)
 
         #Construct confidence regions
@@ -169,8 +169,8 @@ class TestWorkspace(ReportBaseCase):
 
         tbls.append( w.GateEigenvalueTable(self.mdl, self.tgt, cr) )
         tbls.append( w.GateEigenvalueTable(self.mdl, None, cr, display=("polar",) ) ) # polar with no target model
-        tbls.append( w.GateEigenvalueTable(self.mdl, self.tgt, cr, display=("evdm","evinf","rel"),
-                                           virtual_ops=[pygsti.obj.Circuit(('Gx','Gx'))] ) )
+        tbls.append(w.GateEigenvalueTable(self.mdl, self.tgt, cr, display=("evdm","evinf","rel"),
+                                          virtual_ops=[pygsti.obj.Circuit(('Gx', 'Gx'))]))
         with self.assertRaises(ValueError):
             tbls.append( w.GateEigenvalueTable(self.mdl, self.tgt, cr, display=("foobar",)) )
 
@@ -219,7 +219,7 @@ class TestWorkspace(ReportBaseCase):
         weirdGS = pygsti.construction.create_explicit_model(
             [('Q0','Q1')],['Gi'], ["I(Q0)"])
         #weirdGS.preps['rho1'] = pygsti.obj.ComplementSPAMVec(weirdGS.preps['rho0'],[]) #num_params not implemented!
-        weirdGS.povms['Mtensor'] = pygsti.obj.TensorProdPOVM([self.mdl.povms['Mdefault'],self.mdl.povms['Mdefault']])
+        weirdGS.povms['Mtensor'] = pygsti.obj.TensorProdPOVM([self.mdl.povms['Mdefault'], self.mdl.povms['Mdefault']])
         tbls.append( w.MetadataTable(weirdGS, params) )
 
         tbls.append( w.SoftwareEnvTable() )
@@ -285,7 +285,7 @@ class TestWorkspace(ReportBaseCase):
         mds = pygsti.objects.MultiDataSet()
         mds.add_dataset("DS0",self.ds)
         mds.add_dataset("DS1",self.ds)
-        dsc = pygsti.objects.DataComparator([self.ds,self.ds], op_exclusions=['Gfoo'], op_inclusions=['Gx','Gy','Gi'])
+        dsc = pygsti.objects.DataComparator([self.ds, self.ds], op_exclusions=['Gfoo'], op_inclusions=['Gx', 'Gy', 'Gi'])
         dsc2 = pygsti.objects.DataComparator(mds)
         dsc.run()
         dsc2.run()
@@ -323,8 +323,8 @@ class TestWorkspace(ReportBaseCase):
                                     direct_gst_models=directModels) )
 
         gmx = np.identity(4,'d'); gmx[3,0] = 0.5
-        plts.append( w.MatrixPlot(gmx, -1,1, ['a','b','c','d'], ['e','f','g','h'], "X", "Y",
-                                  colormap = pygsti.report.colormaps.DivergingColormap(vmin=-2, vmax=2)) )
+        plts.append(w.MatrixPlot(gmx, -1, 1, ['a','b','c','d'], ['e','f','g','h'], "X", "Y",
+                                 colormap = pygsti.report.colormaps.DivergingColormap(vmin=-2, vmax=2)))
         plts.append( w.MatrixPlot(gmx, -1,1, ['a','b','c','d'], ['e','f','g','h'], "X", "Y",colormap=None))
         plts.append( w.GateMatrixPlot(gmx, -1,1, "pp", "in", "out", box_labels=True) )
         plts.append( w.PolarEigenvaluePlot([np.linalg.eigvals(self.mdl.operations['Gx'])],["purple"],scale=1.5) )
@@ -544,7 +544,7 @@ class TestWorkspace(ReportBaseCase):
         printer.start_recording()
         printer.log("Hello World (with $\\alpha$ math latex)")
         lineinfo = printer.stop_recording()
-        strs = pygsti.construction.to_circuits([ (), ('Gx',), ('Gx','Gy')])
+        strs = pygsti.construction.to_circuits([(), ('Gx',), ('Gx', 'Gy')])
 
         table = ws.BlankTable()
         plot = ws.BoxKeyPlot(strs, strs)
@@ -620,11 +620,11 @@ class TestWorkspace(ReportBaseCase):
         import pygsti.report.colormaps
         import pygsti.report.workspaceplots
 
-        colormap = pygsti.report.colormaps.DivergingColormap(0,10)
+        colormap = pygsti.report.colormaps.DivergingColormap(0, 10)
         mx = np.identity(2,'d')
         mxs = [ [mx, mx],
                 [mx, mx] ]
-        gstrs = pygsti.construction.to_circuits([ (), ('Gx',) ])
+        gstrs = pygsti.construction.to_circuits([(), ('Gx',)])
 
         # ---- _nested_color_boxplot ----
         pygsti.report.workspaceplots._nested_color_boxplot(mxs, colormap)
@@ -661,7 +661,7 @@ class TestWorkspace(ReportBaseCase):
         for L in [1,2]:
             for germ in germs:
                 plaquettes[(L, germ)] = pygsti.obj.GermFiducialPairPlaquette(germ, L, fidpairs)
-        gss = pygsti.obj.PlaquetteGridCircuitStructure(plaquettes, [1,2], germs, 'L', 'germ')
+        gss = pygsti.obj.PlaquetteGridCircuitStructure(plaquettes, [1, 2], germs, 'L', 'germ')
         gss2 = gss.copy()
         
         #cls = type('DummyClass', pygsti.obj.LsGermsStructure.__bases__, dict(pygsti.obj.LsGermsStructure.__dict__))

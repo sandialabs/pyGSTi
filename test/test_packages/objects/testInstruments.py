@@ -31,7 +31,7 @@ class InstrumentTestCase(BaseTestCase):
         #Test instrument construction with elements whose gpindices are already initialized.
         # Since this isn't allowed currently (a future functionality), we need to do some hacking
         E = self.target_model.povms['Mdefault']['0']
-        InstEl = pygsti.obj.FullDenseOp( np.dot(E,E.T) )
+        InstEl = pygsti.obj.FullDenseOp(np.dot(E, E.T))
         InstEl2 = InstEl.copy()
         nParams = InstEl.num_params # should be 16
 
@@ -91,7 +91,7 @@ class InstrumentTestCase(BaseTestCase):
         mdl.povms['Mdefault'].depolarize(0.01)
 
         # Introducing a rotation error to the measurement
-        Uerr = pygsti.rotation_gate_mx([0,0.02,0]) # input angles are halved by the method
+        Uerr = pygsti.rotation_gate_mx([0, 0.02, 0]) # input angles are halved by the method
         E = np.dot(mdl.povms['Mdefault']['0'].T,Uerr).T # effect is stored as column vector
         Erem = self.povm_ident - E
         mdl.povms['Mdefault'] = pygsti.obj.UnconstrainedPOVM({'0': E, '1': Erem})
@@ -116,8 +116,8 @@ class InstrumentTestCase(BaseTestCase):
 
 
         mdl_datagen = mdl
-        ds = pygsti.construction.simulate_data(mdl,lsgst_struct,1000,'none') #'multinomial')
-        pygsti.io.write_dataset(temp_files + "/intermediate_meas_dataset.txt",ds)
+        ds = pygsti.construction.simulate_data(mdl, lsgst_struct, 1000, 'none') #'multinomial')
+        pygsti.io.write_dataset(temp_files + "/intermediate_meas_dataset.txt", ds)
         ds2 = pygsti.io.load_dataset(temp_files + "/intermediate_meas_dataset.txt")
         for opstr,dsRow in ds.items():
             for lbl,cnt in dsRow.counts.items():
@@ -125,9 +125,9 @@ class InstrumentTestCase(BaseTestCase):
         #print(ds)
 
         #LGST
-        mdl_lgst = pygsti.run_lgst(ds, fiducials,fiducials, self.target_model) #, guessModelForGauge=mdl_datagen)
+        mdl_lgst = pygsti.run_lgst(ds, fiducials, fiducials, self.target_model) #, guessModelForGauge=mdl_datagen)
         self.assertTrue("Iz" in mdl_lgst.instruments)
-        mdl_opt = pygsti.gaugeopt_to_target(mdl_lgst,mdl_datagen) #, method="BFGS")
+        mdl_opt = pygsti.gaugeopt_to_target(mdl_lgst, mdl_datagen) #, method="BFGS")
         print(mdl_datagen.strdiff(mdl_opt))
         print("Frobdiff = ",mdl_datagen.frobeniusdist( mdl_lgst))
         print("Frobdiff after GOpt = ",mdl_datagen.frobeniusdist(mdl_opt))
@@ -142,10 +142,10 @@ class InstrumentTestCase(BaseTestCase):
         #assert(False),"STOP"
 
         #LSGST
-        results = pygsti.run_long_sequence_gst(ds,self.target_model,fiducials,fiducials,germs,max_lengths)
+        results = pygsti.run_long_sequence_gst(ds, self.target_model, fiducials, fiducials, germs, max_lengths)
         #print(results.estimates[results.name].models['go0'])
         mdl_est = results.estimates[results.name].models['go0']
-        mdl_est_opt = pygsti.gaugeopt_to_target(mdl_est,mdl_datagen)
+        mdl_est_opt = pygsti.gaugeopt_to_target(mdl_est, mdl_datagen)
         print("Frobdiff = ", mdl_datagen.frobeniusdist(mdl_est))
         print("Frobdiff after GOpt = ", mdl_datagen.frobeniusdist(mdl_est_opt))
         self.assertAlmostEqual(mdl_datagen.frobeniusdist(mdl_est_opt), 0.0, places=4)
@@ -155,9 +155,9 @@ class InstrumentTestCase(BaseTestCase):
         mdl_targetTP.set_all_parameterizations("TP")
         self.assertEqual(mdl_targetTP.num_params,71) # 3 + 4*2 + 12*5 = 71
         #print(mdl_targetTP)
-        resultsTP = pygsti.run_long_sequence_gst(ds,mdl_targetTP,fiducials,fiducials,germs,max_lengths)
+        resultsTP = pygsti.run_long_sequence_gst(ds, mdl_targetTP, fiducials, fiducials, germs, max_lengths)
         mdl_est = resultsTP.estimates[resultsTP.name].models['go0']
-        mdl_est_opt = pygsti.gaugeopt_to_target(mdl_est,mdl_datagen)
+        mdl_est_opt = pygsti.gaugeopt_to_target(mdl_est, mdl_datagen)
         print("TP Frobdiff = ", mdl_datagen.frobeniusdist(mdl_est))
         print("TP Frobdiff after GOpt = ", mdl_datagen.frobeniusdist(mdl_est_opt))
         self.assertAlmostEqual(mdl_datagen.frobeniusdist(mdl_est_opt), 0.0, places=4)
@@ -170,8 +170,8 @@ class InstrumentTestCase(BaseTestCase):
         #    prep_labels=["rho0"], prep_expressions=["0"],
         #    effect_labels=["0","1"], effect_expressions=["0","complement"])
 
-        v0 = modelconstruction._basis_create_spam_vector("0", pygsti.obj.Basis.cast("pp",4))
-        v1 = modelconstruction._basis_create_spam_vector("1", pygsti.obj.Basis.cast("pp",4))
+        v0 = modelconstruction._basis_create_spam_vector("0", pygsti.obj.Basis.cast("pp", 4))
+        v1 = modelconstruction._basis_create_spam_vector("1", pygsti.obj.Basis.cast("pp", 4))
         P0 = np.dot(v0,v0.T)
         P1 = np.dot(v1,v1.T)
         print("v0 = ",v0)
@@ -179,24 +179,24 @@ class InstrumentTestCase(BaseTestCase):
         print("P1 = ",P0)
         #print("P0+P1 = ",P0+P1)
 
-        model.instruments["Itest"] = pygsti.obj.Instrument( [('0',P0),('1',P1)] )
+        model.instruments["Itest"] = pygsti.obj.Instrument([('0', P0), ('1', P1)])
 
         for param in ("full","TP","CPTP"):
             print(param)
             model.set_all_parameterizations(param)
             model.to_vector() # builds & cleans paramvec for tests below
             for lbl,obj in model.preps.items():
-                print(lbl,':',obj.gpindices, pygsti.tools.length(obj.gpindices))
+                print(lbl,':', obj.gpindices, pygsti.tools.length(obj.gpindices))
             for lbl,obj in model.povms.items():
-                print(lbl,':',obj.gpindices, pygsti.tools.length(obj.gpindices))
+                print(lbl,':', obj.gpindices, pygsti.tools.length(obj.gpindices))
                 for sublbl,subobj in obj.items():
-                    print("  > ",sublbl,':',subobj.gpindices, pygsti.tools.length(subobj.gpindices))
+                    print("  > ", sublbl,':', subobj.gpindices, pygsti.tools.length(subobj.gpindices))
             for lbl,obj in model.operations.items():
-                print(lbl,':',obj.gpindices, pygsti.tools.length(obj.gpindices))
+                print(lbl,':', obj.gpindices, pygsti.tools.length(obj.gpindices))
             for lbl,obj in model.instruments.items():
-                print(lbl,':',obj.gpindices, pygsti.tools.length(obj.gpindices))
+                print(lbl,':', obj.gpindices, pygsti.tools.length(obj.gpindices))
                 for sublbl,subobj in obj.items():
-                    print("  > ",sublbl,':',subobj.gpindices, pygsti.tools.length(subobj.gpindices))
+                    print("  > ", sublbl,':', subobj.gpindices, pygsti.tools.length(subobj.gpindices))
 
 
             print("NPARAMS = ",model.num_params)
@@ -299,10 +299,10 @@ class InstrumentTestCase(BaseTestCase):
 
     def testAdvancedGateStrs(self):
         #specify prep and/or povm labels in operation sequence:
-        circuit_normal = pygsti.obj.Circuit( ('Gx',) )
-        circuit_wprep = pygsti.obj.Circuit( ('rho0','Gx') )
-        circuit_wpovm = pygsti.obj.Circuit( ('Gx','Mdefault') )
-        circuit_wboth = pygsti.obj.Circuit( ('rho0','Gx','Mdefault') )
+        circuit_normal = pygsti.obj.Circuit(('Gx',))
+        circuit_wprep = pygsti.obj.Circuit(('rho0', 'Gx'))
+        circuit_wpovm = pygsti.obj.Circuit(('Gx', 'Mdefault'))
+        circuit_wboth = pygsti.obj.Circuit(('rho0', 'Gx', 'Mdefault'))
 
         #Now compute probabilities for these:
         model = self.target_model.copy()

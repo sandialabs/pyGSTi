@@ -14,9 +14,9 @@ import numpy as _np
 import copy as _copy
 
 from scipy.sparse.construct import rand
-from ..baseobjs.label import Label as _Label
-from ..baseobjs.smartcache import smart_cached
-from . import matrixmod2 as _mtx
+from pygsti.baseobjs.label import Label as _Label
+from pygsti.baseobjs.smartcache import smart_cached
+from pygsti.tools import matrixmod2 as _mtx
 
 try:
     from . import fastcalc as _fastcalc

@@ -17,12 +17,12 @@ import scipy.linalg as _spl
 import scipy.sparse as _sps
 import scipy.sparse.linalg as _spsl
 
-from .linearop import LinearOperator as _LinearOperator
-from .. import modelmember as _modelmember, term as _term
-from ..errorgencontainer import ErrorGeneratorContainer as _ErrorGeneratorContainer
-from ...models import gaugegroup as _gaugegroup
-from ...baseobjs.polynomial import Polynomial as _Polynomial
-from ...tools import matrixtools as _mt
+from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
+from pygsti.modelmembers import modelmember as _modelmember, term as _term
+from pygsti.modelmembers.errorgencontainer import ErrorGeneratorContainer as _ErrorGeneratorContainer
+from pygsti.models import gaugegroup as _gaugegroup
+from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
+from pygsti.tools import matrixtools as _mt
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 MAX_EXPONENT = _np.log(_np.finfo('d').max) - 10.0  # so that exp(.) doesn't overflow

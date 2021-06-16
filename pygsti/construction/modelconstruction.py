@@ -17,23 +17,23 @@ import warnings as _warnings
 import numpy as _np
 import scipy.linalg as _spl
 
-from ..evotypes import Evotype as _Evotype
-from ..modelmembers import operations as _op
-from ..modelmembers import povms as _povm
-from ..modelmembers import states as _state
-from ..modelmembers.operations import opfactory as _opfactory
-from ..models import explicitmodel as _emdl
-from ..models import gaugegroup as _gg
-from ..models.localnoisemodel import LocalNoiseModel as _LocalNoiseModel
-from ..baseobjs import label as _label, statespace as _statespace
-from ..baseobjs.basis import Basis as _Basis
-from ..baseobjs.basis import BuiltinBasis as _BuiltinBasis
-from ..baseobjs.basis import DirectSumBasis as _DirectSumBasis
-from ..tools import basistools as _bt
-from ..tools import internalgates as _itgs
-from ..tools import optools as _gt
-from ..tools.basisconstructors import sigmax, sigmay, sigmaz
-from ..tools.legacytools import deprecate as _deprecated_fn
+from pygsti.evotypes import Evotype as _Evotype
+from pygsti.modelmembers import operations as _op
+from pygsti.modelmembers import povms as _povm
+from pygsti.modelmembers import states as _state
+from pygsti.modelmembers.operations import opfactory as _opfactory
+from pygsti.models import explicitmodel as _emdl
+from pygsti.models import gaugegroup as _gg
+from pygsti.models.localnoisemodel import LocalNoiseModel as _LocalNoiseModel
+from pygsti.baseobjs import label as _label, statespace as _statespace
+from pygsti.baseobjs.basis import Basis as _Basis
+from pygsti.baseobjs.basis import BuiltinBasis as _BuiltinBasis
+from pygsti.baseobjs.basis import DirectSumBasis as _DirectSumBasis
+from pygsti.tools import basistools as _bt
+from pygsti.tools import internalgates as _itgs
+from pygsti.tools import optools as _gt
+from pygsti.tools.basisconstructors import sigmax, sigmay, sigmaz
+from pygsti.tools.legacytools import deprecate as _deprecated_fn
 
 
 #############################################

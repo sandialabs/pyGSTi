@@ -17,7 +17,7 @@ import warnings as _warnings
 import numpy as _np
 
 from pygsti.circuits.circuit import Circuit as _Circuit
-from ..baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 
 
 def _walk_subtree(treedict, indx, running_inds):

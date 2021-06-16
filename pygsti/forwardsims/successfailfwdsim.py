@@ -10,8 +10,8 @@ Defines the OplessForwardSimulator calculator class
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from .forwardsim import CacheForwardSimulator as _CacheForwardSimulator
-from ..layouts.cachedlayout import CachedCOPALayout as _CachedCOPALayout
+from pygsti.forwardsims.forwardsim import CacheForwardSimulator as _CacheForwardSimulator
+from pygsti.layouts.cachedlayout import CachedCOPALayout as _CachedCOPALayout
 
 
 class SuccessFailForwardSimulator(_CacheForwardSimulator):

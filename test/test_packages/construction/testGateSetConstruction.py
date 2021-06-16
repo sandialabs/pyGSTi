@@ -20,9 +20,9 @@ class TestGateSetConstructionMethods(BaseTestCase):
     def test_build_gatesets(self):
         SQ2 = 1/np.sqrt(2)
         for defParamType in ("full", "TP", "static"):
-            gateset_simple = pygsti.objects.ExplicitOpModel(['Q0'],'pp',defParamType)
+            gateset_simple = pygsti.objects.ExplicitOpModel(['Q0'], 'pp', defParamType)
             gateset_simple['rho0'] = [SQ2, 0, 0, SQ2]
-            gateset_simple['Mdefault'] = pygsti.obj.UnconstrainedPOVM( [('0',[SQ2, 0, 0, -SQ2])] )
+            gateset_simple['Mdefault'] = pygsti.obj.UnconstrainedPOVM([('0', [SQ2, 0, 0, -SQ2])])
             gateset_simple['Gi'] = [ [1, 0, 0, 0],
                                      [0, 1, 0, 0],
                                      [0, 0, 1, 0],
@@ -37,7 +37,7 @@ class TestGateSetConstructionMethods(BaseTestCase):
             with self.assertRaises(ValueError):
                 gateset_simple['Gx'] = [[1,2,3,4],[5,6,7]]
 
-        gateset_badDefParam = pygsti.objects.ExplicitOpModel(['Q0'],"pp","full")
+        gateset_badDefParam = pygsti.objects.ExplicitOpModel(['Q0'], "pp", "full")
         gateset_badDefParam.preps.default_param = "foobar"
         gateset_badDefParam.operations.default_param = "foobar"
         with self.assertRaises(ValueError):
@@ -60,7 +60,7 @@ class TestGateSetConstructionMethods(BaseTestCase):
         with self.assertRaises(ValueError):
             gateset_povm_first['rhoBad'] =  np.array([1,2,3],'d') #wrong dimension
         with self.assertRaises(ValueError):
-            gateset_povm_first['Mdefault'] =  pygsti.obj.UnconstrainedPOVM( [('0',np.array([1,2,3],'d'))] ) #wrong dimension
+            gateset_povm_first['Mdefault'] =  pygsti.obj.UnconstrainedPOVM([('0', np.array([1, 2, 3], 'd'))]) #wrong dimension
 
 
 if __name__ == "__main__":

@@ -14,14 +14,13 @@ import copy as _copy
 import itertools as _itertools
 import pathlib as _pathlib
 
-from .treenode import TreeNode as _TreeNode
-from .. import construction as _cnst
-from .. import io as _io
-from .. import baseobjs as _baseobjs
-from .. import circuits as _circuits
-from .. import datasets as _datasets
-from ..tools import NamedDict as _NamedDict
-from ..tools import listtools as _lt
+from pygsti.protocols.treenode import TreeNode as _TreeNode
+from pygsti import construction as _cnst
+from pygsti import io as _io
+from pygsti import circuits as _circuits
+from pygsti import datasets as _datasets
+from pygsti.tools import NamedDict as _NamedDict
+from pygsti.tools import listtools as _lt
 
 
 class Protocol(object):

@@ -84,11 +84,11 @@ class TestGateSetMethods(GateSetTestCase):
         self.assertArraysAlmostEqual(bulk_prods3[1],p2)
 
     def test_hessians(self):
-        gatestring0 = pygsti.obj.Circuit(('Gi','Gx'))
-        gatestring1 = pygsti.obj.Circuit(('Gx','Gy'))
-        gatestring2 = pygsti.obj.Circuit(('Gx','Gy','Gy'))
+        gatestring0 = pygsti.obj.Circuit(('Gi', 'Gx'))
+        gatestring1 = pygsti.obj.Circuit(('Gx', 'Gy'))
+        gatestring2 = pygsti.obj.Circuit(('Gx', 'Gy', 'Gy'))
 
-        circuitList = pygsti.construction.to_circuits([gatestring0,gatestring1,gatestring2])
+        circuitList = pygsti.construction.to_circuits([gatestring0, gatestring1, gatestring2])
         layout = self.model.sim.create_layout([gatestring0,gatestring1,gatestring2], array_types=('E','EPP'))
         mlayout = self.mgateset.sim.create_layout([gatestring0,gatestring1,gatestring2], array_types=('E','EPP'))
 

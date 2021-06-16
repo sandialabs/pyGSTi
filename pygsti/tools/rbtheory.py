@@ -14,9 +14,9 @@ import warnings as _warnings
 
 import numpy as _np
 
-from . import matrixtools as _mtls
-from . import optools as _optls
-from . import rbtools as _rbtls
+from pygsti.tools import matrixtools as _mtls
+from pygsti.tools import optools as _optls
+from pygsti.tools import rbtools as _rbtls
 
 
 # from .. import construction as _cnst

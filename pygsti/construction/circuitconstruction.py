@@ -15,10 +15,10 @@ import itertools as _itertools
 import numpy as _np
 import numpy.random as _rndm
 
-from ..circuits import circuit as _cir
-from ..models import Model as _Model
-from ..baseobjs.label import Label as _Lbl
-from ..tools import listtools as _lt
+from pygsti.circuits import circuit as _cir
+from pygsti.models import Model as _Model
+from pygsti.baseobjs.label import Label as _Lbl
+from pygsti.tools import listtools as _lt
 
 
 def _run_expression(str_expression, my_locals):

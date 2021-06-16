@@ -15,10 +15,10 @@ import time as _time
 from collections import defaultdict as _defaultdict
 from pathlib import Path as _Path
 
-from . import merge_helpers as _merge
-from . import workspace as _ws
-from .notebook import Notebook as _Notebook
-from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
+from pygsti.report import merge_helpers as _merge
+from pygsti.report import workspace as _ws
+from pygsti.report.notebook import Notebook as _Notebook
+from pygsti.baseobjs import VerbosityPrinter as _VerbosityPrinter
 
 
 # TODO this whole thing needs to be rewritten with different reports as derived classes

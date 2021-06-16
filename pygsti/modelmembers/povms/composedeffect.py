@@ -13,9 +13,9 @@ The ComposedPOVMEffect class and supporting functionality.
 
 import numpy as _np
 
-from .effect import POVMEffect as _POVMEffect
-from .. import modelmember as _modelmember, term as _term
-from ..states.staticstate import StaticState as _StaticState
+from pygsti.modelmembers.povms.effect import POVMEffect as _POVMEffect
+from pygsti.modelmembers import modelmember as _modelmember, term as _term
+from pygsti.modelmembers.states.staticstate import StaticState as _StaticState
 
 
 class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer

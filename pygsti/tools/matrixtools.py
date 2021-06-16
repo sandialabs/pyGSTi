@@ -20,7 +20,7 @@ import scipy.optimize as _spo
 import scipy.sparse as _sps
 import scipy.sparse.linalg as _spsl
 
-from .basistools import change_basis
+from pygsti.tools.basistools import change_basis
 
 try:
     from . import fastcalc as _fastcalc

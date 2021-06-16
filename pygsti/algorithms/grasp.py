@@ -15,8 +15,8 @@ import random
 
 import numpy as _np
 
-from .. import baseobjs as _baseobjs
-from .. import circuits as _circuits
+from pygsti import baseobjs as _baseobjs
+from pygsti import circuits as _circuits
 
 
 def get_swap_neighbors(weights, forced_weights=None, shuffle=False):

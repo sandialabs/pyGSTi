@@ -22,21 +22,21 @@ from scipy.stats import chi2 as _chi2
 
 from pygsti.baseobjs.profiler import DummyProfiler as _DummyProfiler
 from pygsti.protocols.estimate import Estimate as _Estimate
-from . import protocol as _proto
-from .modeltest import ModelTest as _ModelTest
-from .. import algorithms as _alg
-from .. import construction as _construction
-from .. import io as _io
-from .. import models as _models
-from .. import optimize as _opt
-from .. import tools as _tools
-from .. import baseobjs as _baseobjs
-from ..forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
-from ..modelmembers import operations as _op
-from ..models import Model as _Model
-from ..objectivefns import objectivefns as _objfns, wildcardbudget as _wild
-from ..circuits.circuitlist import CircuitList as _CircuitList
-from ..baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
+from pygsti.protocols import protocol as _proto
+from pygsti.protocols.modeltest import ModelTest as _ModelTest
+from pygsti import algorithms as _alg
+from pygsti import construction as _construction
+from pygsti import io as _io
+from pygsti import models as _models
+from pygsti import optimize as _opt
+from pygsti import tools as _tools
+from pygsti import baseobjs as _baseobjs
+from pygsti.forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
+from pygsti.modelmembers import operations as _op
+from pygsti.models import Model as _Model
+from pygsti.objectivefns import objectivefns as _objfns, wildcardbudget as _wild
+from pygsti.circuits.circuitlist import CircuitList as _CircuitList
+from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 
 #For results object:
 

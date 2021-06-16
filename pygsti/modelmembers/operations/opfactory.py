@@ -1,5 +1,5 @@
 """
-Defines the Factory class
+Defines the OpFactory class
 """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -11,16 +11,16 @@ Defines the Factory class
 #***************************************************************************************************
 import numpy as _np
 
-from .staticunitaryop import StaticUnitaryOp as _StaticUnitaryOp
-from .embeddedop import EmbeddedOp as _EmbeddedOp
-from .composedop import ComposedOp as _ComposedOp
+from pygsti.modelmembers.operations.staticunitaryop import StaticUnitaryOp as _StaticUnitaryOp
+from pygsti.modelmembers.operations.embeddedop import EmbeddedOp as _EmbeddedOp
+from pygsti.modelmembers.operations.composedop import ComposedOp as _ComposedOp
 
-from .. import modelmember as _gm
-from .. import instruments as _instrument
-from .. import povms as _povm
-from ...baseobjs.label import Label as _Lbl
-from ...baseobjs import statespace as _statespace
-from ...evotypes import Evotype as _Evotype
+from pygsti.modelmembers import modelmember as _gm
+from pygsti.modelmembers import instruments as _instrument
+from pygsti.modelmembers import povms as _povm
+from pygsti.baseobjs.label import Label as _Lbl
+from pygsti.baseobjs import statespace as _statespace
+from pygsti.evotypes import Evotype as _Evotype
 
 
 def op_from_factories(factory_dict, lbl):

@@ -28,10 +28,10 @@ def runAnalysis(obj, ds, prepStrs, effectStrs, gsTarget, lsgstStringsToUse,
     #Run LGST to get starting model
     assertGatesetsInSync(gsTarget, comm)
     mdl_lgst = pygsti.run_lgst(ds, prepStrs, effectStrs, gsTarget,
-                             svd_truncate_to=gsTarget.dim, verbosity=3)
+                               svd_truncate_to=gsTarget.dim, verbosity=3)
 
     assertGatesetsInSync(mdl_lgst, comm)
-    mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst,gsTarget)
+    mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst, gsTarget)
 
     assertGatesetsInSync(mdl_lgst_go, comm)
 
@@ -712,19 +712,19 @@ def test_MPI_mlgst_forcefn(comm):
     fiducials = std.fiducials
     target_model = std.target_model()
     lgstStrings = pygsti.construction.create_lgst_circuits(fiducials, fiducials,
-                                                             list(target_model.operations.keys()))
+                                                           list(target_model.operations.keys()))
     #Create dataset on root proc
     if comm is None or comm.Get_rank() == 0:
         datagen_gateset = target_model.depolarize(op_noise=0.01, spam_noise=0.01)
         ds = pygsti.construction.simulate_data(datagen_gateset, lgstStrings,
-                                                    num_samples=10000, sample_error='binomial', seed=100)
+                                               num_samples=10000, sample_error='binomial', seed=100)
         ds = comm.bcast(ds, root=0)
     else:
         ds = comm.bcast(None, root=0)
 
 
     mdl_lgst = pygsti.run_lgst(ds, fiducials, fiducials, target_model, svd_truncate_to=4, verbosity=0)
-    mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst,target_model, {'spam':1.0, 'gates': 1.0})
+    mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst, target_model, {'spam':1.0, 'gates': 1.0})
 
     forcingfn_grad = np.ones((1,mdl_lgst_go.num_params), 'd')
     mdl_lsgst_chk_opts3 = pygsti.algorithms.core.run_gst_fit_simple(
@@ -773,20 +773,20 @@ def test_run1Q_end2end(comm):
     listOfExperiments = pygsti.construction.create_lsgst_circuits(
         list(target_model.operations.keys()), fiducials, fiducials, germs, maxLengths)
     ds = pygsti.construction.simulate_data(mdl_datagen, listOfExperiments,
-                                                num_samples=1000,
-                                                sample_error="binomial",
-                                                seed=1234, comm=comm)
+                                           num_samples=1000,
+                                           sample_error="binomial",
+                                           seed=1234, comm=comm)
     if comm.Get_rank() == 0:
         pickle.dump(ds, open("mpi_dataset.pkl","wb"))
     comm.barrier() #to make sure dataset file is written
 
     #test with pkl file - should only read in on rank0 then broadcast
     results = pygsti.run_long_sequence_gst("mpi_dataset.pkl", target_model, fiducials, fiducials,
-                                          germs, [1], comm=comm)
+                                           germs, [1], comm=comm)
 
     #test with dataset object
     results = pygsti.run_long_sequence_gst(ds, target_model, fiducials, fiducials,
-                                          germs, maxLengths, comm=comm)
+                                           germs, maxLengths, comm=comm)
 
     #Use dummy duplicate of results to trigger MPI data-comparison processing:
     pygsti.report.create_standard_report({"one": results, "two": results}, "mpi_test_report",
@@ -814,9 +814,9 @@ def test_MPI_germsel(comm):
     #                                    mem_limit=3*(1024**3), comm=comm)
 
     germs_lowmem = pygsti.alg.find_germs_breadthfirst(gatesetNeighborhood, superGermSet,
-                                               randomize=False, seed=2018, score_func='all',
-                                               threshold=1e6, verbosity=1, op_penalty=1.0,
-                                               mem_limit=3*(1024**2), comm=comm) # force "single-Jac" mode
+                                                      randomize=False, seed=2018, score_func='all',
+                                                      threshold=1e6, verbosity=1, op_penalty=1.0,
+                                                      mem_limit=3*(1024**2), comm=comm) # force "single-Jac" mode
 
 @mpitest(4)
 def test_MPI_profiler(comm):
@@ -938,7 +938,7 @@ def test_MPI_tools(comm):
                                     axes=0, comm=comm, max_buffer_size=maxbuf)
         assert(np.linalg.norm(my_array2[slc] - master[slc]) < 1e-6)
 
-        indices = [ pygsti.tools.slicetools.to_array(s) for s in slices ]
+        indices = [pygsti.tools.slicetools.to_array(s) for s in slices]
         loc_indices = pygsti.tools.slicetools.to_array(loc_slice)
         my_array3 = np.zeros(100,'d')
         my_array3[loc_indices] = master[loc_indices] # ~ computation (just copy from "master")

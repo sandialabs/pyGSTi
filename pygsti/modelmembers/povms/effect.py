@@ -12,8 +12,8 @@ The POVMEffect class and supporting functionality.
 
 import numpy as _np
 
-from .. import modelmember as _modelmember
-from ...tools import optools as _ot
+from pygsti.modelmembers import modelmember as _modelmember
+from pygsti.tools import optools as _ot
 
 
 class POVMEffect(_modelmember.ModelMember):

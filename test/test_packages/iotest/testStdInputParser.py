@@ -50,7 +50,7 @@ class TestStdInputParser(BaseTestCase):
             #print("%s ==> " % s, expected)
             result, line_labels, occurrence_id = std.parse_circuit_raw(s, lookup=lkup, create_subcircuits=False)
             self.assertEqual(line_labels, None)
-            circuit_result = pygsti.obj.Circuit(result,line_labels="auto",expand_subcircuits=True)
+            circuit_result = pygsti.obj.Circuit(result, line_labels="auto", expand_subcircuits=True)
               #use "auto" line labels since none are parsed.
             self.assertEqual(circuit_result.tup, expected)
 
@@ -798,9 +798,9 @@ BASIS: pp
         #print " ==> model1:\n", gs1
         #print " ==> model2:\n", gs2
 
-        rotXPi   = pygsti.construction.modelconstruction._create_operation( [(4,)],[('Q0',)], "X(pi,Q0)")
-        rotXPiOv2   = pygsti.construction.modelconstruction._create_operation( [(4,)],[('Q0',)], "X(pi/2,Q0)")
-        rotYPiOv2   = pygsti.construction.modelconstruction._create_operation( [(4,)],[('Q0',)], "Y(pi/2,Q0)")
+        rotXPi   = pygsti.construction.modelconstruction._create_operation([(4,)], [('Q0',)], "X(pi,Q0)")
+        rotXPiOv2   = pygsti.construction.modelconstruction._create_operation([(4,)], [('Q0',)], "X(pi/2,Q0)")
+        rotYPiOv2   = pygsti.construction.modelconstruction._create_operation([(4,)], [('Q0',)], "Y(pi/2,Q0)")
 
         self.assertArraysAlmostEqual(gs1.operations['G1'],rotXPiOv2)
         self.assertArraysAlmostEqual(gs1.operations['G2'],rotYPiOv2)
@@ -823,7 +823,7 @@ BASIS: pp
             for s in ["(Gx:0)Gy:1", "(Gx:0)^4Gy:1", "[Gx:0Gy:1]","[Gx:0Gy:1]^2","[Gx:0[Gz:2Gy:1]]Gz:0",
                       "[Gx:0(Gz:2Gy:1)]Gz:0", "[Gx:0[Gz:2Gy:1]^2]", "[Gx:0([Gz:2Gy:1]^2)]"]:
                 print("FROM ",s,":")
-                c = pygsti.obj.Circuit(None,stringrep=s, expand_subcircuits=expand)
+                c = pygsti.obj.Circuit(None, stringrep=s, expand_subcircuits=expand)
                 print(c)
                 # c._print_labelinfo() #DEBUG - TODO: could check this structure as part of this test
                 c2 = pygsti.obj.Circuit(c, stringrep=c.str, expand_subcircuits=expand)

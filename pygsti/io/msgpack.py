@@ -13,8 +13,8 @@ Defines msgpack package interface capable of encoding pyGSTi objects
 import msgpack as _msgpack
 msgpack_uses_binary_strs = _msgpack.version < (1, 0, 0)  # msgpack only used binary strings in pre 1.0 versions
 
-from .jsoncodec import encode_obj
-from .jsoncodec import decode_obj
+from pygsti.io.jsoncodec import encode_obj
+from pygsti.io.jsoncodec import decode_obj
 
 
 def dumps(obj, **kwargs):

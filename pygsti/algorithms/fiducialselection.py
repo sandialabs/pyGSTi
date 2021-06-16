@@ -13,12 +13,12 @@ Functions for selecting a complete set of fiducials for a GST analysis.
 import numpy as _np
 import scipy
 
-from . import grasp as _grasp
-from . import scoring as _scoring
-from .. import construction as _constr
-from .. import baseobjs as _baseobjs
-from ..modelmembers.povms import ComplementPOVMEffect as _ComplementPOVMEffect
-from ..tools import frobeniusdist_squared
+from pygsti.algorithms import grasp as _grasp
+from pygsti.algorithms import scoring as _scoring
+from pygsti import construction as _constr
+from pygsti import baseobjs as _baseobjs
+from pygsti.modelmembers.povms import ComplementPOVMEffect as _ComplementPOVMEffect
+from pygsti.tools import frobeniusdist_squared
 
 
 def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,

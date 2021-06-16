@@ -14,10 +14,10 @@ import collections as _collections
 import itertools as _itertools
 import uuid as _uuid
 
-from . import model as _mdl
-from ..modelmembers import operations as _op
-from ..modelmembers import povms as _povm
-from ..baseobjs.label import Label as _Label
+from pygsti.models import model as _mdl
+from pygsti.modelmembers import operations as _op
+from pygsti.modelmembers import povms as _povm
+from pygsti.baseobjs.label import Label as _Label
 
 
 class ImplicitOpModel(_mdl.OpModel):

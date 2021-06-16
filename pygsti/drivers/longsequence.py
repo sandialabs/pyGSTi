@@ -13,13 +13,13 @@ End-to-end functions for performing long-sequence GST
 import os as _os
 import pickle as _pickle
 
-from .. import construction as _construction
-from .. import io as _io
-from .. import baseobjs as _baseobjs
-from .. import protocols as _proto
-from ..forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
-from ..objectivefns import objectivefns as _objfns
-from ..baseobjs.advancedoptions import GSTAdvancedOptions as _GSTAdvancedOptions
+from pygsti import construction as _construction
+from pygsti import io as _io
+from pygsti import baseobjs as _baseobjs
+from pygsti import protocols as _proto
+from pygsti.forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
+from pygsti.objectivefns import objectivefns as _objfns
+from pygsti.baseobjs.advancedoptions import GSTAdvancedOptions as _GSTAdvancedOptions
 
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]
 DEFAULT_BAD_FIT_THRESHOLD = 2.0

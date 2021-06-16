@@ -15,9 +15,9 @@ import copy as _copy
 import numpy as _np
 
 from pygsti.circuits.circuit import Circuit as _Circuit
-from ..baseobjs.label import Label as _Label
-from ..tools import matrixmod2 as _mtx
-from ..tools import symplectic as _symp
+from pygsti.baseobjs.label import Label as _Label
+from pygsti.tools import matrixmod2 as _mtx
+from pygsti.tools import symplectic as _symp
 
 
 def _create_standard_costfunction(name):

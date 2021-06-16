@@ -17,20 +17,20 @@ import warnings as _warnings
 import numpy as _np
 import numpy.linalg as _nla
 
-from ..objectivefns.objectivefns import RawChi2Function as _RawChi2Function
-from ..objectivefns.objectivefns import RawPoissonPicDeltaLogLFunction as _RawPoissonPicDeltaLogLFunction
-from .distforwardsim import DistributableForwardSimulator as _DistributableForwardSimulator
-from .forwardsim import ForwardSimulator as _ForwardSimulator
-from .forwardsim import _bytes_for_array_types
-from ..layouts.evaltree import EvalTree as _EvalTree
-from ..layouts.matrixlayout import MatrixCOPALayout as _MatrixCOPALayout
-from ..baseobjs.profiler import DummyProfiler as _DummyProfiler
-from ..baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
-from ..baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from ..tools import mpitools as _mpit
-from ..tools import sharedmemtools as _smt
-from ..tools import slicetools as _slct
-from ..tools.matrixtools import _fas
+from pygsti.objectivefns.objectivefns import RawChi2Function as _RawChi2Function
+from pygsti.objectivefns.objectivefns import RawPoissonPicDeltaLogLFunction as _RawPoissonPicDeltaLogLFunction
+from pygsti.forwardsims.distforwardsim import DistributableForwardSimulator as _DistributableForwardSimulator
+from pygsti.forwardsims.forwardsim import ForwardSimulator as _ForwardSimulator
+from pygsti.forwardsims.forwardsim import _bytes_for_array_types
+from pygsti.layouts.evaltree import EvalTree as _EvalTree
+from pygsti.layouts.matrixlayout import MatrixCOPALayout as _MatrixCOPALayout
+from pygsti.baseobjs.profiler import DummyProfiler as _DummyProfiler
+from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
+from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from pygsti.tools import mpitools as _mpit
+from pygsti.tools import sharedmemtools as _smt
+from pygsti.tools import slicetools as _slct
+from pygsti.tools.matrixtools import _fas
 
 _dummy_profiler = _DummyProfiler()
 

@@ -43,34 +43,34 @@ class TestReport(ReportBaseCase):
     def test_failures(self):
         self.assertWarns(pygsti.report.create_general_report, self.results, temp_files + "/XXX")
         with self.assertRaises(ValueError): # backward compat catch - when forget to specify title
-            pygsti.report.create_standard_report(self.results,temp_files+"/XXX", 95)
+            pygsti.report.create_standard_report(self.results, temp_files + "/XXX", 95)
 
         with self.assertRaises(ValueError): #PDF report with multiple gauge opts
-            pygsti.report.create_standard_report(self.results,temp_files + "/XXX.pdf")
+            pygsti.report.create_standard_report(self.results, temp_files + "/XXX.pdf")
 
     def test_std_clifford_comp(self):
-        self.assertTrue(pygsti.report.factory.find_std_clifford_compilation(std.target_model(),3) is not None)
+        self.assertTrue(pygsti.report.factory.find_std_clifford_compilation(std.target_model(), 3) is not None)
         nonStdGS = std.target_model().rotate((0.15,-0.03,0.03))
         self.assertTrue(pygsti.report.factory.find_std_clifford_compilation(nonStdGS) is None)
 
 
     def test_reports_chi2_noCIs(self):
-        pygsti.report.create_standard_report(self.results,temp_files + "/general_reportA",
-                                            confidence_level=None, verbosity=3,  auto_open=False) # omit title as test
+        pygsti.report.create_standard_report(self.results, temp_files + "/general_reportA",
+                                             confidence_level=None, verbosity=3, auto_open=False) # omit title as test
 
         #Test advanced options
         linkto = ()
         if bLatex: linkto = ('tex','pdf') + linkto #Note: can't render as 'tex' without matplotlib b/c of figs
         if bPandas: linkto = ('pkl',) + linkto
         results_odict = collections.OrderedDict([("One", self.results), ("Two",self.results)])
-        pygsti.report.create_standard_report(results_odict,temp_files + "/general_reportA_adv1",
-                                             confidence_level=None, verbosity=3,  auto_open=False,
+        pygsti.report.create_standard_report(results_odict, temp_files + "/general_reportA_adv1",
+                                             confidence_level=None, verbosity=3, auto_open=False,
                                              advanced_options={'errgen_type': "logG-logT",
                                                               'precision': {'normal': 2, 'polar': 1, 'sci': 1}},
                                              link_to=linkto)
 
-        pygsti.report.create_standard_report({"One": self.results, "Two": self.results_logL},temp_files + "/general_reportA_adv2",
-                                             confidence_level=None, verbosity=3,  auto_open=False,
+        pygsti.report.create_standard_report({"One": self.results, "Two": self.results_logL}, temp_files + "/general_reportA_adv2",
+                                             confidence_level=None, verbosity=3, auto_open=False,
                                              advanced_options={'errgen_type': "logTiG",
                                                               'precision': 2, #just a single int
                                                               'resizable': False,
@@ -78,8 +78,8 @@ class TestReport(ReportBaseCase):
 
         #test latex reporting
         if bLatex:
-            pygsti.report.create_standard_report(self.results.view("default","go0"),temp_files + "/general_reportA.pdf",
-                                                 confidence_level=None, verbosity=3,  auto_open=False)
+            pygsti.report.create_standard_report(self.results.view("default", "go0"), temp_files + "/general_reportA.pdf",
+                                                 confidence_level=None, verbosity=3, auto_open=False)
 
 
 
@@ -92,8 +92,8 @@ class TestReport(ReportBaseCase):
         crfact.compute_hessian(comm=None)
         crfact.project_hessian('intrinsic error')
 
-        pygsti.report.create_standard_report(self.results,temp_files + "/general_reportB",
-                                             "Report B", confidence_level=95, verbosity=3,  auto_open=False)
+        pygsti.report.create_standard_report(self.results, temp_files + "/general_reportB",
+                                             "Report B", confidence_level=95, verbosity=3, auto_open=False)
 
         #Compare the html files?
         #self.checkFile("general_reportB%s.html" % vs)
@@ -105,8 +105,8 @@ class TestReport(ReportBaseCase):
         crfact.project_hessian('std')
 
         #Note: Negative confidence levels no longer trigger non-mark error bars; this is done via "nm threshold"
-        pygsti.report.create_standard_report(self.results,temp_files + "/general_reportE",
-                                             "Report E", confidence_level=95, verbosity=3,  auto_open=False,
+        pygsti.report.create_standard_report(self.results, temp_files + "/general_reportE",
+                                             "Report E", confidence_level=95, verbosity=3, auto_open=False,
                                              advanced_options={'nm threshold': -10})
         #Compare the html files?
         #self.checkFile("general_reportC%s.html" % vs)
@@ -120,9 +120,9 @@ class TestReport(ReportBaseCase):
 
 
         #Note: this report will have (un-combined) Robust estimates too
-        pygsti.report.create_standard_report(results,temp_files + "/general_reportC",
-                                             "Report C", confidence_level=None, verbosity=3,  auto_open=False,
-                                             advanced_options={'combine_robust': False} )
+        pygsti.report.create_standard_report(results, temp_files + "/general_reportC",
+                                             "Report C", confidence_level=None, verbosity=3, auto_open=False,
+                                             advanced_options={'combine_robust': False})
         #Compare the html files?
         #self.checkFile("general_reportC%s.html" % vs)
 
@@ -137,8 +137,8 @@ class TestReport(ReportBaseCase):
         crfact.project_hessian('optimal gate CIs')
 
         #Note: this report will have Robust estimates too
-        pygsti.report.create_standard_report(self.results_logL,temp_files + "/general_reportD",
-                                             "Report D", confidence_level=95, verbosity=3,  auto_open=False)
+        pygsti.report.create_standard_report(self.results_logL, temp_files + "/general_reportD",
+                                             "Report D", confidence_level=95, verbosity=3, auto_open=False)
         #Compare the html files?
         #self.checkFile("general_reportD%s.html" % vs)
 
@@ -146,7 +146,7 @@ class TestReport(ReportBaseCase):
         #Note: this report will have (un-combined) Robust estimates too
         pygsti.report.create_standard_report({"chi2": self.results, "logl": self.results_logL},
                                              temp_files + "/general_reportF",
-                                             "Report F", confidence_level=None, verbosity=3,  auto_open=False)
+                                             "Report F", confidence_level=None, verbosity=3, auto_open=False)
         #Compare the html files?
         #self.checkFile("general_reportC%s.html" % vs)
 

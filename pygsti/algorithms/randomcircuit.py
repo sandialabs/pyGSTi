@@ -15,11 +15,11 @@ import itertools as _itertools
 
 import numpy as _np
 
-from . import compilers as _cmpl
-from ..circuits import circuit as _cir
-from ..baseobjs import label as _lbl
-from ..tools import group as _rbobjs
-from ..tools import symplectic as _symp
+from pygsti.algorithms import compilers as _cmpl
+from pygsti.circuits import circuit as _cir
+from pygsti.baseobjs import label as _lbl
+from pygsti.tools import group as _rbobjs
+from pygsti.tools import symplectic as _symp
 
 
 def find_all_sets_of_compatible_two_q_gates(edgelist, n, gatename='Gcnot', aslabel=False):

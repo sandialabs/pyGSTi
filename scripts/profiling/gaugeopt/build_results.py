@@ -5,7 +5,7 @@ import time
 import pygsti
 from pygsti.construction import std2Q_XYCNOT
 
-gs_target = pygsti.construction.build_gateset( 
+gs_target = pygsti.construction.build_gateset(
             [4], [('Q0','Q1')],['Gix','Giy','Gxi','Gyi','Gcnot'], 
             [ "X(pi/2,Q1)", "Y(pi/2,Q1)", "X(pi/2,Q0)", "Y(pi/2,Q0)", "CNOT(Q0,Q1)" ],
             prep_labels=['rho0'], prep_expressions=["0"],
@@ -13,7 +13,7 @@ gs_target = pygsti.construction.build_gateset(
             spamdefs={'upup': ('rho0','E0'), 'updn': ('rho0','E1'),
                       'dnup': ('rho0','E2'), 'dndn': ('rho0','remainder') }, basis="pp")
 
-gs_targetB = pygsti.construction.build_gateset( 
+gs_targetB = pygsti.construction.build_gateset(
             [4], [('Q0','Q1')],['Gix','Giy','Gxi','Gyi','Gcnot'], 
             [ "I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)", "CNOT(Q0,Q1)" ],
             prep_labels=['rho0'], prep_expressions=["0"], 
@@ -37,16 +37,16 @@ assert(abs(gs_target.frobeniusdist(gs_targetC)) < 1e-6)
 #If you know the fiducial strings you can create a list manually.  Note
 # that in general there can be different "preparation" and "measurement"
 # (or "effect") fiducials.
-prep_fiducials = pygsti.construction.gatestring_list( [ (), ('Gix',), ('Giy',), ('Gix','Gix'), 
-('Gxi',), ('Gxi','Gix'), ('Gxi','Giy'), ('Gxi','Gix','Gix'), 
-('Gyi',), ('Gyi','Gix'), ('Gyi','Giy'), ('Gyi','Gix','Gix'), 
-('Gxi','Gxi'), ('Gxi','Gxi','Gix'), ('Gxi','Gxi','Giy'), ('Gxi','Gxi','Gix','Gix') ] )
+prep_fiducials = pygsti.construction.gatestring_list([(), ('Gix',), ('Giy',), ('Gix', 'Gix'),
+                                                      ('Gxi',), ('Gxi','Gix'), ('Gxi','Giy'), ('Gxi','Gix','Gix'),
+                                                      ('Gyi',), ('Gyi','Gix'), ('Gyi','Giy'), ('Gyi','Gix','Gix'),
+                                                      ('Gxi','Gxi'), ('Gxi','Gxi','Gix'), ('Gxi','Gxi','Giy'), ('Gxi','Gxi','Gix','Gix')])
 
-effect_fiducials = pygsti.construction.gatestring_list( [(), ('Gix',), ('Giy',), 
- ('Gix','Gix'), ('Gxi',),
- ('Gyi',), ('Gxi','Gxi'),
- ('Gxi','Gix'), ('Gxi','Giy'),
- ('Gyi','Gix'), ('Gyi','Giy')] )
+effect_fiducials = pygsti.construction.gatestring_list([(), ('Gix',), ('Giy',),
+                                                        ('Gix','Gix'), ('Gxi',),
+                                                        ('Gyi',), ('Gxi','Gxi'),
+                                                        ('Gxi','Gix'), ('Gxi','Giy'),
+                                                        ('Gyi','Gix'), ('Gyi','Giy')])
 
 #Or, if you're lucky, you can just import them
 prep_fiducialsB = std2Q_XYCNOT.prepStrs
@@ -78,7 +78,7 @@ assert(specs[0] == specsB[0])
 # full 71-germ list from std2Q_XYCNOT
 germs4 = pygsti.construction.gatestring_list(
     [ ('Gix',), ('Giy',), ('Gxi',), ('Gyi',) ] )
-germs11 = pygsti.construction.gatestring_list( [ ('Gix',), ('Giy',), ('Gxi',), ('Gyi',), ('Gcnot',), ('Gxi','Gyi'), ('Gix','Giy'), ('Gix','Gcnot'), ('Gxi','Gcnot'), ('Giy','Gcnot'), ('Gyi','Gcnot') ] )
+germs11 = pygsti.construction.gatestring_list([('Gix',), ('Giy',), ('Gxi',), ('Gyi',), ('Gcnot',), ('Gxi', 'Gyi'), ('Gix', 'Giy'), ('Gix', 'Gcnot'), ('Gxi', 'Gcnot'), ('Giy', 'Gcnot'), ('Gyi', 'Gcnot')])
 
 germs71 = std2Q_XYCNOT.germs
 
@@ -90,7 +90,7 @@ maxLengths = [1,2,4]
 #"germs4" here so that the tutorial runs quickly; really, you'd
 #want to use germs71!
 listOfExperiments = pygsti.construction.create_lsgst_circuits(gs_target.gates.keys(), prep_fiducials,
-                                                                   effect_fiducials, germs4, maxLengths)
+                                                              effect_fiducials, germs4, maxLengths)
 
 #Create an empty dataset file, which stores the list of experiments
 # and zerod-out columns where data should be inserted.  Note the use of the SPAM
@@ -101,7 +101,7 @@ pygsti.io.write_empty_dataset("tutorial_files/My2QDataTemplate.txt", listOfExper
 #Generate some "fake" (simulated) data based on a depolarized version of the target gateset
 gs_datagen = gs_target.depolarize(gate_noise=0.1, spam_noise=0.001)
 ds = pygsti.construction.simulate_data(gs_datagen, listOfExperiments, n_samples=1000,
-                                            sample_error="multinomial", seed=2016)
+                                       sample_error="multinomial", seed=2016)
 
 
 start = time.time()
@@ -112,9 +112,9 @@ results = pygsti.run_long_sequence_gst(ds, gs_target, prep_fiducials, effect_fid
                                     verbosity=3 )
 '''
 results = pygsti.run_long_sequence_gst(ds, gs_target, prep_fiducials, effect_fiducials, germs4,
-                                    maxLengths, gauge_opt_params=None,
-                                    advanced_options={ 'depolarizeStart' : 0.1 }, mem_limit=3*(1024)**3,
-                                    verbosity=3 )
+                                       maxLengths, gauge_opt_params=None,
+                                       advanced_options={ 'depolarizeStart' : 0.1 }, mem_limit=3*(1024)**3,
+                                       verbosity=3)
 end = time.time()
 print("Total time=%f hours" % ((end - start) / 3600.0))
 

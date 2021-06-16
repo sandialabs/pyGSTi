@@ -12,8 +12,8 @@ The FullArbitraryOp class and supporting functionality.
 
 import numpy as _np
 
-from .denseop import DenseOperator as _DenseOperator
-from .linearop import LinearOperator as _LinearOperator
+from pygsti.modelmembers.operations.denseop import DenseOperator as _DenseOperator
+from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
 
 
 class FullArbitraryOp(_DenseOperator):

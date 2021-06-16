@@ -8,9 +8,9 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from . import Section as _Section
-from .. import reportables as _reportables
-from ..workspace import NotApplicable as _NotApplicable
+from pygsti.report.section import Section as _Section
+from pygsti.report import reportables as _reportables
+from pygsti.report.workspace import NotApplicable as _NotApplicable
 
 
 class GaugeInvariantsGatesSection(_Section):

@@ -16,11 +16,11 @@ import itertools as _itertools
 
 import numpy as _np
 
-from .state import State as _State
-from .. import modelmember as _modelmember, term as _term
-from ...baseobjs import statespace as _statespace
-from ...tools import listtools as _lt
-from ...tools import matrixtools as _mt
+from pygsti.modelmembers.states.state import State as _State
+from pygsti.modelmembers import modelmember as _modelmember, term as _term
+from pygsti.baseobjs import statespace as _statespace
+from pygsti.tools import listtools as _lt
+from pygsti.tools import matrixtools as _mt
 
 
 class TensorProductState(_State):

@@ -15,11 +15,11 @@ import warnings as _warnings
 
 import numpy as _np
 
-from ..layouts.cachedlayout import CachedCOPALayout as _CachedCOPALayout
-from ..layouts.copalayout import CircuitOutcomeProbabilityArrayLayout as _CircuitOutcomeProbabilityArrayLayout
-from ..baseobjs import outcomelabeldict as _ld
-from ..baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
-from ..tools import slicetools as _slct
+from pygsti.layouts.cachedlayout import CachedCOPALayout as _CachedCOPALayout
+from pygsti.layouts.copalayout import CircuitOutcomeProbabilityArrayLayout as _CircuitOutcomeProbabilityArrayLayout
+from pygsti.baseobjs import outcomelabeldict as _ld
+from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
+from pygsti.tools import slicetools as _slct
 
 
 class ForwardSimulator(object):

@@ -22,8 +22,8 @@ try:
 except:
     from scipy.optimize import OptimizeResult as _optResult  # for later scipy versions
 
-from .customcg import fmax_cg
-from ..baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from pygsti.optimize.customcg import fmax_cg
+from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 
 
 def minimize(fn, x0, method='cg', callback=None,

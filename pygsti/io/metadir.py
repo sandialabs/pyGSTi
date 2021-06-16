@@ -15,9 +15,9 @@ import json as _json
 import pathlib as _pathlib
 import pickle as _pickle
 
-from . import loaders as _load
-from . import writers as _write
-from ..baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from pygsti.io import loaders as _load
+from pygsti.io import writers as _write
+from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 
 QUICK_LOAD_MAX_SIZE = 10 * 1024  # 10 kilobytes
 
