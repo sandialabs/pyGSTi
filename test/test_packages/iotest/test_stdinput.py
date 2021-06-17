@@ -2,6 +2,7 @@ from pathlib import Path
 
 import numpy as np
 
+import pygsti
 import pygsti.io.stdinput as stdin
 from pygsti import io
 from pygsti.modelpacks.legacy import std1Q_XYI as std

@@ -1,5 +1,6 @@
 import numpy as np
 
+import pygsti
 from pygsti import io
 from pygsti.io import loaders
 from . import IOBase, with_temp_path
