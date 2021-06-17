@@ -13,9 +13,9 @@ import time as _time
 
 import numpy as _np
 
-from ...baseobjs.label import Label as _Lbl
-from ...datasets.dataset import DataSet as _DataSet
-from ...tools import symplectic as _symp
+from pygsti.baseobjs.label import Label as _Lbl
+from pygsti.data.dataset import DataSet as _DataSet
+from pygsti.tools import symplectic as _symp
 
 #from . import sample as _samp
 _samp = None  # MOVED - and this module is deprecated & broken now, so just set to None

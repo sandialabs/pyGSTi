@@ -98,9 +98,9 @@ class OpFactoryTestCase(BaseTestCase):
             nQubits, ('Gi','Gx','Gy'))
         mdl.factories['layers'][('Gxrot',0)] = Gxrot_factory
 
-        c1 = pygsti.obj.Circuit('Gxrot;1.57:0') 
-        c2 = pygsti.obj.Circuit([('Gxrot',';',1.57,0)])
-        c3 = pygsti.obj.Circuit([('Gy',0),('Gy',0),('Gx',0), ('Gxrot',';',1.25,0),('Gx',0)] )
+        c1 = pygsti.obj.Circuit('Gxrot;1.57:0')
+        c2 = pygsti.obj.Circuit([('Gxrot', ';', 1.57, 0)])
+        c3 = pygsti.obj.Circuit([('Gy', 0), ('Gy', 0), ('Gx', 0), ('Gxrot', ';', 1.25, 0), ('Gx', 0)])
 
         p1 = mdl.probabilities(c1)
         p2 = mdl.probabilities(c2)
@@ -118,10 +118,10 @@ class OpFactoryTestCase(BaseTestCase):
         Gxrot_factory = XRotationOpFactory()
         mdl = pygsti.obj.LocalNoiseModel.from_parameterization(
             nQubits, ('Gi','Gx','Gy'))
-        mdl.factories['layers'][('Gxrot',0)] = pygsti.objects.EmbeddedOpFactory((0,1),(0,),Gxrot_factory,dense=True)
-        mdl.factories['layers'][('Gxrot',1)] = pygsti.objects.EmbeddedOpFactory((0,1),(1,),Gxrot_factory,dense=True)
+        mdl.factories['layers'][('Gxrot',0)] = pygsti.objects.EmbeddedOpFactory((0, 1), (0,), Gxrot_factory, dense=True)
+        mdl.factories['layers'][('Gxrot',1)] = pygsti.objects.EmbeddedOpFactory((0, 1), (1,), Gxrot_factory, dense=True)
 
-        c = pygsti.obj.Circuit( [('Gxrot',';3.14',0),('Gxrot',';1.5',1)] )
+        c = pygsti.obj.Circuit([('Gxrot', ';3.14', 0), ('Gxrot', ';1.5', 1)])
         p = mdl.probabilities(c)
         self.assertAlmostEqual(p[('11',)], 0.46463110452654444)
 
@@ -130,9 +130,9 @@ class OpFactoryTestCase(BaseTestCase):
         Gxrot_factory = XRotationOpFactory()
         mdl = pygsti.obj.LocalNoiseModel.from_parameterization(
             nQubits, ('Gi','Gx','Gy'))
-        mdl.factories['layers']['Gxrot'] = pygsti.objects.EmbeddingOpFactory((0,1),Gxrot_factory,dense=True)
+        mdl.factories['layers']['Gxrot'] = pygsti.objects.EmbeddingOpFactory((0, 1), Gxrot_factory, dense=True)
 
-        c = pygsti.obj.Circuit( [('Gxrot',';3.14',0),[('Gxrot',';1.5',1),('Gx',0)]] )
+        c = pygsti.obj.Circuit([('Gxrot', ';3.14', 0), [('Gxrot', ';1.5', 1), ('Gx', 0)]])
 
         p = mdl.probabilities(c)
         self.assertAlmostEqual(p[('10',)], 0.2681106285986824)
@@ -150,7 +150,7 @@ class OpFactoryTestCase(BaseTestCase):
 
         #see that parent and gpindices of ops created by factory are correctly set
         mdl.from_vector( np.array([0.1,0.02]) )
-        op = mdl.circuit_layer_operator( pygsti.obj.Label(('Gxrot',';1.57',0)), 'op')
+        op = mdl.circuit_layer_operator(pygsti.obj.Label(('Gxrot', ';1.57', 0)), 'op')
         self.assertArraysAlmostEqual( op.to_dense(),
                                       np.array([[1,   0,    0,   0],
                                                 [0, 0.9,    0,   0],

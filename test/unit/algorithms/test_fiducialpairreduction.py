@@ -1,5 +1,5 @@
 import pygsti.algorithms.fiducialpairreduction as fpr
-import pygsti.construction as pc
+import pygsti.circuits as pc
 from pygsti.circuits import Circuit
 from . import fixtures
 from ..util import BaseCase

@@ -17,8 +17,7 @@ import warnings as _warnings
 import numpy as _np
 from pygsti.baseobjs.label import Label as _Label, CircuitLabel as _CircuitLabel
 
-from pygsti.baseobjs import outcomelabeldict as _ld
-from pygsti.tools import compattools as _compat
+from pygsti.baseobjs import outcomelabeldict as _ld, _compatibility as _compat
 from pygsti.tools import internalgates as _itgs
 from pygsti.tools import slicetools as _slct
 
@@ -403,7 +402,7 @@ class Circuit(object):
             allow multiple copies of the same ciruit to be stored in a
             dictionary or :class:`DataSet`.
         """
-        from ..io import CircuitParser as _CircuitParser
+        from pygsti.circuits.circuitparser import CircuitParser as _CircuitParser
         layer_labels_objs = None  # layer_labels elements as Label objects (only if needed)
         if isinstance(layer_labels, str):
             cparser = _CircuitParser(); cparser.lookup = None
@@ -708,7 +707,7 @@ class Circuit(object):
         assert(not self._static), \
             ("Cannot edit a read-only circuit!  "
              "Set editable=True when calling pygsti.obj.Circuit to create editable circuit.")
-        from ..io import CircuitParser as _CircuitParser
+        from pygsti.circuits.circuitparser import CircuitParser as _CircuitParser
         cparser = _CircuitParser()
         chk, chk_labels, chk_occurrence = cparser.parse(value)
 

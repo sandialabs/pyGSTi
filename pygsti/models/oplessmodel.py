@@ -12,12 +12,12 @@ Defines the OplessModel class
 
 import numpy as _np
 
-from .model import Model as _Model
-from ..baseobjs.opcalc import float_product as prod
-from ..circuits.circuit import Circuit as _Circuit
-from ..forwardsims.successfailfwdsim import SuccessFailForwardSimulator as _SuccessFailForwardSimulator
-from ..baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
-from ..tools import slicetools as _slct
+from pygsti.models.model import Model as _Model
+from pygsti.baseobjs.opcalc import float_product as prod
+from pygsti.circuits.circuit import Circuit as _Circuit
+from pygsti.forwardsims.successfailfwdsim import SuccessFailForwardSimulator as _SuccessFailForwardSimulator
+from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
+from pygsti.tools import slicetools as _slct
 
 
 #REMOVE

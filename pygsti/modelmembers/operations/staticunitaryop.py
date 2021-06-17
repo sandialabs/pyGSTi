@@ -12,9 +12,9 @@ The StaticPureOp class and supporting functionality.
 
 import numpy as _np
 
-from .denseop import DenseUnitaryOperator as _DenseUnitaryOperator
-from .. import term as _term
-from ...baseobjs.polynomial import Polynomial as _Polynomial
+from pygsti.modelmembers.operations.denseop import DenseUnitaryOperator as _DenseUnitaryOperator
+from pygsti.modelmembers import term as _term
+from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
 
 
 class StaticUnitaryOp(_DenseUnitaryOperator):

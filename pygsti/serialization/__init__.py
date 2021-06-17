@@ -1,5 +1,5 @@
 """
-A sub-package holding data set objects and supporting analysis objects
+pyGSTi Serialization Python Package
 """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -10,6 +10,9 @@ A sub-package holding data set objects and supporting analysis objects
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from .dataset import DataSet
-from .multidataset import MultiDataSet
-from .datacomparator import DataComparator
+from . import json
+
+#Users may not have msgpack, which is fine.
+try:
+    from . import msgpack
+except ImportError: pass

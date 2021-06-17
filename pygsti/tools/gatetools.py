@@ -14,8 +14,8 @@ import numpy as _np
 import scipy.linalg as _spl
 
 ## Pauli basis matrices
-from ..tools.basisconstructors import id2x2, sigmax, sigmay, sigmaz
-from ..tools.optools import unitary_to_pauligate
+from pygsti.baseobjs.basisconstructors import id2x2, sigmax, sigmay, sigmaz
+from pygsti.tools.optools import unitary_to_pauligate
 
 sigmaii = _np.kron(id2x2, id2x2)
 sigmaix = _np.kron(id2x2, sigmax)

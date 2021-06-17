@@ -13,9 +13,9 @@ import sys as _sys
 
 from numpy import pi as _pi
 
-from ...construction import circuitconstruction as _strc
-from ...construction import qutrit as _qutrit
-from ...construction import stdtarget as _stdtarget
+from ...circuits import circuitconstruction as _strc
+from ...models import qutrit as _qutrit
+from .. import stdtarget as _stdtarget
 
 description = "Idle, symmetric X(pi/2), symmetric Y(pi/2), and Molmer-Sorenson gates"
 

@@ -33,8 +33,8 @@ from .staticcliffordop import StaticCliffordOp
 from .staticstdop import StaticStandardOp
 from .staticunitaryop import StaticUnitaryOp
 from .stochasticop import StochasticNoiseOp
-from ...tools import basistools as _bt
-from ...tools import optools as _ot
+from pygsti.tools import basistools as _bt
+from pygsti.tools import optools as _ot
 
 
 def convert(operation, to_type, basis, extra=None):
@@ -114,7 +114,7 @@ def convert(operation, to_type, basis, extra=None):
 
         unitary_postfactor = None
         if isinstance(operation, (FullArbitraryOp, FullTPOp, StaticArbitraryOp)):
-            from ...tools import jamiolkowski as _jt
+            from pygsti.tools import jamiolkowski as _jt
             RANK_TOL = 1e-6
             J = _jt.fast_jamiolkowski_iso_std(operation.to_dense(), op_mx_basis=basis)  # Choi mx basis doesn't matter
             if _np.linalg.matrix_rank(J, RANK_TOL) == 1:  # when 'operation' is unitary, separate it
@@ -245,8 +245,8 @@ def optimize_operation(op_to_optimize, target_op):
         op_to_optimize.set_dense(target_op.to_dense())  # just copy entire overall matrix since fully parameterized
         return
 
-    from ... import optimize as _opt
-    from ...tools import matrixtools as _mt
+    from pygsti import optimize as _opt
+    from pygsti.tools import matrixtools as _mt
     assert(target_op.dim == op_to_optimize.dim)  # operations must have the same overall dimension
     targetMatrix = target_op.to_dense() if isinstance(target_op, LinearOperator) else target_op
 

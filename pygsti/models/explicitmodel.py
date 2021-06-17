@@ -18,22 +18,22 @@ import warnings as _warnings
 import numpy as _np
 import scipy as _scipy
 
-from . import explicitcalc as _explicitcalc
-from . import model as _mdl, gaugegroup as _gg
-from .memberdict import OrderedMemberDict as _OrderedMemberDict
-from .layerrules import LayerRules as _LayerRules
-from ..forwardsims import matrixforwardsim as _matrixfwdsim
-from ..modelmembers import instruments as _instrument
-from ..modelmembers import operations as _op
-from ..modelmembers import povms as _povm
-from ..modelmembers import states as _state
-from ..modelmembers.operations import opfactory as _opfactory
-from ..baseobjs.basis import BuiltinBasis as _BuiltinBasis, DirectSumBasis as _DirectSumBasis
-from ..baseobjs.label import Label as _Label, CircuitLabel as _CircuitLabel
-from ..tools import basistools as _bt
-from ..tools import jamiolkowski as _jt
-from ..tools import matrixtools as _mt
-from ..tools import optools as _gt
+from pygsti.models import explicitcalc as _explicitcalc
+from pygsti.models import model as _mdl, gaugegroup as _gg
+from pygsti.models.memberdict import OrderedMemberDict as _OrderedMemberDict
+from pygsti.models.layerrules import LayerRules as _LayerRules
+from pygsti.forwardsims import matrixforwardsim as _matrixfwdsim
+from pygsti.modelmembers import instruments as _instrument
+from pygsti.modelmembers import operations as _op
+from pygsti.modelmembers import povms as _povm
+from pygsti.modelmembers import states as _state
+from pygsti.modelmembers.operations import opfactory as _opfactory
+from pygsti.baseobjs.basis import BuiltinBasis as _BuiltinBasis, DirectSumBasis as _DirectSumBasis
+from pygsti.baseobjs.label import Label as _Label, CircuitLabel as _CircuitLabel
+from pygsti.tools import basistools as _bt
+from pygsti.tools import jamiolkowski as _jt
+from pygsti.tools import matrixtools as _mt
+from pygsti.tools import optools as _ot
 
 
 class ExplicitOpModel(_mdl.OpModel):
@@ -390,9 +390,9 @@ class ExplicitOpModel(_mdl.OpModel):
         #    self._sim = _mapfwdsim.SimpleMapForwardSimulator(self)
         #    #self._sim = _mapfwdsim.MapForwardSimulator(self, max_cache_size=0)
         #
-        #elif _gt.is_valid_lindblad_paramtype(typ):
+        #elif _ot.is_valid_lindblad_paramtype(typ):
         #    baseType = typ
-        #    #baseType, evotype = _gt.split_lindblad_paramtype(typ)
+        #    #baseType, evotype = _ot.split_lindblad_paramtype(typ)
         #    #self._evotype = _Evotype.cast(evotype)
         #    #self._evotype = _Evotype.cast("statevec")  # don't change evotype - just change parameterization TODO
         #
@@ -417,7 +417,7 @@ class ExplicitOpModel(_mdl.OpModel):
         if extra is None: extra = {}
 
         povmtyp = rtyp = typ  # assume spam types are available to all objects
-        ityp = "TP" if _gt.is_valid_lindblad_paramtype(typ) else typ
+        ityp = "TP" if _ot.is_valid_lindblad_paramtype(typ) else typ
 
         for lbl, gate in self.operations.items():
             self.operations[lbl] = _op.convert(gate, typ, basis,
@@ -827,10 +827,10 @@ class ExplicitOpModel(_mdl.OpModel):
             def dist(a, b): return _np.linalg.norm(a - b)
             def vecdist(a, b): return _np.linalg.norm(a - b)
         elif metric == 'infidelity':
-            def dist(a, b): return _gt.entanglement_infidelity(a, b, self.basis)
+            def dist(a, b): return _ot.entanglement_infidelity(a, b, self.basis)
             def vecdist(a, b): return _np.linalg.norm(a - b)
         elif metric == 'diamond':
-            def dist(a, b): return 0.5 * _gt.diamondist(a, b, self.basis)
+            def dist(a, b): return 0.5 * _ot.diamondist(a, b, self.basis)
             def vecdist(a, b): return _np.linalg.norm(a - b)
         else:
             raise ValueError("Invalid `metric` argument: %s" % metric)
@@ -1138,7 +1138,7 @@ class ExplicitOpModel(_mdl.OpModel):
             # make randMat Hermetian: (A_dag + A)^dag = (A_dag + A)
             randUnitary = _scipy.linalg.expm(-1j * randMat)
 
-            randOp = _gt.unitary_to_process_mx(randUnitary)  # in std basis
+            randOp = _ot.unitary_to_process_mx(randUnitary)  # in std basis
             randOp = _bt.change_basis(randOp, "std", self.basis)
 
             mdl_randomized.operations[opLabel] = _op.FullArbitraryOp(

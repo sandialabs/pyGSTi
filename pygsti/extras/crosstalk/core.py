@@ -14,10 +14,10 @@ import numpy as _np
 import pcalg
 from gsq.ci_tests import ci_test_dis
 
-from . import objects as _obj
-from ... import io as _pygio
-from ...circuits.circuit import Circuit as _Circuit
-from ...datasets.dataset import DataSet as _DataSet
+from pygsti.extras.crosstalk import objects as _obj
+from pygsti import io as _pygio
+from pygsti.circuits.circuit import Circuit as _Circuit
+from pygsti.data.dataset import DataSet as _DataSet
 
 
 def tuple_replace_at_index(tup, ix, val):

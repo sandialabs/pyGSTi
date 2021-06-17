@@ -6,15 +6,14 @@ import scipy.sparse as sps
 import pygsti.modelmembers.operations as op
 import pygsti.tools.internalgates as itgs
 import pygsti.tools.optools as gt
-from pygsti.construction.modelconstruction import _create_spam_vector, _create_operation
+from pygsti.models.modelconstruction import _create_spam_vector, _create_operation
 from pygsti.evotypes import Evotype
 from pygsti.modelmembers.instruments import TPInstrument
 from pygsti.modelmembers.states import FullState
 from pygsti.models import ExplicitOpModel
-from pygsti.baseobjs import statespace
+from pygsti.baseobjs import statespace, basisconstructors as bc
 from pygsti.models.gaugegroup import FullGaugeGroupElement, UnitaryGaugeGroupElement
 from pygsti.baseobjs import Basis
-from pygsti.tools import basisconstructors as bc
 from ..util import BaseCase, needs_cvxpy
 
 

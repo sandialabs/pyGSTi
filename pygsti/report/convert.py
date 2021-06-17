@@ -17,12 +17,12 @@ from pygsti.report.reportableqty import ReportableQty as _ReportableQty
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 # ***************************************************************************************************
-from . import html
-from . import latex
-from . import python
-from ..modelmembers import operations as _op
-from ..modelmembers import povms as _povm
-from ..modelmembers import states as _state
+from pygsti.report import html
+from pygsti.report import latex
+from pygsti.report import python
+from pygsti.modelmembers import operations as _op
+from pygsti.modelmembers import povms as _povm
+from pygsti.modelmembers import states as _state
 
 
 def functions_in(module):

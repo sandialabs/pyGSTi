@@ -14,8 +14,8 @@ import functools as _functools
 
 import numpy as _np
 
-from .denseop import DenseOperator as _DenseOperator
-from ...tools import matrixtools as _mt
+from pygsti.modelmembers.operations.denseop import DenseOperator as _DenseOperator
+from pygsti.tools import matrixtools as _mt
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 

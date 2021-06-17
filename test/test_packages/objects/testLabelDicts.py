@@ -14,7 +14,7 @@ class LabelDictTestCase(BaseTestCase):
     def test_classical_statespacelabels(self):
 
         mdl1Q = std1Q_XYI.target_model()
-        mdl = pygsti.obj.ExplicitOpModel(['Q0','C0'])  # one qubit, one classical bit
+        mdl = pygsti.obj.ExplicitOpModel(['Q0', 'C0'])  # one qubit, one classical bit
         self.assertEqual(mdl.dim, 8)
         self.assertEqual(mdl.state_space_labels.dim, 8)
         self.assertEqual(mdl.state_space_labels.labels, (('Q0', 'C0'),) )
@@ -26,9 +26,9 @@ class LabelDictTestCase(BaseTestCase):
 
         EffectVecs = [ (elbl +'c0', np.kron([[1.0],[0.0]], evec)) for elbl,evec in mdl1Q.povms['Mdefault'].items() ] \
                    + [ (elbl +'c1', np.kron([[0.0],[1.0]], evec)) for elbl,evec in mdl1Q.povms['Mdefault'].items() ]
-        mdl.povms['Mboth'] = pygsti.obj.UnconstrainedPOVM( EffectVecs )
+        mdl.povms['Mboth'] = pygsti.obj.UnconstrainedPOVM(EffectVecs)
         EffectVecs = [ (elbl, np.kron([[1.0],[1.0]], evec)) for elbl,evec in mdl1Q.povms['Mdefault'].items() ]
-        mdl.povms['Mqubit'] = pygsti.obj.UnconstrainedPOVM( EffectVecs )
+        mdl.povms['Mqubit'] = pygsti.obj.UnconstrainedPOVM(EffectVecs)
 
         G = np.kron([[1.0,0],[0,1.0]], mdl1Q.operations['Gx'])
         mdl.operations['Gx'] = G

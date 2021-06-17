@@ -2,7 +2,7 @@ import pickle
 
 import pygsti.baseobjs.outcomelabeldict as ld
 from pygsti.models.memberdict import OrderedMemberDict
-from pygsti.construction.modelconstruction import create_explicit_model
+from pygsti.models.modelconstruction import create_explicit_model
 from pygsti.models import ExplicitOpModel
 from ..util import BaseCase
 

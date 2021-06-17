@@ -20,7 +20,7 @@ import scipy.optimize as _spo
 import scipy.sparse as _sps
 import scipy.sparse.linalg as _spsl
 
-from .basistools import change_basis
+from pygsti.tools.basistools import change_basis
 
 try:
     from . import fastcalc as _fastcalc
@@ -406,13 +406,13 @@ def unitary_superoperator_matrix_log(m, mx_basis):
         and `logM` can be written as the action `rho -> -i[H,rho]`.
     """
     from . import lindbladtools as _lt  # (would create circular imports if at top)
-    from . import optools as _gt  # (would create circular imports if at top)
+    from . import optools as _ot  # (would create circular imports if at top)
 
     M_std = change_basis(m, mx_basis, "std")
     evals = _np.linalg.eigvals(M_std)
     assert(_np.allclose(_np.abs(evals), 1.0))  # simple but technically incomplete check for a unitary superop
     # (e.g. could be anti-unitary: diag(1, -1, -1, -1))
-    U = _gt.process_mx_to_unitary(M_std)
+    U = _ot.process_mx_to_unitary(M_std)
     H = _spl.logm(U) / -1j  # U = exp(-iH)
     logM_std = _lt.hamiltonian_to_lindbladian(H)  # rho --> -i[H, rho] * sqrt(d)/2
     logM = change_basis(logM_std * (2.0 / _np.sqrt(H.shape[0])), "std", mx_basis)

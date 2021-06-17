@@ -13,9 +13,13 @@ pyGSTi Models Python Package
 
 from .cloudnoisemodel import CloudNoiseModel
 from .explicitmodel import ExplicitOpModel
-from .explicitmodel import ExplicitOpModel as GateSet  # alias
 from .implicitmodel import ImplicitOpModel
 from .localnoisemodel import LocalNoiseModel
 from .model import Model
 from .oplessmodel import OplessModel
 from .oplessmodel import SuccessFailModel
+
+from .modelconstruction import *
+from .nqnoiseconstruction import *
+from .qutrit import create_qutrit_model
+# Unused: from rpemodel import make_rpe_model

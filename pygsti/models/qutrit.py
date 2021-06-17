@@ -13,12 +13,12 @@ Routines for building qutrit gates and models
 import numpy as _np
 from scipy import linalg as _linalg
 
-from ..baseobjs import Basis as _Basis, statespace as _statespace
-from ..models.gaugegroup import FullGaugeGroup as _FullGaugeGroup
-from ..modelmembers.operations import FullArbitraryOp as _FullArbitraryOp
-from ..modelmembers.povms import UnconstrainedPOVM as _UnconstrainedPOVM
-from ..models import ExplicitOpModel as _ExplicitOpModel
-from ..tools import unitary_to_process_mx, change_basis
+from pygsti.baseobjs import Basis as _Basis, statespace as _statespace
+from pygsti.models.gaugegroup import FullGaugeGroup as _FullGaugeGroup
+from pygsti.modelmembers.operations import FullArbitraryOp as _FullArbitraryOp
+from pygsti.modelmembers.povms import UnconstrainedPOVM as _UnconstrainedPOVM
+from pygsti.models import ExplicitOpModel as _ExplicitOpModel
+from pygsti.tools import unitary_to_process_mx, change_basis
 
 #Define 2 qubit to symmetric (+) antisymmetric space transformation A:
 A = _np.matrix([[1, 0, 0, 0],

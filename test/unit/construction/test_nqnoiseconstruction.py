@@ -1,10 +1,10 @@
 import numpy as np
 import scipy
 
-import pygsti.construction.nqnoiseconstruction as nc
+import pygsti.models.nqnoiseconstruction as nc
 from pygsti.modelpacks.legacy import std1Q_XYI, std2Q_XXYYII, std2Q_XYICNOT
 from pygsti.circuits import Circuit
-from pygsti.datasets import DataSet
+from pygsti.data import DataSet
 from ..util import BaseCase
 
 

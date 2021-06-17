@@ -15,14 +15,14 @@ import itertools as _itertools
 
 import numpy as _np
 
-from .linearop import LinearOperator as _LinearOperator
-from .. import modelmember as _modelmember, term as _term
-from ...evotypes import Evotype as _Evotype
-from ...baseobjs import statespace as _statespace
-from ...baseobjs.basis import ExplicitBasis as _ExplicitBasis
-from ...tools import listtools as _lt
-from ...tools import matrixtools as _mt
-from ...tools import slicetools as _slct
+from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
+from pygsti.modelmembers import modelmember as _modelmember, term as _term
+from pygsti.evotypes import Evotype as _Evotype
+from pygsti.baseobjs import statespace as _statespace
+from pygsti.baseobjs.basis import ExplicitBasis as _ExplicitBasis
+from pygsti.tools import listtools as _lt
+from pygsti.tools import matrixtools as _mt
+from pygsti.tools import slicetools as _slct
 
 
 class ComposedOp(_LinearOperator):

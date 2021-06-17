@@ -22,21 +22,20 @@ from scipy.stats import chi2 as _chi2
 
 from pygsti.baseobjs.profiler import DummyProfiler as _DummyProfiler
 from pygsti.protocols.estimate import Estimate as _Estimate
-from . import protocol as _proto
-from .modeltest import ModelTest as _ModelTest
-from .. import algorithms as _alg
-from .. import construction as _construction
-from .. import io as _io
-from .. import models as _models
-from .. import optimize as _opt
-from .. import tools as _tools
-from .. import baseobjs as _baseobjs
-from ..forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
-from ..modelmembers import operations as _op
-from ..models import Model as _Model
-from ..objectivefns import objectivefns as _objfns, wildcardbudget as _wild
-from ..circuits.circuitlist import CircuitList as _CircuitList
-from ..baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
+from pygsti.protocols import protocol as _proto
+from pygsti.protocols.modeltest import ModelTest as _ModelTest
+from pygsti import algorithms as _alg
+from pygsti import circuits as _circuits
+from pygsti import io as _io
+from pygsti import models as _models
+from pygsti import optimize as _opt
+from pygsti import tools as _tools
+from pygsti import baseobjs as _baseobjs
+from pygsti.modelmembers import operations as _op
+from pygsti.models import Model as _Model
+from pygsti.objectivefns import objectivefns as _objfns, wildcardbudget as _wild
+from pygsti.circuits.circuitlist import CircuitList as _CircuitList
+from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 
 #For results object:
 
@@ -233,7 +232,7 @@ class StandardGSTDesign(GateSetTomographyDesign):
 
         #TODO: add a line_labels arg to create_lsgst_circuit_lists and pass qubit_labels in?
         target_model = _load_model(target_model_filename_or_obj)
-        lists = _construction.create_lsgst_circuit_lists(
+        lists = _circuits.create_lsgst_circuit_lists(
             target_model, self.prep_fiducials, self.meas_fiducials, self.germs,
             self.maxlengths, self.fiducial_pairs, self.truncation_method, self.nested,
             self.fpr_keep_fraction, self.fpr_keep_seed, self.include_lgst,
@@ -669,6 +668,7 @@ class GateSetTomography(_proto.Protocol):
         else:
             if optimizer is None: optimizer = {}
             if 'first_fditer' not in optimizer:  # then add default first_fditer value
+                from pygsti.forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
                 mdl = self.initial_model.model
                 optimizer['first_fditer'] = 1 if mdl and isinstance(mdl.sim, _MatrixFSim) else 0
             self.optimizer = _opt.CustomLMOptimizer.cast(optimizer)

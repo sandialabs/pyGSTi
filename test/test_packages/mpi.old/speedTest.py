@@ -41,9 +41,9 @@ def runMC2GSTAnalysis(myspecs, mygerms, gsTarget, seed,
 
     #Run LGST to get starting model
     mdl_lgst = pygsti.run_lgst(dsFake, myspecs, gsTarget,
-                             svd_truncate_to=gsTarget.dim, verbosity=3)
-    mdl_lgst_go = pygsti.optimize_gauge(mdl_lgst,"target",
-                                       target_model=mdl_dataGen)
+                               svd_truncate_to=gsTarget.dim, verbosity=3)
+    mdl_lgst_go = pygsti.optimize_gauge(mdl_lgst, "target",
+                                        target_model=mdl_dataGen)
 
     #Run full iterative LSGST
     tStart = time.time()

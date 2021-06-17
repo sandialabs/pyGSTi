@@ -13,13 +13,13 @@ import os as _os
 import pickle as _pickle
 import warnings as _warnings
 
-from . import benchmarker as _benchmarker
-from . import dataset as _dataset
+from pygsti.extras.rb import benchmarker as _benchmarker
+from pygsti.extras.rb import dataset as _dataset
 # todo : update
-from . import sample as _sample
-from ... import io as _io
-from ...circuits import circuit as _cir
-from ...datasets import multidataset as _mds
+from pygsti.extras.rb import sample as _sample
+from pygsti import io as _io
+from pygsti.circuits import circuit as _cir
+from pygsti.data import multidataset as _mds
 
 
 #def load_benchmarking_data(basedir):
@@ -38,12 +38,12 @@ def load_benchmarker(directory, load_datasets=True, verbosity=1):
     dscomparator = globaldict['dscomparator']
 
     if load_datasets:
-        dskeys = [dskey.name for dskey in _os.scandir(directory + '/datasets') if dskey.is_dir()]
+        dskeys = [dskey.name for dskey in _os.scandir(directory + '/data') if dskey.is_dir()]
         multidsdict = {dskey: _mds.MultiDataSet()for dskey in dskeys}
 
         for dskey in dskeys:
             for passnum in range(numpasses):
-                dsfn = directory + '/datasets/{}/ds{}.txt'.format(dskey, passnum)
+                dsfn = directory + '/data/{}/ds{}.txt'.format(dskey, passnum)
                 ds = _io.load_dataset(dsfn, collision_action='keepseparate', record_zero_counts=False,
                                       ignore_zero_count_lines=False, verbosity=verbosity)
                 multidsdict[dskey].add_dataset(passnum, ds)
@@ -180,7 +180,7 @@ def write_benchmarker(benchmarker, outdir, overwrite=False, verbosity=0):
                     _json.dump(summarydict, f, indent=4)
 
     for dskey in benchmarker.multids.keys():
-        fdir = outdir + '/datasets/{}'.format(dskey)
+        fdir = outdir + '/data/{}'.format(dskey)
         _os.makedirs(fdir)
         for dsind in benchmarker.multids[dskey].keys():
             fname = fdir + '/ds{}.txt'.format(dsind)

@@ -12,17 +12,9 @@ circuit mirroring functions.
 
 import numpy as _np
 
-from ..circuits import circuit as _cir
-from ..baseobjs import label as _lbl
-from ..tools import symplectic as _symp
-
-
-# from .. import construction as _cnst
-# from .. import io as _io
-# from ..tools import group as _rbobjs
-
-
-#import itertools as _itertools
+from pygsti.circuits import circuit as _cir
+from pygsti.baseobjs import label as _lbl
+from pygsti.tools import symplectic as _symp
 
 
 def _pvec_to_pauli_layer(pvec, pauli_labels, qubit_labels):

@@ -14,11 +14,11 @@ import warnings as _warnings
 
 import numpy as _np
 
-from .. import baseobjs as _baseobjs
-from .. import optimize as _opt
-from .. import tools as _tools
-from ..modelmembers import operations as _op
-from ..modelmembers import povms as _povm
+from pygsti import baseobjs as _baseobjs
+from pygsti import optimize as _opt
+from pygsti import tools as _tools
+from pygsti.modelmembers import operations as _op
+from pygsti.modelmembers import povms as _povm
 
 
 def contract(model, to_what, dataset=None, maxiter=1000000, tol=0.01, use_direct_cp=True, method="Nelder-Mead",

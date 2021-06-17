@@ -18,12 +18,12 @@ import scipy.linalg as _spl
 import scipy.sparse as _sps
 import scipy.sparse.linalg as _spsl
 
-from . import basistools as _bt
-from . import jamiolkowski as _jam
-from . import lindbladtools as _lt
-from . import matrixtools as _mt
-from ..baseobjs.basis import Basis as _Basis, ExplicitBasis as _ExplicitBasis, DirectSumBasis as _DirectSumBasis
-from ..baseobjs.label import Label as _Label
+from pygsti.tools import basistools as _bt
+from pygsti.tools import jamiolkowski as _jam
+from pygsti.tools import lindbladtools as _lt
+from pygsti.tools import matrixtools as _mt
+from pygsti.baseobjs.basis import Basis as _Basis, ExplicitBasis as _ExplicitBasis, DirectSumBasis as _DirectSumBasis
+from pygsti.baseobjs.label import Label as _Label
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 

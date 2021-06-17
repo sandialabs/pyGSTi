@@ -61,7 +61,7 @@ class AdvancedParameterizationTestCase(BaseTestCase):
         print("PREGAME")
         printInfo()
         print("BEGIN")
-        mdl_constructed = pygsti.obj.ExplicitOpModel(['Q0','Q1','Q2'])
+        mdl_constructed = pygsti.obj.ExplicitOpModel(['Q0', 'Q1', 'Q2'])
         print("Model id = ",id(mdl_constructed))
         print("INSERT1: Giii indices = ", Giii.gpindices, " parent = ", Giii.parent)
         mdl_constructed.operations['Giii'] = Giii # will set gpindices of Giii, which will set those of
@@ -124,7 +124,7 @@ class AdvancedParameterizationTestCase(BaseTestCase):
         Gx_depol = mdl_std1Q_HS.operations['Gx'].copy()
         #Gx_depol.depolarize( (alpha,alpha,0) )
         Gx_depol.set_error_rates( {('S','X'): 0.01, ('S','Y'): 0.01, ('S','Z'): 0.01} )
-        print("Infidelity = ",pygsti.tools.entanglement_infidelity(Gx_depol, mdl_std1Q_HS.operations['Gx']))
+        print("Infidelity = ", pygsti.tools.entanglement_infidelity(Gx_depol, mdl_std1Q_HS.operations['Gx']))
         self.assertAlmostEqual(pygsti.tools.entanglement_infidelity(Gx_depol, mdl_std1Q_HS.operations['Gx']), depol_err)
 
         

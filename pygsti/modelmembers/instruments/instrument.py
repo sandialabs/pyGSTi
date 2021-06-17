@@ -12,13 +12,13 @@ Defines the Instrument class
 import collections as _collections
 import numpy as _np
 
-from .. import modelmember as _mm
-from .. import operations as _op
-from .. import states as _state
-from ...evotypes import Evotype as _Evotype
-from ...baseobjs import statespace as _statespace
-from ...tools import matrixtools as _mt
-from ...baseobjs.label import Label as _Label
+from pygsti.modelmembers import modelmember as _mm
+from pygsti.modelmembers import operations as _op
+from pygsti.modelmembers import states as _state
+from pygsti.evotypes import Evotype as _Evotype
+from pygsti.baseobjs import statespace as _statespace
+from pygsti.tools import matrixtools as _mt
+from pygsti.baseobjs.label import Label as _Label
 
 
 class Instrument(_mm.ModelMember, _collections.OrderedDict):

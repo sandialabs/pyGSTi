@@ -48,14 +48,14 @@ class LayoutTestCase(BaseTestCase):
         self.assertEqual(layout.circuits, layout_copy.circuits)
 
     def test_base_layout(self):
-        self._test_layout( pygsti.objects.copalayout.CircuitOutcomeProbabilityArrayLayout.create_from(self.circuits[:], self.model) )
+        self._test_layout(pygsti.objects.copalayout.CircuitOutcomeProbabilityArrayLayout.create_from(self.circuits[:], self.model))
 
     def test_map_layout(self):
-        self._test_layout( pygsti.objects.maplayout.MapCOPALayout(self.circuits[:], self.model) )
+        self._test_layout(pygsti.objects.maplayout.MapCOPALayout(self.circuits[:], self.model))
         #TODO: test split layouts
 
     def test_matrix_layout(self):
-        self._test_layout( pygsti.objects.matrixlayout.MatrixCOPALayout(self.circuits[:], self.model) )
+        self._test_layout(pygsti.objects.matrixlayout.MatrixCOPALayout(self.circuits[:], self.model))
 
     #SCRATCH
     #    # An additional specific test added from debugging mapevaltree splitting

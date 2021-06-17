@@ -1,6 +1,6 @@
 import numpy as _np
 
-from pygsti import construction
+from pygsti import circuits
 from pygsti.modelpacks.legacy import std1Q_XYI as std
 from pygsti.tools import likelihoodfns as lfn
 from . import fixtures as pkg
@@ -22,7 +22,7 @@ class LikelihoodFunctionsTester(LikelihoodFunctionsBase):
 class LogLTester(LikelihoodFunctionsBase):
     def setUp(self):
         super(LogLTester, self).setUp()
-        self.circuits = construction.to_circuits([('Gx',), ('Gy',), ('Gx', 'Gx')])
+        self.circuits = circuits.to_circuits([('Gx',), ('Gy',), ('Gx', 'Gx')])
 
     def test_logl(self):
         L1 = lfn.logl(self.model, self.ds, self.circuits,

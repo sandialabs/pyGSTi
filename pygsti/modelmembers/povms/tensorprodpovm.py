@@ -15,10 +15,10 @@ import itertools as _itertools
 
 import numpy as _np
 
-from .povm import POVM as _POVM
-from .tensorprodeffect import TensorProductPOVMEffect as _TensorProductPOVMEffect
-from .. import modelmember as _mm
-from ...baseobjs import statespace as _statespace
+from pygsti.modelmembers.povms.povm import POVM as _POVM
+from pygsti.modelmembers.povms.tensorprodeffect import TensorProductPOVMEffect as _TensorProductPOVMEffect
+from pygsti.modelmembers import modelmember as _mm
+from pygsti.baseobjs import statespace as _statespace
 
 
 class TensorProductPOVM(_POVM):

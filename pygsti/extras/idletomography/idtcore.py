@@ -21,9 +21,8 @@ from .idtresults import IdleTomographyResults as _IdleTomographyResults
 from ... import baseobjs as _baseobjs
 from ... import models as _models
 from ... import tools as _tools
-from ...construction import modelconstruction as _modelconstruction
+from ...models import modelconstruction as _modelconstruction
 from ...modelmembers import states as _state
-from ...modelmembers import povms as _povm
 from ...modelmembers import operations as _op
 from ...baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from ...circuits.circuit import Circuit as _Circuit

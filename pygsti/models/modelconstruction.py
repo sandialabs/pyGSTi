@@ -12,28 +12,27 @@ Functions for the construction of new models.
 
 import collections as _collections
 import itertools as _itertools
-import warnings as _warnings
 
 import numpy as _np
 import scipy.linalg as _spl
 
-from ..evotypes import Evotype as _Evotype
-from ..modelmembers import operations as _op
-from ..modelmembers import povms as _povm
-from ..modelmembers import states as _state
-from ..modelmembers.operations import opfactory as _opfactory
-from ..models import explicitmodel as _emdl
-from ..models import gaugegroup as _gg
-from ..models.localnoisemodel import LocalNoiseModel as _LocalNoiseModel
-from ..baseobjs import label as _label, statespace as _statespace
-from ..baseobjs.basis import Basis as _Basis
-from ..baseobjs.basis import BuiltinBasis as _BuiltinBasis
-from ..baseobjs.basis import DirectSumBasis as _DirectSumBasis
-from ..tools import basistools as _bt
-from ..tools import internalgates as _itgs
-from ..tools import optools as _gt
-from ..tools.basisconstructors import sigmax, sigmay, sigmaz
-from ..tools.legacytools import deprecate as _deprecated_fn
+from pygsti.evotypes import Evotype as _Evotype
+from pygsti.modelmembers import operations as _op
+from pygsti.modelmembers import povms as _povm
+from pygsti.modelmembers import states as _state
+from pygsti.modelmembers.operations import opfactory as _opfactory
+from pygsti.models import explicitmodel as _emdl
+from pygsti.models import gaugegroup as _gg
+from pygsti.models.localnoisemodel import LocalNoiseModel as _LocalNoiseModel
+from pygsti.baseobjs import label as _label, statespace as _statespace
+from pygsti.baseobjs.basis import Basis as _Basis
+from pygsti.baseobjs.basis import BuiltinBasis as _BuiltinBasis
+from pygsti.baseobjs.basis import DirectSumBasis as _DirectSumBasis
+from pygsti.tools import basistools as _bt
+from pygsti.tools import internalgates as _itgs
+from pygsti.tools import optools as _ot
+from pygsti.baseobjs.basisconstructors import sigmax, sigmay, sigmaz
+from pygsti.tools.legacytools import deprecate as _deprecated_fn
 
 
 #############################################
@@ -309,7 +308,7 @@ def _basis_create_operation(state_space, op_expr, basis="gm", parameterization="
 
             Uop = _spl.expm(ex)  # 2x2 unitary matrix operating on single qubit in [0,1] basis
             # complex 4x4 mx operating on vectorized 1Q densty matrix in std basis
-            operationMx = _gt.unitary_to_process_mx(Uop)
+            operationMx = _ot.unitary_to_process_mx(Uop)
             # *real* 4x4 mx in Pauli-product basis -- better for parameterization
             pp_opMx = _op.StaticArbitraryOp(_bt.change_basis(operationMx, 'std', 'pp'), evotype, state_space=None)
             opTermInFinalBasis = _op.EmbeddedOp(state_space, [label], pp_opMx)
@@ -326,7 +325,7 @@ def _basis_create_operation(state_space, op_expr, basis="gm", parameterization="
             ex = -1j * theta * (sxCoeff * sigmax / 2. + syCoeff * sigmay / 2. + szCoeff * sigmaz / 2.)
             Uop = _spl.expm(ex)  # 2x2 unitary matrix operating on single qubit in [0,1] basis
             # complex 4x4 mx operating on vectorized 1Q densty matrix in std basis
-            operationMx = _gt.unitary_to_process_mx(Uop)
+            operationMx = _ot.unitary_to_process_mx(Uop)
             # *real* 4x4 mx in Pauli-product basis -- better for parameterization
             pp_opMx = _op.StaticArbitraryOp(_bt.change_basis(operationMx, 'std', 'pp'), evotype, state_space=None)
             opTermInFinalBasis = _op.EmbeddedOp(state_space, [label], pp_opMx)
@@ -360,7 +359,7 @@ def _basis_create_operation(state_space, op_expr, basis="gm", parameterization="
                 "%s gate must act on qubits!" % opName
 
             # complex 16x16 mx operating on vectorized 2Q densty matrix in std basis
-            operationMx = _gt.unitary_to_process_mx(Uop)
+            operationMx = _ot.unitary_to_process_mx(Uop)
             # *real* 16x16 mx in Pauli-product basis -- better for parameterization
             pp_opMx = _op.StaticArbitraryOp(_bt.change_basis(operationMx, 'std', 'pp'), evotype, state_space=None)
             opTermInFinalBasis = _op.EmbeddedOp(state_space, [label1, label2], pp_opMx)
@@ -385,7 +384,7 @@ def _basis_create_operation(state_space, op_expr, basis="gm", parameterization="
             Utot[i2, i1] = Uop[1, 0]
             Utot[i2, i2] = Uop[1, 1]
             # dmDim^2 x dmDim^2 mx operating on vectorized total densty matrix
-            opTermInStdBasis = _gt.unitary_to_process_mx(Utot)
+            opTermInStdBasis = _ot.unitary_to_process_mx(Utot)
 
             # contract [3] to [2, 1]
             embedded_std_basis = _Basis.cast('std', 9)  # [2]
@@ -1253,7 +1252,7 @@ def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}
     else:
         global_idle_op = None
 
-    # TODO: While TensorProdSPAMVec does not work with ComposedSPAMVec, build up prep/povm as n-qubit ops first    
+    # TODO: While TensorProdSPAMVec does not work with ComposedSPAMVec, build up prep/povm as n-qubit ops first
     prep_layers = {}
     if 'prep' in all_keys:
         if tensorprod_spamvec_povm:
@@ -1300,7 +1299,7 @@ def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}
                                          lindblad_parameterization)
             # TODO: Could do qubit-specific by allowing different err_gate1Q
             err_gates = [err_gate1Q.copy() for i in range(num_qubits)] \
-                if independent_gates else [err_gate1Q,] * num_qubits
+                if independent_gates else [err_gate1Q] * num_qubits
             err_gateNQ = _op.ComposedOp([_op.EmbeddedOp(state_space, [qubit_labels[i]], err_gates[i])
                                          for i in range(num_qubits)], evotype, state_space)
             # TODO: Could specialize for LindbladOps, although this should also handle that case

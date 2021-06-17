@@ -20,7 +20,7 @@ import scipy.sparse as _sps
 import scipy.sparse.linalg as _spsl
 from numpy.linalg import inv as _inv
 
-from pygsti.tools.basisconstructors import _basis_constructor_dict
+from pygsti.baseobjs.basisconstructors import _basis_constructor_dict
 
 
 #Helper functions

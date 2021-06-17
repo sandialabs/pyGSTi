@@ -15,12 +15,12 @@ import itertools as _itertools
 
 import numpy as _np
 
-from .effect import POVMEffect as _POVMEffect
-from .. import modelmember as _modelmember, term as _term
-from ...baseobjs import statespace as _statespace
-from ...tools import listtools as _lt
-from ...tools import matrixtools as _mt
-from ...tools import slicetools as _slct
+from pygsti.modelmembers.povms.effect import POVMEffect as _POVMEffect
+from pygsti.modelmembers import modelmember as _modelmember, term as _term
+from pygsti.baseobjs import statespace as _statespace
+from pygsti.tools import listtools as _lt
+from pygsti.tools import matrixtools as _mt
+from pygsti.tools import slicetools as _slct
 
 
 class TensorProductPOVMEffect(_POVMEffect):

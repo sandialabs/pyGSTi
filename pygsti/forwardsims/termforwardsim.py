@@ -15,17 +15,17 @@ import warnings as _warnings
 
 import numpy as _np
 
-from ..baseobjs.opcalc import compact_deriv as _compact_deriv, \
+from pygsti.baseobjs.opcalc import compact_deriv as _compact_deriv, \
     bulk_eval_compact_polynomials as _bulk_eval_compact_polynomials, \
     bulk_eval_compact_polynomials_derivs as _bulk_eval_compact_polynomials_derivs
-from .distforwardsim import DistributableForwardSimulator as _DistributableForwardSimulator
-from ..layouts.termlayout import TermCOPALayout as _TermCOPALayout
-from ..baseobjs.polynomial import Polynomial as _Polynomial
-from ..baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
-from ..baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from ..tools import mpitools as _mpit
-from ..tools import slicetools as _slct
-from ..tools.matrixtools import _fas
+from pygsti.forwardsims.distforwardsim import DistributableForwardSimulator as _DistributableForwardSimulator
+from pygsti.layouts.termlayout import TermCOPALayout as _TermCOPALayout
+from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
+from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
+from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from pygsti.tools import mpitools as _mpit
+from pygsti.tools import slicetools as _slct
+from pygsti.tools.matrixtools import _fas
 
 
 # from . import replib

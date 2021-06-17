@@ -63,7 +63,7 @@ except ImportError:
 
 from ply import lex, yacc
 
-from ...baseobjs import label as _lbl
+from pygsti.baseobjs import label as _lbl
 
 
 class CircuitLexer:

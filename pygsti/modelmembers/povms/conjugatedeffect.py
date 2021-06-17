@@ -12,8 +12,8 @@ The ConjugatedStatePOVMEffect class and supporting functionality.
 
 import copy as _copy
 
-from .effect import POVMEffect as _POVMEffect
-from ...tools import matrixtools as _mt
+from pygsti.modelmembers.povms.effect import POVMEffect as _POVMEffect
+from pygsti.tools import matrixtools as _mt
 
 
 class DenseEffectInterface(object):

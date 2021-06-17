@@ -13,9 +13,9 @@ A custom MPI-enabled linear solver.
 import numpy as _np
 import scipy as _scipy
 
-from .arraysinterface import UndistributedArraysInterface as _UndistributedArraysInterface
-from ..tools import sharedmemtools as _smt
-from ..tools import slicetools as _slct
+from pygsti.optimize.arraysinterface import UndistributedArraysInterface as _UndistributedArraysInterface
+from pygsti.tools import sharedmemtools as _smt
+from pygsti.tools import slicetools as _slct
 
 try:
     from ..tools import fastcalc as _fastcalc

@@ -13,13 +13,12 @@ End-to-end functions for performing long-sequence GST
 import os as _os
 import pickle as _pickle
 
-from .. import construction as _construction
-from .. import io as _io
-from .. import baseobjs as _baseobjs
-from .. import protocols as _proto
-from ..forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
-from ..objectivefns import objectivefns as _objfns
-from ..baseobjs.advancedoptions import GSTAdvancedOptions as _GSTAdvancedOptions
+from pygsti import circuits as _circuits
+from pygsti import io as _io
+from pygsti import baseobjs as _baseobjs
+from pygsti import protocols as _proto
+from pygsti.objectivefns import objectivefns as _objfns
+from pygsti.baseobjs.advancedoptions import GSTAdvancedOptions as _GSTAdvancedOptions
 
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]
 DEFAULT_BAD_FIT_THRESHOLD = 2.0
@@ -234,7 +233,7 @@ def run_linear_gst(data_filename_or_set, target_model_filename_or_object,
     ds = _load_dataset(data_filename_or_set, comm, printer)
 
     target_model = _load_model(target_model_filename_or_object)
-    germs = _construction.to_circuits([()] + [(gl,) for gl in target_model.operations.keys()])  # just the single gates
+    germs = _circuits.to_circuits([()] + [(gl,) for gl in target_model.operations.keys()])  # just the single gates
     max_lengths = [1]  # we only need maxLength == 1 when doing LGST
 
     exp_design = _proto.StandardGSTDesign(target_model, prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
@@ -775,6 +774,7 @@ def _get_gst_builders(advanced_options):
 
 
 def _get_optimizer(advanced_options, exp_design):
+    from pygsti.forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
     advanced_options = advanced_options or {}
     default_fditer = 1 if isinstance(exp_design.target_model.sim, _MatrixFSim) else 0
     optimizer = {'maxiter': advanced_options.get('max_iterations', 100000),
