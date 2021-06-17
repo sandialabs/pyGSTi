@@ -131,6 +131,7 @@ def setup_with_extensions(extensions=None):
             'pygsti.modelpacks.legacy',
             'pygsti.objectivefns',
             'pygsti.optimize',
+            'pygsti.processors',
             'pygsti.protocols',
             'pygsti.report',
             'pygsti.report.section',
