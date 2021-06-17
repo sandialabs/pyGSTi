@@ -17,7 +17,7 @@ import warnings as _warnings
 
 import numpy as _np
 
-from pygsti.tools import basisconstructors as _bc
+from pygsti.baseobjs import basisconstructors as _bc
 from pygsti.tools import matrixtools as _mt
 
 # Tolerace for matrix_rank when finding rank of a *normalized* projection

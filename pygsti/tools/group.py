@@ -14,8 +14,6 @@ from functools import reduce as _reduce
 
 import numpy as _np
 
-from pygsti.modelpacks.legacy import std1Q_Cliffords
-
 
 def is_integer(x):
     """
@@ -42,6 +40,7 @@ def construct_1q_clifford_group():
     -------
     MatrixGroup
     """
+    from pygsti.modelpacks.legacy import std1Q_Cliffords
     mdl = std1Q_Cliffords.target_model()
     return MatrixGroup(mdl.operations.values(), mdl.operations.keys())
 

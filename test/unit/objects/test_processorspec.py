@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 import scipy
 
-from pygsti.baseobjs.processorspec import ProcessorSpec
+from pygsti.processors.processorpack import ProcessorPack
 from pygsti.circuits import Circuit
 from ..util import BaseCase
 
@@ -19,7 +19,7 @@ class ProcessorSpecTester(BaseCase):
             sigmaZ = np.array([[1, 0], [0, -1]], 'd')
             return scipy.linalg.expm(1j * float(a) * sigmaZ)
 
-        ps = ProcessorSpec(nQubits, ('Gx','Gy','Gcnot','Ga'), nonstd_gate_unitaries={'Ga': fn},
+        ps = ProcessorPack(nQubits, ('Gx','Gy','Gcnot','Ga'), nonstd_gate_unitaries={'Ga': fn},
                            construct_models=('target','clifford'))
 
         c = Circuit("Gx:1Ga;0.3:1Gx:1@(0,1)")

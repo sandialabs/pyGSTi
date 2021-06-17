@@ -99,6 +99,7 @@ def setup_with_extensions(extensions=None):
             'pygsti.baseobjs',
             'pygsti.baseobjs.opcalc',
             'pygsti.circuits',
+            'pygsti.circuits.circuitparser',
             'pygsti.construction',
             'pygsti.data',
             'pygsti.drivers',
@@ -119,7 +120,6 @@ def setup_with_extensions(extensions=None):
             'pygsti.extras.devices',
             'pygsti.forwardsims',
             'pygsti.io',
-            'pygsti.io.circuitparser',
             'pygsti.layouts',
             'pygsti.models',
             'pygsti.modelmembers',
@@ -134,6 +134,7 @@ def setup_with_extensions(extensions=None):
             'pygsti.protocols',
             'pygsti.report',
             'pygsti.report.section',
+            'pygsti.serialization'
             'pygsti.tools',
         ],
         package_dir={'': '.'},
@@ -205,7 +206,7 @@ def setup_with_extensions(extensions=None):
                 'termforwardsim_calc_stabilizer.pyx'
             ],
             'pygsti.baseobjs.opcalc': ['fastopcalc.pyx'],
-            'pygsti.io.circuitparser': ['fastcircuitparser.pyx'],
+            'pygsti.circuits.circuitparser': ['fastcircuitparser.pyx'],
             'pygsti.report': [
                 'templates/*.tex',
                 'templates/*.html',
@@ -460,8 +461,8 @@ try:
             extra_link_args=["-std=c++11"]
         ),
         Extension(
-            "pygsti.io.circuitparser.fastcircuitparser",
-            sources=["pygsti/io/circuitparser/fastcircuitparser.pyx"],
+            "pygsti.circuits..circuitparser.fastcircuitparser",
+            sources=["pygsti/circuits/circuitparser/fastcircuitparser.pyx"],
             include_dirs=['.', np.get_include()],
             language="c++",
             extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"

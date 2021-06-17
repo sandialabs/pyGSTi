@@ -5,7 +5,7 @@ import numpy as np
 
 import pygsti
 import pygsti.construction as pc
-from pygsti.io import json
+from pygsti.serialization import json
 from pygsti.modelpacks.legacy import std1Q_XY
 from pygsti.modelpacks.legacy import std2Q_XYCNOT as std
 from pygsti.objects import Label as L
@@ -137,7 +137,7 @@ class CalcMethods2QTestCase(BaseTestCase):
 
         print("MISFIT nSigma = ",results.estimates['default'].misfit_sigma())
         self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 5, delta=1.0)
-        mdl_compare = pygsti.io.json.load(open(compare_files + "/test2Qcalc_std_terms.model"))
+        mdl_compare = pygsti.serialization.json.load(open(compare_files + "/test2Qcalc_std_terms.model"))
         self.assertAlmostEqual( np.linalg.norm(results.estimates['default'].models['go0'].to_vector()
                                                - mdl_compare.to_vector()), 0, places=3)
 
@@ -163,7 +163,7 @@ class CalcMethods2QTestCase(BaseTestCase):
 
         print("MISFIT nSigma = ",results.estimates['default'].misfit_sigma())
         self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 1.0, delta=1.0)
-        mdl_compare = pygsti.io.json.load(open(compare_files + "/test2Qcalc_redmod_exact.model"))
+        mdl_compare = pygsti.serialization.json.load(open(compare_files + "/test2Qcalc_redmod_exact.model"))
         self.assertAlmostEqual( results.estimates['default'].models['go0'].frobeniusdist(mdl_compare), 0, places=3)
 
 
@@ -179,7 +179,7 @@ class CalcMethods2QTestCase(BaseTestCase):
 
         print("MISFIT nSigma = ",results.estimates['default'].misfit_sigma())
         self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 1.0, delta=1.0)
-        mdl_compare = pygsti.io.json.load(open(compare_files + "/test2Qcalc_redmod_exact.model"))
+        mdl_compare = pygsti.serialization.json.load(open(compare_files + "/test2Qcalc_redmod_exact.model"))
         self.assertAlmostEqual( results.estimates['default'].models['go0'].frobeniusdist(mdl_compare), 0, places=1)
           #Note: models aren't necessarily exactly equal given gauge freedoms that we don't know
           # how to optimizize over exactly - so this is a very loose test...
@@ -198,7 +198,7 @@ class CalcMethods2QTestCase(BaseTestCase):
 
         print("MISFIT nSigma = ",results.estimates['default'].misfit_sigma())
         self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 1.0, delta=1.0)
-        mdl_compare = pygsti.io.json.load(open(compare_files + "/test2Qcalc_redmod_exact.model"))
+        mdl_compare = pygsti.serialization.json.load(open(compare_files + "/test2Qcalc_redmod_exact.model"))
         self.assertAlmostEqual( np.linalg.norm(results.estimates['default'].models['go0'].to_vector()
                                                - mdl_compare.to_vector()), 0, places=1)
           #Note: models aren't necessarily exactly equal given gauge freedoms that we don't know
@@ -222,7 +222,7 @@ class CalcMethods2QTestCase(BaseTestCase):
 
         print("MISFIT nSigma = ",results.estimates['default'].misfit_sigma())
         self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 3.0, delta=1.0)
-        mdl_compare = pygsti.io.json.load(open(compare_files + "/test2Qcalc_redmod_terms.model"))
+        mdl_compare = pygsti.serialization.json.load(open(compare_files + "/test2Qcalc_redmod_terms.model"))
         self.assertAlmostEqual( np.linalg.norm(results.estimates['default'].models['go0'].to_vector()
                                                - mdl_compare.to_vector()), 0, places=3)
 
@@ -239,7 +239,7 @@ class CalcMethods2QTestCase(BaseTestCase):
 
         print("MISFIT nSigma = ",results.estimates['default'].misfit_sigma())
         self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 3.0, delta=1.0)
-        mdl_compare = pygsti.io.json.load(open(compare_files + "/test2Qcalc_redmod_terms.model"))
+        mdl_compare = pygsti.serialization.json.load(open(compare_files + "/test2Qcalc_redmod_terms.model"))
         self.assertAlmostEqual( np.linalg.norm(results.estimates['default'].models['go0'].to_vector()
                                                - mdl_compare.to_vector()), 0, places=3)
 

@@ -17,7 +17,7 @@ from pygsti.objects import Label as L
 
 from pygsti.modelpacks.legacy import std1Q_XYI
 from pygsti.io import enable_old_object_unpickling
-from pygsti.tools.compattools import patched_uuid
+from pygsti.baseobjs._compatibility import patched_uuid
 
 def Ls(*args):
     """ Convert args to a tuple to Labels """

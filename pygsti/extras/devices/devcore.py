@@ -37,7 +37,7 @@ from . import rigetti_agave
 from . import rigetti_aspen4
 from . import rigetti_aspen6
 from . import rigetti_aspen7
-from ...baseobjs import processorspec as _pspec
+from ...processors import processorpack as _pspec
 from ...models import oplessmodel as _oplessmodel, modelconstruction as _mconst
 from ...modelmembers.povms import povm as _povm
 from ...tools import rbtools as _anl

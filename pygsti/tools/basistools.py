@@ -14,7 +14,7 @@ from functools import partial
 
 import numpy as _np
 
-from pygsti.tools.basisconstructors import _basis_constructor_dict
+from pygsti.baseobjs.basisconstructors import _basis_constructor_dict
 # from ..baseobjs.basis import Basis, BuiltinBasis, DirectSumBasis
 from pygsti.baseobjs import basis as _basis
 

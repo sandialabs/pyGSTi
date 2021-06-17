@@ -21,7 +21,6 @@ from collections import OrderedDict as _OrderedDict
 import numpy as _np
 from scipy.linalg import expm as _expm
 
-from pygsti.io import CircuitParser as _CircuitParser
 from pygsti import baseobjs as _baseobjs
 from pygsti import tools as _tools
 from pygsti.modelmembers import instruments as _instrument
@@ -31,6 +30,7 @@ from pygsti.modelmembers import states as _state
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.models import gaugegroup as _gaugegroup
 from pygsti.circuits.circuit import Circuit as _Circuit
+from pygsti.circuits.circuitparser import CircuitParser as _CircuitParser
 from pygsti.data import DataSet as _DataSet, MultiDataSet as _MultiDataSet
 
 # A dictionary mapping qubit string representations into created

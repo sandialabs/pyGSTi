@@ -15,6 +15,7 @@ from . import data
 from . import models
 from . import modelmembers as mm
 from . import forwardsims
+from . import processors
 from . import protocols
 from . import report as rpt
 
@@ -29,6 +30,6 @@ from pygsti.tools.gatetools import *  # *_qubit_gate fns
 from .drivers import *
 from .tools import *
 # NUMPY BUG FIX (imported from tools)
-from .tools.compattools import _numpy14einsumfix
+from pygsti.baseobjs._compatibility import _numpy14einsumfix
 
 _numpy14einsumfix()

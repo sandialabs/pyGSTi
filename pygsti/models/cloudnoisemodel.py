@@ -36,7 +36,7 @@ from pygsti.baseobjs.qubitgraph import QubitGraph as _QubitGraph
 from pygsti.tools import basistools as _bt
 from pygsti.tools import internalgates as _itgs
 from pygsti.tools import optools as _ot
-from pygsti.tools.basisconstructors import sqrt2, id2x2, sigmax, sigmay, sigmaz
+from pygsti.baseobjs.basisconstructors import sqrt2, id2x2, sigmax, sigmay, sigmaz
 
 
 def _iter_basis_inds(weight):

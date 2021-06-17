@@ -23,145 +23,145 @@ import numpy as _np
 
 from pygsti.circuits import gstcircuits as _stdlists
 from pygsti.baseobjs import polynomial as _polynomial
-from pygsti.forwardsims.termforwardsim import TermForwardSimulator as _TermFSim
 from pygsti.tools import mpitools as _mpit
 
 
 def _get_cachefile_names(std_module, param_type, simulator, py_version):
     """ Get the standard cache file names for a module """
 
-    if param_type == "H+S terms":
-        cachePath = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
-                                  "../construction/caches")
-
-        assert(simulator == "auto" or isinstance(simulator, _TermFSim)), "Invalid `simulator` argument!"
-        termOrder = 1 if simulator == "auto" else simulator.max_order
-        fn = ("cacheHS%d." % termOrder) + std_module.__name__ + "_v%d" % py_version
-        fn = _os.path.join(cachePath, fn)
-        return fn + "_keys.pkz", fn + "_vals.npz"
-    else:
-        raise ValueError("No cache files used for param-type=%s" % param_type)
+    # TODO REMOVE? - no more "H+S terms" parametype
+    # if param_type == "H+S terms":
+    #     cachePath = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
+    #                               "../construction/caches")
+    #
+    #     assert(simulator == "auto" or isinstance(simulator, _TermFSim)), "Invalid `simulator` argument!"
+    #     termOrder = 1 if simulator == "auto" else simulator.max_order
+    #     fn = ("cacheHS%d." % termOrder) + std_module.__name__ + "_v%d" % py_version
+    #     fn = _os.path.join(cachePath, fn)
+    #     return fn + "_keys.pkz", fn + "_vals.npz"
+    # else:
+    raise ValueError("No cache files used for param-type=%s" % param_type)
 
 
 # XXX is this used?
-def _make_hs_cache_for_std_model(std_module, term_order, max_length, json_too=False, comm=None):
-    """
-    A utility routine to for creating the term-based cache files for a standard module
-    """
-    target_model = std_module.target_model()
-    prep_fiducials = std_module.prepStrs
-    effect_fiducials = std_module.effectStrs
-    germs = std_module.germs
-
-    x = 1
-    maxLengths = []
-    while(x <= max_length):
-        maxLengths.append(x)
-        x *= 2
-
-    listOfExperiments = _stdlists.create_lsgst_circuits(
-        target_model, prep_fiducials, effect_fiducials, germs, maxLengths)
-
-    mdl_terms = target_model.copy()
-    mdl_terms.set_all_parameterizations("H+S terms")  # CPTP terms?
-    my_calc_cache = {}
-    mdl_terms.sim = _TermFSim(mode="taylor", max_order=term_order, cache=my_calc_cache)
-
-    comm_method = "scheduler"
-    if comm is not None and comm.Get_size() > 1 and comm_method == "scheduler":
-        from mpi4py import MPI  # just needed for MPI.SOURCE below
-
-        #Alternate: use rank0 as "scheduler"
-        rank = 0 if (comm is None) else comm.Get_rank()
-        nprocs = 1 if (comm is None) else comm.Get_size()
-        N = len(listOfExperiments); cur_index = 0; active_workers = nprocs - 1
-        buf = _np.zeros(1, _np.int64)  # use buffer b/c mpi4py .send/.recv seem buggy
-        if rank == 0:
-            # ** I am the scheduler **
-            # Give each "worker" rank an initial index to compute
-            for i in range(1, nprocs):
-                if cur_index == N:  # there are more procs than items - just send -1 index to mean "you're done!"
-                    buf[0] = -1
-                    comm.Send(buf, dest=i, tag=1)  # tag == 1 => scheduler to worker
-                    active_workers -= 1
-                else:
-                    buf[0] = cur_index
-                    comm.Send(buf, dest=i, tag=1); cur_index += 1
-
-            # while there are active workers keep dishing out indices
-            while active_workers > 0:
-                comm.Recv(buf, source=MPI.ANY_SOURCE, tag=2)  # worker requesting assignment
-                worker_rank = buf[0]
-                if cur_index == N:  # nothing more to do: just send -1 index to mean "you're done!"
-                    buf[0] = -1
-                    comm.Send(buf, dest=worker_rank, tag=1)  # tag == 1 => scheduler to worker
-                    active_workers -= 1
-                else:
-                    buf[0] = cur_index
-                    comm.Send(buf, dest=worker_rank, tag=1)
-                    cur_index += 1
-
-        else:
-            # ** I am a worker **
-            comm.Recv(buf, source=0, tag=1)
-            index_to_compute = buf[0]
-
-            while index_to_compute >= 0:
-                print("Worker %d computing prob %d of %d" % (rank, index_to_compute, N))
-                t0 = _time.time()
-                mdl_terms.probabilities(listOfExperiments[index_to_compute])
-                print("Worker %d finished computing prob %d in %.2fs" % (rank, index_to_compute, _time.time() - t0))
-
-                buf[0] = rank
-                comm.Send(buf, dest=0, tag=2)  # tag == 2 => worker requests next assignment
-                comm.Recv(buf, source=0, tag=1)
-                index_to_compute = buf[0]
-
-        print("Rank %d at barrier" % rank)
-        comm.barrier()  # wait here until all workers and scheduler are done
-
-    else:
-
-        #divide up strings among ranks
-        my_expList, _, _ = _mpit.distribute_indices(listOfExperiments, comm, False)
-        rankStr = "" if (comm is None) else "Rank%d: " % comm.Get_rank()
-
-        if comm is not None and comm.Get_rank() == 0:
-            print("%d circuits divided among %d processors" % (len(listOfExperiments), comm.Get_size()))
-
-        t0 = _time.time()
-        for i, opstr in enumerate(my_expList):
-            print("%s%.2fs: Computing prob %d of %d" % (rankStr, _time.time() - t0, i, len(my_expList)))
-            mdl_terms.probabilities(opstr)
-        #mdl_terms.bulk_probs(my_expList) # also fills cache, but allocs more mem at once
-
-    py_version = 3 if (_sys.version_info > (3, 0)) else 2
-    key_fn, val_fn = _get_cachefile_names(std_module, "H+S terms",
-                                          "termorder:%d" % term_order, py_version)
-    _write_calccache(my_calc_cache, key_fn, val_fn, json_too, comm)
-
-    if comm is None or comm.Get_rank() == 0:
-        print("Completed in %.2fs" % (_time.time() - t0))
-        print("Num of Experiments = ", len(listOfExperiments))
-
-    #if comm is None:
-    #    calcc_list = [ my_calc_cache ]
-    #else:
-    #    calcc_list = comm.gather(my_calc_cache, root=0)
-    #
-    #if comm is None or comm.Get_rank() == 0:
-    #    calc_cache = {}
-    #    for c in calcc_list:
-    #        calc_cache.update(c)
-    #
-    #    print("Completed in %.2fs" % (_time.time()-t0))
-    #    print("Cachesize = ",len(calc_cache))
-    #    print("Num of Experiments = ", len(listOfExperiments))
-    #
-    #    py_version = 3 if (_sys.version_info > (3, 0)) else 2
-    #    key_fn, val_fn = _get_cachefile_names(std_module, "H+S terms",
-    #                                          "termorder:%d" % term_order,py_version)
-    #    _write_calccache(calc_cache, key_fn, val_fn, json_too, comm)
+# def _make_hs_cache_for_std_model(std_module, term_order, max_length, json_too=False, comm=None):
+#     """
+#     A utility routine to for creating the term-based cache files for a standard module
+#     """
+#     target_model = std_module.target_model()
+#     prep_fiducials = std_module.prepStrs
+#     effect_fiducials = std_module.effectStrs
+#     germs = std_module.germs
+#
+#     x = 1
+#     maxLengths = []
+#     while(x <= max_length):
+#         maxLengths.append(x)
+#         x *= 2
+#
+#     listOfExperiments = _stdlists.create_lsgst_circuits(
+#         target_model, prep_fiducials, effect_fiducials, germs, maxLengths)
+#
+#     mdl_terms = target_model.copy()
+#     mdl_terms.set_all_parameterizations("H+S terms")  # CPTP terms?
+#     my_calc_cache = {}
+#     mdl_terms.sim = _TermFSim(mode="taylor", max_order=term_order, cache=my_calc_cache)
+#
+#     comm_method = "scheduler"
+#     if comm is not None and comm.Get_size() > 1 and comm_method == "scheduler":
+#         from mpi4py import MPI  # just needed for MPI.SOURCE below
+#
+#         #Alternate: use rank0 as "scheduler"
+#         rank = 0 if (comm is None) else comm.Get_rank()
+#         nprocs = 1 if (comm is None) else comm.Get_size()
+#         N = len(listOfExperiments); cur_index = 0; active_workers = nprocs - 1
+#         buf = _np.zeros(1, _np.int64)  # use buffer b/c mpi4py .send/.recv seem buggy
+#         if rank == 0:
+#             # ** I am the scheduler **
+#             # Give each "worker" rank an initial index to compute
+#             for i in range(1, nprocs):
+#                 if cur_index == N:  # there are more procs than items - just send -1 index to mean "you're done!"
+#                     buf[0] = -1
+#                     comm.Send(buf, dest=i, tag=1)  # tag == 1 => scheduler to worker
+#                     active_workers -= 1
+#                 else:
+#                     buf[0] = cur_index
+#                     comm.Send(buf, dest=i, tag=1); cur_index += 1
+#
+#             # while there are active workers keep dishing out indices
+#             while active_workers > 0:
+#                 comm.Recv(buf, source=MPI.ANY_SOURCE, tag=2)  # worker requesting assignment
+#                 worker_rank = buf[0]
+#                 if cur_index == N:  # nothing more to do: just send -1 index to mean "you're done!"
+#                     buf[0] = -1
+#                     comm.Send(buf, dest=worker_rank, tag=1)  # tag == 1 => scheduler to worker
+#                     active_workers -= 1
+#                 else:
+#                     buf[0] = cur_index
+#                     comm.Send(buf, dest=worker_rank, tag=1)
+#                     cur_index += 1
+#
+#         else:
+#             # ** I am a worker **
+#             comm.Recv(buf, source=0, tag=1)
+#             index_to_compute = buf[0]
+#
+#             while index_to_compute >= 0:
+#                 print("Worker %d computing prob %d of %d" % (rank, index_to_compute, N))
+#                 t0 = _time.time()
+#                 mdl_terms.probabilities(listOfExperiments[index_to_compute])
+#                 print("Worker %d finished computing prob %d in %.2fs" % (rank, index_to_compute, _time.time() - t0))
+#
+#                 buf[0] = rank
+#                 comm.Send(buf, dest=0, tag=2)  # tag == 2 => worker requests next assignment
+#                 comm.Recv(buf, source=0, tag=1)
+#                 index_to_compute = buf[0]
+#
+#         print("Rank %d at barrier" % rank)
+#         comm.barrier()  # wait here until all workers and scheduler are done
+#
+#     else:
+#
+#         #divide up strings among ranks
+#         my_expList, _, _ = _mpit.distribute_indices(listOfExperiments, comm, False)
+#         rankStr = "" if (comm is None) else "Rank%d: " % comm.Get_rank()
+#
+#         if comm is not None and comm.Get_rank() == 0:
+#             print("%d circuits divided among %d processors" % (len(listOfExperiments), comm.Get_size()))
+#
+#         t0 = _time.time()
+#         for i, opstr in enumerate(my_expList):
+#             print("%s%.2fs: Computing prob %d of %d" % (rankStr, _time.time() - t0, i, len(my_expList)))
+#             mdl_terms.probabilities(opstr)
+#         #mdl_terms.bulk_probs(my_expList) # also fills cache, but allocs more mem at once
+#
+#     py_version = 3 if (_sys.version_info > (3, 0)) else 2
+#     key_fn, val_fn = _get_cachefile_names(std_module, "H+S terms",
+#                                           "termorder:%d" % term_order, py_version)
+#     _write_calccache(my_calc_cache, key_fn, val_fn, json_too, comm)
+#
+#     if comm is None or comm.Get_rank() == 0:
+#         print("Completed in %.2fs" % (_time.time() - t0))
+#         print("Num of Experiments = ", len(listOfExperiments))
+#
+#     #if comm is None:
+#     #    calcc_list = [ my_calc_cache ]
+#     #else:
+#     #    calcc_list = comm.gather(my_calc_cache, root=0)
+#     #
+#     #if comm is None or comm.Get_rank() == 0:
+#     #    calc_cache = {}
+#     #    for c in calcc_list:
+#     #        calc_cache.update(c)
+#     #
+#     #    print("Completed in %.2fs" % (_time.time()-t0))
+#     #    print("Cachesize = ",len(calc_cache))
+#     #    print("Num of Experiments = ", len(listOfExperiments))
+#     #
+#     #    py_version = 3 if (_sys.version_info > (3, 0)) else 2
+#     #    key_fn, val_fn = _get_cachefile_names(std_module, "H+S terms",
+#     #                                          "termorder:%d" % term_order,py_version)
+#    #    _write_calccache(calc_cache, key_fn, val_fn, json_too, comm)
 
 
 # XXX apparently only used from _make_hs_cache_for_std_model which itself looks unused
@@ -217,7 +217,7 @@ def _write_calccache(calc_cache, key_fn, val_fn, json_too=False, comm=None):
 
         if json_too:  # for Python 2 & 3 compatibility
             import os as _os
-            from ..io import json as _json
+            from pygsti.serialization import json as _json
             key_fn_json = _os.path.splitext(key_fn)[0] + ".json"
             with open(key_fn_json, 'w') as f:
                 _json.dump(ckeys, f)
@@ -338,26 +338,28 @@ def _copy_target(std_module, param_type, simulator="auto", gscache=None):
 
     mdl = std_module._target_model.copy()
     mdl.set_all_parameterizations(param_type)  # automatically sets simulator
-    if param_type == "H+S terms":
-        assert(simulator == "auto" or isinstance(simulator, _TermFSim)), "Invalid `simulator` argument!"
-        # Note: don't update `simulator` variable here as it's used below for setting gscache element.
-        sim = _TermFSim(mode="taylor", max_order=1) if simulator == "auto" else simulator
-        py_version = 3 if (_sys.version_info > (3, 0)) else 2
-        calc_cache = {}  # the default
 
-        key_fn, val_fn = _get_cachefile_names(std_module, param_type, sim, py_version)
-        if _os.path.exists(key_fn) and _os.path.exists(val_fn):
-            calc_cache = _load_calccache(key_fn, val_fn)
-        elif py_version == 3:  # python3 will try to load python2 files as a fallback
-            key_fn, val_fn = _get_cachefile_names(std_module, param_type, sim, 2)
-            if _os.path.exists(key_fn) and _os.path.exists(val_fn):
-                calc_cache = _load_calccache(key_fn, val_fn)
-
-        sim.set_cache(calc_cache)  # TODO
-        mdl.sim = sim
-    else:
-        if simulator != "auto":
-            mdl.sim = simulator
+    #TODO REMOVE - no more "H+S terms" paramtype
+    # if param_type == "H+S terms":
+    #     assert(simulator == "auto" or isinstance(simulator, _TermFSim)), "Invalid `simulator` argument!"
+    #     # Note: don't update `simulator` variable here as it's used below for setting gscache element.
+    #     sim = _TermFSim(mode="taylor", max_order=1) if simulator == "auto" else simulator
+    #     py_version = 3 if (_sys.version_info > (3, 0)) else 2
+    #     calc_cache = {}  # the default
+    #
+    #     key_fn, val_fn = _get_cachefile_names(std_module, param_type, sim, py_version)
+    #     if _os.path.exists(key_fn) and _os.path.exists(val_fn):
+    #         calc_cache = _load_calccache(key_fn, val_fn)
+    #     elif py_version == 3:  # python3 will try to load python2 files as a fallback
+    #         key_fn, val_fn = _get_cachefile_names(std_module, param_type, sim, 2)
+    #         if _os.path.exists(key_fn) and _os.path.exists(val_fn):
+    #             calc_cache = _load_calccache(key_fn, val_fn)
+    #
+    #     sim.set_cache(calc_cache)  # TODO
+    #     mdl.sim = sim
+    # else:
+    if simulator != "auto":
+        mdl.sim = simulator
 
     if gscache is not None:
         gscache[(param_type, simulator)] = mdl

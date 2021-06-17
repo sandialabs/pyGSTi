@@ -22,7 +22,6 @@ from pygsti.baseobjs.opcalc import compact_deriv as _compact_deriv, \
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
 from pygsti.modelmembers import term as _term
 from pygsti.evotypes import Evotype as _Evotype
-from pygsti.models import gaugegroup as _gaugegroup
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.baseobjs.basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
@@ -1489,6 +1488,7 @@ class LindbladErrorgen(_LinearOperator):
         -------
         None
         """
+        from pygsti.models import gaugegroup as _gaugegroup
         if isinstance(s, _gaugegroup.UnitaryGaugeGroupElement) or \
            isinstance(s, _gaugegroup.TPSpamGaugeGroupElement):
             U = s.transform_matrix

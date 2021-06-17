@@ -27,7 +27,7 @@ from pygsti.report import merge_helpers as _merge
 from pygsti.report import plotly_plot_ex as _plotly_ex
 from pygsti import baseobjs as _baseobjs
 from pygsti.baseobjs.smartcache import CustomDigestError as _CustomDigestError
-from pygsti.tools import compattools as _compat
+from pygsti.baseobjs import _compatibility as _compat
 
 _PYGSTI_WORKSPACE_INITIALIZED = False
 VALIDATE_PLOTLY = False  # False increases performance of report rendering; set to True to debug

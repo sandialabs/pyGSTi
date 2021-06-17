@@ -15,7 +15,7 @@ import numpy as _np
 
 from pygsti.baseobjs.opcalc import bulk_eval_compact_polynomials_complex as _bulk_eval_compact_polynomials_complex
 from pygsti.modelmembers import modelmember as _modelmember
-from pygsti.tools import compattools as _compat
+from pygsti.baseobjs import _compatibility as _compat
 from pygsti.tools import optools as _ot
 
 

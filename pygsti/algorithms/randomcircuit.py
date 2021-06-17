@@ -2386,7 +2386,7 @@ def create_mirror_rb_circuit(pspec, length, qubit_labels=None, sampler='Qelimina
         n = pspec.number_of_qubits
 
     # Check that the inverse of every gate is in the model:
-    for gname in pspec.root_gate_names:
+    for gname in pspec.gate_names:
         assert(gname in list(pspec.gate_inverse.keys())), \
             "%s gate does not have an inverse in the gate-set! MRB is not possible!" % gname
 
@@ -2949,7 +2949,7 @@ def create_random_germpower_mirror_circuits(pspec, depths, qubit_labels=None, lo
         n = pspec.number_of_qubits
 
     # Check that the inverse of every gate is in the model:
-    for gname in pspec.root_gate_names:
+    for gname in pspec.gate_names:
         assert(gname in list(pspec.gate_inverse.keys())), \
             "%s gate does not have an inverse in the gate-set! MRB is not possible!" % gname
 

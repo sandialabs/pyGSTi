@@ -17,8 +17,6 @@ import warnings as _warnings
 import numpy as _np
 import numpy.linalg as _nla
 
-from pygsti.objectivefns.objectivefns import RawChi2Function as _RawChi2Function
-from pygsti.objectivefns.objectivefns import RawPoissonPicDeltaLogLFunction as _RawPoissonPicDeltaLogLFunction
 from pygsti.forwardsims.distforwardsim import DistributableForwardSimulator as _DistributableForwardSimulator
 from pygsti.forwardsims.forwardsim import ForwardSimulator as _ForwardSimulator
 from pygsti.forwardsims.forwardsim import _bytes_for_array_types
@@ -2037,6 +2035,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         -------
         None
         """
+        from pygsti.objectivefns.objectivefns import RawChi2Function as _RawChi2Function
         raw_obj = _RawChi2Function({'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
                                    layout.resource_alloc())
         return self._bulk_fill_timedep_objfn(raw_obj, array_to_fill, layout, ds_circuits, num_total_outcomes,
@@ -2095,6 +2094,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         -------
         None
         """
+        from pygsti.objectivefns.objectivefns import RawChi2Function as _RawChi2Function
         raw_obj = _RawChi2Function({'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
                                    layout.resource_alloc())
         return self._bulk_fill_timedep_dobjfn(raw_obj, array_to_fill, layout, ds_circuits, num_total_outcomes,
@@ -2151,6 +2151,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         -------
         None
         """
+        from pygsti.objectivefns.objectivefns import RawPoissonPicDeltaLogLFunction as _RawPoissonPicDeltaLogLFunction
         raw_obj = _RawPoissonPicDeltaLogLFunction({'min_prob_clip': min_prob_clip, 'radius': radius},
                                                   layout.resource_alloc())
         return self._bulk_fill_timedep_objfn(raw_obj, array_to_fill, layout, ds_circuits, num_total_outcomes,
@@ -2209,6 +2210,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         -------
         None
         """
+        from pygsti.objectivefns.objectivefns import RawPoissonPicDeltaLogLFunction as _RawPoissonPicDeltaLogLFunction
         raw_obj = _RawPoissonPicDeltaLogLFunction({'min_prob_clip': min_prob_clip, 'radius': radius},
                                                   layout.resource_alloc())
         return self._bulk_fill_timedep_dobjfn(raw_obj, array_to_fill, layout, ds_circuits, num_total_outcomes,

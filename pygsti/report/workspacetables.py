@@ -30,7 +30,6 @@ from pygsti.modelmembers import operations as _op
 from pygsti.modelmembers import povms as _povm
 from pygsti.modelmembers import states as _state
 from pygsti.objectivefns import objectivefns as _objfns
-from pygsti.forwardsims import MatrixForwardSimulator as _MatrixFSim
 from pygsti.circuits.circuit import Circuit as _Circuit
 
 
@@ -1068,6 +1067,7 @@ class ModelVsTargetTable(WorkspaceTable):
         pRBnum = _ev(_reportables.Predicted_rb_number(model, target_model), confidence_region_info)
         table.add_row(("Predicted primitive RB number", pRBnum), (None, 'Normal'))
 
+        from pygsti.forwardsims import MatrixForwardSimulator as _MatrixFSim
         if clifford_compilation and isinstance(model.sim, _MatrixFSim):
             clifford_model = _models.create_explicit_alias_model(model, clifford_compilation)
             clifford_targetModel = _models.create_explicit_alias_model(target_model, clifford_compilation)

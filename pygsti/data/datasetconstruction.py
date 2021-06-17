@@ -20,7 +20,6 @@ import numpy.random as _rndm
 from pygsti.circuits import circuitconstruction as _gstrc
 from pygsti.data import dataset as _ds
 from pygsti.baseobjs import label as _lbl, outcomelabeldict as _ld
-from pygsti.protocols import ExperimentDesign as _ExperimentDesign
 
 
 def simulate_data(model_or_dataset, circuit_list, num_samples,
@@ -132,6 +131,7 @@ def simulate_data(model_or_dataset, circuit_list, num_samples,
         alias_dict = {_lbl.Label(ky): tuple((_lbl.Label(el) for el in val))
                       for ky, val in alias_dict.items()}  # convert to use Labels
 
+    from pygsti.protocols import ExperimentDesign as _ExperimentDesign
     if isinstance(circuit_list, _ExperimentDesign):
         circuit_list = circuit_list.all_circuits_needing_data
 

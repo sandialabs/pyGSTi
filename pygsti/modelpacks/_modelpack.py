@@ -21,7 +21,6 @@ from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.circuits.circuitconstruction import to_circuits as _circuit_list
 from pygsti.models.modelconstruction import create_explicit_model as _build_explicit_model
 from pygsti.circuits.gstcircuits import create_lsgst_circuit_lists as _make_lsgst_lists
-from pygsti.forwardsims.termforwardsim import TermForwardSimulator as _TermFSim
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.polynomial import bulk_load_compact_polynomials as _bulk_load_compact_polys
 from pygsti.protocols import gst as _gst
@@ -99,20 +98,23 @@ class ModelPack(_ABC):
             # cache miss
             mdl = self._target_model(qubit_labels, evotype)
             mdl.set_all_parameterizations(parameterization_type)  # automatically sets simulator
-            if parameterization_type == "H+S terms":
-                assert(simulator == "auto" or isinstance(simulator, _TermFSim)), \
-                    "Invalid `simulator` argument for H+S terms: %s!" % str(type(simulator))
-                if simulator == "auto":
-                    sim = _TermFSim(mode="taylor", max_order=1)
 
-                key_path, val_path = self._get_cachefile_names(parameterization_type, sim)
-                if key_path.exists() and val_path.exists():
-                    sim.set_cache(_load_calccache(key_path, val_path))    # TODO
-
-                mdl.sim = sim
-            else:
-                if simulator != "auto":
-                    mdl.sim = simulator
+            # We separated parameter names from evotype names - so no more "H+S Terms"  TODO REMOVE?
+            # from pygsti.forwardsims.termforwardsim import TermForwardSimulator as _TermFSim
+            # if parameterization_type == "H+S terms":
+            #     assert(simulator == "auto" or isinstance(simulator, _TermFSim)), \
+            #         "Invalid `simulator` argument for H+S terms: %s!" % str(type(simulator))
+            #     if simulator == "auto":
+            #         sim = _TermFSim(mode="taylor", max_order=1)
+            #
+            #     key_path, val_path = self._get_cachefile_names(parameterization_type, sim)
+            #     if key_path.exists() and val_path.exists():
+            #         sim.set_cache(_load_calccache(key_path, val_path))    # TODO
+            #
+            #     mdl.sim = sim
+            # else:
+            if simulator != "auto":
+                mdl.sim = simulator
 
             # finally cache result
             self._gscache[(parameterization_type, simulator, qubit_labels, evotype)] = mdl
@@ -125,6 +127,7 @@ class ModelPack(_ABC):
         if param_type == "H+S terms":
             cachePath = _Path(__file__).absolute().parent / "caches"
 
+            from pygsti.forwardsims.termforwardsim import TermForwardSimulator as _TermFSim
             assert(simulator == "auto" or isinstance(simulator, _TermFSim)), "Invalid `simulator` argument!"
             termOrder = 1 if simulator == "auto" else simulator.max_order
             fn = ("cacheHS%d." % termOrder) + self.__module__

@@ -3,7 +3,8 @@ import pickle
 import unittest
 
 from pygsti.circuits import circuit
-from pygsti.baseobjs import ProcessorSpec, Label, CircuitLabel
+from pygsti.baseobjs import Label, CircuitLabel
+from pygsti.processors import ProcessorPack
 from pygsti.tools import symplectic
 from ..util import BaseCase
 
@@ -477,7 +478,7 @@ MEASURE 2 ro[2]
         n = 4
         qubit_labels = ['Q' + str(i) for i in range(n)]
         gate_names = ['Gh', 'Gp', 'Gxpi', 'Gpdag', 'Gcnot']  # 'Gi',
-        ps = ProcessorSpec(n, gate_names=gate_names, qubit_labels=qubit_labels, construct_models=('target','clifford'))
+        ps = ProcessorPack(n, gate_names=gate_names, qubit_labels=qubit_labels, construct_models=('target','clifford'))
 
         # Tests the circuit simulator
         c = circuit.Circuit(layer_labels=[Label('Gh', 'Q0'), Label('Gcnot', ('Q0', 'Q1'))], line_labels=['Q0', 'Q1'])

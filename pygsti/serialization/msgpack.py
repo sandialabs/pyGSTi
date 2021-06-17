@@ -1,5 +1,5 @@
 """
-Defines json package interface capable of encoding pyGSTi objects
+Defines msgpack package interface capable of encoding pyGSTi objects
 """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -10,36 +10,16 @@ Defines json package interface capable of encoding pyGSTi objects
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import json as _json
+import msgpack as _msgpack
+msgpack_uses_binary_strs = _msgpack.version < (1, 0, 0)  # msgpack only used binary strings in pre 1.0 versions
 
-from pygsti.io.jsoncodec import decode_obj
-from pygsti.io.jsoncodec import encode_obj
-
-
-class PygstiJSONEncoder(_json.JSONEncoder):
-    """
-    JSON Encoder capable of handling pyGSTi types
-    """
-
-    def encode(self, item):
-        """
-        Main encoding function
-
-        Parameters
-        ----------
-        item : various
-            item to encode
-
-        Returns
-        -------
-        various
-        """
-        return super(PygstiJSONEncoder, self).encode(encode_obj(item, False))
+from pygsti.serialization.jsoncodec import encode_obj
+from pygsti.serialization.jsoncodec import decode_obj
 
 
 def dumps(obj, **kwargs):
     """
-    An overload of json.dumps that works with pyGSTi types
+    An overload of msgpack.dumps that works with pyGSTi types
 
     Parameters
     ----------
@@ -50,13 +30,13 @@ def dumps(obj, **kwargs):
     -------
     str
     """
-    kwargs['cls'] = PygstiJSONEncoder
-    return _json.dumps(obj, **kwargs)
+    enc = encode_obj(obj, msgpack_uses_binary_strs)
+    return _msgpack.packb(enc, **kwargs)
 
 
 def dump(obj, f, **kwargs):
     """
-    An overload of json.dump that works with pyGSTi types
+    An overload of msgpack.dump that works with pyGSTi types
 
     Parameters
     ----------
@@ -70,14 +50,13 @@ def dump(obj, f, **kwargs):
     -------
     None
     """
-    kwargs['cls'] = PygstiJSONEncoder
-    enc = encode_obj(obj, False)  # this shouldn't be needed... bug in json I think.
-    return _json.dump(enc, f, **kwargs)
+    enc = encode_obj(obj, msgpack_uses_binary_strs)
+    _msgpack.pack(enc, f, **kwargs)
 
 
 def loads(s, **kwargs):
     """
-    An overload of json.loads that works with pyGSTi types
+    An overload of msgpack.loads that works with pyGSTi types
 
     Parameters
     ----------
@@ -88,13 +67,13 @@ def loads(s, **kwargs):
     -------
     object
     """
-    decoded_json = _json.loads(s, **kwargs)  # load normal JSON
-    return decode_obj(decoded_json, False)  # makes pygsti objects
+    decoded_msgpack = _msgpack.unpackb(s, **kwargs)  # load normal MSGPACK
+    return decode_obj(decoded_msgpack, msgpack_uses_binary_strs)  # makes pygsti objects
 
 
 def load(f, **kwargs):
     """
-    An overload of json.load that works with pyGSTi types
+    An overload of msgpack.load that works with pyGSTi types
 
     Parameters
     ----------
@@ -105,5 +84,5 @@ def load(f, **kwargs):
     -------
     object
     """
-    decoded_json = _json.load(f, **kwargs)  # load normal JSON
-    return decode_obj(decoded_json, False)  # makes pygsti objects
+    decoded_msgpack = _msgpack.unpack(f, **kwargs)  # load normal MSGPACK
+    return decode_obj(decoded_msgpack, msgpack_uses_binary_strs)  # makes pygsti objects

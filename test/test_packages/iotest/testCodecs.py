@@ -11,8 +11,8 @@ import collections
 
 import pygsti
 from pygsti.modelpacks.legacy import std1Q_XY as std
-import pygsti.io.json as json
-import pygsti.io.msgpack as msgpack
+import pygsti.serialization.json as json
+import pygsti.serialization.msgpack as msgpack
 from pygsti.objects.label import CircuitLabel
 
 from ..testutils import BaseTestCase, temp_files
@@ -87,11 +87,11 @@ class TestCodecs(CodecsTestCase):
         #basic types
         s = json.dumps(range(10))
         x = json.loads(s)
-        s = json.dumps(4+3.0j)
+        s = json.dumps(4 + 3.0j)
         x = json.loads(s)
-        s = json.dumps(np.array([1,2,3,4],'d'))
+        s = json.dumps(np.array([1, 2, 3, 4], 'd'))
         x = json.loads(s)
-        s = json.dumps( testObj )
+        s = json.dumps(testObj)
         x = json.loads(s)
 
         #string list
@@ -153,11 +153,11 @@ class TestCodecs(CodecsTestCase):
         #basic types
         s = msgpack.dumps(range(10))
         x = msgpack.loads(s)
-        s = msgpack.dumps(4+3.0j)
+        s = msgpack.dumps(4 + 3.0j)
         x = msgpack.loads(s)
-        s = msgpack.dumps(np.array([1,2,3,4],'d'))
+        s = msgpack.dumps(np.array([1, 2, 3, 4], 'd'))
         x = msgpack.loads(s)
-        s = msgpack.dumps( testObj )
+        s = msgpack.dumps(testObj)
         x = msgpack.loads(s)
 
         #string list

@@ -27,7 +27,6 @@ from pygsti.report import workspace as _ws
 from pygsti import _version
 from pygsti import tools as _tools
 from pygsti.models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
-from pygsti.modelpacks import RBModelPack as _RBModelPack
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from pygsti.objectivefns import objectivefns as _objfns
 from pygsti.circuits.circuit import Circuit as _Circuit
@@ -1107,6 +1106,7 @@ def find_std_clifford_compilation(model, verbosity=0):
            set(target_model.preps.keys()) == set(model.preps.keys()) and \
            set(target_model.povms.keys()) == set(model.povms.keys()):
             if target_model.frobeniusdist(model) < 1e-6:
+                from pygsti.modelpacks import RBModelPack as _RBModelPack
                 if isinstance(mod, _RBModelPack):
                     printer.log("Found standard clifford compilation from %s" % module_name)
                     return mod.clifford_compilation(qubit_labels)

@@ -2,7 +2,7 @@ import pickle
 
 from pygsti.baseobjs.label import Label as L
 
-from pygsti.io import jsoncodec
+from pygsti.serialization import jsoncodec
 from pygsti.circuits import Circuit
 from ..util import BaseCase
 

@@ -4,7 +4,7 @@ from pygsti.objects.label import Label as L
 
 import pygsti
 import pygsti.construction as pc
-from pygsti.io import jsoncodec
+from pygsti.serialization import jsoncodec
 from pygsti.objects import label
 from ..testutils import BaseTestCase, temp_files
 
@@ -33,9 +33,9 @@ class LabelTestCase(BaseTestCase):
             if isinstance(l, label.LabelTupTup):
                 print("  comps: ", ", ".join(["%s (%s)" % (c,str(type(c))) for c in l.components]))
 
-            j = jsoncodec.encode_obj(l,False)
+            j = jsoncodec.encode_obj(l, False)
             #print("Json: ",j)
-            l3 = jsoncodec.decode_obj(j,False)
+            l3 = jsoncodec.decode_obj(j, False)
             #print("Unjsoned ", l3, " a ",type(l3))
             self.assertEqual(type(l),type(l3))
 

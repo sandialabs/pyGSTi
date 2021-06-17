@@ -12,7 +12,6 @@ Functions for the construction of new models.
 
 import collections as _collections
 import itertools as _itertools
-import warnings as _warnings
 
 import numpy as _np
 import scipy.linalg as _spl
@@ -32,7 +31,7 @@ from pygsti.baseobjs.basis import DirectSumBasis as _DirectSumBasis
 from pygsti.tools import basistools as _bt
 from pygsti.tools import internalgates as _itgs
 from pygsti.tools import optools as _ot
-from pygsti.tools.basisconstructors import sigmax, sigmay, sigmaz
+from pygsti.baseobjs.basisconstructors import sigmax, sigmay, sigmaz
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
 
 

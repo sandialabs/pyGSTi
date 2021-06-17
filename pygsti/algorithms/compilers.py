@@ -1316,7 +1316,7 @@ def compile_cnot_circuit(s, pspec, qubit_labels=None, algorithm='COiCAGE', clnam
     """
 
     if qubit_labels is not None: qubits = list(qubit_labels)
-    else: qubits = pspec.qubit_labels
+    else: qubits = list(pspec.qubit_labels)
     n = len(qubits)
     assert(n == _np.shape(s)[0] // 2), "The CNOT circuit is over the wrong number of qubits!"
     assert(_np.array_equal(s[:n, n:2 * n], _np.zeros((n, n), int))

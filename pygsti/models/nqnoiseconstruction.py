@@ -18,6 +18,7 @@ import numpy as _np
 import scipy as _scipy
 
 from pygsti.circuits import circuitconstruction as _gsc
+from pygsti.circuits.circuitparser import CircuitParser as _CircuitParser
 from pygsti.models.modelconstruction import _parameterization_from_errgendict
 from pygsti import baseobjs as _baseobjs
 from pygsti.baseobjs import qubitgraph as _qgraph, statespace as _statespace
@@ -679,7 +680,6 @@ def create_cloud_crosstalk_model(num_qubits, gate_names, nonstd_gate_unitaries={
 
     orig_lindblad_error_coeffs = lindblad_error_coeffs.copy()
 
-    from pygsti.io import CircuitParser as _CircuitParser
     cparser = _CircuitParser()
     cparser.lookup = None  # lookup - functionality removed as it wasn't used
     for k, v in orig_lindblad_error_coeffs.items():

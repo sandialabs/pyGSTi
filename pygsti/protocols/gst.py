@@ -31,7 +31,6 @@ from pygsti import models as _models
 from pygsti import optimize as _opt
 from pygsti import tools as _tools
 from pygsti import baseobjs as _baseobjs
-from pygsti.forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
 from pygsti.modelmembers import operations as _op
 from pygsti.models import Model as _Model
 from pygsti.objectivefns import objectivefns as _objfns, wildcardbudget as _wild
@@ -669,6 +668,7 @@ class GateSetTomography(_proto.Protocol):
         else:
             if optimizer is None: optimizer = {}
             if 'first_fditer' not in optimizer:  # then add default first_fditer value
+                from pygsti.forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
                 mdl = self.initial_model.model
                 optimizer['first_fditer'] = 1 if mdl and isinstance(mdl.sim, _MatrixFSim) else 0
             self.optimizer = _opt.CustomLMOptimizer.cast(optimizer)

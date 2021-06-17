@@ -1,5 +1,5 @@
 """
-A sub-package holding circuit-related objects
+pyGSTi Processors Python Package
 """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -10,11 +10,5 @@ A sub-package holding circuit-related objects
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from .circuit import Circuit
-from .circuitlist import CircuitList
-from .circuitstructure import CircuitPlaquette, FiducialPairPlaquette, \
-    GermFiducialPairPlaquette, PlaquetteGridCircuitStructure
-
-from .circuitconstruction import *
-from .gstcircuits import *
-# Unused: from rpecircuits import *
+from .processorpack import ProcessorPack
+from .compilationlibrary import CompilationLibrary

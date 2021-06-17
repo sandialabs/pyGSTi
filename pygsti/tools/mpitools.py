@@ -15,7 +15,7 @@ import warnings as _warnings
 
 import numpy as _np
 
-from pygsti.tools import compattools as _compat
+from pygsti.baseobjs import _compatibility as _compat
 from pygsti.tools import sharedmemtools as _smt
 from pygsti.tools import slicetools as _slct
 from pygsti.tools.matrixtools import _fas, _findx, _findx_shape

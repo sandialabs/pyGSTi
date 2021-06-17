@@ -17,7 +17,6 @@ from pygsti import circuits as _circuits
 from pygsti import io as _io
 from pygsti import baseobjs as _baseobjs
 from pygsti import protocols as _proto
-from pygsti.forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
 from pygsti.objectivefns import objectivefns as _objfns
 from pygsti.baseobjs.advancedoptions import GSTAdvancedOptions as _GSTAdvancedOptions
 
@@ -775,6 +774,7 @@ def _get_gst_builders(advanced_options):
 
 
 def _get_optimizer(advanced_options, exp_design):
+    from pygsti.forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
     advanced_options = advanced_options or {}
     default_fditer = 1 if isinstance(exp_design.target_model.sim, _MatrixFSim) else 0
     optimizer = {'maxiter': advanced_options.get('max_iterations', 100000),

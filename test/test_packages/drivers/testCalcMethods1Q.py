@@ -12,7 +12,7 @@ import pygsti.construction as pc
 from pygsti.modelpacks.legacy import std1Q_XYI as std
 from pygsti.modelpacks.legacy import std1Q_XY
 from pygsti.objects import Label as L, Circuit
-from pygsti.io import json
+from pygsti.serialization import json
 
 import os
 
@@ -158,12 +158,12 @@ class CalcMethods1QTestCase(BaseTestCase):
 
         #RUN BELOW LINES TO SAVE GATESET (SAVE)
         if regenerate_references():
-            pygsti.io.json.dump(results.estimates[results.name].models['go0'],
-                                open(compare_files + "/test1Qcalc_std_exact.model",'w'))
+            pygsti.serialization.json.dump(results.estimates[results.name].models['go0'],
+                                           open(compare_files + "/test1Qcalc_std_exact.model",'w'))
 
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 1.0, delta=2.0)
-        mdl_compare = pygsti.io.json.load(open(compare_files + "/test1Qcalc_std_exact.model"))
+        mdl_compare = pygsti.serialization.json.load(open(compare_files + "/test1Qcalc_std_exact.model"))
 
         #gauge opt before compare
         gsEstimate = results.estimates[results.name].models['go0'].copy()
@@ -183,7 +183,7 @@ class CalcMethods1QTestCase(BaseTestCase):
 
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 1.0, delta=2.0)
-        mdl_compare = pygsti.io.json.load(open(compare_files + "/test1Qcalc_std_exact.model"))
+        mdl_compare = pygsti.serialization.json.load(open(compare_files + "/test1Qcalc_std_exact.model"))
 
         gsEstimate = results.estimates[results.name].models['go0'].copy()
         gsEstimate.set_all_parameterizations("full")
@@ -204,12 +204,12 @@ class CalcMethods1QTestCase(BaseTestCase):
 
         #RUN BELOW LINES TO SAVE GATESET (SAVE)
         if regenerate_references():
-            pygsti.io.json.dump(results.estimates[results.name].models['go0'],
-                                open(compare_files + "/test1Qcalc_std_terms.model",'w'))
+            pygsti.serialization.json.dump(results.estimates[results.name].models['go0'],
+                                           open(compare_files + "/test1Qcalc_std_terms.model",'w'))
 
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 1, delta=1.0)
-        mdl_compare = pygsti.io.json.load(open(compare_files + "/test1Qcalc_std_terms.model"))
+        mdl_compare = pygsti.serialization.json.load(open(compare_files + "/test1Qcalc_std_terms.model"))
 
         # can't easily gauge opt b/c term-based models can't be converted to "full"
         #mdl_compare.set_all_parameterizations("full")
@@ -239,8 +239,8 @@ class CalcMethods1QTestCase(BaseTestCase):
 
         #RUN BELOW LINES TO SAVE GATESET (SAVE)
         if regenerate_references():
-            pygsti.io.json.dump(results.estimates[results.name].models['go0'],
-                                open(compare_files + "/test1Qcalc_std_prunedpath.model",'w'))
+            pygsti.serialization.json.dump(results.estimates[results.name].models['go0'],
+                                           open(compare_files + "/test1Qcalc_std_prunedpath.model",'w'))
 
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 1, delta=1.0)
@@ -275,8 +275,8 @@ class CalcMethods1QTestCase(BaseTestCase):
 
         #RUN BELOW LINES TO SAVE GATESET (SAVE)
         if regenerate_references():
-            pygsti.io.json.dump(results.estimates[results.name].models['go0'],
-                                open(compare_files + "/test1Qcalc_redmod_exact.model",'w'))
+            pygsti.serialization.json.dump(results.estimates[results.name].models['go0'],
+                                           open(compare_files + "/test1Qcalc_redmod_exact.model",'w'))
 
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 0.0, delta=1.0)
@@ -336,7 +336,7 @@ class CalcMethods1QTestCase(BaseTestCase):
 
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 0.0, delta=1.0)
-        mdl_compare = pygsti.io.json.load(open(compare_files + "/test1Qcalc_redmod_exact.model"))
+        mdl_compare = pygsti.serialization.json.load(open(compare_files + "/test1Qcalc_redmod_exact.model"))
         self.assertAlmostEqual( np.linalg.norm(results.estimates[results.name].models['go0'].to_vector()
                                                - mdl_compare.to_vector()), 0, places=1)
           #Note: models aren't necessarily exactly equal given gauge freedoms that we don't know
@@ -376,12 +376,12 @@ class CalcMethods1QTestCase(BaseTestCase):
 
         #RUN BELOW LINES TO SAVE GATESET (SAVE)
         if regenerate_references():
-            pygsti.io.json.dump(results.estimates[results.name].models['go0'],
-                                open(compare_files + "/test1Qcalc_redmod_terms.model",'w'))
+            pygsti.serialization.json.dump(results.estimates[results.name].models['go0'],
+                                           open(compare_files + "/test1Qcalc_redmod_terms.model",'w'))
 
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 0.0, delta=1.0)
-        mdl_compare = pygsti.io.json.load(open(compare_files + "/test1Qcalc_redmod_terms.model"))
+        mdl_compare = pygsti.serialization.json.load(open(compare_files + "/test1Qcalc_redmod_terms.model"))
         self.assertAlmostEqual( np.linalg.norm(results.estimates[results.name].models['go0'].to_vector()
                                                - mdl_compare.to_vector()), 0, places=3)
 
@@ -442,7 +442,7 @@ class CalcMethods1QTestCase(BaseTestCase):
 
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 0.0, delta=1.0)
-        mdl_compare = pygsti.io.json.load(open(compare_files + "/test1Qcalc_redmod_terms.model"))
+        mdl_compare = pygsti.serialization.json.load(open(compare_files + "/test1Qcalc_redmod_terms.model"))
         self.assertAlmostEqual( np.linalg.norm(results.estimates[results.name].models['go0'].to_vector()
                                                - mdl_compare.to_vector()), 0, places=1)  #TODO: why this isn't more similar to svterm case??
 

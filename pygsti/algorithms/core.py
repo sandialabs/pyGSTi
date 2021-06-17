@@ -24,7 +24,6 @@ from pygsti.baseobjs import BuiltinBasis, VerbosityPrinter, DirectSumBasis
 from pygsti import tools as _tools
 from pygsti import circuits as _circuits
 from pygsti import objectivefns as _objfns
-from pygsti.forwardsims.termforwardsim import TermForwardSimulator as _TermFSim
 from pygsti.modelmembers import operations as _op
 from pygsti.modelmembers import povms as _povm
 from pygsti.modelmembers import instruments as _instrument
@@ -674,6 +673,7 @@ def run_gst_fit(mdc_store, optimizer, objective_function_builder, verbosity=0):
     printer.log("--- %s GST ---" % objective.name, 1)
 
     # Solve least squares minimization problem
+    from pygsti.forwardsims.termforwardsim import TermForwardSimulator as _TermFSim
     if isinstance(objective.model.sim, _TermFSim):  # could have used mdc_store.model (it's the same model)
         opt_result = _do_term_runopt(objective, optimizer, printer)
     else:
