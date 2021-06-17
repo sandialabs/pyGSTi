@@ -100,7 +100,6 @@ def setup_with_extensions(extensions=None):
             'pygsti.baseobjs.opcalc',
             'pygsti.circuits',
             'pygsti.circuits.circuitparser',
-            'pygsti.construction',
             'pygsti.data',
             'pygsti.drivers',
             'pygsti.evotypes',
