@@ -614,9 +614,9 @@ def fill_in_empty_dataset_with_fake_data(model, dataset_filename, num_samples,
     from pygsti.data.datasetconstruction import simulate_data as _simulate_data
     ds_template = _loaders.load_dataset(dataset_filename, ignore_zero_count_lines=False, with_times=False, verbosity=0)
     ds = _simulate_data(model, list(ds_template.keys()), num_samples,
-                             sample_error, seed, rand_state, alias_dict,
-                             collision_action, record_zero_counts, comm,
-                             mem_limit, times)
+                        sample_error, seed, rand_state, alias_dict,
+                        collision_action, record_zero_counts, comm,
+                        mem_limit, times)
     if fixed_column_mode == "auto":
         fixed_column_mode = bool(len(ds_template.outcome_labels) <= 8 and times is None)
     write_dataset(dataset_filename, ds, fixed_column_mode=fixed_column_mode)

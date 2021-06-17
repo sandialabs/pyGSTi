@@ -216,7 +216,6 @@ def _write_calccache(calc_cache, key_fn, val_fn, json_too=False, comm=None):
         print("Wrote %s" % key_fn)
 
         if json_too:  # for Python 2 & 3 compatibility
-            import os as _os
             from pygsti.serialization import json as _json
             key_fn_json = _os.path.splitext(key_fn)[0] + ".json"
             with open(key_fn_json, 'w') as f:

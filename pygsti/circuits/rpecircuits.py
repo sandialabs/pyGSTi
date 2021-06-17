@@ -205,6 +205,3 @@ def make_rpe_string_list_d(log2k_max):
     stringListD['theta', 'sin'] = thetaSinStrList
     stringListD['totalStrList'] = totalStrList
     return stringListD
-
-
-

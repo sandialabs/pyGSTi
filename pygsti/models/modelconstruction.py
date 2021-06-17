@@ -1252,7 +1252,7 @@ def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}
     else:
         global_idle_op = None
 
-    # TODO: While TensorProdSPAMVec does not work with ComposedSPAMVec, build up prep/povm as n-qubit ops first    
+    # TODO: While TensorProdSPAMVec does not work with ComposedSPAMVec, build up prep/povm as n-qubit ops first
     prep_layers = {}
     if 'prep' in all_keys:
         if tensorprod_spamvec_povm:
@@ -1299,7 +1299,7 @@ def create_crosstalk_free_model(num_qubits, gate_names, nonstd_gate_unitaries={}
                                          lindblad_parameterization)
             # TODO: Could do qubit-specific by allowing different err_gate1Q
             err_gates = [err_gate1Q.copy() for i in range(num_qubits)] \
-                if independent_gates else [err_gate1Q,] * num_qubits
+                if independent_gates else [err_gate1Q] * num_qubits
             err_gateNQ = _op.ComposedOp([_op.EmbeddedOp(state_space, [qubit_labels[i]], err_gates[i])
                                          for i in range(num_qubits)], evotype, state_space)
             # TODO: Could specialize for LindbladOps, although this should also handle that case

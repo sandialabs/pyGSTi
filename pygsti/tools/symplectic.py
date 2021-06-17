@@ -1510,7 +1510,7 @@ def random_clifford(n, rand_state=None):
     ----------
     n : int
         The number of qubits the Clifford group is over.
-    
+
     rand_state: RandomState, optional
         A np.random.RandomState object for seeding RNG
 
@@ -1523,7 +1523,7 @@ def random_clifford(n, rand_state=None):
     """
     if rand_state is None:
         rand_state = _np.random.RandomState()
-    
+
     s = random_symplectic_matrix(n, convention='standard', rand_state=rand_state)
     p = random_phase_vector(s, n, rand_state=rand_state)
 
@@ -1545,7 +1545,7 @@ def random_phase_vector(s, n, rand_state=None):
 
     n : int
         The number of qubits the Clifford group is over.
-    
+
     rand_state: RandomState, optional
         A np.random.RandomState object for seeding RNG
 
@@ -2104,7 +2104,7 @@ def random_symplectic_index(n, rand_state=None):
     ----------
     n : int
         Number of qubits (half dimension of symplectic matrix).
-    
+
     rand_state: RandomState, optional
         A np.random.RandomState object for seeding RNG
 

@@ -134,7 +134,7 @@ def setup_with_extensions(extensions=None):
             'pygsti.protocols',
             'pygsti.report',
             'pygsti.report.section',
-            'pygsti.serialization'
+            'pygsti.serialization',
             'pygsti.tools',
         ],
         package_dir={'': '.'},

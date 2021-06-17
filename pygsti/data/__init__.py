@@ -18,4 +18,3 @@ from .hypothesistest import HypothesisTest
 
 from .datasetconstruction import *
 from .rpedata import make_rpe_data_set
-

@@ -102,9 +102,9 @@ class ProcessorPack(_ProcessorSpec):
     verbosity : int, optional
         If > 0, information about the generation of the ProcessorSpec is printed to the screen.
     """
-    
+
     @classmethod
-    def from_processorspec(cls, pspec, construct_models=(), 
+    def from_processorspec(cls, pspec, construct_models=(),
                            construct_clifford_compilations={'paulieq': ('1Qcliffords', 'allcnots'),
                                                             'absolute': ('paulis', '1Qcliffords')},
                            verbosity=0):
