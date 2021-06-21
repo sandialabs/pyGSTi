@@ -8,7 +8,7 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from ... import objects as _obj
+from ... import datasets as _datasets
 from ...protocols import ProtocolData as _ProtocolData
 import numpy as _np
 import time as _time
@@ -270,7 +270,7 @@ class IBMQExperiment(dict):
         """
         self['batch_result_object'] = []
         #get results from backend jobs and add to dict
-        ds = _obj.DataSet()
+        ds = _datasets.DataSet()
         for exp_idx, qjob in enumerate(self['qjob']):
             print("Querying IBMQ for results objects for batch {}...".format(exp_idx))
             batch_result = qjob.result()
