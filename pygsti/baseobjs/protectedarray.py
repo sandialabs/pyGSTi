@@ -11,10 +11,9 @@ Defines the ProtectedArray class
 #***************************************************************************************************
 
 import copy as _copy
-
 import numpy as _np
 
-from pygsti.tools import compattools as _compat
+from pygsti.baseobjs import _compatibility as _compat
 
 
 class ProtectedArray(object):

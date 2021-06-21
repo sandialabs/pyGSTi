@@ -105,8 +105,8 @@ class TestDriversMethods(DriversTestCase):
             std.target_model().operations.keys(), std.fiducials, std.fiducials, std.germs,
             maxLens, fidPairs, ts, keep_fraction=0.5, keep_seed=1234)
         result = self.runSilent(pygsti.run_long_sequence_gst_base,
-            ds, std.target_model(), reducedLists,
-            advanced_options={'truncScheme': ts})
+                                ds, std.target_model(), reducedLists,
+                                advanced_options={'truncScheme': ts})
 
         #create a report...
         pygsti.report.create_standard_report(result, temp_files + "/full_report_RFPR",
@@ -167,7 +167,7 @@ class TestDriversMethods(DriversTestCase):
         #No set_all_parameterizations option for this one, since it probably isn't so useful
         for lbl,gate in target_model.operations.items():
             target_model.operations[lbl] = pygsti.objects.operation.convert(gate, "GLND", "gm")
-        target_model.default_gauge_group = pygsti.objects.UnitaryGaugeGroup(target_model.dim,"gm")
+        target_model.default_gauge_group = pygsti.objects.UnitaryGaugeGroup(target_model.dim, "gm")
           #Lindblad gates only know how to do unitary transforms currently, even though
           # in the non-cptp case it they should be able to transform generally.
 

@@ -12,11 +12,11 @@ RB Protocol objects
 
 import numpy as _np
 
-from . import protocol as _proto
-from . import vb as _vb
-from .. import tools as _tools
-from ..algorithms import randomcircuit as _rc
-from ..algorithms import rbfit as _rbfit
+from pygsti.protocols import protocol as _proto
+from pygsti.protocols import vb as _vb
+from pygsti import tools as _tools
+from pygsti.algorithms import randomcircuit as _rc
+from pygsti.algorithms import rbfit as _rbfit
 
 
 class CliffordRBDesign(_vb.BenchmarkingDesign):
@@ -281,18 +281,17 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
         self.seed = seed
 
         for lnum, l in enumerate(depths):
-            lseed = seed + lnum*circuits_per_depth
+            lseed = seed + lnum * circuits_per_depth
             if verbosity > 0:
-                print('- Sampling {} circuits at CRB length {} ({} of {} depths) with seed {}'.format(circuits_per_depth, l,
-                                                                                                      lnum + 1, len(depths),
-                                                                                                      lseed))
+                print('- Sampling {} circuits at CRB length {} ({} of {} depths) with seed {}'.format(
+                    circuits_per_depth, l, lnum + 1, len(depths), lseed))
 
-            args_list = [(pspec, l),] *  circuits_per_depth
+            args_list = [(pspec, l)] * circuits_per_depth
             kwargs_list = [dict(qubit_labels=qubit_labels, randomizeout=randomizeout, citerations=citerations,
                                 compilerargs=compilerargs, interleaved_circuit=interleaved_circuit,
-                                seed=lseed+i) for i in range(circuits_per_depth)]
-            results = _tools.mptools.starmap_with_kwargs(_rc.create_clifford_rb_circuit, circuits_per_depth, num_processes,
-                                                         args_list, kwargs_list)
+                                seed=lseed + i) for i in range(circuits_per_depth)]
+            results = _tools.mptools.starmap_with_kwargs(_rc.create_clifford_rb_circuit, circuits_per_depth,
+                                                         num_processes, args_list, kwargs_list)
 
             circuits_at_depth = []
             idealouts_at_depth = []
@@ -703,21 +702,20 @@ class DirectRBDesign(_vb.BenchmarkingDesign):
         self.seed = seed
 
         for lnum, l in enumerate(depths):
-            lseed = seed + lnum*circuits_per_depth
+            lseed = seed + lnum * circuits_per_depth
             if verbosity > 0:
-                print('- Sampling {} circuits at DRB length {} ({} of {} depths) with seed {}'.format(circuits_per_depth, l,
-                                                                                                      lnum + 1, len(depths),
-                                                                                                      lseed))
-            
-            args_list = [(pspec, l),] *  circuits_per_depth
+                print('- Sampling {} circuits at DRB length {} ({} of {} depths) with seed {}'.format(
+                    circuits_per_depth, l, lnum + 1, len(depths), lseed))
+
+            args_list = [(pspec, l)] * circuits_per_depth
             kwargs_list = [dict(qubit_labels=qubit_labels, sampler=sampler, samplerargs=samplerargs,
                                 addlocal=addlocal, lsargs=lsargs, randomizeout=randomizeout,
                                 cliffordtwirl=cliffordtwirl, conditionaltwirl=conditionaltwirl,
                                 citerations=citerations, compilerargs=compilerargs,
                                 partitioned=partitioned,
-                                seed=lseed+i) for i in range(circuits_per_depth)]
-            results = _tools.mptools.starmap_with_kwargs(_rc.create_direct_rb_circuit, circuits_per_depth, num_processes,
-                                                         args_list, kwargs_list)
+                                seed=lseed + i) for i in range(circuits_per_depth)]
+            results = _tools.mptools.starmap_with_kwargs(_rc.create_direct_rb_circuit, circuits_per_depth,
+                                                         num_processes, args_list, kwargs_list)
 
             circuits_at_depth = []
             idealouts_at_depth = []
@@ -999,7 +997,7 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
             is a single layer of random Pauli operators (in between two layers of 1-qubit Clifford
             gates if `localclifford` is True); at length l there are 2l+1 Pauli layers as there
             are
-        
+
         seed : int, optional
             A seed to initialize the random number generator used for creating random clifford
             circuits. The seed is incremented for each circuit sampled to ensure deterministic
@@ -1029,19 +1027,18 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
         self.seed = seed
 
         for lnum, l in enumerate(depths):
-            lseed = seed + lnum*circuits_per_depth
+            lseed = seed + lnum * circuits_per_depth
             if verbosity > 0:
-                print('- Sampling {} circuits at MRB length {} ({} of {} depths) with seed {}'.format(circuits_per_depth, l,
-                                                                                                      lnum + 1, len(depths),
-                                                                                                      lseed))
-            
-            args_list = [(pspec, l),] *  circuits_per_depth
+                print('- Sampling {} circuits at MRB length {} ({} of {} depths) with seed {}'.format(
+                    circuits_per_depth, l, lnum + 1, len(depths), lseed))
+
+            args_list = [(pspec, l)] * circuits_per_depth
             kwargs_list = [dict(qubit_labels=qubit_labels, sampler=sampler,
                                 samplerargs=samplerargs, localclifford=localclifford,
                                 paulirandomize=paulirandomize,
-                                seed=lseed+i) for i in range(circuits_per_depth)]
-            results = _tools.mptools.starmap_with_kwargs(_rc.create_mirror_rb_circuit, circuits_per_depth, num_processes,
-                                                         args_list, kwargs_list)
+                                seed=lseed + i) for i in range(circuits_per_depth)]
+            results = _tools.mptools.starmap_with_kwargs(_rc.create_mirror_rb_circuit, circuits_per_depth,
+                                                         num_processes, args_list, kwargs_list)
 
             circuits_at_depth = []
             idealouts_at_depth = []

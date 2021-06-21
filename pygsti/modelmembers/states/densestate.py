@@ -1,12 +1,25 @@
+"""
+The DenseState and DensePureState classes and supporting functionality.
+"""
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
+
+
 import copy as _copy
 
-from .state import State as _State
-from ...evotypes import Evotype as _Evotype
-from ...baseobjs import statespace as _statespace
-from ...baseobjs.basis import Basis as _Basis
-from ...tools import basistools as _bt
-from ...tools import matrixtools as _mt
-from ...tools import optools as _ot
+from pygsti.modelmembers.states.state import State as _State
+from pygsti.evotypes import Evotype as _Evotype
+from pygsti.baseobjs import statespace as _statespace
+from pygsti.baseobjs.basis import Basis as _Basis
+from pygsti.tools import basistools as _bt
+from pygsti.tools import matrixtools as _mt
+from pygsti.tools import optools as _ot
 
 
 class DenseStateInterface(object):
@@ -127,7 +140,7 @@ class DenseStateInterface(object):
 class DenseState(DenseStateInterface, _State):
     """
     TODO: update docstring
-    A state preparation vector that behaves like a numpy array.
+    A state preparation vector that is interfaced/behaves as a dense super-ket (a numpy array).
 
     This class is the common base class for parameterizations of a state vector
     that have a dense representation and can be accessed like a numpy array.
@@ -197,7 +210,7 @@ class DenseState(DenseStateInterface, _State):
 
 class DensePureState(DenseStateInterface, _State):
     """
-    TODO: docstring - a state that is stored as a dense super-ket
+    TODO: docstring - a state that is interfaced as a dense ket
     """
 
     def __init__(self, purevec, basis, evotype, state_space):

@@ -1,7 +1,8 @@
-import pygsti.construction as pc
-import pygsti.datasets.datacomparator as dc
+import pygsti.circuits as pc
+import pygsti.data as pdata
+import pygsti.data.datacomparator as dc
 from pygsti.modelpacks.legacy import std1Q_XYI
-from pygsti.datasets import DataSet, MultiDataSet
+from pygsti.data import DataSet, MultiDataSet
 from ..util import BaseCase
 
 
@@ -16,10 +17,10 @@ class DataComparatorTester(BaseCase):
         fiducials = std1Q_XYI.fiducials
         max_lengths = [1, 2, 4, 8]
         gate_sequences = pc.create_lsgst_circuits(std1Q_XYI.gates, fiducials, fiducials, germs, max_lengths)
-        #Generate the data for the two datasets, using the same model, with 100 repetitions of each sequence.
+        #Generate the data for the two data, using the same model, with 100 repetitions of each sequence.
         N = 100
-        cls.DS_0 = pc.simulate_data(cls.mdl_exp_0, gate_sequences, N, 'binomial', seed=10)
-        cls.DS_1 = pc.simulate_data(cls.mdl_exp_1, gate_sequences, N, 'binomial', seed=20)
+        cls.DS_0 = pdata.simulate_data(cls.mdl_exp_0, gate_sequences, N, 'binomial', seed=10)
+        cls.DS_1 = pdata.simulate_data(cls.mdl_exp_1, gate_sequences, N, 'binomial', seed=20)
 
     def setUp(self):
         self.mdl_exp_0 = self.mdl_exp_0.copy()

@@ -12,10 +12,10 @@ ModelTest Protocol objects
 
 import numpy as _np
 
-from . import protocol as _proto
-from ..circuits.circuit import Circuit as _Circuit
-from ..datasets.freedataset import FreeformDataSet as _FreeformDataSet
-from ..modelmembers import states as _state
+from pygsti.protocols import protocol as _proto
+from pygsti.circuits.circuit import Circuit as _Circuit
+from pygsti.data.freedataset import FreeformDataSet as _FreeformDataSet
+from pygsti.modelmembers import states as _state
 
 
 class FreeformDataSimulator(_proto.DataSimulator):

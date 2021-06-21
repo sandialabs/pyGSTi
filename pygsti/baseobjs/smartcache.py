@@ -185,7 +185,7 @@ class SmartCache(object):
 
     def __pygsti_getstate__(self):  # same but for json/msgpack
         d = dict(self.__dict__)
-        from ..io.jsoncodec import encode_obj
+        from pygsti.serialization.jsoncodec import encode_obj
 
         def get_jsonable_dict(cache_dict):
 

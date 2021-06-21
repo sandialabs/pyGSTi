@@ -16,9 +16,9 @@ import itertools as _itertools
 import numpy as _np
 import scipy.sparse as _sps
 
-from .linearop import LinearOperator as _LinearOperator
-from .. import modelmember as _modelmember
-from ...baseobjs.basis import EmbeddedBasis as _EmbeddedBasis
+from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
+from pygsti.modelmembers import modelmember as _modelmember
+from pygsti.baseobjs.basis import EmbeddedBasis as _EmbeddedBasis
 
 
 class EmbeddedOp(_LinearOperator):

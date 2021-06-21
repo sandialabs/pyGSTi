@@ -14,8 +14,8 @@ from itertools import cycle as _cycle
 
 import numpy as _np
 
-from ...datasets import dataset as _stdds, multidataset as _multids, datacomparator as _dcomp
-from ...models import oplessmodel as _oplessmodel
+from pygsti.data import dataset as _stdds, multidataset as _multids, datacomparator as _dcomp
+from pygsti.models import oplessmodel as _oplessmodel
 
 #from . import analysis as _analysis
 _analysis = None  # MOVED - and this module is deprecated & broken now, so just set to None

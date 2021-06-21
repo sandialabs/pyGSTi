@@ -13,13 +13,13 @@ The EmbeddedPureState class and supporting functionality.
 
 import numpy as _np
 
-from .state import State as _State
-from .staticstate import StaticState as _StaticState
-from .. import term as _term
-from ...evotype import Evotype as _Evotype
-from ...baseobjs.polynomial import Polynomial as _Polynomial
-from ...tools import basistools as _bt
-from ...tools import optools as _ot
+from pygsti.modelmembers.states.state import State as _State
+from pygsti.modelmembers.states.staticstate import StaticState as _StaticState
+from pygsti.modelmembers import term as _term
+from pygsti.evotype import Evotype as _Evotype
+from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
+from pygsti.tools import basistools as _bt
+from pygsti.tools import optools as _ot
 
 
 #TODO: figure out what to do with this class when we wire up term calcs??

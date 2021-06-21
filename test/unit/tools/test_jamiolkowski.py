@@ -1,7 +1,7 @@
 import numpy as np
 
 import pygsti.tools.basistools as bt
-from pygsti.construction.modelconstruction import _basis_create_operation
+from pygsti.models.modelconstruction import _basis_create_operation
 from pygsti.modelpacks.legacy import std1Q_XYI as std1Q
 from pygsti.models import ExplicitOpModel
 from pygsti.baseobjs import statespace

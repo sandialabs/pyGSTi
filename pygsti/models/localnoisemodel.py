@@ -14,23 +14,23 @@ import collections as _collections
 import itertools as _itertools
 import warnings as _warnings
 
-from .implicitmodel import ImplicitOpModel as _ImplicitOpModel
-from .layerrules import LayerRules as _LayerRules
-from .memberdict import OrderedMemberDict as _OrderedMemberDict
-from ..baseobjs import qubitgraph as _qgraph, statespace as _statespace
-from ..evotypes import Evotype as _Evotype
-from ..forwardsims.forwardsim import ForwardSimulator as _FSim
-from ..forwardsims.mapforwardsim import MapForwardSimulator as _MapFSim
-from ..forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
-from ..modelmembers import operations as _op
-from ..modelmembers import povms as _povm
-from ..modelmembers import states as _state
-from ..modelmembers.operations import opfactory as _opfactory
-from ..baseobjs.basis import BuiltinBasis as _BuiltinBasis
-from ..baseobjs.label import Label as _Lbl, CircuitLabel as _CircuitLabel
-from ..tools import basistools as _bt
-from ..tools import internalgates as _itgs
-from ..tools import optools as _gt
+from pygsti.models.implicitmodel import ImplicitOpModel as _ImplicitOpModel
+from pygsti.models.layerrules import LayerRules as _LayerRules
+from pygsti.models.memberdict import OrderedMemberDict as _OrderedMemberDict
+from pygsti.baseobjs import qubitgraph as _qgraph, statespace as _statespace
+from pygsti.evotypes import Evotype as _Evotype
+from pygsti.forwardsims.forwardsim import ForwardSimulator as _FSim
+from pygsti.forwardsims.mapforwardsim import MapForwardSimulator as _MapFSim
+from pygsti.forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
+from pygsti.modelmembers import operations as _op
+from pygsti.modelmembers import povms as _povm
+from pygsti.modelmembers import states as _state
+from pygsti.modelmembers.operations import opfactory as _opfactory
+from pygsti.baseobjs.basis import BuiltinBasis as _BuiltinBasis
+from pygsti.baseobjs.label import Label as _Lbl, CircuitLabel as _CircuitLabel
+from pygsti.tools import basistools as _bt
+from pygsti.tools import internalgates as _itgs
+from pygsti.tools import optools as _ot
 
 
 class LocalNoiseModel(_ImplicitOpModel):
@@ -354,7 +354,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                 else:
                     #REMOVE:
                     #if evotype in ("densitymx", "svterm", "cterm"):
-                    #    gatedict[name] = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", "pp")
+                    #    gatedict[name] = _bt.change_basis(_ot.unitary_to_process_mx(U), "std", "pp")
 
                     # we just store the unitaries
                     gatedict[name] = U
@@ -365,7 +365,7 @@ class LocalNoiseModel(_ImplicitOpModel):
 
         #REMOVE
         #if evotype in ("densitymx", "svterm", "cterm"):
-        #    from ..construction.modelconstruction import _basis_create_spam_vector
+        #    from pygsti.models.modelconstruction import _basis_create_spam_vector
         #    basis1Q = _BuiltinBasis("pp", 4)
         #    v0 = _basis_create_spam_vector("0", basis1Q)
         #    v1 = _basis_create_spam_vector("1", basis1Q)
@@ -404,7 +404,7 @@ class LocalNoiseModel(_ImplicitOpModel):
             prep_factors = []; povm_factors = []
 
             #Note: TP and full evotypes are require dense states
-            from ..construction.modelconstruction import _basis_create_spam_vector
+            from pygsti.models.modelconstruction import _basis_create_spam_vector
             basis1Q = _BuiltinBasis("pp", 4)
             v0 = _basis_create_spam_vector("0", basis1Q)
             v1 = _basis_create_spam_vector("1", basis1Q)
@@ -479,7 +479,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                     else:
                         #TODO - update this, currently all other parameterizations convert unitary -> superop matrix
                         # and we convert this to the desired parameterizatio
-                        ptm = _bt.change_basis(_gt.unitary_to_process_mx(gate), "std", "pp")
+                        ptm = _bt.change_basis(_ot.unitary_to_process_mx(gate), "std", "pp")
                         gate = _op.convert(_op.StaticArbitraryOp(ptm), parameterization, "pp")
                 except Exception as e:
                     if on_construction_error == 'warn':
@@ -499,7 +499,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                 else:
                     #TODO - update this, currently all other parameterizations convert unitary -> superop matrix
                     # and we convert this to the desired parameterization
-                    ptm = _bt.change_basis(_gt.unitary_to_process_mx(global_idle), "std", "pp")
+                    ptm = _bt.change_basis(_ot.unitary_to_process_mx(global_idle), "std", "pp")
                     global_idle = _op.convert(_op.StaticArbitraryOp(global_idle), parameterization, "pp")
 
         return cls(num_qubits, gatedict, prep_layers, povm_layers, availability,
@@ -783,7 +783,7 @@ class _SimpleCompLayerRules(_LayerRules):
             # See if this effect label could correspond to a *marginalized* POVM, and
             # if so, create the marginalized POVM and add its effects to model.effect_blks['layers']
             assert(isinstance(layerlbl, _Lbl))  # Sanity check (REMOVE?)
-            povmName = _gt.effect_label_to_povm(layerlbl)
+            povmName = _ot.effect_label_to_povm(layerlbl)
             if povmName in model.povm_blks['layers']:
                 # implicit creation of marginalized POVMs whereby an existing POVM name is used with sslbls that
                 # are not present in the stored POVM's label.

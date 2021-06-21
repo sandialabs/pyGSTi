@@ -17,18 +17,18 @@ import warnings as _warnings
 import numpy as _np
 import plotly.graph_objs as go
 
-from . import pauliobjs as _pobjs
-from ... import _version
-from ...circuits import Circuit as _Circuit
-from ...datasets import DataComparator as _DataComparator
-from ...baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from ...report import autotitle as _autotitle
-from ...report import figure as _reportfigure
-from ...report import merge_helpers as _merge
-from ...report import table as _reporttable
-from ...report import workspace as _ws
-from ...report import workspaceplots as _wp
-from ...tools import timed_block as _timed_block
+from pygsti.extras.idletomography import pauliobjs as _pobjs
+from pygsti import _version
+from pygsti.circuits import Circuit as _Circuit
+from pygsti.data import DataComparator as _DataComparator
+from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from pygsti.report import autotitle as _autotitle
+from pygsti.report import figure as _reportfigure
+from pygsti.report import merge_helpers as _merge
+from pygsti.report import table as _reporttable
+from pygsti.report import workspace as _ws
+from pygsti.report import workspaceplots as _wp
+from pygsti.tools import timed_block as _timed_block
 
 
 class IdleTomographyObservedRatesTable(_ws.WorkspaceTable):

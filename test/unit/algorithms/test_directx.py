@@ -1,4 +1,5 @@
-import pygsti.construction as pc
+import pygsti.circuits as pc
+import pygsti.data as pdata
 from pygsti.algorithms import directx
 from pygsti.baseobjs import Label as L
 from . import fixtures
@@ -23,7 +24,7 @@ class DirectXTester(BaseCase):
             "f0+base+f1", order=['f0', 'f1', 'base'], f0=fixtures.fiducials,
             f1=fixtures.fiducials, base=cls.strs
         )
-        cls._ds = pc.simulate_data(fixtures.datagen_gateset.copy(), expstrs, 1000, 'multinomial', seed=_SEED)
+        cls._ds = pdata.simulate_data(fixtures.datagen_gateset.copy(), expstrs, 1000, 'multinomial', seed=_SEED)
 
     def setUp(self):
         self.tgt = self._tgt.copy()

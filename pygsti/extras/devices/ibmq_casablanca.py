@@ -18,7 +18,7 @@ edgelist = [
     ('Q1', 'Q2'), ('Q2', 'Q1'),
     # 2nd row of connections
     ('Q4', 'Q5'), ('Q5', 'Q4'),
-    ('Q5', 'Q6'), ('Q6', 'Q5'),  
+    ('Q5', 'Q6'), ('Q6', 'Q5'),
     # 1st column of connections
     ('Q1', 'Q3'), ('Q3', 'Q1'),
     ('Q3', 'Q5'), ('Q5', 'Q3'),

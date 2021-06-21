@@ -10,8 +10,8 @@ Defines the WeakForwardSimulator calculator class
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from .forwardsim import ForwardSimulator as _ForwardSimulator
-from ..baseobjs import outcomelabeldict as _ld
+from pygsti.forwardsims.forwardsim import ForwardSimulator as _ForwardSimulator
+from pygsti.baseobjs import outcomelabeldict as _ld
 
 
 class WeakForwardSimulator(_ForwardSimulator):

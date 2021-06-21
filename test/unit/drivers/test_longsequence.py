@@ -1,6 +1,6 @@
 from io import BytesIO
 
-import pygsti.construction as pc
+import pygsti.data as pdata
 from pygsti import io
 from pygsti.drivers import longsequence as ls
 from pygsti.forwardsims import mapforwardsim
@@ -326,7 +326,7 @@ class RobustDataScalingTester(LongSequenceGSTBase):
     def setUpClass(cls):
         super(RobustDataScalingTester, cls).setUpClass()
         datagen_gateset = cls.model.depolarize(op_noise=0.1, spam_noise=0.03).rotate((0.05, 0.13, 0.02))
-        ds2 = pc.simulate_data(
+        ds2 = pdata.simulate_data(
             datagen_gateset, cls.lsgstStrings[-1], num_samples=1000, sample_error='binomial', seed=100
         ).copy_nonstatic()
         ds2.add_counts_from_dataset(cls.ds)

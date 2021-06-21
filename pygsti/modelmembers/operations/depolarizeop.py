@@ -12,9 +12,9 @@ The DepolarizeOp class and supporting functionality.
 
 import numpy as _np
 
-from .stochasticop import StochasticNoiseOp as _StochasticNoiseOp
-from ...baseobjs import statespace as _statespace
-from ...baseobjs.basis import Basis as _Basis
+from pygsti.modelmembers.operations.stochasticop import StochasticNoiseOp as _StochasticNoiseOp
+from pygsti.baseobjs import statespace as _statespace
+from pygsti.baseobjs.basis import Basis as _Basis
 
 
 class DepolarizeOp(_StochasticNoiseOp):

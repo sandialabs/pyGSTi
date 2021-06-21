@@ -13,10 +13,10 @@ The ComposedState class and supporting functionality.
 
 import numpy as _np
 
-from .state import State as _State
-from .staticstate import StaticState as _StaticState
-from .. import modelmember as _modelmember, term as _term
-from ..errorgencontainer import ErrorMapContainer as _ErrorMapContainer
+from pygsti.modelmembers.states.state import State as _State
+from pygsti.modelmembers.states.staticstate import StaticState as _StaticState
+from pygsti.modelmembers import modelmember as _modelmember, term as _term
+from pygsti.modelmembers.errorgencontainer import ErrorMapContainer as _ErrorMapContainer
 
 
 class ComposedState(_State):  # , _ErrorMapContainer
@@ -261,7 +261,7 @@ class ComposedState(_State):  # , _ErrorMapContainer
     #        #Construct "spam error generator" by comparing *dense* vectors
     #        pvdense = pure_vec.to_dense()
     #        svdense = spam_vec.to_dense()
-    #        errgen = _gt.spam_error_generator(svdense, pvdense, mx_basis)
+    #        errgen = _ot.spam_error_generator(svdense, pvdense, mx_basis)
     #        if sparse: errgen = _sps.csr_matrix(errgen)
     #
     #    assert(pure_vec._evotype == evotype), "`pure_vec` must have evotype == '%s'" % evotype

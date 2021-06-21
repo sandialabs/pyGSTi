@@ -19,16 +19,15 @@ import scipy.sparse.linalg as _spsl
 from pygsti.baseobjs.opcalc import compact_deriv as _compact_deriv, \
     bulk_eval_compact_polynomials_complex as _bulk_eval_compact_polynomials_complex, \
     abs_sum_bulk_eval_compact_polynomials_complex as _abs_sum_bulk_eval_compact_polynomials_complex
-from .linearop import LinearOperator as _LinearOperator
-from .. import term as _term
-from ...evotypes import Evotype as _Evotype
-from ...models import gaugegroup as _gaugegroup
-from ...baseobjs import statespace as _statespace
-from ...baseobjs.basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis
-from ...baseobjs.polynomial import Polynomial as _Polynomial
-from ...tools import basistools as _bt
-from ...tools import matrixtools as _mt
-from ...tools import optools as _ot
+from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
+from pygsti.modelmembers import term as _term
+from pygsti.evotypes import Evotype as _Evotype
+from pygsti.baseobjs import statespace as _statespace
+from pygsti.baseobjs.basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis
+from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
+from pygsti.tools import basistools as _bt
+from pygsti.tools import matrixtools as _mt
+from pygsti.tools import optools as _ot
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 
@@ -1489,6 +1488,7 @@ class LindbladErrorgen(_LinearOperator):
         -------
         None
         """
+        from pygsti.models import gaugegroup as _gaugegroup
         if isinstance(s, _gaugegroup.UnitaryGaugeGroupElement) or \
            isinstance(s, _gaugegroup.TPSpamGaugeGroupElement):
             U = s.transform_matrix

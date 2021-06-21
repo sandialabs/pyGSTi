@@ -14,4 +14,7 @@ from .circuit import Circuit
 from .circuitlist import CircuitList
 from .circuitstructure import CircuitPlaquette, FiducialPairPlaquette, \
     GermFiducialPairPlaquette, PlaquetteGridCircuitStructure
-from .compilationlibrary import CompilationLibrary
+
+from .circuitconstruction import *
+from .gstcircuits import *
+# Unused: from rpecircuits import *

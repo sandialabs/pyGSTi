@@ -12,12 +12,12 @@ Defines the ComposedPOVM class
 
 import collections as _collections
 
-from .composedeffect import ComposedPOVMEffect as _ComposedPOVMEffect
-from .computationalpovm import ComputationalBasisPOVM as _ComputationalBasisPOVM
-from .povm import POVM as _POVM
-from .. import modelmember as _mm
-from .. import operations as _op
-from ...baseobjs import Basis as _Basis
+from pygsti.modelmembers.povms.composedeffect import ComposedPOVMEffect as _ComposedPOVMEffect
+from pygsti.modelmembers.povms.computationalpovm import ComputationalBasisPOVM as _ComputationalBasisPOVM
+from pygsti.modelmembers.povms.povm import POVM as _POVM
+from pygsti.modelmembers import modelmember as _mm
+from pygsti.modelmembers import operations as _op
+from pygsti.baseobjs import Basis as _Basis
 
 
 class ComposedPOVM(_POVM):

@@ -16,9 +16,9 @@ import time as _time
 import numpy as _np
 import scipy as _scipy
 
-from . import arraysinterface as _ari
-from .customsolve import custom_solve as _custom_solve
-from ..baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from pygsti.optimize import arraysinterface as _ari
+from pygsti.optimize.customsolve import custom_solve as _custom_solve
+from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 
 # from scipy.optimize import OptimizeResult as _optResult
 

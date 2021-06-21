@@ -10,7 +10,7 @@ Defines the TPPOVM class
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from .basepovm import _BasePOVM
+from pygsti.modelmembers.povms.basepovm import _BasePOVM
 
 
 class TPPOVM(_BasePOVM):

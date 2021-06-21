@@ -2,10 +2,10 @@ import unittest
 
 from nose.tools import raises
 
-from pygsti.io.circuitparser import slowcircuitparser
+from pygsti.circuits.circuitparser import slowcircuitparser
 
 try:
-    from pygsti.io.circuitparser import fastcircuitparser
+    from pygsti.circuits.circuitparser import fastcircuitparser
     _FASTCIRCUITPARSER_LOADED = True
 except ImportError:
     _FASTCIRCUITPARSER_LOADED = False

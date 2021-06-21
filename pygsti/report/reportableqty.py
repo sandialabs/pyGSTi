@@ -14,7 +14,7 @@ from copy import deepcopy as _deepcopy
 
 import numpy as _np
 
-from ..baseobjs.label import Label as _Label
+from pygsti.baseobjs.label import Label as _Label
 
 
 def minimum(qty1, qty2):

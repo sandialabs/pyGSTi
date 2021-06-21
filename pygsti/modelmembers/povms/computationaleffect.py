@@ -16,15 +16,15 @@ import itertools as _itertools
 
 import numpy as _np
 
-from .effect import POVMEffect as _POVMEffect
-from .. import term as _term
-from ...evotypes import Evotype as _Evotype
-from ...baseobjs import statespace as _statespace
-from ...baseobjs.basis import Basis as _Basis
-from ...baseobjs.polynomial import Polynomial as _Polynomial
+from pygsti.modelmembers.povms.effect import POVMEffect as _POVMEffect
+from pygsti.modelmembers import term as _term
+from pygsti.evotypes import Evotype as _Evotype
+from pygsti.baseobjs import statespace as _statespace
+from pygsti.baseobjs.basis import Basis as _Basis
+from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
 
 try:
-    from ...tools import fastcalc as _fastcalc
+    from pygsti.tools import fastcalc as _fastcalc
 except ImportError:
     _fastcalc = None
 

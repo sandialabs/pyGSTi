@@ -15,7 +15,7 @@ import pickle as _pickle
 import numpy as _np
 
 from pygsti.objectivefns.wildcardbudget import update_circuit_probs as _update_circuit_probs
-from .optimize import minimize as _minimize
+from pygsti.optimize.optimize import minimize as _minimize
 
 
 def optimize_wildcard_budget_neldermead(budget, L1weights, wildcard_objfn, two_dlogl_threshold,

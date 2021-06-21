@@ -8,9 +8,9 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from . import Section as _Section
-from .. import reportables as _reportables
-from ..workspace import NotApplicable as _NotApplicable
+from pygsti.report.section import Section as _Section
+from pygsti.report import reportables as _reportables
+from pygsti.report.workspace import NotApplicable as _NotApplicable
 
 
 class GaugeInvariantsGatesSection(_Section):
@@ -79,7 +79,7 @@ class GaugeInvariantsGatesSection(_Section):
     def single_metric_table_gauge_inv(workspace, switchboard=None, dataset_labels=None, est_labels=None,
                                       gi_switchboard=None, **kwargs):
         if len(dataset_labels) > 1:
-            # Multiple datasets
+            # Multiple data
             return workspace.GatesSingleMetricTable(
                 gi_switchboard.metric, switchboard.mdl_final_grid,
                 switchboard.mdl_target_grid, est_labels, dataset_labels,
@@ -182,7 +182,7 @@ class GaugeVariantSection(_Section):
     def single_metric_table_gauge_var(workspace, switchboard=None, dataset_labels=None, est_labels=None,
                                       gv_switchboard=None, **kwargs):
         if len(dataset_labels) > 1:
-            # Multiple datasets
+            # Multiple data
             return workspace.GatesSingleMetricTable(
                 gv_switchboard.metric, switchboard.mdl_final_grid,
                 switchboard.mdl_target_grid, est_labels, dataset_labels,

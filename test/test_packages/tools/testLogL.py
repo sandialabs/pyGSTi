@@ -24,10 +24,10 @@ class LogLTestCase(BaseTestCase):
                                 poisson_picture=True, mem_limit=0) # No memory for you
 
         musage("Pt2")
-        L = pygsti.logl_hessian(model, ds, prob_clip_interval=(-1e6,1e6),
+        L = pygsti.logl_hessian(model, ds, prob_clip_interval=(-1e6, 1e6),
                                 poisson_picture=True, mem_limit=None, verbosity=10) # Reference: no mem limit
         musage("Pt3")
-        L1 = pygsti.logl_hessian(model, ds, prob_clip_interval=(-1e6,1e6),
+        L1 = pygsti.logl_hessian(model, ds, prob_clip_interval=(-1e6, 1e6),
                                  poisson_picture=True, mem_limit=1024.0**3, verbosity=10) # Limit memory (1GB)
         musage("Pt4")
         #L2 = pygsti.logl_hessian(model, ds,prob_clip_interval=(-1e6,1e6),

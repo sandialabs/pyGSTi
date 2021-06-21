@@ -12,7 +12,7 @@ Defines the Row class
 #***************************************************************************************************
 
 from pygsti.report.reportableqty import ReportableQty as _ReportableQty
-from .cell import Cell
+from pygsti.report.cell import Cell
 
 
 class Row(object):

@@ -12,9 +12,9 @@ Utility functions related to the Choi representation of gates.
 
 import numpy as _np
 
-from . import basistools as _bt
-from . import matrixtools as _mt
-from ..baseobjs.basis import Basis as _Basis
+from pygsti.tools import basistools as _bt
+from pygsti.tools import matrixtools as _mt
+from pygsti.baseobjs.basis import Basis as _Basis
 
 
 # Gate Mx G:      rho  --> G rho                    where G and rho are in the Pauli basis (by definition/convention)                                           # noqa

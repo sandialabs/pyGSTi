@@ -23,19 +23,19 @@ def circuits(self):
 
 @ns.memo
 def dataset(self):
-    return pygsti.construction.simulate_data(
+    return pygsti.data.simulate_data(
         self.datagen_model, self.circuits, 1000, seed=2020)
 
 
 @ns.memo
 def sparse_dataset(self):
-    return pygsti.construction.simulate_data(
+    return pygsti.data.simulate_data(
         self.datagen_model, self.circuits, 50, seed=2020, record_zero_counts=False)
 
 
 @ns.memo
 def perfect_dataset(self):
-    return pygsti.construction.simulate_data(
+    return pygsti.data.simulate_data(
         self.datagen_model, self.circuits, 1000, sample_error='none')
 
 

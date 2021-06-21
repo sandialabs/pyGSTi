@@ -16,12 +16,12 @@ import time as _time
 
 import numpy as _np
 
-from .. import tools as _tools
-from ..layouts.distlayout import DistributableCOPALayout as _DistributableCOPALayout
-from ..tools import slicetools as _slct, mpitools as _mpit, sharedmemtools as _smt
-from ..circuits.circuitlist import CircuitList as _CircuitList
-from ..baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
-from ..baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from pygsti import tools as _tools
+from pygsti.layouts.distlayout import DistributableCOPALayout as _DistributableCOPALayout
+from pygsti.tools import slicetools as _slct, mpitools as _mpit, sharedmemtools as _smt
+from pygsti.circuits.circuitlist import CircuitList as _CircuitList
+from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
+from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 
 
 def _objfn(objfn_cls, model, dataset, circuits=None,

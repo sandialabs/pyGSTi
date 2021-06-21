@@ -18,17 +18,17 @@ import warnings as _warnings
 
 import numpy as _np
 
-from ..baseobjs import statespace as _statespace
-from .layerrules import LayerRules as _LayerRules
-from ..evotypes import Evotype as _Evotype
-from ..forwardsims import forwardsim as _fwdsim
-from ..forwardsims import mapforwardsim as _mapfwdsim
-from ..forwardsims import matrixforwardsim as _matrixfwdsim
-from ..modelmembers import modelmember as _gm
-from ..baseobjs.basis import Basis as _Basis
-from ..baseobjs.label import Label as _Label
-from ..baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
-from ..tools import slicetools as _slct
+from pygsti.baseobjs import statespace as _statespace
+from pygsti.models.layerrules import LayerRules as _LayerRules
+from pygsti.evotypes import Evotype as _Evotype
+from pygsti.forwardsims import forwardsim as _fwdsim
+from pygsti.forwardsims import mapforwardsim as _mapfwdsim
+from pygsti.forwardsims import matrixforwardsim as _matrixfwdsim
+from pygsti.modelmembers import modelmember as _gm
+from pygsti.baseobjs.basis import Basis as _Basis
+from pygsti.baseobjs.label import Label as _Label
+from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
+from pygsti.tools import slicetools as _slct
 
 MEMLIMIT_FOR_NONGAUGE_PARAMS = None
 

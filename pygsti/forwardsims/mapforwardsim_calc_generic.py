@@ -10,10 +10,10 @@
 
 import numpy as _np
 
-from ..tools import mpitools as _mpit
-from ..tools import sharedmemtools as _smt
-from ..tools import slicetools as _slct
-from ..tools.matrixtools import _fas
+from pygsti.tools import mpitools as _mpit
+from pygsti.tools import sharedmemtools as _smt
+from pygsti.tools import slicetools as _slct
+from pygsti.tools.matrixtools import _fas
 
 
 def propagate_staterep(staterep, operationreps):

@@ -13,9 +13,9 @@ The ComposedPOVMEffect class and supporting functionality.
 
 import numpy as _np
 
-from .effect import POVMEffect as _POVMEffect
-from .. import modelmember as _modelmember, term as _term
-from ..states.staticstate import StaticState as _StaticState
+from pygsti.modelmembers.povms.effect import POVMEffect as _POVMEffect
+from pygsti.modelmembers import modelmember as _modelmember, term as _term
+from pygsti.modelmembers.states.staticstate import StaticState as _StaticState
 
 
 class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
@@ -260,7 +260,7 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
     #        #Construct "spam error generator" by comparing *dense* vectors
     #        pvdense = pure_vec.to_dense()
     #        svdense = spam_vec.to_dense()
-    #        errgen = _gt.spam_error_generator(svdense, pvdense, mx_basis)
+    #        errgen = _ot.spam_error_generator(svdense, pvdense, mx_basis)
     #        if sparse: errgen = _sps.csr_matrix(errgen)
     #
     #    assert(pure_vec._evotype == evotype), "`pure_vec` must have evotype == '%s'" % evotype

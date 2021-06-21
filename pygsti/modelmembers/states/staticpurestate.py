@@ -10,7 +10,7 @@ The StaticPureState class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from .densestate import DensePureState as _DensePureState
+from pygsti.modelmembers.states.densestate import DensePureState as _DensePureState
 
 
 class StaticPureState(_DensePureState):

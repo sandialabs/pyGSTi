@@ -233,9 +233,9 @@ class IDTTestCase(BaseTestCase):
 
         maxLens = [1,2,4]
         expList = pygsti.construction.create_lsgst_circuits(std.target_model(), std.prepStrs,
-                                                                 std.effectStrs, std.germs_lite, maxLens)
+                                                            std.effectStrs, std.germs_lite, maxLens)
         ds = pygsti.construction.simulate_data(std.target_model().depolarize(0.01, 0.01),
-                                                    expList, 1000, 'multinomial', seed=1234)
+                                               expList, 1000, 'multinomial', seed=1234)
 
         result = pygsti.run_long_sequence_gst(ds, std.target_model(), std.prepStrs, std.effectStrs, std.germs_lite, maxLens, verbosity=3)
 
@@ -253,7 +253,7 @@ class IDTTestCase(BaseTestCase):
 
         maxLens = [1,2,4]
         expList = pygsti.construction.create_lsgst_circuits(std2Q.target_model(), std2Q.prepStrs,
-                                                                 std2Q.effectStrs, std2Q.germs_lite, maxLens)
+                                                            std2Q.effectStrs, std2Q.germs_lite, maxLens)
         mdl_datagen = std2Q.target_model().depolarize(0.01, 0.01)
         ds2Q = pygsti.construction.simulate_data(mdl_datagen, expList, 1000, 'multinomial', seed=1234)
 
@@ -263,7 +263,7 @@ class IDTTestCase(BaseTestCase):
         start = std.target_model()
         start.set_all_parameterizations("TP")
         result = pygsti.run_long_sequence_gst(ds, start, std.prepStrs[0:4], std.effectStrs[0:4],
-                                             std.germs_lite, maxLens, verbosity=3, advanced_options={'objective': 'chi2'})
+                                              std.germs_lite, maxLens, verbosity=3, advanced_options={'objective': 'chi2'})
         #result = pygsti.run_model_test(start.depolarize(0.009,0.009), ds, std.target_model(), std.prepStrs[0:4],
         #                              std.effectStrs[0:4], std.germs_lite, maxLens)
         pygsti.report.create_standard_report(result, temp_files + "/gstWithIdleTomogTestReportStd1Qfrom2Q",
@@ -353,12 +353,12 @@ class IDTTestCase(BaseTestCase):
 
         #Run GST on the data (set tolerance high so this 2Q-GST run doesn't take long)
         gstresults = pygsti.run_long_sequence_gst_base(ds, target_model, gss,
-                                                      advanced_options={'tolerance': 1e-1}, verbosity=3)
+                                                       advanced_options={'tolerance': 1e-1}, verbosity=3)
 
         #In FUTURE, we shouldn't need to set need to set the basis of our nQ GST results in order to make a report
         for estkey in gstresults.estimates: # 'default'
-            gstresults.estimates[estkey].models['go0'].basis = pygsti.obj.Basis.cast("pp",16)
-            gstresults.estimates[estkey].models['target'].basis = pygsti.obj.Basis.cast("pp",16)
+            gstresults.estimates[estkey].models['go0'].basis = pygsti.obj.Basis.cast("pp", 16)
+            gstresults.estimates[estkey].models['target'].basis = pygsti.obj.Basis.cast("pp", 16)
         #pygsti.report.create_standard_report(gstresults, temp_files + "/gstWithIdleTomogTestReport",
         #                                    "Test GST Report w/Idle Tomography Tab",
         #                                    verbosity=3, auto_open=False)

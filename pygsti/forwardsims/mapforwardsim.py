@@ -14,16 +14,16 @@ import importlib as _importlib
 
 import numpy as _np
 
-from .distforwardsim import DistributableForwardSimulator as _DistributableForwardSimulator
-from .forwardsim import ForwardSimulator as _ForwardSimulator
-from .forwardsim import _bytes_for_array_types
-from ..layouts.maplayout import MapCOPALayout as _MapCOPALayout
-from ..baseobjs.profiler import DummyProfiler as _DummyProfiler
-from ..baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
-from ..baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from ..tools import sharedmemtools as _smt
-from ..tools import slicetools as _slct
-from ..tools.matrixtools import _fas
+from pygsti.forwardsims.distforwardsim import DistributableForwardSimulator as _DistributableForwardSimulator
+from pygsti.forwardsims.forwardsim import ForwardSimulator as _ForwardSimulator
+from pygsti.forwardsims.forwardsim import _bytes_for_array_types
+from pygsti.layouts.maplayout import MapCOPALayout as _MapCOPALayout
+from pygsti.baseobjs.profiler import DummyProfiler as _DummyProfiler
+from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
+from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from pygsti.tools import sharedmemtools as _smt
+from pygsti.tools import slicetools as _slct
+from pygsti.tools.matrixtools import _fas
 
 _dummy_profiler = _DummyProfiler()
 

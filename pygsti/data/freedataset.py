@@ -86,7 +86,7 @@ class FreeformDataSet(object):
         -------
         pandas.DataFrame
         """
-        from ..protocols.protocol import _process_dataframe
+        from pygsti.tools.dataframetools import _process_dataframe
         cdict = _NamedDict('Circuit', None)
         for cir, i in self.cirIndex.items():
             cdict[cir.str] = _NamedDict('ValueName', 'category', items=self._info[i])

@@ -1,6 +1,6 @@
 import numpy as np
 
-import pygsti.tools.basisconstructors as bc
+import pygsti.baseobjs.basisconstructors as bc
 from ..util import BaseCase
 
 

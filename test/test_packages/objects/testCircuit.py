@@ -14,8 +14,8 @@ class CircuitTestCase(BaseTestCase):
         pygsti.obj.Circuit.default_expand_subcircuits = False # so mult/exponentiation => CircuitLabels
 
         try:
-            Gi = pygsti.obj.Circuit(None,stringrep='Gi',editable=True)
-            Gy = pygsti.obj.Circuit(None,stringrep='Gy',editable=True)
+            Gi = pygsti.obj.Circuit(None, stringrep='Gi', editable=True)
+            Gy = pygsti.obj.Circuit(None, stringrep='Gy', editable=True)
             c2 = Gy*2
             #print(c2.tup)
             c3 = Gi + c2
@@ -37,7 +37,7 @@ class CircuitTestCase(BaseTestCase):
             pygsti.obj.Circuit.default_expand_subcircuits = True
 
     def test_replace_with_idling_line(self):
-        c = pygsti.obj.Circuit( [('Gcnot',0,1)], editable=True)
+        c = pygsti.obj.Circuit([('Gcnot', 0, 1)], editable=True)
         c.replace_with_idling_line_inplace(0)
         self.assertEqual(c.layertup, ((),))
 

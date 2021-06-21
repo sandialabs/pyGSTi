@@ -10,10 +10,10 @@ The StaticStandardOp class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from .linearop import LinearOperator as _LinearOperator
-from ...evotypes import Evotype as _Evotype
-from ...baseobjs import statespace as _statespace
-from ...tools import internalgates as _itgs
+from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
+from pygsti.evotypes import Evotype as _Evotype
+from pygsti.baseobjs import statespace as _statespace
+from pygsti.tools import internalgates as _itgs
 
 
 class StaticStandardOp(_LinearOperator):

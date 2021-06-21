@@ -14,10 +14,10 @@ import warnings as _warnings
 
 import numpy as _np
 
-from .. import tools as _tools
-from ..objectivefns import objectivefns as _objfns
-from ..circuits.circuitlist import CircuitList as _CircuitList
-from ..baseobjs.smartcache import smart_cached
+from pygsti import tools as _tools
+from pygsti.objectivefns import objectivefns as _objfns
+from pygsti.circuits.circuitlist import CircuitList as _CircuitList
+from pygsti.baseobjs.smartcache import smart_cached
 
 
 #TODO REMOVE
@@ -607,7 +607,7 @@ def _compute_sub_mxs(gss, model, sub_mx_creation_fn, dataset=None, sub_mx_creati
 @smart_cached
 def dscompare_llr_matrices(gsplaq, dscomparator):
     """
-    Computes matrix of 2*log-likelihood-ratios comparing the datasets of `dscomparator`.
+    Computes matrix of 2*log-likelihood-ratios comparing the data of `dscomparator`.
 
     Parameters
     ----------

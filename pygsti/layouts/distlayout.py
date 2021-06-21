@@ -14,12 +14,12 @@ import collections as _collections
 
 import numpy as _np
 
-from .copalayout import CircuitOutcomeProbabilityArrayLayout as _CircuitOutcomeProbabilityArrayLayout
-from ..baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
-from ..baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from ..tools import mpitools as _mpit
-from ..tools import sharedmemtools as _smt
-from ..tools import slicetools as _slct
+from pygsti.layouts.copalayout import CircuitOutcomeProbabilityArrayLayout as _CircuitOutcomeProbabilityArrayLayout
+from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
+from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from pygsti.tools import mpitools as _mpit
+from pygsti.tools import sharedmemtools as _smt
+from pygsti.tools import slicetools as _slct
 
 
 #import time as _time #DEBUG TIMERS

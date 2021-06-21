@@ -12,9 +12,9 @@ Variables for working with the a model containing Idle, X(pi/2), Y(pi/2), and Z(
 
 import sys as _sys
 
-from ...construction import circuitconstruction as _strc
-from ...construction import modelconstruction as _setc
-from ...construction import stdtarget as _stdtarget
+from ...circuits import circuitconstruction as _strc
+from ...models import modelconstruction as _setc
+from .. import stdtarget as _stdtarget
 
 description = "Idle, X(pi/2), Y(pi/2), Z(pi/2) gates"
 

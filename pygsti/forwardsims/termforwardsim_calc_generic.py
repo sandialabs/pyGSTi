@@ -14,7 +14,7 @@ import math as _math
 
 import numpy as _np
 
-from ..tools import listtools as _lt
+from pygsti.tools import listtools as _lt
 
 SMALL = 1e-5
 # a number which is used in place of zero within the

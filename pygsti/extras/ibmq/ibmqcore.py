@@ -31,8 +31,8 @@ except: _qiskit = None
 #}
 
 _attribute_to_json = ['remove_duplicates', 'randomized_order', 'circuits_per_batch', 'num_shots', 'job_ids']
-_attribute_to_pickle = ['pspec', 'pygsti_circuits', 'pygsti_openqasm_circuits', 
-                        'qiskit_QuantumCircuits', 'qiskit_QuantumCircuits_as_openqasm', 
+_attribute_to_pickle = ['pspec', 'pygsti_circuits', 'pygsti_openqasm_circuits',
+                        'qiskit_QuantumCircuits', 'qiskit_QuantumCircuits_as_openqasm',
                         'submit_time_calibration_data', 'qobj', 'qjob', 'batch_result_object'
                         ]
 
@@ -161,7 +161,8 @@ class IBMQExperiment(dict):
             print("Constructing job for circuit batch {} of {}".format(batch_idx + 1, num_batches))
             #openqasm_circuit_ids = []
             for circ_idx, circ in enumerate(circuit_batch):
-                pygsti_openqasm_circ = circ.convert_to_openqasm(num_qubits =pspec.number_of_qubits, standard_gates_version='x-sx-rz')
+                pygsti_openqasm_circ = circ.convert_to_openqasm(num_qubits=pspec.number_of_qubits,
+                                                                standard_gates_version='x-sx-rz')
                 qiskit_qc = _qiskit.QuantumCircuit.from_qasm_str(pygsti_openqasm_circ)
 
                 self['pygsti_openqasm_circuits'][batch_idx].append(pygsti_openqasm_circ)
@@ -228,7 +229,7 @@ class IBMQExperiment(dict):
                     try:
                         print('  - Queue position is {}'.format(self['qjob'][-1].queue_position()))
                     except:
-                        print('  - Failed to get queue position'.format(batch_idx))
+                        print('  - Failed to get queue position {}'.format(batch_idx))
                     submit_status = True
                 except Exception as ex:
                     template = "An exception of type {0} occurred. Arguments:\n{1!r}"
@@ -243,7 +244,8 @@ class IBMQExperiment(dict):
                         print(message)
                     total_waits += 1
                     batch_waits += 1
-                    print("This batch has failed {0} times and there have been {1} total failures".format(batch_waits, total_waits))
+                    print("This batch has failed {0} times and there have been {1} total failures".format(
+                        batch_waits, total_waits))
                     print('Waiting ', end='')
                     for step in range(wait_steps):
                         print('{} '.format(step), end='')
@@ -341,6 +343,6 @@ class IBMQExperiment(dict):
                     ret[atr] = _pickle.load(f)
                 except:
                     _warnings.warn("Couldn't unpickle {}, so skipping this attribute.".format(atr))
-                    ret[atr] = None 
+                    ret[atr] = None
 
         return ret

@@ -17,26 +17,26 @@ import warnings as _warnings
 import numpy as _np
 import scipy.sparse as _sps
 
-from ..baseobjs import statespace as _statespace
-from .implicitmodel import ImplicitOpModel as _ImplicitOpModel
-from .layerrules import LayerRules as _LayerRules
-from .memberdict import OrderedMemberDict as _OrderedMemberDict
-from ..evotypes import Evotype as _Evotype
-from ..forwardsims.forwardsim import ForwardSimulator as _FSim
-from ..forwardsims.mapforwardsim import MapForwardSimulator as _MapFSim
-from ..forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
-from ..modelmembers import operations as _op
-from ..modelmembers import povms as _povm
-from ..modelmembers import states as _state
-from ..modelmembers.operations import opfactory as _opfactory
-from ..baseobjs.basis import BuiltinBasis as _BuiltinBasis, ExplicitBasis as _ExplicitBasis
-from ..baseobjs.label import Label as _Lbl, CircuitLabel as _CircuitLabel
-from ..baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from ..baseobjs.qubitgraph import QubitGraph as _QubitGraph
-from ..tools import basistools as _bt
-from ..tools import internalgates as _itgs
-from ..tools import optools as _gt
-from ..tools.basisconstructors import sqrt2, id2x2, sigmax, sigmay, sigmaz
+from pygsti.baseobjs import statespace as _statespace
+from pygsti.models.implicitmodel import ImplicitOpModel as _ImplicitOpModel
+from pygsti.models.layerrules import LayerRules as _LayerRules
+from pygsti.models.memberdict import OrderedMemberDict as _OrderedMemberDict
+from pygsti.evotypes import Evotype as _Evotype
+from pygsti.forwardsims.forwardsim import ForwardSimulator as _FSim
+from pygsti.forwardsims.mapforwardsim import MapForwardSimulator as _MapFSim
+from pygsti.forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
+from pygsti.modelmembers import operations as _op
+from pygsti.modelmembers import povms as _povm
+from pygsti.modelmembers import states as _state
+from pygsti.modelmembers.operations import opfactory as _opfactory
+from pygsti.baseobjs.basis import BuiltinBasis as _BuiltinBasis, ExplicitBasis as _ExplicitBasis
+from pygsti.baseobjs.label import Label as _Lbl, CircuitLabel as _CircuitLabel
+from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from pygsti.baseobjs.qubitgraph import QubitGraph as _QubitGraph
+from pygsti.tools import basistools as _bt
+from pygsti.tools import internalgates as _itgs
+from pygsti.tools import optools as _ot
+from pygsti.baseobjs.basisconstructors import sqrt2, id2x2, sigmax, sigmay, sigmaz
 
 
 def _iter_basis_inds(weight):
@@ -406,7 +406,7 @@ class CloudNoiseModel(_ImplicitOpModel):
                     local_state_space = _statespace.default_space_for_udim(U0.shape[0])
                     gatedict[name] = _opfactory.UnitaryOpFactory(U, local_state_space, 'pp', evotype=evotype)
                 else:
-                    gatedict[name] = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", 'pp')
+                    gatedict[name] = _bt.change_basis(_ot.unitary_to_process_mx(U), "std", 'pp')
                     # assume evotype is a densitymx or term type
 
         #Add anything from custom_gates directly if it wasn't added already
@@ -462,7 +462,7 @@ class CloudNoiseModel(_ImplicitOpModel):
             basis1Q = _BuiltinBasis("pp", 4)
             prep_factors = []; povm_factors = []
 
-            from ..construction.modelconstruction import _basis_create_spam_vector
+            from pygsti.models.modelconstruction import _basis_create_spam_vector
 
             v0 = _basis_create_spam_vector("0", basis1Q)
             v1 = _basis_create_spam_vector("1", basis1Q)
@@ -1271,7 +1271,7 @@ class CloudNoiseLayerRules(_LayerRules):
             # See if this effect label could correspond to a *marginalized* POVM, and
             # if so, create the marginalized POVM and add its effects to model.effect_blks['layers']
             assert(isinstance(layerlbl, _Lbl))  # Sanity check (REMOVE?)
-            povmName = _gt.effect_label_to_povm(layerlbl)
+            povmName = _ot.effect_label_to_povm(layerlbl)
             if povmName in model.povm_blks['layers']:
                 # implicit creation of marginalized POVMs whereby an existing POVM name is used with sslbls that
                 # are not present in the stored POVM's label.

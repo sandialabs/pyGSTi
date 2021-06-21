@@ -20,7 +20,7 @@ try: from astropy.stats import LombScargle as _LombScargle
 except: _LombScargle = None
 
 from scipy.stats import chi2 as _chi2
-from ... import datasets as _datasets
+from pygsti import data as _data
 
 
 def spectrum(x, times=None, null_hypothesis=None, counts=1, frequencies='auto', transform='dct',
@@ -497,11 +497,11 @@ def compute_auto_frequencies(ds, transform='dct'):
     assert(transform in ('dct', 'dft', 'lsp')), "The type of transform is invalid!"
     # todo : This is only reasonable with data that is equally spaced per circuit and with the same
     # time-step over circuits
-    if isinstance(ds, _datasets.MultiDataSet):
+    if isinstance(ds, _data.MultiDataSet):
         dskey = list(ds.keys())[0]
         timestep = ds[dskey].meantimestep
         rw = ds[dskey][list(ds[dskey].keys())[0]]
-    elif isinstance(ds, _datasets.DataSet):
+    elif isinstance(ds, _data.DataSet):
         timestep = ds.meantimestep
         rw = ds[list(ds.keys())[0]]
     else:
