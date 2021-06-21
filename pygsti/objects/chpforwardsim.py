@@ -103,7 +103,7 @@ class CHPForwardSimulator(_WeakForwardSimulator):
             _os.remove(path)
 
         # Extract outputs
-        pattern = _re.compile('Outcome of measuring qubit (\d): (\d)')
+        pattern = _re.compile('Outcome of measuring qubit (\d+): (\d)')
         qubit_outcomes = []
         for match in pattern.finditer(out.decode('utf-8')):
             qubit_outcomes.append((int(match.group(1)), match.group(2)))
