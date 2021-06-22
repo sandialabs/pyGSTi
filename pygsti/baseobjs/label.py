@@ -161,6 +161,19 @@ class Label(object):
     def has_nontrivial_components(self):
         return len(self.components) > 0 and self.components != (self,)
 
+    def collect_args(self):
+        if not self.has_nontrivial_components:
+            return self.args
+        else:
+            ret = list(self.args)
+            for c in self.components:
+                ret.extend(c.collect_args())
+            return tuple(ret)
+
+    def strip_args(self):
+        # default, appropriate for a label without args or components
+        return self
+
     def expand_subcircuits(self):
         """
         Expand any sub-circuits within this label.
@@ -1035,6 +1048,11 @@ class LabelTupTup(Label, tuple):
         """
         return LabelTupTup(tuple((lbl.map_state_space_labels(mapper) for lbl in self)))
 
+    def strip_args(self):
+        """ Return version of self with all arguments removed """
+        # default, appropriate for a label without args or components
+        return LabelTupTup.__new__(LabelTupTup, (comp.strip_args() for comp in self))
+
     def __str__(self):
         """
         Defines how a Label is printed out, e.g. Gx:0 or Gcnot:1:2
@@ -1302,6 +1320,11 @@ class LabelTupTupWithTime(Label, tuple):
         Label
         """
         return LabelTupTupWithTime(tuple((lbl.map_state_space_labels(mapper) for lbl in self)))
+
+    def strip_args(self):
+        """ Return version of self with all arguments removed """
+        # default, appropriate for a label without args or components
+        return LabelTupTupWithTime.__new__(LabelTupTupWithTime, (comp.strip_args() for comp in self), self.time)
 
     def __str__(self):
         """
@@ -1587,6 +1610,9 @@ class CircuitLabel(Label, tuple):
                             tuple((lbl.map_state_space_labels(mapper) for lbl in self.components)),
                             mapped_sslbls,
                             self[2])
+
+    def strip_args(self):
+        raise NotImplementedError("TODO!")
 
     def __str__(self):
         """
@@ -1886,6 +1912,9 @@ class LabelTupWithArgs(Label, tuple):
         return Label(self.name, mapped_sslbls, self.time, self.args)
         # FUTURE: use LabelTupWithArgs here instead of Label?
 
+    def strip_args(self):
+        return LabelTup.__new__(LabelTup, (self[0],) + self[self[1]:])  # make a new LabelTup (no args)
+
     def __str__(self):
         """
         Defines how a Label is printed out, e.g. Gx:0 or Gcnot:1:2
@@ -2139,6 +2168,11 @@ class LabelTupTupWithArgs(Label, tuple):
         """
         return LabelTupTupWithArgs(tuple((lbl.map_state_space_labels(mapper)
                                           for lbl in self.components)), self.time, self.args)
+
+    def strip_args(self):
+        """ Return version of self with all arguments removed """
+        # default, appropriate for a label without args or components
+        return LabelTupTupWithTime.__new__(LabelTupTupWithTime, (comp.strip_args() for comp in self), self.time)
 
     def __str__(self):
         """

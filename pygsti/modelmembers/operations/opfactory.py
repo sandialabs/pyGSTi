@@ -50,18 +50,20 @@ def op_from_factories(factory_dict, lbl):
     -------
     LinearOperator
     """
-    if lbl.args:
-        lbl_without_args = _Lbl(lbl.name, lbl.sslbls)
+    lbl_args = lbl.collect_args()
+
+    if lbl_args:
+        lbl_without_args = lbl.strip_args()
         if lbl_without_args in factory_dict:
-            return factory_dict[lbl_without_args].create_simplified_op(args=lbl.args)
+            return factory_dict[lbl_without_args].create_simplified_op(args=lbl_args)
             # E.g. an EmbeddedOpFactory
 
     lbl_name = _Lbl(lbl.name)
     if lbl_name in factory_dict:
-        return factory_dict[lbl_name].create_simplified_op(args=lbl.args, sslbls=lbl.sslbls)
+        return factory_dict[lbl_name].create_simplified_op(args=lbl_args, sslbls=lbl.sslbls)
         # E.g. an EmbeddingOpFactory
 
-    extra = ". Maybe you forgot the args?" if not lbl.args else ""
+    extra = ". Maybe you forgot the args?" if not lbl_args else ""
     raise KeyError("Cannot create operator for label `%s` from factories%s" % (str(lbl), extra))
 
 
