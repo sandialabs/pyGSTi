@@ -17,7 +17,7 @@ ws.CircuitTable((prep_fiducials, meas_fiducials),["Prep.","Measure"], common_tit
 ### Germ sequences.
 A list of the "germ" gate sequences.
 @@code
-ws.CircuitTable(germs, "Germ", n_cols=2)
+ws.CircuitTable(germs, "Germ", num_cols=2)
 
 @@markdown
 ### General dataset properties.

@@ -530,8 +530,8 @@ class Estimate(object):
                 for y in gss.used_ys:
                     sub_mxs.append([])
                     for x in gss.used_xs:
-                        plaq = gss.get_plaquette(x, y, empty_if_missing=True)
-                        scaling_mx = _np.nan * _np.ones((plaq.rows, plaq.cols), 'd')
+                        plaq = gss.plaquette(x, y, empty_if_missing=True)
+                        scaling_mx = _np.nan * _np.ones((plaq.num_rows, plaq.num_cols), 'd')
                         for i, j, opstr in plaq:
                             scaling_mx[i, j] = 1.0
                         sub_mxs[-1].append(scaling_mx)
