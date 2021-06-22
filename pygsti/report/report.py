@@ -286,7 +286,7 @@ class Report:
 
             circuits_final = results.circuit_lists['final']
             circuits_per_iter = results.circuit_lists['iteration']  # All L-values
-            if isinstance(circuits_final, pygsti.objects.PlaquetteGridCircuitStructure):
+            if isinstance(circuits_final, pygsti.circuits.PlaquetteGridCircuitStructure):
                 Ls = circuits_final.xs
 
             prep_fiducials = results.circuit_lists['prep fiducials']
