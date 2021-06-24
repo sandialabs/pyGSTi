@@ -14,8 +14,8 @@ import copy as _copy
 
 import numpy as _np
 
-from ..tools import listtools as _lt
-from ..tools import slicetools as _slct
+from pygsti.tools import listtools as _lt
+from pygsti.tools import slicetools as _slct
 
 
 class ModelChild(object):

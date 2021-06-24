@@ -20,11 +20,11 @@ from pygsti import tools as _tools
 from pygsti.objectivefns.objectivefns import CachedObjectiveFunction as _CachedObjectiveFunction
 from pygsti.objectivefns.objectivefns import ModelDatasetCircuitsStore as _ModelDatasetCircuitStore
 from pygsti.protocols.confidenceregionfactory import ConfidenceRegionFactory as _ConfidenceRegionFactory
-from ..models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
-from ..objectivefns import objectivefns as _objfns
-from ..circuits.circuitlist import CircuitList as _CircuitList
-from ..circuits.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
-from ..baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from pygsti.models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
+from pygsti.objectivefns import objectivefns as _objfns
+from pygsti.circuits.circuitlist import CircuitList as _CircuitList
+from pygsti.circuits.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
+from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 
 #Class for holding confidence region factory keys
 CRFkey = _collections.namedtuple('CRFkey', ['model', 'circuit_list'])
@@ -530,8 +530,8 @@ class Estimate(object):
                 for y in gss.used_ys:
                     sub_mxs.append([])
                     for x in gss.used_xs:
-                        plaq = gss.get_plaquette(x, y, empty_if_missing=True)
-                        scaling_mx = _np.nan * _np.ones((plaq.rows, plaq.cols), 'd')
+                        plaq = gss.plaquette(x, y, empty_if_missing=True)
+                        scaling_mx = _np.nan * _np.ones((plaq.num_rows, plaq.num_cols), 'd')
                         for i, j, opstr in plaq:
                             scaling_mx[i, j] = 1.0
                         sub_mxs[-1].append(scaling_mx)

@@ -10,7 +10,7 @@ Stability analysis protocol objects
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from . import protocol as _proto
+from pygsti.protocols import protocol as _proto
 
 
 class StabilityAnalysisDesign(_proto.ExperimentDesign):

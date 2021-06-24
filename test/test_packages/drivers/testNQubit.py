@@ -12,7 +12,8 @@ import pygsti.construction as pc
 import warnings
 
 from ..testutils import BaseTestCase, compare_files, regenerate_references
-from pygsti.construction import modelconstruction, nqnoiseconstruction
+from pygsti.models import modelconstruction, nqnoiseconstruction
+
 
 #from .nqubitconstruction import *
 
@@ -85,9 +86,9 @@ class NQubitTestCase(BaseTestCase):
 
         #RUN to SAVE list & dataset
         if regenerate_references():
-            pygsti.io.json.dump(gss, open(compare_files + "/nqubit_2Q_seqs.json",'w'))
+            pygsti.io.json.dump(gss, open(compare_files + "/nqubit_2Q_seqs.json", 'w'))
             ds = pygsti.construction.simulate_data(mdl_datagen, expList, 1000, "multinomial", seed=1234)
-            pygsti.io.json.dump(ds,open(compare_files + "/nqubit_2Q_dataset.json",'w'))
+            pygsti.io.json.dump(ds, open(compare_files + "/nqubit_2Q_dataset.json", 'w'))
 
         compare_gss = pygsti.io.json.load(open(compare_files + "/nqubit_2Q_seqs.json"))
 
@@ -112,7 +113,7 @@ class NQubitTestCase(BaseTestCase):
 
         #RUN to SAVE list
         if regenerate_references():
-            pygsti.io.json.dump(gss, open(compare_files + "/nqubit_1Q_seqs.json",'w'))
+            pygsti.io.json.dump(gss, open(compare_files + "/nqubit_1Q_seqs.json", 'w'))
 
         compare_gss = pygsti.io.json.load(open(compare_files + "/nqubit_1Q_seqs.json"))
 
@@ -161,8 +162,8 @@ class NQubitTestCase(BaseTestCase):
                                                          simulator="map", parameterization="H+S",
                                                         sparse_lindblad_basis=True, sparse_lindblad_reps=True)
         results = pygsti.run_long_sequence_gst_base(ds, mdl_to_optimize,
-                                                   lsgstLists, gauge_opt_params=False,
-                                                   advanced_options={'tolerance': 1e-1}, verbosity=4)
+                                                    lsgstLists, gauge_opt_params=False,
+                                                    advanced_options={'tolerance': 1e-1}, verbosity=4)
 
     def test_2Q_terms(self):
 
@@ -201,7 +202,7 @@ class NQubitTestCase(BaseTestCase):
             calc_cache = {}
             mdl_to_optimize.sim = pygsti.objects.TermForwardSimulator(mode='taylor-order', max_order=1, cache=calc_cache)
             mdl_to_optimize.sim.bulk_probs(gss) #lsgstLists[-1]
-            pygsti.io.json.dump(calc_cache, open(compare_files + '/nqubit_2Qterms.cache','w'))
+            pygsti.io.json.dump(calc_cache, open(compare_files + '/nqubit_2Qterms.cache', 'w'))
 
         #Just load precomputed cache (we test run_long_sequence_gst_base here, not cache computation)
         calc_cache = pygsti.io.json.load(open(compare_files + '/nqubit_2Qterms.cache'))
@@ -253,7 +254,7 @@ class NQubitTestCase(BaseTestCase):
         prep_fiducials = meas_fiducials = fiducials
         #TODO: add fiducials for 2Q pairs (edges on graph)
 
-        germs = pygsti.construction.to_circuits([ (gl,) for gl in op_labels ], line_labels=line_labels)
+        germs = pygsti.construction.to_circuits([(gl,) for gl in op_labels], line_labels=line_labels)
         maxLs = [1]
         expList = pygsti.construction.create_lsgst_circuits(mdl_datagen, prep_fiducials, meas_fiducials, germs, maxLs)
         self.assertTrue( Circuit((),line_labels) in expList)
@@ -277,7 +278,7 @@ class NQubitTestCase(BaseTestCase):
         return
 
         results = pygsti.run_long_sequence_gst(ds, target_model, prep_fiducials, meas_fiducials, germs, maxLs, verbosity=5,
-                                              advanced_options={'max_iterations': 2}) #keep this short; don't care if it doesn't converge.
+                                               advanced_options={'max_iterations': 2}) #keep this short; don't care if it doesn't converge.
         print("DONE!")
 
 
@@ -285,12 +286,12 @@ class NQubitTestCase(BaseTestCase):
     def test_SPAM(self):
         nQubits = 3
         factorPOVMs = []
-        basis1Q = pygsti.obj.Basis.cast("pp",4)
-        basisNQ = pygsti.obj.Basis.cast("pp",4**nQubits)
+        basis1Q = pygsti.obj.Basis.cast("pp", 4)
+        basisNQ = pygsti.obj.Basis.cast("pp", 4 ** nQubits)
         for i in range(nQubits):
-            effects = [ (l,modelconstruction._basis_create_spam_vector(l, basis1Q)) for l in ["0","1"] ]
-            factorPOVMs.append( pygsti.obj.TPPOVM(effects) )
-        povm = pygsti.obj.TensorProdPOVM( factorPOVMs )
+            effects = [(l, modelconstruction._basis_create_spam_vector(l, basis1Q)) for l in ["0", "1"]]
+            factorPOVMs.append(pygsti.obj.TPPOVM(effects))
+        povm = pygsti.obj.TensorProdPOVM(factorPOVMs)
         print(list(povm.keys()))
         print("params = ",povm.num_params,"dim = ",povm.dim)
         print(povm)
@@ -300,10 +301,10 @@ class NQubitTestCase(BaseTestCase):
         povm.from_vector(v)
         print("Post adding noise:"); print(povm)
 
-        mdl = pygsti.obj.ExplicitOpModel(['Q0','Q1','Q2'])
-        prepFactors = [ pygsti.obj.TPSPAMVec(modelconstruction._basis_create_spam_vector("0", basis1Q))
-                        for i in range(nQubits)]
-        mdl.preps['rho0'] = pygsti.obj.TensorProdSPAMVec('prep',prepFactors)
+        mdl = pygsti.obj.ExplicitOpModel(['Q0', 'Q1', 'Q2'])
+        prepFactors = [pygsti.obj.TPSPAMVec(modelconstruction._basis_create_spam_vector("0", basis1Q))
+                       for i in range(nQubits)]
+        mdl.preps['rho0'] = pygsti.obj.TensorProdSPAMVec('prep', prepFactors)
         # OR one big prep: mdl.preps['rho0'] = modelconstruction._basis_create_spam_vector("0", basisNQ)
 
         print("Before adding to model:")

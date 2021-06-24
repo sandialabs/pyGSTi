@@ -23,9 +23,8 @@ from collections import defaultdict as _defaultdict
 import numpy as _np
 
 from pygsti.circuits import circuit as _cir
-from pygsti.baseobjs import outcomelabeldict as _ld
+from pygsti.baseobjs import outcomelabeldict as _ld, _compatibility as _compat
 from pygsti.tools import NamedDict as _NamedDict
-from pygsti.tools import compattools as _compat
 from pygsti.tools import listtools as _lt
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
 
@@ -1053,7 +1052,7 @@ class DataSet(object):
                                 for i in self.cirIndex.values()]) <= maxOlIndex)
                     # self.oliData.shape[0] > maxIndex doesn't make sense since cirIndex holds slices
                 else:
-                    #Note: for non-static datasets, assume *all* data in self.oliData is "in" this data set, i.e.,
+                    #Note: for non-static data, assume *all* data in self.oliData is "in" this data set, i.e.,
                     # it can't be that this is a truncated dataset with pointers to more data than it actually owns.
                     maxIndex = max(self.cirIndex.values())
                     assert(len(self.oliData) > maxIndex)
@@ -3067,7 +3066,7 @@ class DataSet(object):
         -------
         pandas.DataFrame
         """
-        from ..protocols.protocol import _process_dataframe
+        from pygsti.tools.dataframetools import _process_dataframe
         cdict = _NamedDict('Circuit', None)
         for cir, raw_auxdict in self.auxInfo.items():
             cdict[cir.str] = _NamedDict('ValueName', 'category', items=raw_auxdict)

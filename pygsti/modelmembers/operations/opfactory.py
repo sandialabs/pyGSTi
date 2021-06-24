@@ -1,5 +1,5 @@
 """
-Defines the Factory class
+Defines the OpFactory class
 """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -11,16 +11,16 @@ Defines the Factory class
 #***************************************************************************************************
 import numpy as _np
 
-from .staticunitaryop import StaticUnitaryOp as _StaticUnitaryOp
-from .embeddedop import EmbeddedOp as _EmbeddedOp
-from .composedop import ComposedOp as _ComposedOp
+from pygsti.modelmembers.operations.staticunitaryop import StaticUnitaryOp as _StaticUnitaryOp
+from pygsti.modelmembers.operations.embeddedop import EmbeddedOp as _EmbeddedOp
+from pygsti.modelmembers.operations.composedop import ComposedOp as _ComposedOp
 
-from .. import modelmember as _gm
-from .. import instruments as _instrument
-from .. import povms as _povm
-from ...baseobjs.label import Label as _Lbl
-from ...baseobjs import statespace as _statespace
-from ...evotypes import Evotype as _Evotype
+from pygsti.modelmembers import modelmember as _gm
+from pygsti.modelmembers import instruments as _instrument
+from pygsti.modelmembers import povms as _povm
+from pygsti.baseobjs.label import Label as _Lbl
+from pygsti.baseobjs import statespace as _statespace
+from pygsti.evotypes import Evotype as _Evotype
 
 
 def op_from_factories(factory_dict, lbl):
@@ -50,18 +50,20 @@ def op_from_factories(factory_dict, lbl):
     -------
     LinearOperator
     """
-    if lbl.args:
-        lbl_without_args = _Lbl(lbl.name, lbl.sslbls)
+    lbl_args = lbl.collect_args()
+
+    if lbl_args:
+        lbl_without_args = lbl.strip_args()
         if lbl_without_args in factory_dict:
-            return factory_dict[lbl_without_args].create_simplified_op(args=lbl.args)
+            return factory_dict[lbl_without_args].create_simplified_op(args=lbl_args)
             # E.g. an EmbeddedOpFactory
 
     lbl_name = _Lbl(lbl.name)
     if lbl_name in factory_dict:
-        return factory_dict[lbl_name].create_simplified_op(args=lbl.args, sslbls=lbl.sslbls)
+        return factory_dict[lbl_name].create_simplified_op(args=lbl_args, sslbls=lbl.sslbls)
         # E.g. an EmbeddingOpFactory
 
-    extra = ". Maybe you forgot the args?" if not lbl.args else ""
+    extra = ". Maybe you forgot the args?" if not lbl_args else ""
     raise KeyError("Cannot create operator for label `%s` from factories%s" % (str(lbl), extra))
 
 

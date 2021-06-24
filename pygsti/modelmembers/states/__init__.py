@@ -24,8 +24,8 @@ from .staticpurestate import StaticPureState
 from .staticstate import StaticState
 from .tensorprodstate import TensorProductState
 from .tpstate import TPState
-from ...tools import basistools as _bt
-from ...tools import optools as _ot
+from pygsti.tools import basistools as _bt
+from pygsti.tools import optools as _ot
 
 
 def convert(state, to_type, basis, extra=None):
@@ -267,8 +267,8 @@ def optimize_state(vec_to_optimize, target_vec):
         vec_to_optimize.set_dense(target_vec.to_dense())  # just copy entire overall matrix since fully parameterized
         return
 
-    from ... import optimize as _opt
-    from ...tools import matrixtools as _mt
+    from pygsti import optimize as _opt
+    from pygsti.tools import matrixtools as _mt
     assert(target_vec.dim == vec_to_optimize.dim)  # vectors must have the same overall dimension
     targetVector = target_vec.to_dense() if isinstance(target_vec, State) else target_vec
 

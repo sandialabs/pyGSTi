@@ -19,8 +19,6 @@ from hashlib import blake2b as _blake2b
 import numpy as _np
 
 from pygsti.baseobjs.profiler import DummyProfiler as _DummyProfiler
-from pygsti.tools import mpitools as _mpit
-from pygsti.tools import sharedmemtools as _smt
 
 _dummy_profiler = _DummyProfiler()
 _GB = 1.0 / (1024.0)**3  # converts bytes to GB
@@ -465,6 +463,7 @@ class ResourceAllocation(object):
             else _np.zeros(local.shape, local.dtype)
         if self.host_comm is not None and self.host_comm.size > 1:
             #Divide up result among "workers", i.e., procs on same host
+            from pygsti.tools import mpitools as _mpit
             slices = _mpit.slice_up_slice(slice(0, result.shape[0]), self.host_comm.size)
 
             # Zero out result
@@ -610,6 +609,7 @@ class ResourceAllocation(object):
             bcast_shape, bcast_dtype = self.comm.bcast((value.shape, value.dtype) if self.comm.rank == root else None,
                                                        root=root)
             #FUTURE: check whether `value` is already shared memory  (or add flag?) and if so don't allocate/free `ar`
+            from pygsti.tools import sharedmemtools as _smt
             ar, ar_shm = _smt.create_shared_ndarray(self, bcast_shape, bcast_dtype)
             if self.comm.rank == root:
                 ar[(slice(None, None),) * value.ndim] = value  # put our value into the shared memory.

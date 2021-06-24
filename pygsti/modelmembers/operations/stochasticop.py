@@ -12,12 +12,12 @@ The StochasticNoiseOp class and supporting functionality.
 
 import numpy as _np
 
-from .linearop import LinearOperator as _LinearOperator
-from .. import modelmember as _modelmember, term as _term
-from ...evotypes import Evotype as _Evotype
-from ...baseobjs import statespace as _statespace
-from ...baseobjs.basis import Basis as _Basis
-from ...baseobjs.polynomial import Polynomial as _Polynomial
+from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
+from pygsti.modelmembers import modelmember as _modelmember, term as _term
+from pygsti.evotypes import Evotype as _Evotype
+from pygsti.baseobjs import statespace as _statespace
+from pygsti.baseobjs.basis import Basis as _Basis
+from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
 
 
 class StochasticNoiseOp(_LinearOperator):

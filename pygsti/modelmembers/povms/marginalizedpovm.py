@@ -13,10 +13,10 @@ Defines the MarginalizedPOVM class
 import collections as _collections
 
 # from .. import modelmember as _mm
-from .povm import POVM as _POVM
-from .staticeffect import StaticPOVMEffect as _StaticPOVMEffect
+from pygsti.modelmembers.povms.povm import POVM as _POVM
+from pygsti.modelmembers.povms.staticeffect import StaticPOVMEffect as _StaticPOVMEffect
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
-from ...baseobjs.label import Label as _Label
+from pygsti.baseobjs.label import Label as _Label
 
 
 class MarginalizedPOVM(_POVM):

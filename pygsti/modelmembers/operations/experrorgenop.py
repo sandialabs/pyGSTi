@@ -17,12 +17,11 @@ import scipy.linalg as _spl
 import scipy.sparse as _sps
 import scipy.sparse.linalg as _spsl
 
-from .linearop import LinearOperator as _LinearOperator
-from .. import modelmember as _modelmember, term as _term
-from ..errorgencontainer import ErrorGeneratorContainer as _ErrorGeneratorContainer
-from ...models import gaugegroup as _gaugegroup
-from ...baseobjs.polynomial import Polynomial as _Polynomial
-from ...tools import matrixtools as _mt
+from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
+from pygsti.modelmembers import modelmember as _modelmember, term as _term
+from pygsti.modelmembers.errorgencontainer import ErrorGeneratorContainer as _ErrorGeneratorContainer
+from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
+from pygsti.tools import matrixtools as _mt
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 MAX_EXPONENT = _np.log(_np.finfo('d').max) - 10.0  # so that exp(.) doesn't overflow
@@ -145,7 +144,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         #        assert(isinstance(self.unitary_postfactor, StaticCliffordOp))  # see __init__
         #        U = self.unitary_postfactor.unitary
         #    else: U = self.unitary_postfactor
-        #    op_std = _gt.unitary_to_process_mx(U)
+        #    op_std = _ot.unitary_to_process_mx(U)
         #    upost = _bt.change_basis(op_std, 'std', self.errorgen.matrix_basis)
 
         cls = self.__class__  # so that this method works for derived classes too
@@ -222,7 +221,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
             #            assert(isinstance(self.unitary_postfactor, StaticCliffordOp))  # see __init__
             #            U = self.unitary_postfactor.unitary
             #        else: U = self.unitary_postfactor
-            #        op_std = _gt.unitary_to_process_mx(U)
+            #        op_std = _ot.unitary_to_process_mx(U)
             #        upost = _bt.change_basis(op_std, 'std', self.errorgen.matrix_basis)
             #    else:
             #        upost = self.unitary_postfactor
@@ -839,6 +838,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         None
         """
         assert(typ in ('prep', 'effect')), "Invalid `typ` argument: %s" % typ
+        from pygsti.models import gaugegroup as _gaugegroup
 
         if isinstance(s, _gaugegroup.UnitaryGaugeGroupElement) or \
            isinstance(s, _gaugegroup.TPSpamGaugeGroupElement):

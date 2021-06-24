@@ -15,8 +15,8 @@ import collections as _collections
 
 import numpy as _np
 
-from . import protocol as _proto
-from ..algorithms.robust_phase_estimation import RobustPhaseEstimation as _RobustPhaseEstimation
+from pygsti.protocols import protocol as _proto
+from pygsti.algorithms.robust_phase_estimation import RobustPhaseEstimation as _RobustPhaseEstimation
 
 
 class RobustPhaseEstimationDesign(_proto.CircuitListsDesign):

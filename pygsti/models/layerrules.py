@@ -11,7 +11,7 @@ Defines the LayerLizard class and supporting functionality.
 #***************************************************************************************************
 
 
-from ..modelmembers import operations as _op
+from pygsti.modelmembers import operations as _op
 
 
 class LayerRules(object):

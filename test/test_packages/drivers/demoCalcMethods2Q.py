@@ -5,7 +5,7 @@ import numpy as np
 
 import pygsti
 import pygsti.construction as pc
-from pygsti.io import json
+from pygsti.serialization import json
 from pygsti.modelpacks.legacy import std1Q_XY
 from pygsti.modelpacks.legacy import std2Q_XYCNOT as std
 from pygsti.objects import Label as L
@@ -31,7 +31,7 @@ class CalcMethods2QTestCase(BaseTestCase):
         #Note: std is a 2Q model
         cls.maxLengths = [1]
         #cls.germs = std.germs_lite
-        cls.germs = pygsti.construction.to_circuits([ (gl,) for gl in std.target_model().operations ])
+        cls.germs = pygsti.construction.to_circuits([(gl,) for gl in std.target_model().operations])
         cls.mdl_datagen = std.target_model().depolarize(op_noise=0.1, spam_noise=0.001)
         cls.listOfExperiments = pygsti.construction.create_lsgst_circuits(
             std.target_model(), std.prepStrs, std.effectStrs, cls.germs, cls.maxLengths)
@@ -59,7 +59,7 @@ class CalcMethods2QTestCase(BaseTestCase):
                 fids1Q, [ ( (L('Gx'),) , (L('Gx',i),) ), ( (L('Gy'),) , (L('Gy',i),) ) ]) )
         #print(redmod_fiducials, "Fiducials")
 
-        cls.redmod_germs = pygsti.construction.to_circuits([ (gl,) for gl in op_labels ])
+        cls.redmod_germs = pygsti.construction.to_circuits([(gl,) for gl in op_labels])
         cls.redmod_maxLs = [1]
         expList = pygsti.construction.create_lsgst_circuits(
             cls.mdl_redmod_datagen, cls.redmod_fiducials, cls.redmod_fiducials,
@@ -92,8 +92,8 @@ class CalcMethods2QTestCase(BaseTestCase):
         target_model.set_all_parameterizations("CPTP")
         target_model.set_simtype('matrix') # the default for 1Q, so we could remove this line
         results = pygsti.run_long_sequence_gst(self.ds, target_model, std.prepStrs, std.effectStrs,
-                                              self.germs, self.maxLengths, advanced_options=self.advOpts,
-                                              verbosity=4)
+                                               self.germs, self.maxLengths, advanced_options=self.advOpts,
+                                               verbosity=4)
         #RUN BELOW LINES TO SAVE GATESET (UNCOMMENT to regenerate)
         #pygsti.io.write_model(results.estimates['default'].models['go0'],
         #                        compare_files + "/test2Qcalc_std_exact.model","Saved Standard-Calc 2Q test model")
@@ -112,8 +112,8 @@ class CalcMethods2QTestCase(BaseTestCase):
         target_model.set_all_parameterizations("CPTP")
         target_model.set_simtype('map')
         results = pygsti.run_long_sequence_gst(self.ds, target_model, std.prepStrs, std.effectStrs,
-                                              self.germs, self.maxLengths, advanced_options=self.advOpts,
-                                              verbosity=4)
+                                               self.germs, self.maxLengths, advanced_options=self.advOpts,
+                                               verbosity=4)
 
         #Note: expected nSigma of 143 is so high b/c we use very high tol of 1e-2 => result isn't very good
         print("MISFIT nSigma = ",results.estimates['default'].misfit_sigma())
@@ -129,7 +129,7 @@ class CalcMethods2QTestCase(BaseTestCase):
         target_model.set_all_parameterizations("H+S terms")
         target_model.set_simtype('termorder:1') # this is the default set by set_all_parameterizations above
         results = pygsti.run_long_sequence_gst(self.ds, target_model, std.prepStrs, std.effectStrs,
-                                              self.germs, self.maxLengths, verbosity=4)
+                                               self.germs, self.maxLengths, verbosity=4)
 
         #RUN BELOW LINES TO SAVE GATESET (UNCOMMENT to regenerate)
         #pygsti.io.json.dump(results.estimates['default'].models['go0'],
@@ -137,7 +137,7 @@ class CalcMethods2QTestCase(BaseTestCase):
 
         print("MISFIT nSigma = ",results.estimates['default'].misfit_sigma())
         self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 5, delta=1.0)
-        mdl_compare = pygsti.io.json.load(open(compare_files + "/test2Qcalc_std_terms.model"))
+        mdl_compare = pygsti.serialization.json.load(open(compare_files + "/test2Qcalc_std_terms.model"))
         self.assertAlmostEqual( np.linalg.norm(results.estimates['default'].models['go0'].to_vector()
                                                - mdl_compare.to_vector()), 0, places=3)
 
@@ -154,8 +154,8 @@ class CalcMethods2QTestCase(BaseTestCase):
                                              sim_type="matrix", verbosity=1)
         target_model.from_vector(self.rand_start206)
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
-                                              self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
-                                              verbosity=4, advanced_options={'tolerance': 1e-3})
+                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
+                                               verbosity=4, advanced_options={'tolerance': 1e-3})
 
         #RUN BELOW LINES TO SAVE GATESET (UNCOMMENT to regenerate)
         #pygsti.io.json.dump(results.estimates['default'].models['go0'],
@@ -163,7 +163,7 @@ class CalcMethods2QTestCase(BaseTestCase):
 
         print("MISFIT nSigma = ",results.estimates['default'].misfit_sigma())
         self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 1.0, delta=1.0)
-        mdl_compare = pygsti.io.json.load( open(compare_files + "/test2Qcalc_redmod_exact.model"))
+        mdl_compare = pygsti.serialization.json.load(open(compare_files + "/test2Qcalc_redmod_exact.model"))
         self.assertAlmostEqual( results.estimates['default'].models['go0'].frobeniusdist(mdl_compare), 0, places=3)
 
 
@@ -174,12 +174,12 @@ class CalcMethods2QTestCase(BaseTestCase):
                                              sim_type="map", verbosity=1)
         target_model.from_vector(self.rand_start206)
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
-                                              self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
-                                              verbosity=4, advanced_options={'tolerance': 1e-3})
+                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
+                                               verbosity=4, advanced_options={'tolerance': 1e-3})
 
         print("MISFIT nSigma = ",results.estimates['default'].misfit_sigma())
         self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 1.0, delta=1.0)
-        mdl_compare = pygsti.io.json.load( open(compare_files + "/test2Qcalc_redmod_exact.model"))
+        mdl_compare = pygsti.serialization.json.load(open(compare_files + "/test2Qcalc_redmod_exact.model"))
         self.assertAlmostEqual( results.estimates['default'].models['go0'].frobeniusdist(mdl_compare), 0, places=1)
           #Note: models aren't necessarily exactly equal given gauge freedoms that we don't know
           # how to optimizize over exactly - so this is a very loose test...
@@ -193,12 +193,12 @@ class CalcMethods2QTestCase(BaseTestCase):
                                              sim_type="map", verbosity=1)
         target_model.from_vector(self.rand_start206)
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
-                                              self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
-                                              verbosity=4, advanced_options={'tolerance': 1e-3})
+                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
+                                               verbosity=4, advanced_options={'tolerance': 1e-3})
 
         print("MISFIT nSigma = ",results.estimates['default'].misfit_sigma())
         self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 1.0, delta=1.0)
-        mdl_compare = pygsti.io.json.load( open(compare_files + "/test2Qcalc_redmod_exact.model"))
+        mdl_compare = pygsti.serialization.json.load(open(compare_files + "/test2Qcalc_redmod_exact.model"))
         self.assertAlmostEqual( np.linalg.norm(results.estimates['default'].models['go0'].to_vector()
                                                - mdl_compare.to_vector()), 0, places=1)
           #Note: models aren't necessarily exactly equal given gauge freedoms that we don't know
@@ -213,8 +213,8 @@ class CalcMethods2QTestCase(BaseTestCase):
                                       sim_type="termorder:1", parameterization="H+S terms")
         target_model.from_vector(self.rand_start228)
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
-                                              self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
-                                              verbosity=4, advanced_options={'tolerance': 1e-3})
+                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
+                                               verbosity=4, advanced_options={'tolerance': 1e-3})
 
         #RUN BELOW LINES TO SAVE GATESET (UNCOMMENT to regenerate)
         #pygsti.io.json.dump(results.estimates['default'].models['go0'],
@@ -222,7 +222,7 @@ class CalcMethods2QTestCase(BaseTestCase):
 
         print("MISFIT nSigma = ",results.estimates['default'].misfit_sigma())
         self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 3.0, delta=1.0)
-        mdl_compare = pygsti.io.json.load( open(compare_files + "/test2Qcalc_redmod_terms.model"))
+        mdl_compare = pygsti.serialization.json.load(open(compare_files + "/test2Qcalc_redmod_terms.model"))
         self.assertAlmostEqual( np.linalg.norm(results.estimates['default'].models['go0'].to_vector()
                                                - mdl_compare.to_vector()), 0, places=3)
 
@@ -234,12 +234,12 @@ class CalcMethods2QTestCase(BaseTestCase):
                                              sim_type="termorder:1", parameterization="H+S clifford terms")
         target_model.from_vector(self.rand_start228)
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
-                                              self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
-                                              verbosity=4, advanced_options={'tolerance': 1e-3})
+                                               self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
+                                               verbosity=4, advanced_options={'tolerance': 1e-3})
 
         print("MISFIT nSigma = ",results.estimates['default'].misfit_sigma())
         self.assertAlmostEqual( results.estimates['default'].misfit_sigma(), 3.0, delta=1.0)
-        mdl_compare = pygsti.io.json.load( open(compare_files + "/test2Qcalc_redmod_terms.model"))
+        mdl_compare = pygsti.serialization.json.load(open(compare_files + "/test2Qcalc_redmod_terms.model"))
         self.assertAlmostEqual( np.linalg.norm(results.estimates['default'].models['go0'].to_vector()
                                                - mdl_compare.to_vector()), 0, places=3)
 

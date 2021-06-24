@@ -10,7 +10,7 @@ The StaticArbitraryOp class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from .denseop import DenseOperator as _DenseOperator
+from pygsti.modelmembers.operations.denseop import DenseOperator as _DenseOperator
 
 
 class StaticArbitraryOp(_DenseOperator):

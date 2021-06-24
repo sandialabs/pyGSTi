@@ -33,8 +33,8 @@ from .tensorprodeffect import TensorProductPOVMEffect
 from .tensorprodpovm import TensorProductPOVM
 from .tppovm import TPPOVM
 from .unconstrainedpovm import UnconstrainedPOVM
-from ...tools import basistools as _bt
-from ...tools import optools as _ot
+from pygsti.tools import basistools as _bt
+from pygsti.tools import optools as _ot
 
 
 def convert(povm, to_type, basis, extra=None):

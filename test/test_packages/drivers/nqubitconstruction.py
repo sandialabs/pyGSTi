@@ -316,9 +316,9 @@ def create_nqubit_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
 
         
     #SPAM
-    basis1Q = pygsti.obj.Basis("pp",2)
-    prepFactors = [ pygsti.obj.TPSPAMVec(pygsti.construction._basis_create_spam_vector("0", basis1Q))
-                    for i in range(nQubits)]
+    basis1Q = pygsti.obj.Basis("pp", 2)
+    prepFactors = [pygsti.obj.TPSPAMVec(pygsti.construction._basis_create_spam_vector("0", basis1Q))
+                   for i in range(nQubits)]
     if prepNoise is not None:
         if isinstance(prepNoise,tuple): # use as (seed, strength)
             seed,strength = prepNoise
@@ -327,12 +327,12 @@ def create_nqubit_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
         else:
             depolAmts = prepNoise[0:nQubits]
         for amt,vec in zip(depolAmts,prepFactors): vec.depolarize(amt) 
-    mdl.preps['rho0'] = pygsti.obj.TensorProdSPAMVec('prep',prepFactors)
+    mdl.preps['rho0'] = pygsti.obj.TensorProdSPAMVec('prep', prepFactors)
     
     factorPOVMs = []
     for i in range(nQubits):
-        effects = [ (l,pygsti.construction._basis_create_spam_vector(l, basis1Q)) for l in ["0","1"] ]
-        factorPOVMs.append( pygsti.obj.TPPOVM(effects) )
+        effects = [(l, pygsti.construction._basis_create_spam_vector(l, basis1Q)) for l in ["0", "1"]]
+        factorPOVMs.append(pygsti.obj.TPPOVM(effects))
     if povmNoise is not None:
         if isinstance(povmNoise,tuple): # use as (seed, strength)
             seed,strength = povmNoise
@@ -341,7 +341,7 @@ def create_nqubit_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
         else:
             depolAmts = povmNoise[0:nQubits]
         for amt,povm in zip(depolAmts,factorPOVMs): povm.depolarize(amt) 
-    mdl.povms['Mdefault'] = pygsti.obj.TensorProdPOVM( factorPOVMs )
+    mdl.povms['Mdefault'] = pygsti.obj.TensorProdPOVM(factorPOVMs)
         
     printer.log("DONE! - returning Model with dim=%d and gates=%s" % (mdl.dim, list(mdl.operations.keys())))
     return mdl
@@ -365,7 +365,7 @@ def create_global_idle(qubitGraph, maxWeight, sparse=False, verbosity=0):
     
     termgates = [] # gates to compose
     ssAllQ = [tuple(['Q%d'%i for i in range(qubitGraph.nQubits)])]
-    basisAllQ = pygsti.objects.Basis('pp', 2**qubitGraph.nQubits, sparse=sparse)
+    basisAllQ = pygsti.objects.Basis('pp', 2 ** qubitGraph.nQubits, sparse=sparse)
     
     nQubits = qubitGraph.nQubits
     possible_err_qubit_inds = _np.arange(nQubits)
@@ -374,7 +374,7 @@ def create_global_idle(qubitGraph, maxWeight, sparse=False, verbosity=0):
         printer.log("Weight %d: %d possible qubits" % (wt,nPossible),2)
         basisEl_Id = basisProductMatrix(_np.zeros(wt,'i'),sparse)
         wtId = _sps.identity(4**wt,'d','csr') if sparse else  _np.identity(4**wt,'d')
-        wtBasis = pygsti.objects.Basis('pp', 2**wt, sparse=sparse)
+        wtBasis = pygsti.objects.Basis('pp', 2 ** wt, sparse=sparse)
         
         for err_qubit_inds in _itertools.combinations(possible_err_qubit_inds, wt):
             if len(err_qubit_inds) == 2 and not qubitGraph.is_connected(err_qubit_inds[0],err_qubit_inds[1]):
@@ -515,7 +515,7 @@ def create_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxhops
     printer.log("Creating %d-qubit target op factor on qubits %s" %
                 (len(target_qubit_inds),str(target_qubit_inds)),2)
     ssAllQ = [tuple(['Q%d'%i for i in range(qubitGraph.nQubits)])]
-    basisAllQ = pygsti.objects.Basis('pp', 2**qubitGraph.nQubits, sparse=sparse)
+    basisAllQ = pygsti.objects.Basis('pp', 2 ** qubitGraph.nQubits, sparse=sparse)
     fullTargetOp = Embedded(ssAllQ, ['Q%d'%i for i in target_qubit_inds],
                             Static(targetOp), basisAllQ.dim) 
 
@@ -584,7 +584,7 @@ def create_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxhops
         
         #Construct one embedded Lindblad-gate using all `errbasis` terms
         ssLocQ = [tuple(['Q%d'%i for i in range(nLocal)])]
-        basisLocQ = pygsti.objects.Basis('pp', 2**nLocal, sparse=sparse)
+        basisLocQ = pygsti.objects.Basis('pp', 2 ** nLocal, sparse=sparse)
         locId = _sps.identity(4**nLocal,'d','csr') if sparse else _np.identity(4**nLocal,'d')
         localErr = Lindblad(locId, ham_basis=errbasis,
                             nonham_basis=errbasis, cptp=True,
@@ -610,7 +610,7 @@ def create_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxhops
             basisEl_Id = basisProductMatrix(_np.zeros(wt,'i'),sparse) #identity basis el
 
             wtId = _sps.identity(4**wt,'d','csr') if sparse else _np.identity(4**wt,'d')
-            wtBasis = pygsti.objects.Basis('pp', 2**wt, sparse=sparse)
+            wtBasis = pygsti.objects.Basis('pp', 2 ** wt, sparse=sparse)
 
             printer.log("Weight %d, max-hops %d: %d possible qubits" % (wt,maxHops,nPossible),3)
             

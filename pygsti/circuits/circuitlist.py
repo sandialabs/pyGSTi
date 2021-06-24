@@ -12,8 +12,8 @@ import copy as _copy
 # ***************************************************************************************************
 import uuid as _uuid
 
-from .circuit import Circuit as _Circuit
-from ..tools import listtools as _lt
+from pygsti.circuits.circuit import Circuit as _Circuit
+from pygsti.tools import listtools as _lt
 
 
 class CircuitList(object):

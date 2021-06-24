@@ -1,4 +1,4 @@
-from pygsti.construction import qutrit
+from pygsti.models import qutrit
 from ..util import BaseCase
 
 

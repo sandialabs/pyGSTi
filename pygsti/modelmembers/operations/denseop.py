@@ -15,13 +15,13 @@ import copy as _copy
 import numpy as _np
 import scipy.sparse as _sps
 
-from .linearop import LinearOperator as _LinearOperator
-from ...evotypes import Evotype as _Evotype
-from ...baseobjs import statespace as _statespace
-from ...baseobjs.basis import Basis as _Basis
-from ...tools import basistools as _bt
-from ...tools import matrixtools as _mt
-from ...tools import optools as _ot
+from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
+from pygsti.evotypes import Evotype as _Evotype
+from pygsti.baseobjs import statespace as _statespace
+from pygsti.baseobjs.basis import Basis as _Basis
+from pygsti.tools import basistools as _bt
+from pygsti.tools import matrixtools as _mt
+from pygsti.tools import optools as _ot
 
 
 def finite_difference_deriv_wrt_params(operation, wrt_filter, eps=1e-7):
@@ -439,7 +439,7 @@ class DenseUnitaryOperator(DenseOperatorInterface, _LinearOperator):
         -------
         None
         """
-        from ...models import gaugegroup as _gaugegroup
+        from pygsti.models import gaugegroup as _gaugegroup
         if isinstance(s, _gaugegroup.UnitaryGaugeGroupElement) or \
            isinstance(s, _gaugegroup.TPSpamGaugeGroupElement):
 
@@ -484,7 +484,7 @@ class DenseUnitaryOperator(DenseOperatorInterface, _LinearOperator):
         """
         assert(typ in ('prep', 'effect')), "Invalid `typ` argument: %s" % typ
 
-        from ...models import gaugegroup as _gaugegroup
+        from pygsti.models import gaugegroup as _gaugegroup
         if isinstance(s, _gaugegroup.UnitaryGaugeGroupElement) or \
            isinstance(s, _gaugegroup.TPSpamGaugeGroupElement):
             U = s.transform_matrix

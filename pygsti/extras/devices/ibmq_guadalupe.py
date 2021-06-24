@@ -23,16 +23,16 @@ edgelist = [
     # 2nd row of connections
     ('Q3', 'Q5'), ('Q5', 'Q3'),
     ('Q5', 'Q8'), ('Q8', 'Q5'),
-    ('Q8', 'Q11'), ('Q11', 'Q8'),         
-    ('Q11', 'Q14'), ('Q14', 'Q11'),     
+    ('Q8', 'Q11'), ('Q11', 'Q8'),
+    ('Q11', 'Q14'), ('Q14', 'Q11'),
     # 1st column of connections
     ('Q1', 'Q2'), ('Q2', 'Q1'),
     ('Q2', 'Q3'), ('Q3', 'Q2'),
-    # 2nd column of connections   
-    ('Q6', 'Q7'), ('Q7', 'Q6'), 
-    ('Q8', 'Q9'), ('Q9', 'Q8'), 
-    # 3rd column of connections  
-    ('Q12', 'Q13'), ('Q13', 'Q12'),                
+    # 2nd column of connections
+    ('Q6', 'Q7'), ('Q7', 'Q6'),
+    ('Q8', 'Q9'), ('Q9', 'Q8'),
+    # 3rd column of connections
+    ('Q12', 'Q13'), ('Q13', 'Q12'),
     ('Q13', 'Q14'), ('Q14', 'Q13')
 ]
 

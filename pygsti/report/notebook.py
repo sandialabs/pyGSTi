@@ -16,7 +16,7 @@ import textwrap as _textwrap
 import webbrowser as _browser
 from subprocess import call as _call
 
-from .notebookcell import NotebookCell
+from pygsti.report.notebookcell import NotebookCell
 
 
 class Notebook(object):

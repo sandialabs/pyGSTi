@@ -12,7 +12,7 @@ Defines the POVM class
 import collections as _collections
 import numpy as _np
 
-from .. import modelmember as _mm
+from pygsti.modelmembers import modelmember as _mm
 
 #Thoughts:
 # what are POVM objs needed for?

@@ -14,10 +14,10 @@ import collections as _collections
 
 import numpy as _np
 
-from .distlayout import DistributableCOPALayout as _DistributableCOPALayout
-from .distlayout import _DistributableAtom
-from ..circuits.circuitlist import CircuitList as _CircuitList
-from ..tools import listtools as _lt
+from pygsti.layouts.distlayout import DistributableCOPALayout as _DistributableCOPALayout
+from pygsti.layouts.distlayout import _DistributableAtom
+from pygsti.circuits.circuitlist import CircuitList as _CircuitList
+from pygsti.tools import listtools as _lt
 
 
 class _TermCOPALayoutAtom(_DistributableAtom):

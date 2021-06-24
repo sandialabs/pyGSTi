@@ -13,8 +13,8 @@ The EmbeddedErrorgen class and supporting functionality.
 import collections as _collections
 import warnings as _warnings
 
-from .embeddedop import EmbeddedOp as _EmbeddedOp
-from ...baseobjs.basis import Basis as _Basis, EmbeddedBasis as _EmbeddedBasis
+from pygsti.modelmembers.operations.embeddedop import EmbeddedOp as _EmbeddedOp
+from pygsti.baseobjs.basis import Basis as _Basis, EmbeddedBasis as _EmbeddedBasis
 
 
 # Idea:

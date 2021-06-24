@@ -16,12 +16,12 @@ import collections as _collections
 import numpy as _np
 import scipy.sparse as _sps
 
-from .linearop import LinearOperator as _LinearOperator
-from .. import modelmember as _modelmember
-from ...evotypes import Evotype as _Evotype
-from ...baseobjs import statespace as _statespace
-from ...baseobjs.basis import ExplicitBasis as _ExplicitBasis
-from ...tools import matrixtools as _mt
+from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
+from pygsti.modelmembers import modelmember as _modelmember
+from pygsti.evotypes import Evotype as _Evotype
+from pygsti.baseobjs import statespace as _statespace
+from pygsti.baseobjs.basis import ExplicitBasis as _ExplicitBasis
+from pygsti.tools import matrixtools as _mt
 
 
 class ComposedErrorgen(_LinearOperator):

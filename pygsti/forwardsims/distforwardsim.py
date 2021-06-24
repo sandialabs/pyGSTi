@@ -11,10 +11,10 @@ Defines the DistributableForwardSimulator calculator class
 #***************************************************************************************************
 import numpy as _np
 
-from .forwardsim import ForwardSimulator as _ForwardSimulator
-from ..tools import mpitools as _mpit
-from ..tools import slicetools as _slct
-from ..tools import sharedmemtools as _smt
+from pygsti.forwardsims.forwardsim import ForwardSimulator as _ForwardSimulator
+from pygsti.tools import mpitools as _mpit
+from pygsti.tools import slicetools as _slct
+from pygsti.tools import sharedmemtools as _smt
 
 
 class DistributableForwardSimulator(_ForwardSimulator):

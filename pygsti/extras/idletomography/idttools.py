@@ -15,7 +15,7 @@ import numpy as _np
 from . import pauliobjs as _pobjs
 from ... import tools as _tools
 from ...modelmembers import operations as _op
-from ...construction import nqnoiseconstruction as _nqn
+from ...models import nqnoiseconstruction as _nqn
 
 
 # maybe need to restructure in future - "tools" usually doesn't import "objects"

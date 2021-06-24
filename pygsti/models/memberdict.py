@@ -12,8 +12,8 @@ Defines OrderedDict-derived classes used to store specific pyGSTi objects
 import collections as _collections
 import copy as _copy
 
-from ..baseobjs.label import Label as _Label
-from ..modelmembers import modelmember as _mm
+from pygsti.baseobjs.label import Label as _Label
+from pygsti.modelmembers import modelmember as _mm
 
 
 class _PrefixOrderedDict(_collections.OrderedDict):

@@ -14,7 +14,7 @@ import copy as _copy
 import json as _json
 import pathlib as _pathlib
 
-from .. import io as _io
+from pygsti import io as _io
 
 
 class TreeNode(object):

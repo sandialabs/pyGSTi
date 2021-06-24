@@ -4,7 +4,7 @@ from collections import OrderedDict
 import numpy as np
 
 from pygsti.circuits import Circuit
-from pygsti.datasets import MultiDataSet, DataSet
+from pygsti.data import MultiDataSet, DataSet
 from ..util import BaseCase
 
 # module-level test fixtures

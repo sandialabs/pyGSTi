@@ -12,8 +12,8 @@ The FullState class and supporting functionality.
 
 import numpy as _np
 
-from .densestate import DenseState as _DenseState
-from .state import State as _State
+from pygsti.modelmembers.states.densestate import DenseState as _DenseState
+from pygsti.modelmembers.states.state import State as _State
 
 
 class FullState(_DenseState):

@@ -23,7 +23,7 @@ from pygsti.tools import listtools as _lt
 from pygsti.tools import symplectic as _symp
 
 IDENT = 'I'  # internal 1Q-identity-gate name used for compilation
-# MUST be the same as in processorspec.py
+# MUST be the same as in processorpack.py
 
 
 class CompilationError(Exception):

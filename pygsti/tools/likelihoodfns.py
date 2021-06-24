@@ -15,9 +15,9 @@ import warnings as _warnings
 import numpy as _np
 import scipy.stats as _stats
 
-from . import basistools as _bt
-from . import jamiolkowski as _jam
-from . import listtools as _lt
+from pygsti.tools import basistools as _bt
+from pygsti.tools import jamiolkowski as _jam
+from pygsti.tools import listtools as _lt
 
 #from ..baseobjs.smartcache import smart_cached
 

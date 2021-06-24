@@ -119,7 +119,7 @@ class ContinuousGatesTestCase(BaseTestCase):
         results = pygsti.run_long_sequence_gst_base(ds, mdl, [allStrs], gauge_opt_params=False, verbosity=3)
 
         _, nSigma, pval = pygsti.two_delta_logl(results.estimates[results.name].models['final iteration estimate'], results.dataset,
-                            dof_calc_method="all")
+                                                dof_calc_method="all")
         self.assertTrue(nSigma < 5.0) # so far we just know that this should roughly work -- how to make TD-GST robus is still an open research topic
 
 if __name__ == "__main__":

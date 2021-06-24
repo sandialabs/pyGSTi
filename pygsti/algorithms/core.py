@@ -19,21 +19,19 @@ import scipy.optimize as _spo
 import scipy.stats as _stats
 
 from pygsti.baseobjs.profiler import DummyProfiler as _DummyProfiler
-from .. import construction as _pc
-from .. import models as _models
-from .. import baseobjs as _baseobjs
-from .. import tools as _tools
-from .. import circuits as _circuits
-from .. import objectivefns as _objfns
-from ..forwardsims.termforwardsim import TermForwardSimulator as _TermFSim
-from ..modelmembers import operations as _op
-from ..modelmembers import povms as _povm
-from ..modelmembers import instruments as _instrument
-from ..modelmembers import states as _state
-from ..circuits.circuitlist import CircuitList as _CircuitList
-from ..baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
-from ..optimize.customlm import CustomLMOptimizer as _CustomLMOptimizer
-from ..optimize.customlm import Optimizer as _Optimizer
+from pygsti import models as _models
+from pygsti.baseobjs import BuiltinBasis, VerbosityPrinter, DirectSumBasis
+from pygsti import tools as _tools
+from pygsti import circuits as _circuits
+from pygsti import objectivefns as _objfns
+from pygsti.modelmembers import operations as _op
+from pygsti.modelmembers import povms as _povm
+from pygsti.modelmembers import instruments as _instrument
+from pygsti.modelmembers import states as _state
+from pygsti.circuits.circuitlist import CircuitList as _CircuitList
+from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
+from pygsti.optimize.customlm import CustomLMOptimizer as _CustomLMOptimizer
+from pygsti.optimize.customlm import Optimizer as _Optimizer
 
 _dummy_profiler = _DummyProfiler()
 
@@ -133,7 +131,7 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
     # A       = (nESpecs, gsDim)
     # B       = (gsDim, nRhoSpecs)
 
-    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
+    printer = VerbosityPrinter.create_printer(verbosity)
     if target_model is None:
         raise ValueError("Must specify a target model for LGST!")
 
@@ -202,7 +200,7 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
         lgstModel = _models.ExplicitOpModel(target_model.state_space, target_model.basis)
     else:  # construct a default basis for the requested dimension
         # - just act on diagonal density mx
-        dumb_basis = _baseobjs.DirectSumBasis([_baseobjs.BuiltinBasis('gm', 1)] * svd_truncate_to)
+        dumb_basis = DirectSumBasis([BuiltinBasis('gm', 1)] * svd_truncate_to)
         lgstModel = _models.ExplicitOpModel([('L%d' % i,) for i in range(svd_truncate_to)], dumb_basis)
 
     for opLabel in op_labelsToEstimate:
@@ -646,7 +644,7 @@ def run_gst_fit(mdc_store, optimizer, objective_function_builder, verbosity=0):
     optimizer = optimizer if isinstance(optimizer, _Optimizer) else _CustomLMOptimizer.cast(optimizer)
     comm = mdc_store.resource_alloc.comm
     profiler = mdc_store.resource_alloc.profiler
-    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm)
+    printer = VerbosityPrinter.create_printer(verbosity, comm)
 
     tStart = _time.time()
 
@@ -675,6 +673,7 @@ def run_gst_fit(mdc_store, optimizer, objective_function_builder, verbosity=0):
     printer.log("--- %s GST ---" % objective.name, 1)
 
     # Solve least squares minimization problem
+    from pygsti.forwardsims.termforwardsim import TermForwardSimulator as _TermFSim
     if isinstance(objective.model.sim, _TermFSim):  # could have used mdc_store.model (it's the same model)
         opt_result = _do_term_runopt(objective, optimizer, printer)
     else:
@@ -751,7 +750,7 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
     optimizer = optimizer if isinstance(optimizer, _Optimizer) else _CustomLMOptimizer.cast(optimizer)
     comm = resource_alloc.comm
     profiler = resource_alloc.profiler
-    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm)
+    printer = VerbosityPrinter.create_printer(verbosity, comm)
 
     models = []; optimums = []
     mdl = start_model.copy(); nIters = len(circuit_lists)
@@ -1020,9 +1019,9 @@ def find_closest_unitary_opmx(operation_mx):
     #def getu_1q(basisVec):  # 1 qubit version
     #    return _spl.expm( 1j * (basisVec[0]*_tools.sigmax + basisVec[1]*_tools.sigmay + basisVec[2]*_tools.sigmaz) )
     def _get_gate_mx_1q(basis_vec):  # 1 qubit version
-        return _pc.single_qubit_gate(basis_vec[0],
-                                     basis_vec[1],
-                                     basis_vec[2])
+        return _tools.single_qubit_gate(basis_vec[0],
+                                        basis_vec[1],
+                                        basis_vec[2])
 
     if operation_mx.shape[0] == 4:
         #bell = _np.transpose(_np.array( [[1,0,0,1]] )) / _np.sqrt(2)

@@ -14,14 +14,13 @@ import copy as _copy
 import itertools as _itertools
 import pathlib as _pathlib
 
-from .treenode import TreeNode as _TreeNode
-from .. import construction as _cnst
-from .. import io as _io
-from .. import baseobjs as _baseobjs
-from .. import circuits as _circuits
-from .. import datasets as _datasets
-from ..tools import NamedDict as _NamedDict
-from ..tools import listtools as _lt
+from pygsti.protocols.treenode import TreeNode as _TreeNode
+from pygsti import io as _io
+from pygsti import circuits as _circuits
+from pygsti import data as _data
+from pygsti.tools import NamedDict as _NamedDict
+from pygsti.tools import listtools as _lt
+from pygsti.tools.dataframetools import _process_dataframe
 
 
 class Protocol(object):
@@ -1421,7 +1420,7 @@ class SimultaneousExperimentDesign(ExperimentDesign):
         -------
         ProtocolData
         """
-        if isinstance(dataset, _datasets.MultiDataSet):
+        if isinstance(dataset, _data.MultiDataSet):
             raise NotImplementedError("SimultaneousExperimentDesigns don't work with multi-pass data yet.")
 
         all_circuits = self.all_circuits_needing_data
@@ -1431,10 +1430,10 @@ class SimultaneousExperimentDesign(ExperimentDesign):
         qubit_indices = [qubit_index[ql] for ql in qubit_labels]  # order determined by first circuit (see above)
 
         if isinstance(dataset, dict):  # then do filtration "element-wise"
-            filtered_ds = {k: _cnst.filter_dataset(ds, qubit_labels, qubit_indices) for k, ds in dataset.items()}
+            filtered_ds = {k: _data.filter_dataset(ds, qubit_labels, qubit_indices) for k, ds in dataset.items()}
             for fds in filtered_ds.values(): fds.add_std_nqubit_outcome_labels(len(qubit_labels))
         else:
-            filtered_ds = _cnst.filter_dataset(dataset, qubit_labels, qubit_indices)  # Marginalize dataset
+            filtered_ds = _data.filter_dataset(dataset, qubit_labels, qubit_indices)  # Marginalize dataset
             filtered_ds.add_std_nqubit_outcome_labels(len(qubit_labels))  # ensure filtered_ds has appropriate outcomes
 
         if sub_design.alt_actual_circuits_executed:
@@ -1622,7 +1621,7 @@ class ProtocolData(_TreeNode):
                 #FUTURE: use MultiDataSet, BUT in addition to init_from_dict we'll need to add truncate, filter, and
                 # process_circuits support for MultiDataSet objects -- for now (above) we just use dicts of DataSets.
                 #raise NotImplementedError("Need to implement MultiDataSet.init_from_dict!")
-                #dataset = _datasets.MultiDataSet.init_from_dict(
+                #dataset = _data.MultiDataSet.init_from_dict(
                 #    {pth.name: _io.load_dataset(pth, verbosity=0) for pth in dataset_files})
 
         cache = _io.metadir._read_json_or_pkl_files_to_dict(data_dir / 'cache')
@@ -1659,7 +1658,7 @@ class ProtocolData(_TreeNode):
         self.cache = cache if (cache is not None) else {}
         self.tags = {}
 
-        if isinstance(self.dataset, (_datasets.MultiDataSet, dict)):  # can be dict of DataSets instead of a multi-ds
+        if isinstance(self.dataset, (_data.MultiDataSet, dict)):  # can be dict of DataSets instead of a multi-ds
             for dsname in self.dataset:
                 if dsname not in self.cache: self.cache[dsname] = {}  # create separate caches for each pass
             self._passdatas = {dsname: ProtocolData(self.edesign, ds, self.cache[dsname])
@@ -1728,7 +1727,7 @@ class ProtocolData(_TreeNode):
         -------
         bool
         """
-        return isinstance(self.dataset, (_datasets.MultiDataSet, dict))
+        return isinstance(self.dataset, (_data.MultiDataSet, dict))
 
     #def underlying_tree_paths(self):
     #    return self.edesign.get_tree_paths()
@@ -1801,7 +1800,7 @@ class ProtocolData(_TreeNode):
                 assert(len(list(data_dir.glob('*.txt'))) == 0), "There shouldn't be *.txt files in %s!" % str(data_dir)
             else:
                 data_dir.mkdir(exist_ok=True)
-                if isinstance(self.dataset, (_datasets.MultiDataSet, dict)):
+                if isinstance(self.dataset, (_data.MultiDataSet, dict)):
                     for dsname, ds in self.dataset.items():
                         _io.write_dataset(data_dir / (dsname + '.txt'), ds)
                 else:
@@ -1860,7 +1859,7 @@ class ProtocolData(_TreeNode):
         pandas.DataFrame
         """
         cdict = _NamedDict('Circuit', None)
-        if isinstance(self.dataset, _datasets.FreeformDataSet):
+        if isinstance(self.dataset, _data.FreeformDataSet):
             for cir, i in self.dataset.cirIndex.items():
                 d = _NamedDict('ValueName', 'category', items=self.dataset._info[i])
                 if isinstance(self.edesign, FreeformDesign):
@@ -2695,7 +2694,7 @@ class DataCountsSimulator(DataSimulator):
         -------
         ProtocolData
         """
-        from ..construction.datasetconstruction import simulate_data as _simulate_data
+        from pygsti.data.datasetconstruction import simulate_data as _simulate_data
         ds = _simulate_data(self.model, edesign.all_circuits_needing_data, self.num_samples,
                             self.sample_error, self.seed, self.rand_state,
                             self.alias_dict, self.collision_action,
@@ -2718,42 +2717,3 @@ def _convert_nameddict_attributes(obj):
         elif len(tup) == 3: attr, key, typ = tup
         keys_vals_types.append((key, getattr(obj, attr), typ))
     return keys_vals_types
-
-
-def _drop_constant_cols(df):
-    to_drop = [col for col in df.columns if len(df[col].unique()) == 1]
-    return df.drop(columns=to_drop)
-
-
-def _reset_index(df):
-    '''Returns DataFrame with index as columns - works with Categorical indices unlike DataFrame.reset_index'''
-    import pandas as _pd
-    index_df = df.index.to_frame(index=False)
-    df = df.reset_index(drop=True)
-    # In merge is important the order in which you pass the dataframes
-    # if the index contains a Categorical. I.e.,
-    # pd.merge(df, index_df, left_index=True, right_index=True) does not work.
-    return _pd.merge(index_df, df, left_index=True, right_index=True)
-
-
-def _process_dataframe(df, pivot_valuename, pivot_value, drop_columns, preserve_order=False):
-    """ See to_dataframe docstrings for argument descriptions. """
-    if drop_columns:
-        if drop_columns is True: drop_columns = (True,)
-        for col in drop_columns:
-            df = _drop_constant_cols(df) if (col is True) else df.drop(columns=col)
-
-    if pivot_valuename is not None or pivot_value is not None:
-        if pivot_valuename is None: pivot_valuename = "ValueName"
-        if pivot_value is None: pivot_value = "Value"
-        index_columns = list(df.columns)
-        index_columns.remove(pivot_valuename)
-        index_columns.remove(pivot_value)
-        df_all_index_but_value = df.set_index(index_columns + [pivot_valuename])
-        df_unstacked = df_all_index_but_value[pivot_value].unstack()
-        if preserve_order:  # a documented bug in pandas is unstack sorts - this tries to fix (HACK)
-            #df_unstacked = df_unstacked.reindex(df_all_index_but_value.index.get_level_values(0))
-            df_unstacked = df_unstacked.reindex(df_all_index_but_value.index.get_level_values(0).unique())
-        df = _reset_index(df_unstacked)
-
-    return df

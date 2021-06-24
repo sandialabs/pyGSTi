@@ -1,5 +1,5 @@
 """
-Functions for creating datasets
+Functions for creating data
 """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -17,10 +17,9 @@ import warnings as _warnings
 import numpy as _np
 import numpy.random as _rndm
 
-from . import circuitconstruction as _gstrc
-from ..datasets import dataset as _ds
-from ..baseobjs import label as _lbl, outcomelabeldict as _ld
-from ..protocols import ExperimentDesign as _ExperimentDesign
+from pygsti.circuits import circuitconstruction as _gstrc
+from pygsti.data import dataset as _ds
+from pygsti.baseobjs import label as _lbl, outcomelabeldict as _ld
 
 
 def simulate_data(model_or_dataset, circuit_list, num_samples,
@@ -132,6 +131,7 @@ def simulate_data(model_or_dataset, circuit_list, num_samples,
         alias_dict = {_lbl.Label(ky): tuple((_lbl.Label(el) for el in val))
                       for ky, val in alias_dict.items()}  # convert to use Labels
 
+    from pygsti.protocols import ExperimentDesign as _ExperimentDesign
     if isinstance(circuit_list, _ExperimentDesign):
         circuit_list = circuit_list.all_circuits_needing_data
 

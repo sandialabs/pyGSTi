@@ -12,8 +12,8 @@ The FullUnitaryOp class and supporting functionality.
 
 import numpy as _np
 
-from .denseop import DenseOperator as _DenseUnitaryOperator
-from .linearop import LinearOperator as _LinearOperator
+from pygsti.modelmembers.operations.denseop import DenseOperator as _DenseUnitaryOperator
+from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
 
 
 class FullUnitaryOp(_DenseUnitaryOperator):

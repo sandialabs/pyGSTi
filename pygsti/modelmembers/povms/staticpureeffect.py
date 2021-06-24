@@ -10,8 +10,8 @@ The StaticPOVMPureEffect class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from .conjugatedeffect import ConjugatedStatePOVMEffect as _ConjugatedStatePOVMEffect
-from ..states.staticpurestate import StaticPureState as _StaticPureState
+from pygsti.modelmembers.povms.conjugatedeffect import ConjugatedStatePOVMEffect as _ConjugatedStatePOVMEffect
+from pygsti.modelmembers.states.staticpurestate import StaticPureState as _StaticPureState
 
 
 class StaticPOVMPureEffect(_ConjugatedStatePOVMEffect):

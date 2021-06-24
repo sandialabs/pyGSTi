@@ -15,9 +15,9 @@ import copy as _copy
 import numpy as _np
 
 from pygsti.circuits.circuit import Circuit as _Circuit
-from ..baseobjs.label import Label as _Label
-from ..tools import matrixmod2 as _mtx
-from ..tools import symplectic as _symp
+from pygsti.baseobjs.label import Label as _Label
+from pygsti.tools import matrixmod2 as _mtx
+from pygsti.tools import symplectic as _symp
 
 
 def _create_standard_costfunction(name):
@@ -354,7 +354,7 @@ def compile_symplectic(s, pspec=None, qubit_labels=None, iterations=20, algorith
             import bpdb; bpdb.set_trace()
             pass
         assert(qubit_labels is None), "qubit_labels can only be specified if `pspec` is not None!"
-    
+
     if rand_state is None:
         rand_state = _np.random.RandomState()
 
@@ -470,7 +470,8 @@ def compile_symplectic(s, pspec=None, qubit_labels=None, iterations=20, algorith
 
 
 def _compile_symplectic_using_rogge_algorithm(s, pspec=None, qubit_labels=None, ctype='basic',
-                                              costfunction='2QGC:10:depth:1', iterations=10, check=True, rand_state=None):
+                                              costfunction='2QGC:10:depth:1', iterations=10, check=True,
+                                              rand_state=None):
     """
     Creates a :class:`Circuit` that implements a Clifford gate using the ROGGE algorithm.
 
@@ -528,7 +529,7 @@ def _compile_symplectic_using_rogge_algorithm(s, pspec=None, qubit_labels=None, 
     check : bool, optional
         Whether to check that the output circuit implements the correct symplectic matrix (i.e., tests for algorithm
         success).
-    
+
     rand_state: RandomState, optional
         A np.random.RandomState object for seeding RNG
 
@@ -1092,7 +1093,8 @@ def _compile_symplectic_using_riag_algoritm(s, pspec, qubit_labels=None, iterati
     return bestcircuit
 
 
-def _compile_symplectic_using_iag_algorithm(s, pspec, qubit_labels=None, cnotalg='COCAGE', cargs=[], check=True, rand_state=None):
+def _compile_symplectic_using_iag_algorithm(s, pspec, qubit_labels=None, cnotalg='COCAGE', cargs=[], check=True,
+                                            rand_state=None):
     """
     Creates a :class:`Circuit` that implements a Clifford gate using the IAG algorithm.
 
@@ -1145,7 +1147,7 @@ def _compile_symplectic_using_iag_algorithm(s, pspec, qubit_labels=None, cnotalg
         assert(len(qubit_labels) == n), \
             ("The number of qubits is inconsisent with the size of `s`! "
              "If `s` is over a subset, `qubit_labels` must be specified!")
-    
+
     if rand_state is None:
         rand_state = _np.random.RandomState()
 
@@ -1153,7 +1155,8 @@ def _compile_symplectic_using_iag_algorithm(s, pspec, qubit_labels=None, cnotalg
     sout = s.copy()
 
     # Stage 1: Hadamard gates from the LHS to make the UR submatrix of s invertible.
-    sout, LHS1_Hsome_layer = _make_submatrix_invertable_using_hadamards(sout, 'row', 'UR', qubit_labels, rand_state=rand_state)
+    sout, LHS1_Hsome_layer = _make_submatrix_invertable_using_hadamards(sout, 'row', 'UR', qubit_labels,
+                                                                        rand_state=rand_state)
     assert(_symp.check_symplectic(sout))
     # Stage 2: CNOT circuit from the RHS to map the UR submatrix of s to I.
     sout, RHS1A_CNOTs, success = _submatrix_gaussian_elimination_using_cnots(sout, 'column', 'UR', qubit_labels)
@@ -1212,11 +1215,14 @@ def _compile_symplectic_using_iag_algorithm(s, pspec, qubit_labels=None, cnotalg
 
     # clname is set to None so that the function doesn't change the circuit into the native gate library.
     circuit_1_cnots = compile_cnot_circuit(cnot1_s, pspec, qubit_labels=qubit_labels,
-                                           algorithm=cnotalg, clname=None, check=False, aargs=cargs, rand_state=rand_state)
+                                           algorithm=cnotalg, clname=None, check=False, aargs=cargs,
+                                           rand_state=rand_state)
     circuit_2_cnots = compile_cnot_circuit(cnot2_s, pspec, qubit_labels=qubit_labels,
-                                           algorithm=cnotalg, clname=None, check=False, aargs=cargs, rand_state=rand_state)
+                                           algorithm=cnotalg, clname=None, check=False, aargs=cargs,
+                                           rand_state=rand_state)
     circuit_3_cnots = compile_cnot_circuit(cnot3_s, pspec, qubit_labels=qubit_labels,
-                                           algorithm=cnotalg, clname=None, check=False, aargs=cargs, rand_state=rand_state)
+                                           algorithm=cnotalg, clname=None, check=False, aargs=cargs,
+                                           rand_state=rand_state)
 
     circuit = circuit_1_cnots.copy(editable=True)
     circuit.append_circuit_inplace(circuit_1_local)
@@ -1233,7 +1239,8 @@ def _compile_symplectic_using_iag_algorithm(s, pspec, qubit_labels=None, cnotalg
     return circuit
 
 
-def compile_cnot_circuit(s, pspec, qubit_labels=None, algorithm='COiCAGE', clname=None, check=True, aargs=[], rand_state=None):
+def compile_cnot_circuit(s, pspec, qubit_labels=None, algorithm='COiCAGE', clname=None, check=True, aargs=[],
+                         rand_state=None):
     """
     A CNOT circuit compiler.
 
@@ -1316,7 +1323,7 @@ def compile_cnot_circuit(s, pspec, qubit_labels=None, algorithm='COiCAGE', clnam
     """
 
     if qubit_labels is not None: qubits = list(qubit_labels)
-    else: qubits = pspec.qubit_labels
+    else: qubits = list(pspec.qubit_labels)
     n = len(qubits)
     assert(n == _np.shape(s)[0] // 2), "The CNOT circuit is over the wrong number of qubits!"
     assert(_np.array_equal(s[:n, n:2 * n], _np.zeros((n, n), int))
@@ -2066,7 +2073,7 @@ def compile_stabilizer_state(s, p, pspec, qubit_labels=None, iterations=20, paul
             - 'depth' : the cost of the circuit is the depth of the circuit.
             - '2QGC:x:depth:y' : the cost of the circuit is x * the number of 2-qubit gates in the circuit +
                 y * the depth of the circuit, where x and y are integers.
-    
+
     rand_state: RandomState, optional
         A np.random.RandomState object for seeding RNG
 
@@ -2235,7 +2242,7 @@ def compile_stabilizer_measurement(s, p, pspec, qubit_labels=None, iterations=20
             - 'depth' : the cost of the circuit is the depth of the circuit.
             - '2QGC:x:depth:y' : the cost of the circuit is x * the number of 2-qubit gates in the circuit +
                 y * the depth of the circuit, where x and y are integers.
-    
+
     rand_state: RandomState, optional
         A np.random.RandomState object for seeding RNG
 
@@ -2252,7 +2259,7 @@ def compile_stabilizer_measurement(s, p, pspec, qubit_labels=None, iterations=20
     n = _np.shape(s)[0] // 2
     assert(n == len(qubit_labels)), \
         "The input `s` is the wrong size for the number of qubits specified by `pspec` or `qubit_labels`!"
-    
+
     if rand_state is None:
         rand_state = _np.random.RandomState()
 
@@ -2575,7 +2582,7 @@ def _make_submatrix_invertable_using_hadamards(s, optype, position, qubit_labels
         The qubit labels corresponding to the indices of `s`. This is required because othewise
         it is ambigious as to what the 'name' of a qubit associated with each indices is, so it
         is not possible to return a suitable list of CNOTs.
-    
+
     rand_state: RandomState, optional
         A np.random.RandomState object for seeding RNG
 
@@ -2962,7 +2969,8 @@ def compile_conditional_symplectic(s, pspec, qubit_labels=None, calg='COiCAGE', 
     sout = s.copy()
 
     # Stage 1: Hadamard gates from the LHS to make the UR submatrix of s invertible.
-    sout, Hsome_layer = _make_submatrix_invertable_using_hadamards(sout, 'row', 'UR', qubit_labels, rand_state=rand_state)
+    sout, Hsome_layer = _make_submatrix_invertable_using_hadamards(sout, 'row', 'UR', qubit_labels,
+                                                                   rand_state=rand_state)
 
     if n > 1:
         # Stage 2: CNOT circuit from the RHS to map the UR submatrix of s to I.
