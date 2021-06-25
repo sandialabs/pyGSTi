@@ -471,11 +471,12 @@ class InterpolatedQuantityFactory(object):
             The number of parameter ranges, counted back from the last one, that should be passed to
             `fn_to_interpolate` as an entire range of values, i.e. via the `grouped_axial_pts` argument.
 
-        interpolator_and_args : tuple, optional
+        interpolator_and_args : tuple or string, optional
             Optionally a 2-tuple of an interpolation class and argument dictionary.  If None, the
             default of `(csaps.NdGridCubicSmoothingSpline, {'shape', self.qty__shape})` is used. If
             csaps is not available, then `(scipy.interpolate.LinearNDInterpolator, {'rescale': True})`
-            is used instead.
+            is used instead. A linear interpolator can be specified explicitly by `linear` and the 
+            default spline interpolator may be explicitly specified by `spline`. 
         """
         self.fn_to_interpolate = fn_to_interpolate
         assert(bool(parameter_ranges is not None) ^ bool(parameter_points is not None)), \
@@ -624,6 +625,10 @@ class InterpolatedQuantityFactory(object):
                 interp_cls, interp_kwargs = (_cubicSplineMod, {'shape': self.grid_shape})
             else:
                 interp_cls, interp_kwargs = (_linND, {'rescale': True})
+        elif self.interpolator_and_args == 'linear':
+            interp_cls, interp_kwargs = (_linND, {'rescale': True})
+        elif self.interpolator_and_args == 'spline':
+            interp_cls, interp_kwargs = (_cubicSplineMod, {'shape': self.grid_shape})
         else:
             interp_cls, interp_kwargs = self.interpolator_and_args
 
