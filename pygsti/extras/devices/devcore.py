@@ -123,7 +123,7 @@ def create_processor_spec(device, one_qubit_gates, qubitsubset=None, removeedges
 
     availability = {two_qubit_gate: edgelist}
     #print(availability)
-    pspec = _pspec.ProcessorSpec(total_qubits, gate_names, availability=availability,
+    pspec = _pspec.ProcessorPack(total_qubits, gate_names, availability=availability,
                                  construct_clifford_compilations=construct_clifford_compilations,
                                  construct_models=construct_models,
                                  verbosity=verbosity, qubit_labels=qubits)
