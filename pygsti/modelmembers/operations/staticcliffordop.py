@@ -47,6 +47,9 @@ class StaticCliffordOp(_LinearOperator):
         assert(self.unitary is not None), "Must supply `unitary` argument!"
         U = self.unitary.to_dense() if isinstance(self.unitary, _LinearOperator) else self.unitary
 
+        # Make contiguous for Cython-based evotypes
+        U = U.copy(order='C')
+
         state_space = _statespace.default_space_for_udim(U.shape[0]) if (state_space is None) \
             else _statespace.StateSpace.cast(state_space)
 

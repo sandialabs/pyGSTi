@@ -483,8 +483,8 @@ class LocalNoiseModel(_ImplicitOpModel):
                         gate = _op.convert(_op.StaticArbitraryOp(ptm), parameterization, "pp")
                 except Exception as e:
                     if on_construction_error == 'warn':
-                        _warnings.warn("Failed to create %s gate %s. Dropping it." %
-                                       (parameterization, gateName))
+                        _warnings.warn("Failed to create %s gate %s with error '%s'. Dropping it." %
+                                       (parameterization, gateName, e))
                     if on_construction_error in ('warn', 'ignore'): continue
                     else: raise e
                 gatedict[gateName] = gate
