@@ -28,7 +28,7 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
                num_gs_copies=5, seed=None, candidate_germ_counts=None,
                candidate_seed=None, force="singletons", algorithm='greedy',
                algorithm_kwargs=None, mem_limit=None, comm=None,
-               profiler=None, verbosity=1):
+               profiler=None, verbosity=1, num_nongauge_params=None):
     """
     Generate a germ set for doing GST with a given target model.
 
@@ -126,6 +126,9 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
         The verbosity level of the :class:`~pygsti.objects.VerbosityPrinter`
         used to print log messages.
 
+    num_nongauge_params : int, optional
+        Force the number of nongauge parameters rather than rely on automated gauge optimization. 
+
     Returns
     -------
     list of Circuit
@@ -163,7 +166,8 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
             'score_func': 'all',
             'comm': comm,
             'mem_limit': mem_limit,
-            'profiler': profiler
+            'profiler': profiler,
+            'num_nongauge_params': num_nongauge_params
         }
         for key in default_kwargs:
             if key not in algorithm_kwargs:
@@ -1306,7 +1310,7 @@ def find_germs_breadthfirst(model_list, germs_list, randomize=True,
                             randomization_strength=1e-3, num_copies=None, seed=0,
                             op_penalty=0, score_func='all', tol=1e-6, threshold=1e6,
                             check=False, force="singletons", pretest=True, mem_limit=None,
-                            comm=None, profiler=None, verbosity=0):
+                            comm=None, profiler=None, verbosity=0, num_nongauge_params=None):
     """
     Greedy algorithm starting with 0 germs.
 
@@ -1390,6 +1394,9 @@ def find_germs_breadthfirst(model_list, germs_list, randomize=True,
     verbosity : int, optional
         Level of detail printed to stdout.
 
+    num_nongauge_params : int, optional
+        Force the number of nongauge parameters rather than rely on automated gauge optimization. 
+
     Returns
     -------
     list
@@ -1412,8 +1419,14 @@ def find_germs_breadthfirst(model_list, germs_list, randomize=True,
     #assert(all([(mdl.num_params == Np) for mdl in model_list])), \
     #    "All models must have the same number of parameters!"
 
+    
+    
     (_, numGaugeParams,
-     numNonGaugeParams, _) = _get_model_params(model_list)
+         numNonGaugeParams, _) = _get_model_params(model_list)
+    if num_nongauge_params is not None:
+        numGaugeParams = numGaugeParams + numNonGaugeParams - num_nongauge_params
+        numNonGaugeParams = num_nongauge_params
+        
     germLengths = _np.array([len(germ) for germ in germs_list], _np.int64)
 
     numGerms = len(germs_list)

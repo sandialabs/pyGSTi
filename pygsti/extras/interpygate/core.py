@@ -628,7 +628,10 @@ class InterpolatedQuantityFactory(object):
         elif self.interpolator_and_args == 'linear':
             interp_cls, interp_kwargs = (_linND, {'rescale': True})
         elif self.interpolator_and_args == 'spline':
-            interp_cls, interp_kwargs = (_cubicSplineMod, {'shape': self.grid_shape})
+            if use_csaps:
+                interp_cls, interp_kwargs = (_cubicSplineMod, {'shape': self.grid_shape})
+            else:
+                raise ValueError("csaps package is not loaded, so 'spline' interpolator is not available.")
         else:
             interp_cls, interp_kwargs = self.interpolator_and_args
 
