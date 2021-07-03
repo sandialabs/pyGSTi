@@ -2232,7 +2232,7 @@ def lindblad_terms_to_projections(lindblad_term_dict, basis, other_mode="all"):
         Basis labels can be strings or integers.  Values are complex
         coefficients (error rates).
 
-    basis : Basis, optional
+    basis : Basis
         A basis mapping the labels used in the keys of `lindblad_term_dict` to
         basis matrices (e.g. numpy arrays or Scipy sparse matrices).  The
         first element of this basis should be an identity element, and

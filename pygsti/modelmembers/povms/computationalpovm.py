@@ -41,6 +41,22 @@ class ComputationalBasisPOVM(_POVM):
         with the appropriate number of qubits is used.
     """
 
+    @classmethod
+    def from_pure_vectors(cls, pure_vectors, evotype, state_space):
+        # Check if `pure_vectors` happens to be a Z-basis POVM on n-qubits
+        assert(len(pure_vectors) > 0)
+        if not isinstance(pure_vectors, dict):
+            pure_vectors = _collections.OrderedDict(pure_vectors)
+        nqubits = len(next(iter(pure_vectors.values())))
+
+        v = (_np.array([1, 0], 'd'), _np.array([0, 1], 'd'))  # (v0,v1) - eigenstates of sigma_z
+        for zvals in _itertools.product(*([(0, 1)] * nqubits)):
+            testvec = _functools.reduce(_np.kron, [v[i] for i in zvals])  # FUTURE: make this more efficient
+            lbl = ''.join(map(str, zvals))
+            if not _np.allclose(testvec, pure_vectors[lbl]):
+                raise ValueError("`pure_vectors` doesn't look like a Z-basis computational POVM")
+        return cls(nqubits, evotype, None, state_space)
+
     def __init__(self, nqubits, evotype="default", qubit_filter=None, state_space=None):
         if qubit_filter is not None:
             raise NotImplementedError("Still need to implement qubit_filter functionality")

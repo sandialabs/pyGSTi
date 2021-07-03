@@ -19,6 +19,7 @@ import scipy.sparse as _sps
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
 from pygsti.modelmembers import modelmember as _modelmember
 from pygsti.baseobjs.basis import EmbeddedBasis as _EmbeddedBasis
+from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 
 
 class EmbeddedOp(_LinearOperator):
@@ -47,6 +48,9 @@ class EmbeddedOp(_LinearOperator):
         self.target_labels = target_labels
         self.embedded_op = operation_to_embed
         self._iter_elements_cache = None  # speeds up _iter_matrix_elements significantly
+
+        assert(_StateSpace.cast(state_space).contains_labels(target_labels)), \
+            "`target_labels` (%s) not found in `state_space` (%s)" % (str(target_labels), str(state_space))
 
         evotype = operation_to_embed._evotype
 

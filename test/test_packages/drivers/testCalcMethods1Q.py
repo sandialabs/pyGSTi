@@ -8,7 +8,8 @@ import unittest
 import numpy as np
 import scipy.linalg as spl
 import pygsti
-import pygsti.construction as pc
+import pygsti.models.modelconstruction as mc
+from pygsti.baseobjs.processorspec import ProcessorSpec as _ProcessorSpec
 from pygsti.modelpacks.legacy import std1Q_XYI as std
 from pygsti.modelpacks.legacy import std1Q_XY
 from pygsti.objects import Label as L, Circuit
@@ -22,7 +23,6 @@ from ..testutils import BaseTestCase, compare_files, regenerate_references
 def build_XYCNOT_cloudnoise_model(nQubits, geometry="line", cnot_edges=None,
                                       maxIdleWeight=1, maxSpamWeight=1, maxhops=0,
                                       extraWeight1Hops=0, extraGateWeight=0,
-                                      sparse_lindblad_basis=False, sparse_lindblad_reps=False,
                                       roughNoise=None, simulator="matrix", parameterization="H+S",
                                       spamtype="lindblad", addIdleNoiseToAllGates=True,
                                       errcomp_type="gates", return_clouds=False, verbosity=0):
@@ -39,14 +39,22 @@ def build_XYCNOT_cloudnoise_model(nQubits, geometry="line", cnot_edges=None,
 
     availability = {}; nonstd_gate_unitaries = {}
     if cnot_edges is not None: availability['Gcnot'] = cnot_edges
-    return pc.create_cloudnoise_model_from_hops_and_weights(
-        nQubits, ['Gx','Gy','Gcnot'], nonstd_gate_unitaries, None, availability,
-        None, geometry, maxIdleWeight, maxSpamWeight, maxhops,
+    pspec = _ProcessorSpec(nQubits, ['Gx','Gy','Gcnot'], nonstd_gate_unitaries, availability, geometry)
+    assert(spamtype == "lindblad")  # unused and should remove this arg, but should always be "lindblad"
+    mdl = mc.create_cloud_crosstalk_model_from_hops_and_weights(
+        pspec, None,
+        maxIdleWeight, maxSpamWeight, maxhops,
         extraWeight1Hops, extraGateWeight,
-        roughNoise, sparse_lindblad_basis, sparse_lindblad_reps,
-        simulator, parameterization,
-        spamtype, addIdleNoiseToAllGates,
-        errcomp_type, True, return_clouds, verbosity)
+        simulator, 'default', parameterization, parameterization,
+        addIdleNoiseToAllGates,
+        errcomp_type, True, True, verbosity)
+
+    if return_clouds:
+        #FUTURE - just return cloud *keys*? (operation label values are never used
+        # downstream, but may still be useful for debugging, so keep for now)
+        return mdl, mdl.clouds
+    else:
+        return mdl
 
 
 class CalcMethods1QTestCase(BaseTestCase):
@@ -90,7 +98,6 @@ class CalcMethods1QTestCase(BaseTestCase):
         cls.nQubits=1 # can't just change this now - see op_labels below
         cls.mdl_redmod_datagen = build_XYCNOT_cloudnoise_model(cls.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
                                                                extraWeight1Hops=0, extraGateWeight=1,
-                                                               sparse_lindblad_basis=False, sparse_lindblad_reps=False,
                                                                simulator="matrix", verbosity=1, roughNoise=(1234,0.01))
 
         #Create a reduced set of fiducials and germs
@@ -265,7 +272,6 @@ class CalcMethods1QTestCase(BaseTestCase):
         # Using dense matrices and matrix-based calcs
         target_model = build_XYCNOT_cloudnoise_model(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
                                                      extraWeight1Hops=0, extraGateWeight=1,
-                                                     sparse_lindblad_basis=False, sparse_lindblad_reps=False,
                                                      simulator="matrix", verbosity=1)
         print("Num params = ",target_model.num_params)
         target_model.from_vector(self.rand_start25)
@@ -288,7 +294,6 @@ class CalcMethods1QTestCase(BaseTestCase):
         # Using dense embedded matrices and map-based calcs (maybe not really necessary to include?)
         target_model = build_XYCNOT_cloudnoise_model(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
                                                      extraWeight1Hops=0, extraGateWeight=1,
-                                                     sparse_lindblad_basis=False, sparse_lindblad_reps=False,
                                                      simulator="map", errcomp_type='gates', verbosity=1)
         print("Num params = ",target_model.num_params)
         target_model.from_vector(self.rand_start25)
@@ -310,7 +315,6 @@ class CalcMethods1QTestCase(BaseTestCase):
         # but w/*errcomp_type=errogens* Model (maybe not really necessary to include?)
         target_model = build_XYCNOT_cloudnoise_model(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
                                                      extraWeight1Hops=0, extraGateWeight=1,
-                                                     sparse_lindblad_basis=False, sparse_lindblad_reps=False,
                                                      simulator="map", errcomp_type='errorgens', verbosity=1)
         print("Num params = ",target_model.num_params)
         target_model.from_vector(self.rand_start25)
@@ -326,7 +330,6 @@ class CalcMethods1QTestCase(BaseTestCase):
         # Using sparse embedded matrices and map-based calcs
         target_model = build_XYCNOT_cloudnoise_model(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
                                                      extraWeight1Hops=0, extraGateWeight=1,
-                                                     sparse_lindblad_basis=True, sparse_lindblad_reps=True,
                                                      simulator="map", errcomp_type='gates', verbosity=1)
         print("Num params = ",target_model.num_params)
         target_model.from_vector(self.rand_start25)
@@ -348,7 +351,6 @@ class CalcMethods1QTestCase(BaseTestCase):
         # but w/*errcomp_type=errogens* Model (maybe not really necessary to include?)
         target_model = build_XYCNOT_cloudnoise_model(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
                                                      extraWeight1Hops=0, extraGateWeight=1,
-                                                     sparse_lindblad_basis=True, sparse_lindblad_reps=True,
                                                      simulator="map", errcomp_type='errorgens', verbosity=1)
         print("Num params = ",target_model.num_params)
         target_model.from_vector(self.rand_start25)
@@ -366,8 +368,8 @@ class CalcMethods1QTestCase(BaseTestCase):
         termsim = pygsti.objects.TermForwardSimulator(mode='taylor-order', max_order=1)
         target_model = build_XYCNOT_cloudnoise_model(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
                                                      extraWeight1Hops=0, extraGateWeight=1,
-                                                     sparse_lindblad_basis=False, sparse_lindblad_reps=True, verbosity=1,
-                                                     simulator=termsim, parameterization="H+S terms", errcomp_type='gates')
+                                                     verbosity=1, simulator=termsim, parameterization="H+S terms",
+                                                     errcomp_type='gates')
         print("Num params = ",target_model.num_params)
         target_model.from_vector(self.rand_start36)
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
@@ -391,7 +393,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         termsim = pygsti.objects.TermForwardSimulator(mode='taylor-order', max_order=1)
         target_model = build_XYCNOT_cloudnoise_model(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
                                                      extraWeight1Hops=0, extraGateWeight=1,
-                                                     sparse_lindblad_basis=False, sparse_lindblad_reps=True, verbosity=1,
+                                                     verbosity=1,
                                                      simulator=termsim, parameterization="H+S terms", errcomp_type='errorgens')
         print("Num params = ",target_model.num_params)
         target_model.from_vector(self.rand_start36)
@@ -407,7 +409,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         termsim = pygsti.objects.TermForwardSimulator(mode='pruned')
         target_model = build_XYCNOT_cloudnoise_model(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
                                                      extraWeight1Hops=0, extraGateWeight=1,
-                                                     sparse_lindblad_basis=False, sparse_lindblad_reps=True, verbosity=1,
+                                                    verbosity=1,
                                                      simulator=termsim, parameterization="H+S terms", errcomp_type='errorgens')
 
         #separately call set_simtype to set other params
@@ -432,7 +434,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         termsim = pygsti.objects.TermForwardSimulator(mode='taylor-order', max_order=1)
         target_model = build_XYCNOT_cloudnoise_model(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
                                                      extraWeight1Hops=0, extraGateWeight=1,
-                                                     sparse_lindblad_basis=False, sparse_lindblad_reps=True, verbosity=1,
+                                                     verbosity=1,
                                                      simulator=termsim, parameterization="H+S clifford terms", errcomp_type='gates')
         print("Num params = ",target_model.num_params)
         target_model.from_vector(self.rand_start36)
@@ -452,7 +454,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         termsim = pygsti.objects.TermForwardSimulator(mode='taylor-order', max_order=1)
         target_model = build_XYCNOT_cloudnoise_model(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
                                                      extraWeight1Hops=0, extraGateWeight=1,
-                                                     sparse_lindblad_basis=False, sparse_lindblad_reps=True, verbosity=1,
+                                                     verbosity=1,
                                                      simulator=termsim, parameterization="H+S clifford terms", errcomp_type='errorgens')
         print("Num params = ",target_model.num_params)
         target_model.from_vector(self.rand_start36)

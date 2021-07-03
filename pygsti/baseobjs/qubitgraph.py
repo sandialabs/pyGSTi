@@ -189,7 +189,7 @@ class QubitGraph(object):
         if initial_connectivity is not None:
             if initial_connectivity.dtype == _np.bool:
                 assert(direction_names is None), \
-                    "`initial_connectivity` must have *integer* indices when `direction_names` is non-None"
+                    "`initial_connectivity` must hold *integer* direction-indices when `direction_names` is non-None"
             else:
                 #TODO: fix numpy integer-type test here
                 assert(initial_connectivity.dtype == _np.int), \
@@ -197,15 +197,10 @@ class QubitGraph(object):
                      "int (but has dtype=%s)") % str(initial_connectivity.dtype)
                 assert(direction_names is not None), \
                     "must supply `direction_names` when `initial_connectivity` contains *integers*!"
-            self.directions = list(direction_names) if direction_names is not None else None
-            # either a list of direction names or None, indicating no directions
 
         elif initial_edges is not None:
             lens = list(map(len, initial_edges))
-            if len(lens) == 0:
-                # set direction names if we're given any
-                self.directions = list(direction_names) if direction_names is not None else None
-            else:
+            if len(lens) > 0:
                 assert(all([x == lens[0] for x in lens])), \
                     "All elements of `initial_edges` must be tuples of *either* length 2 or 3.  You can't mix them."
                 if lens[0] == 2:
@@ -227,7 +222,9 @@ class QubitGraph(object):
                             "Missing one or more direction names from `direction_names`!"
                     else:  # direction_name is None, and that's ok b/c no direction indices were used
                         direction_names = list(sorted(direction_names_chk))
-                self.directions = direction_names  # set direction names if we're given any
+
+        # set direction names if we're given or collected any: either a list of direction names or None (no directions)
+        self.directions = list(direction_names) if direction_names is not None else None
 
         assert(self.directions is None or self.directed), "QubitGraph directions can only be used with `directed==True`"
 

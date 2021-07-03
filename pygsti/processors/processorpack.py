@@ -19,7 +19,7 @@ from pygsti.baseobjs.processorspec import ProcessorSpec as _ProcessorSpec
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.qubitgraph import QubitGraph as _QubitGraph
 from pygsti.processors.compilationlibrary import CompilationError as _CompilationError
-from pygsti.processors.compilationlibrary import CompilationLibrary as _CompilationLibrary
+from pygsti.processors.compilationlibrary import CliffordCompilationLibrary as _CliffordCompilationLibrary
 from pygsti.forwardsims.mapforwardsim import MapForwardSimulator as _MapFSim
 from pygsti.models.localnoisemodel import LocalNoiseModel as _LocalNoiseModel
 from pygsti.tools import internalgates as _itgs
@@ -116,7 +116,8 @@ class ProcessorPack(_ProcessorSpec):
                  qubit_labels=None, construct_models=(),
                  construct_clifford_compilations={'paulieq': ('1Qcliffords', 'allcnots'),
                                                   'absolute': ('paulis', '1Qcliffords')}, verbosity=0):
-        super(ProcessorPack, self).__init__(num_qubits, gate_names, nonstd_gate_unitaries, availability, qubit_labels)
+        geometry = None  # don't add as arg until we get other things straightened out
+        super(ProcessorPack, self).__init__(num_qubits, gate_names, nonstd_gate_unitaries, availability, geometry, qubit_labels)
 
         # A dictionary of models for the device (e.g., imperfect unitaries, process matrices etc).
         self.models = _collections.OrderedDict()
@@ -126,7 +127,7 @@ class ProcessorPack(_ProcessorSpec):
 
         # The connectivity graph of the device, for the "clifford" model (future: perhaps this should not only be for
         # Clifford gates, or there should be a qubitgraph for each model.)
-        self.qubitgraph = None
+        self.clifford_qubitgraph = None
 
         # Holds a dictionary with keys that are 1Q gatename pairs (gn1, gn2), with a value gn3 that is the 1Q that
         # these gates combine to when gn1 is applied first and then gn2. There is no key for a pair if they don't
@@ -191,8 +192,8 @@ class ProcessorPack(_ProcessorSpec):
                     raise ValueError(
                         "The keys to `construct_clifford_compilations` can only be `paulieq` and `absolute!")
 
-            # Generates the QubitGraph for the multi-qubit Clifford gates. If there are multi-qubit gates which are not
-            # Clifford gates then these are not counted as "connections".
+            # Generate clifford_qubitgraph for the multi-qubit Clifford gates. If there are multi-qubit gates
+            # which are not Clifford gates then these are not counted as "connections".
             connectivity = _np.zeros((self.number_of_qubits, self.number_of_qubits), dtype=bool)
             for oplabel in self.models['clifford'].primitive_op_labels:
                 # This treats non-entangling 2-qubit gates as making qubits connected. Stopping that is
@@ -202,7 +203,7 @@ class ProcessorPack(_ProcessorSpec):
                     for p in _itertools.permutations(oplabel.qubits, 2):
                         connectivity[self.qubit_labels.index(p[0]), self.qubit_labels.index(p[1])] = True
 
-            self.qubitgraph = _QubitGraph(self.qubit_labels, connectivity)
+            self.clifford_qubitgraph = _QubitGraph(self.qubit_labels, connectivity)
 
         #future : store this in a less clumsy way.
         if 'clifford' in self.models:
@@ -407,7 +408,7 @@ class ProcessorPack(_ProcessorSpec):
         if 'clifford' not in self.models:
             raise ValueError("Cannot create standard compilations without a 'clifford' model!")
         # Creates an empty library to fill
-        library = _CompilationLibrary(self.models['clifford'], compile_type)
+        library = _CliffordCompilationLibrary(self.models['clifford'], compile_type)
 
         # 1-qubit gate compilations. These must be complied "locally" - i.e., out of native gates which act only
         # on the target qubit of the gate being compiled, and they are stored in the compilation library.
@@ -597,7 +598,7 @@ class ProcessorPack(_ProcessorSpec):
 
     #     """
     #     self.qubitcosts = {}
-    #     distances = self.qubitgraph.shortest_path_distance_matrix()
+    #     distances = self.clifford_qubitgraph.shortest_path_distance_matrix()
     #     for i in range(0,self.number_of_qubits):
     #         self.qubitcosts[i] = _np.sum(distances[i,:])
 

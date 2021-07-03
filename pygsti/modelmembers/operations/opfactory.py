@@ -388,13 +388,20 @@ class EmbeddingOpFactory(OpFactory):
         (usually equal to the number of qubits the contained gate acts
         upon).  If `None`, then the length of the `sslbls` passed to this
         factory's `create_op` method is not checked at all.
+
+    allowed_sslbls_fn : callable, optional
+        A boolean function that takes a single `sslbls` argument specifying the state-space
+        labels for which the factory has been asked to embed `factory_or_op_to_embed`.  If
+        the function returns `True` then the embedding is allowed, if `False` then an error
+        is raised.
     """
 
-    def __init__(self, state_space, factory_or_op_to_embed, num_target_labels=None):
+    def __init__(self, state_space, factory_or_op_to_embed, num_target_labels=None, allowed_sslbls_fn=None):
         state_space = _statespace.StateSpace.cast(state_space)
         self.embedded_factory_or_op = factory_or_op_to_embed
         self.embeds_factory = isinstance(factory_or_op_to_embed, OpFactory)
         self.num_target_labels = num_target_labels
+        self.allowed_sslbls_fn = allowed_sslbls_fn
         super(EmbeddingOpFactory, self).__init__(state_space, factory_or_op_to_embed._evotype)
 
     def create_op(self, args=None, sslbls=None):
@@ -424,6 +431,8 @@ class EmbeddingOpFactory(OpFactory):
         assert(self.num_target_labels is None or len(sslbls) == self.num_target_labels), \
             ("EmbeddingFactory.create_op called with the wrong number (%s) of target labels!"
              " (expected %d)") % (len(sslbls), self.num_target_labels)
+        if self.allowed_sslbls_fn is not None and self.allowed_sslbls_fn(sslbls) is False:
+            raise ValueError("Not allowed to embed onto sslbls=" + str(sslbls))
 
         if self.embeds_factory:
             op = self.embedded_factory_or_op.create_op(args, None)  # Note: will have its gpindices set already

@@ -9,7 +9,7 @@ Sub-package holding model POVM and POVM effect objects.
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
-
+import _collections
 import functools as _functools
 import itertools as _itertools
 
@@ -35,6 +35,149 @@ from .tppovm import TPPOVM
 from .unconstrainedpovm import UnconstrainedPOVM
 from pygsti.tools import basistools as _bt
 from pygsti.tools import optools as _ot
+
+
+def create_from_pure_vectors(pure_vectors, povm_type, basis='pp', evotype='default', state_space=None):
+    """ TODO: docstring -- create a POVM from a list/dict of (key, pure-vector) pairs """
+    povm_type_preferences = (povm_type,) if isinstance(povm_type, str) else povm_type
+    if not isinstance(pure_vectors, dict):  # then assume it's a list of (key, value) pairs
+        pure_vectors = _collections.OrderedDict(pure_vectors)
+
+    for typ in povm_type_preferences:
+        try:
+            if typ in ('computational', 'static standard'):
+                povm = ComputationalBasisPOVM.from_dense_purevecs(pure_vectors, evotype, state_space)
+            #elif typ in ('static stabilizer', 'static clifford'):
+            #    povm = ComputationalBasisPOVM(...evotype='stabilizer') ??
+            elif typ in ('static pure', 'static unitary',
+                         'full pure', 'full unitary',
+                         'static', 'full'):
+                effects = [(lbl, create_effect_from_pure_vector(vec, typ, basis, evotype, state_space))
+                           for lbl, vec in pure_vectors.items()]
+                povm = UnconstrainedPOVM(effects, evotype, state_space)
+            elif typ == 'TP':
+                effects = [(lbl, create_effect_from_pure_vector(vec, "full", basis, evotype, state_space))
+                            for lbl, vec in povm.items()]
+                povm = TPPOVM(effects, evotype, state_space)
+            elif _ot.is_valid_lindblad_paramtype(typ):
+                from ..operations import LindbladErrorgen as _LindbladErrorgen, ExpErrorgenOp as _ExpErrorgenOp
+                base_povm = create_from_pure_vectors(pure_vectors, ('computational', 'static pure'),
+                                                     basis, evotype, state_space)
+
+                proj_basis = 'pp' if state_space.is_entirely_qubits else basis
+                errorgen = _LindbladErrorgen.from_error_generator(state_space.dim, typ, proj_basis, basis,
+                                                                 truncate=True, evotype=evotype,
+                                                                 state_space=state_space)
+                povm = ComposedPOVM(_ExpErrorgenOp(errorgen), base_povm, mx_basis=basis)
+            else:
+                raise ValueError("Unknown POVM type '%s'!" % str(typ))
+
+            return povm  # if we get to here, then we've successfully created a state to return
+        except (ValueError, AssertionError):
+            pass  # move on to next type
+
+    raise ValueError("Could not create a POVM of type(s) %s from the given pure vectors!" % (str(povm_type)))
+
+
+def create_from_dmvecs(superket_vectors, povm_type, basis='pp', evotype='default', state_space=None):
+    """ TODO: docstring -- create a POVM from a list/dict of (key, pure-vector) pairs """
+    povm_type_preferences = (povm_type,) if isinstance(povm_type, str) else povm_type
+    if not isinstance(superket_vectors, dict):  # then assume it's a list of (key, value) pairs
+        superket_vectors = _collections.OrderedDict(superket_vectors)
+
+    for typ in povm_type_preferences:
+        try:
+            if typ in ("full", "static"):
+                effects = [(lbl, create_effect_from_dmvec(dmvec, typ, basis, evotype, state_space))
+                           for lbl, dmvec in superket_vectors.items()]
+                povm = UnconstrainedPOVM(effects, evotype, state_space)
+            elif typ == 'TP':
+                effects = [(lbl, create_effect_from_dmvec(dmvec, 'full', basis, evotype, state_space))
+                           for lbl, dmvec in superket_vectors.items()]
+                povm = TPPOVM(effects, evotype, state_space)
+            elif _ot.is_valid_lindblad_paramtype(typ):
+                from ..operations import LindbladErrorgen as _LindbladErrorgen, ExpErrorgenOp as _ExpErrorgenOp
+                base_povm = create_from_dmvecs(pure_vectors, ('computational', 'static'),
+                                               basis, evotype, state_space)
+
+                proj_basis = 'pp' if state_space.is_entirely_qubits else basis
+                errorgen = _LindbladErrorgen.from_error_generator(state_space.dim, typ, proj_basis, basis,
+                                                                 truncate=True, evotype=evotype,
+                                                                 state_space=state_space)
+                povm = ComposedPOVM(_ExpErrorgenOp(errorgen), base_povm, mx_basis=basis)
+            elif typ in ('computational', 'static standard',
+                         'static pure', 'static unitary',
+                         'full pure', 'full unitary'):
+                pure_vectors = {k: _ot.dmvec_to_state(_bt.change_basis(superket, basis, 'std'))
+                                for k, superket in superket_vectors.items()}
+                povm = create_from_pure_vectors(pure_vectors, typ, basis, evotype, state_space)
+            else:
+                raise ValueError("Unknown POVM type '%s'!" % str(typ))
+
+            return povm  # if we get to here, then we've successfully created a state to return
+        except (ValueError, AssertionError):
+            pass  # move on to next type
+
+    raise ValueError("Could not create a POVM of type(s) %s from the given pure vectors!" % (str(povm_type)))
+
+
+def create_effect_from_pure_vector(pure_vector, effect_type, basis='pp', evotype='default', state_space=None):
+    """ TODO: docstring -- create a State from a state vector """
+    effect_type_preferences = (effect_type,) if isinstance(effect_type, str) else effect_type
+
+    for typ in effect_type_preferences:
+        try:
+            if typ in ('computational', 'static standard'):
+                ef = ComputationalBasisPOVMEffect.from_dense_purevec(pure_vector, basis, evotype, state_space)
+            #elif typ == ('static stabilizer', 'static clifford'):
+            #    ef = StaticStabilizerEffect(...)  # TODO
+            elif typ == ('static pure', 'static unitary'):
+                ef = StaticPOVMPureEffect(pure_vector, basis, evotype, state_space)
+            elif typ == ('full pure', 'full unitary'):
+                ef = FullPOVMPureEffect(pure_vector, basis, evotype, state_space)
+            elif typ in ('static', 'full'):
+                superket = _bt.change_basis(_ot.state_to_dmvec(pure_vector), 'std', basis)
+                ef = create_effect_from_dmvec(superket, typ, basis, evotype, state_space)
+            elif _ot.is_valid_lindblad_paramtype(typ):
+                from ..operations import LindbladErrorgen as _LindbladErrorgen, ExpErrorgenOp as _ExpErrorgenOp
+                static_effect = create_effect_from_pure_vector(
+                    pure_vector, ('computational', 'static pure'), basis, evotype, state_space)
+
+                proj_basis = 'pp' if state_space.is_entirely_qubits else basis
+                errorgen = _LindbladErrorgen.from_error_generator(state_space.dim, typ, proj_basis, basis,
+                                                                  truncate=True, evotype=evotype,
+                                                                  state_space=state_space)
+                ef = ComposedPOVMEffect(static_effect, _ExpErrorgenOp(errorgen))
+            else:
+                raise ValueError("Unknown effect type '%s'!" % str(typ))
+
+            return ef  # if we get to here, then we've successfully created a state to return
+        except (ValueError, AssertionError):
+            pass  # move on to next type
+
+    raise ValueError("Could not create an effect of type(s) %s from the given pure vector!" % (str(effect_type)))
+
+
+def create_effect_from_dmvec(superket_vector, effect_type, basis='pp', evotype='default', state_space=None):
+    effect_type_preferences = (effect_type,) if isinstance(effect_type, str) else effect_type
+
+    for typ in effect_type_preferences:
+        try:
+            if typ == "static":
+                ef = StaticPOVMEffect(superket_vector, evotype, state_space)
+            elif typ == "full":
+                ef = FullPOVMEffect(superket_vector, evotype, state_space)
+            else:
+                # Anything else we try to convert to a pure vector and convert the pure state vector
+                dmvec = _bt.change_basis(superket_vector, basis, 'std')
+                purevec = _ot.dmvec_to_state(dmvec)  # raises error if dmvec does not correspond to a pure state
+
+                ef = create_effect_from_pure_vector(purevec, typ, basis, evotype, state_space)
+            return ef
+        except (ValueError, AssertionError):
+            pass  # move on to next type
+
+    raise ValueError("Could not create an effect of type(s) %s from the given superket vector!" % (str(effect_type)))
 
 
 def convert(povm, to_type, basis, extra=None):
@@ -92,14 +235,7 @@ def convert(povm, to_type, basis, extra=None):
             base_povm = UnconstrainedPOVM(base_items, povm.evotype, povm.state_space)
 
         proj_basis = 'pp' if povm.state_space.is_entirely_qubits else basis
-        nonham_mode, param_mode, use_ham_basis, use_nonham_basis = \
-            _LindbladErrorgen.decomp_paramtype(to_type)
-        ham_basis = proj_basis if use_ham_basis else None
-        nonham_basis = proj_basis if use_nonham_basis else None
-
-        errorgen = _LindbladErrorgen.from_error_generator(_np.zeros((povm.state_space.dim,
-                                                                     povm.state_space.dim), 'd'),
-                                                          ham_basis, nonham_basis, param_mode, nonham_mode,
+        errorgen = _LindbladErrorgen.from_error_generator(povm.state_space.dim, to_type, proj_basis,
                                                           basis, truncate=True, evotype=povm.evotype)
         return ComposedPOVM(_ExpErrorgenOp(errorgen), base_povm, mx_basis=basis)
 
@@ -233,14 +369,7 @@ def convert_effect(effect, to_type, basis, extra=None):
             static_effect = effect
 
         proj_basis = 'pp' if state.state_space.is_entirely_qubits else basis
-        nonham_mode, param_mode, use_ham_basis, use_nonham_basis = \
-            _LindbladErrorgen.decomp_paramtype(to_type)
-        ham_basis = proj_basis if use_ham_basis else None
-        nonham_basis = proj_basis if use_nonham_basis else None
-
-        errorgen = _LindbladErrorgen.from_error_generator(_np.zeros((effect.state_space.dim,
-                                                                     effect.state_space.dim), 'd'),
-                                                          ham_basis, nonham_basis, param_mode, nonham_mode,
+        errorgen = _LindbladErrorgen.from_error_generator(effect.state_space.dim, to_type, proj_basis,
                                                           basis, truncate=True, evotype=effect.evotype)
         return ComposedPOVMEffect(static_effect, _ExpErrorgenOp(errorgen))
 
