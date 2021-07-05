@@ -165,6 +165,21 @@ class StateSpace(object):
         """
         return self.tensor_product_blocks_dimensions[i_tpb]
 
+    def tensor_product_block_udimensions(self, i_tpb):
+        """
+        Get the unitary-operator dimensions for the factors in the `iTBP`-th tensor-product block.
+
+        Parameters
+        ----------
+        i_tpb : int
+            Tensor-product block index.
+
+        Returns
+        -------
+        tuple
+        """
+        return self.tensor_product_blocks_dimensions[i_tpb]
+
     def copy(self):
         """
         Return a copy of this StateSpace.

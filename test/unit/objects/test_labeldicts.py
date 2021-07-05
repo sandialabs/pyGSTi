@@ -2,7 +2,7 @@ import pickle
 
 import pygsti.baseobjs.outcomelabeldict as ld
 from pygsti.models.memberdict import OrderedMemberDict
-from pygsti.models.modelconstruction import create_explicit_model
+from pygsti.models.modelconstruction import create_explicit_model_from_expressions
 from pygsti.models import ExplicitOpModel
 from ..util import BaseCase
 
@@ -20,7 +20,7 @@ class LabelDictTester(BaseCase):
             d['rho0'] = [0]  # bad default parameter type
 
     def test_iter_gatesets(self):
-        model = create_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gy'], ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"])
+        model = create_explicit_model_from_expressions([('Q0',)], ['Gi', 'Gx', 'Gy'], ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"])
         model2 = ExplicitOpModel(['Q0'])
         for label, gate in model.operations.items():
             model2[label] = gate

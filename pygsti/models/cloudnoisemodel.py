@@ -565,15 +565,10 @@ class CloudNoiseModel(_ImplicitOpModel):
         # values = list of gate-labels giving the gates (primitive layers?) associated with that cloud (necessary?)
         self._clouds = _collections.OrderedDict()
 
-        #Get gates availability
-        gates_and_avail = _collections.OrderedDict()
-        for gateName, gate in mm_gatedict.items():  # gate is a static ModelMember (op or factory)
-            resolved_avail = self.processor_spec.resolved_availability(gateName)
-            gates_and_avail[gateName] = (gate, resolved_avail)
-
-        for gn, (gate, resolved_avail) in gates_and_avail.items():
+        for gn, gate in mm_gatedict.items():  # gate is a static ModelMember (op or factory)
             #Note: gate was taken from mm_gatedict, and so is a static op or factory
             gate_is_factory = isinstance(gate, _opfactory.OpFactory)
+            resolved_avail = self.processor_spec.resolved_availability(gn)
 
             if gate_is_factory:
                 self.factories['gates'][_Lbl(gn)] = gate

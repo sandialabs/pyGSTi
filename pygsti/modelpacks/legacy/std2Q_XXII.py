@@ -185,7 +185,7 @@ germs_lite = _strc.to_circuits(
      ], line_labels=('*',))
 
 #Construct the target model
-_target_model = _setc.create_explicit_model(
+_target_model = _setc.create_explicit_model_from_expressions(
     [('Q0', 'Q1')], ['Gii', 'Gix', 'Giy', 'Gxi', 'Gyi', 'Gxx'],
     ["I(Q0):I(Q1)", "I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)",
      "Y(pi/2,Q0):I(Q1)", "X(pi/2,Q0):X(pi/2,Q1)"],

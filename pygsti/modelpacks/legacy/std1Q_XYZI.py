@@ -35,8 +35,8 @@ germs = _strc.to_circuits(
 germs_lite = germs[0:10]
 
 #Construct a target model: Identity, X(pi/2), Y(pi/2)
-_target_model = _setc.create_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gy', 'Gz'],
-                                           ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)", "Z(pi/2,Q0)"])
+_target_model = _setc.create_explicit_model_from_expressions([('Q0',)], ['Gi', 'Gx', 'Gy', 'Gz'],
+                                                             ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)", "Z(pi/2,Q0)"])
 
 _gscache = {("full", "auto"): _target_model}
 

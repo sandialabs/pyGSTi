@@ -276,7 +276,7 @@ legacy_germs = _strc.to_circuits(
 
 
 #Construct the target model
-_target_model = _setc.create_explicit_model(
+_target_model = _setc.create_explicit_model_from_expressions(
     [('Q0', 'Q1')], ['Gii', 'Gix', 'Giy', 'Gxi', 'Gyi', 'Gcphase'],
     ["I(Q0):I(Q1)", "I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)", "CPHASE(Q0,Q1)"],
     effect_labels=['00', '01', '10', '11'], effect_expressions=["0", "1", "2", "3"])
@@ -307,7 +307,7 @@ def target_model(parameterization_type="full", sim_type="auto"):
 
 
 #Wrong CPHASE (bad 1Q phase factor)
-legacy_gs_target = _setc.create_explicit_model(
+legacy_gs_target = _setc.create_explicit_model_from_expressions(
     [('Q0', 'Q1')], ['Gix', 'Giy', 'Gxi', 'Gyi', 'Gcphase'],
     ["I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)", "CZ(pi,Q0,Q1)"],
     effect_labels=['00', '01', '10', '11'], effect_expressions=["0", "1", "2", "3"])

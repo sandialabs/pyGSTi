@@ -11,4 +11,4 @@ pyGSTi Processors Python Package
 #***************************************************************************************************
 
 from .processorpack import ProcessorPack
-from .compilationlibrary import CliffordCompilationLibrary, CompilationRules, CompilationError
+#from .compilationlibrary import CliffordCompilationLibrary, CompilationRules, CompilationError

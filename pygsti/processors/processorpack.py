@@ -19,7 +19,7 @@ from pygsti.baseobjs.processorspec import ProcessorSpec as _ProcessorSpec
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.qubitgraph import QubitGraph as _QubitGraph
 from pygsti.processors.compilationlibrary import CompilationError as _CompilationError
-from pygsti.processors.compilationlibrary import CliffordCompilationLibrary as _CliffordCompilationLibrary
+#from pygsti.processors.compilationlibrary import CliffordCompilationLibrary as _CliffordCompilationLibrary
 from pygsti.forwardsims.mapforwardsim import MapForwardSimulator as _MapFSim
 from pygsti.models.localnoisemodel import LocalNoiseModel as _LocalNoiseModel
 from pygsti.tools import internalgates as _itgs

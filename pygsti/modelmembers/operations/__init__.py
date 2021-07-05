@@ -49,7 +49,7 @@ def create_from_unitary_mx(unitary_mx, op_type, basis='pp', stdname=None, evotyp
             elif typ == 'static clifford':
                 op = StaticCliffordOp(U, None, basis, evotype, state_space)
             elif typ == 'static unitary':
-                op = op.StaticUnitaryOp(U, basis, evotype, state_space)
+                op = StaticUnitaryOp(U, basis, evotype, state_space)
             elif typ == "full unitary":
                 op = FullUnitaryOp(U, basis, evotype, state_space)
             elif typ in ('static', 'full', 'full TP', 'linear'):
@@ -79,7 +79,7 @@ def create_from_unitary_mx(unitary_mx, op_type, basis='pp', stdname=None, evotyp
                 raise ValueError("Unknown operation type '%s'!" % str(typ))
 
             return op  # if we get to here, then we've successfully created an op to return
-        except (ValueError, AssertionError):
+        except (ValueError, AssertionError, AttributeError):
             pass  # move on to next type
 
     raise ValueError("Could not create an operator of type(s) %s from the given unitary op!" % (str(op_type)))

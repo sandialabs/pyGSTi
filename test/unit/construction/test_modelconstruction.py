@@ -16,11 +16,11 @@ class ModelConstructionTester(BaseCase):
         pygsti.models.ExplicitOpModel._strict = False
 
     def test_build_basis_gateset(self):
-        modelA = mc.create_explicit_model(
+        modelA = mc.create_explicit_model_from_expressions(
             [('Q0',)], ['Gi', 'Gx', 'Gy'],
             ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"]
         )
-        modelB = mc.basis_create_explicit_model(
+        modelB = mc._create_explicit_model_from_expessions(
             [('Q0',)], pygsti.baseobjs.Basis.cast('gm', 4),
             ['Gi', 'Gx', 'Gy'], ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"]
         )
@@ -36,7 +36,7 @@ class ModelConstructionTester(BaseCase):
         model1['Gx'] = mc._basis_create_operation(model1.state_space, "X(pi/2,Q0)")
         model1['Gy'] = mc._basis_create_operation(model1.state_space, "Y(pi/2,Q0)")
     
-        model2 = mc.create_explicit_model(
+        model2 = mc.create_explicit_model_from_expressions(
             [('Q0',)], ['Gi', 'Gx', 'Gy'],
             ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"]
         )
@@ -44,14 +44,14 @@ class ModelConstructionTester(BaseCase):
         self.assertAlmostEqual(model1.frobeniusdist(model2), 0)
 
     def test_build_explicit_model(self):
-        model = mc.create_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gy'], ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"])
+        model = mc.create_explicit_model_from_expressions([('Q0',)], ['Gi', 'Gx', 'Gy'], ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"])
         self.assertEqual(set(model.operations.keys()), set(['Gi', 'Gx', 'Gy']))
         self.assertAlmostEqual(sum(model.probabilities(('Gx', 'Gi', 'Gy')).values()), 1.0)
         self.assertEqual(model.num_params, 60)
 
-        gateset2b = mc.create_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gy'],
-                                            ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"],
-                                            effect_labels=['1', '0'])
+        gateset2b = mc.create_explicit_model_from_expressions([('Q0',)], ['Gi', 'Gx', 'Gy'],
+                                                              ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"],
+                                                              effect_labels=['1', '0'])
         self.assertArraysAlmostEqual(model.effects['0'], gateset2b.effects['1'])
         self.assertArraysAlmostEqual(model.effects['1'], gateset2b.effects['0'])
 
@@ -61,9 +61,9 @@ class ModelConstructionTester(BaseCase):
         #                                      ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"],
         #                                      basis="std")
 
-        pp_gateset = mc.create_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gy'],
-                                             ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"],
-                                             basis="pp")
+        pp_gateset = mc.create_explicit_model_from_expressions([('Q0',)], ['Gi', 'Gx', 'Gy'],
+                                                               ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"],
+                                                               basis="pp")
 
         #for op in ['Gi', 'Gx', 'Gy']:
         #    self.assertArraysAlmostEqual(std_gateset[op], pp_gateset[op])
@@ -380,26 +380,26 @@ class ModelConstructionTester(BaseCase):
 
     def test_build_explicit_model_raises_on_bad_state(self):
         with self.assertRaises(ValueError):
-            mc.create_explicit_model([('A0',)], ['Gi', 'Gx', 'Gy'],
-                                    ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"])
+            mc.create_explicit_model_from_expressions([('A0',)], ['Gi', 'Gx', 'Gy'],
+                                                      ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"])
 
     def test_build_explicit_model_raises_on_bad_basis(self):
         with self.assertRaises(AssertionError):
-            mc.create_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gy'],
-                                    ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"],
-                                    basis="FooBar")
+            mc.create_explicit_model_from_expressions([('Q0',)], ['Gi', 'Gx', 'Gy'],
+                                                      ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"],
+                                                      basis="FooBar")
 
     def test_build_explicit_model_raises_on_bad_rho_expression(self):
         with self.assertRaises(ValueError):
-            mc.create_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gy'],
-                                    ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"],
-                                    prep_labels=['rho0'], prep_expressions=["FooBar"],)
+            mc.create_explicit_model_from_expressions([('Q0',)], ['Gi', 'Gx', 'Gy'],
+                                                      ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"],
+                                                      prep_labels=['rho0'], prep_expressions=["FooBar"], )
 
     def test_build_explicit_model_raises_on_bad_effect_expression(self):
         with self.assertRaises(ValueError):
-            mc.create_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gy'],
-                                    ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"],
-                                    effect_labels=['0', '1'], effect_expressions=["FooBar", "1"])
+            mc.create_explicit_model_from_expressions([('Q0',)], ['Gi', 'Gx', 'Gy'],
+                                                      ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"],
+                                                      effect_labels=['0', '1'], effect_expressions=["FooBar", "1"])
 
 
 class GateConstructionBase(object):

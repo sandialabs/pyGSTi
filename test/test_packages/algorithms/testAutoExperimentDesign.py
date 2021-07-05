@@ -14,8 +14,8 @@ class AutoExperimentDesignTestCase(BaseTestCase):
     def test_auto_experiment_design(self):
         # Let's construct a 1-qubit $X(\pi/2)$, $Y(\pi/2)$, $I$ model for which we will need to find germs and fiducials.
 
-        target_model = constr.create_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gy'],
-                                         ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"])
+        target_model = constr.create_explicit_model_from_expressions([('Q0',)], ['Gi', 'Gx', 'Gy'],
+                                                                     ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"])
 
 
         # ## Hands-off

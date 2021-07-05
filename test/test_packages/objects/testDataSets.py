@@ -118,8 +118,8 @@ Gx^4 20 80
 
     def test_generate_fake_data(self):
 
-        model = pygsti.construction.create_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gy', 'Gz'],
-                                                          [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)", "Z(pi/2,Q0)"])
+        model = pygsti.construction.create_explicit_model_from_expressions([('Q0',)], ['Gi', 'Gx', 'Gy', 'Gz'],
+                                                                           [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)", "Z(pi/2,Q0)"])
 
         depol_gateset = model.depolarize(op_noise=0.1,spam_noise=0)
 

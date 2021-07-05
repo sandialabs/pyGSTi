@@ -69,7 +69,7 @@ class SPAMVecTestCase(BaseTestCase):
 
     #TODO
     def test_complement_spamvec(self):
-        model = pygsti.construction.create_explicit_model(
+        model = pygsti.construction.create_explicit_model_from_expressions(
             [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"])
 
@@ -114,9 +114,9 @@ class SPAMVecTestCase(BaseTestCase):
 
 
     def test_povms(self):
-        model = pygsti.construction.create_explicit_model(
+        model = pygsti.construction.create_explicit_model_from_expressions(
             [('Q0',)],['Gi'], ["I(Q0)"])
-        gateset2Q = pygsti.construction.create_explicit_model(
+        gateset2Q = pygsti.construction.create_explicit_model_from_expressions(
             [('Q0','Q1')],['Gi'], ["I(Q0)"])
 
         povm = model.povms['Mdefault'].copy()
