@@ -751,6 +751,7 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
     state_space = _statespace.QubitSpace(qubit_labels)
     evotype = _Evotype.cast(evotype)
     modelnoise = OpModelNoise.cast(modelnoise)
+    modelnoise.reset_access_counters()
 
     if custom_gates is None:
         custom_gates = {}
@@ -824,6 +825,7 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
     for k, v in povm_layers.items():
         ret.povms[k] = v
 
+    modelnoise.warn_about_zero_counters()
     return ret
 
 
@@ -1290,6 +1292,10 @@ class OpModelNoise(ModelNoise):
         else:
             raise ValueError("Cannot convert type %s to an OpModelNoise object!" % str(type(obj)))
 
+    def __init__(self):
+        self._opkey_access_counters = {}
+        super(OpModelNoise, self).__init__()
+
     def keys(self):
         raise NotImplementedError("Derived classes should implement this!")
 
@@ -1314,7 +1320,20 @@ class OpModelNoise(ModelNoise):
 
     def create_errormap(self, opkey, evotype, state_space, target_labels=None, qubit_graph=None):
         stencil = self.create_errormap_stencil(opkey, evotype, state_space, target_labels)
-        return self.apply_errormap_stencil(stencil, evotype, state_space, target_labels, qubit_graph)        
+        return self.apply_errormap_stencil(stencil, evotype, state_space, target_labels, qubit_graph)
+
+    def reset_access_counters(self):
+        self._opkey_access_counters = {k: 0 for k in self.keys()}
+
+    def _increment_touch_count(self, opkey):
+        if opkey in self._opkey_access_counters:
+            self._opkey_access_counters[opkey] += 1
+
+    def warn_about_zero_counters(self):
+        untouched_keys = [k for k, touch_cnt in self._opkey_access_counters.items() if touch_cnt == 0]
+        if len(untouched_keys) > 0:
+            _warnings.warn(("The following model-noise entries were unused: %s.  You may want to double check"
+                            " that you've entered a valid noise specification.") % ", ".join(untouched_keys))
 
 
 class OpModelPerOpNoise(OpModelNoise):
@@ -1355,6 +1374,7 @@ class OpModelPerOpNoise(OpModelNoise):
         else:  # assume opnoise is an OpNoise object
             local_errorgen = opnoise.create_errorgen(evotype, state_space)
             errgens_to_embed_then_compose[target_labels] = local_errorgen
+        self._increment_touch_count(opkey)
         return errgens_to_embed_then_compose
 
     def apply_errorgen_stencil(self, stencil, evotype, state_space, target_labels=None, qubit_graph=None, copy=False):
@@ -1387,6 +1407,7 @@ class OpModelPerOpNoise(OpModelNoise):
         else:  # assume opnoise is an OpNoise object
             local_errormap = opnoise.create_errormap(evotype, state_space)
             errmaps_to_embed_then_compose[target_labels] = local_errormap
+        self._increment_touch_count(opkey)
         return errmaps_to_embed_then_compose
 
     def apply_errormap_stencil(self, stencil, evotype, state_space, target_labels=None, qubit_graph=None, copy=False):
@@ -1449,6 +1470,7 @@ class ComposedOpModelNoise(OpModelNoise):
         return any([(key in modelnoise) for modelnoise in self.opmodelnoises])
 
     def create_errorgen_stencil(self, opkey, evotype, state_space, target_labels=None):
+        self._increment_touch_count(opkey)
         return tuple([modelnoise.create_errorgen_stencil(opkey, evotype, state_space, target_labels)
                       for modelnoise in self.opmodelnoises])
 
@@ -1459,6 +1481,7 @@ class ComposedOpModelNoise(OpModelNoise):
         return _op.ComposedErrorgen(noise_errgens) if len(noise_errgens) > 0 else None
 
     def create_errormap_stencil(self, opkey, evotype, state_space, target_labels=None):
+        self._increment_touch_count(opkey)
         return tuple([modelnoise.create_errormap_stencil(opkey, evotype, state_space, target_labels)
                       for modelnoise in self.opmodelnoises])
 
@@ -1483,7 +1506,6 @@ class ComposedOpModelNoise(OpModelNoise):
 
 
 class OpNoise(object):
-
     def __str__(self):
         return self.__class__.__name__ + "(" + ", ".join(["%s=%s" % (str(k), str(v))
                                                           for k, v in self.__dict__.items()]) + ")"
@@ -1865,7 +1887,7 @@ def _create_crosstalk_free_model(processor_spec, modelnoise, custom_gates=None, 
     state_space = _statespace.QubitSpace(qubit_labels)
     evotype = _Evotype.cast(evotype)
     modelnoise = OpModelNoise.cast(modelnoise)
-    num_qubits = len(qubit_labels)
+    modelnoise.reset_access_counters()
 
     if ideal_gate_type == "auto":
         ideal_gate_type = ('static standard', 'static clifford', 'static unitary')
@@ -1888,6 +1910,7 @@ def _create_crosstalk_free_model(processor_spec, modelnoise, custom_gates=None, 
     prep_layers, povm_layers = _create_spam_layers(processor_spec, modelnoise, local_noise,
                                                    ideal_spam_type, evotype, state_space, independent_gates)
 
+    modelnoise.warn_about_zero_counters()
     return _LocalNoiseModel(processor_spec, gatedict, prep_layers, povm_layers,
                             evotype, simulator, on_construction_error,
                             independent_gates, ensure_composed_gates, global_idle_op)
@@ -1925,7 +1948,7 @@ def _create_cloud_crosstalk_model(processor_spec, modelnoise, custom_gates=None,
     state_space = _statespace.QubitSpace(qubit_labels)  # FUTURE: allow other types of state spaces somehow?
     evotype = _Evotype.cast(evotype)
     modelnoise = OpModelNoise.cast(modelnoise)
-    num_qubits = len(qubit_labels)
+    modelnoise.reset_access_counters()
     printer = _VerbosityPrinter.create_printer(verbosity)
 
     #Create static ideal gates without any noise (we use `modelnoise` further down)
@@ -2010,10 +2033,12 @@ def _create_cloud_crosstalk_model(processor_spec, modelnoise, custom_gates=None,
         cloud_key = (tuple(lbl.sslbls), tuple(sorted(cloud_lbls)))  # (sets are unhashable)
         return cloud_key
 
-    return _CloudNoiseModel(processor_spec, gatedict, global_idle_layer, prep_layers, povm_layers,
-                            build_cloudnoise_fn, build_cloudkey_fn,
-                            simulator, evotype, errcomp_type,
-                            add_idle_noise_to_all_gates, printer)
+    ret = _CloudNoiseModel(processor_spec, gatedict, global_idle_layer, prep_layers, povm_layers,
+                           build_cloudnoise_fn, build_cloudkey_fn,
+                           simulator, evotype, errcomp_type,
+                           add_idle_noise_to_all_gates, printer)
+    modelnoise.warn_about_zero_counters()  # must do this after model creation so build_ fns have been run
+    return ret
 
 
 def create_cloud_crosstalk_model_from_hops_and_weights(
