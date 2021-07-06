@@ -684,7 +684,7 @@ def write_rb_summary_data_to_file(ds, filename):
     todo
 
     """
-    numqubits = ds.number_of_qubits
+    numqubits = ds.num_qubits
     with open(filename, 'w') as f:
 
         descriptor_string = ds.descriptor.split("\n")

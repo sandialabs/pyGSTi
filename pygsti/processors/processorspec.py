@@ -1,5 +1,5 @@
 """
-Defines the ProcessorSpec class and supporting functionality.
+Defines the QubitProcessorSpec class and supporting functionality.
 """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -21,6 +21,10 @@ from pygsti.baseobjs import qubitgraph as _qgraph
 from pygsti.baseobjs.label import Label as _Lbl
 
 class ProcessorSpec(object):
+    pass  # base class for potentially other types of processors (not composed of just qubits)
+
+
+class QubitProcessorSpec(ProcessorSpec):
     """
     The device specification for a one or more qubit quantum computer.
 
@@ -53,7 +57,7 @@ class ProcessorSpec(object):
     nonstd_gate_unitaries: dictionary of numpy arrays
         A dictionary with keys that are gate names (strings) and values that are numpy arrays specifying
         quantum gates in terms of unitary matrices. This is an additional "lookup" database of unitaries -
-        to add a gate to this `ProcessorSpec` its names still needs to appear in the `gate_names` list.
+        to add a gate to this `QubitProcessorSpec` its names still needs to appear in the `gate_names` list.
         This dictionary's values specify additional (target) native gates that can be implemented in the device
         as unitaries acting on ordinary pure-state-vectors, in the standard computationl basis. These unitaries
         need not, and often should not, be unitaries acting on all of the qubits. E.g., a CNOT gate is specified
@@ -138,12 +142,13 @@ class ProcessorSpec(object):
         self.availability = _collections.OrderedDict([(gatenm, availability.get(gatenm, 'all-edges'))
                                                       for gatenm in self.gate_names])  #if _Lbl(gatenm).sslbls is not None NEEDED?
 
-        self.compiled_from = None  # could hold (ProcessorSpec, compilations) tuple if not None
+        self.compiled_from = None  # could hold (QubitProcessorSpec, compilations) tuple if not None
         self.aux_info = aux_info  # can hold anything additional (e.g. gate inverse relationships)
         self._symplectic_reps = {}  # lazily-evaluated symplectic representations for Clifford gates
+        super(QubitProcessorSpec, self).__init__()
 
     @property
-    def number_of_qubits(self):
+    def num_qubits(self):
         """ The number of qubits. """
         return len(self.qubit_labels)
 
@@ -303,7 +308,7 @@ class ProcessorSpec(object):
                 #assert(not _np.allclose(u,Id)), "Identity should *not* be included in root gate names!"
                 #if _np.allclose(u, Id):
                 #    _warnings.warn("The identity should often *not* be included "
-                #                   "in the root gate names of a ProcessorSpec.")
+                #                   "in the root gate names of a QubitProcessorSpec.")
                 nontrivial_gname_pauligate_pairs.append((gname, u))
 
         for gname1, u1 in nontrivial_gname_pauligate_pairs:
@@ -367,10 +372,10 @@ class ProcessorSpec(object):
 
         Returns
         -------
-        ProcessorSpec
+        QubitProcessorSpec
         """
-        from pygsti.processors.compilationlibrary import CompilationRules as _CompilationRules
-        from pygsti.processors.compilationlibrary import CompilationError as _CompilationError
+        from pygsti.processors.compilationrules import CompilationRules as _CompilationRules
+        from pygsti.processors.compilationrules import CompilationError as _CompilationError
         compilation_rules = _CompilationRules.cast(compilation_rules)
         gate_names = tuple(compilation_rules.gate_unitaries.keys())
         gate_unitaries = compilation_rules.gate_unitaries.copy()  # can contain `None` entries we deal with below
@@ -446,8 +451,8 @@ class ProcessorSpec(object):
                 "Cannot add specific values to non-explicit availabilities (e.g. given by functions)"
             availability[gate_lbl.name] += (gate_lbl.sslbls,)
 
-        ret = ProcessorSpec(self.number_of_qubits, gate_names, gate_unitaries, availability,
-                            self.qubit_graph, self.qubit_labels)
+        ret = QubitProcessorSpec(self.num_qubits, gate_names, gate_unitaries, availability,
+                                 self.qubit_graph, self.qubit_labels)
         ret.compiled_from = (self, compilation_rules)
         return ret
 
@@ -455,5 +460,5 @@ class ProcessorSpec(object):
         gate_names = [gn for gn in gate_names_to_include if gn in self.gate_names]
         gate_unitaries = {gn: self.gate_unitaries[gn] for gn in gate_names}
         availability = {gn: self.availability[gn] for gn in gate_names}
-        return ProcessorSpec(self.number_of_qubits, gate_names, gate_unitaries, availability,
-                             self.qubit_graph, self.qubit_labels)
+        return QubitProcessorSpec(self.num_qubits, gate_names, gate_unitaries, availability,
+                                  self.qubit_graph, self.qubit_labels)

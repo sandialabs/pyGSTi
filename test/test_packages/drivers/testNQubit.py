@@ -9,11 +9,12 @@ from pygsti.modelpacks.legacy import std1Q_XY
 from pygsti.objects import Label as L
 from pygsti.objects import Circuit
 import pygsti.models.modelconstruction as mc
-from pygsti.baseobjs.processorspec import ProcessorSpec as _ProcessorSpec
+from pygsti.processors.processorspec import QubitProcessorSpec as _ProcessorSpec
 import warnings
 
 from ..testutils import BaseTestCase, compare_files, regenerate_references
-from pygsti.models import modelconstruction, nqnoiseconstruction
+from pygsti.models import modelconstruction
+from pygsti.circuits import cloudcircuitconstruction
 
 
 #from .nqubitconstruction import *
@@ -86,7 +87,7 @@ class NQubitTestCase(BaseTestCase):
                                                     roughNoise=(1234,0.01))
 
         cache = {}
-        gss = nqnoiseconstruction._create_xycnot_cloudnoise_circuits(
+        gss = cloudcircuitconstruction._create_xycnot_cloudnoise_circuits(
             nQubits, maxLengths, 'line', cnot_edges, max_idle_weight=2, maxhops=1,
             extra_weight_1_hops=0, extra_gate_weight=0, verbosity=4, cache=cache, algorithm="sequential")
         expList = list(gss) #[ tup[0] for tup in expList_tups]
@@ -112,7 +113,7 @@ class NQubitTestCase(BaseTestCase):
                                                     roughNoise=(1234,0.01))
 
         cache = {}
-        gss = nqnoiseconstruction._create_xycnot_cloudnoise_circuits(
+        gss = cloudcircuitconstruction._create_xycnot_cloudnoise_circuits(
             nQubits, maxLengths, 'line', cnot_edges, max_idle_weight=1, maxhops=0,
             extra_weight_1_hops=0, extra_gate_weight=0, verbosity=4, cache=cache, algorithm="greedy")
         #expList = gss.allstrs #[ tup[0] for tup in expList_tups]

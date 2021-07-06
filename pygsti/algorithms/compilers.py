@@ -38,8 +38,8 @@ def _create_standard_costfunction(name):
     Returns
     -------
     function
-        A function that takes a circuit as the first argument, a ProcessorSpec as the second
-        argument (or a "junk" input when a ProcessorSpec is not needed), and returns the cost
+        A function that takes a circuit as the first argument, a QubitProcessorSpec as the second
+        argument (or a "junk" input when a QubitProcessorSpec is not needed), and returns the cost
         of the circuit.
     """
     if name == '2QGC':
@@ -77,7 +77,7 @@ def compile_clifford(s, p, pspec=None, qubit_labels=None, iterations=20, algorit
     to, or sampled in, the symplectic representation using the functions in pygsti.tools.symplectic.
 
     The circuit created by this function will be over a user-specified model and respects any desired
-    connectivity, if a ProcessorSpec object is provided. Otherwise, it is over a canonical model containing
+    connectivity, if a QubitProcessorSpec object is provided. Otherwise, it is over a canonical model containing
     all-to-all CNOTs, Hadamard, Phase, 3 products of Hadamard and Phase, and the Pauli gates.
 
     Parameters
@@ -89,13 +89,13 @@ def compile_clifford(s, p, pspec=None, qubit_labels=None, iterations=20, algorit
         A length-2n vector over [0,1,2,3] that, together with s, defines a valid n-qubit Clifford
         gate.
 
-    pspec : ProcessorSpec, optional
-        An nbar-qubit ProcessorSpec object that encodes the device that the Clifford is being compiled
+    pspec : QubitProcessorSpec, optional
+        An nbar-qubit QubitProcessorSpec object that encodes the device that the Clifford is being compiled
         for, where nbar >= n. If this is specified, the output circuit is over the gates available
         in this device. If this is None, the output circuit is over the "canonical" model of CNOT gates
         between all qubits, consisting of "H", "HP", "PH", "HPH", "I", "X", "Y" and "Z", which is the set
         used internally for the compilation. In most circumstances, the output will be more useful if a
-        ProcessorSpec is provided.
+        QubitProcessorSpec is provided.
 
         If nbar > n it is necessary to provide `qubit_labels`, that specifies which of the qubits in `pspec`
         the Clifford acts on. (All other qubits will not be part of the returned circuit, regardless of
@@ -184,9 +184,9 @@ def compile_clifford(s, p, pspec=None, qubit_labels=None, iterations=20, algorit
 
     if pspec is not None:
         if qubit_labels is None:
-            assert(pspec.number_of_qubits == n), \
+            assert(pspec.num_qubits == n), \
                 ("If all the qubits in `pspec` are to be used, "
-                 "the Clifford must be over all {} qubits!".format(pspec.number_of_qubits))
+                 "the Clifford must be over all {} qubits!".format(pspec.num_qubits))
             qubit_labels = pspec.qubit_labels
         else:
             assert(len(qubit_labels) == n), "The subset of qubits to compile for is the wrong size for this CLifford!!"
@@ -215,7 +215,7 @@ def compile_clifford(s, p, pspec=None, qubit_labels=None, iterations=20, algorit
     else: pauli_layer = _symp.find_postmultipled_pauli(s, temp_p, p, qubit_labels=qubit_labels)
     # Turn the Pauli layer into a circuit.
     pauli_circuit = _Circuit(layer_labels=pauli_layer, line_labels=qubit_labels, editable=True)
-    # Only change gate library of the Pauli circuit if we have a ProcessorSpec with compilations.
+    # Only change gate library of the Pauli circuit if we have a QubitProcessorSpec with compilations.
     if pspec is not None:
         pauli_circuit.change_gate_library(
             pspec.compilations['absolute'], one_q_gate_relations=pspec.oneQgate_relations)  # identity=pspec.identity,
@@ -243,7 +243,7 @@ def compile_symplectic(s, pspec=None, qubit_labels=None, iterations=20, algorith
 
     Returns an n-qubit circuit that implements an n-qubit Clifford gate that is described by the symplectic
     matrix `s` and *some* vector `p`. The circuit created by this function will be over a user-specified model
-    and respecting any desired connectivity, if a ProcessorSpec object is provided. Otherwise, it is over a
+    and respecting any desired connectivity, if a QubitProcessorSpec object is provided. Otherwise, it is over a
     canonical model containing all-to-all CNOTs, Hadamard, Phase, 3 products of Hadamard and Phase, and the
     Pauli gates.
 
@@ -252,8 +252,8 @@ def compile_symplectic(s, pspec=None, qubit_labels=None, iterations=20, algorith
     s : array over [0,1]
         An (2n X 2n) symplectic matrix of 0s and 1s integers.
 
-    pspec : ProcessorSpec, optional
-        An nbar-qubit ProcessorSpec object that encodes the device that `s` is being compiled
+    pspec : QubitProcessorSpec, optional
+        An nbar-qubit QubitProcessorSpec object that encodes the device that `s` is being compiled
         for, where nbar >= n. If this is specified, the output circuit is over the gates available
         in this device. If this is None, the output circuit is over the "canonical" model of CNOT gates
         between all qubits, consisting of "H", "HP", "PH", "HPH", "I", "X", "Y" and "Z", which is the set
@@ -343,9 +343,9 @@ def compile_symplectic(s, pspec=None, qubit_labels=None, iterations=20, algorith
     n = _np.shape(s)[0] // 2
     if pspec is not None:
         if qubit_labels is None:
-            assert(pspec.number_of_qubits == n), \
+            assert(pspec.num_qubits == n), \
                 ("If all the qubits in `pspec` are to be used, "
-                 "`s` must be a symplectic matrix over {} qubits!".format(pspec.number_of_qubits))
+                 "`s` must be a symplectic matrix over {} qubits!".format(pspec.num_qubits))
         else:
             assert(len(qubit_labels) == n), \
                 "The subset of qubits to compile `s` for is the wrong size for this symplectic matrix!"
@@ -485,8 +485,8 @@ def _compile_symplectic_using_rogge_algorithm(s, pspec=None, qubit_labels=None, 
     s : array over [0,1]
         An (2n X 2n) symplectic matrix of 0s and 1s integers.
 
-    pspec : ProcessorSpec, optional
-        An nbar-qubit ProcessorSpec object that encodes the device that `s` is being compiled
+    pspec : QubitProcessorSpec, optional
+        An nbar-qubit QubitProcessorSpec object that encodes the device that `s` is being compiled
         for, where nbar >= n. If this is specified, the output circuit is over the gates available
         in this device. If this is None, the output circuit is over the "canonical" model of CNOT gates
         between all qubits, consisting of "H", "HP", "PH", "HPH", "I", "X", "Y" and "Z", which is the set
@@ -605,8 +605,8 @@ def _compile_symplectic_using_ogge_algorithm(s, eliminationorder, pspec=None, qu
         `pspec` is not specified this list should consist of the integers between 0 and n-1 in any order, corresponding
         to the indices of `s`.
 
-    pspec : ProcessorSpec, optional
-        An nbar-qubit ProcessorSpec object that encodes the device that `s` is being compiled
+    pspec : QubitProcessorSpec, optional
+        An nbar-qubit QubitProcessorSpec object that encodes the device that `s` is being compiled
         for, where nbar >= n. If this is specified, the output circuit is over the gates available
         in this device. If this is None, the output circuit is over the "canonical" model of CNOT gates
         between all qubits, consisting of "H", "HP", "PH", "HPH", "I", "X", "Y" and "Z", which is the set
@@ -951,8 +951,8 @@ def _compile_symplectic_using_ag_algorithm(s, pspec=None, qubit_labels=None, cno
     s : array over [0,1]
         An (2n X 2n) symplectic matrix of 0s and 1s integers.
 
-    pspec : ProcessorSpec, optional
-        An nbar-qubit ProcessorSpec object that encodes the device that `s` is being compiled
+    pspec : QubitProcessorSpec, optional
+        An nbar-qubit QubitProcessorSpec object that encodes the device that `s` is being compiled
         for, where nbar >= n.
 
     qubit_labels : list, optional
@@ -1000,8 +1000,8 @@ def _compile_symplectic_using_riag_algoritm(s, pspec, qubit_labels=None, iterati
     s : array over [0,1]
         An (2n X 2n) symplectic matrix of 0s and 1s integers.
 
-    pspec : ProcessorSpec
-        An nbar-qubit ProcessorSpec object that encodes the device that `s` is being compiled
+    pspec : QubitProcessorSpec
+        An nbar-qubit QubitProcessorSpec object that encodes the device that `s` is being compiled
         for, where nbar >= n. If this is specified, the output circuit is over the gates available
         in this device. If this is None, the output circuit is over the "canonical" model of CNOT gates
         between all qubits, consisting of "H", "HP", "PH", "HPH", "I", "X", "Y" and "Z", which is the set
@@ -1108,8 +1108,8 @@ def _compile_symplectic_using_iag_algorithm(s, pspec, qubit_labels=None, cnotalg
     s : array over [0,1]
         An (2n X 2n) symplectic matrix of 0s and 1s integers.
 
-    pspec : ProcessorSpec, optional
-        An nbar-qubit ProcessorSpec object that encodes the device that `s` is being compiled
+    pspec : QubitProcessorSpec, optional
+        An nbar-qubit QubitProcessorSpec object that encodes the device that `s` is being compiled
         for, where nbar >= n.
 
     qubit_labels : list, optional
@@ -1255,8 +1255,8 @@ def compile_cnot_circuit(s, pspec, qubit_labels=None, algorithm='COiCAGE', clnam
         it must be block-diagonal. Specifically, it has the form s = ((A,0),(0,B)) where B is the
         inverse transpose of A (over [0,1] mod 2).
 
-    pspec : ProcessorSpec
-        An nbar-qubit ProcessorSpec object that encodes the device that `s` is being compiled
+    pspec : QubitProcessorSpec
+        An nbar-qubit QubitProcessorSpec object that encodes the device that `s` is being compiled
         for, where nbar >= n. If this is specified, the output circuit is over the gates available
         in this device. If this is None, the output circuit is over the "canonical" model of CNOT gates
         between all qubits, consisting of "H", "HP", "PH", "HPH", "I", "X", "Y" and "Z", which is the set
@@ -1420,8 +1420,8 @@ def _compile_cnot_circuit_using_bge_algorithm(s, pspec, qubit_labels=None, clnam
         be a (2x2) block-diagonal matrix, whereby the upper left block is any invertable transformation over
         [0,1]^n, and the lower right block is the inverse transpose of this transformation.
 
-    pspec : ProcessorSpec
-        An nbar-qubit ProcessorSpec object that encodes the device that the CNOT circuit is being compiled
+    pspec : QubitProcessorSpec
+        An nbar-qubit QubitProcessorSpec object that encodes the device that the CNOT circuit is being compiled
         for, where nbar >= n. The algorithm is takes into account the connectivity of the device as specified
         by pspec.qubitgraph. If nbar > n it is necessary to provide `qubit_labels`, to specify which qubits in
         `pspec` the CNOT circuit acts on (all other qubits will not be part of the returned circuit, regardless of
@@ -1561,8 +1561,8 @@ def _compile_cnot_circuit_using_ocage_algorithm(s, pspec, qubitorder, qubit_labe
         be a (2x2) block-diagonal matrix, whereby the upper left block is any invertable transformation over
         [0,1]^n, and the lower right block is the inverse transpose of this transformation.
 
-    pspec : ProcessorSpec
-        An nbar-qubit ProcessorSpec object that encodes the device that the CNOT circuit is being compiled
+    pspec : QubitProcessorSpec
+        An nbar-qubit QubitProcessorSpec object that encodes the device that the CNOT circuit is being compiled
         for, where nbar >= n. The algorithm is takes into account the connectivity of the device as specified
         by pspec.qubitgraph. The output circuit  is over the gates available  in this device is `clname` is
         not None. If nbar > n it is necessary to provide `qubit_labels`, that specifies which of the qubits in `pspec`
@@ -1800,8 +1800,8 @@ def _compile_cnot_circuit_using_oicage_algorithm(s, pspec, qubitorder, qubit_lab
         be a (2x2) block-diagonal matrix, whereby the upper left block is any invertable transformation over
         [0,1]^n, and the lower right block is the inverse transpose of this transformation.
 
-    pspec : ProcessorSpec
-        An nbar-qubit ProcessorSpec object that encodes the device that the CNOT circuit is being compiled
+    pspec : QubitProcessorSpec
+        An nbar-qubit QubitProcessorSpec object that encodes the device that the CNOT circuit is being compiled
         for, where nbar >= n. The algorithm is takes into account the connectivity of the device as specified
         by pspec.qubitgraph. If nbar > n it is necessary to provide `qubit_labels`, that specifies which of the
         qubits in `pspec` the CNOT circuit acts on (all other qubits will not be part of the returned circuit,
@@ -2016,13 +2016,13 @@ def compile_stabilizer_state(s, p, pspec, qubit_labels=None, iterations=20, paul
         gate. This phase vector matrix should, together with `s`, represent any Clifford gate that,
         when acting on |0,0,0,...>, generates the desired stabilizer state. So `p` is not unique.
 
-    pspec : ProcessorSpec, optional
-        An nbar-qubit ProcessorSpec object that encodes the device that the stabilizer is being compiled
+    pspec : QubitProcessorSpec, optional
+        An nbar-qubit QubitProcessorSpec object that encodes the device that the stabilizer is being compiled
         for, where nbar >= n. If this is specified, the output circuit is over the gates available
         in this device. If this is None, the output circuit is over the "canonical" model of CNOT gates
         between all qubits, consisting of "H", "HP", "PH", "HPH", "I", "X", "Y" and "Z", which is the set
         used internally for the compilation. In most circumstances, the output will be more useful if a
-        ProcessorSpec is provided.
+        QubitProcessorSpec is provided.
 
         If nbar > n it is necessary to provide `qubit_labels`, that specifies which of the qubits in `pspec`
         the stabilizer is over. (All other qubits will not be part of the returned circuit, regardless of
@@ -2124,7 +2124,7 @@ def compile_stabilizer_state(s, p, pspec, qubit_labels=None, iterations=20, paul
 
         assert(failcount <= 5 * iterations), \
             ("Randomized compiler is failing unexpectedly often. "
-             "Perhaps input ProcessorSpec is not valid or does not contain the neccessary information.")
+             "Perhaps input QubitProcessorSpec is not valid or does not contain the neccessary information.")
 
     if paulirandomize:
         paulilist = ['I', 'X', 'Y', 'Z']
@@ -2185,13 +2185,13 @@ def compile_stabilizer_measurement(s, p, pspec, qubit_labels=None, iterations=20
         when acting on |0,0,0,...>, generates the stabilizer state that we need to map to |0,0,0,...>.
         So `p` is not unique.
 
-    pspec : ProcessorSpec, optional
-        An nbar-qubit ProcessorSpec object that encodes the device that the stabilizer is being compiled
+    pspec : QubitProcessorSpec, optional
+        An nbar-qubit QubitProcessorSpec object that encodes the device that the stabilizer is being compiled
         for, where nbar >= n. If this is specified, the output circuit is over the gates available
         in this device. If this is None, the output circuit is over the "canonical" model of CNOT gates
         between all qubits, consisting of "H", "HP", "PH", "HPH", "I", "X", "Y" and "Z", which is the set
         used internally for the compilation. In most circumstances, the output will be more useful if a
-        ProcessorSpec is provided.
+        QubitProcessorSpec is provided.
 
         If nbar > n it is necessary to provide `qubit_labels`, that specifies which of the qubits in `pspec`
         the stabilizer is over. (All other qubits will not be part of the returned circuit, regardless of
@@ -2910,8 +2910,8 @@ def compile_conditional_symplectic(s, pspec, qubit_labels=None, calg='COiCAGE', 
     s : array over [0,1]
         An (2n X 2n) symplectic matrix of 0s and 1s integers.
 
-    pspec : ProcessorSpec, optional
-        An nbar-qubit ProcessorSpec object that encodes the device that `s` is being "conditionally" compiled
+    pspec : QubitProcessorSpec, optional
+        An nbar-qubit QubitProcessorSpec object that encodes the device that `s` is being "conditionally" compiled
         for, where nbar >= n. If nbar > n it is necessary to provide `qubit_labels`, that specifies which of the
         qubits in `pspec` the stabilizer is over. (All other qubits will not be part of the returned circuit,
         regardless of whether that means an over-head is required to avoid using gates that act on those qubits.

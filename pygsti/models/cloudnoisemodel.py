@@ -551,7 +551,7 @@ class CloudNoiseModel(_ImplicitOpModel):
         self.factories['cloudnoise'] = _OrderedMemberDict(self, None, None, flags)
 
         printer = _VerbosityPrinter.create_printer(verbosity)
-        printer.log("Creating a %d-qubit cloud-noise model" % self.processor_spec.number_of_qubits)
+        printer.log("Creating a %d-qubit cloud-noise model" % self.processor_spec.num_qubits)
 
         if global_idle_layer is None:
             pass

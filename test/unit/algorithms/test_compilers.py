@@ -2,7 +2,7 @@ import numpy as np
 
 from pygsti.algorithms import compilers
 from pygsti.baseobjs import Label
-from pygsti.processors import ProcessorPack
+from pygsti.processors import QubitProcessorPack
 from pygsti.circuits import Circuit
 from pygsti.tools import symplectic
 from ..util import BaseCase, Namespace
@@ -16,8 +16,8 @@ fixture_1Q = Namespace(
                            [0, 1]], dtype=np.int8),
     clifford_phase=np.array([0, 2])
 )
-fixture_1Q.pspec = ProcessorPack(num_qubits=1, gate_names=['Gcnot', 'Gh', 'Gp', 'Gxpi', 'Gypi', 'Gzpi'],
-                                 construct_models=('target','clifford'))
+fixture_1Q.pspec = QubitProcessorPack(num_qubits=1, gate_names=['Gcnot', 'Gh', 'Gp', 'Gxpi', 'Gypi', 'Gzpi'],
+                                      construct_models=('target','clifford'))
 fixture_2Q = Namespace(
     n=2,
     qubit_labels=['Q0', 'Q1'],
@@ -30,7 +30,7 @@ fixture_2Q = Namespace(
                            [0, 1, 0, 1]]),
     clifford_phase=np.array([2, 0, 1, 3])
 )
-fixture_2Q.pspec = ProcessorPack(
+fixture_2Q.pspec = QubitProcessorPack(
     fixture_2Q.n, gate_names=fixture_2Q.gate_names, availability=fixture_2Q.availability,
     qubit_labels=fixture_2Q.qubit_labels, construct_models=('target','clifford')
 )
@@ -59,7 +59,7 @@ fixture_3Q = Namespace(
                            [0, 0, 1, 0, 0, 1]]),
     clifford_phase=np.array([2, 2, 3, 1, 1, 2])
 )
-fixture_3Q.pspec = ProcessorPack(
+fixture_3Q.pspec = QubitProcessorPack(
     fixture_3Q.n, gate_names=fixture_3Q.gate_names, availability=fixture_3Q.availability,
     qubit_labels=fixture_3Q.qubit_labels, construct_models=('target','clifford')
 )

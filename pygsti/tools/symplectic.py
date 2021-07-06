@@ -1060,8 +1060,8 @@ def symplectic_rep_of_clifford_circuit(circuit, srep_dict=None, pspec=None):
         specified (and it is ignored if it is specified). Otherwise it must be
         specified.
 
-    pspec : ProcessorSpec, optional
-        A ProcessorSpec that contains a Clifford model that defines the symplectic
+    pspec : QubitProcessorSpec, optional
+        A QubitProcessorSpec that contains a Clifford model that defines the symplectic
         action of all of the gates in `circuit`. If this is not None it over-rides
         `srep_dict`. Both `pspec` and `srep_dict` can only be None if the circuit
         contains only gates with names that are hard-coded into pyGSTi.
@@ -1170,7 +1170,7 @@ def symplectic_rep_of_clifford_layer(layer, n=None, q_labels=None, srep_dict=Non
 
     for sub_lbl in layer.components:
         matrix, phase = srep_dict[sub_lbl.name]
-        nforgate = sub_lbl.number_of_qubits
+        nforgate = sub_lbl.num_qubits
         sub_lbl_qubits = sub_lbl.qubits if (sub_lbl.qubits is not None) else q_labels
         for ind1, qlabel1 in enumerate(sub_lbl_qubits):
             qindex1 = q_labels.index(qlabel1)

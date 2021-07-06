@@ -5,7 +5,7 @@ import pygsti
 import pygsti.models.modelconstruction as mc
 import pygsti.modelmembers.operations as op
 import pygsti.tools.basistools as bt
-from pygsti.baseobjs.processorspec import ProcessorSpec as _ProcessorSpec
+from pygsti.processors.processorspec import QubitProcessorSpec as _ProcessorSpec
 from ..util import BaseCase
 
 

@@ -9,7 +9,7 @@ import numpy as np
 import scipy.linalg as spl
 import pygsti
 import pygsti.models.modelconstruction as mc
-from pygsti.baseobjs.processorspec import ProcessorSpec as _ProcessorSpec
+from pygsti.processors.processorspec import QubitProcessorSpec as _ProcessorSpec
 from pygsti.modelpacks.legacy import std1Q_XYI as std
 from pygsti.modelpacks.legacy import std1Q_XY
 from pygsti.objects import Label as L, Circuit

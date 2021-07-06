@@ -50,7 +50,7 @@ class HasProcessorSpec(object):
 
     Parameters
     ----------
-    processorspec_filename_or_obj : ProcessorSpec or str
+    processorspec_filename_or_obj : QubitProcessorSpec or str
         The processor API used by this experiment design.
     """
 
@@ -81,7 +81,7 @@ class GateSetTomographyDesign(_proto.CircuitListsDesign, HasProcessorSpec):
 
     Parameters
     ----------
-    processorspec_filename_or_obj : ProcessorSpec or str
+    processorspec_filename_or_obj : QubitProcessorSpec or str
         The processor API used by this experiment design.
 
     circuit_lists : list
@@ -119,7 +119,7 @@ class StandardGSTDesign(GateSetTomographyDesign):
 
     Parameters
     ----------
-    processorspec_filename_or_obj : ProcessorSpec or str
+    processorspec_filename_or_obj : QubitProcessorSpec or str
         The processor API used by this experiment design.
 
     prep_fiducial_list_or_filename : list or str

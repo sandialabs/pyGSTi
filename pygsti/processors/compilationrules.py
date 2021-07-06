@@ -103,7 +103,7 @@ class CliffordCompilationRules(CompilationRules):
     a compilation for a gate, a template is used if a suitable one can be found;
     otherwise a new template is created and then used.
 
-    Compilation libraries are most often used within a :class:`ProcessorSpec`
+    Compilation libraries are most often used within a :class:`QubitProcessorSpec`
     object.
 
     Parameters
@@ -125,7 +125,7 @@ class CliffordCompilationRules(CompilationRules):
     """
 
     @classmethod
-    def create_standard(cls, base_processor_spec, compile_type="absolute", subctypes=("1Qcliffords",), verbosity=1):
+    def create_standard(cls, base_processor_spec, compile_type="absolute", what_to_compile=("1Qcliffords",), verbosity=1):
         """ subctype : {"1Qcliffords", "localcnots", "allcnots", "paulis"} -- but depends on `ctype` """
 
         # A list of the 1-qubit gates to compile, in the std names understood inside the compilation code.
@@ -134,12 +134,12 @@ class CliffordCompilationRules(CompilationRules):
         two_q_gates = []
 
         add_nonlocal_two_q_gates = False  # Defaults to not adding non-local compilations of 2-qubit gates.
-        number_of_qubits = base_processor_spec.number_of_qubits
+        number_of_qubits = base_processor_spec.num_qubits
         qubit_labels = base_processor_spec.qubit_labels
 
         # We construct the requested Pauli-equivalent compilations.
         if compile_type == 'paulieq':
-            for subctype in subctypes:
+            for subctype in what_to_compile:
                 if subctype == '1Qcliffords':
                     one_q_gates += ['H', 'P', 'PH', 'HP', 'HPH']
                 elif subctype == 'localcnots':
@@ -159,7 +159,7 @@ class CliffordCompilationRules(CompilationRules):
 
         # We construct the requested `absolute` (i.e., not only up to Paulis) compilations.
         elif compile_type == 'absolute':
-            for subctype in subctypes:
+            for subctype in what_to_compile:
                 if subctype == 'paulis':
                     one_q_gates += ['I', 'X', 'Y', 'Z']
                 elif subctype == '1Qcliffords':
@@ -367,9 +367,9 @@ class CliffordCompilationRules(CompilationRules):
         def is_local_compilation_feasible(allowed_gatenames):
             """ Whether template_labels can possibly be enough
                 gates to compile a template for op_label with """
-            if oplabel.number_of_qubits <= 1:
+            if oplabel.num_qubits <= 1:
                 return len(allowed_gatenames) > 0  # 1Q gates, anything is ok
-            elif oplabel.number_of_qubits == 2:
+            elif oplabel.num_qubits == 2:
                 # 2Q gates need a compilation gate that is also 2Q (can't do with just 1Q gates!)
                 return max([self.processor_spec.gate_number_of_qubits(gn) for gn in allowed_gatenames]) == 2
             else:
@@ -398,7 +398,7 @@ class CliffordCompilationRules(CompilationRules):
                 available_gatelabels = [gl for gn in available_gatenames
                                         for gl in self.processor_spec.available_gatelabels(gn, oplabel.sslbls)]
                 template_to_use = self.add_clifford_compilation_template(
-                    oplabel.name, oplabel.number_of_qubits, unitary, srep,
+                    oplabel.name, oplabel.num_qubits, unitary, srep,
                     available_gatelabels, available_srep_dict,
                     verbosity=verbosity, max_iterations=max_iterations)
 
@@ -684,7 +684,7 @@ class CliffordCompilationRules(CompilationRules):
         -------
         None
         """
-        nQ = self.processor_spec.number_of_qubits
+        nQ = self.processor_spec.num_qubits
         qubit_labels = self.processor_spec.qubit_labels
         d = {qlbl: i for i, qlbl in enumerate(qubit_labels)}
         assert(len(qubit_labels) == nQ), "Number of qubit labels is inconsistent with Model dimension!"
@@ -780,8 +780,8 @@ class CliffordCompilationRules(CompilationRules):
         -------
         Circuit
         """
-        assert(oplabel.number_of_qubits > 1), "1-qubit gates can't be non-local!"
-        assert(oplabel.name == "CNOT" and oplabel.number_of_qubits == 2), \
+        assert(oplabel.num_qubits > 1), "1-qubit gates can't be non-local!"
+        assert(oplabel.name == "CNOT" and oplabel.num_qubits == 2), \
             "Only non-local CNOT compilation is currently supported."
 
         #Get connectivity of this gate (CNOT)
@@ -852,7 +852,7 @@ class CliffordCompilationRules(CompilationRules):
             s, p = _symp.symplectic_rep_of_clifford_circuit(circuit, sreps)
 
             # Construct the symplectic rep of CNOT between this pair of qubits, to compare to s.
-            nQ = self.processor_spec.number_of_qubits
+            nQ = self.processor_spec.num_qubits
             iq1 = line_labels.index(q1)  # assumes single tensor-prod term
             iq2 = line_labels.index(q2)  # assumes single tensor-prod term
             s_cnot, p_cnot = _symp.symplectic_rep_of_clifford_layer(_Label('CNOT', (iq1, iq2)), nQ)
@@ -1117,8 +1117,8 @@ class CliffordCompilationRules(CompilationRules):
          compiling with these CompilationRules"""
         # Generate clifford_qubitgraph for the multi-qubit Clifford gates. If there are multi-qubit gates
         # which are not Clifford gates then these are not counted as "connections".
-        CtwoQ_connectivity = _np.zeros((self.processor_spec.number_of_qubits,
-                                       self.processor_spec.number_of_qubits), dtype=bool)
+        CtwoQ_connectivity = _np.zeros((self.processor_spec.num_qubits,
+                                       self.processor_spec.num_qubits), dtype=bool)
         qubit_labels = self.processor_spec.qubit_labels
         clifford_gates = set(self.processor_spec.compute_clifford_symplectic_reps().keys())
         for gn in self.processor_spec.gate_names:

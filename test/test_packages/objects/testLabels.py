@@ -4,7 +4,7 @@ from pygsti.objects.label import Label as L
 
 import pygsti
 import pygsti.models.modelconstruction as mc
-from pygsti.baseobjs.processorspec import ProcessorSpec as _ProcessorSpec
+from pygsti.processors.processorspec import QubitProcessorSpec as _ProcessorSpec
 from pygsti.serialization import jsoncodec
 from pygsti.objects import label
 from ..testutils import BaseTestCase, temp_files

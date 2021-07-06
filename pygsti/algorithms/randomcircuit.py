@@ -82,8 +82,8 @@ def sample_circuit_layer_by_pairing_qubits(pspec, qubit_labels=None, two_q_prob=
 
     Parameters
     ----------
-    pspec : ProcessorSpec
-        The ProcessorSpec for the device that the circuit layer is being sampled for. This
+    pspec : QubitProcessorSpec
+        The QubitProcessorSpec for the device that the circuit layer is being sampled for. This
         function assumes all-to-all connectivity, but does not check this is satisfied. Unless
         `qubit_labels` is not None, a circuit layer is sampled over all the qubits in `pspec`.
 
@@ -99,12 +99,12 @@ def sample_circuit_layer_by_pairing_qubits(pspec, qubit_labels=None, two_q_prob=
     one_q_gate_names : 'all' or list, optional
         If not 'all', a list of the names of the 1-qubit gates to be sampled from when applying
         a 1-qubit gate to a qubit. If this is 'all', the full set of 1-qubit gate names is extracted
-        from the ProcessorSpec.
+        from the QubitProcessorSpec.
 
     two_q_gate_names : 'all' or list, optional
         If not 'all', a list of the names of the 2-qubit gates to be sampled from when applying
         a 2-qubit gate to a pair of qubits. If this is 'all', the full set of 2-qubit gate names is
-        extracted from the ProcessorSpec.
+        extracted from the QubitProcessorSpec.
 
     modelname : str, optional
         Only used if one_q_gate_names or two_q_gate_names is None. Specifies which of the
@@ -123,7 +123,7 @@ def sample_circuit_layer_by_pairing_qubits(pspec, qubit_labels=None, two_q_prob=
     if rand_state is None:
         rand_state = _np.random.RandomState()
 
-    if qubit_labels is None: n = pspec.number_of_qubits
+    if qubit_labels is None: n = pspec.num_qubits
     else:
         assert(isinstance(qubit_labels, list) or isinstance(qubit_labels, tuple)), "SubsetQs must be a list or a tuple!"
         n = len(qubit_labels)
@@ -144,10 +144,10 @@ def sample_circuit_layer_by_pairing_qubits(pspec, qubit_labels=None, two_q_prob=
         operationlist = pspec.models[modelname].primitive_op_labels
         for gate in operationlist:
             if oneQpopulate:
-                if (gate.number_of_qubits == 1) and (gate.name not in one_q_gate_names):
+                if (gate.num_qubits == 1) and (gate.name not in one_q_gate_names):
                     one_q_gate_names.append(gate.name)
             if twoQpopulate:
-                if (gate.number_of_qubits == 2) and (gate.name not in two_q_gate_names):
+                if (gate.num_qubits == 2) and (gate.name not in two_q_gate_names):
                     two_q_gate_names.append(gate.name)
 
     # Basic variables required for sampling the circuit layer.
@@ -288,8 +288,8 @@ def sample_circuit_layer_by_q_elimination(pspec, qubit_labels=None, two_q_prob=0
 
     Parameters
     ----------
-    pspec : ProcessorSpec
-        The ProcessorSpec for the device that the circuit layer is being sampled for. Unless
+    pspec : QubitProcessorSpec
+        The QubitProcessorSpec for the device that the circuit layer is being sampled for. Unless
         `qubit_labels` is not None, a circuit layer is sampled over all the qubits in `pspec`.
 
     qubit_labels : list, optional
@@ -310,13 +310,13 @@ def sample_circuit_layer_by_q_elimination(pspec, qubit_labels=None, two_q_prob=0
         objects. This is *not* just gate names (e.g. "Gh"), but Labels each containing
         the gate name and the qubit it acts on. So it is possible to specify different
         1-qubit models on different qubits. If this is 'all', the full set of possible
-        1-qubit gates is extracted from the ProcessorSpec.
+        1-qubit gates is extracted from the QubitProcessorSpec.
 
     two_q_gates : 'all' or list, optional
         If not 'all', a list of the 2-qubit gates to sample from, in the form of Label
         objects. This is *not* just gate names (e.g. "Gcnot"), but Labels each containing
         the gate name and the qubits it acts on. If this is 'all', the full set of possible
-        2-qubit gates is extracted from the ProcessorSpec.
+        2-qubit gates is extracted from the QubitProcessorSpec.
 
     modelname : str, optional
         Only used if one_q_gate_names or two_q_gate_names is None. Specifies the which of the
@@ -333,7 +333,7 @@ def sample_circuit_layer_by_q_elimination(pspec, qubit_labels=None, two_q_prob=0
         only one gate acting on each qubit in `pspec` or `qubit_labels`).
     """
     if qubit_labels is None:
-        n = pspec.number_of_qubits
+        n = pspec.num_qubits
         qubits = list(pspec.qubit_labels[:])  # copy this list
     else:
         assert(isinstance(qubit_labels, (list, tuple))), "SubsetQs must be a list or a tuple!"
@@ -346,13 +346,13 @@ def sample_circuit_layer_by_q_elimination(pspec, qubit_labels=None, two_q_prob=0
     # If one_q_gates is specified, use the given list.
     if one_q_gates != 'all':
         oneQgates_available = _copy.copy(one_q_gates)
-    # If one_q_gates is not specified, extract this list from the ProcessorSpec
+    # If one_q_gates is not specified, extract this list from the QubitProcessorSpec
     else:
         oneQgates_available = list(pspec.models[modelname].primitive_op_labels)
         d = len(oneQgates_available)
         for i in range(0, d):
             # If it's not a 1-qubit gate, we delete it.
-            if oneQgates_available[d - 1 - i].number_of_qubits != 1:
+            if oneQgates_available[d - 1 - i].num_qubits != 1:
                 del oneQgates_available[d - 1 - i]
             # If it's not a gate on the allowed qubits, we delete it.
             elif oneQgates_available[d - 1 - i].qubits[0] not in qubits:
@@ -361,13 +361,13 @@ def sample_circuit_layer_by_q_elimination(pspec, qubit_labels=None, two_q_prob=0
     # If two_q_gates is specified, use the given list.
     if two_q_gates != 'all':
         twoQgates_available = _copy.copy(two_q_gates)
-    # If two_q_gates is not specified, extract this list from the ProcessorSpec
+    # If two_q_gates is not specified, extract this list from the QubitProcessorSpec
     else:
         twoQgates_available = list(pspec.models[modelname].primitive_op_labels)
         d = len(twoQgates_available)
         for i in range(0, d):
             # If it's not a 2-qubit gate, we delete it.
-            if twoQgates_available[d - 1 - i].number_of_qubits != 2:
+            if twoQgates_available[d - 1 - i].num_qubits != 2:
                 del twoQgates_available[d - 1 - i]
             # If it's not a gate on the allowed qubits, we delete it.
             elif not set(twoQgates_available[d - 1 - i].qubits).issubset(set(qubits)):
@@ -499,8 +499,8 @@ def sample_circuit_layer_by_co2_q_gates(pspec, qubit_labels, co2_q_gates, co2_q_
 
     Parameters
     ----------
-    pspec : ProcessorSpec
-        The ProcessorSpec for the device that the circuit layer is being sampled for. Unless
+    pspec : QubitProcessorSpec
+        The QubitProcessorSpec for the device that the circuit layer is being sampled for. Unless
         `qubit_labels` is not None, a circuit layer is sampled over all the qubits in `pspec`.
 
     qubit_labels : list
@@ -538,7 +538,7 @@ def sample_circuit_layer_by_co2_q_gates(pspec, qubit_labels, co2_q_gates, co2_q_
     one_q_gate_names : 'all' or list of strs, optional
         If not 'all', a list of the names of the 1-qubit gates to be sampled from when applying
         a 1-qubit gate to a qubit. If this is 'all', the full set of 1-qubit gate names is
-        extracted from the ProcessorSpec.
+        extracted from the QubitProcessorSpec.
 
     modelname : str, optional
         Only used if one_q_gate_names is 'all'. Specifies which of the `pspec.models` to use to
@@ -612,7 +612,7 @@ def sample_circuit_layer_by_co2_q_gates(pspec, qubit_labels, co2_q_gates, co2_q_
                 possibleops = pspec.models[modelname].primitive_op_labels
                 l = len(possibleops)
                 for j in range(0, l):
-                    if possibleops[l - j].number_of_qubits != 1:
+                    if possibleops[l - j].num_qubits != 1:
                         del possibleops[l - j]
                     else:
                         if possibleops[l - j].qubits[0] != qubit:
@@ -634,8 +634,8 @@ def sample_circuit_layer_of_one_q_gates(pspec, qubit_labels=None, one_q_gate_nam
 
     Parameters
     ----------
-    pspec : ProcessorSpec
-        The ProcessorSpec for the device that the circuit layer is being sampled for. Unless
+    pspec : QubitProcessorSpec
+        The QubitProcessorSpec for the device that the circuit layer is being sampled for. Unless
         `qubit_labels` is not None, a circuit layer is sampled over all the qubits in `pspec`.
 
     qubit_labels : list, optional
@@ -646,7 +646,7 @@ def sample_circuit_layer_of_one_q_gates(pspec, qubit_labels=None, one_q_gate_nam
     one_q_gate_names : 'all' or list of strs, optional
         If not 'all', a list of the names of the 1-qubit gates to be sampled from when applying
         a 1-qubit gate to a qubit. If this is 'all', the full set of 1-qubit gate names is
-        extracted from the ProcessorSpec.
+        extracted from the QubitProcessorSpec.
 
     pdist : 'uniform' or list of floats, optional
         If a list, they are unnormalized probabilities to sample each of the 1-qubit gates
@@ -728,8 +728,8 @@ def create_random_circuit(pspec, length, qubit_labels=None, sampler='Qeliminatio
 
     Parameters
     ----------
-    pspec : ProcessorSpec
-        The ProcessorSpec for the device that the circuit is being sampled for. This is always
+    pspec : QubitProcessorSpec
+        The QubitProcessorSpec for the device that the circuit is being sampled for. This is always
         handed to the sampler, as the first argument of the sampler function. Unless
         `qubit_labels` is not None, the circuit is sampled over all the qubits in `pspec`.
 
@@ -749,10 +749,10 @@ def create_random_circuit(pspec, length, qubit_labels=None, sampler='Qeliminatio
         Except for 'local', this corresponds to sampling layers according to the sampling function
         in rb.sampler named circuit_layer_by* (with * replaced by 'sampler'). For 'local', this
         corresponds to sampling according to rb.sampler.circuit_layer_of_oneQgates. If this is a
-        function, it should be a function that takes as the first argument a ProcessorSpec, and
+        function, it should be a function that takes as the first argument a QubitProcessorSpec, and
         returns a random circuit layer as a list of gate Label objects. Note that the default
         'Qelimination' is not necessarily the most useful in-built sampler, but it is the only
-        sampler that requires no parameters beyond the ProcessorSpec *and* works for arbitrary
+        sampler that requires no parameters beyond the QubitProcessorSpec *and* works for arbitrary
         connectivity devices. See the docstrings for each of these samplers for more information.
 
     samplerargs : list, optional
@@ -848,8 +848,8 @@ def sample_simultaneous_random_circuit(pspec, length, structure='1Q', sampler='Q
 
     Parameters
     ----------
-    pspec : ProcessorSpec
-        The ProcessorSpec for the device that the circuit is being sampled for, which defines the
+    pspec : QubitProcessorSpec
+        The QubitProcessorSpec for the device that the circuit is being sampled for, which defines the
         "native" gate-set and the connectivity of the device. The returned circuit will be over
         the gates in `pspec`, and will respect the connectivity encoded by `pspec`. Note that `pspec`
         is always handed to the sampler, as the first argument of the sampler function (this is only
@@ -867,9 +867,9 @@ def sample_simultaneous_random_circuit(pspec, length, structure='1Q', sampler='Q
         in rb.sampler named circuit_layer_by* (with * replaced by 'sampler'). For 'local', this
         corresponds to sampling according to rb.sampler.circuit_layer_of_oneQgates.
         If `sampler` is a function, it should be a function that takes as the first argument a
-        ProcessorSpec, and returns a random circuit layer as a list of gate Label objects. Note that
+        QubitProcessorSpec, and returns a random circuit layer as a list of gate Label objects. Note that
         the default 'Qelimination' is not necessarily the most useful in-built sampler, but it is
-        the only sampler that requires no parameters beyond the ProcessorSpec *and* works for arbitrary
+        the only sampler that requires no parameters beyond the QubitProcessorSpec *and* works for arbitrary
         connectivity devices. See the docstrings for each of these samplers for more information.
 
     samplerargs : list, optional
@@ -899,7 +899,7 @@ def sample_simultaneous_random_circuit(pspec, length, structure='1Q', sampler='Q
     if isinstance(structure, str):
         assert(structure == '1Q'), "The only default `structure` option is the string '1Q'"
         structure = tuple([(q,) for q in pspec.qubit_labels])
-        n = pspec.number_of_qubits
+        n = pspec.num_qubits
     else:
         assert(isinstance(structure, list) or isinstance(structure, tuple)
                ), "If not a string, `structure` must be a list or tuple."
@@ -912,7 +912,7 @@ def sample_simultaneous_random_circuit(pspec, length, structure='1Q', sampler='Q
                    ), "The qubits in the tuples/lists of `structure must all be unique!"
 
         assert(set(qubits_used).issubset(set(pspec.qubit_labels))
-               ), "The qubits to benchmark must all be in the ProcessorSpec `pspec`!"
+               ), "The qubits to benchmark must all be in the QubitProcessorSpec `pspec`!"
         n = len(qubits_used)
 
     # Creates a empty circuit over no wires
@@ -984,8 +984,8 @@ def create_simultaneous_random_circuits_experiment(pspec, depths, circuits_per_l
 
     Parameters
     ----------
-    pspec : ProcessorSpec
-        The ProcessorSpec for the device that the circuit is being sampled for, which defines the
+    pspec : QubitProcessorSpec
+        The QubitProcessorSpec for the device that the circuit is being sampled for, which defines the
         "native" gate-set and the connectivity of the device. The returned circuit will be over
         the gates in `pspec`, and will respect the connectivity encoded by `pspec`. Note that `pspec`
         is always handed to the sampler, as the first argument of the sampler function (this is only
@@ -1007,9 +1007,9 @@ def create_simultaneous_random_circuits_experiment(pspec, depths, circuits_per_l
         in rb.sampler named circuit_layer_by* (with * replaced by 'sampler'). For 'local', this
         corresponds to sampling according to rb.sampler.circuit_layer_of_oneQgates.
         If `sampler` is a function, it should be a function that takes as the first argument a
-        ProcessorSpec, and returns a random circuit layer as a list of gate Label objects. Note that
+        QubitProcessorSpec, and returns a random circuit layer as a list of gate Label objects. Note that
         the default 'Qelimination' is not necessarily the most useful in-built sampler, but it is the
-        only sampler that requires no parameters beyond the ProcessorSpec *and* works for arbitrary
+        only sampler that requires no parameters beyond the QubitProcessorSpec *and* works for arbitrary
         connectivity devices. See the docstrings for each of these samplers for more information.
 
     samplerargs : list, optional
@@ -1083,7 +1083,7 @@ def create_simultaneous_random_circuits_experiment(pspec, depths, circuits_per_l
                 "The qubits in the tuples/lists of `structure must all be unique!"
 
         assert(set(qubits_used).issubset(set(pspec.qubit_labels))), \
-            "The qubits to benchmark must all be in the ProcessorSpec `pspec`!"
+            "The qubits to benchmark must all be in the QubitProcessorSpec `pspec`!"
 
     experiment_dict['spec']['structure'] = structure
     experiment_dict['circuits'] = {}
@@ -1173,8 +1173,8 @@ def create_exhaustive_independent_random_circuits_experiment(pspec, allowed_dept
 
     Parameters
     ----------
-    pspec : ProcessorSpec
-        The ProcessorSpec for the device that the circuit is being sampled for, which defines the
+    pspec : QubitProcessorSpec
+        The QubitProcessorSpec for the device that the circuit is being sampled for, which defines the
         "native" gate-set and the connectivity of the device. The returned circuit will be over
         the gates in `pspec`, and will respect the connectivity encoded by `pspec`. Note that `pspec`
         is always handed to the sampler, as the first argument of the sampler function (this is only
@@ -1195,9 +1195,9 @@ def create_exhaustive_independent_random_circuits_experiment(pspec, allowed_dept
         in rb.sampler named circuit_layer_by* (with * replaced by 'sampler'). For 'local', this
         corresponds to sampling according to rb.sampler.circuit_layer_of_oneQgates.
         If `sampler` is a function, it should be a function that takes as the first argument a
-        ProcessorSpec, and returns a random circuit layer as a list of gate Label objects. Note that
+        QubitProcessorSpec, and returns a random circuit layer as a list of gate Label objects. Note that
         the default 'Qelimination' is not necessarily the most useful in-built sampler, but it is the
-        only sampler that requires no parameters beyond the ProcessorSpec *and* works for arbitrary
+        only sampler that requires no parameters beyond the QubitProcessorSpec *and* works for arbitrary
         connectivity devices. See the docstrings for each of these samplers for more information.
 
     samplerargs : list, optional
@@ -1242,7 +1242,7 @@ def create_exhaustive_independent_random_circuits_experiment(pspec, allowed_dept
                 "The qubits in the tuples/lists of `structure must all be unique!"
 
         assert(set(qubits_used).issubset(set(pspec.qubit_labels))), \
-            "The qubits to benchmark must all be in the ProcessorSpec `pspec`!"
+            "The qubits to benchmark must all be in the QubitProcessorSpec `pspec`!"
 
     rand_state = _np.random.RandomState(seed)  # OK if seed is None
 
@@ -1294,8 +1294,8 @@ def create_direct_rb_circuit(pspec, length, qubit_labels=None, sampler='Qelimina
 
     Parameters
     ----------
-    pspec : ProcessorSpec
-        The ProcessorSpec for the device that the circuit is being sampled for, which defines the
+    pspec : QubitProcessorSpec
+        The QubitProcessorSpec for the device that the circuit is being sampled for, which defines the
         "native" gate-set and the connectivity of the device. The returned DRB circuit will be over
         the gates in `pspec`, and will respect the connectivity encoded by `pspec`. Note that `pspec`
         is always handed to the sampler, as the first argument of the sampler function (this is only
@@ -1322,9 +1322,9 @@ def create_direct_rb_circuit(pspec, length, qubit_labels=None, sampler='Qelimina
         corresponds to sampling according to rb.sampler.circuit_layer_of_oneQgates [which is not
         a valid form of sampling for n-qubit DRB, but is not explicitly forbidden in this function].
         If `sampler` is a function, it should be a function that takes as the first argument a
-        ProcessorSpec, and returns a random circuit layer as a list of gate Label objects. Note that
+        QubitProcessorSpec, and returns a random circuit layer as a list of gate Label objects. Note that
         the default 'Qelimination' is not necessarily the most useful in-built sampler, but it is
-        the only sampler that requires no parameters beyond the ProcessorSpec *and* works for arbitrary
+        the only sampler that requires no parameters beyond the QubitProcessorSpec *and* works for arbitrary
         connectivity devices. See the docstrings for each of these samplers for more information.
 
     samplerargs : list, optional
@@ -1403,7 +1403,7 @@ def create_direct_rb_circuit(pspec, length, qubit_labels=None, sampler='Qelimina
         qubit on the ith wire of the output circuit.
     """
     if qubit_labels is not None: n = len(qubit_labels)
-    else: n = pspec.number_of_qubits
+    else: n = pspec.num_qubits
 
     rand_state = _np.random.RandomState(seed)  # Ok if seed is None
 
@@ -1505,8 +1505,8 @@ def sample_simultaneous_direct_rb_circuit(pspec, length, structure='1Q', sampler
 
     Parameters
     ----------
-    pspec : ProcessorSpec
-        The ProcessorSpec for the device that the circuit is being sampled for, which defines the
+    pspec : QubitProcessorSpec
+        The QubitProcessorSpec for the device that the circuit is being sampled for, which defines the
         "native" gate-set and the connectivity of the device. The returned DRB circuit will be over
         the gates in `pspec`, and will respect the connectivity encoded by `pspec`. Note that `pspec`
         is always handed to the sampler, as the first argument of the sampler function (this is only
@@ -1531,9 +1531,9 @@ def sample_simultaneous_direct_rb_circuit(pspec, length, structure='1Q', sampler
         corresponds to sampling according to rb.sampler.circuit_layer_of_oneQgates [which is not
         a valid form of sampling for n-qubit DRB, but is not explicitly forbidden in this function].
         If `sampler` is a function, it should be a function that takes as the first argument a
-        ProcessorSpec, and returns a random circuit layer as a list of gate Label objects. Note that
+        QubitProcessorSpec, and returns a random circuit layer as a list of gate Label objects. Note that
         the default 'Qelimination' is not necessarily the most useful in-built sampler, but it is
-        the only sampler that requires no parameters beyond the ProcessorSpec *and* works for arbitrary
+        the only sampler that requires no parameters beyond the QubitProcessorSpec *and* works for arbitrary
         connectivity devices. See the docstrings for each of these samplers for more information.
 
     samplerargs : list, optional
@@ -1613,7 +1613,7 @@ def sample_simultaneous_direct_rb_circuit(pspec, length, structure='1Q', sampler
     if isinstance(structure, str):
         assert(structure == '1Q'), "The only default `structure` option is the string '1Q'"
         structure = tuple([(q,) for q in pspec.qubit_labels])
-        n = pspec.number_of_qubits
+        n = pspec.num_qubits
     else:
         assert(isinstance(structure, list) or isinstance(structure, tuple)
                ), "If not a string, `structure` must be a list or tuple."
@@ -1626,7 +1626,7 @@ def sample_simultaneous_direct_rb_circuit(pspec, length, structure='1Q', sampler
                    ), "The qubits in the tuples/lists of `structure must all be unique!"
 
         assert(set(qubits_used).issubset(set(pspec.qubit_labels))
-               ), "The qubits to benchmark must all be in the ProcessorSpec `pspec`!"
+               ), "The qubits to benchmark must all be in the QubitProcessorSpec `pspec`!"
         n = len(qubits_used)
 
     for qubit_labels in structure:
@@ -1775,8 +1775,8 @@ def create_simultaneous_direct_rb_experiment(pspec, depths, circuits_per_length,
 
     Parameters
     ----------
-    pspec : ProcessorSpec
-        The ProcessorSpec for the device that the circuit is being sampled for, which defines the
+    pspec : QubitProcessorSpec
+        The QubitProcessorSpec for the device that the circuit is being sampled for, which defines the
         "native" gate-set and the connectivity of the device. The returned DRB circuit will be over
         the gates in `pspec`, and will respect the connectivity encoded by `pspec`. Note that `pspec`
         is always handed to the sampler, as the first argument of the sampler function (this is only
@@ -1804,9 +1804,9 @@ def create_simultaneous_direct_rb_experiment(pspec, depths, circuits_per_length,
         corresponds to sampling according to rb.sampler.circuit_layer_of_oneQgates [which is not
         a valid form of sampling for n-qubit DRB, but is not explicitly forbidden in this function].
         If `sampler` is a function, it should be a function that takes as the first argument a
-        ProcessorSpec, and returns a random circuit layer as a list of gate Label objects. Note that
+        QubitProcessorSpec, and returns a random circuit layer as a list of gate Label objects. Note that
         the default 'Qelimination' is not necessarily the most useful in-built sampler, but it is the
-        only sampler that requires no parameters beyond the ProcessorSpec *and* works for arbitrary
+        only sampler that requires no parameters beyond the QubitProcessorSpec *and* works for arbitrary
         connectivity devices. See the docstrings for each of these samplers for more information.
 
     samplerargs : list, optional
@@ -1947,7 +1947,7 @@ def create_simultaneous_direct_rb_experiment(pspec, depths, circuits_per_length,
                 "The qubits in the tuples/lists of `structure must all be unique!"
 
         assert(set(qubits_used).issubset(set(pspec.qubit_labels))), \
-            "The qubits to benchmark must all be in the ProcessorSpec `pspec`!"
+            "The qubits to benchmark must all be in the QubitProcessorSpec `pspec`!"
 
     experiment_dict['spec']['structure'] = structure
     experiment_dict['circuits'] = {}
@@ -2034,7 +2034,7 @@ def create_clifford_rb_circuit(pspec, length, qubit_labels=None, randomizeout=Fa
     processes", Magesan et al. PRL 106 180504 (2011). This consists of a circuit of `length`+1 uniformly
     random n-qubit Clifford gates followed by the unique inversion Clifford, with all the Cliffords compiled
     into the "native" gates of a device as specified by `pspec`. The circuit output by this function will
-    respect the connectivity of the device, as encoded into `pspec` (see the ProcessorSpec object docstring
+    respect the connectivity of the device, as encoded into `pspec` (see the QubitProcessorSpec object docstring
     for how to construct the relevant `pspec`).
 
     Note the convention that the the output Circuit consists of `length+2` Clifford gates, rather than the
@@ -2046,8 +2046,8 @@ def create_clifford_rb_circuit(pspec, length, qubit_labels=None, randomizeout=Fa
 
     Parameters
     ----------
-    pspec : ProcessorSpec
-        The ProcessorSpec for the device that the circuit is being sampled for, which defines the
+    pspec : QubitProcessorSpec
+        The QubitProcessorSpec for the device that the circuit is being sampled for, which defines the
         "native" gate-set and the connectivity of the device. The returned CRB circuit will be over
         the gates in `pspec`, and will respect the connectivity encoded by `pspec`.
 
@@ -2057,7 +2057,7 @@ def create_clifford_rb_circuit(pspec, length, qubit_labels=None, randomizeout=Fa
 
     qubit_labels : list, optional
         If not None, a list of the qubits that the RB circuit is to be sampled for. This should
-        be all or a subset of the qubits in the device specified by the ProcessorSpec `pspec`.
+        be all or a subset of the qubits in the device specified by the QubitProcessorSpec `pspec`.
         If None, it is assumed that the RB circuit should be over all the qubits. Note that the
         ordering of this list is the order of the ``wires'' in the returned circuit, but is otherwise
         irrelevant. If desired, a circuit that explicitly idles on the other qubits can be obtained
@@ -2182,8 +2182,8 @@ def sample_pauli_layer_as_compiled_circuit(pspec, qubit_labels=None, keepidle=Fa
 
     Parameters
     ----------
-    pspec : ProcessorSpec
-        The ProcessorSpec for the device.
+    pspec : QubitProcessorSpec
+        The QubitProcessorSpec for the device.
 
     qubit_labels : list, optional
         If not None, a list of a subset of the qubits from `pspec` that
@@ -2237,8 +2237,8 @@ def sample_one_q_clifford_layer_as_compiled_circuit(pspec, qubit_labels=None, ra
 
     Parameters
     ----------
-    pspec : ProcessorSpec
-        The ProcessorSpec for the device.
+    pspec : QubitProcessorSpec
+        The QubitProcessorSpec for the device.
 
     qubit_labels : list, optional
         If not None, a list of a subset of the qubits from `pspec` that
@@ -2257,7 +2257,7 @@ def sample_one_q_clifford_layer_as_compiled_circuit(pspec, qubit_labels=None, ra
         n = len(qubit_labels)
         qubits = qubit_labels[:]  # copy this list
     else:
-        n = pspec.number_of_qubits
+        n = pspec.num_qubits
         qubits = pspec.qubit_labels[:]  # copy this list
 
     # The hard-coded notation for the 1Q clifford operators
@@ -2290,8 +2290,8 @@ def create_mirror_rb_circuit(pspec, length, qubit_labels=None, sampler='Qelimina
 
     Parameters
     ----------
-    pspec : ProcessorSpec
-        The ProcessorSpec for the device that the circuit is being sampled for. The `pspec` is always
+    pspec : QubitProcessorSpec
+        The QubitProcessorSpec for the device that the circuit is being sampled for. The `pspec` is always
         handed to the sampler, as the first argument of the sampler function.
 
     length : int
@@ -2317,7 +2317,7 @@ def create_mirror_rb_circuit(pspec, length, qubit_labels=None, sampler='Qelimina
 
     qubit_labels : list, optional
         If not None, a list of the qubits that the RB circuit is to be sampled for. This should
-        be all or a subset of the qubits in the device specified by the ProcessorSpec `pspec`.
+        be all or a subset of the qubits in the device specified by the QubitProcessorSpec `pspec`.
         If None, it is assumed that the RB circuit should be over all the qubits. Note that the
         ordering of this list is the order of the ``wires'' in the returned circuit, but is otherwise
         irrelevant.
@@ -2329,9 +2329,9 @@ def create_mirror_rb_circuit(pspec, length, qubit_labels=None, sampler='Qelimina
         corresponds to sampling according to rb.sampler.circuit_layer_of_oneQgates [which is not
         a valid option for n-qubit MRB -- it results in sim. 1-qubit MRB -- but it is not explicitly
         forbidden by this function]. If `sampler` is a function, it should be a function that takes
-        as the first argument a ProcessorSpec, and returns a random circuit layer as a list of gate
+        as the first argument a QubitProcessorSpec, and returns a random circuit layer as a list of gate
         Label objects. Note that the default 'Qelimination' is not necessarily the most useful
-        in-built sampler, but it is the only sampler that requires no parameters beyond the ProcessorSpec
+        in-built sampler, but it is the only sampler that requires no parameters beyond the QubitProcessorSpec
         *and* works for arbitrary connectivity devices. See the docstrings for each of these samplers
         for more information.
 
@@ -2364,10 +2364,10 @@ def create_mirror_rb_circuit(pspec, length, qubit_labels=None, sampler='Qelimina
             - 2*`length`+1 if paulirandomize and not local clifford.
             - `length` + X, if not paulirandomize and local clifford, where X is a random variable
               that accounts for the depth from the layers of random 1-qubit Cliffords (X = 2 if the 1
-              qubit Clifford gates are "native" gates in the ProcessorSpec).
+              qubit Clifford gates are "native" gates in the QubitProcessorSpec).
             - 2*`length`+1 + X, if paulirandomize and local clifford, where X is a random variable
               that accounts for the depth from the layers of random 1-qubit Cliffords (X = 2 if the 1
-              qubit Clifford gates are "native" gates in the ProcessorSpec).
+              qubit Clifford gates are "native" gates in the QubitProcessorSpec).
     Tuple
         A length-n tuple of integers in [0,1], corresponding to the error-free outcome of the
         circuit. Always all zeros if `randomizeout` is False. The ith element of the tuple
@@ -2387,7 +2387,7 @@ def create_mirror_rb_circuit(pspec, length, qubit_labels=None, sampler='Qelimina
         qubit_labels = list(qubit_labels)
         n = len(qubit_labels)
     else:
-        n = pspec.number_of_qubits
+        n = pspec.num_qubits
 
     # Check that the inverse of every gate is in the model:
     for gname in pspec.gate_names:
@@ -2954,7 +2954,7 @@ def create_random_germpower_mirror_circuits(pspec, depths, qubit_labels=None, lo
         qubit_labels = list(qubit_labels)
         n = len(qubit_labels)
     else:
-        n = pspec.number_of_qubits
+        n = pspec.num_qubits
 
     # Check that the inverse of every gate is in the model:
     for gname in pspec.gate_names:

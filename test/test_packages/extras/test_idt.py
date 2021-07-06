@@ -7,7 +7,7 @@ import numpy as np
 
 import pygsti
 import pygsti.models.modelconstruction as mc
-from pygsti.baseobjs.processorspec import ProcessorSpec as _ProcessorSpec
+from pygsti.processors.processorspec import QubitProcessorSpec as _ProcessorSpec
 from pygsti.extras import idletomography as idt
 from ..testutils import BaseTestCase, compare_files, temp_files, regenerate_references
 

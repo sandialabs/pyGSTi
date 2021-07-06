@@ -2813,8 +2813,8 @@ class Circuit(object):
             idle gates in place of the previous 1-qubit gates.  Note that `None` can be used as `name3`
             to signify that the result is the identity (no gate labels).
 
-            If a ProcessorSpec object has been created for the gates/device in question, the
-            ProcessorSpec.oneQgate_relations is the appropriate (and auto-generated) `one_q_gate_relations`.
+            If a QubitProcessorSpec object has been created for the gates/device in question, the
+            QubitProcessorSpec.oneQgate_relations is the appropriate (and auto-generated) `one_q_gate_relations`.
 
             Note that this function will not compress sequences of 1-qubit gates that cannot be compressed by
             independently inspecting sequential non-idle pairs (as would be the case with, for example,
@@ -2986,8 +2986,8 @@ class Circuit(object):
             1-qubit gates will be compressed into a single possibly non-idle 1-qubit gate followed by
             idle gates in place of the previous 1-qubit gates.
 
-            If a ProcessorSpec object has been created for the gates/device in question, the
-            ProcessorSpec.oneQgate_relations is the appropriate (and auto-generated) `one_q_gate_relations`.
+            If a QubitProcessorSpec object has been created for the gates/device in question, the
+            QubitProcessorSpec.oneQgate_relations is the appropriate (and auto-generated) `one_q_gate_relations`.
 
             Note that this function will not compress sequences of 1-qubit gates that cannot be compressed by
             independently inspecting sequential non-idle pairs (as would be the case with, for example,

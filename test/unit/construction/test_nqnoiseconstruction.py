@@ -2,7 +2,7 @@ import numpy as np
 import scipy
 
 import pygsti.models.modelconstruction as mc
-import pygsti.models.nqnoiseconstruction as nc
+import pygsti.circuits.cloudcircuitconstruction as nc
 from pygsti.modelpacks.legacy import std1Q_XYI, std2Q_XXYYII, std2Q_XYICNOT
 from pygsti.circuits import Circuit
 from pygsti.data import DataSet
