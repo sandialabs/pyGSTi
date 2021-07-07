@@ -13,6 +13,8 @@ Defines the ComputationalBasisPOVM class
 
 import collections as _collections
 import itertools as _itertools
+import functools as _functools
+import numpy as _np
 
 from pygsti.modelmembers.povms.computationaleffect import ComputationalBasisPOVMEffect as _ComputationalBasisPOVMEffect
 from pygsti.modelmembers.povms.povm import POVM as _POVM
@@ -47,7 +49,7 @@ class ComputationalBasisPOVM(_POVM):
         assert(len(pure_vectors) > 0)
         if not isinstance(pure_vectors, dict):
             pure_vectors = _collections.OrderedDict(pure_vectors)
-        nqubits = len(next(iter(pure_vectors.values())))
+        nqubits = int(_np.log2(len(next(iter(pure_vectors.values())))))
 
         v = (_np.array([1, 0], 'd'), _np.array([0, 1], 'd'))  # (v0,v1) - eigenstates of sigma_z
         for zvals in _itertools.product(*([(0, 1)] * nqubits)):

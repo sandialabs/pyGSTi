@@ -33,6 +33,7 @@ from .tensorprodeffect import TensorProductPOVMEffect
 from .tensorprodpovm import TensorProductPOVM
 from .tppovm import TPPOVM
 from .unconstrainedpovm import UnconstrainedPOVM
+from pygsti.baseobjs import statespace as _statespace
 from pygsti.tools import basistools as _bt
 from pygsti.tools import optools as _ot
 
@@ -42,11 +43,14 @@ def create_from_pure_vectors(pure_vectors, povm_type, basis='pp', evotype='defau
     povm_type_preferences = (povm_type,) if isinstance(povm_type, str) else povm_type
     if not isinstance(pure_vectors, dict):  # then assume it's a list of (key, value) pairs
         pure_vectors = _collections.OrderedDict(pure_vectors)
+    if state_space is None:
+        state_space = _statespace.default_space_for_udim(len(next(iter(pure_vectors.values()))))
+
 
     for typ in povm_type_preferences:
         try:
             if typ in ('computational', 'static standard'):
-                povm = ComputationalBasisPOVM.from_dense_purevecs(pure_vectors, evotype, state_space)
+                povm = ComputationalBasisPOVM.from_pure_vectors(pure_vectors, evotype, state_space)
             #elif typ in ('static stabilizer', 'static clifford'):
             #    povm = ComputationalBasisPOVM(...evotype='stabilizer') ??
             elif typ in ('static pure', 'static unitary',
@@ -128,7 +132,7 @@ def create_effect_from_pure_vector(pure_vector, effect_type, basis='pp', evotype
     for typ in effect_type_preferences:
         try:
             if typ in ('computational', 'static standard'):
-                ef = ComputationalBasisPOVMEffect.from_dense_purevec(pure_vector, basis, evotype, state_space)
+                ef = ComputationalBasisPOVMEffect.from_pure_vector(pure_vector, basis, evotype, state_space)
             #elif typ == ('static stabilizer', 'static clifford'):
             #    ef = StaticStabilizerEffect(...)  # TODO
             elif typ == ('static pure', 'static unitary'):
@@ -378,7 +382,7 @@ def convert_effect(effect, to_type, basis, extra=None):
             return effect  # no conversion necessary
 
         purevec = effect.to_dense().flatten()  # assume a pure state (otherwise would need to change Model dim)
-        return ComputationalBasisPOVMEffect.from_dense_purevec(purevec)
+        return ComputationalBasisPOVMEffect.from_pure_vector(purevec)
 
     else:
         raise ValueError("Invalid to_type argument: %s" % to_type)

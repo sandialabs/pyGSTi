@@ -17,8 +17,10 @@ import collections as _collections
 from pygsti.tools import internalgates as _itgs
 from pygsti.tools import symplectic as _symplectic
 from pygsti.tools import optools as _ot
+from pygsti.tools import basistools as _bt
 from pygsti.baseobjs import qubitgraph as _qgraph
 from pygsti.baseobjs.label import Label as _Lbl
+
 
 class ProcessorSpec(object):
     pass  # base class for potentially other types of processors (not composed of just qubits)
@@ -93,6 +95,28 @@ class QubitProcessorSpec(ProcessorSpec):
         Any additional information that should be attached to this processor spec.
     """
 
+    @classmethod
+    def from_explicit_model(cls, model, qubit_labels):
+        """ TODO: docstring """
+        #go through ops, building up availability and unitaries, then create procesor spec...
+        nqubits = len(qubit_labels)
+        gate_unitaries = _collections.OrderedDict()
+        availability = {}
+        for opkey, op in model.operations.items():  # TODO: need to deal with special () idle label
+            gn = opkey.name
+            sslbls = opkey.sslbls
+            if gn not in gate_unitaries:
+                U = _ot.process_mx_to_unitary(_bt.change_basis(op.to_dense('HilbertSchmidt'),
+                                                               model.basis, 'std'))
+                gate_unitaries[gn] = U
+                availability[gn] = [sslbls]
+            else:
+                availability[gn].append(sslbls)
+
+        return cls(nqubits, list(gate_unitaries.keys()), gate_unitaries, availability,
+                   qubit_labels=qubit_labels)
+
+
     def __init__(self, num_qubits, gate_names, nonstd_gate_unitaries=None, availability=None,
                  geometry=None, qubit_labels=None, aux_info=None):
         assert(type(num_qubits) is int), "The number of qubits, n, should be an integer!"
@@ -127,8 +151,8 @@ class QubitProcessorSpec(ProcessorSpec):
         else:  # assume geometry is a string
             if qubit_labels is None:
                 qubit_labels = tuple(range(num_qubits))
-            self.qubit_graph = _qgraph.QubitGraph.common_graph(num_qubits, geometry, directed=False,
-                                                               qubit_labels=qubit_labels)
+            self.qubit_graph = _qgraph.QubitGraph.common_graph(num_qubits, geometry, directed=True,
+                                                               qubit_labels=qubit_labels, all_directions=True)
 
         # If no qubit labels are provided it defaults to integers from 0 to num_qubits-1.
         if qubit_labels is None:
@@ -152,7 +176,16 @@ class QubitProcessorSpec(ProcessorSpec):
         """ The number of qubits. """
         return len(self.qubit_labels)
 
-    def gate_number_of_qubits(self, gate_name):
+    @property
+    def primitive_op_labels(self):
+        """ All the primitive operation labels derived from the gate names and availabilities """
+        ret = []
+        for gn in self.gate_names:
+            avail = self.resolved_availability(gn, 'tuple')
+            ret.extend([_Lbl(gn, sslbls) for sslbls in avail])
+        return ret
+
+    def gate_num_qubits(self, gate_name):
         unitary = self.gate_unitaries[gate_name]
         return int(round(_np.log2(unitary.udim if callable(unitary) else unitary.shape[0])))
 
@@ -160,7 +193,7 @@ class QubitProcessorSpec(ProcessorSpec):
         """ TODO: docstring -- returns the availability resolved as either a tuple of sslbl-tuples or a fn"""
         assert(tuple_or_function in ('tuple', 'function', 'auto'))
         avail_entry = self.availability.get(gate_name, 'all-edges')
-        gate_nqubits = self.gate_number_of_qubits(gate_name)
+        gate_nqubits = self.gate_num_qubits(gate_name)
         return self._resolve_availability(avail_entry, gate_nqubits, tuple_or_function)
 
     def _resolve_availability(self, avail_entry, gate_nqubits, tuple_or_function="auto"):
@@ -226,7 +259,7 @@ class QubitProcessorSpec(ProcessorSpec):
         """ TODO: docstring - return all the gate names that are available for at least a subset of `sslbls`"""
         ret = []
         for gn in self.gate_names:
-            gn_nqubits = self.gate_number_of_qubits(gn)
+            gn_nqubits = self.gate_num_qubits(gn)
             avail_fn = self.resolved_availability(gn, tuple_or_function="function")
             if gn_nqubits > len(sslbls): continue  # gate has too many qubits to fit in sslbls
             if any((avail_fn(sslbls_subset) for sslbls_subset in _itertools.permutations(sslbls, gn_nqubits))):
@@ -237,7 +270,7 @@ class QubitProcessorSpec(ProcessorSpec):
         """ TODO: docstring - return all the gate labels that are available for `gatename` on
             at least a subset of `sslbls`"""
         ret = []
-        gate_nqubits = self.gate_number_of_qubits(gate_name)
+        gate_nqubits = self.gate_num_qubits(gate_name)
         avail_fn = self.resolved_availability(gate_name, tuple_or_function="function")
         if gate_nqubits > len(sslbls): return ()  # gate has too many qubits to fit in sslbls
         return tuple((_Lbl(gate_name, sslbls_subset) for sslbls_subset in _itertools.permutations(sslbls, gate_nqubits)

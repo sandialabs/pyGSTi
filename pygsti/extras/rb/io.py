@@ -743,14 +743,14 @@ def write_rb_summary_data_to_file(ds, filename):
 #     Format 1 (`is_counts_data` is True):
 
 #         # The number of qubits
-#         The number of qubits (this line is optional if `number_of_qubits` is specified)
+#         The number of qubits (this line is optional if `num_qubits` is specified)
 #         # RB length // Success counts // Total counts // Circuit depth // Circuit two-qubit gate count
 #         Between 3 and 5 columns of data (the last two columns are expected only if `contains_circuit_data` is True).
 
 #     Format 2 (`is_counts_data` is False):
 
 #         # The number of qubits
-#         The number of qubits (this line is optional if `number_of_qubits` is specified)
+#         The number of qubits (this line is optional if `num_qubits` is specified)
 #         # RB length // Survival probabilities // Circuit depth // Circuit two-qubit gate count
 #         Between 2 and 4 columns of data (the last two columns are expected only if `contains_circuit_data` is True).
 
@@ -773,7 +773,7 @@ def write_rb_summary_data_to_file(ds, filename):
 #         they run any analysis on the data). But it is useful to be able to set this to False for simulated
 #         data obtained from perfect outcome sampling.
 
-#     number_of_qubits : int, optional.
+#     num_qubits : int, optional.
 #         The number of qubits the data is for. Must be specified if this isn't in the input file.
 
 #     total_counts : int, optional

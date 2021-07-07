@@ -917,7 +917,7 @@ class QubitGraph(object):
         i = self._nodeinds[start_node]
         dir_index = direction if isinstance(direction, int) else self.directions.index(direction)
         for j, d in enumerate(self._connectivity[i, :]):
-            if d == dir_index:
+            if d == dir_index + 1:  # b/c 0 means "no edge" in connectivity mx
                 return self._nodes[j]
         return None  # No node in this direction
 

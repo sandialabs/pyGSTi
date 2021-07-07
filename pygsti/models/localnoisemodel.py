@@ -588,7 +588,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                 # Note: can't use automatic-embedding b/c we need to force embedding
                 # when just ordering doesn't align (e.g. Gcnot:1:0 on 2-qubits needs to embed)
                 allowed_sslbls_fn = resolved_avail if callable(resolved_avail) else None
-                gate_nQubits = self.processor_spec.gate_number_of_qubits(gateName)
+                gate_nQubits = self.processor_spec.gate_num_qubits(gateName)
                 embedded_op = _opfactory.EmbeddingOpFactory(state_space, base_gate,
                                                             num_target_labels=gate_nQubits,
                                                             allowed_sslbls_fn=allowed_sslbls_fn)

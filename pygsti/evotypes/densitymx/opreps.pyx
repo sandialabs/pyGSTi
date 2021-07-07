@@ -14,6 +14,7 @@
 import sys
 import numpy as _np
 import copy as _copy
+import scipy.sparse as _sps
 
 import itertools as _itertools
 from ...baseobjs.statespace import StateSpace as _StateSpace
@@ -149,6 +150,14 @@ cdef class OpRepSparse(OpRep):
 
     def __reduce__(self):
         return (OpRepSparse, (self.data, self.indices, self.indptr, self.state_space))
+
+    def to_dense(self, on_space):
+        if on_space not in ('minimal', 'HilbertSchmidt'):
+            raise ValueError("'densitymx' evotype cannot produce Hilbert-space ops!")
+
+        dim = self.state_space.dim
+        sparsemx = _sps.csr_matrix((self.data, self.indices, self.indptr), shape=(dim, dim))
+        return sparsemx.toarray()
 
     def copy(self):
         return OpRepSparse(self.data.copy(), self.indices.copy(), self.indptr.copy(), self.state_space.copy())

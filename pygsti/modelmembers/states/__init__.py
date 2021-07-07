@@ -24,6 +24,7 @@ from .staticpurestate import StaticPureState
 from .staticstate import StaticState
 from .tensorprodstate import TensorProductState
 from .tpstate import TPState
+from pygsti.baseobjs import statespace as _statespace
 from pygsti.tools import basistools as _bt
 from pygsti.tools import optools as _ot
 
@@ -31,11 +32,13 @@ from pygsti.tools import optools as _ot
 def create_from_pure_vector(pure_vector, state_type, basis='pp', evotype='default', state_space=None):
     """ TODO: docstring -- create a State from a state vector """
     state_type_preferences = (state_type,) if isinstance(state_type, str) else state_type
+    if state_space is None:
+        state_space = _statespace.default_space_for_udim(len(pure_vector))
 
     for typ in state_type_preferences:
         try:
             if typ in ('computational', 'static standard'):
-                st = ComputationalBasisState.from_dense_purevec(pure_vector, basis, evotype, state_space)
+                st = ComputationalBasisState.from_pure_vector(pure_vector, basis, evotype, state_space)
             #elif typ == ('static stabilizer', 'static clifford'):
             #    st = StaticStabilizerState(...)  # TODO
             elif typ == ('static pure', 'static unitary'):
@@ -46,13 +49,14 @@ def create_from_pure_vector(pure_vector, state_type, basis='pp', evotype='defaul
                 superket = _bt.change_basis(_ot.state_to_dmvec(pure_vector), 'std', basis)
                 st = create_from_dmvec(superket, typ, basis, evotype, state_space)
             elif _ot.is_valid_lindblad_paramtype(typ):
+                from ..operations import LindbladErrorgen as _LindbladErrorgen, ExpErrorgenOp as _ExpErrorgenOp
                 static_state = create_from_pure_vector(pure_vector, ('computational', 'static pure'),
                                                        basis, evotype, state_space)
 
                 proj_basis = 'pp' if state_space.is_entirely_qubits else basis
-                errorgen = LindbladErrorgen.from_error_generator(state_space.dim, typ, proj_basis, basis,
-                                                                 truncate=True, evotype=evotype,
-                                                                 state_space=state_space)
+                errorgen = _LindbladErrorgen.from_error_generator(state_space.dim, typ, proj_basis, basis,
+                                                                  truncate=True, evotype=evotype,
+                                                                  state_space=state_space)
                 st = ComposedState(static_state, _ExpErrorgenOp(errorgen))
             else:
                 raise ValueError("Unknown state type '%s'!" % str(typ))
@@ -182,7 +186,7 @@ def convert(state, to_type, basis, extra=None):
             return state  # no conversion necessary
 
         purevec = state.to_dense().flatten()  # assume a pure state (otherwise would need to change Model dim)
-        return ComputationalBasisState.from_dense_purevec(purevec)
+        return ComputationalBasisState.from_pure_vector(purevec)
 
     else:
         raise ValueError("Invalid to_type argument: %s" % to_type)

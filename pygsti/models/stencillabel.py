@@ -13,6 +13,7 @@ Stencil label classes and supporting functions.
 import itertools as _itertools
 import pygsti.baseobjs.statespace as _statespace
 
+
 class StencilLabel(object):
 
     @classmethod

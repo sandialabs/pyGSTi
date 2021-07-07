@@ -1769,8 +1769,8 @@ def lindblad_error_generators(dmbasis_ham, dmbasis_other, normalize,
                         assert(_np.isclose(normfn(otherLindbladTerms[i]), 1.0))
 
         elif other_mode == "diag_affine":
-            otherLindbladTerms = [[None] * (other_nMxs - 1)] * 2 if sparse else \
-                _np.empty((2, other_nMxs - 1, d2, d2), 'complex')
+            otherLindbladTerms = [[None] * (other_nMxs - 1), [None] * (other_nMxs - 1)] \
+                if sparse else _np.empty((2, other_nMxs - 1, d2, d2), 'complex')
             for i, Lm in enumerate(other_mxs[1:]):  # don't include identity
                 otherLindbladTerms[0][i] = _lt.nonham_lindbladian(Lm, Lm, sparse)
                 otherLindbladTerms[1][i] = _lt.affine_lindbladian(Lm, sparse)

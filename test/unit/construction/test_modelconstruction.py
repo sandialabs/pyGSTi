@@ -71,7 +71,7 @@ class ModelConstructionTester(BaseCase):
     def test_build_crosstalk_free_model(self):
         nQubits = 2
 
-        pspec = _ProcessorSpec(nQubits, ('Gi', 'Gx', 'Gy', 'Gcnot'))
+        pspec = _ProcessorSpec(nQubits, ('Gi', 'Gx', 'Gy', 'Gcnot'), geometry='line')
 
         mdl = mc.create_crosstalk_free_model(
             pspec,
@@ -109,7 +109,8 @@ class ModelConstructionTester(BaseCase):
         self.assertEqual(mdl.operation_blks['gates']['Gi'].gpindices, slice1)
 
         # Case: ensure_composed_gates=False, independent_gates=True
-        pspec = _ProcessorSpec(nQubits, ('Gx', 'Gy', 'Gcnot'), qubit_labels=['qb{}'.format(i) for i in range(nQubits)])
+        pspec = _ProcessorSpec(nQubits, ('Gx', 'Gy', 'Gcnot'), qubit_labels=['qb{}'.format(i) for i in range(nQubits)],
+                               geometry='line')
         cfmdl = mc.create_crosstalk_free_model(
             pspec,
             depolarization_strengths={'Gx': 0.1, 'idle': 0.01, 'prep': 0.01, 'povm': 0.01},
@@ -118,7 +119,7 @@ class ModelConstructionTester(BaseCase):
                 'Gcnot': {('H', 'ZZ'): 0.01, ('S', 'IX'): 0.01},
             },
             ensure_composed_gates=False, independent_gates=True,
-            ideal_spam_type="tensor product static")
+            ideal_spam_type="computational")
 
         self.assertEqual(cfmdl.num_params, 17)
 
@@ -281,6 +282,7 @@ class ModelConstructionTester(BaseCase):
             pspec, lindblad_error_coeffs={
                 'Gi': {('H', 'X'): 0.1, ('S', 'Y'): 0.1},
                 'prep': {('H', 'Y'): 0.01}},
+            ideal_spam_type='tensor product static'
         )
         rho0 = mdl_prep1.prep_blks['layers']['rho0']
         self.assertTrue(isinstance(rho0, pygsti.modelmembers.states.TensorProductState))
@@ -290,6 +292,7 @@ class ModelConstructionTester(BaseCase):
             pspec, lindblad_error_coeffs={
                 'Gi': {('H', 'X'): 0.1, ('S', 'Y'): 0.1},
                 'povm': {('H', 'Y'): 0.01}},
+            ideal_spam_type='tensor product static'
         )
         Mdefault = mdl_povm1.povm_blks['layers']['Mdefault']
         self.assertTrue(isinstance(Mdefault, pygsti.modelmembers.povms.TensorProductPOVM))
@@ -300,7 +303,7 @@ class ModelConstructionTester(BaseCase):
             pspec, lindblad_error_coeffs={
                 'Gi': {('H', 'X'): 0.1, ('S', 'Y'): 0.1},
                 'prep': {('H', 'Y'): 0.01}},
-            ideal_spam_type="tensor product static"
+            ideal_spam_type="computational"
         )
         rho0 = mdl_prep2.prep_blks['layers']['rho0']
         self.assertTrue(isinstance(rho0, pygsti.modelmembers.states.ComposedState))
@@ -310,7 +313,7 @@ class ModelConstructionTester(BaseCase):
             pspec, lindblad_error_coeffs={
                 'Gi': {('H', 'X'): 0.1, ('S', 'Y'): 0.1},
                 'povm': {('H', 'Y'): 0.01}},
-            ideal_spam_type="tensor product static"
+            ideal_spam_type="computational"
         )
         Mdefault = mdl_povm2.povm_blks['layers']['Mdefault']
         self.assertTrue(isinstance(Mdefault, pygsti.modelmembers.povms.ComposedPOVM))
@@ -324,6 +327,7 @@ class ModelConstructionTester(BaseCase):
             a, = args
             sigmaZ = np.array([[1, 0], [0, -1]], 'd')
             return scipy.linalg.expm(1j * float(a) * sigmaZ)
+        fn.udim = 2
 
         pspec = _ProcessorSpec(nQubits, ('Gx', 'Gy', 'Gcnot', 'Ga'), nonstd_gate_unitaries={'Ga': fn})
         cfmdl = mc.create_crosstalk_free_model(pspec)
@@ -342,6 +346,7 @@ class ModelConstructionTester(BaseCase):
             theta, = args
             sigmaX = np.array([[0, 1], [1, 0]], 'd')
             return scipy.linalg.expm(1j * float(theta) / 4 * sigmaX)
+        fn.udim = 2
 
         class XRotationOpFactory(pygsti.modelmembers.operations.OpFactory):
             def __init__(self):

@@ -579,7 +579,7 @@ class CloudNoiseModel(_ImplicitOpModel):
 
                 # Target operation
                 allowed_sslbls_fn = resolved_avail if callable(resolved_avail) else None
-                gate_nQubits = self.processor_spec.gate_number_of_qubits(gn)
+                gate_nQubits = self.processor_spec.gate_num_qubits(gn)
                 printer.log("Creating %dQ %s gate on arbitrary qubits!!" % (gate_nQubits, gn))
                 self.factories['layers'][_Lbl(gn)] = _opfactory.EmbeddingOpFactory(
                     state_space, gate, num_target_labels=gate_nQubits, allowed_sslbls_fn=allowed_sslbls_fn)

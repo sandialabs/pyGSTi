@@ -371,7 +371,7 @@ class CliffordCompilationRules(CompilationRules):
                 return len(allowed_gatenames) > 0  # 1Q gates, anything is ok
             elif oplabel.num_qubits == 2:
                 # 2Q gates need a compilation gate that is also 2Q (can't do with just 1Q gates!)
-                return max([self.processor_spec.gate_number_of_qubits(gn) for gn in allowed_gatenames]) == 2
+                return max([self.processor_spec.gate_num_qubits(gn) for gn in allowed_gatenames]) == 2
             else:
                 # >2Q gates need to make sure there's some connected path
                 return True  # future: update using graphs stuff?
@@ -1122,7 +1122,7 @@ class CliffordCompilationRules(CompilationRules):
         qubit_labels = self.processor_spec.qubit_labels
         clifford_gates = set(self.processor_spec.compute_clifford_symplectic_reps().keys())
         for gn in self.processor_spec.gate_names:
-            if self.processor_spec.gate_number_of_qubits(gn) == 2 and gn in clifford_gates:
+            if self.processor_spec.gate_num_qubits(gn) == 2 and gn in clifford_gates:
                 for sslbls in self.processor_spec.resolved_availability(gn, 'tuple'):
                     CtwoQ_connectivity[qubit_labels.index(sslbls[0]), qubit_labels.index(sslbls[1])] = True
 

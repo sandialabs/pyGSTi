@@ -1,5 +1,5 @@
 from pygsti.baseobjs import Label
-from pygsti.processors import QubitProcessorPack
+from pygsti.processors import QubitProcessorSpec
 from ...util import BaseCase
 
 
@@ -11,20 +11,20 @@ class RBSampleTester(BaseCase):
     def setUpClass(cls):
         super(RBSampleTester, cls).setUpClass()
         glist = ['Gxpi2', 'Gypi2', 'Gcnot']  # 'Gi',
-        cls.pspec_1 = QubitProcessorPack(4, glist, verbosity=0, qubit_labels=['Q0', 'Q1', 'Q2', 'Q3'])
+        cls.pspec_1 = QubitProcessorSpec(4, glist, qubit_labels=['Q0', 'Q1', 'Q2', 'Q3'], geometry='line')
 
         # # XXX this takes nearly a minute to construct on my machine....
         # glist = ['Gxpi', 'Gypi', 'Gzpi', 'Gh', 'Gp', 'Gcphase']  # 'Gi',
         # availability = {'Gcphase': [(0, 1), (1, 2)]}
-        # cls.pspec_2 = QubitProcessorPack(3, glist, availability=availability, verbosity=0)
+        # cls.pspec_2 = QubitProcessorSpec(3, glist, availability=availability, geometry='line')
 
         # XXX is this an OK test fixture? see above.
         glist = ['Gxpi2', 'Gypi2', 'Gcphase']  # 'Gi',
         availability = {'Gcphase': [(0, 1), (1, 2)]}
-        cls.pspec_2 = QubitProcessorPack(3, glist, availability=availability, verbosity=0)
+        cls.pspec_2 = QubitProcessorSpec(3, glist, availability=availability, geometry='line')
 
         glist = ['Gxpi2', 'Gxmpi2', 'Gypi2', 'Gympi2', 'Gcnot']  # 'Gi',
-        cls.pspec_inv = QubitProcessorPack(4, glist, verbosity=0, qubit_labels=['Q0', 'Q1', 'Q2', 'Q3'])
+        cls.pspec_inv = QubitProcessorSpec(4, glist, qubit_labels=['Q0', 'Q1', 'Q2', 'Q3'], geometry='line')
 
     def test_clifford_rb_experiment(self):
         self.skipTest("RB analysis is known to be broken.  Skip tests until it gets fixed.")

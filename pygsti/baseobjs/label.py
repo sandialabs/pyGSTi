@@ -286,7 +286,7 @@ class LabelTup(Label, tuple):
         return self.sslbls
 
     @property
-    def number_of_qubits(self):  # Used in Circuit
+    def num_qubits(self):  # Used in Circuit
         """
         The number of qubits this label "acts" on (an integer). `None` if `self.ssbls is None`.
         """
@@ -549,7 +549,7 @@ class LabelTupWithTime(Label, tuple):
         return self.sslbls
 
     @property
-    def number_of_qubits(self):  # Used in Circuit
+    def num_qubits(self):  # Used in Circuit
         """
         The number of qubits this label "acts" on (an integer). `None` if `self.ssbls is None`.
         """
@@ -786,7 +786,7 @@ class LabelStr(Label, str):
         return None
 
     @property
-    def number_of_qubits(self):  # Used in Circuit
+    def num_qubits(self):  # Used in Circuit
         """
         The number of qubits this label "acts" on (an integer). `None` if `self.ssbls is None`.
         """
@@ -981,7 +981,7 @@ class LabelTupTup(Label, tuple):
         return self.sslbls
 
     @property
-    def number_of_qubits(self):  # Used in Circuit
+    def num_qubits(self):  # Used in Circuit
         """
         The number of qubits this label "acts" on (an integer). `None` if `self.ssbls is None`.
         """
@@ -1249,7 +1249,7 @@ class LabelTupTupWithTime(Label, tuple):
         return self.sslbls
 
     @property
-    def number_of_qubits(self):  # Used in Circuit
+    def num_qubits(self):  # Used in Circuit
         """
         The number of qubits this label "acts" on (an integer). `None` if `self.ssbls is None`.
         """
@@ -1531,7 +1531,7 @@ class CircuitLabel(Label, tuple):
         return self.sslbls
 
     @property
-    def number_of_qubits(self):  # Used in Circuit
+    def num_qubits(self):  # Used in Circuit
         """
         The number of qubits this label "acts" on (an integer). `None` if `self.ssbls is None`.
         """
@@ -1831,7 +1831,7 @@ class LabelTupWithArgs(Label, tuple):
         return self.sslbls
 
     @property
-    def number_of_qubits(self):  # Used in Circuit
+    def num_qubits(self):  # Used in Circuit
         """
         The number of qubits this label "acts" on (an integer). `None` if `self.ssbls is None`.
         """
@@ -2085,7 +2085,7 @@ class LabelTupTupWithArgs(Label, tuple):
         return self.sslbls
 
     @property
-    def number_of_qubits(self):  # Used in Circuit
+    def num_qubits(self):  # Used in Circuit
         """
         The number of qubits this label "acts" on (an integer). `None` if `self.ssbls is None`.
         """

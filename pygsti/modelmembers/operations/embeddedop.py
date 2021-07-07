@@ -187,7 +187,7 @@ class EmbeddedOp(_LinearOperator):
         """ Iterates of (op_i,op_j,embedded_op_i,embedded_op_j) tuples giving mapping
             between nonzero elements of operation matrix and elements of the embedded operation matrix """
         if self._iter_elements_cache[on_space] is not None:
-            for item in self._iter_elements_cache[on_cache]:
+            for item in self._iter_elements_cache[on_space]:
                 yield item
             return
 
@@ -255,7 +255,8 @@ class EmbeddedOp(_LinearOperator):
         """
         embedded_sparse = self.embedded_op.to_sparse(on_space).tolil()
         if on_space == 'minimal':  # resolve 'minimal' based on embedded rep type
-            on_space = 'Hilbert' if embedded_dense.shape[0] == self.embedded_op.state_space.udim else 'HilbertSchmidt'
+            on_space = 'Hilbert' if embedded_sparse.shape[0] == self.embedded_op.state_space.udim \
+                else 'HilbertSchmidt'
 
         finalOp = _sps.identity(self.state_space.udim if (on_space == 'Hilbert') else self.state_space.dim,
                                 embedded_sparse.dtype, format='lil')
@@ -395,9 +396,9 @@ class EmbeddedOp(_LinearOperator):
         dim = self.state_space.udim if (on_space == 'Hilbert') else self.state_space.dim
 
         derivMx = _np.zeros((dim**2, embedded_deriv.shape[1]), embedded_deriv.dtype)
-        M = embedded_deriv.shape[0]
-        M_check = self.embedded_op.state_space.udim if (on_space == 'Hilbert') else self.embedded_op.state_space.dim
-        assert(M == M_check), "Mismatch between embedded gate's state space dim/udim and it's deriv_wrt_params value"
+        M = self.embedded_op.state_space.udim if (on_space == 'Hilbert') else self.embedded_op.state_space.dim
+        assert(M**2 == embedded_deriv.shape[0]), \
+            "Mismatch between embedded gate's state space dim/udim and it's deriv_wrt_params value"
 
         #fill in embedded_op contributions (always overwrites the diagonal
         # of finalOp where appropriate, so OK it starts as identity)

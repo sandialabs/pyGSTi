@@ -860,7 +860,7 @@ class LindbladErrorgen(_LinearOperator):
                 "Imaginary error gen norm: %g" % _np.linalg.norm(lnd_error_gen.imag)
             return lnd_error_gen.real
 
-        elif self._rep_type == 'sparse':
+        elif self._rep_type == 'sparse superop':
             return self.to_sparse(on_space).toarray()
         else:  # dense rep
             return self._rep.to_dense(on_space)
@@ -898,7 +898,7 @@ class LindbladErrorgen(_LinearOperator):
                                           for c, gen in zip(cRow, genRow)])
 
             return lnd_error_gen
-        elif self._rep_type == 'sparse':
+        elif self._rep_type == 'sparse superop':
             assert(on_space in ('minimal', 'HilbertSchmidt'))
             return _sps.csr_matrix((self._rep.data, self._rep.indices, self._rep.indptr),
                                    shape=(self.dim, self.dim))
@@ -1389,7 +1389,7 @@ class LindbladErrorgen(_LinearOperator):
             Uinv = s.transform_matrix_inverse
 
             #conjugate Lindbladian exponent by U:
-            err_gen_mx = self.to_sparse() if self._rep_type == 'sparse' else self.to_dense()
+            err_gen_mx = self.to_sparse() if self._rep_type == 'sparse superop' else self.to_dense()
             err_gen_mx = _mt.safe_dot(Uinv, _mt.safe_dot(err_gen_mx, U))
             trunc = bool(isinstance(s, _gaugegroup.UnitaryGaugeGroupElement))
             self._set_params_from_matrix(err_gen_mx, truncate=trunc)
@@ -1437,7 +1437,7 @@ class LindbladErrorgen(_LinearOperator):
     #       isinstance(s, _gaugegroup.TPSpamGaugeGroupElement):
     #        U = s.transform_matrix
     #        Uinv = s.transform_matrix_inverse
-    #        err_gen_mx = self.to_sparse() if self._rep_type == 'sparse' else self.to_dense()
+    #        err_gen_mx = self.to_sparse() if self._rep_type == 'sparse superop' else self.to_dense()
     #
     #        #just act on postfactor and Lindbladian exponent:
     #        if typ == "prep":

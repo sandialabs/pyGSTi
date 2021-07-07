@@ -4,8 +4,9 @@ import unittest
 
 from pygsti.circuits import circuit
 from pygsti.baseobjs import Label, CircuitLabel
-from pygsti.processors import QubitProcessorPack
+from pygsti.processors import QubitProcessorSpec
 from pygsti.tools import symplectic
+from pygsti.models import modelconstruction as mc
 from ..util import BaseCase
 
 
@@ -478,11 +479,12 @@ MEASURE 2 ro[2]
         n = 4
         qubit_labels = ['Q' + str(i) for i in range(n)]
         gate_names = ['Gh', 'Gp', 'Gxpi', 'Gpdag', 'Gcnot']  # 'Gi',
-        ps = QubitProcessorPack(n, gate_names=gate_names, qubit_labels=qubit_labels, construct_models=('target', 'clifford'))
+        ps = QubitProcessorSpec(n, gate_names=gate_names, qubit_labels=qubit_labels, geometry='line')
 
         # Tests the circuit simulator
+        mdl = mc.create_crosstalk_free_model(ps)
         c = circuit.Circuit(layer_labels=[Label('Gh', 'Q0'), Label('Gcnot', ('Q0', 'Q1'))], line_labels=['Q0', 'Q1'])
-        out = c.simulate(ps.models['target'])
+        out = c.simulate(mdl)
         self.assertLess(abs(out['00'] - 0.5), 10**-10)
         self.assertLess(abs(out['11'] - 0.5), 10**-10)
 

@@ -19,18 +19,21 @@ from pygsti import baseobjs as _baseobjs
 from pygsti import protocols as _proto
 from pygsti.objectivefns import objectivefns as _objfns
 from pygsti.baseobjs.advancedoptions import GSTAdvancedOptions as _GSTAdvancedOptions
+from pygsti.processors import QubitProcessorSpec as _QubitProcessorSpec
+from pygsti.models.modelconstruction import _create_explicit_model
 
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]
 DEFAULT_BAD_FIT_THRESHOLD = 2.0
 
 
 def run_model_test(model_filename_or_object,
-                   data_filename_or_set, target_model_filename_or_object,
+                   data_filename_or_set, processorspec_filename_or_object,
                    prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
                    germs_list_or_filename, max_lengths, gauge_opt_params=None,
                    advanced_options=None, comm=None, mem_limit=None,
                    output_pkl=None, verbosity=2):
     """
+    TODO: update docstring - processorspec_filename_or_object
     Compares a :class:`Model`'s predictions to a `DataSet` using GST-like circuits.
 
     This routine tests a Model model against a DataSet using a specific set of
@@ -121,7 +124,7 @@ def run_model_test(model_filename_or_object,
     ds = _load_dataset(data_filename_or_set, comm, printer)
     advanced_options = _GSTAdvancedOptions(advanced_options or {})
 
-    exp_design = _proto.StandardGSTDesign(target_model_filename_or_object,
+    exp_design = _proto.StandardGSTDesign(processorspec_filename_or_object,
                                           prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
                                           germs_list_or_filename, max_lengths,
                                           advanced_options.get('germ_length_limits', None),
@@ -157,11 +160,12 @@ def run_model_test(model_filename_or_object,
     return results
 
 
-def run_linear_gst(data_filename_or_set, target_model_filename_or_object,
+def run_linear_gst(data_filename_or_set, processorspec_filename_or_object,
                    prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
                    gauge_opt_params=None, advanced_options=None, comm=None,
                    mem_limit=None, output_pkl=None, verbosity=2):
     """
+    TODO: update docstring -processorspec_filename_or_object
     Perform Linear Gate Set Tomography (LGST).
 
     This function differs from the lower level :function:`run_lgst` function
@@ -232,11 +236,12 @@ def run_linear_gst(data_filename_or_set, target_model_filename_or_object,
     advanced_options = _GSTAdvancedOptions(advanced_options or {})
     ds = _load_dataset(data_filename_or_set, comm, printer)
 
-    target_model = _load_model(target_model_filename_or_object)
-    germs = _circuits.to_circuits([()] + [(gl,) for gl in target_model.operations.keys()])  # just the single gates
+    pspec = processorspec_filename_or_object  # _load_processorspec TODO
+    germs = _circuits.to_circuits([()] + [(gl,) for gl in pspec.primitive_op_labels])  # just the single gates
     max_lengths = [1]  # we only need maxLength == 1 when doing LGST
 
-    exp_design = _proto.StandardGSTDesign(target_model, prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
+    exp_design = _proto.StandardGSTDesign(pspec,
+                                          prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
                                           germs, max_lengths,
                                           sequenceRules=advanced_options.get('string_manipulation_rules', None),
                                           op_label_aliases=advanced_options.get('op_label_aliases', None),
@@ -248,7 +253,7 @@ def run_linear_gst(data_filename_or_set, target_model_filename_or_object,
         gauge_opt_params = {'item_weights': {'gates': 1.0, 'spam': 0.001}}
     gopt_suite = {'go0': gauge_opt_params} if gauge_opt_params else None
 
-    proto = _proto.LinearGateSetTomography(target_model, gopt_suite, None,
+    proto = _proto.LinearGateSetTomography(pspec.create_target_model('full', 'full'), gopt_suite, None,
                                            _get_badfit_options(advanced_options), printer,
                                            name=advanced_options.get('estimate_label', None))
     proto.profile = advanced_options.get('profile', 1)
@@ -262,12 +267,13 @@ def run_linear_gst(data_filename_or_set, target_model_filename_or_object,
     return results
 
 
-def run_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
+def run_long_sequence_gst(data_filename_or_set, processorspec_filename_or_object,
                           prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
                           germs_list_or_filename, max_lengths, gauge_opt_params=None,
                           advanced_options=None, comm=None, mem_limit=None,
                           output_pkl=None, verbosity=2):
     """
+    TODO: update docstring - processorspec_filename_or_obj
     Perform long-sequence GST (LSGST).
 
     This analysis fits a model (`target_model_filename_or_object`) to data
@@ -398,7 +404,7 @@ def run_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
     advanced_options = _GSTAdvancedOptions(advanced_options or {})
     ds = _load_dataset(data_filename_or_set, comm, printer)
 
-    exp_design = _proto.StandardGSTDesign(target_model_filename_or_object,
+    exp_design = _proto.StandardGSTDesign(processorspec_filename_or_object,
                                           prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
                                           germs_list_or_filename, max_lengths,
                                           advanced_options.get('germ_length_limits', None),
@@ -414,9 +420,10 @@ def run_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
     if gauge_opt_params is None:
         gauge_opt_params = {'item_weights': {'gates': 1.0, 'spam': 0.001}}
     gopt_suite = {'go0': gauge_opt_params} if gauge_opt_params else None
-    proto = _proto.GateSetTomography(_get_gst_initial_model(advanced_options), gopt_suite, None,
+    initial_model = _get_gst_initial_model(advanced_options)
+    proto = _proto.GateSetTomography(initial_model, gopt_suite, None,
                                      _get_gst_builders(advanced_options),
-                                     _get_optimizer(advanced_options, exp_design),
+                                     _get_optimizer(advanced_options, initial_model),
                                      _get_badfit_options(advanced_options), printer)
 
     proto.profile = advanced_options.get('profile', 1)
@@ -431,11 +438,12 @@ def run_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
     return results
 
 
-def run_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_object,
+def run_long_sequence_gst_base(data_filename_or_set, processorspec_filename_or_object,
                                lsgst_lists, gauge_opt_params=None,
                                advanced_options=None, comm=None, mem_limit=None,
                                output_pkl=None, verbosity=2):
     """
+    TODO: update docstring - processorspec_filename_or_obj
     A more fundamental interface for performing end-to-end GST.
 
     Similar to :func:`run_long_sequence_gst` except this function takes
@@ -511,7 +519,7 @@ def run_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_ob
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm)
     advanced_options = advanced_options or {}
 
-    exp_design = _proto.GateSetTomographyDesign(target_model_filename_or_object, lsgst_lists)
+    exp_design = _proto.GateSetTomographyDesign(processorspec_filename_or_object, lsgst_lists)
 
     ds = _load_dataset(data_filename_or_set, comm, printer)
     data = _proto.ProtocolData(exp_design, ds)
@@ -519,10 +527,11 @@ def run_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_ob
     if gauge_opt_params is None:
         gauge_opt_params = {'item_weights': {'gates': 1.0, 'spam': 0.001}}
     gopt_suite = {'go0': gauge_opt_params} if gauge_opt_params else None
-
-    proto = _proto.GateSetTomography(_get_gst_initial_model(advanced_options), gopt_suite, None,
+    initial_model = _get_gst_initial_model(advanced_options)
+    
+    proto = _proto.GateSetTomography(initial_model, gopt_suite, None,
                                      _get_gst_builders(advanced_options),
-                                     _get_optimizer(advanced_options, exp_design),
+                                     _get_optimizer(advanced_options, initial_model),
                                      _get_badfit_options(advanced_options), printer,
                                      name=advanced_options.get('estimate_label', None))
 
@@ -538,13 +547,14 @@ def run_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_ob
     return results
 
 
-def run_stdpractice_gst(data_filename_or_set, target_model_filename_or_object,
+def run_stdpractice_gst(data_filename_or_set, processorspec_filename_or_object,
                         prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
                         germs_list_or_filename, max_lengths, modes="TP,CPTP,Target",
                         gaugeopt_suite='stdgaugeopt',
                         gaugeopt_target=None, models_to_test=None, comm=None, mem_limit=None,
                         advanced_options=None, output_pkl=None, verbosity=2):
     """
+    TODO: update docstring
     Perform end-to-end GST analysis using standard practices.
 
     This routines is an even higher-level driver than
@@ -660,7 +670,7 @@ def run_stdpractice_gst(data_filename_or_set, target_model_filename_or_object,
     advanced_options = _GSTAdvancedOptions(advanced_options or {})
     ds = _load_dataset(data_filename_or_set, comm, printer)
 
-    exp_design = _proto.StandardGSTDesign(target_model_filename_or_object,
+    exp_design = _proto.StandardGSTDesign(processorspec_filename_or_object,
                                           prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
                                           germs_list_or_filename, max_lengths,
                                           advanced_options.get('germ_length_limits', None),
@@ -675,7 +685,7 @@ def run_stdpractice_gst(data_filename_or_set, target_model_filename_or_object,
     data = _proto.ProtocolData(exp_design, ds)
     proto = _proto.StandardGST(modes, gaugeopt_suite, gaugeopt_target, models_to_test,
                                _get_gst_builders(advanced_options),
-                               _get_optimizer(advanced_options, exp_design),
+                               _get_optimizer(advanced_options, exp_design.create_target_model()),
                                _get_badfit_options(advanced_options), printer,
                                name=advanced_options.get('estimate_label', None))
 
@@ -773,10 +783,10 @@ def _get_gst_builders(advanced_options):
     return objfn_builders
 
 
-def _get_optimizer(advanced_options, exp_design):
+def _get_optimizer(advanced_options, model_being_optimized):
     from pygsti.forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
     advanced_options = advanced_options or {}
-    default_fditer = 1 if isinstance(exp_design.target_model.sim, _MatrixFSim) else 0
+    default_fditer = 1 if isinstance(model_being_optimized.sim, _MatrixFSim) else 0
     optimizer = {'maxiter': advanced_options.get('max_iterations', 100000),
                  'tol': advanced_options.get('tolerance', 1e-6),
                  'fditer': advanced_options.get('finitediff_iterations', default_fditer)}

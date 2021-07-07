@@ -93,7 +93,7 @@ class StandardGSTDesignTester(BaseCase):
     """
 
     def test_creation(self):
-        gst.GateSetTomographyDesign(smq1Q_XYI.target_model(),
+        gst.GateSetTomographyDesign(smq1Q_XYI.processor_spec(),
                                     smq1Q_XYI.prep_fiducials(),
                                     smq1Q_XYI.meas_fiducials(),
                                     smq1Q_XYI.germs(),
@@ -116,7 +116,7 @@ class GSTInitialModelTester(BaseCase):
         im2 = gst.GSTInitialModel.cast(im)
         self.assertTrue(im2 is im)
 
-        im3 = gst.GSTInitialModel.cast(self.edesign.target_model)
+        im3 = gst.GSTInitialModel.cast(self.edesign.create_target_model())
         self.assertEqual(im3.starting_point, "User-supplied-Model")
 
     def test_get_model_target(self):
@@ -124,11 +124,11 @@ class GSTInitialModelTester(BaseCase):
         im = gst.GSTInitialModel()  # default is to use the target
         mdl = im.get_model(self.edesign, None, None, None)
         self.assertEqual(im.starting_point, 'target')
-        self.assertTrue(mdl is self.edesign.target_model)
+        self.assertTrue(self.edesign.create_target_model().frobeniusdist(mdl) < 1e-6)
 
     def test_get_model_custom(self):
         #Custom model
-        custom_model = self.edesign.target_model.rotate(max_rotate=0.05, seed=1234)
+        custom_model = self.edesign.create_target_model().rotate(max_rotate=0.05, seed=1234)
         im = gst.GSTInitialModel(custom_model)  # default is to use the target
         mdl = im.get_model(self.edesign, None, None, None)
         self.assertEqual(im.starting_point, "User-supplied-Model")
@@ -136,7 +136,7 @@ class GSTInitialModelTester(BaseCase):
 
     def test_get_model_depolarized(self):
         #Depolarized start
-        depol_model = self.edesign.target_model.depolarize(op_noise=0.1)
+        depol_model = self.edesign.create_target_model().depolarize(op_noise=0.1)
         im = gst.GSTInitialModel(depolarize_start=0.1)  # default is to use the target
         mdl = im.get_model(self.edesign, None, None, None)
         self.assertEqual(im.starting_point, 'target')
@@ -144,13 +144,13 @@ class GSTInitialModelTester(BaseCase):
 
     def test_get_model_lgst(self):
         #LGST
-        datagen_model = self.edesign.target_model.depolarize(op_noise=0.1)
+        datagen_model = self.edesign.create_target_model().depolarize(op_noise=0.1)
         ds = simulate_data(datagen_model, self.edesign.all_circuits_needing_data, 1000, sample_error='none')  # no error for reproducibility
 
-        im1 = gst.GSTInitialModel(self.edesign.target_model, "LGST")
+        im1 = gst.GSTInitialModel(self.edesign.create_target_model(), "LGST")
         mdl1 = im1.get_model(self.edesign, None, ds, None)
 
-        im2 = gst.GSTInitialModel(self.edesign.target_model, "LGST-if-possible")
+        im2 = gst.GSTInitialModel(self.edesign.create_target_model(), "LGST-if-possible")
         mdl2 = im2.get_model(self.edesign, None, ds, None)
 
         self.assertTrue(mdl1.frobeniusdist(mdl2) < 1e-6)

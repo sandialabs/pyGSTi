@@ -68,7 +68,7 @@ class OpRepDenseSuperop(OpRep):
 
     def to_dense(self, on_space):
         if on_space not in ('minimal', 'HilbertSchmidt'):
-            raise ValueError("'densitymx' evotype cannot produce Hilbert-space ops!")
+            raise ValueError("'densitymx_slow' evotype cannot produce Hilbert-space ops!")
         return self.base
 
     def acton(self, state):
@@ -112,6 +112,11 @@ class OpRepSparse(OpRep):
         """ Act the adjoint of this operation matrix on an input state """
         Aadj = self.A.conjugate(copy=True).transpose()
         return _StateRep(Aadj.dot(state.data), state.state_space)
+
+    def to_dense(self, on_space):
+        if on_space not in ('minimal', 'HilbertSchmidt'):
+            raise ValueError("'densitymx_slow' evotype cannot produce Hilbert-space ops!")
+        return self.A.todense()
 
 
 class OpRepStandard(OpRepDenseSuperop):

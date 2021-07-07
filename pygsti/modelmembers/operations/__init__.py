@@ -33,14 +33,18 @@ from .staticcliffordop import StaticCliffordOp
 from .staticstdop import StaticStandardOp
 from .staticunitaryop import StaticUnitaryOp
 from .stochasticop import StochasticNoiseOp
+from pygsti.baseobjs import statespace as _statespace
 from pygsti.tools import basistools as _bt
 from pygsti.tools import optools as _ot
+
 
 
 def create_from_unitary_mx(unitary_mx, op_type, basis='pp', stdname=None, evotype='default', state_space=None):
     """ TODO: docstring - note that op_type can be a list/tuple of types in order of precedence """
     op_type_preferences = (op_type,) if isinstance(op_type, str) else op_type
     U = unitary_mx
+    if state_space is None:
+        state_space = _statespace.default_space_for_udim(U.shape[0])
 
     for typ in op_type_preferences:
         try:
@@ -62,7 +66,7 @@ def create_from_unitary_mx(unitary_mx, op_type, basis='pp', stdname=None, evotyp
                     unitary_postfactor = create_from_unitary_mx(
                         U, ('static standard', 'static clifford', 'static unitary'),
                         basis, stdname, evotype, state_space)
-
+                    
                 proj_basis = 'pp' if state_space.is_entirely_qubits else basis
                 errorgen = LindbladErrorgen.from_error_generator(state_space.dim, typ, proj_basis, basis,
                                                                  truncate=True, evotype=evotype,
@@ -91,7 +95,7 @@ def create_from_superop_mx(superop_mx, op_type, basis='pp', stdname=None, evotyp
     for typ in op_type_preferences:
         try:
             if typ == "static":  # "static arbitrary"?
-                op = op.StaticArbitraryOp(superop_mx, evotype, state_space)
+                op = StaticArbitraryOp(superop_mx, evotype, state_space)
             elif typ == "full":  # "full arbitrary"?
                 op = FullArbitraryOp(superop_mx, evotype, state_space)
             elif typ == "full TP":

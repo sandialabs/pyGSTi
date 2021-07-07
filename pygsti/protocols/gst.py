@@ -31,6 +31,7 @@ from pygsti import models as _models
 from pygsti import optimize as _opt
 from pygsti import tools as _tools
 from pygsti import baseobjs as _baseobjs
+from pygsti.processors import QubitProcessorSpec as _QubitProcessorSpec
 from pygsti.modelmembers import operations as _op
 from pygsti.models import Model as _Model
 from pygsti.objectivefns import objectivefns as _objfns, wildcardbudget as _wild
@@ -54,13 +55,11 @@ class HasProcessorSpec(object):
         The processor API used by this experiment design.
     """
 
-    def __init__(self, procesorspec_filename_or_obj):
-        if not isinstance(procesorspec_filename_or_obj, _baseobjs.ProcessorSpec):
-            raise NotImplementedError("Need to implement loading processor specs from file")
-        self.processor_spec = procesorspec_filename_or_obj #_load_model(target_model_filename_or_obj)
+    def __init__(self, processorspec_filename_or_obj):
+        self.processor_spec = _load_pspec(processorspec_filename_or_obj)
         self.auxfile_types['processor_spec'] = 'pickle'
 
-    def create_target_model(self):
+    def create_target_model(self, ideal_gate_type='auto', ideal_spam_type='computational'):
         """
         TODO: docstring
 
@@ -70,8 +69,8 @@ class HasProcessorSpec(object):
         """
         # Create a static explicit model as the target model, based on the processor spec
         return _models.modelconstruction._create_explicit_model(
-            self.processor_spec, evotype='default', simulator='auto',
-            ideal_gate_type='auto', ideal_spam_type='computational',
+            self.processor_spec, None, evotype='default', simulator='auto',
+            ideal_gate_type=ideal_gate_type, ideal_spam_type=ideal_spam_type,
             embed_gates=False, basis='pp')
 
 
@@ -247,7 +246,7 @@ class StandardGSTDesign(GateSetTomographyDesign):
         self.fpr_keep_seed = keep_seed
 
         #TODO: add a line_labels arg to create_lsgst_circuit_lists and pass qubit_labels in?
-        processor_spec = processorspec_filename_or_obj #_load_model(target_model_filename_or_obj)
+        processor_spec = _load_pspec(processorspec_filename_or_obj)
         lists = _circuits.create_lsgst_circuit_lists(
             processor_spec, self.prep_fiducials, self.meas_fiducials, self.germs,
             self.maxlengths, self.fiducial_pairs, self.truncation_method, self.nested,
@@ -1350,6 +1349,14 @@ def _update_gaugeopt_dict_from_suitename(gaugeopt_suite_dict, root_lbl, suite_na
         pass  # add nothing
     else:
         raise ValueError("Unknown gauge-optimization suite '%s'" % suite_name)
+
+
+def _load_pspec(processorspec_filename_or_obj):
+    if not isinstance(processorspec_filename_or_obj, _QubitProcessorSpec):
+        with open(processorspec_filename_or_obj, 'rb') as f:
+            return _pickle.load(f)
+    else:
+        return processorspec_filename_or_obj
 
 
 def _load_model(model_filename_or_obj):
