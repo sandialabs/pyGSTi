@@ -67,6 +67,17 @@ class POVMEffect(_modelmember.ModelMember):
         """
         return self.state_space.dim
 
+    @property
+    def size(self):
+        """
+        Return the number of independent elements in this gate (when viewed as a dense array)
+
+        Returns
+        -------
+        int
+        """
+        return self.state_space.dim
+
     def set_dense(self, vec):
         """
         Set the dense-vector value of this POVM effect vector.

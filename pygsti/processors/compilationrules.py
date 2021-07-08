@@ -21,6 +21,7 @@ from pygsti.baseobjs.qubitgraph import QubitGraph as _QubitGraph
 from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.tools import listtools as _lt
 from pygsti.tools import symplectic as _symp
+from pygsti.tools import internalgates as _itgs
 
 IDENT = 'I'  # internal 1Q-identity-gate name used for compilation
 # MUST be the same as in processorpack.py
@@ -33,13 +34,59 @@ class CompilationError(Exception):
     pass
 
 
-class CompilationLibrary(_collections.OrderedDict):
-    """
-    An collection of compilations for gates.
+class CompilationRules(object):
 
-    Essentially an ordered dictionary whose keys are operation labels
-    (:class:`Label` objects) and whose values are circuits
-    (:class:`Circuit` objects).  A `CompilationLibrary` holds a :class:`Model`
+    @classmethod
+    def cast(cls, obj):
+        if isinstance(obj, CompilationRules): return obj
+        return cls(obj)
+
+    def __init__(self, compilation_rules_dict=None):
+        self.gate_unitaries = _collections.OrderedDict()  # gate_name => unitary mx, fn, or None
+        self.local_templates = _collections.OrderedDict()  # gate_name => Circuit on gate's #qubits
+        self.function_templates = _collections.OrderedDict()  # gate_name => fn(sslbls)
+        self.specific_compilations = _collections.OrderedDict()  # gate_label => Circuit on absolute qubits
+        if compilation_rules_dict is not None:
+            raise NotImplementedError("Need to convert compilation_rules_dict into info")
+
+    def add_compilation_rule(self, gate_name, template_circuit_or_fn, unitary=None):
+        std_gate_unitaries = _itgs.standard_gatename_unitaries()
+        std_gate_unitaries.update(_itgs.internal_gate_unitaries())  # internal gates ok too?
+        if unitary is None:
+            if gate_name in std_gate_unitaries: unitary = std_gate_unitaries[gate_name]
+            else: raise ValueError("Must supply `unitary` for non-standard gate name '%s'" % gate_name)
+        self.gate_unitaries[gate_name] = unitary
+
+        if callable(template_circuit_or_fn):
+            self.function_templates[gate_name] = template_circuit_or_fn
+        else:
+            self.local_templates[gate_name] = template_circuit_or_fn
+
+    def add_specific_compilation_rule(self, gate_label, circuit, unitary):
+        std_gate_unitaries = _itgs.standard_gatename_unitaries()
+        std_gate_unitaries.update(_itgs.internal_gate_unitaries())  # internal gates ok too?
+        if gate_label.name not in self.gate_unitaries:
+            if unitary is None:
+                if gate_label.name in std_gate_unitaries: unitary = std_gate_unitaries[gate_label.name]
+                else: raise ValueError("Must supply `unitary` for non-standard gate name '%s'" % gate_label.name)
+            self.gate_unitaries[gate_label.name] = unitary
+        self.specific_compilations[gate_label] = circuit
+
+    def create_aux_info(self):
+        """ TODO: docstring -- compute any aux_info to be added to processorspec when
+         compiling with these CompilationRules"""
+        return {}
+
+
+class CliffordCompilationRules(CompilationRules):
+    """
+    An collection of compilations for clifford gates.
+
+    Holds mapping between operation labels (:class:`Label` objects) and circuits
+    (:class:`Circuit` objects).
+
+    TODO: update this docstring part:
+    A `CliffordCompilationRules` holds a :class:`Model`
     which specifies the "native" gates that all compilations are made up of.
     Currently, this model should only contain Clifford gates, so that its
     `compute_clifford_symplectic_reps` method gives representations for all of its
@@ -58,7 +105,7 @@ class CompilationLibrary(_collections.OrderedDict):
     a compilation for a gate, a template is used if a suitable one can be found;
     otherwise a new template is created and then used.
 
-    Compilation libraries are most often used within a :class:`ProcessorSpec`
+    Compilation libraries are most often used within a :class:`QubitProcessorSpec`
     object.
 
     Parameters
@@ -79,8 +126,170 @@ class CompilationLibrary(_collections.OrderedDict):
         initial items (key,value pairs) to place in library.
     """
 
-    def __init__(self, clifford_model, ctyp="absolute", items=[]):
+    @classmethod
+    def create_standard(cls, base_processor_spec, compile_type="absolute", what_to_compile=("1Qcliffords",),
+                        verbosity=1):
+        """ subctype : {"1Qcliffords", "localcnots", "allcnots", "paulis"} -- but depends on `ctype` """
+
+        # A list of the 1-qubit gates to compile, in the std names understood inside the compilation code.
+        one_q_gates = []
+        # A list of the 2-qubit gates to compile, in the std names understood inside the compilation code.
+        two_q_gates = []
+
+        add_nonlocal_two_q_gates = False  # Defaults to not adding non-local compilations of 2-qubit gates.
+        number_of_qubits = base_processor_spec.num_qubits
+        qubit_labels = base_processor_spec.qubit_labels
+
+        # We construct the requested Pauli-equivalent compilations.
+        if compile_type == 'paulieq':
+            for subctype in what_to_compile:
+                if subctype == '1Qcliffords':
+                    one_q_gates += ['H', 'P', 'PH', 'HP', 'HPH']
+                elif subctype == 'localcnots':
+                    # So that the default still makes sense with 1 qubit, we ignore the request to compile CNOTs
+                    # in that case
+                    if number_of_qubits > 1:
+                        two_q_gates += ['CNOT', ]
+                elif subctype == 'allcnots':
+                    # So that the default still makes sense with 1 qubit, we ignore the request to compile CNOTs
+                    # in that case
+                    if number_of_qubits > 1:
+                        two_q_gates += ['CNOT', ]
+                        add_nonlocal_two_q_gates = True
+                else:
+                    raise ValueError("{} is invalid for the `{}` compile type!".format(subctype, compile_type))
+
+        # We construct the requested `absolute` (i.e., not only up to Paulis) compilations.
+        elif compile_type == 'absolute':
+            for subctype in what_to_compile:
+                if subctype == 'paulis':
+                    one_q_gates += ['I', 'X', 'Y', 'Z']
+                elif subctype == '1Qcliffords':
+                    one_q_gates += ['C' + str(q) for q in range(24)]
+                else:
+                    raise ValueError("{} is invalid for the `{}` compile type!".format(subctype, compile_type))
+        else:
+            raise ValueError("Invalid `compile_type` argument: %s" % str(compile_type))
+
+        descs = {'paulieq': 'up to paulis', 'absolute': ''}
+
+        # Lists that are all the hard-coded 1-qubit and 2-qubit gates.
+        # future: should probably import these from _itgss somehow.
+        hardcoded_oneQgates = ['I', 'X', 'Y', 'Z', 'H', 'P', 'HP', 'PH', 'HPH'] + ['C' + str(i) for i in range(24)]
+
+        # Currently we can only compile CNOT gates, although that should be fixed.
+        for gate in two_q_gates:
+            assert (gate == 'CNOT'), ("The only 2-qubit gate auto-generated compilations currently possible "
+                                      "are for the CNOT gate (Gcnot)!")
+
+        # Creates an empty library to fill
+        compilation_rules = cls(base_processor_spec, compile_type)
+
+        # 1-qubit gate compilations. These must be complied "locally" - i.e., out of native gates which act only
+        # on the target qubit of the gate being compiled, and they are stored in the compilation rules.
+        for q in qubit_labels:
+            for gname in one_q_gates:
+                # Check that this is a gate that is defined in the code, so that we can try and compile it.
+                assert (gname in hardcoded_oneQgates), "{} is not an allowed hard-coded 1-qubit gate".format(gname)
+                if verbosity > 0:
+                    print(
+                        "- Creating a circuit to implement {} {} on qubit {}...".format(gname, descs[compile_type],
+                                                                                        q))
+                # This does a brute-force search to compile the gate, by creating `templates` when necessary, and using
+                # a template if one has already been constructed.
+                compilation_rules.add_local_compilation_of(_Label(gname, q), verbosity=verbosity)
+            if verbosity > 0: print("Complete.")
+
+        # Manually add in the "obvious" compilations for CNOT gates as templates, so that we use the normal conversions
+        # based on the Hadamard gate -- if this is possible. If we don't do this, we resort to random compilations,
+        # which might not give the "expected" compilations (even if the alternatives might be just as good).
+        if 'CNOT' in two_q_gates:
+            # Look to see if we have a CNOT gate in the model (with any name).
+            cnot_name = cls._find_std_gate(base_processor_spec, 'CNOT')
+            H_name = cls._find_std_gate(base_processor_spec, 'H')
+            I_name = cls._find_std_gate(base_processor_spec, 'I')
+
+            # If we've failed to find a Hadamard gate but we only need paulieq compilation, we try
+            # to find a gate that is Pauli-equivalent to Hadamard.
+            if H_name is None and compile_type == 'paulieq':
+                for gn, gunitary in base_processor_spec.gate_unitaries.items():
+                    if callable(gunitary): continue  # can't pre-process factories
+                    if _symp.unitary_is_clifford(gunitary):
+                        if _itgs.is_gate_pauli_equivalent_to_this_standard_unitary(gunitary, 'H'):
+                            H_name = gn; break
+
+            # If CNOT is available, add it as a template for 'CNOT'.
+            if cnot_name is not None:
+                compilation_rules._clifford_templates['CNOT'] = [(_Label(cnot_name, (0, 1)),)]
+                # If Hadamard is also available, add the standard conjugation as template for reversed CNOT.
+                if H_name is not None:
+                    compilation_rules._clifford_templates['CNOT'].append((_Label(H_name, 0), _Label(H_name, 1), _Label(
+                        cnot_name, (1, 0)), _Label(H_name, 0), _Label(H_name, 1)))
+
+            # If CNOT isn't available, look to see if we have CPHASE gate in the model (with any name). If we do *and*
+            # we have Hadamards, we add the obvious construction of CNOT from CPHASE and Hadamards as a template
+            else:
+                cphase_name = cls._find_std_gate(base_processor_spec, 'CPHASE')
+
+                # If we find CPHASE, and we have a Hadamard-like gate, we add used them to add a CNOT compilation
+                # template.
+                if H_name is not None:
+                    if cphase_name is not None:
+                        if I_name is not None:
+                            # we explicitly put identity gates into template (so noise on them is simluated correctly?)
+
+                            # Add it with CPHASE in both directions, in case the CPHASES have been specified as being
+                            # available in only one direction
+                            compilation_rules._clifford_templates['CNOT'] = [
+                                (_Label(I_name, 0), _Label(H_name, 1), _Label(cphase_name, (0, 1)), _Label(I_name, 0),
+                                 _Label(H_name, 1))]
+                            compilation_rules._clifford_templates['CNOT'].append(
+                                (_Label(I_name, 0), _Label(H_name, 1), _Label(cphase_name, (1, 0)), _Label(I_name, 0),
+                                 _Label(H_name, 1)))
+                        else:  # similar, but without explicit identity gates
+                            compilation_rules._clifford_templates['CNOT'] = [
+                                (_Label(H_name, 1), _Label(cphase_name, (0, 1)), _Label(H_name, 1))]
+                            compilation_rules._clifford_templates['CNOT'].append(
+                                (_Label(H_name, 1), _Label(cphase_name, (1, 0)), _Label(H_name, 1)))
+
+        # After adding default templates, we know generate compilations for CNOTs between all connected pairs. If the
+        # default templates were not relevant or aren't relevant for some qubits, this will generate new templates by
+        # brute force.
+        for gate in two_q_gates:
+            not_locally_compilable = []
+            for q1 in base_processor_spec.qubit_labels:
+                for q2 in base_processor_spec.qubit_labels:
+                    if q1 == q2: continue  # 2Q gates must be on different qubits!
+                    for gname in two_q_gates:
+                        if verbosity > 0:
+                            print("Creating a circuit to implement {} {} on qubits {}...".format(
+                                gname, descs[compile_type], (q1, q2)))
+                        try:
+                            compilation_rules.add_local_compilation_of(
+                                _Label(gname, (q1, q2)), verbosity=verbosity)
+                        except CompilationError:
+                            not_locally_compilable.append((gname, q1, q2))
+
+            # If requested, try to compile remaining 2Q gates that are `non-local` (not between neighbouring qubits)
+            # using specific algorithms.
+            if add_nonlocal_two_q_gates:
+                for gname, q1, q2 in not_locally_compilable:
+                    compilation_rules.add_nonlocal_compilation_of(_Label(gname, (q1, q2)),
+                                                                  verbosity=verbosity)
+
+        return compilation_rules
+
+    @classmethod
+    def _find_std_gate(cls, base_processor_spec, std_gate_name):
+        for gn in base_processor_spec.gate_names:
+            if callable(base_processor_spec.gate_unitaries[gn]): continue  # can't pre-process factories
+            if _itgs.is_gate_this_standard_unitary(base_processor_spec.gate_unitaries[gn], std_gate_name):
+                return gn
+        return None
+
+    def __init__(self, native_gates_processorspec, compile_type="absolute"):
         """
+        TODO: update docstring
         Create a new CompilationLibrary.
 
         Parameters
@@ -89,7 +298,7 @@ class CompilationLibrary(_collections.OrderedDict):
             The model of "native" Clifford gates which all compilations in
             this library are composed from.
 
-        ctyp : {"absolute","paulieq"}
+        compile_type : {"absolute","paulieq"}
             The "compilation type" for this library.  If `"absolute"`, then
             compilations must match the gate operation being compiled exactly.
             If `"paulieq"`, then compilations only need to match the desired
@@ -97,16 +306,15 @@ class CompilationLibrary(_collections.OrderedDict):
             multi-qubit Clifford gates / stabilizer states without unneeded 1-qubit
             gate over-heads).
         """
-        self.model = clifford_model  # model of (all Clifford) gates to compile requested gates into
-        self.ctype = ctyp  # "absolute" or "paulieq"
-        self.templates = _collections.defaultdict(list)  # keys=gate names (strs); vals=tuples of Labels
-        self.connectivity = {}  # QubitGraphs for gates currently compiled in library (key=gate_name)
-        super(CompilationLibrary, self).__init__(items)
-        #** Note: if change __init__ signature, update __reduce__ below
 
-    def __reduce__(self):
-        return (CompilationLibrary,
-                (self.model, self.ctype, list(self.items())), None)
+        # processor_spec: holds all native Clifford gates (requested gates compile into circuits of these)
+        self.processor_spec = native_gates_processorspec
+
+        self.compile_type = compile_type  # "absolute" or "paulieq"
+        self._clifford_templates = _collections.defaultdict(list)  # keys=gate names (strs); vals=tuples of Labels
+        self.connectivity = {}  # QubitGraphs for gates currently compiled in library (key=gate_name)
+
+        super(CliffordCompilationRules, self).__init__()
 
     def _create_local_compilation_of(self, oplabel, unitary=None, srep=None, max_iterations=10, verbosity=1):
         """
@@ -151,71 +359,65 @@ class CompilationLibrary(_collections.OrderedDict):
         """
         # Template compilations always use integer qubit labels: 0 to N
         #  where N is the number of qubits in the template's overall label
-        #  (i.e. its key in self.templates)
+        #  (i.e. its key in self._clifford_templates)
         def to_real_label(template_label):
             """ Convert a "template" operation label (which uses integer qubit labels
-                0 to N) to a "real" label for a potential gate in self.model. """
-            qlabels = [oplabel.qubits[i] for i in template_label.qubits]
+                0 to N) to a "real" label for a potential gate in self.processor_spec. """
+            qlabels = [oplabel.sslbls[i] for i in template_label.sslbls]
             return _Label(template_label.name, qlabels)
 
         def to_template_label(real_label):
             """ The reverse (qubits in template == oplabel.qubits) """
-            qlabels = [oplabel.qubits.index(lbl) for lbl in real_label.qubits]
+            qlabels = [oplabel.sslbls.index(lbl) for lbl in real_label.sslbls]
             return _Label(real_label.name, qlabels)
 
-        def is_local_compilation_feasible(template_labels):
+        def is_local_compilation_feasible(allowed_gatenames):
             """ Whether template_labels can possibly be enough
                 gates to compile a template for op_label with """
-            if oplabel.number_of_qubits <= 1:
-                return len(template_labels) > 0  # 1Q gates, anything is ok
-            elif oplabel.number_of_qubits == 2:
+            if oplabel.num_qubits <= 1:
+                return len(allowed_gatenames) > 0  # 1Q gates, anything is ok
+            elif oplabel.num_qubits == 2:
                 # 2Q gates need a compilation gate that is also 2Q (can't do with just 1Q gates!)
-                return max([lbl.number_of_qubits for lbl in template_labels]) == 2
+                return max([self.processor_spec.gate_num_qubits(gn) for gn in allowed_gatenames]) == 2
             else:
                 # >2Q gates need to make sure there's some connected path
                 return True  # future: update using graphs stuff?
 
         template_to_use = None
 
-        for template_compilation in self.templates.get(oplabel.name, []):
+        for template_compilation in self._clifford_templates.get(oplabel.name, []):
             #Check availability of gates in self.model to determine
             # whether template_compilation can be applied.
-            model_primitive_ops = self.model.primitive_op_labels
-            if all([(gl in model_primitive_ops) for gl in map(to_real_label,
-                                                              template_compilation)]):
+            if all([self.processor_spec.is_available(gl) for gl in map(to_real_label, template_compilation)]):
                 template_to_use = template_compilation
                 if verbosity > 0: print("Existing template found!")
                 break  # compilation found!
 
         else:  # no existing templates can be applied, so make a new one
 
-            #construct a list of the available gates on the qubits of
-            # `oplabel` (or a subset of them)
-            available_glabels = list(filter(lambda gl: set(gl.qubits).issubset(oplabel.qubits),
-                                            self.model.primitive_op_labels))
-            available_glabels.extend([_Label(IDENT, k) for k in oplabel.qubits])
-            available_template_labels = set(map(to_template_label, available_glabels))
-            available_srep_dict = self.model.compute_clifford_symplectic_reps(available_glabels)
-            available_srep_dict[IDENT] = _symp.unitary_to_symplectic(_np.identity(2, 'd'))
-            #Manually add 1Q idle gate on each of the qubits, as this typically isn't stored in model.
+            #construct a list of the available gates on the qubits of `oplabel` (or a subset of them)
+            available_gatenames = self.processor_spec.available_gatenames(oplabel.sslbls)
+            available_srep_dict = self.processor_spec.compute_clifford_symplectic_reps(available_gatenames)
+            #available_srep_dict[IDENT] = _symp.unitary_to_symplectic(_np.identity(2, 'd'))  # REMOVE
+            #Manually add 1Q idle gate, as this typically isn't stored in the processor spec.
 
-            if is_local_compilation_feasible(available_template_labels):
+            if is_local_compilation_feasible(available_gatenames):
+                available_gatelabels = [to_template_label(gl) for gn in available_gatenames
+                                        for gl in self.processor_spec.available_gatelabels(gn, oplabel.sslbls)]
                 template_to_use = self.add_clifford_compilation_template(
-                    oplabel.name, oplabel.number_of_qubits, unitary, srep,
-                    available_template_labels, available_srep_dict,
+                    oplabel.name, oplabel.num_qubits, unitary, srep,
+                    available_gatelabels, available_srep_dict,
                     verbosity=verbosity, max_iterations=max_iterations)
 
         #If a template has been found, use it.
         if template_to_use is not None:
             opstr = list(map(to_real_label, template_to_use))
-            #REMOVE 'I's
-            assert(self.model.state_space.num_tensor_product_blocks == 1), "Only single-TPB state spaces are supported!"
-            return _Circuit(layer_labels=opstr,
-                            line_labels=self.model.state_space.tensor_product_block_labels(0))
+            #REMOVE 'I's ?
+            return _Circuit(layer_labels=opstr, line_labels=self.processor_spec.qubit_labels)
         else:
             raise CompilationError("Cannot locally compile %s" % str(oplabel))
 
-    def get_local_compilation_of(self, oplabel, unitary=None, srep=None, max_iterations=10, force=False, verbosity=1):
+    def _get_local_compilation_of(self, oplabel, unitary=None, srep=None, max_iterations=10, force=False, verbosity=1):
         """
         Gets a new local compilation of `oplabel`.
 
@@ -253,8 +455,8 @@ class CompilationLibrary(_collections.OrderedDict):
         -------
         None
         """
-        if not force and oplabel in self:
-            return self[oplabel]  # don't re-compute unless we're told to
+        if not force and oplabel in self.specific_compilations:
+            return self.specific_compilations[oplabel]  # don't re-compute unless we're told to
 
         circuit = self._create_local_compilation_of(oplabel,
                                                     unitary=unitary,
@@ -301,12 +503,11 @@ class CompilationLibrary(_collections.OrderedDict):
         -------
         None
         """
-        self[oplabel] = self.get_local_compilation_of(oplabel, unitary, srep,
-                                                      max_iterations, force,
-                                                      verbosity)
+        circuit = self._get_local_compilation_of(oplabel, unitary, srep, max_iterations, force, verbosity)
+        self.add_specific_compilation_rule(oplabel, circuit, unitary)
 
     def add_clifford_compilation_template(self, gate_name, nqubits, unitary, srep,
-                                          available_glabels, available_sreps,
+                                          available_gatelabels, available_sreps,
                                           verbosity=1, max_iterations=10):
         """
         Adds a new compilation template for `gate_name`.
@@ -372,16 +573,16 @@ class CompilationLibrary(_collections.OrderedDict):
             "The gate acts on a different number of qubits to stated by `nqubits`"
 
         if verbosity > 0:
-            if self.ctype == 'absolute':
+            if self.compile_type == 'absolute':
                 print("- Generating a template for a compilation of {}...".format(gate_name), end='\n')
-            elif self.ctype == 'paulieq':
+            elif self.compile_type == 'paulieq':
                 print("- Generating a template for a pauli-equivalent compilation of {}...".format(gate_name), end='\n')
 
         obtained_sreps = {}
 
         #Separate the available operation labels by their target qubits
         available_glabels_by_qubit = _collections.defaultdict(list)
-        for gl in available_glabels:
+        for gl in available_gatelabels:
             available_glabels_by_qubit[tuple(sorted(gl.qubits))].append(gl)
             #sort qubit labels b/c order doesn't matter and can't hash sets
 
@@ -399,6 +600,9 @@ class CompilationLibrary(_collections.OrderedDict):
         for layer in all_layers:
             obtained_sreps[layer] = _symp.symplectic_rep_of_clifford_layer(layer, nqubits, srep_dict=available_sreps)
 
+        # find the 1Q identity gate name
+        I_name = self._find_std_gate(self.processor_spec, 'I')
+
         # Main loop. We go through the loop at most max_iterations times
         found = False
         for counter in range(0, max_iterations):
@@ -413,8 +617,8 @@ class CompilationLibrary(_collections.OrderedDict):
             # Look to see if we have found a compilation
             for seq, (s, p) in obtained_sreps.items():
                 if _np.array_equal(smatrix, s):
-                    if self.ctype == 'paulieq' or \
-                       (self.ctype == 'absolute' and _np.array_equal(svector, p)):
+                    if self.compile_type == 'paulieq' or \
+                       (self.compile_type == 'absolute' and _np.array_equal(svector, p)):
                         candidates.append(seq)
                         found = True
 
@@ -422,17 +626,27 @@ class CompilationLibrary(_collections.OrderedDict):
             # one containing the most idle gates.
             if len(candidates) > 1:
 
-                number_of_idles = 0
-                max_number_of_idles = 0
-
                 # Look at each sequence, and see if it has more than or equal to max_number_of_idles.
                 # If so, set it to the current chosen sequence.
-                for seq in candidates:
-                    number_of_idles = len([x for x in seq if x.name == IDENT])
+                if I_name is not None:
+                    number_of_idles = 0
+                    max_number_of_idles = 0
 
-                    if number_of_idles >= max_number_of_idles:
-                        max_number_of_idles = number_of_idles
-                        compilation = seq
+                    for seq in candidates:
+                        number_of_idles = len([x for x in seq if x.name == I_name])
+
+                        if number_of_idles >= max_number_of_idles:
+                            max_number_of_idles = number_of_idles
+                            compilation = seq
+                else:
+                    # idles are absent from circuits - just take one with smallest depth
+                    min_depth = 1e100
+                    for seq in candidates:
+                        depth = len(seq)
+                        if depth < min_depth:
+                            min_depth = depth
+                            compilation = seq
+
             elif len(candidates) == 1:
                 compilation = candidates[0]
 
@@ -464,12 +678,12 @@ class CompilationLibrary(_collections.OrderedDict):
             # Update list of potential compilations
             obtained_sreps = new_obtained_sreps
 
-        #Compilation done: remove IDENT labels, as these are just used to
+        #Compilation done: remove identity labels, as these are just used to
         # explicitly keep track of the number of identity gates in a circuit (really needed?)
-        compilation = list(filter(lambda gl: gl.name != IDENT, compilation))
+        compilation = list(filter(lambda gl: gl.name != I_name, compilation))
 
         #Store & return template that was found
-        self.templates[gate_name].append(compilation)
+        self._clifford_templates[gate_name].append(compilation)
 
         return compilation
 
@@ -490,14 +704,13 @@ class CompilationLibrary(_collections.OrderedDict):
         -------
         None
         """
-        nQ = self.model.state_space.num_qubits
-        assert(self.model.state_space.num_tensor_product_blocks == 1), "Only single-TPB state spaces are supported"
-        qubit_labels = self.model.state_space.tensor_product_block_labels(0)
+        nQ = self.processor_spec.num_qubits
+        qubit_labels = self.processor_spec.qubit_labels
         d = {qlbl: i for i, qlbl in enumerate(qubit_labels)}
         assert(len(qubit_labels) == nQ), "Number of qubit labels is inconsistent with Model dimension!"
 
         connectivity = _np.zeros((nQ, nQ), dtype=bool)
-        for compiled_gatelabel in self.keys():
+        for compiled_gatelabel in self.specific_compilations.keys():
             if compiled_gatelabel.name == gate_name:
                 for p in _itertools.permutations(compiled_gatelabel.qubits, 2):
                     connectivity[d[p[0]], d[p[1]]] = True
@@ -516,8 +729,14 @@ class CompilationLibrary(_collections.OrderedDict):
         gate_name : str
             The gate name.
 
-        allowed_filter : dict or set
-            See :method:`get_nonlocal_compilation_of`.
+        allowed_filter : dict or set, optional
+            Specifies which gates are allowed to be to construct this
+            connectivity.  If a `dict`, keys must be gate names (like
+            `"CNOT"`) and values :class:`QubitGraph` objects indicating
+            where that gate (if it's present in the library) may be used.
+            If a `set`, then it specifies a set of qubits and any gate in
+            the current library that is confined within that set is allowed.
+            If None, then all gates within the library are allowed.
 
         Returns
         -------
@@ -587,8 +806,8 @@ class CompilationLibrary(_collections.OrderedDict):
         -------
         Circuit
         """
-        assert(oplabel.number_of_qubits > 1), "1-qubit gates can't be non-local!"
-        assert(oplabel.name == "CNOT" and oplabel.number_of_qubits == 2), \
+        assert(oplabel.num_qubits > 1), "1-qubit gates can't be non-local!"
+        assert(oplabel.name == "CNOT" and oplabel.num_qubits == 2), \
             "Only non-local CNOT compilation is currently supported."
 
         #Get connectivity of this gate (CNOT)
@@ -642,8 +861,7 @@ class CompilationLibrary(_collections.OrderedDict):
         cnot_circuit = part_1 + part_2 + part_3 + part_4
 
         # Convert the operationlist to a circuit.
-        assert(self.model.state_space.num_tensor_product_blocks == 1), "Only single-TPB state spaces are supported"
-        line_labels = self.model.state_space.tensor_product_block_labels(0)
+        line_labels = self.processor_spec.qubit_labels
         circuit = _Circuit(layer_labels=cnot_circuit,
                            line_labels=line_labels,
                            editable=True)
@@ -656,23 +874,23 @@ class CompilationLibrary(_collections.OrderedDict):
         if check:
             # Calculate the symplectic matrix implemented by this circuit, to check the compilation
             # is ok, below.
-            sreps = self.model.compute_clifford_symplectic_reps()
+            sreps = self.processor_spec.compute_clifford_symplectic_reps()
             s, p = _symp.symplectic_rep_of_clifford_circuit(circuit, sreps)
 
             # Construct the symplectic rep of CNOT between this pair of qubits, to compare to s.
-            nQ = self.model.state_space.num_qubits
+            nQ = self.processor_spec.num_qubits
             iq1 = line_labels.index(q1)  # assumes single tensor-prod term
             iq2 = line_labels.index(q2)  # assumes single tensor-prod term
             s_cnot, p_cnot = _symp.symplectic_rep_of_clifford_layer(_Label('CNOT', (iq1, iq2)), nQ)
 
             assert(_np.array_equal(s, s_cnot)), "Compilation has failed!"
-            if self.ctype == "absolute":
+            if self.compile_type == "absolute":
                 assert(_np.array_equal(p, p_cnot)), "Compilation has failed!"
 
         return circuit
 
-    def get_nonlocal_compilation_of(self, oplabel, force=False,
-                                    allowed_filter=None, verbosity=1, check=True):
+    def _get_nonlocal_compilation_of(self, oplabel, force=False,
+                                     allowed_filter=None, verbosity=1, check=True):
         """
         Get a potentially non-local compilation of `oplabel`.
 
@@ -726,7 +944,7 @@ class CompilationLibrary(_collections.OrderedDict):
         else:
             key = oplabel
 
-        if not force and key in self:
+        if not force and key in self.specific_compilations:
             return self[oplabel]  # don't re-compute unless we're told to
 
         circuit = self._create_nonlocal_compilation_of(
@@ -791,13 +1009,13 @@ class CompilationLibrary(_collections.OrderedDict):
         else:
             key = oplabel
 
-        if not force and key in self:
+        if not force and key in self.specific_compilations:
             return
         else:
-            circuit = self.get_nonlocal_compilation_of(oplabel, force, allowed_filter,
-                                                       verbosity, check)
+            circuit = self._get_nonlocal_compilation_of(oplabel, force, allowed_filter,
+                                                        verbosity, check)
 
-            self[key] = circuit
+            self.add_specific_compilation_rule(key, circuit, unitary=None)  # Need to take unitary as arg?
 
     def get_compilation_of(self, oplabel, force=False, allowed_filter=None, verbosity=1, check=True):
         """
@@ -847,7 +1065,7 @@ class CompilationLibrary(_collections.OrderedDict):
         # should be removed somehow.
         try:
             # We don't have to account for `force` manually here, because it is dealt with inside this function
-            circuit = self.get_local_compilation_of(
+            circuit = self._get_local_compilation_of(
                 oplabel, unitary=None, srep=None, max_iterations=10, force=force, verbosity=verbosity)
             # Check for the case where this function won't currently behave as expected.
             if isinstance(allowed_filter, dict):
@@ -856,7 +1074,7 @@ class CompilationLibrary(_collections.OrderedDict):
 
         # If local compilation isn't possible, we move on and try non-local compilation
         except:
-            circuit = self.get_nonlocal_compilation_of(
+            circuit = self._get_nonlocal_compilation_of(
                 oplabel, force=force, allowed_filter=allowed_filter, verbosity=verbosity, check=check)
 
         return circuit

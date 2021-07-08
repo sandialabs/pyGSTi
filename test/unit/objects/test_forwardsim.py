@@ -55,7 +55,7 @@ class ForwardSimBase(object):
     @classmethod
     def setUpClass(cls):
         ExplicitOpModel._strict = False
-        cls.model = models.create_explicit_model(
+        cls.model = models.create_explicit_model_from_expressions(
             [('Q0',)], ['Gi', 'Gx', 'Gy'],
             ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"]
         )

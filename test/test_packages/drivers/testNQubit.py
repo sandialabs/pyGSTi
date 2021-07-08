@@ -8,11 +8,13 @@ import numpy as np
 from pygsti.modelpacks.legacy import std1Q_XY
 from pygsti.objects import Label as L
 from pygsti.objects import Circuit
-import pygsti.construction as pc
+import pygsti.models.modelconstruction as mc
+from pygsti.processors.processorspec import QubitProcessorSpec as _ProcessorSpec
 import warnings
 
 from ..testutils import BaseTestCase, compare_files, regenerate_references
-from pygsti.models import modelconstruction, nqnoiseconstruction
+from pygsti.models import modelconstruction
+from pygsti.circuits import cloudcircuitconstruction
 
 
 #from .nqubitconstruction import *
@@ -21,21 +23,28 @@ from pygsti.models import modelconstruction, nqnoiseconstruction
 def build_XYCNOT_cloudnoise_model(nQubits, geometry="line", cnot_edges=None,
                                       maxIdleWeight=1, maxSpamWeight=1, maxhops=0,
                                       extraWeight1Hops=0, extraGateWeight=0,
-                                      sparse_lindblad_basis=False, sparse_lindblad_reps=False,
                                       roughNoise=None, simulator="matrix", parameterization="H+S",
                                       spamtype="lindblad", addIdleNoiseToAllGates=True,
                                       errcomp_type="gates", return_clouds=False, verbosity=0):
 
     availability = {}; nonstd_gate_unitaries = {}
     if cnot_edges is not None: availability['Gcnot'] = cnot_edges
-    return pc.create_cloudnoise_model_from_hops_and_weights(
-        nQubits, ['Gx','Gy','Gcnot'], nonstd_gate_unitaries, None, availability,
-        None, geometry, maxIdleWeight, maxSpamWeight, maxhops,
+    pspec = _ProcessorSpec(nQubits, ['Gx', 'Gy', 'Gcnot'], nonstd_gate_unitaries, availability, geometry)
+    assert (spamtype == "lindblad")  # unused and should remove this arg, but should always be "lindblad"
+    mdl = mc.create_cloud_crosstalk_model_from_hops_and_weights(
+        pspec, None,
+        maxIdleWeight, maxSpamWeight, maxhops,
         extraWeight1Hops, extraGateWeight,
-        roughNoise, sparse_lindblad_basis, sparse_lindblad_reps,
-        simulator, parameterization,
-        spamtype, addIdleNoiseToAllGates,
-        errcomp_type, True, return_clouds, verbosity)
+        simulator, 'default', parameterization, parameterization,
+        addIdleNoiseToAllGates,
+        errcomp_type, True, True, verbosity)
+
+    if return_clouds:
+        # FUTURE - just return cloud *keys*? (operation label values are never used
+        # downstream, but may still be useful for debugging, so keep for now)
+        return mdl, mdl.clouds
+    else:
+        return mdl
 
 
 class NQubitTestCase(BaseTestCase):
@@ -53,8 +62,7 @@ class NQubitTestCase(BaseTestCase):
         print("TEST3")
         mdl_test = build_XYCNOT_cloudnoise_model(
             nQubits=3, geometry="line", maxIdleWeight=1, maxhops=1,
-            extraWeight1Hops=0, extraGateWeight=1, sparse_lindblad_basis=True,
-            sparse_lindblad_reps=True, simulator="map", verbosity=10)
+            extraWeight1Hops=0, extraGateWeight=1, simulator="map", verbosity=10)
         #                                    roughNoise=(1234,0.1))
 
         #print("Constructed model with %d gates, dim=%d, and n_params=%d.  Norm(paramvec) = %g" %
@@ -74,12 +82,12 @@ class NQubitTestCase(BaseTestCase):
 
         mdl_datagen = build_XYCNOT_cloudnoise_model(nQubits, "line", cnot_edges, maxIdleWeight=2, maxhops=1,
                                                     extraWeight1Hops=0, extraGateWeight=0,
-                                                    sparse_lindblad_basis=True, sparse_lindblad_reps=True, verbosity=1,
+                                                    verbosity=1,
                                                     simulator="map", parameterization="H+S",
                                                     roughNoise=(1234,0.01))
 
         cache = {}
-        gss = nqnoiseconstruction._create_xycnot_cloudnoise_circuits(
+        gss = cloudcircuitconstruction._create_xycnot_cloudnoise_circuits(
             nQubits, maxLengths, 'line', cnot_edges, max_idle_weight=2, maxhops=1,
             extra_weight_1_hops=0, extra_gate_weight=0, verbosity=4, cache=cache, algorithm="sequential")
         expList = list(gss) #[ tup[0] for tup in expList_tups]
@@ -101,12 +109,11 @@ class NQubitTestCase(BaseTestCase):
 
         mdl_datagen = build_XYCNOT_cloudnoise_model(nQubits, "line", cnot_edges, maxIdleWeight=1, maxhops=0,
                                                     extraWeight1Hops=0, extraGateWeight=0,
-                                                    sparse_lindblad_basis=True, sparse_lindblad_reps=True,
                                                     verbosity=1, simulator="map", parameterization="H+S",
                                                     roughNoise=(1234,0.01))
 
         cache = {}
-        gss = nqnoiseconstruction._create_xycnot_cloudnoise_circuits(
+        gss = cloudcircuitconstruction._create_xycnot_cloudnoise_circuits(
             nQubits, maxLengths, 'line', cnot_edges, max_idle_weight=1, maxhops=0,
             extra_weight_1_hops=0, extra_gate_weight=0, verbosity=4, cache=cache, algorithm="greedy")
         #expList = gss.allstrs #[ tup[0] for tup in expList_tups]
@@ -159,8 +166,7 @@ class NQubitTestCase(BaseTestCase):
 
         mdl_to_optimize = build_XYCNOT_cloudnoise_model(nQubits, "line", cnot_edges, maxIdleWeight=2, maxhops=1,
                                                          extraWeight1Hops=0, extraGateWeight=1, verbosity=1,
-                                                         simulator="map", parameterization="H+S",
-                                                        sparse_lindblad_basis=True, sparse_lindblad_reps=True)
+                                                         simulator="map", parameterization="H+S")
         results = pygsti.run_long_sequence_gst_base(ds, mdl_to_optimize,
                                                     lsgstLists, gauge_opt_params=False,
                                                     advanced_options={'tolerance': 1e-1}, verbosity=4)
@@ -194,8 +200,7 @@ class NQubitTestCase(BaseTestCase):
         termsim = pygsti.objects.TermForwardSimulator(mode='taylor-order', max_order=1)
         mdl_to_optimize = build_XYCNOT_cloudnoise_model(nQubits, "line", cnot_edges, maxIdleWeight=2, maxhops=1,
                                                         extraWeight1Hops=0, extraGateWeight=1, verbosity=1,
-                                                        simulator=termsim, parameterization="H+S terms",
-                                                        sparse_lindblad_basis=False, sparse_lindblad_reps=True)
+                                                        simulator=termsim, parameterization="H+S terms")
 
         #RUN to create cache (SAVE)
         if regenerate_references():
@@ -225,9 +230,7 @@ class NQubitTestCase(BaseTestCase):
         print("Constructing Target LinearOperator Set")
         target_model = build_XYCNOT_cloudnoise_model(
             nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
-            extraWeight1Hops=0, extraGateWeight=1,
-            sparse_lindblad_basis=True, sparse_lindblad_reps=True,
-            simulator="map",verbosity=1)
+            extraWeight1Hops=0, extraGateWeight=1, simulator="map",verbosity=1)
         #print("nElements test = ",target_model.num_elements)
         #print("nParams test = ",target_model.num_params)
         #print("nNonGaugeParams test = ",target_model.num_nongauge_params)
@@ -235,9 +238,7 @@ class NQubitTestCase(BaseTestCase):
         print("Constructing Datagen LinearOperator Set")
         mdl_datagen = build_XYCNOT_cloudnoise_model(
             nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
-            extraWeight1Hops=0, extraGateWeight=1,
-            sparse_lindblad_basis=True, sparse_lindblad_reps=True,
-            verbosity=1, roughNoise=(1234,0.1), simulator="map")
+            extraWeight1Hops=0, extraGateWeight=1, verbosity=1, roughNoise=(1234,0.1), simulator="map")
 
         mdl_test = mdl_datagen
         print("Constructed model with %d op-blks, dim=%d, and nParams=%d.  Norm(paramvec) = %g" %

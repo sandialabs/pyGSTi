@@ -6,6 +6,8 @@ import warnings
 import numpy as np
 
 import pygsti
+import pygsti.models.modelconstruction as mc
+from pygsti.processors.processorspec import QubitProcessorSpec as _ProcessorSpec
 from pygsti.extras import idletomography as idt
 from ..testutils import BaseTestCase, compare_files, temp_files, regenerate_references
 
@@ -31,14 +33,22 @@ def build_XYCNOT_cloudnoise_model(nQubits, geometry="line", cnot_edges=None,
                                   errcomp_type="gates", return_clouds=False, verbosity=0):
     availability = {}; nonstd_gate_unitaries = {}
     if cnot_edges is not None: availability['Gcnot'] = cnot_edges
-    return pygsti.construction.create_cloudnoise_model_from_hops_and_weights(
-        nQubits, ['Gx','Gy','Gcnot'], nonstd_gate_unitaries, None, availability,
-        None, geometry, maxIdleWeight, maxSpamWeight, maxhops,
+    pspec = _ProcessorSpec(nQubits, ['Gx', 'Gy', 'Gcnot'], nonstd_gate_unitaries, availability, geometry)
+    assert (spamtype == "lindblad")  # unused and should remove this arg, but should always be "lindblad"
+    mdl = mc.create_cloud_crosstalk_model_from_hops_and_weights(
+        pspec, None,
+        maxIdleWeight, maxSpamWeight, maxhops,
         extraWeight1Hops, extraGateWeight,
-        roughNoise, sparse_lindblad_basis, sparse_lindblad_reps,
-        simulator, parameterization,
-        spamtype, addIdleNoiseToAllGates,
-        errcomp_type, True, return_clouds, verbosity)
+        simulator, 'default', parameterization, parameterization,
+        addIdleNoiseToAllGates,
+        errcomp_type, True, True, verbosity)
+
+    if return_clouds:
+        # FUTURE - just return cloud *keys*? (operation label values are never used
+        # downstream, but may still be useful for debugging, so keep for now)
+        return mdl, mdl.clouds
+    else:
+        return mdl
 
 
 def get_fileroot(nQubits, maxMaxLen, errMag, spamMag, nSamples, simulator, idleErrorInFiducials):

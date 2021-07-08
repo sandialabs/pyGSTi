@@ -10,7 +10,7 @@ from ..util import BaseCase
 class DataSetConstructionTester(BaseCase):
     def setUp(self):
         # TODO optimize
-        self.model = models.create_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gy'], ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"])
+        self.model = models.create_explicit_model_from_expressions([('Q0',)], ['Gi', 'Gx', 'Gy'], ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"])
         self.depolGateset = self.model.depolarize(op_noise=0.1)
 
         def make_lsgst_lists(opLabels, fiducialList, germList, maxLengthList):

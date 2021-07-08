@@ -1,7 +1,7 @@
 import numpy as np
 
 import pygsti.models.explicitmodel as mdl
-from pygsti.models.modelconstruction import create_explicit_model, _create_operation
+from pygsti.models.modelconstruction import create_explicit_model_from_expressions, _create_operation
 from pygsti.modelpacks.legacy import std1Q_XYI as std
 from ..util import BaseCase
 
@@ -36,10 +36,10 @@ class ExplicitOpModelToolTester(BaseCase):
     def setUp(self):
         mdl.ExplicitOpModel._strict = False
         # XXX can these be constructed directly?  EGN: yes, some model-construction tests should do it.
-        self.model = create_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gy'],
-                                          ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"])
+        self.model = create_explicit_model_from_expressions([('Q0',)], ['Gi', 'Gx', 'Gy'],
+                                                            ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"])
 
-        self.gateset_2q = create_explicit_model(
+        self.gateset_2q = create_explicit_model_from_expressions(
             [('Q0', 'Q1')], ['GIX', 'GIY', 'GXI', 'GYI', 'GCNOT'],
             ["I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)", "CX(pi,Q0,Q1)"])
 

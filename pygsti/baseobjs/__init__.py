@@ -15,5 +15,4 @@ from .verbosityprinter import VerbosityPrinter
 from .profiler import Profiler
 from .basis import Basis, BuiltinBasis, ExplicitBasis, TensorProdBasis, DirectSumBasis
 from .label import Label, CircuitLabel
-from .processorspec import ProcessorSpec
 from .resourceallocation import ResourceAllocation

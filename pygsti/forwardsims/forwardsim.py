@@ -44,6 +44,23 @@ class ForwardSimulator(object):
     """
 
     @classmethod
+    def cast(cls, obj, num_qubits=None):
+        """ num_qubits only used if `obj == 'auto'` """
+        from .matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
+        from .mapforwardsim import MapForwardSimulator as _MapFSim
+
+        if isinstance(obj, ForwardSimulator):
+            return obj
+        elif obj == "auto":
+            return _MapFSim() if (num_qubits is None or num_qubits > 2) else _MatrixFSim()
+        elif obj == "map":
+            return _MapFSim()
+        elif obj == "matrix":
+            return _MatrixFSim()
+        else:
+            raise ValueError("Cannot convert %s to a forward simulator!" % str(obj))
+
+    @classmethod
     def _array_types_for_method(cls, method_name):
         # The array types of *intermediate* or *returned* values within various class methods (for memory estimates)
         if method_name == 'bulk_probs': return ('E',) + cls._array_types_for_method('bulk_fill_probs')

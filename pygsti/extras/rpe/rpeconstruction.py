@@ -75,20 +75,20 @@ def create_parameterized_rpe_model(alpha_true, epsilon_true, aux_rot, spam_depol
     ELabels = rpeconfig_inst.ELabels
 
     if with_id:
-        outputModel = _models.create_explicit_model(
+        outputModel = _models.create_explicit_model_from_expressions(
             [('Q0',)], ['Gi', loose_axis_gate_label, fixed_axis_gate_label],
             ["I(Q0)", loose_axis_label + "(%s,Q0)" % epsilon_true, fixed_axis_label + "(%s,Q0)" % alpha_true],
             prep_labels=["rho0"], prep_expressions=rhoExpressions,
             effect_labels=ELabels, effect_expressions=EExpressions)
     else:
-        outputModel = _models.create_explicit_model(
+        outputModel = _models.create_explicit_model_from_expressions(
             [('Q0',)], [loose_axis_gate_label, fixed_axis_gate_label],
             [loose_axis_label + "(%s,Q0)" % epsilon_true, fixed_axis_label + "(%s,Q0)" % alpha_true],
             prep_labels=["rho0"], prep_expressions=rhoExpressions,
             effect_labels=ELabels, effect_expressions=EExpressions)
 
     if aux_rot != 0:
-        modelAux1 = _models.create_explicit_model(
+        modelAux1 = _models.create_explicit_model_from_expressions(
             [('Q0',)], ['Gi', auxiliary_axis_gate_label, fixed_axis_gate_label],
             ["I(Q0)", auxiliary_axis_label + "(%s,Q0)" % aux_rot, fixed_axis_label + "(pi/2,Q0)"],
             prep_labels=["rho0"], prep_expressions=rhoExpressions,

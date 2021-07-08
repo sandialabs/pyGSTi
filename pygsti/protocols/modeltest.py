@@ -156,8 +156,8 @@ class ModelTest(_proto.Protocol):
 
         if self.target_model is not None:
             target_model = self.target_model
-        elif hasattr(data.edesign, 'target_model'):
-            target_model = data.edesign.target_model
+        elif hasattr(data.edesign, 'create_target_model'):
+            target_model = data.edesign.create_target_model()
         else:
             target_model = None  # target model isn't necessary
 

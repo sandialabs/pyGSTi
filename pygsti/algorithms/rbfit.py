@@ -61,7 +61,7 @@ from pygsti.tools import rbtools as _rbt
 #             datatype = 'raw'
 
 #     lengths = RBSdataset.lengths
-#     n = RBSdataset.number_of_qubits
+#     n = RBSdataset.num_qubits
 
 #     if isinstance(asymptote, str):
 #         assert(asymptote == 'std'), "If `asympotote` is a string it must be 'std'!"

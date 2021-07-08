@@ -57,8 +57,9 @@ class ComposedErrorgen(_LinearOperator):
             state_space = errgens_to_compose[0].state_space
         else:
             state_space = _statespace.StateSpace.cast(state_space)
+
         assert(all([state_space.is_compatible_with(eg.state_space) for eg in errgens_to_compose])), \
-            "All error generators must have compatible state spaces (%d expected)!" % str(state_space)
+            "All error generators must have compatible state spaces (%s expected)!" % str(state_space)
 
         if evotype == "auto":
             evotype = errgens_to_compose[0]._evotype
@@ -440,6 +441,29 @@ class ComposedErrorgen(_LinearOperator):
         None
         """
         self.factors.extend(factors_to_add)
+        if self._rep is not None:
+            self._rep.reinit_factor_reps([op._rep for op in self.factors])
+        if self.parent:  # need to alert parent that *number* (not just value)
+            self.parent._mark_for_rebuild(self)  # of our params may have changed
+
+    def insert(self, insert_at, *factors_to_insert):
+        """
+        Insert one or more factors into this operator.
+
+        Parameters
+        ----------
+        insert_at : int
+            The index at which to insert `factors_to_insert`.  The factor at this
+            index and those after it are shifted back by `len(factors_to_insert)`.
+
+        *factors_to_insert : LinearOperator
+            One or multiple factor operators to insert within this operator.
+
+        Returns
+        -------
+        None
+        """
+        self.factors[insert_at:insert_at] = list(factors_to_insert)
         if self._rep is not None:
             self._rep.reinit_factor_reps([op._rep for op in self.factors])
         if self.parent:  # need to alert parent that *number* (not just value)
