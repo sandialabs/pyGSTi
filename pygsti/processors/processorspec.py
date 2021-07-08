@@ -103,8 +103,13 @@ class QubitProcessorSpec(ProcessorSpec):
         gate_unitaries = _collections.OrderedDict()
         availability = {}
         for opkey, op in model.operations.items():  # TODO: need to deal with special () idle label
-            gn = opkey.name
-            sslbls = opkey.sslbls
+            if opkey == _Lbl(()):  # special case: turn empty tuple labels into "(idle)" gate in processor spec
+                gn = "(idle)"
+                sslbls = None
+            else:
+                gn = opkey.name
+                sslbls = opkey.sslbls
+
             if gn not in gate_unitaries:
                 U = _ot.process_mx_to_unitary(_bt.change_basis(op.to_dense('HilbertSchmidt'),
                                                                model.basis, 'std'))
@@ -116,9 +121,8 @@ class QubitProcessorSpec(ProcessorSpec):
         return cls(nqubits, list(gate_unitaries.keys()), gate_unitaries, availability,
                    qubit_labels=qubit_labels)
 
-
     def __init__(self, num_qubits, gate_names, nonstd_gate_unitaries=None, availability=None,
-                 geometry=None, qubit_labels=None, aux_info=None):
+                 geometry=None, qubit_labels=None, nonstd_gate_symplecticreps=None, aux_info=None):
         assert(type(num_qubits) is int), "The number of qubits, n, should be an integer!"
         if nonstd_gate_unitaries is None: nonstd_gate_unitaries = {}
 
@@ -135,6 +139,19 @@ class QubitProcessorSpec(ProcessorSpec):
                 self.gate_unitaries[gname] = nonstd_gate_unitaries[gname]
             elif gname in std_gate_unitaries:
                 self.gate_unitaries[gname] = std_gate_unitaries[gname]
+            elif 'idle' in gname:  # interpret gname as an idle gate on the given number of qubits (all by default)
+                availability = {} if availability is None else availability.copy()  # get a copy of the availability
+                if gname in availability:
+                    assert(isinstance(availability[gname], (tuple, list))), \
+                        "Inferred idle gates need a tuple-like availability!"  # (can't deal with, e.g. "all-edges" yet)
+                    avail = availability[gname]
+                    if len(avail) == 0: nq = num_qubits  # or should we error?
+                    elif avail[0] is None: nq = num_qubits
+                    else: nq = len(avail[0])
+                else:
+                    nq = num_qubits  # if no availability is given, assume an idle on *all* the qubits
+                    availability[gname] = [None]  # and update availability for later processing
+                self.gate_unitaries[gname] = _np.identity(2**nq, 'd')
             else:
                 raise ValueError(
                     str(gname) + " is not a valid 'standard' gate name, it must be given in `nonstd_gate_unitaries`")
@@ -169,6 +186,8 @@ class QubitProcessorSpec(ProcessorSpec):
         self.compiled_from = None  # could hold (QubitProcessorSpec, compilations) tuple if not None
         self.aux_info = aux_info  # can hold anything additional (e.g. gate inverse relationships)
         self._symplectic_reps = {}  # lazily-evaluated symplectic representations for Clifford gates
+        if nonstd_gate_symplecticreps is not None:
+            self._symplectic_reps.update(nonstd_gate_symplecticreps)
         super(QubitProcessorSpec, self).__init__()
 
     @property
@@ -187,6 +206,7 @@ class QubitProcessorSpec(ProcessorSpec):
 
     def gate_num_qubits(self, gate_name):
         unitary = self.gate_unitaries[gate_name]
+        if unitary is None: return self.num_qubits  # unitary=None => identity on all qubits
         return int(round(_np.log2(unitary.udim if callable(unitary) else unitary.shape[0])))
 
     def resolved_availability(self, gate_name, tuple_or_function="auto"):
@@ -296,6 +316,9 @@ class QubitProcessorSpec(ProcessorSpec):
         for gn, unitary in self.gate_unitaries.items():
             if gatename_filter is not None and gn not in gatename_filter: continue
             if gn not in self._symplectic_reps:
+                if unitary is None:  # special case of n-qubit identity
+                    unitary = _np.identity(2**self.num_qubits, 'd')  # TODO - more efficient in FUTURE
+                    
                 try:
                     self._symplectic_reps[gn] = _symplectic.unitary_to_symplectic(unitary)
                 except ValueError:
@@ -334,6 +357,7 @@ class QubitProcessorSpec(ProcessorSpec):
 
         for gname in self.gate_names:
             if callable(self.gate_unitaries[gname]): continue  # can't pre-process factories
+            if self.gate_unitaries[gname] is None: continue  # can't pre-process global idle
 
             # We convert to process matrices, to avoid global phase problems.
             u = _ot.unitary_to_pauligate(self.gate_unitaries[gname])
@@ -381,12 +405,14 @@ class QubitProcessorSpec(ProcessorSpec):
         gate_inverse = {}
         for gname1 in self.gate_names:
             if callable(self.gate_unitaries[gname1]): continue  # can't pre-process factories
+            if self.gate_unitaries[gname1] is None: continue  # can't pre-process global idle
 
             # We convert to process matrices, to avoid global phase problems.
             u1 = _ot.unitary_to_pauligate(self.gate_unitaries[gname1])
             if _np.shape(u1) != (4, 4):
                 for gname2 in self.gate_names:
                     if callable(self.gate_unitaries[gname2]): continue  # can't pre-process factories
+                    if self.gate_unitaries[gname2] is None: continue  # can't pre-process global idle
                     u2 = _ot.unitary_to_pauligate(self.gate_unitaries[gname2])
                     if _np.shape(u2) == _np.shape(u1):
                         ucombined = _np.dot(u2, u1)
@@ -495,3 +521,20 @@ class QubitProcessorSpec(ProcessorSpec):
         availability = {gn: self.availability[gn] for gn in gate_names}
         return QubitProcessorSpec(self.num_qubits, gate_names, gate_unitaries, availability,
                                   self.qubit_graph, self.qubit_labels)
+
+    @property
+    def idle_gate_names(self):
+        ret = []
+        for gn, unitary in self.gate_unitaries.items():
+            if callable(unitary): continue  # factories can't be idle gates
+            if isinstance(unitary, (int, _np.int64)) or _np.allclose(unitary, _np.identity(unitary.shape[0], 'd')):
+                ret.append(gn)
+        return ret
+
+    @property
+    def global_idle_gate_name(self):
+        for gn in self.idle_gate_names:
+            avail = self.resolved_availability(gn, 'tuple')
+            if None in avail or self.qubit_labels in avail:
+                return gn
+        return None

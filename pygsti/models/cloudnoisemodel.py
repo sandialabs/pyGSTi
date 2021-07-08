@@ -500,10 +500,10 @@ class CloudNoiseModel(_ImplicitOpModel):
     #                add_idle_noise_to_all_gates, sparse_lindblad_reps, printer)
 
     def __init__(self, processor_spec, gatedict,
-                 global_idle_layer=None, prep_layers=None, povm_layers=None,
+                 prep_layers=None, povm_layers=None,
                  build_cloudnoise_fn=None, build_cloudkey_fn=None,
                  simulator="map", evotype="default", errcomp_type="gates",
-                 add_idle_noise_to_all_gates=True, verbosity=0):
+                 implicit_idle_mode="add_global", verbosity=0):
 
         qubit_labels = processor_spec.qubit_labels
         state_space = _statespace.QubitSpace(qubit_labels)
@@ -517,25 +517,28 @@ class CloudNoiseModel(_ImplicitOpModel):
         # noise models, these gate operations should be *static* (no parameters) as they represent the target
         # operations and all noise (and parameters) are assumed to enter through the cloudnoise members.
         mm_gatedict = _collections.OrderedDict()  # static *target* ops as ModelMembers
-        for gn, gate in gatedict.items():
+        for key, gate in gatedict.items():
             if isinstance(gate, _op.LinearOperator):
                 assert(gate.num_params == 0), "Only *static* ideal operators are allowed in `gatedict`!"
-                mm_gatedict[gn] = gate
+                mm_gatedict[key] = gate
             elif isinstance(gate, _opfactory.OpFactory):
                 assert(gate.num_params == 0), "Only *static* ideal factories are allowed in `gatedict`!"
-                mm_gatedict[gn] = gate
+                mm_gatedict[key] = gate
             else:  # presumably a numpy array or something like it:
-                mm_gatedict[gn] = _op.StaticArbitraryOp(gate, evotype, state_space=None)  # use default state space
-            assert(mm_gatedict[gn]._evotype == evotype)
+                mm_gatedict[key] = _op.StaticArbitraryOp(gate, evotype, state_space=None)  # use default state space
+            assert(mm_gatedict[key]._evotype == evotype)
 
         #Set other members
         self.processor_spec = processor_spec
-        self.addIdleNoiseToAllGates = add_idle_noise_to_all_gates
         self.errcomp_type = errcomp_type
 
-        if global_idle_layer is None:
-            self.addIdleNoiseToAllGates = False  # there is no idle noise to add!
-        layer_rules = CloudNoiseLayerRules(self.addIdleNoiseToAllGates, errcomp_type)
+        idle_names = self.processor_spec.idle_gate_names
+        global_idle_name = self.processor_spec.global_idle_gate_name
+        noisy_global_idle_name = global_idle_name if build_cloudnoise_fn is not None else None
+        assert(set(idle_names).issubset([global_idle_name])), \
+            "Only global idle operations are allowed in a CloudNoiseModel!"
+
+        layer_rules = CloudNoiseLayerRules(errcomp_type, noisy_global_idle_name, implicit_idle_mode)
         super(CloudNoiseModel, self).__init__(state_space, layer_rules, "pp", simulator=simulator, evotype=evotype)
 
         flags = {'auto_embed': False, 'match_parent_statespace': False,
@@ -553,37 +556,52 @@ class CloudNoiseModel(_ImplicitOpModel):
         printer = _VerbosityPrinter.create_printer(verbosity)
         printer.log("Creating a %d-qubit cloud-noise model" % self.processor_spec.num_qubits)
 
-        if global_idle_layer is None:
-            pass
-        elif callable(global_idle_layer):
-            self.operation_blks['layers'][_Lbl('globalIdle')] = global_idle_layer()
-        else:
-            self.operation_blks['layers'][_Lbl('globalIdle')] = global_idle_layer
+        #REMOVE
+        #if global_idle_name is not None and build_cloudnoise_fn is not None:
+        #    cloudnoise = build_cloudnoise_fn(_Lbl(global_idle_name, None))
+        #    if cloudnoise is not None:
+        #        self.operation_blks['layers'][_Lbl('globalIdle')] = cloudnoise
 
         # a dictionary of "cloud" objects
         # keys = cloud identifiers, e.g. (target_qubit_indices, cloud_qubit_indices) tuples
         # values = list of gate-labels giving the gates (primitive layers?) associated with that cloud (necessary?)
         self._clouds = _collections.OrderedDict()
 
-        for gn, gate in mm_gatedict.items():  # gate is a static ModelMember (op or factory)
-            #Note: gate was taken from mm_gatedict, and so is a static op or factory
-            gate_is_factory = isinstance(gate, _opfactory.OpFactory)
-            resolved_avail = self.processor_spec.resolved_availability(gn)
+        for gn in self.processor_spec.gate_names:
+            # process gate names (no sslbls, e.g. "Gx", not "Gx:0") - we'll check for the
+            # latter when we process the corresponding gate name's availability
 
-            if gate_is_factory:
-                self.factories['gates'][_Lbl(gn)] = gate
-            else:
-                self.operation_blks['gates'][_Lbl(gn)] = gate
+            gate_unitary = self.processor_spec.gate_unitaries[gn]
+            resolved_avail = self.processor_spec.resolved_availability(gn)
+            gate_is_factory = callable(gate_unitary)
+
+            #REMOVE (after consideration)
+            #TODO: CONSIDER the following - I think we still add the gate in all cases:
+            #      what if 1) gate is implied? do we add it here?  I think so...
+            #              2) gate acts on all qubits - is it just a layer then, and do we add it? I think so...
+            #              3) gate is identity and implied -- then maybe we don't add it?
+            #              4) gate is missing from mm_gatedict - how is this possible? if implied and the identity?
+            # IDEA: in general, perhaps implied identity gates don't need to be recorded in 'gates' or 'layers',
+            #       only 'cloudnoise'?  # e.g. don't want a 20Q identity unitary op - just set unitary=None
+            #       then
+
+            gate = mm_gatedict.get(gn, None)  # a static op or factory, no need to consider if "independent" (no params)
+            if gate is not None:  # (a gate name may not be in gatedict if it's an identity without any noise)
+                if gate_is_factory:
+                    self.factories['gates'][_Lbl(gn)] = gate
+                else:
+                    self.operation_blks['gates'][_Lbl(gn)] = gate
 
             if callable(resolved_avail) or resolved_avail == '*':
 
                 # Target operation
-                allowed_sslbls_fn = resolved_avail if callable(resolved_avail) else None
-                gate_nQubits = self.processor_spec.gate_num_qubits(gn)
-                printer.log("Creating %dQ %s gate on arbitrary qubits!!" % (gate_nQubits, gn))
-                self.factories['layers'][_Lbl(gn)] = _opfactory.EmbeddingOpFactory(
-                    state_space, gate, num_target_labels=gate_nQubits, allowed_sslbls_fn=allowed_sslbls_fn)
-                # add any primitive ops for this embedding factory?
+                if gate is not None:
+                    allowed_sslbls_fn = resolved_avail if callable(resolved_avail) else None
+                    gate_nQubits = self.processor_spec.gate_num_qubits(gn)
+                    printer.log("Creating %dQ %s gate on arbitrary qubits!!" % (gate_nQubits, gn))
+                    self.factories['layers'][_Lbl(gn)] = _opfactory.EmbeddingOpFactory(
+                        state_space, gate, num_target_labels=gate_nQubits, allowed_sslbls_fn=allowed_sslbls_fn)
+                    # add any primitive ops for this embedding factory?
 
                 # Cloudnoise operation
                 if build_cloudnoise_fn is not None:
@@ -598,19 +616,21 @@ class CloudNoiseModel(_ImplicitOpModel):
                 for inds in resolved_avail:  # inds are target qubit labels
 
                     #Target operation
-                    printer.log("Creating %dQ %s gate on qubits %s!!" % (len(inds), gn, inds))
-                    assert(_Lbl(gn, inds) not in gatedict), \
-                        ("Cloudnoise models do not accept primitive-op labels, e.g. %s, in `gatedict` as this dict "
-                         "specfies the ideal target gates. Perhaps make the cloudnoise depend on the target qubits "
-                         "of the %s gate?") % (str(_Lbl(gn, inds)), gn)
+                    if gate is not None:
+                        printer.log("Creating %dQ %s gate on qubits %s!!"
+                                    % ((len(qubit_labels) if inds is None else len(inds)), gn, inds))
+                        assert(inds is None or _Lbl(gn, inds) not in gatedict), \
+                            ("Cloudnoise models do not accept primitive-op labels, e.g. %s, in `gatedict` as this dict "
+                             "specfies the ideal target gates. Perhaps make the cloudnoise depend on the target qubits "
+                             "of the %s gate?") % (str(_Lbl(gn, inds)), gn)
 
-                    if gate_is_factory:
-                        self.factories['layers'][_Lbl(gn, inds)] = _opfactory.EmbeddedOpFactory(
-                            state_space, inds, gate)
-                        # add any primitive ops for this factory?
-                    else:
-                        self.operation_blks['layers'][_Lbl(gn, inds)] = _op.EmbeddedOp(
-                            state_space, inds, gate)
+                        if gate_is_factory:
+                            self.factories['layers'][_Lbl(gn, inds)] = gate if (inds is None) else \
+                                _opfactory.EmbeddedOpFactory(state_space, inds, gate)
+                            # add any primitive ops for this factory?
+                        else:
+                            self.operation_blks['layers'][_Lbl(gn, inds)] = gate if (inds is None) else \
+                                _op.EmbeddedOp(state_space, inds, gate)
 
                     #Cloudnoise operation
                     if build_cloudnoise_fn is not None:
@@ -968,9 +988,18 @@ class CloudNoiseModel(_ImplicitOpModel):
 
 class CloudNoiseLayerRules(_LayerRules):
 
-    def __init__(self, add_idle_noise, errcomp_type):
-        self.add_idle_noise = add_idle_noise
+    def __init__(self, errcomp_type, implied_global_idle_label, implicit_idle_mode):
         self.errcomp_type = errcomp_type
+        self.implied_global_idle_label = implied_global_idle_label
+        self.implicit_idle_mode = implicit_idle_mode  # how to handle implied idles ("blanks") in circuits
+        self._add_global_idle_to_all_layers = False
+
+        if implicit_idle_mode is None or implicit_idle_mode == "none":  # no noise on idles
+            pass  # just use defaults above
+        elif implicit_idle_mode == "add_global":  # add global idle to all layers
+            self._add_global_idle_to_all_layers = True
+        else:
+            raise ValueError("Invalid `implicit_idle_mode`: '%s'" % str(implicit_idle_mode))
 
     def prep_layer_operator(self, model, layerlbl, caches):
         """
@@ -1046,12 +1075,18 @@ class CloudNoiseLayerRules(_LayerRules):
         Composed = _op.ComposedOp
         ExpErrorgen = _op.ExpErrorgenOp
         Sum = _op.ComposedErrorgen
+        add_idle = (self.implied_global_idle_label is not None) and self._add_global_idle_to_all_layers
         #print("DB: CloudNoiseLayerLizard building gate %s for %s w/comp-type %s" %
         #      (('matrix' if dense else 'map'), str(oplabel), self.errcomp_type) )
 
         components = layerlbl.components
-        if len(components) == 0:  # or layerlbl == 'Gi': # OLD: special case: 'Gi' acts as global idle!
-            return model.operation_blks['layers']['globalIdle']  # idle!
+        if len(components) == 0 and self.implied_global_idle_label is not None:
+            if self.errcomp_type == "gates":
+                return model.operation_blks['cloudnoise'][self.implied_global_idle_label]  # idle!
+            elif self.errcomp_type == "errorgens":
+                return ExpErrorgen(model.operation_blks['cloudnoise'][self.implied_global_idle_label])
+            else:
+                raise ValueError("Invalid errcomp_type in CloudNoiseLayerRules: %s" % str(self.errcomp_type))
 
         #Compose target operation from layer's component labels, which correspond
         # to the perfect (embedded) target ops in op_blks
@@ -1062,7 +1097,7 @@ class CloudNoiseLayerRules(_LayerRules):
         ops_to_compose = [targetOp]
 
         if self.errcomp_type == "gates":
-            if self.add_idle_noise: ops_to_compose.append(model.operation_blks['layers']['globalIdle'])
+            if add_idle: ops_to_compose.append(model.operation_blks['cloudnoise'][self.implied_global_idle_label])
             component_cloudnoise_ops = self._layer_component_cloudnoises(model, components, caches['op-cloudnoise'])
             if len(component_cloudnoise_ops) > 0:
                 if len(component_cloudnoise_ops) > 1:
@@ -1076,7 +1111,7 @@ class CloudNoiseLayerRules(_LayerRules):
             #We compose the target operations to create a
             # final target op, and compose this with a *single* ExpErrorgen operation which has as
             # its error generator the composition (sum) of all the factors' error gens.
-            errorGens = [model.operation_blks['layers']['globalIdle'].errorgen] if self.add_idle_noise else []
+            errorGens = [model.operation_blks['cloudnoise'][self.implied_global_idle_label]] if add_idle else []
             errorGens.extend(self._layer_component_cloudnoises(model, components, caches['op-cloudnoise']))
             if len(errorGens) > 0:
                 if len(errorGens) > 1:

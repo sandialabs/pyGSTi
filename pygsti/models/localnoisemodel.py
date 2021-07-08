@@ -518,8 +518,7 @@ class LocalNoiseModel(_ImplicitOpModel):
     #availability=None, qubit_labels=None, geometry="line"
     def __init__(self, processor_spec, gatedict, prep_layers=None, povm_layers=None, evotype="default",
                  simulator="auto", on_construction_error='raise',
-                 independent_gates=False, ensure_composed_gates=False,
-                 global_idle=None):
+                 independent_gates=False, ensure_composed_gates=False, implicit_idle_mode="add_global"):
 
         qubit_labels = processor_spec.qubit_labels
         state_space = _statespace.QubitSpace(qubit_labels)
@@ -534,14 +533,18 @@ class LocalNoiseModel(_ImplicitOpModel):
         # operators appropriately.
         mm_gatedict = _collections.OrderedDict()  # ops as ModelMembers
 
-        for gn, gate in gatedict.items():
+        for key, gate in gatedict.items():
             if isinstance(gate, (_op.LinearOperator, _opfactory.OpFactory)):
-                mm_gatedict[gn] = gate
+                mm_gatedict[key] = gate
             else:  # presumably a numpy array or something like it.
-                mm_gatedict[gn] = _op.StaticArbitraryOp(gate, evotype, state_space)  # static gates by default
+                mm_gatedict[key] = _op.StaticArbitraryOp(gate, evotype, state_space)  # static gates by default
 
         self.processor_spec = processor_spec
-        super(LocalNoiseModel, self).__init__(state_space, _SimpleCompLayerRules(), 'pp',
+        global_idle_name = processor_spec.global_idle_gate_name
+        idle_names = processor_spec.idle_gate_names
+        layer_rules = _SimpleCompLayerRules(global_idle_name, implicit_idle_mode)
+        
+        super(LocalNoiseModel, self).__init__(state_space, layer_rules, 'pp',
                                               simulator=simulator, evotype=evotype)
 
         flags = {'auto_embed': False, 'match_parent_statespace': False,
@@ -559,24 +562,38 @@ class LocalNoiseModel(_ImplicitOpModel):
         for gateName in self.processor_spec.gate_names:
             # process gate names (no sslbls, e.g. "Gx", not "Gx:0") - we'll check for the
             # latter when we process the corresponding gate name's availability
-
             gate_unitary = self.processor_spec.gate_unitaries[gateName]
             resolved_avail = self.processor_spec.resolved_availability(gateName)
 
+            gate_is_idle = gateName in idle_names
             gate_is_factory = callable(gate_unitary)
-            if not independent_gates:  # then get our "template" gate ready
-                gate = mm_gatedict[gateName]  # for non-independent gates, need to specify gate name alone (no sslbls)
-                if ensure_composed_gates and not isinstance(gate, _op.ComposedOp) and not gate_is_factory:
-                    #Make a single ComposedOp *here*, which is used
-                    # in all the embeddings for different target qubits
-                    gate = _op.ComposedOp([gate], state_space="auto", evotype="auto")  # to make adding factors easy
+            #gate_is_implied = gateName.startswith('(') and gateName.endswith(')')
+            #assert(not (gate_is_implied and not gate_is_idle)), "Only idle gates can be implied (name parenthesized)!"
+            #  no need to enforce this?  (REMOVE)
 
-                if gate_is_factory:
-                    self.factories['gates'][_Lbl(gateName)] = gate
-                else:
-                    self.operation_blks['gates'][_Lbl(gateName)] = gate
+            if not independent_gates:  # then get our "template" gate ready
+                # for non-independent gates, need to specify gate name alone (no sslbls):
+                gate = mm_gatedict.get(gateName, None)
+
+                if gate is not None:  # (a gate name may not be in gatedict if it's an identity without any noise)
+                    if ensure_composed_gates and not isinstance(gate, _op.ComposedOp) and not gate_is_factory:
+                        #Make a single ComposedOp *here*, which is used
+                        # in all the embeddings for different target qubits
+                        gate = _op.ComposedOp([gate], state_space="auto", evotype="auto")  # to make adding factors easy
+
+                    if gate_is_factory:
+                        self.factories['gates'][_Lbl(gateName)] = gate
+                    else:
+                        self.operation_blks['gates'][_Lbl(gateName)] = gate
+
+                    if gate_is_idle and gate.state_space.num_qubits == 1 and global_idle_name is None:
+                        # then attempt to turn this 1Q idle into a global idle (for implied idle layers)
+                        global_idle = _op.ComposedOp([_op.EmbeddedOp(state_space, (qlbl,), gate)
+                                                      for qlbl in qubit_labels])
+                        self.operation_blks['layers'][_Lbl('(auto_global_idle)')] = global_idle
+                        global_idle_name = layer_rules.global_idle_name = '(auto_global_idle)'
             else:
-                gate = None  # this is reset to something useful in the "elif independent_gates" block below
+                gate = None  # this is set to something useful in the "elif independent_gates" block below
 
             if callable(resolved_avail) or resolved_avail == '*':
                 # then `gate` has function-determined or arbitrary availability, and we just need to
@@ -595,8 +612,10 @@ class LocalNoiseModel(_ImplicitOpModel):
                 self.factories['layers'][_Lbl(gateName)] = embedded_op
 
             else:  # resolved_avail is a list/tuple of available sslbls for the current gate/factory
+                gates_for_auto_global_idle = _collections.OrderedDict()
+
                 for inds in resolved_avail:
-                    if _Lbl(gateName, inds) in mm_gatedict:
+                    if _Lbl(gateName, inds) in mm_gatedict and inds is not None:
                         #Allow elements of `gatedict` that *have* sslbls override the
                         # default copy/reference of the "name-only" gate:
                         base_gate = mm_gatedict[_Lbl(gateName, inds)]
@@ -608,39 +627,48 @@ class LocalNoiseModel(_ImplicitOpModel):
                             self.operation_blks['gates'][_Lbl(gateName, inds)] = base_gate
 
                     elif independent_gates:  # then we need to ~copy `gate` so it has indep params
-                        gate = mm_gatedict[gateName]  # was set to `None` above; reset here
+                        gate = mm_gatedict.get(gateName, None)  # was set to `None` above; reset here
 
-                        if ensure_composed_gates and not gate_is_factory:
-                            #Make a single ComposedOp *here*, for *only this* embedding
-                            # Don't copy gate here, as we assume it's ok to be shared when we
-                            #  have independent composed gates
-                            base_gate = _op.ComposedOp([gate], evotype="auto", state_space="auto")  # to ease adding factors
-                        else:  # want independent params but not a composed gate, so .copy()
-                            base_gate = gate.copy()  # so independent parameters
+                        if gate is not None:  # (may be False if gate is an identity without any noise)
+                            if ensure_composed_gates and not gate_is_factory:
+                                #Make a single ComposedOp *here*, for *only this* embedding
+                                # Don't copy gate here, as we assume it's ok to be shared when we
+                                #  have independent composed gates
+                                base_gate = _op.ComposedOp([gate], evotype="auto", state_space="auto")
+                            else:  # want independent params but not a composed gate, so .copy()
+                                base_gate = gate.copy()  # so independent parameters
 
-                        if gate_is_factory:
-                            self.factories['gates'][_Lbl(gateName, inds)] = base_gate
-                        else:
-                            self.operation_blks['gates'][_Lbl(gateName, inds)] = base_gate
+                            if gate_is_factory:
+                                self.factories['gates'][_Lbl(gateName, inds)] = base_gate
+                            else:
+                                self.operation_blks['gates'][_Lbl(gateName, inds)] = base_gate
+
                     else:  # (not independent_gates, so `gate` is set to non-None above)
                         base_gate = gate  # already a Composed operator (for easy addition
                         # of factors) if ensure_composed_gates == True and not gate_is_factory
+
+                    if base_gate is None:
+                        continue  # end loop here if base_gate is just a perfect identity that shouldn't be added
 
                     #At this point, `base_gate` is the operator or factory that we want to embed into inds
                     # into inds (except in the special case inds[0] == '*' where we make an EmbeddingOpFactory)
                     try:
                         if gate_is_factory:
-                            if inds == tuple(qubit_labels):  # then no need to embed
+                            if inds is None or inds == tuple(qubit_labels):  # then no need to embed
                                 embedded_op = base_gate
                             else:
                                 embedded_op = _opfactory.EmbeddedOpFactory(state_space, inds, base_gate)
                             self.factories['layers'][_Lbl(gateName, inds)] = embedded_op
                         else:
-                            if inds == tuple(qubit_labels):  # then no need to embed
+                            if inds is None or inds == tuple(qubit_labels):  # then no need to embed
                                 embedded_op = base_gate
                             else:
                                 embedded_op = _op.EmbeddedOp(state_space, inds, base_gate)
                             self.operation_blks['layers'][_Lbl(gateName, inds)] = embedded_op
+
+                            # If a 1Q idle gate (factories not supported yet) then turn this into a global idle
+                            if gate_is_idle and base_gate.state_space.num_qubits == 1 and global_idle_name is None:
+                                gates_for_auto_global_idle[inds] = embedded_op
 
                     except Exception as e:
                         if on_construction_error == 'warn':
@@ -648,25 +676,44 @@ class LocalNoiseModel(_ImplicitOpModel):
                         if on_construction_error in ('warn', 'ignore'): continue
                         else: raise e
 
-        if global_idle is not None:
-            if not isinstance(global_idle, _op.LinearOperator):
-                global_idle = _op.StaticArbitraryOp(global_idle, evotype, state_space)  # static gates by default
+                if len(gates_for_auto_global_idle) > 0:  # then create a global idle based on 1Q idle gates
+                    global_idle = _op.ComposedOp(list(gates_for_auto_global_idle.values()))
+                    global_idle_name = layer_rules.global_idle_name = '(auto_global_idle)'
+                    self.operation_blks['layers'][_Lbl('(auto_global_idle)')] = global_idle
+                    
 
-            global_idle_nQubits = global_idle.state_space.num_qubits
-
-            if state_space.num_qubits > 1 and global_idle_nQubits == 1:  # auto create tensor-prod 1Q global idle
-                self.operation_blks['gates'][_Lbl('1QGlobalIdle')] = global_idle
-                global_idle = _op.ComposedOp([_op.EmbeddedOp(state_space, (qlbl,), global_idle)
-                                              for qlbl in qubit_labels])
-
-            global_idle_nQubits = global_idle.state_space.num_qubits
-            assert(global_idle_nQubits == state_space.num_qubits), \
-                "Global idle gate acts on %d qubits but should act on %d!" % (global_idle_nQubits,
-                                                                              state_space.num_qubits)
-            self.operation_blks['layers'][_Lbl('globalIdle')] = global_idle
+        #REMOVE - covered by above
+        #if global_idle is not None:
+        #    if not isinstance(global_idle, _op.LinearOperator):
+        #        global_idle = _op.StaticArbitraryOp(global_idle, evotype, state_space)  # static gates by default
+        #
+        #    global_idle_nQubits = global_idle.state_space.num_qubits
+        #
+        #    if state_space.num_qubits > 1 and global_idle_nQubits == 1:  # auto create tensor-prod 1Q global idle
+        #        self.operation_blks['gates'][_Lbl('1QGlobalIdle')] = global_idle
+        #        global_idle = _op.ComposedOp([_op.EmbeddedOp(state_space, (qlbl,), global_idle)
+        #                                      for qlbl in qubit_labels])
+        #
+        #    global_idle_nQubits = global_idle.state_space.num_qubits
+        #    assert(global_idle_nQubits == state_space.num_qubits), \
+        #        "Global idle gate acts on %d qubits but should act on %d!" % (global_idle_nQubits,
+        #                                                                      state_space.num_qubits)
+        #    self.operation_blks['layers'][_Lbl('globalIdle')] = global_idle
 
 
 class _SimpleCompLayerRules(_LayerRules):
+
+    def __init__(self, global_idle_name, implicit_idle_mode):
+        self.global_idle_name = global_idle_name
+        self.implicit_idle_mode = implicit_idle_mode  # how to handle implied idles ("blanks") in circuits
+        self._add_global_idle_to_all_layers = False
+
+        if implicit_idle_mode is None or implicit_idle_mode == "none":  # no noise on idles
+            pass  # just use defaults above
+        elif implicit_idle_mode == "add_global":  # add global idle to all layers
+            self._add_global_idle_to_all_layers = True
+        else:
+            raise ValueError("Invalid `implicit_idle_mode`: '%s'" % str(implicit_idle_mode))
 
     def prep_layer_operator(self, model, layerlbl, caches):
         """
@@ -734,6 +781,8 @@ class _SimpleCompLayerRules(_LayerRules):
         """
         if layerlbl in caches['complete-layers']: return caches['complete-layers'][layerlbl]
         components = layerlbl.components
+        add_idle = (self.global_idle_name is not None) and self._add_global_idle_to_all_layers
+        
         bHasGlobalIdle = bool(_Lbl('globalIdle') in model.operation_blks['layers'])
 
         if isinstance(layerlbl, _CircuitLabel):
@@ -741,10 +790,10 @@ class _SimpleCompLayerRules(_LayerRules):
             caches['complete-layers'][layerlbl] = op
             return op
 
-        if len(components) == 1 and not bHasGlobalIdle:
+        if len(components) == 1 and add_idle is False:
             ret = self._layer_component_operation(model, components[0], caches['op-layers'])
         else:
-            gblIdle = [model.operation_blks['layers'][_Lbl('globalIdle')]] if bHasGlobalIdle else []
+            gblIdle = [model.operation_blks['layers'][_Lbl(self.global_idle_name)]] if add_idle else []
 
             #Note: OK if len(components) == 0, as it's ok to have a composed gate with 0 factors
             ret = _op.ComposedOp(gblIdle + [self._layer_component_operation(model, l, caches['op-layers'])

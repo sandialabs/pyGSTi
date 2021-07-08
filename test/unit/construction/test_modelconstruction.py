@@ -80,7 +80,7 @@ class ModelConstructionTester(BaseCase):
         )
         assert(set(mdl.operation_blks['gates'].keys()) == set(["Gi", "Gx", "Gy", "Gcnot"]))
         assert(set(mdl.operation_blks['layers'].keys()) == set(
-            [('Gi', 0), ('Gi', 1), ('Gx', 0), ('Gx', 1), ('Gy', 0), ('Gy', 1), ('Gcnot', 0, 1), ('Gcnot', 1, 0)]))
+            [('Gi', 0), ('Gi', 1), ('Gx', 0), ('Gx', 1), ('Gy', 0), ('Gy', 1), ('Gcnot', 0, 1), ('Gcnot', 1, 0), '(auto_global_idle)']))
         self.assertEqual(mdl.num_params, 0)
 
         addlErr = pygsti.modelmembers.operations.FullTPOp(np.identity(4, 'd'))  # adds 12 params
@@ -109,7 +109,7 @@ class ModelConstructionTester(BaseCase):
         self.assertEqual(mdl.operation_blks['gates']['Gi'].gpindices, slice1)
 
         # Case: ensure_composed_gates=False, independent_gates=True
-        pspec = _ProcessorSpec(nQubits, ('Gx', 'Gy', 'Gcnot'), qubit_labels=['qb{}'.format(i) for i in range(nQubits)],
+        pspec = _ProcessorSpec(nQubits, ('Gx', 'Gy', 'Gcnot', 'idle'), qubit_labels=['qb{}'.format(i) for i in range(nQubits)],
                                geometry='line')
         cfmdl = mc.create_crosstalk_free_model(
             pspec,

@@ -776,6 +776,14 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
     ret = _emdl.ExplicitOpModel(state_space, basis, default_param=ideal_gate_type, evotype=evotype,
                                 simulator=simulator)
 
+    # Special rule: when initializng an explicit model, if the processor spec has an implied global idle
+    #  gate (e.g. "(idle)", then the created model instead has a empty-tuple Label as the key for this op.
+    global_idle_name = processor_spec.global_idle_gate_name
+    if (global_idle_name is not None) and global_idle_name.startswith('(') and global_idle_name.endswith(')'):
+        gn_to_make_emptytup = global_idle_name
+    else:
+        gn_to_make_emptytup = None
+
     for gn, gate_unitary in processor_spec.gate_unitaries.items():
 
         gate_is_factory = callable(gate_unitary)
@@ -783,7 +791,7 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
 
         if callable(resolved_avail) or resolved_avail == '*':
             assert (embed_gates), "Cannot create factories with `embed_gates=False` yet!"
-            key = _label.Label(gn)
+            key = _label.Label(gn) if (gn != gn_to_make_emptytup) else _label.Label(())
             allowed_sslbls_fn = resolved_avail if callable(resolved_avail) else None
             gate_nQubits = processor_spec.gate_num_qubits(gn)
             ideal_factory = _opfactory.EmbeddingOpFactory(
@@ -794,12 +802,12 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
 
         else:  # resolved_avail is a list/tuple of available sslbls for the current gate/factory
             for inds in resolved_avail:  # inds are target qubit labels
-                key = _label.Label(gn, inds)
+                key = _label.Label(()) if (inds is None and gn == gn_to_make_emptytup) else _label.Label(gn, inds)
 
                 if key in custom_gates:  # allow custom_gates to specify gate elements directly
                     if isinstance(custom_gates[key], _opfactory.OpFactory):
                         ret.factories[key] = custom_gates[key]
-                    elif isinstance(gate, _op.LinearOperator):
+                    elif isinstance(custom_gates[key], _op.LinearOperator):
                         ret.operations[key] = custom_gates[key]
                     else:  # presumably a numpy array or something like it.
                         ret.operations[key] = _op.StaticArbitraryOp(custom_gates[key], evotype,
@@ -809,18 +817,25 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
                 if gate_is_factory:
                     assert(embed_gates), "Cannot create factories with `embed_gates=False` yet!"
                     # TODO: check for modelnoise on *local* factory, i.e. create_errormap(gn, ...)??
-                    ideal_factory = _opfactory.EmbeddedOpFactory(state_space, inds, local_gates[gn])
+                    if inds is None or inds == tuple(qubit_labels):  # then no need to embed
+                        ideal_factory = local_gates[gn]
+                    else:
+                        ideal_factory = _opfactory.EmbeddedOpFactory(state_space, inds, local_gates[gn])
                     noiseop = modelnoise.create_errormap(key, evotype, state_space, target_labels=inds)
                     factory = ideal_factory if (noiseop is None) else _op.ComposedOpFactory([ideal_factory, noiseop])
                     ret.factories[key] = factory
                 else:
-                    if embed_gates:
-                        ideal_gate = local_gates[gn]
-                        ideal_gate = _op.EmbeddedOp(state_space, inds, ideal_gate)
-                    else:
-                        embedded_unitary = _embed_unitary(state_space, inds, gate_unitary)
-                        ideal_gate = _op.create_from_unitary_mx(embedded_unitary, ideal_gate_type, 'pp',
+                    if inds is None or inds == tuple(qubit_labels):  # then no need to embed
+                        ideal_gate = _op.create_from_unitary_mx(gate_unitary, ideal_gate_type, 'pp',
                                                                 None, evotype, state_space)
+                    else:
+                        if embed_gates:
+                            ideal_gate = local_gates[gn]
+                            ideal_gate = _op.EmbeddedOp(state_space, inds, ideal_gate)
+                        else:
+                            embedded_unitary = _embed_unitary(state_space, inds, gate_unitary)
+                            ideal_gate = _op.create_from_unitary_mx(embedded_unitary, ideal_gate_type, 'pp',
+                                                                    None, evotype, state_space)
 
                     #TODO: check for modelnoise on *local* gate, i.e. create_errormap(gn, ...)??
                     noiseop = modelnoise.create_errormap(key, evotype, state_space, target_labels=inds)
@@ -986,164 +1001,158 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
     return prep_layers, povm_layers
 
 
-def create_localnoise_model(num_qubits, gate_names, nonstd_gate_unitaries=None, custom_gates=None,
-                            availability=None, qubit_labels=None, geometry="line", parameterization='static',
-                            evotype="default", simulator="auto", on_construction_error='raise',
-                            independent_gates=False, ensure_composed_gates=False, global_idle=None):
-    """
-    Creates a "standard" n-qubit local-noise model, usually of ideal gates.
-
-    The returned model is "standard", in that the following standard gate
-    names may be specified as elements to `gate_names` without the need to
-    supply their corresponding unitaries (as one must when calling
-    the constructor directly):
-
-    - 'Gi' : the 1Q idle operation
-    - 'Gx','Gy','Gz' : 1Q pi/2 rotations
-    - 'Gxpi','Gypi','Gzpi' : 1Q pi rotations
-    - 'Gh' : Hadamard
-    - 'Gp' : phase
-    - 'Gcphase','Gcnot','Gswap' : standard 2Q gates
-
-    Furthermore, if additional "non-standard" gates are needed,
-    they are specified by their *unitary* gate action, even if
-    the final model propagates density matrices (as opposed
-    to state vectors).
-
-    Parameters
-    ----------
-    num_qubits : int
-        The total number of qubits.
-
-    gate_names : list
-        A list of string-type gate names (e.g. `"Gx"`) either taken from
-        the list of builtin "standard" gate names given above or from the
-        keys of `nonstd_gate_unitaries`.  These are the typically 1- and 2-qubit
-        gates that are repeatedly embedded (based on `availability`) to form
-        the resulting model.
-
-    nonstd_gate_unitaries : dict, optional
-        A dictionary of numpy arrays which specifies the unitary gate action
-        of the gate names given by the dictionary's keys.  As an advanced
-        behavior, a unitary-matrix-returning function which takes a single
-        argument - a tuple of label arguments - may be given instead of a
-        single matrix to create an operation *factory* which allows
-        continuously-parameterized gates.  This function must also return
-        an empty/dummy unitary when `None` is given as it's argument.
-
-    custom_gates : dict, optional
-        A dictionary that associates with gate labels
-        :class:`LinearOperator`, :class:`OpFactory`, or `numpy.ndarray`
-        objects.  These objects describe the full action of the gate or
-        primitive-layer they're labeled by (so if the model represents
-        states by density matrices these objects are superoperators, not
-        unitaries), and override any standard construction based on builtin
-        gate names or `nonstd_gate_unitaries`.  Keys of this dictionary may
-        be string-type gate *names*, which will be embedded according to
-        `availability`, or labels that include target qubits,
-        e.g. `("Gx",0)`, which override this default embedding behavior.
-        Furthermore, :class:`OpFactory` objects may be used in place of
-        `LinearOperator` objects to allow the evaluation of labels with
-        arguments.
-
-    availability : dict, optional
-        A dictionary whose keys are the same gate names as in
-        `gatedict` and whose values are lists of qubit-label-tuples.  Each
-        qubit-label-tuple must have length equal to the number of qubits
-        the corresponding gate acts upon, and causes that gate to be
-        embedded to act on the specified qubits.  For example,
-        `{ 'Gx': [(0,),(1,),(2,)], 'Gcnot': [(0,1),(1,2)] }` would cause
-        the `1-qubit `'Gx'`-gate to be embedded three times, acting on qubits
-        0, 1, and 2, and the 2-qubit `'Gcnot'`-gate to be embedded twice,
-        acting on qubits 0 & 1 and 1 & 2.  Instead of a list of tuples,
-        values of `availability` may take the special values:
-
-        - `"all-permutations"` and `"all-combinations"` equate to all possible
-        permutations and combinations of the appropriate number of qubit labels
-        (deterined by the gate's dimension).
-        - `"all-edges"` equates to all the vertices, for 1Q gates, and all the
-        edges, for 2Q gates of the graphy given by `geometry`.
-        - `"arbitrary"` or `"*"` means that the corresponding gate can be placed
-        on any target qubits via an :class:`EmbeddingOpFactory` (uses less
-        memory but slower than `"all-permutations"`.
-
-        If a gate name (a key of `gatedict`) is not present in `availability`,
-        the default is `"all-edges"`.
-
-    qubit_labels : tuple, optional
-        The circuit-line labels for each of the qubits, which can be integers
-        and/or strings.  Must be of length `num_qubits`.  If None, then the
-        integers from 0 to `num_qubits-1` are used.
-
-    geometry : {"line","ring","grid","torus"} or QubitGraph, optional
-        The type of connectivity among the qubits, specifying a graph used to
-        define neighbor relationships.  Alternatively, a :class:`QubitGraph`
-        object with `qubit_labels` as the node labels may be passed directly.
-        This argument is only used as a convenient way of specifying gate
-        availability (edge connections are used for gates whose availability
-        is unspecified by `availability` or whose value there is `"all-edges"`).
-
-    parameterization : {"full", "TP", "CPTP", "H+S", "S", "static", "H+S terms",
-        "H+S clifford terms", "clifford"}
-        The type of parameterizaton to use for each gate value before it is
-        embedded. See :method:`Model.set_all_parameterizations` for more
-        details.
-
-    evotype : Evotype or str, optional
-        The evolution type of this model, describing how states are
-        represented.  The special value `"default"` is equivalent
-        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
-
-    simulator : ForwardSimulator or {"auto", "matrix", "map"}
-        The simulator used to compute predicted probabilities for the
-        resulting :class:`Model`.  Usually `"auto"` is fine, the default for
-        each `evotype` is usually what you want.  Setting this to something
-        else is expert-level tuning.
-
-    on_construction_error : {'raise','warn',ignore'}
-        What to do when the creation of a gate with the given
-        `parameterization` fails.  Usually you'll want to `"raise"` the error.
-        In some cases, for example when converting as many gates as you can
-        into `parameterization="clifford"` gates, `"warn"` or even `"ignore"`
-        may be useful.
-
-    independent_gates : bool, optional
-        Whether gates are allowed independent local noise or not.  If False,
-        then all gates with the same name (e.g. "Gx") will have the *same*
-        (local) noise (e.g. an overrotation by 1 degree), and the
-        `operation_bks['gates']` dictionary contains a single key per gate
-        name.  If True, then gates with the same name acting on different
-        qubits may have different local noise, and so the
-        `operation_bks['gates']` dictionary contains a key for each gate
-         available gate placement.
-
-    ensure_composed_gates : bool, optional
-        If True then the elements of the `operation_bks['gates']` will always
-        be :class:`ComposedOp` objects.  The purpose of this is to
-        facilitate modifying the gate operations after the model is created.
-        If False, then the appropriately parameterized gate objects (often
-        dense gates) are used directly.
-
-    global_idle : LinearOperator, optional
-        A global idle operation, which is performed once at the beginning
-        of every circuit layer.  If `None`, no such operation is performed.
-        If a 1-qubit operator is given and `num_qubits > 1` the global idle
-        is the parallel application of this operator on each qubit line.
-        Otherwise the given operator must act on all `num_qubits` qubits.
-
-    Returns
-    -------
-    Model
-        A model with `"rho0"` prep, `"Mdefault"` POVM, and gates labeled by
-        gate name (keys of `gatedict`) and qubit labels (from within
-        `availability`).  For instance, the operation label for the `"Gx"` gate on
-        qubit 2 might be `Label("Gx",1)`.
-    """
-    return _LocalNoiseModel.from_parameterization(
-        num_qubits, gate_names, nonstd_gate_unitaries, custom_gates,
-        availability, qubit_labels, geometry, parameterization, evotype,
-        simulator, on_construction_error, independent_gates,
-        ensure_composed_gates, global_idle)
+#TODO REMOVE or update & deprecate (this can be done via crosstalk-free model creation w/out noise now
+#def create_localnoise_model(num_qubits, gate_names, nonstd_gate_unitaries=None, custom_gates=None,
+#                            availability=None, qubit_labels=None, geometry="line", parameterization='static',
+#                            evotype="default", simulator="auto", on_construction_error='raise',
+#                            independent_gates=False, ensure_composed_gates=False):
+#    """
+#    Creates a "standard" n-qubit local-noise model, usually of ideal gates.
+#
+#    The returned model is "standard", in that the following standard gate
+#    names may be specified as elements to `gate_names` without the need to
+#    supply their corresponding unitaries (as one must when calling
+#    the constructor directly):
+#
+#    - 'Gi' : the 1Q idle operation
+#    - 'Gx','Gy','Gz' : 1Q pi/2 rotations
+#    - 'Gxpi','Gypi','Gzpi' : 1Q pi rotations
+#    - 'Gh' : Hadamard
+#    - 'Gp' : phase
+#    - 'Gcphase','Gcnot','Gswap' : standard 2Q gates
+#
+#    Furthermore, if additional "non-standard" gates are needed,
+#    they are specified by their *unitary* gate action, even if
+#    the final model propagates density matrices (as opposed
+#    to state vectors).
+#
+#    Parameters
+#    ----------
+#    num_qubits : int
+#        The total number of qubits.
+#
+#    gate_names : list
+#        A list of string-type gate names (e.g. `"Gx"`) either taken from
+#        the list of builtin "standard" gate names given above or from the
+#        keys of `nonstd_gate_unitaries`.  These are the typically 1- and 2-qubit
+#        gates that are repeatedly embedded (based on `availability`) to form
+#        the resulting model.
+#
+#    nonstd_gate_unitaries : dict, optional
+#        A dictionary of numpy arrays which specifies the unitary gate action
+#        of the gate names given by the dictionary's keys.  As an advanced
+#        behavior, a unitary-matrix-returning function which takes a single
+#        argument - a tuple of label arguments - may be given instead of a
+#        single matrix to create an operation *factory* which allows
+#        continuously-parameterized gates.  This function must also return
+#        an empty/dummy unitary when `None` is given as it's argument.
+#
+#    custom_gates : dict, optional
+#        A dictionary that associates with gate labels
+#        :class:`LinearOperator`, :class:`OpFactory`, or `numpy.ndarray`
+#        objects.  These objects describe the full action of the gate or
+#        primitive-layer they're labeled by (so if the model represents
+#        states by density matrices these objects are superoperators, not
+#        unitaries), and override any standard construction based on builtin
+#        gate names or `nonstd_gate_unitaries`.  Keys of this dictionary may
+#        be string-type gate *names*, which will be embedded according to
+#        `availability`, or labels that include target qubits,
+#        e.g. `("Gx",0)`, which override this default embedding behavior.
+#        Furthermore, :class:`OpFactory` objects may be used in place of
+#        `LinearOperator` objects to allow the evaluation of labels with
+#        arguments.
+#
+#    availability : dict, optional
+#        A dictionary whose keys are the same gate names as in
+#        `gatedict` and whose values are lists of qubit-label-tuples.  Each
+#        qubit-label-tuple must have length equal to the number of qubits
+#        the corresponding gate acts upon, and causes that gate to be
+#        embedded to act on the specified qubits.  For example,
+#        `{ 'Gx': [(0,),(1,),(2,)], 'Gcnot': [(0,1),(1,2)] }` would cause
+#        the `1-qubit `'Gx'`-gate to be embedded three times, acting on qubits
+#        0, 1, and 2, and the 2-qubit `'Gcnot'`-gate to be embedded twice,
+#        acting on qubits 0 & 1 and 1 & 2.  Instead of a list of tuples,
+#        values of `availability` may take the special values:
+#
+#        - `"all-permutations"` and `"all-combinations"` equate to all possible
+#        permutations and combinations of the appropriate number of qubit labels
+#        (deterined by the gate's dimension).
+#        - `"all-edges"` equates to all the vertices, for 1Q gates, and all the
+#        edges, for 2Q gates of the graphy given by `geometry`.
+#        - `"arbitrary"` or `"*"` means that the corresponding gate can be placed
+#        on any target qubits via an :class:`EmbeddingOpFactory` (uses less
+#        memory but slower than `"all-permutations"`.
+#
+#        If a gate name (a key of `gatedict`) is not present in `availability`,
+#        the default is `"all-edges"`.
+#
+#    qubit_labels : tuple, optional
+#        The circuit-line labels for each of the qubits, which can be integers
+#        and/or strings.  Must be of length `num_qubits`.  If None, then the
+#        integers from 0 to `num_qubits-1` are used.
+#
+#    geometry : {"line","ring","grid","torus"} or QubitGraph, optional
+#        The type of connectivity among the qubits, specifying a graph used to
+#        define neighbor relationships.  Alternatively, a :class:`QubitGraph`
+#        object with `qubit_labels` as the node labels may be passed directly.
+#        This argument is only used as a convenient way of specifying gate
+#        availability (edge connections are used for gates whose availability
+#        is unspecified by `availability` or whose value there is `"all-edges"`).
+#
+#    parameterization : {"full", "TP", "CPTP", "H+S", "S", "static", "H+S terms",
+#        "H+S clifford terms", "clifford"}
+#        The type of parameterizaton to use for each gate value before it is
+#        embedded. See :method:`Model.set_all_parameterizations` for more
+#        details.
+#
+#    evotype : Evotype or str, optional
+#        The evolution type of this model, describing how states are
+#        represented.  The special value `"default"` is equivalent
+#        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
+#
+#    simulator : ForwardSimulator or {"auto", "matrix", "map"}
+#        The simulator used to compute predicted probabilities for the
+#        resulting :class:`Model`.  Usually `"auto"` is fine, the default for
+#        each `evotype` is usually what you want.  Setting this to something
+#        else is expert-level tuning.
+#
+#    on_construction_error : {'raise','warn',ignore'}
+#        What to do when the creation of a gate with the given
+#        `parameterization` fails.  Usually you'll want to `"raise"` the error.
+#        In some cases, for example when converting as many gates as you can
+#        into `parameterization="clifford"` gates, `"warn"` or even `"ignore"`
+#        may be useful.
+#
+#    independent_gates : bool, optional
+#        Whether gates are allowed independent local noise or not.  If False,
+#        then all gates with the same name (e.g. "Gx") will have the *same*
+#        (local) noise (e.g. an overrotation by 1 degree), and the
+#        `operation_bks['gates']` dictionary contains a single key per gate
+#        name.  If True, then gates with the same name acting on different
+#        qubits may have different local noise, and so the
+#        `operation_bks['gates']` dictionary contains a key for each gate
+#         available gate placement.
+#
+#    ensure_composed_gates : bool, optional
+#        If True then the elements of the `operation_bks['gates']` will always
+#        be :class:`ComposedOp` objects.  The purpose of this is to
+#        facilitate modifying the gate operations after the model is created.
+#        If False, then the appropriately parameterized gate objects (often
+#        dense gates) are used directly.
+#
+#    Returns
+#    -------
+#    Model
+#        A model with `"rho0"` prep, `"Mdefault"` POVM, and gates labeled by
+#        gate name (keys of `gatedict`) and qubit labels (from within
+#        `availability`).  For instance, the operation label for the `"Gx"` gate on
+#        qubit 2 might be `Label("Gx",1)`.
+#    """
+#    return _LocalNoiseModel.from_parameterization(
+#        num_qubits, gate_names, nonstd_gate_unitaries, custom_gates,
+#        availability, qubit_labels, geometry, parameterization, evotype,
+#        simulator, on_construction_error, independent_gates,
+#        ensure_composed_gates)
 
 
 def _setup_local_gates(processor_spec, evotype, modelnoise=None, custom_gates=None,
@@ -1166,8 +1175,8 @@ def _setup_local_gates(processor_spec, evotype, modelnoise=None, custom_gates=No
             gatedict[key] = custom_gates[key]
             continue
 
-        # Skip idle, prep, and povm here, just do gates
-        if key in ['idle', 'prep', 'povm']:
+        # Skip prep, and povm here, just do gates
+        if key in ['prep', 'povm']:
             continue
 
         # If key has qubits, get base name for lookup
@@ -1176,14 +1185,21 @@ def _setup_local_gates(processor_spec, evotype, modelnoise=None, custom_gates=No
 
         U = processor_spec.gate_unitaries[name]  # all gate names must be in the processorspec
         if ((name not in processor_spec.nonstd_gate_unitaries)
-                or (not callable(processor_spec.nonstd_gate_unitaries[name])
+                or (not callable(processor_spec.nonstd_gate_unitaries[name]) and (name in std_gate_unitaries)
                     and processor_spec.nonstd_gate_unitaries[name].shape == std_gate_unitaries[name].shape
                     and _np.allclose(processor_spec.nonstd_gate_unitaries[name], std_gate_unitaries[name]))):
             stdname = name  # setting `stdname` != None means we can try to create a StaticStandardOp below
         else:
             stdname = None
 
-        if not callable(U):  # normal operation (not a factory)
+        if isinstance(U, (int, _np.int64)):  # signals that the gate is an identity on `U` qubits and shouldn't be built
+            # A key is added to the returned gatedict only if there is any noise on this operation
+            ideal_gate_state_space = _statespace.default_space_for_num_qubits(U)
+            noiseop = modelnoise.create_errormap(key, evotype, ideal_gate_state_space, target_labels=None)
+            if noiseop is not None:
+                gatedict[key] = noiseop
+
+        elif not callable(U):  # normal operation (not a factory)
             ideal_gate = _op.create_from_unitary_mx(U, ideal_gate_type, 'pp', stdname, evotype, state_space=None)
             noiseop = modelnoise.create_errormap(key, evotype, ideal_gate.state_space, target_labels=None)
             # Note: above line creates a *local* noise op, working entirely in the ideal gate's target space.
@@ -1398,8 +1414,7 @@ def create_crosstalk_free_model(processor_spec, custom_gates=None,
 # num_qubits, gate_names, nonstd_gate_unitaries={}, availability=None, qubit_labels=None, geometry="line"
 def _create_crosstalk_free_model(processor_spec, modelnoise, custom_gates=None, evotype="default", simulator="auto",
                                  on_construction_error='raise', independent_gates=False, independent_spam=True,
-                                 ensure_composed_gates=False, ideal_gate_type='auto', ideal_spam_type='computational',
-                                 include_global_idle=False):
+                                 ensure_composed_gates=False, ideal_gate_type='auto', ideal_spam_type='computational'):
     qubit_labels = processor_spec.qubit_labels
     state_space = _statespace.QubitSpace(qubit_labels)
     evotype = _Evotype.cast(evotype)
@@ -1411,21 +1426,21 @@ def _create_crosstalk_free_model(processor_spec, modelnoise, custom_gates=None, 
 
     gatedict = _setup_local_gates(processor_spec, evotype, modelnoise, custom_gates, ideal_gate_type)
 
-    # GLOBAL IDLE:
-    if 'idle' in gatedict:
-        global_idle_op_1Q = gatedict['idle']
-        del gatedict['idle']
-    else:
-        ideal_global_idle_1Q = _op.create_from_unitary_mx(_np.identity(2), ideal_gate_type,
-                                                          'pp', 'Gi', evotype, state_space=None)
-        global_idle_op_1Q = ideal_global_idle_1Q if (ideal_global_idle_1Q.num_params > 0) else None
-
-    if 'idle' in modelnoise:
-        idle_state_space = _statespace.default_space_for_udim(2)  # single qubit state space
-        global_idle_error = modelnoise.create_errormap('idle', evotype, idle_state_space,
-                                                       target_labels=None)  # 1-qubit idle op, can be None
-        global_idle_op_1Q = global_idle_error if (global_idle_op_1Q is None) \
-            else _op.ComposedOp((global_idle_op_1Q, global_idle_error))
+    # GLOBAL IDLE: -- REMOVE (now handled through processorspec processing)
+    #if 'idle' in gatedict:
+    #    global_idle_op_1Q = gatedict['idle']
+    #    del gatedict['idle']
+    #else:
+    #    ideal_global_idle_1Q = _op.create_from_unitary_mx(_np.identity(2), ideal_gate_type,
+    #                                                      'pp', 'Gi', evotype, state_space=None)
+    #    global_idle_op_1Q = ideal_global_idle_1Q if (ideal_global_idle_1Q.num_params > 0) else None
+    #
+    #if 'idle' in modelnoise:
+    #    idle_state_space = _statespace.default_space_for_udim(2)  # single qubit state space
+    #    global_idle_error = modelnoise.create_errormap('idle', evotype, idle_state_space,
+    #                                                   target_labels=None)  # 1-qubit idle op, can be None
+    #    global_idle_op_1Q = global_idle_error if (global_idle_op_1Q is None) \
+    #        else _op.ComposedOp((global_idle_op_1Q, global_idle_error))
 
     # SPAM:
     local_noise = True
@@ -1436,7 +1451,7 @@ def _create_crosstalk_free_model(processor_spec, modelnoise, custom_gates=None, 
     modelnoise.warn_about_zero_counters()
     return _LocalNoiseModel(processor_spec, gatedict, prep_layers, povm_layers,
                             evotype, simulator, on_construction_error,
-                            independent_gates, ensure_composed_gates, global_idle_op_1Q)
+                            independent_gates, ensure_composed_gates)
 
 
 def create_cloud_crosstalk_model(processor_spec, custom_gates=None,
@@ -1444,7 +1459,7 @@ def create_cloud_crosstalk_model(processor_spec, custom_gates=None,
                                  depolarization_parameterization='depolarize', stochastic_parameterization='stochastic',
                                  lindblad_parameterization='auto', evotype="default", simulator="auto",
                                  independent_gates=False, independent_spam=True, errcomp_type="errorgens",
-                                 add_idle_noise_to_all_gates=True, verbosity=0):
+                                 implicit_idle_mode="add_global", verbosity=0):
     """
     TODO: update docstring - see long docstring in cloudcircuitconstruction.py
     """
@@ -1522,13 +1537,13 @@ def create_cloud_crosstalk_model(processor_spec, custom_gates=None,
 
     return _create_cloud_crosstalk_model(processor_spec, _ComposedOpModelNoise(modelnoises), custom_gates, evotype,
                                          simulator, independent_gates, independent_spam, errcomp_type,
-                                         add_idle_noise_to_all_gates, verbosity)
+                                         implicit_idle_mode, verbosity)
 
 
 def _create_cloud_crosstalk_model(processor_spec, modelnoise, custom_gates=None,
                                   evotype="default", simulator="auto", independent_gates=False,
                                   independent_spam=True, errcomp_type="errorgens",
-                                  add_idle_noise_to_all_gates=True, verbosity=0):
+                                  implicit_idle_mode="add_global", verbosity=0):
     qubit_labels = processor_spec.qubit_labels
     state_space = _statespace.QubitSpace(qubit_labels)  # FUTURE: allow other types of state spaces somehow?
     evotype = _Evotype.cast(evotype)
@@ -1541,13 +1556,13 @@ def _create_cloud_crosstalk_model(processor_spec, modelnoise, custom_gates=None,
                                   ideal_gate_type=('static standard', 'static clifford', 'static unitary'))
     stencils = _collections.OrderedDict()
 
-    # Global Idle
-    if 'idle' in modelnoise:
-        printer.log("Creating Idle:")
-        global_idle_layer = modelnoise.create_errormap('idle', evotype, state_space, target_labels=None,
-                                                       qubit_graph=processor_spec.qubit_graph)
-    else:
-        global_idle_layer = None
+    # Global Idle - REMOVE - now processed with other processorspec gates
+    #if 'idle' in modelnoise:
+    #    printer.log("Creating Idle:")
+    #    global_idle_layer = modelnoise.create_errormap('idle', evotype, state_space, target_labels=None,
+    #                                                   qubit_graph=processor_spec.qubit_graph)
+    #else:
+    #    global_idle_layer = None
 
     # SPAM
     local_noise = False
@@ -1606,19 +1621,21 @@ def _create_cloud_crosstalk_model(processor_spec, modelnoise, custom_gates=None,
             stencils[lbl.name] = create_stencil_fn(lbl.name, evotype, state_space, target_labels=lbl.sslbls)
             stencil = stencils[lbl.name]
         else:
-            return tuple(lbl.sslbls)  # simple cloud-key when there is no cloud noise
+            # simple cloud-key when there is no cloud noise
+            return tuple(lbl.sslbls) if (lbl.sslbls is not None) else None
 
         #Otherwise, process stencil to get a list of all the qubit labels `lbl`'s cloudnoise error
         # touches and form this into a key
         cloud_sslbls = modelnoise.compute_stencil_absolute_sslbls(stencil, state_space, lbl.sslbls,
                                                                   processor_spec.qubit_graph)
-        cloud_key = (tuple(lbl.sslbls), tuple(sorted(cloud_sslbls)))  # (sets are unhashable)
+        hashable_sslbls = tuple(lbl.sslbls) if (lbl.sslbls is not None) else None
+        cloud_key = (hashable_sslbls, tuple(sorted(cloud_sslbls)))  # (sets are unhashable)
         return cloud_key
 
-    ret = _CloudNoiseModel(processor_spec, gatedict, global_idle_layer, prep_layers, povm_layers,
+    ret = _CloudNoiseModel(processor_spec, gatedict, prep_layers, povm_layers,
                            build_cloudnoise_fn, build_cloudkey_fn,
                            simulator, evotype, errcomp_type,
-                           add_idle_noise_to_all_gates, printer)
+                           implicit_idle_mode, printer)
     modelnoise.warn_about_zero_counters()  # must do this after model creation so build_ fns have been run
     return ret
 
@@ -1629,8 +1646,9 @@ def create_cloud_crosstalk_model_from_hops_and_weights(
         maxhops=0, extra_weight_1_hops=0, extra_gate_weight=0,
         simulator="auto", evotype='default',
         gate_type="H+S", spam_type="H+S",
-        add_idle_noise_to_all_gates=True, errcomp_type="gates",
-        independent_gates=True, connected_highweight_errors=True,
+        implicit_idle_mode="add_global", errcomp_type="gates",
+        independent_gates=True, independent_spam=True,
+        connected_highweight_errors=True,
         verbosity=0):
         """
         TODO: update docstring
@@ -1794,12 +1812,16 @@ def create_cloud_crosstalk_model_from_hops_and_weights(
         modelnoise = {}
         all_qubit_labels = processor_spec.qubit_labels
         conn = connected_highweight_errors  # shorthand: whether high-weight errors must be connected on the graph
+        global_idle_name = processor_spec.global_idle_gate_name
 
         # Global Idle
         if max_idle_weight > 0:
+            assert(global_idle_name is not None), \
+                "`max_idle_weight` must equal 0 for processor specs without a global idle gate!"
             #printer.log("Creating Idle:")
             wt_maxhop_tuples = [(i, None) for i in range(1, max_idle_weight + 1)]
-            modelnoise['idle'] = _build_weight_maxhops_modelnoise(all_qubit_labels, wt_maxhop_tuples, gate_type, conn)
+            modelnoise[global_idle_name] = _build_weight_maxhops_modelnoise(all_qubit_labels, wt_maxhop_tuples,
+                                                                            gate_type, conn)
 
         # SPAM
         if max_spam_weight > 0:
@@ -1817,6 +1839,7 @@ def create_cloud_crosstalk_model_from_hops_and_weights(
         # REMOVE cloud_maxhops_2Q = max([mx for wt, mx in weight_maxhops_tuples_2Q])  # max of max-hops
 
         for gatenm, gate_unitary in processor_spec.gate_unitaries.items():
+            if gatenm == global_idle_name: continue  # processed above
             gate_nQubits = int(round(_np.log2(gate_unitary.shape[0])))
             if gate_nQubits not in (1, 2):
                 raise ValueError("Only 1- and 2-qubit gates are supported.  %s acts on %d qubits!"
@@ -1841,8 +1864,8 @@ def create_cloud_crosstalk_model_from_hops_and_weights(
         #     return cloud_key
 
         return _create_cloud_crosstalk_model(processor_spec, modelnoise, custom_gates,
-                                             evotype, simulator, independent_gates,
-                                             errcomp_type, add_idle_noise_to_all_gates, verbosity)
+                                             evotype, simulator, independent_gates, independent_spam,
+                                             errcomp_type, implicit_idle_mode, verbosity)
 
 
 def _iter_basis_inds(weight):
