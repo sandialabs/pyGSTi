@@ -84,7 +84,7 @@ def create_from_dmvec(superket_vector, state_type, basis='pp', evotype='default'
                 st = CPTPState(superket_vector, basis, truncate, evotype, state_space)
             else:
                 # Anything else we try to convert to a pure vector and convert the pure state vector
-                dmvec = _bt.change_basis(state.to_dense(), basis, 'std')
+                dmvec = _bt.change_basis(superket_vector.to_dense(), basis, 'std')
                 purevec = _ot.dmvec_to_state(dmvec)
                 st = create_from_pure_vector(purevec, typ, basis, evotype, state_space)
             return st

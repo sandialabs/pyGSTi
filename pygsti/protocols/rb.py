@@ -29,7 +29,8 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
     This encapsulates a "Clifford randomized benchmarking" (CRB) experiment.  CRB is the RB protocol defined
     in "Scalable and robust randomized benchmarking of quantum processes", Magesan et al. PRL 106 180504 (2011).
     The circuits created by this function will respect the connectivity and gate-set of the device encoded
-    by `pspec` (see the :class:`QubitProcessorSpec` object docstring for how to construct the relevant `pspec` for a device).
+    by `pspec` (see the :class:`QubitProcessorSpec` object docstring for how to construct the relevant `pspec`
+    for a device).
 
     Note that this function uses the convention that a depth "l" CRB circuit  consists of "l"+2 Clifford gates
     before compilation.

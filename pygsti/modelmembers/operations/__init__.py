@@ -65,7 +65,7 @@ def create_from_unitary_mx(unitary_mx, op_type, basis='pp', stdname=None, evotyp
                     unitary_postfactor = create_from_unitary_mx(
                         U, ('static standard', 'static clifford', 'static unitary'),
                         basis, stdname, evotype, state_space)
-                    
+
                 proj_basis = 'pp' if state_space.is_entirely_qubits else basis
                 errorgen = LindbladErrorgen.from_error_generator(state_space.dim, typ, proj_basis, basis,
                                                                  truncate=True, evotype=evotype,

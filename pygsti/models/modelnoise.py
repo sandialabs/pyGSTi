@@ -148,7 +148,7 @@ class OpModelPerOpNoise(OpModelNoise):
             sslbls_list = self._map_stencil_sslbls(stencil_sslbls, qubit_graph, state_space, target_labels)
             if None in sslbls_list and stencil_sslbls is not None:
                 # `None` in list signals a non-present direction => skip these terms
-                sslbls_list = list(filter(lambda x: x is not None, sslbls_list))  
+                sslbls_list = list(filter(lambda x: x is not None, sslbls_list))
             for sslbls in sslbls_list:
                 op_to_embed = local_errorgen if (sslbls is None or state_space.is_entire_space(sslbls)) \
                     else _op.EmbeddedErrorgen(state_space, sslbls, local_errorgen)
@@ -192,7 +192,7 @@ class OpModelPerOpNoise(OpModelNoise):
             sslbls_list = self._map_stencil_sslbls(stencil_sslbls, qubit_graph, state_space, target_labels)
             if None in sslbls_list and stencil_sslbls is not None:
                 # `None` in list signals a non-present direction => skip these terms
-                sslbls_list = list(filter(lambda x: x is not None, sslbls_list))  
+                sslbls_list = list(filter(lambda x: x is not None, sslbls_list))
             for sslbls in sslbls_list:
                 op_to_embed = local_errormap if (sslbls is None or state_space.is_entire_space(sslbls)) \
                     else _op.EmbeddedOp(state_space, sslbls, local_errormap)

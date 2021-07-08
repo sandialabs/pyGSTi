@@ -59,7 +59,7 @@ class ComposedErrorgen(_LinearOperator):
             state_space = _statespace.StateSpace.cast(state_space)
 
         assert(all([state_space.is_compatible_with(eg.state_space) for eg in errgens_to_compose])), \
-            "All error generators must have compatible state spaces (%s expected)!" % str(state_space)            
+            "All error generators must have compatible state spaces (%s expected)!" % str(state_space)
 
         if evotype == "auto":
             evotype = errgens_to_compose[0]._evotype

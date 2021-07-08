@@ -1593,8 +1593,8 @@ def _compile_cnot_circuit_using_ocage_algorithm(s, pspec, qubitorder, qubit_labe
         This algorithm takes the connectivity into account, but sometimes resorts to 'non-local' CNOTs. If
         `respect_connectivity` is True these gates are re-expressed over the available gates using a SWAP-like
         decomposition. If False, the algorithm does not compile these gates automatically. However, they will
-        still be converted to native gates from `pspec` if `compile_to_native` is True, using whatever the user specified
-        algorithm for compiling non-local CNOT gates this implies.
+        still be converted to native gates from `pspec` if `compile_to_native` is True, using whatever the user
+        specified algorithm for compiling non-local CNOT gates this implies.
 
     Returns
     -------

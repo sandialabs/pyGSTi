@@ -102,7 +102,7 @@ class QubitProcessorSpec(ProcessorSpec):
 
         if qubit_labels is None:  # special case of legacy explicit models where all gates have availability [None]
             qubit_labels = tuple(range(model.state_space.num_qubits))
-        
+
         nqubits = len(qubit_labels)
         gate_unitaries = _collections.OrderedDict()
         availability = {}
@@ -160,7 +160,7 @@ class QubitProcessorSpec(ProcessorSpec):
                 raise ValueError(
                     str(gname) + " is not a valid 'standard' gate name, it must be given in `nonstd_gate_unitaries`")
 
-       # Set self.qubit_graph (can be None)
+        # Set self.qubit_graph (can be None)
         if geometry is None:
             if qubit_labels is None:
                 qubit_labels = tuple(range(num_qubits))
@@ -185,7 +185,8 @@ class QubitProcessorSpec(ProcessorSpec):
         # Set availability
         if availability is None: availability = {}
         self.availability = _collections.OrderedDict([(gatenm, availability.get(gatenm, 'all-edges'))
-                                                      for gatenm in self.gate_names])  #if _Lbl(gatenm).sslbls is not None NEEDED?
+                                                      for gatenm in self.gate_names])
+        # if _Lbl(gatenm).sslbls is not None NEEDED?
 
         self.compiled_from = None  # could hold (QubitProcessorSpec, compilations) tuple if not None
         self.aux_info = aux_info if (aux_info is not None) else {}  # can hold anything additional
@@ -244,7 +245,7 @@ class QubitProcessorSpec(ProcessorSpec):
             return tuple(_itertools.permutations(self.qubit_labels, gate_nqubits))  # "auto" also comes here
 
         elif avail_entry == 'all-edges':
-            assert(gate_nqubits in (1,2)), \
+            assert(gate_nqubits in (1, 2)), \
                 "I don't know how to place a %d-qubit gate on graph edges yet" % gate_nqubits
             if tuple_or_function == "function":
                 def _f(sslbls):
@@ -294,7 +295,6 @@ class QubitProcessorSpec(ProcessorSpec):
     def available_gatelabels(self, gate_name, sslbls):
         """ TODO: docstring - return all the gate labels that are available for `gatename` on
             at least a subset of `sslbls`"""
-        ret = []
         gate_nqubits = self.gate_num_qubits(gate_name)
         avail_fn = self.resolved_availability(gate_name, tuple_or_function="function")
         if gate_nqubits > len(sslbls): return ()  # gate has too many qubits to fit in sslbls
@@ -323,7 +323,7 @@ class QubitProcessorSpec(ProcessorSpec):
             if gn not in self._symplectic_reps:
                 if unitary is None:  # special case of n-qubit identity
                     unitary = _np.identity(2**self.num_qubits, 'd')  # TODO - more efficient in FUTURE
-                    
+
                 try:
                     self._symplectic_reps[gn] = _symplectic.unitary_to_symplectic(unitary)
                 except ValueError:
@@ -475,7 +475,7 @@ class QubitProcessorSpec(ProcessorSpec):
                 compilation_circuit = compilation_rules.local_templates[gn]
                 all_sslbls = compilation_circuit.line_labels
                 gn_nqubits = len(all_sslbls)
-                assert(all_sslbls == tuple(range(0,len(gn_nqubits)))), \
+                assert(all_sslbls == tuple(range(0, len(gn_nqubits)))), \
                     "Template circuits *must* have line labels == 0...(gate's #qubits-1), not %s!" % (str(all_sslbls))
 
                 # To construct the availability for a circuit, we take the intersection

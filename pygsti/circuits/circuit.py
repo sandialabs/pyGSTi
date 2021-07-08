@@ -2481,7 +2481,7 @@ class Circuit(object):
             def get_compilation(gate):
                 return compilation.specific_compilations.get(gate, None)
 
-        else: # Otherwise, we assume it's a dict.
+        else:  # Otherwise, we assume it's a dict.
             assert(allowed_filter is None), \
                 "`allowed_filter` can only been not None if the compilation is a CliffordCompilationRules object!"
 

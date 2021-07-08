@@ -543,7 +543,7 @@ class LocalNoiseModel(_ImplicitOpModel):
         global_idle_name = processor_spec.global_idle_gate_name
         idle_names = processor_spec.idle_gate_names
         layer_rules = _SimpleCompLayerRules(global_idle_name, implicit_idle_mode)
-        
+
         super(LocalNoiseModel, self).__init__(state_space, layer_rules, 'pp',
                                               simulator=simulator, evotype=evotype)
 
@@ -680,7 +680,6 @@ class LocalNoiseModel(_ImplicitOpModel):
                     global_idle = _op.ComposedOp(list(gates_for_auto_global_idle.values()))
                     global_idle_name = layer_rules.global_idle_name = '(auto_global_idle)'
                     self.operation_blks['layers'][_Lbl('(auto_global_idle)')] = global_idle
-                    
 
         #REMOVE - covered by above
         #if global_idle is not None:
@@ -782,7 +781,7 @@ class _SimpleCompLayerRules(_LayerRules):
         if layerlbl in caches['complete-layers']: return caches['complete-layers'][layerlbl]
         components = layerlbl.components
         add_idle = (self.global_idle_name is not None) and self._add_global_idle_to_all_layers
-        
+
         if isinstance(layerlbl, _CircuitLabel):
             op = self._create_op_for_circuitlabel(model, layerlbl)
             caches['complete-layers'][layerlbl] = op

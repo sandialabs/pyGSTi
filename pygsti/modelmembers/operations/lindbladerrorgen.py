@@ -189,8 +189,8 @@ class LindbladErrorgen(_LinearOperator):
                                         mx_basis, truncate, evotype, state_space=state_space)
 
     @classmethod
-    def from_error_generator(cls, errgen_or_dim, parameterization="CPTP", lindblad_basis='pp', mx_basis='pp', truncate=True,
-                             evotype="default", state_space=None):
+    def from_error_generator(cls, errgen_or_dim, parameterization="CPTP", lindblad_basis='pp', mx_basis='pp',
+                             truncate=True, evotype="default", state_space=None):
         """
         TODO: docstring - take from now-private version below Note: errogen_or_dim can be an integer => zero errgen
         """
@@ -1882,8 +1882,8 @@ class LindbladParameterization(object):
             raise ValueError("Unrecognized base type in `param_type`=%s" % param_type)
 
         ham_allowed = True if (("H" == param_type)
-                                 or ("H+" in param_type)
-                                 or param_type in ("CPTP", "GLND")) else False
+                               or ("H+" in param_type)
+                               or param_type in ("CPTP", "GLND")) else False
         nonham_allowed = False if param_type == "H" else True
         return cls(nonham_mode, param_mode, ham_allowed, nonham_allowed, param_type)
 

@@ -644,12 +644,13 @@ class CloudNoiseModel(_ImplicitOpModel):
                     if build_cloudkey_fn is not None:
                         # TODO: is there any way to get a default "key", e.g. the
                         # qubits touched by the corresponding cloudnoise op?
-                        # need a way to identify a clound (e.g. Gx and Gy gates on some qubit will have the *same* cloud)
+                        # need a way to identify a clound (e.g. Gx and Gy gates on some qubit will have *same* cloud)
                         cloud_key = build_cloudkey_fn(_Lbl(gn, inds))
                         if cloud_key not in self.clouds: self.clouds[cloud_key] = []
                         self.clouds[cloud_key].append(_Lbl(gn, inds))
                     #keep track of the primitive-layer labels in each cloud,
-                    # used to specify which gate parameters should be amplifiable by germs for a given cloud (?) TODO CHECK
+                    # used to specify which gate parameters should be amplifiable by germs for a given cloud (?)
+                    # TODO CHECK THIS
 
         _init_spam_layers(self, prep_layers, povm_layers)  # SPAM
 

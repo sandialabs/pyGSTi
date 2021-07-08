@@ -127,7 +127,8 @@ class CliffordCompilationRules(CompilationRules):
     """
 
     @classmethod
-    def create_standard(cls, base_processor_spec, compile_type="absolute", what_to_compile=("1Qcliffords",), verbosity=1):
+    def create_standard(cls, base_processor_spec, compile_type="absolute", what_to_compile=("1Qcliffords",),
+                        verbosity=1):
         """ subctype : {"1Qcliffords", "localcnots", "allcnots", "paulis"} -- but depends on `ctype` """
 
         # A list of the 1-qubit gates to compile, in the std names understood inside the compilation code.
@@ -235,7 +236,7 @@ class CliffordCompilationRules(CompilationRules):
                 if H_name is not None:
                     if cphase_name is not None:
                         if I_name is not None:
-                            # we explicitly put identity gates into template (so any noise on them is simluated correctly)
+                            # we explicitly put identity gates into template (so noise on them is simluated correctly?)
 
                             # Add it with CPHASE in both directions, in case the CPHASES have been specified as being
                             # available in only one direction
@@ -250,7 +251,6 @@ class CliffordCompilationRules(CompilationRules):
                                 (_Label(H_name, 1), _Label(cphase_name, (0, 1)), _Label(H_name, 1))]
                             compilation_rules._clifford_templates['CNOT'].append(
                                 (_Label(H_name, 1), _Label(cphase_name, (1, 0)), _Label(H_name, 1)))
-                            
 
         # After adding default templates, we know generate compilations for CNOTs between all connected pairs. If the
         # default templates were not relevant or aren't relevant for some qubits, this will generate new templates by
@@ -275,7 +275,7 @@ class CliffordCompilationRules(CompilationRules):
             if add_nonlocal_two_q_gates:
                 for gname, q1, q2 in not_locally_compilable:
                     compilation_rules.add_nonlocal_compilation_of(_Label(gname, (q1, q2)),
-                                                        verbosity=verbosity)
+                                                                  verbosity=verbosity)
 
         return compilation_rules
 
@@ -600,7 +600,7 @@ class CliffordCompilationRules(CompilationRules):
         for layer in all_layers:
             obtained_sreps[layer] = _symp.symplectic_rep_of_clifford_layer(layer, nqubits, srep_dict=available_sreps)
 
-        # find the 1Q identity gate name 
+        # find the 1Q identity gate name
         I_name = self._find_std_gate(self.processor_spec, 'I')
 
         # Main loop. We go through the loop at most max_iterations times
@@ -890,7 +890,7 @@ class CliffordCompilationRules(CompilationRules):
         return circuit
 
     def _get_nonlocal_compilation_of(self, oplabel, force=False,
-                                    allowed_filter=None, verbosity=1, check=True):
+                                     allowed_filter=None, verbosity=1, check=True):
         """
         Get a potentially non-local compilation of `oplabel`.
 

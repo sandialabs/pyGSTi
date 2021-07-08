@@ -114,15 +114,17 @@ def rpe_ensemble_test(alpha_true, epsilon_true, y_rot, spam_depol, log2k_max, n,
 
     simModel = _setc.create_explicit_model_from_expressions([('Q0',)], ['Gi', 'Gx', 'Gz'],
                                                             ["I(Q0)", "X(" + str(epsilon_true) + ",Q0)",
-                                            "Z(" + str(alpha_true) + ",Q0)"],
+                                                             "Z(" + str(alpha_true) + ",Q0)"],
                                                             prep_labels=["rho0"], prep_expressions=["0"],
-                                                            effect_labels=["E0", "Ec"], effect_expressions=["0", "complement"],
+                                                            effect_labels=["E0", "Ec"],
+                                                            effect_expressions=["0", "complement"],
                                                             spamdefs={'0': ('rho0', 'E0'), '1': ('rho0', 'Ec')})
 
     modelAux1 = _setc.create_explicit_model_from_expressions([('Q0',)], ['Gi', 'Gy', 'Gz'],
                                                              ["I(Q0)", "Y(" + str(y_rot) + ",Q0)", "Z(pi/2,Q0)"],
                                                              prep_labels=["rho0"], prep_expressions=["0"],
-                                                             effect_labels=["E0", "Ec"], effect_expressions=["0", "complement"],
+                                                             effect_labels=["E0", "Ec"],
+                                                             effect_expressions=["0", "complement"],
                                                              spamdefs={'0': ('rho0', 'E0'), '1': ('rho0', 'Ec')})
 
     simModel.operations['Gx'] = _op.FullArbitraryOp(

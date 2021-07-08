@@ -46,7 +46,6 @@ def create_from_pure_vectors(pure_vectors, povm_type, basis='pp', evotype='defau
     if state_space is None:
         state_space = _statespace.default_space_for_udim(len(next(iter(pure_vectors.values()))))
 
-
     for typ in povm_type_preferences:
         try:
             if typ in ('computational', 'static standard'):
@@ -61,7 +60,7 @@ def create_from_pure_vectors(pure_vectors, povm_type, basis='pp', evotype='defau
                 povm = UnconstrainedPOVM(effects, evotype, state_space)
             elif typ == 'TP':
                 effects = [(lbl, create_effect_from_pure_vector(vec, "full", basis, evotype, state_space))
-                            for lbl, vec in povm.items()]
+                           for lbl, vec in povm.items()]
                 povm = TPPOVM(effects, evotype, state_space)
             elif _ot.is_valid_lindblad_paramtype(typ):
                 from ..operations import LindbladErrorgen as _LindbladErrorgen, ExpErrorgenOp as _ExpErrorgenOp
@@ -70,8 +69,8 @@ def create_from_pure_vectors(pure_vectors, povm_type, basis='pp', evotype='defau
 
                 proj_basis = 'pp' if state_space.is_entirely_qubits else basis
                 errorgen = _LindbladErrorgen.from_error_generator(state_space.dim, typ, proj_basis, basis,
-                                                                 truncate=True, evotype=evotype,
-                                                                 state_space=state_space)
+                                                                  truncate=True, evotype=evotype,
+                                                                  state_space=state_space)
                 povm = ComposedPOVM(_ExpErrorgenOp(errorgen), base_povm, mx_basis=basis)
             else:
                 raise ValueError("Unknown POVM type '%s'!" % str(typ))
@@ -101,13 +100,13 @@ def create_from_dmvecs(superket_vectors, povm_type, basis='pp', evotype='default
                 povm = TPPOVM(effects, evotype, state_space)
             elif _ot.is_valid_lindblad_paramtype(typ):
                 from ..operations import LindbladErrorgen as _LindbladErrorgen, ExpErrorgenOp as _ExpErrorgenOp
-                base_povm = create_from_dmvecs(pure_vectors, ('computational', 'static'),
+                base_povm = create_from_dmvecs(superket_vectors, ('computational', 'static'),
                                                basis, evotype, state_space)
 
                 proj_basis = 'pp' if state_space.is_entirely_qubits else basis
                 errorgen = _LindbladErrorgen.from_error_generator(state_space.dim, typ, proj_basis, basis,
-                                                                 truncate=True, evotype=evotype,
-                                                                 state_space=state_space)
+                                                                  truncate=True, evotype=evotype,
+                                                                  state_space=state_space)
                 povm = ComposedPOVM(_ExpErrorgenOp(errorgen), base_povm, mx_basis=basis)
             elif typ in ('computational', 'static standard',
                          'static pure', 'static unitary',

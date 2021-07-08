@@ -148,7 +148,7 @@ class EmbeddedOp(_LinearOperator):
         for l in self.target_labels:
             divisors.append(divisor)
             dim = self.state_space.label_udimension(l) if on_space == "Hilbert" \
-                    else self.state_space.label_dimension(l)   # e.g. 4 or 2 for qubits (depending on on_space)
+                else self.state_space.label_dimension(l)   # e.g. 4 or 2 for qubits (depending on on_space)
             divisor *= dim
 
         iTensorProdBlk = [self.state_space.label_tensor_product_block_index(label) for label in self.target_labels][0]

@@ -37,7 +37,7 @@ from . import rigetti_agave
 from . import rigetti_aspen4
 from . import rigetti_aspen6
 from . import rigetti_aspen7
-from  pygsti.processors import QubitProcessorSpec as _QubitProcessorSpec
+from pygsti.processors import QubitProcessorSpec as _QubitProcessorSpec
 from pygsti.processors import CliffordCompilationRules as _CliffordCompilationRules
 from pygsti.models import oplessmodel as _oplessmodel, modelconstruction as _mconst
 from pygsti.modelmembers.povms import povm as _povm
@@ -90,8 +90,8 @@ def get_edgelist(device):
 
 
 def create_clifford_processor_spec(device, one_qubit_gates, qubitsubset=None, removeedges=(),
-                          clifford_compilation_type='absolute', what_to_compile=('1Qcliffords',),
-                          verbosity=0):
+                                   clifford_compilation_type='absolute', what_to_compile=('1Qcliffords',),
+                                   verbosity=0):
     """
     TODO: docstring
 

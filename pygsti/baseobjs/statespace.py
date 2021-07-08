@@ -316,7 +316,7 @@ class StateSpace(object):
         sub_tpb_udims = []
         sub_tpb_types = []
         for lbls, udims, typs in zip(self.tensor_product_blocks_labels, self.tensor_product_blocks_udimensions,
-                               self.tensor_product_blocks_types):
+                                     self.tensor_product_blocks_types):
             sub_lbls = []; sub_udims = []; sub_types = []
             for lbl, udim, typ in zip(lbls, udims, typs):
                 if lbl in labels:
@@ -663,7 +663,7 @@ class ExplicitStateSpace(StateSpace):
         if self._nqubits is None:
             raise ValueError("This state space is not a tensor product of qubit factors spaces!")
         return self._nqubits
-    
+
     @property
     def num_tensor_product_blocks(self):
         """
