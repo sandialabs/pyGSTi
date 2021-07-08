@@ -2461,10 +2461,9 @@ class Circuit(object):
         """
         assert(not self._static), "Cannot edit a read-only circuit!"
 
-        # If it's a CompilationLibrary, it has this attribute. When it's a CompilationLibrary we use the
-        # .get_compilation_of method, which will look to see if a compilation for a gate is already available (with
-        # `allowed_filter` taken account of) and if not it will attempt to construct it.
-        if hasattr(compilation, 'templates'):
+        from pygsti.processors import CompilationRules as _CompilationRules
+        from pygsti.processors import CliffordCompilationRules as _CliffordCompilationRules
+        if isinstance(compilation, _CliffordCompilationRules):
             # The function we query to find compilations
             def get_compilation(gate):
                 # Use try, because it will fail if it cannot construct a compilation, and this is fine under some
@@ -2474,11 +2473,17 @@ class Circuit(object):
                     return circuit
                 except:
                     return None
-        # Otherwise, we assume it's a dict.
-        else:
+
+        elif isinstance(compilation, _CompilationRules):
             assert(allowed_filter is None), \
-                "`allowed_filter` can only been not None if the compilation is a CompilationLibrary!"
-            # The function we query to find compilations
+                "`allowed_filter` can only been not None if the compilation is a CliffordCompilationRules object!"
+
+            def get_compilation(gate):
+                return compilation.specific_compilations.get(gate, None)
+
+        else: # Otherwise, we assume it's a dict.
+            assert(allowed_filter is None), \
+                "`allowed_filter` can only been not None if the compilation is a CliffordCompilationRules object!"
 
             def get_compilation(gate):
                 return compilation.get(gate, None)

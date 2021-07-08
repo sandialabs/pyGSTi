@@ -783,8 +783,6 @@ class _SimpleCompLayerRules(_LayerRules):
         components = layerlbl.components
         add_idle = (self.global_idle_name is not None) and self._add_global_idle_to_all_layers
         
-        bHasGlobalIdle = bool(_Lbl('globalIdle') in model.operation_blks['layers'])
-
         if isinstance(layerlbl, _CircuitLabel):
             op = self._create_op_for_circuitlabel(model, layerlbl)
             caches['complete-layers'][layerlbl] = op

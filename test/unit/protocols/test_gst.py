@@ -128,7 +128,7 @@ class GSTInitialModelTester(BaseCase):
 
     def test_get_model_custom(self):
         #Custom model
-        custom_model = self.edesign.create_target_model().rotate(max_rotate=0.05, seed=1234)
+        custom_model = self.edesign.create_target_model('full','full').rotate(max_rotate=0.05, seed=1234)
         im = gst.GSTInitialModel(custom_model)  # default is to use the target
         mdl = im.get_model(self.edesign, None, None, None)
         self.assertEqual(im.starting_point, "User-supplied-Model")
@@ -136,7 +136,7 @@ class GSTInitialModelTester(BaseCase):
 
     def test_get_model_depolarized(self):
         #Depolarized start
-        depol_model = self.edesign.create_target_model().depolarize(op_noise=0.1)
+        depol_model = self.edesign.create_target_model('full', 'full').depolarize(op_noise=0.1)
         im = gst.GSTInitialModel(depolarize_start=0.1)  # default is to use the target
         mdl = im.get_model(self.edesign, None, None, None)
         self.assertEqual(im.starting_point, 'target')
@@ -144,13 +144,13 @@ class GSTInitialModelTester(BaseCase):
 
     def test_get_model_lgst(self):
         #LGST
-        datagen_model = self.edesign.create_target_model().depolarize(op_noise=0.1)
+        datagen_model = self.edesign.create_target_model('full').depolarize(op_noise=0.1)
         ds = simulate_data(datagen_model, self.edesign.all_circuits_needing_data, 1000, sample_error='none')  # no error for reproducibility
 
-        im1 = gst.GSTInitialModel(self.edesign.create_target_model(), "LGST")
+        im1 = gst.GSTInitialModel(self.edesign.create_target_model('full'), "LGST")
         mdl1 = im1.get_model(self.edesign, None, ds, None)
 
-        im2 = gst.GSTInitialModel(self.edesign.create_target_model(), "LGST-if-possible")
+        im2 = gst.GSTInitialModel(self.edesign.create_target_model('full'), "LGST-if-possible")
         mdl2 = im2.get_model(self.edesign, None, ds, None)
 
         self.assertTrue(mdl1.frobeniusdist(mdl2) < 1e-6)

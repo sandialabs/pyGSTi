@@ -99,6 +99,10 @@ class QubitProcessorSpec(ProcessorSpec):
     def from_explicit_model(cls, model, qubit_labels):
         """ TODO: docstring """
         #go through ops, building up availability and unitaries, then create procesor spec...
+
+        if qubit_labels is None:  # special case of legacy explicit models where all gates have availability [None]
+            qubit_labels = tuple(range(model.state_space.num_qubits))
+        
         nqubits = len(qubit_labels)
         gate_unitaries = _collections.OrderedDict()
         availability = {}
@@ -184,7 +188,7 @@ class QubitProcessorSpec(ProcessorSpec):
                                                       for gatenm in self.gate_names])  #if _Lbl(gatenm).sslbls is not None NEEDED?
 
         self.compiled_from = None  # could hold (QubitProcessorSpec, compilations) tuple if not None
-        self.aux_info = aux_info  # can hold anything additional (e.g. gate inverse relationships)
+        self.aux_info = aux_info if (aux_info is not None) else {}  # can hold anything additional
         self._symplectic_reps = {}  # lazily-evaluated symplectic representations for Clifford gates
         if nonstd_gate_symplecticreps is not None:
             self._symplectic_reps.update(nonstd_gate_symplecticreps)
@@ -200,6 +204,7 @@ class QubitProcessorSpec(ProcessorSpec):
         """ All the primitive operation labels derived from the gate names and availabilities """
         ret = []
         for gn in self.gate_names:
+            if gn.startswith('(') and gn.endswith(')'): continue  # skip implicit gate names
             avail = self.resolved_availability(gn, 'tuple')
             ret.extend([_Lbl(gn, sslbls) for sslbls in avail])
         return ret
@@ -421,6 +426,30 @@ class QubitProcessorSpec(ProcessorSpec):
                             gate_inverse[gname2] = gname1
         return gate_inverse
 
+    def compute_clifford_ops_on_qubits(self):
+        """ TODO: docstring """
+        clifford_gates = set(self.compute_clifford_symplectic_reps().keys())
+        clifford_ops_on_qubits = _collections.defaultdict(list)
+        for gn in self.gate_names:
+            if gn in clifford_gates:
+                for sslbls in self.resolved_availability(gn, 'tuple'):
+                    clifford_ops_on_qubits[sslbls].append(_Lbl(gn, sslbls))
+
+        return clifford_ops_on_qubits
+
+    def compute_clifford_2Q_connectivity(self):
+        # Generate clifford_qubitgraph for the multi-qubit Clifford gates. If there are multi-qubit gates
+        # which are not Clifford gates then these are not counted as "connections".
+        CtwoQ_connectivity = _np.zeros((self.num_qubits, self.num_qubits), dtype=bool)
+        qubit_labels = self.qubit_labels
+        clifford_gates = set(self.compute_clifford_symplectic_reps().keys())
+        for gn in self.gate_names:
+            if self.gate_num_qubits(gn) == 2 and gn in clifford_gates:
+                for sslbls in self.resolved_availability(gn, 'tuple'):
+                    CtwoQ_connectivity[qubit_labels.index(sslbls[0]), qubit_labels.index(sslbls[1])] = True
+
+        return _qgraph.QubitGraph(qubit_labels, CtwoQ_connectivity)
+
     def compile(self, compilation_rules):
         """
         TODO: docstring
@@ -510,8 +539,10 @@ class QubitProcessorSpec(ProcessorSpec):
                 "Cannot add specific values to non-explicit availabilities (e.g. given by functions)"
             availability[gate_lbl.name] += (gate_lbl.sslbls,)
 
+        aux_info = self.aux_info.copy()
+        aux_info.update(compilation_rules.create_aux_info())
         ret = QubitProcessorSpec(self.num_qubits, gate_names, gate_unitaries, availability,
-                                 self.qubit_graph, self.qubit_labels)
+                                 self.qubit_graph, self.qubit_labels, aux_info=aux_info)
         ret.compiled_from = (self, compilation_rules)
         return ret
 

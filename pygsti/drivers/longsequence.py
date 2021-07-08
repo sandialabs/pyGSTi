@@ -20,6 +20,7 @@ from pygsti import protocols as _proto
 from pygsti.objectivefns import objectivefns as _objfns
 from pygsti.baseobjs.advancedoptions import GSTAdvancedOptions as _GSTAdvancedOptions
 from pygsti.processors import QubitProcessorSpec as _QubitProcessorSpec
+from pygsti.models.model import Model as _Model
 from pygsti.models.modelconstruction import _create_explicit_model
 
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]
@@ -267,7 +268,7 @@ def run_linear_gst(data_filename_or_set, processorspec_filename_or_object,
     return results
 
 
-def run_long_sequence_gst(data_filename_or_set, processorspec_filename_or_object,
+def run_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
                           prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
                           germs_list_or_filename, max_lengths, gauge_opt_params=None,
                           advanced_options=None, comm=None, mem_limit=None,
@@ -403,8 +404,13 @@ def run_long_sequence_gst(data_filename_or_set, processorspec_filename_or_object
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm)
     advanced_options = _GSTAdvancedOptions(advanced_options or {})
     ds = _load_dataset(data_filename_or_set, comm, printer)
+    target_model = _load_model(target_model_filename_or_object)
 
-    exp_design = _proto.StandardGSTDesign(processorspec_filename_or_object,
+    pspec = _QubitProcessorSpec.from_explicit_model(
+        target_model, qubit_labels=target_model.state_space.tensor_product_block_labels(0))
+    # Note: line above just fails if model isn't an explicit model - generalize in FUTURE
+
+    exp_design = _proto.StandardGSTDesign(pspec,
                                           prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
                                           germs_list_or_filename, max_lengths,
                                           advanced_options.get('germ_length_limits', None),
@@ -420,10 +426,10 @@ def run_long_sequence_gst(data_filename_or_set, processorspec_filename_or_object
     if gauge_opt_params is None:
         gauge_opt_params = {'item_weights': {'gates': 1.0, 'spam': 0.001}}
     gopt_suite = {'go0': gauge_opt_params} if gauge_opt_params else None
-    initial_model = _get_gst_initial_model(advanced_options)
+    initial_model = _get_gst_initial_model(target_model, advanced_options)
     proto = _proto.GateSetTomography(initial_model, gopt_suite, None,
                                      _get_gst_builders(advanced_options),
-                                     _get_optimizer(advanced_options, initial_model),
+                                     _get_optimizer(advanced_options, target_model),
                                      _get_badfit_options(advanced_options), printer)
 
     proto.profile = advanced_options.get('profile', 1)
@@ -438,7 +444,7 @@ def run_long_sequence_gst(data_filename_or_set, processorspec_filename_or_object
     return results
 
 
-def run_long_sequence_gst_base(data_filename_or_set, processorspec_filename_or_object,
+def run_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_object,
                                lsgst_lists, gauge_opt_params=None,
                                advanced_options=None, comm=None, mem_limit=None,
                                output_pkl=None, verbosity=2):
@@ -519,7 +525,10 @@ def run_long_sequence_gst_base(data_filename_or_set, processorspec_filename_or_o
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm)
     advanced_options = advanced_options or {}
 
-    exp_design = _proto.GateSetTomographyDesign(processorspec_filename_or_object, lsgst_lists)
+    target_model = _load_model(target_model_filename_or_object)
+    pspec = _QubitProcessorSpec.from_explicit_model(
+        target_model, qubit_labels=target_model.state_space.tensor_product_block_labels(0))
+    exp_design = _proto.GateSetTomographyDesign(pspec, lsgst_lists)
 
     ds = _load_dataset(data_filename_or_set, comm, printer)
     data = _proto.ProtocolData(exp_design, ds)
@@ -527,11 +536,11 @@ def run_long_sequence_gst_base(data_filename_or_set, processorspec_filename_or_o
     if gauge_opt_params is None:
         gauge_opt_params = {'item_weights': {'gates': 1.0, 'spam': 0.001}}
     gopt_suite = {'go0': gauge_opt_params} if gauge_opt_params else None
-    initial_model = _get_gst_initial_model(advanced_options)
-    
+    initial_model = _get_gst_initial_model(target_model, advanced_options)
+
     proto = _proto.GateSetTomography(initial_model, gopt_suite, None,
                                      _get_gst_builders(advanced_options),
-                                     _get_optimizer(advanced_options, initial_model),
+                                     _get_optimizer(advanced_options, target_model),
                                      _get_badfit_options(advanced_options), printer,
                                      name=advanced_options.get('estimate_label', None))
 
@@ -760,11 +769,11 @@ def _output_to_pickle(obj, output_pkl, comm):
             _pickle.dump(obj, output_pkl)
 
 
-def _get_gst_initial_model(advanced_options):
+def _get_gst_initial_model(target_model, advanced_options):
     advanced_options = advanced_options or {}
     if advanced_options.get("starting_point", None) is None:
         advanced_options["starting_point"] = "LGST-if-possible"  # to keep backward compatibility
-    return _proto.GSTInitialModel(None, advanced_options.get("starting_point", None),
+    return _proto.GSTInitialModel(None, target_model, advanced_options.get("starting_point", None),
                                   advanced_options.get('depolarize_start', 0),
                                   advanced_options.get('randomize_start', 0),
                                   advanced_options.get('lgst_gaugeopt_tol', 1e-6),

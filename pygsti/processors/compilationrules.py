@@ -51,6 +51,7 @@ class CompilationRules(object):
 
     def add_compilation_rule(self, gate_name, template_circuit_or_fn, unitary=None):
         std_gate_unitaries = _itgs.standard_gatename_unitaries()
+        std_gate_unitaries.update(_itgs.internal_gate_unitaries())  # internal gates ok too?
         if unitary is None:
             if gate_name in std_gate_unitaries: unitary = std_gate_unitaries[gate_name]
             else: raise ValueError("Must supply `unitary` for non-standard gate name '%s'" % gate_name)
@@ -63,6 +64,7 @@ class CompilationRules(object):
 
     def add_specific_compilation_rule(self, gate_label, circuit, unitary):
         std_gate_unitaries = _itgs.standard_gatename_unitaries()
+        std_gate_unitaries.update(_itgs.internal_gate_unitaries())  # internal gates ok too?
         if gate_label.name not in self.gate_unitaries:
             if unitary is None:
                 if gate_label.name in std_gate_unitaries: unitary = std_gate_unitaries[gate_label.name]
@@ -70,7 +72,7 @@ class CompilationRules(object):
             self.gate_unitaries[gate_label.name] = unitary
         self.specific_compilations[gate_label] = circuit
 
-    def add_aux_info(self):
+    def create_aux_info(self):
         """ TODO: docstring -- compute any aux_info to be added to processorspec when
          compiling with these CompilationRules"""
         return {}
@@ -154,8 +156,7 @@ class CliffordCompilationRules(CompilationRules):
                         two_q_gates += ['CNOT', ]
                         add_nonlocal_two_q_gates = True
                 else:
-                    raise ValueError("One of the values for the key `{}` to "
-                                     "`construct_clifford_compilations` is not a valid option!".format(compile_type))
+                    raise ValueError("{} is invalid for the `{}` compile type!".format(subctype, compile_type))
 
         # We construct the requested `absolute` (i.e., not only up to Paulis) compilations.
         elif compile_type == 'absolute':
@@ -165,11 +166,9 @@ class CliffordCompilationRules(CompilationRules):
                 elif subctype == '1Qcliffords':
                     one_q_gates += ['C' + str(q) for q in range(24)]
                 else:
-                    raise ValueError("One of the values for the key `{}` to "
-                                     "`construct_clifford_compilations` is not a valid option!".format(
-                        compile_type))
+                    raise ValueError("{} is invalid for the `{}` compile type!".format(subctype, compile_type))
         else:
-            raise ValueError("Invalid `ctype` argument: %s" % str(compile_type))
+            raise ValueError("Invalid `compile_type` argument: %s" % str(compile_type))
 
         descs = {'paulieq': 'up to paulis', 'absolute': ''}
 
@@ -203,17 +202,11 @@ class CliffordCompilationRules(CompilationRules):
         # Manually add in the "obvious" compilations for CNOT gates as templates, so that we use the normal conversions
         # based on the Hadamard gate -- if this is possible. If we don't do this, we resort to random compilations,
         # which might not give the "expected" compilations (even if the alternatives might be just as good).
-        def find_std_gate(std_gate_name):
-            for gn in base_processor_spec.gate_names:
-                if callable(base_processor_spec.gate_unitaries[gn]): continue  # can't pre-process factories
-                if _itgs.is_gate_this_standard_unitary(base_processor_spec.gate_unitaries[gn], std_gate_name):
-                    return gn
-            return None
-
         if 'CNOT' in two_q_gates:
             # Look to see if we have a CNOT gate in the model (with any name).
-            cnot_name = find_std_gate('CNOT')
-            H_name = find_std_gate('H')
+            cnot_name = cls._find_std_gate(base_processor_spec, 'CNOT')
+            H_name = cls._find_std_gate(base_processor_spec, 'H')
+            I_name = cls._find_std_gate(base_processor_spec, 'I')
 
             # If we've failed to find a Hadamard gate but we only need paulieq compilation, we try
             # to find a gate that is Pauli-equivalent to Hadamard.
@@ -235,24 +228,29 @@ class CliffordCompilationRules(CompilationRules):
             # If CNOT isn't available, look to see if we have CPHASE gate in the model (with any name). If we do *and*
             # we have Hadamards, we add the obvious construction of CNOT from CPHASE and Hadamards as a template
             else:
-                cphase_name = find_std_gate('CPHASE')
+                cphase_name = cls._find_std_gate(base_processor_spec, 'CPHASE')
 
                 # If we find CPHASE, and we have a Hadamard-like gate, we add used them to add a CNOT compilation
                 # template.
                 if H_name is not None:
                     if cphase_name is not None:
-                        # Note: we need the identity gate for these templates, which we put explicitly
-                        # in template layers and which all models should be able to deal with (as the
-                        # lack of labels in a layer).
+                        if I_name is not None:
+                            # we explicitly put identity gates into template (so any noise on them is simluated correctly)
 
-                        # Add it with CPHASE in both directions, in case the CPHASES have been specified as being
-                        # available in only one direction
-                        compilation_rules._clifford_templates['CNOT'] = [
-                            (_Label(IDENT, 0), _Label(H_name, 1), _Label(cphase_name, (0, 1)), _Label(IDENT, 0),
-                             _Label(H_name, 1))]
-                        compilation_rules._clifford_templates['CNOT'].append(
-                            (_Label(IDENT, 0), _Label(H_name, 1), _Label(cphase_name, (1, 0)), _Label(IDENT, 0),
-                             _Label(H_name, 1)))
+                            # Add it with CPHASE in both directions, in case the CPHASES have been specified as being
+                            # available in only one direction
+                            compilation_rules._clifford_templates['CNOT'] = [
+                                (_Label(I_name, 0), _Label(H_name, 1), _Label(cphase_name, (0, 1)), _Label(I_name, 0),
+                                 _Label(H_name, 1))]
+                            compilation_rules._clifford_templates['CNOT'].append(
+                                (_Label(I_name, 0), _Label(H_name, 1), _Label(cphase_name, (1, 0)), _Label(I_name, 0),
+                                 _Label(H_name, 1)))
+                        else:  # similar, but without explicit identity gates
+                            compilation_rules._clifford_templates['CNOT'] = [
+                                (_Label(H_name, 1), _Label(cphase_name, (0, 1)), _Label(H_name, 1))]
+                            compilation_rules._clifford_templates['CNOT'].append(
+                                (_Label(H_name, 1), _Label(cphase_name, (1, 0)), _Label(H_name, 1)))
+                            
 
         # After adding default templates, we know generate compilations for CNOTs between all connected pairs. If the
         # default templates were not relevant or aren't relevant for some qubits, this will generate new templates by
@@ -281,8 +279,17 @@ class CliffordCompilationRules(CompilationRules):
 
         return compilation_rules
 
+    @classmethod
+    def _find_std_gate(cls, base_processor_spec, std_gate_name):
+        for gn in base_processor_spec.gate_names:
+            if callable(base_processor_spec.gate_unitaries[gn]): continue  # can't pre-process factories
+            if _itgs.is_gate_this_standard_unitary(base_processor_spec.gate_unitaries[gn], std_gate_name):
+                return gn
+        return None
+
     def __init__(self, native_gates_processorspec, compile_type="absolute"):
         """
+        TODO: update docstring
         Create a new CompilationLibrary.
 
         Parameters
@@ -391,11 +398,11 @@ class CliffordCompilationRules(CompilationRules):
             #construct a list of the available gates on the qubits of `oplabel` (or a subset of them)
             available_gatenames = self.processor_spec.available_gatenames(oplabel.sslbls)
             available_srep_dict = self.processor_spec.compute_clifford_symplectic_reps(available_gatenames)
-            available_srep_dict[IDENT] = _symp.unitary_to_symplectic(_np.identity(2, 'd'))
+            #available_srep_dict[IDENT] = _symp.unitary_to_symplectic(_np.identity(2, 'd'))  # REMOVE
             #Manually add 1Q idle gate, as this typically isn't stored in the processor spec.
 
             if is_local_compilation_feasible(available_gatenames):
-                available_gatelabels = [gl for gn in available_gatenames
+                available_gatelabels = [to_template_label(gl) for gn in available_gatenames
                                         for gl in self.processor_spec.available_gatelabels(gn, oplabel.sslbls)]
                 template_to_use = self.add_clifford_compilation_template(
                     oplabel.name, oplabel.num_qubits, unitary, srep,
@@ -593,6 +600,9 @@ class CliffordCompilationRules(CompilationRules):
         for layer in all_layers:
             obtained_sreps[layer] = _symp.symplectic_rep_of_clifford_layer(layer, nqubits, srep_dict=available_sreps)
 
+        # find the 1Q identity gate name 
+        I_name = self._find_std_gate(self.processor_spec, 'I')
+
         # Main loop. We go through the loop at most max_iterations times
         found = False
         for counter in range(0, max_iterations):
@@ -616,17 +626,27 @@ class CliffordCompilationRules(CompilationRules):
             # one containing the most idle gates.
             if len(candidates) > 1:
 
-                number_of_idles = 0
-                max_number_of_idles = 0
-
                 # Look at each sequence, and see if it has more than or equal to max_number_of_idles.
                 # If so, set it to the current chosen sequence.
-                for seq in candidates:
-                    number_of_idles = len([x for x in seq if x.name == IDENT])
+                if I_name is not None:
+                    number_of_idles = 0
+                    max_number_of_idles = 0
 
-                    if number_of_idles >= max_number_of_idles:
-                        max_number_of_idles = number_of_idles
-                        compilation = seq
+                    for seq in candidates:
+                        number_of_idles = len([x for x in seq if x.name == I_name])
+
+                        if number_of_idles >= max_number_of_idles:
+                            max_number_of_idles = number_of_idles
+                            compilation = seq
+                else:
+                    # idles are absent from circuits - just take one with smallest depth
+                    min_depth = 1e100
+                    for seq in candidates:
+                        depth = len(seq)
+                        if depth < min_depth:
+                            min_depth = depth
+                            compilation = seq
+
             elif len(candidates) == 1:
                 compilation = candidates[0]
 
@@ -658,9 +678,9 @@ class CliffordCompilationRules(CompilationRules):
             # Update list of potential compilations
             obtained_sreps = new_obtained_sreps
 
-        #Compilation done: remove IDENT labels, as these are just used to
+        #Compilation done: remove identity labels, as these are just used to
         # explicitly keep track of the number of identity gates in a circuit (really needed?)
-        compilation = list(filter(lambda gl: gl.name != IDENT, compilation))
+        compilation = list(filter(lambda gl: gl.name != I_name, compilation))
 
         #Store & return template that was found
         self._clifford_templates[gate_name].append(compilation)
@@ -709,8 +729,14 @@ class CliffordCompilationRules(CompilationRules):
         gate_name : str
             The gate name.
 
-        allowed_filter : dict or set
-            See :method:`get_nonlocal_compilation_of`.
+        allowed_filter : dict or set, optional
+            Specifies which gates are allowed to be to construct this
+            connectivity.  If a `dict`, keys must be gate names (like
+            `"CNOT"`) and values :class:`QubitGraph` objects indicating
+            where that gate (if it's present in the library) may be used.
+            If a `set`, then it specifies a set of qubits and any gate in
+            the current library that is confined within that set is allowed.
+            If None, then all gates within the library are allowed.
 
         Returns
         -------
@@ -863,7 +889,7 @@ class CliffordCompilationRules(CompilationRules):
 
         return circuit
 
-    def get_nonlocal_compilation_of(self, oplabel, force=False,
+    def _get_nonlocal_compilation_of(self, oplabel, force=False,
                                     allowed_filter=None, verbosity=1, check=True):
         """
         Get a potentially non-local compilation of `oplabel`.
@@ -918,7 +944,7 @@ class CliffordCompilationRules(CompilationRules):
         else:
             key = oplabel
 
-        if not force and key in self:
+        if not force and key in self.specific_compilations:
             return self[oplabel]  # don't re-compute unless we're told to
 
         circuit = self._create_nonlocal_compilation_of(
@@ -983,11 +1009,11 @@ class CliffordCompilationRules(CompilationRules):
         else:
             key = oplabel
 
-        if not force and key in self:
+        if not force and key in self.specific_compilations:
             return
         else:
-            circuit = self.get_nonlocal_compilation_of(oplabel, force, allowed_filter,
-                                                       verbosity, check)
+            circuit = self._get_nonlocal_compilation_of(oplabel, force, allowed_filter,
+                                                        verbosity, check)
 
             self.add_specific_compilation_rule(key, circuit, unitary=None)  # Need to take unitary as arg?
 
@@ -1039,7 +1065,7 @@ class CliffordCompilationRules(CompilationRules):
         # should be removed somehow.
         try:
             # We don't have to account for `force` manually here, because it is dealt with inside this function
-            circuit = self.get_local_compilation_of(
+            circuit = self._get_local_compilation_of(
                 oplabel, unitary=None, srep=None, max_iterations=10, force=force, verbosity=verbosity)
             # Check for the case where this function won't currently behave as expected.
             if isinstance(allowed_filter, dict):
@@ -1048,7 +1074,7 @@ class CliffordCompilationRules(CompilationRules):
 
         # If local compilation isn't possible, we move on and try non-local compilation
         except:
-            circuit = self.get_nonlocal_compilation_of(
+            circuit = self._get_nonlocal_compilation_of(
                 oplabel, force=force, allowed_filter=allowed_filter, verbosity=verbosity, check=check)
 
         return circuit
@@ -1111,29 +1137,3 @@ class CliffordCompilationRules(CompilationRules):
             oplabel, force=force, allowed_filter=allowed_filter, verbosity=verbosity, check=check)
 
         return
-
-    def add_aux_info(self):
-        """ TODO: docstring -- compute any aux_info to be added to processorspec when
-         compiling with these CompilationRules"""
-        # Generate clifford_qubitgraph for the multi-qubit Clifford gates. If there are multi-qubit gates
-        # which are not Clifford gates then these are not counted as "connections".
-        CtwoQ_connectivity = _np.zeros((self.processor_spec.num_qubits,
-                                       self.processor_spec.num_qubits), dtype=bool)
-        qubit_labels = self.processor_spec.qubit_labels
-        clifford_gates = set(self.processor_spec.compute_clifford_symplectic_reps().keys())
-        for gn in self.processor_spec.gate_names:
-            if self.processor_spec.gate_num_qubits(gn) == 2 and gn in clifford_gates:
-                for sslbls in self.processor_spec.resolved_availability(gn, 'tuple'):
-                    CtwoQ_connectivity[qubit_labels.index(sslbls[0]), qubit_labels.index(sslbls[1])] = True
-
-        clifford2Q_qubitgraph = _QubitGraph(qubit_labels, CtwoQ_connectivity)
-
-        # FUTURE : store this in a less clumsy way.
-        clifford_ops_on_qubits = _collections.defaultdict(list)
-        for gn in self.processor_spec.gate_names:
-            if gn in clifford_gates:
-                for gl in self.processor_spec.resolved_availability(gn, 'tuple'):
-                    clifford_ops_on_qubits[gl.sslbls].append(gl)
-
-        return {'clifford2Q_qubitgraph': clifford2Q_qubitgraph, 'clifford_ops_on_qubits': clifford_ops_on_qubits}
-

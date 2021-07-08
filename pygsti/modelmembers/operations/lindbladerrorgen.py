@@ -100,7 +100,7 @@ class LindbladErrorgen(_LinearOperator):
 
     @classmethod
     def from_operation_matrix(cls, op_matrix, parameterization='CPTP', lindblad_basis='pp',
-                              mx_basis='pp', truncate=True, evotype="default"):
+                              mx_basis='pp', truncate=True, evotype="default", state_space=None):
         """
         Creates a Lindblad-parameterized error generator from an operation.
 
@@ -158,6 +158,8 @@ class LindbladErrorgen(_LinearOperator):
             The evolution type.  The special value `"default"` is equivalent
             to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
 
+        state_space : TODO docstring
+
         Returns
         -------
         LindbladOp
@@ -184,7 +186,7 @@ class LindbladErrorgen(_LinearOperator):
             errgenMx = _ot.error_generator(op_matrix, _np.identity(op_matrix.shape[0], 'd'),
                                            mx_basis, "logGTi")
         return cls.from_error_generator(errgenMx, parameterization, lindblad_basis,
-                                        mx_basis, truncate, evotype, state_space=None)
+                                        mx_basis, truncate, evotype, state_space=state_space)
 
     @classmethod
     def from_error_generator(cls, errgen_or_dim, parameterization="CPTP", lindblad_basis='pp', mx_basis='pp', truncate=True,
@@ -337,7 +339,7 @@ class LindbladErrorgen(_LinearOperator):
 
         # Store superop dimension
         dim = state_space.dim
-        lindblad_basis = _Basis.cast(lindblad_basis, dim, sparse=sparse_bases)
+        self.lindblad_basis = _Basis.cast(lindblad_basis, dim, sparse=sparse_bases)
         self.nonham_mode = parameterization.nonham_mode
         self.param_mode = parameterization.param_mode
 
@@ -345,7 +347,7 @@ class LindbladErrorgen(_LinearOperator):
         # but maybe we want lindblad_term_dict, basisdict => basis + projections/coeffs,
         #  then projections/coeffs => paramvals? since the latter is what set_errgen needs
         hamC, otherC, self.ham_basis, self.other_basis = \
-            _ot.lindblad_terms_to_projections(lindblad_term_dict, lindblad_basis, self.nonham_mode)
+            _ot.lindblad_terms_to_projections(lindblad_term_dict, self.lindblad_basis, self.nonham_mode)
 
         self.ham_basis_size = len(self.ham_basis)
         self.other_basis_size = len(self.other_basis)
@@ -377,7 +379,7 @@ class LindbladErrorgen(_LinearOperator):
 
         #Create a representation of the type chosen above:
         if self._rep_type == 'lindblad errorgen':
-            rep = evotype.create_lindblad_errorgen_rep(lindblad_term_dict, lindblad_basis, state_space)
+            rep = evotype.create_lindblad_errorgen_rep(lindblad_term_dict, self.lindblad_basis, state_space)
         else:
             #Otherwise create a sparse or dense matrix representation
             self.hamGens, self.otherGens = self._init_generators(dim)

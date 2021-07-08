@@ -66,10 +66,12 @@ def _create_standard_costfunction(name):
     return costfunction
 
 
-def compile_clifford(s, p, pspec=None, qubit_labels=None, iterations=20, algorithm='ROGGE', aargs=[],
+def compile_clifford(s, p, pspec=None, absolute_compilation=None, paulieq_compilation=None,
+                     qubit_labels=None, iterations=20, algorithm='ROGGE', aargs=[],
                      costfunction='2QGC:10:depth:1', prefixpaulis=False, paulirandomize=False,
                      rand_state=None):
     """
+    TODO: docstring updates on all fns in this module -- pspec no longer holds a compilation library!
     Compiles an n-qubit Clifford gate into a circuit over a given model.
 
     Compiles an n-qubit Clifford gate, described by the symplectic matrix s and vector p, into
@@ -200,7 +202,9 @@ def compile_clifford(s, p, pspec=None, qubit_labels=None, iterations=20, algorit
 
     # Create a circuit that implements a Clifford with symplectic matrix s. This is the core
     # of this compiler, and is the part that can be implemented with different algorithms.
-    circuit = compile_symplectic(s, pspec=pspec, qubit_labels=qubit_labels, iterations=iterations,
+    circuit = compile_symplectic(s, pspec=pspec, absolute_compilation=absolute_compilation,
+                                 paulieq_compilation=paulieq_compilation,
+                                 qubit_labels=qubit_labels, iterations=iterations,
                                  algorithms=[algorithm], costfunction=costfunction,
                                  paulirandomize=paulirandomize, aargs={'algorithm': aargs},
                                  check=False, rand_state=rand_state)
@@ -216,15 +220,15 @@ def compile_clifford(s, p, pspec=None, qubit_labels=None, iterations=20, algorit
     # Turn the Pauli layer into a circuit.
     pauli_circuit = _Circuit(layer_labels=pauli_layer, line_labels=qubit_labels, editable=True)
     # Only change gate library of the Pauli circuit if we have a QubitProcessorSpec with compilations.
-    if pspec is not None:
-        pauli_circuit.change_gate_library(
-            pspec.compilations['absolute'], one_q_gate_relations=pspec.oneQgate_relations)  # identity=pspec.identity,
+    if pspec is not None and absolute_compilation is not None:
+        oneQgate_relations = pspec.compute_one_qubit_gate_relations()
+        pauli_circuit.change_gate_library(absolute_compilation, one_q_gate_relations=oneQgate_relations)
     # Prefix or post-fix the Pauli circuit to the main symplectic-generating circuit.
     if prefixpaulis: circuit.prefix_circuit_inplace(pauli_circuit)
     else: circuit.append_circuit_inplace(pauli_circuit)
 
     # If we aren't Pauli-randomizing, do a final bit of depth compression
-    if pspec is not None: circuit.compress_depth_inplace(one_q_gate_relations=pspec.oneQgate_relations, verbosity=0)
+    if pspec is not None: circuit.compress_depth_inplace(one_q_gate_relations=oneQgate_relations, verbosity=0)
     else: circuit.compress_depth_inplace(verbosity=0)
 
     # Check that the correct Clifford has been compiled. This should never fail, but could if
@@ -236,8 +240,9 @@ def compile_clifford(s, p, pspec=None, qubit_labels=None, iterations=20, algorit
     return circuit
 
 
-def compile_symplectic(s, pspec=None, qubit_labels=None, iterations=20, algorithms=['ROGGE'],
-                       costfunction='2QGC:10:depth:1', paulirandomize=False, aargs={}, check=True, rand_state=None):
+def compile_symplectic(s, pspec=None, absolute_compilation=None, paulieq_compilation=None, qubit_labels=None,
+                       iterations=20, algorithms=['ROGGE'], costfunction='2QGC:10:depth:1', paulirandomize=False,
+                       aargs={}, check=True, rand_state=None):
     """
     Creates a :class:`Circuit` that implements a Clifford gate given in the symplectic representation.
 
@@ -378,6 +383,7 @@ def compile_symplectic(s, pspec=None, qubit_labels=None, iterations=20, algorith
         else:
             eliminationorder = list(range(n))
         circuit = _compile_symplectic_using_ogge_algorithm(s, eliminationorder=eliminationorder, pspec=pspec,
+                                                           paulieq_compilation=paulieq_compilation,
                                                            qubit_labels=qubit_labels, ctype='basic', check=False)
         circuits.append(circuit)
 
@@ -412,9 +418,9 @@ def compile_symplectic(s, pspec=None, qubit_labels=None, iterations=20, algorith
         # This defaults to what we think is the best Gauss. elimin. based CNOT compiler in pyGSTi (this one may actual
         # not be the best one though). Note that this is a randomized version of the algorithm (using the albert-factor
         # randomization).
-        circuit = _compile_symplectic_using_riag_algoritm(s, pspec, qubit_labels=qubit_labels, iterations=iterations,
-                                                          cnotalg='COiCAGE', cargs=[], costfunction=costfunction,
-                                                          check=False, rand_state=rand_state)
+        circuit = _compile_symplectic_using_riag_algoritm(s, pspec, paulieq_compilation, qubit_labels=qubit_labels,
+                                                          iterations=iterations, cnotalg='COiCAGE', cargs=[],
+                                                          costfunction=costfunction, check=False, rand_state=rand_state)
         circuits.append(circuit)
 
     # Future
@@ -442,7 +448,7 @@ def compile_symplectic(s, pspec=None, qubit_labels=None, iterations=20, algorith
         d = circuit.depth
         for i in range(0, d + 1):
             # Different labelling depending on qubit_labels and pspec.
-            if pspec is None:
+            if pspec is None or absolute_compilation is None:
                 pcircuit = _Circuit(layer_labels=[_Label(paulilist[rand_state.randint(4)], k)
                                                   for k in range(n)], num_lines=n, identity='I')
             else:
@@ -458,8 +464,8 @@ def compile_symplectic(s, pspec=None, qubit_labels=None, iterations=20, algorith
                 # Compile the circuit into the native model, using an "absolute" compilation -- Pauli-equivalent is
                 # not sufficient here.
                 # identity=pspec.identity,
-                pcircuit.change_gate_library(pspec.compilations['absolute'],
-                                             one_q_gate_relations=pspec.oneQgate_relations)
+                oneQgate_relations = pspec.compute_one_qubit_gate_relations()
+                pcircuit.change_gate_library(absolute_compilation, one_q_gate_relations=oneQgate_relations)
             circuit.insert_circuit_inplace(pcircuit, d - i)
 
     if check:
@@ -576,8 +582,8 @@ def _compile_symplectic_using_rogge_algorithm(s, pspec=None, qubit_labels=None, 
     return bestcircuit
 
 
-def _compile_symplectic_using_ogge_algorithm(s, eliminationorder, pspec=None, qubit_labels=None,
-                                             ctype='basic', check=True):
+def _compile_symplectic_using_ogge_algorithm(s, eliminationorder, pspec=None, paulieq_compilation=None,
+                                             qubit_labels=None, ctype='basic', check=True):
     """
     Creates a :class:`Circuit` that implements a Clifford gate using the OGGE algorithm.
 
@@ -676,14 +682,13 @@ def _compile_symplectic_using_ogge_algorithm(s, eliminationorder, pspec=None, qu
 
     # If we have a pspec, we change the gate library. We use a pauli-equivalent compilation, as it is
     # only necessary to implement each gate in this circuit up to Pauli matrices.
-    if pspec is not None:
+    if pspec is not None and paulieq_compilation is not None:
+        oneQgate_relations = pspec.compute_one_qubit_gate_relations()
         if qubit_labels is None:
-            # ,identity=pspec.identity,
-            circuit.change_gate_library(pspec.compilations['paulieq'], one_q_gate_relations=pspec.oneQgate_relations)
+            circuit.change_gate_library(paulieq_compilation, one_q_gate_relations=oneQgate_relations)
         else:
-            # identity=pspec.identity,
-            circuit.change_gate_library(pspec.compilations['paulieq'], allowed_filter=set(qubit_labels),
-                                        one_q_gate_relations=pspec.oneQgate_relations)
+            circuit.change_gate_library(paulieq_compilation, allowed_filter=set(qubit_labels),
+                                        one_q_gate_relations=oneQgate_relations)
     if check:
         implemented_s, implemented_p = _symp.symplectic_rep_of_clifford_circuit(circuit, pspec=pspec)
         assert(_np.array_equal(s, implemented_s))
@@ -980,8 +985,9 @@ def _compile_symplectic_using_ag_algorithm(s, pspec=None, qubit_labels=None, cno
     return circuit
 
 
-def _compile_symplectic_using_riag_algoritm(s, pspec, qubit_labels=None, iterations=20, cnotalg='COiCAGE',
-                                            cargs=[], costfunction='2QGC:10:depth:1', check=True, rand_state=None):
+def _compile_symplectic_using_riag_algoritm(s, pspec, paulieq_compilation, qubit_labels=None, iterations=20,
+                                            cnotalg='COiCAGE', cargs=[], costfunction='2QGC:10:depth:1',
+                                            check=True, rand_state=None):
     """
     Creates a :class:`Circuit` that implements a Clifford gate using the RIAG algorithm.
 
@@ -1066,19 +1072,20 @@ def _compile_symplectic_using_riag_algoritm(s, pspec, qubit_labels=None, iterati
     mincost = _np.inf
     for i in range(iterations):
         circuit = _compile_symplectic_using_iag_algorithm(
-            s, pspec, qubit_labels=qubit_labels, cnotalg=cnotalg, cargs=cargs, check=False, rand_state=rand_state)
+            s, pspec, paulieq_compilation, qubit_labels=qubit_labels, cnotalg=cnotalg, cargs=cargs,
+            check=False, rand_state=rand_state)
 
         # Change to the native gate library
-        if pspec is not None:  # Currently pspec is not optional, so this always happens.
+        if pspec is not None and paulieq_compilation is not None:  # Currently pspec is not optional, so always happens.
             circuit = circuit.copy(editable=True)
+            oneQgate_relations = pspec.compute_one_qubit_gate_relations()
             if qubit_labels is None:
                 # ,identity=pspec.identity
-                circuit.change_gate_library(pspec.compilations['paulieq'],
-                                            one_q_gate_relations=pspec.oneQgate_relations)
+                circuit.change_gate_library(paulieq_compilation, one_q_gate_relations=oneQgate_relations)
             else:
                 # identity=pspec.identity,
-                circuit.change_gate_library(pspec.compilations['paulieq'], allowed_filter=set(qubit_labels),
-                                            one_q_gate_relations=pspec.oneQgate_relations)
+                circuit.change_gate_library(paulieq_compilation, allowed_filter=set(qubit_labels),
+                                            one_q_gate_relations=oneQgate_relations)
 
         # Calculate the cost after changing gate library.
         cost = costfunction(circuit, pspec)
@@ -1093,8 +1100,8 @@ def _compile_symplectic_using_riag_algoritm(s, pspec, qubit_labels=None, iterati
     return bestcircuit
 
 
-def _compile_symplectic_using_iag_algorithm(s, pspec, qubit_labels=None, cnotalg='COCAGE', cargs=[], check=True,
-                                            rand_state=None):
+def _compile_symplectic_using_iag_algorithm(s, pspec, compilation, qubit_labels=None, cnotalg='COCAGE', cargs=[],
+                                            check=True, rand_state=None):
     """
     Creates a :class:`Circuit` that implements a Clifford gate using the IAG algorithm.
 
@@ -1213,15 +1220,15 @@ def _compile_symplectic_using_iag_algorithm(s, pspec, qubit_labels=None, cnotalg
     cnot2_s, junk = _symp.symplectic_rep_of_clifford_circuit(circuit_2_cnots)
     cnot3_s, junk = _symp.symplectic_rep_of_clifford_circuit(circuit_3_cnots)
 
-    # clname is set to None so that the function doesn't change the circuit into the native gate library.
-    circuit_1_cnots = compile_cnot_circuit(cnot1_s, pspec, qubit_labels=qubit_labels,
-                                           algorithm=cnotalg, clname=None, check=False, aargs=cargs,
+    # compile_to_native=False so that the function doesn't change the circuit into the native gate library.
+    circuit_1_cnots = compile_cnot_circuit(cnot1_s, pspec, compilation=None, qubit_labels=qubit_labels,
+                                           algorithm=cnotalg, compile_to_native=False, check=False, aargs=cargs,
                                            rand_state=rand_state)
-    circuit_2_cnots = compile_cnot_circuit(cnot2_s, pspec, qubit_labels=qubit_labels,
-                                           algorithm=cnotalg, clname=None, check=False, aargs=cargs,
+    circuit_2_cnots = compile_cnot_circuit(cnot2_s, pspec, compilation=None, qubit_labels=qubit_labels,
+                                           algorithm=cnotalg, compile_to_native=False, check=False, aargs=cargs,
                                            rand_state=rand_state)
-    circuit_3_cnots = compile_cnot_circuit(cnot3_s, pspec, qubit_labels=qubit_labels,
-                                           algorithm=cnotalg, clname=None, check=False, aargs=cargs,
+    circuit_3_cnots = compile_cnot_circuit(cnot3_s, pspec, compilation=None, qubit_labels=qubit_labels,
+                                           algorithm=cnotalg, compile_to_native=False, check=False, aargs=cargs,
                                            rand_state=rand_state)
 
     circuit = circuit_1_cnots.copy(editable=True)
@@ -1239,8 +1246,8 @@ def _compile_symplectic_using_iag_algorithm(s, pspec, qubit_labels=None, cnotalg
     return circuit
 
 
-def compile_cnot_circuit(s, pspec, qubit_labels=None, algorithm='COiCAGE', clname=None, check=True, aargs=[],
-                         rand_state=None):
+def compile_cnot_circuit(s, pspec, compilation, qubit_labels=None, algorithm='COiCAGE', compile_to_native=False,
+                         check=True, aargs=[], rand_state=None):
     """
     A CNOT circuit compiler.
 
@@ -1283,7 +1290,7 @@ def compile_cnot_circuit(s, pspec, qubit_labels=None, algorithm='COiCAGE', clnam
                 LHS (or lower RHS) of `s`. This algorithm does not take device connectivity into account.
             - 'OCAGE' : User-ordered connectivity-adjusted Gaussian elimination. The qubits are eliminated in the
                 specified order; the first element of arrgs must be a list specify this order. The algorithm is
-                also "connectivity-adjusted" in the sense that it uses the connectivity graph (in pspec.qubitgraph)
+                also "connectivity-adjusted" in the sense that it uses the connectivity graph (in pspec.qubit_graph)
                 to try and avoid using CNOTs between unconnected pairs whenever possible, and to decide the order
                 of various operations.
             - 'OiCAGE' : The same as 'OCAGE' except that it has some improvements, and it requires connectivity
@@ -1296,12 +1303,8 @@ def compile_cnot_circuit(s, pspec, qubit_labels=None, algorithm='COiCAGE', clnam
              - 'COCAGE', 'COiCAGE' : The same as 'OCAGE' and 'OiCAGE', respectively, except that the elimination order
                 is fixed to eliminate qubits with the worse connectivity before those with better connectivity.
 
-    clname : str, optional
-        A name for a CompilationLibrary in `pspec`, i.e., a key to the dict `pspec.compilationlibraries`. If
-        specified, the output circuit is over the gates in `pspec` (rather than over CNOT), with the replacement
-        according to this specified CompilationLibrary. If it is only necessary to implement the correct circuit
-        up to paulis this would be `paulieq`. To obtain a compilation that exactly implements the input CNOT circuit
-        this should be set to `absolute`. (Although user-added compilation libraries are also fine).
+    compile_to_native : bool, optional
+        Whether the compilation in `pspec` should be used to give the circuit in terms of the gates of the native model.
 
     check : bool, optional
         Whether to check the output is correct.
@@ -1358,7 +1361,7 @@ def compile_cnot_circuit(s, pspec, qubit_labels=None, algorithm='COiCAGE', clnam
         qubitorder = []
         for k in range(n):
             # Find the distance matrix for the remaining qubits
-            distances = pspec.qubitgraph.subgraph(remaining_qubits).shortest_path_distance_matrix()
+            distances = pspec.qubit_graph.subgraph(remaining_qubits).shortest_path_distance_matrix()
             # Cost them on the total distance to all other qubits.
             costs = _np.sum(distances, axis=0)
             # Find the most-expensive qubit, and put that next in the list
@@ -1389,10 +1392,11 @@ def compile_cnot_circuit(s, pspec, qubit_labels=None, algorithm='COiCAGE', clnam
     else: raise ValueError("The choice of algorithm is invalid!")
 
     # If a compilation is specified, we compile into the native model.
-    if clname is not None:
+    if compile_to_native:
+        oneQgate_relations = pspec.compute_one_qubit_gate_relations()
         circuit = circuit.copy(editable=True)
-        circuit.change_gate_library(pspec.compilations[clname], allowed_filter=qubit_labels,
-                                    one_q_gate_relations=pspec.oneQgate_relations)  # , identity=pspec.identity)
+        circuit.change_gate_library(compilation, allowed_filter=qubit_labels,
+                                    one_q_gate_relations=oneQgate_relations)  # , identity=pspec.identity)
     if check:
         s_implemented, p_implemented = _symp.symplectic_rep_of_clifford_circuit(circuit, pspec=pspec)
         # This only checks its correct upto the phase vector, so that we can use the algorithm
@@ -1403,7 +1407,7 @@ def compile_cnot_circuit(s, pspec, qubit_labels=None, algorithm='COiCAGE', clnam
     return circuit
 
 
-def _compile_cnot_circuit_using_bge_algorithm(s, pspec, qubit_labels=None, clname=None, check=True):
+def _compile_cnot_circuit_using_bge_algorithm(s, pspec, qubit_labels=None, compile_to_native=False, check=True):
     """
     Compile a CNOT circuit.
 
@@ -1423,7 +1427,7 @@ def _compile_cnot_circuit_using_bge_algorithm(s, pspec, qubit_labels=None, clnam
     pspec : QubitProcessorSpec
         An nbar-qubit QubitProcessorSpec object that encodes the device that the CNOT circuit is being compiled
         for, where nbar >= n. The algorithm is takes into account the connectivity of the device as specified
-        by pspec.qubitgraph. If nbar > n it is necessary to provide `qubit_labels`, to specify which qubits in
+        by pspec.qubit_graph. If nbar > n it is necessary to provide `qubit_labels`, to specify which qubits in
         `pspec` the CNOT circuit acts on (all other qubits will not be part of the returned circuit, regardless of
         whether that means an over-head is required to avoid using gates that act on those qubits. If these
         additional qubits should be used, then the input CNOT circuit needs to be ``padded'' to be the identity
@@ -1436,7 +1440,7 @@ def _compile_cnot_circuit_using_bge_algorithm(s, pspec, qubit_labels=None, clnam
         list of the qubits to compile the CNOT circuit for; it should be a subset of the elements of
         pspec.qubit_labels. The ordering of the qubits in `s` is taken w.r.t the ordering of this list.
 
-    clname : str, optional
+    compile_to_native : bool, optional
         Unused.
 
     check : bool, optional
@@ -1564,8 +1568,8 @@ def _compile_cnot_circuit_using_ocage_algorithm(s, pspec, qubitorder, qubit_labe
     pspec : QubitProcessorSpec
         An nbar-qubit QubitProcessorSpec object that encodes the device that the CNOT circuit is being compiled
         for, where nbar >= n. The algorithm is takes into account the connectivity of the device as specified
-        by pspec.qubitgraph. The output circuit  is over the gates available  in this device is `clname` is
-        not None. If nbar > n it is necessary to provide `qubit_labels`, that specifies which of the qubits in `pspec`
+        by pspec.qubit_graph. The output circuit  is over the gates available  in this device is `compile_to_native` is
+        `True`. If nbar > n it is necessary to provide `qubit_labels`, that specifies which of the qubits in `pspec`
         the CNOT circuit acts on (all other qubits will not be part of the returned circuit, regardless of
         whether that means an over-head is required to avoid using gates that act on those qubits. If these
         additional qubits should be used, then the input CNOT circuit needs to be ``padded'' to be the identity
@@ -1589,7 +1593,7 @@ def _compile_cnot_circuit_using_ocage_algorithm(s, pspec, qubitorder, qubit_labe
         This algorithm takes the connectivity into account, but sometimes resorts to 'non-local' CNOTs. If
         `respect_connectivity` is True these gates are re-expressed over the available gates using a SWAP-like
         decomposition. If False, the algorithm does not compile these gates automatically. However, they will
-        still be converted to native gates from `pspec` if `clname` is True, using whatever the user specified
+        still be converted to native gates from `pspec` if `compile_to_native` is True, using whatever the user specified
         algorithm for compiling non-local CNOT gates this implies.
 
     Returns
@@ -1614,8 +1618,8 @@ def _compile_cnot_circuit_using_ocage_algorithm(s, pspec, qubitorder, qubit_labe
     else: allqubits = pspec.qubit_labels
 
     # Find the correct qubit graph to take into account.
-    if qubit_labels is None: qubitgraph = pspec.qubitgraph
-    else: qubitgraph = pspec.qubitgraph.subgraph(qubit_labels)
+    if qubit_labels is None: qubitgraph = pspec.qubit_graph
+    else: qubitgraph = pspec.qubit_graph.subgraph(qubit_labels)
     nodenames = qubitgraph.node_names
 
     # Find the distances and the shortest path predecessor matrix for this set of qubits.
@@ -1785,7 +1789,8 @@ def _compile_cnot_circuit_using_ocage_algorithm(s, pspec, qubitorder, qubit_labe
     return cnot_circuit
 
 
-def _compile_cnot_circuit_using_oicage_algorithm(s, pspec, qubitorder, qubit_labels=None, clname=None, check=True):
+def _compile_cnot_circuit_using_oicage_algorithm(s, pspec, qubitorder, qubit_labels=None, compile_to_native=False,
+                                                 check=True):
     """
     An improved, ordered and connectivity-adjusted Gaussian-elimination (OiCAGE) algorithm for compiling a CNOT circuit.
 
@@ -1803,7 +1808,7 @@ def _compile_cnot_circuit_using_oicage_algorithm(s, pspec, qubitorder, qubit_lab
     pspec : QubitProcessorSpec
         An nbar-qubit QubitProcessorSpec object that encodes the device that the CNOT circuit is being compiled
         for, where nbar >= n. The algorithm is takes into account the connectivity of the device as specified
-        by pspec.qubitgraph. If nbar > n it is necessary to provide `qubit_labels`, that specifies which of the
+        by pspec.qubit_graph. If nbar > n it is necessary to provide `qubit_labels`, that specifies which of the
         qubits in `pspec` the CNOT circuit acts on (all other qubits will not be part of the returned circuit,
         regardless of whether that means an over-head is required to avoid using gates that act on those qubits.
         If these additional qubits should be used, then the input CNOT circuit needs to be ``padded'' to be the identity
@@ -1820,7 +1825,7 @@ def _compile_cnot_circuit_using_oicage_algorithm(s, pspec, qubitorder, qubit_lab
         list of the qubits to compile the CNOT circuit for; it should be a subset of the elements of
         pspec.qubit_labels. The ordering of the qubits in `s` is taken w.r.t the ordering of this list.
 
-    clname : str, optional
+    compile_to_native : bool, optional
         Unused.
 
     check : bool, optional
@@ -1850,10 +1855,11 @@ def _compile_cnot_circuit_using_oicage_algorithm(s, pspec, qubitorder, qubit_lab
         allqubits = pspec.qubit_labels
 
     # Find the correct qubit graph to take into account.
+    #clifford_2Q_connectivity = pspec.compute_clifford_2Q_connectivity()
     if qubit_labels is None:
-        qubitgraph = pspec.qubitgraph
+        qubitgraph = pspec.qubit_graph
     else:
-        qubitgraph = pspec.qubitgraph.subgraph(qubit_labels)
+        qubitgraph = pspec.qubit_graph.subgraph(qubit_labels)
 
     # Loop through the qubits and eliminate them in turn.
     for k in range(n):
@@ -1995,14 +2001,15 @@ def _compile_cnot_circuit_using_oicage_algorithm(s, pspec, qubitorder, qubit_lab
     return cnot_circuit
 
 
-def compile_stabilizer_state(s, p, pspec, qubit_labels=None, iterations=20, paulirandomize=False,
+def compile_stabilizer_state(s, p, pspec, absolute_compilation, paulieq_compilation, qubit_labels=None,
+                             iterations=20, paulirandomize=False,
                              algorithm='COiCAGE', aargs=[], costfunction='2QGC:10:depth:1',
                              rand_state=None):
     """
     Generates a circuit to create the stabilizer state from the standard input state |0,0,0,...>.
 
     The stabilizer state is specified by `s` and `p`. The circuit returned is over the model of
-    the processor spec `pspec`.  See :function:`compile_stabilizer_state()` for the inverse of this.
+    the processor spec.  See :function:`compile_stabilizer_state()` for the inverse of this.
 
     Parameters
     ----------
@@ -2016,7 +2023,7 @@ def compile_stabilizer_state(s, p, pspec, qubit_labels=None, iterations=20, paul
         gate. This phase vector matrix should, together with `s`, represent any Clifford gate that,
         when acting on |0,0,0,...>, generates the desired stabilizer state. So `p` is not unique.
 
-    pspec : QubitProcessorSpec, optional
+    pspec, pspec : QubitProcessorSpec, optional
         An nbar-qubit QubitProcessorSpec object that encodes the device that the stabilizer is being compiled
         for, where nbar >= n. If this is specified, the output circuit is over the gates available
         in this device. If this is None, the output circuit is over the "canonical" model of CNOT gates
@@ -2112,7 +2119,7 @@ def compile_stabilizer_state(s, p, pspec, qubit_labels=None, iterations=20, paul
             i += 1
             # Do the depth-compression *before* changing gate library
             tc.compress_depth_inplace(one_q_gate_relations=oneQgate_relations, verbosity=0)
-            tc.change_gate_library(pspec.compilations['paulieq'])  # ,identity=pspec.identity)
+            tc.change_gate_library(paulieq_compilation)  # ,identity=pspec.identity)
             cost = costfunction(tc, pspec)
             # If this is the best circuit so far, then save it.
             if cost < mincost:
@@ -2122,9 +2129,9 @@ def compile_stabilizer_state(s, p, pspec, qubit_labels=None, iterations=20, paul
         except:
             failcount += 1
 
-        assert(failcount <= 5 * iterations), \
-            ("Randomized compiler is failing unexpectedly often. "
-             "Perhaps input QubitProcessorSpec is not valid or does not contain the neccessary information.")
+    assert(failcount <= 5 * iterations), \
+        ("Randomized compiler is failing unexpectedly often. "
+         "Perhaps input QubitProcessorSpec is not valid or does not contain the neccessary information.")
 
     if paulirandomize:
         paulilist = ['I', 'X', 'Y', 'Z']
@@ -2133,14 +2140,14 @@ def compile_stabilizer_state(s, p, pspec, qubit_labels=None, iterations=20, paul
             pcircuit = _Circuit(layer_labels=[_Label(paulilist[rand_state.randint(4)], qubit_labels[k])
                                               for k in range(n)],
                                 line_labels=qubit_labels, editable=True)
-            pcircuit.change_gate_library(pspec.compilations['absolute'])  # ,identity=pspec.identity)
+            pcircuit.change_gate_library(absolute_compilation)  # ,identity=pspec.identity)
             circuit.insert_circuit_inplace(pcircuit, d - i)
 
     implemented_s, implemented_p = _symp.symplectic_rep_of_clifford_circuit(circuit, pspec=pspec)
 
     check_circuit.append_circuit_inplace(circuit)
     # Add CNOT into the dictionary, because the gates in check_circuit are 'CNOT'.
-    sreps = pspec.models['clifford'].compute_clifford_symplectic_reps()
+    sreps = pspec.compute_clifford_symplectic_reps()
     sreps['CNOT'] = (_np.array([[1, 0, 0, 0], [1, 1, 0, 0], [0, 0, 1, 1],
                                 [0, 0, 0, 1]], int), _np.array([0, 0, 0, 0], int))
     implemented_scheck, implemented_pcheck = _symp.symplectic_rep_of_clifford_circuit(check_circuit, srep_dict=sreps)
@@ -2153,16 +2160,19 @@ def compile_stabilizer_state(s, p, pspec, qubit_labels=None, iterations=20, paul
     # Find the needed Pauli at the end.
     pauli_layer = _symp.find_postmultipled_pauli(implemented_scheck, implemented_pcheck, p, qubit_labels=qubit_labels)
     paulicircuit = _Circuit(layer_labels=pauli_layer, line_labels=qubit_labels, editable=True)
-    paulicircuit.change_gate_library(pspec.compilations['absolute'])  # ,identity=pspec.identity)
+    paulicircuit.change_gate_library(absolute_compilation)  # ,identity=pspec.identity)
     circuit.append_circuit_inplace(paulicircuit)
 
-    if not paulirandomize: circuit.compress_depth_inplace(one_q_gate_relations=pspec.oneQgate_relations, verbosity=0)
+    if not paulirandomize:
+        oneQgate_relations = pspec.compute_one_qubit_gate_relations()
+        circuit.compress_depth_inplace(one_q_gate_relations=oneQgate_relations, verbosity=0)
 
     circuit.done_editing()
     return circuit
 
 
-def compile_stabilizer_measurement(s, p, pspec, qubit_labels=None, iterations=20, paulirandomize=False,
+def compile_stabilizer_measurement(s, p, pspec, absolute_compilation, paulieq_compilation, qubit_labels=None,
+                                   iterations=20, paulirandomize=False,
                                    algorithm='COCAGE', aargs=[], costfunction='2QGC:10:depth:1', rand_state=None):
     """
     Generates a circuit to map the stabilizer state to the standard state |0,0,0,...>.
@@ -2185,7 +2195,7 @@ def compile_stabilizer_measurement(s, p, pspec, qubit_labels=None, iterations=20
         when acting on |0,0,0,...>, generates the stabilizer state that we need to map to |0,0,0,...>.
         So `p` is not unique.
 
-    pspec : QubitProcessorSpec, optional
+    pspec, pspec : QubitProcessorSpec, optional
         An nbar-qubit QubitProcessorSpec object that encodes the device that the stabilizer is being compiled
         for, where nbar >= n. If this is specified, the output circuit is over the gates available
         in this device. If this is None, the output circuit is over the "canonical" model of CNOT gates
@@ -2289,7 +2299,7 @@ def compile_stabilizer_measurement(s, p, pspec, qubit_labels=None, iterations=20
             # inverse).
             tc.compress_depth_inplace(one_q_gate_relations=oneQgate_relations, verbosity=0)
             # Change into the gates of pspec.
-            tc.change_gate_library(pspec.compilations['paulieq'])  # ,identity=pspec.identity)
+            tc.change_gate_library(paulieq_compilation)  # ,identity=pspec.identity)
             # If this is the best circuit so far, then save it.
             cost = costfunction(tc, pspec)
             if cost < mincost:
@@ -2310,7 +2320,7 @@ def compile_stabilizer_measurement(s, p, pspec, qubit_labels=None, iterations=20
             pcircuit = _Circuit(layer_labels=[_Label(paulilist[rand_state.randint(4)], qubit_labels[k])
                                               for k in range(n)],
                                 line_labels=qubit_labels, editable=True)
-            pcircuit.change_gate_library(pspec.compilations['absolute'])  # ,identity=pspec.identity)
+            pcircuit.change_gate_library(absolute_compilation)  # ,identity=pspec.identity)
             circuit.insert_circuit_inplace(pcircuit, d - i)
 
     # We didn't reverse tcc, so reverse check_circuit now. This circuit contains CNOTs, and is the circuit we'd need
@@ -2319,7 +2329,7 @@ def compile_stabilizer_measurement(s, p, pspec, qubit_labels=None, iterations=20
     check_circuit.reverse_inplace()
     check_circuit.prefix_circuit_inplace(circuit)
 
-    sreps = pspec.models['clifford'].compute_clifford_symplectic_reps()
+    sreps = pspec.compute_clifford_symplectic_reps()
     sreps['CNOT'] = (_np.array([[1, 0, 0, 0], [1, 1, 0, 0], [0, 0, 1, 1],
                                 [0, 0, 0, 1]], int), _np.array([0, 0, 0, 0], int))
     #implemented_s, implemented_p = _symp.symplectic_rep_of_clifford_circuit(circuit, srep_dict=sreps)
@@ -2339,11 +2349,13 @@ def compile_stabilizer_measurement(s, p, pspec, qubit_labels=None, iterations=20
         implemented_sin_check, implemented_pin_check, p, qubit_labels=qubit_labels)
     # Get the Pauli layer as a circuit, find in pspec gate library, and prefix to current circuit.
     paulicircuit = _Circuit(layer_labels=pauli_layer, line_labels=qubit_labels, editable=True)
-    paulicircuit.change_gate_library(pspec.compilations['absolute'])  # ,identity=pspec.identity)
+    paulicircuit.change_gate_library(absolute_compilation)  # ,identity=pspec.identity)
     circuit.prefix_circuit_inplace(paulicircuit)
     # We can only do depth compression again if we haven't Pauli-randomized. Otherwise we'd potentially undo this
     # randomization.
-    if not paulirandomize: circuit.compress_depth_inplace(one_q_gate_relations=pspec.oneQgate_relations, verbosity=0)
+    if not paulirandomize:
+        oneQgate_relations = pspec.compute_one_qubit_gate_relations()
+        circuit.compress_depth_inplace(one_q_gate_relations=oneQgate_relations, verbosity=0)
 
     circuit.done_editing()
     return circuit
@@ -3016,9 +3028,10 @@ def compile_conditional_symplectic(s, pspec, qubit_labels=None, calg='COiCAGE', 
             # Finds the CNOT circuit we are trying to compile in the symplectic rep.
             cnot_s, cnot_p = _symp.symplectic_rep_of_clifford_circuit(
                 _Circuit(layer_labels=CNOTs, line_labels=qubit_labels).parallelize())
-            # clname is set to None so that the function doesn't change the circuit into the native gate library.
-            circuit = compile_cnot_circuit(cnot_s, pspec, qubit_labels=qubit_labels,
-                                           algorithm=calg, clname=None, check=False, aargs=cargs, rand_state=rand_state)
+            # compile_to_native=False so that the function doesn't change the circuit into the native gate library.
+            circuit = compile_cnot_circuit(cnot_s, pspec, compilation=None, qubit_labels=qubit_labels,
+                                           algorithm=calg, compile_to_native=False, check=False,
+                                           aargs=cargs, rand_state=rand_state)
         circuit = circuit.copy(editable=True)
     else:
         circuit = _Circuit(layer_labels=[], line_labels=qubit_labels, editable=True)

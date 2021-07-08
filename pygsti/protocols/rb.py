@@ -21,6 +21,9 @@ from pygsti.algorithms import rbfit as _rbfit
 
 class CliffordRBDesign(_vb.BenchmarkingDesign):
     """
+    TODO: update docstrings in this module -- new clifford_compilations arg to __init__ fns and pspec
+           doesn't hold compilation libraries anymore.
+
     Experiment design for Clifford randomized benchmarking.
 
     This encapsulates a "Clifford randomized benchmarking" (CRB) experiment.  CRB is the RB protocol defined
@@ -183,7 +186,7 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
                               interleaved_circuit)
         return self
 
-    def __init__(self, pspec, depths, circuits_per_depth, qubit_labels=None, randomizeout=False,
+    def __init__(self, pspec, clifford_compilations, depths, circuits_per_depth, qubit_labels=None, randomizeout=False,
                  interleaved_circuit=None,
                  citerations=20, compilerargs=(), descriptor='A Clifford RB experiment',
                  add_default_protocol=False, seed=1234, verbosity=1, num_processes=1):
@@ -286,7 +289,7 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
                 print('- Sampling {} circuits at CRB length {} ({} of {} depths) with seed {}'.format(
                     circuits_per_depth, l, lnum + 1, len(depths), lseed))
 
-            args_list = [(pspec, l)] * circuits_per_depth
+            args_list = [(pspec, clifford_compilations, l)] * circuits_per_depth
             kwargs_list = [dict(qubit_labels=qubit_labels, randomizeout=randomizeout, citerations=citerations,
                                 compilerargs=compilerargs, interleaved_circuit=interleaved_circuit,
                                 seed=lseed + i) for i in range(circuits_per_depth)]
@@ -563,7 +566,8 @@ class DirectRBDesign(_vb.BenchmarkingDesign):
                               add_default_protocol)
         return self
 
-    def __init__(self, pspec, depths, circuits_per_depth, qubit_labels=None, sampler='Qelimination', samplerargs=[],
+    def __init__(self, pspec, clifford_compilations, depths, circuits_per_depth, qubit_labels=None,
+                 sampler='Qelimination', samplerargs=[],
                  addlocal=False, lsargs=(), randomizeout=False, cliffordtwirl=True, conditionaltwirl=True,
                  citerations=20, compilerargs=(), partitioned=False, descriptor='A DRB experiment',
                  add_default_protocol=False, seed=1234, verbosity=1, num_processes=1):
@@ -707,7 +711,7 @@ class DirectRBDesign(_vb.BenchmarkingDesign):
                 print('- Sampling {} circuits at DRB length {} ({} of {} depths) with seed {}'.format(
                     circuits_per_depth, l, lnum + 1, len(depths), lseed))
 
-            args_list = [(pspec, l)] * circuits_per_depth
+            args_list = [(pspec, clifford_compilations, l)] * circuits_per_depth
             kwargs_list = [dict(qubit_labels=qubit_labels, sampler=sampler, samplerargs=samplerargs,
                                 addlocal=addlocal, lsargs=lsargs, randomizeout=randomizeout,
                                 cliffordtwirl=cliffordtwirl, conditionaltwirl=conditionaltwirl,
@@ -921,7 +925,8 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
                               add_default_protocol)
         return self
 
-    def __init__(self, pspec, depths, circuits_per_depth, qubit_labels=None, sampler='Qelimination', samplerargs=(),
+    def __init__(self, pspec, clifford_compilations, depths, circuits_per_depth, qubit_labels=None,
+                 sampler='Qelimination', samplerargs=(),
                  localclifford=True, paulirandomize=True, descriptor='A mirror RB experiment',
                  add_default_protocol=False, seed=1234, num_processes=1, verbosity=1):
         """
@@ -1032,7 +1037,7 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
                 print('- Sampling {} circuits at MRB length {} ({} of {} depths) with seed {}'.format(
                     circuits_per_depth, l, lnum + 1, len(depths), lseed))
 
-            args_list = [(pspec, l)] * circuits_per_depth
+            args_list = [(pspec, clifford_compilations['absolute'], l)] * circuits_per_depth
             kwargs_list = [dict(qubit_labels=qubit_labels, sampler=sampler,
                                 samplerargs=samplerargs, localclifford=localclifford,
                                 paulirandomize=paulirandomize,

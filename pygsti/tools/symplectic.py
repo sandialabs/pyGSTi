@@ -1080,7 +1080,7 @@ def symplectic_rep_of_clifford_circuit(circuit, srep_dict=None, pspec=None):
         srep_dict = {}
     srep_dict.update(compute_internal_gate_symplectic_representations())
     if pspec is not None:
-        srep_dict.update(pspec.models['clifford'].compute_clifford_symplectic_reps())
+        srep_dict.update(pspec.compute_clifford_symplectic_reps())
 
     # The initial action of the circuit before any layers are applied.
     s = _np.identity(2 * n, int)

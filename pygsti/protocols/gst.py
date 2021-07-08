@@ -59,18 +59,24 @@ class HasProcessorSpec(object):
         self.processor_spec = _load_pspec(processorspec_filename_or_obj)
         self.auxfile_types['processor_spec'] = 'pickle'
 
-    def create_target_model(self, ideal_gate_type='auto', ideal_spam_type='computational'):
+    def create_target_model(self, gate_type='auto', spam_type='auto'):
         """
         TODO: docstring
+
+        auto gate type is static
+        auto spam type means match gate type or 'computational' if gate_type is auto
 
         Returns
         -------
         Model
         """
         # Create a static explicit model as the target model, based on the processor spec
+        if spam_type == "auto":
+            spam_type = "computational" if gate_type == "auto" else gate_type
+
         return _models.modelconstruction._create_explicit_model(
             self.processor_spec, None, evotype='default', simulator='auto',
-            ideal_gate_type=ideal_gate_type, ideal_spam_type=ideal_spam_type,
+            ideal_gate_type=gate_type, ideal_spam_type=spam_type,
             embed_gates=False, basis='pp')
 
 
@@ -355,10 +361,11 @@ class GSTInitialModel(object):
         """
         return obj if isinstance(obj, GSTInitialModel) else cls(obj)
 
-    def __init__(self, model=None, starting_point=None, depolarize_start=0, randomize_start=0,
+    def __init__(self, model=None, target_model=None, starting_point=None, depolarize_start=0, randomize_start=0,
                  lgst_gaugeopt_tol=1e-6, contract_start_to_cptp=False):
         # Note: starting_point can be an initial model or string
         self.model = model
+        self.target_model = target_model
         if starting_point is None:
             self.starting_point = "target" if (model is None) else "User-supplied-Model"
         else:
@@ -395,10 +402,17 @@ class GSTInitialModel(object):
         Model
         """
 
-        if isinstance(edesign, HasProcessorSpec):
-            target_model = edesign.create_target_model()
+        if self.target_model is None:
+            if isinstance(edesign, HasProcessorSpec):
+                typ = 'full' if (self.starting_point in ("LGST", "LGST-if-possible")
+                                 or self.contract_start_to_cptp
+                                 or self.depolarize_start > 0
+                                 or self.randomize_start > 0) else 'auto'
+                target_model = edesign.create_target_model(typ)
+            else:
+                target_model = None
         else:
-            target_model = None
+            target_model = self.target_model
 
         #Get starting point (model), which is used to compute other quantities
         # Note: should compute on rank 0 and distribute?

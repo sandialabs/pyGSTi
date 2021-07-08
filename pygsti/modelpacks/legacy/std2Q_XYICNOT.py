@@ -289,6 +289,12 @@ _target_model = _setc.create_explicit_model_from_expressions(
 _gscache = {("full", "auto"): _target_model}
 
 
+def processor_spec():
+    from pygsti.processors import QubitProcessorSpec as _QubitProcessorSpec
+    static_target_model = target_model('static')
+    return _QubitProcessorSpec.from_explicit_model(static_target_model, None)
+
+
 def target_model(parameterization_type="full", sim_type="auto"):
     """
     Returns a copy of the target model in the given parameterization.

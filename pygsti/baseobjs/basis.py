@@ -1430,7 +1430,6 @@ class TensorProdBasis(LazyBasis):
         sparse = all([c.sparse for c in self.component_bases])
         #assert(all([c.real == real for c in self.component_bases])), "Inconsistent `real` value among component bases!"
         assert(all([c.sparse == sparse for c in self.component_bases])), "Inconsistent sparsity among component bases!"
-        assert(sparse is False), "Sparse matrices are not supported within TensorProductBasis objects yet"
 
         super(TensorProdBasis, self).__init__(name, longname, real, sparse)
 
@@ -1482,17 +1481,26 @@ class TensorProdBasis(LazyBasis):
 
     def _lazy_build_elements(self):
         #LAZY building of elements (in case we never need them)
-        compMxs = _np.zeros((self.size,) + self.elshape, 'complex')
+        if self.sparse:
+            compMxs = [None] * self.size
+        else:
+            compMxs = _np.zeros((self.size,) + self.elshape, 'complex')
 
         #Take kronecker product of *natural* reps of component-basis elements
         # then reshape to vectors at the end.  This requires that the vector-
         # dimension of the component spaces equals the "natural space" dimension.
         comp_els = [c.elements for c in self.component_bases]
         for i, factors in enumerate(_itertools.product(*comp_els)):
-            M = _np.identity(1, 'complex')
-            for f in factors:
-                M = _np.kron(M, f)
+            if self.sparse:
+                M = _sps.identity(1, 'complex', 'csr')
+                for f in factors:
+                    M = _sps.kron(M, f, 'csr')
+            else:
+                M = _np.identity(1, 'complex')
+                for f in factors:
+                    M = _np.kron(M, f)
             compMxs[i] = M
+
         self._elements = compMxs
 
     def _lazy_build_labels(self):
@@ -1503,12 +1511,13 @@ class TensorProdBasis(LazyBasis):
 
     def _copy_with_toggled_sparsity(self):
         return TensorProdBasis([cb._copy_with_toggled_sparsity() for cb in self.component_bases],
-                                self.name, self.longname)
+                               self.name, self.longname)
 
     def __eq__(self, other):
         otherIsBasis = isinstance(other, TensorProdBasis)
         if not otherIsBasis: return False  # can't be equal to a non-DirectSumBasis
         if len(self.component_bases) != len(other.component_bases): return False
+        if self.sparse != other.sparse: return False
         return all([c1 == c2 for (c1, c2) in zip(self.component_bases, other.component_bases)])
 
     def create_equivalent(self, builtin_basis_name):
