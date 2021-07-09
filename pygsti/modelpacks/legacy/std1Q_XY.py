@@ -34,10 +34,16 @@ germs = _strc.to_circuits(
 germs_lite = germs[0:4]
 
 #Construct a target model:  X(pi/2), Y(pi/2)
-_target_model = _setc.create_explicit_model([('Q0',)], ['Gx', 'Gy'],
-                                           ["X(pi/2,Q0)", "Y(pi/2,Q0)"])
+_target_model = _setc.create_explicit_model_from_expressions([('Q0',)], ['Gx', 'Gy'],
+                                                             ["X(pi/2,Q0)", "Y(pi/2,Q0)"])
 
 _gscache = {("full", "auto"): _target_model}
+
+
+def processor_spec():
+    from pygsti.processors import QubitProcessorSpec as _QubitProcessorSpec
+    static_target_model = target_model('static')
+    return _QubitProcessorSpec.from_explicit_model(static_target_model, None)
 
 
 def target_model(parameterization_type="full", sim_type="auto"):

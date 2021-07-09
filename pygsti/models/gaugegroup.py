@@ -717,8 +717,7 @@ class UnitaryGaugeGroup(OpGaugeGroup):
 
     def __init__(self, state_space, basis, evotype='default'):
         errgen = _op.LindbladErrorgen.from_operation_matrix(
-            _np.identity(state_space.dim, 'd'), ham_basis=basis, nonham_basis=None,
-            param_mode="cptp", mx_basis=basis, evotype=evotype)
+            _np.identity(state_space.dim, 'd'), "H", basis, mx_basis=basis, evotype=evotype)
         operation = _op.ExpErrorgenOp(errgen)
         OpGaugeGroup.__init__(self, operation, UnitaryGaugeGroupElement, "Unitary")
 

@@ -218,7 +218,7 @@ cdef class OpRepEmbedded(OpRep):
         tensorProdBlkLabels = state_space.tensor_product_block_labels(iTensorProdBlk)
         # count possible *density-matrix-space* indices of each component of the tensor product block
         cdef _np.ndarray[_np.int64_t, ndim=1, mode='c'] num_basis_els = \
-            _np.array([state_space.label_dimension(l) for l in tensorProdBlkLabels], _np.int64)
+            _np.array([state_space.label_udimension(l) for l in tensorProdBlkLabels], _np.int64)
 
         # Separate the components of the tensor product that are not operated on, i.e. that our
         # final map just acts as identity w.r.t.
@@ -234,7 +234,7 @@ cdef class OpRepEmbedded(OpRep):
         cdef INT ncomponents_in_active_block = len(state_space.tensor_product_block_labels(active_block_index))
         cdef INT embedded_dim = embedded_rep.dim
         cdef _np.ndarray[_np.int64_t, ndim=1, mode='c'] blocksizes = \
-            _np.array([_np.product(state_space.tensor_product_block_dimensions(k))
+            _np.array([_np.product(state_space.tensor_product_block_udimensions(k))
                        for k in range(nblocks)], _np.int64)
         cdef INT i, j
 

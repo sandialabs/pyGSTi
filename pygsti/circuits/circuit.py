@@ -2461,10 +2461,9 @@ class Circuit(object):
         """
         assert(not self._static), "Cannot edit a read-only circuit!"
 
-        # If it's a CompilationLibrary, it has this attribute. When it's a CompilationLibrary we use the
-        # .get_compilation_of method, which will look to see if a compilation for a gate is already available (with
-        # `allowed_filter` taken account of) and if not it will attempt to construct it.
-        if hasattr(compilation, 'templates'):
+        from pygsti.processors import CompilationRules as _CompilationRules
+        from pygsti.processors import CliffordCompilationRules as _CliffordCompilationRules
+        if isinstance(compilation, _CliffordCompilationRules):
             # The function we query to find compilations
             def get_compilation(gate):
                 # Use try, because it will fail if it cannot construct a compilation, and this is fine under some
@@ -2474,11 +2473,17 @@ class Circuit(object):
                     return circuit
                 except:
                     return None
-        # Otherwise, we assume it's a dict.
-        else:
+
+        elif isinstance(compilation, _CompilationRules):
             assert(allowed_filter is None), \
-                "`allowed_filter` can only been not None if the compilation is a CompilationLibrary!"
-            # The function we query to find compilations
+                "`allowed_filter` can only been not None if the compilation is a CliffordCompilationRules object!"
+
+            def get_compilation(gate):
+                return compilation.specific_compilations.get(gate, None)
+
+        else:  # Otherwise, we assume it's a dict.
+            assert(allowed_filter is None), \
+                "`allowed_filter` can only been not None if the compilation is a CliffordCompilationRules object!"
 
             def get_compilation(gate):
                 return compilation.get(gate, None)
@@ -2813,8 +2818,8 @@ class Circuit(object):
             idle gates in place of the previous 1-qubit gates.  Note that `None` can be used as `name3`
             to signify that the result is the identity (no gate labels).
 
-            If a ProcessorSpec object has been created for the gates/device in question, the
-            ProcessorSpec.oneQgate_relations is the appropriate (and auto-generated) `one_q_gate_relations`.
+            If a QubitProcessorSpec object has been created for the gates/device in question, the
+            QubitProcessorSpec.oneQgate_relations is the appropriate (and auto-generated) `one_q_gate_relations`.
 
             Note that this function will not compress sequences of 1-qubit gates that cannot be compressed by
             independently inspecting sequential non-idle pairs (as would be the case with, for example,
@@ -2986,8 +2991,8 @@ class Circuit(object):
             1-qubit gates will be compressed into a single possibly non-idle 1-qubit gate followed by
             idle gates in place of the previous 1-qubit gates.
 
-            If a ProcessorSpec object has been created for the gates/device in question, the
-            ProcessorSpec.oneQgate_relations is the appropriate (and auto-generated) `one_q_gate_relations`.
+            If a QubitProcessorSpec object has been created for the gates/device in question, the
+            QubitProcessorSpec.oneQgate_relations is the appropriate (and auto-generated) `one_q_gate_relations`.
 
             Note that this function will not compress sequences of 1-qubit gates that cannot be compressed by
             independently inspecting sequential non-idle pairs (as would be the case with, for example,

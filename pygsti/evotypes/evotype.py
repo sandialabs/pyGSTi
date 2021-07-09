@@ -23,6 +23,32 @@ class Evotype(object):
     """
     defaut_evotype = None
 
+    _reptype_to_attrs = {
+        'dense superop': 'OpRepDenseSuperop',
+        'dense unitary': 'OpRepDenseUnitary',
+        'composed': 'OpRepComposed',
+        'embedded': 'OpRepEmbedded',
+        'experrorgen': 'OpRepExpErrorgen',
+        'stochastic': 'OpRepStochastic',
+        'sum': 'OpRepSum',
+        'clifford': 'OpRepClifford',
+        'repeated': 'OpRepRepeated',
+        'standard': 'OpRepStandard',
+        'sparse superop': 'OpRepSparse',
+        'lindblad errorgen': 'OpRepLindbladErrorgen',
+        'dense state': 'StateRepDense',
+        'pure state': 'StateRepPure',
+        'computational state': 'StateRepComputational',
+        'composed state': 'StateRepComposed',
+        'tensorproduct state': 'StateRepTensorProduct',
+        'conjugatedstate effect': 'EffectRepConjugatedState',
+        'computational effect': 'EffectRepComputational',
+        'tensorproduct effect': 'EffectRepTensorProduct',
+        'composed effect': 'EffectRepComposed',
+        'term': 'TermRep',
+        'direct term': 'TermDirectRep'
+    }
+
     @classmethod
     def cast(cls, obj, default_prefer_dense_reps=False):
         if isinstance(obj, Evotype):
@@ -65,6 +91,12 @@ class Evotype(object):
 
     def __str__(self):
         return self.name
+
+    def supported_reptypes(self):
+        return [reptype for reptype, attr in self._reptype_to_attrs.items() if hasattr(self.module, attr)]
+
+    def supports(self, reptype):
+        return hasattr(self.module, self._reptype_to_attrs[reptype])
 
     def create_dense_superop_rep(self, mx, state_space):  # process_mx=None,
         return self.module.OpRepDenseSuperop(mx, state_space)

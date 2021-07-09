@@ -56,7 +56,7 @@ class ComputationalBasisPOVMEffect(_POVMEffect):
     """
 
     @classmethod
-    def from_dense_vec(cls, vec, basis='pp', evotype="default", state_space=None):
+    def from_state_vector(cls, vec, basis='pp', evotype="default", state_space=None):
         """
         Create a new ComputationalBasisPOVMEffect from a dense vector.
 
@@ -100,7 +100,7 @@ class ComputationalBasisPOVMEffect(_POVMEffect):
                           "cannot construct ComputationalBasisPOVMEffect"))
 
     @classmethod
-    def from_dense_purevec(cls, purevec, basis='pp', evotype="default", state_space=None):
+    def from_pure_vector(cls, purevec, basis='pp', evotype="default", state_space=None):
         """
         TODO: update docstring
         Create a new StabilizerEffectVec from a pure-state vector.

@@ -165,6 +165,21 @@ class StateSpace(object):
         """
         return self.tensor_product_blocks_dimensions[i_tpb]
 
+    def tensor_product_block_udimensions(self, i_tpb):
+        """
+        Get the unitary-operator dimensions for the factors in the `iTBP`-th tensor-product block.
+
+        Parameters
+        ----------
+        i_tpb : int
+            Tensor-product block index.
+
+        Returns
+        -------
+        tuple
+        """
+        return self.tensor_product_blocks_dimensions[i_tpb]
+
     def copy(self):
         """
         Return a copy of this StateSpace.
@@ -183,6 +198,162 @@ class StateSpace(object):
             if self.udim == other_state_space.udim:
                 return True
         return False
+
+    def is_entire_space(self, labels):
+        """
+        True if this state space is a single tensor product block with (exactly, in order) the given set of labels.
+
+        Parameters
+        ----------
+        labels : iterable
+            the labels to test.
+
+        Returns
+        -------
+        bool
+        """
+        return (self.num_tensor_product_blocks == 1
+                and self.tensor_product_block_labels(0) == tuple(labels))
+
+    def contains_labels(self, labels):
+        """
+        True if this state space contains all of a given set of labels.
+
+        Parameters
+        ----------
+        labels : iterable
+            the labels to test.
+
+        Returns
+        -------
+        bool
+        """
+        return all((self.contains_label(lbl) for lbl in labels))
+
+    def contains_label(self, label):
+        """
+        True if this state space contains a given label.
+
+        Parameters
+        ----------
+        label : str or int
+            the label to test for.
+
+        Returns
+        -------
+        bool
+        """
+        for i in range(self.num_tensor_product_blocks):
+            if label in self.tensor_product_block_labels(i): return True
+        return False
+
+    @property
+    def common_dimension(self):
+        """
+        Returns the common super-op dimension of all the labels in this space.
+
+        If not all the labels in this space have the same dimension, then
+        `None` is returned to indicate this.
+
+        This property is useful when working with stencils, where operations
+        are created for a "stencil space" that is not exactly a subspace of
+        a StateSpace space but will be mapped to one in the future.
+
+        Returns
+        -------
+        int or None
+        """
+        tpb_dims = self.tensor_product_blocks_dimensions
+        if len(tpb_dims) == 0: return 0
+
+        ref_dim = tpb_dims[0][0]
+        if all([dim == ref_dim for dims in tpb_dims for dim in dims]):
+            return ref_dim
+        else:
+            return None
+
+    @property
+    def common_udimension(self):
+        """
+        Returns the common unitary-op dimension of all the labels in this space.
+
+        If not all the labels in this space have the same dimension, then
+        `None` is returned to indicate this.
+
+        This property is useful when working with stencils, where operations
+        are created for a "stencil space" that is not exactly a subspace of
+        a StateSpace space but will be mapped to one in the future.
+
+        Returns
+        -------
+        int or None
+        """
+        tpb_udims = self.tensor_product_blocks_udimensions
+        if len(tpb_udims) == 0: return 0
+
+        ref_udim = tpb_udims[0][0]
+        if all([udim == ref_udim for udims in tpb_udims for udim in udims]):
+            return ref_udim
+        else:
+            return None
+
+    def create_subspace(self, labels):
+        """
+        Create a sub-`StateSpace` object from a set of existing labels.
+
+        Parameters
+        ----------
+        labels : iterable
+            The labels to include in the returned state space.
+
+        Returns
+        -------
+        StateSpace
+        """
+        # Default, generic, implementation constructs an explicit state space
+        labels = set(labels)
+        sub_tpb_labels = []
+        sub_tpb_udims = []
+        sub_tpb_types = []
+        for lbls, udims, typs in zip(self.tensor_product_blocks_labels, self.tensor_product_blocks_udimensions,
+                                     self.tensor_product_blocks_types):
+            sub_lbls = []; sub_udims = []; sub_types = []
+            for lbl, udim, typ in zip(lbls, udims, typs):
+                if lbl in labels:
+                    sub_lbls.append(lbl)
+                    sub_udims.append(udim)
+                    sub_types.append(typ)
+                    labels.remove(lbl)
+            if len(sub_lbls) > 0:
+                sub_tpb_labels.append(sub_lbls)
+                sub_tpb_udims.append(sub_udims)
+                sub_tpb_types.append(sub_types)
+        assert(len(labels) == 0), "One or more elements of `labels` is not a valid label for this state space!"
+        return ExplicitStateSpace(sub_tpb_labels, sub_tpb_udims, sub_tpb_types)
+
+    def create_stencil_subspace(self, labels):
+        """
+        Create a template sub-`StateSpace` object from a set of potentially stencil-type labels.
+
+        That is, the elements of `labels` don't need to actually exist
+        within this state space -- they may be stencil labels that will
+        resolve to a label in this state space later on.
+
+        Parameters
+        ----------
+        labels : iterable
+            The labels to include in the returned state space.
+
+        Returns
+        -------
+        StateSpace
+        """
+        common_udim = self.common_udimension
+        if common_udim is None:
+            raise ValueError("Can only create stencil sub-StateSpace for a state space with a common label dimension!")
+        num_labels = len(labels)
+        return ExplicitStateSpace(tuple(range(num_labels)), (common_udim,) * num_labels)
+        # Note: this creates quantum-type sectors because integer labels are used (OK?)
 
     def __repr__(self):
         return self.__class__.__name__ + "[" + str(self) + "]"

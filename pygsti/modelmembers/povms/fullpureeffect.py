@@ -30,8 +30,8 @@ class FullPOVMPureEffect(_ConjugatedStatePOVMEffect):
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
     """
 
-    def __init__(self, vec, evotype="default"):
-        _ConjugatedStatePOVMEffect.__init__(self, _FullPureState(vec, evotype))
+    def __init__(self, vec, basis="pp", evotype="default", state_space=None):
+        _ConjugatedStatePOVMEffect.__init__(self, _FullPureState(vec, basis, evotype, state_space))
 
     def set_dense(self, vec):
         """

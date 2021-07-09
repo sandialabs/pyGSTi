@@ -16,14 +16,18 @@ from abc import ABC as _ABC, abstractmethod as _abstractmethod
 from pathlib import Path as _Path
 
 import numpy as _np
+import collections as _collections
 
 from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.circuits.circuitconstruction import to_circuits as _circuit_list
-from pygsti.models.modelconstruction import create_explicit_model as _build_explicit_model
+from pygsti.models.modelconstruction import create_explicit_model_from_expressions as _build_explicit_model
 from pygsti.circuits.gstcircuits import create_lsgst_circuit_lists as _make_lsgst_lists
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.polynomial import bulk_load_compact_polynomials as _bulk_load_compact_polys
 from pygsti.protocols import gst as _gst
+from pygsti.tools import optools as _ot
+from pygsti.tools import basistools as _bt
+from pygsti.processors import QubitProcessorSpec as _QubitProcessorSpec
 
 
 class ModelPack(_ABC):
@@ -120,6 +124,11 @@ class ModelPack(_ABC):
             self._gscache[(parameterization_type, simulator, qubit_labels, evotype)] = mdl
 
         return self._gscache[(parameterization_type, simulator, qubit_labels, evotype)].copy()
+
+    def processor_spec(self, qubit_labels=None):
+        """ TODO: docstring """
+        static_target_model = self.target_model('static', qubit_labels=qubit_labels)  # assumed to be an ExplicitOpModel
+        return _QubitProcessorSpec.from_explicit_model(static_target_model, self._sslbls)
 
     def _get_cachefile_names(self, param_type, simulator):
         """ Get the standard cache file names for a modelpack """
@@ -371,7 +380,7 @@ class GSTModelPack(ModelPack):
             max_lengths_list = list(_gen_max_length(max_max_length))
 
         return _gst.StandardGSTDesign(
-            self._target_model(qubit_labels, evotype),
+            self.processor_spec(qubit_labels),
             self.prep_fiducials(qubit_labels),
             self.meas_fiducials(qubit_labels),
             self.germs(qubit_labels, lite),

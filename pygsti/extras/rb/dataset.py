@@ -93,7 +93,7 @@ class RBSummaryDataset(object):
     the entire output of RB experiments).
     """
 
-    def __init__(self, number_of_qubits, success_counts=None, total_counts=None, hamming_distance_counts=None,
+    def __init__(self, num_qubits, success_counts=None, total_counts=None, hamming_distance_counts=None,
                  aux={}, finitecounts=True, descriptor=''):
         """
         # todo : update.
@@ -102,7 +102,7 @@ class RBSummaryDataset(object):
 
         Parameters
         ----------
-        number_of_qubits : int
+        num_qubits : int
             The number of qubits the dataset is for. This should be the number of qubits the RB experiments where
             "holistically" performed on. So, this dataset type is not suitable for, e.g., a *full* set of simultaneous
             RB data, which consists of parallel RB on different qubits. Data of that sort can be input into
@@ -156,7 +156,7 @@ class RBSummaryDataset(object):
             A string that describes what the data is for.
 
         """
-        self.number_of_qubits = number_of_qubits
+        self.num_qubits = num_qubits
         self.finitecounts = finitecounts
         self.aux = _copy.deepcopy(aux)
         self.descriptor = descriptor
@@ -338,7 +338,7 @@ class RBSummaryDataset(object):
                         else:
                             hamming_distance_counts[l].append(sampledHDProbs)
 
-            bootstrapped_dataset = RBSummaryDataset(self.number_of_qubits, success_counts, total_counts,
+            bootstrapped_dataset = RBSummaryDataset(self.num_qubits, success_counts, total_counts,
                                                     hamming_distance_counts, finitecounts=self.finitecounts,
                                                     descriptor='data created from a non-parametric bootstrap')
 
