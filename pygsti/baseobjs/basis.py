@@ -212,7 +212,7 @@ class Basis(object):
                     assert(dim == basis.dim or dim == basis.elsize), \
                         "Basis object has unexpected dimension: %d != %d or %d" % (dim, basis.dim, basis.elsize)
             if sparse is not None:
-                assert(sparse == basis.sparse), "Basis object has unexpected sparsity: %s" % (basis.sparse)
+                basis = basis.with_sparsity(sparse)
             return basis
         elif isinstance(name_or_basis_or_matrices, str):
             name = name_or_basis_or_matrices
@@ -382,6 +382,31 @@ class Basis(object):
         Basis
         """
         return _copy.deepcopy(self)
+
+    def with_sparsity(self, desired_sparsity):
+        """
+        Returns either this basis or a copy of it with the desired sparsity.
+
+        If this basis has the desired sparsity it is simply returned.  If
+        not, this basis is copied to one that does.
+
+        Parameters
+        ----------
+        desired_sparsity : bool
+            The sparsity (`True` for sparse elements, `False` for dense elements)
+            that is desired.
+
+        Returns
+        -------
+        Basis
+        """
+        if self.sparse == desired_sparsity:
+            return self
+        else:
+            return self._copy_with_toggled_sparsity()
+
+    def _copy_with_toggled_sparsity(self):
+        raise NotImplementedError("Derived classes should implement this!")
 
     def __str__(self):
         return '{} (dim={}), {} elements of shape {} :\n{}'.format(
@@ -924,12 +949,16 @@ class ExplicitBasis(Basis):
         # shape of "natural" elements - size may be > self.dim (to display naturally)
         return self._elshape
 
+    def _copy_with_toggled_sparsity(self):
+        return ExplicitBasis(self.elements, self.labels, self.name, self.longname, self.real, not self.sparse)
+
     def __hash__(self):
         return hash((self.name, self.dim, self.elshape, self.sparse))  # better?
 
 
 class BuiltinBasis(LazyBasis):
     """
+    TODO: update docstrings in this module - dim_or_statespace now!
     A basis that is included within and integrated into pyGSTi.
 
     Such bases may, in most cases be represented merely by its name.  (In actuality,
@@ -1018,6 +1047,9 @@ class BuiltinBasis(LazyBasis):
         f = _basis_constructor_dict[self.name].labeler
         cargs = {'dim': self.state_space.dim, 'sparse': self.sparse}
         self._labels = f(**cargs)
+
+    def _copy_with_toggled_sparsity(self):
+        return BuiltinBasis(self.name, self.state_space, not self.sparse)
 
     def __eq__(self, other):
         if isinstance(other, BuiltinBasis):  # then can compare quickly
@@ -1195,6 +1227,10 @@ class DirectSumBasis(LazyBasis):
         for i, compbasis in enumerate(self.component_bases):
             for lbl in compbasis.labels:
                 self._labels.append(lbl + "/%d" % i)
+
+    def _copy_with_toggled_sparsity(self):
+        return DirectSumBasis([cb._copy_with_toggled_sparsity() for cb in self.component_bases],
+                              self.name, self.longname)
 
     def __eq__(self, other):
         otherIsBasis = isinstance(other, DirectSumBasis)
@@ -1394,7 +1430,6 @@ class TensorProdBasis(LazyBasis):
         sparse = all([c.sparse for c in self.component_bases])
         #assert(all([c.real == real for c in self.component_bases])), "Inconsistent `real` value among component bases!"
         assert(all([c.sparse == sparse for c in self.component_bases])), "Inconsistent sparsity among component bases!"
-        assert(sparse is False), "Sparse matrices are not supported within TensorProductBasis objects yet"
 
         super(TensorProdBasis, self).__init__(name, longname, real, sparse)
 
@@ -1446,17 +1481,26 @@ class TensorProdBasis(LazyBasis):
 
     def _lazy_build_elements(self):
         #LAZY building of elements (in case we never need them)
-        compMxs = _np.zeros((self.size,) + self.elshape, 'complex')
+        if self.sparse:
+            compMxs = [None] * self.size
+        else:
+            compMxs = _np.zeros((self.size,) + self.elshape, 'complex')
 
         #Take kronecker product of *natural* reps of component-basis elements
         # then reshape to vectors at the end.  This requires that the vector-
         # dimension of the component spaces equals the "natural space" dimension.
         comp_els = [c.elements for c in self.component_bases]
         for i, factors in enumerate(_itertools.product(*comp_els)):
-            M = _np.identity(1, 'complex')
-            for f in factors:
-                M = _np.kron(M, f)
+            if self.sparse:
+                M = _sps.identity(1, 'complex', 'csr')
+                for f in factors:
+                    M = _sps.kron(M, f, 'csr')
+            else:
+                M = _np.identity(1, 'complex')
+                for f in factors:
+                    M = _np.kron(M, f)
             compMxs[i] = M
+
         self._elements = compMxs
 
     def _lazy_build_labels(self):
@@ -1465,10 +1509,15 @@ class TensorProdBasis(LazyBasis):
         for i, factor_lbls in enumerate(_itertools.product(*comp_lbls)):
             self._labels.append(''.join(factor_lbls))
 
+    def _copy_with_toggled_sparsity(self):
+        return TensorProdBasis([cb._copy_with_toggled_sparsity() for cb in self.component_bases],
+                               self.name, self.longname)
+
     def __eq__(self, other):
         otherIsBasis = isinstance(other, TensorProdBasis)
         if not otherIsBasis: return False  # can't be equal to a non-DirectSumBasis
         if len(self.component_bases) != len(other.component_bases): return False
+        if self.sparse != other.sparse: return False
         return all([c1 == c2 for (c1, c2) in zip(self.component_bases, other.component_bases)])
 
     def create_equivalent(self, builtin_basis_name):
@@ -1727,6 +1776,12 @@ class EmbeddedBasis(LazyBasis):
     def _lazy_build_labels(self):
         self._labels = [EmbeddedBasis.embed_label(lbl, self.target_labels)
                         for lbl in self.embedded_basis.labels]
+
+    def _copy_with_toggled_sparsity(self):
+        return EmbeddedBasis(self.embedded_basis._copy_with_toggled_sparsity(),
+                             self.state_space,
+                             self.target_labels,
+                             self.name, self.longname)
 
     def __eq__(self, other):
         otherIsBasis = isinstance(other, EmbeddedBasis)

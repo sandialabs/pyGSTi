@@ -452,18 +452,12 @@ class OpModel(Model):
 
     @sim.setter
     def sim(self, simulator):
-        if simulator == "auto":
-            d = self.state_space.dim if (self.state_space.dim is not None) else 0
-            simulator = "matrix" if d <= 16 else "map"
-
-        if simulator == "matrix":
-            self._sim = _matrixfwdsim.MatrixForwardSimulator(self)
-        elif simulator == "map":
-            self._sim = _mapfwdsim.MapForwardSimulator(self, max_cache_size=0)  # default is to *not* use a cache
-        else:
-            assert(isinstance(simulator, _fwdsim.ForwardSimulator)), "`simulator` argument must be a ForwardSimulator!"
-            self._sim = simulator
-            self._sim.model = self  # ensure the simulator's `model` is set to this object
+        try:  # don't fail if state space doesn't have an integral # of qubits
+            nqubits = self.state_space.num_qubits
+        except:
+            nqubits = None
+        self._sim = simulator = _fwdsim.ForwardSimulator.cast(simulator, nqubits)
+        self._sim.model = self  # ensure the simulator's `model` is set to this object
 
     @property
     def evotype(self):

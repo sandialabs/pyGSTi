@@ -185,6 +185,31 @@ class ComposedOp(_LinearOperator):
         if self.parent:  # need to alert parent that *number* (not just value)
             self.parent._mark_for_rebuild(self)  # if our params may have changed
 
+    def insert(self, insert_at, *factorops_to_insert):
+        """
+        Insert one or more factors into this operator.
+
+        Parameters
+        ----------
+        insert_at : int
+            The index at which to insert `factorops_to_insert`.  The factor at this
+            index and those after it are shifted back by `len(factorops_to_insert)`.
+
+        *factors_to_insert : LinearOperator
+            One or multiple factor operators to insert within this operator.
+
+        Returns
+        -------
+        None
+        """
+        self.factorops[insert_at:insert_at] = list(factorops_to_insert)
+        if self._rep_type == 'dense':
+            self._update_denserep()
+        elif self._rep is not None:
+            self._rep.reinit_factor_op_reps([op._rep for op in self.factorops])
+        if self.parent:  # need to alert parent that *number* (not just value)
+            self.parent._mark_for_rebuild(self)  # if our params may have changed
+
     def remove(self, *factorop_indices):
         """
         Remove one or more factors from this operator.

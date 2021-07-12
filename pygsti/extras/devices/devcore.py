@@ -37,10 +37,11 @@ from . import rigetti_agave
 from . import rigetti_aspen4
 from . import rigetti_aspen6
 from . import rigetti_aspen7
-from ...processors import processorpack as _pspec
-from ...models import oplessmodel as _oplessmodel, modelconstruction as _mconst
-from ...modelmembers.povms import povm as _povm
-from ...tools import rbtools as _anl
+from pygsti.processors import QubitProcessorSpec as _QubitProcessorSpec
+from pygsti.processors import CliffordCompilationRules as _CliffordCompilationRules
+from pygsti.models import oplessmodel as _oplessmodel, modelconstruction as _mconst
+from pygsti.modelmembers.povms import povm as _povm
+from pygsti.tools import rbtools as _anl
 
 
 def get_device_specs(devname):
@@ -88,14 +89,39 @@ def get_edgelist(device):
     return specs.edgelist
 
 
-def create_processor_spec(device, one_qubit_gates, qubitsubset=None, removeedges=[],
-                          construct_clifford_compilations={'paulieq': ('1Qcliffords',),
-                                                           'absolute': ('paulis', '1Qcliffords')},
-                          construct_models=('clifford', 'target'),
-                          verbosity=0):
+def create_clifford_processor_spec(device, one_qubit_gates, qubitsubset=None, removeedges=(),
+                                   clifford_compilation_type='absolute', what_to_compile=('1Qcliffords',),
+                                   verbosity=0):
+    """
+    TODO: docstring
+
+    Parameters
+    ----------
+    device
+    one_qubit_gates
+    qubitsubset
+    removeedges
+    clifford_compilation_type
+    what_to_compile
+    verbosity
+
+    Returns
+    -------
+    QubitProcessorSpec
+    """
+    native_pspec = create_processor_spec(device, one_qubit_gates, qubitsubset, removeedges)
+    clifford_compilation = _CliffordCompilationRules.create_standard(
+        native_pspec, clifford_compilation_type, what_to_compile, verbosity)
+    clifford_pspec = native_pspec.compile(clifford_compilation)
+    return clifford_pspec
+
+
+def create_processor_spec(device, one_qubit_gates, qubitsubset=None, removeedges=()):
     """
     todo
 
+    clifford compilation type & what_to_compile = {'paulieq': ('1Qcliffords',),
+                                           'absolute': ('paulis', '1Qcliffords')}
     """
     dev = _get_dev_specs(device)
 
@@ -123,12 +149,7 @@ def create_processor_spec(device, one_qubit_gates, qubitsubset=None, removeedges
 
     availability = {two_qubit_gate: edgelist}
     #print(availability)
-    pspec = _pspec.ProcessorSpec(total_qubits, gate_names, availability=availability,
-                                 construct_clifford_compilations=construct_clifford_compilations,
-                                 construct_models=construct_models,
-                                 verbosity=verbosity, qubit_labels=qubits)
-
-    return pspec
+    return _QubitProcessorSpec(total_qubits, gate_names, availability=availability, qubit_labels=qubits)
 
 
 def create_error_rates_model(caldata, device, one_qubit_gates, one_qubit_gates_to_native={}, calformat=None,

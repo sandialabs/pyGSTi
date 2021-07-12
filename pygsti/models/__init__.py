@@ -20,6 +20,5 @@ from .oplessmodel import OplessModel
 from .oplessmodel import SuccessFailModel
 
 from .modelconstruction import *
-from .nqnoiseconstruction import *
 from .qutrit import create_qutrit_model
 # Unused: from rpemodel import make_rpe_model

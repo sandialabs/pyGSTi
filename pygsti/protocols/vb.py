@@ -96,8 +96,8 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
 
     Parameters
     ----------
-    pspec : ProcessorSpec
-       The ProcessorSpec for the device that the experiment is being generated for. The `pspec` is always
+    pspec : QubitProcessorSpec
+       The QubitProcessorSpec for the device that the experiment is being generated for. The `pspec` is always
        handed to the sampler, as the first argument of the sampler function.
 
     depths : list of ints
@@ -126,7 +126,7 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
 
     qubit_labels : list, optional
         If not None, a list of the qubits that the RB circuit is to be sampled for. This should
-        be all or a subset of the qubits in the device specified by the ProcessorSpec `pspec`.
+        be all or a subset of the qubits in the device specified by the QubitProcessorSpec `pspec`.
         If None, it is assumed that the RB circuit should be over all the qubits. Note that the
         ordering of this list is the order of the ``wires'' in the returned circuit, but is otherwise
         irrelevant.
@@ -138,9 +138,9 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
         corresponds to sampling according to rb.sampler.circuit_layer_of_oneQgates [which is not
         a valid option for n-qubit MRB -- it results in sim. 1-qubit MRB -- but it is not explicitly
         forbidden by this function]. If `sampler` is a function, it should be a function that takes
-        as the first argument a ProcessorSpec, and returns a random circuit layer as a list of gate
+        as the first argument a QubitProcessorSpec, and returns a random circuit layer as a list of gate
         Label objects. Note that the default 'Qelimination' is not necessarily the most useful
-        in-built sampler, but it is the only sampler that requires no parameters beyond the ProcessorSpec
+        in-built sampler, but it is the only sampler that requires no parameters beyond the QubitProcessorSpec
         *and* works for arbitrary connectivity devices. See the docstrings for each of these samplers
         for more information.
 
@@ -187,7 +187,7 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
 
         qubit_labels : list, optional
             If not None, a list of the qubits that the RB circuit is to be sampled for. This should
-            be all or a subset of the qubits in the device specified by the ProcessorSpec `pspec`.
+            be all or a subset of the qubits in the device specified by the QubitProcessorSpec `pspec`.
             If None, it is assumed that the RB circuit should be over all the qubits. Note that the
             ordering of this list is the order of the ``wires'' in the returned circuit, but is otherwise
             irrelevant.
@@ -199,9 +199,9 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
             corresponds to sampling according to rb.sampler.circuit_layer_of_oneQgates [which is not
             a valid option for n-qubit MRB -- it results in sim. 1-qubit MRB -- but it is not explicitly
             forbidden by this function]. If `sampler` is a function, it should be a function that takes
-            as the first argument a ProcessorSpec, and returns a random circuit layer as a list of gate
+            as the first argument a QubitProcessorSpec, and returns a random circuit layer as a list of gate
             Label objects. Note that the default 'Qelimination' is not necessarily the most useful
-            in-built sampler, but it is the only sampler that requires no parameters beyond the ProcessorSpec
+            in-built sampler, but it is the only sampler that requires no parameters beyond the QubitProcessorSpec
             *and* works for arbitrary connectivity devices. See the docstrings for each of these samplers
             for more information.
 

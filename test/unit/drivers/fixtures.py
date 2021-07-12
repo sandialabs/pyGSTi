@@ -6,6 +6,7 @@ from ..util import Namespace
 
 ns = Namespace()
 ns.model = std.target_model()
+ns.pspec = std.processor_spec()
 ns.opLabels = list(ns.model.operations.keys())
 ns.fiducials = std.fiducials
 ns.germs = std.germs

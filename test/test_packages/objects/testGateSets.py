@@ -38,16 +38,16 @@ class GateSetTestCase(BaseTestCase):
         #Set Model objects to "strict" mode for testing
         pygsti.objects.ExplicitOpModel._strict = False
 
-        self.model = pygsti.construction.create_explicit_model(
+        self.model = pygsti.construction.create_explicit_model_from_expressions(
             [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"])
 
-        self.tp_gateset = pygsti.construction.create_explicit_model(
+        self.tp_gateset = pygsti.construction.create_explicit_model_from_expressions(
             [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
             parameterization="TP")
 
-        self.static_gateset = pygsti.construction.create_explicit_model(
+        self.static_gateset = pygsti.construction.create_explicit_model_from_expressions(
             [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
             parameterization="static")

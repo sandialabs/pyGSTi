@@ -18,6 +18,7 @@ import scipy.sparse as _sps
 import scipy.sparse.linalg as _spsl
 
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
+from pygsti.modelmembers.operations.lindbladerrorgen import LindbladParameterization as _LindbladParameterization
 from pygsti.modelmembers import modelmember as _modelmember, term as _term
 from pygsti.modelmembers.errorgencontainer import ErrorGeneratorContainer as _ErrorGeneratorContainer
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
@@ -840,8 +841,8 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         assert(typ in ('prep', 'effect')), "Invalid `typ` argument: %s" % typ
         from pygsti.models import gaugegroup as _gaugegroup
 
-        if isinstance(s, _gaugegroup.UnitaryGaugeGroupElement) or \
-           isinstance(s, _gaugegroup.TPSpamGaugeGroupElement):
+        if isinstance(s, _gaugegroup.UnitaryGaugeGroupElement) \
+           or isinstance(s, _gaugegroup.TPSpamGaugeGroupElement):
             U = s.transform_matrix
             Uinv = s.transform_matrix_inverse
             mx = self.to_dense(on_space='minimal') if self._rep_type == 'dense' else self.to_sparse(on_space='minimal')
@@ -854,12 +855,11 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
 
             errgen_cls = self.errorgen.__class__
             #Note: this only really works for LindbladErrorGen objects now... make more general in FUTURE?
-            truncate = True  # because of finite precision errors
-            transformed_errgen = errgen_cls.from_operation_matrix(mx, self.errorgen.ham_basis,
-                                                                  self.errorgen.other_basis,
-                                                                  self.errorgen.param_mode,
-                                                                  self.errorgen.nonham_mode,
-                                                                  truncate, self.errorgen.matrix_basis,
+            truncate = 1e-6  # looser truncation, but can't be 'True' since we need to throw errors when appropriate
+            param = _LindbladParameterization(self.errorgen.nonham_mode, self.errorgen.param_mode,
+                                              len(self.errorgen.ham_basis) > 0, len(self.errorgen.other_basis) > 0)
+            transformed_errgen = errgen_cls.from_operation_matrix(mx, param, self.errorgen.lindblad_basis,
+                                                                  self.errorgen.matrix_basis, truncate,
                                                                   self.errorgen.evotype)
             self.errorgen.from_vector(transformed_errgen.to_vector())
 
