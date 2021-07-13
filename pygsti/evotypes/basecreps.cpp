@@ -1,5 +1,6 @@
 #define NULL 0
 
+#include <algorithm>
 #include <iostream>
 #include <complex>
 #include <assert.h>
