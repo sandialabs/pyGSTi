@@ -23,8 +23,8 @@ class ParallelTest(object):
         exp_design = std.get_gst_experiment_design(4)
         mdl_datagen = std.target_model().depolarize(op_noise=0.1, spam_noise=0.01)
 
-        ds_serial = pygsti.construction.simulate_data(mdl_datagen, exp_design, 1000, seed=1234, comm=None)
-        ds_parallel = pygsti.construction.simulate_data(mdl_datagen, exp_design, 1000, seed=1234, comm=comm)
+        ds_serial = pygsti.data.simulate_data(mdl_datagen, exp_design, 1000, seed=1234, comm=None)
+        ds_parallel = pygsti.data.simulate_data(mdl_datagen, exp_design, 1000, seed=1234, comm=comm)
 
         if comm is None or comm.rank == 0:
             assert (set(ds_serial.keys()) == set(ds_parallel.keys()))
@@ -36,7 +36,7 @@ class ParallelTest(object):
 
         exp_design = std.get_gst_experiment_design(4)
         mdl_datagen = std.target_model().depolarize(op_noise=0.1, spam_noise=0.01)
-        ds = pygsti.construction.simulate_data(mdl_datagen, exp_design, 1000, seed=1234, comm=comm)
+        ds = pygsti.data.simulate_data(mdl_datagen, exp_design, 1000, seed=1234, comm=comm)
         data = pygsti.protocols.ProtocolData(exp_design, ds)
 
         initial_model = std.target_model("TP")
@@ -62,7 +62,7 @@ class ParallelTest(object):
     
         #Get some operation sequences
         maxLengths = [1, 2, 4]
-        circuits = pygsti.construction.create_lsgst_circuits(
+        circuits = pygsti.circuits.create_lsgst_circuits(
             list(std.target_model().operations.keys()), std.prep_fiducials(),
             std.meas_fiducials(), std.germs(), maxLengths)
     
@@ -103,7 +103,7 @@ class ParallelTest(object):
 
         #Get some operation sequences
         maxLengths = [1,2,4,8]
-        gstrs = pygsti.construction.create_lsgst_circuits(
+        gstrs = pygsti.circuits.create_lsgst_circuits(
             std.target_model(), std.fiducials(), std.fiducials(), std.germs(), maxLengths)
 
         #Check bulk products
@@ -144,7 +144,7 @@ class ParallelTest(object):
         mdl = std.target_model()
         exp_design = std.get_gst_experiment_design(1)
         mdl_datagen = mdl.depolarize(op_noise=0.01, spam_noise=0.01)
-        ds = pygsti.construction.simulate_data(mdl_datagen, exp_design, 1000, seed=1234, comm=comm)
+        ds = pygsti.data.simulate_data(mdl_datagen, exp_design, 1000, seed=1234, comm=comm)
     
         builder = pygsti.obj.ObjectiveFunctionBuilder.create_from(objfn)
         builder.additional_args['array_types'] = ('EP', 'EPP')  # HACK - todo this better
@@ -214,7 +214,7 @@ class ParallelTest(object):
     
         #Get some operation sequences
         maxLengths = [1]
-        circuits = pygsti.construction.create_lsgst_circuits(
+        circuits = pygsti.circuits.create_lsgst_circuits(
             list(std.target_model().operations.keys()), std.prep_fiducials(),
             std.meas_fiducials(), std.germs(), maxLengths)
         nP = mdl.num_params

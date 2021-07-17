@@ -28,7 +28,7 @@ ctypedef long long INT
 ctypedef unsigned long long UINT
 
 
-cdef extern from "opcreps.h" namespace "CReps":
+cdef extern from "opcreps.h" namespace "CReps_densitymx":
     cdef cppclass OpCRep:
         OpCRep(INT) except +
         StateCRep* acton(StateCRep*, StateCRep*)

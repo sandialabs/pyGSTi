@@ -337,10 +337,10 @@ def write_model(model, filename, title=None):
             if isinstance(rhoVec, _state.FullState): typ = "PREP"
             elif isinstance(rhoVec, _state.TPState): typ = "TP-PREP"
             elif isinstance(rhoVec, _state.StaticState): typ = "STATIC-PREP"
-            elif isinstance(rhoVec, _state.LindbladSPAMVec):  # TODO - change to ComposedState
-                typ = "CPTP-PREP"
-                props = [("PureVec", rhoVec.state_vec.to_dense(on_space='HilbertSchmidt')),
-                         ("ErrgenMx", rhoVec.error_map.to_dense(on_space='HilbertSchmidt'))]
+            #elif isinstance(rhoVec, _state.LindbladSPAMVec):  # TODO - change to ComposedState?
+            #    typ = "CPTP-PREP"
+            #    props = [("PureVec", rhoVec.state_vec.to_dense(on_space='HilbertSchmidt')),
+            #             ("ErrgenMx", rhoVec.error_map.to_dense(on_space='HilbertSchmidt'))]
             else:
                 _warnings.warn(
                     ("Non-standard prep of type {typ} cannot be described by"
@@ -357,10 +357,10 @@ def write_model(model, filename, title=None):
             props = None; povm_to_write = povm
             if isinstance(povm, _povm.UnconstrainedPOVM): povmType = "POVM"
             elif isinstance(povm, _povm.TPPOVM): povmType = "TP-POVM"
-            elif isinstance(povm, _povm.LindbladPOVM):  # TODO - change to ComposedPOVM
-                povmType = "CPTP-POVM"
-                props = [("ErrgenMx", povm.error_map.to_dense(on_space='HilbertSchmidt'))]
-                povm_to_write = povm.base_povm
+            #elif isinstance(povm, _povm.LindbladPOVM):  # TODO - change to ComposedPOVM?
+            #    povmType = "CPTP-POVM"
+            #    props = [("ErrgenMx", povm.error_map.to_dense(on_space='HilbertSchmidt'))]
+            #    povm_to_write = povm.base_povm
             else:
                 _warnings.warn(
                     ("Non-standard POVM of type {typ} cannot be described by"

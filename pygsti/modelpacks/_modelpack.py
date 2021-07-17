@@ -100,8 +100,11 @@ class ModelPack(_ABC):
 
         if (parameterization_type, simulator, qubit_labels, evotype) not in self._gscache:
             # cache miss
-            mdl = self._target_model(qubit_labels, evotype)
-            mdl.set_all_parameterizations(parameterization_type)  # automatically sets simulator
+            #try:
+            mdl = self._target_model(qubit_labels, evotype, parameterization=parameterization_type)
+            #except:
+            #    mdl = self._target_model(qubit_labels, evotype)
+            #    mdl.set_all_parameterizations(parameterization_type)  # automatically sets simulator
 
             # We separated parameter names from evotype names - so no more "H+S Terms"  TODO REMOVE?
             # from pygsti.forwardsims.termforwardsim import TermForwardSimulator as _TermFSim
@@ -128,7 +131,7 @@ class ModelPack(_ABC):
     def processor_spec(self, qubit_labels=None):
         """ TODO: docstring """
         static_target_model = self.target_model('static', qubit_labels=qubit_labels)  # assumed to be an ExplicitOpModel
-        return _QubitProcessorSpec.from_explicit_model(static_target_model, self._sslbls)
+        return static_target_model.create_processor_spec(self._sslbls)
 
     def _get_cachefile_names(self, param_type, simulator):
         """ Get the standard cache file names for a modelpack """

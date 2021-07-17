@@ -206,6 +206,13 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         else:
             self.calclib = None
 
+    def __getstate__(self):
+        state = super(TermForwardSimulator, self).__getstate__()
+        if 'calclib' in state: del state['calclib']
+        #Note: I don't think we need to implement __setstate__ since the model also needs to be reset,
+        # and this is done by the parent model which will cause _set_evotype to be called.
+        return state
+
     #OLD - now we have a _set_evotype method.
     #@_ForwardSimulator.model.setter
     #def model(self, val):

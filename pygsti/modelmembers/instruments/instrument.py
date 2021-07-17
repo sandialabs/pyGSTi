@@ -54,8 +54,6 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
         if len(items) > 0:
             assert(member_ops is None), "`items` was given when op_matrices != None"
 
-        evotype = None
-
         if member_ops is not None:
             if isinstance(member_ops, dict):
                 member_list = [(k, v) for k, v in member_ops.items()]  # gives definite ordering

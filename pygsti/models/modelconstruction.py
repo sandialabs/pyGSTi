@@ -271,6 +271,8 @@ def _basis_create_operation(state_space, op_expr, basis="gm", parameterization="
     #default indices to parameterize (I2P) - used only when
     # creating parameterized gates
 
+    build_evotype = 'default'  # this should be densitymx or densitymx_slow, and is only used for building the matrix
+
     opTermsInFinalBasis = []
     exprTerms = op_expr.split(':')
     for exprTerm in exprTerms:
@@ -283,9 +285,9 @@ def _basis_create_operation(state_space, op_expr, basis="gm", parameterization="
         if opName == "I":
             # qubit labels (TODO: what about 'L' labels? -- not sure if they work with this...)
             labels = to_labels(args)
-            stateSpaceDim = int(_np.product([state_space.label_dimension(l) for l in labels]))
+            stateSpaceUDim = int(_np.product([state_space.label_udimension(l) for l in labels]))
             # *real* 4x4 mx in Pauli-product basis -- still just the identity!
-            pp_opMx = _op.StaticArbitraryOp(_np.identity(stateSpaceDim, 'd'), evotype=evotype)
+            pp_opMx = _op.StaticUnitaryOp(_np.identity(stateSpaceUDim, complex), 'pp', evotype=build_evotype)
             opTermInFinalBasis = _op.EmbeddedOp(state_space, labels, pp_opMx)
 
         elif opName == "D":
@@ -320,10 +322,7 @@ def _basis_create_operation(state_space, op_expr, basis="gm", parameterization="
             elif opName == 'Z': ex = -1j * theta * sigmaz / 2
 
             Uop = _spl.expm(ex)  # 2x2 unitary matrix operating on single qubit in [0,1] basis
-            # complex 4x4 mx operating on vectorized 1Q densty matrix in std basis
-            operationMx = _ot.unitary_to_process_mx(Uop)
-            # *real* 4x4 mx in Pauli-product basis -- better for parameterization
-            pp_opMx = _op.StaticArbitraryOp(_bt.change_basis(operationMx, 'std', 'pp'), evotype, state_space=None)
+            pp_opMx = _op.StaticUnitaryOp(Uop, 'pp', build_evotype, state_space=None)
             opTermInFinalBasis = _op.EmbeddedOp(state_space, [label], pp_opMx)
 
         elif opName == 'N':  # more general single-qubit gate
@@ -337,10 +336,7 @@ def _basis_create_operation(state_space, op_expr, basis="gm", parameterization="
 
             ex = -1j * theta * (sxCoeff * sigmax / 2. + syCoeff * sigmay / 2. + szCoeff * sigmaz / 2.)
             Uop = _spl.expm(ex)  # 2x2 unitary matrix operating on single qubit in [0,1] basis
-            # complex 4x4 mx operating on vectorized 1Q densty matrix in std basis
-            operationMx = _ot.unitary_to_process_mx(Uop)
-            # *real* 4x4 mx in Pauli-product basis -- better for parameterization
-            pp_opMx = _op.StaticArbitraryOp(_bt.change_basis(operationMx, 'std', 'pp'), evotype, state_space=None)
+            pp_opMx = _op.StaticUnitaryOp(Uop, 'pp', build_evotype, state_space=None)
             opTermInFinalBasis = _op.EmbeddedOp(state_space, [label], pp_opMx)
 
         elif opName in ('CX', 'CY', 'CZ', 'CNOT', 'CPHASE'):  # two-qubit gate names
@@ -371,10 +367,7 @@ def _basis_create_operation(state_space, op_expr, basis="gm", parameterization="
             assert(state_space.label_dimension(label1) == 4 and state_space.label_dimension(label2) == 4), \
                 "%s gate must act on qubits!" % opName
 
-            # complex 16x16 mx operating on vectorized 2Q densty matrix in std basis
-            operationMx = _ot.unitary_to_process_mx(Uop)
-            # *real* 16x16 mx in Pauli-product basis -- better for parameterization
-            pp_opMx = _op.StaticArbitraryOp(_bt.change_basis(operationMx, 'std', 'pp'), evotype, state_space=None)
+            pp_opMx = _op.StaticUnitaryOp(Uop, 'pp', build_evotype, state_space=None)
             opTermInFinalBasis = _op.EmbeddedOp(state_space, [label1, label2], pp_opMx)
 
         elif opName == "LX":  # TODO - better way to describe leakage?
@@ -396,6 +389,7 @@ def _basis_create_operation(state_space, op_expr, basis="gm", parameterization="
             Utot[i1, i2] = Uop[0, 1]
             Utot[i2, i1] = Uop[1, 0]
             Utot[i2, i2] = Uop[1, 1]
+
             # dmDim^2 x dmDim^2 mx operating on vectorized total densty matrix
             opTermInStdBasis = _ot.unitary_to_process_mx(Utot)
 
@@ -406,7 +400,7 @@ def _basis_create_operation(state_space, op_expr, basis="gm", parameterization="
                                                         embedded_std_basis, std_basis)
 
             opMxInFinalBasis = _bt.change_basis(opTermInReducedStdBasis, std_basis, basis)
-            opTermInFinalBasis = _op.FullArbitraryOp(opMxInFinalBasis, evotype, state_space)
+            opTermInFinalBasis = _op.FullArbitraryOp(opMxInFinalBasis, build_evotype, state_space)
 
         else: raise ValueError("Invalid gate name: %s" % opName)
 
@@ -425,6 +419,12 @@ def _basis_create_operation(state_space, op_expr, basis="gm", parameterization="
         return _op.FullArbitraryOp(finalOpMx, evotype, state_space)
     if parameterization == "static":
         return _op.StaticArbitraryOp(finalOpMx, evotype, state_space)
+    if parameterization == "static unitary":  # HACK
+        U = _ot.process_mx_to_unitary(_bt.change_basis(finalOpMx, basis, 'std'))
+        return _op.StaticUnitaryOp(U, basis, evotype, state_space)
+    if parameterization == "static clifford":  # HACK
+        U = _ot.process_mx_to_unitary(_bt.change_basis(finalOpMx, basis, 'std'))
+        return _op.StaticCliffordOp(U, None, basis, evotype, state_space)
     if parameterization == "TP":
         return _op.FullTPOp(finalOpMx, evotype, state_space)
 
@@ -535,6 +535,12 @@ def _create_explicit_model_from_expessions(state_space, basis,
             ret.preps[label] = _state.TPState(vec, evotype, state_space)
         elif parameterization == "static":
             ret.preps[label] = _state.StaticState(vec, evotype, state_space)
+        elif parameterization == "static unitary":  # TEMPORARY HACK
+            i = int(rhoExpr); purevec = _np.zeros(int(_np.sqrt(len(vec))), complex); purevec[i] = 1.0
+            ret.preps[label] = _state.StaticPureState(purevec, 'pp', evotype, state_space)
+        elif parameterization == "static clifford":  # TEMPORARY HACK
+            i = int(rhoExpr); purevec = _np.zeros(int(_np.sqrt(len(vec))), complex); purevec[i] = 1.0
+            ret.preps[label] = _state.ComputationalBasisState.from_pure_vector(purevec, 'pp', evotype, state_space)
         else:
             raise ValueError("Invalid parameterization: %s" % parameterization)
 
@@ -564,6 +570,12 @@ def _create_explicit_model_from_expessions(state_space, basis,
             evec = _basis_create_spam_vector(EExpr, basis)
             if parameterization == "static":
                 effects.append((label, _povm.StaticPOVMEffect(evec, evotype)))
+            elif parameterization == "static unitary":  # TEMPORARY HACK
+                i = int(EExpr); purevec = _np.zeros(int(_np.sqrt(len(evec))), complex); purevec[i] = 1.0
+                effects.append((label, _povm.StaticPOVMPureEffect(purevec, 'pp', evotype)))
+            elif parameterization == "static clifford":  # TEMPORARY HACK
+                i = int(EExpr); purevec = _np.zeros(int(_np.sqrt(len(evec))), complex); purevec[i] = 1.0
+                effects.append((label, _povm.ComputationalBasisPOVMEffect.from_pure_vector(purevec, 'pp', evotype)))
             else:
                 effects.append((label, _povm.FullPOVMEffect(evec, evotype)))
 

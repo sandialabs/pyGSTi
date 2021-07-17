@@ -234,7 +234,7 @@ def convert(povm, to_type, basis, extra=None):
         if isinstance(povm, ComputationalBasisPOVM):  # special easy case
             base_povm = ComputationalBasisPOVM(povm.state_space.num_qubits, povm.evotype)  # just copy it?
         else:
-            base_items = [(lbl, convert_effect(vec, 'static', basis)) for lbl, vec in povm.items()]
+            base_items = [(lbl, convert_effect(vec, 'static unitary', basis)) for lbl, vec in povm.items()]
             base_povm = UnconstrainedPOVM(base_items, povm.evotype, povm.state_space)
 
         proj_basis = 'pp' if povm.state_space.is_entirely_qubits else basis
@@ -341,7 +341,7 @@ def convert_effect(effect, to_type, basis, extra=None):
             return StaticPOVMEffect(effect.to_dense(), effect.evotype, effect.state_space)
 
     elif to_type == "static unitary":
-        dmvec = _bt.change_basis(effect.to_dense(), basis, 'std')
+        dmvec = _bt.change_basis(effect.to_dense('HilbertSchmidt'), basis, 'std')
         purevec = _ot.dmvec_to_state(dmvec)
         return StaticPOVMPureEffect(purevec, basis, effect.evotype, effect.state_space)
 

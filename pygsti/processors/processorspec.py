@@ -95,36 +95,6 @@ class QubitProcessorSpec(ProcessorSpec):
         Any additional information that should be attached to this processor spec.
     """
 
-    @classmethod
-    def from_explicit_model(cls, model, qubit_labels):
-        """ TODO: docstring """
-        #go through ops, building up availability and unitaries, then create procesor spec...
-
-        if qubit_labels is None:  # special case of legacy explicit models where all gates have availability [None]
-            qubit_labels = tuple(range(model.state_space.num_qubits))
-
-        nqubits = len(qubit_labels)
-        gate_unitaries = _collections.OrderedDict()
-        availability = {}
-        for opkey, op in model.operations.items():  # TODO: need to deal with special () idle label
-            if opkey == _Lbl(()):  # special case: turn empty tuple labels into "(idle)" gate in processor spec
-                gn = "(idle)"
-                sslbls = None
-            else:
-                gn = opkey.name
-                sslbls = opkey.sslbls
-
-            if gn not in gate_unitaries:
-                U = _ot.process_mx_to_unitary(_bt.change_basis(op.to_dense('HilbertSchmidt'),
-                                                               model.basis, 'std'))
-                gate_unitaries[gn] = U
-                availability[gn] = [sslbls]
-            else:
-                availability[gn].append(sslbls)
-
-        return cls(nqubits, list(gate_unitaries.keys()), gate_unitaries, availability,
-                   qubit_labels=qubit_labels)
-
     def __init__(self, num_qubits, gate_names, nonstd_gate_unitaries=None, availability=None,
                  geometry=None, qubit_labels=None, nonstd_gate_symplecticreps=None, aux_info=None):
         assert(type(num_qubits) is int), "The number of qubits, n, should be an integer!"
@@ -472,4 +442,15 @@ class QubitProcessorSpec(ProcessorSpec):
             avail = self.resolved_availability(gn, 'tuple')
             if None in avail or self.qubit_labels in avail:
                 return gn
+        return None
+
+    @property
+    def global_idle_layer_label(self):
+        """ Similar to global_idle_gate_name but include the appropriate sslbls """
+        for gn in self.idle_gate_names:
+            avail = self.resolved_availability(gn, 'tuple')
+            if None in avail:
+                return _Lbl(gn, None)
+            elif self.qubit_labels in avail:
+                return _Lbl(gn, self.qubit_labels)
         return None

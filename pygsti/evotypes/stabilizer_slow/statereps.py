@@ -46,6 +46,11 @@ class StateRep(_basereps.StateRep):
     #def dim(self):
     #    return 2**self.nqubits  # assume "unitary evolution"-type mode
 
+    def actionable_staterep(self):
+        # return a state rep that can be acted on by op reps or mapped to
+        # a probability/amplitude by POVM effect reps.
+        return self  # for most classes, the rep itself is actionable
+
     def copy(self):
         cpy = StateRep(_np.zeros((0, 0), _np.int64), None, None, self.state_space)  # makes a dummy cpy.sframe
         cpy.sframe = self.sframe.copy()  # a legit copy *with* qubit filers copied too

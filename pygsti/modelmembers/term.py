@@ -177,6 +177,7 @@ def exponentiate_terms_above_mag(terms, order, postterm, cache=None, min_term_ma
     termType = postterm.__class__
     composeFn = postterm._rep.__class__.composed
     termreps = [t._rep for t in terms]
+    evotype = postterm._evotype
 
     def build_terms(order_to_build):
         if order_to_build in cache:  # Note: 0th order is *always* in cache
@@ -207,7 +208,7 @@ def exponentiate_terms_above_mag(terms, order, postterm, cache=None, min_term_ma
         return cache[order_to_build]
 
     #return build_terms(order)  #OLD - when cache held full objects
-    return [termType(rep) for rep in build_terms(order)]
+    return [termType(rep, evotype) for rep in build_terms(order)]
 
 
 #REMOVE - now embedded rep class does this
@@ -362,11 +363,11 @@ class RankOneTerm(object):
         -------
         RankOneTerm
         """
-        return self.__class__(self._rep.copy())
+        return self.__class__(self._rep.copy(), self._evotype)
 
     def __mul__(self, x):
         """ Multiply by scalar """
-        return self.__class__(self._rep.scalar_mult(x))
+        return self.__class__(self._rep.scalar_mult(x), self._evotype)
 
     def __rmul__(self, x):
         return self.__mul__(x)
@@ -429,7 +430,7 @@ class _HasMagnitude(object):
         -------
         RankOneTerm
         """
-        return self.__class__(self._rep.__class__.composed([t._rep for t in all_terms], magnitude))
+        return self.__class__(self._rep.__class__.composed([t._rep for t in all_terms], magnitude), self._evotype)
 
 
 class _NoMagnitude(object):
@@ -449,7 +450,7 @@ class _NoMagnitude(object):
         -------
         RankOneTerm
         """
-        return self.__class__(self._rep.__class__.composed([t._rep for t in all_terms], 1.0))
+        return self.__class__(self._rep.__class__.composed([t._rep for t in all_terms], 1.0), self._evotype)
 
 
 class RankOnePrepTerm(RankOneTerm, _NoMagnitude):
@@ -645,9 +646,9 @@ class RankOneOpTerm(RankOneTerm, _NoMagnitude):
             else:
                 #Try to construct a clifford rep first, otherwise a dense unitary
                 try:
-                    pre_rep = evotype.create_clifford_rep(pre_op, None, state_space)
+                    pre_rep = evotype.create_clifford_rep(pre_op, None, None, state_space)
                 except Exception:
-                    pre_rep = evotype.create_denseunitary_rep(pre_op, state_space)
+                    pre_rep = evotype.create_dense_unitary_rep(pre_op, None, state_space)  # basis=None (unused?)
             pre_reps.append(pre_rep)
 
         if post_op is not None:
@@ -658,9 +659,9 @@ class RankOneOpTerm(RankOneTerm, _NoMagnitude):
             else:
                 #Try to construct a clifford rep first, otherwise a dense unitary
                 try:
-                    post_rep = evotype.create_clifford_rep(post_op, None, state_space)
+                    post_rep = evotype.create_clifford_rep(post_op, None, None, state_space)
                 except Exception:
-                    post_rep = evotype.create_denseunitary_rep(post_op, state_space)
+                    post_rep = evotype.create_dense_unitary_rep(post_op, None, state_space)  # basis=None (unused?)
             post_reps.append(post_rep)
 
         rep = evotype.create_term_rep(cls._coeff_rep(coeff), 1.0, 0.0,
@@ -687,7 +688,7 @@ class RankOneOpTerm(RankOneTerm, _NoMagnitude):
         pre_reps = [evotype.create_embedded_rep(state_space, target_labels, oprep) for oprep in self._rep.pre_ops]
         post_reps = [evotype.create_embedded_rep(state_space, target_labels, oprep) for oprep in self._rep.post_ops]
         return self.__class__(self._rep.__class__(self._rep.coeff, 1.0, 0.0, None, None,
-                                                  None, None, pre_reps, post_reps))
+                                                  None, None, pre_reps, post_reps), self._evotype)
 
 
 class RankOnePrepTermWithMagnitude(RankOneTerm, _HasMagnitude):
@@ -716,7 +717,7 @@ class RankOnePrepTermWithMagnitude(RankOneTerm, _HasMagnitude):
         return self.__class__(self._rep.__class__(
             self._rep.coeff, self._rep.magnitude, self._rep.logmagnitude,
             self._rep.pre_state, self._rep.post_state, None, None, pre_reps, post_reps
-        ))
+        ), self._evotype)
 
 
 class RankOneEffectTermWithMagnitude(RankOneTerm, _HasMagnitude):
@@ -745,7 +746,7 @@ class RankOneEffectTermWithMagnitude(RankOneTerm, _HasMagnitude):
         return self.__class__(self._rep.__class__(
             self._rep.coeff, self._rep.magnitude, self._rep.logmagnitude,
             None, None, self._rep.pre_effect, self._rep.post_effect, pre_reps, post_reps
-        ))
+        ), self._evotype)
 
 
 class RankOneOpTermWithMagnitude(RankOneTerm, _HasMagnitude):
@@ -772,7 +773,7 @@ class RankOneOpTermWithMagnitude(RankOneTerm, _HasMagnitude):
         pre_reps = [evotype.create_embedded_rep(state_space, target_labels, oprep) for oprep in self._rep.pre_ops]
         post_reps = [evotype.create_embedded_rep(state_space, target_labels, oprep) for oprep in self._rep.post_ops]
         return self.__class__(self._rep.__class__(self._rep.coeff, self._rep.magnitude, self._rep.logmagnitude,
-                                                  None, None, None, None, pre_reps, post_reps))
+                                                  None, None, None, None, pre_reps, post_reps), self._evotype)
 
 
 class _HasNumericalCoefficient(object):
@@ -891,7 +892,7 @@ class RankOnePolynomialPrepTerm(RankOnePrepTerm, _HasPolynomialCoefficient):
         assert(mag <= 1.0), "Individual term magnitudes should be <= 1.0 so that '*_above_mag' routines work!"
         rep = self._rep.copy()
         rep.set_magnitude(mag)
-        return RankOnePolynomialPrepTermWithMagnitude(rep)
+        return RankOnePolynomialPrepTermWithMagnitude(rep, self._evotype)
 
 
 class RankOnePolynomialEffectTerm(RankOneEffectTerm, _HasPolynomialCoefficient):
@@ -914,7 +915,7 @@ class RankOnePolynomialEffectTerm(RankOneEffectTerm, _HasPolynomialCoefficient):
         assert(mag <= 1.0), "Individual term magnitudes should be <= 1.0 so that '*_above_mag' routines work!"
         rep = self._rep.copy()
         rep.set_magnitude(mag)
-        return RankOnePolynomialEffectTermWithMagnitude(rep)
+        return RankOnePolynomialEffectTermWithMagnitude(rep, self._evotype)
 
 
 class RankOnePolynomialOpTerm(RankOneOpTerm, _HasPolynomialCoefficient):
@@ -937,7 +938,7 @@ class RankOnePolynomialOpTerm(RankOneOpTerm, _HasPolynomialCoefficient):
         assert(mag <= 1.0), "Individual term magnitudes should be <= 1.0 so that '*_above_mag' routines work!"
         rep = self._rep.copy()
         rep.set_magnitude(mag)
-        return RankOnePolynomialOpTermWithMagnitude(rep)
+        return RankOnePolynomialOpTermWithMagnitude(rep, self._evotype)
 
 
 class RankOnePolynomialPrepTermWithMagnitude(RankOnePrepTermWithMagnitude, _HasPolynomialCoefficient):

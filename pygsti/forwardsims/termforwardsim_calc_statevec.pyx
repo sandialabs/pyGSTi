@@ -16,11 +16,11 @@ from libc cimport time
 from libcpp cimport bool
 from libcpp.vector cimport vector
 from cython.operator cimport dereference as deref
-from ..evotypes.basereps_cython cimport PolynomialRep, PolynomialCRep, PolynomialVarsIndex
-from ..evotypes.statevec.statereps cimport StateRep, StateCRep
-from ..evotypes.statevec.opreps cimport OpRep, OpCRep
-from ..evotypes.statevec.effectreps cimport EffectRep, EffectCRep
-from ..evotypes.statevec.termreps cimport TermRep, TermCRep, TermDirectRep, TermDirectCRep
+from pygsti.evotypes.basereps_cython cimport PolynomialRep, PolynomialCRep, PolynomialVarsIndex
+from pygsti.evotypes.statevec.statereps cimport StateRep, StateCRep
+from pygsti.evotypes.statevec.opreps cimport OpRep, OpCRep, OpCRep_DenseUnitary
+from pygsti.evotypes.statevec.effectreps cimport EffectRep, EffectCRep
+from pygsti.evotypes.statevec.termreps cimport TermRep, TermCRep, TermDirectRep, TermDirectCRep
 
 from libc.stdlib cimport malloc, free
 from libc.math cimport log10, sqrt
@@ -35,7 +35,7 @@ import time as pytime
 import numpy as np
 
 #import itertools as _itertools
-from ..opcalc import fastopcalc as _fastopcalc
+from pygsti.baseobjs.opcalc import fastopcalc as _fastopcalc
 #from scipy.sparse.linalg import LinearOperator
 
 cdef double SMALL = 1e-5
@@ -127,7 +127,7 @@ cdef vector[vector[TermCRep_ptr]] extract_cterms(python_termrep_lists, INT max_o
 
 
 def prs_as_polynomials(fwdsim, rholabel, elabels, circuit, polynomial_vindices_per_int,
-                          comm=None, mem_limit=None, fastmode=True):
+                       comm=None, mem_limit=None, fastmode=True):
 
     # Create gatelable -> int mapping to be used throughout
     distinct_gateLabels = sorted(set(circuit))
@@ -232,8 +232,6 @@ cdef vector[PolynomialCRep*] c_prs_as_polynomials(
         #  free them (or assign them to new PolynomialRep wrapper objs)
 
     for order in range(max_order+1):
-        #print("DB: pr_as_polynomial order=",order)
-
         #for p in partition_into(order, N):
         for i in range(N+2): p[i] = 0 # clear p
         factor_lists = vector[vector_TermCRep_ptr_ptr](N+2)
@@ -265,7 +263,6 @@ cdef vector[PolynomialCRep*] c_prs_as_polynomials(
                 factor_lists[N+1] = &E_term_reps[p[N+1]]
                 Einds = &E_term_indices[p[N+1]]
 
-                #print "DB: Order1 "
                 innerloop_fn(factor_lists,Einds,&prps,dim) #, prps_chk)
                 p[i] = 0
 
@@ -343,7 +340,7 @@ cdef void pr_as_polynomial_innerloop(vector[vector_TermCRep_ptr_ptr] factor_list
     #for factors in _itertools.product(*factor_lists):
     while(True):
         # In this loop, b holds "current" indices into factor_lists
-        factor = deref(factor_lists[0])[b[0]] # the last factor (an Evec)
+        factor = deref(factor_lists[0])[b[0]]
         coeff = deref(factor._coeff) # an unordered_map (copies to new "coeff" variable)
 
         for i in range(1,nFactorLists):
@@ -387,7 +384,6 @@ cdef void pr_as_polynomial_innerloop(vector[vector_TermCRep_ptr_ptr] factor_list
             factor._pre_ops[j].acton(prop1,prop2)
             tprop = prop1; prop1 = prop2; prop2 = tprop # final state in prop1
         pRight = EVec.amplitude(prop1).conjugate()
-
 
         #Add result to appropriate polynomial
         result = coeff  # use a reference?

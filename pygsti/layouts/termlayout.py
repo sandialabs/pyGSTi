@@ -218,7 +218,7 @@ class TermCOPALayout(_DistributableCOPALayout):
         -------
         TermPathSet or None
         """
-        from .termforwardsim import TermPathSet as _TermPathSet
+        from pygsti.forwardsims.termforwardsim import TermPathSet as _TermPathSet
         local_atom_pathsets = [atom.pathset for atom in self.atoms]
         if None in local_atom_pathsets:  # None signifies that we're not using path-sets (not "pruned" term-fwdsim mode)
             return None  # None behaves a bit like NaN - if there's a None, just return None.

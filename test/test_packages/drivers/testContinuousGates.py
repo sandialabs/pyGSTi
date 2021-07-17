@@ -6,7 +6,6 @@ import unittest
 import pygsti
 import numpy as np
 from pygsti.modelpacks.legacy import std1Q_XYI
-import pygsti.construction as pc
 
 from ..testutils import BaseTestCase
 
@@ -79,9 +78,9 @@ class ContinuousGatesTestCase(BaseTestCase):
         nQubits = 1
 
         #Create some sequences:
-        smq1Q_XYI = pygsti.construction.stdmodule_to_smqmodule(std1Q_XYI)
+        smq1Q_XYI = pygsti.modelpacks.stdmodule_to_smqmodule(std1Q_XYI)
         maxLens = [1]
-        seqStructs = pygsti.construction.make_lsgst_structs(
+        seqStructs = pygsti.circuits.make_lsgst_structs(
             smq1Q_XYI.target_model(), smq1Q_XYI.prepStrs, smq1Q_XYI.effectStrs, smq1Q_XYI.germs, maxLens)
 
         #Add random X-rotations via label arguments
@@ -107,7 +106,7 @@ class ContinuousGatesTestCase(BaseTestCase):
         np.random.seed(4567)
         datagen_vec = 0.001 * np.random.random(mdl_datagen.num_params)
         mdl_datagen.from_vector(datagen_vec)
-        ds = pygsti.construction.simulate_data(mdl_datagen, allStrs, 1000, seed=1234)
+        ds = pygsti.data.simulate_data(mdl_datagen, allStrs, 1000, seed=1234)
 
         #Run GST
         mdl = pygsti.obj.LocalNoiseModel.from_parameterization(

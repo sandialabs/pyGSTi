@@ -658,6 +658,10 @@ class CloudNoiseModel(_ImplicitOpModel):
         for op_blk_lbl, op_blk in self.operation_blks.items():
             printer.log("  %s: %s" % (op_blk_lbl, ', '.join(map(str, op_blk.keys()))))
 
+    def create_processor_spec(self):
+        import copy as _copy
+        return _copy.deepcopy(self.processor_spec)
+            
     @property
     def clouds(self):
         """

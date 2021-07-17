@@ -10,7 +10,10 @@ The StaticPureState class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import numpy as _np
+from pygsti.modelmembers import term as _term
 from pygsti.modelmembers.states.densestate import DensePureState as _DensePureState
+from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
 
 
 class StaticPureState(_DensePureState):
@@ -38,3 +41,65 @@ class StaticPureState(_DensePureState):
 
     def __init__(self, purevec, basis='pp', evotype="default", state_space=None):
         _DensePureState.__init__(self, purevec, basis, evotype, state_space)
+
+    def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
+        """
+        Get the `order`-th order Taylor-expansion terms of this state vector.
+
+        This function either constructs or returns a cached list of the terms at
+        the given order.  Each term is "rank-1", meaning that it is a state
+        preparation followed by or POVM effect preceded by actions on a
+        density matrix `rho` of the form:
+
+        `rho -> A rho B`
+
+        The coefficients of these terms are typically polynomials of the
+        State's parameters, where the polynomial's variable indices index the
+        *global* parameters of the State's parent (usually a :class:`Model`)
+        , not the State's local parameter array (i.e. that returned from
+        `to_vector`).
+
+        Parameters
+        ----------
+        order : int
+            The order of terms to get.
+
+        max_polynomial_vars : int, optional
+            maximum number of variables the created polynomials can have.
+
+        return_coeff_polys : bool
+            Whether a parallel list of locally-indexed (using variable indices
+            corresponding to *this* object's parameters rather than its parent's)
+            polynomial coefficients should be returned as well.
+
+        Returns
+        -------
+        terms : list
+            A list of :class:`RankOneTerm` objects.
+        coefficients : list
+            Only present when `return_coeff_polys == True`.
+            A list of *compact* polynomial objects, meaning that each element
+            is a `(vtape,ctape)` 2-tuple formed by concatenating together the
+            output of :method:`Polynomial.compact`.
+        """
+        if order == 0:  # only 0-th order term exists (assumes static pure_state_vec)
+            coeff = _Polynomial({(): 1.0}, max_polynomial_vars)
+            #if self._prep_or_effect == "prep":
+            terms = [_term.RankOnePolynomialPrepTerm.create_from(coeff, self, self,
+                                                                 self._evotype, self.state_space)]
+            #else:
+            #    terms = [_term.RankOnePolynomialEffectTerm.create_from(coeff, purevec, purevec,
+            #                                                           self._evotype, self.state_space)]
+
+            if return_coeff_polys:
+                coeffs_as_compact_polys = coeff.compact(complex_coeff_tape=True)
+                return terms, coeffs_as_compact_polys
+            else:
+                return terms
+        else:
+            if return_coeff_polys:
+                vtape = _np.empty(0, _np.int64)
+                ctape = _np.empty(0, complex)
+                return [], (vtape, ctape)
+            else:
+                return []

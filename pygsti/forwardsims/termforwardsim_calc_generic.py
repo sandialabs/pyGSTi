@@ -23,8 +23,8 @@ SMALL = 1e-5
 
 
 #Base case which works for both SV and SB evolution types thanks to Python's duck typing
-def prs_as_polys(fwdsim, rholabel, elabels, circuit, polynomial_vindices_per_int,
-                 comm=None, mem_limit=None, fastmode=True):
+def prs_as_polynomials(fwdsim, rholabel, elabels, circuit, polynomial_vindices_per_int,
+                       comm=None, mem_limit=None, fastmode=True):
     """
     Computes polynomials of the probabilities for multiple spam-tuples of `circuit`
 
@@ -114,8 +114,7 @@ def prs_as_polys(fwdsim, rholabel, elabels, circuit, polynomial_vindices_per_int
     #        for term in termlist:
     #            print("Coeff: ",str(term.coeff))
 
-    #HERE DEBUG!!!
-    global DEBUG_FCOUNT
+    global DEBUG_FCOUNT  # DEBUG!!!
     # db_part_cnt = 0
     # db_factor_cnt = 0
     #print("DB: pr_as_poly for ",str(tuple(map(str,circuit))), " max_order=",fwdsim.max_order)
@@ -206,6 +205,7 @@ def prs_as_polys(fwdsim, rholabel, elabels, circuit, polynomial_vindices_per_int
 
             else:  # non-fast mode
                 last_index = len(factor_lists) - 1
+                print("DB: factor lengths = ",factor_list_lens)
                 for fi in _itertools.product(*[range(l) for l in factor_list_lens]):
                     factors = [factor_lists[i][factorInd] for i, factorInd in enumerate(fi)]
                     res = _functools.reduce(lambda x, y: x.mult(y), [f.coeff for f in factors])
@@ -219,7 +219,10 @@ def prs_as_polys(fwdsim, rholabel, elabels, circuit, polynomial_vindices_per_int
                     #       " pLeft=", pLeft, " pRight=", pRight, "res=", res)
                     if prps[Ei] is None: prps[Ei] = res
                     else: prps[Ei].add_inplace(res)
-                    #print("DB pr_as_poly   running prps[",Ei,"] =",prps[Ei])
+
+                    if Ei == 0:
+                        from pygsti.baseobjs.polynomial import Polynomial
+                        print("DB pr_as_poly ",fi," running prps[",Ei,"] =",Polynomial.from_rep(prps[Ei]))
 
             # #DEBUG!!!
             # db_nfactors = [len(l) for l in factor_lists]

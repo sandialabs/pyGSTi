@@ -29,21 +29,21 @@ class ReportBaseCase(BaseTestCase):
         #  #only use the first EVec
 
         op_labels = std.gates
-        cls.lgstStrings = pygsti.construction.create_lgst_circuits(std.fiducials, std.fiducials, op_labels)
+        cls.lgstStrings = pygsti.circuits.create_lgst_circuits(std.fiducials, std.fiducials, op_labels)
         cls.maxLengthList = [1,2,4,8]
 
-        cls.lsgstStrings = pygsti.construction.create_lsgst_circuit_lists(
+        cls.lsgstStrings = pygsti.circuits.create_lsgst_circuit_lists(
             op_labels, std.fiducials, std.fiducials, std.germs, cls.maxLengthList)
-        cls.lsgstStructs = pygsti.construction.make_lsgst_structs(
+        cls.lsgstStructs = pygsti.circuits.make_lsgst_structs(
             op_labels, std.fiducials, std.fiducials, std.germs, cls.maxLengthList)
 
 
         # RUN BELOW LINES TO GENERATE ANALYSIS DATASET (SAVE)
         if regenerate_references():
-            ds = pygsti.construction.simulate_data(datagen_gateset, cls.lsgstStrings[-1], num_samples=1000,
+            ds = pygsti.data.simulate_data(datagen_gateset, cls.lsgstStrings[-1], num_samples=1000,
                                                    sample_error='binomial', seed=100)
             ds.save(compare_files + "/reportgen.dataset")
-            ds2 = pygsti.construction.simulate_data(datagen_gateset2, cls.lsgstStrings[-1], num_samples=1000,
+            ds2 = pygsti.data.simulate_data(datagen_gateset2, cls.lsgstStrings[-1], num_samples=1000,
                                                     sample_error='binomial', seed=100)
             ds2.save(compare_files + "/reportgen2.dataset")
 

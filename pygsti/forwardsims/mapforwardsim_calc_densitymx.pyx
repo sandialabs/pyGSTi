@@ -280,10 +280,10 @@ cdef dm_mapfill_probs(double[:] array_to_fill,
 
 
 def mapfill_dprobs_atom(fwdsim,
-                           np.ndarray[double, ndim=2] array_to_fill,
-                           dest_indices,
-                           dest_param_indices,
-                           layout_atom, param_indices, resource_alloc):
+                        np.ndarray[double, ndim=2] array_to_fill,
+                        dest_indices,
+                        dest_param_indices,
+                        layout_atom, param_indices, resource_alloc):
 
     cdef double eps = 1e-7 #hardcoded?
     #REMOVE if resource_alloc.comm is not None: resource_alloc.comm.barrier()  # ??
@@ -347,7 +347,7 @@ def mapfill_dprobs_atom(fwdsim,
     #Get a map from global parameter indices to the desired
     # final index within array_to_fill
     iParamToFinal = {i: dest_index for i, dest_index in zip(param_indices, dest_param_indices)}
-    
+
     for i in range(fwdsim.model.num_params):
         #print("dprobs cache %d of %d" % (i,self.Np))
         if i in iParamToFinal:
@@ -433,7 +433,7 @@ def mapfill_TDloglpp_terms(fwdsim, array_to_fill, dest_indices, num_outcomes, la
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
 def mapfill_TDterms(fwdsim, objective, array_to_fill, dest_indices, num_outcomes,
-                       layout_atom, dataset_rows, comm, outcomes_cache, double fnarg1, double fnarg2):
+                    layout_atom, dataset_rows, comm, outcomes_cache, double fnarg1, double fnarg2):
 
     cdef INT i, j, k, l, kinit, nTotOutcomes
     cdef double cur_probtotal, t, t0, n_i, n, N  # note: n, N can be a floats!

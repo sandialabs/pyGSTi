@@ -46,9 +46,7 @@ _gscache = {("full", "auto"): _target_model}
 
 
 def processor_spec():
-    from pygsti.processors import QubitProcessorSpec as _QubitProcessorSpec
-    static_target_model = target_model('static')
-    return _QubitProcessorSpec.from_explicit_model(static_target_model, None)
+    return target_model('static').create_processor_spec(None)
 
 
 def target_model(parameterization_type="full", sim_type="auto"):

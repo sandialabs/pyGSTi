@@ -540,9 +540,10 @@ class LocalNoiseModel(_ImplicitOpModel):
                 mm_gatedict[key] = _op.StaticArbitraryOp(gate, evotype, state_space)  # static gates by default
 
         self.processor_spec = processor_spec
-        global_idle_name = processor_spec.global_idle_gate_name
         idle_names = processor_spec.idle_gate_names
-        layer_rules = _SimpleCompLayerRules(global_idle_name, implicit_idle_mode)
+        global_idle_layer_label = processor_spec.global_idle_layer_label
+        
+        layer_rules = _SimpleCompLayerRules(global_idle_layer_label, implicit_idle_mode)
 
         super(LocalNoiseModel, self).__init__(state_space, layer_rules, 'pp',
                                               simulator=simulator, evotype=evotype)
@@ -586,12 +587,12 @@ class LocalNoiseModel(_ImplicitOpModel):
                     else:
                         self.operation_blks['gates'][_Lbl(gateName)] = gate
 
-                    if gate_is_idle and gate.state_space.num_qubits == 1 and global_idle_name is None:
+                    if gate_is_idle and gate.state_space.num_qubits == 1 and global_idle_layer_label is None:
                         # then attempt to turn this 1Q idle into a global idle (for implied idle layers)
                         global_idle = _op.ComposedOp([_op.EmbeddedOp(state_space, (qlbl,), gate)
                                                       for qlbl in qubit_labels])
                         self.operation_blks['layers'][_Lbl('(auto_global_idle)')] = global_idle
-                        global_idle_name = layer_rules.global_idle_name = '(auto_global_idle)'
+                        global_idle_layer_label = layer_rules.global_idle_layer_label = _Lbl('(auto_global_idle)')
             else:
                 gate = None  # this is set to something useful in the "elif independent_gates" block below
 
@@ -667,7 +668,8 @@ class LocalNoiseModel(_ImplicitOpModel):
                             self.operation_blks['layers'][_Lbl(gateName, inds)] = embedded_op
 
                             # If a 1Q idle gate (factories not supported yet) then turn this into a global idle
-                            if gate_is_idle and base_gate.state_space.num_qubits == 1 and global_idle_name is None:
+                            if gate_is_idle and base_gate.state_space.num_qubits == 1 \
+                               and global_idle_layer_label is None:
                                 gates_for_auto_global_idle[inds] = embedded_op
 
                     except Exception as e:
@@ -678,7 +680,7 @@ class LocalNoiseModel(_ImplicitOpModel):
 
                 if len(gates_for_auto_global_idle) > 0:  # then create a global idle based on 1Q idle gates
                     global_idle = _op.ComposedOp(list(gates_for_auto_global_idle.values()))
-                    global_idle_name = layer_rules.global_idle_name = '(auto_global_idle)'
+                    global_idle_layer_label = layer_rules.global_idle_layer_label = _Lbl('(auto_global_idle)')
                     self.operation_blks['layers'][_Lbl('(auto_global_idle)')] = global_idle
 
         #REMOVE - covered by above
@@ -699,11 +701,15 @@ class LocalNoiseModel(_ImplicitOpModel):
         #                                                                      state_space.num_qubits)
         #    self.operation_blks['layers'][_Lbl('globalIdle')] = global_idle
 
+    def create_processor_spec(self):
+        import copy as _copy
+        return _copy.deepcopy(self.processor_spec)
+
 
 class _SimpleCompLayerRules(_LayerRules):
 
-    def __init__(self, global_idle_name, implicit_idle_mode):
-        self.global_idle_name = global_idle_name
+    def __init__(self, global_idle_layer_label, implicit_idle_mode):
+        self.global_idle_layer_label = global_idle_layer_label
         self.implicit_idle_mode = implicit_idle_mode  # how to handle implied idles ("blanks") in circuits
         self._add_global_idle_to_all_layers = False
 
@@ -780,7 +786,7 @@ class _SimpleCompLayerRules(_LayerRules):
         """
         if layerlbl in caches['complete-layers']: return caches['complete-layers'][layerlbl]
         components = layerlbl.components
-        add_idle = (self.global_idle_name is not None) and self._add_global_idle_to_all_layers
+        add_idle = (self.global_idle_layer_label is not None) and self._add_global_idle_to_all_layers
 
         if isinstance(layerlbl, _CircuitLabel):
             op = self._create_op_for_circuitlabel(model, layerlbl)
@@ -790,7 +796,7 @@ class _SimpleCompLayerRules(_LayerRules):
         if len(components) == 1 and add_idle is False:
             ret = self._layer_component_operation(model, components[0], caches['op-layers'])
         else:
-            gblIdle = [model.operation_blks['layers'][_Lbl(self.global_idle_name)]] if add_idle else []
+            gblIdle = [model.operation_blks['layers'][self.global_idle_layer_label]] if add_idle else []
 
             #Note: OK if len(components) == 0, as it's ok to have a composed gate with 0 factors
             ret = _op.ComposedOp(gblIdle + [self._layer_component_operation(model, l, caches['op-layers'])

@@ -102,7 +102,7 @@ def make_idle_tomography_data(nQubits, maxLengths=(0,1,2,4), errMags=(0.01,0.001
             else:
                 sampleError = 'multinomial'; Nsamp = nSamples
 
-            ds_idleInFids = pygsti.construction.simulate_data(
+            ds_idleInFids = pygsti.data.simulate_data(
                                 gateset_idleInFids, listOfExperiments, num_samples=Nsamp,
                                 sample_error=sampleError, seed=8675309)
             fileroot = get_fileroot(nQubits, maxLengths[-1], errMag, spamMag, nSamples, simulator, True)
@@ -110,7 +110,7 @@ def make_idle_tomography_data(nQubits, maxLengths=(0,1,2,4), errMags=(0.01,0.001
             pickle.dump(ds_idleInFids, open("%s_ds.pkl" % fileroot, "wb"))
             print("Wrote fileroot ",fileroot)
 
-            ds_noIdleInFids = pygsti.construction.simulate_data(
+            ds_noIdleInFids = pygsti.data.simulate_data(
                                 gateset_noIdleInFids, listOfExperiments, num_samples=Nsamp,
                                 sample_error=sampleError, seed=8675309)
 
@@ -239,12 +239,12 @@ class IDTTestCase(BaseTestCase):
 
     def test_idletomog_gstdata_std1Q(self):
         from pygsti.modelpacks.legacy import std1Q_XYI as std
-        std = pygsti.construction.stdmodule_to_smqmodule(std)
+        std = pygsti.modelpacks.stdmodule_to_smqmodule(std)
 
         maxLens = [1,2,4]
-        expList = pygsti.construction.create_lsgst_circuits(std.target_model(), std.prepStrs,
+        expList = pygsti.circuits.create_lsgst_circuits(std.target_model(), std.prepStrs,
                                                             std.effectStrs, std.germs_lite, maxLens)
-        ds = pygsti.construction.simulate_data(std.target_model().depolarize(0.01, 0.01),
+        ds = pygsti.data.simulate_data(std.target_model().depolarize(0.01, 0.01),
                                                expList, 1000, 'multinomial', seed=1234)
 
         result = pygsti.run_long_sequence_gst(ds, std.target_model(), std.prepStrs, std.effectStrs, std.germs_lite, maxLens, verbosity=3)
@@ -258,17 +258,17 @@ class IDTTestCase(BaseTestCase):
         # perform idle tomography on first qubit of 2Q
         from pygsti.modelpacks.legacy import std2Q_XYICNOT as std2Q
         from pygsti.modelpacks.legacy import std1Q_XYI as std
-        std2Q = pygsti.construction.stdmodule_to_smqmodule(std2Q)
-        std = pygsti.construction.stdmodule_to_smqmodule(std)
+        std2Q = pygsti.modelpacks.stdmodule_to_smqmodule(std2Q)
+        std = pygsti.modelpacks.stdmodule_to_smqmodule(std)
 
         maxLens = [1,2,4]
-        expList = pygsti.construction.create_lsgst_circuits(std2Q.target_model(), std2Q.prepStrs,
+        expList = pygsti.circuits.create_lsgst_circuits(std2Q.target_model(), std2Q.prepStrs,
                                                             std2Q.effectStrs, std2Q.germs_lite, maxLens)
         mdl_datagen = std2Q.target_model().depolarize(0.01, 0.01)
-        ds2Q = pygsti.construction.simulate_data(mdl_datagen, expList, 1000, 'multinomial', seed=1234)
+        ds2Q = pygsti.data.simulate_data(mdl_datagen, expList, 1000, 'multinomial', seed=1234)
 
         #Just analyze first qubit (qubit 0)
-        ds = pygsti.construction.filter_dataset(ds2Q, (0,))
+        ds = pygsti.data.filter_dataset(ds2Q, (0,))
 
         start = std.target_model()
         start.set_all_parameterizations("TP")
@@ -304,7 +304,7 @@ class IDTTestCase(BaseTestCase):
             c = pickle.load(open(compare_files+"/idt_nQsequenceCache.pkl", 'rb'))
 
         t = time.time()
-        gss = pygsti.construction._create_xycnot_cloudnoise_circuits(
+        gss = pygsti.circuits._create_xycnot_cloudnoise_circuits(
             nQubits, maxLengths, 'line', [(0,1)], max_idle_weight=2,
             idle_only=False, paramroot="H+S", cache=c, verbosity=3)
         #print("GSS STRINGS: ")
@@ -346,7 +346,7 @@ class IDTTestCase(BaseTestCase):
         problemStr = pygsti.obj.Circuit([()], num_lines=nQubits)
         print("Problem: ",problemStr.str)
         assert(problemStr in gss.allstrs)
-        ds = pygsti.construction.simulate_data(mdl_datagen, gss.allstrs, 1000, 'multinomial', seed=1234)
+        ds = pygsti.data.simulate_data(mdl_datagen, gss.allstrs, 1000, 'multinomial', seed=1234)
 
         # ----- Run idle tomography with our custom (GST) set of pauli fiducial pairs ----
         advanced = {'pauli_fidpairs': pauli_fidpairs, 'jacobian mode': "together"}

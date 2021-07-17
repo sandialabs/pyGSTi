@@ -7,8 +7,7 @@ import scipy.sparse as sps
 import pygsti
 from pygsti.modelpacks.legacy import std1Q_XYI
 from pygsti.modelpacks.legacy import std2Q_XYICNOT
-from pygsti.objects import LindbladDenseOp, ComposedDenseOp, EmbeddedDenseOp, StaticDenseOp
-from pygsti.objects import LindbladOp
+from pygsti.modelmembers.operations import ExpErrorgenOp, ComposedOp, EmbeddedOp, StaticArbitraryOp, LindbladErrorgen
 from ..testutils import BaseTestCase
 
 
@@ -25,24 +24,24 @@ class AdvancedParameterizationTestCase(BaseTestCase):
         print("START")
 
         Id_1Q = np.identity(4**1,'d')
-        idleErr0 = LindbladDenseOp.from_operation_matrix(Id_1Q) # 1-qubit error generator
-        idleErr1 = LindbladDenseOp.from_operation_matrix(Id_1Q) # allow different "idle"
-        idleErr2 = LindbladDenseOp.from_operation_matrix(Id_1Q) # 1Q errors on each qubit
+        idleErr0 = ExpErrorgenOp(LindbladErrorgen.from_operation_matrix(Id_1Q)) # 1-qubit error generator
+        idleErr1 = ExpErrorgenOp(LindbladErrorgen.from_operation_matrix(Id_1Q)) # allow different "idle"
+        idleErr2 = ExpErrorgenOp(LindbladErrorgen.from_operation_matrix(Id_1Q)) # 1Q errors on each qubit
         # so far no gpindices have been set...
 
         ss3Q = [('Q0','Q1','Q2')] #3Q state space
-        Giii = ComposedDenseOp([ EmbeddedDenseOp(ss3Q, ('Q0',), idleErr0),
-                              EmbeddedDenseOp(ss3Q, ('Q1',), idleErr1),
-                              EmbeddedDenseOp(ss3Q, ('Q2',), idleErr2)
+        Giii = ComposedOp([ EmbeddedOp(ss3Q, ('Q0',), idleErr0),
+                            EmbeddedOp(ss3Q, ('Q1',), idleErr1),
+                            EmbeddedOp(ss3Q, ('Q2',), idleErr2)
                             ])
 
-        targetGx = StaticDenseOp(gs1Q.operations['Gx'])
-        Gxii_xErr = LindbladDenseOp.from_operation_matrix(Id_1Q)
-        Gxii_xGate = ComposedDenseOp( [targetGx, idleErr0, Gxii_xErr])
-        Gxii = ComposedDenseOp([ EmbeddedDenseOp(ss3Q, ('Q0',), Gxii_xGate),
-                              EmbeddedDenseOp(ss3Q, ('Q1',), idleErr1),
-                              EmbeddedDenseOp(ss3Q, ('Q2',), idleErr2)
-                            ])
+        targetGx = StaticArbitraryOp(gs1Q.operations['Gx'])
+        Gxii_xErr = ExpErrorgenOp(LindbladErrorgen.from_operation_matrix(Id_1Q))
+        Gxii_xGate = ComposedOp( [targetGx, idleErr0, Gxii_xErr])
+        Gxii = ComposedOp([ EmbeddedOp(ss3Q, ('Q0',), Gxii_xGate),
+                            EmbeddedOp(ss3Q, ('Q1',), idleErr1),
+                            EmbeddedOp(ss3Q, ('Q2',), idleErr2)
+                           ])
 
         def printInfo():
             def pp(x): return id(x) if (x is not None) else x #print's parent nicely
@@ -61,7 +60,7 @@ class AdvancedParameterizationTestCase(BaseTestCase):
         print("PREGAME")
         printInfo()
         print("BEGIN")
-        mdl_constructed = pygsti.obj.ExplicitOpModel(['Q0', 'Q1', 'Q2'])
+        mdl_constructed = pygsti.models.ExplicitOpModel(['Q0', 'Q1', 'Q2'])
         print("Model id = ",id(mdl_constructed))
         print("INSERT1: Giii indices = ", Giii.gpindices, " parent = ", Giii.parent)
         mdl_constructed.operations['Giii'] = Giii # will set gpindices of Giii, which will set those of
@@ -93,10 +92,10 @@ class AdvancedParameterizationTestCase(BaseTestCase):
 
         print("\nGate Test:")
         SparseId = sps.identity(4**2,'d','csr')
-        gate = LindbladDenseOp.from_operation_matrix( np.identity(4**2,'d') )
+        gate = ExpErrorgenOp(LindbladErrorgen.from_operation_matrix( np.identity(4**2,'d') ))
         print("gate Errgen type (should be dense):",type(gate.errorgen.to_dense()))
         self.assertIsInstance(gate.errorgen.to_dense(), np.ndarray)
-        sparseOp = LindbladOp.from_operation_matrix( SparseId )
+        sparseOp = ExpErrorgenOp(LindbladErrorgen.from_operation_matrix( SparseId ))
         print("spareGate Errgen type (should be sparse):",type(sparseOp.errorgen.to_sparse()))
         self.assertIsInstance(sparseOp.errorgen.to_sparse(), sps.csr_matrix)
         self.assertArraysAlmostEqual(gate.errorgen.to_dense(),sparseOp.errorgen.to_dense())
@@ -104,15 +103,16 @@ class AdvancedParameterizationTestCase(BaseTestCase):
         perfectG = std2Q_XYICNOT.target_model().operations['Gix'].copy()
         noisyG = std2Q_XYICNOT.target_model().operations['Gix'].copy()
         noisyG.depolarize(0.9)
-        Sparse_noisyG = sps.csr_matrix(noisyG,dtype='d')
-        Sparse_perfectG = sps.csr_matrix(perfectG,dtype='d')
-        op2 = LindbladDenseOp.from_operation_matrix( noisyG, perfectG )
-        sparseGate2 = LindbladOp.from_operation_matrix( Sparse_noisyG, Sparse_perfectG )
-        print("spareGate2 Errgen type (should be sparse):",type(sparseGate2.errorgen.to_sparse()))
-        self.assertIsInstance(sparseGate2.errorgen.to_sparse(), sps.csr_matrix)
+        error_mx = np.dot(np.linalg.inv(perfectG.to_dense()), noisyG.to_dense())
+        Sparse_error_mx = sps.csr_matrix(error_mx,dtype='d')
+        op2 = ComposedOp([perfectG, ExpErrorgenOp(LindbladErrorgen.from_operation_matrix(error_mx))])
+        sparseGate2 = ComposedOp([perfectG, ExpErrorgenOp(LindbladErrorgen.from_operation_matrix(Sparse_error_mx))])
+        print("spareGate2 Errgen type (should be sparse):",type(sparseGate2.factorops[1].errorgen.to_sparse()))
+        self.assertIsInstance(sparseGate2.factorops[1].errorgen.to_sparse(), sps.csr_matrix)
         #print("errgen = \n"); pygsti.tools.print_mx(op2.err_gen,width=4,prec=1)
         #print("sparse errgen = \n"); pygsti.tools.print_mx(sparseGate2.err_gen.toarray(),width=4,prec=1)
-        self.assertArraysAlmostEqual(op2.errorgen.to_dense(),sparseGate2.errorgen.to_dense())
+        self.assertArraysAlmostEqual(op2.factorops[1].errorgen.to_dense(),
+                                     sparseGate2.factorops[1].errorgen.to_dense())
 
     def test_setting_lindblad_stochastic_error_rates(self):
         mdl_std1Q_HS = std1Q_XYI.target_model("H+S")
@@ -124,8 +124,9 @@ class AdvancedParameterizationTestCase(BaseTestCase):
         Gx_depol = mdl_std1Q_HS.operations['Gx'].copy()
         #Gx_depol.depolarize( (alpha,alpha,0) )
         Gx_depol.set_error_rates( {('S','X'): 0.01, ('S','Y'): 0.01, ('S','Z'): 0.01} )
-        print("Infidelity = ", pygsti.tools.entanglement_infidelity(Gx_depol, mdl_std1Q_HS.operations['Gx']))
-        self.assertAlmostEqual(pygsti.tools.entanglement_infidelity(Gx_depol, mdl_std1Q_HS.operations['Gx']), depol_err)
+        print("Infidelity = ", pygsti.tools.entanglement_infidelity(Gx_depol.to_dense("HilbertSchmidt"),
+                                                                    mdl_std1Q_HS.operations['Gx'].to_dense("HilbertSchmidt")))
+        self.assertAlmostEqual(pygsti.tools.entanglement_infidelity(Gx_depol.to_dense(), mdl_std1Q_HS.operations['Gx'].to_dense()), depol_err)
 
         
         print("error rate of depol channel = ", depol_err)
@@ -152,9 +153,9 @@ class AdvancedParameterizationTestCase(BaseTestCase):
         Gx_rot = mdl_std1Q_HS.operations['Gx'].copy()
 
         #Test 3 different ways of setting rotation angles.
-        Gx_rot.rotate( (0.2,0.0,0) )
-        self.assertAlmostEqual(Gx_rot.errorgen_coefficients()[('H','X')], 0.2)
-        self.assertAlmostEqual(Gx_rot.error_rates()[('H','X')], 0.2)
+        #Gx_rot.rotate( (0.2,0.0,0) )  # can't do this anymore -- composed ops don't implement set_dense (ok)
+        #self.assertAlmostEqual(Gx_rot.errorgen_coefficients()[('H','X')], 0.2)
+        #self.assertAlmostEqual(Gx_rot.error_rates()[('H','X')], 0.2)
         Gx_rot.set_error_rates({('H','Y'): 0.1})
         self.assertAlmostEqual(Gx_rot.errorgen_coefficients()[('H','Y')], 0.1)
         self.assertAlmostEqual(Gx_rot.error_rates()[('H','Y')], 0.1)

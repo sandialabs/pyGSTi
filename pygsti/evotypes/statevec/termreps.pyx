@@ -34,7 +34,7 @@ cdef class TermRep(_basereps_cython.TermRep):
             pre_ops += t.pre_ops
             post_ops += t.post_ops
         return TermRep(coeffrep, magnitude, logmag, first.pre_state, first.post_state,
-                         first.pre_effect, first.post_effect, pre_ops, post_ops)
+                       first.pre_effect, first.post_effect, pre_ops, post_ops)
 
     def __cinit__(self, PolynomialRep coeff, double mag, double logmag,
                   StateRep pre_state, StateRep post_state,

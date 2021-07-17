@@ -215,6 +215,7 @@ class DensePureState(DenseStateInterface, _State):
 
     def __init__(self, purevec, basis, evotype, state_space):
         purevec = _State._to_vector(purevec)
+        purevec = purevec.astype(complex)
         state_space = _statespace.default_space_for_udim(purevec.shape[0]) if (state_space is None) \
             else _statespace.StateSpace.cast(state_space)
         evotype = _Evotype.cast(evotype)
