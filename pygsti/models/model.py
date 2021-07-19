@@ -456,6 +456,7 @@ class OpModel(Model):
             nqubits = self.state_space.num_qubits
         except:
             nqubits = None
+        # TODO: This should probably also take evotype (e.g. 'chp' should probably use a CHPForwardSim, etc)
         self._sim = simulator = _fwdsim.ForwardSimulator.cast(simulator, nqubits)
         self._sim.model = self  # ensure the simulator's `model` is set to this object
 

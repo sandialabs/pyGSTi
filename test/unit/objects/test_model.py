@@ -163,7 +163,7 @@ class GeneralMethodBase(object):
         other = models.create_explicit_model_from_expressions(
             [('Q0',)], ['Gi', 'Gx', 'Gy'],
             ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"],
-            parameterization='TP'
+            gate_type='full TP'
         )
         self.model.strdiff(other)
         # TODO assert correctness

@@ -29,7 +29,8 @@ from pygsti.tools import basistools as _bt
 from pygsti.tools import optools as _ot
 
 
-def create_from_pure_vector(pure_vector, state_type, basis='pp', evotype='default', state_space=None):
+def create_from_pure_vector(pure_vector, state_type, basis='pp', evotype='default', state_space=None,
+                            on_construction_error='warn'):
     """ TODO: docstring -- create a State from a state vector """
     state_type_preferences = (state_type,) if isinstance(state_type, str) else state_type
     if state_space is None:
@@ -37,13 +38,13 @@ def create_from_pure_vector(pure_vector, state_type, basis='pp', evotype='defaul
 
     for typ in state_type_preferences:
         try:
-            if typ in ('computational', 'static standard'):
+            if typ == 'computational':
                 st = ComputationalBasisState.from_pure_vector(pure_vector, basis, evotype, state_space)
             #elif typ == ('static stabilizer', 'static clifford'):
             #    st = StaticStabilizerState(...)  # TODO
-            elif typ == ('static pure', 'static unitary'):
+            elif typ == 'static pure':
                 st = StaticPureState(pure_vector, basis, evotype, state_space)
-            elif typ == ('full pure', 'full unitary'):
+            elif typ == 'full pure':
                 st = FullPureState(pure_vector, basis, evotype, state_space)
             elif typ in ('static', 'full', 'full TP', 'TrueCPTP'):
                 superket = _bt.change_basis(_ot.state_to_dmvec(pure_vector), 'std', basis)
@@ -62,7 +63,11 @@ def create_from_pure_vector(pure_vector, state_type, basis='pp', evotype='defaul
                 raise ValueError("Unknown state type '%s'!" % str(typ))
 
             return st  # if we get to here, then we've successfully created a state to return
-        except (ValueError, AssertionError):
+        except (ValueError, AssertionError) as err:
+            if on_construction_error == 'raise':
+                raise err
+            elif on_construction_error == 'warn':
+                print('Failed to construct state with type "{}" with error: {}'.format(typ, str(err)))
             pass  # move on to next type
 
     raise ValueError("Could not create a state of type(s) %s from the given pure vector!" % (str(state_type)))
@@ -84,7 +89,13 @@ def create_from_dmvec(superket_vector, state_type, basis='pp', evotype='default'
                 st = CPTPState(superket_vector, basis, truncate, evotype, state_space)
             else:
                 # Anything else we try to convert to a pure vector and convert the pure state vector
-                dmvec = _bt.change_basis(superket_vector.to_dense(), basis, 'std')
+                try:
+                    vec = superket_vector.to_dense()
+                except AttributeError as err:
+                    # No to_dense(), assuming numpy array already
+                    vec = superket_vector
+                
+                dmvec = _bt.change_basis(vec, basis, 'std')
                 purevec = _ot.dmvec_to_state(dmvec)
                 st = create_from_pure_vector(purevec, typ, basis, evotype, state_space)
             return st
@@ -93,6 +104,56 @@ def create_from_dmvec(superket_vector, state_type, basis='pp', evotype='default'
 
     raise ValueError("Could not create a state of type(s) %s from the given superket vector!" % (str(state_type)))
 
+def get_state_type_from_op_type(op_type):
+    """Decode an op type into an appropriate state type.
+
+    Parameters:
+    -----------
+    op_type: str or list of str
+        Operation parameterization type (or list of preferences)
+    
+    Returns
+    -------
+    str
+        State parameterization type
+    """
+    op_type_preferences = (op_type,) if isinstance(op_type, str) else op_type
+
+    state_conversion = {
+        'auto': 'computational',
+        'static standard': 'computational',
+        'static clifford': 'static pure',
+        'static unitary': 'static pure',
+        'full unitary': 'full pure',
+        'static': 'static',
+        'full': 'full',
+        'full TP': 'full TP',
+        'linear': 'full',
+    }
+
+    state_type_preferences = []
+    for typ in op_type_preferences:
+        state_type = None
+        if _ot.is_valid_lindblad_paramtype(typ):
+            # Lindblad types are passed through
+            state_type = typ
+        else:
+            state_type = state_conversion.get(typ, None)
+        
+        if state_type is None:
+            continue
+
+        if state_type not in state_type_preferences:
+            state_type_preferences.append(state_type)
+    
+    if len(state_type_preferences) == 0:
+        raise RuntimeError(
+            'Could not convert any op types from {}.\n'.format(op_type_preferences) +
+            '\tKnown op_types: Lindblad types or {}\n'.format(sorted(list(state_conversion.keys()))) + 
+            '\tValid state_types: Lindblad types or {}'.format(sorted(list(set(state_conversion.values()))))
+        )
+
+    return state_type_preferences
 
 def convert(state, to_type, basis, extra=None):
     """

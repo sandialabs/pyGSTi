@@ -20,7 +20,7 @@ class ModelConstructionTester(BaseCase):
             [('Q0',)], ['Gi', 'Gx', 'Gy'],
             ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"]
         )
-        modelB = mc._create_explicit_model_from_expessions(
+        modelB = mc._create_explicit_model_from_expressions(
             [('Q0',)], pygsti.baseobjs.Basis.cast('gm', 4),
             ['Gi', 'Gx', 'Gy'], ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"]
         )

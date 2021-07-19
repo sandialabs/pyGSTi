@@ -14,6 +14,56 @@ from .instrument import Instrument
 from .tpinstrument import TPInstrument
 from .tpinstrumentop import TPInstrumentOp
 
+from pygsti.tools import optools as _ot
+
+
+def get_instrument_type_from_op_type(op_type):
+    """Decode an op type into an appropriate instrument type.
+
+    Parameters:
+    -----------
+    op_type: str or list of str
+        Operation parameterization type (or list of preferences)
+    
+    Returns
+    -------
+    instr_type_preferences: tuple of str
+        POVM parameterization types
+    """
+    op_type_preferences = (op_type,) if isinstance(op_type, str) else op_type
+
+    # Limited set (only matching what is in convert)
+    instr_conversion = {
+        'auto': 'full',
+        'static unitary': 'static unitary',
+        'static': 'static',
+        'full': 'full',
+        'full TP': 'TP',
+    }
+
+    instr_type_preferences = []
+    for typ in op_type_preferences:
+        instr_type = None
+        if _ot.is_valid_lindblad_paramtype(typ):
+            # Lindblad types are passed through as TP only (matching current convert logic)
+            instr_type = "TP"
+        else:
+            instr_type = instr_conversion.get(typ, None)
+        
+        if instr_type is None:
+            continue
+
+        if instr_type not in instr_type_preferences:
+            instr_type_preferences.append(instr_type)
+    
+    if len(instr_type_preferences) == 0:
+        raise RuntimeError(
+            'Could not convert any op types from {}.\n'.format(op_type_preferences) +
+            '\tKnown op_types: Lindblad types or {}\n'.format(sorted(list(instr_conversion.keys()))) + 
+            '\tValid instrument_types: Lindblad types or {}'.format(sorted(list(set(instr_conversion.values()))))
+        )
+
+    return instr_type_preferences
 
 def convert(instrument, to_type, basis, extra=None):
     """
