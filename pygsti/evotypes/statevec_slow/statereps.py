@@ -64,9 +64,9 @@ class StateRep(_basereps.StateRep):
         return str(self.data)
 
 
-class StateRepPure(StateRep):
+class StateRepDensePure(StateRep):
     def __init__(self, purevec, basis, state_space):
-        super(StateRepPure, self).__init__(purevec, state_space, basis)
+        super(StateRepDensePure, self).__init__(purevec, state_space, basis)
 
     @property
     def base(self):
