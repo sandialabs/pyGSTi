@@ -43,6 +43,11 @@ class StateRep(_basereps.StateRep):
     def copy_from(self, other):
         self.data[:] = other.data
 
+    def actionable_staterep(self):
+        # return a state rep that can be acted on by op reps or mapped to
+        # a probability/amplitude by POVM effect reps.
+        return self  # for most classes, the rep itself is actionable
+
     def to_dense(self, on_space):
         if on_space in ('minimal', 'Hilbert'):
             return self.data
@@ -100,12 +105,22 @@ class StateRepComposed(StateRep):
     def __init__(self, state_rep, op_rep, state_space):
         self.state_rep = state_rep
         self.op_rep = op_rep
+        if state_space is None:
+            state_space = op_rep.state_space if (op_rep is not None) else state_rep.state_space
         super(StateRepComposed, self).__init__(state_rep.to_dense('Hilbert'), state_space, self.state_rep.basis)
         self.reps_have_changed()
 
     def reps_have_changed(self):
-        rep = self.op_rep.acton(self.state_rep)
-        self.base[:] = rep.base[:]
+        pass  # don't do anything here - all work in actionalble_staterep
+        #OLD REMOVE:
+        #rep = self.op_rep.acton(self.state_rep)
+        #self.base[:] = rep.base[:]
+
+    def actionable_staterep(self):
+        state_rep = self.state_rep.actionable_staterep()
+        rep = self.op_rep.acton(state_rep)
+        #self.data[:] = rep.data[:]  # do this also?
+        return rep
 
 
 class StateRepTensorProduct(StateRep):

@@ -993,8 +993,13 @@ class BuiltinBasis(LazyBasis):
         from pygsti.baseobjs import statespace as _statespace
         assert(name in _basis_constructor_dict), "Unknown builtin basis name '%s'!" % name
         if sparse is None: sparse = False  # choose dense matrices by default (when sparsity is "unspecified")
-        self.state_space = dim_or_statespace if isinstance(dim_or_statespace, _statespace.StateSpace) \
-            else _statespace.default_space_for_dim(dim_or_statespace)
+
+        if name == 'cl':  # HACK for now, until we figure out better classical state spaces
+            self.state_space = dim_or_statespace if isinstance(dim_or_statespace, _statespace.StateSpace) \
+                else _statespace.ExplicitStateSpace([('L%d' % i,) for i in range(dim_or_statespace)])
+        else:
+            self.state_space = dim_or_statespace if isinstance(dim_or_statespace, _statespace.StateSpace) \
+                else _statespace.default_space_for_dim(dim_or_statespace)
 
         longname = _basis_constructor_dict[name].longname
         real = _basis_constructor_dict[name].real

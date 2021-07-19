@@ -37,6 +37,9 @@ cdef class StateRep(_basereps_cython.StateRep):
     def __reduce__(self):
         return (StateRep, (), (self.data.flags.writeable,))
 
+    def __pygsti_reduce__(self):
+        return self.__reduce__()
+
     def __setstate__(self, state):
         writeable, = state
         self.data.flags.writeable = writeable
@@ -64,7 +67,7 @@ cdef class StateRep(_basereps_cython.StateRep):
 
 
 cdef class StateRepDense(StateRep):
-    def __cinit__(self, _np.ndarray[double, ndim=1, mode='c'] data, state_space):
+    def __cinit__(self, _np.ndarray[double, ndim=1] data, state_space):
         self._cinit_base(data, state_space)
 
     def __reduce__(self):

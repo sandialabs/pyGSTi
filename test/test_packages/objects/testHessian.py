@@ -2,13 +2,13 @@ import pickle
 import unittest
 
 import numpy as np
-from pygsti.objects.mapforwardsim import MapForwardSimulator
+from pygsti.forwardsims.mapforwardsim import MapForwardSimulator
 
 import pygsti
 from pygsti import protocols as proto
 from pygsti.modelpacks.legacy import std1Q_XY as stdxy
 from pygsti.modelpacks.legacy import std1Q_XYI as stdxyi
-from pygsti.objects import Label as L
+from pygsti.baseobjs import Label as L
 from pygsti.report import modelfunction as gsf
 from ..testutils import BaseTestCase, compare_files
 
@@ -19,14 +19,14 @@ class TestHessianMethods(BaseTestCase):
         super(TestHessianMethods, self).setUp()
 
         self.model = pygsti.io.load_model(compare_files + "/analysis.model")
-        self.ds = pygsti.objects.DataSet(file_to_load_from=compare_files + "/analysis.dataset")
+        self.ds = pygsti.data.DataSet(file_to_load_from=compare_files + "/analysis.dataset")
 
 
         fiducials = stdxyi.fiducials
         germs = stdxyi.germs
         op_labels = list(self.model.operations.keys()) # also == std.gates
         self.maxLengthList = [1,2]
-        self.gss = pygsti.construction.make_lsgst_structs(op_labels, fiducials, fiducials, germs, self.maxLengthList)
+        self.gss = pygsti.circuits.make_lsgst_structs(op_labels, fiducials, fiducials, germs, self.maxLengthList)
 
 
     def test_parameter_counting(self):
@@ -67,7 +67,7 @@ class TestHessianMethods(BaseTestCase):
 
         #XYI Model: SP0=False
         tst = stdxyi.target_model()
-        tst.preps['rho0'] = pygsti.obj.TPSPAMVec(tst.preps['rho0'])
+        tst.preps['rho0'] = pygsti.modelmembers.states.TPState(tst.preps['rho0'])
         n = tst.num_params
         self.assertEqual(n,59) # 3*16 + 2*4 + 3 = 59
 
@@ -75,9 +75,9 @@ class TestHessianMethods(BaseTestCase):
         self.assertEqual(n,44) # 15 gauge params (minus one b/c can't change rho?)
 
         #XYI Model: G0=SP0=False
-        tst.operations['Gi'] = pygsti.obj.TPDenseOp(tst.operations['Gi'])
-        tst.operations['Gx'] = pygsti.obj.TPDenseOp(tst.operations['Gx'])
-        tst.operations['Gy'] = pygsti.obj.TPDenseOp(tst.operations['Gy'])
+        tst.operations['Gi'] = pygsti.modelmembers.operations.FullTPOp(tst.operations['Gi'])
+        tst.operations['Gx'] = pygsti.modelmembers.operations.FullTPOp(tst.operations['Gx'])
+        tst.operations['Gy'] = pygsti.modelmembers.operations.FullTPOp(tst.operations['Gy'])
         n = tst.num_params
         self.assertEqual(n,47) # 3*12 + 2*4 + 3 = 47
 
@@ -128,13 +128,13 @@ class TestHessianMethods(BaseTestCase):
 
     def test_confidenceRegion(self):
 
-        edesign = proto.CircuitListsDesign([pygsti.obj.CircuitList(circuit_struct)
+        edesign = proto.CircuitListsDesign([pygsti.circuits.CircuitList(circuit_struct)
                                             for circuit_struct in self.gss])
         data = proto.ProtocolData(edesign, self.ds)
         res = proto.ModelEstimateResults(data, proto.StandardGST(modes="TP"))
 
         #Add estimate for hessian-based CI --------------------------------------------------
-        builder = pygsti.obj.PoissonPicDeltaLogLFunction.builder()
+        builder = pygsti.objectivefns.PoissonPicDeltaLogLFunction.builder()
         res.add_estimate(
             proto.estimate.Estimate.create_gst_estimate(
                 res, stdxyi.target_model(), stdxyi.target_model(),
@@ -357,7 +357,7 @@ class TestHessianMethods(BaseTestCase):
         #TODO: assert values of df & f0 ??
 
     def test_pickle_ConfidenceRegion(self):
-        edesign = proto.CircuitListsDesign([pygsti.obj.CircuitList(circuit_struct)
+        edesign = proto.CircuitListsDesign([pygsti.circuits.CircuitList(circuit_struct)
                                             for circuit_struct in self.gss])
         data = proto.ProtocolData(edesign, self.ds)
         res = proto.ModelEstimateResults(data, proto.StandardGST(modes="TP"))

@@ -67,7 +67,7 @@ class EmbeddedPureState(_State):
         evotype = _Evotype.cast(evotype)
         #rep = evotype.create_state_rep()
         #rep.init_from_dense_purevec(pure_state)
-        raise NotImplementedError("Maybe this class isn't even eeded, or need to create a static pure state class?")
+        raise NotImplementedError("Maybe this class isn't even needed, or need to create a static pure state class?")
 
         #TODO: remove
         #pure_evo = pure_state._evotype

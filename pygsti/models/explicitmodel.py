@@ -30,6 +30,7 @@ from pygsti.modelmembers import states as _state
 from pygsti.modelmembers.operations import opfactory as _opfactory
 from pygsti.baseobjs.basis import BuiltinBasis as _BuiltinBasis, DirectSumBasis as _DirectSumBasis
 from pygsti.baseobjs.label import Label as _Label, CircuitLabel as _CircuitLabel
+from pygsti.baseobjs import statespace as _statespace
 from pygsti.tools import basistools as _bt
 from pygsti.tools import jamiolkowski as _jt
 from pygsti.tools import matrixtools as _mt
@@ -1137,6 +1138,12 @@ class ExplicitOpModel(_mdl.OpModel):
             the increased-dimension Model
         """
 
+        if isinstance(new_dimension, _statespace.StateSpace):
+            state_space = new_dimension
+            new_dimension = state_space.dim
+        else:
+            state_space = _statespace.default_space_for_dim(new_dimension)
+
         curDim = self.state_space.dim
         assert(new_dimension > curDim)
 
@@ -1152,12 +1159,13 @@ class ExplicitOpModel(_mdl.OpModel):
 
         addedDim = new_dimension - curDim
         vec_zeroPad = _np.zeros((addedDim, 1), 'd')
+        evotype = self.evotype
 
         #Increase dimension of rhoVecs and EVecs by zero-padding
         for lbl, rhoVec in self.preps.items():
             assert(len(rhoVec) == curDim)
             new_model.preps[lbl] = \
-                _state.FullState(_np.concatenate((rhoVec, vec_zeroPad)))               # evotype???? TODO
+                _state.FullState(_np.concatenate((rhoVec, vec_zeroPad)), evotype, state_space)
 
         for lbl, povm in self.povms.items():
             assert(povm.state_space.dim == curDim)
@@ -1165,9 +1173,9 @@ class ExplicitOpModel(_mdl.OpModel):
                        for elbl, EVec in povm.items()]
 
             if isinstance(povm, _povm.TPPOVM):
-                new_model.povms[lbl] = _povm.TPPOVM(effects)
+                new_model.povms[lbl] = _povm.TPPOVM(effects, evotype, state_space)
             else:
-                new_model.povms[lbl] = _povm.UnconstrainedPOVM(effects)  # everything else
+                new_model.povms[lbl] = _povm.UnconstrainedPOVM(effects, evotype, state_space)  # everything else
 
         #Increase dimension of gates by assuming they act as identity on additional (unknown) space
         for opLabel, gate in self.operations.items():
@@ -1175,7 +1183,7 @@ class ExplicitOpModel(_mdl.OpModel):
             newOp = _np.zeros((new_dimension, new_dimension))
             newOp[0:curDim, 0:curDim] = gate[:, :]
             for i in range(curDim, new_dimension): newOp[i, i] = 1.0
-            new_model.operations[opLabel] = _op.FullArbitraryOp(newOp)
+            new_model.operations[opLabel] = _op.FullArbitraryOp(newOp, evotype, state_space)
 
         for instLabel, inst in self.instruments.items():
             inst_ops = []
@@ -1183,8 +1191,8 @@ class ExplicitOpModel(_mdl.OpModel):
                 newOp = _np.zeros((new_dimension, new_dimension))
                 newOp[0:curDim, 0:curDim] = gate[:, :]
                 for i in range(curDim, new_dimension): newOp[i, i] = 1.0
-                inst_ops.append((outcomeLbl, _op.FullArbitraryOp(newOp)))
-            new_model.instruments[instLabel] = _instrument.Instrument(inst_ops)
+                inst_ops.append((outcomeLbl, _op.FullArbitraryOp(newOp, evotype, state_space)))
+            new_model.instruments[instLabel] = _instrument.Instrument(inst_ops, evotype, state_space)
 
         if len(self.factories) > 0:
             raise NotImplementedError("Changing dimension of models with factories is not supported yet!")
@@ -1211,6 +1219,12 @@ class ExplicitOpModel(_mdl.OpModel):
         Model
             the decreased-dimension Model
         """
+        if isinstance(new_dimension, _statespace.StateSpace):
+            state_space = new_dimension
+            new_dimension = state_space.dim
+        else:
+            state_space = _statespace.default_space_for_dim(new_dimension)
+
         curDim = self.state_space.dim
         assert(new_dimension < curDim)
 
@@ -1228,31 +1242,31 @@ class ExplicitOpModel(_mdl.OpModel):
         for lbl, rhoVec in self.preps.items():
             assert(len(rhoVec) == curDim)
             new_model.preps[lbl] = \
-                _state.FullState(rhoVec[0:new_dimension, :], self.evotype)
+                _state.FullState(rhoVec[0:new_dimension, :], self.evotype, state_space)
 
         for lbl, povm in self.povms.items():
             assert(povm.state_space.dim == curDim)
             effects = [(elbl, EVec[0:new_dimension, :]) for elbl, EVec in povm.items()]
 
             if isinstance(povm, _povm.TPPOVM):
-                new_model.povms[lbl] = _povm.TPPOVM(effects)
+                new_model.povms[lbl] = _povm.TPPOVM(effects, self.evotype, state_space)
             else:
-                new_model.povms[lbl] = _povm.UnconstrainedPOVM(effects)  # everything else
+                new_model.povms[lbl] = _povm.UnconstrainedPOVM(effects, self.evotype, state_space)  # everything else
 
         #Decrease dimension of gates by truncation
         for opLabel, gate in self.operations.items():
             assert(gate.shape == (curDim, curDim))
             newOp = _np.zeros((new_dimension, new_dimension))
             newOp[:, :] = gate[0:new_dimension, 0:new_dimension]
-            new_model.operations[opLabel] = _op.FullArbitraryOp(newOp)
+            new_model.operations[opLabel] = _op.FullArbitraryOp(newOp, self.evotype, state_space)
 
         for instLabel, inst in self.instruments.items():
             inst_ops = []
             for outcomeLbl, gate in inst.items():
                 newOp = _np.zeros((new_dimension, new_dimension))
                 newOp[:, :] = gate[0:new_dimension, 0:new_dimension]
-                inst_ops.append((outcomeLbl, _op.FullArbitraryOp(newOp)))
-            new_model.instruments[instLabel] = _instrument.Instrument(inst_ops)
+                inst_ops.append((outcomeLbl, _op.FullArbitraryOp(newOp, self.evotype, state_space)))
+            new_model.instruments[instLabel] = _instrument.Instrument(inst_ops, self.evotype, state_space)
 
         if len(self.factories) > 0:
             raise NotImplementedError("Changing dimension of models with factories is not supported yet!")
@@ -1414,6 +1428,44 @@ class ExplicitOpModel(_mdl.OpModel):
         self._opcaches['povm-layers'] = simplified_effects
         self._opcaches['op-layers'] = simplified_ops
 
+    def create_processor_spec(self, qubit_labels='auto'):
+        """ TODO: docstring """
+        from pygsti.processors import QubitProcessorSpec as _QubitProcessorSpec
+        #go through ops, building up availability and unitaries, then create procesor spec...
+
+        nqubits = self.state_space.num_qubits
+        gate_unitaries = _collections.OrderedDict()
+        availability = {}
+        #observed_sslbls = set()
+        for opkey, op in self.operations.items():  # TODO: need to deal with special () idle label
+            if opkey == _Label(()):  # special case: turn empty tuple labels into "(idle)" gate in processor spec
+                gn = "(idle)"
+                sslbls = None
+            else:
+                gn = opkey.name
+                sslbls = opkey.sslbls
+                #if sslbls is not None:
+                #    observed_sslbls.update(sslbls)
+
+            if gn not in gate_unitaries:
+                U = _ot.process_mx_to_unitary(_bt.change_basis(op.to_dense('HilbertSchmidt'),
+                                                               self.basis, 'std'))
+                gate_unitaries[gn] = U
+                availability[gn] = [sslbls]
+            else:
+                availability[gn].append(sslbls)
+
+        if qubit_labels == 'auto':
+            qubit_labels = self.state_space.tensor_product_block_labels(0)
+            #OR: qubit_labels = self.state_space.qubit_labels  # only works for a QubitSpace
+            #OR: qubit_labels = tuple(sorted(observed_sslbls))
+
+        if qubit_labels is None:  # special case of legacy explicit models where all gates have availability [None]
+            qubit_labels = tuple(range(nqubits))
+
+        return _QubitProcessorSpec(nqubits, list(gate_unitaries.keys()), gate_unitaries, availability,
+                                   qubit_labels=qubit_labels)
+
 
 class ExplicitLayerRules(_LayerRules):
     """ Rule: layer must appear explicitly as a "primitive op" """
@@ -1464,8 +1516,7 @@ class ExplicitLayerRules(_LayerRules):
         """
         if layerlbl in caches['op-layers']: return caches['op-layers'][layerlbl]
         if isinstance(layerlbl, _CircuitLabel):
-            dense = isinstance(model._sim, _matrixfwdsim.MatrixForwardSimulator)  # True => create dense-matrix gates
-            op = self._create_op_for_circuitlabel(model, layerlbl, dense)
+            op = self._create_op_for_circuitlabel(model, layerlbl)
             caches['op-layers'][layerlbl] = op
             return op
         elif layerlbl in model.operations:

@@ -41,11 +41,11 @@ class TestCoreMethods(AlgorithmsBase):
 
     def test_LGST_no_sample_error(self):
         #change rep-count type so dataset can hold fractional counts for sampleError = 'none'
-        oldType = pygsti.datasets.dataset.Repcount_type
-        pygsti.datasets.dataset.Repcount_type = np.float64
-        ds = pygsti.construction.simulate_data(self.datagen_gateset, self.lgstStrings,
+        oldType = pygsti.data.dataset.Repcount_type
+        pygsti.data.dataset.Repcount_type = np.float64
+        ds = pygsti.data.simulate_data(self.datagen_gateset, self.lgstStrings,
                                                num_samples=10000, sample_error='none')
-        pygsti.datasets.dataset.Repcount_type = oldType
+        pygsti.data.dataset.Repcount_type = oldType
 
         mdl_lgst = pygsti.run_lgst(ds, self.fiducials, self.fiducials, self.model, svd_truncate_to=4, verbosity=0)
         print("DATAGEN:")
@@ -65,7 +65,7 @@ class TestCoreMethods(AlgorithmsBase):
         nSamplesList = np.array([ 16, 128, 1024, 8192 ])
         diffs = []
         for nSamples in nSamplesList:
-            ds = pygsti.construction.simulate_data(my_datagen_gateset, self.lgstStrings, nSamples,
+            ds = pygsti.data.simulate_data(my_datagen_gateset, self.lgstStrings, nSamples,
                                                    sample_error='binomial', seed=100)
             mdl_lgst = pygsti.run_lgst(ds, self.fiducials, self.fiducials, self.model, svd_truncate_to=4, verbosity=0)
             mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst, my_datagen_gateset, {'spam':1.0, 'gate': 1.0}, check_jac=True)

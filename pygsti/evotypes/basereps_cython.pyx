@@ -45,6 +45,9 @@ cdef class PolynomialRep:
     def __reduce__(self):
         return (PolynomialRep, (self.int_coeffs, self.max_num_vars, self.vindices_per_int))
 
+    def __pygsti_reduce__(self):
+        return self.__reduce__()
+
     def __dealloc__(self):
         del self.c_polynomial
 

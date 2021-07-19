@@ -404,6 +404,7 @@ def _basis_create_operation(state_space, op_expr, basis="gm", parameterization="
             Utot[i1, i2] = Uop[0, 1]
             Utot[i2, i1] = Uop[1, 0]
             Utot[i2, i2] = Uop[1, 1]
+
             # dmDim^2 x dmDim^2 mx operating on vectorized total densty matrix
             opTermInStdBasis = _ot.unitary_to_process_mx(Utot)
 

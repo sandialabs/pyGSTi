@@ -15,7 +15,8 @@
 //#define DEBUG(x) x
 #define DEBUG(x) 
 
-namespace CReps {
+namespace CReps_statevec {
+
   /****************************************************************************\
   |* EffectCRep                                                             *|
   \****************************************************************************/
@@ -157,5 +158,33 @@ namespace CReps {
   dcomplex EffectCRep_Computational::amplitude(StateCRep* state) {
     //There's only a single nonzero index with element == 1.0, so dotprod is trivial
     return state->_dataptr[_nonzero_index];
+  }
+
+  /****************************************************************************\
+  |* EffectCRep_Composed                                                      *|
+  \****************************************************************************/
+
+  EffectCRep_Composed::EffectCRep_Composed(OpCRep* errgen_oprep,
+					   EffectCRep* effect_rep,
+					   INT errgen_id, INT dim)
+    :EffectCRep(dim)
+  {
+    _errgen_ptr = errgen_oprep;
+    _effect_ptr = effect_rep;
+    _errgen_id = errgen_id;
+  }
+  
+  EffectCRep_Composed::~EffectCRep_Composed() { }
+
+  double EffectCRep_Composed::probability(StateCRep* state) {
+    StateCRep outState(_dim);
+    _errgen_ptr->acton(state, &outState);
+    return _effect_ptr->probability(&outState);
+  }
+
+  dcomplex EffectCRep_Composed::amplitude(StateCRep* state) {
+      StateCRep outState(_dim);
+      _errgen_ptr->acton(state, &outState);
+      return _effect_ptr->amplitude(&outState);
   }
 }

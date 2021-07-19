@@ -28,24 +28,39 @@ from .opreps cimport OpRep, OpCRep
 ctypedef long long INT
 ctypedef unsigned long long UINT
 
-cdef extern from "statecreps.h" namespace "CReps":
+cdef extern from "statecreps.h" namespace "CReps_stabilizer":
     cdef cppclass StateCRep:
         pass
 
-cdef extern from "opcreps.h" namespace "CReps":
+cdef extern from "opcreps.h" namespace "CReps_stabilizer":
     cdef cppclass OpCRep:
         pass
     
-cdef extern from "effectcreps.h" namespace "CReps":
+cdef extern from "effectcreps.h" namespace "CReps_stabilizer":
     cdef cppclass EffectCRep:
-        EffectCRep(INT*, INT) except +
+        EffectCRep() except +
+        EffectCRep(INT) except +
         double probability(StateCRep* state)
         double complex amplitude(StateCRep* state)
         INT _n
 
+    cdef cppclass EffectCRep_Computational(EffectCRep):
+        EffectCRep_Computational() except +
+        EffectCRep_Computational(INT*, INT) except +
+        double probability(StateCRep* state)
+        double complex amplitude(StateCRep* state)
+
+    cdef cppclass EffectCRep_Composed(EffectCRep):
+        EffectCRep_Composed() except +
+        EffectCRep_Composed(OpCRep*, EffectCRep*, INT, INT) except +
+        double probability(StateCRep* state)
+        double complex amplitude(StateCRep* state)
+        INT _dim
+        INT op_id
+
+
 cdef class EffectRep(_basereps_cython.EffectRep):
     cdef EffectCRep* c_effect
-    cdef public _np.ndarray zvals
     cdef public object state_space
 
 ctypedef EffectCRep* EffectCRep_ptr

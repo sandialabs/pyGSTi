@@ -27,7 +27,8 @@ from .lindbladerrorgen import LindbladErrorgen, LindbladParameterization
 from .linearop import LinearOperator
 from .linearop import finite_difference_deriv_wrt_params, finite_difference_hessian_wrt_params
 from .lpdenseop import LinearlyParamArbitraryOp
-from .opfactory import OpFactory
+from .opfactory import OpFactory, EmbeddedOpFactory, EmbeddingOpFactory, ComposedOpFactory
+from .repeatedop import RepeatedOp
 from .staticarbitraryop import StaticArbitraryOp
 from .staticcliffordop import StaticCliffordOp
 from .staticstdop import StaticStandardOp
@@ -76,7 +77,7 @@ def create_from_unitary_mx(unitary_mx, op_type, basis='pp', stdname=None, evotyp
 
                 if op.dim <= 16:  # only do this for up to 2Q operations, otherwise to_dense is too expensive
                     expected_superop_mx = _bt.change_basis(_ot.unitary_to_process_mx(U), 'std', basis)
-                    assert (_np.linalg.norm(op.to_dense() - expected_superop_mx) < 1e-6), \
+                    assert (_np.linalg.norm(op.to_dense('HilbertSchmidt') - expected_superop_mx) < 1e-6), \
                         "Failure to create Lindblad operation (maybe due the complex log's branch cut?)"
             else:
                 raise ValueError("Unknown operation type '%s'!" % str(typ))
@@ -203,6 +204,8 @@ def convert(operation, to_type, basis, extra=None):
             if _np.linalg.matrix_rank(J, RANK_TOL) == 1:  # when 'operation' is unitary, separate it
                 unitary_op = _ot.process_mx_to_unitary(_bt.change_basis(operation.to_dense(), basis, 'std'))
                 unitary_postfactor = StaticUnitaryOp(unitary_op, basis, operation.evotype, operation.state_space)
+        elif isinstance(operation, StaticUnitaryOp):
+            unitary_postfactor = operation.copy()
 
         proj_basis = 'pp' if operation.state_space.is_entirely_qubits else basis
         if unitary_postfactor is not None:
@@ -211,13 +214,13 @@ def convert(operation, to_type, basis, extra=None):
                                                              state_space=operation.state_space)
             ret = ComposedOp([unitary_postfactor, ExpErrorgenOp(errorgen)])
         else:
-            errorgen = LindbladErrorgen.from_operation_matrix(operation.to_dense(), to_type, proj_basis,
+            errorgen = LindbladErrorgen.from_operation_matrix(operation.to_dense('HilbertSchmidt'), to_type, proj_basis,
                                                               mx_basis=basis, truncate=True, evotype=operation.evotype,
                                                               state_space=operation.state_space)
             ret = ExpErrorgenOp(errorgen)
 
         if ret.dim <= 16:  # only do this for up to 2Q operations, otherwise to_dense is too expensive
-            assert(_np.linalg.norm(operation.to_dense() - ret.to_dense()) < 1e-6), \
+            assert(_np.linalg.norm(operation.to_dense('HilbertSchmidt') - ret.to_dense('HilbertSchmidt')) < 1e-6), \
                 "Failure to create CPTP operation (maybe due the complex log's branch cut?)"
         return ret
 
@@ -230,7 +233,7 @@ def convert(operation, to_type, basis, extra=None):
         return StaticCliffordOp(operation)
 
     else:
-        raise ValueError("Invalid to_type argument: %s" % to_type)
+        raise ValueError("Invalid to_type argument: %s" % str(to_type))
 
 
 def check_deriv_wrt_params(operation, deriv_to_check=None, wrt_filter=None, eps=1e-7):

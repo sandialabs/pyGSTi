@@ -116,7 +116,7 @@ class ModelPack(_ABC):
     def processor_spec(self, qubit_labels=None):
         """ TODO: docstring """
         static_target_model = self.target_model('static', qubit_labels=qubit_labels)  # assumed to be an ExplicitOpModel
-        return _QubitProcessorSpec.from_explicit_model(static_target_model, self._sslbls)
+        return static_target_model.create_processor_spec(self._sslbls)
 
     def _get_cachefile_names(self, param_type, simulator):
         """ Get the standard cache file names for a modelpack """

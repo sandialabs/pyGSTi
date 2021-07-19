@@ -377,21 +377,23 @@ class LindbladErrorgen(_LinearOperator):
         self.Lmx = None
         self._coefficient_weights = None
 
+        #All representations need to track 1norms:
+        self.hamGens, self.otherGens = self._init_generators(dim)
+
+        if self.hamGens is not None:
+            self.hamGens_1norms = _np.array([_mt.safe_onenorm(mx) for mx in self.hamGens], 'd')
+        if self.otherGens is not None:
+            if self.nonham_mode == "diagonal":
+                self.otherGens_1norms = _np.array([_mt.safe_onenorm(mx) for mx in self.otherGens], 'd')
+            else:
+                self.otherGens_1norms = _np.array([_mt.safe_onenorm(mx)
+                                                   for oGenRow in self.otherGens for mx in oGenRow], 'd')
+
         #Create a representation of the type chosen above:
         if self._rep_type == 'lindblad errorgen':
             rep = evotype.create_lindblad_errorgen_rep(lindblad_term_dict, self.lindblad_basis, state_space)
-        else:
-            #Otherwise create a sparse or dense matrix representation
-            self.hamGens, self.otherGens = self._init_generators(dim)
 
-            if self.hamGens is not None:
-                self.hamGens_1norms = _np.array([_mt.safe_onenorm(mx) for mx in self.hamGens], 'd')
-            if self.otherGens is not None:
-                if self.nonham_mode == "diagonal":
-                    self.otherGens_1norms = _np.array([_mt.safe_onenorm(mx) for mx in self.otherGens], 'd')
-                else:
-                    self.otherGens_1norms = _np.array([_mt.safe_onenorm(mx)
-                                                       for oGenRow in self.otherGens for mx in oGenRow], 'd')
+        else:  # Otherwise create a sparse or dense matrix representation
 
             #Allocate space fo Cholesky mx (used in _construct_errgen_matrix)
             # (intermediate storage for matrix and for deriv computation)
@@ -434,6 +436,7 @@ class LindbladErrorgen(_LinearOperator):
         _LinearOperator.__init__(self, rep, evotype)  # sets self.dim
         self._update_rep()  # updates _rep whether it's a dense or sparse matrix
         self._paramlbls = _ot.lindblad_param_labels(self.ham_basis, self.other_basis, self.param_mode, self.nonham_mode)
+        assert(self._onenorm_upbound is not None)  # _update_rep should set this
         #Done with __init__(...)
 
     def _init_generators(self, dim):
@@ -571,7 +574,7 @@ class LindbladErrorgen(_LinearOperator):
                 scale, U = _mt.to_unitary(basis[termLbl[1]])
                 scale *= _np.sqrt(d) / 2  # mimics rho1's _np.sqrt(d) / 2 scaling in `hamiltonian_to_lindbladian`
                 Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-                    _Polynomial({(k,): -1j * scale}, mpv), U, IDENT, self._evotype))
+                    _Polynomial({(k,): -1j * scale}, mpv), U, IDENT, self._evotype, self.state_space))
                 Lterms.append(_term.RankOnePolynomialOpTerm.create_from(_Polynomial({(k,): +1j * scale}, mpv),
                                                                         IDENT, U.conjugate().T, self._evotype,
                                                                         self.state_space))
@@ -733,12 +736,6 @@ class LindbladErrorgen(_LinearOperator):
         error generator matrix using the current parameters and updates self._rep
         accordingly (by rewriting its data).
         """
-        if self._rep_type == 'lindblad':
-            # the code below is for updating sparse or dense matrix representations.  If our
-            # evotype has a native Lindblad representation, maybe in the FUTURE we should
-            # call an update method of it here?
-            return
-
         dim = self.dim
         hamCoeffs, otherCoeffs = _ot.paramvals_to_lindblad_projections(
             self.paramvals, self.ham_basis_size, self.other_basis_size,
@@ -746,7 +743,18 @@ class LindbladErrorgen(_LinearOperator):
         onenorm = 0.0
 
         #Finally, build operation matrix from generators and coefficients:
-        if self._rep_type == 'sparse superop':  # then bases & errgen are sparse
+        if self._rep_type == 'lindblad errorgen':
+            # the code below is for updating sparse or dense matrix representations.  If our
+            # evotype has a native Lindblad representation, maybe in the FUTURE we should
+            # call an update method of it here?
+
+            #Still need to update onenorm - FUTURE: maybe put this logic inside rep?
+            if hamCoeffs is not None:
+                onenorm += _np.dot(self.hamGens_1norms, _np.abs(hamCoeffs))
+            if otherCoeffs is not None:
+                onenorm += _np.dot(self.otherGens_1norms, _np.abs(otherCoeffs.flat))
+
+        elif self._rep_type == 'sparse superop':  # then bases & errgen are sparse
             coeffs = None
             data = self._data_scratch
             data.fill(0.0)  # data starts at zero
@@ -754,6 +762,7 @@ class LindbladErrorgen(_LinearOperator):
             if hamCoeffs is not None:
                 onenorm += _np.dot(self.hamGens_1norms, _np.abs(hamCoeffs))
                 if otherCoeffs is not None:
+                    onenorm += _np.dot(self.otherGens_1norms, _np.abs(otherCoeffs.flat))
                     coeffs = _np.concatenate((hamCoeffs, otherCoeffs.flat), axis=0)
                 else:
                     coeffs = hamCoeffs
@@ -820,7 +829,9 @@ class LindbladErrorgen(_LinearOperator):
                 "Imaginary error gen norm: %g" % _np.linalg.norm(lnd_error_gen.imag)
             #print("errgen pre-real = \n"); _mt.print_mx(lnd_error_gen,width=4,prec=1)
             self._rep.base[:, :] = lnd_error_gen.real
+
         self._onenorm_upbound = onenorm
+        #assert(self._onenorm_upbound >= _np.linalg.norm(self.to_dense(), ord=1) - 1e-6)  #DEBUG
 
     def to_dense(self, on_space='minimal'):
         """
@@ -838,7 +849,7 @@ class LindbladErrorgen(_LinearOperator):
         -------
         numpy.ndarray
         """
-        if self._rep_type == 'lindblad':
+        if self._rep_type == 'lindblad errorgen':
             assert(on_space in ('minimal', 'HilbertSchmidt'))
             #Then we need to do similar things to __init__ for a dense rep - maybe consolidate?
             hamCoeffs, otherCoeffs = _ot.paramvals_to_lindblad_projections(
@@ -875,10 +886,7 @@ class LindbladErrorgen(_LinearOperator):
         -------
         scipy.sparse.csr_matrix
         """
-        _warnings.warn(("Constructing the sparse matrix of a LindbladDenseOp."
-                        "  Usually this is *NOT* a sparse matrix (the exponential of a"
-                        " sparse matrix isn't generally sparse)!"))
-        if self._rep_type == 'lindblad':
+        if self._rep_type == 'lindblad errorgen':
             assert(on_space in ('minimal', 'HilbertSchmidt'))
             #Need to do similar things to __init__ - maybe consolidate?
             hamCoeffs, otherCoeffs = _ot.paramvals_to_lindblad_projections(
@@ -969,7 +977,7 @@ class LindbladErrorgen(_LinearOperator):
             is a `(vtape,ctape)` 2-tuple formed by concatenating together the
             output of :method:`Polynomial.compact`.
         """
-        assert(self._native_lindblad_rep), \
+        assert(self._rep_type == 'lindblad errorgen'), \
             "Only evotypes with native Lindblad errorgen representations can utilize Taylor terms"
         assert(order == 0), \
             "Error generators currently treat all terms as 0-th order; nothing else should be requested!"
@@ -1100,7 +1108,7 @@ class LindbladErrorgen(_LinearOperator):
         None
         """
         assert(len(v) == self.num_params)
-        self.paramvals = v
+        self.paramvals[:] = v
         self._update_rep()
         self.dirty = dirty_value
 

@@ -4,7 +4,6 @@ import unittest
 import numpy as np
 
 import pygsti
-import pygsti.construction as pc
 from pygsti.serialization import json
 from pygsti.modelpacks.legacy import std1Q_XY
 from pygsti.modelpacks.legacy import std2Q_XYCNOT as std
@@ -31,13 +30,13 @@ class CalcMethods2QTestCase(BaseTestCase):
         #Note: std is a 2Q model
         cls.maxLengths = [1]
         #cls.germs = std.germs_lite
-        cls.germs = pygsti.construction.to_circuits([(gl,) for gl in std.target_model().operations])
+        cls.germs = pygsti.circuits.to_circuits([(gl,) for gl in std.target_model().operations])
         cls.mdl_datagen = std.target_model().depolarize(op_noise=0.1, spam_noise=0.001)
-        cls.listOfExperiments = pygsti.construction.create_lsgst_circuits(
+        cls.listOfExperiments = pygsti.circuits.create_lsgst_circuits(
             std.target_model(), std.prepStrs, std.effectStrs, cls.germs, cls.maxLengths)
 
         #RUN BELOW FOR DATAGEN (UNCOMMENT to regenerate)
-        #ds = pygsti.construction.simulate_data(cls.mdl_datagen, cls.listOfExperiments,
+        #ds = pygsti.data.simulate_data(cls.mdl_datagen, cls.listOfExperiments,
         #                                            n_samples=1000, sample_error="multinomial", seed=1234)
         #ds.save(compare_files + "/calcMethods2Q.dataset")
 
@@ -59,14 +58,14 @@ class CalcMethods2QTestCase(BaseTestCase):
                 fids1Q, [ ( (L('Gx'),) , (L('Gx',i),) ), ( (L('Gy'),) , (L('Gy',i),) ) ]) )
         #print(redmod_fiducials, "Fiducials")
 
-        cls.redmod_germs = pygsti.construction.to_circuits([(gl,) for gl in op_labels])
+        cls.redmod_germs = pygsti.circuits.to_circuits([(gl,) for gl in op_labels])
         cls.redmod_maxLs = [1]
-        expList = pygsti.construction.create_lsgst_circuits(
+        expList = pygsti.circuits.create_lsgst_circuits(
             cls.mdl_redmod_datagen, cls.redmod_fiducials, cls.redmod_fiducials,
             cls.redmod_germs, cls.redmod_maxLs)
 
         #RUN BELOW FOR DATAGEN (UNCOMMENT to regenerate)
-        #redmod_ds = pygsti.construction.simulate_data(cls.mdl_redmod_datagen, expList, 1000, "round", seed=1234)
+        #redmod_ds = pygsti.data.simulate_data(cls.mdl_redmod_datagen, expList, 1000, "round", seed=1234)
         #redmod_ds.save(compare_files + "/calcMethods2Q_redmod.dataset")
 
         cls.redmod_ds = pygsti.objects.DataSet(file_to_load_from=compare_files + "/calcMethods2Q_redmod.dataset")
@@ -249,10 +248,10 @@ class CalcMethods2QTestCase(BaseTestCase):
         from pygsti.modelpacks.legacy import std2Q_XYICPHASE as stdChk
 
         maxLengths = [1,2,4]
-        listOfExperiments = pygsti.construction.create_lsgst_circuits(
+        listOfExperiments = pygsti.circuits.create_lsgst_circuits(
             stdChk.target_model(), stdChk.prepStrs, stdChk.effectStrs, stdChk.germs, maxLengths)
-        #listOfExperiments = pygsti.construction.to_circuits([ ('Gcnot','Gxi') ])
-        #listOfExperiments = pygsti.construction.to_circuits([ ('Gxi','Gcphase','Gxi','Gix') ])
+        #listOfExperiments = pygsti.circuits.to_circuits([ ('Gcnot','Gxi') ])
+        #listOfExperiments = pygsti.circuits.to_circuits([ ('Gxi','Gcphase','Gxi','Gix') ])
 
         mdl_normal = stdChk.target_model().copy()
         mdl_clifford = stdChk.target_model().copy()

@@ -18,11 +18,11 @@ class InstrumentTestCase(BaseTestCase):
         Erem = self.target_model.povms['Mdefault']['1']
         Gmz_plus = np.dot(E,E.T)
         Gmz_minus = np.dot(Erem,Erem.T)
-        self.target_model.instruments['Iz'] = pygsti.obj.Instrument({'plus': Gmz_plus, 'minus': Gmz_minus})
+        self.target_model.instruments['Iz'] = pygsti.modelmembers.instruments.Instrument({'plus': Gmz_plus, 'minus': Gmz_minus})
         self.povm_ident = self.target_model.povms['Mdefault']['0'] + self.target_model.povms['Mdefault']['1']
 
         self.mdl_target_wTP = self.target_model.copy()
-        self.mdl_target_wTP.instruments['IzTP'] = pygsti.obj.TPInstrument({'plus': Gmz_plus, 'minus': Gmz_minus})
+        self.mdl_target_wTP.instruments['IzTP'] = pygsti.modelmembers.instruments.TPInstrument({'plus': Gmz_plus, 'minus': Gmz_minus})
 
         super(InstrumentTestCase, self).setUp()
 
@@ -30,11 +30,13 @@ class InstrumentTestCase(BaseTestCase):
         #Test instrument construction with elements whose gpindices are already initialized.
         # Since this isn't allowed currently (a future functionality), we need to do some hacking
         E = self.target_model.povms['Mdefault']['0']
-        InstEl = pygsti.obj.FullDenseOp(np.dot(E, E.T))
+        InstEl = pygsti.modelmembers.operations.FullArbitraryOp(np.dot(E, E.T))
         InstEl2 = InstEl.copy()
         nParams = InstEl.num_params # should be 16
 
-        I = pygsti.obj.Instrument({})
+        I = pygsti.modelmembers.instruments.Instrument({},
+                                                       evotype='default',
+                                                       state_space=pygsti.baseobjs.statespace.default_space_for_udim(2))
         InstEl.set_gpindices(slice(0,16), I)
         InstEl2.set_gpindices(slice(8,24), I) # some overlap - to test _build_paramvec
 
@@ -44,11 +46,10 @@ class InstrumentTestCase(BaseTestCase):
         I['B'] = InstEl2
         I._readonly = True
 
-        I._paramvec = I._build_paramvec()
+        I._paramvec, I._paramlbls = I._build_paramvec()
           # this whole test was to exercise this function's ability to
           # form a parameter vector with weird overlapping gpindices.
         self.assertEqual( len(I._paramvec) , 24 )
-
 
     def testInstrumentMethods(self):
 
@@ -71,15 +72,18 @@ class InstrumentTestCase(BaseTestCase):
         mdl.rotate(max_rotate=0.01, seed=1234)
 
     def testChangeDimension(self):
+        larger_ss = pygsti.baseobjs.ExplicitStateSpace([('L%d' % i,) for i in range(6)])
+        smaller_ss = pygsti.baseobjs.ExplicitStateSpace([('L%d' % i,) for i in range(3)])
+
         mdl = self.target_model.copy()
-        new_gs = mdl.increase_dimension(6)
-        new_gs = mdl._decrease_dimension(3)
+        new_gs = mdl.increase_dimension(larger_ss)
+        new_gs = mdl._decrease_dimension(smaller_ss)
 
         #TP
         mdl = self.target_model.copy()
         mdl.set_all_parameterizations("TP")
-        new_gs = mdl.increase_dimension(6)
-        new_gs = mdl._decrease_dimension(3)
+        new_gs = mdl.increase_dimension(larger_ss)
+        new_gs = mdl._decrease_dimension(smaller_ss)
 
 
     def testIntermediateMeas(self):
@@ -93,12 +97,12 @@ class InstrumentTestCase(BaseTestCase):
         Uerr = pygsti.rotation_gate_mx([0, 0.02, 0]) # input angles are halved by the method
         E = np.dot(mdl.povms['Mdefault']['0'].T,Uerr).T # effect is stored as column vector
         Erem = self.povm_ident - E
-        mdl.povms['Mdefault'] = pygsti.obj.UnconstrainedPOVM({'0': E, '1': Erem})
+        mdl.povms['Mdefault'] = pygsti.modelmembers.povms.UnconstrainedPOVM({'0': E, '1': Erem}, evotype='default')
 
         # Now add the post-measurement gates from the vector E0 and remainder = id-E0
         Gmz_plus = np.dot(E,E.T) #since E0 is stored internally as column spamvec
         Gmz_minus = np.dot(Erem,Erem.T)
-        mdl.instruments['Iz'] = pygsti.obj.Instrument({'plus': Gmz_plus, 'minus': Gmz_minus})
+        mdl.instruments['Iz'] = pygsti.modelmembers.instruments.Instrument({'plus': Gmz_plus, 'minus': Gmz_minus})
         self.assertEqual(mdl.num_params,92) # 4*3 + 16*5 = 92
         #print(mdl)
 
@@ -106,16 +110,16 @@ class InstrumentTestCase(BaseTestCase):
         fiducials = std.fiducials
         max_lengths = [1] #,2,4,8]
         glbls = list(mdl.operations.keys()) + list(mdl.instruments.keys())
-        lsgst_struct = pygsti.construction.create_lsgst_circuits(
+        lsgst_struct = pygsti.circuits.create_lsgst_circuits(
             glbls,fiducials,fiducials,germs,max_lengths)
-        lsgst_struct2 = pygsti.construction.create_lsgst_circuits(
+        lsgst_struct2 = pygsti.circuits.create_lsgst_circuits(
             mdl,fiducials,fiducials,germs,max_lengths) #use mdl as source
         self.assertEqual(list(lsgst_struct), list(lsgst_struct2))
 
 
 
         mdl_datagen = mdl
-        ds = pygsti.construction.simulate_data(mdl, lsgst_struct, 1000, 'none') #'multinomial')
+        ds = pygsti.data.simulate_data(mdl, lsgst_struct, 1000, 'none') #'multinomial')
         pygsti.io.write_dataset(temp_files + "/intermediate_meas_dataset.txt", ds)
         ds2 = pygsti.io.load_dataset(temp_files + "/intermediate_meas_dataset.txt")
         for opstr,dsRow in ds.items():
@@ -135,9 +139,9 @@ class InstrumentTestCase(BaseTestCase):
         #print(mdl_datagen)
 
         #DEBUG compiling w/dataset
-        #dbList = pygsti.construction.create_lsgst_circuits(self.target_model,fiducials,fiducials,germs,max_lengths)
+        #dbList = pygsti.circuits.create_lsgst_circuits(self.target_model,fiducials,fiducials,germs,max_lengths)
         ##self.target_model.simplify_circuits(dbList, ds)
-        #self.target_model.simplify_circuits([ pygsti.obj.Circuit(None,stringrep="Iz") ], ds )
+        #self.target_model.simplify_circuits([ pygsti.circuits.Circuit(None,stringrep="Iz") ], ds )
         #assert(False),"STOP"
 
         #LSGST
@@ -163,14 +167,14 @@ class InstrumentTestCase(BaseTestCase):
 
     def testBasicGatesetOps(self):
         # This test was made from a debug script used to get the code working
-        model = pygsti.construction.create_explicit_model_from_expressions(
+        model = pygsti.models.modelconstruction.create_explicit_model_from_expressions(
             [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"])
         #    prep_labels=["rho0"], prep_expressions=["0"],
         #    effect_labels=["0","1"], effect_expressions=["0","complement"])
 
-        v0 = modelconstruction._basis_create_spam_vector("0", pygsti.obj.Basis.cast("pp", 4))
-        v1 = modelconstruction._basis_create_spam_vector("1", pygsti.obj.Basis.cast("pp", 4))
+        v0 = modelconstruction._basis_create_spam_vector("0", pygsti.baseobjs.Basis.cast("pp", 4))
+        v1 = modelconstruction._basis_create_spam_vector("1", pygsti.baseobjs.Basis.cast("pp", 4))
         P0 = np.dot(v0,v0.T)
         P1 = np.dot(v1,v1.T)
         print("v0 = ",v0)
@@ -178,7 +182,7 @@ class InstrumentTestCase(BaseTestCase):
         print("P1 = ",P0)
         #print("P0+P1 = ",P0+P1)
 
-        model.instruments["Itest"] = pygsti.obj.Instrument([('0', P0), ('1', P1)])
+        model.instruments["Itest"] = pygsti.modelmembers.instruments.Instrument([('0', P0), ('1', P1)])
 
         for param in ("full","TP","CPTP"):
             print(param)
@@ -232,7 +236,7 @@ class InstrumentTestCase(BaseTestCase):
         gatestring1 = ('Gx','Gy')
         gatestring2 = ('Gx','Gy','Gy')
 
-        p1 = np.dot( model.operations['Gy'], model.operations['Gx'] )
+        p1 = np.dot( model.operations['Gy'].to_dense(), model.operations['Gx'].to_dense())
         p2 = model.sim.product(gatestring1, scale=False)
         p3,scale = model.sim.product(gatestring1, scale=True)
 
@@ -246,8 +250,8 @@ class InstrumentTestCase(BaseTestCase):
 
         layout = model.sim.create_layout( [gatestring1,gatestring2] )
 
-        p1 = np.dot( model.operations['Gy'], model.operations['Gx'] )
-        p2 = np.dot( model.operations['Gy'], np.dot( model.operations['Gy'], model.operations['Gx'] ))
+        p1 = np.dot( model.operations['Gy'].to_dense(), model.operations['Gx'].to_dense() )
+        p2 = np.dot( model.operations['Gy'].to_dense(), np.dot( model.operations['Gy'].to_dense(), model.operations['Gx'].to_dense() ))
 
         bulk_prods = model.sim.bulk_product([gatestring1,gatestring2])
         bulk_prods_scaled, scaleVals = model.sim.bulk_product([gatestring1,gatestring2], scale=True)
@@ -264,8 +268,8 @@ class InstrumentTestCase(BaseTestCase):
         layout = model.sim.create_layout( [gatestring1,gatestring2] )
 
         p1 = np.dot( np.transpose(model.povms['Mdefault']['0'].to_dense()),
-                     np.dot( model.operations['Gy'],
-                             np.dot(model.operations['Gx'],
+                     np.dot( model.operations['Gy'].to_dense(),
+                             np.dot(model.operations['Gx'].to_dense(),
                                     model.preps['rho0'].to_dense())))
         probs = model.probabilities(gatestring1)
         print(probs)
@@ -298,10 +302,10 @@ class InstrumentTestCase(BaseTestCase):
 
     def testAdvancedGateStrs(self):
         #specify prep and/or povm labels in operation sequence:
-        circuit_normal = pygsti.obj.Circuit(('Gx',))
-        circuit_wprep = pygsti.obj.Circuit(('rho0', 'Gx'))
-        circuit_wpovm = pygsti.obj.Circuit(('Gx', 'Mdefault'))
-        circuit_wboth = pygsti.obj.Circuit(('rho0', 'Gx', 'Mdefault'))
+        circuit_normal = pygsti.circuits.Circuit(('Gx',))
+        circuit_wprep = pygsti.circuits.Circuit(('rho0', 'Gx'))
+        circuit_wpovm = pygsti.circuits.Circuit(('Gx', 'Mdefault'))
+        circuit_wboth = pygsti.circuits.Circuit(('rho0', 'Gx', 'Mdefault'))
 
         #Now compute probabilities for these:
         model = self.target_model.copy()
@@ -327,7 +331,7 @@ class InstrumentTestCase(BaseTestCase):
 
         s = str(mdl) #stringify with instruments
 
-        for param in ('full','TP','CPTP','static'):
+        for param in ('full','TP','static'):  # skip 'CPTP' b/c cannot serialize that to text anymore
             print("Param: ",param)
             mdl.set_all_parameterizations(param)
             filename = temp_files + "/gateset_with_instruments_%s.txt" % param

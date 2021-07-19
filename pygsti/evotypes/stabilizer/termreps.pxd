@@ -41,7 +41,7 @@ cdef double SMALL = 1e-5
 # magnitude from being zero (and losing memory of terms).
 
 
-cdef extern from "termcreps.h" namespace "CReps":
+cdef extern from "termcreps.h" namespace "CReps_stabilizer":
     cdef cppclass TermCRep:
         TermCRep(PolynomialCRep*, double, double, StateCRep*, StateCRep*, vector[OpCRep*], vector[OpCRep*]) except +
         TermCRep(PolynomialCRep*, double, double, EffectCRep*, EffectCRep*, vector[OpCRep*], vector[OpCRep*]) except +

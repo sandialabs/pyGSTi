@@ -114,7 +114,7 @@ class ImplicitOpModel(_mdl.OpModel):
         copy_into.factories = _collections.OrderedDict([(lbl, fdict.copy(copy_into, memo))
                                                        for lbl, fdict in self.factories.items()])
 
-        copy_into.state_space = self.state_space.copy()  # needed by simplifier helper
+        copy_into._state_space = self.state_space.copy()  # needed by simplifier helper
 
     def __setstate__(self, state_dict):
         super().__setstate__(state_dict)

@@ -6,7 +6,8 @@ import pygsti
 import pygsti.io.stdinput as stdin
 from pygsti import io
 from pygsti.modelpacks.legacy import std1Q_XYI as std
-from pygsti.objects import Circuit, CircuitLabel
+from pygsti.circuits import Circuit
+from pygsti.baseobjs.label import CircuitLabel
 from . import IOBase, with_temp_path, with_temp_file
 
 
