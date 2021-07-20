@@ -55,7 +55,7 @@ class ReportBaseCase(BaseTestCase):
         mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst, target_model, {'gates': 1.0, 'spam': 0.0})
         cls.mdl_clgst = pygsti.contract(mdl_lgst_go, "CPTP")
         cls.mdl_clgst_tp = pygsti.contract(cls.mdl_clgst, "vSPAM")
-        cls.mdl_clgst_tp.set_all_parameterizations("TP")
+        cls.mdl_clgst_tp.set_all_parameterizations("full TP")
 
         #Compute results for MC2GST
         lsgst_gatesets_prego, *_ = pygsti.run_iterative_gst(
@@ -98,7 +98,7 @@ class ReportBaseCase(BaseTestCase):
 
         #Compute results for MLGST with TP constraint
         # Use run_long_sequence_gst with a non-mark dataset to trigger data scaling
-        tp_target = target_model.copy(); tp_target.set_all_parameterizations("TP")
+        tp_target = target_model.copy(); tp_target.set_all_parameterizations("full TP")
 
 
         cls.ds3 = cls.ds.copy_nonstatic()
@@ -126,7 +126,7 @@ class ReportBaseCase(BaseTestCase):
         #                          'weights': None, 'defaultDirectory': temp_files + "",
         #                          'defaultBasename': "MyDefaultReportName"})
         #
-        #tp_target = target_model.copy(); tp_target.set_all_parameterizations("TP")
+        #tp_target = target_model.copy(); tp_target.set_all_parameterizations("full TP")
         #gaugeOptParams = gaugeOptParams.copy() #just to be safe
         #gaugeOptParams['model'] = lsgst_gatesets_TP[-1]  #so can gauge-propagate CIs
         #gaugeOptParams['target_model'] = tp_target  #so can gauge-propagate CIs

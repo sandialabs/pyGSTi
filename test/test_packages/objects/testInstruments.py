@@ -81,7 +81,7 @@ class InstrumentTestCase(BaseTestCase):
 
         #TP
         mdl = self.target_model.copy()
-        mdl.set_all_parameterizations("TP")
+        mdl.set_all_parameterizations("full TP")
         new_gs = mdl.increase_dimension(larger_ss)
         new_gs = mdl._decrease_dimension(smaller_ss)
 
@@ -155,7 +155,7 @@ class InstrumentTestCase(BaseTestCase):
 
         #LGST w/TP gates
         mdl_targetTP = self.target_model.copy()
-        mdl_targetTP.set_all_parameterizations("TP")
+        mdl_targetTP.set_all_parameterizations("full TP")
         self.assertEqual(mdl_targetTP.num_params,71) # 3 + 4*2 + 12*5 = 71
         #print(mdl_targetTP)
         resultsTP = pygsti.run_long_sequence_gst(ds, mdl_targetTP, fiducials, fiducials, germs, max_lengths)
@@ -184,7 +184,7 @@ class InstrumentTestCase(BaseTestCase):
 
         model.instruments["Itest"] = pygsti.modelmembers.instruments.Instrument([('0', P0), ('1', P1)])
 
-        for param in ("full","TP","CPTP"):
+        for param in ("full","full TP","CPTP"):
             print(param)
             model.set_all_parameterizations(param)
             model.to_vector() # builds & cleans paramvec for tests below
@@ -331,7 +331,7 @@ class InstrumentTestCase(BaseTestCase):
 
         s = str(mdl) #stringify with instruments
 
-        for param in ('full','TP','static'):  # skip 'CPTP' b/c cannot serialize that to text anymore
+        for param in ('full','full TP','static'):  # skip 'CPTP' b/c cannot serialize that to text anymore
             print("Param: ",param)
             mdl.set_all_parameterizations(param)
             filename = temp_files + "/gateset_with_instruments_%s.txt" % param

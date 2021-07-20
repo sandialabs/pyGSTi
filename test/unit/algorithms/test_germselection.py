@@ -96,7 +96,7 @@ class GermSelectionTester(GermSelectionData, BaseCase):
         gs3 = fixtures.model.copy()
         gs4 = fixtures.model.copy()
         gs1.set_all_parameterizations("full")
-        gs2.set_all_parameterizations("TP")
+        gs2.set_all_parameterizations("full TP")
         gs3.set_all_parameterizations("full")
         gs4.set_all_parameterizations("full")
         gs3.operations['Gi2'] = np.identity(4, 'd')  # adds non-gauge params but not gauge params

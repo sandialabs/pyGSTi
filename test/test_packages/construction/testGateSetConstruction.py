@@ -19,7 +19,7 @@ class TestGateSetConstructionMethods(BaseTestCase):
 
     def test_build_gatesets(self):
         SQ2 = 1/np.sqrt(2)
-        for defParamType in ("full", "TP", "static"):
+        for defParamType in ("full", "full TP", "static"):
             gateset_simple = pygsti.models.ExplicitOpModel(['Q0'], 'pp', defParamType)
             gateset_simple['rho0'] = [SQ2, 0, 0, SQ2]
             gateset_simple['Mdefault'] = pygsti.modelmembers.povms.UnconstrainedPOVM([('0', [SQ2, 0, 0, -SQ2])], evotype='default')

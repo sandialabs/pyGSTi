@@ -39,7 +39,7 @@ class ParallelTest(object):
         ds = pygsti.data.simulate_data(mdl_datagen, exp_design, 1000, seed=1234, comm=comm)
         data = pygsti.protocols.ProtocolData(exp_design, ds)
 
-        initial_model = std.target_model("TP")
+        initial_model = std.target_model("full TP")
         proto = pygsti.protocols.GateSetTomography(initial_model, verbosity=1,
                                                    optimizer={'maxiter': 100, 'serial_solve_proc_threshold': 100})
 

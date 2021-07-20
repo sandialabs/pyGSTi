@@ -1104,11 +1104,7 @@ class CloudNoiseLayerRules(_LayerRules):
             targetOp = Composed([op for op in to_compose if op is not None],
                                 evotype=model.evotype, state_space=model.state_space)
         else:
-            try:
-                targetOp = self._layer_component_targetop(model, components[0], caches['op-layers'])
-            except:
-                import bpdb; bpdb.set_trace()
-                print("PROB")
+            targetOp = self._layer_component_targetop(model, components[0], caches['op-layers'])
         ops_to_compose = [targetOp] if (targetOp is not None) else []
 
         if self.errcomp_type == "gates":

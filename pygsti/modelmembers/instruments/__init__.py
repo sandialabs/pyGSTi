@@ -36,6 +36,7 @@ def get_instrument_type_from_op_type(op_type):
     instr_conversion = {
         'auto': 'full',
         'static unitary': 'static unitary',
+        'static clifford': 'static clifford',
         'static': 'static',
         'full': 'full',
         'full TP': 'TP',
@@ -64,6 +65,7 @@ def get_instrument_type_from_op_type(op_type):
         )
 
     return instr_type_preferences
+
 
 def convert(instrument, to_type, basis, extra=None):
     """
@@ -95,15 +97,21 @@ def convert(instrument, to_type, basis, extra=None):
         The converted instrument, usually a distinct
         object from the object passed as input.
     """
+    to_types = to_type if isinstance(to_type, (tuple, list)) else (to_type,)  # HACK to support multiple to_type values
+    for to_type in to_types:
+        try:
+            if to_type == "TP":
+                if isinstance(instrument, TPInstrument):
+                    return instrument
+                else:
+                    return TPInstrument(list(instrument.items()), instrument.evotype, instrument.state_space)
+            elif to_type in ("full", "static", "static unitary"):
+                from ..operations import convert as _op_convert
+                gate_list = [(k, _op_convert(g, to_type, basis)) for k, g in instrument.items()]
+                return Instrument(gate_list, instrument.evotype, instrument.state_space)
+            else:
+                raise ValueError("Cannot convert an instrument to type %s" % to_type)
+        except:
+            pass  # try next to_type
 
-    if to_type == "TP":
-        if isinstance(instrument, TPInstrument):
-            return instrument
-        else:
-            return TPInstrument(list(instrument.items()), instrument.evotype, instrument.state_space)
-    elif to_type in ("full", "static", "static unitary"):
-        from ..operations import convert as _op_convert
-        gate_list = [(k, _op_convert(g, to_type, basis)) for k, g in instrument.items()]
-        return Instrument(gate_list, instrument.evotype, instrument.state_space)
-    else:
-        raise ValueError("Cannot convert an instrument to type %s" % to_type)
+    raise ValueError("Could not convert instrument to to type(s): %s" % str(to_types))

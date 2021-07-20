@@ -421,7 +421,7 @@ class TPOpTester(MutableDenseOpBase, BaseCase):
 
     @staticmethod
     def build_gate():
-        return _create_operation([(4,)], [('Q0',)], "Y(pi/4,Q0)", "gm", parameterization="TP")
+        return _create_operation([(4,)], [('Q0',)], "Y(pi/4,Q0)", "gm", parameterization="full TP")
 
     #REMOVED - we don't support .compose methods anymore
     #def test_composition(self):
@@ -446,7 +446,7 @@ class TPOpTester(MutableDenseOpBase, BaseCase):
 
     def test_convert(self):
         conv = op.convert(self.gate, "full", "gm")
-        conv = op.convert(self.gate, "TP", "gm")
+        conv = op.convert(self.gate, "full TP", "gm")
         # TODO assert correctness
 
     def test_first_row_read_only(self):

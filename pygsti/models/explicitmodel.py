@@ -112,7 +112,7 @@ class ExplicitOpModel(_mdl.OpModel):
         #                         'H+S terms','clifford','H+S clifford terms'))
         def flagfn(typ): return {'auto_embed': True, 'match_parent_statespace': True,
                                  'match_parent_evotype': True, 'cast_to_type': typ}
-        
+
         if default_prep_type == "auto":
             default_prep_type = _state.get_state_type_from_op_type(default_gate_type)
         if default_povm_type == "auto":
@@ -404,7 +404,7 @@ class ExplicitOpModel(_mdl.OpModel):
 
         if typ == 'full':
             self.default_gauge_group = _gg.FullGaugeGroup(self.state_space, self.evotype)
-        elif typ == 'TP':
+        elif typ == 'full TP':
             self.default_gauge_group = _gg.TPGaugeGroup(self.state_space, self.evotype)
         elif typ == 'CPTP':
             self.default_gauge_group = _gg.UnitaryGaugeGroup(self.state_space, basis, self.evotype)
@@ -1151,7 +1151,8 @@ class ExplicitOpModel(_mdl.OpModel):
         sslbls = [('L%d' % i,) for i in range(new_dimension)]  # interpret as independent classical levels
         dumb_basis = _DirectSumBasis([_BuiltinBasis('gm', 1)] * new_dimension,
                                      name="Unknown")  # - just act on diagonal density mx
-        new_model = ExplicitOpModel(sslbls, dumb_basis, "full", self.preps._prefix, self.effects_prefix,
+        new_model = ExplicitOpModel(sslbls, dumb_basis, "full", "auto", "auto", "auto",
+                                    self.preps._prefix, self.effects_prefix,
                                     self.operations._prefix, self.povms._prefix,
                                     self.instruments._prefix, self._sim.copy())
         #new_model._dim = new_dimension # dim will be set when elements are added
@@ -1232,7 +1233,8 @@ class ExplicitOpModel(_mdl.OpModel):
         sslbls = [('L%d' % i,) for i in range(new_dimension)]  # interpret as independent classical levels
         dumb_basis = _DirectSumBasis([_BuiltinBasis('gm', 1)] * new_dimension,
                                      name="Unknown")  # - just act on diagonal density mx
-        new_model = ExplicitOpModel(sslbls, dumb_basis, "full", self.preps._prefix, self.effects_prefix,
+        new_model = ExplicitOpModel(sslbls, dumb_basis, "full", "auto", "auto", "auto",
+                                    self.preps._prefix, self.effects_prefix,
                                     self.operations._prefix, self.povms._prefix,
                                     self.instruments._prefix, self._sim.copy())
         #new_model._dim = new_dimension # dim will be set when elements are added

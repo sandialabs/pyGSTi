@@ -219,12 +219,8 @@ def set_idle_errors(nqubits, model, errdict, rand_default=None,
             experrgen_op = factor
             targetLabels = model.state_space.qubit_labels
 
-        try:
-            assert(isinstance(experrgen_op, _op.ExpErrorgenOp)), \
-                "Expected idle op to be a composition of possibly embedded exp(errorgen) gates!"
-        except:
-            import bpdb; bpdb.set_trace()
-            print("PROB")
+        assert(isinstance(experrgen_op, _op.ExpErrorgenOp)), \
+            "Expected idle op to be a composition of possibly embedded exp(errorgen) gates!"
 
         sub_v = v[factor.gpindices]
         bsH = experrgen_op.errorgen.ham_basis_size
@@ -407,12 +403,8 @@ def predicted_intrinsic_rates(nqubits, maxweight, model,
             experrgen_op = factor
             targetLabels = model.state_space.qubit_labels
 
-        try:
-            assert(isinstance(experrgen_op, _op.ExpErrorgenOp)), \
-                "Expected idle op to be a composition of possibly embedded exp(errorgen) gates!"
-        except:
-            import bpdb; bpdb.set_trace()
-            print("PROB2")
+        assert(isinstance(experrgen_op, _op.ExpErrorgenOp)), \
+            "Expected idle op to be a composition of possibly embedded exp(errorgen) gates!"
             
         errgen_coeffs = experrgen_op.errorgen_coefficients()
         nTargetQubits = len(targetLabels)

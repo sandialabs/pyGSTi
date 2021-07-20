@@ -355,9 +355,6 @@ def compile_symplectic(s, pspec=None, absolute_compilation=None, paulieq_compila
             assert(len(qubit_labels) == n), \
                 "The subset of qubits to compile `s` for is the wrong size for this symplectic matrix!"
     else:
-        if qubit_labels is not None:
-            import bpdb; bpdb.set_trace()
-            pass
         assert(qubit_labels is None), "qubit_labels can only be specified if `pspec` is not None!"
 
     if rand_state is None:

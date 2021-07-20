@@ -55,7 +55,7 @@ class TimeDependentTestCase(BaseTestCase):
         super(TimeDependentTestCase, self).setUp()
 
     def test_time_dependent_datagen(self):
-        mdl = std1Q_XYI.target_model("TP",sim_type="map")
+        mdl = std1Q_XYI.target_model("full TP",sim_type="map")
         mdl.operations['Gi'] = MyTimeDependentIdle(1.0)
 
         #Create a time-dependent dataset (simulation of time-dependent model):
@@ -82,7 +82,7 @@ class TimeDependentTestCase(BaseTestCase):
         germs = std1Q_XYI.germs
         maxLengths = [1, 2]
 
-        target_model = std1Q_XYI.target_model("TP", sim_type="map")
+        target_model = std1Q_XYI.target_model("full TP", sim_type="map")
         mdl_datagen = target_model.depolarize(op_noise=0.01, spam_noise=0.001)
         edesign = pygsti.protocols.StandardGSTDesign(target_model.create_processor_spec(), prep_fiducials,
                                                      meas_fiducials, germs, maxLengths)
@@ -126,7 +126,7 @@ class TimeDependentTestCase(BaseTestCase):
         germs = std1Q_XYI.germs
         maxLengths = [1, 2]
 
-        target_model = std1Q_XYI.target_model("TP",sim_type="map")
+        target_model = std1Q_XYI.target_model("full TP",sim_type="map")
         mdl_datagen = target_model.depolarize(op_noise=0.01, spam_noise=0.001)
         mdl_datagen.operations['Gi'] = MyTimeDependentIdle(1.0)
         edesign = pygsti.protocols.StandardGSTDesign(target_model.create_processor_spec(), prep_fiducials,

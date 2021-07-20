@@ -133,7 +133,7 @@ def convert(operation, to_type, basis, extra=None):
     operation : LinearOperator
         LinearOperator to convert
 
-    to_type : {"full","TP","static","static unitary","clifford",LINDBLAD}
+    to_type : {"full","full TP","static","static unitary","clifford",LINDBLAD}
         The type of parameterizaton to convert to.  "LINDBLAD" is a placeholder
         for the various Lindblad parameterization types.  See
         :method:`Model.set_all_parameterizations` for more details.
@@ -152,7 +152,7 @@ def convert(operation, to_type, basis, extra=None):
         The converted operation, usually a distinct
         object from the operation object passed as input.
     """
-    to_types = to_type if isinstance(to_type, tuple) else (to_type,)  # HACK to support multiple to_type values
+    to_types = to_type if isinstance(to_type, (tuple, list)) else (to_type,)  # HACK to support multiple to_type values
     for to_type in to_types:
         try:
             if to_type == "full":
@@ -161,7 +161,7 @@ def convert(operation, to_type, basis, extra=None):
                 else:
                     return FullArbitraryOp(operation.to_dense(), operation.evotype, operation.state_space)
         
-            elif to_type == "TP":
+            elif to_type == "full TP":
                 if isinstance(operation, FullTPOp):
                     return operation  # no conversion necessary
                 else:
@@ -237,7 +237,7 @@ def convert(operation, to_type, basis, extra=None):
         except:
             pass  # try next to_type
 
-    raise ValueError("Could not convert operation to to type: %s" % str(to_types))
+    raise ValueError("Could not convert operation to to type(s): %s" % str(to_types))
 
 
 def check_deriv_wrt_params(operation, deriv_to_check=None, wrt_filter=None, eps=1e-7):

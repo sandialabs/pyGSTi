@@ -102,7 +102,7 @@ class TestWorkspace(ReportBaseCase):
 
         gsMultiSpam = self.mdl.copy()
         gsMultiSpam.povms['Msecondpovm'] = self.mdl.povms['Mdefault'].copy()
-        gsTP = self.tgt.depolarize(0.01,0.01); gsTP.set_all_parameterizations("TP")
+        gsTP = self.tgt.depolarize(0.01,0.01); gsTP.set_all_parameterizations("full TP")
         gsCPTP = self.tgt.depolarize(0.01,0.01); gsCPTP.set_all_parameterizations("CPTP")
         gsGM = self.mdl.depolarize(0.01,0.01); gsGM.basis = pygsti.baseobjs.Basis.cast("gm", 4)
         gsSTD = self.mdl.depolarize(0.01,0.01); gsSTD.basis = pygsti.baseobjs.Basis.cast("std", 4)

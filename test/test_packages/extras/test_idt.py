@@ -270,7 +270,7 @@ class IDTTestCase(BaseTestCase):
         ds = pygsti.data.filter_dataset(ds2Q, (0,))
 
         start = std.target_model()
-        start.set_all_parameterizations("TP")
+        start.set_all_parameterizations("full TP")
         result = pygsti.run_long_sequence_gst(ds, start, std.prepStrs[0:4], std.effectStrs[0:4],
                                               std.germs_lite, maxLens, verbosity=3, advanced_options={'objective': 'chi2'})
         #result = pygsti.run_model_test(start.depolarize(0.009,0.009), ds, std.target_model(), std.prepStrs[0:4],

@@ -70,17 +70,17 @@ class ModelBase(object):
 
 class FullModelBase(ModelBase):
     """Base class for test cases using a full-parameterized model"""
-    build_options = {'parameterization': 'full'}
+    build_options = {'gate_type': 'full'}
 
 
 class TPModelBase(ModelBase):
     """Base class for test cases using a TP-parameterized model"""
-    build_options = {'parameterization': 'TP'}
+    build_options = {'gate_type': 'full TP'}
 
 
 class StaticModelBase(ModelBase):
     """Base class for test cases using a static-parameterized model"""
-    build_options = {'parameterization': 'static'}
+    build_options = {'gate_type': 'static'}
 
 
 ##
@@ -104,7 +104,7 @@ class GeneralMethodBase(object):
         )
 
     def test_set_all_parameterizations_TP(self):
-        self.model.set_all_parameterizations("TP")
+        self.model.set_all_parameterizations("full TP")
         self._assert_model_params(
             nOperations=3,
             nSPVecs=1,

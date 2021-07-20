@@ -268,6 +268,8 @@ def _basis_create_operation(state_space, op_expr, basis="gm", parameterization="
     # -- End Helper Functions ------------------------------------------------------------------------------------------
     # ------------------------------------------------------------------------------------------------------------------
 
+    #FUTURE?: type_preferences = ('static standard', 'static clifford', 'static unitary')
+    build_evotype = 'default'
     superop_mxs_in_basis = []
     exprTerms = op_expr.split(':')
     for exprTerm in exprTerms:
@@ -282,7 +284,13 @@ def _basis_create_operation(state_space, op_expr, basis="gm", parameterization="
             labels = to_labels(args)
             stateSpaceUDim = int(_np.product([state_space.label_udimension(l) for l in labels]))
             # a complex 2x2 mx unitary for the identity in Pauli-product basis
-            Uop = _op.StaticUnitaryOp(_np.identity(stateSpaceUDim, 'complex'), 'pp', evotype)
+            Uop = _op.StaticUnitaryOp(_np.identity(stateSpaceUDim, 'complex'), 'pp', build_evotype)
+
+            #FUTURE?:
+            # stdname = 'Gi' if (stateSpaceUDim == 2) else None
+            # Uop = _op.create_from_unitary_mx(_np.identity(stateSpaceUDim, complex), type_preferences, 'pp',
+            #                                  stdname=stdname, evotype=evotype)
+            
             # a complex 2*num_qubits x 2*num_qubits mx unitary on full space in Pauli-product basis
             Uop_embed = _op.EmbeddedOp(state_space, labels, Uop)
             # a real 4*num_qubits x 4*num_qubits mx superoperator in final basis
@@ -322,7 +330,14 @@ def _basis_create_operation(state_space, op_expr, basis="gm", parameterization="
             elif opName == 'Z': ex = -1j * theta * sigmaz / 2
 
             # complex 2x2 unitary matrix operating on single qubit in Pauli-product basis
-            Uop = _op.StaticUnitaryOp(_spl.expm(ex), 'pp', evotype)
+            Uop = _op.StaticUnitaryOp(_spl.expm(ex), 'pp', build_evotype)
+
+            #FUTURE?:
+            #stdname = None
+            #if _np.isclose(theta, _np.pi): stdname = 'G%spi' % opName.lower()
+            #elif _np.isclose(theta, _np.pi/2): stdname = 'G%spi2' % opName.lower()
+            # Uop = _op.create_from_unitary_mx(_spl.expm(ex), type_preferences, 'pp', stdname=stdname, evotype=evotype)
+            
             # a complex 2*num_qubits x 2*num_qubits mx unitary on full space in Pauli-product basis
             Uop_embed = _op.EmbeddedOp(state_space, (label,), Uop)
             # a real 4*num_qubits x 4*num_qubits mx superoperator in Pauli-product basis
@@ -341,7 +356,8 @@ def _basis_create_operation(state_space, op_expr, basis="gm", parameterization="
 
             ex = -1j * theta * (sxCoeff * sigmax / 2. + syCoeff * sigmay / 2. + szCoeff * sigmaz / 2.)
             # complex 2x2 unitary matrix operating on single qubit in Pauli-product basis
-            Uop = _op.StaticUnitaryOp(_spl.expm(ex), 'pp', evotype=evotype)
+            Uop = _op.StaticUnitaryOp(_spl.expm(ex), 'pp', evotype=build_evotype)
+            #FUTURE?: Uop = _op.create_from_unitary_mx(_spl.expm(ex), type_preferences, 'pp', evotype=evotype)
             # a complex 2*num_qubits x 2*num_qubits mx unitary on full space in Pauli-product basis
             Uop_embed = _op.EmbeddedOp(state_space, (label,), Uop)
             # a real 4*num_qubits x 4*num_qubits mx superoperator in Pauli-product basis
@@ -377,7 +393,14 @@ def _basis_create_operation(state_space, op_expr, basis="gm", parameterization="
             assert(state_space.label_dimension(label1) == 4 and state_space.label_dimension(label2) == 4), \
                 "%s gate must act on qubits!" % opName
             # complex 4x4 unitary matrix operating on two-qubit in Pauli-product basis
-            Uop = _op.StaticUnitaryOp(U, 'pp', evotype)
+            Uop = _op.StaticUnitaryOp(U, 'pp', build_evotype)
+
+            #FUTURE?:
+            # if opName == "CNOT": stdname = "Gcnot"
+            # elif opName == "CPHASE": stdname = "Gcphase"
+            # else: stdname = None
+            # Uop = _op.create_from_unitary_mx(U, type_preferences, 'pp', stdname=stdname, evotype=evotype)
+
             # a complex 2*num_qubits x 2*num_qubits mx unitary on full space
             Uop_embed = _op.EmbeddedOp(state_space, [label1, label2], Uop)
             # a real 4*num_qubits x 4*num_qubits mx superoperator in Pauli-product basis
@@ -429,7 +452,8 @@ def _basis_create_operation(state_space, op_expr, basis="gm", parameterization="
         assert(_np.linalg.norm(final_superop_mx.imag) < 1e-6), "Operation matrix should be real but isn't!"
         final_superop_mx = _np.real(final_superop_mx)
 
-    return _op.create_from_superop_mx(final_superop_mx, parameterization, basis, evotype=evotype, state_space=state_space)
+    return _op.create_from_superop_mx(final_superop_mx, parameterization, basis,
+                                      evotype=evotype, state_space=state_space)
 
 
 @_deprecated_fn('_basis_create_operation(...)')
@@ -537,7 +561,6 @@ def _create_explicit_model_from_expressions(state_space, basis,
 
     for label, rhoExpr in zip(prep_labels, prep_expressions):
         vec = _basis_create_spam_vector(rhoExpr, basis)
-
         ret.preps[label] = _state.create_from_dmvec(vec, prep_type, basis, evotype, state_space)
 
     if isinstance(povm_labels, str):
@@ -575,8 +598,11 @@ def _create_explicit_model_from_expressions(state_space, basis,
         ret.default_gauge_group = _gg.FullGaugeGroup(ret.state_space, evotype)
     elif gate_type == "full TP":
         ret.default_gauge_group = _gg.TPGaugeGroup(ret.state_space, evotype)
+    elif gate_type == 'CPTP':
+        ret.default_gauge_group = _gg.UnitaryGaugeGroup(ret.state_space, basis, evotype)
     else:
-        ret.default_gauge_group = None  # assume no gauge freedom
+        #OLD REMOVE: ret.default_gauge_group = None  # assume no gauge freedom
+        ret.default_gauge_group = _gg.TrivialGaugeGroup(ret.state_space)
 
     return ret
 
@@ -773,7 +799,7 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
         return dummyop.to_dense("Hilbert")
 
     local_gates = _setup_local_gates(processor_spec, evotype, None, {}, ideal_gate_type)  # no custom *local* gates
-    ret = _emdl.ExplicitOpModel(state_space, basis, default_param=ideal_gate_type, evotype=evotype,
+    ret = _emdl.ExplicitOpModel(state_space, basis, default_gate_type=ideal_gate_type, evotype=evotype,
                                 simulator=simulator)
 
     # Special rule: when initializng an explicit model, if the processor spec has an implied global idle
@@ -942,6 +968,7 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
     # cases below.
 
     # Prep logic
+    if isinstance(ideal_prep_type, (tuple, list)): ideal_prep_type = ideal_prep_type[0]  # HACK to support multiple values
     if ideal_prep_type == 'computational' or ideal_prep_type.startswith('lindblad '):
         ideal_prep = _state.ComputationalBasisState([0] * num_qubits, 'pp', evotype, state_space)
 
@@ -994,6 +1021,7 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
         _add_to_prep_layers(ideal_prep, prep_ops_to_compose)
 
     # Povm logic
+    if isinstance(ideal_povm_type, (tuple, list)): ideal_povm_type = ideal_povm_type[0]  # HACK to support multiple values
     if ideal_povm_type == 'computational' or ideal_povm_type.startswith('lindblad '):
         ideal_povm = _povm.ComputationalBasisPOVM(num_qubits, evotype, state_space=state_space)
 
@@ -1460,7 +1488,7 @@ def create_crosstalk_free_model(processor_spec, custom_gates=None,
 
     return _create_crosstalk_free_model(processor_spec, _ComposedOpModelNoise(modelnoises), custom_gates, evotype,
                                         simulator, on_construction_error, independent_gates, independent_spam,
-                                        ensure_composed_gates, ideal_gate_type, ideal_spam_type)
+                                        ensure_composed_gates, ideal_gate_type, ideal_spam_type, ideal_spam_type)
 
 
 # num_qubits, gate_names, nonstd_gate_unitaries={}, availability=None, qubit_labels=None, geometry="line"

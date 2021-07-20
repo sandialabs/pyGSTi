@@ -503,14 +503,11 @@ def fidpairs_to_pauli_fidpairs(fidpairs_list, pauli_basis_dicts, nqubits):
         #Get gatenames_per_qubit (keys = sslbls, vals = lists of gatenames)
         #print("DB: Converting ",opstr)
         gatenames_per_qubit = _collections.defaultdict(list)
-        try:
-            for glbl in opstr:
-                for c in glbl.components:  # in case of parallel labels
-                    assert(len(c.sslbls) == 1)
-                    assert(isinstance(c.sslbls[0], int))
-                    gatenames_per_qubit[c.sslbls[0]].append(c.name)
-        except:
-            import bpdb; bpdb.set_trace()
+        for glbl in opstr:
+            for c in glbl.components:  # in case of parallel labels
+                assert(len(c.sslbls) == 1)
+                assert(isinstance(c.sslbls[0], int))
+                gatenames_per_qubit[c.sslbls[0]].append(c.name)
         #print("DB: gatenames_per_qubit =  ",gatenames_per_qubit)
         #print("DB: rev keys = ",list(rev_pauli_dict.keys()))
 

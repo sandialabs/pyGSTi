@@ -80,7 +80,7 @@ class StdPracticeGSTTester(LongSequenceBase):
     def test_stdpractice_gst_TP(self):
         result = ls.run_stdpractice_gst(
             self.ds, self.pspec, self.fiducials, self.fiducials,
-            self.germs, self.maxLens, modes="TP",
+            self.germs, self.maxLens, modes="full TP",
             models_to_test={"Test": self.mdl_guess}, comm=None,
             mem_limit=None, verbosity=5
         )
@@ -128,7 +128,7 @@ class StdPracticeGSTTester(LongSequenceBase):
 
         result = ls.run_stdpractice_gst(
             ds_path, pspec_path, fiducial_path, fiducial_path, germ_path,
-            self.maxLens, modes="TP", comm=None, mem_limit=None, verbosity=5
+            self.maxLens, modes="full TP", comm=None, mem_limit=None, verbosity=5
         )
         # TODO assert correctness
 
@@ -140,7 +140,7 @@ class StdPracticeGSTTester(LongSequenceBase):
         }
         result = ls.run_stdpractice_gst(
             self.ds, self.pspec, self.fiducials, self.fiducials,
-            self.germs, self.maxLens, modes="TP", comm=None,
+            self.germs, self.maxLens, modes="full TP", comm=None,
             mem_limit=None, verbosity=5, gaugeopt_target=self.mdl_guess,
             gaugeopt_suite=myGaugeOptSuiteDict
         )
@@ -156,7 +156,7 @@ class StdPracticeGSTTester(LongSequenceBase):
         with self.assertWarns(Warning):
             result = ls.run_stdpractice_gst(
                 self.ds, self.pspec, self.fiducials, self.fiducials,
-                self.germs, self.maxLens, modes="TP", comm=None,
+                self.germs, self.maxLens, modes="full TP", comm=None,
                 mem_limit=None, verbosity=5, gaugeopt_target=self.mdl_guess,
                 gaugeopt_suite=myGaugeOptSuiteDict
             )
@@ -165,7 +165,7 @@ class StdPracticeGSTTester(LongSequenceBase):
     def test_stdpractice_gst_advanced_options(self):
         result = ls.run_stdpractice_gst(
             self.ds, self.pspec, self.fiducials, self.fiducials,
-            self.germs, self.maxLens, modes="TP", comm=None,
+            self.germs, self.maxLens, modes="full TP", comm=None,
             mem_limit=None, verbosity=5,
             advanced_options={'all': {
                 'objective': 'chi2',
@@ -185,7 +185,7 @@ class StdPracticeGSTTester(LongSequenceBase):
             # TODO assert correctness
 
     def test_stdpractice_gst_raises_on_bad_mode(self):
-        with self.assertRaises(ValueError):
+        with self.assertRaises(RuntimeError):
             result = ls.run_stdpractice_gst(
                 self.ds, self.pspec, self.fiducials, self.fiducials,
                 self.germs, self.maxLens, modes="Foobar"

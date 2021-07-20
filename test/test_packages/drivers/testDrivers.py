@@ -218,7 +218,7 @@ class TestDriversMethods(DriversTestCase):
         maxLens = self.maxLens
         result = self.runSilent(pygsti.run_stdpractice_gst,
                                 ds, std.target_model().create_processor_spec(), std.fiducials, std.fiducials,
-                                std.germs, maxLens, modes="TP,CPTP,Test,Target",
+                                std.germs, maxLens, modes="full TP,CPTP,Test,Target",
                                 models_to_test = {"Test": mdl_guess},
                                 comm=None, mem_limit=None, verbosity=5)
         pygsti.report.create_standard_report(result, temp_files + "/full_report_stdpractice",
@@ -228,7 +228,7 @@ class TestDriversMethods(DriversTestCase):
         """Test bootstrap model generation"""
         ds = pygsti.data.DataSet(file_to_load_from=compare_files + "/drivers.dataset")
         tp_target = std.target_model()
-        tp_target.set_all_parameterizations("TP")
+        tp_target.set_all_parameterizations("full TP")
         mdl = pygsti.run_lgst(ds, std.fiducials, std.fiducials, target_model=tp_target, svd_truncate_to=4, verbosity=0)
 
         default_maxLens = [0]+[2**k for k in range(5)]

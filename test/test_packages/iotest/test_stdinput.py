@@ -650,7 +650,7 @@ BASIS: pp
         self._test_gateset_writeload('full')
 
     def test_read_model_TP_param(self):
-        self._test_gateset_writeload('TP')
+        self._test_gateset_writeload('full TP')
 
     @unittest.skip("Need to fix CPTP model serialization")
     def test_read_model_CPTP_param(self):
