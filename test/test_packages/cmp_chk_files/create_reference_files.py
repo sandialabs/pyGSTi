@@ -18,9 +18,9 @@ maxLengths = [1, 2, 4]  # roughly gives the length of the sequences used by GST
 
 # 3) generate "fake" data from a depolarized version of target_model
 mdl_datagen = target_model.depolarize(op_noise=0.01, spam_noise=0.001)
-listOfExperiments = pygsti.construction.create_lsgst_circuits(
+listOfExperiments = pygsti.circuits.create_lsgst_circuits(
     target_model, prep_fiducials, meas_fiducials, germs, maxLengths)
-ds = pygsti.construction.simulate_data(mdl_datagen, listOfExperiments, num_samples=1000,
+ds = pygsti.data.simulate_data(mdl_datagen, listOfExperiments, num_samples=1000,
                                        sample_error="binomial", seed=1234)
 
 results = pygsti.run_stdpractice_gst(ds, target_model, prep_fiducials, meas_fiducials,

@@ -14,7 +14,7 @@ class LogLTestCase(BaseTestCase):
         current_mem = pygsti.baseobjs.profiler._get_mem_usage
 
         musage("Initial")
-        ds = pygsti.objects.DataSet(file_to_load_from=compare_files + "/analysis.dataset")
+        ds = pygsti.data.DataSet(file_to_load_from=compare_files + "/analysis.dataset")
         model = pygsti.io.load_model(compare_files + "/analysis.model")
         musage("Pt1")
         
@@ -59,7 +59,7 @@ class LogLTestCase(BaseTestCase):
         from mpi4py import MPI
         comm = MPI.COMM_WORLD
         current_mem = pygsti.baseobjs.profiler._get_mem_usage
-        ds   = pygsti.objects.DataSet(file_to_load_from=compare_files + "/analysis.dataset")
+        ds   = pygsti.data.DataSet(file_to_load_from=compare_files + "/analysis.dataset")
         model = pygsti.io.load_model(compare_files + "/analysis.model")
         L = pygsti.logl_hessian(model, ds,
                                 prob_clip_interval=(-1e6,1e6), mem_limit=500*1024**2+current_mem(),

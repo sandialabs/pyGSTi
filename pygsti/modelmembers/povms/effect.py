@@ -14,6 +14,7 @@ import numpy as _np
 
 from pygsti.modelmembers import modelmember as _modelmember
 from pygsti.tools import optools as _ot
+from pygsti.baseobjs.opcalc import bulk_eval_compact_polynomials_complex as _bulk_eval_compact_polynomials_complex
 
 
 class POVMEffect(_modelmember.ModelMember):
@@ -318,3 +319,175 @@ class POVMEffect(_modelmember.ModelMember):
 
         # FUTURE: create a finite differencing hessian method?
         raise NotImplementedError("hessian_wrt_params(...) is not implemented for %s objects" % self.__class__.__name__)
+
+    def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
+        """
+        Get the `order`-th order Taylor-expansion terms of this effect vector.
+
+        This function either constructs or returns a cached list of the terms at
+        the given order.  Each term is "rank-1", meaning that it is a state
+        preparation followed by or POVM effect preceded by actions on a
+        density matrix `rho` of the form:
+
+        `rho -> A rho B`
+
+        The coefficients of these terms are typically polynomials of the
+        State's parameters, where the polynomial's variable indices index the
+        *global* parameters of the State's parent (usually a :class:`Model`)
+        , not the State's local parameter array (i.e. that returned from
+        `to_vector`).
+
+        Parameters
+        ----------
+        order : int
+            The order of terms to get.
+
+        max_polynomial_vars : int, optional
+            maximum number of variables the created polynomials can have.
+
+        return_coeff_polys : bool
+            Whether a parallel list of locally-indexed (using variable indices
+            corresponding to *this* object's parameters rather than its parent's)
+            polynomial coefficients should be returned as well.
+
+        Returns
+        -------
+        terms : list
+            A list of :class:`RankOneTerm` objects.
+
+        coefficients : list
+            Only present when `return_coeff_polys == True`.
+            A list of *compact* polynomial objects, meaning that each element
+            is a `(vtape,ctape)` 2-tuple formed by concatenating together the
+            output of :method:`Polynomial.compact`.
+        """
+        #NOTE: exact copy of State method - consolidate in FUTURE?
+        raise NotImplementedError("taylor_order_terms(...) not implemented for %s objects!" %
+                                  self.__class__.__name__)
+
+    def highmagnitude_terms(self, min_term_mag, force_firstorder=True, max_taylor_order=3, max_polynomial_vars=100):
+        """
+        Get terms with magnitude above `min_term_mag`.
+
+        Get the terms (from a Taylor expansion of this state vector) that have
+        magnitude above `min_term_mag` (the magnitude of a term is taken to
+        be the absolute value of its coefficient), considering only those
+        terms up to some maximum Taylor expansion order, `max_taylor_order`.
+
+        Note that this function also *sets* the magnitudes of the returned
+        terms (by calling `term.set_magnitude(...)`) based on the current
+        values of this state vector's parameters.  This is an essential step
+        to using these terms in pruned-path-integral calculations later on.
+
+        Parameters
+        ----------
+        min_term_mag : float
+            the threshold for term magnitudes: only terms with magnitudes above
+            this value are returned.
+
+        force_firstorder : bool, optional
+            if True, then always return all the first-order Taylor-series terms,
+            even if they have magnitudes smaller than `min_term_mag`.  This
+            behavior is needed for using GST with pruned-term calculations, as
+            we may begin with a guess model that has no error (all terms have
+            zero magnitude!) and still need to compute a meaningful jacobian at
+            this point.
+
+        max_taylor_order : int, optional
+            the maximum Taylor-order to consider when checking whether term-
+            magnitudes exceed `min_term_mag`.
+
+        max_polynomial_vars : int, optional
+            maximum number of variables the created polynomials can have.
+
+        Returns
+        -------
+        highmag_terms : list
+            A list of the high-magnitude terms that were found.  These
+            terms are *sorted* in descending order by term-magnitude.
+
+        first_order_indices : list
+            A list of the indices into `highmag_terms` that mark which
+            of these terms are first-order Taylor terms (useful when
+            we're forcing these terms to always be present).
+        """
+        #NOTE: SAME as for LinearOperator class and State class -- TODO consolidate in FUTURE
+        #print("DB: state get_high_magnitude_terms")
+        v = self.to_vector()
+        taylor_order = 0
+        terms = []; last_len = -1; first_order_magmax = 1.0
+        while len(terms) > last_len:  # while we keep adding something
+            if taylor_order > 1 and first_order_magmax**taylor_order < min_term_mag:
+                break  # there's no way any terms at this order reach min_term_mag - exit now!
+
+            MAX_CACHED_TERM_ORDER = 1
+            if taylor_order <= MAX_CACHED_TERM_ORDER:
+                #print("order ",taylor_order," : ",len(terms), "terms")
+                terms_at_order, cpolys = self.taylor_order_terms(taylor_order, max_polynomial_vars, True)
+                coeffs = _bulk_eval_compact_polynomials_complex(
+                    cpolys[0], cpolys[1], v, (len(terms_at_order),))  # an array of coeffs
+                mags = _np.abs(coeffs)
+                last_len = len(terms)
+                #OLD: terms_at_order = [ t.copy_with_magnitude(abs(coeff)) for coeff, t in zip(coeffs, terms_at_order) ]
+
+                if taylor_order == 1:
+                    #OLD: first_order_magmax = max([t.magnitude for t in terms_at_order])
+                    first_order_magmax = max(mags)
+
+                    if force_firstorder:
+                        terms.extend([(taylor_order, t.copy_with_magnitude(mag))
+                                      for coeff, mag, t in zip(coeffs, mags, terms_at_order)])
+                    else:
+                        for mag, t in zip(mags, terms_at_order):
+                            if mag >= min_term_mag:
+                                terms.append((taylor_order, t.copy_with_magnitude(mag)))
+                else:
+                    for mag, t in zip(mags, terms_at_order):
+                        if mag >= min_term_mag:
+                            terms.append((taylor_order, t.copy_with_magnitude(mag)))
+
+            else:
+                eff_min_term_mag = 0.0 if (taylor_order == 1 and force_firstorder) else min_term_mag
+                terms.extend([(taylor_order, t) for t in
+                              self.taylor_order_terms_above_mag(taylor_order,
+                                                                max_polynomial_vars, eff_min_term_mag)])
+
+            taylor_order += 1
+            if taylor_order > max_taylor_order: break
+
+        #Sort terms based on magnitude
+        sorted_terms = sorted(terms, key=lambda t: t[1].magnitude, reverse=True)
+        first_order_indices = [i for i, t in enumerate(sorted_terms) if t[0] == 1]
+        return [t[1] for t in sorted_terms], first_order_indices
+
+    def taylor_order_terms_above_mag(self, order, max_polynomial_vars, min_term_mag):
+        """
+        Get the `order`-th order Taylor-expansion terms of this state vector that have magnitude above `min_term_mag`.
+
+        This function constructs the terms at the given order which have a magnitude (given by
+        the absolute value of their coefficient) that is greater than or equal to `min_term_mag`.
+        It calls :method:`taylor_order_terms` internally, so that all the terms at order `order`
+        are typically cached for future calls.
+
+        Parameters
+        ----------
+        order : int
+            The order of terms to get.
+
+        max_polynomial_vars : int, optional
+            maximum number of variables the created polynomials can have.
+
+        min_term_mag : float
+            the minimum term magnitude.
+
+        Returns
+        -------
+        list
+        """
+        #NOTE: exact copy of State method - consolidate in FUTURE?
+        v = self.to_vector()
+        terms_at_order, cpolys = self.taylor_order_terms(order, max_polynomial_vars, True)
+        coeffs = _bulk_eval_compact_polynomials_complex(
+            cpolys[0], cpolys[1], v, (len(terms_at_order),))  # an array of coeffs
+        terms_at_order = [t.copy_with_magnitude(abs(coeff)) for coeff, t in zip(coeffs, terms_at_order)]
+        return [t for t in terms_at_order if t.magnitude >= min_term_mag]

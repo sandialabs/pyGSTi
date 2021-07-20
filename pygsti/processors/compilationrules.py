@@ -16,9 +16,9 @@ import itertools as _itertools
 
 import numpy as _np
 from pygsti.baseobjs.label import Label as _Label
-
 from pygsti.baseobjs.qubitgraph import QubitGraph as _QubitGraph
 from pygsti.circuits.circuit import Circuit as _Circuit
+from pygsti.processors.processorspec import QubitProcessorSpec as _QubitProcessorSpec
 from pygsti.tools import listtools as _lt
 from pygsti.tools import symplectic as _symp
 from pygsti.tools import internalgates as _itgs
@@ -76,6 +76,101 @@ class CompilationRules(object):
         """ TODO: docstring -- compute any aux_info to be added to processorspec when
          compiling with these CompilationRules"""
         return {}
+
+    def apply_to_processorspec(self, processor_spec):
+        """
+        TODO: docstring
+
+        Parameters
+        ----------
+        processor_spec : ProcessorSpec
+
+        Returns
+        -------
+        QubitProcessorSpec
+        """
+        gate_names = tuple(self.gate_unitaries.keys())
+        gate_unitaries = self.gate_unitaries.copy()  # can contain `None` entries we deal with below
+
+        availability = {}
+        for gn in gate_names:
+            if gn in self.local_templates:
+                # merge availabilities from gates in local template
+                compilation_circuit = self.local_templates[gn]
+                all_sslbls = compilation_circuit.line_labels
+                gn_nqubits = len(all_sslbls)
+                assert (all_sslbls == tuple(range(0, len(gn_nqubits)))), \
+                    "Template circuits *must* have line labels == 0...(gate's #qubits-1), not %s!" % (
+                        str(all_sslbls))
+
+                # To construct the availability for a circuit, we take the intersection
+                # of the availability for each of the layers.  Each layer's availability is
+                # the cartesian-like product of the availabilities for each of the components
+                circuit_availability = None
+                for layer in compilation_circuit[:]:
+                    layer_availability_factors = []
+                    layer_availability_sslbls = []
+                    for gate in layer.components:
+                        gate_availability = processor_spec.availability[gate.name]
+                        if gate_availability in ('all-edges', 'all-combinations', 'all-permutations'):
+                            raise NotImplementedError("Cannot merge special availabilities yet")
+                        layer_availability_factors.append(gate_availability)
+
+                        gate_sslbls = gate.sslbls
+                        if gate_sslbls is None: gate_sslbls = all_sslbls
+                        assert (len(set(layer_availability_sslbls).intersection(gate_sslbls)) == 0), \
+                            "Duplicate state space labels in layer: %s" % str(layer)
+                        layer_availability_sslbls.extend(gate_sslbls)  # integers
+                    layer_availability = _itertools.product(*layer_availability_factors)
+                    if tuple(layer_availability_sslbls) != all_sslbls:  # then need to permute availability elements
+                        p = {to: frm for frm, to in enumerate(layer_availability_sslbls)}  # use sslbls as *indices*
+                        new_order = [p[i] for i in range(gn_nqubits)]
+                        layer_availability = tuple(map(lambda el: tuple([el[i] for i in new_order]),
+                                                       layer_availability))
+                    circuit_availability = layer_availability if (circuit_availability is None) else \
+                        circuit_availability.intersection(layer_availability)
+                assert (circuit_availability is not None), "Local template circuit cannot be empty!"
+                availability[gn] = tuple(sorted(circuit_availability))
+
+                if gate_unitaries[gn] is None:
+                    # TODO: compute unitary via product of embedded unitaries of circuit layers, something like:
+                    # gate_unitaries[gn] = product(
+                    #      [kronproduct(
+                    #           [embed(self.gate_unitaries[gate.name], gate.sslbls, range(gn_nqubits))
+                    #            for gate in layer.components])
+                    #       for layer in compilation_circuit)])
+                    raise NotImplementedError("Still need to implement product of unitaries logic!")
+
+            elif gn in self.function_templates:
+                # create boolean oracle function for availability
+                def _fn(sslbls):
+                    try:
+                        self.function_templates[gn](sslbls)  # (returns a circuit)
+                        return True
+                    except CompilationError:
+                        return False
+
+                availability[gn] = _fn  # boolean function indicating availability
+            else:
+                availability[gn] = ()  # empty tuple for absent gates - OK b/c may have specific compilations
+
+            if gate_unitaries[gn] is None:
+                raise ValueError("Must specify unitary for gate name '%s'" % str(gn))
+
+        # specific compilations add specific availability for their gate names:
+        for gate_lbl in self.specific_compilations.keys():
+            assert (gate_lbl.name in gate_names), \
+                "gate name '%s' missing from CompilationRules gate unitaries!" % gate_lbl.name
+            assert (isinstance(availability[gate_lbl.name], tuple)), \
+                "Cannot add specific values to non-explicit availabilities (e.g. given by functions)"
+            availability[gate_lbl.name] += (gate_lbl.sslbls,)
+
+        aux_info = processor_spec.aux_info.copy()
+        aux_info.update(self.create_aux_info())
+        ret = _QubitProcessorSpec(processor_spec.num_qubits, gate_names, gate_unitaries, availability,
+                                  processor_spec.qubit_graph, processor_spec.qubit_labels, aux_info=aux_info)
+        ret.compiled_from = (processor_spec, self)
+        return ret
 
 
 class CliffordCompilationRules(CompilationRules):

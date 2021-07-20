@@ -13,10 +13,13 @@
 
 import sys
 import numpy as _np
+import copy as _copy
 
 from ...baseobjs.statespace import StateSpace as _StateSpace
 from ...tools import internalgates as _itgs
 from ...tools import symplectic as _symp
+from ...tools import basistools as _bt
+from ...tools import optools as _ot
 
 
 cdef class OpRep(_basereps_cython.OpRep):
@@ -26,6 +29,9 @@ cdef class OpRep(_basereps_cython.OpRep):
 
     def __reduce__(self):
         return (OpRep, ())
+
+    def __pygsti_reduce__(self):
+        return self.__reduce__()
 
     def __dealloc__(self):
         del self.c_rep
@@ -41,9 +47,10 @@ cdef class OpRep(_basereps_cython.OpRep):
     def acton(self, StateRep state not None):
         cdef INT n = self.c_rep._n
         cdef INT namps = state.c_state._namps
-        cdef StateRep out_state = StateRep(_np.empty((2*n,2*n), dtype=_np.int64),
-                                               _np.empty((namps,2*n), dtype=_np.int64),
-                                               _np.empty(namps, dtype=_np.complex128))
+        cdef StateRep out_state = StateRep()
+        out_state._cinit_base(_np.empty((2*n,2*n), dtype=_np.int64),
+                              _np.empty((namps,2*n), dtype=_np.int64),
+                              _np.empty(namps, dtype=_np.complex128), self.state_space)
         self.c_rep.acton(state.c_state, out_state.c_state)
         return out_state
 
@@ -66,7 +73,7 @@ cdef class OpRepClifford(OpRep):
     cdef public _np.ndarray unitary_dagger
     cdef public object basis
 
-    def __cinit__(self, _np.ndarray[_np.complex128_t, ndim=2, mode='c'] unitarymx, symplecticrep, basis, state_space):
+    def __init__(self, _np.ndarray[_np.complex128_t, ndim=2] unitarymx, symplecticrep, basis, state_space):
         if symplecticrep is not None:
             self.smatrix, self.svector = symplecticrep
         else:
@@ -76,7 +83,7 @@ cdef class OpRepClifford(OpRep):
         self.smatrix_inv, self.svector_inv = _symp.inverse_clifford(
             self.smatrix, self.svector)  # cache inverse since it's expensive
 
-        self.unitary = unitarymx
+        self.unitary = _np.ascontiguousarray(unitarymx)
         self.unitary_dagger = _np.ascontiguousarray(_np.conjugate(_np.transpose(unitarymx)))
         self.basis = basis
 
@@ -92,6 +99,14 @@ cdef class OpRepClifford(OpRep):
                                          <double complex*>self.unitary.data,
                                          <INT*>self.smatrix_inv.data, <INT*>self.svector_inv.data,
                                          <double complex*>self.unitary_dagger.data, self.state_space.num_qubits)
+
+    def to_dense(self, on_space):
+        if on_space in ('minimal', 'Hilbert'):
+            return self.unitary
+        elif on_space == 'HilbertSchmidt':
+            return _bt.change_basis(_ot.unitary_to_process_mx(self.unitary), 'std', self.basis)
+        else:
+            raise ValueError("Invalid `on_space` argument: %s" % str(on_space))
 
     def __reduce__(self):
         return (OpRepClifford, (self.unitary, (self.smatrix, self.svector), self.basis, self.state_space))
@@ -209,9 +224,48 @@ cdef class OpRepRepeated(OpRep):
         return OpRepRepeated(self.repeated_rep.copy(), self.num_repetitions, self.state_space)
 
 
+cdef class OpRepExpErrorgen(OpRep):
+    cdef public object errorgen_rep
+
+    def __init__(self, errorgen_rep):
+        self.errorgen_rep = errorgen_rep
+        self.state_space = errorgen_rep.state_space
+        self.c_rep = NULL  # cannot act with this rep type for now
+        # (really we could flesh it out more and fail acton() when the errorgen
+        #  cannot be exponentiated/made dense?)
+
+    def errgenrep_has_changed(self, onenorm_upperbound):
+        pass
+
+    def acton(self, StateRep state not None):
+        raise AttributeError("Cannot currently act with stabilizer.OpRepExpErrorgen - for terms only!")
+
+    def adjoint_acton(self, StateRep state not None):
+        raise AttributeError("Cannot currently act with stabilizer.OpRepExpErrorgen - for terms only!")
+
+    def __reduce__(self):
+        return (OpRepExpErrorgen, (self.errorgen_rep,))
+
+    def copy(self):
+        return _copy.deepcopy(self)  # I think this should work using reduce/setstate framework TODO - test and maybe put in base class?
+
+
 cdef class OpRepLindbladErrorgen(OpRep):
+    cdef public object Lterms
+    cdef public object Lterm_coeffs
+    cdef public object LtermdictAndBasis
+
     def __init__(self, lindblad_term_dict, basis, state_space):
-        super(OpRepLindbladErrorgen, self).__init__(state_space)
+        self.state_space = _StateSpace.cast(state_space)
         self.Lterms = None
         self.Lterm_coeffs = None
         self.LtermdictAndBasis = (lindblad_term_dict, basis)
+
+    def acton(self, StateRep state not None):
+        raise AttributeError("Cannot currently act with statevec.OpRepLindbladErrorgen - for terms only!")
+
+    def adjoint_acton(self, StateRep state not None):
+        raise AttributeError("Cannot currently act with statevec.OpRepLindbladErrorgen - for terms only!")
+
+    def __reduce__(self):
+        return (OpRepLindbladErrorgen, (self.LtermdictAndBasis[0], self.LtermdictAndBasis[1], self.state_space))

@@ -405,10 +405,7 @@ def run_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
     advanced_options = _GSTAdvancedOptions(advanced_options or {})
     ds = _load_dataset(data_filename_or_set, comm, printer)
     target_model = _load_model(target_model_filename_or_object)
-
-    pspec = _QubitProcessorSpec.from_explicit_model(
-        target_model, qubit_labels=target_model.state_space.tensor_product_block_labels(0))
-    # Note: line above just fails if model isn't an explicit model - generalize in FUTURE
+    pspec = target_model.create_processor_spec()
 
     exp_design = _proto.StandardGSTDesign(pspec,
                                           prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
@@ -427,10 +424,12 @@ def run_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
         gauge_opt_params = {'item_weights': {'gates': 1.0, 'spam': 0.001}}
     gopt_suite = {'go0': gauge_opt_params} if gauge_opt_params else None
     initial_model = _get_gst_initial_model(target_model, advanced_options)
-    proto = _proto.GateSetTomography(initial_model, gopt_suite, None,
+    proto = _proto.GateSetTomography(initial_model, gopt_suite, target_model,
                                      _get_gst_builders(advanced_options),
                                      _get_optimizer(advanced_options, target_model),
                                      _get_badfit_options(advanced_options), printer)
+    #Note: we give target_model as gaugeopt_target above b/c this is more robust than creating
+    # a target model from the edesign's processor spec (e.g. pspec doesn't hold instruments yet)
 
     proto.profile = advanced_options.get('profile', 1)
     proto.record_output = advanced_options.get('record_output', 1)
@@ -526,8 +525,7 @@ def run_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_ob
     advanced_options = advanced_options or {}
 
     target_model = _load_model(target_model_filename_or_object)
-    pspec = _QubitProcessorSpec.from_explicit_model(
-        target_model, qubit_labels=target_model.state_space.tensor_product_block_labels(0))
+    pspec = target_model.create_processor_spec()
     exp_design = _proto.GateSetTomographyDesign(pspec, lsgst_lists)
 
     ds = _load_dataset(data_filename_or_set, comm, printer)

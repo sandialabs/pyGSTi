@@ -81,7 +81,7 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
         if scale:
             scaledGatesAndExps = {}
             scale_exp = 0
-            G = _np.identity(self.model.state_space.dim)
+            G = _np.identity(self.model.evotype.minimal_dim(self.model.state_space))
             for lOp in circuit:
                 if lOp not in scaledGatesAndExps:
                     opmx = self.model.circuit_layer_operator(lOp, 'op').to_dense(on_space='minimal')
@@ -103,7 +103,7 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
             return G, scale
 
         else:
-            G = _np.identity(self.model.state_space.dim)
+            G = _np.identity(self.model.evotype.minimal_dim(self.model.state_space))
             for lOp in circuit:
                 G = _np.dot(self.model.circuit_layer_operator(lOp, 'op').to_dense(on_space='minimal'), G)
                 # above line: LEXICOGRAPHICAL VS MATRIX ORDER
@@ -171,7 +171,7 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
         """
         Return the derivative of a length-1 (single-gate) sequence
         """
-        dim = self.model.state_space.dim
+        dim = self.model.evotype.minimal_dim(self.model.state_space)
         gate = self.model.circuit_layer_operator(op_label, 'op')
         op_wrtFilter, gpindices = self._process_wrt_filter(wrt_filter, gate)
 
@@ -199,7 +199,7 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
         """
         Return the hessian of a length-1 (single-gate) sequence
         """
-        dim = self.model.state_space.dim
+        dim = self.model.evotype.minimal_dim(self.model.state_space)
 
         gate = self.model.circuit_layer_operator(op_label, 'op')
         op_wrtFilter1, gpindices1 = self._process_wrt_filter(wrt_filter1, gate)
@@ -282,7 +282,7 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
         #
         # Note: if gate G(L) is just a matrix of parameters, then dG(L)/dij = E(i,j), an elementary matrix
 
-        dim = self.model.state_space.dim
+        dim = self.model.evotype.minimal_dim(self.model.state_space)
 
         #Cache partial products (relatively little mem required)
         leftProds = []
@@ -392,7 +392,7 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
         #  Note: unvec( X ) can be done efficiently by actually computing X^T ( note (A tensor B)^T = A^T tensor B^T )
         #  and using numpy's reshape
 
-        dim = self.model.state_space.dim
+        dim = self.model.evotype.minimal_dim(self.model.state_space)
 
         uniqueOpLabels = sorted(list(set(revOpLabelList)))
         used_operations = _collections.OrderedDict()
@@ -914,7 +914,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         Note: will *not* parallelize computation:  parallelization should be
         done at a higher level.
         """
-        dim = self.model.state_space.dim
+        dim = self.model.evotype.minimal_dim(self.model.state_space)
 
         #Note: resource_alloc gives procs that could work together to perform
         # computation, e.g. paralllel dot products but NOT to just partition
@@ -969,7 +969,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         """
 
         if profiler is None: profiler = _dummy_profiler
-        dim = self.model.state_space.dim
+        dim = self.model.evotype.minimal_dim(self.model.state_space)
         nDerivCols = self.model.num_params if (wrt_slice is None) \
             else _slct.length(wrt_slice)
         deriv_shape = (nDerivCols, dim, dim)
@@ -1076,7 +1076,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         use derivative rows and columns to parallelize computation.
         """
 
-        dim = self.model.state_space.dim
+        dim = self.model.evotype.minimal_dim(self.model.state_space)
 
         # Note: dProdCache?.shape = (#circuits,#params_to_diff_wrt,dim,dim)
         nDerivCols1 = d_prod_cache1.shape[1]
@@ -1318,7 +1318,8 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             mem_estimate = _bytes_for_array_types(array_types, global_layout.num_elements, max_local_els, max_atom_els,
                                                   global_layout.num_circuits, max_local_circuits,
                                                   layout._param_dimensions, (loc_nparams1, loc_nparams2),
-                                                  (blk1, blk2), max_atom_cachesize, self.model.state_space.dim)
+                                                  (blk1, blk2), max_atom_cachesize,
+                                                  self.model.evotype.minimal_dim(self.model.state_space))
 
             #def approx_mem_estimate(natoms, np1, np2):
             #    approx_cachesize = (num_circuits / natoms) * 1.3  # inflate expected # circuits per atom => cache_size
@@ -1569,7 +1570,8 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
     def _bulk_fill_probs_atom(self, array_to_fill, layout_atom, resource_alloc):
         #Free memory from previous subtree iteration before computing caches
         scaleVals = Gs = prodCache = scaleCache = None
-        resource_alloc.check_can_allocate_memory(layout_atom.cache_size * self.model.state_space.dim**2)  # prod cache
+        dim = self.model.evotype.minimal_dim(self.model.state_space)
+        resource_alloc.check_can_allocate_memory(layout_atom.cache_size * dim**2)  # prod cache
 
         #Fill cache info
         prodCache, scaleCache = self._compute_product_cache(layout_atom.tree, resource_alloc)
@@ -1603,7 +1605,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         _np.seterr(**old_err)
 
     def _bulk_fill_dprobs_atom(self, array_to_fill, dest_param_slice, layout_atom, param_slice, resource_alloc):
-        dim = self.model.state_space.dim
+        dim = self.model.evotype.minimal_dim(self.model.state_space)
         resource_alloc.check_can_allocate_memory(layout_atom.cache_size * dim * dim * _slct.length(param_slice))
         prodCache, scaleCache = self._compute_product_cache(layout_atom.tree, resource_alloc)
         dProdCache = self._compute_dproduct_cache(layout_atom.tree, prodCache, scaleCache,
@@ -1625,7 +1627,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
     def _bulk_fill_hprobs_atom(self, array_to_fill, dest_param_slice1, dest_param_slice2, layout_atom,
                                param_slice1, param_slice2, resource_alloc):
-        dim = self.model.state_space.dim
+        dim = self.model.evotype.minimal_dim(self.model.state_space)
         resource_alloc.check_can_allocate_memory(layout_atom.cache_size * dim**2
                                                  * _slct.length(param_slice1) * _slct.length(param_slice2))
         prodCache, scaleCache = self._compute_product_cache(layout_atom.tree, resource_alloc)
@@ -1792,8 +1794,9 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
         if flat:
             # cols = deriv cols, rows = flattened everything else
+            dim = self.model.evotype.minimal_dim(self.model.state_space)
             dGs = _np.swapaxes(_np.swapaxes(dGs, 0, 1).reshape(
-                (nDerivCols, nCircuits * self.model.state_space.dim**2)), 0, 1)
+                (nDerivCols, nCircuits * dim**2)), 0, 1)
 
         if return_prods:
             return (dGs, Gs, scaleVals) if scale else (dGs, Gs)

@@ -74,9 +74,9 @@ def create_fake_dataset(comm):
     #rhoStrs, EStrs = pygsti.construction.get_spam_strs(specs)
 
     rhoStrs = EStrs = std.fiducials
-    lgstStrings = pygsti.construction.create_lgst_circuits(
+    lgstStrings = pygsti.circuits.create_lgst_circuits(
         rhoStrs, EStrs, list(std.target_model().operations.keys()))
-    lsgstStrings = pygsti.construction.create_lsgst_circuit_lists(
+    lsgstStrings = pygsti.circuits.create_lsgst_circuit_lists(
             list(std.target_model().operations.keys()), rhoStrs, EStrs,
             std.germs, maxLengths, fidPairList )
 
@@ -85,7 +85,7 @@ def create_fake_dataset(comm):
 
     if comm is None or comm.Get_rank() == 0:
         mdl_dataGen = std.target_model().depolarize(op_noise=0.1)
-        dsFake = pygsti.construction.simulate_data(
+        dsFake = pygsti.data.simulate_data(
             mdl_dataGen, allRequiredStrs, nSamples, sample_error="multinomial",
             seed=1234)
         dsFake = comm.bcast(dsFake, root=0)
@@ -113,7 +113,7 @@ def test_MPI_products(comm):
 
     #Get some operation sequences
     maxLengths = [1,2,4,8]
-    gstrs = pygsti.construction.create_lsgst_circuits(
+    gstrs = pygsti.circuits.create_lsgst_circuits(
         list(std.target_model().operations.keys()), std.fiducials, std.fiducials, std.germs, maxLengths)
     layout = mdl.sim.create_layout(gstrs)
     split_layout = mdl.sim.create_layout(gstrs, resource_alloc={'comm': comm})  # if force split: num_sub_trees=g_numSubTrees
@@ -184,7 +184,7 @@ def test_MPI_products(comm):
 #
 #    #Get some operation sequences
 #    maxLengths = g_maxLengths
-#    gstrs = pygsti.construction.create_lsgst_circuits(
+#    gstrs = pygsti.circuits.create_lsgst_circuits(
 #        list(std.target_model().operations.keys()), std.fiducials, std.fiducials, std.germs, maxLengths)
 #    tree,lookup,outcome_lookup = mdl.bulk_evaltree(gstrs)
 #    split_tree = tree.copy()
@@ -257,7 +257,7 @@ def test_MPI_probs(comm):
 
     #Get some operation sequences
     maxLengths = g_maxLengths
-    gstrs = pygsti.construction.create_lsgst_circuits(
+    gstrs = pygsti.circuits.create_lsgst_circuits(
         list(std.target_model().operations.keys()), std.fiducials, std.fiducials, std.germs, maxLengths)
     #tree,lookup,outcome_lookup = mdl.bulk_evaltree(gstrs)
     #split_tree = tree.copy()
@@ -333,7 +333,7 @@ def test_MPI_fills(comm):
 
     #Get some operation sequences
     maxLengths = g_maxLengths
-    gstrs = pygsti.construction.create_lsgst_circuits(
+    gstrs = pygsti.circuits.create_lsgst_circuits(
         list(std.target_model().operations.keys()), std.fiducials, std.fiducials, std.germs, maxLengths)
     layout = mdl.sim.create_layout(gstrs)
     split_layout = mdl.sim.create_layout(gstrs, resource_alloc={'comm': comm})  # num_sub_trees=g_numSubTrees?
@@ -473,7 +473,7 @@ def test_MPI_compute_cache(comm):
     mdl.kick(0.1,seed=1234)
 
     #Get some operation sequences
-    gstrs = pygsti.construction.to_circuits([('Gx',), ('Gy')])
+    gstrs = pygsti.circuits.to_circuits([('Gx',), ('Gy')])
     layout = mdl.sim.create_layout(gstrs)
 
     #Check fill probabilities
@@ -515,7 +515,7 @@ def test_MPI_by_block(comm):
 
     #Get some operation sequences
     maxLengths = g_maxLengths
-    gstrs = pygsti.construction.create_lsgst_circuits(
+    gstrs = pygsti.circuits.create_lsgst_circuits(
         list(std.target_model().operations.keys()), std.fiducials, std.fiducials, std.germs, maxLengths)
     layout = mdl.sim.create_layout(gstrs)
 
@@ -711,12 +711,12 @@ def test_MPI_gatestrings_logl(comm):
 def test_MPI_mlgst_forcefn(comm):
     fiducials = std.fiducials
     target_model = std.target_model()
-    lgstStrings = pygsti.construction.create_lgst_circuits(fiducials, fiducials,
+    lgstStrings = pygsti.circuits.create_lgst_circuits(fiducials, fiducials,
                                                            list(target_model.operations.keys()))
     #Create dataset on root proc
     if comm is None or comm.Get_rank() == 0:
         datagen_gateset = target_model.depolarize(op_noise=0.01, spam_noise=0.01)
-        ds = pygsti.construction.simulate_data(datagen_gateset, lgstStrings,
+        ds = pygsti.data.simulate_data(datagen_gateset, lgstStrings,
                                                num_samples=10000, sample_error='binomial', seed=100)
         ds = comm.bcast(ds, root=0)
     else:
@@ -770,9 +770,9 @@ def test_run1Q_end2end(comm):
     maxLengths = [1,2,4]
 
     mdl_datagen = target_model.depolarize(op_noise=0.1, spam_noise=0.001)
-    listOfExperiments = pygsti.construction.create_lsgst_circuits(
+    listOfExperiments = pygsti.circuits.create_lsgst_circuits(
         list(target_model.operations.keys()), fiducials, fiducials, germs, maxLengths)
-    ds = pygsti.construction.simulate_data(mdl_datagen, listOfExperiments,
+    ds = pygsti.data.simulate_data(mdl_datagen, listOfExperiments,
                                            num_samples=1000,
                                            sample_error="binomial",
                                            seed=1234, comm=comm)
@@ -806,7 +806,7 @@ def test_MPI_germsel(comm):
 
     max_length   = 6
     gates        = std.target_model().operations.keys()
-    superGermSet = pygsti.construction.list_all_circuits_without_powers_and_cycles(gates, max_length)
+    superGermSet = pygsti.circuits.list_all_circuits_without_powers_and_cycles(gates, max_length)
 
     #germs = pygsti.alg.find_germs_breadthfirst(gatesetNeighborhood, superGermSet,
     #                                    randomize=False, seed=2018, score_func='all',

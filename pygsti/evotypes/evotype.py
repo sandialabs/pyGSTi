@@ -21,7 +21,7 @@ class Evotype(object):
         operations.  Most often this is set to `True` when using a :class:`MatrixForwardSimulator`
         in order to get a performance gain.
     """
-    defaut_evotype = None
+    default_evotype = None
 
     _reptype_to_attrs = {
         'dense superop': 'OpRepDenseSuperop',
@@ -37,7 +37,7 @@ class Evotype(object):
         'sparse superop': 'OpRepSparse',
         'lindblad errorgen': 'OpRepLindbladErrorgen',
         'dense state': 'StateRepDense',
-        'pure state': 'StateRepPure',
+        'pure state': 'StateRepDensePure',
         'computational state': 'StateRepComputational',
         'composed state': 'StateRepComposed',
         'tensorproduct state': 'StateRepTensorProduct',
@@ -92,6 +92,13 @@ class Evotype(object):
     def __str__(self):
         return self.name
 
+    @property
+    def minimal_space(self):
+        return self.module.minimal_space
+
+    def minimal_dim(self, state_space):
+        return state_space.udim if self.minimal_space == 'Hilbert' else state_space.dim
+
     def supported_reptypes(self):
         return [reptype for reptype, attr in self._reptype_to_attrs.items() if hasattr(self.module, attr)]
 
@@ -139,7 +146,7 @@ class Evotype(object):
         return self.module.StateRepDense(vec, state_space)
 
     def create_pure_state_rep(self, purevec, super_basis, state_space):
-        return self.module.StateRepPure(purevec, super_basis, state_space)
+        return self.module.StateRepDensePure(purevec, super_basis, state_space)
 
     def create_computational_state_rep(self, zvals, super_basis, state_space):
         return self.module.StateRepComputational(zvals, super_basis, state_space)
@@ -181,6 +188,21 @@ class Evotype(object):
         except Exception:
             return _basereps.StockTermDirectRep(coeff, mag, logmag, pre_state, post_state,
                                                 pre_effect, post_effect, pre_ops, post_ops)
+
+    def conjugate_state_term_rep(self, term_rep):
+        """ Turns a state term => effect term via conjugation of the state """
+        coeff = term_rep.coeff
+        mag = term_rep.magnitude
+        logmag = term_rep.logmagnitude
+        pre_effect = self.create_conjugatedstate_effect_rep(term_rep.pre_state)
+        post_effect = self.create_conjugatedstate_effect_rep(term_rep.post_state)
+
+        try:  # see if module implements its own term rep, otherwise use "stock" version
+            return self.module.TermRep(coeff, mag, logmag, None, None,
+                                       pre_effect, post_effect, term_rep.pre_ops, term_rep.post_ops)
+        except Exception:
+            return _basereps.StockTermRep(coeff, mag, logmag, None, None,
+                                          pre_effect, post_effect, term_rep.pre_ops, term_rep.post_ops)
 
 
 try:

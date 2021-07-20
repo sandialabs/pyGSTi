@@ -46,6 +46,11 @@ class StateRep(_basereps.StateRep):
     #def dim(self):
     #    return 2**self.nqubits  # assume "unitary evolution"-type mode
 
+    def actionable_staterep(self):
+        # return a state rep that can be acted on by op reps or mapped to
+        # a probability/amplitude by POVM effect reps.
+        return self  # for most classes, the rep itself is actionable
+
     def copy(self):
         cpy = StateRep(_np.zeros((0, 0), _np.int64), None, None, self.state_space)  # makes a dummy cpy.sframe
         cpy.sframe = self.sframe.copy()  # a legit copy *with* qubit filers copied too
@@ -83,10 +88,20 @@ class StateRepComposed(StateRep):
         self.reps_have_changed()
 
     def reps_have_changed(self):
-        rep = self.op_rep.acton(self.state_rep)
-        self.smatrix[:, :] = rep.smatrix[:, :]
-        self.pvectors[:, :] = rep.pvectors[:, :]
-        self.amps[:] = rep.amps[:]
+        pass  # don't do anything here - all work in actionalble_staterep
+        #OLD REMOVE:
+        #rep = self.op_rep.acton(self.state_rep)
+        #self.smatrix[:, :] = rep.smatrix[:, :]
+        #self.pvectors[:, :] = rep.pvectors[:, :]
+        #self.amps[:] = rep.amps[:]
+
+    def actionable_staterep(self):
+        state_rep = self.state_rep.actionable_staterep()
+        rep = self.op_rep.acton(state_rep)
+        #self.smatrix[:, :] = rep.smatrix[:, :]  # do this also?
+        #self.pvectors[:, :] = rep.pvectors[:, :]  # do this also?
+        #self.amps[:] = rep.amps[:]  # do this also?
+        return rep
 
 
 class StateRepTensorProduct(StateRep):

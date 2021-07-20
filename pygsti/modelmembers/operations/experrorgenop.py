@@ -170,8 +170,28 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
             self._rep.base.flags.writeable = False
             self.base_deriv = None
             self.base_hessian = None
-        elif not close:
+        else:  # if not close:
             self._rep.errgenrep_has_changed(self.errorgen.onenorm_upperbound())
+
+            #CHECK that sparsemx action is correct (DEBUG) REMOVE
+            #from pygsti.modelmembers.states import StaticState
+            #Mdense = _spl.expm(self.errorgen.to_dense())
+            #if Mdense.shape == (4,4):
+            #    for i in range(4):
+            #        v = _np.zeros(4); v[i] = 1.0
+            #
+            #        staterep = StaticState(v)._rep
+            #        check_acton = self._rep.acton(staterep).data
+            #
+            #        #check_sparse_scipy = _spsl.expm_multiply(self.errorgen.to_sparse(), v.copy())
+            #        prep = _mt.expm_multiply_prep(self.errorgen.to_sparse())
+            #        check_sparse = _mt.expm_multiply_fast(prep, v)
+            #        check_dense = _np.dot(Mdense, v)
+            #
+            #        diff = _np.linalg.norm(check_dense - check_acton)
+            #        #diff2 = _np.linalg.norm(check_sparse_scipy - check_sparse)
+            #        if diff > 1e-6: # or diff2 > 1e-3:
+            #            print("PROBLEM (%d)!!" % i, " Expop diff = ", diff)
 
     def set_gpindices(self, gpindices, parent, memo=None):
         """
@@ -249,9 +269,6 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         -------
         scipy.sparse.csr_matrix
         """
-        _warnings.warn(("Constructing the sparse matrix of a LindbladDenseOp."
-                        "  Usually this is *NOT* acutally sparse (the exponential of a"
-                        " sparse matrix isn't generally sparse)!"))
         if self._rep_type == 'dense':
             return _sps.csr_matrix(self.to_dense(on_space))
         else:
@@ -855,7 +872,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
 
             errgen_cls = self.errorgen.__class__
             #Note: this only really works for LindbladErrorGen objects now... make more general in FUTURE?
-            truncate = 3e-6  # looser truncation, but can't be 'True' since we need to throw errors when appropriate
+            truncate = 1e-5  # looser truncation, but can't be 'True' since we need to throw errors when appropriate
             param = _LindbladParameterization(self.errorgen.nonham_mode, self.errorgen.param_mode,
                                               len(self.errorgen.ham_basis) > 0, len(self.errorgen.other_basis) > 0)
             transformed_errgen = errgen_cls.from_operation_matrix(mx, param, self.errorgen.lindblad_basis,

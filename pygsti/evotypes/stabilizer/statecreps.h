@@ -7,7 +7,7 @@ typedef std::complex<double> dcomplex;
 typedef long long INT;
 
 
-namespace CReps {
+namespace CReps_stabilizer {
 
   class StateCRep {
     public:

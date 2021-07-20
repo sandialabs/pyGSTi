@@ -13,7 +13,7 @@ class TestRPEObjectMethods(BaseTestCase):
 
     def test_rpe_datasets(self):
 
-        model = pygsti.construction.create_explicit_model_from_expressions([('Q0',)], ['Gi', 'Gx', 'Gy', 'Gz'],
+        model = pygsti.models.modelconstruction.create_explicit_model_from_expressions([('Q0',)], ['Gi', 'Gx', 'Gy', 'Gz'],
                                                                            [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)", "Z(pi/2,Q0)"])
 
         depol_gateset = model.depolarize(op_noise=0.1,spam_noise=0)

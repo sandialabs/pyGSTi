@@ -189,17 +189,17 @@ class ComputationalBasisState(_State):
         if _fastcalc is None:  # do it the slow way using numpy
             return _functools.reduce(_np.kron, [v[i] for i in self._zvals])
         else:
-            typ = 'd' if self._evotype == "densitymx" else complex
+            typ = v0.dtype
             fast_kron_array = _np.ascontiguousarray(
                 _np.empty((len(self._zvals), factor_dim), typ))
             fast_kron_factordims = _np.ascontiguousarray(_np.array([factor_dim] * len(self._zvals), _np.int64))
             for i, zi in enumerate(self._zvals):
                 fast_kron_array[i, :] = v[zi]
             ret = _np.ascontiguousarray(_np.empty(factor_dim**len(self._zvals), typ))
-            if self._evotype == "densitymx":
-                _fastcalc.fast_kron(ret, fast_kron_array, fast_kron_factordims)
-            else:
+            if fast_kron_array.dtype == _np.dtype(complex):
                 _fastcalc.fast_kron_complex(ret, fast_kron_array, fast_kron_factordims)
+            else:
+                _fastcalc.fast_kron(ret, fast_kron_array, fast_kron_factordims)
             return ret
 
     def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):

@@ -16,13 +16,13 @@
 //#define DEBUG(x) x
 #define DEBUG(x) 
 
-namespace CReps {
+namespace CReps_stabilizer {
 
   /****************************************************************************\
   |* TermCRep                                                                 *|
   \****************************************************************************/
     
-  TermCRep::TermCRep(PolynomialCRep* coeff, double magnitude, double logmagnitude,
+  TermCRep::TermCRep(CReps::PolynomialCRep* coeff, double magnitude, double logmagnitude,
 			 StateCRep* pre_state, StateCRep* post_state,
 			 std::vector<OpCRep*> pre_ops, std::vector<OpCRep*> post_ops) {
     _coeff = coeff;
@@ -36,7 +36,7 @@ namespace CReps {
     _post_ops = post_ops;
   }
   
-  TermCRep::TermCRep(PolynomialCRep* coeff, double magnitude, double logmagnitude,
+  TermCRep::TermCRep(CReps::PolynomialCRep* coeff, double magnitude, double logmagnitude,
 			 EffectCRep* pre_effect, EffectCRep* post_effect,
 			 std::vector<OpCRep*> pre_ops, std::vector<OpCRep*> post_ops) {
     _coeff = coeff;
@@ -50,7 +50,7 @@ namespace CReps {
     _post_ops = post_ops;
   }
   
-  TermCRep::TermCRep(PolynomialCRep* coeff, double magnitude, double logmagnitude,
+  TermCRep::TermCRep(CReps::PolynomialCRep* coeff, double magnitude, double logmagnitude,
 			 std::vector<OpCRep*> pre_ops,
 			 std::vector<OpCRep*> post_ops) {
     _coeff = coeff;

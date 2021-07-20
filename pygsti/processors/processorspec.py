@@ -95,36 +95,6 @@ class QubitProcessorSpec(ProcessorSpec):
         Any additional information that should be attached to this processor spec.
     """
 
-    @classmethod
-    def from_explicit_model(cls, model, qubit_labels):
-        """ TODO: docstring """
-        #go through ops, building up availability and unitaries, then create procesor spec...
-
-        if qubit_labels is None:  # special case of legacy explicit models where all gates have availability [None]
-            qubit_labels = tuple(range(model.state_space.num_qubits))
-
-        nqubits = len(qubit_labels)
-        gate_unitaries = _collections.OrderedDict()
-        availability = {}
-        for opkey, op in model.operations.items():  # TODO: need to deal with special () idle label
-            if opkey == _Lbl(()):  # special case: turn empty tuple labels into "(idle)" gate in processor spec
-                gn = "(idle)"
-                sslbls = None
-            else:
-                gn = opkey.name
-                sslbls = opkey.sslbls
-
-            if gn not in gate_unitaries:
-                U = _ot.process_mx_to_unitary(_bt.change_basis(op.to_dense('HilbertSchmidt'),
-                                                               model.basis, 'std'))
-                gate_unitaries[gn] = U
-                availability[gn] = [sslbls]
-            else:
-                availability[gn].append(sslbls)
-
-        return cls(nqubits, list(gate_unitaries.keys()), gate_unitaries, availability,
-                   qubit_labels=qubit_labels)
-
     def __init__(self, num_qubits, gate_names, nonstd_gate_unitaries=None, availability=None,
                  geometry=None, qubit_labels=None, nonstd_gate_symplecticreps=None, aux_info=None):
         assert(type(num_qubits) is int), "The number of qubits, n, should be an integer!"
@@ -155,7 +125,10 @@ class QubitProcessorSpec(ProcessorSpec):
                 else:
                     nq = num_qubits  # if no availability is given, assume an idle on *all* the qubits
                     availability[gname] = [None]  # and update availability for later processing
-                self.gate_unitaries[gname] = _np.identity(2**nq, 'd')
+                if gname.startswith('(') and gname.endswith(')'):
+                    self.gate_unitaries[gname] = nq  # an identity gate that should not be build unless it's noisy
+                else:
+                    self.gate_unitaries[gname] = _np.identity(2**nq, 'd')
             else:
                 raise ValueError(
                     str(gname) + " is not a valid 'standard' gate name, it must be given in `nonstd_gate_unitaries`")
@@ -213,6 +186,7 @@ class QubitProcessorSpec(ProcessorSpec):
     def gate_num_qubits(self, gate_name):
         unitary = self.gate_unitaries[gate_name]
         if unitary is None: return self.num_qubits  # unitary=None => identity on all qubits
+        if isinstance(unitary, (int, _np.int64)): return unitary  # unitary=int => identity in n qubits
         return int(round(_np.log2(unitary.udim if callable(unitary) else unitary.shape[0])))
 
     def resolved_availability(self, gate_name, tuple_or_function="auto"):
@@ -323,6 +297,8 @@ class QubitProcessorSpec(ProcessorSpec):
             if gn not in self._symplectic_reps:
                 if unitary is None:  # special case of n-qubit identity
                     unitary = _np.identity(2**self.num_qubits, 'd')  # TODO - more efficient in FUTURE
+                if isinstance(unitary, (int, _np.int64)):
+                    unitary = _np.identity(2**unitary, 'd')  # TODO - more efficient in FUTURE
 
                 try:
                     self._symplectic_reps[gn] = _symplectic.unitary_to_symplectic(unitary)
@@ -361,11 +337,14 @@ class QubitProcessorSpec(ProcessorSpec):
         gate_inverse = {}
 
         for gname in self.gate_names:
-            if callable(self.gate_unitaries[gname]): continue  # can't pre-process factories
-            if self.gate_unitaries[gname] is None: continue  # can't pre-process global idle
+            U = self.gate_unitaries[gname]
+            if callable(U): continue  # can't pre-process factories
+            if U is None: continue  # can't pre-process global idle
+            if isinstance(U, (int, _np.int64)):
+                U = _np.identity(2**U, 'd')  # n-qubit identity
 
             # We convert to process matrices, to avoid global phase problems.
-            u = _ot.unitary_to_pauligate(self.gate_unitaries[gname])
+            u = _ot.unitary_to_pauligate(U)
             if u.shape == (4, 4):
                 #assert(not _np.allclose(u,Id)), "Identity should *not* be included in root gate names!"
                 #if _np.allclose(u, Id):
@@ -409,16 +388,23 @@ class QubitProcessorSpec(ProcessorSpec):
         """
         gate_inverse = {}
         for gname1 in self.gate_names:
-            if callable(self.gate_unitaries[gname1]): continue  # can't pre-process factories
-            if self.gate_unitaries[gname1] is None: continue  # can't pre-process global idle
+            U1 = self.gate_unitaries[gname1]
+            if callable(U1): continue  # can't pre-process factories
+            if U1 is None: continue  # can't pre-process global idle
+            if isinstance(U1, (int, _np.int64)):
+                U1 = _np.identity(2**U1, 'd')  # n-qubit identity
 
             # We convert to process matrices, to avoid global phase problems.
-            u1 = _ot.unitary_to_pauligate(self.gate_unitaries[gname1])
+            u1 = _ot.unitary_to_pauligate(U1)
             if _np.shape(u1) != (4, 4):
                 for gname2 in self.gate_names:
-                    if callable(self.gate_unitaries[gname2]): continue  # can't pre-process factories
-                    if self.gate_unitaries[gname2] is None: continue  # can't pre-process global idle
-                    u2 = _ot.unitary_to_pauligate(self.gate_unitaries[gname2])
+                    U2 = self.gate_unitaries[gname2]
+                    if callable(U2): continue  # can't pre-process factories
+                    if U2 is None: continue  # can't pre-process global idle
+                    if isinstance(U2, (int, _np.int64)):
+                        U2 = _np.identity(2**U2, 'd')  # n-qubit identity
+
+                    u2 = _ot.unitary_to_pauligate(U2)
                     if _np.shape(u2) == _np.shape(u1):
                         ucombined = _np.dot(u2, u1)
                         if _np.allclose(ucombined, _np.identity(_np.shape(u2)[0], float)):
@@ -450,102 +436,6 @@ class QubitProcessorSpec(ProcessorSpec):
 
         return _qgraph.QubitGraph(qubit_labels, CtwoQ_connectivity)
 
-    def compile(self, compilation_rules):
-        """
-        TODO: docstring
-
-        Parameters
-        ----------
-        compilation_rules : CompilationRules
-
-        Returns
-        -------
-        QubitProcessorSpec
-        """
-        from pygsti.processors.compilationrules import CompilationRules as _CompilationRules
-        from pygsti.processors.compilationrules import CompilationError as _CompilationError
-        compilation_rules = _CompilationRules.cast(compilation_rules)
-        gate_names = tuple(compilation_rules.gate_unitaries.keys())
-        gate_unitaries = compilation_rules.gate_unitaries.copy()  # can contain `None` entries we deal with below
-
-        availability = {}
-        for gn in gate_names:
-            if gn in compilation_rules.local_templates:
-                # merge availabilities from gates in local template
-                compilation_circuit = compilation_rules.local_templates[gn]
-                all_sslbls = compilation_circuit.line_labels
-                gn_nqubits = len(all_sslbls)
-                assert(all_sslbls == tuple(range(0, len(gn_nqubits)))), \
-                    "Template circuits *must* have line labels == 0...(gate's #qubits-1), not %s!" % (str(all_sslbls))
-
-                # To construct the availability for a circuit, we take the intersection
-                # of the availability for each of the layers.  Each layer's availability is
-                # the cartesian-like product of the availabilities for each of the components
-                circuit_availability = None
-                for layer in compilation_circuit[:]:
-                    layer_availability_factors = []
-                    layer_availability_sslbls = []
-                    for gate in layer.components:
-                        gate_availability = self.availability[gate.name]
-                        if gate_availability in ('all-edges', 'all-combinations', 'all-permutations'):
-                            raise NotImplementedError("Cannot merge special availabilities yet")
-                        layer_availability_factors.append(gate_availability)
-
-                        gate_sslbls = gate.sslbls
-                        if gate_sslbls is None: gate_sslbls = all_sslbls
-                        assert(len(set(layer_availability_sslbls).intersection(gate_sslbls)) == 0), \
-                            "Duplicate state space labels in layer: %s" % str(layer)
-                        layer_availability_sslbls.extend(gate_sslbls)  # integers
-                    layer_availability = _itertools.product(*layer_availability_factors)
-                    if tuple(layer_availability_sslbls) != all_sslbls:  # then need to permute availability elements
-                        p = {to: frm for frm, to in enumerate(layer_availability_sslbls)}  # use sslbls as *indices*
-                        new_order = [p[i] for i in range(gn_nqubits)]
-                        layer_availability = tuple(map(lambda el: tuple([el[i] for i in new_order]),
-                                                       layer_availability))
-                    circuit_availability = layer_availability if (circuit_availability is None) else \
-                        circuit_availability.intersection(layer_availability)
-                assert(circuit_availability is not None), "Local template circuit cannot be empty!"
-                availability[gn] = tuple(sorted(circuit_availability))
-
-                if gate_unitaries[gn] is None:
-                    #TODO: compute unitary via product of embedded unitaries of circuit layers, something like:
-                    # gate_unitaries[gn] = product(
-                    #      [kronproduct(
-                    #           [embed(self.gate_unitaries[gate.name], gate.sslbls, range(gn_nqubits))
-                    #            for gate in layer.components])
-                    #       for layer in compilation_circuit)])
-                    raise NotImplementedError("Still need to implement product of unitaries logic!")
-
-            elif gn in compilation_rules.function_templates:
-                # create boolean oracle function for availability
-                def _fn(sslbls):
-                    try:
-                        compilation_rules.function_templates[gn](sslbls)  # (returns a circuit)
-                        return True
-                    except _CompilationError:
-                        return False
-                availability[gn] = _fn  # boolean function indicating availability
-            else:
-                availability[gn] = ()   # empty tuple for absent gates - OK b/c may have specific compilations
-
-            if gate_unitaries[gn] is None:
-                raise ValueError("Must specify unitary for gate name '%s'" % str(gn))
-
-        # specific compilations add specific availability for their gate names:
-        for gate_lbl in compilation_rules.specific_compilations.keys():
-            assert(gate_lbl.name in gate_names), \
-                "gate name '%s' missing from CompilationRules gate unitaries!" % gate_lbl.name
-            assert(isinstance(availability[gate_lbl.name], tuple)), \
-                "Cannot add specific values to non-explicit availabilities (e.g. given by functions)"
-            availability[gate_lbl.name] += (gate_lbl.sslbls,)
-
-        aux_info = self.aux_info.copy()
-        aux_info.update(compilation_rules.create_aux_info())
-        ret = QubitProcessorSpec(self.num_qubits, gate_names, gate_unitaries, availability,
-                                 self.qubit_graph, self.qubit_labels, aux_info=aux_info)
-        ret.compiled_from = (self, compilation_rules)
-        return ret
-
     def subset(self, gate_names_to_include):
         gate_names = [gn for gn in gate_names_to_include if gn in self.gate_names]
         gate_unitaries = {gn: self.gate_unitaries[gn] for gn in gate_names}
@@ -558,6 +448,7 @@ class QubitProcessorSpec(ProcessorSpec):
         ret = []
         for gn, unitary in self.gate_unitaries.items():
             if callable(unitary): continue  # factories can't be idle gates
+            #TODO: add case for (unitary is None) if this is interpreted as a global idle
             if isinstance(unitary, (int, _np.int64)) or _np.allclose(unitary, _np.identity(unitary.shape[0], 'd')):
                 ret.append(gn)
         return ret
@@ -568,4 +459,15 @@ class QubitProcessorSpec(ProcessorSpec):
             avail = self.resolved_availability(gn, 'tuple')
             if None in avail or self.qubit_labels in avail:
                 return gn
+        return None
+
+    @property
+    def global_idle_layer_label(self):
+        """ Similar to global_idle_gate_name but include the appropriate sslbls """
+        for gn in self.idle_gate_names:
+            avail = self.resolved_availability(gn, 'tuple')
+            if None in avail:
+                return _Lbl(gn, None)
+            elif self.qubit_labels in avail:
+                return _Lbl(gn, self.qubit_labels)
         return None

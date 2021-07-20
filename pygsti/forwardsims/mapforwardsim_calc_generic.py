@@ -17,7 +17,7 @@ from pygsti.tools.matrixtools import _fas
 
 
 def propagate_staterep(staterep, operationreps):
-    ret = staterep
+    ret = staterep.actionable_staterep()
     for oprep in operationreps:
         ret = oprep.acton(ret)
     return ret
@@ -233,7 +233,7 @@ def mapfill_TDterms(fwdsim, objfn, array_to_fill, dest_indices, num_outcomes, la
 
             t = t0
             rhoVec.set_time(t)
-            rho = rhoVec._rep
+            rho = rhoVec._rep.actionable_staterep()
             t += rholabel.time
             #if t0 < 10: print("BEGIN rho = ",rho.to_dense())  # REMOVE
 

@@ -15,6 +15,8 @@ import numpy as _np
 import itertools as _itertools
 from ...baseobjs.statespace import StateSpace as _StateSpace
 
+from .opreps cimport OpRep
+
 
 cdef class StateRep(_basereps_cython.StateRep):
 
@@ -40,6 +42,9 @@ cdef class StateRep(_basereps_cython.StateRep):
     def __reduce__(self):
         return (StateRep, ())
 
+    def __pygsti_reduce__(self):
+        return self.__reduce__()
+
     @property
     def nqubits(self):
         return self.state_space.num_qubits
@@ -47,6 +52,11 @@ cdef class StateRep(_basereps_cython.StateRep):
     #@property
     #def dim(self):
     #    return 2**(self.c_state._n) # assume "unitary evolution"-type mode
+
+    def actionable_staterep(self):
+        # return a state rep that can be acted on by op reps or mapped to
+        # a probability/amplitude by POVM effect reps.
+        return self  # for most classes, the rep itself is actionable
 
     def __dealloc__(self):
         del self.c_state
@@ -79,7 +89,8 @@ cdef class StateRepComputational(StateRep):
         s = state_s.copy()  # needed?
         ps = state_ps.reshape(1, 2 * nqubits)
         a = _np.ones(1, complex)  # all == 1.0 by default
-        
+
+        self.zvals = zvals
         self.basis = basis
         self._cinit_base(s, ps, a, state_space)
 
@@ -90,6 +101,9 @@ cdef class StateRepComputational(StateRep):
 
 
 cdef class StateRepComposed(StateRep):
+    cdef public StateRep state_rep
+    cdef public OpRep op_rep
+
     def __cinit__(self, state_rep, op_rep, state_space):
         self.state_rep = state_rep
         self.op_rep = op_rep
@@ -97,10 +111,15 @@ cdef class StateRepComposed(StateRep):
         self.reps_have_changed()
 
     def reps_have_changed(self):
-        rep = self.op_rep.acton(self.state_rep)
-        self.smatrix[:, :] = rep.smatrix[:, :]
-        self.pvectors[:, :] = rep.pvectors[:, :]
-        self.amps[:] = rep.amps[:]
+        pass  # don't do anything here - all work in actionalble_staterep
+
+    def actionable_staterep(self):
+        state_rep = self.state_rep.actionable_staterep()
+        rep = self.op_rep.acton(state_rep)
+        #self.smatrix[:, :] = rep.smatrix[:, :]
+        #self.pvectors[:, :] = rep.pvectors[:, :]
+        #self.amps[:] = rep.amps[:]
+        return rep
 
     def __reduce__(self):
         return (StateRepComposed, (self.state_rep, self.op_rep, self.state_space))

@@ -34,6 +34,9 @@ cdef class OpRep(_basereps_cython.OpRep):
     def __reduce__(self):
         return (OpRep, ())
 
+    def __pygsti_reduce__(self):
+        return self.__reduce__()
+
     def __dealloc__(self):
         if self.c_rep != NULL:
             del self.c_rep
@@ -101,7 +104,6 @@ cdef class OpRepDenseSuperop(OpRep):
         return (OpRepDenseSuperop.__new__, (self.__class__,), (self.state_space, self.base, self.base.flags.writeable))
 
     def __setstate__(self, state):
-        assert(self.c_rep == NULL)
 
         state_space, data, writable = state
         self.state_space = state_space
@@ -184,10 +186,14 @@ cdef class OpRepStandard(OpRepDenseSuperop):
     def __reduce__(self):
         return (OpRepStandard, (self.name, self.basis, self.state_space))
 
+    def __setstate__(self, state):
+        pass  # must define this becuase base class does - need to override it
+
 
 cdef class OpRepStochastic(OpRepDenseSuperop):
     cdef public object basis
     cdef public object stochastic_superops
+    cdef public object rates
 
     def __init__(self, basis, rate_poly_dicts, initial_rates, seed_or_state, state_space):
         self.basis = basis
@@ -203,10 +209,17 @@ cdef class OpRepStochastic(OpRepDenseSuperop):
         self.update_rates(initial_rates)
 
     def update_rates(self, rates):
+        self.rates = rates
         errormap = _np.identity(self.basis.dim)
-        for rate, ss in zip(rates, self.stochastic_superops):
+        for rate, ss in zip(self.rates, self.stochastic_superops):
             errormap += rate * ss
         self.base[:, :] = errormap
+
+    def __reduce__(self):
+        return (OpRepStochastic, (self.basis, None, self.rates, None, self.state_space))
+
+    def __setstate__(self, state):
+        pass  # must define this becuase base class does - need to override it
 
 
 cdef class OpRepComposed(OpRep):

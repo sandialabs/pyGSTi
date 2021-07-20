@@ -112,7 +112,7 @@ def create_clifford_processor_spec(device, one_qubit_gates, qubitsubset=None, re
     native_pspec = create_processor_spec(device, one_qubit_gates, qubitsubset, removeedges)
     clifford_compilation = _CliffordCompilationRules.create_standard(
         native_pspec, clifford_compilation_type, what_to_compile, verbosity)
-    clifford_pspec = native_pspec.compile(clifford_compilation)
+    clifford_pspec = clifford_compilation.apply_to_processorspec(native_pspec)
     return clifford_pspec
 
 

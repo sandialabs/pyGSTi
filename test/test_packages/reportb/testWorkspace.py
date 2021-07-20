@@ -102,10 +102,10 @@ class TestWorkspace(ReportBaseCase):
 
         gsMultiSpam = self.mdl.copy()
         gsMultiSpam.povms['Msecondpovm'] = self.mdl.povms['Mdefault'].copy()
-        gsTP = self.tgt.depolarize(0.01,0.01); gsTP.set_all_parameterizations("TP")
+        gsTP = self.tgt.depolarize(0.01,0.01); gsTP.set_all_parameterizations("full TP")
         gsCPTP = self.tgt.depolarize(0.01,0.01); gsCPTP.set_all_parameterizations("CPTP")
-        gsGM = self.mdl.depolarize(0.01,0.01); gsGM.basis = pygsti.obj.Basis.cast("gm", 4)
-        gsSTD = self.mdl.depolarize(0.01,0.01); gsSTD.basis = pygsti.obj.Basis.cast("std", 4)
+        gsGM = self.mdl.depolarize(0.01,0.01); gsGM.basis = pygsti.baseobjs.Basis.cast("gm", 4)
+        gsSTD = self.mdl.depolarize(0.01,0.01); gsSTD.basis = pygsti.baseobjs.Basis.cast("std", 4)
         gsQT = stdQT_XYIMS.target_model().depolarize(0.01,0.01)
 
         #Construct confidence regions
@@ -114,7 +114,7 @@ class TestWorkspace(ReportBaseCase):
                                                 min_prob_clip=1e-4, prob_clip_interval=(-1e6,1e6),
                                                 radius=1e-4)
             est = pygsti.protocols.estimate.Estimate.create_gst_estimate(None, mdl, None, []) #dummy w/out parent
-            crfactory = pygsti.obj.ConfidenceRegionFactory(
+            crfactory = pygsti.protocols.confidenceregionfactory.ConfidenceRegionFactory(
                 parent=est, model_lbl="target", circuit_list_lbl=None,
                 hessian=hessian, non_mark_radius_sq=0.0)
             crfactory.project_hessian('std')
@@ -170,7 +170,7 @@ class TestWorkspace(ReportBaseCase):
         tbls.append( w.GateEigenvalueTable(self.mdl, self.tgt, cr) )
         tbls.append( w.GateEigenvalueTable(self.mdl, None, cr, display=("polar",) ) ) # polar with no target model
         tbls.append(w.GateEigenvalueTable(self.mdl, self.tgt, cr, display=("evdm","evinf","rel"),
-                                          virtual_ops=[pygsti.obj.Circuit(('Gx', 'Gx'))]))
+                                          virtual_ops=[pygsti.circuits.Circuit(('Gx', 'Gx'))]))
         with self.assertRaises(ValueError):
             tbls.append( w.GateEigenvalueTable(self.mdl, self.tgt, cr, display=("foobar",)) )
 
@@ -216,15 +216,15 @@ class TestWorkspace(ReportBaseCase):
         params['gaugeOptParams'] = [goparams] # can also be a list (for GOpt stages)
         tbls.append( w.MetadataTable(gsTP, params) )
 
-        weirdGS = pygsti.construction.create_explicit_model_from_expressions(
+        weirdGS = pygsti.models.modelconstruction.create_explicit_model_from_expressions(
             [('Q0','Q1')],['Gi'], ["I(Q0)"])
         #weirdGS.preps['rho1'] = pygsti.obj.ComplementSPAMVec(weirdGS.preps['rho0'],[]) #num_params not implemented!
-        weirdGS.povms['Mtensor'] = pygsti.obj.TensorProdPOVM([self.mdl.povms['Mdefault'], self.mdl.povms['Mdefault']])
+        weirdGS.povms['Mtensor'] = pygsti.modelmembers.povms.TensorProductPOVM([self.mdl.povms['Mdefault'], self.mdl.povms['Mdefault']])
         tbls.append( w.MetadataTable(weirdGS, params) )
 
         tbls.append( w.SoftwareEnvTable() )
 
-        profiler = pygsti.obj.Profiler()
+        profiler = pygsti.baseobjs.Profiler()
         tbls.append( w.ProfilerTable(profiler,"time") )
         tbls.append( w.ProfilerTable(profiler,"name") )
         if profiler is not None:
@@ -282,11 +282,11 @@ class TestWorkspace(ReportBaseCase):
         plts.append( w.ColorBoxPlot(("chi2","logl"), self.gss, self.ds, self.mdl, box_labels=False,
                                     hover_info=True, sum_up=False, invert=False, typ="scatter") )
 
-        mds = pygsti.objects.MultiDataSet()
+        mds = pygsti.data.MultiDataSet()
         mds.add_dataset("DS0",self.ds)
         mds.add_dataset("DS1",self.ds)
-        dsc = pygsti.objects.DataComparator([self.ds, self.ds], op_exclusions=['Gfoo'], op_inclusions=['Gx', 'Gy', 'Gi'])
-        dsc2 = pygsti.objects.DataComparator(mds)
+        dsc = pygsti.data.DataComparator([self.ds, self.ds], op_exclusions=['Gfoo'], op_inclusions=['Gx', 'Gy', 'Gi'])
+        dsc2 = pygsti.data.DataComparator(mds)
         dsc.run()
         dsc2.run()
         plts.append( w.ColorBoxPlot(("dscmp",), self.gss, None, self.mdl, dscomparator=dsc) ) # dscmp with 'None' dataset specified
@@ -481,7 +481,7 @@ class TestWorkspace(ReportBaseCase):
 
 
     def test_text_creation(self):
-        printer = pygsti.obj.VerbosityPrinter(1)
+        printer = pygsti.baseobjs.VerbosityPrinter(1)
         printer.start_recording()
         printer.log("Hello World")
         lineinfo = printer.stop_recording()
@@ -540,11 +540,11 @@ class TestWorkspace(ReportBaseCase):
     def test_plot_and_table_objects(self):
         ws = pygsti.report.Workspace()
 
-        printer = pygsti.obj.VerbosityPrinter(1)
+        printer = pygsti.baseobjs.VerbosityPrinter(1)
         printer.start_recording()
         printer.log("Hello World (with $\\alpha$ math latex)")
         lineinfo = printer.stop_recording()
-        strs = pygsti.construction.to_circuits([(), ('Gx',), ('Gx', 'Gy')])
+        strs = pygsti.circuits.to_circuits([(), ('Gx',), ('Gx', 'Gy')])
 
         table = ws.BlankTable()
         plot = ws.BoxKeyPlot(strs, strs)
@@ -624,7 +624,7 @@ class TestWorkspace(ReportBaseCase):
         mx = np.identity(2,'d')
         mxs = [ [mx, mx],
                 [mx, mx] ]
-        gstrs = pygsti.construction.to_circuits([(), ('Gx',)])
+        gstrs = pygsti.circuits.to_circuits([(), ('Gx',)])
 
         # ---- _nested_color_boxplot ----
         pygsti.report.workspaceplots._nested_color_boxplot(mxs, colormap)
@@ -660,8 +660,8 @@ class TestWorkspace(ReportBaseCase):
         fidpairs = {(i,j): (prep, meas) for j,prep in enumerate(preps) for i,meas in enumerate(effects)}
         for L in [1,2]:
             for germ in germs:
-                plaquettes[(L, germ)] = pygsti.obj.GermFiducialPairPlaquette(germ, L, fidpairs)
-        gss = pygsti.obj.PlaquetteGridCircuitStructure(plaquettes, [1, 2], germs, 'L', 'germ')
+                plaquettes[(L, germ)] = pygsti.circuits.GermFiducialPairPlaquette(germ, L, fidpairs)
+        gss = pygsti.circuits.PlaquetteGridCircuitStructure(plaquettes, [1, 2], germs, 'L', 'germ')
         gss2 = gss.copy()
         
         #cls = type('DummyClass', pygsti.obj.LsGermsStructure.__bases__, dict(pygsti.obj.LsGermsStructure.__dict__))

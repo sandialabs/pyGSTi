@@ -6,7 +6,7 @@
 typedef std::complex<double> dcomplex;
 typedef long long INT;
 
-namespace CReps {
+namespace CReps_densitymx {
     
   class EffectCRep {
     public:

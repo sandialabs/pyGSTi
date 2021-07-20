@@ -439,9 +439,8 @@ class ComposedOp(_LinearOperator):
         else:
             return _np.take(derivMx, wrt_filter, axis=1)
 
-    def taylor_order_terms(self, order, gpindices_array, max_polynomial_vars=100, return_coeff_polys=False):
+    def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
         """
-        TODO docstring: add gpindices_array
         Get the `order`-th order Taylor-expansion terms of this operation.
 
         This function either constructs or returns a cached list of the terms at
@@ -479,7 +478,7 @@ class ComposedOp(_LinearOperator):
             output of :method:`Polynomial.compact`.
         """
         if order not in self.terms:
-            self._compute_taylor_order_terms(order, max_polynomial_vars, gpindices_array)
+            self._compute_taylor_order_terms(order, max_polynomial_vars, self.gpindices_as_array())
 
         if return_coeff_polys:
             #Return coefficient polys in terms of *local* parameters (get_taylor_terms
@@ -827,6 +826,93 @@ class ComposedOp(_LinearOperator):
             case.
         """
         return self.errorgen_coefficients(return_basis=False, logscale_nonham=True)
+
+    def set_errorgen_coefficients(self, lindblad_term_dict, action="update", logscale_nonham=False):
+        """
+        Sets the coefficients of terms in the error generator of this operation.
+
+        The dictionary `lindblad_term_dict` has tuple-keys describing the type of term and the basis
+        elements used to construct it, e.g. `('H','X')`.
+
+        Parameters
+        ----------
+        lindblad_term_dict : dict
+            Keys are `(termType, basisLabel1, <basisLabel2>)`
+            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            or `"A"` (Affine).  Hamiltonian and Affine terms always have a
+            single basis label (so key is a 2-tuple) whereas Stochastic tuples
+            have 1 basis label to indicate a *diagonal* term and otherwise have
+            2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
+            terms.  Values are the coefficients of these error generators,
+            and should be real except for the 2-basis-label case.
+
+        action : {"update","add","reset"}
+            How the values in `lindblad_term_dict` should be combined with existing
+            error-generator coefficients.
+
+        logscale_nonham : bool, optional
+            Whether or not the values in `lindblad_term_dict` for non-hamiltonian
+            error generators should be interpreted as error *rates* (of an
+            "equivalent" depolarizing channel, see :method:`errorgen_coefficients`)
+            instead of raw coefficients.  If True, then the non-hamiltonian
+            coefficients are set to `-log(1 - d^2*rate)/d^2`, where `rate` is
+            the corresponding value given in `lindblad_term_dict`.  This is what is
+            performed by the function :method:`set_error_rates`.
+
+        Returns
+        -------
+        None
+        """
+        values_to_set = lindblad_term_dict.copy()  # so we can remove elements as we set them
+
+        for op in self.factorops:
+            try:
+                available_factor_coeffs = op.errorgen_coefficients(False, logscale_nonham)
+            except AttributeError:
+                continue  # just skip members that don't implemnt errorgen_coefficients (?)
+
+            Ltermdict_local = _collections.OrderedDict([(k, v) for k, v in values_to_set.items()
+                                                        if k in available_factor_coeffs])
+            op.set_errorgen_coefficients(Ltermdict_local, action, logscale_nonham)
+            for k in Ltermdict_local:
+                del values_to_set[k]  # remove the values that we just set
+
+        if len(values_to_set) > 0:  # then there were some values that could not be set!
+            raise ValueError("These errorgen coefficients could not be set: %s" %
+                             (",".join(map(str, values_to_set.keys()))))
+
+        if self._rep_type == 'dense': self._update_denserep()
+        self.dirty = True
+
+    def set_error_rates(self, lindblad_term_dict, action="update"):
+        """
+        Sets the coeffcients of terms in the error generator of this operation.
+
+        Values are set so that the contributions of the resulting channel's
+        error rate are given by the values in `lindblad_term_dict`.  See
+        :method:`error_rates` for more details.
+
+        Parameters
+        ----------
+        lindblad_term_dict : dict
+            Keys are `(termType, basisLabel1, <basisLabel2>)`
+            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            or `"A"` (Affine).  Hamiltonian and Affine terms always have a
+            single basis label (so key is a 2-tuple) whereas Stochastic tuples
+            have 1 basis label to indicate a *diagonal* term and otherwise have
+            2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
+            terms.  Values are real error rates except for the 2-basis-label
+            case, when they may be complex.
+
+        action : {"update","add","reset"}
+            How the values in `lindblad_term_dict` should be combined with existing
+            error rates.
+
+        Returns
+        -------
+        None
+        """
+        self.set_errorgen_coefficients(lindblad_term_dict, action, logscale_nonham=True)
 
     def __str__(self):
         """ Return string representation """
