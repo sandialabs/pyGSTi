@@ -47,6 +47,11 @@ cdef class StateRep(_basereps_cython.StateRep):
     def copy_from(self, other):
         self.data[:] = other.data[:]
 
+    def actionable_staterep(self):
+        # return a state rep that can be acted on by op reps or mapped to
+        # a probability/amplitude by POVM effect reps.
+        return self  # for most classes, the rep itself is actionable
+
     def to_dense(self, on_space):
         if on_space not in ('minimal', 'HilbertSchmidt'):
             raise ValueError("'densitymx' evotype cannot produce Hilbert-space ops!")
