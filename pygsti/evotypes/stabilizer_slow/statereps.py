@@ -88,10 +88,20 @@ class StateRepComposed(StateRep):
         self.reps_have_changed()
 
     def reps_have_changed(self):
-        rep = self.op_rep.acton(self.state_rep)
-        self.smatrix[:, :] = rep.smatrix[:, :]
-        self.pvectors[:, :] = rep.pvectors[:, :]
-        self.amps[:] = rep.amps[:]
+        pass  # don't do anything here - all work in actionalble_staterep
+        #OLD REMOVE:
+        #rep = self.op_rep.acton(self.state_rep)
+        #self.smatrix[:, :] = rep.smatrix[:, :]
+        #self.pvectors[:, :] = rep.pvectors[:, :]
+        #self.amps[:] = rep.amps[:]
+
+    def actionable_staterep(self):
+        state_rep = self.state_rep.actionable_staterep()
+        rep = self.op_rep.acton(state_rep)
+        #self.smatrix[:, :] = rep.smatrix[:, :]  # do this also?
+        #self.pvectors[:, :] = rep.pvectors[:, :]  # do this also?
+        #self.amps[:] = rep.amps[:]  # do this also?
+        return rep
 
 
 class StateRepTensorProduct(StateRep):

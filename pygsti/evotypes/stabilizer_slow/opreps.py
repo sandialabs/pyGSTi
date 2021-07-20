@@ -182,6 +182,23 @@ class OpRepEmbedded(OpRep):
         return outstate
 
 
+class OpRepExpErrorgen(OpRep):
+
+    def __init__(self, errorgen_rep):
+        state_space = errorgen_rep.state_space
+        self.errorgen_rep = errorgen_rep
+        super(OpRepExpErrorgen, self).__init__(state_space)
+
+    def errgenrep_has_changed(self, onenorm_upperbound):
+        pass
+    
+    def acton(self, state):
+        raise AttributeError("Cannot currently act with statevec.OpRepExpErrorgen - for terms only!")
+
+    def adjoint_acton(self, state):
+        raise AttributeError("Cannot currently act with statevec.OpRepExpErrorgen - for terms only!")
+
+
 class OpRepRepeated(OpRep):
     def __init__(self, rep_to_repeat, num_repetitions, state_space):
         state_space = _StateSpace.cast(state_space)

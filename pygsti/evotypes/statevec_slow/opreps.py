@@ -11,6 +11,7 @@ Operation representation classes for the `statevec_slow` evolution type.
 #***************************************************************************************************
 
 import itertools as _itertools
+import copy as _copy
 
 import numpy as _np
 from scipy.sparse.linalg import LinearOperator
@@ -48,6 +49,9 @@ class OpRep(_basereps.OpRep):
             in_state = _StateRep(_np.ascontiguousarray(v, complex))
             return self.adjoint_acton(in_state).to_dense('Hilbert')
         return LinearOperator((self.dim, self.dim), matvec=mv, rmatvec=rmv)  # transpose, adjoint, dot, matmat?
+
+    def copy(self):
+        return _copy.deepcopy(self)
 
 
 class OpRepDenseUnitary(OpRep):
@@ -249,6 +253,23 @@ class OpRepEmbedded(OpRep):
         #act on other blocks trivially:
         self._acton_other_blocks_trivially(output_state, state)
         return output_state
+
+
+class OpRepExpErrorgen(OpRep):
+
+    def __init__(self, errorgen_rep):
+        state_space = errorgen_rep.state_space
+        self.errorgen_rep = errorgen_rep
+        super(OpRepExpErrorgen, self).__init__(state_space)
+
+    def errgenrep_has_changed(self, onenorm_upperbound):
+        pass
+    
+    def acton(self, state):
+        raise AttributeError("Cannot currently act with statevec.OpRepExpErrorgen - for terms only!")
+
+    def adjoint_acton(self, state):
+        raise AttributeError("Cannot currently act with statevec.OpRepExpErrorgen - for terms only!")
 
 
 class OpRepRepeated(OpRep):
