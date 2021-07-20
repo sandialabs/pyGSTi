@@ -872,7 +872,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
 
             errgen_cls = self.errorgen.__class__
             #Note: this only really works for LindbladErrorGen objects now... make more general in FUTURE?
-            truncate = 3e-6  # looser truncation, but can't be 'True' since we need to throw errors when appropriate
+            truncate = 1e-5  # looser truncation, but can't be 'True' since we need to throw errors when appropriate
             param = _LindbladParameterization(self.errorgen.nonham_mode, self.errorgen.param_mode,
                                               len(self.errorgen.ham_basis) > 0, len(self.errorgen.other_basis) > 0)
             transformed_errgen = errgen_cls.from_operation_matrix(mx, param, self.errorgen.lindblad_basis,
