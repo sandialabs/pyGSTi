@@ -252,7 +252,10 @@ def value(el, specs, mathmode=False):
         return el
     if type(el) in (int, _np.int64):
         return "%d" % el
-    if el is None or _np.isnan(el): return "--"
+    try:
+        if el is None or _np.isnan(el): return "--"
+    except:
+        import bpdb; bpdb.set_trace()
 
     try:
         if abs(el.real) > TOL:

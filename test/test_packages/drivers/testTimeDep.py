@@ -38,10 +38,11 @@ class MyTimeDependentIdle(pygsti.modelmembers.operations.DenseOperator):
 
         # .base is a member of DenseOperator and is a numpy array that is
         # the dense Pauli transfer matrix of this operator
-        self.base[:,:] = np.array([[1,   0,   0,   0],
+        self._ptr[:,:] = np.array([[1,   0,   0,   0],
                                    [0,   a,   0,   0],
                                    [0,   0,   a,   0],
                                    [0,   0,   0,   a]],'d')
+        self._ptr_has_changed()
 
     def transform(self, S):
         # Update self with inverse(S) * self * S (used in gauge optimization)
@@ -83,7 +84,7 @@ class TimeDependentTestCase(BaseTestCase):
 
         target_model = std1Q_XYI.target_model("TP", sim_type="map")
         mdl_datagen = target_model.depolarize(op_noise=0.01, spam_noise=0.001)
-        edesign = pygsti.protocols.StandardGSTDesign(target_model, prep_fiducials,
+        edesign = pygsti.protocols.StandardGSTDesign(target_model.create_processor_spec(), prep_fiducials,
                                                      meas_fiducials, germs, maxLengths)
 
         # *sparse*, time-independent data
@@ -128,13 +129,13 @@ class TimeDependentTestCase(BaseTestCase):
         target_model = std1Q_XYI.target_model("TP",sim_type="map")
         mdl_datagen = target_model.depolarize(op_noise=0.01, spam_noise=0.001)
         mdl_datagen.operations['Gi'] = MyTimeDependentIdle(1.0)
-        edesign = pygsti.protocols.StandardGSTDesign(target_model, prep_fiducials,
+        edesign = pygsti.protocols.StandardGSTDesign(target_model.create_processor_spec(), prep_fiducials,
                                                      meas_fiducials, germs, maxLengths)
 
         # *sparse*, time-independent data
         ds = pygsti.data.simulate_data(mdl_datagen, edesign.all_circuits_needing_data, num_samples=1000,
-                                               sample_error="binomial", seed=1234, times=[0, 0.1, 0.2],
-                                               record_zero_counts=False)
+                                       sample_error="binomial", seed=1234, times=[0, 0.1, 0.2],
+                                       record_zero_counts=False)
         self.assertEqual(ds.degrees_of_freedom(aggregate_times=False), 500)
 
         target_model.operations['Gi'] = MyTimeDependentIdle(0.0)  # start assuming no time dependent decay 0

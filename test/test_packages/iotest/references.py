@@ -33,7 +33,7 @@ class IOGen:
 
     @_memo
     def ds(self):
-        ds = pygsti.obj.DataSet(outcome_labels=['0', '1'], comment="Hello")
+        ds = pygsti.data.DataSet(outcome_labels=['0', '1'], comment="Hello")
         ds.add_count_dict(('Gx',), {'0': 10, '1': 90})
         ds.add_count_dict(('Gx', 'Gy'), {'0': 40, '1': 60})
         ds.done_adding_data()
@@ -45,7 +45,7 @@ class IOGen:
 
     @_memo
     def sparse_ds(self):
-        ds = pygsti.objects.DataSet()
+        ds = pygsti.data.DataSet()
         ds.add_count_dict(('Gx',), {'0': 10, '1': 90})
         ds[('Gy',)] = {'0': 20, '1': 80}
         ds[('Gx', 'Gy')] = {('0', '0'): 30, ('1', '1'): 70}

@@ -977,8 +977,11 @@ class LindbladErrorgen(_LinearOperator):
             is a `(vtape,ctape)` 2-tuple formed by concatenating together the
             output of :method:`Polynomial.compact`.
         """
-        assert(self._rep_type == 'lindblad errorgen'), \
-            "Only evotypes with native Lindblad errorgen representations can utilize Taylor terms"
+        try:
+            assert(self._rep_type == 'lindblad errorgen'), \
+                "Only evotypes with native Lindblad errorgen representations can utilize Taylor terms"
+        except:
+            import bpdb; bpdb.set_trace()
         assert(order == 0), \
             "Error generators currently treat all terms as 0-th order; nothing else should be requested!"
         assert(return_coeff_polys is False)

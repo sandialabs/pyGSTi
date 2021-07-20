@@ -1063,7 +1063,7 @@ def parse_model(filename):
 
     if state_space is None:
         assert(basis_dim is not None)  # b/c of logic above
-        state_space = _statespace.ExplicitStateSpace(['*'], [basis_dim])
+        state_space = _statespace.ExplicitStateSpace(['*'], [int(round(_np.sqrt(basis_dim)))])
         # special '*' state space label w/entire dimension inferred from BASIS line
 
     mdl = _ExplicitOpModel(state_space, basis)

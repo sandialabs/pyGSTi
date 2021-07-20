@@ -114,7 +114,7 @@ class TestWorkspace(ReportBaseCase):
                                                 min_prob_clip=1e-4, prob_clip_interval=(-1e6,1e6),
                                                 radius=1e-4)
             est = pygsti.protocols.estimate.Estimate.create_gst_estimate(None, mdl, None, []) #dummy w/out parent
-            crfactory = pygsti.protocols.ConfidenceRegionFactory(
+            crfactory = pygsti.protocols.confidenceregionfactory.ConfidenceRegionFactory(
                 parent=est, model_lbl="target", circuit_list_lbl=None,
                 hessian=hessian, non_mark_radius_sq=0.0)
             crfactory.project_hessian('std')

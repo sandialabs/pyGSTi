@@ -435,7 +435,7 @@ class GatesTable(WorkspaceTable):
                 basis = model.basis
 
                 if display_as == "numbers":
-                    row_data.append(op)
+                    row_data.append(op.to_dense('HilbertSchmidt'))
                     row_formatters.append('Brackets')
                 elif display_as == "boxes":
                     fig = _wp.GateMatrixPlot(self.ws, op.to_dense(on_space='HilbertSchmidt'),
@@ -451,7 +451,7 @@ class GatesTable(WorkspaceTable):
                 intervalVec = confidence_region_info.retrieve_profile_likelihood_confidence_intervals(
                     lbl, comp_lbl)[:, None]
 
-                if isinstance(per_model_ops[-1], _op.FullDenseOp):
+                if isinstance(per_model_ops[-1], _op.FullArbitraryOp):
                     #then we know how to reshape into a matrix
                     op_dim = models[-1].dim
                     basis = models[-1].basis

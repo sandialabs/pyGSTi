@@ -837,13 +837,20 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
                     ret.factories[key] = factory
                 else:
                     if inds is None or inds == tuple(qubit_labels):  # then no need to embed
-                        ideal_gate = _op.create_from_unitary_mx(gate_unitary, ideal_gate_type, 'pp',
-                                                                None, evotype, state_space)
+                        if isinstance(gate_unitary, (int, _np.int64)):  # interpret gate_unitary as identity
+                            assert(gate_unitary == len(qubit_labels)), \
+                                "Idle unitary as int should be on all qubits for %s" % (str(gn))
+                            ideal_gate = _op.ComposedOp([], evotype, state_space)  # (identity gate on *all* qubits)
+                        else:
+                            ideal_gate = _op.create_from_unitary_mx(gate_unitary, ideal_gate_type, 'pp',
+                                                                    None, evotype, state_space)
                     else:
                         if embed_gates:
                             ideal_gate = local_gates[gn]
                             ideal_gate = _op.EmbeddedOp(state_space, inds, ideal_gate)
                         else:
+                            if isinstance(gate_unitary, (int, _np.int64)):  # interpret gate_unitary as identity
+                                gate_unitary = _np.identity(2**gate_unitary, 'd')  # turn into explicit identity op
                             embedded_unitary = _embed_unitary(state_space, inds, gate_unitary)
                             ideal_gate = _op.create_from_unitary_mx(embedded_unitary, ideal_gate_type, 'pp',
                                                                     None, evotype, state_space)
@@ -1633,13 +1640,13 @@ def _create_cloud_crosstalk_model(processor_spec, modelnoise, custom_gates=None,
             stencil = stencils[lbl.name]
         else:
             # simple cloud-key when there is no cloud noise
-            return tuple(lbl.sslbls) if (lbl.sslbls is not None) else None
+            return tuple(lbl.sslbls) if (lbl.sslbls is not None) else qubit_labels
 
         #Otherwise, process stencil to get a list of all the qubit labels `lbl`'s cloudnoise error
         # touches and form this into a key
         cloud_sslbls = modelnoise.compute_stencil_absolute_sslbls(stencil, state_space, lbl.sslbls,
                                                                   processor_spec.qubit_graph)
-        hashable_sslbls = tuple(lbl.sslbls) if (lbl.sslbls is not None) else None
+        hashable_sslbls = tuple(lbl.sslbls) if (lbl.sslbls is not None) else qubit_labels
         cloud_key = (hashable_sslbls, tuple(sorted(cloud_sslbls)))  # (sets are unhashable)
         return cloud_key
 
@@ -1851,7 +1858,8 @@ def create_cloud_crosstalk_model_from_hops_and_weights(
 
     for gatenm, gate_unitary in processor_spec.gate_unitaries.items():
         if gatenm == global_idle_name: continue  # processed above
-        gate_nQubits = int(round(_np.log2(gate_unitary.shape[0])))
+        gate_nQubits = int(gate_unitary) if isinstance(gate_unitary, (int, _np.int64)) \
+            else int(round(_np.log2(gate_unitary.shape[0])))  # NOTE: integer gate_unitary => idle on n qubits
         if gate_nQubits not in (1, 2):
             raise ValueError("Only 1- and 2-qubit gates are supported.  %s acts on %d qubits!"
                              % (str(gatenm), gate_nQubits))

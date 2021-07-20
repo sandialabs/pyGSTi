@@ -264,50 +264,50 @@ class TestCodecs(CodecsTestCase):
 
         mock_json_obj = {'__tuple__': True}
         with self.assertRaises(AssertionError):
-            pygsti.io.jsoncodec._decode_std_base(mock_json_obj, "", binary)
+            pygsti.serialization.jsoncodec._decode_std_base(mock_json_obj, "", binary)
 
         mock_json_obj = {'__list__': ['a','b']}
-        pygsti.io.jsoncodec._decode_std_base(mock_json_obj, [], binary)
+        pygsti.serialization.jsoncodec._decode_std_base(mock_json_obj, [], binary)
 
         mock_json_obj = {'__set__': ['a','b']}
-        pygsti.io.jsoncodec._decode_std_base(mock_json_obj, set(), binary)
+        pygsti.serialization.jsoncodec._decode_std_base(mock_json_obj, set(), binary)
 
         mock_json_obj = {'__ndict__': [('key1','val1'),('key2','val2')]}
-        pygsti.io.jsoncodec._decode_std_base(mock_json_obj, {}, binary)
+        pygsti.serialization.jsoncodec._decode_std_base(mock_json_obj, {}, binary)
 
         mock_json_obj = {'__odict__': [('key1','val1'),('key2','val2')]}
-        pygsti.io.jsoncodec._decode_std_base(mock_json_obj, collections.OrderedDict(), binary)
+        pygsti.serialization.jsoncodec._decode_std_base(mock_json_obj, collections.OrderedDict(), binary)
 
         mock_json_obj = {'__uuid__': True}
         with self.assertRaises(AssertionError):
-            pygsti.io.jsoncodec._decode_std_base(mock_json_obj, "", binary)
+            pygsti.serialization.jsoncodec._decode_std_base(mock_json_obj, "", binary)
 
         mock_json_obj = {'__ndarray__': True}
         with self.assertRaises(AssertionError):
-            pygsti.io.jsoncodec._decode_std_base(mock_json_obj, "", binary)
+            pygsti.serialization.jsoncodec._decode_std_base(mock_json_obj, "", binary)
 
         mock_json_obj = {'__npgeneric__': True}
         with self.assertRaises(AssertionError):
-            pygsti.io.jsoncodec._decode_std_base(mock_json_obj, "", binary)
+            pygsti.serialization.jsoncodec._decode_std_base(mock_json_obj, "", binary)
 
         mock_json_obj = {'__complex__': True}
         with self.assertRaises(AssertionError):
-            pygsti.io.jsoncodec._decode_std_base(mock_json_obj, "", binary)
+            pygsti.serialization.jsoncodec._decode_std_base(mock_json_obj, "", binary)
 
         mock_json_obj = {'__counter__': True}
         with self.assertRaises(AssertionError):
-            pygsti.io.jsoncodec._decode_std_base(mock_json_obj, "", binary)
+            pygsti.serialization.jsoncodec._decode_std_base(mock_json_obj, "", binary)
 
         mock_json_obj = {'__slice__': True}
         with self.assertRaises(AssertionError):
-            pygsti.io.jsoncodec._decode_std_base(mock_json_obj, "", binary)
+            pygsti.serialization.jsoncodec._decode_std_base(mock_json_obj, "", binary)
 
 
     def test_helpers(self):
-        pygsti.io.jsoncodec._tostr("Hi")
-        pygsti.io.jsoncodec._tostr(b"Hi")
-        pygsti.io.jsoncodec._tobin("Hi")
-        pygsti.io.jsoncodec._tobin(b"Hi")
+        pygsti.serialization.jsoncodec._tostr("Hi")
+        pygsti.serialization.jsoncodec._tostr(b"Hi")
+        pygsti.serialization.jsoncodec._tobin("Hi")
+        pygsti.serialization.jsoncodec._tobin(b"Hi")
 
     def test_pickle_dataset_with_circuitlabels(self):
         #A later-added test checking whether Circuits containing CiruitLabels

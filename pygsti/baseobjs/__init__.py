@@ -18,3 +18,4 @@ from .label import Label, CircuitLabel
 from .outcomelabeldict import OutcomeLabelDict
 from .statespace import StateSpace, QubitSpace, ExplicitStateSpace
 from .resourceallocation import ResourceAllocation
+from .qubitgraph import QubitGraph

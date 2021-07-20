@@ -48,8 +48,8 @@ class ReportBaseCase(BaseTestCase):
             ds2.save(compare_files + "/reportgen2.dataset")
 
 
-        cls.ds = pygsti.objects.DataSet(file_to_load_from=compare_files + "/reportgen.dataset")
-        cls.ds2 = pygsti.objects.DataSet(file_to_load_from=compare_files + "/reportgen2.dataset")
+        cls.ds = pygsti.data.DataSet(file_to_load_from=compare_files + "/reportgen.dataset")
+        cls.ds2 = pygsti.data.DataSet(file_to_load_from=compare_files + "/reportgen2.dataset")
 
         mdl_lgst = pygsti.run_lgst(cls.ds, std.fiducials, std.fiducials, target_model, svd_truncate_to=4, verbosity=0)
         mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst, target_model, {'gates': 1.0, 'spam': 0.0})
@@ -68,7 +68,7 @@ class ReportBaseCase(BaseTestCase):
         )
 
         experiment_design = pygsti.protocols.StandardGSTDesign(
-            target_model, std.fiducials, std.fiducials, std.germs, cls.maxLengthList
+            target_model.create_processor_spec(), std.fiducials, std.fiducials, std.germs, cls.maxLengthList
         )
         data = pygsti.protocols.ProtocolData(experiment_design, cls.ds)
         protocol = pygsti.protocols.StandardGST()

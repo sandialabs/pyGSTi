@@ -526,7 +526,9 @@ class CloudNoiseModel(_ImplicitOpModel):
                 mm_gatedict[key] = gate
             else:  # presumably a numpy array or something like it:
                 mm_gatedict[key] = _op.StaticArbitraryOp(gate, evotype, state_space=None)  # use default state space
-            assert(mm_gatedict[key]._evotype == evotype)
+            assert(mm_gatedict[key]._evotype == evotype), \
+                ("Custom gate object supplied in `gatedict` for key %s has evotype %s (!= expected %s)"
+                 % (str(key), str(mm_gatedict[key]._evotype), str(evotype)))
 
         #Set other members
         self.processor_spec = processor_spec
@@ -1085,7 +1087,8 @@ class CloudNoiseLayerRules(_LayerRules):
         #      (('matrix' if dense else 'map'), str(oplabel), self.errcomp_type) )
 
         components = layerlbl.components
-        if len(components) == 0 and self.implied_global_idle_label is not None:
+        if (len(components) == 0 and self.implied_global_idle_label is not None) \
+           or components == (self.implied_global_idle_label,):
             if self.errcomp_type == "gates":
                 return model.operation_blks['cloudnoise'][self.implied_global_idle_label]  # idle!
             elif self.errcomp_type == "errorgens":
@@ -1096,10 +1099,17 @@ class CloudNoiseLayerRules(_LayerRules):
         #Compose target operation from layer's component labels, which correspond
         # to the perfect (embedded) target ops in op_blks
         if len(components) > 1:
-            targetOp = Composed([self._layer_component_targetop(model, l, caches['op-layers']) for l in components],
+            #Note: _layer_component_targetop can return `None` for a (static) identity op
+            to_compose = [self._layer_component_targetop(model, l, caches['op-layers']) for l in components]
+            targetOp = Composed([op for op in to_compose if op is not None],
                                 evotype=model.evotype, state_space=model.state_space)
-        else: targetOp = self._layer_component_targetop(model, components[0], caches['op-layers'])
-        ops_to_compose = [targetOp]
+        else:
+            try:
+                targetOp = self._layer_component_targetop(model, components[0], caches['op-layers'])
+            except:
+                import bpdb; bpdb.set_trace()
+                print("PROB")
+        ops_to_compose = [targetOp] if (targetOp is not None) else []
 
         if self.errcomp_type == "gates":
             if add_idle: ops_to_compose.append(model.operation_blks['cloudnoise'][self.implied_global_idle_label])
@@ -1147,6 +1157,11 @@ class CloudNoiseLayerRules(_LayerRules):
         """
         if complbl in cache:
             return cache[complbl]  # caches['op-layers'] would hold "simplified" instrument members
+
+        if complbl == self.implied_global_idle_label:
+            # special case of the implied global idle, which give `None` instead of the
+            # identity as its target operation since we don't want to include an unnecesseary idle op.
+            return None
 
         if isinstance(complbl, _CircuitLabel):
             raise NotImplementedError("Cloud noise models cannot simulate circuits with partial-layer subcircuits.")

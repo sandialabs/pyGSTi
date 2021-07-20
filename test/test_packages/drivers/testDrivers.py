@@ -217,7 +217,7 @@ class TestDriversMethods(DriversTestCase):
         #lower bad-fit threshold to zero to trigger bad-fit additional processing
         maxLens = self.maxLens
         result = self.runSilent(pygsti.run_stdpractice_gst,
-                                ds, std.target_model(), std.fiducials, std.fiducials,
+                                ds, std.target_model().create_processor_spec(), std.fiducials, std.fiducials,
                                 std.germs, maxLens, modes="TP,CPTP,Test,Target",
                                 models_to_test = {"Test": mdl_guess},
                                 comm=None, mem_limit=None, verbosity=5)

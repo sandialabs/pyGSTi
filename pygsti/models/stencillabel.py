@@ -104,10 +104,13 @@ class StencilLabelAllCombos(StencilLabel):
     def compute_absolute_sslbls(self, qubit_graph, state_space, target_lbls):
         ret = []
         for chosen_sslbls in _itertools.combinations(self.possible_sslbls, self.num_to_choose):
+            resolved_chosen_sslbls = self._resolve_single_sslbls_tuple(chosen_sslbls, qubit_graph,
+                                                                       state_space, target_lbls)
             if self.connected and len(chosen_sslbls) == 2 \
-                    and not qubit_graph.is_directly_connected(chosen_sslbls[0], chosen_sslbls[1]):
+               and qubit_graph.is_directly_connected(resolved_chosen_sslbls[0],
+                                                     resolved_chosen_sslbls[1]):
                 continue  # TO UPDATE - check whether all wt indices are a connected subgraph
-            ret.append(self._resolve_single_sslbls_tuple(chosen_sslbls, qubit_graph, state_space, target_lbls))
+            ret.append(resolved_chosen_sslbls)
         return ret  # return a *list* of
 
     def _create_local_state_space(self, entire_state_space):

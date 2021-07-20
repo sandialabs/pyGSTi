@@ -21,26 +21,26 @@ from pygsti.circuits import cloudcircuitconstruction
 
 #Mimics a function that used to be in pyGSTi, replaced with create_cloudnoise_model_from_hops_and_weights
 def build_XYCNOT_cloudnoise_model(nQubits, geometry="line", cnot_edges=None,
-                                      maxIdleWeight=1, maxSpamWeight=1, maxhops=0,
-                                      extraWeight1Hops=0, extraGateWeight=0,
-                                      roughNoise=None, simulator="matrix", parameterization="H+S",
-                                      spamtype="lindblad", addIdleNoiseToAllGates=True,
-                                      errcomp_type="gates", return_clouds=False, verbosity=0):
+                                  maxIdleWeight=1, maxSpamWeight=1, maxhops=0,
+                                  extraWeight1Hops=0, extraGateWeight=0,
+                                  roughNoise=None, simulator="matrix", parameterization="H+S",
+                                  spamtype="lindblad", addIdleNoiseToAllGates=True,
+                                  errcomp_type="gates", evotype="default", return_clouds=False, verbosity=0):
 
     availability = {}; nonstd_gate_unitaries = {}
     if cnot_edges is not None: availability['Gcnot'] = cnot_edges
-    pspec = _ProcessorSpec(nQubits, ['Gx', 'Gy', 'Gcnot'], nonstd_gate_unitaries, availability, geometry)
-    assert (spamtype == "lindblad")  # unused and should remove this arg, but should always be "lindblad"
+    pspec = _ProcessorSpec(nQubits, ['Gidle', 'Gx','Gy','Gcnot'], nonstd_gate_unitaries, availability, geometry)
+    assert(spamtype == "lindblad")  # unused and should remove this arg, but should always be "lindblad"
     mdl = mc.create_cloud_crosstalk_model_from_hops_and_weights(
         pspec, None,
         maxIdleWeight, maxSpamWeight, maxhops,
         extraWeight1Hops, extraGateWeight,
-        simulator, 'default', parameterization, parameterization,
-        addIdleNoiseToAllGates,
-        errcomp_type, True, True, verbosity)
+        simulator, evotype, parameterization, parameterization,
+        "add_global" if addIdleNoiseToAllGates else "none",
+        errcomp_type, True, True, True, verbosity)
 
     if return_clouds:
-        # FUTURE - just return cloud *keys*? (operation label values are never used
+        #FUTURE - just return cloud *keys*? (operation label values are never used
         # downstream, but may still be useful for debugging, so keep for now)
         return mdl, mdl.clouds
     else:
@@ -94,11 +94,11 @@ class NQubitTestCase(BaseTestCase):
 
         #RUN to SAVE list & dataset
         if regenerate_references():
-            pygsti.io.json.dump(gss, open(compare_files + "/nqubit_2Q_seqs.json", 'w'))
+            pygsti.serialization.json.dump(gss, open(compare_files + "/nqubit_2Q_seqs.json", 'w'))
             ds = pygsti.data.simulate_data(mdl_datagen, expList, 1000, "multinomial", seed=1234)
-            pygsti.io.json.dump(ds, open(compare_files + "/nqubit_2Q_dataset.json", 'w'))
+            pygsti.serialization.json.dump(ds, open(compare_files + "/nqubit_2Q_dataset.json", 'w'))
 
-        compare_gss = pygsti.io.json.load(open(compare_files + "/nqubit_2Q_seqs.json"))
+        compare_gss = pygsti.serialization.json.load(open(compare_files + "/nqubit_2Q_seqs.json"))
 
         self.assertEqual(set(gss), set(compare_gss))
 
@@ -120,9 +120,9 @@ class NQubitTestCase(BaseTestCase):
 
         #RUN to SAVE list
         if regenerate_references():
-            pygsti.io.json.dump(gss, open(compare_files + "/nqubit_1Q_seqs.json", 'w'))
+            pygsti.serialization.json.dump(gss, open(compare_files + "/nqubit_1Q_seqs.json", 'w'))
 
-        compare_gss = pygsti.io.json.load(open(compare_files + "/nqubit_1Q_seqs.json"))
+        compare_gss = pygsti.serialization.json.load(open(compare_files + "/nqubit_1Q_seqs.json"))
 
         #expList_tups_mod = [tuple( etup[0:3] + ('XX','XX')) for etup in expList_tups ]
         #for etup in expList_tups:
@@ -146,10 +146,10 @@ class NQubitTestCase(BaseTestCase):
         #    warnings.warn("Skipping test_2Q b/c no fastreps!")
         #    return
 
-        gss = pygsti.io.json.load(open(compare_files + "/nqubit_2Q_seqs.json"))
+        gss = pygsti.serialization.json.load(open(compare_files + "/nqubit_2Q_seqs.json"))
         expList = list(gss)
 
-        ds = pygsti.io.json.load(open(compare_files + "/nqubit_2Q_dataset.json"))
+        ds = pygsti.serialization.json.load(open(compare_files + "/nqubit_2Q_dataset.json"))
         print(len(expList)," sequences")
 
         nQubits = 2
@@ -174,15 +174,15 @@ class NQubitTestCase(BaseTestCase):
     def test_2Q_terms(self):
 
         #only test when reps are fast (b/c otherwise this test is slow!)
-        try: from pygsti.objects.replib import fastreplib
-        except ImportError:
-            warnings.warn("Skipping test_2Q_terms b/c no fastreps!")
-            return
+        #try: from pygsti.objects.replib import fastreplib
+        #except ImportError:
+        #    warnings.warn("Skipping test_2Q_terms b/c no fastreps!")
+        #    return
 
-        gss = pygsti.io.json.load(open(compare_files + "/nqubit_2Q_seqs.json"))
+        gss = pygsti.serialization.json.load(open(compare_files + "/nqubit_2Q_seqs.json"))
         expList = list(gss)
 
-        ds = pygsti.io.json.load(open(compare_files + "/nqubit_2Q_dataset.json"))
+        ds = pygsti.serialization.json.load(open(compare_files + "/nqubit_2Q_dataset.json"))
         print(len(expList)," sequences")
 
         nQubits = 2
@@ -200,17 +200,17 @@ class NQubitTestCase(BaseTestCase):
         termsim = pygsti.forwardsims.TermForwardSimulator(mode='taylor-order', max_order=1)
         mdl_to_optimize = build_XYCNOT_cloudnoise_model(nQubits, "line", cnot_edges, maxIdleWeight=2, maxhops=1,
                                                         extraWeight1Hops=0, extraGateWeight=1, verbosity=1,
-                                                        simulator=termsim, parameterization="H+S terms")
+                                                        simulator=termsim, parameterization="H+S", evotype='statevec')
 
         #RUN to create cache (SAVE)
         if regenerate_references():
             calc_cache = {}
             mdl_to_optimize.sim = pygsti.forwardsims.TermForwardSimulator(mode='taylor-order', max_order=1, cache=calc_cache)
             mdl_to_optimize.sim.bulk_probs(gss) #lsgstLists[-1]
-            pygsti.io.json.dump(calc_cache, open(compare_files + '/nqubit_2Qterms.cache', 'w'))
+            pygsti.serialization.json.dump(calc_cache, open(compare_files + '/nqubit_2Qterms.cache', 'w'))
 
         #Just load precomputed cache (we test run_long_sequence_gst_base here, not cache computation)
-        calc_cache = pygsti.io.json.load(open(compare_files + '/nqubit_2Qterms.cache'))
+        calc_cache = pygsti.serialization.json.load(open(compare_files + '/nqubit_2Qterms.cache'))
         mdl_to_optimize.sim = pygsti.forwardsims.TermForwardSimulator(mode='taylor-order', max_order=1, cache=calc_cache)
 
         results = pygsti.run_long_sequence_gst_base(ds, mdl_to_optimize,
@@ -291,10 +291,10 @@ class NQubitTestCase(BaseTestCase):
         basisNQ = pygsti.baseobjs.Basis.cast("pp", 4 ** nQubits)
         for i in range(nQubits):
             effects = [(l, modelconstruction._basis_create_spam_vector(l, basis1Q)) for l in ["0", "1"]]
-            factorPOVMs.append(pygsti.modelmembers.povms.TPPOVM(effects))
-        povm = pygsti.modelmembers.povms.TensorProdPOVM(factorPOVMs)
+            factorPOVMs.append(pygsti.modelmembers.povms.TPPOVM(effects, evotype='default'))
+        povm = pygsti.modelmembers.povms.TensorProductPOVM(factorPOVMs)
         print(list(povm.keys()))
-        print("params = ",povm.num_params,"dim = ",povm.dim)
+        print("params = ",povm.num_params,"dim = ",povm.state_space.dim)
         print(povm)
 
         v = povm.to_vector()
@@ -305,7 +305,7 @@ class NQubitTestCase(BaseTestCase):
         mdl = pygsti.models.ExplicitOpModel(['Q0', 'Q1', 'Q2'])
         prepFactors = [pygsti.modelmembers.states.TPState(modelconstruction._basis_create_spam_vector("0", basis1Q))
                        for i in range(nQubits)]
-        mdl.preps['rho0'] = pygsti.modelmembers.states.TensorProductState('prep', prepFactors)
+        mdl.preps['rho0'] = pygsti.modelmembers.states.TensorProductState(prepFactors, mdl.state_space)
         # OR one big prep: mdl.preps['rho0'] = modelconstruction._basis_create_spam_vector("0", basisNQ)
 
         print("Before adding to model:")

@@ -100,11 +100,11 @@ class ModelPack(_ABC):
 
         if (parameterization_type, simulator, qubit_labels, evotype) not in self._gscache:
             # cache miss
-            #try:
-            mdl = self._target_model(qubit_labels, evotype, parameterization=parameterization_type)
-            #except:
-            #    mdl = self._target_model(qubit_labels, evotype)
-            #    mdl.set_all_parameterizations(parameterization_type)  # automatically sets simulator
+            try:
+                mdl = self._target_model(qubit_labels, evotype, parameterization=parameterization_type)
+            except TypeError:
+                mdl = self._target_model(qubit_labels, evotype)
+                mdl.set_all_parameterizations(parameterization_type)  # automatically sets simulator
 
             # We separated parameter names from evotype names - so no more "H+S Terms"  TODO REMOVE?
             # from pygsti.forwardsims.termforwardsim import TermForwardSimulator as _TermFSim

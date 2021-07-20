@@ -399,8 +399,12 @@ class LindbladNoise(OpNoise):
             ham_coefficients = _np.zeros(len(ham_basis) - 1, 'd')
         if nonham_coefficients is None and nonham_basis is not None:
             d = len(ham_basis) - 1
-            nonham_coefficients = _np.zeros((d, d), complex) if parameterization.nonham_mode == 'all' \
-                else _np.zeros(d, 'd')
+            if parameterization.nonham_mode == 'all':
+                nonham_coefficients = _np.zeros((d, d), complex)
+            elif parameterization.nonham_mode == 'diag_affine':
+                nonham_coefficients = _np.zeros((2, d), 'd')
+            else:
+                nonham_coefficients = _np.zeros(d, 'd')
 
         # coeffs + bases => Ltermdict, basis
         Ltermdict, _ = _ot.projections_to_lindblad_terms(

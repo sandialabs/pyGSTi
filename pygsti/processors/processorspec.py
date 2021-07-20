@@ -125,7 +125,10 @@ class QubitProcessorSpec(ProcessorSpec):
                 else:
                     nq = num_qubits  # if no availability is given, assume an idle on *all* the qubits
                     availability[gname] = [None]  # and update availability for later processing
-                self.gate_unitaries[gname] = _np.identity(2**nq, 'd')
+                if gname.startswith('(') and gname.endswith(')'):
+                    self.gate_unitaries[gname] = nq  # an identity gate that should not be build unless it's noisy
+                else:
+                    self.gate_unitaries[gname] = _np.identity(2**nq, 'd')
             else:
                 raise ValueError(
                     str(gname) + " is not a valid 'standard' gate name, it must be given in `nonstd_gate_unitaries`")
@@ -183,6 +186,7 @@ class QubitProcessorSpec(ProcessorSpec):
     def gate_num_qubits(self, gate_name):
         unitary = self.gate_unitaries[gate_name]
         if unitary is None: return self.num_qubits  # unitary=None => identity on all qubits
+        if isinstance(unitary, (int, _np.int64)): return unitary  # unitary=int => identity in n qubits
         return int(round(_np.log2(unitary.udim if callable(unitary) else unitary.shape[0])))
 
     def resolved_availability(self, gate_name, tuple_or_function="auto"):
@@ -293,6 +297,8 @@ class QubitProcessorSpec(ProcessorSpec):
             if gn not in self._symplectic_reps:
                 if unitary is None:  # special case of n-qubit identity
                     unitary = _np.identity(2**self.num_qubits, 'd')  # TODO - more efficient in FUTURE
+                if isinstance(unitary, (int, _np.int64)):
+                    unitary = _np.identity(2**unitary, 'd')  # TODO - more efficient in FUTURE
 
                 try:
                     self._symplectic_reps[gn] = _symplectic.unitary_to_symplectic(unitary)
@@ -331,11 +337,14 @@ class QubitProcessorSpec(ProcessorSpec):
         gate_inverse = {}
 
         for gname in self.gate_names:
-            if callable(self.gate_unitaries[gname]): continue  # can't pre-process factories
-            if self.gate_unitaries[gname] is None: continue  # can't pre-process global idle
+            U = self.gate_unitaries[gname]
+            if callable(U): continue  # can't pre-process factories
+            if U is None: continue  # can't pre-process global idle
+            if isinstance(U, (int, _np.int64)):
+                U = _np.identity(2**U, 'd')  # n-qubit identity
 
             # We convert to process matrices, to avoid global phase problems.
-            u = _ot.unitary_to_pauligate(self.gate_unitaries[gname])
+            u = _ot.unitary_to_pauligate(U)
             if u.shape == (4, 4):
                 #assert(not _np.allclose(u,Id)), "Identity should *not* be included in root gate names!"
                 #if _np.allclose(u, Id):
@@ -379,16 +388,23 @@ class QubitProcessorSpec(ProcessorSpec):
         """
         gate_inverse = {}
         for gname1 in self.gate_names:
-            if callable(self.gate_unitaries[gname1]): continue  # can't pre-process factories
-            if self.gate_unitaries[gname1] is None: continue  # can't pre-process global idle
+            U1 = self.gate_unitaries[gname1]
+            if callable(U1): continue  # can't pre-process factories
+            if U1 is None: continue  # can't pre-process global idle
+            if isinstance(U1, (int, _np.int64)):
+                U1 = _np.identity(2**U1, 'd')  # n-qubit identity
 
             # We convert to process matrices, to avoid global phase problems.
-            u1 = _ot.unitary_to_pauligate(self.gate_unitaries[gname1])
+            u1 = _ot.unitary_to_pauligate(U1)
             if _np.shape(u1) != (4, 4):
                 for gname2 in self.gate_names:
-                    if callable(self.gate_unitaries[gname2]): continue  # can't pre-process factories
-                    if self.gate_unitaries[gname2] is None: continue  # can't pre-process global idle
-                    u2 = _ot.unitary_to_pauligate(self.gate_unitaries[gname2])
+                    U2 = self.gate_unitaries[gname2]
+                    if callable(U2): continue  # can't pre-process factories
+                    if U2 is None: continue  # can't pre-process global idle
+                    if isinstance(U2, (int, _np.int64)):
+                        U2 = _np.identity(2**U2, 'd')  # n-qubit identity
+
+                    u2 = _ot.unitary_to_pauligate(U2)
                     if _np.shape(u2) == _np.shape(u1):
                         ucombined = _np.dot(u2, u1)
                         if _np.allclose(ucombined, _np.identity(_np.shape(u2)[0], float)):
@@ -432,6 +448,7 @@ class QubitProcessorSpec(ProcessorSpec):
         ret = []
         for gn, unitary in self.gate_unitaries.items():
             if callable(unitary): continue  # factories can't be idle gates
+            #TODO: add case for (unitary is None) if this is interpreted as a global idle
             if isinstance(unitary, (int, _np.int64)) or _np.allclose(unitary, _np.identity(unitary.shape[0], 'd')):
                 ret.append(gn)
         return ret

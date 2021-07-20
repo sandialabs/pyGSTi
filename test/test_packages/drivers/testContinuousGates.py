@@ -11,7 +11,7 @@ from ..testutils import BaseTestCase
 
 
 #Note: these are the same sample factory classes used elsewhere in the unit tests - TODO: consolidate
-class XRotationOp(pygsti.obj.DenseOperator):
+class XRotationOp(pygsti.modelmembers.operations.DenseOperator):
     def __init__(self, target_angle, initial_params=(0,0)):
         #initialize with no noise
         self.target_angle = target_angle
@@ -35,20 +35,21 @@ class XRotationOp(pygsti.obj.DenseOperator):
         b = a*2*np.cos(theta)*np.sin(theta)
         c = a*(np.cos(theta)**2 - np.sin(theta)**2)
 
-        # .base is a member of DenseOperator and is a numpy array that is
+        # ._ptr is a member of DenseOperator and is a numpy array that is
         # the dense Pauli transfer matrix of this operator
-        self.base[:] = np.array([[1,   0,   0,   0],
+        self._ptr[:] = np.array([[1,   0,   0,   0],
                                  [0,   a,   0,   0],
                                  [0,   0,   c,  -b],
                                  [0,   0,   b,   c]],'d')
+        self._ptr_has_changed()  # call this whenever the contents of _ptr may have changed.
         self.dirty = dirty_value
 
 
-class ParamXRotationOpFactory(pygsti.obj.OpFactory):
+class ParamXRotationOpFactory(pygsti.modelmembers.operations.OpFactory):
     def __init__(self):
         dim = 4  # 1-qubit
         self.params = np.array([0,0],'d')  #initialize with no noise
-        pygsti.obj.OpFactory.__init__(self, dim, "densitymx")
+        pygsti.modelmembers.operations.OpFactory.__init__(self, dim, "densitymx")
 
     def create_object(self, args=None, sslbls=None):
         assert(sslbls is None) # we don't use these, and they're only non-None when we're expected to use them
@@ -67,7 +68,6 @@ class ParamXRotationOpFactory(pygsti.obj.OpFactory):
         self.dirty = dirty_value
 
 
-
 class ContinuousGatesTestCase(BaseTestCase):
 
     def setUp(self):
@@ -78,7 +78,7 @@ class ContinuousGatesTestCase(BaseTestCase):
         nQubits = 1
 
         #Create some sequences:
-        smq1Q_XYI = pygsti.modelpacks.stdmodule_to_smqmodule(std1Q_XYI)
+        smq1Q_XYI = pygsti.modelpacks.stdtarget.stdmodule_to_smqmodule(std1Q_XYI)
         maxLens = [1]
         seqStructs = pygsti.circuits.make_lsgst_structs(
             smq1Q_XYI.target_model(), smq1Q_XYI.prepStrs, smq1Q_XYI.effectStrs, smq1Q_XYI.germs, maxLens)
@@ -96,8 +96,8 @@ class ContinuousGatesTestCase(BaseTestCase):
         self.assertEqual(len(allStrs), 209)  # Was 167 when process_circuits acted on *list* rather than individual plaquettes
 
         #Generate some data for these sequences (simulates an implicit model with factory)
-        mdl_datagen = pygsti.obj.LocalNoiseModel.from_parameterization(
-            nQubits, ('Gi','Gx','Gy'), parameterization="H+S")
+        pspec = pygsti.processors.QubitProcessorSpec(nQubits, ('Gi','Gx','Gy'))
+        mdl_datagen = pygsti.models.create_crosstalk_free_model(pspec, ideal_gate_type='H+S', ideal_spam_type='H+S')
 
         mdl_datagen.factories['layers'][('Gxrot', 0)] = ParamXRotationOpFactory()
         print(mdl_datagen.num_params, "model params")
@@ -109,8 +109,7 @@ class ContinuousGatesTestCase(BaseTestCase):
         ds = pygsti.data.simulate_data(mdl_datagen, allStrs, 1000, seed=1234)
 
         #Run GST
-        mdl = pygsti.obj.LocalNoiseModel.from_parameterization(
-            nQubits, ('Gi','Gx','Gy'), parameterization="H+S")
+        mdl = pygsti.models.create_crosstalk_free_model(pspec, ideal_gate_type='H+S', ideal_spam_type='H+S')
         mdl.factories['layers'][('Gxrot', 0)] = ParamXRotationOpFactory()
         mdl.sim = 'map'  # must use map calcs with factories (at least for now, since matrix eval trees don't know about all possible gates?)
         #mdl.from_vector( datagen_vec ) # DEBUG - used to see at where optimization should get us...

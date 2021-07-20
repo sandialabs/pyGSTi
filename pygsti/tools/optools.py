@@ -2161,7 +2161,10 @@ def projections_to_lindblad_terms(ham_projs, other_projs, ham_basis, other_basis
                 set_basis_el(lbl, bmx)
 
         elif other_mode == "diag_affine":
-            assert((2, len(other_mxs[1:])) == other_projs.shape)
+            try:
+                assert((2, len(other_mxs[1:])) == other_projs.shape)
+            except:
+                import bpdb; bpdb.set_trace()
             for coeff, lbl, bmx in zip(other_projs[0], other_lbls[1:], other_mxs[1:]):  # skip identity
                 Ltermdict[('S', lbl)] = coeff
                 set_basis_el(lbl, bmx)
