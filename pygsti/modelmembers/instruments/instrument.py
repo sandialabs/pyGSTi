@@ -412,8 +412,8 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
             that outcome is observed.
         """
         # Note: no 'stabilizer' or 'statevec' support yet (how renormalize sframe or how does state vec work?)
-        assert(self._evotype in ('densitymx',)), \
-            "acton(...) cannot be used with the %s evolution type!" % self._evotype
+        #REMOVE assert(self._evotype in ('densitymx',)), \
+        #REMOVE    "acton(...) cannot be used with the %s evolution type!" % self._evotype
         assert(state._evotype == self._evotype), "Evolution type mismatch: %s != %s" % (self._evotype, state._evotype)
 
         staterep = state._rep

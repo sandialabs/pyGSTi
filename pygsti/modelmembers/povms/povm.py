@@ -227,8 +227,8 @@ class POVM(_mm.ModelMember, _collections.OrderedDict):
             A dictionary whose keys are the outcome labels (strings)
             and whose values are the probabilities of seeing each outcome.
         """
-        assert(self._evotype in ('densitymx', 'statevec', 'stabilizer')), \
-            "probabilities(...) cannot be used with the %s evolution type!" % self._evotype
+        # REMOVE assert(self._evotype in ('densitymx', 'statevec', 'stabilizer')), \
+        # REMOVE     "probabilities(...) cannot be used with the %s evolution type!" % self._evotype
         assert(state._evotype == self._evotype), "Evolution type mismatch: %s != %s" % (self._evotype, state._evotype)
 
         staterep = state._rep
