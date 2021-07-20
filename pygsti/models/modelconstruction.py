@@ -290,7 +290,7 @@ def _basis_create_operation(state_space, op_expr, basis="gm", parameterization="
             # stdname = 'Gi' if (stateSpaceUDim == 2) else None
             # Uop = _op.create_from_unitary_mx(_np.identity(stateSpaceUDim, complex), type_preferences, 'pp',
             #                                  stdname=stdname, evotype=evotype)
-            
+
             # a complex 2*num_qubits x 2*num_qubits mx unitary on full space in Pauli-product basis
             Uop_embed = _op.EmbeddedOp(state_space, labels, Uop)
             # a real 4*num_qubits x 4*num_qubits mx superoperator in final basis
@@ -337,7 +337,7 @@ def _basis_create_operation(state_space, op_expr, basis="gm", parameterization="
             #if _np.isclose(theta, _np.pi): stdname = 'G%spi' % opName.lower()
             #elif _np.isclose(theta, _np.pi/2): stdname = 'G%spi2' % opName.lower()
             # Uop = _op.create_from_unitary_mx(_spl.expm(ex), type_preferences, 'pp', stdname=stdname, evotype=evotype)
-            
+
             # a complex 2*num_qubits x 2*num_qubits mx unitary on full space in Pauli-product basis
             Uop_embed = _op.EmbeddedOp(state_space, (label,), Uop)
             # a real 4*num_qubits x 4*num_qubits mx superoperator in Pauli-product basis
@@ -470,11 +470,11 @@ def _create_operation(state_space_dims, state_space_labels, op_expr, basis="gm",
 
 
 def _create_explicit_model_from_expressions(state_space, basis,
-                                           op_labels, op_expressions,
-                                           prep_labels=('rho0',), prep_expressions=('0',),
-                                           effect_labels='standard', effect_expressions='standard',
-                                           povm_labels='Mdefault', gate_type="full", prep_type="auto",
-                                           povm_type="auto", instrument_type="auto", evotype='default'):
+                                            op_labels, op_expressions,
+                                            prep_labels=('rho0',), prep_expressions=('0',),
+                                            effect_labels='standard', effect_expressions='standard',
+                                            povm_labels='Mdefault', gate_type="full", prep_type="auto",
+                                            povm_type="auto", instrument_type="auto", evotype='default'):
     """
     Build a new Model given lists of operation labels and expressions.
 
@@ -707,13 +707,13 @@ def create_explicit_model_from_expressions(state_space,
         else: basis = "gm"
 
     return _create_explicit_model_from_expressions(state_space,
-                                                  _Basis.cast(basis, state_space),
-                                                  op_labels, op_expressions,
-                                                  prep_labels, prep_expressions,
-                                                  effect_labels, effect_expressions,
-                                                  povm_labels, gate_type=gate_type,
-                                                  prep_type=prep_type, povm_type=povm_type,
-                                                  instrument_type=instrument_type, evotype=evotype)
+                                                   _Basis.cast(basis, state_space),
+                                                   op_labels, op_expressions,
+                                                   prep_labels, prep_expressions,
+                                                   effect_labels, effect_expressions,
+                                                   povm_labels, gate_type=gate_type,
+                                                   prep_type=prep_type, povm_type=povm_type,
+                                                   instrument_type=instrument_type, evotype=evotype)
 
 
 def create_explicit_alias_model(mdl_primitives, alias_dict):
@@ -915,7 +915,7 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
             prepNoiseMap = modelnoise.create_errormap('prep', evotype, state_space, target_labels=None,
                                                       qubit_graph=processor_spec.qubit_graph)
             if prepNoiseMap is not None: prep_ops.append(prepNoiseMap)
-    
+
     def _add_povm_noise(povm_ops):
         """ Adds one or more noise ops to prep_ops lists (to compose later) """
         if local_noise:  # then assume modelnoise specifies 1Q errors
@@ -938,7 +938,7 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
             prep_layers['rho0'] = _state.ComposedState(ideal_prep, prep_ops[0])
         else:
             prep_layers['rho0'] = _state.ComposedState(ideal_prep, _op.ComposedOp(prep_ops))
-    
+
     def _add_to_povm_layers(ideal_povm, povm_ops):
         """ Adds noise elements to povm_layers """
         if len(povm_ops_to_compose) == 0:
@@ -947,20 +947,20 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
             povm_layers['Mdefault'] = _povm.ComposedPOVM(povm_ops[0], ideal_povm, 'pp')
         else:
             povm_layers['Mdefault'] = _povm.ComposedPOVM(_op.ComposedOp(povm_ops), ideal_povm, 'pp')
-    
+
     def _create_nq_noise(lndtype):
         if local_noise:
             # create a 1-qubit exp(errorgen) that is applied to each qubit independently
             errgen_1Q = _op.LindbladErrorgen.from_error_generator(singleQ_state_space.dim, lndtype, 'pp', 'pp',
-                                                                    truncate=True, evotype=evotype, state_space=None)
+                                                                  truncate=True, evotype=evotype, state_space=None)
             err_gateNQ = _op.ComposedOp([_op.EmbeddedOp(state_space, [qubit_labels[i]],
                                                         _op.ExpErrorgenOp(errgen_1Q.copy()))
-                                            for i in range(num_qubits)], evotype, state_space)
+                                         for i in range(num_qubits)], evotype, state_space)
         else:
             # create an n-qubit exp(errorgen)
             errgen_NQ = _op.LindbladErrorgen.from_error_generator(state_space.dim, lndtype, 'pp', 'pp',
-                                                                    truncate=True, evotype=evotype,
-                                                                    state_space=state_space)
+                                                                  truncate=True, evotype=evotype,
+                                                                  state_space=state_space)
             err_gateNQ = _op.ExpErrorgenOp(errgen_NQ)
         return err_gateNQ
 
@@ -968,7 +968,7 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
     # cases below.
 
     # Prep logic
-    if isinstance(ideal_prep_type, (tuple, list)): ideal_prep_type = ideal_prep_type[0]  # HACK to support multiple values
+    if isinstance(ideal_prep_type, (tuple, list)): ideal_prep_type = ideal_prep_type[0]  # HACK to support multiple vals
     if ideal_prep_type == 'computational' or ideal_prep_type.startswith('lindblad '):
         ideal_prep = _state.ComputationalBasisState([0] * num_qubits, 'pp', evotype, state_space)
 
@@ -1021,7 +1021,7 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
         _add_to_prep_layers(ideal_prep, prep_ops_to_compose)
 
     # Povm logic
-    if isinstance(ideal_povm_type, (tuple, list)): ideal_povm_type = ideal_povm_type[0]  # HACK to support multiple values
+    if isinstance(ideal_povm_type, (tuple, list)): ideal_povm_type = ideal_povm_type[0]  # HACK to support multiple vals
     if ideal_povm_type == 'computational' or ideal_povm_type.startswith('lindblad '):
         ideal_povm = _povm.ComputationalBasisPOVM(num_qubits, evotype, state_space=state_space)
 
@@ -1030,7 +1030,7 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
             lndtype = ideal_povm_type[len('lindblad '):]
 
             err_gateNQ = _create_nq_noise(lndtype)
-            
+
             povm_ops_to_compose.append(err_gateNQ.copy())  # .copy() => POVM errors independent
 
         # Add noise
@@ -1494,7 +1494,8 @@ def create_crosstalk_free_model(processor_spec, custom_gates=None,
 # num_qubits, gate_names, nonstd_gate_unitaries={}, availability=None, qubit_labels=None, geometry="line"
 def _create_crosstalk_free_model(processor_spec, modelnoise, custom_gates=None, evotype="default", simulator="auto",
                                  on_construction_error='raise', independent_gates=False, independent_spam=True,
-                                 ensure_composed_gates=False, ideal_gate_type='auto', ideal_prep_type='auto', ideal_povm_type='auto'):
+                                 ensure_composed_gates=False, ideal_gate_type='auto', ideal_prep_type='auto',
+                                 ideal_povm_type='auto'):
     qubit_labels = processor_spec.qubit_labels
     state_space = _statespace.QubitSpace(qubit_labels)
     evotype = _Evotype.cast(evotype)

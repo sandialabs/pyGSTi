@@ -168,7 +168,7 @@ class CompilationRules(object):
         aux_info = processor_spec.aux_info.copy()
         aux_info.update(self.create_aux_info())
         ret = _QubitProcessorSpec(processor_spec.num_qubits, gate_names, gate_unitaries, availability,
-                                 processor_spec.qubit_graph, processor_spec.qubit_labels, aux_info=aux_info)
+                                  processor_spec.qubit_graph, processor_spec.qubit_labels, aux_info=aux_info)
         ret.compiled_from = (processor_spec, self)
         return ret
 

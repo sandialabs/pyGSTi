@@ -91,10 +91,10 @@ def create_from_dmvec(superket_vector, state_type, basis='pp', evotype='default'
                 # Anything else we try to convert to a pure vector and convert the pure state vector
                 try:
                     vec = superket_vector.to_dense()
-                except AttributeError as err:
+                except AttributeError:  # as err:
                     # No to_dense(), assuming numpy array already
                     vec = superket_vector
-                
+
                 dmvec = _bt.change_basis(vec, basis, 'std')
                 purevec = _ot.dmvec_to_state(dmvec)
                 st = create_from_pure_vector(purevec, typ, basis, evotype, state_space)
@@ -104,6 +104,7 @@ def create_from_dmvec(superket_vector, state_type, basis='pp', evotype='default'
 
     raise ValueError("Could not create a state of type(s) %s from the given superket vector!" % (str(state_type)))
 
+
 def get_state_type_from_op_type(op_type):
     """Decode an op type into an appropriate state type.
 
@@ -111,7 +112,7 @@ def get_state_type_from_op_type(op_type):
     -----------
     op_type: str or list of str
         Operation parameterization type (or list of preferences)
-    
+
     Returns
     -------
     str
@@ -139,18 +140,18 @@ def get_state_type_from_op_type(op_type):
             state_type = typ
         else:
             state_type = state_conversion.get(typ, None)
-        
+
         if state_type is None:
             continue
 
         if state_type not in state_type_preferences:
             state_type_preferences.append(state_type)
-    
+
     if len(state_type_preferences) == 0:
         raise RuntimeError(
-            'Could not convert any op types from {}.\n'.format(op_type_preferences) +
-            '\tKnown op_types: Lindblad types or {}\n'.format(sorted(list(state_conversion.keys()))) + 
-            '\tValid state_types: Lindblad types or {}'.format(sorted(list(set(state_conversion.values()))))
+            'Could not convert any op types from {}.\n'.format(op_type_preferences)
+            + '\tKnown op_types: Lindblad types or {}\n'.format(sorted(list(state_conversion.keys())))
+            + '\tValid state_types: Lindblad types or {}'.format(sorted(list(set(state_conversion.values()))))
         )
 
     return state_type_preferences
@@ -196,14 +197,14 @@ def convert(state, to_type, basis, extra=None):
                     return state  # no conversion necessary
                 else:
                     return FullState(state.to_dense(), state.evotype, state.state_space)
-        
+
             elif to_type == "full TP":
                 if isinstance(state, TPState):
                     return state  # no conversion necessary
                 else:
                     return TPState(state.to_dense(), state.evotype, state.state_space)
                     # above will raise ValueError if conversion cannot be done
-        
+
             elif to_type == "TrueCPTP":  # a non-lindbladian CPTP state that hasn't worked well...
                 if isinstance(state, CPTPState):
                     return state  # no conversion necessary
@@ -211,20 +212,20 @@ def convert(state, to_type, basis, extra=None):
                     truncate = False
                     return CPTPState(state.to_dense(), basis, truncate, state.evotype, state.state_space)
                     # above will raise ValueError if conversion cannot be done
-        
+
             elif to_type == "static":
                 if isinstance(state, StaticState):
                     return state  # no conversion necessary
                 else:
                     return StaticState(state.to_dense(), state.evotype, state.state_space)
-        
+
             elif to_type == "static unitary":
                 dmvec = _bt.change_basis(state.to_dense(), basis, 'std')
                 purevec = _ot.dmvec_to_state(dmvec)
                 return StaticPureState(purevec, basis, state.evotype, state.state_space)
-        
+
             elif _ot.is_valid_lindblad_paramtype(to_type):
-        
+
                 from ..operations import LindbladErrorgen as _LindbladErrorgen, ExpErrorgenOp as _ExpErrorgenOp
                 purevec = None
                 if isinstance(state, (FullState, TPState, StaticState)):
@@ -233,26 +234,26 @@ def convert(state, to_type, basis, extra=None):
                         purevec = _ot.dmvec_to_state(dmvec)  # raises error if dmvec does not correspond to a pure state
                     except ValueError:
                         purevec = None
-        
+
                 if purevec is not None:
                     static_state = StaticPureState(purevec, basis, state.evotype, state.state_space)
                 elif state.num_params > 0:  # then we need to convert to a static state
                     static_state = StaticState(state.to_dense(), state.evotype, state.state_space)
                 else:  # state.num_params == 0 so it's already static
                     static_state = state
-        
+
                 proj_basis = 'pp' if state.state_space.is_entirely_qubits else basis
                 errorgen = _LindbladErrorgen.from_error_generator(state.state_space.dim, to_type, proj_basis,
                                                                   basis, truncate=True, evotype=state.evotype)
                 return ComposedState(static_state, _ExpErrorgenOp(errorgen))
-        
+
             elif to_type == "static clifford":
                 if isinstance(state, ComputationalBasisState):
                     return state  # no conversion necessary
-        
+
                 purevec = state.to_dense().flatten()  # assume a pure state (otherwise would need to change Model dim)
                 return ComputationalBasisState.from_pure_vector(purevec)
-        
+
             else:
                 raise ValueError("Invalid to_type argument: %s" % to_type)
         except:

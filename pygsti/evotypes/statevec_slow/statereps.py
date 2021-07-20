@@ -127,7 +127,8 @@ class StateRepTensorProduct(StateRep):
     def __init__(self, factor_state_reps, state_space):
         self.factor_reps = factor_state_reps
         dim = _np.product([fct.dim for fct in self.factor_reps])
-        super(StateRepTensorProduct, self).__init__(_np.zeros(dim, complex), state_space, None)  # TODO: compute a tensorprod basis?
+        # FUTURE TODO: below compute a tensorprod basis instead of punting and passing `None`
+        super(StateRepTensorProduct, self).__init__(_np.zeros(dim, complex), state_space, None)
         self.reps_have_changed()
 
     def reps_have_changed(self):

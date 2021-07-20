@@ -260,7 +260,6 @@ def _encode_std_obj(py_obj, binary):
                 'kind': kind,
                 'shape': py_obj.shape}
 
-    
     elif isinstance(py_obj, (_np.bool_, _np.number)):
         data = py_obj.tobytes() if binary else _tostr(_base64.b64encode(py_obj.tobytes()))
         return {'__npgeneric__': data,

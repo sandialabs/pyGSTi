@@ -95,7 +95,7 @@ class Evotype(object):
     @property
     def minimal_space(self):
         return self.module.minimal_space
-        
+
     def minimal_dim(self, state_space):
         return state_space.udim if self.minimal_space == 'Hilbert' else state_space.dim
 
@@ -203,7 +203,6 @@ class Evotype(object):
         except Exception:
             return _basereps.StockTermRep(coeff, mag, logmag, None, None,
                                           pre_effect, post_effect, term_rep.pre_ops, term_rep.post_ops)
-
 
 
 try:

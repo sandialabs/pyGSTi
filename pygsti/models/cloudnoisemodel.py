@@ -663,7 +663,7 @@ class CloudNoiseModel(_ImplicitOpModel):
     def create_processor_spec(self):
         import copy as _copy
         return _copy.deepcopy(self.processor_spec)
-            
+
     @property
     def clouds(self):
         """

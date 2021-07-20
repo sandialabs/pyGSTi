@@ -404,7 +404,7 @@ def run_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm)
     advanced_options = _GSTAdvancedOptions(advanced_options or {})
     ds = _load_dataset(data_filename_or_set, comm, printer)
-    target_model = _load_model(target_model_filename_or_object)    
+    target_model = _load_model(target_model_filename_or_object)
     pspec = target_model.create_processor_spec()
 
     exp_design = _proto.StandardGSTDesign(pspec,

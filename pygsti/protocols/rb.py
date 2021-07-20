@@ -284,10 +284,9 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
         ideal_outs = []
 
         if seed is None:
-            self.seed = _np.random.randint(1, 1e6) # Pick a random seed
+            self.seed = _np.random.randint(1, 1e6)  # Pick a random seed
         else:
             self.seed = seed
-
 
         for lnum, l in enumerate(depths):
             lseed = self.seed + lnum * circuits_per_depth
@@ -711,7 +710,7 @@ class DirectRBDesign(_vb.BenchmarkingDesign):
         ideal_outs = []
 
         if seed is None:
-            self.seed = _np.random.randint(1, 1e6) # Pick a random seed
+            self.seed = _np.random.randint(1, 1e6)  # Pick a random seed
         else:
             self.seed = seed
 
@@ -1041,7 +1040,7 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
         ideal_outs = []
 
         if seed is None:
-            self.seed = _np.random.randint(1, 1e6) # Pick a random seed
+            self.seed = _np.random.randint(1, 1e6)  # Pick a random seed
         else:
             self.seed = seed
 

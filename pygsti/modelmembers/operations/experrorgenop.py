@@ -170,7 +170,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
             self._rep.base.flags.writeable = False
             self.base_deriv = None
             self.base_hessian = None
-        else: #if not close:
+        else:  # if not close:
             self._rep.errgenrep_has_changed(self.errorgen.onenorm_upperbound())
 
             #CHECK that sparsemx action is correct (DEBUG) REMOVE
@@ -182,7 +182,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
             #
             #        staterep = StaticState(v)._rep
             #        check_acton = self._rep.acton(staterep).data
-            #        
+            #
             #        #check_sparse_scipy = _spsl.expm_multiply(self.errorgen.to_sparse(), v.copy())
             #        prep = _mt.expm_multiply_prep(self.errorgen.to_sparse())
             #        check_sparse = _mt.expm_multiply_fast(prep, v)

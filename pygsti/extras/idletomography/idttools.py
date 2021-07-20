@@ -405,7 +405,7 @@ def predicted_intrinsic_rates(nqubits, maxweight, model,
 
         assert(isinstance(experrgen_op, _op.ExpErrorgenOp)), \
             "Expected idle op to be a composition of possibly embedded exp(errorgen) gates!"
-            
+
         errgen_coeffs = experrgen_op.errorgen_coefficients()
         nTargetQubits = len(targetLabels)
 

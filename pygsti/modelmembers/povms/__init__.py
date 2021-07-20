@@ -207,7 +207,7 @@ def get_povm_type_from_op_type(op_type):
     -----------
     op_type: str or list of str
         Operation parameterization type (or list of preferences)
-    
+
     Returns
     -------
     povm_type_preferences: tuple of str
@@ -237,18 +237,18 @@ def get_povm_type_from_op_type(op_type):
             povm_type = typ
         else:
             povm_type = povm_conversion.get(typ, None)
-        
+
         if povm_type is None:
             continue
 
         if povm_type not in povm_type_preferences:
             povm_type_preferences.append(povm_type)
-    
+
     if len(povm_type_preferences) == 0:
         raise RuntimeError(
-            'Could not convert any op types from {}.\n'.format(op_type_preferences) +
-            '\tKnown op_types: Lindblad types or {}\n'.format(sorted(list(povm_conversion.keys()))) + 
-            '\tValid povm_types: Lindblad types or {}'.format(sorted(list(set(povm_conversion.values()))))
+            'Could not convert any op types from {}.\n'.format(op_type_preferences)
+            + '\tKnown op_types: Lindblad types or {}\n'.format(sorted(list(povm_conversion.keys())))
+            + '\tValid povm_types: Lindblad types or {}'.format(sorted(list(set(povm_conversion.values()))))
         )
 
     return povm_type_preferences
@@ -292,7 +292,7 @@ def convert(povm, to_type, basis, extra=None):
                 converted_effects = [(lbl, convert_effect(vec, to_type, basis))
                                      for lbl, vec in povm.items()]
                 return UnconstrainedPOVM(converted_effects, povm.evotype, povm.state_space)
-        
+
             elif to_type == "TP":
                 if isinstance(povm, TPPOVM):
                     return povm  # no conversion necessary
@@ -300,26 +300,26 @@ def convert(povm, to_type, basis, extra=None):
                     converted_effects = [(lbl, convert_effect(vec, "full", basis))
                                          for lbl, vec in povm.items()]
                     return TPPOVM(converted_effects, povm.evotype, povm.state_space)
-        
+
             elif _ot.is_valid_lindblad_paramtype(to_type):
                 from ..operations import LindbladErrorgen as _LindbladErrorgen, ExpErrorgenOp as _ExpErrorgenOp
-        
+
                 #Construct a static "base" POVM
                 if isinstance(povm, ComputationalBasisPOVM):  # special easy case
                     base_povm = ComputationalBasisPOVM(povm.state_space.num_qubits, povm.evotype)  # just copy it?
                 else:
                     base_items = [(lbl, convert_effect(vec, 'static unitary', basis)) for lbl, vec in povm.items()]
                     base_povm = UnconstrainedPOVM(base_items, povm.evotype, povm.state_space)
-        
+
                 proj_basis = 'pp' if povm.state_space.is_entirely_qubits else basis
                 errorgen = _LindbladErrorgen.from_error_generator(povm.state_space.dim, to_type, proj_basis,
                                                                   basis, truncate=True, evotype=povm.evotype)
                 return ComposedPOVM(_ExpErrorgenOp(errorgen), base_povm, mx_basis=basis)
-        
+
             elif to_type == "static clifford":
                 if isinstance(povm, ComputationalBasisPOVM):
                     return povm
-        
+
                 #OLD
                 ##Try to figure out whether this POVM acts on states or density matrices
                 #if any([ (isinstance(Evec,DenseSPAMVec) and _np.iscomplexobj(Evec.base)) # PURE STATE?
@@ -327,28 +327,27 @@ def convert(povm, to_type, basis, extra=None):
                 #    nqubits = int(round(_np.log2(povm.dim)))
                 #else:
                 #    nqubits = int(round(_np.log2(povm.dim))) // 2
-        
+
                 #Assume `povm` already represents state-vec ops, since otherwise we'd
                 # need to change dimension
                 nqubits = int(round(_np.log2(povm.dim)))
-        
+
                 #Check if `povm` happens to be a Z-basis POVM on `nqubits`
                 v = (_np.array([1, 0], 'd'), _np.array([0, 1], 'd'))  # (v0,v1) - eigenstates of sigma_z
                 for zvals, lbl in zip(_itertools.product(*([(0, 1)] * nqubits)), povm.keys()):
                     testvec = _functools.reduce(_np.kron, [v[i] for i in zvals])
                     if not _np.allclose(testvec, povm[lbl].to_dense()):
                         raise ValueError("Cannot convert POVM into a Z-basis stabilizer state POVM")
-        
+
                 #If no errors, then return a stabilizer POVM
                 return ComputationalBasisPOVM(nqubits, 'stabilizer')
-        
+
             else:
                 raise ValueError("Invalid to_type argument: %s" % to_type)
         except:
             pass  # try next to_type
 
     raise ValueError("Could not convert POVM to to type(s): %s" % str(to_types))
-
 
 
 #REMOVE (UNUSED) - but an example of evotype-changing code...

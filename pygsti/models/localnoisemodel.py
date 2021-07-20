@@ -542,7 +542,7 @@ class LocalNoiseModel(_ImplicitOpModel):
         self.processor_spec = processor_spec
         idle_names = processor_spec.idle_gate_names
         global_idle_layer_label = processor_spec.global_idle_layer_label
-        
+
         layer_rules = _SimpleCompLayerRules(global_idle_layer_label, implicit_idle_mode)
 
         super(LocalNoiseModel, self).__init__(state_space, layer_rules, 'pp',

@@ -9,6 +9,7 @@ The StaticStandardOp class and supporting functionality.
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
+import numpy as _np
 
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
 from pygsti.modelmembers import term as _term
@@ -131,7 +132,7 @@ class StaticStandardOp(_LinearOperator):
         if order == 0:  # only 0-th order term exists
             coeff = _Polynomial({(): 1.0}, max_polynomial_vars)
             terms = [_term.RankOnePolynomialOpTerm.create_from(coeff, self, self,
-                                                              self._evotype, self.state_space)]
+                                                               self._evotype, self.state_space)]
             if return_coeff_polys:
                 coeffs_as_compact_polys = coeff.compact(complex_coeff_tape=True)
                 return terms, coeffs_as_compact_polys

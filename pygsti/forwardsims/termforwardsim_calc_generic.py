@@ -205,7 +205,7 @@ def prs_as_polynomials(fwdsim, rholabel, elabels, circuit, polynomial_vindices_p
 
             else:  # non-fast mode
                 last_index = len(factor_lists) - 1
-                print("DB: factor lengths = ",factor_list_lens)
+                #print("DB: factor lengths = ", factor_list_lens)
                 for fi in _itertools.product(*[range(l) for l in factor_list_lens]):
                     factors = [factor_lists[i][factorInd] for i, factorInd in enumerate(fi)]
                     res = _functools.reduce(lambda x, y: x.mult(y), [f.coeff for f in factors])
@@ -220,9 +220,9 @@ def prs_as_polynomials(fwdsim, rholabel, elabels, circuit, polynomial_vindices_p
                     if prps[Ei] is None: prps[Ei] = res
                     else: prps[Ei].add_inplace(res)
 
-                    if Ei == 0:
-                        from pygsti.baseobjs.polynomial import Polynomial
-                        print("DB pr_as_poly ",fi," running prps[",Ei,"] =",Polynomial.from_rep(prps[Ei]))
+                    #if Ei == 0:
+                    #    from pygsti.baseobjs.polynomial import Polynomial
+                    #    print("DB pr_as_poly ",fi," running prps[",Ei,"] =",Polynomial.from_rep(prps[Ei]))
 
             # #DEBUG!!!
             # db_nfactors = [len(l) for l in factor_lists]

@@ -877,7 +877,7 @@ class ComposedOp(_LinearOperator):
             for k in Ltermdict_local:
                 del values_to_set[k]  # remove the values that we just set
 
-        if len(values_to_set) > 0:  #then there were some values that could not be set!
+        if len(values_to_set) > 0:  # then there were some values that could not be set!
             raise ValueError("These errorgen coefficients could not be set: %s" %
                              (",".join(map(str, values_to_set.keys()))))
 
