@@ -21,7 +21,7 @@ class Evotype(object):
         operations.  Most often this is set to `True` when using a :class:`MatrixForwardSimulator`
         in order to get a performance gain.
     """
-    defaut_evotype = None
+    default_evotype = None
 
     _reptype_to_attrs = {
         'dense superop': 'OpRepDenseSuperop',
