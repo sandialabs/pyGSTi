@@ -190,7 +190,7 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
     def __init__(self, pspec, clifford_compilations, depths, circuits_per_depth, qubit_labels=None, randomizeout=False,
                  interleaved_circuit=None,
                  citerations=20, compilerargs=(), descriptor='A Clifford RB experiment',
-                 add_default_protocol=False, seed=1234, verbosity=1, num_processes=1):
+                 add_default_protocol=False, seed=None, verbosity=1, num_processes=1):
         """
         Generates a "Clifford randomized benchmarking" (CRB) experiment, which is the RB protocol defined
         in "Scalable and robust randomized benchmarking of quantum processes", Magesan et al. PRL 106 180504 (2011).
@@ -266,7 +266,8 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
         seed : int, optional
             A seed to initialize the random number generator used for creating random clifford
             circuits. The seed is incremented for each circuit sampled to ensure deterministic
-            sampling even when using multiprocessing for parallelization.
+            sampling even when using multiprocessing for parallelization. If None, a random
+            integer between 1 and 1e6 is selected.
 
         verbosity : int, optional
             If > 0 the number of circuits generated so far is shown.
@@ -282,10 +283,14 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
         circuit_lists = []
         ideal_outs = []
 
-        self.seed = seed
+        if seed is None:
+            self.seed = _np.random.randint(1, 1e6) # Pick a random seed
+        else:
+            self.seed = seed
+
 
         for lnum, l in enumerate(depths):
-            lseed = seed + lnum * circuits_per_depth
+            lseed = self.seed + lnum * circuits_per_depth
             if verbosity > 0:
                 print('- Sampling {} circuits at CRB length {} ({} of {} depths) with seed {}'.format(
                     circuits_per_depth, l, lnum + 1, len(depths), lseed))
@@ -571,7 +576,7 @@ class DirectRBDesign(_vb.BenchmarkingDesign):
                  sampler='Qelimination', samplerargs=[],
                  addlocal=False, lsargs=(), randomizeout=False, cliffordtwirl=True, conditionaltwirl=True,
                  citerations=20, compilerargs=(), partitioned=False, descriptor='A DRB experiment',
-                 add_default_protocol=False, seed=1234, verbosity=1, num_processes=1):
+                 add_default_protocol=False, seed=None, verbosity=1, num_processes=1):
         """
         Generates a "direct randomized benchmarking" (DRB) experiments, which is the protocol introduced in
         arXiv:1807.07975 (2018).
@@ -687,7 +692,8 @@ class DirectRBDesign(_vb.BenchmarkingDesign):
         seed : int, optional
             A seed to initialize the random number generator used for creating random clifford
             circuits. The seed is incremented for each circuit sampled to ensure deterministic
-            sampling even when using multiprocessing for parallelization.
+            sampling even when using multiprocessing for parallelization. If None, a random
+            integer between 1 and 1e6 is selected.
 
         verbosity : int, optional
             If > 0 the number of circuits generated so far is shown.
@@ -704,10 +710,13 @@ class DirectRBDesign(_vb.BenchmarkingDesign):
         circuit_lists = []
         ideal_outs = []
 
-        self.seed = seed
+        if seed is None:
+            self.seed = _np.random.randint(1, 1e6) # Pick a random seed
+        else:
+            self.seed = seed
 
         for lnum, l in enumerate(depths):
-            lseed = seed + lnum * circuits_per_depth
+            lseed = self.seed + lnum * circuits_per_depth
             if verbosity > 0:
                 print('- Sampling {} circuits at DRB length {} ({} of {} depths) with seed {}'.format(
                     circuits_per_depth, l, lnum + 1, len(depths), lseed))
@@ -929,7 +938,7 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
     def __init__(self, pspec, clifford_compilations, depths, circuits_per_depth, qubit_labels=None,
                  sampler='Qelimination', samplerargs=(),
                  localclifford=True, paulirandomize=True, descriptor='A mirror RB experiment',
-                 add_default_protocol=False, seed=1234, num_processes=1, verbosity=1):
+                 add_default_protocol=False, seed=None, num_processes=1, verbosity=1):
         """
         Generates a "mirror randomized benchmarking" (MRB) experiment, for the case of Clifford gates and with
         the option of Pauli randomization and local Clifford twirling. To implement mirror RB it is necessary
@@ -1007,7 +1016,8 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
         seed : int, optional
             A seed to initialize the random number generator used for creating random clifford
             circuits. The seed is incremented for each circuit sampled to ensure deterministic
-            sampling even when using multiprocessing for parallelization.
+            sampling even when using multiprocessing for parallelization. If None, a random
+            integer between 1 and 1e6 is selected.
 
         descriptor : str, optional
             A string describing the generated experiment. Stored in the returned dictionary.
@@ -1030,10 +1040,13 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
         circuit_lists = []
         ideal_outs = []
 
-        self.seed = seed
+        if seed is None:
+            self.seed = _np.random.randint(1, 1e6) # Pick a random seed
+        else:
+            self.seed = seed
 
         for lnum, l in enumerate(depths):
-            lseed = seed + lnum * circuits_per_depth
+            lseed = self.seed + lnum * circuits_per_depth
             if verbosity > 0:
                 print('- Sampling {} circuits at MRB length {} ({} of {} depths) with seed {}'.format(
                     circuits_per_depth, l, lnum + 1, len(depths), lseed))

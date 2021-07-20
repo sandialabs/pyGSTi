@@ -37,6 +37,7 @@ from pygsti.models import Model as _Model
 from pygsti.objectivefns import objectivefns as _objfns, wildcardbudget as _wild
 from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
+from pygsti.modelmembers import states as _states, povms as _povms
 
 #For results object:
 
@@ -59,7 +60,7 @@ class HasProcessorSpec(object):
         self.processor_spec = _load_pspec(processorspec_filename_or_obj)
         self.auxfile_types['processor_spec'] = 'pickle'
 
-    def create_target_model(self, gate_type='auto', spam_type='auto'):
+    def create_target_model(self, gate_type='auto', prep_type='auto', povm_type='auto'):
         """
         TODO: docstring
 
@@ -71,12 +72,14 @@ class HasProcessorSpec(object):
         Model
         """
         # Create a static explicit model as the target model, based on the processor spec
-        if spam_type == "auto":
-            spam_type = "computational" if gate_type == "auto" else gate_type
+        if prep_type == "auto":
+            prep_type = _states.get_state_type_from_op_type(gate_type)
+        if povm_type == "auto":
+            povm_type = _povms.get_povm_type_from_op_type(gate_type)
 
         return _models.modelconstruction._create_explicit_model(
             self.processor_spec, None, evotype='default', simulator='auto',
-            ideal_gate_type=gate_type, ideal_spam_type=spam_type,
+            ideal_gate_type=gate_type, ideal_prep_type=prep_type, ideal_povm_type=povm_type,
             embed_gates=False, basis='pp')
 
 

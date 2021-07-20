@@ -53,7 +53,7 @@ class ModelPack(_ABC):
         self._gscache = {}
 
     @_abstractmethod
-    def _target_model(self, sslbls):
+    def _target_model(self, sslbls, **kwargs):
         pass
 
     def _build_explicit_target_model(self, sslbls, gate_names, gate_expressions, **kwargs):
@@ -67,7 +67,8 @@ class ModelPack(_ABC):
         updated_gateexps = [gexp.format(*sslbls) for gexp in gate_expressions]
         return _build_explicit_model(full_sslbls, updated_gatenames, updated_gateexps, **kwargs)
 
-    def target_model(self, parameterization_type="full", simulator="auto", qubit_labels=None, evotype='default'):
+    def target_model(self, gate_type="full", prep_type="auto", povm_type="auto", instrument_type="auto",
+                     simulator="auto", evotype='default', qubit_labels=None):
         """
         Returns a copy of the target model in the given parameterization.
 
@@ -98,35 +99,19 @@ class ModelPack(_ABC):
         assert(len(qubit_labels) == len(self._sslbls)), \
             "Expected %d qubit labels and got: %s!" % (len(self._sslbls), str(qubit_labels))
 
-        if (parameterization_type, simulator, qubit_labels, evotype) not in self._gscache:
+        cache_key = (gate_type, prep_type, povm_type, instrument_type, simulator, evotype, qubit_labels)
+        if cache_key not in self._gscache:
             # cache miss
-            try:
-                mdl = self._target_model(qubit_labels, evotype, parameterization=parameterization_type)
-            except TypeError:
-                mdl = self._target_model(qubit_labels, evotype)
-                mdl.set_all_parameterizations(parameterization_type)  # automatically sets simulator
+            mdl = self._target_model(qubit_labels, gate_type=gate_type, prep_type=prep_type, povm_type=povm_type,
+                                     instrument_type=instrument_type, evotype=evotype)
 
-            # We separated parameter names from evotype names - so no more "H+S Terms"  TODO REMOVE?
-            # from pygsti.forwardsims.termforwardsim import TermForwardSimulator as _TermFSim
-            # if parameterization_type == "H+S terms":
-            #     assert(simulator == "auto" or isinstance(simulator, _TermFSim)), \
-            #         "Invalid `simulator` argument for H+S terms: %s!" % str(type(simulator))
-            #     if simulator == "auto":
-            #         sim = _TermFSim(mode="taylor", max_order=1)
-            #
-            #     key_path, val_path = self._get_cachefile_names(parameterization_type, sim)
-            #     if key_path.exists() and val_path.exists():
-            #         sim.set_cache(_load_calccache(key_path, val_path))    # TODO
-            #
-            #     mdl.sim = sim
-            # else:
-            if simulator != "auto":
-                mdl.sim = simulator
+            # Set the simulator (if auto, setter initializes to matrix or map)
+            mdl.sim = simulator
 
             # finally cache result
-            self._gscache[(parameterization_type, simulator, qubit_labels, evotype)] = mdl
+            self._gscache[cache_key] = mdl
 
-        return self._gscache[(parameterization_type, simulator, qubit_labels, evotype)].copy()
+        return self._gscache[cache_key].copy()
 
     def processor_spec(self, qubit_labels=None):
         """ TODO: docstring """

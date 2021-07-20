@@ -55,6 +55,7 @@ class ComputationalBasisPOVM(_POVM):
         for zvals in _itertools.product(*([(0, 1)] * nqubits)):
             testvec = _functools.reduce(_np.kron, [v[i] for i in zvals])  # FUTURE: make this more efficient
             lbl = ''.join(map(str, zvals))
+            testvec = testvec.reshape(2**nqubits, 1) # Reshape to column vector
             if not _np.allclose(testvec, pure_vectors[lbl]):
                 raise ValueError("`pure_vectors` doesn't look like a Z-basis computational POVM")
         return cls(nqubits, evotype, None, state_space)

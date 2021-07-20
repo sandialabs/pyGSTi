@@ -102,21 +102,29 @@ class ExplicitOpModel(_mdl.OpModel):
     #Whether access to gates & spam vecs via Model indexing is allowed
     _strict = False
 
-    def __init__(self, state_space, basis="pp", default_param="full",
-                 prep_prefix="rho", effect_prefix="E", gate_prefix="G",
-                 povm_prefix="M", instrument_prefix="I", simulator="auto",
-                 evotype="default"):
+    def __init__(self, state_space, basis="pp", default_gate_type="full",
+                 default_prep_type="auto", default_povm_type="auto",
+                 default_instrument_type="auto", prep_prefix="rho", effect_prefix="E",
+                 gate_prefix="G", povm_prefix="M", instrument_prefix="I",
+                 simulator="auto", evotype="default"):
         #More options now (TODO enumerate?)
         #assert(default_param in ('full','TP','CPTP','H+S','S','static',
         #                         'H+S terms','clifford','H+S clifford terms'))
         def flagfn(typ): return {'auto_embed': True, 'match_parent_statespace': True,
                                  'match_parent_evotype': True, 'cast_to_type': typ}
+        
+        if default_prep_type == "auto":
+            default_prep_type = _state.get_state_type_from_op_type(default_gate_type)
+        if default_povm_type == "auto":
+            default_povm_type = _povm.get_povm_type_from_op_type(default_gate_type)
+        if default_instrument_type == "auto":
+            default_instrument_type = _instrument.get_instrument_type_from_op_type(default_gate_type)
 
-        self.preps = _OrderedMemberDict(self, default_param, prep_prefix, flagfn("state"))
-        self.povms = _OrderedMemberDict(self, default_param, povm_prefix, flagfn("povm"))
-        self.operations = _OrderedMemberDict(self, default_param, gate_prefix, flagfn("operation"))
-        self.instruments = _OrderedMemberDict(self, default_param, instrument_prefix, flagfn("instrument"))
-        self.factories = _OrderedMemberDict(self, default_param, gate_prefix, flagfn("factory"))
+        self.preps = _OrderedMemberDict(self, default_prep_type, prep_prefix, flagfn("state"))
+        self.povms = _OrderedMemberDict(self, default_povm_type, povm_prefix, flagfn("povm"))
+        self.operations = _OrderedMemberDict(self, default_gate_type, gate_prefix, flagfn("operation"))
+        self.instruments = _OrderedMemberDict(self, default_instrument_type, instrument_prefix, flagfn("instrument"))
+        self.factories = _OrderedMemberDict(self, default_gate_type, gate_prefix, flagfn("factory"))
         self.effects_prefix = effect_prefix
         self._default_gauge_group = None
 
@@ -329,7 +337,8 @@ class ExplicitOpModel(_mdl.OpModel):
         else:
             raise KeyError("Key %s has an invalid prefix" % label)
 
-    def set_all_parameterizations(self, parameterization_type, extra=None):
+    def set_all_parameterizations(self, gate_type, prep_type="auto", povm_type="auto",
+                                  instrument_type="auto", extra=None):
         """
         Convert all gates, states, and POVMs to a specific parameterization type.
 
@@ -368,59 +377,14 @@ class ExplicitOpModel(_mdl.OpModel):
         -------
         None
         """
-        typ = parameterization_type
-
-        #More options now (TODO enumerate?)
-        #assert(parameterization_type in ('full','TP','CPTP','H+S','S','static',
-        #                                 'H+S terms','clifford','H+S clifford terms',
-        #                                 'static unitary'))
-
-        #Update dim and evolution type so that setting converted elements works correctly
-        #baseType = typ  # the default - only updated if a lindblad param type
-
-        #Resets sim - don't do this automatically now
-        #if typ == 'static unitary':
-        #    assert(self._evotype == "densitymx"), \
-        #        "Can only convert to 'static unitary' from a density-matrix evolution type."
-        #    #self._evotype = _Evotype.cast("statevec")  # don't change evotype - just change parameterization
-        #    self._dim = int(round(_np.sqrt(self.dim)))  # reduce dimension d -> sqrt(d)
-        #    if not isinstance(self._sim, (_matrixfwdsim.MatrixForwardSimulator, _mapfwdsim.MapForwardSimulator)):
-        #        self._sim = _matrixfwdsim.MatrixForwardSimulator(self) if self.dim <= 4 else \
-        #            _mapfwdsim.MapForwardSimulator(self, max_cache_size=0)
-        #
-        #elif typ == 'clifford':
-        #    #self._evotype = _Evotype.cast("stabilizer")
-        #    self._sim = _mapfwdsim.SimpleMapForwardSimulator(self)
-        #    #self._sim = _mapfwdsim.MapForwardSimulator(self, max_cache_size=0)
-        #
-        #elif _ot.is_valid_lindblad_paramtype(typ):
-        #    baseType = typ
-        #    #baseType, evotype = _ot.split_lindblad_paramtype(typ)
-        #    #self._evotype = _Evotype.cast(evotype)
-        #    #self._evotype = _Evotype.cast("statevec")  # don't change evotype - just change parameterization TODO
-        #
-        #    #Resets sim - don't do this automatically now
-        #    #if evotype == "densitymx":
-        #    #    if not isinstance(self._sim, (_matrixfwdsim.MatrixForwardSimulator, _mapfwdsim.MapForwardSimulator)):
-        #    #        self._sim = _matrixfwdsim.MatrixForwardSimulator(self) if self.dim <= 16 else \
-        #    #            _mapfwdsim.MapForwardSimulator(self, max_cache_size=0)
-        #    #elif evotype in ("svterm", "cterm"):
-        #    #    if not isinstance(self._sim, _termfwdsim.TermForwardSimulator):
-        #    #        self._sim = _termfwdsim.TermForwardSimulator(self)
-        #
-        #elif typ in ('static', 'full', 'TP', 'CPTP', 'linear'):  # assume all other parameterizations are densitymx
-        #    self._evotype = _Evotype.cast("densitymx")
-        #    if not isinstance(self._sim, (_matrixfwdsim.MatrixForwardSimulator, _mapfwdsim.MapForwardSimulator)):
-        #        self._sim = _matrixfwdsim.MatrixForwardSimulator(self) if self.dim <= 16 else \
-        #            _mapfwdsim.MapForwardSimulator(self, max_cache_size=0)
-        #else:
-        #    raise ValueError("Invalid parameterization type: %s" % str(typ))
+        typ = gate_type
 
         basis = self.basis
         if extra is None: extra = {}
 
-        povmtyp = rtyp = typ  # assume spam types are available to all objects
-        ityp = "TP" if _ot.is_valid_lindblad_paramtype(typ) else typ
+        rtyp = _state.get_state_type_from_op_type(gate_type) if prep_type == "auto" else prep_type
+        povmtyp = _povm.get_povm_type_from_op_type(gate_type) if povm_type == "auto" else povm_type
+        ityp = _instrument.get_instrument_type_from_op_type(gate_type) if instrument_type == "auto" else instrument_type
 
         for lbl, gate in self.operations.items():
             self.operations[lbl] = _op.convert(gate, typ, basis,
