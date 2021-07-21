@@ -459,6 +459,7 @@ try:
             "pygsti.forwardsims.termforwardsim_calc_statevec",
             sources=[
                 "pygsti/forwardsims/termforwardsim_calc_statevec.pyx",
+                "pygsti/evotypes/statevec/statecreps.cpp"
             ],
             include_dirs=['.', 'pygsti/evotypes', np.get_include()],
             language="c++",
@@ -469,6 +470,7 @@ try:
             "pygsti.forwardsims.termforwardsim_calc_stabilizer",
             sources=[
                 "pygsti/forwardsims/termforwardsim_calc_stabilizer.pyx",
+                "pygsti/evotypes/stabilizer/statecreps.cpp"
             ],
             include_dirs=['.', 'pygsti/evotypes', np.get_include()],
             language="c++",

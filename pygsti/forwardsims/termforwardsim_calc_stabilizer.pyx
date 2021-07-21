@@ -35,7 +35,7 @@ import time as pytime
 import numpy as np
 
 #import itertools as _itertools
-from ..opcalc import fastopcalc as _fastopcalc
+from pygsti.baseobjs.opcalc import fastopcalc as _fastopcalc
 #from scipy.sparse.linalg import LinearOperator
 
 cdef double SMALL = 1e-5

@@ -167,8 +167,8 @@ class TestWorkspace(ReportBaseCase):
 
         tbls.append( w.GateDecompTable(self.mdl, self.tgt, cr) )
 
-        tbls.append( w.GateEigenvalueTable(self.mdl, self.tgt, cr) )
         #Polar plots don't work in latest plotly -- no 'r' variable -- TODO update (but these plots are unused) POLAR SKIP
+        #tbls.append( w.GateEigenvalueTable(self.mdl, self.tgt, cr) )
         #tbls.append( w.GateEigenvalueTable(self.mdl, None, cr, display=("polar",) ) ) # polar with no target model
         tbls.append(w.GateEigenvalueTable(self.mdl, self.tgt, cr, display=("evdm","evinf","rel"),
                                           virtual_ops=[pygsti.circuits.Circuit(('Gx', 'Gx'))]))
