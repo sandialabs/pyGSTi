@@ -244,7 +244,7 @@ def prs_directly(fwdsim, rholabel, elabels, circuit, repcache, comm=None, mem_li
 
 
 def refresh_magnitudes_in_repcache(repcache, paramvec):
-    from ..opcalc import bulk_eval_compact_polynomials_complex as _bulk_eval_compact_polynomials_complex
+    from pygsti.baseobjs.opcalc import bulk_eval_compact_polynomials_complex as _bulk_eval_compact_polynomials_complex
     for repcel in repcache.values():
         for termrep in repcel[0]:  # first element of tuple contains list of term-reps
             v, c = termrep.coeff.compact_complex()
@@ -447,9 +447,9 @@ def find_best_pathmagnitude_threshold(fwdsim, rholabel, elabels, circuit, polyno
     return sum(npaths), threshold, sum(target_sum_of_pathmags), sum(achieved_sum_of_pathmags)
 
 
-def compute_pruned_path_polys_given_threshold(threshold, fwdsim, rholabel, elabels, circuit,
-                                              polynomial_vindices_per_int, repcache, circuitsetup_cache,
-                                              comm, mem_limit, fastmode):
+def compute_pruned_path_polynomials_given_threshold(threshold, fwdsim, rholabel, elabels, circuit,
+                                                    polynomial_vindices_per_int, repcache, circuitsetup_cache,
+                                                    comm, mem_limit, fastmode):
     """
     Computes probabilities for multiple spam-tuples of `circuit`
 
