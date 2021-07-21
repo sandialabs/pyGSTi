@@ -449,6 +449,7 @@ try:
             "pygsti.forwardsims.mapforwardsim_calc_densitymx",
             sources=[
                 "pygsti/forwardsims/mapforwardsim_calc_densitymx.pyx",
+                "pygsti/evotypes/densitymx/statecreps.cpp",
             ],
             include_dirs=['.', 'pygsti/evotypes', np.get_include()],
             language="c++",
@@ -459,7 +460,8 @@ try:
             "pygsti.forwardsims.termforwardsim_calc_statevec",
             sources=[
                 "pygsti/forwardsims/termforwardsim_calc_statevec.pyx",
-                "pygsti/evotypes/statevec/statecreps.cpp"
+                "pygsti/evotypes/statevec/statecreps.cpp",
+                "pygsti/evotypes/basecreps.cpp"
             ],
             include_dirs=['.', 'pygsti/evotypes', np.get_include()],
             language="c++",
@@ -470,7 +472,8 @@ try:
             "pygsti.forwardsims.termforwardsim_calc_stabilizer",
             sources=[
                 "pygsti/forwardsims/termforwardsim_calc_stabilizer.pyx",
-                "pygsti/evotypes/stabilizer/statecreps.cpp"
+                "pygsti/evotypes/stabilizer/statecreps.cpp",
+                "pygsti/evotypes/basecreps.cpp"
             ],
             include_dirs=['.', 'pygsti/evotypes', np.get_include()],
             language="c++",
