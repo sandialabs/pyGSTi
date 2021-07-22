@@ -32,3 +32,5 @@ from .rbtheory import *
 from .slicetools import *
 from .symplectic import *
 from .typeddict import TypedDict
+
+from . import vb
