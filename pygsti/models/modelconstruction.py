@@ -1617,12 +1617,13 @@ def _create_cloud_crosstalk_model(processor_spec, modelnoise, custom_gates=None,
         # for this gate, then we should use it to construct the output, using a copy when gates are independent
         # and a reference to the *same* stencil operations when `independent_gates==False`.
 
+        num_sslbls = len(lbl.sslbls) if (lbl.sslbls is not None) else None
         if lbl in modelnoise:
-            stencil = create_stencil_fn(lbl, evotype, state_space, target_labels=lbl.sslbls)
+            stencil = create_stencil_fn(lbl, evotype, state_space, num_target_labels=num_sslbls)
         elif lbl.name in stencils:
             stencil = stencils[lbl.name]
         elif lbl.name in modelnoise:
-            stencils[lbl.name] = create_stencil_fn(lbl.name, evotype, state_space, target_labels=lbl.sslbls)
+            stencils[lbl.name] = create_stencil_fn(lbl.name, evotype, state_space, num_target_labels=num_sslbls)
             stencil = stencils[lbl.name]
         else:
             return None  # no cloudnoise error for this label
@@ -1632,12 +1633,13 @@ def _create_cloud_crosstalk_model(processor_spec, modelnoise, custom_gates=None,
                                 copy=independent_gates and (lbl not in modelnoise))  # no need to copy if first case
 
     def build_cloudkey_fn(lbl):
+        num_sslbls = len(lbl.sslbls) if (lbl.sslbls is not None) else None
         if lbl in modelnoise:
-            stencil = create_stencil_fn(lbl, evotype, state_space, target_labels=lbl.sslbls)
+            stencil = create_stencil_fn(lbl, evotype, state_space, num_target_labels=num_sslbls)
         elif lbl.name in stencils:
             stencil = stencils[lbl.name]
         elif lbl.name in modelnoise:
-            stencils[lbl.name] = create_stencil_fn(lbl.name, evotype, state_space, target_labels=lbl.sslbls)
+            stencils[lbl.name] = create_stencil_fn(lbl.name, evotype, state_space, num_target_labels=num_sslbls)
             stencil = stencils[lbl.name]
         else:
             # simple cloud-key when there is no cloud noise
