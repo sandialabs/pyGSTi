@@ -8,7 +8,7 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-qubits = ['Q' + str(x) for x in range(28)]
+qubits = ['Q' + str(x) for x in range(27)]
 
 two_qubit_gate = 'Gcnot'
 
