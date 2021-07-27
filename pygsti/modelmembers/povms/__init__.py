@@ -21,7 +21,6 @@ from .composedpovm import ComposedPOVM
 from .computationaleffect import ComputationalBasisPOVMEffect
 from .computationalpovm import ComputationalBasisPOVM
 from .conjugatedeffect import ConjugatedStatePOVMEffect
-# from .denseeffect.py  # REMOVE
 from .effect import POVMEffect
 from .fulleffect import FullPOVMEffect
 from .fullpureeffect import FullPOVMPureEffect
@@ -348,30 +347,6 @@ def convert(povm, to_type, basis, extra=None):
             pass  # try next to_type
 
     raise ValueError("Could not convert POVM to to type(s): %s" % str(to_types))
-
-
-#REMOVE (UNUSED) - but an example of evotype-changing code...
-#def _convert_to_static_effect(effect, new_evotype, mx_basis="pp"):
-#    """
-#    Attempts to convert `vec` to a static (0 params) SPAMVec with
-#    evoution type `new_evotype`.  Used to convert spam vecs to
-#    being LindbladSPAMVec objects.
-#    """
-#    if effect.evotype == new_evotype and effect.num_params == 0:
-#        return effect  # no conversion necessary
-#
-#    #First, check if it's a computational effect, which is easy to convert evotypes of:
-#    if isinstance(effect, ComputationalBasisPOVMEffect):
-#        return ComputationalBasisPOVMEffect(effect._zvals, new_evotype)
-#
-#    #Next, try to construct a pure-state if possible
-#    #if isinstance(effect, ConjugatedStatePOVMEffect):
-#    try:
-#        dmvec = _bt.change_basis(effect.to_dense(), mx_basis, 'std')
-#        purevec = _ot.dmvec_to_state(dmvec)
-#        return StaticPOVMPureEffect(purevec, new_evotype)
-#    except:
-#        return StaticPOVMEffect(effect.to_dense(), new_evotype)
 
 
 def convert_effect(effect, to_type, basis, extra=None):

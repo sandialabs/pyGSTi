@@ -191,13 +191,6 @@ def convert(operation, to_type, basis, extra=None):
                 return StaticUnitaryOp(unitary, basis, operation.evotype, operation.state_space)
 
             elif _ot.is_valid_lindblad_paramtype(to_type):
-                # e.g. "H+S terms","H+S clifford terms"
-
-                #REMOVE
-                #_, evotype = _ot.split_lindblad_paramtype(to_type)
-                #LindbladOpType = LindbladOp
-                #if evotype in ("svterm", "cterm") else \
-                #    LindbladDenseOp
 
                 unitary_postfactor = None
                 if isinstance(operation, (FullArbitraryOp, FullTPOp, StaticArbitraryOp)):

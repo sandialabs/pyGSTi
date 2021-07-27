@@ -112,9 +112,6 @@ class StateRepComposed(StateRep):
 
     def reps_have_changed(self):
         pass  # don't do anything here - all work in actionalble_staterep
-        #OLD REMOVE:
-        #rep = self.op_rep.acton(self.state_rep)
-        #self.base[:] = rep.base[:]
 
     def actionable_staterep(self):
         state_rep = self.state_rep.actionable_staterep()

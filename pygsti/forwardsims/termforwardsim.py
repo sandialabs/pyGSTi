@@ -537,7 +537,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
 
         if threshold_guess is None: threshold_guess = -1.0  # use negatives to signify "None" in C
         circuitsetup_cache = {}  # DEBUG REMOVE?
-        #repcache = {}  # DEBUG REMOVE
+        #repcache = {}  # used for debugging
 
         npaths, threshold, target_sopm, achieved_sopm = \
             self.calclib.find_best_pathmagnitude_threshold(
@@ -1001,10 +1001,6 @@ class TermForwardSimulator(_DistributableForwardSimulator):
             gap_jacs = self._sopm_gaps_jacobian_atom(layout_atom)
             #gap_jacs[ _np.where(gaps < self.pathmagnitude_gap) ] = 0.0  # set deriv to zero where gap was clipped to 0
             _fas(termgap_penalty_jac, [elInds], gap_jacs)
-
-        #REMOVE #collect/gather results
-        #all_atom_element_slices = [atom.element_slice for atom in layout.atoms]
-        #_mpit.gather_slices(all_atom_element_slices, atomOwners, termgap_penalty_jac, [], 0, resource_alloc.comm)
 
         return termgap_penalty_jac
 

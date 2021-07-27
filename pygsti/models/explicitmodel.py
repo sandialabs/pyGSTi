@@ -128,13 +128,6 @@ class ExplicitOpModel(_mdl.OpModel):
         self.effects_prefix = effect_prefix
         self._default_gauge_group = None
 
-        #REMOVE
-        #if basis == "auto":
-        #    evotype = _Evotype.cast(evotype)
-        #    basis = "pp" if evotype in ("densitymx", "svterm", "cterm") \
-        #        else "sv"  # ( if evotype in ("statevec","stabilizer") )
-        # TODO - change this based on evotype dimension in FUTURE ????
-
         super(ExplicitOpModel, self).__init__(state_space, basis, evotype, ExplicitLayerRules(), simulator)
 
     @property

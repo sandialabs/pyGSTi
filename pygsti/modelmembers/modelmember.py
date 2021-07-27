@@ -339,11 +339,6 @@ class ModelMember(ModelChild):
             # set and are getting reset to something else.
             for i, (subm, subm_rpindices) in enumerate(zip(self.submembers(), self._submember_rpindices)):
                 if id(subm) in memo: continue  # already processed
-                #REMOVE
-                #rel_subm_gpindices = _decompose_gpindices(
-                #    my_old_gpindices, subm.gpindices)
-                #new_subm_gpindices = _compose_gpindices(
-                #    gpindices, rel_subm_gpindices)
                 new_subm_gpindices = _compose_gpindices(
                     gpindices, subm_rpindices)
                 subm.set_gpindices(new_subm_gpindices, parent, memo)

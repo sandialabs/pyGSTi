@@ -765,26 +765,6 @@ class ExplicitStateSpace(StateSpace):
         else:
             self._nqubits = None
 
-    #REMOVE - this shouldn't be needed anymore
-    #def reduce_dims_densitymx_to_state_inplace(self):
-    #    """
-    #    Reduce all state space dimensions appropriately for moving from a density-matrix to state-vector rep
-    #
-    #    Returns
-    #    -------
-    #    None
-    #    """
-    #    for lbl in self.label_dims:
-    #        if self.labeltypes[lbl] == 'Q':
-    #            self.label_dims[lbl] = int(_np.sqrt(self.label_dims[lbl]))
-    #
-    #    #update tensor-product-block dims and overall dim too:
-    #    self.tpb_dims = []
-    #    for iTPB, tpbLabels in enumerate(self.labels):
-    #        self.tpb_dims.append(int(_np.product([self.label_dims[lbl] for lbl in tpbLabels])))
-    #        self.tpb_index.update({lbl: iTPB for lbl in tpbLabels})
-    #    self.dim = sum(self.tpb_dims)
-
     @property
     def udim(self):
         """
@@ -924,22 +904,6 @@ class ExplicitStateSpace(StateSpace):
         str
         """
         return self.labeltypes[label]
-
-    #REMOVE
-    #def product_dim(self, labels):  # only in modelconstruction
-    #    """
-    #    Computes the product of the state-space dimensions associated with each label in `labels`.
-    #
-    #    Parameters
-    #    ----------
-    #    labels : list
-    #        A list of state space labels (strings or integers).
-    #
-    #    Returns
-    #    -------
-    #    int
-    #    """
-    #    return int(_np.product([self.label_dims[l] for l in labels]))
 
     def __str__(self):
         if len(self.labels) == 0: return "ZeroDimSpace"

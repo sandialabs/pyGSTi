@@ -446,7 +446,6 @@ class EmbeddedOp(_LinearOperator):
         """
         #Reduce labeldims b/c now working on *state-space* instead of density mx:
         sslbls = self.state_space.copy()
-        #REMOVE sslbls.reduce_dims_densitymx_to_state_inplace()
         if return_coeff_polys:
             terms, coeffs = self.embedded_op.taylor_order_terms(order, max_polynomial_vars, True)
             embedded_terms = [t.embed(sslbls, self.target_labels) for t in terms]
@@ -486,7 +485,6 @@ class EmbeddedOp(_LinearOperator):
             A list of :class:`Rank1Term` objects.
         """
         sslbls = self.state_space.copy()
-        #REMOVE sslbls.reduce_dims_densitymx_to_state_inplace()
         return [t.embed(sslbls, self.target_labels)
                 for t in self.embedded_op.taylor_order_terms_above_mag(order, max_polynomial_vars, min_term_mag)]
 
@@ -509,7 +507,7 @@ class EmbeddedOp(_LinearOperator):
         # In this case, since the coeffs of the terms of an EmbeddedOp are the same as those
         # of the operator being embedded, the total term magnitude is the same:
 
-        #DEBUG TODO REMOVE
+        #DEBUG CHECK
         #print("DB: Embedded.total_term_magnitude = ",self.embedded_op.get_total_term_magnitude()," -- ",
         #   self.embedded_op.__class__.__name__)
         #ret = self.embedded_op.get_total_term_magnitude()

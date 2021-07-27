@@ -328,33 +328,6 @@ class OpRepEmbedded(OpRep):
 class OpRepExpErrorgen(OpRep):
 
     def __init__(self, errorgen_rep):
-
-        #self.unitary_postfactor = unitary_postfactor  # can be None
-        #self.err_gen_prep = None REMOVE
-
-        #Pre-compute the exponential of the error generator if dense matrices
-        # are used, otherwise cache prepwork for sparse expm calls
-
-        #Allocate sparse matrix arrays for rep
-        #if self.unitary_postfactor is None:
-        #    Udata = _np.empty(0, 'd')
-        #    Uindices = _np.empty(0, _np.int64)
-        #    Uindptr = _np.zeros(1, _np.int64)
-        #else:
-        #    assert(_sps.isspmatrix_csr(self.unitary_postfactor)), \
-        #        "Internal error! Unitary postfactor should be a *sparse* CSR matrix!"
-        #    Udata = self.unitary_postfactor.data
-        #    Uindptr = _np.ascontiguousarray(self.unitary_postfactor.indptr, _np.int64)
-        #    Uindices = _np.ascontiguousarray(self.unitary_postfactor.indices, _np.int64)
-
-        #TODO REMOVE
-        #if len(unitarypost_data) > 0:  # (nnz > 0)
-        #    self.unitary_postfactor = _sps.csr_matrix(
-        #        (unitarypost_data, unitarypost_indices,
-        #         unitarypost_indptr), shape=(dim, dim))
-        #else:
-        #    self.unitary_postfactor = None  # no unitary postfactor
-
         state_space = errorgen_rep.state_space
         self.errorgen_rep = errorgen_rep
 
@@ -392,10 +365,6 @@ class OpRepExpErrorgen(OpRep):
 
     def acton(self, state):
         """ Act this gate map on an input state """
-        #TODO REMOVE
-        #if self.unitary_postfactor is not None:
-        #    statedata = self.unitary_postfactor.dot(state.data)
-        #else:
         statedata = state.data.copy()  # must COPY because _custom... call below *modifies* "b" arg
 
         tol = 1e-16  # 2^-53 (=Scipy default) -- TODO: make into an arg?

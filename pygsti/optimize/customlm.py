@@ -281,18 +281,18 @@ class CustomLMOptimizer(Optimizer):
             objective_func(opt_x)
             #objective.model.from_vector(opt_x)  # performed within line above
 
-        #REMOVE DEBUG TO CHECK SYNC (especially for shared mem)
-        if objective.resource_alloc.comm is not None:
-            comm = objective.resource_alloc.comm
-            v_cmp = comm.bcast(objective.model.to_vector() if (comm.Get_rank() == 0) else None, root=0)
-            v_matches_x = _np.allclose(objective.model.to_vector(), opt_x)
-            same_as_root = _np.isclose(_np.linalg.norm(objective.model.to_vector() - v_cmp), 0.0)
-            if not (v_matches_x and same_as_root):
-                raise ValueError("Rank %d CUSTOMLM ERROR: END model vector-matches-x=%s and vector-is-same-as-root=%s"
-                                 % (comm.rank, str(v_matches_x), str(same_as_root)))
-            comm.barrier()  # if we get past here, then *all* processors are OK
-            if comm.rank == 0:
-                print("OK - model vector == best_x and all vectors agree w/root proc's")
+        #DEBUG CHECK SYNC between procs (especially for shared mem) - could REMOVE
+        # if objective.resource_alloc.comm is not None:
+        #     comm = objective.resource_alloc.comm
+        #     v_cmp = comm.bcast(objective.model.to_vector() if (comm.Get_rank() == 0) else None, root=0)
+        #     v_matches_x = _np.allclose(objective.model.to_vector(), opt_x)
+        #     same_as_root = _np.isclose(_np.linalg.norm(objective.model.to_vector() - v_cmp), 0.0)
+        #     if not (v_matches_x and same_as_root):
+        #         raise ValueError("Rank %d CUSTOMLM ERROR: END model vector-matches-x=%s and vector-is-same-as-root=%s"
+        #                          % (comm.rank, str(v_matches_x), str(same_as_root)))
+        #     comm.barrier()  # if we get past here, then *all* processors are OK
+        #     if comm.rank == 0:
+        #         print("OK - model vector == best_x and all vectors agree w/root proc's")
 
         unpenalized_f = f[0:-objective.ex] if (objective.ex > 0) else f
         unpenalized_normf = sum(unpenalized_f**2)  # objective function without penalty factors
@@ -533,7 +533,6 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
         for k in range(max_iter):  # outer loop
             # assume global_x, x, f, fnorm hold valid values
 
-            #t0 = _time.time() # REMOVE
             if len(msg) > 0:
                 break  # exit outer loop if an exit-message has been set
 
@@ -1070,21 +1069,6 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                                 break  # exit inner loop normally
                             else:
                                 reject_msg = " (out-of-bounds)"
-
-                        #TEST TODO REMOVE - update Jac w/rank1 term given info from failed evaluation
-                        #else:
-                        #    if _np.sqrt(norm_dx) < 0.1:
-                        #        print("DB: updating jac w/rank1")
-                        #        delta_f = (new_f - f) - _np.dot(Jac,dx)  # df_actual - df_expected_from_Jac
-                        #        Jac -= 0.1 * _np.outer(delta_f,dx) / norm_dx
-                        #        Jnorm = _np.linalg.norm(Jac)
-                        #        JTJ = _mpit.mpidot(Jac.T, Jac, my_cols_slice, comm)  # _np.dot(Jac.T,Jac)
-                        #        JTf = _np.dot(Jac.T, f)
-                        #        norm_JTf = _np.linalg.norm(JTf, ord=_np.inf)
-                        #        undamped_JTJ_diag = JTJ.diagonal().copy()
-                        #        mu *= 1/3.0 # so mu stays level when updating J
-                        #        print("DB: new |J| = ",Jnorm)
-
                     else:
                         reject_msg = " (out-of-bounds)"
 

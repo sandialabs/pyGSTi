@@ -1467,72 +1467,6 @@ def _add_gaugeopt_and_badfit(results, estlbl, target_model, gaugeopt_suite, gaug
     return results
 
 
-##TODO REMOVE
-#def OLD_package_into_results(callerProtocol, data, target_model, mdl_start, lsgstLists,
-#                          parameters, mdl_lsgst_list, gaugeopt_suite, gaugeopt_target,
-#                          comm, memLimit, output_pkl, verbosity,
-#                          profiler, evaltree_cache=None):
-#    # advanced_options, opt_args,
-#    """
-#    Performs all of the post-optimization processing common to
-#    run_long_sequence_gst and do_model_evaluation.
-#
-#    Creates a Results object to be returned from run_long_sequence_gst
-#    and do_model_evaluation (passed in as 'callerName').  Performs
-#    gauge optimization, and robust data scaling (with re-optimization
-#    if needed and opt_args is not None - i.e. only for
-#    run_long_sequence_gst).
-#    """
-#    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm)
-#    tref = _time.time()
-#    callerName = callerProtocol.name
-#
-#    #ret = advancedOptions.get('appendTo', None)
-#    #if ret is None:
-#    ret = ModelEstimateResults(data, callerProtocol)
-#    #else:
-#    #    # a dummy object to check compatibility w/ret2
-#    #    dummy = ModelEstimateResults(data, callerProtocol)
-#    #    ret.add_estimates(dummy)  # does nothing, but will complain when appropriate
-#
-#    #add estimate to Results
-#    profiler.add_time('%s: results initialization' % callerName, tref); tref = _time.time()
-#
-#    #Do final gauge optimization to *final* iteration result only
-#    if gaugeopt_suite:
-#        if gaugeopt_target is None: gaugeopt_target = target_model
-#        _add_gauge_opt(ret, estlbl, gaugeopt_suite, gaugeopt_target,
-#                      mdl_lsgst_list[-1], comm, advancedOptions, printer - 1)
-#        profiler.add_time('%s: gauge optimization' % callerName, tref)
-#
-#    #Perform extra analysis if a bad fit was obtained - do this *after* gauge-opt b/c it mimics gaugeopts
-#    badFitThreshold = advancedOptions.get('badFitThreshold', DEFAULT_BAD_FIT_THRESHOLD)
-#    onBadFit = advancedOptions.get('onBadFit', [])  # ["wildcard"]) #["Robust+"]) # empty list => 'do nothing'
-#    badfit_opts = advancedOptions.get('badFitOptions', {'wildcard_budget_includes_spam': True,
-#                                                        'wildcard_smart_init': True})
-#    _add_badfit_estimates(ret, estlbl, onBadFit, badFitThreshold, badfit_opts, opt_args, evaltree_cache,
-#                         comm, memLimit, printer)
-#    profiler.add_time('%s: add badfit estimates' % callerName, tref); tref = _time.time()
-#
-#    #Add recorded info (even robust-related info) to the *base*
-#    #   estimate label's "stdout" meta information
-#    if printer.is_recording():
-#        ret.estimates[estlbl].meta['stdout'] = printer.stop_recording()
-#
-#    #Write results to a pickle file if desired
-#    if output_pkl and (comm is None or comm.Get_rank() == 0):
-#        if isinstance(output_pkl, str):
-#            with open(output_pkl, 'wb') as pklfile:
-#                _pickle.dump(ret, pklfile)
-#        else:
-#            _pickle.dump(ret, output_pkl)
-#
-#    return ret
-
-
-#def _add_gauge_opt(estimate, gaugeOptParams, target_model, starting_model,
-#                  comm=None, verbosity=0):
-
 def _add_gauge_opt(results, base_est_label, gaugeopt_suite, target_model, starting_model,
                    unreliable_ops, comm=None, verbosity=0):
     """
@@ -2220,21 +2154,6 @@ class ModelEstimateResults(_proto.ProtocolResults):
 
             circuit_lists['final'] = circuit_lists['iteration'][-1]
 
-            #TODO REMOVE
-            ##We currently expect to have these keys (in future have users check for them?)
-            #if 'prep fiducials' not in circuit_lists: circuit_lists['prep fiducials'] = []
-            #if 'meas fiducials' not in circuit_lists: circuit_lists['meas fiducials'] = []
-            #if 'germs' not in circuit_lists: circuit_lists['germs'] = []
-
-            #I think these are UNUSED - TODO REMOVE
-            #circuit_lists['all'] = _tools.remove_duplicates(
-            #    list(_itertools.chain(*circuit_lists['iteration']))) # USED?
-            #running_set = set(); delta_lsts = []
-            #for lst in circuit_lists['iteration']:
-            #    delta_lst = [x for x in lst if (x not in running_set)]
-            #    delta_lsts.append(delta_lst); running_set.update(delta_lst)
-            #circuit_lists['iteration delta'] = delta_lsts  # *added* at each iteration
-
         self.circuit_lists = circuit_lists
         self.estimates = _collections.OrderedDict()
 
@@ -2363,11 +2282,6 @@ class ModelEstimateResults(_proto.ProtocolResults):
                            + " want to do this.")
 
         self.estimates[estimate_key] = estimate
-
-        #TODO REMOVE
-        ##Set gate sequence related parameters inherited from Results
-        #self.estimates[estimate_key].parameters['max length list'] = \
-        #    self.circuit_structs['final'].Ls
 
     def add_model_test(self, target_model, themodel,
                        estimate_key='test', gaugeopt_keys="auto"):

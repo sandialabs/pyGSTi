@@ -12,7 +12,6 @@ Functions for generating bootstrapped error bars
 
 import numpy as _np
 
-# import matplotlib as _mpl #REMOVED
 from pygsti.drivers import longsequence as _longseq
 from pygsti import algorithms as _alg
 from pygsti.data.dataset import DataSet as _DataSet

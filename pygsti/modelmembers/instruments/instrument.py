@@ -81,10 +81,6 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
 
             items = []
             for k, member in member_list:
-                #REMOVE - we need to be given linear ops so that we can infer evotype & state space above
-                #if not isinstance(v, _op.LinearOperator):
-                #    member = _op.FullArbitraryOp(member, evotype, state_space)
-
                 assert(evotype == member.evotype), \
                     "All instrument members must have the same evolution type"
                 assert(state_space.is_compatible_with(member.state_space)), \
@@ -411,9 +407,6 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
             the resulting state that would be obtained if and when
             that outcome is observed.
         """
-        # Note: no 'stabilizer' or 'statevec' support yet (how renormalize sframe or how does state vec work?)
-        #REMOVE assert(self._evotype in ('densitymx',)), \
-        #REMOVE    "acton(...) cannot be used with the %s evolution type!" % self._evotype
         assert(state._evotype == self._evotype), "Evolution type mismatch: %s != %s" % (self._evotype, state._evotype)
 
         staterep = state._rep

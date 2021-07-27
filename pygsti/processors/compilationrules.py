@@ -23,9 +23,6 @@ from pygsti.tools import listtools as _lt
 from pygsti.tools import symplectic as _symp
 from pygsti.tools import internalgates as _itgs
 
-IDENT = 'I'  # internal 1Q-identity-gate name used for compilation
-# MUST be the same as in processorpack.py
-
 
 class CompilationError(Exception):
     """
@@ -572,8 +569,6 @@ class CliffordCompilationRules(CompilationRules):
             #construct a list of the available gates on the qubits of `oplabel` (or a subset of them)
             available_gatenames = self.processor_spec.available_gatenames(oplabel.sslbls)
             available_srep_dict = self.processor_spec.compute_clifford_symplectic_reps(available_gatenames)
-            #available_srep_dict[IDENT] = _symp.unitary_to_symplectic(_np.identity(2, 'd'))  # REMOVE
-            #Manually add 1Q idle gate, as this typically isn't stored in the processor spec.
 
             if is_local_compilation_feasible(available_gatenames):
                 available_gatelabels = [to_template_label(gl) for gn in available_gatenames
@@ -586,7 +581,6 @@ class CliffordCompilationRules(CompilationRules):
         #If a template has been found, use it.
         if template_to_use is not None:
             opstr = list(map(to_real_label, template_to_use))
-            #REMOVE 'I's ?
             return _Circuit(layer_labels=opstr, line_labels=self.processor_spec.qubit_labels)
         else:
             raise CompilationError("Cannot locally compile %s" % str(oplabel))

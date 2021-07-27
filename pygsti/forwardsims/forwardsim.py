@@ -166,13 +166,6 @@ class ForwardSimulator(object):
     #    #self.prepreps = { lbl:p.torep('prep') for lbl,p in preps.items() }
     #    #self.effectreps = { lbl:e.torep('effect') for lbl,e in effects.items() }
 
-    #UNUSED - REMOVE?
-    #def propagate(self, state, simplified_circuit, time=None):
-    #    """
-    #    Propagate a state given a set of operations.
-    #    """
-    #    raise NotImplementedError()  # TODO - create an interface for running circuits
-
     def _compute_circuit_outcome_probabilities(self, array_to_fill, circuit, outcomes, resource_alloc, time=None):
         raise NotImplementedError("Derived classes should implement this!")
 
@@ -786,11 +779,6 @@ class ForwardSimulator(object):
         # proc's hprobs (may be too large) - so I think this function signature may still be fine,
         # but need to construct wrt_slices_list from global slices assigned to it by the layout.
         # (note the values in the wrt_slices_list must be global param indices - just not all of them)
-
-        #REMOVE  - a distributed layout should be using a DistributablsForwardSimulator that overrides this.
-        #if isinstance(layout, _DistributableCOPALayout):  # gather data onto rank-0 processor
-        #    nElements = layout.host_num_elements
-        #else:
 
         nElements = len(layout)  # (global number of elements, though "global" isn't really defined)
 

@@ -593,9 +593,6 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
 
                 add_to_plaquettes(pkey, plaquettes, germ_power, maxLen, germ, power,
                                   fiducialPairsThisIter, dscheck, missing_list)
-                #REMOVE
-                #missing_list.extend(cs.add_plaquette(germ_power, maxLen, germ,
-                #                                     fiducialPairsThisIter, dscheck))
 
         if nest:
             # pinch off a copy of variables that were left as the running variables above

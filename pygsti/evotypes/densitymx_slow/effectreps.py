@@ -90,13 +90,6 @@ class EffectRepTensorProduct(EffectRep):
         factordims = _np.ascontiguousarray(
             _np.array([fct.state_space.dim for fct in povm_factors], _np.int64))
 
-        #REMOVE
-        #rep = replib.DMEffectRepTensorProd(self._fast_kron_array, self._fast_kron_factordims,
-        #                                   len(self.factors), self._fast_kron_array.shape[1], dim)
-        #def __init__(self, kron_array, factor_dims, nfactors, max_factor_dim, dim):
-        #int dim = _np.product(factor_dims) -- just send as argument for speed?
-        #assert(dim == _np.product(kron_factor_dims))
-
         self.povm_factors = povm_factors
         self.effect_labels = effect_labels
         self.kron_array = kron_array
