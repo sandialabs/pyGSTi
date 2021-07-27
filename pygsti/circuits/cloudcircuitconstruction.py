@@ -1309,7 +1309,6 @@ def _create_xycnot_cloudnoise_circuits(num_qubits, max_lengths, geometry, cnot_e
                                        idt_pauli_dicts=None, algorithm="greedy", comm=None):
 
     """
-    TODO: update docstring -- processorspec now, no more geometry; paramroot => parameterization?
     Compute circuits which amplify the parameters of a particular :class:`CloudNoiseModel`.
 
     Returns circuits that amplify the parameters of a :class:`CloudNoiseModel` containing
@@ -1754,8 +1753,7 @@ def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
                                parameterization="H+S", verbosity=0, cache=None, idle_only=False,
                                idt_pauli_dicts=None, algorithm="greedy", idle_op_str=((),), comm=None):
     """
-    TODO: update docstring (now have processor_spec, no longer have num_qubits, gatedict, availability, geometry)
-    Finds a set of circuits that amplify all the parameters of a clould-noise model.
+    Constructs a set of circuits that amplify all the parameters of a clould-noise model.
 
     Create a set of `fiducial1+germ^power+fiducial2` sequences which amplify
     all of the parameters of a `CloudNoiseModel` created by passing the
@@ -1769,8 +1767,10 @@ def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
 
     Parameters
     ----------
-    num_qubits : int
-        The number of qubits
+    processor_spec : ProcessorSpec
+        Defines the prcoessor interface (API) for which circuits are created.  This
+        API includes the number of qubits and their labels, gate names, qubit geometry
+        or gate availability, etc.
 
     max_lengths : list
         A list of integers specifying the different maximum lengths for germ
@@ -1783,38 +1783,6 @@ def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
         with both the gates it posseses and their parameterizations - for
         instance, only `[(), ('Gx',), ('Gy',)]` is needed for just Hamiltonian
         and Stochastic errors.
-
-    gatedict : dict
-        A dictionary whose keys are gate labels and values are gates, specifying
-        the gates of the :class:`CloudNoiseModel` this function obtains circuits for.
-
-    availability : dict, optional
-        A dictionary whose keys are the same gate names as in
-        `gatedict` and whose values are lists of qubit-label-tuples.  Each
-        qubit-label-tuple must have length equal to the number of qubits
-        the corresponding gate acts upon, and causes that gate to be
-        embedded to act on the specified qubits.  For example,
-        `{ 'Gx': [(0,),(1,),(2,)], 'Gcnot': [(0,1),(1,2)] }` would cause
-        the `1-qubit `'Gx'`-gate to be embedded three times, acting on qubits
-        0, 1, and 2, and the 2-qubit `'Gcnot'`-gate to be embedded twice,
-        acting on qubits 0 & 1 and 1 & 2.  Instead of a list of tuples,
-        values of `availability` may take the special values:
-
-        - `"all-permutations"` and `"all-combinations"` equate to all possible
-        permutations and combinations of the appropriate number of qubit labels
-        (deterined by the gate's dimension).
-        - `"all-edges"` equates to all the vertices, for 1Q gates, and all the
-        edges, for 2Q gates of the graphy given by `geometry`.
-        - `"arbitrary"` or `"*"` means that the corresponding gate can be placed
-        on any target qubits via an :class:`EmbeddingOpFactory` (uses less
-        memory but slower than `"all-permutations"`.
-
-        If a gate name (a key of `gatedict`) is not present in `availability`,
-        the default is `"all-edges"`.
-
-    geometry : {"line","ring","grid","torus"} or QubitGraph
-        The type of connectivity among the qubits, specifying a
-        graph used to define neighbor relationships.
 
     max_idle_weight : int, optional
         The maximum-weight for errors on the global idle gate.
@@ -1838,10 +1806,9 @@ def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
         this equals 1, for instance, then 1-qubit gates can have up to weight-2
         errors and 2-qubit gates can have up to weight-3 errors.
 
-    paramroot : {"CPTP", "H+S+A", "H+S", "S", "H+D+A", "D+A", "D"}
+    parameterization : {"CPTP", "H+S+A", "H+S", "S", "H+D+A", "D+A", "D"}
         The parameterization used to define which parameters need to be
-        amplified.  Note this is only the "root", e.g. you shouldn't pass
-        "H+S terms" here, since the latter is implied by "H+S" when necessary.
+        amplified.
 
     verbosity : int, optional
         The level of detail printed to stdout.  0 means silent.

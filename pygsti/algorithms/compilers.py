@@ -71,16 +71,16 @@ def compile_clifford(s, p, pspec=None, absolute_compilation=None, paulieq_compil
                      costfunction='2QGC:10:depth:1', prefixpaulis=False, paulirandomize=False,
                      rand_state=None):
     """
-    TODO: docstring updates on all fns in this module -- pspec no longer holds a compilation library!
-    Compiles an n-qubit Clifford gate into a circuit over a given model.
+    Compiles an n-qubit Clifford gate into a circuit over a given processor specification.
 
     Compiles an n-qubit Clifford gate, described by the symplectic matrix s and vector p, into
-    a circuit over the specified model, or, a standard model. Clifford gates/circuits can be converted
-    to, or sampled in, the symplectic representation using the functions in pygsti.tools.symplectic.
+    a circuit over the gates given by a processor specification or a standard processor. Clifford
+    gates/circuits can be converted to, or sampled in, the symplectic representation using the functions
+    in :module:`pygsti.tools.symplectic`.
 
-    The circuit created by this function will be over a user-specified model and respects any desired
-    connectivity, if a QubitProcessorSpec object is provided. Otherwise, it is over a canonical model containing
-    all-to-all CNOTs, Hadamard, Phase, 3 products of Hadamard and Phase, and the Pauli gates.
+    The circuit created by this function will be over the gates in the given processor spec, respecting its
+    connectivity, when a QubitProcessorSpec object is provided. Otherwise, it is over a canonical processor
+    containing all-to-all CNOTs, Hadamard, Phase, 3 products of Hadamard and Phase, and the Pauli gates.
 
     Parameters
     ----------
@@ -94,7 +94,7 @@ def compile_clifford(s, p, pspec=None, absolute_compilation=None, paulieq_compil
     pspec : QubitProcessorSpec, optional
         An nbar-qubit QubitProcessorSpec object that encodes the device that the Clifford is being compiled
         for, where nbar >= n. If this is specified, the output circuit is over the gates available
-        in this device. If this is None, the output circuit is over the "canonical" model of CNOT gates
+        in this device. If this is None, the output circuit is over the "canonical" processor of CNOT gates
         between all qubits, consisting of "H", "HP", "PH", "HPH", "I", "X", "Y" and "Z", which is the set
         used internally for the compilation. In most circumstances, the output will be more useful if a
         QubitProcessorSpec is provided.
@@ -107,6 +107,12 @@ def compile_clifford(s, p, pspec=None, absolute_compilation=None, paulieq_compil
 
         The ordering of the indices in (`s`,`p`) is w.r.t to ordering of the qubit labels in pspec.qubit_labels,
         unless `qubit_labels` is specified. Then, the ordering is taken w.r.t the ordering of the list `qubit_labels`.
+
+    absolute_compilation : CompilationRules
+        Rules for exactly (absolutely) compiling the "native" gates of `pspec` into clifford gates.
+
+    paulieq_compilation : CompilationRules
+       Rules for compiling, up to single-qubit Pauli gates, the "native" gates of `pspec` into clifford gates.
 
     qubit_labels : list, optional
         Required if the Clifford to compile is over less qubits than `pspec`. In this case this is a
@@ -247,10 +253,10 @@ def compile_symplectic(s, pspec=None, absolute_compilation=None, paulieq_compila
     Creates a :class:`Circuit` that implements a Clifford gate given in the symplectic representation.
 
     Returns an n-qubit circuit that implements an n-qubit Clifford gate that is described by the symplectic
-    matrix `s` and *some* vector `p`. The circuit created by this function will be over a user-specified model
-    and respecting any desired connectivity, if a QubitProcessorSpec object is provided. Otherwise, it is over a
-    canonical model containing all-to-all CNOTs, Hadamard, Phase, 3 products of Hadamard and Phase, and the
-    Pauli gates.
+    matrix `s` and *some* vector `p`. The circuit created by this function will be over the gates in the processor
+    specification `pspec`, respecting any desired connectivity if a QubitProcessorSpec object is provided. Otherwise,
+    the circuit is over the gates of a canonical processor containing all-to-all CNOTs, Hadamard, Phase, 3 products
+    of Hadamard and Phase, and the Pauli gates.
 
     Parameters
     ----------
@@ -260,7 +266,7 @@ def compile_symplectic(s, pspec=None, absolute_compilation=None, paulieq_compila
     pspec : QubitProcessorSpec, optional
         An nbar-qubit QubitProcessorSpec object that encodes the device that `s` is being compiled
         for, where nbar >= n. If this is specified, the output circuit is over the gates available
-        in this device. If this is None, the output circuit is over the "canonical" model of CNOT gates
+        in this device. If this is None, the output circuit is over the "canonical" processor of CNOT gates
         between all qubits, consisting of "H", "HP", "PH", "HPH", "I", "X", "Y" and "Z", which is the set
         used internally for the compilation.
 
@@ -272,6 +278,12 @@ def compile_symplectic(s, pspec=None, absolute_compilation=None, paulieq_compila
 
         The indexing `s` is assumed to be the same as that in the list pspec.qubit_labels, unless `qubit_labels`
         is specified. Then, the ordering is taken w.r.t the ordering of the list `qubit_labels`.
+
+    absolute_compilation : CompilationRules
+        Rules for exactly (absolutely) compiling the "native" gates of `pspec` into clifford gates.
+
+    paulieq_compilation : CompilationRules
+       Rules for compiling, up to single-qubit Pauli gates, the "native" gates of `pspec` into clifford gates.
 
     qubit_labels : list, optional
         Required if the Clifford to compile is over less qubits than `pspec`. In this case this is a
@@ -458,7 +470,7 @@ def compile_symplectic(s, pspec=None, absolute_compilation=None, paulieq_compila
                     pcircuit = _Circuit(layer_labels=[_Label(paulilist[rand_state.randint(4)], pspec.qubit_labels[k])
                                                       for k in range(n)],
                                         line_labels=pspec.qubit_labels, editable=True)  # , identity=pspec.identity)
-                # Compile the circuit into the native model, using an "absolute" compilation -- Pauli-equivalent is
+                # Compile the circuit into the native gate set, using an "absolute" compilation -- Pauli-equivalent is
                 # not sufficient here.
                 # identity=pspec.identity,
                 oneQgate_relations = pspec.compute_one_qubit_gate_relations()
@@ -491,7 +503,7 @@ def _compile_symplectic_using_rogge_algorithm(s, pspec=None, qubit_labels=None, 
     pspec : QubitProcessorSpec, optional
         An nbar-qubit QubitProcessorSpec object that encodes the device that `s` is being compiled
         for, where nbar >= n. If this is specified, the output circuit is over the gates available
-        in this device. If this is None, the output circuit is over the "canonical" model of CNOT gates
+        in this device. If this is None, the output circuit is over the "canonical" processor of CNOT gates
         between all qubits, consisting of "H", "HP", "PH", "HPH", "I", "X", "Y" and "Z", which is the set
         used internally for the compilation.
 
@@ -611,7 +623,7 @@ def _compile_symplectic_using_ogge_algorithm(s, eliminationorder, pspec=None, pa
     pspec : QubitProcessorSpec, optional
         An nbar-qubit QubitProcessorSpec object that encodes the device that `s` is being compiled
         for, where nbar >= n. If this is specified, the output circuit is over the gates available
-        in this device. If this is None, the output circuit is over the "canonical" model of CNOT gates
+        in this device. If this is None, the output circuit is over the "canonical" processor of CNOT gates
         between all qubits, consisting of "H", "HP", "PH", "HPH", "I", "X", "Y" and "Z", which is the set
         used internally for the compilation.
 
@@ -1006,7 +1018,7 @@ def _compile_symplectic_using_riag_algoritm(s, pspec, paulieq_compilation, qubit
     pspec : QubitProcessorSpec
         An nbar-qubit QubitProcessorSpec object that encodes the device that `s` is being compiled
         for, where nbar >= n. If this is specified, the output circuit is over the gates available
-        in this device. If this is None, the output circuit is over the "canonical" model of CNOT gates
+        in this device. If this is None, the output circuit is over the "canonical" processor of CNOT gates
         between all qubits, consisting of "H", "HP", "PH", "HPH", "I", "X", "Y" and "Z", which is the set
         used internally for the compilation.
 
@@ -1018,6 +1030,9 @@ def _compile_symplectic_using_riag_algoritm(s, pspec, paulieq_compilation, qubit
 
         The indexing `s` is assumed to be the same as that in the list pspec.qubit_labels, unless `qubit_labels`
         is specified. Then, the ordering is taken w.r.t the ordering of the list `qubit_labels`.
+
+    paulieq_compilation : CompilationRules
+       Rules for compiling, up to single-qubit Pauli gates, the "native" gates of `pspec` into clifford gates.
 
     qubit_labels : List, optional
         Required if the Clifford to compile is over less qubits than `pspec`. In this case this is a
@@ -1069,7 +1084,7 @@ def _compile_symplectic_using_riag_algoritm(s, pspec, paulieq_compilation, qubit
     mincost = _np.inf
     for i in range(iterations):
         circuit = _compile_symplectic_using_iag_algorithm(
-            s, pspec, paulieq_compilation, qubit_labels=qubit_labels, cnotalg=cnotalg, cargs=cargs,
+            s, pspec, qubit_labels=qubit_labels, cnotalg=cnotalg, cargs=cargs,
             check=False, rand_state=rand_state)
 
         # Change to the native gate library
@@ -1097,7 +1112,7 @@ def _compile_symplectic_using_riag_algoritm(s, pspec, paulieq_compilation, qubit
     return bestcircuit
 
 
-def _compile_symplectic_using_iag_algorithm(s, pspec, compilation, qubit_labels=None, cnotalg='COCAGE', cargs=[],
+def _compile_symplectic_using_iag_algorithm(s, pspec, qubit_labels=None, cnotalg='COCAGE', cargs=[],
                                             check=True, rand_state=None):
     """
     Creates a :class:`Circuit` that implements a Clifford gate using the IAG algorithm.
@@ -1105,7 +1120,7 @@ def _compile_symplectic_using_iag_algorithm(s, pspec, compilation, qubit_labels=
     A single iteration of the algorithm in _compile_symplectic_using_riag_algoritm(). See that functions
     docstring for more information. Note that it is normallly better to access this algorithm through that
     function even when only a single iteration of the randomization is desired: this function does *not* change
-    into the native model.
+    into the native gate library of `pspec`.
 
     Parameters
     ----------
@@ -1262,7 +1277,7 @@ def compile_cnot_circuit(s, pspec, compilation, qubit_labels=None, algorithm='CO
     pspec : QubitProcessorSpec
         An nbar-qubit QubitProcessorSpec object that encodes the device that `s` is being compiled
         for, where nbar >= n. If this is specified, the output circuit is over the gates available
-        in this device. If this is None, the output circuit is over the "canonical" model of CNOT gates
+        in this device. If this is None, the output circuit is over the "canonical" processor of CNOT gates
         between all qubits, consisting of "H", "HP", "PH", "HPH", "I", "X", "Y" and "Z", which is the set
         used internally for the compilation.
 
@@ -1274,6 +1289,9 @@ def compile_cnot_circuit(s, pspec, compilation, qubit_labels=None, algorithm='CO
 
         The indexing `s` is assumed to be the same as that in the list pspec.qubit_labels, unless `qubit_labels`
         is specified. Then, the ordering is taken w.r.t the ordering of the list `qubit_labels`.
+
+    compilation : CompilationRules
+       Rules for compiling the "native" gates of `pspec` into clifford gates, used if `compile_to_native==True`.
 
     qubit_labels : list, optional
         Required if the Clifford to compile is over less qubits than `pspec`. In this case this is a
@@ -1301,7 +1319,7 @@ def compile_cnot_circuit(s, pspec, compilation, qubit_labels=None, algorithm='CO
                 is fixed to eliminate qubits with the worse connectivity before those with better connectivity.
 
     compile_to_native : bool, optional
-        Whether the compilation in `pspec` should be used to give the circuit in terms of the gates of the native model.
+        Whether the circuit should be given in terms of the native gates of the processor defined in `pspec`.
 
     check : bool, optional
         Whether to check the output is correct.
@@ -1388,7 +1406,7 @@ def compile_cnot_circuit(s, pspec, compilation, qubit_labels=None, algorithm='CO
 
     else: raise ValueError("The choice of algorithm is invalid!")
 
-    # If a compilation is specified, we compile into the native model.
+    # If a compilation is specified, we compile into the native gates.
     if compile_to_native:
         oneQgate_relations = pspec.compute_one_qubit_gate_relations()
         circuit = circuit.copy(editable=True)
@@ -1522,7 +1540,7 @@ def _compile_cnot_circuit_using_ocage_algorithm(s, pspec, qubitorder, qubit_labe
     An ordered and connectivity-adjusted Gaussian-elimination (OCAGE) algorithm for compiling a CNOT circuit.
 
     The algorithm takes as input a symplectic matrix `s`, that defines the action of a CNOT circuit, and it
-    generates a CNOT circuit (converted to a native model, if requested) that implements the same unitary.
+    generates a CNOT circuit (converted to a native gate set, if requested) that implements the same unitary.
 
     The algorithm works by mapping s -> identity using CNOTs acting from the LHS and RHS. I.e., it finds two
     CNOT circuits Ccnot1, Ccnot2 such that symp(Ccnot1) * s * symp(Ccnot2) = identity (where symp(c) is the
@@ -2005,7 +2023,7 @@ def compile_stabilizer_state(s, p, pspec, absolute_compilation, paulieq_compilat
     """
     Generates a circuit to create the stabilizer state from the standard input state |0,0,0,...>.
 
-    The stabilizer state is specified by `s` and `p`. The circuit returned is over the model of
+    The stabilizer state is specified by `s` and `p`. The circuit returned is over the gates in
     the processor spec.  See :function:`compile_stabilizer_state()` for the inverse of this.
 
     Parameters
@@ -2023,7 +2041,7 @@ def compile_stabilizer_state(s, p, pspec, absolute_compilation, paulieq_compilat
     pspec, pspec : QubitProcessorSpec, optional
         An nbar-qubit QubitProcessorSpec object that encodes the device that the stabilizer is being compiled
         for, where nbar >= n. If this is specified, the output circuit is over the gates available
-        in this device. If this is None, the output circuit is over the "canonical" model of CNOT gates
+        in this device. If this is None, the output circuit is over the "canonical" processor of CNOT gates
         between all qubits, consisting of "H", "HP", "PH", "HPH", "I", "X", "Y" and "Z", which is the set
         used internally for the compilation. In most circumstances, the output will be more useful if a
         QubitProcessorSpec is provided.
@@ -2036,6 +2054,12 @@ def compile_stabilizer_state(s, p, pspec, absolute_compilation, paulieq_compilat
 
         The ordering of the indices in (`s`,`p`) is w.r.t to ordering of the qubit labels in pspec.qubit_labels,
         unless `qubit_labels` is specified. Then, the ordering is taken w.r.t the ordering of the list `qubit_labels`.
+
+    absolute_compilation : CompilationRules
+        Rules for exactly (absolutely) compiling the "native" gates of `pspec` into clifford gates.
+
+    paulieq_compilation : CompilationRules
+       Rules for compiling, up to single-qubit Pauli gates, the "native" gates of `pspec` into clifford gates.
 
     qubit_labels : List, optional
         Required if the stabilizer state is over less qubits than `pspec`. In this case this is a
@@ -2174,7 +2198,7 @@ def compile_stabilizer_measurement(s, p, pspec, absolute_compilation, paulieq_co
     """
     Generates a circuit to map the stabilizer state to the standard state |0,0,0,...>.
 
-    The stabilizer state is specified by `s` and `p`.  The circuit returned is over the model of the
+    The stabilizer state is specified by `s` and `p`.  The circuit returned is over the gates in the
     processor spec `pspec`.  See :function"`compile_stabilizer_state()` for the inverse of this. So,
     this circuit followed by a Z-basis measurement can be used to simulate a projection onto the
     stabilizer state C|0,0,0,...> where C is the Clifford represented by `s` and `p`.
@@ -2192,10 +2216,10 @@ def compile_stabilizer_measurement(s, p, pspec, absolute_compilation, paulieq_co
         when acting on |0,0,0,...>, generates the stabilizer state that we need to map to |0,0,0,...>.
         So `p` is not unique.
 
-    pspec, pspec : QubitProcessorSpec, optional
+    pspec : QubitProcessorSpec, optional
         An nbar-qubit QubitProcessorSpec object that encodes the device that the stabilizer is being compiled
         for, where nbar >= n. If this is specified, the output circuit is over the gates available
-        in this device. If this is None, the output circuit is over the "canonical" model of CNOT gates
+        in this device. If this is None, the output circuit is over the "canonical" processor of CNOT gates
         between all qubits, consisting of "H", "HP", "PH", "HPH", "I", "X", "Y" and "Z", which is the set
         used internally for the compilation. In most circumstances, the output will be more useful if a
         QubitProcessorSpec is provided.
@@ -2208,6 +2232,12 @@ def compile_stabilizer_measurement(s, p, pspec, absolute_compilation, paulieq_co
 
         The ordering of the indices in (`s`,`p`) is w.r.t to ordering of the qubit labels in pspec.qubit_labels,
         unless `qubit_labels` is specified. Then, the ordering is taken w.r.t the ordering of the list `qubit_labels`.
+
+    absolute_compilation : CompilationRules
+        Rules for exactly (absolutely) compiling the "native" gates of `pspec` into clifford gates.
+
+    paulieq_compilation : CompilationRules
+       Rules for compiling, up to single-qubit Pauli gates, the "native" gates of `pspec` into clifford gates.
 
     qubit_labels : List, optional
         Required if the stabilizer state is over less qubits than `pspec`. In this case this is a

@@ -893,7 +893,6 @@ class CloudNoiseModel(_ImplicitOpModel):
 #         model.  See :method:`CloudnoiseModel.__init__` for details.
 #
 #     sparse_lindblad_basis : bool, optional
-#         TODO - update docstring and probabaly rename this and arg below
 #         Whether the embedded Lindblad-parameterized gates within the constructed
 #         gate are represented as sparse or dense matrices.  (This is determied by
 #         whether they are constructed using sparse basis matrices.)

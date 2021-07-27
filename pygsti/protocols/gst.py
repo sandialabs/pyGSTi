@@ -62,16 +62,33 @@ class HasProcessorSpec(object):
 
     def create_target_model(self, gate_type='auto', prep_type='auto', povm_type='auto'):
         """
-        TODO: docstring
+        Create a target model for this experiment design.
 
-        auto gate type is static
-        auto spam type means match gate type or 'computational' if gate_type is auto
+        An explicit model is created based on the processor spec.  If a different type
+        of model is needed, consider creating the model manually via the construction
+        functions in the `pygsti.models.modelconstruction` module using this experiment
+        design's `.processor_spec` attribute.
+
+        Parameters
+        ----------
+        gate_type : str, optional
+            The type of gate objects to create.  Currently `"auto"` is the same as `"static"`.
+
+        prep_type : str, optional
+            The type of state preparation objects to create.  `"auto"` selects a type based
+            on the value of `gate_type`.
+
+        povm_type : str, optional
+            The type of POVM objects to create.  `"auto"` selects a type based
+            on the value of `gate_type`.
 
         Returns
         -------
         Model
         """
         # Create a static explicit model as the target model, based on the processor spec
+        if gate_type == "auto":
+            gate_type = "static"
         if prep_type == "auto":
             prep_type = _states.get_state_type_from_op_type(gate_type)
         if povm_type == "auto":
@@ -1805,7 +1822,7 @@ def _compute_robust_scaling(scale_typ, objfn_cache, mdc_objfn):
 def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options, verbosity):
     """
     Create a wildcard budget for a model estimate.
-    TODO: docstring (update)
+    TODO: update docstring
 
     Parameters
     ----------
@@ -2066,7 +2083,7 @@ def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options,
 def _reoptimize_with_weights(mdc_objfn, circuit_weights_dict, optimizer, verbosity):
     """
     Re-optimize a model after data counts have been scaled by circuit weights.
-    TODO: docstring
+    TODO: update docstring
 
     Parameters
     ----------

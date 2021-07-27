@@ -1532,7 +1532,34 @@ class DataSet(object):
     def add_count_arrays(self, circuit, outcome_index_array, count_array,
                          record_zero_counts=True, aux=None):
         """
-        TODO: docstring
+        Add the outcomes for a single circuit, formatted as raw data arrays.
+
+        Parameters
+        ----------
+        circuit : Circuit
+            The circuit to add data for.
+
+        outcome_index_array : numpy.ndarray
+            An array of outcome indices, which must be values of `self.olIndex`
+            (which maps outcome labels to indices).
+
+        count_array : numpy.ndarray
+            An array of integer (or sometimes floating point) counts, one corresponding
+            to each outcome index (element of `outcome_index_array`).
+
+        record_zero_counts : bool, optional
+            Whether zero counts (zeros in `count_array` should be stored explicitly or
+            not stored and inferred.  Setting to False reduces the space taken by data
+            sets containing lots of zero counts, but makes some objective function evaluations
+            less precise.
+
+        aux : dict or None, optional
+            If not `None` a dictionary of user-defined auxiliary information that
+            should be associated with this circuit.
+
+        Returns
+        -------
+        None
         """
         if self.collisionAction == "aggregate" and circuit in self:
             iNext = int(max(self[circuit].time)) + 1 \

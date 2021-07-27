@@ -172,7 +172,6 @@ class LocalNoiseModel(_ImplicitOpModel):
     #                           independent_gates=False, ensure_composed_gates=False,
     #                           global_idle=None):
     #     """
-    #     TODO: docstring
     #     Creates a n-qubit model, usually of ideal gates, that is capable of describing "local noise".
     #
     #     By "local noise" we mean noise/error that only acts on the

@@ -19,15 +19,19 @@ try:
 except ImportError:
     # If cython is unavailable, just make a pure-python base class to fill in.
     class OpRep:
+        """ The base class for all operation representation classes """
         pass
 
     class StateRep:
+        """ The base class for all state representation classes """
         pass
 
     class EffectRep:
+        """ The base class for all POVM effect representation classes """
         pass
 
     class TermRep:
+        """ The base class for rank-1 term representation classes """
         pass
 
     class PolynomialRep(dict):
@@ -67,11 +71,41 @@ except ImportError:
                 self.update(int_coeff_dict)
 
         def reinit(self, int_coeff_dict):
-            """ TODO: docstring """
+            """
+            Reinitialize this polynomial using new coefficents.
+
+            Parameters
+            ----------
+            int_coeff_dict : dict
+                The new coefficient dictionary to use in place of the current one. This
+                dictionaries keys are "integerized" (by self._vinds_to_int) tuples of
+                variable indices, and values are the polynomial coefficients themselves.
+                Note that an "intergerized" tuple of variable indices is actually a *tuple*
+                of integers, even through it acts as a single (extra long) integer.
+
+            Returns
+            -------
+            None
+            """
             self.clear()
             self.update(int_coeff_dict)
 
         def mapvec_indices_inplace(self, mapfn_as_vector):
+            """
+            Apply a given mapping vector (function) to all of the variable indices of this polynomial.
+
+            This operation is performed in-place, updating the contents of this polynomial object.
+
+            Parameters
+            ----------
+            mapfn_as_vector : numpy.ndarray
+                An array of integers such that `mapfn_as_vector[old_variable_index] = new_variable_index`.
+                An array is used instead of a function for perfomance.
+
+            Returns
+            -------
+            None
+            """
             new_items = {}
             for k, v in self.items():
                 new_vinds = tuple((mapfn_as_vector[j] for j in self._int_to_vinds(k)))
@@ -476,6 +510,15 @@ SMALL = 1e-5
 
 
 class StockTermRep(TermRep):
+    """
+    A basic term representation that just holds other representation types (polys, states, effects, and gates).
+
+    This "stock" class is in many cases entirely sufficient of an evotype, and is used by
+    default when an evotype doesn't define its own term-representation types so that evotypes
+    don't need to define term-rep types unless they're doing something that is non-standard.
+
+    TODO: rest of StockTermRep docstring
+    """
     # just a container for other reps (polys, states, effects, and gates)
 
     @classmethod

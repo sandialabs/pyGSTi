@@ -4041,7 +4041,12 @@ class Circuit(object):
 
         Parameters
         ----------
-        model : TODO docstring
+        model : Model
+            The model used to provide necessary details regarding the expansion, including:
+
+            - default SPAM layers
+            - definitions of instrument-containing layers
+            - expansions of individual instruments and POVMs
 
         Returns
         -------

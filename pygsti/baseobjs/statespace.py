@@ -20,10 +20,8 @@ class StateSpace(object):
     """
     Base class for defining a state space (Hilbert or Hilbert-Schmidt space).
 
-    This class mainly just sets the API for a "state space" in pyGSTi, accessed
+    This base class just sets the API for a "state space" in pyGSTi, accessed
     as the direct sum of one or more tensor products of Hilbert spaces.
-
-    TODO: docstrings for this module
     """
 
     @classmethod
@@ -49,29 +47,33 @@ class StateSpace(object):
             return QubitSpace(obj)
         return ExplicitStateSpace(obj)
 
-    def is_entirely_qubits(self):
-        try:
-            self.num_qubits
-            return True
-        except Exception:
-            return False
-
     @property
     def udim(self):
+        """
+        Integer Hilbert (unitary operator) space dimension of this quantum state space.
+
+        Raises an error if this space is *not* a quantum state space.
+        """
         raise NotImplementedError("Derived classes should implement this!")
 
     @property
     def dim(self):
+        """Integer Hilbert-Schmidt (super-operator) or classical dimension of this state space."""
         raise NotImplementedError("Derived classes should implement this!")
 
     @property
     def num_qubits(self):  # may raise ValueError if the state space doesn't consist entirely of qubits
+        """
+        The number of qubits in this quantum state space.
+
+        Raises a ValueError if this state space doesn't consist entirely of qubits.
+        """
         raise NotImplementedError("Derived classes should implement this!")
 
     @property
     def num_tensor_product_blocks(self):
         """
-        Get the number of tensor-product blocks which are direct-summed to get the final state space.
+        The number of tensor-product blocks which are direct-summed to get the final state space.
 
         Returns
         -------
@@ -82,7 +84,7 @@ class StateSpace(object):
     @property
     def tensor_product_blocks_labels(self):
         """
-        Get the labels for all the tensor-product blocks.
+        The labels for all the tensor-product blocks.
 
         Returns
         -------
@@ -93,7 +95,7 @@ class StateSpace(object):
     @property
     def tensor_product_blocks_dimensions(self):
         """
-        Get the superoperator dimensions for all the tensor-product blocks.
+        The superoperator dimensions for all the tensor-product blocks.
 
         Returns
         -------
@@ -104,7 +106,7 @@ class StateSpace(object):
     @property
     def tensor_product_blocks_udimensions(self):
         """
-        Get the unitary-operator dimensions for all the tensor-product blocks.
+        The unitary operator dimensions for all the tensor-product blocks.
 
         Returns
         -------
@@ -115,7 +117,7 @@ class StateSpace(object):
     @property
     def tensor_product_blocks_types(self):
         """
-        Get the type (quantum vs classical) of all the tensor-product blocks.
+        The type (quantum vs classical) of all the tensor-product blocks.
 
         Returns
         -------
@@ -124,20 +126,68 @@ class StateSpace(object):
         raise NotImplementedError("Derived classes should implement this!")
 
     def label_dimension(self, label):
+        """
+        The superoperator dimension of the given label (from any tensor product block)
+
+        Parameters
+        ----------
+        label : str or int
+            The label whose dimension should be retrieved.
+
+        Returns
+        -------
+        int
+        """
         raise NotImplementedError("Derived classes should implement this!")
 
     def label_udimension(self, label):
+        """
+        The unitary operator dimension of the given label (from any tensor product block)
+
+        Parameters
+        ----------
+        label : str or int
+            The label whose dimension should be retrieved.
+
+        Returns
+        -------
+        int
+        """
         raise NotImplementedError("Derived classes should implement this!")
 
     def label_tensor_product_block_index(self, label):
+        """
+        The index of the tensor product block containing the given label.
+
+        Parameters
+        ----------
+        label : str or int
+            The label whose index should be retrieved.
+
+        Returns
+        -------
+        int
+        """
         raise NotImplementedError("Derived classes should implement this!")
 
     def label_type(self, label):
+        """
+        The type (quantum or classical) of the given label (from any tensor product block).
+
+        Parameters
+        ----------
+        label : str or int
+            The label whose type should be retrieved.
+
+        Returns
+        -------
+        str
+        """
         raise NotImplementedError("Derived classes should implement this!")
 
     def tensor_product_block_labels(self, i_tpb):
         """
-        Get the labels for the `iTBP`-th tensor-product block.
+        The labels for the `iTBP`-th tensor-product block.
 
         Parameters
         ----------
@@ -152,7 +202,7 @@ class StateSpace(object):
 
     def tensor_product_block_dimensions(self, i_tpb):
         """
-        Get the superoperator dimensions for the factors in the `iTBP`-th tensor-product block.
+        The superoperator dimensions for the factors in the `iTBP`-th tensor-product block.
 
         Parameters
         ----------
@@ -167,7 +217,7 @@ class StateSpace(object):
 
     def tensor_product_block_udimensions(self, i_tpb):
         """
-        Get the unitary-operator dimensions for the factors in the `iTBP`-th tensor-product block.
+        The unitary-operator dimensions for the factors in the `iTBP`-th tensor-product block.
 
         Parameters
         ----------
@@ -191,6 +241,22 @@ class StateSpace(object):
         return _copy.deepcopy(self)
 
     def is_compatible_with(self, other_state_space):
+        """
+        Whether another state space is compatible with this one.
+
+        Two state spaces are considered "compatible" when their overall dimensions
+        agree (even if their tensor product block structure and labels do not).
+        (This checks whether the Hilbert spaces are isomorphic.)
+
+        Parameters
+        ----------
+        other_state_space : StateSpace
+            The state space to check compatibility with.
+
+        Returns
+        -------
+        bool
+        """
         try:
             if self.num_qubits == other_state_space.num_qubits:
                 return True
@@ -198,6 +264,20 @@ class StateSpace(object):
             if self.udim == other_state_space.udim:
                 return True
         return False
+
+    def is_entirely_qubits(self):
+        """
+        Whether this state space is just the tensor product of qubit subspaces.
+
+        Returns
+        -------
+        bool
+        """
+        try:
+            self.num_qubits
+            return True
+        except Exception:
+            return False
 
     def is_entire_space(self, labels):
         """
@@ -385,14 +465,21 @@ class QubitSpace(StateSpace):
 
     @property
     def udim(self):
+        """
+        Integer Hilbert (unitary operator) space dimension of this quantum state space.
+        """
         return 2**self.num_qubits
 
     @property
     def dim(self):
+        """Integer Hilbert-Schmidt (super-operator) or classical dimension of this state space."""
         return 4**self.num_qubits
 
     @property
     def num_qubits(self):  # may raise ValueError if the state space doesn't consist entirely of qubits
+        """
+        The number of qubits in this quantum state space.
+        """
         return len(self.qubit_labels)
 
     @property
@@ -451,24 +538,72 @@ class QubitSpace(StateSpace):
         return (('Q',) * self.num_qubits,)
 
     def label_dimension(self, label):
+        """
+        The superoperator dimension of the given label (from any tensor product block)
+
+        Parameters
+        ----------
+        label : str or int
+            The label whose dimension should be retrieved.
+
+        Returns
+        -------
+        int
+        """
         if label in self.qubit_labels:
             return 4
         else:
             raise KeyError("Invalid qubit label: %s" % label)
 
     def label_udimension(self, label):
+        """
+        The unitary operator dimension of the given label (from any tensor product block)
+
+        Parameters
+        ----------
+        label : str or int
+            The label whose dimension should be retrieved.
+
+        Returns
+        -------
+        int
+        """
         if label in self.qubit_labels:
             return 2
         else:
             raise KeyError("Invalid qubit label: %s" % label)
 
     def label_tensor_product_block_index(self, label):
+        """
+        The index of the tensor product block containing the given label.
+
+        Parameters
+        ----------
+        label : str or int
+            The label whose index should be retrieved.
+
+        Returns
+        -------
+        int
+        """
         if label in self.qubit_labels:
             return 0
         else:
             raise KeyError("Invalid qubit label: %s" % label)
 
     def label_type(self, label):
+        """
+        The type (quantum or classical) of the given label (from any tensor product block).
+
+        Parameters
+        ----------
+        label : str or int
+            The label whose type should be retrieved.
+
+        Returns
+        -------
+        str
+        """
         if label in self.qubit_labels:
             return 'Q'
         else:
@@ -652,14 +787,25 @@ class ExplicitStateSpace(StateSpace):
 
     @property
     def udim(self):
+        """
+        Integer Hilbert (unitary operator) space dimension of this quantum state space.
+
+        Raises an error if this space is *not* a quantum state space.
+        """
         return self._udim
 
     @property
     def dim(self):
+        """Integer Hilbert-Schmidt (super-operator) or classical dimension of this state space."""
         return self._dim
 
     @property
     def num_qubits(self):  # may raise ValueError if the state space doesn't consist entirely of qubits
+        """
+        The number of qubits in this quantum state space.
+
+        Raises a ValueError if this state space doesn't consist entirely of qubits.
+        """
         if self._nqubits is None:
             raise ValueError("This state space is not a tensor product of qubit factors spaces!")
         return self._nqubits
@@ -667,7 +813,7 @@ class ExplicitStateSpace(StateSpace):
     @property
     def num_tensor_product_blocks(self):
         """
-        Get the number of tensor-product blocks which are direct-summed to get the final state space.
+        The number of tensor-product blocks which are direct-summed to get the final state space.
 
         Returns
         -------
@@ -678,7 +824,7 @@ class ExplicitStateSpace(StateSpace):
     @property
     def tensor_product_blocks_labels(self):
         """
-        Get the labels for all the tensor-product blocks.
+        The labels for all the tensor-product blocks.
 
         Returns
         -------
@@ -689,7 +835,7 @@ class ExplicitStateSpace(StateSpace):
     @property
     def tensor_product_blocks_dimensions(self):
         """
-        Get the superoperator dimensions for all the tensor-product blocks.
+        The superoperator dimensions for all the tensor-product blocks.
 
         Returns
         -------
@@ -700,7 +846,7 @@ class ExplicitStateSpace(StateSpace):
     @property
     def tensor_product_blocks_udimensions(self):
         """
-        Get the unitary operator dimensions for all the tensor-product blocks.
+        The unitary operator dimensions for all the tensor-product blocks.
 
         Returns
         -------
@@ -711,7 +857,7 @@ class ExplicitStateSpace(StateSpace):
     @property
     def tensor_product_blocks_types(self):
         """
-        Get the type (quantum vs classical) of all the tensor-product blocks.
+        The type (quantum vs classical) of all the tensor-product blocks.
 
         Returns
         -------
@@ -720,15 +866,63 @@ class ExplicitStateSpace(StateSpace):
         return tuple([tuple([self.labeltypes[lbl] for lbl in tpb_labels]) for tpb_labels in self.labels])
 
     def label_dimension(self, label):
+        """
+        The superoperator dimension of the given label (from any tensor product block)
+
+        Parameters
+        ----------
+        label : str or int
+            The label whose dimension should be retrieved.
+
+        Returns
+        -------
+        int
+        """
         return self.label_dims[label]
 
     def label_udimension(self, label):
+        """
+        The unitary operator dimension of the given label (from any tensor product block)
+
+        Parameters
+        ----------
+        label : str or int
+            The label whose dimension should be retrieved.
+
+        Returns
+        -------
+        int
+        """
         return self.label_udims[label]
 
     def label_tensor_product_block_index(self, label):
+        """
+        The index of the tensor product block containing the given label.
+
+        Parameters
+        ----------
+        label : str or int
+            The label whose index should be retrieved.
+
+        Returns
+        -------
+        int
+        """
         return self.tpb_index[label]
 
     def label_type(self, label):
+        """
+        The type (quantum or classical) of the given label (from any tensor product block).
+
+        Parameters
+        ----------
+        label : str or int
+            The label whose type should be retrieved.
+
+        Returns
+        -------
+        str
+        """
         return self.labeltypes[label]
 
     #REMOVE
@@ -755,6 +949,18 @@ class ExplicitStateSpace(StateSpace):
 
 
 def default_space_for_dim(dim):
+    """
+    Create a state space for a given superoperator dimension.
+
+    Parameters
+    ----------
+    dim : int
+        The dimension.
+
+    Returns
+    -------
+    StateSpace
+    """
     nqubits = int(round(_np.log2(dim) / 2))
     if 4**nqubits == dim:
         return QubitSpace(nqubits)
@@ -765,6 +971,18 @@ def default_space_for_dim(dim):
 
 
 def default_space_for_udim(udim):
+    """
+    Create a state space for a given unitary operator dimension.
+
+    Parameters
+    ----------
+    dim : int
+        The dimension.
+
+    Returns
+    -------
+    StateSpace
+    """
     nqubits = int(round(_np.log2(udim)))
     if 2**nqubits == udim:
         return QubitSpace(nqubits)
@@ -773,4 +991,16 @@ def default_space_for_udim(udim):
 
 
 def default_space_for_num_qubits(num_qubits):
+    """
+    Create a state space for a given number of qubits.
+
+    Parameters
+    ----------
+    num_qubits : int
+        The number of qubits.
+
+    Returns
+    -------
+    QubitStateSpace
+    """
     return QubitSpace(num_qubits)

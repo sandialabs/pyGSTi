@@ -35,9 +35,36 @@ class CompilationError(Exception):
 
 
 class CompilationRules(object):
+    """
+    A prescription for creating ("compiling") a set of gates based on another set.
 
+    A :class:`CompilationRules` object contains a dictionary of gate unitaries,
+    much like a :class:`ProcessorSpec`, and instructions for creating these gates.
+    The instructions can be given explicitly as circuits corresponding to a given gate,
+    or implicitly as functions.  Instructions can be given for gate *names* (e.g. `"Gx"`),
+    regardless of the target state space labels of the gate, as well as for specific
+    gate locations (e.g. `("Gx",2)`).
+
+    Parameters
+    ----------
+    compilation_rules_dict : dict
+        A dictionary of initial rules, which can be specified in multiple formats.
+        NOTE: currently this argument isn't wired up, and must be left as `None`.
+    """
     @classmethod
     def cast(cls, obj):
+        """
+        Convert an object into compilation rules, if it isn't already.
+
+        Parameters
+        ----------
+        obj : object
+            The object to convert.
+
+        Returns
+        -------
+        CompilationRules
+        """
         if isinstance(obj, CompilationRules): return obj
         return cls(obj)
 
@@ -50,6 +77,30 @@ class CompilationRules(object):
             raise NotImplementedError("Need to convert compilation_rules_dict into info")
 
     def add_compilation_rule(self, gate_name, template_circuit_or_fn, unitary=None):
+        """
+        Add a compilation rule for a gate *name*, given as a circuit or function.
+
+        Parameters
+        ----------
+        gate_name : str
+            The gate name to add a rule for.
+
+        template_circuit_or_fn : Circuit or callable
+            The rule.  This can be specified as either a circuit or as a function.  If a
+            circuit is given, it must be on the gate's local state space, assumed to be
+            a k-qubit space (for a k-qubit gate) with qubit labels 0 to k-1.  That is,
+            the circuit must have line labels equal to `0...k-1`.  If a function if given,
+            the function must take as a single argument a tuple of state space labels that
+            specify the target labels of the gate.
+
+        unitary : numpy.ndarray
+            The unitary corresponding to the gate.  This can be left as `None` if
+            `gate_name` names a standard or internal gate known to pyGSTi.
+
+        Returns
+        -------
+        None
+        """
         std_gate_unitaries = _itgs.standard_gatename_unitaries()
         std_gate_unitaries.update(_itgs.internal_gate_unitaries())  # internal gates ok too?
         if unitary is None:
@@ -63,6 +114,27 @@ class CompilationRules(object):
             self.local_templates[gate_name] = template_circuit_or_fn
 
     def add_specific_compilation_rule(self, gate_label, circuit, unitary):
+        """
+        Add a compilation rule for a gate at a specific location (target labels)
+
+        Parameters
+        ----------
+        gate_label : Label
+            The gate label to add a rule for.  Includes the gate's name and its target
+            state space labels (`gate_label.sslbls`).
+
+        circuit : Circuit
+            The rule, given as a circuit on the gate's local state space, i.e. the circuit's
+            line labels should be the same as `gate_label.sslbls`.
+
+        unitary : numpy.ndarray
+            The unitary corresponding to the gate.  This can be left as `None` if
+            `gate_label.name` names a standard or internal gate known to pyGSTi.
+
+        Returns
+        -------
+        None
+        """
         std_gate_unitaries = _itgs.standard_gatename_unitaries()
         std_gate_unitaries.update(_itgs.internal_gate_unitaries())  # internal gates ok too?
         if gate_label.name not in self.gate_unitaries:
@@ -73,17 +145,26 @@ class CompilationRules(object):
         self.specific_compilations[gate_label] = circuit
 
     def create_aux_info(self):
-        """ TODO: docstring -- compute any aux_info to be added to processorspec when
-         compiling with these CompilationRules"""
+        """
+        Create auxiliary information that should be stored along with the compilation rules herein.
+
+        (Currently unused, but perhaps useful in the future.)
+
+        Returns
+        -------
+        dict
+        """
         return {}
 
     def apply_to_processorspec(self, processor_spec):
         """
-        TODO: docstring
+        Use these compilation rules to convert one processor specification into another one.
 
         Parameters
         ----------
-        processor_spec : ProcessorSpec
+        processor_spec : QubitProcessorSpec
+            The initial processor specification, which should contain the gates present within the
+            circuits/functions of this compilation rules object.
 
         Returns
         -------
@@ -180,12 +261,10 @@ class CliffordCompilationRules(CompilationRules):
     Holds mapping between operation labels (:class:`Label` objects) and circuits
     (:class:`Circuit` objects).
 
-    TODO: update this docstring part:
-    A `CliffordCompilationRules` holds a :class:`Model`
-    which specifies the "native" gates that all compilations are made up of.
-    Currently, this model should only contain Clifford gates, so that its
-    `compute_clifford_symplectic_reps` method gives representations for all of its
-    gates.
+    A `CliffordCompilationRules` holds a processor specification of the "native" gates
+    of a processor and uses it to produce compilations of many of/all Clifford operations.
+    Currently, the native gates should all be Clifford gates, so that the processor spec's
+    `compute_clifford_symplectic_reps` method gives representations for all of its gates.
 
     Compilations can be either "local" or "non-local". A local compilation
     ony uses gates that act on its target qubits.  All 1-qubit gates can be
@@ -194,37 +273,55 @@ class CliffordCompilationRules(CompilationRules):
     CNOT).  Currently, non-local compilations can only be constructed for
     the CNOT gate.
 
-    To speed up the creation of local compilations, a `CompilationLibrary`
-    stores "template" compilations, which specify how to construct a
+    To speed up the creation of local compilations, a `CliffordCompilationRules`
+    instance stores "template" compilations, which specify how to construct a
     compilation for some k-qubit gate on qubits labeled 0 to k-1.  When creating
     a compilation for a gate, a template is used if a suitable one can be found;
     otherwise a new template is created and then used.
 
-    Compilation libraries are most often used within a :class:`QubitProcessorSpec`
-    object.
-
     Parameters
     ----------
-    clifford_model : Model
-        The model of "native" Clifford gates which all compilations in
-        this library are composed from.
+    native_gates_processorspec : QubitProcessorSpec
+        The processor specification of "native" Clifford gates which all
+        compilation rules are composed from.
 
-    ctyp : {"absolute","paulieq"}
-        The "compilation type" for this library.  If `"absolute"`, then
+    compile_type : {"absolute","paulieq"}
+        The "compilation type" for this rules set.  If `"absolute"`, then
         compilations must match the gate operation being compiled exactly.
         If `"paulieq"`, then compilations only need to match the desired
         gate operation up to a Paui operation (which is useful for compiling
         multi-qubit Clifford gates / stabilizer states without unneeded 1-qubit
         gate over-heads).
-
-    items : list, optional
-        initial items (key,value pairs) to place in library.
     """
 
     @classmethod
     def create_standard(cls, base_processor_spec, compile_type="absolute", what_to_compile=("1Qcliffords",),
                         verbosity=1):
-        """ subctype : {"1Qcliffords", "localcnots", "allcnots", "paulis"} -- but depends on `ctype` """
+        """
+        Create a common set of compilation rules based on a base processor specification.
+
+        Parameters
+        ----------
+        base_processor_spec : QubitProcessorSpec
+            The processor specification of "native" Clifford gates which all
+            the compilation rules will be in terms of.
+
+        compile_type : {"absolute","paulieq"}
+            The "compilation type" for this rules set.  If `"absolute"`, then
+            compilations must match the gate operation being compiled exactly.
+            If `"paulieq"`, then compilations only need to match the desired
+            gate operation up to a Paui operation (which is useful for compiling
+            multi-qubit Clifford gates / stabilizer states without unneeded 1-qubit
+            gate over-heads).
+
+        what_to_compile : {"1Qcliffords", "localcnots", "allcnots", "paulis"}
+            What operations should rules be created for?  Allowed values may depend on
+            the value of `compile_type`.
+
+        Returns
+        -------
+        CliffordCompilationRules
+        """
 
         # A list of the 1-qubit gates to compile, in the std names understood inside the compilation code.
         one_q_gates = []
@@ -376,6 +473,7 @@ class CliffordCompilationRules(CompilationRules):
 
     @classmethod
     def _find_std_gate(cls, base_processor_spec, std_gate_name):
+        """ Check to see of a standard/internal gate exists in a processor spec """
         for gn in base_processor_spec.gate_names:
             if callable(base_processor_spec.gate_unitaries[gn]): continue  # can't pre-process factories
             if _itgs.is_gate_this_standard_unitary(base_processor_spec.gate_unitaries[gn], std_gate_name):
@@ -383,25 +481,6 @@ class CliffordCompilationRules(CompilationRules):
         return None
 
     def __init__(self, native_gates_processorspec, compile_type="absolute"):
-        """
-        TODO: update docstring
-        Create a new CompilationLibrary.
-
-        Parameters
-        ----------
-        clifford_model : Model
-            The model of "native" Clifford gates which all compilations in
-            this library are composed from.
-
-        compile_type : {"absolute","paulieq"}
-            The "compilation type" for this library.  If `"absolute"`, then
-            compilations must match the gate operation being compiled exactly.
-            If `"paulieq"`, then compilations only need to match the desired
-            gate operation up to a Paui operation (which is useful for compiling
-            multi-qubit Clifford gates / stabilizer states without unneeded 1-qubit
-            gate over-heads).
-        """
-
         # processor_spec: holds all native Clifford gates (requested gates compile into circuits of these)
         self.processor_spec = native_gates_processorspec
 

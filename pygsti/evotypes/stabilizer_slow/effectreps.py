@@ -36,7 +36,7 @@ class EffectRep(_basereps.EffectRep):
     def to_dense(self, on_space):
         return _mt.zvals_to_dense(self.zvals, superket=bool(on_space not in ('minimal', 'Hilbert')))
 
-    
+
 #OLD REMOVE:
 #    def to_dense(self, on_space):
 #        """

@@ -1281,7 +1281,6 @@ def create_direct_rb_circuit(pspec, clifford_compilations, length, qubit_labels=
                              samplerargs=[], addlocal=False, lsargs=[], randomizeout=True, cliffordtwirl=True,
                              conditionaltwirl=True, citerations=20, compilerargs=[], partitioned=False, seed=None):
     """
-    TODO: update docstring - add clifford compilations and modify pspec -- same with other create_ fns in this module
     Generates a "direct randomized benchmarking" (DRB) circuit.
 
     DRB is the protocol introduced in arXiv:1807.07975 (2018). The length of the "core" circuit is
@@ -1300,6 +1299,9 @@ def create_direct_rb_circuit(pspec, clifford_compilations, length, qubit_labels=
         is always handed to the sampler, as the first argument of the sampler function (this is only
         of importance when not using an in-built sampler for the "core" of the DRB circuit). Unless
         `qubit_labels` is not None, the circuit is sampled over all the qubits in `pspec`.
+
+    clifford_compilation : CompilationRules
+        Rules for compiling the "native" gates of `pspec` into Clifford gates.
 
     length : int
         The "direct RB length" of the circuit, which is closely related to the circuit depth. It
@@ -1522,6 +1524,11 @@ def sample_simultaneous_direct_rb_circuit(pspec, clifford_compilations, length, 
         is always handed to the sampler, as the first argument of the sampler function (this is only
         of importance when not using an in-built sampler for the "core" of the DRB circuit). Unless
         `qubit_labels` is not None, the circuit is sampled over all the qubits in `pspec`.
+
+    clifford_compilations : dict
+        A dictionary with the potential keys `'absolute'` and `'paulieq'` and corresponding
+        :class:`CompilationRules` values.  These compilation rules specify how to compile the
+        "native" gates of `pspec` into Clifford gates.
 
     length : int
         The "direct RB length" of the circuit, which is closely related to the circuit depth. It
@@ -2072,6 +2079,11 @@ def create_clifford_rb_circuit(pspec, clifford_compilations, length, qubit_label
         "native" gate-set and the connectivity of the device. The returned CRB circuit will be over
         the gates in `pspec`, and will respect the connectivity encoded by `pspec`.
 
+    clifford_compilations : dict
+        A dictionary with the potential keys `'absolute'` and `'paulieq'` and corresponding
+        :class:`CompilationRules` values.  These compilation rules specify how to compile the
+        "native" gates of `pspec` into Clifford gates.
+
     length : int
         The "CRB length" of the circuit -- an integer >= 0 --  which is the number of Cliffords in the
         circuit - 2 *before* each Clifford is compiled into the native gate-set.
@@ -2213,6 +2225,9 @@ def sample_pauli_layer_as_compiled_circuit(pspec, absolute_compilation, qubit_la
     pspec : QubitProcessorSpec
         The QubitProcessorSpec for the device.
 
+    absolute_compilation : CompilationRules
+        Rules for exactly (absolutely) compiling the "native" gates of `pspec` into clifford gates.
+
     qubit_labels : list, optional
         If not None, a list of a subset of the qubits from `pspec` that
         the pauli circuit should act on.
@@ -2268,6 +2283,9 @@ def sample_one_q_clifford_layer_as_compiled_circuit(pspec, absolute_compilation,
     pspec : QubitProcessorSpec
         The QubitProcessorSpec for the device.
 
+    absolute_compilation : CompilationRules
+        Rules for exactly (absolutely) compiling the "native" gates of `pspec` into clifford gates.
+
     qubit_labels : list, optional
         If not None, a list of a subset of the qubits from `pspec` that
         the circuit should act on.
@@ -2321,6 +2339,9 @@ def create_mirror_rb_circuit(pspec, absolute_compilation, length, qubit_labels=N
     pspec : QubitProcessorSpec
         The QubitProcessorSpec for the device that the circuit is being sampled for. The `pspec` is always
         handed to the sampler, as the first argument of the sampler function.
+
+    absolute_compilation : CompilationRules
+        Rules for exactly (absolutely) compiling the "native" gates of `pspec` into clifford gates.
 
     length : int
         The "mirror RB length" of the circuit, which is closely related to the circuit depth. It
@@ -2955,6 +2976,9 @@ def create_random_germpower_mirror_circuits(pspec, absolute_compilation, depths,
     ----------
     pspec : <TODO typ>
         <TODO description>
+
+    absolute_compilation : CompilationRules
+        Rules for exactly (absolutely) compiling the "native" gates of `pspec` into clifford gates.
 
     depths : <TODO typ>
         <TODO description>

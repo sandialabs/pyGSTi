@@ -253,7 +253,55 @@ def refresh_magnitudes_in_repcache(repcache, paramvec):
 
 
 def circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcache, threshold, min_term_mag):
-    """ TODO: docstring """
+    """
+    Compute the achieved and maximum sum-of-path-magnitudes (SOPM) for a given circuit and model.
+
+    This is a helper function for a TermForwardSimulator, and not typically called independently.
+
+    A path-integral forward simulator specifies a model and path criteria (e.g. the max Taylor order).  The
+    model's operations can construct Taylor terms with coefficients based on the current model parameters.
+    The magnitudes of these coefficients are used to estimate the error incurred by a given path truncation
+    as follows:  term coefficient magnitudes are multiplied together to get path magnitudes, and these are added
+    to get an "achieved" sum-of-path-magnitudes.  This can be compared with a second quantity, the "maximum" sum-
+    of-path-magnitudes based on estimates (ideally upper bounds) of the magnitudes for *all* paths.
+
+    Parameters
+    ----------
+    fwdsim : TermForwardSimulator
+        The forward simulator.  Contains the model that is used.
+
+    rholabel : Label
+        The preparation label, which precedes the layers in `circuit`.  Note that `circuit` should not contain
+        any preparation or POVM labels - only the operation labels.
+
+    elabels : list or tuple
+        A list of POVM effect labels, which follow the layers in `circuit`.  Note that `circuit` should not contain
+        any preparation or POVM labels - only the operation labels.
+
+    circuit : Circuit
+        The non-SPAM operations that make up the circuit that values are computed for.
+
+    repcache : dict
+        A dictionary of already-build preparation, operation, and POVM effect representations.  Keys are
+        labels and values are the representation objects.  Use of a representation cache can significantly
+        speed up multiple calls to this function.
+
+    threshold : float
+        A threshold giving the minimum path magnitude that should be included in the "achieved" sum of
+        path magnitudes.  As this number gets smaller, more paths are included.
+
+    min_term_mag : float
+        The minimum magnitude a single term can have and still be considered in paths.  This essentially
+        specifies a pre-path-magnitude threshold that lessens computational overhead by ignoring terms
+        that have a very small magnitude.
+
+    Returns
+    -------
+    achieved_sopm : float
+        The achieved sum-of-path-magnitudes.
+    max_sopm : float
+        The approximate maximum sum-of-path-magnitudes.
+    """
     mpv = fwdsim.model.num_params  # max_polynomial_vars
     distinct_gateLabels = sorted(set(circuit))
 
@@ -721,32 +769,41 @@ def _prs_as_pruned_polys(fwdsim, rholabel, elabels, circuit, repcache, comm=None
         A switch between a faster, slighty more memory hungry mode of
         computation (`fastmode=True`)and a simpler slower one (`=False`).
 
-        pathmagnitude_gap : float, optional
-            The amount less than the perfect sum-of-path-magnitudes that
-            is desired.  This sets the target sum-of-path-magnitudes for each
-            circuit -- the threshold that determines how many paths are added.
+    pathmagnitude_gap : float, optional
+        The amount less than the perfect sum-of-path-magnitudes that
+        is desired.  This sets the target sum-of-path-magnitudes for each
+        circuit -- the threshold that determines how many paths are added.
 
-        min_term_mag : float, optional
-            A technical parameter to the path pruning algorithm; this value
-            sets a threshold for how small a term magnitude (one factor in
-            a path magnitude) must be before it is removed from consideration
-            entirely (to limit the number of even *potential* paths).  Terms
-            with a magnitude lower than this values are neglected.
+    min_term_mag : float, optional
+        A technical parameter to the path pruning algorithm; this value
+        sets a threshold for how small a term magnitude (one factor in
+        a path magnitude) must be before it is removed from consideration
+        entirely (to limit the number of even *potential* paths).  Terms
+        with a magnitude lower than this values are neglected.
 
-        current_threshold : float, optional
-            If the threshold needed to achieve the desired `pathmagnitude_gap`
-            is greater than this value (i.e. if using current_threshold would
-            result in *more* paths being computed) then this function will not
-            compute any paths and exit early, returning `None` in place of the
-            usual list of polynomial representations.
+    current_threshold : float, optional
+        If the threshold needed to achieve the desired `pathmagnitude_gap`
+        is greater than this value (i.e. if using current_threshold would
+        result in *more* paths being computed) then this function will not
+        compute any paths and exit early, returning `None` in place of the
+        usual list of polynomial representations.
 
-    compute_polyreps: TODO, docstring - whether to just compute sopm or actually compute corresponding polyreps
+    max_paths : int, optional
+        The maximum number of paths that will be summed to compute the polynomials
+        for this circuit.
+
+    compute_polyreps: bool, optional
+        If `False`, then the polynomials are not actually constructed -- only the
+        sum-of-path-magnitudes are computed.  This is useful when testing a given
+        threshold to see if the paths are sufficient, before committing to building
+        all of the polynomials (which can be time consuming).
 
     Returns
     -------
     prps : list of PolynomialRep objects
         the polynomials for the requested circuit probabilities, computed by
-        selectively summing up high-magnitude paths.
+        selectively summing up high-magnitude paths.  If `compute_polyreps == False`,
+        then an empty list is returned.
     npaths : int
         the number of paths that were included.
     threshold : float

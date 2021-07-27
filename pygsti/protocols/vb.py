@@ -327,7 +327,7 @@ class SummaryStatistics(_proto.Protocol):
             return list(hamming_distance_counts)  # why a list?
 
         def adjusted_success_probability(hamming_distance_counts):
-            """ TODO: docstring """
+            """ A scaled success probability that is more meaningful for multi-qubit benchmarking """
             hamming_distance_pdf = _np.array(hamming_distance_counts) / _np.sum(hamming_distance_counts)
             adjSP = _np.sum([(-1 / 2)**n * hamming_distance_pdf[n] for n in range(len(hamming_distance_pdf))])
             return adjSP

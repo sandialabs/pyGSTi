@@ -16,7 +16,13 @@ from pygsti.modelmembers import operations as _op
 
 class LayerRules(object):
     """
-    TODO: docstring
+    Rules for composing a layer operation from the elements stored within a model.
+
+    A :class:`LayerRules` object serves as an intermediary between a :class:`ImplicitModel`
+    object and a :class:`ForwardSimulator`.  It contains the logic for creating
+    layer operations based on the partial/fundamental operation "blocks" stored within the
+    model.  Since different models hold different operation blocks, layer rules are usually
+    tailored to a specific models.
     """
 
     def _create_op_for_circuitlabel(self, model, circuitlbl):

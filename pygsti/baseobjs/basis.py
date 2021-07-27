@@ -173,7 +173,7 @@ class Basis(object):
             inferred based on `name_or_basis_or_matrices`, other times it must
             be supplied.  This is the dimension of the space that this basis
             fully or partially spans.  This is equal to the number of basis
-            elements in a "full" (ordinary) basis.  When a `StateSpaceLabels`
+            elements in a "full" (ordinary) basis.  When a `StateSpace`
             object is given, a more detailed direct-sum-of-tensor-product-blocks
             structure for the state space (rather than a single dimension) is
             described, and a basis is produced for this space.  For instance,
@@ -188,7 +188,7 @@ class Basis(object):
         classical_name : str, optional
             An alternate builtin basis name that should be used when
             constructing the bases for the classical sectors of `dim`,
-            when `dim` is a `StateSpaceLabels` object.
+            when `dim` is a `StateSpace` object.
 
         Returns
         -------
@@ -958,7 +958,6 @@ class ExplicitBasis(Basis):
 
 class BuiltinBasis(LazyBasis):
     """
-    TODO: update docstrings in this module - dim_or_statespace now!
     A basis that is included within and integrated into pyGSTi.
 
     Such bases may, in most cases be represented merely by its name.  (In actuality,
@@ -968,13 +967,6 @@ class BuiltinBasis(LazyBasis):
     ----------
     name : {"pp", "gm", "std", "qt", "id", "cl", "sv"}
         Name of the basis to be created.
-
-    dim : int
-        The dimension of the basis to be created.  Note that this is the
-        dimension of the *vectors*, which correspond to flattened elements
-        in simple cases.  Thus, a 1-qubit basis would have dimension 2 in
-        the state-vector (`name="sv"`) case and dimension 4 when
-        constructing a density-matrix basis (e.g. `name="pp"`).
 
     dim_or_statespace : int or StateSpace
         The dimension of the basis to be created or the state space for which a
