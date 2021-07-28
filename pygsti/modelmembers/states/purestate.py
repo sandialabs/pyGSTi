@@ -178,35 +178,6 @@ class EmbeddedPureState(_State):
             else:
                 return []
 
-    #TODO REMOVE
-    #def get_direct_order_terms(self, order, base_order):
-    #    """
-    #    Parameters
-    #    ----------
-    #    order : int
-    #        The order of terms to get.
-    #
-    #    Returns
-    #    -------
-    #    list
-    #        A list of :class:`RankOneTerm` objects.
-    #    """
-    #    if self.num_params > 0:
-    #        raise ValueError(("PureStateSPAMVec.taylor_order_terms(...) is only "
-    #                          "implemented for the case when its underlying "
-    #                          "pure state vector has 0 parameters (is static)"))
-    #
-    #    if order == 0: # only 0-th order term exists (assumes static pure_state_vec)
-    #        if self._evotype == "svterm":  tt = "dense"
-    #        elif self._evotype == "cterm": tt = "clifford"
-    #        else: raise ValueError("Invalid evolution type %s for calling `taylor_order_terms`" % self._evotype)
-    #
-    #        purevec = self.pure_state_vec
-    #        terms = [ _term.RankOneTerm(1.0, purevec, purevec, tt) ]
-    #    else:
-    #        terms = []
-    #    return terms
-
     @property
     def parameter_labels(self):
         """

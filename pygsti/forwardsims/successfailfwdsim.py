@@ -59,14 +59,6 @@ class SuccessFailForwardSimulator(_CacheForwardSimulator):
 
     def _compute_circuit_outcome_probabilities_with_cache(self, array_to_fill, circuit, outcomes, resource_alloc, cache,
                                                           time=None):
-        #REMOVE
-        #if False and cache:  # TEST (disabled) - use cached polys to evaluate - REMOVE this?
-        #    cpolys = cache
-        #    ps = _bulk_eval_compact_polynomials(cpolys[0], cpolys[1], self.model.to_vector(), (len(outcomes),))
-        #    assert(_np.linalg.norm(_np.imag(ps)) < 1e-6)
-        #    array_to_fill[:] = _np.real(ps)
-        #else:
-
         sp = self.model._success_prob(circuit, cache)
         probs = {('success',): sp, ('fail',): 1 - sp}
         for i, outcome in enumerate(outcomes):
@@ -76,15 +68,6 @@ class SuccessFailForwardSimulator(_CacheForwardSimulator):
                                                                     resource_alloc, cache):
         # array to fill has shape (num_outcomes, len(param_slice)) and should be filled with the "w.r.t. param_slice"
         # derivatives of each specified circuit outcome probability.
-
-        #REMOVE
-        #if False and cache:  # TEST (disabled)
-        #    cpolys = cache
-        #    dpolys = _compact_deriv(cpolys[0], cpolys[1], _slct.indices(param_slice))
-        #    array_to_fill[:, :] = _bulk_eval_compact_polynomials(dpolys[0], dpolys[1], self.model.to_vector(),
-        #                                                         (len(outcomes), _slct.length(param_slice)))
-        #else:
-
         dsp = self.model._success_dprob(circuit, param_slice, cache)
         dprobs = {('success',): dsp, ('fail',): -dsp}
         for i, outcome in enumerate(outcomes):

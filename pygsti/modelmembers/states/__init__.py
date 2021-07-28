@@ -15,10 +15,8 @@ import numpy as _np
 from .composedstate import ComposedState
 from .computationalstate import ComputationalBasisState
 from .cptpstate import CPTPState
-# from .densestate  REMOVE?
 from .fullpurestate import FullPureState
 from .fullstate import FullState
-# from .purestate #TODO??
 from .state import State
 from .staticpurestate import StaticPureState
 from .staticstate import StaticState

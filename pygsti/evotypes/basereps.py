@@ -19,15 +19,19 @@ try:
 except ImportError:
     # If cython is unavailable, just make a pure-python base class to fill in.
     class OpRep:
+        """ The base class for all operation representation classes """
         pass
 
     class StateRep:
+        """ The base class for all state representation classes """
         pass
 
     class EffectRep:
+        """ The base class for all POVM effect representation classes """
         pass
 
     class TermRep:
+        """ The base class for rank-1 term representation classes """
         pass
 
     class PolynomialRep(dict):
@@ -67,11 +71,41 @@ except ImportError:
                 self.update(int_coeff_dict)
 
         def reinit(self, int_coeff_dict):
-            """ TODO: docstring """
+            """
+            Reinitialize this polynomial using new coefficents.
+
+            Parameters
+            ----------
+            int_coeff_dict : dict
+                The new coefficient dictionary to use in place of the current one. This
+                dictionaries keys are "integerized" (by self._vinds_to_int) tuples of
+                variable indices, and values are the polynomial coefficients themselves.
+                Note that an "intergerized" tuple of variable indices is actually a *tuple*
+                of integers, even through it acts as a single (extra long) integer.
+
+            Returns
+            -------
+            None
+            """
             self.clear()
             self.update(int_coeff_dict)
 
         def mapvec_indices_inplace(self, mapfn_as_vector):
+            """
+            Apply a given mapping vector (function) to all of the variable indices of this polynomial.
+
+            This operation is performed in-place, updating the contents of this polynomial object.
+
+            Parameters
+            ----------
+            mapfn_as_vector : numpy.ndarray
+                An array of integers such that `mapfn_as_vector[old_variable_index] = new_variable_index`.
+                An array is used instead of a function for perfomance.
+
+            Returns
+            -------
+            None
+            """
             new_items = {}
             for k, v in self.items():
                 new_vinds = tuple((mapfn_as_vector[j] for j in self._int_to_vinds(k)))
@@ -105,48 +139,6 @@ except ImportError:
             """ The coefficient dictionary (with encoded integer keys) """
             return dict(self)  # for compatibility w/C case which can't derive from dict...
 
-        #UNUSED TODO REMOVE
-            #def map_indices_inplace(self, mapfn):
-        #    """
-        #    Map the variable indices in this `PolynomialRep`.
-        #    This allows one to change the "labels" of the variables.
-        #
-        #    Parameters
-        #    ----------
-        #    mapfn : function
-        #        A single-argument function that maps old variable-index tuples
-        #        to new ones.  E.g. `mapfn` might map `(0,1)` to `(10,11)` if
-        #        we were increasing each variable index by 10.
-        #
-        #    Returns
-        #    -------
-        #    None
-        #    """
-        #    new_items = {self._vinds_to_int(mapfn(self._int_to_vinds(k))): v
-        #                 for k, v in self.items()}
-        #    self.clear()
-        #    self.update(new_items)
-        #
-        #def set_maximums(self, max_num_vars=None):
-        #    """
-        #    Alter the maximum order and number of variables (and hence the
-        #    tuple-to-int mapping) for this polynomial representation.
-        #
-        #    Parameters
-        #    ----------
-        #    max_num_vars : int
-        #        The maximum number of variables allowed.
-        #
-        #    Returns
-        #    -------
-        #    None
-        #    """
-        #    coeffs = {self._int_to_vinds(k): v for k, v in self.items()}
-        #    if max_num_vars is not None: self.max_num_vars = max_num_vars
-        #    int_coeffs = {self._vinds_to_int(k): v for k, v in coeffs.items()}
-        #    self.clear()
-        #    self.update(int_coeffs)
-
         def _vinds_to_int(self, vinds):
             """ Maps tuple of variable indices to encoded int """
             ints_in_key = int(_np.ceil(len(vinds) / self.vindices_per_int))
@@ -177,55 +169,6 @@ except ImportError:
                     #DB: if cnt > 50:
                     #DB:    print("VINDS iter %d - indx=%d (orig=%d, nv=%d)" % (cnt,indx,orig,self.max_num_vars))
             return tuple(sorted(ret))
-
-        #UNUSED TODO REMOVE
-        #def deriv(self, wrt_param):
-        #    """
-        #    Take the derivative of this polynomial representation with respect to
-        #    the single variable `wrt_param`.
-        #
-        #    Parameters
-        #    ----------
-        #    wrt_param : int
-        #        The variable index to differentiate with respect to (can be
-        #        0 to the `max_num_vars-1` supplied to `__init__`.
-        #
-        #    Returns
-        #    -------
-        #    PolynomialRep
-        #    """
-        #    dcoeffs = {}
-        #    for i, coeff in self.items():
-        #        ivar = self._int_to_vinds(i)
-        #        cnt = float(ivar.count(wrt_param))
-        #        if cnt > 0:
-        #            l = list(ivar)
-        #            del l[ivar.index(wrt_param)]
-        #            dcoeffs[tuple(l)] = cnt * coeff
-        #    int_dcoeffs = {self._vinds_to_int(k): v for k, v in dcoeffs.items()}
-        #    return PolynomialRep(int_dcoeffs, self.max_num_vars, self.vindices_per_int)
-
-        #def evaluate(self, variable_values):
-        #    """
-        #    Evaluate this polynomial at the given variable values.
-        #
-        #    Parameters
-        #    ----------
-        #    variable_values : iterable
-        #        The values each variable will be evaluated at.  Must have
-        #        length at least equal to the number of variables present
-        #        in this `PolynomialRep`.
-        #
-        #    Returns
-        #    -------
-        #    float or complex
-        #    """
-        #    #FUTURE and make this function smarter (Russian peasant)?
-        #    ret = 0
-        #    for i, coeff in self.items():
-        #        ivar = self._int_to_vinds(i)
-        #        ret += coeff * _np.product([variable_values[i] for i in ivar])
-        #    return ret
 
         def compact_complex(self):
             """
@@ -369,24 +312,6 @@ except ImportError:
                 self[k] += x
             return self
 
-        #UNUSED TODO REMOVE
-        #def scalar_mult(self, x):
-        #    """
-        #    Returns `self * x` where `x` is a scalar.
-        #
-        #    Parameters
-        #    ----------
-        #    x : float or complex
-        #
-        #    Returns
-        #    -------
-        #    PolynomialRep
-        #    """
-        #    # assume a scalar that can multiply values
-        #    newpoly = self.copy()
-        #    newpoly.scale(x)
-        #    return newpoly
-
         def __str__(self):
             def fmt(x):
                 if abs(_np.imag(x)) > 1e-6:
@@ -421,47 +346,6 @@ except ImportError:
             """ Used for debugging in slowreplib routines only"""
             return max([len(self._int_to_vinds(k)) for k in self.keys()])
 
-        #UNUSED TODO REMOVE
-        #def __add__(self, x):
-        #    newpoly = self.copy()
-        #    if isinstance(x, PolynomialRep):
-        #        assert(self.max_num_vars == x.max_num_vars)
-        #        for k, v in x.items():
-        #            if k in newpoly: newpoly[k] += v
-        #            else: newpoly[k] = v
-        #    else:  # assume a scalar that can be added to values
-        #        for k in newpoly:
-        #            newpoly[k] += x
-        #    return newpoly
-        #
-        #def __mul__(self, x):
-        #    if isinstance(x, PolynomialRep):
-        #        return self.mult_poly(x)
-        #    else:  # assume a scalar that can multiply values
-        #        return self.mult_scalar(x)
-        #
-        #def __rmul__(self, x):
-        #    return self.__mul__(x)
-        #
-        #def __pow__(self, n):
-        #    ret = PolynomialRep({0: 1.0}, self.max_num_vars, self.vindices_per_int)
-        #    cur = self
-        #    for i in range(int(_np.floor(_np.log2(n))) + 1):
-        #        rem = n % 2  # gets least significant bit (i-th) of n
-        #        if rem == 1: ret *= cur  # add current power of x (2^i) if needed
-        #        cur = cur * cur  # current power *= 2
-        #        n //= 2  # shift bits of n right
-        #    return ret
-        #
-        #def __copy__(self):
-        #    return self.copy()
-        #
-        #def debug_report(self):
-        #    actual_max_order = max([len(self._int_to_vinds(k)) for k in self.keys()])
-        #    return "PolynomialRep w/max_vars=%d: nterms=%d, actual max-order=%d" % \
-        #        (self.max_num_vars, len(self), actual_max_order)
-        #
-
 
 # Other classes
 LARGE = 1000000000
@@ -476,6 +360,15 @@ SMALL = 1e-5
 
 
 class StockTermRep(TermRep):
+    """
+    A basic term representation that just holds other representation types (polys, states, effects, and gates).
+
+    This "stock" class is in many cases entirely sufficient of an evotype, and is used by
+    default when an evotype doesn't define its own term-representation types so that evotypes
+    don't need to define term-rep types unless they're doing something that is non-standard.
+
+    TODO: rest of StockTermRep docstring
+    """
     # just a container for other reps (polys, states, effects, and gates)
 
     @classmethod

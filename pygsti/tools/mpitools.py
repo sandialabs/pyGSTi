@@ -481,49 +481,11 @@ def gather_slices(slices, slice_owners, ar_to_fill,
         else:
             _warnings.warn("gather_slices: Could not achieve max_buffer_size")
 
-    #TEST TODO REMOVE:
-    # Tried doing something faster (Allgatherv) when slices elements are simple slices (not tuples of slices).
+    # NOTE: Tried doing something faster (Allgatherv) when slices elements are simple slices (not tuples of slices).
     # This ultimately showed that our repeated use of Bcast isn't any slower than fewer calls to Allgatherv,
     # and since the Allgatherv case complicates the code and ignores the memory limit, it's best to just drop it.
-    #from mpi4py import MPI  # not at top so can import pygsti on cluster login nodes
-    #nProcs = comm.Get_size()
-    #if len(slices) == nProcs and len(ar_to_fill_inds) == 0 and \
-    #   all([isinstance(slcOrSlcTup, slice) for slcOrSlcTup in slices]):
-    #    # see if we can find a single owned slice for each processors
-    #    owned_slices = {i: None for i in range(nProcs)}
-    #    for i, slc in enumerate(slices):
-    #        if owned_slices[slice_owners[i]] is None:
-    #            owned_slices[slice_owners[i]] = slc
-    #        else: break  # processor w/rank == slice_owners[i] owns more than 1 slice
-    #    else:
-    #        # each processor owns a single slice, given by owned_slice -- use Allgatherv instead of Bcast
-    #        assert(len(axes) == 1), "Logic error: simple slices given with multiple axes!"
-    #        axis = axes[0]
-    #        local_result = ar_to_fill.swapaxes(0, axis)[owned_slices[my_rank]].flatten()  # (flatten copies)
-    #        result = _np.empty(ar_to_fill.size, ar_to_fill.dtype)  # NOTE: this allocates a lot of memory!
-    #        stride = ar_to_fill.size // ar_to_fill.shape[axis]
-    #
-    #        sizes = _np.array([_slct.length(owned_slices[i]) * stride for i in range(nProcs)], int)
-    #        displacements = _np.array([owned_slices[i].start * stride for i in range(nProcs)], int)
-    #        assert(local_result.size == sizes[my_rank])
-    #        comm.Allgatherv([local_result, sizes[my_rank], MPI.F_DOUBLE], \
-    #                        [result, (sizes,displacements), MPI.F_DOUBLE])
-    #        gathered_shape = list(ar_to_fill.shape)  # we gathered with distributed index swapped to position 0
-    #        t = gathered_shape[0]; gathered_shape[0] = gathered_shape[axis]; gathered_shape[axis] = t
-    #        result.shape = tuple(gathered_shape)
-    #        ar_to_fill[tuple(arIndx)] = result.swapaxes(0, axis)
-    #        #if comm.Get_rank() == 0:
-    #        #    print("Sizes = ", sizes)
-    #        #    print("Displacements = ", displacements)
-    #        #    print("Gathered shape = ", gathered_shape)
-    #        #    print("ar_to_fill shape = ", ar_to_fill.shape)
-    #        #print("Local result shape = ",local_result.shape, " result shape = ",result.shape,
-    #        #      " tofill = ",ar_to_fill.shape)
-    #        #import sys
-    #        #sys.exit(0)
-    #        return
-    #If we can't use Allgatherv, broadcast slices one-by-one (slower, but more general):
 
+    # Broadcast slices one-by-one (slower, but more general):
     for iSlice, slcOrSlcTup in enumerate(slices):
         owner = slice_owners[iSlice]  # owner's rank
         if my_interhost_ranks is not None and owner not in my_interhost_ranks:
@@ -947,19 +909,10 @@ def mpidot(a, b, loc_row_slice, loc_col_slice, slice_tuples_by_rank, comm,
         result = out
         result_shm = out_shm
 
-    #REMOVE asave, bsave = a.copy(), b.copy()
     rshape = (_slct.length(loc_row_slice), _slct.length(loc_col_slice))
     loc_result_flat = _np.empty(rshape[0] * rshape[1], a.dtype)
     loc_result = loc_result_flat.view(); loc_result.shape = rshape
     loc_result[:, :] = _np.dot(a[loc_row_slice, :], b[:, loc_col_slice])
-    #if loc_result.size > 0:
-    #    assert(_np.linalg.norm( _np.dot(a,b)[loc_row_slice, loc_col_slice]-loc_result) /
-    #           (_np.linalg.norm(loc_result) + 1.0)<1e-6),\
-    #        "DIFFS with SAVE = %g, %g.  Other = %g, %g, %s, %s, %s" % (
-    #            _np.linalg.norm(a - asave), _np.linalg.norm(b - bsave),
-    #            _np.linalg.norm( _np.dot(a,b)[loc_row_slice, loc_col_slice] - loc_result ),
-    #                             _np.linalg.norm(loc_result),
-    #            str(loc_result.shape), str(a.shape), str(b.shape))
 
     # broadcast_com defines the group of processors this processor communicates with.
     # Without shared memory, this is *all* the other processors.  With shared memory, this
@@ -978,26 +931,11 @@ def mpidot(a, b, loc_row_slice, loc_col_slice, slice_tuples_by_rank, comm,
         if broadcast_comm.rank != r: buf.shape = cur_shape
         else: buf = loc_result  # already of correct shape
         result[cur_row_slice, cur_col_slice] = buf
-        #if buf.size > 0:
-        #    assert(_np.linalg.norm( _np.dot(a,b)[cur_row_slice, cur_col_slice] - result[cur_row_slice, cur_col_slice] )
-        #           / (_np.linalg.norm(result[cur_row_slice, cur_col_slice] + 1.0)) < 1e-6), \
-        #        "Rank %d: DIFF = %g, %g, %s, %s" % (comm.rank,
-        #        _np.linalg.norm( _np.dot(a,b)[cur_row_slice, cur_col_slice] - result[cur_row_slice, cur_col_slice] ),
-        #        _np.linalg.norm(result[cur_row_slice, cur_col_slice]), str(cur_row_slice), str(cur_col_slice))
     comm.barrier()  # wait for all ranks to finish writing to result
 
     #assert(_np.linalg.norm(_np.dot(a,b) - result)/(_np.linalg.norm(result) + result.size) < 1e-6),\
     #    "DEBUG: %g, %g, %d" % (_np.linalg.norm(_np.dot(a,b) - result), _np.linalg.norm(result), result.size)
     return result, result_shm
-
-    #myNCols = loc_col_slice.stop - loc_col_slice.start
-    ## Gather pieces of coulomb tensor together
-    #nCols = comm.allgather(myNCols)  #gather column counts into an array
-    #displacements = _np.concatenate(([0],_np.cumsum(sizes))) #calc displacements
-    #
-    #result = np.empty(displacements[-1], a.dtype)
-    #comm.Allgatherv([CTelsLoc, size, MPI.F_DOUBLE_COMPLEX], \
-    #                [CTels, (sizes,displacements[:-1]), MPI.F_DOUBLE_COMPLEX])
 
 
 def parallel_apply(f, l, comm):

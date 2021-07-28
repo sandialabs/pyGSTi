@@ -356,9 +356,6 @@ class ComposedErrorgen(_LinearOperator):
         derivMx = _np.zeros((d2**2, self.num_params), 'd')
         for eg, rel_indices in zip(self.factors, self._submember_rpindices):
             factor_deriv = eg.deriv_wrt_params(None)  # do filtering at end
-            #REMOVE
-            #rel_gpindices = _modelmember._decompose_gpindices(
-            #    self.gpindices, eg.gpindices)
             derivMx[:, rel_indices] += factor_deriv[:, :]
 
         if wrt_filter is None:
@@ -556,9 +553,6 @@ class ComposedErrorgen(_LinearOperator):
         assert(self.gpindices is not None), "Must set a ComposedErrorgen's .gpindices before calling parameter_labels"
         vl = _np.empty(self.num_params, dtype=object)
         for eg, factor_local_inds in zip(self.factors, self._submember_rpindices):
-            #REMOVE
-            #factor_local_inds = _modelmember._decompose_gpindices(
-            #    self.gpindices, eg.gpindices)
             vl[factor_local_inds] = eg.parameter_labels
         return vl
 
@@ -586,9 +580,6 @@ class ComposedErrorgen(_LinearOperator):
         assert(self.gpindices is not None), "Must set a ComposedErrorgen's .gpindices before calling to_vector"
         v = _np.empty(self.num_params, 'd')
         for eg, factor_local_inds in zip(self.factors, self._submember_rpindices):
-            #REMOVE
-            #factor_local_inds = _modelmember._decompose_gpindices(
-            #    self.gpindices, eg.gpindices)
             v[factor_local_inds] = eg.to_vector()
         return v
 
@@ -618,9 +609,6 @@ class ComposedErrorgen(_LinearOperator):
         """
         assert(self.gpindices is not None), "Must set a ComposedErrorgen's .gpindices before calling from_vector"
         for eg, factor_local_inds in zip(self.factors, self._submember_rpindices):
-            #REMOVE
-            #factor_local_inds = _modelmember._decompose_gpindices(
-            #    self.gpindices, eg.gpindices)
             eg.from_vector(v[factor_local_inds], close, dirty_value)
         self.dirty = dirty_value
 
@@ -702,7 +690,7 @@ class ComposedErrorgen(_LinearOperator):
         # In this case, since composed error generators are just summed, the total term
         # magnitude is just the sum of the components
 
-        #DEBUG TODO REMOVE
+        #DEBUG CHECK (can REMOVE)
         #factor_ttms = [eg.get_total_term_magnitude() for eg in self.factors]
         #print("DB: ComposedErrorgen.total_term_magnitude = sum(",factor_ttms,") -- ",
         #      [eg.__class__.__name__ for eg in self.factors])
@@ -737,9 +725,6 @@ class ComposedErrorgen(_LinearOperator):
         """
         ret = _np.zeros(self.num_params, 'd')
         for eg, eg_local_inds in zip(self.factors, self._submember_rpindices):
-            #REMOVE
-            #eg_local_inds = _modelmember._decompose_gpindices(
-            #    self.gpindices, eg.gpindices)
             ret[eg_local_inds] += eg.total_term_magnitude_deriv
         return ret
 

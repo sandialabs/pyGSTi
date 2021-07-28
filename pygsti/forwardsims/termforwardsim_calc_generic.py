@@ -253,7 +253,55 @@ def refresh_magnitudes_in_repcache(repcache, paramvec):
 
 
 def circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcache, threshold, min_term_mag):
-    """ TODO: docstring """
+    """
+    Compute the achieved and maximum sum-of-path-magnitudes (SOPM) for a given circuit and model.
+
+    This is a helper function for a TermForwardSimulator, and not typically called independently.
+
+    A path-integral forward simulator specifies a model and path criteria (e.g. the max Taylor order).  The
+    model's operations can construct Taylor terms with coefficients based on the current model parameters.
+    The magnitudes of these coefficients are used to estimate the error incurred by a given path truncation
+    as follows:  term coefficient magnitudes are multiplied together to get path magnitudes, and these are added
+    to get an "achieved" sum-of-path-magnitudes.  This can be compared with a second quantity, the "maximum" sum-
+    of-path-magnitudes based on estimates (ideally upper bounds) of the magnitudes for *all* paths.
+
+    Parameters
+    ----------
+    fwdsim : TermForwardSimulator
+        The forward simulator.  Contains the model that is used.
+
+    rholabel : Label
+        The preparation label, which precedes the layers in `circuit`.  Note that `circuit` should not contain
+        any preparation or POVM labels - only the operation labels.
+
+    elabels : list or tuple
+        A list of POVM effect labels, which follow the layers in `circuit`.  Note that `circuit` should not contain
+        any preparation or POVM labels - only the operation labels.
+
+    circuit : Circuit
+        The non-SPAM operations that make up the circuit that values are computed for.
+
+    repcache : dict
+        A dictionary of already-build preparation, operation, and POVM effect representations.  Keys are
+        labels and values are the representation objects.  Use of a representation cache can significantly
+        speed up multiple calls to this function.
+
+    threshold : float
+        A threshold giving the minimum path magnitude that should be included in the "achieved" sum of
+        path magnitudes.  As this number gets smaller, more paths are included.
+
+    min_term_mag : float
+        The minimum magnitude a single term can have and still be considered in paths.  This essentially
+        specifies a pre-path-magnitude threshold that lessens computational overhead by ignoring terms
+        that have a very small magnitude.
+
+    Returns
+    -------
+    achieved_sopm : float
+        The achieved sum-of-path-magnitudes.
+    max_sopm : float
+        The approximate maximum sum-of-path-magnitudes.
+    """
     mpv = fwdsim.model.num_params  # max_polynomial_vars
     distinct_gateLabels = sorted(set(circuit))
 
@@ -422,15 +470,14 @@ def find_best_pathmagnitude_threshold(fwdsim, rholabel, elabels, circuit, polyno
         max_npaths=max_paths)
     # above takes an array of target pathmags and gives a single threshold that works for all of them (all E-indices)
 
-    # TODO REMOVE
+    # DEBUG PRINT
     #print("Threshold = ", threshold, " Paths=", npaths)
-    #REMOVE (and global_cnt definition above)
     #global global_cnt
     # print("Threshold = ", threshold, " Paths=", npaths, " tgt=", target_sum_of_pathmags,
     #       "cnt = ", global_cnt)  # , " time=%.3fs" % (_time.time()-t0))
     #global_cnt += 1
 
-    # #DEBUG TODO REMOVE
+    # DEBUG PRINT
     # print("---------------------------")
     # print("Path threshold = ",threshold, " max=",max_sum_of_pathmags,
     #       " target=",target_sum_of_pathmags, " achieved=",achieved_sum_of_pathmags)
@@ -513,7 +560,6 @@ def compute_pruned_path_polynomials_given_threshold(threshold, fwdsim, rholabel,
 
     #print("T1 = %.2fs" % (_time.time()-t0)); t0 = _time.time()
 
-    #fastmode = False  # REMOVE - was used for DEBUG b/c "_ex" path traversal won't always work w/fast mode
     if fastmode == 1:  # fastmode
         leftSaved = [None] * (len(factor_lists) - 1)  # saved[i] is state after i-th
         rightSaved = [None] * (len(factor_lists) - 1)  # factor has been applied
@@ -611,34 +657,7 @@ def compute_pruned_path_polynomials_given_threshold(threshold, fwdsim, rholabel,
         elabels), foat_indices_per_op, add_path)  # sets mag and nPaths
 
     #print("T2 = %.2fs" % (_time.time()-t0)); t0 = _time.time()
-
-    #max_degrees = []
-    #for i,factors in enumerate(factor_lists):
-    #    max_degrees.append(max([f.coeff.degree for f in factors]))
-    #print("Max degrees = ",max_degrees)
-    #for Ei,prp in enumerate(prps):
-    #    print(Ei,":", prp.debug_report())
-    #if db_paramvec is not None:
-    #    for Ei,prp in enumerate(prps):
-    #        print(Ei," => ", prp.evaluate(db_paramvec))
-
-    #TODO: REMOVE - most of this is solved, but keep it around for another few commits in case we want to refer back to
-    #it.  - need to fill in some more details, namely how/where we hold weights and log-weights: in reps? in Term objs?
-    #maybe consider Cython version?  need to consider how to perform "fastmode" in this... maybe need to traverse tree
-    #in some standard order?  what about having multiple thresholds for the different elabels... it seems good to try to
-    #run these calcs in parallel.
-    # Note: may only need recusive tree traversal to consider incrementing positions *greater* than or equal to the one
-    #  that was just incremented?  (this may enforce some iteration ordering amenable to a fastmode calc)
-    # Note2: when all effects have *same* op-part of terms, just different effect vector, then maybe we could split the
-    #  effect into an op + effect to better use fastmode calc?  Or maybe if ordering is right this isn't necessary?
-    #Add repcache as in cython version -- saves having to *construct* rep objects all the time... just update
-    #coefficients when needed instead?
-
-    #... and we're done!
-
-    #TODO: check that prps are PolynomialReps and not Polynomials -- we may have made this change
-    # in fastreplib.pyx but forgot it here.
-    return prps
+    return prps  # Note: prps are PolynomialReps and not Polynomials
 
 
 def create_circuitsetup_cacheel(fwdsim, rholabel, elabels, circuit, repcache, min_term_mag, mpv):
@@ -721,32 +740,41 @@ def _prs_as_pruned_polys(fwdsim, rholabel, elabels, circuit, repcache, comm=None
         A switch between a faster, slighty more memory hungry mode of
         computation (`fastmode=True`)and a simpler slower one (`=False`).
 
-        pathmagnitude_gap : float, optional
-            The amount less than the perfect sum-of-path-magnitudes that
-            is desired.  This sets the target sum-of-path-magnitudes for each
-            circuit -- the threshold that determines how many paths are added.
+    pathmagnitude_gap : float, optional
+        The amount less than the perfect sum-of-path-magnitudes that
+        is desired.  This sets the target sum-of-path-magnitudes for each
+        circuit -- the threshold that determines how many paths are added.
 
-        min_term_mag : float, optional
-            A technical parameter to the path pruning algorithm; this value
-            sets a threshold for how small a term magnitude (one factor in
-            a path magnitude) must be before it is removed from consideration
-            entirely (to limit the number of even *potential* paths).  Terms
-            with a magnitude lower than this values are neglected.
+    min_term_mag : float, optional
+        A technical parameter to the path pruning algorithm; this value
+        sets a threshold for how small a term magnitude (one factor in
+        a path magnitude) must be before it is removed from consideration
+        entirely (to limit the number of even *potential* paths).  Terms
+        with a magnitude lower than this values are neglected.
 
-        current_threshold : float, optional
-            If the threshold needed to achieve the desired `pathmagnitude_gap`
-            is greater than this value (i.e. if using current_threshold would
-            result in *more* paths being computed) then this function will not
-            compute any paths and exit early, returning `None` in place of the
-            usual list of polynomial representations.
+    current_threshold : float, optional
+        If the threshold needed to achieve the desired `pathmagnitude_gap`
+        is greater than this value (i.e. if using current_threshold would
+        result in *more* paths being computed) then this function will not
+        compute any paths and exit early, returning `None` in place of the
+        usual list of polynomial representations.
 
-    compute_polyreps: TODO, docstring - whether to just compute sopm or actually compute corresponding polyreps
+    max_paths : int, optional
+        The maximum number of paths that will be summed to compute the polynomials
+        for this circuit.
+
+    compute_polyreps: bool, optional
+        If `False`, then the polynomials are not actually constructed -- only the
+        sum-of-path-magnitudes are computed.  This is useful when testing a given
+        threshold to see if the paths are sufficient, before committing to building
+        all of the polynomials (which can be time consuming).
 
     Returns
     -------
     prps : list of PolynomialRep objects
         the polynomials for the requested circuit probabilities, computed by
-        selectively summing up high-magnitude paths.
+        selectively summing up high-magnitude paths.  If `compute_polyreps == False`,
+        then an empty list is returned.
     npaths : int
         the number of paths that were included.
     threshold : float
@@ -822,8 +850,8 @@ def _prs_as_pruned_polys(fwdsim, rholabel, elabels, circuit, repcache, comm=None
         max_npaths=max_paths)
     # above takes an array of target pathmags and gives a single threshold that works for all of them (all E-indices)
 
+    # DEBUG PRINT (and global_cnt definition above)
     #print("Threshold = ", threshold, " Paths=", npaths)
-    #REMOVE (and global_cnt definition above)
     #global global_cnt
     # print("Threshold = ", threshold, " Paths=", npaths, " tgt=", target_sum_of_pathmags,
     #       "cnt = ", global_cnt)  # , " time=%.3fs" % (_time.time()-t0))
@@ -835,7 +863,6 @@ def _prs_as_pruned_polys(fwdsim, rholabel, elabels, circuit, repcache, comm=None
 
     #print("T1 = %.2fs" % (_time.time()-t0)); t0 = _time.time()
 
-    #fastmode = False  # REMOVE - was used for DEBUG b/c "_ex" path traversal won't always work w/fast mode
     if fastmode:
         leftSaved = [None] * (len(factor_lists) - 1)  # saved[i] is state after i-th
         rightSaved = [None] * (len(factor_lists) - 1)  # factor has been applied
@@ -922,7 +949,7 @@ def _prs_as_pruned_polys(fwdsim, rholabel, elabels, circuit, repcache, comm=None
 
     #print("T2 = %.2fs" % (_time.time()-t0)); t0 = _time.time()
 
-    # #DEBUG
+    # #DEBUG PRINT
     # print("---------------------------")
     # print("Path threshold = ",threshold, " max=",max_sum_of_pathmags,
     #       " target=",target_sum_of_pathmags, " achieved=",achieved_sum_of_pathmags)
@@ -932,36 +959,11 @@ def _prs_as_pruned_polys(fwdsim, rholabel, elabels, circuit, repcache, comm=None
     # print("Num FOAT: ",[len(inds) for inds in foat_indices_per_op])
     # print("---------------------------")
 
-    #max_degrees = []
-    #for i,factors in enumerate(factor_lists):
-    #    max_degrees.append(max([f.coeff.degree for f in factors]))
-    #print("Max degrees = ",max_degrees)
-    #for Ei,prp in enumerate(prps):
-    #    print(Ei,":", prp.debug_report())
-    #if db_paramvec is not None:
-    #    for Ei,prp in enumerate(prps):
-    #        print(Ei," => ", prp.evaluate(db_paramvec))
-
-    #TODO: REMOVE - most of this is solved, but keep it around for another few commits in case we want to refer back to
-    #it.  - need to fill in some more details, namely how/where we hold weights and log-weights: in reps? in Term objs?
-    #maybe consider Cython version?  need to consider how to perform "fastmode" in this... maybe need to traverse tree
-    #in some standard order?  what about having multiple thresholds for the different elabels... it seems good to try to
-    #run these calcs in parallel.
-    # Note: may only need recusive tree traversal to consider incrementing positions *greater* than or equal to the one
-    #  that was just incremented?  (this may enforce some iteration ordering amenable to a fastmode calc)
-    # Note2: when all effects have *same* op-part of terms, just different effect vector, then maybe we could split the
-    #  effect into an op + effect to better use fastmode calc?  Or maybe if ordering is right this isn't necessary?
-    #Add repcache as in cython version -- saves having to *construct* rep objects all the time... just update
-    #coefficients when needed instead?
-
-    #... and we're done!
-
     target_miss = sum(achieved_sum_of_pathmags) - sum(target_sum_of_pathmags + pathmagnitude_gap)
     if target_miss > 1e-5:
         print("Warning: Achieved sum(path mags) exceeds max by ", target_miss, "!!!")
 
-    #TODO: check that prps are PolynomialReps and not Polynomials -- we may have made this change
-    # in fastreplib.pyx but forgot it here.
+    # NOTE: prps are PolynomialReps and not Polynomials
     return prps, sum(npaths), threshold, sum(target_sum_of_pathmags), sum(achieved_sum_of_pathmags)
 
 
@@ -1022,11 +1024,6 @@ def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, f
     nops = [len(oprep_list) for oprep_list in oprep_lists]
     b = [0] * n  # root
     log_thres = _math.log10(pathmag_threshold)
-
-    ##TODO REMOVE
-    #if debug:
-    #    if debug > 1: print("BEGIN TRAVERSAL")
-    #    accepted_bs_and_mags = {}
 
     def traverse_tree(root, incd, log_thres, current_mag, current_logmag, order, current_nzeros):
         """ first_order means only one b[i] is incremented, e.g. b == [0 1 0] or [4 0 0] """
@@ -1114,93 +1111,6 @@ def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, f
     return
 
 
-# TODO REMOVE: method to traverse paths until the result converges, but I don't think this is well justified
-# def traverse_paths_upto_threshold_ex(oprep_lists, high_threshold, low_threshold, num_elabels, foat_indices_per_op,
-#                                      fn_visitpath, debug=False):
-#     """
-#     TODO: docstring
-#     """
-#     # zot = zero-order-terms
-#     n = len(oprep_lists)
-#     nops = [len(oprep_list) for oprep_list in oprep_lists]
-#     b = [0] * n  # root
-#     log_thres_high = _np.log10(high_threshold)  # a previous threshold: we've already visited everything above this
-#     log_thres_low = _np.log10(low_threshold)  # visit everything above this threshold
-#
-#     ##TODO REMOVE
-#     #if debug:
-#     #    if debug > 1: print("BEGIN TRAVERSAL")
-#     #    accepted_bs_and_mags = {}
-#
-#     def traverse_tree(root, incd, log_thres_high, log_thres_low, current_mag, current_logmag, order):
-#         """ first_order means only one b[i] is incremented, e.g. b == [0 1 0] or [4 0 0] """
-#         b = root
-#         #print("BEGIN: ",root)
-#         for i in reversed(range(incd, n)):
-#             if b[i] + 1 == nops[i]: continue
-#             b[i] += 1
-#
-#             if order == 0:  # then incd doesn't matter b/c can inc anything to become 1st order
-#                 sub_order = 1 if (i != n - 1 or b[i] >= num_elabels) else 0
-#             elif order == 1:
-#                 # we started with a first order term where incd was incremented, and now
-#                 # we're incrementing something else
-#                 sub_order = 1 if i == incd else 2  # signifies anything over 1st order where >1 column has be inc'd
-#             else:
-#                 sub_order = order
-#
-#             logmag = current_logmag + (oprep_lists[i][b[i]].logmagnitude - oprep_lists[i][b[i] - 1].logmagnitude)
-#             #print("Trying: ",b)
-#             if logmag >= log_thres_low:  # or sub_order == 0:
-#                 if oprep_lists[i][b[i] - 1].magnitude == 0:
-#                     mag = 0
-#                 else:
-#                     mag = current_mag * (oprep_lists[i][b[i]].magnitude / oprep_lists[i][b[i] - 1].magnitude)
-#
-#                 if logmag > log_thres_high:
-#                     if fn_visitpath(b, mag, i): return True  # fn_visitpath can signal early return
-#                 if traverse_tree(b, i, log_thres_high, log_thres_low, mag, logmag, sub_order):
-#                     # add any allowed paths beneath this one
-#                     return True
-#             elif sub_order <= 1 and high_threshold >= 1.0:
-#                 #We've rejected term-index b[i] (in column i) because it's too small - the only reason
-#                 # to accept b[i] or term indices higher than it is to include "foat" terms, so we now
-#                 # iterate through any remaining foat indices for this column (we've accepted all lower
-#                 # values of b[i], or we wouldn't be here).  Note that we just need to visit the path,
-#                 # we don't need to traverse down, since we know the path magnitude is already too low.
-#                 orig_bi = b[i]
-#                 for j in foat_indices_per_op[i]:
-#                     if j >= orig_bi:
-#                         b[i] = j
-#                         mag = 0 if oprep_lists[i][orig_bi - 1].magnitude == 0 else \
-#                             current_mag * (oprep_lists[i][b[i]].magnitude / oprep_lists[i][orig_bi - 1].magnitude)
-#
-#                         if fn_visitpath(b, mag, i): return True
-#
-#                         if i != n - 1:
-#                             # if we're not incrementing (from a zero-order term) the final index, then we
-#                             # need to to increment it until we hit num_elabels (*all* zero-th order paths)
-#                             orig_bn = b[n - 1]
-#                             for k in range(1, num_elabels):
-#                                 b[n - 1] = k
-#                                 mag2 = mag * (oprep_lists[n - 1][b[n - 1]].magnitude
-#                                               / oprep_lists[i][orig_bn].magnitude)
-#                                 if fn_visitpath(b, mag2, n - 1): return True
-#
-#                             b[n - 1] = orig_bn
-#
-#                 b[i] = orig_bi
-#
-#             b[i] -= 1  # so we don't have to copy b
-#         #print("END: ",root)
-#         return False  # return value == "do we need to terminate traversal immediately?"
-#
-#     current_mag = 1.0; current_logmag = 0.0
-#     fn_visitpath(b, current_mag, 0)  # visit root (all 0s) path
-#     return traverse_tree(b, 0, log_thres_high, log_thres_low, current_mag, current_logmag, 0)
-#     #returns whether fn_visitpath caused us to exit
-
-
 def pathmagnitude_threshold(oprep_lists, e_indices, num_elabels, target_sum_of_pathmags,
                             foat_indices_per_op=None, initial_threshold=0.1,
                             min_threshold=1e-10, max_npaths=1000000):
@@ -1266,13 +1176,10 @@ def pathmagnitude_threshold(oprep_lists, e_indices, num_elabels, target_sum_of_p
     #print("Target magnitude: ",target_mag)
     threshold_upper_bound = 1.0
     threshold_lower_bound = None
-    #db_last_threshold = None #DEBUG TODO REMOVE
     #mag = 0; nPaths = 0
 
     if foat_indices_per_op is None:
         foat_indices_per_op = [()] * len(oprep_lists)
-
-    # REMOVE comm = mem_limit = None  # TODO: make these arguments later?
 
     def count_path(b, mg, incd):
         mag[e_indices[b[-1]]] += mg
@@ -1329,21 +1236,9 @@ def pathmagnitude_threshold(oprep_lists, e_indices, num_elabels, target_sum_of_p
         nPaths[e_indices[b[-1]]] += 1
 
     mag = _np.zeros(num_elabels, 'd')
-    # integrals = _np.zeros(num_elabels, 'd') REMOVE
     nPaths = _np.zeros(num_elabels, int)
     traverse_paths_upto_threshold(oprep_lists, threshold_lower_bound, num_elabels,
                                   foat_indices_per_op, count_path_nomax)  # sets mag and nPaths
-
-    #TODO REMOVE - idea of truncating based on convergence of sum seems flawed - can't detect long tails
-    # last_threshold = 1e10  # something huge
-    # threshold = initial_threshold  # needs to be < 1
-    # converged = False
-    #
-    # while not converged:
-    #     converged = traverse_paths_upto_threshold_ex(oprep_lists, last_threshold, threshold,
-    #                                                  num_elabels, foat_indices_per_op, count_path)
-    #     last_threshold = threshold
-    #     threshold /= 2
 
     return threshold_lower_bound, nPaths, mag
 

@@ -114,7 +114,19 @@ class ModelPack(_ABC):
         return self._gscache[cache_key].copy()
 
     def processor_spec(self, qubit_labels=None):
-        """ TODO: docstring """
+        """
+        Create a processor specification for this model pack with the given qubit labels.
+
+        Parameters
+        ----------
+        qubit_labels : tuple, optional
+            A tuple of qubit labels, e.g. ('Q0', 'Q1') or (0, 1).  The default
+            are the integers starting at 0.
+
+        Returns
+        -------
+        QubitProcessorSpec
+        """
         static_target_model = self.target_model('static', qubit_labels=qubit_labels)  # assumed to be an ExplicitOpModel
         return static_target_model.create_processor_spec(self._sslbls)
 

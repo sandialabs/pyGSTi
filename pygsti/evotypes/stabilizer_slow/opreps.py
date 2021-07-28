@@ -150,11 +150,6 @@ class OpRepEmbedded(OpRep):
                and all([state_space.label_udimension(l) == 2 for l in state_space.tensor_product_block_labels(0)])), \
             "All state space labels must correspond to *qubits*"
 
-        # Just a sanity check...  TODO REMOVE?
-        #if isinstance(self.embedded_op, StaticCliffordOp):
-        #    assert(len(target_labels) == len(self.embedded_op.svector) // 2), \
-        #        "Inconsistent number of qubits in `target_labels` and Clifford `embedded_op`"
-
         #Cache info to speedup representation's acton(...) methods:
         # Note: ...labels[0] is the *only* tensor-prod-block, asserted above
         qubitLabels = state_space.tensor_product_block_labels(0)
@@ -191,7 +186,7 @@ class OpRepExpErrorgen(OpRep):
 
     def errgenrep_has_changed(self, onenorm_upperbound):
         pass
-    
+
     def acton(self, state):
         raise AttributeError("Cannot currently act with statevec.OpRepExpErrorgen - for terms only!")
 

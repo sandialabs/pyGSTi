@@ -368,7 +368,6 @@ class LindbladErrorgen(_LinearOperator):
 
         #Fast CSR-matrix summing variables: N/A if not sparse or using terms
         self._CSRSumIndices = self._CSRSumData = self._CSRSumPtr = None
-        #REMOVE? self.sparse_err_gen_template = None
 
         # Generator matrices & cache qtys: N/A for term-based evotypes
         self.hamGens = self.otherGens = None
@@ -412,12 +411,6 @@ class LindbladErrorgen(_LinearOperator):
                     else:  # nonham_mode in ("diag_affine", "all")
                         oList = [mx for mxRow in self.otherGens for mx in mxRow]
                     all_csr_matrices.extend(oList)
-
-                #OLD REMOVE
-                # csr_sum_array, indptr, indices, N = \
-                #     _mt.csr_sum_indices(all_csr_matrices)
-                #self.hamCSRSumIndices = csr_sum_array[0:len(self.hamGens)]
-                #self.otherCSRSumIndices = csr_sum_array[len(self.hamGens):]
 
                 flat_dest_indices, flat_src_data, flat_nnzptr, indptr, indices, N = \
                     _mt.csr_sum_flat_indices(all_csr_matrices)
@@ -772,28 +765,6 @@ class LindbladErrorgen(_LinearOperator):
 
             if coeffs is not None:
                 _mt.csr_sum_flat(data, coeffs, self._CSRSumIndices, self._CSRSumData, self._CSRSumPtr)
-
-            #TODO: REMOVE
-            # data.fill(0.0)  # data starts at zero
-            #
-            # if hamCoeffs is not None:
-            #     # lnd_error_gen = sum([c*gen for c,gen in zip(hamCoeffs, self.hamGens)])
-            #     _mt.csr_sum(data, hamCoeffs, self.hamGens, self.hamCSRSumIndices)
-            #     onenorm += _np.dot(self.hamGens_1norms, _np.abs(hamCoeffs))
-            #
-            # if otherCoeffs is not None:
-            #     if self.nonham_mode == "diagonal":
-            #         # lnd_error_gen += sum([c*gen for c,gen in zip(otherCoeffs, self.otherGens)])
-            #         _mt.csr_sum(data, otherCoeffs, self.otherGens, self.otherCSRSumIndices)
-            #         onenorm += _np.dot(self.otherGens_1norms, _np.abs(otherCoeffs))
-            #
-            #     else:  # nonham_mode in ("diag_affine", "all")
-            #         # lnd_error_gen += sum([c*gen for cRow,genRow in zip(otherCoeffs, self.otherGens)
-            #         #                      for c,gen in zip(cRow,genRow)])
-            #         _mt.csr_sum(data, otherCoeffs.flat,
-            #                     [oGen for oGenRow in self.otherGens for oGen in oGenRow],
-            #                     self.otherCSRSumIndices)
-            #         onenorm += _np.dot(self.otherGens_1norms, _np.abs(otherCoeffs.flat))
 
             #Don't perform this check as this function is called a *lot* and it
             # could adversely impact performance

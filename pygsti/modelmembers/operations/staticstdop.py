@@ -55,19 +55,6 @@ class StaticStandardOp(_LinearOperator):
         rep = evotype.create_standard_rep(name, basis, state_space)
         _LinearOperator.__init__(self, rep, evotype)
 
-#TODO REMOVE
-#    # TODO: This should not be necessary to define, but is here as a temporary measure
-#    # This will likely be removed as "dense" is reworked in the evotype refactor
-#    @property
-#    def base(self):
-#        """
-#        The underlying dense process matrix.
-#        """
-#        if self._evotype in ['statevec', 'densitymx', 'svterm', 'cterm']:
-#            return self._rep.base
-#        else:
-#            raise NotImplementedError('No base available for evotype "%s"' % self._evotype)
-
     def to_dense(self, on_space='minimal'):
         """
         Return the dense array used to represent this operation within its evolution type.

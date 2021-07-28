@@ -1929,15 +1929,13 @@ def robust_log_gti_and_projections(model_a, model_b, synthetic_idle_circuits):
         lindbladMxs = lindbladMxs[1:]  # skip [0] == Identity
         lbls = lindbladMxBasis.labels[1:]
 
-        #scaleFctr = _tools.std_scale_factor(model_a.dim, ptype)  # REMOVE
         ptype_counts[ptype] = len(lindbladMxs)
-        #ptype_scaleFctrs[ptype] = scaleFctr  # REMOVE?
         error_superops.extend([_tools.change_basis(eg, "std", mxBasis) for eg in lindbladMxs])
         error_labels.extend(["%s(%s)" % (ptype[0], lbl) for lbl in lbls])
     nSuperOps = len(error_superops)
     assert(len(error_labels) == nSuperOps)
 
-    #DEBUG
+    #DEBUG PRINT
     #print("DB: %d gates (%s)" % (nOperations, str(opLabels)))
     #print("DB: %d superops; counts = " % nSuperOps, ptype_counts)
     #print("DB: factors = ",ptype_scaleFctrs)
@@ -2505,42 +2503,6 @@ def instrument_half_diamond_norm(a, b, mx_basis):
             composite_op[aa:bb, cc:dd] = a[clbl].to_dense(on_space='HilbertSchmidt')
             composite_top[aa:bb, cc:dd] = b[clbl].to_dense(on_space='HilbertSchmidt')
     return half_diamond_norm(composite_op, composite_top, sumbasis)
-
-    #TODO: REMOVE
-    # #MANUAL
-    # sumbasis0 = _DirectSumBasis([mx_basis] * nComps)
-    # sumbasis = _TensorProdBasis([_Basis.cast('cl', nComps), mx_basis])
-    # composite_op = _np.zeros((a.dim * nComps, a.dim * nComps), 'd')
-    # composite_top = _np.zeros((a.dim * nComps, a.dim * nComps), 'd')
-    # for i, clbl in enumerate(a.keys()):
-    #     aa, bb = i * a.dim, (i + 1) * a.dim
-    #     composite_op[aa:bb, aa:bb] = a[clbl].to_dense()
-    #     composite_top[aa:bb, aa:bb] = b[clbl].to_dense()
-    # T = _np.kron(_np.array([[1,1],[1,-1]],'d'), _np.identity(a.dim,'d'))
-    # Tinv = _np.linalg.inv(T)
-    # composite_op = _np.dot(T, _np.dot(composite_op, Tinv))
-    # composite_top = _np.dot(T, _np.dot(composite_top, Tinv))
-    # #composite_op = _np.dot(T, composite_op)
-    # #composite_top = _np.dot(T,composite_top)
-    #
-    # #import bpdb; bpdb.set_trace()
-    # return half_diamond_norm(composite_op, composite_top, sumbasis0)  # doens't work w/sumbasis b/c it's a tensorprod
-    #
-    # #MANUAL2
-    # sumbasis = _TensorProdBasis([_Basis.cast('std', nComps**2), _Basis.cast('std', a.dim)])
-    # composite_op = _np.zeros((a.dim * nComps**2, a.dim * nComps**2), 'd')
-    # composite_top = _np.zeros((a.dim * nComps**2, a.dim * nComps**2), 'd')
-    # for i, clbl in enumerate(a.keys()):
-    #     aa, bb = (i * nComps + i) * a.dim, (i * nComps + i + 1) * a.dim
-    #     composite_op[aa:bb, aa:bb] = _tools.change_basis(a[clbl].to_dense(), mx_basis, 'std')
-    #     composite_top[aa:bb, aa:bb] = _tools.change_basis(b[clbl].to_dense(), mx_basis, 'std')
-    #
-    # # half_diamond_norm implementation *needs* a CPTP-like basis where first element is the identity:
-    # stdbasis = _Basis.cast('std', sumbasis.dim)
-    # #import bpdb; bpdb.set_trace()
-    # composite_op = _tools.change_basis(composite_op, sumbasis, stdbasis)
-    # composite_top = _tools.change_basis(composite_top, sumbasis, stdbasis)
-    # return half_diamond_norm(composite_op, composite_top, stdbasis)
 
 
 Instrument_half_diamond_norm = _modf.instrumentfn_factory(instrument_half_diamond_norm)

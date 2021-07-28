@@ -128,13 +128,6 @@ class ExplicitOpModel(_mdl.OpModel):
         self.effects_prefix = effect_prefix
         self._default_gauge_group = None
 
-        #REMOVE
-        #if basis == "auto":
-        #    evotype = _Evotype.cast(evotype)
-        #    basis = "pp" if evotype in ("densitymx", "svterm", "cterm") \
-        #        else "sv"  # ( if evotype in ("statevec","stabilizer") )
-        # TODO - change this based on evotype dimension in FUTURE ????
-
         super(ExplicitOpModel, self).__init__(state_space, basis, evotype, ExplicitLayerRules(), simulator)
 
     @property
@@ -1431,7 +1424,21 @@ class ExplicitOpModel(_mdl.OpModel):
         self._opcaches['op-layers'] = simplified_ops
 
     def create_processor_spec(self, qubit_labels='auto'):
-        """ TODO: docstring """
+        """
+        Create a processor specification from this model with the given qubit labels.
+
+        Currently this only works for models on qubits.
+
+        Parameters
+        ----------
+        qubit_labels : tuple or `"auto"`, optional
+            A tuple of qubit labels, e.g. ('Q0', 'Q1') or (0, 1).  `"auto"`
+            uses the labels in this model's state space labels.
+
+        Returns
+        -------
+        QubitProcessorSpec
+        """
         from pygsti.processors import QubitProcessorSpec as _QubitProcessorSpec
         #go through ops, building up availability and unitaries, then create procesor spec...
 
