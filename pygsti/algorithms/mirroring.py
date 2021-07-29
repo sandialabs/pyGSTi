@@ -632,12 +632,12 @@ def create_cz_mirror_circuit(circ, pspec, circtype='GCzr+Gzr', pauli_labels=None
 
     return mirror_circuit, target_bitstring
 
-def generate_czr_experiment_design(num_circs, depths ,qubit_sets, pspec ,twoQgate_density=0, angles=[_np.pi/2, -1*_np.pi/2]):
+def generate_czr_experiment_design(num_circs, depths ,qubit_set, pspec ,twoQgate_density=0, angles=[_np.pi/2, -1*_np.pi/2]):
     '''
     generates a randomized mirror benchmarking experiment design for circuits with controlled Z rotations for the two-qubit gates
     '''
     depths = depths
-    qubit_sets = qubit_sets
+    qs = qubit_set
     k = num_circs #number of circuits to create
     pspec = pspec
 
@@ -648,22 +648,22 @@ def generate_czr_experiment_design(num_circs, depths ,qubit_sets, pspec ,twoQgat
 
     #make the experiment design
     mcs_by_depth = {d:[] for d in depths}
-    for qs in qubit_sets:
-        for d in depths:
-            #generate k circuits
-            twoQmean =  len(qs) * twoQgate_density / 2
-            circs = [generate_cz_forward_circ(pspec, int(d/2), qubit_labels=qs, mean_two_q_gates=twoQmean, angles=angles) for _ in range(k)]
-            mcs = [(a,[b]) for a,b in [create_cz_mirror_circuit(c, pspec) for c in circs]]
-            mcs_by_depth[d].extend(mcs)
+    for d in depths:
+        #generate k circuits
+        twoQmean =  len(qs) * twoQgate_density / 2
+        circs = [generate_cz_forward_circ(pspec, int(d/2), qubit_labels=qs, mean_two_q_gates=twoQmean, angles=angles) for _ in range(k)]
+        mcs = [(a,[b]) for a,b in [create_cz_mirror_circuit(c, pspec) for c in circs]]
+        mcs_by_depth[d].extend(mcs)
     edesign = _protocols.MirrorRBDesign.from_existing_circuits(mcs_by_depth)
     return edesign
 
 
-def generate_1q_nc_experiment_design(num_circs, depths ,qubit_sets, pspec ,twoQgate_density=0):
+def generate_1q_nc_experiment_design(num_circs, depths ,qubit_set, pspec ,twoQgate_density=0):
     depths = depths
-    qubit_sets = qubit_sets
+    qs = qubit_set
     k = num_circs #number of circuits to create
     pspec = pspec
+    n = len(qs)
 
 
     # The exact details of the random circuit sampling distribution.
@@ -672,11 +672,10 @@ def generate_1q_nc_experiment_design(num_circs, depths ,qubit_sets, pspec ,twoQg
 
     #make the experiment design
     mcs_by_depth = {d:[] for d in depths}
-    for qs in qubit_sets:
-        for d in depths:
-            #generate k circuits
-            circs = [create_random_1q_nc_circuit(pspec, int(d/2), qubit_labels=qs, mean_two_q_gates=twoQmean) for _ in range(k)]
-            mcs = [(a,[b]) for a,b in [create_nc_mirror_circuit(c, pspec) for c in circs]]
-            mcs_by_depth[d].extend(mcs)
-    edesign = pygsti.protocols.MirrorRBDesign.from_existing_circuits(mcs_by_depth)
+    for d in depths:
+        #generate k circuits
+        circs = [create_random_1q_nc_circuit(pspec, int(d/2), qubit_labels=qs, mean_two_q_gates=twoQmean) for _ in range(k)]
+        mcs = [(a,[b]) for a,b in [create_nc_mirror_circuit(c, pspec) for c in circs]]
+        mcs_by_depth[d].extend(mcs)
+    edesign = _protocols.MirrorRBDesign.from_existing_circuits(mcs_by_depth)
     return edesign
