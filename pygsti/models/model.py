@@ -59,6 +59,7 @@ v
         self._hyperparams = {}
         self._paramvec = _np.zeros(0, 'd')
         self._paramlbls = _np.empty(0, dtype=object)
+        self._param_bounds = None
         self.uuid = _uuid.uuid4()  # a Model's uuid is like a persistent id(), useful for hashing
 
     @property
@@ -140,6 +141,17 @@ v
     @num_modeltest_params.setter
     def num_modeltest_params(self, count):
         self._num_modeltest_params = count
+
+    @property
+    def parameter_bounds(self):
+        return self._param_bounds
+
+    @parameter_bounds.setter
+    def parameter_bounds(self, val):
+        if val is not None:
+            assert(val.shape == (self.num_params, 2)), \
+                "`parameter_bounds` can only be set to None or a (num_params, 2)-shaped array!"
+        self._param_bounds = val
 
     @property
     def parameter_labels(self):

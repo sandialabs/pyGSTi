@@ -241,6 +241,9 @@ class CustomLMOptimizer(Optimizer):
         objective_func = objective.lsvec
         jacobian = objective.dlsvec
         x0 = objective.model.to_vector()
+        x_limits = objective.model.parameter_bounds
+        # x_limits should be a (num_params, 2)-shaped array, holding on each row the (min, max) values for the
+        #  corresponding parameter (element of the "x" vector) or `None`.  If `None`, then no limits are imposed.
 
         # Check memory limit can handle what custom_leastsq will "allocate"
         nExtra = objective.ex  # number of additional "extra" elements
@@ -272,6 +275,7 @@ class CustomLMOptimizer(Optimizer):
             resource_alloc=objective.resource_alloc,
             arrays_interface=ari,
             serial_solve_proc_threshold=self.serial_solve_proc_threshold,
+            x_limits=x_limits,
             verbosity=printer - 1, profiler=profiler)
 
         printer.log("Least squares message = %s" % msg, 2)
@@ -315,7 +319,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                    damping_clip=None, use_acceleration=False, uphill_step_threshold=0.0,
                    init_munu="auto", oob_check_interval=0, oob_action="reject", oob_check_mode=0,
                    resource_alloc=None, arrays_interface=None, serial_solve_proc_threshold=100,
-                   verbosity=0, profiler=None):
+                   x_limits=None, verbosity=0, profiler=None):
     """
     An implementation of the Levenberg-Marquardt least-squares optimization algorithm customized for use within pyGSTi.
 
@@ -434,6 +438,17 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
     arrays_interface : ArraysInterface
         An object that provides an interface for creating and manipulating data arrays.
 
+    serial_solve_proc_threshold : int optional
+        When there are fewer than this many processors, the optimizer will solve linear
+        systems serially, using SciPy on a single processor, rather than using a parallelized
+        Gaussian Elimination (with partial pivoting) algorithm coded in Python. Since SciPy's
+        implementation is more efficient, it's not worth using the parallel version until there
+        are many processors to spread the work among.
+
+    x_limits : numpy.ndarray, optional
+        A (num_params, 2)-shaped array, holding on each row the (min, max) values for the corresponding
+        parameter (element of the "x" vector).  If `None`, then no limits are imposed.
+
     verbosity : int, optional
         Amount of detail to print to stdout.
 
@@ -477,6 +492,12 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
         fdJac = ari.allocate_jac()
 
     ari.allscatter_x(global_x, x)
+
+    if x_limits is not None:
+        x_lower_limits = ari.allocate_jtf()
+        x_upper_limits = ari.allocate_jtf()
+        ari.allscatter_x(x_limits[:,0], x_lower_limits)
+        ari.allscatter_x(x_limits[:,1], x_upper_limits)
 
     if damping_basis == "singular_values":
         Jac_V = ari.allocate_jtj()
@@ -814,11 +835,47 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                             dx *= _np.sqrt(max_norm_dx / norm_dx)
                             new_x[:] = x + dx
                             norm_dx = ari.norm2_x(dx)  # _np.linalg.norm(dx)**2
+
+                        #apply x limits (bounds)
+                        if x_limits is not None:
+                            # Approach 1: project x into valid space by simply clipping out-of-bounds values
+                            for i, (x_el, lower, upper) in enumerate(zip(x, x_lower_limits, x_upper_limits)):
+                                if new_x[i] < lower:
+                                    new_x[i] = lower
+                                    dx[i] = lower - x_el
+                                elif new_x[i] > upper:
+                                    new_x[i] = upper
+                                    dx[i] = upper - x_el
+                            norm_dx = ari.norm2_x(dx)  # _np.linalg.norm(dx)**2
+
+                            # Approach 2: by scaling back dx (seems less good, but here in case we want it later)
+                            # # minimally reduce dx s.t. new_x = x + dx so that x_lower_limits <= x + dx <= x_upper_limits
+                            # # x_lower_limits - x <= dx <= x_upper_limits - x.  Note: we use potentially updated dx from
+                            # # max_norm_dx block above.  For 0 <= scale <= 1,
+                            # # 1) require x + scale*dx - x_upper_limits <= 0 => scale <= (x_upper_limits - x) / dx
+                            # #    [Note: above assumes dx > 0 b/c if not it moves x away from bound and scale < 0]
+                            # #    so if scale >= 0, then scale = min((x_upper_limits - x) / dx, 1.0)
+                            # scale = None
+                            # new_x[:] = (x_upper_limits - x) / dx
+                            # new_x_min = ari.min_x(new_x)
+                            # if 0 <= new_x_min < 1.0:
+                            #     scale = new_x_min
+                            # 
+                            # # 2) require x + scale*dx - x_lower_limits <= 0 => scale <= (x - x_lower_limits) / (-dx)
+                            # new_x[:] = (x_lower_limits - x) / dx
+                            # new_x_min = ari.min_x(new_x)
+                            # if 0 <= new_x_min < 1.0:
+                            #     scale = new_x_min if (scale is None) else min(new_x_min, scale)
+                            # 
+                            # if scale is not None:
+                            #     dx *= scale
+                            # new_x[:] = x + dx
+                            # norm_dx = ari.norm2_x(dx)  # _np.linalg.norm(dx)**2
+
                     else:
                         for dx, new_x in zip(dx_lst, new_x_lst):
                             new_x[:] = x + dx
                         norm_dx_lst = [ari.norm2_x(dx) for dx in dx_lst]
-                        norm_dx = norm_dx_lst[1]  # just use center value for printing & checks below
 
                         #ensure dx isn't too large - don't let any component change by more than ~max_dx_scale
                         if max_norm_dx:
@@ -827,6 +884,39 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                                     dx_lst[i] *= _np.sqrt(max_norm_dx / norm_dx)
                                     new_x_lst[i][:] = x + dx_lst[i]
                                     norm_dx_lst[i] = ari.norm2_x(dx_lst[i])
+
+                        #apply x limits (bounds)
+                        if x_limits is not None:
+                            for i, (dx, new_x) in enumerate(zip(dx_lst, new_x_lst)):
+                                # Do same thing as above for each possible dx in dx_lst
+                                # Approach 1:
+                                for ii, (x_el, lower, upper) in enumerate(zip(x, x_lower_limits, x_upper_limits)):
+                                    if new_x[ii] < lower:
+                                        new_x[ii] = lower
+                                        dx[ii] = lower - x_el
+                                    elif new_x[ii] > upper:
+                                        new_x[ii] = upper
+                                        dx[ii] = upper - x_el
+                                norm_dx_lst[i] = ari.norm2_x(dx)  # _np.linalg.norm(dx)**2
+
+                                # Approach 2:
+                                # scale = None
+                                # new_x[:] = (x_upper_limits - x) / dx
+                                # new_x_min = ari.min_x(new_x)
+                                # if 0 <= new_x_min < 1.0:
+                                #     scale = new_x_min
+                                # 
+                                # new_x[:] = (x_lower_limits - x) / dx
+                                # new_x_min = ari.min_x(new_x)
+                                # if 0 <= new_x_min < 1.0:
+                                #     scale = new_x_min if (scale is None) else min(new_x_min, scale)
+                                # 
+                                # if scale is not None:
+                                #     dx *= scale
+                                # new_x[:] = x + dx
+                                # norm_dx_lst[i] = ari.norm2_x(dx)
+
+                        norm_dx = norm_dx_lst[1]  # just use center value for printing & checks below
 
                     printer.log("  - Inner Loop: mu=%g, norm_dx=%g" % (mu, norm_dx), 2)
                     #MEM if profiler: profiler.memory_check("custom_leastsq: mid inner loop")
@@ -1114,6 +1204,10 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
     ari.deallocate_jtf(x)
     ari.deallocate_jtj_shared_mem_buf(jtj_buf)
     #ari.deallocate_x_for_jac(x_for_jac)
+
+    if x_limits is not None:
+        ari.deallocate_jtf(x_lower_limits)
+        ari.deallocate_jtf(x_upper_limits)
 
     if damping_basis == "singular_values":
         ari.deallocate_jtj(Jac_V)
