@@ -1044,6 +1044,31 @@ class DistributedArraysInterface(ArraysInterface):
         _smt.cleanup_shared_ndarray(result_shm)
         return ret
 
+    def min_x(self, x):
+        """
+        Compute the minimum of an `x`-type vector.
+
+        Parameters
+        ----------
+        x : numpy.ndarray or LocalNumpyArray
+            The vector to operate on.
+
+        Returns
+        -------
+        float
+        """
+        # assumes x's are in "fine" mode
+        local_min = _np.array(_np.min(x))
+        local_min.shape = (1,)  # for compatibility with allreduce_sum
+        result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (1,), 'd')
+        self.resource_alloc.allreduce_min(result, local_min,
+                                          unit_ralloc=self.layout.resource_alloc('param-fine'))
+        ret = result[0]  # "copies" the single returned element
+        self.resource_alloc.host_comm_barrier()  # make sure we don't cleanup too quickly
+        _smt.cleanup_shared_ndarray(result_shm)
+        return ret
+
+
     def max_x(self, x):
         """
         Compute the maximum of an `x`-type vector.
