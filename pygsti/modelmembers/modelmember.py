@@ -215,7 +215,8 @@ class ModelMember(ModelChild):
             assert(val.shape == (self.num_params, 2)), \
                 "`parameter_bounds` can only be set to None or a (num_params, 2)-shaped array!"
         self._param_bounds = val
-        self.dirty = True
+        if self.parent:
+            self.parent._mark_for_rebuild(self)
 
     @property
     def parent(self):

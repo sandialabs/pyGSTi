@@ -19,6 +19,7 @@ import scipy as _scipy
 from pygsti.optimize import arraysinterface as _ari
 from pygsti.optimize.customsolve import custom_solve as _custom_solve
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 
 # from scipy.optimize import OptimizeResult as _optResult
 
@@ -464,7 +465,8 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
     msg : str
         A message indicating why the solution converged (or didn't).
     """
-    comm = resource_alloc.comm if (resource_alloc is not None) else None
+    resource_alloc = _ResourceAllocation.cast(resource_alloc)
+    comm = resource_alloc.comm
     printer = _VerbosityPrinter.create_printer(verbosity, comm)
     ari = arrays_interface  # shorthand
 

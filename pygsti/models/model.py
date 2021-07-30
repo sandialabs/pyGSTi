@@ -848,7 +848,7 @@ class OpModel(Model):
             existing elements of _paramvec (use _update_paramvec for this)"""
         v = self._paramvec; Np = len(self._paramvec)  # NOT self.num_params since the latter calls us!
         vl = self._paramlbls
-        vb = self._param_bounds if (self._param_bounds is not None) else _default_param_bounds(self.num_params)
+        vb = self._param_bounds if (self._param_bounds is not None) else _default_param_bounds(Np)
         off = 0; shift = 0
         #print("DEBUG: rebuilding...")
 
@@ -916,7 +916,7 @@ class OpModel(Model):
                     assert(len(objvec[new_local_inds]) == num_new_params)
                     v = _np.insert(v, off, objvec[new_local_inds])
                     vl = _np.insert(vl, off, objlbls[new_local_inds])
-                    vb = _np.insert(vb, off, objbounds[new_local_inds])
+                    vb = _np.insert(vb, off, objbounds[new_local_inds,:], axis=0)
                 # print("objvec len = ",len(objvec), "num_new_params=",num_new_params,
                 #       " gpinds=",obj.gpindices) #," loc=",new_local_inds)
 
@@ -1526,4 +1526,4 @@ def _default_param_bounds(num_params):
 
 def _param_bounds_are_nontrivial(param_bounds):
     """Checks whether a parameter-bounds array holds any actual bounds, or if all are just +-inf """
-    return _np.all(param_bounds[:,0] == -_np.inf) and _np.all(param_bounds[:,1] == _np.inf)
+    return _np.any(param_bounds[:,0] != -_np.inf) or _np.any(param_bounds[:,1] != _np.inf)

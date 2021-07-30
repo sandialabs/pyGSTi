@@ -61,6 +61,12 @@ class OplessModel(_Model):
     def dim(self):
         return 0
 
+    @property
+    def parameter_bounds(self):
+        """ Upper and lower bounds on the values of each parameter, utilized by optimization routines """
+        # Note: this just replicates the base class version (in `Model`) but is needed to have setter method.
+        return self._param_bounds
+
     @parameter_bounds.setter
     def parameter_bounds(self, val):  # (opless models can have their bounds set directly)
         """ Upper and lower bounds on the values of each parameter, utilized by optimization routines """
