@@ -76,7 +76,6 @@ class OplessModel(_Model):
         self._param_bounds = val
         self.dirty = True
 
-
     def circuit_outcomes(self, circuit):  # needed for sparse data detection
         """
         Get all the possible outcome labels produced by simulating this circuit.

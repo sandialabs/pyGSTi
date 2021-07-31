@@ -166,12 +166,12 @@ v
         -------
         None
         """
-        if lower_bound == -_np.inf and upper_bound == np.inf:
+        if lower_bound == -_np.inf and upper_bound == _np.inf:
             return  # do nothing
 
         if self._param_bounds is None:
             self._param_bounds = _default_param_bounds(self.num_params)
-        self._param_bounds[index,:] = (lower_bound, upper_bound)
+        self._param_bounds[index, :] = (lower_bound, upper_bound)
 
     @property
     def parameter_labels(self):
@@ -916,7 +916,7 @@ class OpModel(Model):
                     assert(len(objvec[new_local_inds]) == num_new_params)
                     v = _np.insert(v, off, objvec[new_local_inds])
                     vl = _np.insert(vl, off, objlbls[new_local_inds])
-                    vb = _np.insert(vb, off, objbounds[new_local_inds,:], axis=0)
+                    vb = _np.insert(vb, off, objbounds[new_local_inds, :], axis=0)
                 # print("objvec len = ",len(objvec), "num_new_params=",num_new_params,
                 #       " gpinds=",obj.gpindices) #," loc=",new_local_inds)
 
@@ -948,7 +948,7 @@ class OpModel(Model):
                         if i >= L:
                             v[i] = w[ii]
                             vl[i] = wl[ii]
-                            vb[i,:] = wb[ii,:]
+                            vb[i, :] = wb[ii, :]
                     #print("DEBUG:    --> added %d new params" % (M+1-L))
                 if M >= 0:  # M == -1 signifies this object has no parameters, so we'll just leave `off` alone
                     off = M + 1
@@ -1519,11 +1519,11 @@ class OpModel(Model):
 def _default_param_bounds(num_params):
     """Construct an array to hold parameter bounds that starts with no bounds (all bounds +-inf) """
     param_bounds = _np.empty((num_params, 2), 'd')
-    param_bounds[:,0] = -_np.inf
-    param_bounds[:,1] = +_np.inf
+    param_bounds[:, 0] = -_np.inf
+    param_bounds[:, 1] = +_np.inf
     return param_bounds
 
 
 def _param_bounds_are_nontrivial(param_bounds):
     """Checks whether a parameter-bounds array holds any actual bounds, or if all are just +-inf """
-    return _np.any(param_bounds[:,0] != -_np.inf) or _np.any(param_bounds[:,1] != _np.inf)
+    return _np.any(param_bounds[:, 0] != -_np.inf) or _np.any(param_bounds[:, 1] != _np.inf)

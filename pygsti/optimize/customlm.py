@@ -498,8 +498,8 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
     if x_limits is not None:
         x_lower_limits = ari.allocate_jtf()
         x_upper_limits = ari.allocate_jtf()
-        ari.allscatter_x(x_limits[:,0], x_lower_limits)
-        ari.allscatter_x(x_limits[:,1], x_upper_limits)
+        ari.allscatter_x(x_limits[:, 0], x_lower_limits)
+        ari.allscatter_x(x_limits[:, 1], x_upper_limits)
 
     if damping_basis == "singular_values":
         Jac_V = ari.allocate_jtj()
@@ -851,8 +851,8 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                             norm_dx = ari.norm2_x(dx)  # _np.linalg.norm(dx)**2
 
                             # Approach 2: by scaling back dx (seems less good, but here in case we want it later)
-                            # # minimally reduce dx s.t. new_x = x + dx so that x_lower_limits <= x + dx <= x_upper_limits
-                            # # x_lower_limits - x <= dx <= x_upper_limits - x.  Note: we use potentially updated dx from
+                            # # minimally reduce dx s.t. new_x = x + dx so that x_lower_limits <= x+dx <= x_upper_limits
+                            # # x_lower_limits - x <= dx <= x_upper_limits - x.  Note: use potentially updated dx from
                             # # max_norm_dx block above.  For 0 <= scale <= 1,
                             # # 1) require x + scale*dx - x_upper_limits <= 0 => scale <= (x_upper_limits - x) / dx
                             # #    [Note: above assumes dx > 0 b/c if not it moves x away from bound and scale < 0]
@@ -862,13 +862,13 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                             # new_x_min = ari.min_x(new_x)
                             # if 0 <= new_x_min < 1.0:
                             #     scale = new_x_min
-                            # 
+                            #
                             # # 2) require x + scale*dx - x_lower_limits <= 0 => scale <= (x - x_lower_limits) / (-dx)
                             # new_x[:] = (x_lower_limits - x) / dx
                             # new_x_min = ari.min_x(new_x)
                             # if 0 <= new_x_min < 1.0:
                             #     scale = new_x_min if (scale is None) else min(new_x_min, scale)
-                            # 
+                            #
                             # if scale is not None:
                             #     dx *= scale
                             # new_x[:] = x + dx
@@ -907,12 +907,12 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                                 # new_x_min = ari.min_x(new_x)
                                 # if 0 <= new_x_min < 1.0:
                                 #     scale = new_x_min
-                                # 
+                                #
                                 # new_x[:] = (x_lower_limits - x) / dx
                                 # new_x_min = ari.min_x(new_x)
                                 # if 0 <= new_x_min < 1.0:
                                 #     scale = new_x_min if (scale is None) else min(new_x_min, scale)
-                                # 
+                                #
                                 # if scale is not None:
                                 #     dx *= scale
                                 # new_x[:] = x + dx

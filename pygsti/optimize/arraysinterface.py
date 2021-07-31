@@ -1068,7 +1068,6 @@ class DistributedArraysInterface(ArraysInterface):
         _smt.cleanup_shared_ndarray(result_shm)
         return ret
 
-
     def max_x(self, x):
         """
         Compute the maximum of an `x`-type vector.

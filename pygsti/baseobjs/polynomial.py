@@ -1108,7 +1108,7 @@ Polynomial = FASTPolynomial
 #             ret_tup = []
 #             for k in range(ints_in_key):
 #                 ret = 0; m = 1
-#                 for i in vinds[k * vindices_per_int:(k + 1) * vindices_per_int]:  # last tuple index is most significant
+#                 for i in vinds[k * vindices_per_int:(k + 1) * vindices_per_int]:  # last tuple index=most significant
 #                     assert(i < max_num_vars), "Variable index exceed maximum!"
 #                     ret += (i + 1) * m
 #                     m *= max_num_vars + 1
