@@ -591,7 +591,6 @@ class StdInputParser(object):
         dataset.done_adding_data()
         return dataset
 
-
     def parse_multidatafile(self, filename, show_progress=True,
                             collision_action="aggregate", record_zero_counts=True, ignore_zero_count_lines=True):
         """

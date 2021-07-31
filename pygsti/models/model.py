@@ -59,6 +59,7 @@ v
         self._hyperparams = {}
         self._paramvec = _np.zeros(0, 'd')
         self._paramlbls = _np.empty(0, dtype=object)
+        self._param_bounds = None
         self.uuid = _uuid.uuid4()  # a Model's uuid is like a persistent id(), useful for hashing
 
     @property
@@ -140,6 +141,37 @@ v
     @num_modeltest_params.setter
     def num_modeltest_params(self, count):
         self._num_modeltest_params = count
+
+    @property
+    def parameter_bounds(self):
+        """ Upper and lower bounds on the values of each parameter, utilized by optimization routines """
+        return self._param_bounds
+
+    def set_parameter_bounds(self, index, lower_bound=-_np.inf, upper_bound=_np.inf):
+        """
+        Set the bounds for a single model parameter.
+
+        These limit the values the parameter can have during an optimization of the model.
+
+        Parameters
+        ----------
+        index : int
+            The index of the paramter whose bounds should be set.
+
+        lower_bound, upper_bound : float, optional
+            The lower and upper bounds for the parameter.  Can be set to the special
+            `numpy.inf` (or `-numpy.inf`) values to effectively have no bound.
+
+        Returns
+        -------
+        None
+        """
+        if lower_bound == -_np.inf and upper_bound == _np.inf:
+            return  # do nothing
+
+        if self._param_bounds is None:
+            self._param_bounds = _default_param_bounds(self.num_params)
+        self._param_bounds[index, :] = (lower_bound, upper_bound)
 
     @property
     def parameter_labels(self):
@@ -816,6 +848,7 @@ class OpModel(Model):
             existing elements of _paramvec (use _update_paramvec for this)"""
         v = self._paramvec; Np = len(self._paramvec)  # NOT self.num_params since the latter calls us!
         vl = self._paramlbls
+        vb = self._param_bounds if (self._param_bounds is not None) else _default_param_bounds(Np)
         off = 0; shift = 0
         #print("DEBUG: rebuilding...")
 
@@ -835,6 +868,7 @@ class OpModel(Model):
             #print("DEBUG: Removing %d params:"  % len(indices_to_remove), indices_to_remove)
             v = _np.delete(v, indices_to_remove)
             vl = _np.delete(vl, indices_to_remove)
+            vb = _np.delete(vb, indices_to_remove, axis=0)
             def get_shift(j): return _bisect.bisect_left(indices_to_remove, j)
             memo = set()  # keep track of which object's gpindices have been set
             for _, obj in self._iter_parameterized_objs():
@@ -875,11 +909,14 @@ class OpModel(Model):
                 objvec = obj.to_vector()  # may include more than "new" indices
                 objlbls = _np.empty(obj.num_params, dtype=object)
                 objlbls[:] = [(lbl, obj_plbl) for obj_plbl in obj.parameter_labels]
+                objbounds = obj.parameter_bounds if (obj.parameter_bounds is not None) \
+                    else _default_param_bounds(len(objvec))
                 if num_new_params > 0:
                     new_local_inds = _gm._decompose_gpindices(obj.gpindices, slice(off, off + num_new_params))
                     assert(len(objvec[new_local_inds]) == num_new_params)
                     v = _np.insert(v, off, objvec[new_local_inds])
                     vl = _np.insert(vl, off, objlbls[new_local_inds])
+                    vb = _np.insert(vb, off, objbounds[new_local_inds, :], axis=0)
                 # print("objvec len = ",len(objvec), "num_new_params=",num_new_params,
                 #       " gpinds=",obj.gpindices) #," loc=",new_local_inds)
 
@@ -900,19 +937,25 @@ class OpModel(Model):
                     w = obj.to_vector()
                     wl = _np.empty(obj.num_params, dtype=object)
                     wl[:] = [(lbl, obj_plbl) for obj_plbl in obj.parameter_labels]
+                    wb = obj.parameter_bounds if (obj.parameter_bounds is not None) \
+                        else _default_param_bounds(len(w))
+
                     v = _np.concatenate((v, _np.empty(M + 1 - L, 'd')), axis=0)  # [v.resize(M+1) doesn't work]
                     vl = _np.concatenate((vl, _np.empty(M + 1 - L, dtype=object)), axis=0)
+                    vb = _np.concatenate((vb, _np.empty((M + 1 - L, 2), 'd')), axis=0)
                     #shift += M + 1 - L  # OLD EGN doesn't think we want to shift anything here
                     for ii, i in enumerate(inds):
                         if i >= L:
                             v[i] = w[ii]
                             vl[i] = wl[ii]
+                            vb[i, :] = wb[ii, :]
                     #print("DEBUG:    --> added %d new params" % (M+1-L))
                 if M >= 0:  # M == -1 signifies this object has no parameters, so we'll just leave `off` alone
                     off = M + 1
 
         self._paramvec = v
         self._paramlbls = vl
+        self._param_bounds = vb if _param_bounds_are_nontrivial(vb) else None
         #print("DEBUG: Done rebuild: %d params" % len(v))
 
     def _init_virtual_obj(self, obj):
@@ -1471,3 +1514,16 @@ class OpModel(Model):
         ret = Model.copy(self)
         if OpModel._pcheck: ret._check_paramvec()
         return ret
+
+
+def _default_param_bounds(num_params):
+    """Construct an array to hold parameter bounds that starts with no bounds (all bounds +-inf) """
+    param_bounds = _np.empty((num_params, 2), 'd')
+    param_bounds[:, 0] = -_np.inf
+    param_bounds[:, 1] = +_np.inf
+    return param_bounds
+
+
+def _param_bounds_are_nontrivial(param_bounds):
+    """Checks whether a parameter-bounds array holds any actual bounds, or if all are just +-inf """
+    return _np.any(param_bounds[:, 0] != -_np.inf) or _np.any(param_bounds[:, 1] != _np.inf)

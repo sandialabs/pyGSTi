@@ -136,6 +136,7 @@ class ModelMember(ModelChild):
         self._gpindices = gpindices
         self._submember_rpindices = ()  # parameter indices relative to this object's parameters
         self._paramlbls = None  # signals auto-generation of "unknown" parameter labels
+        self._param_bounds = None  # either None or a (num_params,2)-shaped array of (lower,upper) bounds
         self._dirty = False  # True when there's any *possibility* that this
         # gate's parameters have been changed since the
         # last setting of dirty=False
@@ -201,6 +202,21 @@ class ModelMember(ModelChild):
         if self._paramlbls is None:
             return _np.array(["Unknown param %d" % i for i in range(self.num_params)], dtype=object)
         return self._paramlbls
+
+    @property
+    def parameter_bounds(self):
+        """ Upper and lower bounds on the values of each parameter, utilized by optimization routines """
+        return self._param_bounds
+
+    @parameter_bounds.setter
+    def parameter_bounds(self, val):
+        """ Upper and lower bounds on the values of each parameter, utilized by optimization routines """
+        if val is not None:
+            assert(val.shape == (self.num_params, 2)), \
+                "`parameter_bounds` can only be set to None or a (num_params, 2)-shaped array!"
+        self._param_bounds = val
+        if self.parent:
+            self.parent._mark_for_rebuild(self)
 
     @property
     def parent(self):

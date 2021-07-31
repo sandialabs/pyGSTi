@@ -61,6 +61,21 @@ class OplessModel(_Model):
     def dim(self):
         return 0
 
+    @property
+    def parameter_bounds(self):
+        """ Upper and lower bounds on the values of each parameter, utilized by optimization routines """
+        # Note: this just replicates the base class version (in `Model`) but is needed to have setter method.
+        return self._param_bounds
+
+    @parameter_bounds.setter
+    def parameter_bounds(self, val):  # (opless models can have their bounds set directly)
+        """ Upper and lower bounds on the values of each parameter, utilized by optimization routines """
+        if val is not None:
+            assert(val.shape == (self.num_params, 2)), \
+                "`parameter_bounds` can only be set to None or a (num_params, 2)-shaped array!"
+        self._param_bounds = val
+        self.dirty = True
+
     def circuit_outcomes(self, circuit):  # needed for sparse data detection
         """
         Get all the possible outcome labels produced by simulating this circuit.
