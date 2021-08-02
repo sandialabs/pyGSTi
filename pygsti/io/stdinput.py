@@ -116,14 +116,17 @@ class StdInputParser(object):
         if self.use_global_parse_cache:
             circuit = _global_parse_cache[create_subcircuits].get(s, None)
         if circuit is None:  # wasn't in cache
-            layer_tuple, line_lbls, occurrence_id = self.parse_circuit_raw(s, lookup, create_subcircuits)
+            layer_tuple, line_lbls, occurrence_id, compilable_indices = \
+                self.parse_circuit_raw(s, lookup, create_subcircuits)
             if line_lbls is None:  # if there are no line labels then we need to use "auto" and do a full init
                 circuit = _Circuit(layer_tuple, stringrep=s, line_labels="auto",
-                                   expand_subcircuits=False, check=False, occurrence=occurrence_id)
+                                   expand_subcircuits=False, check=False, occurrence=occurrence_id,
+                                   compilable_layer_indices=compilable_indices)
                 #Note: never expand subcircuits since parse_circuit_raw already does this w/create_subcircuits arg
             else:
                 circuit = _Circuit._fastinit(layer_tuple, line_lbls, editable=False,
-                                             name='', stringrep=s, occurrence=occurrence_id)
+                                             name='', stringrep=s, occurrence=occurrence_id,
+                                             compilable_layer_indices=compilable_indices)
 
             if self.use_global_parse_cache:
                 _global_parse_cache[create_subcircuits][s] = circuit
@@ -152,14 +155,25 @@ class StdInputParser(object):
 
         Returns
         -------
-        tuple of operation labels
-            Representing the circuit.
+        label_tuple: tuple
+            Tuple of operation labels representing the circuit's layers.
+        line_labels: tuple or None
+            A tuple or `None` giving the parsed line labels (follwing the '@' symbol) of the circuit.
+        occurrence_id: int or None
+            The "occurence id" - an integer following a second '@' symbol that identifies a particular
+            copy of this circuit.
+        compilable_indices : tuple or None
+            A tuple of layer indices (into `label_tuple`) marking the layers that can be "compiled",
+            and are *not* followed by a barrier so they can be compiled with following layers.  This
+            is non-`None` only when there are explicit markers within the circuit string indicating
+            the presence or absence of barriers.
         """
         self._circuit_parser.lookup = lookup
-        circuit_tuple, circuit_labels, occurrence_id = self._circuit_parser.parse(s, create_subcircuits)
+        circuit_tuple, circuit_labels, occurrence_id, compilable_indices = \
+            self._circuit_parser.parse(s, create_subcircuits)
         # print "DB: result = ",result
         # print "DB: stack = ",self.exprStack
-        return circuit_tuple, circuit_labels, occurrence_id
+        return circuit_tuple, circuit_labels, occurrence_id, compilable_indices
 
     def parse_dataline(self, s, lookup={}, expected_counts=-1, create_subcircuits=True,
                        line_labels=None):
@@ -247,6 +261,11 @@ class StdInputParser(object):
             The line labels of the cirucit.
         occurrence : object
             Circuit's occurrence id, or `None` if there is none.
+        compilable_indices : tuple or None
+            A tuple of layer indices (into `label_tuple`) marking the layers that can be "compiled",
+            and are *not* followed by a barrier so they can be compiled with following layers.  This
+            is non-`None` only when there are explicit markers within the circuit string indicating
+            the presence or absence of barriers.
         """
         label = r'\s*([a-zA-Z0-9_]+)\s+'
         match = _re.match(label, s)
@@ -254,8 +273,8 @@ class StdInputParser(object):
             raise ValueError("'{}' is not a valid dictline".format(s))
         circuitLabel = match.group(1)
         circuitStr = s[match.end():]
-        circuitTuple, circuitLineLabels, occurrence_id = self._circuit_parser.parse(circuitStr)
-        return circuitLabel, circuitTuple, circuitStr, circuitLineLabels, occurrence_id
+        circuitTuple, circuitLineLabels, occurrence_id, compilable_indices = self._circuit_parser.parse(circuitStr)
+        return circuitLabel, circuitTuple, circuitStr, circuitLineLabels, occurrence_id, compilable_indices
 
     def parse_stringfile(self, filename, line_labels="auto", num_lines=None, create_subcircuits=True):
         """
@@ -297,13 +316,15 @@ class StdInputParser(object):
                     # can be cached, and cache assumes "auto" behavior
                     circuit = self.parse_circuit(line, {}, create_subcircuits)
                 else:
-                    layer_lbls, parsed_line_lbls, occurrence_id = self.parse_circuit_raw(line, {}, create_subcircuits)
+                    layer_lbls, parsed_line_lbls, occurrence_id, compilable_indices = \
+                        self.parse_circuit_raw(line, {}, create_subcircuits)
                     if parsed_line_lbls is None:
                         parsed_line_lbls = line_labels  # default to the passed-in argument
                         #nlines = num_lines
                     #else: nlines = None  # b/c we've got a valid line_lbls
                     circuit = _Circuit._fastinit(layer_lbls, parsed_line_lbls, editable=False,
-                                                 name='', stringrep=line.strip(), occurrence=occurrence_id)
+                                                 name='', stringrep=line.strip(), occurrence=occurrence_id,
+                                                 compilable_layer_indices=compilable_indices)
                     #circuit = _Circuit(layer_lbls, stringrep=line.strip(),
                     #                        line_labels=parsed_line_lbls, num_lines=nlines,
                     #                        expand_subcircuits=False, check=False, occurrence=occurrence_id)
@@ -330,10 +351,11 @@ class StdInputParser(object):
             for line in dictfile:
                 line = line.strip()
                 if len(line) == 0 or line[0] == '#': continue
-                label, tup, s, lineLbls, occurrence_id = self.parse_dictline(line)
+                label, tup, s, lineLbls, occurrence_id, compilable_indices = self.parse_dictline(line)
                 if lineLbls is None: lineLbls = "auto"
                 lookupDict[label] = _Circuit(tup, stringrep=s, line_labels=lineLbls,
-                                             check=False, occurrence=occurrence_id)
+                                             check=False, occurrence=occurrence_id,
+                                             compilable_layer_indices=compilable_indices)
         return lookupDict
 
     def parse_datafile(self, filename, show_progress=True,

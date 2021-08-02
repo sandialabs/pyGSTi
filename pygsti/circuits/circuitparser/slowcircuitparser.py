@@ -32,43 +32,79 @@ def parse_circuit(code, create_subcircuits=True, integerize_sslbls=True):
         labels = None
         occurrence_id = None
 
-    result = []
+    compilable_joins_exist = bool('~' in code)
+    barrier_joins_exist = bool('|' in code)
+    if compilable_joins_exist and barrier_joins_exist:
+        raise ValueError("Circuit string '%s' contains both barrier and compilable layer joining!" % code)
+    elif compilable_joins_exist: interlayer_marker = '~'
+    elif barrier_joins_exist: interlayer_marker = '|'
+    else: interlayer_marker = u''  # matches nothing
+
+    result = []; interlayer_marker_inds = []
     code = code.replace('*', '')  # multiplication is implicit (no need for '*' ops)
     i = 0; end = len(code); segment = 0
 
-    while(True):
-        if i == end: break
-        lbls_list, i, segment = _get_next_lbls(code, i, end, create_subcircuits, integerize_sslbls, segment)
+    while i < end:
+        if code[i] == interlayer_marker:
+            interlayer_marker_inds.append(len(result) - 1); i += 1
+            if i == end: break
+
+        lbls_list, i, segment, marker_inds = _get_next_lbls(code, i, end, create_subcircuits, integerize_sslbls,
+                                                            segment, interlayer_marker)
+        interlayer_marker_inds.extend([len(result) + k for k in marker_inds])
         result.extend(lbls_list)
 
-    return tuple(result), labels, occurrence_id
+    # construct list of compile-able circuit layer indices (indices of result)
+    if compilable_joins_exist:  # marker is '~', so marker indices == compilable-layer indices
+        compilable_indices = tuple(interlayer_marker_inds)
+    elif barrier_joins_exist:  # marker is '|', so invert marker indices to get compilable-layer indices
+        compilable_indices = tuple(sorted(set(range(len(result))) - set(interlayer_marker_inds)))
+    else:
+        compilable_indices = None
+
+    return tuple(result), labels, occurrence_id, compilable_indices
 
 
-def _get_next_lbls(s, start, end, create_subcircuits, integerize_sslbls, segment):
+def _get_next_lbls(s, start, end, create_subcircuits, integerize_sslbls, segment, interlayer_marker):
     if s[start] == "(":
         i = start + 1
-        lbls_list = []
+        lbls_list = []; interlayer_marker_inds = []
         while i < end and s[i] != ")":
-            lbls, i, segment = _get_next_lbls(s, i, end, create_subcircuits, integerize_sslbls, segment)
+            if s[i] == interlayer_marker:
+                interlayer_marker_inds.append(len(lbls_list) - 1); i += 1
+                if i == end or s[i] == ")": break
+
+            lbls, i, segment, _ = _get_next_lbls(s, i, end, create_subcircuits, integerize_sslbls, segment,
+                                                 interlayer_marker)  # don't recursively look for interlayer markers
             lbls_list.extend(lbls)
+
         if i == end: raise ValueError("mismatched parenthesis")
         i += 1
         exponent, i = _parse_exponent(s, i, end)
 
+        if exponent != 1 and len(interlayer_marker_inds) > 0:
+            if exponent == 0: interlayer_marker_inds = ()
+            else:  # exponent > 1
+                base_marker_inds = interlayer_marker_inds[:]  # a new list
+                for k in range(1,exponent):
+                    offset = len(lbls_list) * k
+                    interlayer_marker_inds.extend(map(lambda x: x + offset, base_marker_inds))
+
         if create_subcircuits:
             if len(lbls_list) == 0:  # special case of {}^power => remain empty
-                return [], i, segment
+                return [], i, segment, ()
             else:
                 tmp = _lbl.Label(lbls_list)  # just for total sslbs - should probably do something faster
-                return [_lbl.CircuitLabel('', lbls_list, tmp.sslbls, exponent)], i, segment
+                return [_lbl.CircuitLabel('', lbls_list, tmp.sslbls, exponent)], i, segment, ()
         else:
-            return lbls_list * exponent, i, segment
+            return lbls_list * exponent, i, segment, interlayer_marker_inds
 
     elif s[start] == "[":  # layer
         i = start + 1
         lbls_list = []
         while i < end and s[i] != "]":
-            lbls, i, segment = _get_next_lbls(s, i, end, create_subcircuits, integerize_sslbls, segment)
+            lbls, i, segment, _ = _get_next_lbls(s, i, end, create_subcircuits, integerize_sslbls, segment,
+                                                 interlayer_marker)  # but don't actually look for marker
             lbls_list.extend(lbls)
         if i == end: raise ValueError("mismatched parenthesis")
         i += 1
@@ -83,12 +119,12 @@ def _get_next_lbls(s, start, end, create_subcircuits, integerize_sslbls, segment
                 else _lbl.LabelTupTupWithTime(tuple(lbls_list), time)
         else:
             to_exponentiate = lbls_list[0]
-        return [to_exponentiate] * exponent, i, segment
+        return [to_exponentiate] * exponent, i, segment, ()
 
     else:
         lbls, i, segment = _get_next_simple_lbl(s, start, end, integerize_sslbls, segment)
         exponent, i = _parse_exponent(s, i, end)
-        return lbls * exponent, i, segment
+        return lbls * exponent, i, segment, ()
 
 
 def _get_next_simple_lbl(s, start, end, integerize_sslbls, segment):
