@@ -419,7 +419,7 @@ class OpModelPerOpNoise(OpModelNoise):
         cparser.lookup = None  # lookup - functionality removed as it wasn't used
         for k, v in per_op_noise.items():
             if isinstance(k, str) and ":" in k:  # then parse this to get a label, allowing, e.g. "Gx:0"
-                lbls, _, _ = cparser.parse(k)
+                lbls, _, _, _ = cparser.parse(k)
                 assert (len(lbls) == 1), "Only single primitive-gate labels allowed as keys! (not %s)" % str(k)
                 del self.per_op_noise[k]
                 self.per_op_noise[lbls[0]] = v
