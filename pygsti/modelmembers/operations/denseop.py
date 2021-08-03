@@ -15,13 +15,13 @@ import copy as _copy
 import numpy as _np
 import scipy.sparse as _sps
 
-from .linearop import LinearOperator as _LinearOperator
-from ...evotypes import Evotype as _Evotype
-from ...baseobjs import statespace as _statespace
-from ...baseobjs.basis import Basis as _Basis
-from ...tools import basistools as _bt
-from ...tools import matrixtools as _mt
-from ...tools import optools as _ot
+from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
+from pygsti.evotypes import Evotype as _Evotype
+from pygsti.baseobjs import statespace as _statespace
+from pygsti.baseobjs.basis import Basis as _Basis
+from pygsti.tools import basistools as _bt
+from pygsti.tools import matrixtools as _mt
+from pygsti.tools import optools as _ot
 
 
 def finite_difference_deriv_wrt_params(operation, wrt_filter, eps=1e-7):
@@ -211,7 +211,9 @@ class DenseOperatorInterface(object):
 
     def __setitem__(self, key, val):
         self.dirty = True
-        return self._ptr.__setitem__(key, val)
+        ret = self._ptr.__setitem__(key, val)
+        self._ptr_has_changed()
+        return ret
 
     def __getattr__(self, attr):
         #use __dict__ so no chance for recursive __getattr__
@@ -248,26 +250,10 @@ class DenseOperatorInterface(object):
     def __complex__(self): return complex(self._ptr)
 
 
-#REMOVE
-#class BasedDenseOperatorInterface(DenseOperatorInterface):
-#    """
-#    A DenseOperatorInterface that uses self.base instead of self._rep.base as the "base pointer" to data.
-#
-#    This is used by the FullTPOp class, for example, which has a .base
-#    that is different from its ._rep.base.
-#    """
-#    def __init__(self, base):
-#        self.base = base
-#
-#    @property
-#    def _ptr(self):
-#        return self.base
-
-
 class DenseOperator(DenseOperatorInterface, _LinearOperator):
     """
     TODO: update docstring
-    An operator that behaves like a dense operation matrix.
+    An operator that behaves like a dense super-operator matrix.
 
     This class is the common base class for more specific dense operators.
 
@@ -290,7 +276,7 @@ class DenseOperator(DenseOperatorInterface, _LinearOperator):
         Direct access to the underlying process matrix data.
     """
 
-    def __init__(self, mx, evotype, state_space):
+    def __init__(self, mx, evotype, state_space=None):
         """ Initialize a new LinearOperator """
         mx = _LinearOperator.convert_to_matrix(mx)
         state_space = _statespace.default_space_for_dim(mx.shape[0]) if (state_space is None) \
@@ -334,7 +320,7 @@ class DenseOperator(DenseOperatorInterface, _LinearOperator):
 class DenseUnitaryOperator(DenseOperatorInterface, _LinearOperator):
     """
     TODO: update docstring
-    An operator that behaves like a dense operation matrix.
+    An operator that behaves like a dense (unitary) operator matrix.
 
     This class is the common base class for more specific dense operators.
 
@@ -437,7 +423,7 @@ class DenseUnitaryOperator(DenseOperatorInterface, _LinearOperator):
         -------
         None
         """
-        from ...models import gaugegroup as _gaugegroup
+        from pygsti.models import gaugegroup as _gaugegroup
         if isinstance(s, _gaugegroup.UnitaryGaugeGroupElement) or \
            isinstance(s, _gaugegroup.TPSpamGaugeGroupElement):
 
@@ -482,7 +468,7 @@ class DenseUnitaryOperator(DenseOperatorInterface, _LinearOperator):
         """
         assert(typ in ('prep', 'effect')), "Invalid `typ` argument: %s" % typ
 
-        from ...models import gaugegroup as _gaugegroup
+        from pygsti.models import gaugegroup as _gaugegroup
         if isinstance(s, _gaugegroup.UnitaryGaugeGroupElement) or \
            isinstance(s, _gaugegroup.TPSpamGaugeGroupElement):
             U = s.transform_matrix

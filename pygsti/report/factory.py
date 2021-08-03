@@ -18,24 +18,23 @@ import zipfile as _zipfile
 
 import numpy as _np
 
-from . import Report as _Report
-from . import autotitle as _autotitle
-from . import merge_helpers as _merge
-from . import reportables as _reportables
-from . import section as _section
-from . import workspace as _ws
-from .. import _version
-from .. import tools as _tools
-from ..models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
-from ..modelpacks import RBModelPack as _RBModelPack
+from pygsti.report import Report as _Report
+from pygsti.report import autotitle as _autotitle
+from pygsti.report import merge_helpers as _merge
+from pygsti.report import reportables as _reportables
+from pygsti.report import section as _section
+from pygsti.report import workspace as _ws
+from pygsti import _version
+from pygsti import tools as _tools
+from pygsti.models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
-from ..objectivefns import objectivefns as _objfns
-from ..circuits.circuit import Circuit as _Circuit
-from ..circuits.circuitlist import CircuitList as _CircuitList
-from ..circuits.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
-from ..baseobjs.label import Label as _Lbl
-from ..baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from ..tools.legacytools import deprecate as _deprecated_fn
+from pygsti.objectivefns import objectivefns as _objfns
+from pygsti.circuits.circuit import Circuit as _Circuit
+from pygsti.circuits.circuitlist import CircuitList as _CircuitList
+from pygsti.circuits.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
+from pygsti.baseobjs.label import Label as _Lbl
+from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from pygsti.tools.legacytools import deprecate as _deprecated_fn
 
 #maybe import these from drivers.longsequence so they stay synced?
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]  # ".wildcard" (not a separate estimate anymore)
@@ -244,10 +243,6 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
     switchBd.add("params", (0, 1))
     switchBd.add("objfn_builder", (0, 1))
     switchBd.add("objfn_builder_modvi", (0, 1))
-    #switchBd.add("objective_tvd_tuple", (0, 1))    #REMOVE
-    #switchBd.add("objective_modvi", (0, 1))    #REMOVE
-    #switchBd.add("mpc", (0, 1))    #REMOVE
-    #switchBd.add("mpc_modvi", (0, 1))    #REMOVE
     switchBd.add("clifford_compilation", (0, 1))
     switchBd.add("meta_stdout", (0, 1))
     switchBd.add("profiler", (0, 1))
@@ -329,24 +324,6 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
                 'final_objfn_builder', _objfns.ObjectiveFunctionBuilder.create_from('logl'))
             switchBd.params[d, i] = est.parameters
 
-            #REMOVE
-            #def rpt_objective(opt_objective):
-            #    """ If optimized using just LGST, compute logl values """
-            #    if opt_objective == "lgst": return "logl"
-            #    else: return opt_objective
-            #switchBd.params[d, i] = est.parameters
-            #switchBd.objective[d, i] = rpt_objective(est.parameters['objective'])
-            #switchBd.objective_tvd_tuple[d, i] = (rpt_objective(est.parameters['objective']), 'tvd')
-            #switchBd.objective_modvi[d, i] = rpt_objective(est_modvi.parameters['objective'])
-            #if est.parameters['objective'] == "logl":
-            #    switchBd.mpc[d, i] = est.parameters['minProbClip']
-            #    switchBd.mpc_modvi[d, i] = est_modvi.parameters['minProbClip']
-            #elif est.parameters['objective'] == "chi2":
-            #    switchBd.mpc[d, i] = est.parameters['minProbClipForWeighting']
-            #    switchBd.mpc_modvi[d, i] = est_modvi.parameters['minProbClipForWeighting']
-            #else:  # "lgst" - just use defaults for logl
-            #    switchBd.mpc[d, i] = 1e-4
-            #    switchBd.mpc_modvi[d, i] = 1e-4
             switchBd.clifford_compilation[d, i] = est.parameters.get("clifford compilation", 'auto')
             if switchBd.clifford_compilation[d, i] == 'auto':
                 switchBd.clifford_compilation[d, i] = find_std_clifford_compilation(
@@ -1107,6 +1084,7 @@ def find_std_clifford_compilation(model, verbosity=0):
            set(target_model.preps.keys()) == set(model.preps.keys()) and \
            set(target_model.povms.keys()) == set(model.povms.keys()):
             if target_model.frobeniusdist(model) < 1e-6:
+                from pygsti.modelpacks import RBModelPack as _RBModelPack
                 if isinstance(mod, _RBModelPack):
                     printer.log("Found standard clifford compilation from %s" % module_name)
                     return mod.clifford_compilation(qubit_labels)
@@ -1255,7 +1233,7 @@ def construct_standard_report(results, title="auto",
     if 'ShowUnmodeledError' in flags:
         sections.append(_section.GoodnessUnmodeledSection())
 
-    # Perform idle tomography on datasets if desired (need to do
+    # Perform idle tomography on data if desired (need to do
     #  this before creating main switchboard)
     printer.log("Running idle tomography")
     try:
@@ -1473,7 +1451,7 @@ def construct_nqnoise_report(results, title="auto",
     if 'ShowScaling' in flags:
         sections.append(_section.GoodnessScalingSection())
 
-    # Perform idle tomography on datasets if desired (need to do
+    # Perform idle tomography on data if desired (need to do
     #  this before creating main switchboard)
     printer.log("Running idle tomography")
     try:

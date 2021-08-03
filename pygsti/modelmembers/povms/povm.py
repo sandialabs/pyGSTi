@@ -12,7 +12,7 @@ Defines the POVM class
 import collections as _collections
 import numpy as _np
 
-from .. import modelmember as _mm
+from pygsti.modelmembers import modelmember as _mm
 
 #Thoughts:
 # what are POVM objs needed for?
@@ -227,8 +227,6 @@ class POVM(_mm.ModelMember, _collections.OrderedDict):
             A dictionary whose keys are the outcome labels (strings)
             and whose values are the probabilities of seeing each outcome.
         """
-        assert(self._evotype in ('densitymx', 'statevec', 'stabilizer')), \
-            "probabilities(...) cannot be used with the %s evolution type!" % self._evotype
         assert(state._evotype == self._evotype), "Evolution type mismatch: %s != %s" % (self._evotype, state._evotype)
 
         staterep = state._rep

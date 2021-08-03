@@ -14,10 +14,10 @@ import collections as _collections
 
 import numpy as _np
 
-from .distlayout import DistributableCOPALayout as _DistributableCOPALayout
-from .distlayout import _DistributableAtom
-from ..circuits.circuitlist import CircuitList as _CircuitList
-from ..tools import listtools as _lt
+from pygsti.layouts.distlayout import DistributableCOPALayout as _DistributableCOPALayout
+from pygsti.layouts.distlayout import _DistributableAtom
+from pygsti.circuits.circuitlist import CircuitList as _CircuitList
+from pygsti.tools import listtools as _lt
 
 
 class _TermCOPALayoutAtom(_DistributableAtom):
@@ -218,7 +218,7 @@ class TermCOPALayout(_DistributableCOPALayout):
         -------
         TermPathSet or None
         """
-        from .termforwardsim import TermPathSet as _TermPathSet
+        from pygsti.forwardsims.termforwardsim import TermPathSet as _TermPathSet
         local_atom_pathsets = [atom.pathset for atom in self.atoms]
         if None in local_atom_pathsets:  # None signifies that we're not using path-sets (not "pruned" term-fwdsim mode)
             return None  # None behaves a bit like NaN - if there's a None, just return None.

@@ -13,9 +13,9 @@ Variables for working with the a model containing Idle, X(pi/2) and Y(pi/2) gate
 import sys as _sys
 from collections import OrderedDict as _OrderedDict
 
-from ...construction import circuitconstruction as _strc
-from ...construction import modelconstruction as _setc
-from ...construction import stdtarget as _stdtarget
+from ...circuits import circuitconstruction as _strc
+from ...models import modelconstruction as _setc
+from .. import stdtarget as _stdtarget
 
 description = "Idle, X(pi/2), and Y(pi/2) gates"
 
@@ -30,11 +30,15 @@ germs = _strc.to_circuits([('Gii',), ('Gix',), ('Giy',), ('Gix', 'Giy'),
                             ('Gix', 'Gix', 'Giy', 'Gix', 'Giy', 'Giy')], line_labels=('*',))
 
 #Construct a target model: Identity, X(pi/2), Y(pi/2)
-_target_model = _setc.create_explicit_model([('Q0',)], ['Gii', 'Gix', 'Giy'],
-                                           ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"],
-                                           effect_labels=['0', '1'], effect_expressions=["0", "1"])
+_target_model = _setc.create_explicit_model_from_expressions([('Q0',)], ['Gii', 'Gix', 'Giy'],
+                                                             ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"],
+                                                             effect_labels=['0', '1'], effect_expressions=["0", "1"])
 
 _gscache = {("full", "auto"): _target_model}
+
+
+def processor_spec():
+    return target_model('static').create_processor_spec(None)
 
 
 def target_model(parameterization_type="full", sim_type="auto"):

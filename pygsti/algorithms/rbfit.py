@@ -13,7 +13,7 @@ Functions for analyzing RB data
 import numpy as _np
 from scipy.optimize import curve_fit as _curve_fit
 
-from ..tools import rbtools as _rbt
+from pygsti.tools import rbtools as _rbt
 
 
 # Obsolute function to be deleted.
@@ -61,7 +61,7 @@ from ..tools import rbtools as _rbt
 #             datatype = 'raw'
 
 #     lengths = RBSdataset.lengths
-#     n = RBSdataset.number_of_qubits
+#     n = RBSdataset.num_qubits
 
 #     if isinstance(asymptote, str):
 #         assert(asymptote == 'std'), "If `asympotote` is a string it must be 'std'!"
@@ -89,7 +89,7 @@ from ..tools import rbtools as _rbt
 #         failcount_FF = 0
 #         failcount_FAF = 0
 
-#         # Add bootstrapped datasets, if neccessary.
+#         # Add bootstrapped data, if neccessary.
 #         RBSdataset.add_bootstrapped_datasets(samples=bootstrap_samples)
 
 #         for i in range(bootstrap_samples):

@@ -15,11 +15,11 @@ import warnings as _warnings
 
 import numpy as _np
 
-from ..layouts.cachedlayout import CachedCOPALayout as _CachedCOPALayout
-from ..layouts.copalayout import CircuitOutcomeProbabilityArrayLayout as _CircuitOutcomeProbabilityArrayLayout
-from ..baseobjs import outcomelabeldict as _ld
-from ..baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
-from ..tools import slicetools as _slct
+from pygsti.layouts.cachedlayout import CachedCOPALayout as _CachedCOPALayout
+from pygsti.layouts.copalayout import CircuitOutcomeProbabilityArrayLayout as _CircuitOutcomeProbabilityArrayLayout
+from pygsti.baseobjs import outcomelabeldict as _ld
+from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
+from pygsti.tools import slicetools as _slct
 
 
 class ForwardSimulator(object):
@@ -42,6 +42,23 @@ class ForwardSimulator(object):
     model : Model, optional
         The model this forward simulator will use to compute circuit outcome probabilities.
     """
+
+    @classmethod
+    def cast(cls, obj, num_qubits=None):
+        """ num_qubits only used if `obj == 'auto'` """
+        from .matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
+        from .mapforwardsim import MapForwardSimulator as _MapFSim
+
+        if isinstance(obj, ForwardSimulator):
+            return obj
+        elif obj == "auto":
+            return _MapFSim() if (num_qubits is None or num_qubits > 2) else _MatrixFSim()
+        elif obj == "map":
+            return _MapFSim()
+        elif obj == "matrix":
+            return _MatrixFSim()
+        else:
+            raise ValueError("Cannot convert %s to a forward simulator!" % str(obj))
 
     @classmethod
     def _array_types_for_method(cls, method_name):
@@ -149,13 +166,6 @@ class ForwardSimulator(object):
     #    #self.prepreps = { lbl:p.torep('prep') for lbl,p in preps.items() }
     #    #self.effectreps = { lbl:e.torep('effect') for lbl,e in effects.items() }
 
-    #UNUSED - REMOVE?
-    #def propagate(self, state, simplified_circuit, time=None):
-    #    """
-    #    Propagate a state given a set of operations.
-    #    """
-    #    raise NotImplementedError()  # TODO - create an interface for running circuits
-
     def _compute_circuit_outcome_probabilities(self, array_to_fill, circuit, outcomes, resource_alloc, time=None):
         raise NotImplementedError("Derived classes should implement this!")
 
@@ -199,7 +209,7 @@ class ForwardSimulator(object):
             try:
                 return self._compute_sparse_circuit_outcome_probabilities(circuit, resource_alloc, time)
             except NotImplementedError:
-                pass  # continue on to create full layout and calcualte all outcomes
+                pass  # continue on to create full layout and calculate all outcomes
 
         copa_layout = self.create_layout([circuit], array_types=('e',), resource_alloc=resource_alloc)
         probs_array = _np.empty(copa_layout.num_elements, 'd')
@@ -769,11 +779,6 @@ class ForwardSimulator(object):
         # proc's hprobs (may be too large) - so I think this function signature may still be fine,
         # but need to construct wrt_slices_list from global slices assigned to it by the layout.
         # (note the values in the wrt_slices_list must be global param indices - just not all of them)
-
-        #REMOVE  - a distributed layout should be using a DistributablsForwardSimulator that overrides this.
-        #if isinstance(layout, _DistributableCOPALayout):  # gather data onto rank-0 processor
-        #    nElements = layout.host_num_elements
-        #else:
 
         nElements = len(layout)  # (global number of elements, though "global" isn't really defined)
 

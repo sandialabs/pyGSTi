@@ -10,14 +10,13 @@ The CPTPState class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-
 import numpy as _np
 
-from .densestate import DenseState as _DenseState
-from .state import State as _State
-from ...evotypes import Evotype as _Evotype
-from ...baseobjs import statespace as _statespace
-from ...baseobjs.basis import Basis as _Basis
+from pygsti.modelmembers.states.densestate import DenseState as _DenseState
+from pygsti.modelmembers.states.state import State as _State
+from pygsti.evotypes import Evotype as _Evotype
+from pygsti.baseobjs import statespace as _statespace
+from pygsti.baseobjs.basis import Basis as _Basis
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 

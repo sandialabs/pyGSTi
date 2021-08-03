@@ -17,13 +17,13 @@ import random as _random
 import numpy as _np
 import scipy.special as _spspecial
 
-from .. import baseobjs as _baseobjs
-from .. import circuits as _circuits
+from pygsti import baseobjs as _baseobjs
+from pygsti import circuits as _circuits
 
-from ..construction import circuitconstruction as _gsc
-from ..modelmembers.operations import EigenvalueParamDenseOp as _EigenvalueParamDenseOp
-from ..tools import remove_duplicates as _remove_duplicates
-from ..tools import slicetools as _slct
+from pygsti.circuits import circuitconstruction as _gsc
+from pygsti.modelmembers.operations import EigenvalueParamDenseOp as _EigenvalueParamDenseOp
+from pygsti.tools import remove_duplicates as _remove_duplicates
+from pygsti.tools import slicetools as _slct
 
 
 def _nCr(n, r):                                                                           # noqa
@@ -499,17 +499,6 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
 
             assert(goodPairList is not None)
             pairListDict[germ] = goodPairList  # add to final list of per-germ pairs
-
-            #TODO REMOVE: should never be called b/c of ValueError catch above for insufficient fidicials
-            #else:
-            #    #we tried all the way to nPossiblePairs-1 and no success,
-            #    # just return all the pairs
-            #    printer.log(" --> Highest number amplified = %d of %d" %
-            #                (maxRank, gsGerms.num_params))
-            #    listOfAllPairs = [ (prepfid_index,iEStr)
-            #                       for prepfid_index in range(nRhoStrs)
-            #                       for iEStr in range(nEStrs) ]
-            #    pairListDict[germ] = listOfAllPairs
 
     return pairListDict
 

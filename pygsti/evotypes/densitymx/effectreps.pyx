@@ -30,6 +30,9 @@ cdef class EffectRep(_basereps_cython.EffectRep):
     def __reduce__(self):
         return (EffectRep, ())
 
+    def __pygsti_reduce__(self):
+        return self.__reduce__()
+
     @property
     def dim(self):
         return self.state_space.dim
@@ -60,6 +63,7 @@ cdef class EffectRepConjugatedState(EffectRep):
 
 cdef class EffectRepComputational(EffectRep):
     cdef public _np.ndarray zvals
+    cdef public object basis
 
     def __cinit__(self, _np.ndarray[_np.int64_t, ndim=1, mode='c'] zvals, basis, state_space):
 
@@ -75,11 +79,12 @@ cdef class EffectRepComputational(EffectRep):
             zvals_int += base * zvals[i]
             base = base << 1 # *= 2
         self.zvals = zvals
+        self.basis = basis
         self.c_effect = new EffectCRep_Computational(nfactors, zvals_int, abs_elval, state_space.dim)
         self.state_space = state_space
 
     def __reduce__(self):
-        return (EffectRepComputational, (self.zvals, self.state_space))
+        return (EffectRepComputational, (self.zvals, self.basis, self.state_space))
 
     def to_dense(self, on_space, outvec=None):
         if on_space not in ('minimal', 'HilbertSchmidt'):

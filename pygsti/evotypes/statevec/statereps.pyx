@@ -29,7 +29,7 @@ cdef class StateRep(_basereps_cython.StateRep):
         self.state_space = None
         self.basis = None
         
-    def _cinit_base(self, _np.ndarray[_np.complex128_t, ndim=1, mode='c'] data, state_space, basis):
+    def _cinit_base(self, _np.ndarray[_np.complex128_t, ndim=1] data, state_space, basis):
         self.data = _np.require(data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
         self.c_state = new StateCRep(<double complex*>self.data.data,<INT>self.data.shape[0],<bool>0)
         self.state_space = _StateSpace.cast(state_space)
@@ -39,12 +39,20 @@ cdef class StateRep(_basereps_cython.StateRep):
     def __reduce__(self):
         return (StateRep, (), (self.data.flags.writeable,))
 
+    def __pygsti_reduce__(self):
+        return self.__reduce__()
+
     def __setstate__(self, state):
         writeable, = state
         self.data.flags.writeable = writeable
 
     def copy_from(self, other):
         self.data[:] = other.data[:]
+
+    def actionable_staterep(self):
+        # return a state rep that can be acted on by op reps or mapped to
+        # a probability/amplitude by POVM effect reps.
+        return self  # for most classes, the rep itself is actionable
 
     def to_dense(self, on_space):
         if on_space in ('minimal', 'Hilbert'):
@@ -97,7 +105,7 @@ cdef class StateRepComputational(StateRep):
         else:
             typ = complex
             fast_kron_array = _np.ascontiguousarray(
-                _np.empty((len(zvals), factor_dim), 'd'))
+                _np.empty((len(zvals), factor_dim), typ))
             fast_kron_factordims = _np.ascontiguousarray(_np.array([factor_dim] * len(zvals), _np.int64))
             for i, zi in enumerate(zvals):
                 fast_kron_array[i, :] = v[zi]
@@ -118,12 +126,20 @@ cdef class StateRepComposed(StateRep):
     def __init__(self, state_rep, op_rep, state_space):
         self.state_rep = state_rep
         self.op_rep = op_rep
-        self._cinit_base(state_rep.to_dense('Hilbert'), self.state_space, self.state_rep.basis)
+
+        if state_space is None:
+            state_space = op_rep.state_space if (op_rep.state_space is not None) else state_rep.state_space
+        self._cinit_base(state_rep.to_dense('Hilbert'), state_space, self.state_rep.basis)
         self.reps_have_changed()
 
     def reps_have_changed(self):
-        rep = self.op_rep.acton(self.state_rep)
-        self.data[:] = rep.data[:]
+        pass  # don't do anything here - all work in actionalble_staterep
+
+    def actionable_staterep(self):
+        state_rep = self.state_rep.actionable_staterep()
+        rep = self.op_rep.acton(state_rep)
+        #self.data[:] = rep.data[:]  # do this also?
+        return rep
 
     def __reduce__(self):
         return (StateRepComposed, (self.state_rep, self.op_rep, self.state_space), (self.data.flags.writeable,))

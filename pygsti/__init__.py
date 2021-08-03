@@ -10,14 +10,16 @@
 
 from . import baseobjs
 from . import algorithms as alg
-from . import construction as cst
 from . import circuits
-from . import datasets
+from . import data
 from . import models
-from . import modelmembers
+from . import modelmembers as mm
 from . import forwardsims
+from . import processors
 from . import protocols
 from . import report as rpt
+from . import serialization
+
 # Import the most important/useful routines of each module/sub-package
 # into the package namespace
 from ._version import __version__
@@ -25,10 +27,10 @@ from .algorithms.contract import *
 from .algorithms.core import *
 from .algorithms.gaugeopt import *
 from .algorithms.grammatrix import *
-from .construction.gateconstruction import *  # *_qubit_gate fns
+from pygsti.tools.gatetools import *  # *_qubit_gate fns
 from .drivers import *
 from .tools import *
 # NUMPY BUG FIX (imported from tools)
-from .tools.compattools import _numpy14einsumfix
+from pygsti.baseobjs._compatibility import _numpy14einsumfix
 
 _numpy14einsumfix()

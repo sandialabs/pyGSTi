@@ -14,12 +14,12 @@ import collections as _collections
 
 import numpy as _np
 
-from .copalayout import CircuitOutcomeProbabilityArrayLayout as _CircuitOutcomeProbabilityArrayLayout
-from ..baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
-from ..baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from ..tools import mpitools as _mpit
-from ..tools import sharedmemtools as _smt
-from ..tools import slicetools as _slct
+from pygsti.layouts.copalayout import CircuitOutcomeProbabilityArrayLayout as _CircuitOutcomeProbabilityArrayLayout
+from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
+from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from pygsti.tools import mpitools as _mpit
+from pygsti.tools import sharedmemtools as _smt
+from pygsti.tools import slicetools as _slct
 
 
 #import time as _time #DEBUG TIMERS
@@ -982,8 +982,8 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         else:
             raise ValueError("Invalid array_type: %s" % str(array_type))
 
-        #OLD: create a single array - this is fine, but suffers from slow write speeds when many
-        # procs need to write to the memory, even when different regions are written to  REMOVE?
+        #Previously: create a single array - this is fine, but suffers from slow write speeds when many
+        # procs need to write to the memory, even when different regions are written to
         #host_array, host_array_shm = _smt.create_shared_ndarray(allocating_ralloc, array_shape, dtype,
         #                                                        zero_out, memory_tracker)
 
@@ -999,23 +999,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
             host_array[hashed_slices], host_array_shm[hashed_slices] = _smt.create_shared_ndarray(
                 allocating_ralloc, array_shape, dtype, zero_out, memory_tracker)
 
-        #OLD (single shared array) construction REMOVE?
-        #if array_type in ('e', 'ep', 'ep2', 'epp'):
-        #    elslice = slice(self.host_element_slice.start, self.host_element_slice.stop + extra_elements) \
-        #        if self.part_of_final_atom_processor else self.host_element_slice
-        #    my_slices = (elslice,)
-        #    if array_type in ('ep', 'epp'): my_slices += (self.host_param_slice,)
-        #    if array_type in ('ep2', 'epp'): my_slices += (self.host_param2_slice,)
-        #elif array_type == 'p':
-        #    my_slices = (self.host_param_slice,)
-        ##elif array_type == 'atom-hessian':
-        ##    my_slices = (self.host_param_slice, self.host_param2_slice)
-        #elif array_type == 'jtj':
-        #    my_slices = (self.host_param_fine_slice, slice(0, self.global_num_params))
-        #elif array_type == 'jtf':  # or 'x'
-        #    my_slices = (self.host_param_fine_slice,)
-        #elif array_type == 'c':
-        #    my_slices = (self.host_circuit_slice,)
+        # (OLD single shared array construction REMOVED)
 
         my_hashed_slices = tuple([_slct.slice_hash(s) for s in my_slices])
         local_array = host_array[my_hashed_slices]

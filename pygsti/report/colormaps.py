@@ -13,7 +13,7 @@ Colormap and derived class definitions
 import numpy as _np
 from scipy.stats import chi2 as _chi2
 
-from ..baseobjs.smartcache import smart_cached
+from pygsti.baseobjs.smartcache import smart_cached
 
 
 @smart_cached

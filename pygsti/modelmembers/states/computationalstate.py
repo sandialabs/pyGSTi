@@ -1,17 +1,29 @@
+"""
+The ComputationalBasisState class and supporting functionality.
+"""
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
+
 import functools as _functools
 import itertools as _itertools
 
 import numpy as _np
 
-from .state import State as _State
-from .. import term as _term
-from ...evotypes import Evotype as _Evotype
-from ...baseobjs import statespace as _statespace
-from ...baseobjs.basis import Basis as _Basis
-from ...baseobjs.polynomial import Polynomial as _Polynomial
+from pygsti.modelmembers.states.state import State as _State
+from pygsti.modelmembers import term as _term
+from pygsti.evotypes import Evotype as _Evotype
+from pygsti.baseobjs import statespace as _statespace
+from pygsti.baseobjs.basis import Basis as _Basis
+from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
 
 try:
-    from ...tools import fastcalc as _fastcalc
+    from pygsti.tools import fastcalc as _fastcalc
 except ImportError:
     _fastcalc = None
 
@@ -43,7 +55,7 @@ class ComputationalBasisState(_State):
     """
 
     @classmethod
-    def from_dense_vec(cls, vec, basis='pp', evotype='default', state_space=None):
+    def from_state_vector(cls, vec, basis='pp', evotype='default', state_space=None):
         """
         Create a new ComputationalBasisState from a dense vector.
 
@@ -68,25 +80,20 @@ class ComputationalBasisState(_State):
         -------
         ComputationalBasisState
         """
-        if evotype in ('stabilizer', 'statevec'):
-            nqubits = int(round(_np.log2(len(vec))))
-            v0 = _np.array((1, 0), complex)  # '0' qubit state as complex state vec
-            v1 = _np.array((0, 1), complex)  # '1' qubit state as complex state vec
-        else:
-            nqubits = int(round(_np.log2(len(vec)) / 2))
-            v0 = 1.0 / _np.sqrt(2) * _np.array((1, 0, 0, 1), 'd')  # '0' qubit state as Pauli dmvec
-            v1 = 1.0 / _np.sqrt(2) * _np.array((1, 0, 0, -1), 'd')  # '1' qubit state as Pauli dmvec
-
+        nqubits = int(round(_np.log2(len(vec)) / 2))
+        v0 = 1.0 / _np.sqrt(2) * _np.array((1, 0, 0, 1), 'd')  # '0' qubit state as Pauli dmvec
+        v1 = 1.0 / _np.sqrt(2) * _np.array((1, 0, 0, -1), 'd')  # '1' qubit state as Pauli dmvec
         v = (v0, v1)
+
         for zvals in _itertools.product(*([(0, 1)] * nqubits)):
             testvec = _functools.reduce(_np.kron, [v[i] for i in zvals])
-            if _np.allclose(testvec, vec.flat):
+            if _np.allclose(testvec, vec.flatten()):
                 return cls(zvals, basis, evotype, state_space)
         raise ValueError(("Given `vec` is not a z-basis product state - "
                           "cannot construct ComputationalBasisState"))
 
     @classmethod
-    def from_dense_purevec(cls, purevec, basis='pp', evotype="default", state_space=None):
+    def from_pure_vector(cls, purevec, basis='pp', evotype="default", state_space=None):
         """
         Create a new ComputationalBasisState from a pure-state vector.
 
@@ -120,7 +127,7 @@ class ComputationalBasisState(_State):
         v = (_np.array([1, 0], 'd'), _np.array([0, 1], 'd'))  # (v0,v1)
         for zvals in _itertools.product(*([(0, 1)] * nqubits)):
             testvec = _functools.reduce(_np.kron, [v[i] for i in zvals])
-            if _np.allclose(testvec, purevec.flat):
+            if _np.allclose(testvec, purevec.flatten()):
                 return cls(zvals, basis, evotype, state_space)
         raise ValueError(("Given `purevec` must be a z-basis product state - "
                           "cannot construct ComputationalBasisState"))
@@ -162,37 +169,22 @@ class ComputationalBasisState(_State):
         v0 = _StaticPureState(_np.array((1, 0), complex), basis='pp', evotype=self._evotype).to_dense('minimal')
         v1 = _StaticPureState(_np.array((0, 1), complex), basis='pp', evotype=self._evotype).to_dense('minimal')
         factor_dim = len(v0)
-
-        #OLD REMOVE
-        #if self._evotype == "densitymx":
-        #    factor_dim = 4
-        #    v0 = 1.0 / _np.sqrt(2) * _np.array((1, 0, 0, 1), 'd')  # '0' qubit state as Pauli dmvec
-        #    v1 = 1.0 / _np.sqrt(2) * _np.array((1, 0, 0, -1), 'd')  # '1' qubit state as Pauli dmvec
-        #elif self._evotype in ("statevec", "stabilizer", "chp"):
-        #    factor_dim = 2
-        #    v0 = _np.array((1, 0), complex)  # '0' qubit state as complex state vec
-        #    v1 = _np.array((0, 1), complex)  # '1' qubit state as complex state vec
-        #elif self._evotype in ("svterm", "cterm"):
-        #    raise NotImplementedError("to_dense() is not implemented for evotype %s!" %
-        #                              self._evotype)
-        #else: raise ValueError("Invalid `evotype`: %s" % self._evotype)
-
         v = (v0, v1)
 
         if _fastcalc is None:  # do it the slow way using numpy
             return _functools.reduce(_np.kron, [v[i] for i in self._zvals])
         else:
-            typ = 'd' if self._evotype == "densitymx" else complex
+            typ = v0.dtype
             fast_kron_array = _np.ascontiguousarray(
                 _np.empty((len(self._zvals), factor_dim), typ))
             fast_kron_factordims = _np.ascontiguousarray(_np.array([factor_dim] * len(self._zvals), _np.int64))
             for i, zi in enumerate(self._zvals):
                 fast_kron_array[i, :] = v[zi]
             ret = _np.ascontiguousarray(_np.empty(factor_dim**len(self._zvals), typ))
-            if self._evotype == "densitymx":
-                _fastcalc.fast_kron(ret, fast_kron_array, fast_kron_factordims)
-            else:
+            if fast_kron_array.dtype == _np.dtype(complex):
                 _fastcalc.fast_kron_complex(ret, fast_kron_array, fast_kron_factordims)
+            else:
+                _fastcalc.fast_kron(ret, fast_kron_array, fast_kron_factordims)
             return ret
 
     def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
@@ -236,14 +228,9 @@ class ComputationalBasisState(_State):
             output of :method:`Polynomial.compact`.
         """
         if order == 0:  # only 0-th order term exists
-
-            #TODO - there should be a "term" evotype containing a sub-evotype used to create the state here
-            #REMOVE term_evotype = self._evotype.term_evotype
-            #REMOVE purevec = ComputationalBasisState(self._zvals, term_evotype)
             coeff = _Polynomial({(): 1.0}, max_polynomial_vars)
             terms = [_term.RankOnePolynomialPrepTerm.create_from(coeff, self, self,
                                                                  self._evotype, self.state_space)]
-
             if return_coeff_polys:
                 coeffs_as_compact_polys = coeff.compact(complex_coeff_tape=True)
                 return terms, coeffs_as_compact_polys
@@ -310,105 +297,3 @@ class ComputationalBasisState(_State):
         nQubits = len(self._zvals)
         s = "Computational Z-basis state vec for %d qubits w/z-values: %s" % (nQubits, str(self._zvals))
         return s
-
-
-#REMOVE
-#class StabilizerState(_State):
-#    """
-#    A stabilizer state preparation.
-#
-#    This is represented internally using a compact representation of its stabilizer group.
-#
-#    Parameters
-#    ----------
-#    nqubits : int
-#        Number of qubits
-#
-#    zvals : iterable, optional
-#        An iterable over anything that can be cast as True/False
-#        to indicate the 0/1 value of each qubit in the Z basis.
-#        If None, the all-zeros state is created.
-#
-#    sframe : StabilizerFrame, optional
-#        A complete stabilizer frame to initialize this state from.
-#        If this is not None, then `nqubits` and `zvals` must be None.
-#    """
-#
-#    @classmethod
-#    def from_dense_purevec(cls, purevec):
-#        """
-#        Create a new ComputationalBasisState from a pure-state vector.
-#
-#        Currently, purevec must be a single computational basis state (it
-#        cannot be a superpostion of multiple of them).
-#
-#        Parameters
-#        ----------
-#        purevec : numpy.ndarray
-#            A complex-valued state vector specifying a pure state in the
-#            standard computational basis.  This vector has length 2^n for
-#            n qubits.
-#
-#        Returns
-#        -------
-#        ComputationalBasisState
-#        """
-#        nqubits = int(round(_np.log2(len(purevec))))
-#        v = (_np.array([1, 0], 'd'), _np.array([0, 1], 'd'))  # (v0,v1)
-#        for zvals in _itertools.product(*([(0, 1)] * nqubits)):
-#            testvec = _functools.reduce(_np.kron, [v[i] for i in zvals])
-#            if _np.allclose(testvec, purevec.flat):
-#                return cls(nqubits, zvals)
-#        raise ValueError(("Given `purevec` must be a z-basis product state - "
-#                          "cannot construct ComputationalBasisState"))
-#
-#    def __init__(self, nqubits, zvals=None, sframe=None):
-#        """
-#        Initialize a ComputationalBasisState object.
-#
-#        Parameters
-#        ----------
-#        nqubits : int
-#            Number of qubits
-#
-#        zvals : iterable, optional
-#            An iterable over anything that can be cast as True/False
-#            to indicate the 0/1 value of each qubit in the Z basis.
-#            If None, the all-zeros state is created.
-#
-#        sframe : StabilizerFrame, optional
-#            A complete stabilizer frame to initialize this state from.
-#            If this is not None, then `nqubits` and `zvals` must be None.
-#        """
-#        if sframe is not None:
-#            assert(nqubits is None and zvals is None), "`nqubits` and `zvals` must be None when `sframe` isn't!"
-#            self.sframe = sframe
-#        else:
-#            self.sframe = _stabilizer.StabilizerFrame.from_zvals(nqubits, zvals)
-#        rep = self.sframe.to_rep()  # dim == 2**nqubits
-#        _State.__init__(self, rep, "stabilizer")
-#
-#    def to_dense(self, on_space='minimal', scratch=None):
-#        """
-#        Return this state vector as a (dense) numpy array.
-#
-#        The memory in `scratch` maybe used when it is not-None.
-#
-#        Parameters
-#        ----------
-#        scratch : numpy.ndarray, optional
-#            scratch space available for use.
-#
-#        Returns
-#        -------
-#        numpy.ndarray
-#        """
-#        assert(on_space in ('minimal', 'Hilbert'))
-#        statevec = self.sframe.to_statevec()
-#        statevec.shape = (statevec.size, 1)
-#        return statevec
-#
-#    def __str__(self):
-#        s = "Stabilizer spam vector for %d qubits with rep:\n" % (self.sframe.nqubits)
-#        s += str(self.sframe)
-#        return s

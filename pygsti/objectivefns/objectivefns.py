@@ -16,12 +16,12 @@ import time as _time
 
 import numpy as _np
 
-from .. import tools as _tools
-from ..layouts.distlayout import DistributableCOPALayout as _DistributableCOPALayout
-from ..tools import slicetools as _slct, mpitools as _mpit, sharedmemtools as _smt
-from ..circuits.circuitlist import CircuitList as _CircuitList
-from ..baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
-from ..baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from pygsti import tools as _tools
+from pygsti.layouts.distlayout import DistributableCOPALayout as _DistributableCOPALayout
+from pygsti.tools import slicetools as _slct, mpitools as _mpit, sharedmemtools as _smt
+from pygsti.circuits.circuitlist import CircuitList as _CircuitList
+from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
+from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 
 
 def _objfn(objfn_cls, model, dataset, circuits=None,
@@ -2144,18 +2144,6 @@ class RawChiAlphaFunction(RawObjectiveFunction):
         terms = counts * (xt + 1.0 / (self.alpha * xt**self.alpha) - (1.0 + 1.0 / self.alpha))
         terms = _np.where(itaylor, terms + c0 * counts * (x - x0) + c1 * counts * (x - x0)**2, terms)
         terms = _np.where(counts == 0, self.zero_freq_terms(total_counts, probs), terms)
-
-        #DEBUG TODO REMOVE
-        #if debug and (self.comm is None or self.comm.Get_rank() == 0):
-        #    print("ALPHA OBJECTIVE: ", c0, S2)
-        #    print(" KM=",len(x), " nTaylored=",_np.count_nonzero(itaylor), " nZero=",_np.count_nonzero(self.counts==0))
-        #    print(" xrange = ",_np.min(x),_np.max(x))
-        #    print(" vrange = ",_np.min(terms),_np.max(terms))
-        #    print(" |v|^2 = ",_np.sum(terms))
-        #    print(" |v(normal)|^2 = ",_np.sum(terms[x >= x0]))
-        #    print(" |v(taylor)|^2 = ",_np.sum(terms[x < x0]))
-        #    imax = _np.argmax(terms)
-        #    print(" MAX: v=",terms[imax]," x=",x[imax]," p=",self.probs[imax]," f=",self.freqs[imax])
         return terms
 
     def dterms(self, probs, counts, total_counts, freqs, intermediates=None):
@@ -2649,27 +2637,6 @@ class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
             pos_x = _np.where(x < x0, x0, x)
             c0 = counts * (1 - 1 / x1)  # deriv wrt x at x == x1 (=min_p)
             c1 = 0.5 * counts / (x1**2)  # 0.5 * 2nd deriv at x1
-
-            #DEBUG TODO REMOVE
-            #if self.comm.Get_rank() == 0 and debug:
-            #    print(">>>> DEBUG ----------------------------------")
-            #    print("x range = ",_np.min(x), _np.max(x))
-            #    print("p range = ",_np.min(self.probs), _np.max(self.probs))
-            #    #print("f range = ",_np.min(self.freqs), _np.max(self.freqs))
-            #    #print("fnz range = ",_np.min(self.freqs_nozeros), _np.max(self.freqs_nozeros))
-            #    #print("TVD = ", _np.sum(_np.abs(self.probs - self.freqs)))
-            #    print(" KM=",len(x), " nTaylored=",_np.count_nonzero(x < x0),
-            #          " nZero=",_np.count_nonzero(self.minusCntVecMx==0))
-            #    #for i,el in enumerate(x):
-            #    #    if el < 0.1 or el > 10.0:
-            #    #        print("-> x=%g  p=%g  f=%g  fnz=%g" % (el, self.probs[i],
-            #                   self.freqs[i], self.freqs_nozeros[i]))
-            #    print("<<<<< DEBUG ----------------------------------")
-
-            #pos_x = _np.where(x > 1 / x0, 1 / x0, pos_x)
-            #T = self.minusCntVecMx * (x0 - 1)  # deriv wrt x at x == 1/x0
-            #T2 = -0.5 * self.minusCntVecMx / (1 / x0**2)  # 0.5 * 2nd deriv at 1/x0
-
             return x, pos_x, c0, c1, freqs_nozeros
 
         elif self.regtype == 'minp':
@@ -2754,25 +2721,6 @@ class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
                                   "(it should be smaller than the smallest frequency)") % self.min_p)
             else:
                 raise ValueError("Regularization => negative terms!")
-
-        #DEBUG TODO REMOVE
-        #if debug and (self.comm is None or self.comm.Get_rank() == 0):
-        #    print("LOGL OBJECTIVE: ")
-        #    #print(" KM=",len(x), " nTaylored=",_np.count_nonzero(x < x0),
-        #           " nZero=",_np.count_nonzero(self.minusCntVecMx==0))
-        #    print(" KM=",len(self.probs), " nTaylored=",_np.count_nonzero(self.probs < self.min_p),
-        #          " nZero=",_np.count_nonzero(self.minusCntVecMx==0))
-        #    #print(" xrange = ",_np.min(x),_np.max(x))
-        #    print(" prange = ",_np.min(self.probs),_np.max(self.probs))
-        #    print(" vrange = ",_np.min(v),_np.max(v))
-        #    print(" |v|^2 = ",_np.sum(v))
-        #    #print(" |v(normal)|^2 = ",_np.sum(v[x >= x0]))
-        #    #print(" |v(taylor)|^2 = ",_np.sum(v[x < x0]))
-        #    print(" |v(normal)|^2 = ",_np.sum(v[self.probs >= self.min_p]))
-        #    print(" |v(taylor)|^2 = ",_np.sum(v[self.probs < self.min_p]))
-        #    imax = _np.argmax(v)
-        #    print(" MAX: v=",v[imax]," p=",self.probs[imax]," f=",self.freqs[imax])
-        #    " x=",x[imax]," pos_x=",pos_x[imax],
 
         return terms
 
@@ -4359,13 +4307,6 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         omitted_probs = 1.0 - _np.array([_np.sum(probs[self.layout.indices_for_index(i)])
                                          for i in self.indicesOfCircuitsWithOmittedData])
         return self.raw_objfn.zero_freq_terms(self.total_counts[self.firsts], omitted_probs)
-        #DEBUG TODO REMOVE
-        #if debug and (self.comm is None or self.comm.Get_rank() == 0):
-        #    print(" omitted_probs range = ", _np.min(omitted_probs), _np.max(omitted_probs))
-        #    p0 = 1.0 / (0.5 * (1. + self.alpha) / (self.x1**(2 + self.alpha) * self.fmin))
-        #    print(" nSparse = ",len(self.firsts), " nOmitted >p0=", _np.count_nonzero(omitted_probs >= p0),
-        #          " <0=", _np.count_nonzero(omitted_probs < 0))
-        #    print(" |v(post-sparse)|^2 = ",_np.sum(v))
 
     def _update_lsvec_for_omitted_probs(self, lsvec, probs):
         """
@@ -4408,14 +4349,6 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         """
         # terms => terms + zerofreqfn(omitted)
         terms[self.firsts] += self._omitted_prob_first_terms(probs)
-        #DEBUG TODO REMOVE
-        #if debug and (self.comm is None or self.comm.Get_rank() == 0):
-        #    print(" vrange2 = ",_np.min(v),_np.max(v))
-        #    print(" omitted_probs range = ", _np.min(omitted_probs), _np.max(omitted_probs))
-        #    p0 = 1.0 / ((0.5 / self.fmin) * 1.0 / self.x1**2)
-        #    print(" nSparse = ",len(self.firsts), " nOmitted >p0=", _np.count_nonzero(omitted_probs >= p0),
-        #          " <0=", _np.count_nonzero(omitted_probs < 0))
-        #    print(" |v(post-sparse)|^2 = ",_np.sum(v))
 
     def _omitted_prob_first_dterms(self, probs):
         """
@@ -4524,12 +4457,6 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         dlsvec[self.firsts] *= (lsvec_firsts / updated_lsvec)[:, None]
         dlsvec[self.firsts] -= ((0.5 / updated_lsvec) * self._omitted_prob_first_dterms(probs))[:, None] \
             * dprobs_omitted_rowsum
-        #TODO: REMOVE
-        #if (self.comm is None or self.comm.Get_rank() == 0):
-        #    print(" |dprobs_omitted_rowsum| = ",_np.linalg.norm(dprobs_omitted_rowsum))
-        #    print(" |dprobs_factor_omitted| = ",_np.linalg.norm(((0.5 / lsvec_firsts)
-        #                                    * self.omitted_prob_first_dterms(probs))))
-        #    print(" |jac(post-sparse)| = ",_np.linalg.norm(dlsvec))
 
     def _clip_probs(self):
         """ Clips the potentially shared-mem self.probs according to self.prob_clip_interval """
@@ -5496,9 +5423,7 @@ class TimeDependentMDCObjectiveFunction(MDCObjectiveFunction):
             self.jac = self.layout.allocate_local_array('ep', 'd', memory_tracker=self.resource_alloc,
                                                         extra_elements=self.ex)
 
-        #self.maxCircuitLength = max([len(x) for x in self.circuits])  #REMOVE?
         # If desired, we may need to make it local to this processor, which may not have data for all of self.circuits
-
         self.num_total_outcomes = [self.model.compute_num_outcomes(c) for c in self.circuits]  # to detect sparse-data
 
     def __del__(self):
@@ -6184,22 +6109,6 @@ def _errorgen_penalty_jac_fill(errorgen_penalty_vec_grad_to_fill, mdl, prefactor
 
     #Above fills derivative of val**2 = sum(terms), but we want deriv of val = sqrt(sum(terms)):
     errorgen_penalty_vec_grad_to_fill[0, :] *= 0.5 / val  # final == 1/sqrt(sum(terms)) * dsumterms
-
-    # DEBUG REMOVE: check with finite difference
-    # orig = mdl.to_vector()
-    # fd_deriv = _np.zeros(len(orig), 'd')
-    # val_orig = val
-    # eps = 1e-7
-    # for i in range(len(orig)):
-    #     w = orig.copy(); w[i] += eps
-    #     mdl.from_vector(w)
-    #     fd_deriv[i] = (_errorgen_penalty(mdl, prefactor) - val_orig) / eps
-    # diffvec = fd_deriv - errorgen_penalty_vec_grad_to_fill[0, :]
-    # diffvec[_np.abs(orig) < 2*eps] = 0.0  # we can't accurately assess derivs near zero
-    # diff = _np.linalg.norm(diffvec) / _np.linalg.norm(fd_deriv)
-    # mdl.from_vector(orig)
-    # if diff > 1e-3:
-    #     import bpdb; bpdb.set_trace()
 
     #return the number of leading-dim indicies we filled in
     return 1

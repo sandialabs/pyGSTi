@@ -17,8 +17,8 @@ import warnings as _warnings
 
 import numpy as _np
 
-from ..tools import basisconstructors as _bc
-from ..tools import matrixtools as _mt
+from pygsti.baseobjs import basisconstructors as _bc
+from pygsti.tools import matrixtools as _mt
 
 # Tolerace for matrix_rank when finding rank of a *normalized* projection
 # matrix.  This is a legitimate tolerace since a normalized projection matrix
@@ -468,14 +468,6 @@ class ExplicitOpModelCalc(object):
             raise NotImplementedError(("Cannot (yet) extract gauge/non-gauge "
                                        "parameters for Models with non-dense "
                                        "member representations"))
-
-        #REMOVE
-        #if any([not isinstance(gate,_op.DenseOperator) for gate in self.operations.values()]) or \
-        #   any([not isinstance(vec,_sv.DenseSPAMVec) for vec in self.preps.values()]) or \
-        #   any([not isinstance(vec,_sv.DenseSPAMVec) for vec in self.effects.values()]):
-        #    raise NotImplementedError(("Cannot (yet) extract gauge/non-gauge "
-        #                               "parameters for Models with non-dense "
-        #                               "member representations"))
 
         bSkipEcs = True  # Whether we should artificially skip complement-type
         # effect vecs, which is historically what we've done, even though

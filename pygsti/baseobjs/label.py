@@ -161,6 +161,19 @@ class Label(object):
     def has_nontrivial_components(self):
         return len(self.components) > 0 and self.components != (self,)
 
+    def collect_args(self):
+        if not self.has_nontrivial_components:
+            return self.args
+        else:
+            ret = list(self.args)
+            for c in self.components:
+                ret.extend(c.collect_args())
+            return tuple(ret)
+
+    def strip_args(self):
+        # default, appropriate for a label without args or components
+        return self
+
     def expand_subcircuits(self):
         """
         Expand any sub-circuits within this label.
@@ -286,7 +299,7 @@ class LabelTup(Label, tuple):
         return self.sslbls
 
     @property
-    def number_of_qubits(self):  # Used in Circuit
+    def num_qubits(self):  # Used in Circuit
         """
         The number of qubits this label "acts" on (an integer). `None` if `self.ssbls is None`.
         """
@@ -549,7 +562,7 @@ class LabelTupWithTime(Label, tuple):
         return self.sslbls
 
     @property
-    def number_of_qubits(self):  # Used in Circuit
+    def num_qubits(self):  # Used in Circuit
         """
         The number of qubits this label "acts" on (an integer). `None` if `self.ssbls is None`.
         """
@@ -786,7 +799,7 @@ class LabelStr(Label, str):
         return None
 
     @property
-    def number_of_qubits(self):  # Used in Circuit
+    def num_qubits(self):  # Used in Circuit
         """
         The number of qubits this label "acts" on (an integer). `None` if `self.ssbls is None`.
         """
@@ -981,7 +994,7 @@ class LabelTupTup(Label, tuple):
         return self.sslbls
 
     @property
-    def number_of_qubits(self):  # Used in Circuit
+    def num_qubits(self):  # Used in Circuit
         """
         The number of qubits this label "acts" on (an integer). `None` if `self.ssbls is None`.
         """
@@ -1034,6 +1047,11 @@ class LabelTupTup(Label, tuple):
         Label
         """
         return LabelTupTup(tuple((lbl.map_state_space_labels(mapper) for lbl in self)))
+
+    def strip_args(self):
+        """ Return version of self with all arguments removed """
+        # default, appropriate for a label without args or components
+        return LabelTupTup.__new__(LabelTupTup, (comp.strip_args() for comp in self))
 
     def __str__(self):
         """
@@ -1143,11 +1161,6 @@ class LabelTupTup(Label, tuple):
         ret = []
         expanded_comps = [x.expand_subcircuits() for x in self.components]
 
-        #DEBUG TODO REMOVE
-        #print("DB: expaned comps:")
-        #for i,x in enumerate(expanded_comps):
-        #    print(i,": ",x)
-
         for i in range(self.depth):  # depth == # of layers when expanded
             ec = []
             for expanded_comp in expanded_comps:
@@ -1249,7 +1262,7 @@ class LabelTupTupWithTime(Label, tuple):
         return self.sslbls
 
     @property
-    def number_of_qubits(self):  # Used in Circuit
+    def num_qubits(self):  # Used in Circuit
         """
         The number of qubits this label "acts" on (an integer). `None` if `self.ssbls is None`.
         """
@@ -1302,6 +1315,11 @@ class LabelTupTupWithTime(Label, tuple):
         Label
         """
         return LabelTupTupWithTime(tuple((lbl.map_state_space_labels(mapper) for lbl in self)))
+
+    def strip_args(self):
+        """ Return version of self with all arguments removed """
+        # default, appropriate for a label without args or components
+        return LabelTupTupWithTime.__new__(LabelTupTupWithTime, (comp.strip_args() for comp in self), self.time)
 
     def __str__(self):
         """
@@ -1412,11 +1430,6 @@ class LabelTupTupWithTime(Label, tuple):
         ret = []
         expanded_comps = [x.expand_subcircuits() for x in self.components]
 
-        #DEBUG TODO REMOVE
-        #print("DB: expaned comps:")
-        #for i,x in enumerate(expanded_comps):
-        #    print(i,": ",x)
-
         for i in range(self.depth):  # depth == # of layers when expanded
             ec = []
             for expanded_comp in expanded_comps:
@@ -1475,7 +1488,6 @@ class CircuitLabel(Label, tuple):
         time : float
             The time at which this label occurs (can be relative or absolute)
         """
-        #if name is None: name = '' # backward compatibility (temporary - TODO REMOVE)
         assert(isinstance(reps, _numbers.Integral) and isinstance(name, str)
                ), "Invalid name or reps: %s %s" % (str(name), str(reps))
         tupOfLabels = tuple((Label(tup) for tup in tup_of_layers))  # Note: tup can also be a Label obj
@@ -1531,7 +1543,7 @@ class CircuitLabel(Label, tuple):
         return self.sslbls
 
     @property
-    def number_of_qubits(self):  # Used in Circuit
+    def num_qubits(self):  # Used in Circuit
         """
         The number of qubits this label "acts" on (an integer). `None` if `self.ssbls is None`.
         """
@@ -1587,6 +1599,9 @@ class CircuitLabel(Label, tuple):
                             tuple((lbl.map_state_space_labels(mapper) for lbl in self.components)),
                             mapped_sslbls,
                             self[2])
+
+    def strip_args(self):
+        raise NotImplementedError("TODO!")
 
     def __str__(self):
         """
@@ -1707,8 +1722,6 @@ class CircuitLabel(Label, tuple):
             A tuple of component Labels (none of which should be
             :class:`CircuitLabel`s).
         """
-        #REMOVE print("Expanding subcircuit components: ",self.components)
-        #REMOVE print(" --> ",[ x.expand_subcircuits() for x in self.components ])
         return tuple(_itertools.chain(*[x.expand_subcircuits() for x in self.components])) * self.reps
 
     __hash__ = tuple.__hash__  # this is why we derive from tuple - using the
@@ -1831,7 +1844,7 @@ class LabelTupWithArgs(Label, tuple):
         return self.sslbls
 
     @property
-    def number_of_qubits(self):  # Used in Circuit
+    def num_qubits(self):  # Used in Circuit
         """
         The number of qubits this label "acts" on (an integer). `None` if `self.ssbls is None`.
         """
@@ -1885,6 +1898,9 @@ class LabelTupWithArgs(Label, tuple):
             mapped_sslbls = [mapper(sslbl) for sslbl in self.sslbls]
         return Label(self.name, mapped_sslbls, self.time, self.args)
         # FUTURE: use LabelTupWithArgs here instead of Label?
+
+    def strip_args(self):
+        return LabelTup.__new__(LabelTup, (self[0],) + self[self[1]:])  # make a new LabelTup (no args)
 
     def __str__(self):
         """
@@ -2085,7 +2101,7 @@ class LabelTupTupWithArgs(Label, tuple):
         return self.sslbls
 
     @property
-    def number_of_qubits(self):  # Used in Circuit
+    def num_qubits(self):  # Used in Circuit
         """
         The number of qubits this label "acts" on (an integer). `None` if `self.ssbls is None`.
         """
@@ -2139,6 +2155,11 @@ class LabelTupTupWithArgs(Label, tuple):
         """
         return LabelTupTupWithArgs(tuple((lbl.map_state_space_labels(mapper)
                                           for lbl in self.components)), self.time, self.args)
+
+    def strip_args(self):
+        """ Return version of self with all arguments removed """
+        # default, appropriate for a label without args or components
+        return LabelTupTupWithTime.__new__(LabelTupTupWithTime, (comp.strip_args() for comp in self), self.time)
 
     def __str__(self):
         """

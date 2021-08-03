@@ -16,9 +16,10 @@ import itertools as _itertools
 import numpy as _np
 import scipy.sparse as _sps
 
-from .linearop import LinearOperator as _LinearOperator
-from .. import modelmember as _modelmember
-from ...baseobjs.basis import EmbeddedBasis as _EmbeddedBasis
+from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
+from pygsti.modelmembers import modelmember as _modelmember
+from pygsti.baseobjs.basis import EmbeddedBasis as _EmbeddedBasis
+from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 
 
 class EmbeddedOp(_LinearOperator):
@@ -46,7 +47,10 @@ class EmbeddedOp(_LinearOperator):
     def __init__(self, state_space, target_labels, operation_to_embed):
         self.target_labels = target_labels
         self.embedded_op = operation_to_embed
-        self._iter_elements_cache = None  # speeds up _iter_matrix_elements significantly
+        self._iter_elements_cache = {"Hilbert": None, "HilbertSchmidt": None}  # speeds up _iter_matrix_elements
+
+        assert(_StateSpace.cast(state_space).contains_labels(target_labels)), \
+            "`target_labels` (%s) not found in `state_space` (%s)" % (str(target_labels), str(state_space))
 
         evotype = operation_to_embed._evotype
 
@@ -139,15 +143,20 @@ class EmbeddedOp(_LinearOperator):
                        self.embedded_op.copy(parent, memo))
         return self._copy_gpindices(copyOfMe, parent, memo)
 
-    def _iter_matrix_elements_precalc(self):
+    def _iter_matrix_elements_precalc(self, on_space):
         divisor = 1; divisors = []
         for l in self.target_labels:
             divisors.append(divisor)
-            divisor *= self.state_space.label_dimension(l)  # e.g. 4 or 2 for qubits (depending on evotype)
+            dim = self.state_space.label_udimension(l) if on_space == "Hilbert" \
+                else self.state_space.label_dimension(l)   # e.g. 4 or 2 for qubits (depending on on_space)
+            divisor *= dim
 
         iTensorProdBlk = [self.state_space.label_tensor_product_block_index(label) for label in self.target_labels][0]
         tensorProdBlkLabels = self.state_space.tensor_product_block_labels(iTensorProdBlk)
-        basisInds = [list(range(self.state_space.label_dimension(l))) for l in tensorProdBlkLabels]
+        if on_space == "Hilbert":
+            basisInds = [list(range(self.state_space.label_udimension(l))) for l in tensorProdBlkLabels]
+        else:
+            basisInds = [list(range(self.state_space.label_dimension(l))) for l in tensorProdBlkLabels]
         # e.g. [0,1,2,3] for densitymx qubits (I, X, Y, Z) OR [0,1] for statevec qubits (std *complex* basis)
 
         basisInds_noop = basisInds[:]
@@ -166,16 +175,19 @@ class EmbeddedOp(_LinearOperator):
             reversed(list(map(len, basisInds[1:])))))), _np.int64)
 
         # number of basis elements preceding our block's elements
-        blockDims = [_np.product(tpb_dims) for tpb_dims in self.state_space.tensor_product_blocks_dimensions]
+        if on_space == "Hilbert":
+            blockDims = [_np.product(tpb_dims) for tpb_dims in self.state_space.tensor_product_blocks_udimensions]
+        else:
+            blockDims = [_np.product(tpb_dims) for tpb_dims in self.state_space.tensor_product_blocks_dimensions]
         offset = sum(blockDims[0:iTensorProdBlk])
 
         return divisors, multipliers, sorted_bili, basisInds_noop, offset
 
-    def _iter_matrix_elements(self, rel_to_block=False):
+    def _iter_matrix_elements(self, on_space, rel_to_block=False):
         """ Iterates of (op_i,op_j,embedded_op_i,embedded_op_j) tuples giving mapping
-            between nonzero elements of operation matrix and elements of the embedded operation matrx """
-        if self._iter_elements_cache is not None:
-            for item in self._iter_elements_cache:
+            between nonzero elements of operation matrix and elements of the embedded operation matrix """
+        if self._iter_elements_cache[on_space] is not None:
+            for item in self._iter_elements_cache[on_space]:
                 yield item
             return
 
@@ -204,13 +216,15 @@ class EmbeddedOp(_LinearOperator):
                 indx = indx % d
             return ret
 
-        divisors, multipliers, sorted_bili, basisInds_noop, nonrel_offset = self._iter_matrix_elements_precalc()
+        divisors, multipliers, sorted_bili, basisInds_noop, nonrel_offset = \
+            self._iter_matrix_elements_precalc(on_space)
         offset = 0 if rel_to_block else nonrel_offset
 
         #Begin iteration loop
-        self._iter_elements_cache = []
-        for op_i in range(self.embedded_op.dim):     # rows ~ "output" of the operation map
-            for op_j in range(self.embedded_op.dim):  # cols ~ "input"  of the operation map
+        self._iter_elements_cache[on_space] = []
+        embedded_dim = self.embedded_op.state_space.udim if on_space == "Hilbert" else self.embedded_op.state_space.dim
+        for op_i in range(embedded_dim):     # rows ~ "output" of the operation map
+            for op_j in range(embedded_dim):  # cols ~ "input"  of the operation map
                 op_b1 = _decomp_op_index(op_i, divisors)  # op_b? are lists of dm basis indices, one index per
                 # tensor product component that the operation operates on (2 components for a 2-qubit operation)
                 op_b2 = _decomp_op_index(op_j, divisors)
@@ -228,7 +242,7 @@ class EmbeddedOp(_LinearOperator):
                     in_vec_index = _np.dot(multipliers, tuple(b_in))
 
                     item = (out_vec_index + offset, in_vec_index + offset, op_i, op_j)
-                    self._iter_elements_cache.append(item)
+                    self._iter_elements_cache[on_space].append(item)
                     yield item
 
     def to_sparse(self, on_space='minimal'):
@@ -240,11 +254,16 @@ class EmbeddedOp(_LinearOperator):
         scipy.sparse.csr_matrix
         """
         embedded_sparse = self.embedded_op.to_sparse(on_space).tolil()
-        finalOp = _sps.identity(self.dim, embedded_sparse.dtype, format='lil')
+        if on_space == 'minimal':  # resolve 'minimal' based on embedded rep type
+            on_space = 'Hilbert' if embedded_sparse.shape[0] == self.embedded_op.state_space.udim \
+                else 'HilbertSchmidt'
+
+        finalOp = _sps.identity(self.state_space.udim if (on_space == 'Hilbert') else self.state_space.dim,
+                                embedded_sparse.dtype, format='lil')
 
         #fill in embedded_op contributions (always overwrites the diagonal
         # of finalOp where appropriate, so OK it starts as identity)
-        for i, j, gi, gj in self._iter_matrix_elements():
+        for i, j, gi, gj in self._iter_matrix_elements(on_space):
             finalOp[i, j] = embedded_sparse[gi, gj]
         return finalOp.tocsr()
 
@@ -277,12 +296,16 @@ class EmbeddedOp(_LinearOperator):
         #                                            self.qubit_indices,len(qubitLabels))
 
         embedded_dense = self.embedded_op.to_dense(on_space)
+        if on_space == 'minimal':  # resolve 'minimal' based on embedded rep type
+            on_space = 'Hilbert' if embedded_dense.shape[0] == self.embedded_op.state_space.udim else 'HilbertSchmidt'
+
         # operates on entire state space (direct sum of tensor prod. blocks)
-        finalOp = _np.identity(self.dim, embedded_dense.dtype)
+        finalOp = _np.identity(self.state_space.udim if (on_space == 'Hilbert') else self.state_space.dim,
+                               embedded_dense.dtype)
 
         #fill in embedded_op contributions (always overwrites the diagonal
         # of finalOp where appropriate, so OK it starts as identity)
-        for i, j, gi, gj in self._iter_matrix_elements():
+        for i, j, gi, gj in self._iter_matrix_elements(on_space):
             finalOp[i, j] = embedded_dense[gi, gj]
         return finalOp
 
@@ -367,12 +390,19 @@ class EmbeddedOp(_LinearOperator):
         """
         # Note: this function exploits knowledge of EmbeddedOp internals!!
         embedded_deriv = self.embedded_op.deriv_wrt_params(wrt_filter)
-        derivMx = _np.zeros((self.dim**2, embedded_deriv.shape[1]), embedded_deriv.dtype)
-        M = self.embedded_op.dim
+
+        # resolve on_space as if it were 'minimal', based on embedded rep type
+        on_space = 'Hilbert' if embedded_deriv.shape[0] == self.embedded_op.state_space.udim else 'HilbertSchmidt'
+        dim = self.state_space.udim if (on_space == 'Hilbert') else self.state_space.dim
+
+        derivMx = _np.zeros((dim**2, embedded_deriv.shape[1]), embedded_deriv.dtype)
+        M = self.embedded_op.state_space.udim if (on_space == 'Hilbert') else self.embedded_op.state_space.dim
+        assert(M**2 == embedded_deriv.shape[0]), \
+            "Mismatch between embedded gate's state space dim/udim and it's deriv_wrt_params value"
 
         #fill in embedded_op contributions (always overwrites the diagonal
         # of finalOp where appropriate, so OK it starts as identity)
-        for i, j, gi, gj in self._iter_matrix_elements():
+        for i, j, gi, gj in self._iter_matrix_elements(on_space):
             derivMx[i * self.dim + j, :] = embedded_deriv[gi * M + gj, :]  # fill row of jacobian
         return derivMx  # Note: wrt_filter has already been applied above
 
@@ -416,7 +446,6 @@ class EmbeddedOp(_LinearOperator):
         """
         #Reduce labeldims b/c now working on *state-space* instead of density mx:
         sslbls = self.state_space.copy()
-        sslbls.reduce_dims_densitymx_to_state_inplace()
         if return_coeff_polys:
             terms, coeffs = self.embedded_op.taylor_order_terms(order, max_polynomial_vars, True)
             embedded_terms = [t.embed(sslbls, self.target_labels) for t in terms]
@@ -456,7 +485,6 @@ class EmbeddedOp(_LinearOperator):
             A list of :class:`Rank1Term` objects.
         """
         sslbls = self.state_space.copy()
-        sslbls.reduce_dims_densitymx_to_state_inplace()
         return [t.embed(sslbls, self.target_labels)
                 for t in self.embedded_op.taylor_order_terms_above_mag(order, max_polynomial_vars, min_term_mag)]
 
@@ -479,7 +507,7 @@ class EmbeddedOp(_LinearOperator):
         # In this case, since the coeffs of the terms of an EmbeddedOp are the same as those
         # of the operator being embedded, the total term magnitude is the same:
 
-        #DEBUG TODO REMOVE
+        #DEBUG CHECK
         #print("DB: Embedded.total_term_magnitude = ",self.embedded_op.get_total_term_magnitude()," -- ",
         #   self.embedded_op.__class__.__name__)
         #ret = self.embedded_op.get_total_term_magnitude()
@@ -658,6 +686,82 @@ class EmbeddedOp(_LinearOperator):
             case.
         """
         return self.errorgen_coefficients(return_basis=False, logscale_nonham=True)
+
+    def set_errorgen_coefficients(self, lindblad_term_dict, action="update", logscale_nonham=False):
+        """
+        Sets the coefficients of terms in the error generator of this operation.
+
+        The dictionary `lindblad_term_dict` has tuple-keys describing the type of term and the basis
+        elements used to construct it, e.g. `('H','X')`.
+
+        Parameters
+        ----------
+        lindblad_term_dict : dict
+            Keys are `(termType, basisLabel1, <basisLabel2>)`
+            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            or `"A"` (Affine).  Hamiltonian and Affine terms always have a
+            single basis label (so key is a 2-tuple) whereas Stochastic tuples
+            have 1 basis label to indicate a *diagonal* term and otherwise have
+            2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
+            terms.  Values are the coefficients of these error generators,
+            and should be real except for the 2-basis-label case.
+
+        action : {"update","add","reset"}
+            How the values in `lindblad_term_dict` should be combined with existing
+            error-generator coefficients.
+
+        logscale_nonham : bool, optional
+            Whether or not the values in `lindblad_term_dict` for non-hamiltonian
+            error generators should be interpreted as error *rates* (of an
+            "equivalent" depolarizing channel, see :method:`errorgen_coefficients`)
+            instead of raw coefficients.  If True, then the non-hamiltonian
+            coefficients are set to `-log(1 - d^2*rate)/d^2`, where `rate` is
+            the corresponding value given in `lindblad_term_dict`.  This is what is
+            performed by the function :method:`set_error_rates`.
+
+        Returns
+        -------
+        None
+        """
+        #go through and um-embed Ltermdict labels
+        unembedded_Ltermdict = _collections.OrderedDict()
+        for k, val in lindblad_term_dict.items():
+            unembedded_key = (k[0],) + tuple([_EmbeddedBasis.unembed_label(x, self.target_labels) for x in k[1:]])
+            unembedded_Ltermdict[unembedded_key] = val
+        self.embedded_op.set_errorgen_coefficients(unembedded_Ltermdict, action, logscale_nonham)
+
+        if self._rep_type == 'dense': self._update_denserep()
+        self.dirty = True
+
+    def set_error_rates(self, lindblad_term_dict, action="update"):
+        """
+        Sets the coeffcients of terms in the error generator of this operation.
+
+        Values are set so that the contributions of the resulting channel's
+        error rate are given by the values in `lindblad_term_dict`.  See
+        :method:`error_rates` for more details.
+
+        Parameters
+        ----------
+        lindblad_term_dict : dict
+            Keys are `(termType, basisLabel1, <basisLabel2>)`
+            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            or `"A"` (Affine).  Hamiltonian and Affine terms always have a
+            single basis label (so key is a 2-tuple) whereas Stochastic tuples
+            have 1 basis label to indicate a *diagonal* term and otherwise have
+            2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
+            terms.  Values are real error rates except for the 2-basis-label
+            case, when they may be complex.
+
+        action : {"update","add","reset"}
+            How the values in `lindblad_term_dict` should be combined with existing
+            error rates.
+
+        Returns
+        -------
+        None
+        """
+        self.set_errorgen_coefficients(lindblad_term_dict, action, logscale_nonham=True)
 
     def depolarize(self, amount):
         """

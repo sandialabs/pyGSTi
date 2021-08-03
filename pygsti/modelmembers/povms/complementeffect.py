@@ -12,10 +12,10 @@ The ComplementPOVMEffect class and supporting functionality.
 
 import numpy as _np
 
-from .conjugatedeffect import ConjugatedStatePOVMEffect as _ConjugatedStatePOVMEffect
-from .. import modelmember as _modelmember
-from ..states.fullstate import FullState as _FullState
-from ..states.state import State as _State
+from pygsti.modelmembers.povms.conjugatedeffect import ConjugatedStatePOVMEffect as _ConjugatedStatePOVMEffect
+from pygsti.modelmembers import modelmember as _modelmember
+from pygsti.modelmembers.states.fullstate import FullState as _FullState
+from pygsti.modelmembers.states.state import State as _State
 
 
 class ComplementPOVMEffect(_ConjugatedStatePOVMEffect):

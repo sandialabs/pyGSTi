@@ -11,6 +11,7 @@ Operation representation classes for the `statevec_slow` evolution type.
 #***************************************************************************************************
 
 import itertools as _itertools
+import copy as _copy
 
 import numpy as _np
 from scipy.sparse.linalg import LinearOperator
@@ -48,6 +49,9 @@ class OpRep(_basereps.OpRep):
             in_state = _StateRep(_np.ascontiguousarray(v, complex))
             return self.adjoint_acton(in_state).to_dense('Hilbert')
         return LinearOperator((self.dim, self.dim), matvec=mv, rmatvec=rmv)  # transpose, adjoint, dot, matmat?
+
+    def copy(self):
+        return _copy.deepcopy(self)
 
 
 class OpRepDenseUnitary(OpRep):
@@ -158,8 +162,8 @@ class OpRepEmbedded(OpRep):
 
         iTensorProdBlk = iTensorProdBlks[0]  # because they're all the same (tested above) - this is "active" block
         tensorProdBlkLabels = state_space.tensor_product_block_labels(iTensorProdBlk)
-        # count possible *density-matrix-space* indices of each component of the tensor product block
-        numBasisEls = _np.array([state_space.label_dimension(l) for l in tensorProdBlkLabels], _np.int64)
+        # count possible *state-vector-space* indices of each component of the tensor product block
+        numBasisEls = _np.array([state_space.label_udimension(l) for l in tensorProdBlkLabels], _np.int64)
 
         # Separate the components of the tensor product that are not operated on, i.e. that our
         # final map just acts as identity w.r.t.
@@ -172,9 +176,9 @@ class OpRepEmbedded(OpRep):
         #dim = state_space.udim
         nBlocks = state_space.num_tensor_product_blocks
         iActiveBlock = iTensorProdBlk
-        nComponents = len(state_space.tensor_product_blocks_labels(iActiveBlock))
-        embeddedDim = embedded_rep.udim
-        blocksizes = _np.array([_np.product(state_space.tensor_product_block_dimensions(k))
+        nComponents = len(state_space.tensor_product_block_labels(iActiveBlock))
+        embeddedDim = embedded_rep.dim  # a *unitary* dim - see .dim property above
+        blocksizes = _np.array([_np.product(state_space.tensor_product_block_udimensions(k))
                                 for k in range(nBlocks)], _np.int64)
 
         self.embedded_rep = embedded_rep
@@ -249,6 +253,23 @@ class OpRepEmbedded(OpRep):
         #act on other blocks trivially:
         self._acton_other_blocks_trivially(output_state, state)
         return output_state
+
+
+class OpRepExpErrorgen(OpRep):
+
+    def __init__(self, errorgen_rep):
+        state_space = errorgen_rep.state_space
+        self.errorgen_rep = errorgen_rep
+        super(OpRepExpErrorgen, self).__init__(state_space)
+
+    def errgenrep_has_changed(self, onenorm_upperbound):
+        pass
+
+    def acton(self, state):
+        raise AttributeError("Cannot currently act with statevec.OpRepExpErrorgen - for terms only!")
+
+    def adjoint_acton(self, state):
+        raise AttributeError("Cannot currently act with statevec.OpRepExpErrorgen - for terms only!")
 
 
 class OpRepRepeated(OpRep):

@@ -15,17 +15,17 @@ import warnings as _warnings
 
 import numpy as _np
 
-from ..baseobjs.opcalc import compact_deriv as _compact_deriv, \
+from pygsti.baseobjs.opcalc import compact_deriv as _compact_deriv, \
     bulk_eval_compact_polynomials as _bulk_eval_compact_polynomials, \
     bulk_eval_compact_polynomials_derivs as _bulk_eval_compact_polynomials_derivs
-from .distforwardsim import DistributableForwardSimulator as _DistributableForwardSimulator
-from ..layouts.termlayout import TermCOPALayout as _TermCOPALayout
-from ..baseobjs.polynomial import Polynomial as _Polynomial
-from ..baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
-from ..baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from ..tools import mpitools as _mpit
-from ..tools import slicetools as _slct
-from ..tools.matrixtools import _fas
+from pygsti.forwardsims.distforwardsim import DistributableForwardSimulator as _DistributableForwardSimulator
+from pygsti.layouts.termlayout import TermCOPALayout as _TermCOPALayout
+from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
+from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
+from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from pygsti.tools import mpitools as _mpit
+from pygsti.tools import slicetools as _slct
+from pygsti.tools.matrixtools import _fas
 
 
 # from . import replib
@@ -205,6 +205,13 @@ class TermForwardSimulator(_DistributableForwardSimulator):
                 self.calclib = _importlib.import_module("pygsti.forwardsims.termforwardsim_calc_generic")
         else:
             self.calclib = None
+
+    def __getstate__(self):
+        state = super(TermForwardSimulator, self).__getstate__()
+        if 'calclib' in state: del state['calclib']
+        #Note: I don't think we need to implement __setstate__ since the model also needs to be reset,
+        # and this is done by the parent model which will cause _set_evotype to be called.
+        return state
 
     #OLD - now we have a _set_evotype method.
     #@_ForwardSimulator.model.setter
@@ -530,7 +537,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
 
         if threshold_guess is None: threshold_guess = -1.0  # use negatives to signify "None" in C
         circuitsetup_cache = {}  # DEBUG REMOVE?
-        #repcache = {}  # DEBUG REMOVE
+        #repcache = {}  # used for debugging
 
         npaths, threshold, target_sopm, achieved_sopm = \
             self.calclib.find_best_pathmagnitude_threshold(
@@ -994,10 +1001,6 @@ class TermForwardSimulator(_DistributableForwardSimulator):
             gap_jacs = self._sopm_gaps_jacobian_atom(layout_atom)
             #gap_jacs[ _np.where(gaps < self.pathmagnitude_gap) ] = 0.0  # set deriv to zero where gap was clipped to 0
             _fas(termgap_penalty_jac, [elInds], gap_jacs)
-
-        #REMOVE #collect/gather results
-        #all_atom_element_slices = [atom.element_slice for atom in layout.atoms]
-        #_mpit.gather_slices(all_atom_element_slices, atomOwners, termgap_penalty_jac, [], 0, resource_alloc.comm)
 
         return termgap_penalty_jac
 

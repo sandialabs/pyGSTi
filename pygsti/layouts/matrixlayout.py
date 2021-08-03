@@ -14,12 +14,12 @@ import collections as _collections
 
 import numpy as _np
 
-from .distlayout import DistributableCOPALayout as _DistributableCOPALayout
-from .distlayout import _DistributableAtom
-from .evaltree import EvalTree as _EvalTree
-from ..circuits.circuitlist import CircuitList as _CircuitList
-from ..tools import listtools as _lt
-from ..tools import slicetools as _slct
+from pygsti.layouts.distlayout import DistributableCOPALayout as _DistributableCOPALayout
+from pygsti.layouts.distlayout import _DistributableAtom
+from pygsti.layouts.evaltree import EvalTree as _EvalTree
+from pygsti.circuits.circuitlist import CircuitList as _CircuitList
+from pygsti.tools import listtools as _lt
+from pygsti.tools import slicetools as _slct
 
 
 class _MatrixCOPALayoutAtom(_DistributableAtom):

@@ -28,6 +28,9 @@ cdef class EffectRep(_basereps_cython.EffectRep):
     def __reduce__(self):
         return (EffectRep, ())
 
+    def __pygsti_reduce__(self):
+        return self.__reduce__()
+
     @property
     def dim(self):
         return self.state_space.udim
@@ -80,15 +83,17 @@ cdef class EffectRepComputational(EffectRep):
     def __reduce__(self):
         return (EffectRepComputational, (self.zvals, self.basis, self.state_space))
 
-    def to_dense(self, on_space, outvec, trust_outvec_sparsity=False):
+    def to_dense(self, on_space, outvec=None, trust_outvec_sparsity=False):
         # when trust_outvec_sparsity is True, assume we only need to fill in the
         # non-zero elements of outvec (i.e. that outvec is already zero wherever
         # this vector is zero).
         if on_space not in ('minimal', 'Hilbert'):
             raise ValueError('statevec evotype cannot (yet) generate dense Hilbert-Schmidt effect vectors')
-        if not trust_outvec_sparsity:
+        if outvec is None:
+            outvec = _np.zeros(self.state_space.udim, complex)
+        elif not trust_outvec_sparsity:
             outvec[:] = 0  # reset everything to zero
-        outvec[self.nonzero_index] = 1.0
+        outvec[(<EffectCRep_Computational*>self.c_effect)._nonzero_index] = 1.0
         return outvec
 
 
@@ -168,3 +173,23 @@ cdef class EffectRepTensorProduct(EffectRep):
             sz *= self.factor_dims[k]
 
         return outvec
+
+
+cdef class EffectRepComposed(EffectRep):
+    cdef public OpRep op_rep
+    cdef public EffectRep effect_rep
+    cdef public object op_id
+
+    def __cinit__(self, OpRep op_rep not None, EffectRep effect_rep not None, op_id, state_space):
+        cdef INT dim = effect_rep.c_effect._dim
+        self.op_id = op_id
+        self.op_rep = op_rep
+        self.effect_rep = effect_rep
+        self.c_effect = new EffectCRep_Composed(op_rep.c_rep,
+                                                effect_rep.c_effect,
+                                                <INT>op_id, dim)
+        self.state_space = _StateSpace.cast(state_space)
+        assert(self.state_space.udim == dim)
+
+    def __reduce__(self):
+        return (EffectRepComposed, (self.op_rep, self.effect_rep, self.op_id, self.state_space))

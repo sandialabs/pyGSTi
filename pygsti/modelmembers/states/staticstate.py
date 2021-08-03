@@ -10,7 +10,7 @@ The StaticState class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from .densestate import DenseState as _DenseState
+from pygsti.modelmembers.states.densestate import DenseState as _DenseState
 
 
 class StaticState(_DenseState):

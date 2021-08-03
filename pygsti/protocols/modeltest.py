@@ -15,12 +15,12 @@ import collections as _collections
 from pygsti.baseobjs.profiler import DummyProfiler as _DummyProfiler
 from pygsti.objectivefns.objectivefns import ModelDatasetCircuitsStore as _ModelDatasetCircuitStore
 from pygsti.protocols.estimate import Estimate as _Estimate
-from . import protocol as _proto
-from .. import baseobjs as _baseobjs
-from .. import models as _models
-from ..objectivefns import objectivefns as _objfns
-from ..circuits.circuitlist import CircuitList as _CircuitList
-from ..baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
+from pygsti.protocols import protocol as _proto
+from pygsti import baseobjs as _baseobjs
+from pygsti import models as _models
+from pygsti.objectivefns import objectivefns as _objfns
+from pygsti.circuits.circuitlist import CircuitList as _CircuitList
+from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 
 
 class ModelTest(_proto.Protocol):
@@ -156,8 +156,8 @@ class ModelTest(_proto.Protocol):
 
         if self.target_model is not None:
             target_model = self.target_model
-        elif hasattr(data.edesign, 'target_model'):
-            target_model = data.edesign.target_model
+        elif hasattr(data.edesign, 'create_target_model'):
+            target_model = data.edesign.create_target_model()
         else:
             target_model = None  # target model isn't necessary
 

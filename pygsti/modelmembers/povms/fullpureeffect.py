@@ -10,8 +10,8 @@ The FullPOVMPureEffect class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from .conjugatedeffect import ConjugatedStatePOVMEffect as _ConjugatedStatePOVMEffect
-from ..states.fullpurestate import FullPureState as _FullPureState
+from pygsti.modelmembers.povms.conjugatedeffect import ConjugatedStatePOVMEffect as _ConjugatedStatePOVMEffect
+from pygsti.modelmembers.states.fullpurestate import FullPureState as _FullPureState
 
 
 class FullPOVMPureEffect(_ConjugatedStatePOVMEffect):
@@ -30,8 +30,8 @@ class FullPOVMPureEffect(_ConjugatedStatePOVMEffect):
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
     """
 
-    def __init__(self, vec, evotype="default"):
-        _ConjugatedStatePOVMEffect.__init__(self, _FullPureState(vec, evotype))
+    def __init__(self, vec, basis="pp", evotype="default", state_space=None):
+        _ConjugatedStatePOVMEffect.__init__(self, _FullPureState(vec, basis, evotype, state_space))
 
     def set_dense(self, vec):
         """

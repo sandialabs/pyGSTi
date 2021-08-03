@@ -20,7 +20,7 @@ import scipy.optimize as _spo
 import scipy.sparse as _sps
 import scipy.sparse.linalg as _spsl
 
-from .basistools import change_basis
+from pygsti.tools.basistools import change_basis
 
 try:
     from . import fastcalc as _fastcalc
@@ -588,13 +588,13 @@ def unitary_superoperator_matrix_log(m, mx_basis):
         and `logM` can be written as the action `rho -> -i[H,rho]`.
     """
     from . import lindbladtools as _lt  # (would create circular imports if at top)
-    from . import optools as _gt  # (would create circular imports if at top)
+    from . import optools as _ot  # (would create circular imports if at top)
 
     M_std = change_basis(m, mx_basis, "std")
     evals = _np.linalg.eigvals(M_std)
     assert(_np.allclose(_np.abs(evals), 1.0))  # simple but technically incomplete check for a unitary superop
     # (e.g. could be anti-unitary: diag(1, -1, -1, -1))
-    U = _gt.process_mx_to_unitary(M_std)
+    U = _ot.process_mx_to_unitary(M_std)
     H = _spl.logm(U) / -1j  # U = exp(-iH)
     logM_std = _lt.hamiltonian_to_lindbladian(H)  # rho --> -i[H, rho] * sqrt(d)/2
     logM = change_basis(logM_std * (2.0 / _np.sqrt(H.shape[0])), "std", mx_basis)
@@ -1832,9 +1832,12 @@ else:
         -------
         numpy.ndarray
         """
+        #Note: copy v for now since it's modified by simple_core fn
         A, mu, m_star, s, eta = prep_a
-        return _fastcalc.custom_expm_multiply_simple_core(A.data, A.indptr, A.indices,
-                                                          v, mu, m_star, s, tol, eta)
+        indices = _np.array(A.indices, dtype=int)  # convert to 64-bit ints if needed
+        indptr = _np.array(A.indptr, dtype=int)
+        return _fastcalc.custom_expm_multiply_simple_core(A.data, indptr, indices,
+                                                          v.copy(), mu, m_star, s, tol, eta)
 
 
 def _custom_expm_multiply_simple_core(a, b, mu, m_star, s, tol, eta):  # t == 1.0 replaced below
@@ -1984,8 +1987,7 @@ def sparse_onenorm(a):
     return max(abs(a).sum(axis=0).flat)
 
 
-#REMOVE debug argument?
-def ndarray_base(a, debug=False):
+def ndarray_base(a, verbosity=0):
     """
     Get the base memory object for numpy array `a`.
 
@@ -1996,18 +1998,18 @@ def ndarray_base(a, debug=False):
     a : numpy.ndarray
         Array to get base of.
 
-    debug : bool, optional
-        Enable additional debugging.
+    verbosity : int, optional
+        Print additional debugging information if this is > 0.
 
     Returns
     -------
     numpy.ndarray
     """
-    if debug: print("ndarray_base debug:")
+    if verbosity: print("ndarray_base debug:")
     while a.base is not None:
-        if debug: print(" -> base = ", id(a.base))
+        if verbosity: print(" -> base = ", id(a.base))
         a = a.base
-    if debug: print(" ==> ", id(a))
+    if verbosity: print(" ==> ", id(a))
     return a
 
 

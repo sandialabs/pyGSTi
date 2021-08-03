@@ -17,7 +17,7 @@ from datetime import datetime
 from functools import lru_cache
 from time import time
 
-from ..tools.legacytools import deprecate
+from pygsti.tools.legacytools import deprecate
 
 
 # note that this decorator ignores **kwargs

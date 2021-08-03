@@ -6,7 +6,7 @@ from pygsti.circuits import Circuit, CircuitList
 from ..util import Namespace
 
 ns = Namespace()
-ns.model = smq.target_model('TP')
+ns.model = smq.target_model('full TP')
 ns.max_max_length = 2
 ns.aliases = {Label(('GA1', 0)): Circuit([('Gxpi2', 0)])}
 
@@ -23,19 +23,19 @@ def circuits(self):
 
 @ns.memo
 def dataset(self):
-    return pygsti.construction.simulate_data(
+    return pygsti.data.simulate_data(
         self.datagen_model, self.circuits, 1000, seed=2020)
 
 
 @ns.memo
 def sparse_dataset(self):
-    return pygsti.construction.simulate_data(
+    return pygsti.data.simulate_data(
         self.datagen_model, self.circuits, 50, seed=2020, record_zero_counts=False)
 
 
 @ns.memo
 def perfect_dataset(self):
-    return pygsti.construction.simulate_data(
+    return pygsti.data.simulate_data(
         self.datagen_model, self.circuits, 1000, sample_error='none')
 
 

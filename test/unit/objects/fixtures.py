@@ -19,14 +19,14 @@ def datagen_gateset(self):
 
 @ns.memo
 def expList(self):
-    return pygsti.construction.create_lsgst_circuits(
+    return pygsti.circuits.create_lsgst_circuits(
         self.opLabels, self.fiducials, self.fiducials, self.germs, self.maxLengthList)
 
 
 @ns.memo
 def dataset(self):
     # Was previously written to disk as 'analysis.dataset'
-    return pygsti.construction.simulate_data(
+    return pygsti.data.simulate_data(
         self.datagen_gateset, self.expList, num_samples=10000,
         sample_error='binomial', seed=100
     )
@@ -49,7 +49,7 @@ def mdl_clgst(self):
 
 @ns.memo
 def lsgstStrings(self):
-    return pygsti.construction.create_lsgst_circuit_lists(
+    return pygsti.circuits.create_lsgst_circuit_lists(
         self.opLabels, self.fiducials, self.fiducials, self.germs,
         self.maxLengthList
     )
@@ -57,7 +57,7 @@ def lsgstStrings(self):
 
 @ns.memo
 def lsgstStructs(self):
-    return pygsti.construction.make_lsgst_structs(
+    return pygsti.circuits.make_lsgst_structs(
         self.opLabels, self.fiducials, self.fiducials, self.germs,
         self.maxLengthList
     )

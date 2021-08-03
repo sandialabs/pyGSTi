@@ -1,6 +1,6 @@
 import unittest
 
-from pygsti.objects.verbosityprinter import *
+from pygsti.baseobjs.verbosityprinter import *
 
 # unneeded: from mpi4py                          import MPI
 from ..testutils import BaseTestCase, temp_files

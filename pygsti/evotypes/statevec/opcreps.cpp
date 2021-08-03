@@ -14,7 +14,7 @@
 //#define DEBUG(x) x
 #define DEBUG(x) 
 
-namespace CReps {
+namespace CReps_statevec {
 
   /****************************************************************************\
   |* OpCRep                                                                   *|

@@ -12,9 +12,9 @@ The StaticPureOp class and supporting functionality.
 
 import numpy as _np
 
-from .denseop import DenseUnitaryOperator as _DenseUnitaryOperator
-from .. import term as _term
-from ...baseobjs.polynomial import Polynomial as _Polynomial
+from pygsti.modelmembers.operations.denseop import DenseUnitaryOperator as _DenseUnitaryOperator
+from pygsti.modelmembers import term as _term
+from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
 
 
 class StaticUnitaryOp(_DenseUnitaryOperator):
@@ -85,8 +85,8 @@ class StaticUnitaryOp(_DenseUnitaryOperator):
         """
         if order == 0:  # only 0-th order term exists
             coeff = _Polynomial({(): 1.0}, max_polynomial_vars)
-            terms = _term.RankOnePolynomialOpTerm.create_from(coeff, self, self,
-                                                              self._evotype, self.state_space)
+            terms = [_term.RankOnePolynomialOpTerm.create_from(coeff, self, self,
+                                                               self._evotype, self.state_space)]
             if return_coeff_polys:
                 coeffs_as_compact_polys = coeff.compact(complex_coeff_tape=True)
                 return terms, coeffs_as_compact_polys

@@ -13,9 +13,9 @@ I*X(pi/2), I*Y(pi/2), X(pi/2)*I, Y(pi/2)*I, and CNOT.
 
 import sys as _sys
 
-from ...construction import circuitconstruction as _strc
-from ...construction import modelconstruction as _setc
-from ...construction import stdtarget as _stdtarget
+from ...circuits import circuitconstruction as _strc
+from ...models import modelconstruction as _setc
+from .. import stdtarget as _stdtarget
 
 description = "I*X(pi/2), I*Y(pi/2), X(pi/2)*I, Y(pi/2)*I, and CNOT gates"
 
@@ -231,12 +231,16 @@ legacy_germs = _strc.to_circuits(
 
 
 #Construct the target model
-_target_model = _setc.create_explicit_model(
+_target_model = _setc.create_explicit_model_from_expressions(
     [('Q0', 'Q1')], ['Gix', 'Giy', 'Gxi', 'Gyi', 'Gcnot'],
     ["I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)", "CNOT(Q0,Q1)"],
     effect_labels=['00', '01', '10', '11'], effect_expressions=["0", "1", "2", "3"])
 
 _gscache = {("full", "auto"): _target_model}
+
+
+def processor_spec():
+    return target_model('static').create_processor_spec(None)
 
 
 def target_model(parameterization_type="full", sim_type="auto"):
@@ -262,7 +266,7 @@ def target_model(parameterization_type="full", sim_type="auto"):
 
 
 #Wrong CNOT (bad 1Q phase factor)
-legacy_gs_target = _setc.create_explicit_model(
+legacy_gs_target = _setc.create_explicit_model_from_expressions(
     [('Q0', 'Q1')], ['Gix', 'Giy', 'Gxi', 'Gyi', 'Gcnot'],
     ["I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)", "CX(pi,Q0,Q1)"],
     effect_labels=['00', '01', '10', '11'], effect_expressions=["0", "1", "2", "3"])

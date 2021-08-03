@@ -113,8 +113,8 @@ class FiducialPairReductionTestCase(AlgorithmTestCase):
             mem_limit=int(2*(1024)**3))
 
         nAmplified = pygsti.alg.test_fiducial_pairs(fidPairsDict, target_model, prep_fiducials,
-                                         meas_fiducials, germs,
-                                         verbosity=3, mem_limit=None)
+                                                    meas_fiducials, germs,
+                                                    verbosity=3, mem_limit=None)
 
         print("PFPR: %d AMPLIFIED out of %d total (non-spam non-gauge) params" % (nAmplified, nTotal))
         self.assertEqual(nAmplified, 34)

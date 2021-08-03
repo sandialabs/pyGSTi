@@ -37,12 +37,20 @@ cdef class StateRep(_basereps_cython.StateRep):
     def __reduce__(self):
         return (StateRep, (), (self.data.flags.writeable,))
 
+    def __pygsti_reduce__(self):
+        return self.__reduce__()
+
     def __setstate__(self, state):
         writeable, = state
         self.data.flags.writeable = writeable
 
     def copy_from(self, other):
         self.data[:] = other.data[:]
+
+    def actionable_staterep(self):
+        # return a state rep that can be acted on by op reps or mapped to
+        # a probability/amplitude by POVM effect reps.
+        return self  # for most classes, the rep itself is actionable
 
     def to_dense(self, on_space):
         if on_space not in ('minimal', 'HilbertSchmidt'):
@@ -64,7 +72,7 @@ cdef class StateRep(_basereps_cython.StateRep):
 
 
 cdef class StateRepDense(StateRep):
-    def __cinit__(self, _np.ndarray[double, ndim=1, mode='c'] data, state_space):
+    def __cinit__(self, _np.ndarray[double, ndim=1] data, state_space):
         self._cinit_base(data, state_space)
 
     def __reduce__(self):

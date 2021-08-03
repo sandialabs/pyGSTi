@@ -1,6 +1,6 @@
 import numpy as np
 
-import pygsti.construction.gateconstruction as gc
+import pygsti.tools.gatetools as gc
 from ..util import BaseCase
 
 

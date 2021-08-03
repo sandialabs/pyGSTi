@@ -15,8 +15,8 @@ import sys as _sys
 from contextlib import contextmanager as _contextmanager
 from copy import deepcopy as _dc
 
-from pygsti.tools import compattools as _compat
-from .resourceallocation import ResourceAllocation as _ResourceAllocation
+from pygsti.baseobjs import _compatibility as _compat
+from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 
 
 def _num_digits(n):

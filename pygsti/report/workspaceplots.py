@@ -20,17 +20,17 @@ import scipy as _scipy
 from scipy.stats import chi2 as _chi2
 
 from pygsti.objectivefns.objectivefns import ModelDatasetCircuitsStore as _ModelDatasetCircuitStore
-from . import colormaps as _colormaps
-from . import plothelpers as _ph
-from .figure import ReportFigure
-from .workspace import WorkspacePlot
-from .. import algorithms as _alg
-from .. import baseobjs as _baseobjs
-from ..objectivefns import objectivefns as _objfns
-from ..circuits.circuit import Circuit as _Circuit
-from ..circuits.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure, \
+from pygsti.report import colormaps as _colormaps
+from pygsti.report import plothelpers as _ph
+from pygsti.report.figure import ReportFigure
+from pygsti.report.workspace import WorkspacePlot
+from pygsti import algorithms as _alg
+from pygsti import baseobjs as _baseobjs
+from pygsti.objectivefns import objectivefns as _objfns
+from pygsti.circuits.circuit import Circuit as _Circuit
+from pygsti.circuits.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure, \
     GermFiducialPairPlaquette as _GermFiducialPairPlaquette
-from ..datasets import DataSet as _DataSet
+from pygsti.data import DataSet as _DataSet
 
 #Plotly v3 changes heirarchy of graph objects
 # Do this to avoid deprecation warning is plotly 3+
@@ -1621,15 +1621,6 @@ class ColorBoxPlot(WorkspacePlot):
         if not isinstance(plottypes, (list, tuple)):
             plottypes = [plottypes]
 
-        #TODO REMOVE
-        #probs_precomp_dict = None
-        #plottypes_that_need_precomp = ('chi2', 'logl', 'tvd')
-        #if any([(t in plottypes) for t in plottypes_that_need_precomp]):  # bulk-compute probabilities for performance
-        #    probs_precomp_dict = self._ccompute(_ph._compute_probabilities,
-        #                                        gss, model, dataset,
-        #                                        comm=comm, smartc=self.ws.smartCache,
-        #                                        wildcard=wildcard)
-
         for ptyp in plottypes:
             if ptyp in ("logl", "chi2", "tvd"):
                 ptyp = _objfns.ObjectiveFunctionBuilder.create_from(ptyp)
@@ -1665,32 +1656,6 @@ class ColorBoxPlot(WorkspacePlot):
                 addl_hover_info_fns['p'] = (_mx_fn_from_elements, (objfn.probs, objfn.layout, "%.5g"))
                 addl_hover_info_fns['f'] = (_mx_fn_from_elements, (objfn.freqs, objfn.layout, "%.5g"))
                 addl_hover_info_fns['counts'] = (_mx_fn_from_elements, (objfn.counts, objfn.layout, "%d"))
-
-            #TODO REMOVE
-            #elif ptyp == "logl":
-            #    colormapType = "linlog"
-            #    linlog_color = "red"
-            #    ytitle = "2 log(L ratio)"
-            #    mx_fn = _mx_fn_logl  # use a *global* function so cache can tell it's the same
-            #    extra_arg = (dataset, model, min_prob_clip_for_weighting, probs_precomp_dict)
-            #
-            #    # (function, extra_arg) tuples
-            #    addl_hover_info_fns['outcomes'] = (_addl_mx_fn_sl, None)
-            #    addl_hover_info_fns['p'] = (_addl_mx_fn_p, (model, probs_precomp_dict))
-            #    addl_hover_info_fns['f'] = (_addl_mx_fn_f, (model, dataset, self.ws.smartCache))
-            #    addl_hover_info_fns['counts'] = (_addl_mx_fn_cnt, (model, dataset, self.ws.smartCache))
-            #    #DEBUG: addl_hover_info_fns['chk'] = _addl_mx_fn_chk
-            #elif ptyp == "tvd":
-            #    colormapType = "blueseq"
-            #    ytitle = "Total Variational Distance (TVD)"
-            #    mx_fn = _mx_fn_tvd  # use a *global* function so cache can tell it's the same
-            #    extra_arg = (dataset, model, probs_precomp_dict)
-            #
-            #    # (function, extra_arg) tuples
-            #    addl_hover_info_fns['outcomes'] = (_addl_mx_fn_sl, None)
-            #    addl_hover_info_fns['p'] = (_addl_mx_fn_p, (model, probs_precomp_dict))
-            #    addl_hover_info_fns['f'] = (_addl_mx_fn_f, (model, dataset, self.ws.smartCache))
-            #    addl_hover_info_fns['counts'] = (_addl_mx_fn_cnt, (model, dataset, self.ws.smartCache))
 
             elif ptyp == "blank":
                 colormapType = "trivial"
@@ -1933,25 +1898,6 @@ def _mx_fn_from_elements(plaq, x, y, extra):
     return plaq.elementvec_to_matrix(extra[0], extra[1], mergeop=extra[2])
 
 
-#TODO REMOVE
-#def _mx_fn_chi2(plaq, x, y, extra):
-#    dataset, model, minProbClipForWeighting, probs_precomp_dict = extra
-#    return _ph.chi2_matrix(plaq, dataset, model, minProbClipForWeighting,
-#                           probs_precomp_dict)
-#
-#
-#def _mx_fn_logl(plaq, x, y, extra):
-#    dataset, model, minProbClipForWeighting, probs_precomp_dict = extra
-#    return _ph.logl_matrix(plaq, dataset, model, minProbClipForWeighting,
-#                           probs_precomp_dict)
-#
-#
-#def _mx_fn_tvd(plaq, x, y, extra):
-#    dataset, model, probs_precomp_dict = extra
-#    return _ph.tvd_matrix(plaq, dataset, model,
-#                          probs_precomp_dict)
-
-
 def _mx_fn_blank(plaq, x, y, unused):
     return _np.nan * _np.zeros((plaq.num_rows, plaq.num_cols), 'd')
 
@@ -1998,15 +1944,6 @@ def _mx_fn_drifttvd(plaq, x, y, instabilityanalyzertuple):
 # Begin "Additional sub-matrix" functions for adding more info to hover text
 
 
-#TODO REMOVE
-#def _separate_outcomes_matrix(plaq, elements, fmt="%.3g"):
-#    list_mx = _np.empty((plaq.rows, plaq.cols), dtype=_np.object)
-#    for i, j, _, elIndices, _ in plaq.iter_simplified():
-#        list_mx[i, j] = ", ".join(["NaN" if _np.isnan(x) else
-#                                   (fmt % x) for x in elements[elIndices]])
-#    return list_mx
-
-
 def _outcome_to_str(x):  # same function as in writers.py
     if isinstance(x, str): return x
     else: return ":".join([str(i) for i in x])
@@ -2019,35 +1956,6 @@ def _addl_mx_fn_outcomes(plaq, x, y, layout):
     return slmx
 
 
-#TODO REMOVE
-#def _addl_mx_fn_p(plaq, x, y, extra):
-#    objfn, = extra
-#
-#    probs = _ph.probability_matrices(plaq, model,
-#                                     probs_precomp_dict)
-#    return _separate_outcomes_matrix(plaq, probs, "%.5g")
-#
-#
-#def _addl_mx_fn_f(plaq, x, y, extra):
-#    model, dataset, smartc = extra
-#    plaq_ds = smartc.cached_compute(plaq.expand_aliases,
-#                                    (dataset,), dict(circuit_simplifier=model))[1]  # doesn't seem to work yet...
-#    freqs = _ph.frequency_matrices(plaq_ds, dataset)
-#    return _separate_outcomes_matrix(plaq, freqs, "%.5g")
-#
-#
-#def _addl_mx_fn_cnt(plaq, x, y, extra):
-#    model, dataset, smartc = extra
-#    plaq_ds = smartc.cached_compute(plaq.expand_aliases,
-#                                    (dataset,), dict(circuit_simplifier=model))[1]
-#    cnts = _ph.total_count_matrix(plaq_ds, dataset)
-#    return _separate_outcomes_matrix(plaq, cnts, "%d")
-
-
-#def gate_matrix_boxplot(op_matrix, size=None, color_min=-1.0, color_max=1.0,
-#                        save_to=None, fontSize=20, mx_basis=None,
-#                        mxBasisDims=None, xlabel=None, ylabel=None,
-#                        title=None, box_labels=False, prec=0, mxBasisDimsY=None):
 class GateMatrixPlot(WorkspacePlot):
     """
     Plot of a operation matrix using colored boxes.
@@ -3387,7 +3295,7 @@ class DatasetComparisonHistogramPlot(WorkspacePlot):
         The containing (parent) workspace.
 
     dsc : DataComparator
-        The data set comparator, which holds and compares the datasets.
+        The data set comparator, which holds and compares the data.
 
     nbins : int, optional
         Bins in the histogram.
@@ -3511,7 +3419,7 @@ class DatasetComparisonHistogramPlot(WorkspacePlot):
                 title += ';'
         if dsc.op_inclusions:
             title += ' ' + str(dsc.op_inclusions) + ' included'
-        title += '<br>Comparing datasets ' + str(datasetnames)
+        title += '<br>Comparing data ' + str(datasetnames)
         title += ' p=0 ' + str(pVals0) + ' times; ' + str(len(dsc.pVals)) + ' total sequences'
 
         layout = go.Layout(

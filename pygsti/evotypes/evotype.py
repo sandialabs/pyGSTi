@@ -21,7 +21,33 @@ class Evotype(object):
         operations.  Most often this is set to `True` when using a :class:`MatrixForwardSimulator`
         in order to get a performance gain.
     """
-    defaut_evotype = None
+    default_evotype = None
+
+    _reptype_to_attrs = {
+        'dense superop': 'OpRepDenseSuperop',
+        'dense unitary': 'OpRepDenseUnitary',
+        'composed': 'OpRepComposed',
+        'embedded': 'OpRepEmbedded',
+        'experrorgen': 'OpRepExpErrorgen',
+        'stochastic': 'OpRepStochastic',
+        'sum': 'OpRepSum',
+        'clifford': 'OpRepClifford',
+        'repeated': 'OpRepRepeated',
+        'standard': 'OpRepStandard',
+        'sparse superop': 'OpRepSparse',
+        'lindblad errorgen': 'OpRepLindbladErrorgen',
+        'dense state': 'StateRepDense',
+        'pure state': 'StateRepDensePure',
+        'computational state': 'StateRepComputational',
+        'composed state': 'StateRepComposed',
+        'tensorproduct state': 'StateRepTensorProduct',
+        'conjugatedstate effect': 'EffectRepConjugatedState',
+        'computational effect': 'EffectRepComputational',
+        'tensorproduct effect': 'EffectRepTensorProduct',
+        'composed effect': 'EffectRepComposed',
+        'term': 'TermRep',
+        'direct term': 'TermDirectRep'
+    }
 
     @classmethod
     def cast(cls, obj, default_prefer_dense_reps=False):
@@ -34,17 +60,8 @@ class Evotype(object):
 
     def __init__(self, name, prefer_dense_reps=False):
         self.name = name
-        #REMOVE - and get rid of module_name variable
-        #if ':' in name:
-        #    i = name.index(':')
-        #    module_name, sub_evotype_name = name[0:i], name[i + 1:]  # e.g. 'pathintegral:statevec'
-        #else:
-        #    module_name, sub_evotype_name = name, None
-        module_name = name
-
-        self.module = _importlib.import_module("pygsti.evotypes." + module_name)
+        self.module = _importlib.import_module("pygsti.evotypes." + self.name)
         self.prefer_dense_reps = prefer_dense_reps
-        #REMOVE self.sub_evotype = Evotype(sub_evotype_name) if (sub_evotype_name is not None) else None
 
     def __getstate__(self):
         state = self.__dict__.copy()
@@ -65,6 +82,19 @@ class Evotype(object):
 
     def __str__(self):
         return self.name
+
+    @property
+    def minimal_space(self):
+        return self.module.minimal_space
+
+    def minimal_dim(self, state_space):
+        return state_space.udim if self.minimal_space == 'Hilbert' else state_space.dim
+
+    def supported_reptypes(self):
+        return [reptype for reptype, attr in self._reptype_to_attrs.items() if hasattr(self.module, attr)]
+
+    def supports(self, reptype):
+        return hasattr(self.module, self._reptype_to_attrs[reptype])
 
     def create_dense_superop_rep(self, mx, state_space):  # process_mx=None,
         return self.module.OpRepDenseSuperop(mx, state_space)
@@ -107,7 +137,7 @@ class Evotype(object):
         return self.module.StateRepDense(vec, state_space)
 
     def create_pure_state_rep(self, purevec, super_basis, state_space):
-        return self.module.StateRepPure(purevec, super_basis, state_space)
+        return self.module.StateRepDensePure(purevec, super_basis, state_space)
 
     def create_computational_state_rep(self, zvals, super_basis, state_space):
         return self.module.StateRepComputational(zvals, super_basis, state_space)
@@ -149,6 +179,21 @@ class Evotype(object):
         except Exception:
             return _basereps.StockTermDirectRep(coeff, mag, logmag, pre_state, post_state,
                                                 pre_effect, post_effect, pre_ops, post_ops)
+
+    def conjugate_state_term_rep(self, term_rep):
+        """ Turns a state term => effect term via conjugation of the state """
+        coeff = term_rep.coeff
+        mag = term_rep.magnitude
+        logmag = term_rep.logmagnitude
+        pre_effect = self.create_conjugatedstate_effect_rep(term_rep.pre_state)
+        post_effect = self.create_conjugatedstate_effect_rep(term_rep.post_state)
+
+        try:  # see if module implements its own term rep, otherwise use "stock" version
+            return self.module.TermRep(coeff, mag, logmag, None, None,
+                                       pre_effect, post_effect, term_rep.pre_ops, term_rep.post_ops)
+        except Exception:
+            return _basereps.StockTermRep(coeff, mag, logmag, None, None,
+                                          pre_effect, post_effect, term_rep.pre_ops, term_rep.post_ops)
 
 
 try:

@@ -12,7 +12,7 @@ Chi-squared and related functions
 
 import numpy as _np
 
-from ..tools.legacytools import deprecate as _deprecated_fn
+from pygsti.tools.legacytools import deprecate as _deprecated_fn
 
 
 def chi2(model, dataset, circuits=None,

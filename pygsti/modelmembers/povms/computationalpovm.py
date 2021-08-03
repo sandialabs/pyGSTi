@@ -13,10 +13,12 @@ Defines the ComputationalBasisPOVM class
 
 import collections as _collections
 import itertools as _itertools
+import functools as _functools
+import numpy as _np
 
-from .computationaleffect import ComputationalBasisPOVMEffect as _ComputationalBasisPOVMEffect
-from .povm import POVM as _POVM
-from ...baseobjs import statespace as _statespace
+from pygsti.modelmembers.povms.computationaleffect import ComputationalBasisPOVMEffect as _ComputationalBasisPOVMEffect
+from pygsti.modelmembers.povms.povm import POVM as _POVM
+from pygsti.baseobjs import statespace as _statespace
 
 
 class ComputationalBasisPOVM(_POVM):
@@ -40,6 +42,23 @@ class ComputationalBasisPOVM(_POVM):
         The state space for this POVM.  If `None` a default state space
         with the appropriate number of qubits is used.
     """
+
+    @classmethod
+    def from_pure_vectors(cls, pure_vectors, evotype, state_space):
+        # Check if `pure_vectors` happens to be a Z-basis POVM on n-qubits
+        assert(len(pure_vectors) > 0)
+        if not isinstance(pure_vectors, dict):
+            pure_vectors = _collections.OrderedDict(pure_vectors)
+        nqubits = int(_np.log2(len(next(iter(pure_vectors.values())))))
+
+        v = (_np.array([1, 0], 'd'), _np.array([0, 1], 'd'))  # (v0,v1) - eigenstates of sigma_z
+        for zvals in _itertools.product(*([(0, 1)] * nqubits)):
+            testvec = _functools.reduce(_np.kron, [v[i] for i in zvals])  # FUTURE: make this more efficient
+            lbl = ''.join(map(str, zvals))
+            #testvec = testvec.reshape(2**nqubits, 1) # Reshape to column vector  # RESHAPE NOTE: this breaks unit tests
+            if not _np.allclose(testvec, pure_vectors[lbl]):
+                raise ValueError("`pure_vectors` doesn't look like a Z-basis computational POVM")
+        return cls(nqubits, evotype, None, state_space)
 
     def __init__(self, nqubits, evotype="default", qubit_filter=None, state_space=None):
         if qubit_filter is not None:

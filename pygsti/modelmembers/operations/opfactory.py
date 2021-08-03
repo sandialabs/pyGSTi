@@ -1,5 +1,5 @@
 """
-Defines the Factory class
+Defines the OpFactory class
 """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -11,16 +11,16 @@ Defines the Factory class
 #***************************************************************************************************
 import numpy as _np
 
-from .staticunitaryop import StaticUnitaryOp as _StaticUnitaryOp
-from .embeddedop import EmbeddedOp as _EmbeddedOp
-from .composedop import ComposedOp as _ComposedOp
+from pygsti.modelmembers.operations.staticunitaryop import StaticUnitaryOp as _StaticUnitaryOp
+from pygsti.modelmembers.operations.embeddedop import EmbeddedOp as _EmbeddedOp
+from pygsti.modelmembers.operations.composedop import ComposedOp as _ComposedOp
 
-from .. import modelmember as _gm
-from .. import instruments as _instrument
-from .. import povms as _povm
-from ...baseobjs.label import Label as _Lbl
-from ...baseobjs import statespace as _statespace
-from ...evotypes import Evotype as _Evotype
+from pygsti.modelmembers import modelmember as _gm
+from pygsti.modelmembers import instruments as _instrument
+from pygsti.modelmembers import povms as _povm
+from pygsti.baseobjs.label import Label as _Lbl
+from pygsti.baseobjs import statespace as _statespace
+from pygsti.evotypes import Evotype as _Evotype
 
 
 def op_from_factories(factory_dict, lbl):
@@ -50,18 +50,20 @@ def op_from_factories(factory_dict, lbl):
     -------
     LinearOperator
     """
-    if lbl.args:
-        lbl_without_args = _Lbl(lbl.name, lbl.sslbls)
+    lbl_args = lbl.collect_args()
+
+    if lbl_args:
+        lbl_without_args = lbl.strip_args()
         if lbl_without_args in factory_dict:
-            return factory_dict[lbl_without_args].create_simplified_op(args=lbl.args)
+            return factory_dict[lbl_without_args].create_simplified_op(args=lbl_args)
             # E.g. an EmbeddedOpFactory
 
     lbl_name = _Lbl(lbl.name)
     if lbl_name in factory_dict:
-        return factory_dict[lbl_name].create_simplified_op(args=lbl.args, sslbls=lbl.sslbls)
+        return factory_dict[lbl_name].create_simplified_op(args=lbl_args, sslbls=lbl.sslbls)
         # E.g. an EmbeddingOpFactory
 
-    extra = ". Maybe you forgot the args?" if not lbl.args else ""
+    extra = ". Maybe you forgot the args?" if not lbl_args else ""
     raise KeyError("Cannot create operator for label `%s` from factories%s" % (str(lbl), extra))
 
 
@@ -388,13 +390,20 @@ class EmbeddingOpFactory(OpFactory):
         (usually equal to the number of qubits the contained gate acts
         upon).  If `None`, then the length of the `sslbls` passed to this
         factory's `create_op` method is not checked at all.
+
+    allowed_sslbls_fn : callable, optional
+        A boolean function that takes a single `sslbls` argument specifying the state-space
+        labels for which the factory has been asked to embed `factory_or_op_to_embed`.  If
+        the function returns `True` then the embedding is allowed, if `False` then an error
+        is raised.
     """
 
-    def __init__(self, state_space, factory_or_op_to_embed, num_target_labels=None):
+    def __init__(self, state_space, factory_or_op_to_embed, num_target_labels=None, allowed_sslbls_fn=None):
         state_space = _statespace.StateSpace.cast(state_space)
         self.embedded_factory_or_op = factory_or_op_to_embed
         self.embeds_factory = isinstance(factory_or_op_to_embed, OpFactory)
         self.num_target_labels = num_target_labels
+        self.allowed_sslbls_fn = allowed_sslbls_fn
         super(EmbeddingOpFactory, self).__init__(state_space, factory_or_op_to_embed._evotype)
 
     def create_op(self, args=None, sslbls=None):
@@ -424,6 +433,8 @@ class EmbeddingOpFactory(OpFactory):
         assert(self.num_target_labels is None or len(sslbls) == self.num_target_labels), \
             ("EmbeddingFactory.create_op called with the wrong number (%s) of target labels!"
              " (expected %d)") % (len(sslbls), self.num_target_labels)
+        if self.allowed_sslbls_fn is not None and self.allowed_sslbls_fn(sslbls) is False:
+            raise ValueError("Not allowed to embed onto sslbls=" + str(sslbls))
 
         if self.embeds_factory:
             op = self.embedded_factory_or_op.create_op(args, None)  # Note: will have its gpindices set already

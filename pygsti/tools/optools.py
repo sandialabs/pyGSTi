@@ -18,12 +18,12 @@ import scipy.linalg as _spl
 import scipy.sparse as _sps
 import scipy.sparse.linalg as _spsl
 
-from . import basistools as _bt
-from . import jamiolkowski as _jam
-from . import lindbladtools as _lt
-from . import matrixtools as _mt
-from ..baseobjs.basis import Basis as _Basis, ExplicitBasis as _ExplicitBasis, DirectSumBasis as _DirectSumBasis
-from ..baseobjs.label import Label as _Label
+from pygsti.tools import basistools as _bt
+from pygsti.tools import jamiolkowski as _jam
+from pygsti.tools import lindbladtools as _lt
+from pygsti.tools import matrixtools as _mt
+from pygsti.baseobjs.basis import Basis as _Basis, ExplicitBasis as _ExplicitBasis, DirectSumBasis as _DirectSumBasis
+from pygsti.baseobjs.label import Label as _Label
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 
@@ -1769,8 +1769,8 @@ def lindblad_error_generators(dmbasis_ham, dmbasis_other, normalize,
                         assert(_np.isclose(normfn(otherLindbladTerms[i]), 1.0))
 
         elif other_mode == "diag_affine":
-            otherLindbladTerms = [[None] * (other_nMxs - 1)] * 2 if sparse else \
-                _np.empty((2, other_nMxs - 1, d2, d2), 'complex')
+            otherLindbladTerms = [[None] * (other_nMxs - 1), [None] * (other_nMxs - 1)] \
+                if sparse else _np.empty((2, other_nMxs - 1, d2, d2), 'complex')
             for i, Lm in enumerate(other_mxs[1:]):  # don't include identity
                 otherLindbladTerms[0][i] = _lt.nonham_lindbladian(Lm, Lm, sparse)
                 otherLindbladTerms[1][i] = _lt.affine_lindbladian(Lm, sparse)
@@ -2232,7 +2232,7 @@ def lindblad_terms_to_projections(lindblad_term_dict, basis, other_mode="all"):
         Basis labels can be strings or integers.  Values are complex
         coefficients (error rates).
 
-    basis : Basis, optional
+    basis : Basis
         A basis mapping the labels used in the keys of `lindblad_term_dict` to
         basis matrices (e.g. numpy arrays or Scipy sparse matrices).  The
         first element of this basis should be an identity element, and
@@ -2528,11 +2528,13 @@ def lindblad_projections_to_paramvals(ham_projs, other_projs, param_mode="cptp",
         Allowed values are: `"diagonal"` (only the diagonal Stochastic),
         `"diag_affine"` (diagonal + affine generators), and `"all"`.
 
-    truncate : bool, optional
+    truncate : bool or float, optional
         Whether to truncate the projections onto the Lindblad terms in
         order to meet constraints (e.g. to preserve CPTP) when necessary.
-        If False, then an error is thrown when the given projections
-        cannot be parameterized as specified.
+        If >= 0 or False, then an error is thrown when the given projections
+        cannot be parameterized as specified, using the value given as the
+        the maximum negative eigenvalue that is tolerated (`False` is equivalent
+        to 1e-12).  True tolerates *any* negative eigenvalues.
 
     Returns
     -------
@@ -2542,6 +2544,13 @@ def lindblad_projections_to_paramvals(ham_projs, other_projs, param_mode="cptp",
         values for `other_mode` equal to `"all"`, `"diag_affine"`, or
         `"diagonal"`, respectively.
     """
+    if truncate is False:
+        ttol = -1e-12  # truncation tolerance
+    elif truncate is True:
+        ttol = -_np.inf
+    else:
+        ttol = -truncate
+
     if ham_projs is not None:
         assert(_np.isclose(_np.linalg.norm(ham_projs.imag), 0)), \
             "Hamiltoian projections (coefficients) are not all real!"
@@ -2556,10 +2565,10 @@ def lindblad_projections_to_paramvals(ham_projs, other_projs, param_mode="cptp",
 
             if param_mode in ("depol", "reldepol"):
                 # otherParams is a *single-element* 1D vector of the sqrt of each diagonal el
-                assert(param_mode == "reldepol" or truncate or all([v >= -1e-12 for v in other_projs])), \
-                    "Lindblad stochastic coefficients are not positive (and truncate == False): %s" % str(other_projs)
-                assert(truncate or all([_np.isclose(v, other_projs[0]) for v in other_projs])), \
-                    "Diagonal lindblad coefficients are not equal (truncate == False)!"
+                assert(param_mode == "reldepol" or all([v >= ttol for v in other_projs])), \
+                    "Lindblad stochastic coefficients are not positive (truncate == %s)!" % str(truncate)
+                assert(all([_np.isclose(v, other_projs[0], atol=abs(ttol)) for v in other_projs])), \
+                    "Diagonal lindblad coefficients are not equal (truncate == %s)!" % str(truncate)
                 if param_mode == "depol":
                     otherProj = _np.mean(other_projs.clip(1e-16, 1e100))
                     otherParams = _np.array(_np.sqrt(_np.real(otherProj)), 'd')  # shape (1,)
@@ -2568,8 +2577,8 @@ def lindblad_projections_to_paramvals(ham_projs, other_projs, param_mode="cptp",
                     otherParams = _np.array(_np.real(otherProj), 'd')  # shape (1,)
 
             elif param_mode == "cptp":  # otherParams is a 1D vector of the sqrts of diagonal els
-                assert(truncate or all([v >= -1e-12 for v in other_projs])), \
-                    "Lindblad stochastic coefficients are not positive (and truncate == False): %s" % str(other_projs)
+                assert(all([v >= ttol for v in other_projs])), \
+                    "Lindblad stochastic coefficients are not positive (truncate == %s)!" % str(truncate)
                 other_projs = other_projs.clip(1e-16, 1e100)
                 otherParams = _np.sqrt(other_projs.real)  # shape (bsO-1,)
             else:  # "unconstrained": otherParams is a 1D vector of the real diagonal els of other_projs
@@ -2580,10 +2589,10 @@ def lindblad_projections_to_paramvals(ham_projs, other_projs, param_mode="cptp",
                 "Diagonal stochastic and affine projections (coefficients) are not all real!"
 
             if param_mode in ("depol", "reldepol"):  # otherParams is a single depol value + unconstrained affine coeffs
-                assert(param_mode == "reldepol" or truncate or all([v >= -1e-12 for v in other_projs[0]])), \
-                    "Lindblad coefficients are not CPTP (truncate == False)!"
-                assert(truncate or all([_np.isclose(v, other_projs[0, 0]) for v in other_projs[0]])), \
-                    "Diagonal lindblad coefficients are not equal (truncate == False)!"
+                assert(param_mode == "reldepol" or all([v >= ttol for v in other_projs[0]])), \
+                    "Lindblad coefficients are not CPTP (truncate == %s)!" % str(truncate)
+                assert(all([_np.isclose(v, other_projs[0, 0], atol=abs(ttol)) for v in other_projs[0]])), \
+                    "Diagonal lindblad coefficients are not equal (truncate == %s)!" % str(truncate)
                 if param_mode == "depol":
                     depolProj = _np.mean(other_projs[0, :].clip(1e-16, 1e100))
                     otherParams = _np.concatenate(([_np.sqrt(_np.real(depolProj))],
@@ -2594,8 +2603,8 @@ def lindblad_projections_to_paramvals(ham_projs, other_projs, param_mode="cptp",
                                                    other_projs[1].real))  # shape (1+(bsO-1),)
 
             elif param_mode == "cptp":  # Note: does not constrained affine coeffs to CPTP
-                assert(truncate or all([v >= -1e-12 for v in other_projs[0]])), \
-                    "Lindblad coefficients are not CPTP (truncate == False)!"
+                assert(all([v >= ttol for v in other_projs[0]])), \
+                    "Lindblad coefficients are not CPTP (truncate == %s)!" % str(truncate)
                 diagParams = _np.sqrt(_np.real(other_projs[0, :]).clip(1e-16, 1e100))  # shape (bsO-1,)
                 otherParams = _np.concatenate((diagParams, other_projs[1].real))  # diag + affine params
 
@@ -2619,8 +2628,9 @@ def lindblad_projections_to_paramvals(ham_projs, other_projs, param_mode="cptp",
                 evals, U = _np.linalg.eig(other_projs)
                 Ui = _np.linalg.inv(U)
 
-                assert(truncate or all([ev >= -1e-12 for ev in evals])), \
-                    "Lindblad coefficients are not CPTP (truncate == False)!"
+                assert(all([ev >= ttol for ev in evals])), \
+                    ("Lindblad coefficients are not CPTP (truncate == %s)! (largest neg = %g)"
+                     % (str(truncate), min(evals.real)))
 
                 pos_evals = evals.clip(1e-16, None)
                 other_projs = _np.dot(U, _np.dot(_np.diag(pos_evals), Ui))
@@ -3618,33 +3628,6 @@ def is_valid_lindblad_paramtype(typ):
     """
     return typ in ("CPTP", "H+S", "S", "H+S+A", "S+A", "H+D", "D", "H+D+A", "D+A",
                    "GLND", "H+s", "s", "H+s+A", "s+A", "H+d", "d", "H+d+A", "d+A", "H")
-
-
-#REMOVE
-#def split_lindblad_paramtype(typ):
-#    """
-#    Splits a Lindblad-gate parameteriation type into a base-type (e.g. "H+S") and an evolution-type string.
-#
-#    Parameters
-#    ----------
-#    typ : str
-#        The parameterization type, e.g. "H+S terms".
-#
-#    Returns
-#    -------
-#    base_type : str
-#        The "base-parameterization" part of `typ`.
-#    evotype : str
-#        The evolution type corresponding to `typ`.
-#    """
-#    bTyp = typ.split()[0]  # "base" type
-#    evostr = " ".join(typ.split()[1:])
-#
-#    if evostr == "": evotype = "densitymx"
-#    elif evostr == "terms": evotype = "svterm"
-#    elif evostr == "clifford terms": evotype = "cterm"
-#    else: raise ValueError("Unrecognized evotype in `typ`=%s" % typ)
-#    return bTyp, evotype
 
 
 def effect_label_to_outcome(povm_and_effect_lbl):

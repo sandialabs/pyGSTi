@@ -12,11 +12,12 @@ Defines the ComposedPOVM class
 
 import collections as _collections
 
-from .composedeffect import ComposedPOVMEffect as _ComposedPOVMEffect
-from .computationalpovm import ComputationalBasisPOVM as _ComputationalBasisPOVM
-from .povm import POVM as _POVM
-from .. import modelmember as _mm
-from .. import operations as _op
+from pygsti.modelmembers.povms.composedeffect import ComposedPOVMEffect as _ComposedPOVMEffect
+from pygsti.modelmembers.povms.computationalpovm import ComputationalBasisPOVM as _ComputationalBasisPOVM
+from pygsti.modelmembers.povms.povm import POVM as _POVM
+from pygsti.modelmembers import modelmember as _mm
+from pygsti.modelmembers import operations as _op
+from pygsti.baseobjs import Basis as _Basis
 
 
 class ComposedPOVM(_POVM):
@@ -79,13 +80,13 @@ class ComposedPOVM(_POVM):
         state_space = self.error_map.state_space
 
         if mx_basis is None:
-            if isinstance(errormap, _op.LindbladOp):
+            if isinstance(errormap, _op.ExpErrorgenOp) and isinstance(errormap.errorgen, _op.LindbladErrorgen):
                 mx_basis = errormap.errorgen.matrix_basis
             else:
                 raise ValueError("Cannot extract a matrix-basis from `errormap` (type %s)"
                                  % str(type(errormap)))
 
-        self.matrix_basis = mx_basis
+        self.matrix_basis = _Basis.cast(mx_basis, state_space)
         evotype = self.error_map._evotype
 
         if povm is None:
@@ -357,6 +358,29 @@ class ComposedPOVM(_POVM):
         self.error_map.spam_transform_inplace(s, 'effect')  # only do this *once*
         for lbl, effect in self.items():
             #effect._update_rep()  # these two lines mimic the bookeeping in
+            effect.dirty = True   # a "effect.transform_inplace(s, 'effect')" call.
+        self.dirty = True
+
+    def depolarize(self, amount):
+        """
+        Depolarize this POVM by the given `amount`.
+
+        Parameters
+        ----------
+        amount : float or tuple
+            The amount to depolarize by.  If a tuple, it must have length
+            equal to one less than the dimension of the gate. All but the
+            first element of each spam vector (often corresponding to the
+            identity element) are multiplied by `amount` (if a float) or
+            the corresponding `amount[i]` (if a tuple).
+
+        Returns
+        -------
+        None
+        """
+        self.error_map.depolarize(amount)
+        for lbl, effect in self.items():
+            #effect._update_rep()  # these two lines mimic the bookeepging in
             effect.dirty = True   # a "effect.transform_inplace(s, 'effect')" call.
         self.dirty = True
 

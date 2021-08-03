@@ -14,24 +14,23 @@ import warnings as _warnings
 
 import numpy as _np
 
-from . import plothelpers as _ph
-from . import reportables as _reportables
-from . import workspaceplots as _wp
-from .reportables import evaluate as _ev
-from .table import ReportTable as _ReportTable
-from .workspace import WorkspaceTable
-from .reportableqty import ReportableQty as _ReportableQty, minimum as _rqty_minimum
-from .. import construction as _cnst
-from .. import models as _models
-from .. import baseobjs as _baseobjs
-from .. import tools as _tools
-from ..algorithms import gaugeopt as _gopt
-from ..modelmembers import operations as _op
-from ..modelmembers import povms as _povm
-from ..modelmembers import states as _state
-from ..objectivefns import objectivefns as _objfns
-from ..forwardsims import MatrixForwardSimulator as _MatrixFSim
-from ..circuits.circuit import Circuit as _Circuit
+from pygsti.report import plothelpers as _ph
+from pygsti.report import reportables as _reportables
+from pygsti.report import workspaceplots as _wp
+from pygsti.report.reportables import evaluate as _ev
+from pygsti.report.table import ReportTable as _ReportTable
+from pygsti.report.workspace import WorkspaceTable
+from pygsti.report.reportableqty import ReportableQty as _ReportableQty, minimum as _rqty_minimum
+from pygsti import circuits as _circuits
+from pygsti import models as _models
+from pygsti import baseobjs as _baseobjs
+from pygsti import tools as _tools
+from pygsti.algorithms import gaugeopt as _gopt
+from pygsti.modelmembers import operations as _op
+from pygsti.modelmembers import povms as _povm
+from pygsti.modelmembers import states as _state
+from pygsti.objectivefns import objectivefns as _objfns
+from pygsti.circuits.circuit import Circuit as _Circuit
 
 
 class BlankTable(WorkspaceTable):
@@ -436,7 +435,7 @@ class GatesTable(WorkspaceTable):
                 basis = model.basis
 
                 if display_as == "numbers":
-                    row_data.append(op)
+                    row_data.append(op.to_dense('HilbertSchmidt'))
                     row_formatters.append('Brackets')
                 elif display_as == "boxes":
                     fig = _wp.GateMatrixPlot(self.ws, op.to_dense(on_space='HilbertSchmidt'),
@@ -452,7 +451,7 @@ class GatesTable(WorkspaceTable):
                 intervalVec = confidence_region_info.retrieve_profile_likelihood_confidence_intervals(
                     lbl, comp_lbl)[:, None]
 
-                if isinstance(per_model_ops[-1], _op.FullDenseOp):
+                if isinstance(per_model_ops[-1], _op.FullArbitraryOp):
                     #then we know how to reshape into a matrix
                     op_dim = models[-1].dim
                     basis = models[-1].basis
@@ -930,7 +929,7 @@ class GaugeRobustMetricTable(WorkspaceTable):
             gate_mx = orig_model.operations[lbl].to_dense(on_space='HilbertSchmidt')
             target_gate_mx = target_model.operations[lbl].to_dense(on_space='HilbertSchmidt')
             Ugauge = _tools.compute_best_case_gauge_transform(gate_mx, target_gate_mx)
-            Ugg = _models.gaugegrop.FullGaugeGroupElement(_np.linalg.inv(Ugauge))
+            Ugg = _models.gaugegroup.FullGaugeGroupElement(_np.linalg.inv(Ugauge))
             # transforms gates as Ugauge * gate * Ugauge_inv
 
             mdl = orig_model.copy()
@@ -1068,9 +1067,10 @@ class ModelVsTargetTable(WorkspaceTable):
         pRBnum = _ev(_reportables.Predicted_rb_number(model, target_model), confidence_region_info)
         table.add_row(("Predicted primitive RB number", pRBnum), (None, 'Normal'))
 
+        from pygsti.forwardsims import MatrixForwardSimulator as _MatrixFSim
         if clifford_compilation and isinstance(model.sim, _MatrixFSim):
-            clifford_model = _cnst.create_explicit_alias_model(model, clifford_compilation)
-            clifford_targetModel = _cnst.create_explicit_alias_model(target_model, clifford_compilation)
+            clifford_model = _models.create_explicit_alias_model(model, clifford_compilation)
+            clifford_targetModel = _models.create_explicit_alias_model(target_model, clifford_compilation)
 
             ##For clifford versions we don't have a confidence region - so no error bars
             #AGsI = _ev(_reportables.Average_gateset_infidelity(clifford_model, clifford_targetModel))
@@ -1655,13 +1655,13 @@ class GaugeRobustErrgenTable(WorkspaceTable):
 
         ## Construct synthetic idles
         maxPower = 4; maxLen = 6; Id = _np.identity(target_model.dim, 'd')
-        baseStrs = _cnst.list_all_circuits_without_powers_and_cycles(list(model.operations.keys()), maxLen)
+        baseStrs = _circuits.list_all_circuits_without_powers_and_cycles(list(model.operations.keys()), maxLen)
         for s in baseStrs:
             for i in range(1, maxPower):
                 if len(s**i) > 1 and _np.linalg.norm(target_model.sim.product(s**i) - Id) < 1e-6:
                     syntheticIdleStrs.append(s**i); break
-        #syntheticIdleStrs = _cnst.to_circuits([ ('Gx',)*4, ('Gy',)*4 ] ) #DEBUG!!!
-        #syntheticIdleStrs = _cnst.to_circuits([ ('Gx',)*4, ('Gy',)*4, ('Gy','Gx','Gx')*2] ) #DEBUG!!!
+        #syntheticIdleStrs = _circuits.to_circuits([ ('Gx',)*4, ('Gy',)*4 ] ) #DEBUG!!!
+        #syntheticIdleStrs = _circuits.to_circuits([ ('Gx',)*4, ('Gy',)*4, ('Gy','Gx','Gx')*2] ) #DEBUG!!!
         print("Using synthetic idles: \n", '\n'.join([str(opstr) for opstr in syntheticIdleStrs]))
 
         gaugeRobust_info = _ev(_reportables.Robust_LogGTi_and_projections(

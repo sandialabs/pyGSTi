@@ -10,7 +10,6 @@ Defines classes which represent terms in gate expansions
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
 
 from pygsti.evotypes import Evotype as _Evotype
@@ -178,6 +177,7 @@ def exponentiate_terms_above_mag(terms, order, postterm, cache=None, min_term_ma
     termType = postterm.__class__
     composeFn = postterm._rep.__class__.composed
     termreps = [t._rep for t in terms]
+    evotype = postterm._evotype
 
     def build_terms(order_to_build):
         if order_to_build in cache:  # Note: 0th order is *always* in cache
@@ -208,107 +208,7 @@ def exponentiate_terms_above_mag(terms, order, postterm, cache=None, min_term_ma
         return cache[order_to_build]
 
     #return build_terms(order)  #OLD - when cache held full objects
-    return [termType(rep) for rep in build_terms(order)]
-
-
-#REMOVE - now embedded rep class does this
-#def _embed_oprep(state_space_labels, target_labels, rep_to_embed, evotype):
-#    """Variant of EmbeddedOp.__init__ used to create embeddedop reps without a corresponding embedded op.
-#    For use w/terms where there are just reps
-#    """
-#
-#    opDim = state_space_labels.dim
-#
-#    #Create representation
-#    if evotype == "stabilizer":
-#        # assert that all state space labels == qubits, since we only know
-#        # how to embed cliffords on qubits...
-#        assert(len(state_space_labels.labels) == 1
-#               and all([ld == 2 for ld in state_space_labels.labeldims.values()])), \
-#            "All state space labels must correspond to *qubits*"
-#
-#        #Cache info to speedup representation's acton(...) methods:
-#        # Note: ...labels[0] is the *only* tensor-prod-block, asserted above
-#        qubitLabels = state_space_labels.labels[0]
-#        qubit_indices = _np.array([qubitLabels.index(targetLbl)
-#                                   for targetLbl in target_labels], _np.int64)
-#
-#        nQubits = int(round(_np.log2(opDim)))
-#        rep = replib.SBOpRepEmbedded(rep_to_embed,
-#                                     nQubits, qubit_indices)
-#
-#    elif evotype in ("statevec", "densitymx"):
-#
-#        iTensorProdBlks = [state_space_labels.tpb_index[label] for label in target_labels]
-#        # index of tensor product block (of state space) a bit label is part of
-#        if len(set(iTensorProdBlks)) != 1:
-#            raise ValueError("All qubit labels of a multi-qubit gate must correspond to the"
-#                             " same tensor-product-block of the state space -- checked previously")  # pragma: no cover # noqa
-#
-#        iTensorProdBlk = iTensorProdBlks[0]  # because they're all the same (tested above) - this is "active" block
-#        tensorProdBlkLabels = state_space_labels.labels[iTensorProdBlk]
-#        # count possible *density-matrix-space* indices of each component of the tensor product block
-#        numBasisEls = _np.array([state_space_labels.labeldims[l] for l in tensorProdBlkLabels], _np.int64)
-#
-#        # Separate the components of the tensor product that are not operated on, i.e. that our
-#        # final map just acts as identity w.r.t.
-#        labelIndices = [tensorProdBlkLabels.index(label) for label in target_labels]
-#        actionInds = _np.array(labelIndices, _np.int64)
-#        assert(_np.product([numBasisEls[i] for i in actionInds]) == rep_to_embed.dim), \
-#            "Embedded gate has dimension (%d) inconsistent with the given target labels (%s)" % (
-#                rep_to_embed.dim, str(target_labels))
-#
-#        nBlocks = state_space_labels.num_tensor_product_blocks
-#        iActiveBlock = iTensorProdBlk
-#        nComponents = len(state_space_labels.labels[iActiveBlock])
-#        embeddedDim = rep_to_embed.dim
-#        blocksizes = _np.array([_np.product(state_space_labels.tensor_product_block_dims(k))
-#                                for k in range(nBlocks)], _np.int64)
-#        if evotype == "statevec":
-#            rep = replib.SVOpRepEmbedded(rep_to_embed,
-#                                         numBasisEls, actionInds, blocksizes, embeddedDim,
-#                                         nComponents, iActiveBlock, nBlocks, opDim)
-#        else:  # "densitymx"
-#            rep = replib.DMOpRepEmbedded(rep_to_embed,
-#                                         numBasisEls, actionInds, blocksizes, embeddedDim,
-#                                         nComponents, iActiveBlock, nBlocks, opDim)
-#    else:
-#        raise ValueError("Invalid evotype `%s`" % evotype)
-#    return rep
-
-#def embed_term(term, state_space_labels, target_labels):
-#    """
-#    Embed a term to it acts within a larger state space.
-#
-#    Internally, this simply converts a term's gate operators to embedded gate
-#    operations.
-#
-#    Parameters
-#    ----------
-#    term : RankOneTerm
-#        The term to embed
-#
-#    state_space_labels : a list of tuples
-#        This argument specifies the density matrix space upon which the
-#        constructed term will act.  Each tuple corresponds to a block of a
-#        density matrix in the standard basis (and therefore a component of
-#        the direct-sum density matrix space).
-#
-#    target_labels : list
-#        The labels contained in `state_space_labels` which demarcate the
-#        portions of the state space acted on by `term`.
-#
-#    Returns
-#    -------
-#    RankOneTerm
-#    """
-#    from ..modelmembers import operations as _op
-#    ret = RankOneTerm(term.coeff, None, None, term.termtype, term._evotype)
-#    ret.pre_ops = [_op.EmbeddedOp(state_space_labels, target_labels, op)
-#                   for op in term.pre_ops]
-#    ret.post_ops = [_op.EmbeddedOp(state_space_labels, target_labels, op)
-#                    for op in term.post_ops]
-#    return ret
+    return [termType(rep, evotype) for rep in build_terms(order)]
 
 
 class RankOneTerm(object):
@@ -363,11 +263,11 @@ class RankOneTerm(object):
         -------
         RankOneTerm
         """
-        return self.__class__(self._rep.copy())
+        return self.__class__(self._rep.copy(), self._evotype)
 
     def __mul__(self, x):
         """ Multiply by scalar """
-        return self.__class__(self._rep.scalar_mult(x))
+        return self.__class__(self._rep.scalar_mult(x), self._evotype)
 
     def __rmul__(self, x):
         return self.__mul__(x)
@@ -430,7 +330,7 @@ class _HasMagnitude(object):
         -------
         RankOneTerm
         """
-        return self.__class__(self._rep.__class__.composed([t._rep for t in all_terms], magnitude))
+        return self.__class__(self._rep.__class__.composed([t._rep for t in all_terms], magnitude), self._evotype)
 
 
 class _NoMagnitude(object):
@@ -450,7 +350,7 @@ class _NoMagnitude(object):
         -------
         RankOneTerm
         """
-        return self.__class__(self._rep.__class__.composed([t._rep for t in all_terms], 1.0))
+        return self.__class__(self._rep.__class__.composed([t._rep for t in all_terms], 1.0), self._evotype)
 
 
 class RankOnePrepTerm(RankOneTerm, _NoMagnitude):
@@ -646,9 +546,9 @@ class RankOneOpTerm(RankOneTerm, _NoMagnitude):
             else:
                 #Try to construct a clifford rep first, otherwise a dense unitary
                 try:
-                    pre_rep = evotype.create_clifford_rep(pre_op, None, state_space)
+                    pre_rep = evotype.create_clifford_rep(pre_op, None, None, state_space)
                 except Exception:
-                    pre_rep = evotype.create_denseunitary_rep(pre_op, state_space)
+                    pre_rep = evotype.create_dense_unitary_rep(pre_op, None, state_space)  # basis=None (unused?)
             pre_reps.append(pre_rep)
 
         if post_op is not None:
@@ -659,9 +559,9 @@ class RankOneOpTerm(RankOneTerm, _NoMagnitude):
             else:
                 #Try to construct a clifford rep first, otherwise a dense unitary
                 try:
-                    post_rep = evotype.create_clifford_rep(post_op, None, state_space)
+                    post_rep = evotype.create_clifford_rep(post_op, None, None, state_space)
                 except Exception:
-                    post_rep = evotype.create_denseunitary_rep(post_op, state_space)
+                    post_rep = evotype.create_dense_unitary_rep(post_op, None, state_space)  # basis=None (unused?)
             post_reps.append(post_rep)
 
         rep = evotype.create_term_rep(cls._coeff_rep(coeff), 1.0, 0.0,
@@ -688,7 +588,7 @@ class RankOneOpTerm(RankOneTerm, _NoMagnitude):
         pre_reps = [evotype.create_embedded_rep(state_space, target_labels, oprep) for oprep in self._rep.pre_ops]
         post_reps = [evotype.create_embedded_rep(state_space, target_labels, oprep) for oprep in self._rep.post_ops]
         return self.__class__(self._rep.__class__(self._rep.coeff, 1.0, 0.0, None, None,
-                                                  None, None, pre_reps, post_reps))
+                                                  None, None, pre_reps, post_reps), self._evotype)
 
 
 class RankOnePrepTermWithMagnitude(RankOneTerm, _HasMagnitude):
@@ -717,7 +617,7 @@ class RankOnePrepTermWithMagnitude(RankOneTerm, _HasMagnitude):
         return self.__class__(self._rep.__class__(
             self._rep.coeff, self._rep.magnitude, self._rep.logmagnitude,
             self._rep.pre_state, self._rep.post_state, None, None, pre_reps, post_reps
-        ))
+        ), self._evotype)
 
 
 class RankOneEffectTermWithMagnitude(RankOneTerm, _HasMagnitude):
@@ -746,7 +646,7 @@ class RankOneEffectTermWithMagnitude(RankOneTerm, _HasMagnitude):
         return self.__class__(self._rep.__class__(
             self._rep.coeff, self._rep.magnitude, self._rep.logmagnitude,
             None, None, self._rep.pre_effect, self._rep.post_effect, pre_reps, post_reps
-        ))
+        ), self._evotype)
 
 
 class RankOneOpTermWithMagnitude(RankOneTerm, _HasMagnitude):
@@ -773,7 +673,7 @@ class RankOneOpTermWithMagnitude(RankOneTerm, _HasMagnitude):
         pre_reps = [evotype.create_embedded_rep(state_space, target_labels, oprep) for oprep in self._rep.pre_ops]
         post_reps = [evotype.create_embedded_rep(state_space, target_labels, oprep) for oprep in self._rep.post_ops]
         return self.__class__(self._rep.__class__(self._rep.coeff, self._rep.magnitude, self._rep.logmagnitude,
-                                                  None, None, None, None, pre_reps, post_reps))
+                                                  None, None, None, None, pre_reps, post_reps), self._evotype)
 
 
 class _HasNumericalCoefficient(object):
@@ -892,7 +792,7 @@ class RankOnePolynomialPrepTerm(RankOnePrepTerm, _HasPolynomialCoefficient):
         assert(mag <= 1.0), "Individual term magnitudes should be <= 1.0 so that '*_above_mag' routines work!"
         rep = self._rep.copy()
         rep.set_magnitude(mag)
-        return RankOnePolynomialPrepTermWithMagnitude(rep)
+        return RankOnePolynomialPrepTermWithMagnitude(rep, self._evotype)
 
 
 class RankOnePolynomialEffectTerm(RankOneEffectTerm, _HasPolynomialCoefficient):
@@ -915,7 +815,7 @@ class RankOnePolynomialEffectTerm(RankOneEffectTerm, _HasPolynomialCoefficient):
         assert(mag <= 1.0), "Individual term magnitudes should be <= 1.0 so that '*_above_mag' routines work!"
         rep = self._rep.copy()
         rep.set_magnitude(mag)
-        return RankOnePolynomialEffectTermWithMagnitude(rep)
+        return RankOnePolynomialEffectTermWithMagnitude(rep, self._evotype)
 
 
 class RankOnePolynomialOpTerm(RankOneOpTerm, _HasPolynomialCoefficient):
@@ -938,7 +838,7 @@ class RankOnePolynomialOpTerm(RankOneOpTerm, _HasPolynomialCoefficient):
         assert(mag <= 1.0), "Individual term magnitudes should be <= 1.0 so that '*_above_mag' routines work!"
         rep = self._rep.copy()
         rep.set_magnitude(mag)
-        return RankOnePolynomialOpTermWithMagnitude(rep)
+        return RankOnePolynomialOpTermWithMagnitude(rep, self._evotype)
 
 
 class RankOnePolynomialPrepTermWithMagnitude(RankOnePrepTermWithMagnitude, _HasPolynomialCoefficient):

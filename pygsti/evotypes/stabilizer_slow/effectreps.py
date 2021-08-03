@@ -16,10 +16,8 @@ from ...tools import matrixtools as _mt
 
 
 class EffectRep(_basereps.EffectRep):
-    def __init__(self, zvals, state_space):
-        self.zvals = zvals
+    def __init__(self, state_space):
         self.state_space = _StateSpace.cast(state_space)
-        assert(self.state_space.num_qubits == len(self.zvals))
 
     @property
     def nqubits(self):
@@ -38,29 +36,6 @@ class EffectRep(_basereps.EffectRep):
     def to_dense(self, on_space):
         return _mt.zvals_to_dense(self.zvals, superket=bool(on_space not in ('minimal', 'Hilbert')))
 
-#OLD REMOVE:
-#    def to_dense(self, on_space):
-#        """
-#        Return this SPAM vector as a (dense) numpy array.
-#
-#        The memory in `scratch` maybe used when it is not-None.
-#
-#        Parameters
-#        ----------
-#        scratch : numpy.ndarray, optional
-#            scratch space available for use.
-#
-#        Returns
-#        -------
-#        numpy.ndarray
-#        """
-#        if on_space not in ('minimal', 'Hilbert'):
-#            raise ValueError('stabilizer evotype cannot (yet) generate dense Hilbert-Schmidt effect vectors')
-#        v = (_np.array([1, 0], 'd'), _np.array([0, 1], 'd'))  # (v0,v1) - eigenstates of sigma_z
-#        statevec = _functools.reduce(_np.kron, [v[i] for i in self.zvals])
-#        statevec.shape = (statevec.size, 1)
-#        return statevec
-
 
 #class EffectRepConjugatedState(EffectRep):
 #    pass  # TODO - this should be possible
@@ -68,8 +43,11 @@ class EffectRep(_basereps.EffectRep):
 
 class EffectRepComputational(EffectRep):
 
-    def __init__(self, zvals, state_space):
-        super(EffectRepComputational, self).__init__(zvals, state_space)
+    def __init__(self, zvals, basis, state_space):
+        self.zvals = zvals
+        self.basis = basis
+        assert(self.state_space.num_qubits == len(self.zvals))
+        super(EffectRepComputational, self).__init__(state_space)
 
     #@property
     #def outcomes(self):
@@ -89,3 +67,26 @@ class EffectRepComputational(EffectRep):
 
     def to_dense(self, on_space, outvec=None):
         return _mt.zvals_to_dense(self.zvals, superket=bool(on_space not in ('minimal', 'Hilbert')))
+
+
+class EffectRepComposed(EffectRep):
+    def __init__(self, op_rep, effect_rep, op_id, state_space):
+        self.op_rep = op_rep
+        self.effect_rep = effect_rep
+        self.op_id = op_id
+
+        state_space = _StateSpace.cast(state_space)
+        assert(state_space.is_compatible_with(effect_rep.state_space))
+
+        super(EffectRepComposed, self).__init__(state_space)
+
+    #def __reduce__(self):
+    #    return (EffectRepComposed, (self.op_rep, self.effect_rep, self.op_id, self.state_space))
+
+    def probability(self, state):
+        state = self.op_rep.acton(state)  # *not* acton_adjoint
+        return self.effect_rep.probability(state)
+
+    def amplitude(self, state):  # allow scratch to be passed in?
+        state = self.op_rep.acton(state)  # *not* acton_adjoint
+        return self.effect_rep.amplitude(state)

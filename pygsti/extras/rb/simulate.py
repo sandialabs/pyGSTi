@@ -13,9 +13,9 @@ import time as _time
 
 import numpy as _np
 
-from ...baseobjs.label import Label as _Lbl
-from ...datasets.dataset import DataSet as _DataSet
-from ...tools import symplectic as _symp
+from pygsti.baseobjs.label import Label as _Lbl
+from pygsti.data.dataset import DataSet as _DataSet
+from pygsti.tools import symplectic as _symp
 
 #from . import sample as _samp
 _samp = None  # MOVED - and this module is deprecated & broken now, so just set to None
@@ -467,10 +467,10 @@ def circuit_simulator_for_tensored_independent_pauli_errors(circuit, pspec, erro
     ----------
     circuit : Circuit
         The circuit to simulate. It should only contain gates that are also contained  within the provided
-        ProcessorSpec `pspec` and are Clifford gates.
+        QubitProcessorSpec `pspec` and are Clifford gates.
 
-    pspec : ProcessorSpec
-        The ProcessorSpec that defines the device. The Clifford model in ProcessorSpec should contain all of
+    pspec : QubitProcessorSpec
+        The QubitProcessorSpec that defines the device. The Clifford model in QubitProcessorSpec should contain all of
         the gates that are in the circuit.
 
     errormodel : dict
@@ -500,20 +500,17 @@ def circuit_simulator_for_tensored_independent_pauli_errors(circuit, pspec, erro
         A dictionary of simulated measurement outcome counts.
     """
     n = circuit.number_of_lines
-    #TODO REMOVE
-    #if circuit.identity != idle_name:
-    #    circuit.replace_gatename(circuit.identity,idle_name)
 
     if set(circuit.line_labels) != set(pspec.qubit_labels):
         assert(set(circuit.line_labels).issubset(set(pspec.qubit_labels)))
         reduced_errormodel = errormodel.copy()
-        mask = _np.zeros(pspec.number_of_qubits, bool)
-        for i in range(pspec.number_of_qubits):
+        mask = _np.zeros(pspec.num_qubits, bool)
+        for i in range(pspec.num_qubits):
             if pspec.qubit_labels[i] in circuit.line_labels:
                 mask[i] = True
         for key in list(reduced_errormodel.keys()):
             errormatrix = reduced_errormodel[key]
-            assert(_np.shape(errormatrix)[0] == pspec.number_of_qubits), "Format of `errormodel` incorrect!"
+            assert(_np.shape(errormatrix)[0] == pspec.num_qubits), "Format of `errormodel` incorrect!"
             if len(_np.shape(errormatrix)) == 2:
                 reduced_errormodel[key] = errormatrix[mask, :]
             elif len(_np.shape(errormatrix)) == 1:
@@ -547,10 +544,10 @@ def oneshot_circuit_simulator_for_tensored_independent_pauli_errors(circuit, psp
     ----------
     circuit : Circuit
         The circuit to simulate. It should only contain gates that are also contained  within the provided
-        ProcessorSpec `pspec` and are Clifford gates.
+        QubitProcessorSpec `pspec` and are Clifford gates.
 
-    pspec : ProcessorSpec
-        The ProcessorSpec that defines the device. The Clifford model in ProcessorSpec should contain all of
+    pspec : QubitProcessorSpec
+        The QubitProcessorSpec that defines the device. The Clifford model in QubitProcessorSpec should contain all of
         the gates that are in the circuit.
 
     errormodel : dict
@@ -635,8 +632,8 @@ def rb_with_pauli_errors(pspec, errormodel, lengths, k, counts, qubit_subset=Non
 
     Parameters
     ----------
-    pspec : ProcessorSpec
-        The ProcessorSpec that defines the device.
+    pspec : QubitProcessorSpec
+        The QubitProcessorSpec that defines the device.
 
     errormodel : dict
         A dictionary defining the error model. This errormodel should have keys that are Label objects
@@ -698,12 +695,12 @@ def rb_with_pauli_errors(pspec, errormodel, lengths, k, counts, qubit_subset=Non
             with open(filename, 'w') as f:
                 f.write('# Results from a {} simulation\n'.format(rbtype))
                 f.write('# Number of qubits\n')
-                if qubit_subset is None: f.write(str(pspec.number_of_qubits))
+                if qubit_subset is None: f.write(str(pspec.num_qubits))
                 else: f.write(str(len(qubit_subset)))
                 f.write('\n# RB length // Success counts // Total counts '
                         '// Circuit depth // Circuit two-qubit gate count\n')
 
-    n = pspec.number_of_qubits
+    n = pspec.num_qubits
     lengthslist = []
     scounts = []
     cdepths = []
@@ -768,8 +765,8 @@ def create_iid_pauli_error_model(pspec, one_qubit_gate_errorrate, two_qubit_gate
 
     Parameters
     ----------
-    pspec : ProcessorSpec
-        The ProcessorSpec that defines the device.
+    pspec : QubitProcessorSpec
+        The QubitProcessorSpec that defines the device.
 
     one_qubit_gate_errorrate : float
         The 1-qubit gates error rate (the probability of a Pauli error on the target qubit) not including
@@ -814,7 +811,7 @@ def create_iid_pauli_error_model(pspec, one_qubit_gate_errorrate, two_qubit_gate
         raise ValueError("Error model type not understood! Set `ptype` to a valid option.")
 
     perQ_twoQ_errorrate = 1 - (1 - two_qubit_gate_errorrate)**(1 / 2)
-    n = pspec.number_of_qubits
+    n = pspec.num_qubits
 
     errormodel = {}
 
@@ -834,24 +831,21 @@ def create_iid_pauli_error_model(pspec, one_qubit_gate_errorrate, two_qubit_gate
         errormodel[gate][:, 0] = _np.ones(n, float)
 
         # If not a CNOT, it is a 1-qubit gate / idle.
-        if gate.number_of_qubits == 2:
+        if gate.num_qubits == 2:
             q1 = gate.qubits[0]
             q2 = gate.qubits[1]
             er = perQ_twoQ_errorrate
             errormodel[gate][pspec.qubit_labels.index(q1), :] = error_row(er)
             errormodel[gate][pspec.qubit_labels.index(q2), :] = error_row(er)
 
-        elif gate.number_of_qubits == 1:
+        elif gate.num_qubits == 1:
             q = gate.qubits[0]
-
-            # If the idle gate, use the idle error rate
-            #TODO REMOVE if gate.name == pspec.identity: er = idle_errorrate
             er = one_qubit_gate_errorrate
 
             errormodel[gate][pspec.qubit_labels.index(q), :] = error_row(er)
 
         else:
-            raise ValueError("The ProcessorSpec must only contain 1- and 2- qubit gates!")
+            raise ValueError("The QubitProcessorSpec must only contain 1- and 2- qubit gates!")
 
     errormodel['measure'] = _np.array([measurement_errorrate for q in range(n)])
 
@@ -871,8 +865,8 @@ def create_locally_gate_independent_pauli_error_model(pspec, gate_errorrate_dict
 
     Parameters
     ----------
-    pspec : ProcessorSpec
-        The ProcessorSpec that defines the device.
+    pspec : QubitProcessorSpec
+        The QubitProcessorSpec that defines the device.
 
     gate_errorrate_dict : dict
         A dict where the keys are elements of pspec.qubit_labels and the values are floats in [0,1].
@@ -910,7 +904,7 @@ def create_locally_gate_independent_pauli_error_model(pspec, gate_errorrate_dict
     else:
         raise ValueError("Error model type not understood! Set `ptype` to a valid option.")
 
-    n = pspec.number_of_qubits
+    n = pspec.num_qubits
 
     errormodel = {}
 
@@ -956,8 +950,8 @@ def create_local_pauli_error_model(pspec, one_qubit_gate_errorrate_dict, two_qub
 
     Parameters
     ----------
-    pspec : ProcessorSpec
-        The ProcessorSpec that defines the device.
+    pspec : QubitProcessorSpec
+        The QubitProcessorSpec that defines the device.
 
     one_qubit_gate_errorrate_dict : dict
         A dict where the keys are elements of pspec.qubit_labels and the values are floats in [0,1].
@@ -999,16 +993,16 @@ def create_local_pauli_error_model(pspec, one_qubit_gate_errorrate_dict, two_qub
     else:
         raise ValueError("Error model type not understood! Set `ptype` to a valid option.")
 
-    n = pspec.number_of_qubits
+    n = pspec.num_qubits
 
     errormodel = {}
     for gate in list(pspec.models['clifford'].primitive_op_labels):
         errormodel[gate] = _np.zeros((n, 4), float)
         errormodel[gate][:, 0] = _np.ones(n, float)
 
-        if gate.number_of_qubits == 1:
+        if gate.num_qubits == 1:
             er = one_qubit_gate_errorrate_dict[gate.qubits[0]]
-        elif gate.number_of_qubits == 2:
+        elif gate.num_qubits == 2:
             er = 1 - (1 - two_qubit_gate_errorrate_dict[gate])**(0.5)
         else: raise ValueError("Only 1- and 2-qubit gates supported!")
 

@@ -1,5 +1,5 @@
-import pygsti.construction.circuitconstruction as cc
-import pygsti.construction.datasetconstruction as dc
+import pygsti.circuits.circuitconstruction as cc
+import pygsti.data.datasetconstruction as dc
 from pygsti.modelpacks.legacy import std1Q_XYI as std
 from pygsti.circuits import Circuit
 from pygsti.baseobjs import Label

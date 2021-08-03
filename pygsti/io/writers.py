@@ -15,16 +15,16 @@ import warnings as _warnings
 
 import numpy as _np
 
-from . import loaders as _loaders
-from .. import circuits as _circuits
-from ..models import gaugegroup as _gaugegroup
+from pygsti.io import loaders as _loaders
+from pygsti import circuits as _circuits
+from pygsti.models import gaugegroup as _gaugegroup
 
 # from . import stdinput as _stdinput
-from .. import tools as _tools
-from ..modelmembers import instruments as _instrument
-from ..modelmembers import operations as _op
-from ..modelmembers import povms as _povm
-from ..modelmembers import states as _state
+from pygsti import tools as _tools
+from pygsti.modelmembers import instruments as _instrument
+from pygsti.modelmembers import operations as _op
+from pygsti.modelmembers import povms as _povm
+from pygsti.modelmembers import states as _state
 
 
 def write_empty_dataset(filename, circuits,
@@ -337,10 +337,10 @@ def write_model(model, filename, title=None):
             if isinstance(rhoVec, _state.FullState): typ = "PREP"
             elif isinstance(rhoVec, _state.TPState): typ = "TP-PREP"
             elif isinstance(rhoVec, _state.StaticState): typ = "STATIC-PREP"
-            elif isinstance(rhoVec, _state.LindbladSPAMVec):  # TODO - change to ComposedState
-                typ = "CPTP-PREP"
-                props = [("PureVec", rhoVec.state_vec.to_dense(on_space='HilbertSchmidt')),
-                         ("ErrgenMx", rhoVec.error_map.to_dense(on_space='HilbertSchmidt'))]
+            #elif isinstance(rhoVec, _state.LindbladSPAMVec):  # TODO - change to ComposedState?
+            #    typ = "CPTP-PREP"
+            #    props = [("PureVec", rhoVec.state_vec.to_dense(on_space='HilbertSchmidt')),
+            #             ("ErrgenMx", rhoVec.error_map.to_dense(on_space='HilbertSchmidt'))]
             else:
                 _warnings.warn(
                     ("Non-standard prep of type {typ} cannot be described by"
@@ -357,10 +357,10 @@ def write_model(model, filename, title=None):
             props = None; povm_to_write = povm
             if isinstance(povm, _povm.UnconstrainedPOVM): povmType = "POVM"
             elif isinstance(povm, _povm.TPPOVM): povmType = "TP-POVM"
-            elif isinstance(povm, _povm.LindbladPOVM):  # TODO - change to ComposedPOVM
-                povmType = "CPTP-POVM"
-                props = [("ErrgenMx", povm.error_map.to_dense(on_space='HilbertSchmidt'))]
-                povm_to_write = povm.base_povm
+            #elif isinstance(povm, _povm.LindbladPOVM):  # TODO - change to ComposedPOVM?
+            #    povmType = "CPTP-POVM"
+            #    props = [("ErrgenMx", povm.error_map.to_dense(on_space='HilbertSchmidt'))]
+            #    povm_to_write = povm.base_povm
             else:
                 _warnings.warn(
                     ("Non-standard POVM of type {typ} cannot be described by"
@@ -611,12 +611,12 @@ def fill_in_empty_dataset_with_fake_data(model, dataset_filename, num_samples,
     DataSet
         The generated data set (also written in place of the template file).
     """
-    from ..construction import simulate_data as _generate_fake_data
+    from pygsti.data.datasetconstruction import simulate_data as _simulate_data
     ds_template = _loaders.load_dataset(dataset_filename, ignore_zero_count_lines=False, with_times=False, verbosity=0)
-    ds = _generate_fake_data(model, list(ds_template.keys()), num_samples,
-                             sample_error, seed, rand_state, alias_dict,
-                             collision_action, record_zero_counts, comm,
-                             mem_limit, times)
+    ds = _simulate_data(model, list(ds_template.keys()), num_samples,
+                        sample_error, seed, rand_state, alias_dict,
+                        collision_action, record_zero_counts, comm,
+                        mem_limit, times)
     if fixed_column_mode == "auto":
         fixed_column_mode = bool(len(ds_template.outcome_labels) <= 8 and times is None)
     write_dataset(dataset_filename, ds, fixed_column_mode=fixed_column_mode)

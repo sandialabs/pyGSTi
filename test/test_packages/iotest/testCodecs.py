@@ -11,9 +11,9 @@ import collections
 
 import pygsti
 from pygsti.modelpacks.legacy import std1Q_XY as std
-import pygsti.io.json as json
-import pygsti.io.msgpack as msgpack
-from pygsti.objects.label import CircuitLabel
+import pygsti.serialization.json as json
+import pygsti.serialization.msgpack as msgpack
+from pygsti.baseobjs.label import CircuitLabel
 
 from ..testutils import BaseTestCase, temp_files
 
@@ -25,8 +25,8 @@ class ObjDerivedFromStdType(list):
 
 
 testObj = ObjDerivedFromStdType( (1,2,3) )
-testObj.__class__.__module__ = "pygsti.objects" # make object look like a pygsti-native object so it gets special serialization treatment.
-sys.modules['pygsti.objects'].ObjDerivedFromStdType = ObjDerivedFromStdType
+testObj.__class__.__module__ = "pygsti.baseobjs" # make object look like a pygsti-native object so it gets special serialization treatment.
+sys.modules['pygsti.baseobjs'].ObjDerivedFromStdType = ObjDerivedFromStdType
 
 class CodecsTestCase(BaseTestCase):
 
@@ -35,17 +35,17 @@ class CodecsTestCase(BaseTestCase):
         super(CodecsTestCase, self).setUp()
         self.model = std.target_model()
 
-        self.germs = pygsti.construction.to_circuits( [('Gx',), ('Gy',) ] ) #abridged for speed
+        self.germs = pygsti.circuits.to_circuits([('Gx',), ('Gy',)]) #abridged for speed
         self.fiducials = std.fiducials
         self.maxLens = [1,2]
         self.op_labels = list(self.model.operations.keys())
 
-        self.lsgstStrings = pygsti.construction.create_lsgst_circuit_lists(
+        self.lsgstStrings = pygsti.circuits.create_lsgst_circuit_lists(
             self.op_labels, self.fiducials, self.fiducials, self.germs, self.maxLens )
 
         self.datagen_gateset = self.model.depolarize(op_noise=0.05, spam_noise=0.1)
         test = self.datagen_gateset.copy()
-        self.ds = pygsti.construction.simulate_data(
+        self.ds = pygsti.data.simulate_data(
             self.datagen_gateset, self.lsgstStrings[-1],
             num_samples=1000,sample_error='binomial', seed=100)
 
@@ -55,12 +55,12 @@ class CodecsTestCase(BaseTestCase):
         Gmz_plus = np.dot(E,E.T)
         Gmz_minus = np.dot(Erem,Erem.T)
         self.mdl_withInst = self.datagen_gateset.copy()
-        self.mdl_withInst.instruments['Iz'] = pygsti.obj.Instrument({'plus': Gmz_plus, 'minus': Gmz_minus})
-        self.mdl_withInst.instruments['Iztp'] = pygsti.obj.TPInstrument({'plus': Gmz_plus, 'minus': Gmz_minus})
+        self.mdl_withInst.instruments['Iz'] = pygsti.modelmembers.instruments.Instrument({'plus': Gmz_plus, 'minus': Gmz_minus})
+        self.mdl_withInst.instruments['Iztp'] = pygsti.modelmembers.instruments.TPInstrument({'plus': Gmz_plus, 'minus': Gmz_minus})
 
         self.results = self.runSilent(pygsti.run_long_sequence_gst,
-                                     self.ds, std.target_model(), self.fiducials, self.fiducials,
-                                     self.germs, self.maxLens)
+                                      self.ds, std.target_model(), self.fiducials, self.fiducials,
+                                      self.germs, self.maxLens)
 
         #make a confidence region factory
         estLbl = self.results.name
@@ -76,7 +76,7 @@ class CodecsTestCase(BaseTestCase):
 
         #create miscellaneous other objects
         self.miscObjects = []
-        self.miscObjects.append( pygsti.objects.labeldicts.OutcomeLabelDict(
+        self.miscObjects.append( pygsti.baseobjs.OutcomeLabelDict(
             [( ('0',), 90 ), ( ('1',), 10)]) )
 
 
@@ -87,11 +87,11 @@ class TestCodecs(CodecsTestCase):
         #basic types
         s = json.dumps(range(10))
         x = json.loads(s)
-        s = json.dumps(4+3.0j)
+        s = json.dumps(4 + 3.0j)
         x = json.loads(s)
-        s = json.dumps(np.array([1,2,3,4],'d'))
+        s = json.dumps(np.array([1, 2, 3, 4], 'd'))
         x = json.loads(s)
-        s = json.dumps( testObj )
+        s = json.dumps(testObj)
         x = json.loads(s)
 
         #string list
@@ -153,11 +153,11 @@ class TestCodecs(CodecsTestCase):
         #basic types
         s = msgpack.dumps(range(10))
         x = msgpack.loads(s)
-        s = msgpack.dumps(4+3.0j)
+        s = msgpack.dumps(4 + 3.0j)
         x = msgpack.loads(s)
-        s = msgpack.dumps(np.array([1,2,3,4],'d'))
+        s = msgpack.dumps(np.array([1, 2, 3, 4], 'd'))
         x = msgpack.loads(s)
-        s = msgpack.dumps( testObj )
+        s = msgpack.dumps(testObj)
         x = msgpack.loads(s)
 
         #string list
@@ -264,58 +264,58 @@ class TestCodecs(CodecsTestCase):
 
         mock_json_obj = {'__tuple__': True}
         with self.assertRaises(AssertionError):
-            pygsti.io.jsoncodec._decode_std_base(mock_json_obj,"",binary)
+            pygsti.serialization.jsoncodec._decode_std_base(mock_json_obj, "", binary)
 
         mock_json_obj = {'__list__': ['a','b']}
-        pygsti.io.jsoncodec._decode_std_base(mock_json_obj,[],binary)
+        pygsti.serialization.jsoncodec._decode_std_base(mock_json_obj, [], binary)
 
         mock_json_obj = {'__set__': ['a','b']}
-        pygsti.io.jsoncodec._decode_std_base(mock_json_obj,set(),binary)
+        pygsti.serialization.jsoncodec._decode_std_base(mock_json_obj, set(), binary)
 
         mock_json_obj = {'__ndict__': [('key1','val1'),('key2','val2')]}
-        pygsti.io.jsoncodec._decode_std_base(mock_json_obj,{},binary)
+        pygsti.serialization.jsoncodec._decode_std_base(mock_json_obj, {}, binary)
 
         mock_json_obj = {'__odict__': [('key1','val1'),('key2','val2')]}
-        pygsti.io.jsoncodec._decode_std_base(mock_json_obj,collections.OrderedDict(),binary)
+        pygsti.serialization.jsoncodec._decode_std_base(mock_json_obj, collections.OrderedDict(), binary)
 
         mock_json_obj = {'__uuid__': True}
         with self.assertRaises(AssertionError):
-            pygsti.io.jsoncodec._decode_std_base(mock_json_obj,"",binary)
+            pygsti.serialization.jsoncodec._decode_std_base(mock_json_obj, "", binary)
 
         mock_json_obj = {'__ndarray__': True}
         with self.assertRaises(AssertionError):
-            pygsti.io.jsoncodec._decode_std_base(mock_json_obj,"",binary)
+            pygsti.serialization.jsoncodec._decode_std_base(mock_json_obj, "", binary)
 
         mock_json_obj = {'__npgeneric__': True}
         with self.assertRaises(AssertionError):
-            pygsti.io.jsoncodec._decode_std_base(mock_json_obj,"",binary)
+            pygsti.serialization.jsoncodec._decode_std_base(mock_json_obj, "", binary)
 
         mock_json_obj = {'__complex__': True}
         with self.assertRaises(AssertionError):
-            pygsti.io.jsoncodec._decode_std_base(mock_json_obj,"",binary)
+            pygsti.serialization.jsoncodec._decode_std_base(mock_json_obj, "", binary)
 
         mock_json_obj = {'__counter__': True}
         with self.assertRaises(AssertionError):
-            pygsti.io.jsoncodec._decode_std_base(mock_json_obj,"",binary)
+            pygsti.serialization.jsoncodec._decode_std_base(mock_json_obj, "", binary)
 
         mock_json_obj = {'__slice__': True}
         with self.assertRaises(AssertionError):
-            pygsti.io.jsoncodec._decode_std_base(mock_json_obj,"",binary)
+            pygsti.serialization.jsoncodec._decode_std_base(mock_json_obj, "", binary)
 
 
     def test_helpers(self):
-        pygsti.io.jsoncodec._tostr("Hi")
-        pygsti.io.jsoncodec._tostr(b"Hi")
-        pygsti.io.jsoncodec._tobin("Hi")
-        pygsti.io.jsoncodec._tobin(b"Hi")
+        pygsti.serialization.jsoncodec._tostr("Hi")
+        pygsti.serialization.jsoncodec._tostr(b"Hi")
+        pygsti.serialization.jsoncodec._tobin("Hi")
+        pygsti.serialization.jsoncodec._tobin(b"Hi")
 
     def test_pickle_dataset_with_circuitlabels(self):
         #A later-added test checking whether Circuits containing CiruitLabels
         # are correctly pickled within a DataSet.  In particular correct
         # preservation of the circuit's .str property
-        pygsti.obj.Circuit.default_expand_subcircuits = False # so exponentiation => CircuitLabels
-        ds = pygsti.obj.DataSet(outcome_labels=('0','1'))
-        c0 = pygsti.obj.Circuit(None,stringrep="[Gx:0Gy:1]")
+        pygsti.circuits.Circuit.default_expand_subcircuits = False # so exponentiation => CircuitLabels
+        ds = pygsti.data.DataSet(outcome_labels=('0', '1'))
+        c0 = pygsti.circuits.Circuit(None, stringrep="[Gx:0Gy:1]")
         c = c0**2
         self.assertTrue(isinstance(c.tup[0], CircuitLabel))
         self.assertEqual(c.str, "([Gx:0Gy:1])^2")
@@ -324,7 +324,7 @@ class TestCodecs(CodecsTestCase):
         ds2 = pickle.loads(s)
         c2 = list(ds2.keys())[0]
         self.assertEqual(c2.str, "([Gx:0Gy:1])^2")
-        pygsti.obj.Circuit.default_expand_subcircuits = True
+        pygsti.circuits.Circuit.default_expand_subcircuits = True
 
     #Debugging, because there was some weird python3 vs 2 json incompatibility with string labels
     # - turned out to be that the unit test files needed to import unicode_literals from __future__

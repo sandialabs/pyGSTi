@@ -55,11 +55,6 @@ class StateBase(object):
     def test_num_params(self):
         self.assertEqual(self.vec.num_params, self.n_params)
 
-    def test_copy(self):
-        vec_copy = self.vec.copy()
-        self.assertArraysAlmostEqual(vec_copy.to_dense(), self.vec.to_dense())
-        self.assertEqual(type(vec_copy), type(self.vec))
-
     def test_get_dimension(self):
         self.assertEqual(self.vec.dim, 4)
 
@@ -90,6 +85,12 @@ class StateBase(object):
 
 class DenseStateBase(StateBase):
 
+    def test_vector_conversion(self):
+        v = self.vec.to_vector()
+        self.vec.from_vector(v)
+        deriv = self.vec.deriv_wrt_params()
+        # TODO assert correctness
+    
     def test_element_accessors(self):
         a = self.vec[:]
         b = self.vec[0]
@@ -99,6 +100,11 @@ class DenseStateBase(StateBase):
         self.vec_as_str = str(self.vec)
         a1 = self.vec[:]  # invoke getslice method
         # TODO assert correctness
+
+    def test_copy(self):
+        vec_copy = self.vec.copy()
+        self.assertArraysAlmostEqual(vec_copy.to_dense(), self.vec.to_dense())
+        self.assertEqual(type(vec_copy), type(self.vec))
 
     def test_arithmetic(self):
         result = self.vec + self.vec
@@ -210,7 +216,7 @@ class TPStateTester(MutableDenseStateBase, BaseCase):
 
     def test_convert(self):
         basis = Basis.cast("pp", 4)
-        conv = states.convert(self.vec, "TP", basis)
+        conv = states.convert(self.vec, "full TP", basis)
         # TODO assert correctness
 
 

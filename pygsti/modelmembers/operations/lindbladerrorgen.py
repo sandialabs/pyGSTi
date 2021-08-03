@@ -19,16 +19,15 @@ import scipy.sparse.linalg as _spsl
 from pygsti.baseobjs.opcalc import compact_deriv as _compact_deriv, \
     bulk_eval_compact_polynomials_complex as _bulk_eval_compact_polynomials_complex, \
     abs_sum_bulk_eval_compact_polynomials_complex as _abs_sum_bulk_eval_compact_polynomials_complex
-from .linearop import LinearOperator as _LinearOperator
-from .. import term as _term
-from ...evotypes import Evotype as _Evotype
-from ...models import gaugegroup as _gaugegroup
-from ...baseobjs import statespace as _statespace
-from ...baseobjs.basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis
-from ...baseobjs.polynomial import Polynomial as _Polynomial
-from ...tools import basistools as _bt
-from ...tools import matrixtools as _mt
-from ...tools import optools as _ot
+from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
+from pygsti.modelmembers import term as _term
+from pygsti.evotypes import Evotype as _Evotype
+from pygsti.baseobjs import statespace as _statespace
+from pygsti.baseobjs.basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis
+from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
+from pygsti.tools import basistools as _bt
+from pygsti.tools import matrixtools as _mt
+from pygsti.tools import optools as _ot
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 
@@ -100,80 +99,8 @@ class LindbladErrorgen(_LinearOperator):
     """
 
     @classmethod
-    def decomp_paramtype(cls, param_type):
-        """
-        A utility method for creating LindbladErrorgen objects.
-
-        Decomposes a high-level parameter-type `param_type` (e.g. `"H+S"`
-        into two "modes" - one describing the number (and structure) of the
-        non-Hamiltonian Lindblad coefficients and one describing how the
-        Lindblad coefficients are converted to/from parameters.
-
-        The "non-Hamiltonian mode" describes which non-Hamiltonian Lindblad
-        coefficients are stored in a LindbladOp, and is one
-        of `"diagonal"` (only the diagonal elements of the full coefficient
-        matrix as a 1D array), `"diag_affine"` (a 2-by-d array of the diagonal
-        coefficients on top of the affine projections), or `"all"` (the entire
-        coefficient matrix).
-
-        The "parameter mode" describes how the Lindblad coefficients/projections
-        are converted into parameter values.  This can be:
-        `"unconstrained"` (coefficients are independent unconstrained parameters),
-        `"cptp"` (independent parameters but constrained so map is CPTP),
-        `"depol"` (all non-Ham. diagonal coeffs are the *same, positive* value), or
-        `"reldepol"` (same as `"depol"` but no positivity constraint).
-
-        Parameters
-        ----------
-        param_type : str
-            The high-level Lindblad parameter type to decompose.  E.g "H+S",
-            "H+S+A", "CPTP".
-
-        Returns
-        -------
-        basetype : str
-        evotype : str
-        nonham_mode : str
-        param_mode : str
-        use_ham_basis : bool
-        use_nonham_basis : bool
-        """
-        if param_type == "CPTP":
-            nonham_mode = "all"; param_mode = "cptp"
-        elif param_type == "H":
-            nonham_mode = "all"; param_mode = "cptp"  # these don't matter since there's no non-ham errors
-        elif param_type in ("H+S", "S"):
-            nonham_mode = "diagonal"; param_mode = "cptp"
-        elif param_type in ("H+s", "s"):
-            nonham_mode = "diagonal"; param_mode = "unconstrained"
-        elif param_type in ("H+S+A", "S+A"):
-            nonham_mode = "diag_affine"; param_mode = "cptp"
-        elif param_type in ("H+s+A", "s+A"):
-            nonham_mode = "diag_affine"; param_mode = "unconstrained"
-        elif param_type in ("H+D", "D"):
-            nonham_mode = "diagonal"; param_mode = "depol"
-        elif param_type in ("H+d", "d"):
-            nonham_mode = "diagonal"; param_mode = "reldepol"
-        elif param_type in ("H+D+A", "D+A"):
-            nonham_mode = "diag_affine"; param_mode = "depol"
-        elif param_type in ("H+d+A", "d+A"):
-            nonham_mode = "diag_affine"; param_mode = "reldepol"
-
-        elif param_type == "GLND":
-            nonham_mode = "all"; param_mode = "unconstrained"
-        else:
-            raise ValueError("Unrecognized base type in `param_type`=%s" % param_type)
-
-        use_ham_basis = True if (("H" == param_type)
-                                 or ("H+" in param_type)
-                                 or param_type in ("CPTP", "GLND")) else False
-        use_nonham_basis = False if param_type == "H" else True
-
-        return nonham_mode, param_mode, use_ham_basis, use_nonham_basis
-
-    @classmethod
-    def from_operation_matrix(cls, op_matrix, ham_basis="pp", nonham_basis="pp", param_mode="cptp",
-                              nonham_mode="all", truncate=True, mx_basis="pp", evotype="default"):
+    def from_operation_matrix(cls, op_matrix, parameterization='CPTP', lindblad_basis='pp',
+                              mx_basis='pp', truncate=True, evotype="default", state_space=None):
         """
         Creates a Lindblad-parameterized error generator from an operation.
 
@@ -231,6 +158,8 @@ class LindbladErrorgen(_LinearOperator):
             The evolution type.  The special value `"default"` is equivalent
             to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
 
+        state_space : TODO docstring
+
         Returns
         -------
         LindbladOp
@@ -256,14 +185,27 @@ class LindbladErrorgen(_LinearOperator):
         else:
             errgenMx = _ot.error_generator(op_matrix, _np.identity(op_matrix.shape[0], 'd'),
                                            mx_basis, "logGTi")
-        return cls.from_error_generator(errgenMx, ham_basis,
-                                        nonham_basis, param_mode, nonham_mode,
-                                        mx_basis, truncate, evotype)
+        return cls.from_error_generator(errgenMx, parameterization, lindblad_basis,
+                                        mx_basis, truncate, evotype, state_space=state_space)
 
     @classmethod
-    def from_error_generator(cls, errgen, ham_basis="pp", nonham_basis="pp",
-                             param_mode="cptp", nonham_mode="all",
-                             mx_basis="pp", truncate=True, evotype="densitymx"):
+    def from_error_generator(cls, errgen_or_dim, parameterization="CPTP", lindblad_basis='pp', mx_basis='pp',
+                             truncate=True, evotype="default", state_space=None):
+        """
+        TODO: docstring - take from now-private version below Note: errogen_or_dim can be an integer => zero errgen
+        """
+        parameterization = LindbladParameterization.cast(parameterization)
+        ham_basis = lindblad_basis if parameterization.ham_params_allowed else None
+        nonham_basis = lindblad_basis if parameterization.nonham_params_allowed else None
+
+        errgen = _np.zeros((errgen_or_dim, errgen_or_dim), 'd') \
+            if isinstance(errgen_or_dim, (int, _np.int64)) else errgen_or_dim
+        return cls._from_error_generator(errgen, parameterization, ham_basis, nonham_basis,
+                                         mx_basis, truncate, evotype, state_space)
+
+    @classmethod
+    def _from_error_generator(cls, errgen, parameterization="CPTP", ham_basis="pp", nonham_basis="pp",
+                              mx_basis="pp", truncate=True, evotype="default", state_space=None):
         """
         Create a Lindblad-form error generator from an error generator matrix and a basis.
 
@@ -321,21 +263,20 @@ class LindbladErrorgen(_LinearOperator):
             terms up to some order).  `"cterm"` is similar but uses Clifford operation
             action on stabilizer states.
 
+        state_space : TODO docstring
+
         Returns
         -------
         LindbladErrorgen
         """
 
-        if isinstance(errgen, _LinearOperator):
-            state_space = errgen.state_space
-            dim = state_space.dim
-        else:
-            dim = errgen.shape[0]
+        dim = errgen.shape[0]
+        if state_space is None:
             state_space = _statespace.default_space_for_dim(dim)
-        #d = int(round(_np.sqrt(dim)))  # OLD TODO REMOVE
-        #if d*d != dim: raise ValueError("Error generator dim must be a perfect square")
 
-        #Determine whether we're using sparse bases or not
+        #Maybe this is unnecessary now, but determine whether the bases
+        # given to us are sparse or not and make them all consistent
+        # (maybe this is needed by lindblad_errorgen_projections call below?)
         sparse = None
         if ham_basis is not None:
             if isinstance(ham_basis, _Basis): sparse = ham_basis.sparse
@@ -347,7 +288,7 @@ class LindbladErrorgen(_LinearOperator):
             elif len(nonham_basis) > 0: sparse = _sps.issparse(nonham_basis[0])
         if sparse is None: sparse = False  # the default
 
-        #Create or convert bases to appropriate sparsity
+        #Create or convert bases to consistent sparsity
         if not isinstance(ham_basis, _Basis):
             # needed b/c ham_basis could be a Basis w/dim=0 which can't be cast as dim=dim
             ham_basis = _Basis.cast(ham_basis, dim, sparse=sparse)
@@ -358,81 +299,22 @@ class LindbladErrorgen(_LinearOperator):
         else: matrix_basis = mx_basis
 
         # errgen + bases => coeffs
+        parameterization = LindbladParameterization.cast(parameterization)
         hamC, otherC = \
             _ot.lindblad_errorgen_projections(
                 errgen, ham_basis, nonham_basis, matrix_basis, normalize=False,
-                return_generators=False, other_mode=nonham_mode, sparse=sparse)
+                return_generators=False, other_mode=parameterization.nonham_mode, sparse=sparse)
 
         # coeffs + bases => Ltermdict, basis
         Ltermdict, basis = _ot.projections_to_lindblad_terms(
-            hamC, otherC, ham_basis, nonham_basis, nonham_mode)
+            hamC, otherC, ham_basis, nonham_basis, parameterization.nonham_mode)
 
-        return cls(state_space, Ltermdict, basis,
-                   param_mode, nonham_mode, truncate,
-                   matrix_basis, evotype)
+        return cls(Ltermdict, parameterization, basis, matrix_basis, truncate, evotype, state_space)
 
-    def __init__(self, state_space, lindblad_term_dict, basis=None,
-                 param_mode="cptp", nonham_mode="all", truncate=True,
-                 mx_basis="pp", evotype="default"):
-        """
-        Create a new LinbladErrorgen based on a set of Lindblad terms.
+    def __init__(self, lindblad_term_dict, parameterization='auto', lindblad_basis='pp',
+                 mx_basis="pp", truncate=True, evotype="default", state_space=None):
 
-        Note that if you want to construct a LinbladErrorgen from a
-        error generator matrix, you can use the :method:`from_error_generator`
-        class method.
-
-        Parameters
-        ----------
-        state_space : StateSpace, optional
-            The state space for this operation.
-
-        lindblad_term_dict : dict
-            A dictionary specifying which Linblad terms are present in the
-            parameteriztion.  Keys are `(termType, basisLabel1, <basisLabel2>)`
-            tuples, where `termType` can be `"H"` (Hamiltonian), `"S"`
-            (Stochastic), or `"A"` (Affine).  Hamiltonian and Affine terms always
-            have a single basis label (so key is a 2-tuple) whereas Stochastic
-            tuples with 1 basis label indicate a *diagonal* term, and are the
-            only types of terms allowed when `nonham_mode != "all"`.  Otherwise,
-            Stochastic term tuples can include 2 basis labels to specify
-            "off-diagonal" non-Hamiltonian Lindblad terms.  Basis labels can be
-            strings or integers.  Values are complex coefficients.
-
-        basis : Basis, optional
-            A basis mapping the labels used in the keys of `lindblad_term_dict` to
-            basis matrices (e.g. numpy arrays or Scipy sparse matrices).
-
-        param_mode : {"unconstrained", "cptp", "depol", "reldepol"}
-            Describes how the Lindblad coefficients/projections relate to the
-            error generator's parameter values.  Allowed values are:
-            `"unconstrained"` (coeffs are independent unconstrained parameters),
-            `"cptp"` (independent parameters but constrained so map is CPTP),
-            `"reldepol"` (all non-Ham. diagonal coeffs take the *same* value),
-            `"depol"` (same as `"reldepol"` but coeffs must be *positive*)
-
-        nonham_mode : {"diagonal", "diag_affine", "all"}
-            Which non-Hamiltonian Lindblad projections are potentially non-zero.
-            Allowed values are: `"diagonal"` (only the diagonal Lind. coeffs.),
-            `"diag_affine"` (diagonal coefficients + affine projections), and
-            `"all"` (the entire matrix of coefficients is allowed).
-
-        truncate : bool, optional
-            Whether to truncate the projections onto the Lindblad terms in
-            order to meet constraints (e.g. to preserve CPTP) when necessary.
-            If False, then an error is thrown when the given dictionary of
-            Lindblad terms doesn't conform to the constrains.
-
-        mx_basis : {'std', 'gm', 'pp', 'qt'} or Basis object
-            The basis for this error generator's linear mapping. Allowed
-            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-            and Qutrit (qt) (or a custom basis object).
-
-        evotype : Evotype or str, optional
-            The evolution type.  The special value `"default"` is equivalent
-            to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
-        """
-
-        #FUTURE:
+        # FUTURE:
         # - maybe allow basisdict values to specify an "embedded matrix" w/a tuple like
         #  e.g. a *list* of (matrix, state_space_label) elements -- e.g. [(sigmaX,'Q1'), (sigmaY,'Q4')]
         # - maybe let keys be tuples of (basisname, state_space_label) e.g. (('X','Q1'),('Y','Q4')) -- and
@@ -440,37 +322,52 @@ class LindbladErrorgen(_LinearOperator):
         # - could add standard basis dict items so labels like "X", "XY", etc. are understood?
 
         state_space = _statespace.StateSpace.cast(state_space)
+        parameterization = LindbladParameterization.from_lindblad_terms(lindblad_term_dict) \
+            if parameterization == "auto" else LindbladParameterization.cast(parameterization)
+
+        #Decide on our rep-type ahead of time so we know whether to make bases sparse
+        # (a LindbladErrorgen with a sparse rep => sparse bases and similar with dense rep)
+        evotype = _Evotype.cast(evotype)
+        reptype_preferences = ('lindblad errorgen', 'dense superop', 'sparse superop') \
+            if evotype.prefer_dense_reps else ('lindblad errorgen', 'sparse superop', 'dense superop')
+        for reptype in reptype_preferences:
+            if evotype.supports(reptype):
+                self._rep_type = reptype; break
+        else:
+            raise ValueError("Evotype doesn't support any of the representations a LindbladErrorgen requires.")
+        sparse_bases = bool(self._rep_type == 'sparse superop')  # we use sparse bases iff we have a sparse rep
 
         # Store superop dimension
         dim = state_space.dim
-        #d = int(round(_np.sqrt(d2))) #OLD TODO REMOVE
-        #assert(d*d == d2), "Dimension must be a perfect square"
-
-        self.nonham_mode = nonham_mode
-        self.param_mode = param_mode
+        self.lindblad_basis = _Basis.cast(lindblad_basis, dim, sparse=sparse_bases)
+        self.nonham_mode = parameterization.nonham_mode
+        self.param_mode = parameterization.param_mode
 
         # lindblad_term_dict, basis => bases + parameter values
         # but maybe we want lindblad_term_dict, basisdict => basis + projections/coeffs,
         #  then projections/coeffs => paramvals? since the latter is what set_errgen needs
         hamC, otherC, self.ham_basis, self.other_basis = \
-            _ot.lindblad_terms_to_projections(lindblad_term_dict, basis, self.nonham_mode)
+            _ot.lindblad_terms_to_projections(lindblad_term_dict, self.lindblad_basis, self.nonham_mode)
 
         self.ham_basis_size = len(self.ham_basis)
         self.other_basis_size = len(self.other_basis)
 
-        # Determine whether bases we've been given are sparse
-        if self.ham_basis_size > 0: self._sparse_bases = _sps.issparse(self.ham_basis[0])
-        elif self.other_basis_size > 0: self._sparse_bases = _sps.issparse(self.other_basis[0])
-        else: self._sparse_bases = False
+        assert(parameterization.ham_params_allowed or self.ham_basis_size == 0), \
+            "Hamiltonian lindblad terms are not allowed!"
+        assert(parameterization.nonham_params_allowed or self.other_basis_size == 0), \
+            "Non-Hamiltonian lindblad terms are not allowed!"
 
-        self.matrix_basis = _Basis.cast(mx_basis, dim, sparse=self._sparse_bases)
+        # Check that bases have the desired sparseness (should be same as lindblad_basis)
+        assert (self.ham_basis_size == 0 or self.ham_basis.sparse == sparse_bases)
+        assert (self.other_basis_size == 0 or self.other_basis.sparse == sparse_bases)
+
+        self.matrix_basis = _Basis.cast(mx_basis, dim, sparse=sparse_bases)
 
         self.paramvals = _ot.lindblad_projections_to_paramvals(
             hamC, otherC, self.param_mode, self.nonham_mode, truncate)
 
         #Fast CSR-matrix summing variables: N/A if not sparse or using terms
         self._CSRSumIndices = self._CSRSumData = self._CSRSumPtr = None
-        #REMOVE? self.sparse_err_gen_template = None
 
         # Generator matrices & cache qtys: N/A for term-based evotypes
         self.hamGens = self.otherGens = None
@@ -479,30 +376,30 @@ class LindbladErrorgen(_LinearOperator):
         self.Lmx = None
         self._coefficient_weights = None
 
-        #First try to create a lindblad-errorgen rep
-        evotype = _Evotype.cast(evotype)
-        try:
-            rep = evotype.create_lindblad_errorgen_rep(lindblad_term_dict, basis, state_space)
-            self._rep_type = 'lindblad'
-        except AttributeError:
-            #Otherwise try to create a sparse or dense matrix representation
-            self.hamGens, self.otherGens = self._init_generators(dim)
+        #All representations need to track 1norms:
+        self.hamGens, self.otherGens = self._init_generators(dim)
 
-            if self.hamGens is not None:
-                self.hamGens_1norms = _np.array([_mt.safe_onenorm(mx) for mx in self.hamGens], 'd')
-            if self.otherGens is not None:
-                if self.nonham_mode == "diagonal":
-                    self.otherGens_1norms = _np.array([_mt.safe_onenorm(mx) for mx in self.otherGens], 'd')
-                else:
-                    self.otherGens_1norms = _np.array([_mt.safe_onenorm(mx)
-                                                       for oGenRow in self.otherGens for mx in oGenRow], 'd')
+        if self.hamGens is not None:
+            self.hamGens_1norms = _np.array([_mt.safe_onenorm(mx) for mx in self.hamGens], 'd')
+        if self.otherGens is not None:
+            if self.nonham_mode == "diagonal":
+                self.otherGens_1norms = _np.array([_mt.safe_onenorm(mx) for mx in self.otherGens], 'd')
+            else:
+                self.otherGens_1norms = _np.array([_mt.safe_onenorm(mx)
+                                                   for oGenRow in self.otherGens for mx in oGenRow], 'd')
+
+        #Create a representation of the type chosen above:
+        if self._rep_type == 'lindblad errorgen':
+            rep = evotype.create_lindblad_errorgen_rep(lindblad_term_dict, self.lindblad_basis, state_space)
+
+        else:  # Otherwise create a sparse or dense matrix representation
 
             #Allocate space fo Cholesky mx (used in _construct_errgen_matrix)
             # (intermediate storage for matrix and for deriv computation)
             bsO = self.other_basis_size
             self.Lmx = _np.zeros((bsO - 1, bsO - 1), 'complex') if bsO > 0 else None
 
-            if self._sparse_bases:  # then construct a sparse-matrix representation
+            if sparse_bases:  # then construct a sparse-matrix representation (self._rep_type == 'sparse superop')
                 #Precompute for faster CSR sums in _construct_errgen
                 all_csr_matrices = []
                 if self.hamGens is not None:
@@ -515,12 +412,6 @@ class LindbladErrorgen(_LinearOperator):
                         oList = [mx for mxRow in self.otherGens for mx in mxRow]
                     all_csr_matrices.extend(oList)
 
-                #OLD REMOVE
-                # csr_sum_array, indptr, indices, N = \
-                #     _mt.csr_sum_indices(all_csr_matrices)
-                #self.hamCSRSumIndices = csr_sum_array[0:len(self.hamGens)]
-                #self.otherCSRSumIndices = csr_sum_array[len(self.hamGens):]
-
                 flat_dest_indices, flat_src_data, flat_nnzptr, indptr, indices, N = \
                     _mt.csr_sum_flat_indices(all_csr_matrices)
                 self._CSRSumIndices = flat_dest_indices
@@ -532,14 +423,13 @@ class LindbladErrorgen(_LinearOperator):
                                                 _np.ascontiguousarray(indices, _np.int64),
                                                 _np.ascontiguousarray(indptr, _np.int64),
                                                 state_space)
-                self._rep_type = 'sparse'
-            else:
+            else:  # self._rep_type = 'dense superop'
                 rep = evotype.create_dense_superop_rep(None, state_space)
-                self._rep_type = 'dense'
 
         _LinearOperator.__init__(self, rep, evotype)  # sets self.dim
         self._update_rep()  # updates _rep whether it's a dense or sparse matrix
         self._paramlbls = _ot.lindblad_param_labels(self.ham_basis, self.other_basis, self.param_mode, self.nonham_mode)
+        assert(self._onenorm_upbound is not None)  # _update_rep should set this
         #Done with __init__(...)
 
     def _init_generators(self, dim):
@@ -549,8 +439,9 @@ class LindbladErrorgen(_LinearOperator):
         assert(d * d == dim), "Errorgen dim must be a perfect square"
 
         # Get basis transfer matrix
+        sparse_bases = bool(self._rep_type == 'sparse superop')
         mxBasisToStd = self.matrix_basis.create_transform_matrix(
-            _BuiltinBasis("std", self.matrix_basis.dim, self._sparse_bases))
+            _BuiltinBasis("std", self.matrix_basis.dim, sparse_bases))
         # use BuiltinBasis("std") instead of just "std" in case matrix_basis is a TensorProdBasis
         leftTrans = _spsl.inv(mxBasisToStd.tocsc()).tocsr() if _sps.issparse(mxBasisToStd) \
             else _np.linalg.inv(mxBasisToStd)
@@ -568,10 +459,10 @@ class LindbladErrorgen(_LinearOperator):
 
         if hamGens is not None:
             bsH = len(hamGens) + 1  # projection-basis size (not nec. == dim)
-            _ot._assert_shape(hamGens, (bsH - 1, dim, dim), self._sparse_bases)
+            _ot._assert_shape(hamGens, (bsH - 1, dim, dim), sparse_bases)
 
             # apply basis change now, so we don't need to do so repeatedly later
-            if self._sparse_bases:
+            if sparse_bases:
                 hamGens = [_mt.safe_real(_mt.safe_dot(leftTrans, _mt.safe_dot(mx, rightTrans)),
                                          inplace=True, check=True) for mx in hamGens]
                 for mx in hamGens: mx.sort_indices()
@@ -588,10 +479,10 @@ class LindbladErrorgen(_LinearOperator):
 
             if self.nonham_mode == "diagonal":
                 bsO = len(otherGens) + 1  # projection-basis size (not nec. == dim)
-                _ot._assert_shape(otherGens, (bsO - 1, dim, dim), self._sparse_bases)
+                _ot._assert_shape(otherGens, (bsO - 1, dim, dim), sparse_bases)
 
                 # apply basis change now, so we don't need to do so repeatedly later
-                if self._sparse_bases:
+                if sparse_bases:
                     otherGens = [_mt.safe_real(_mt.safe_dot(leftTrans, _mt.safe_dot(mx, rightTrans)),
                                                inplace=True, check=True) for mx in otherGens]
                     for mx in otherGens: mx.sort_indices()
@@ -604,10 +495,10 @@ class LindbladErrorgen(_LinearOperator):
             elif self.nonham_mode == "diag_affine":
                 # projection-basis size (not nec. == dim) [~shape[1] but works for lists too]
                 bsO = len(otherGens[0]) + 1
-                _ot._assert_shape(otherGens, (2, bsO - 1, dim, dim), self._sparse_bases)
+                _ot._assert_shape(otherGens, (2, bsO - 1, dim, dim), sparse_bases)
 
                 # apply basis change now, so we don't need to do so repeatedly later
-                if self._sparse_bases:
+                if sparse_bases:
                     otherGens = [[_mt.safe_dot(leftTrans, _mt.safe_dot(mx, rightTrans))
                                   for mx in mxRow] for mxRow in otherGens]
 
@@ -622,10 +513,10 @@ class LindbladErrorgen(_LinearOperator):
 
             else:
                 bsO = len(otherGens) + 1  # projection-basis size (not nec. == dim)
-                _ot._assert_shape(otherGens, (bsO - 1, bsO - 1, dim, dim), self._sparse_bases)
+                _ot._assert_shape(otherGens, (bsO - 1, bsO - 1, dim, dim), sparse_bases)
 
                 # apply basis change now, so we don't need to do so repeatedly later
-                if self._sparse_bases:
+                if sparse_bases:
                     otherGens = [[_mt.safe_dot(leftTrans, _mt.safe_dot(mx, rightTrans))
                                   for mx in mxRow] for mxRow in otherGens]
                     #Note: complex OK here, as only linear combos of otherGens (like (i,j) + (j,i)
@@ -676,7 +567,7 @@ class LindbladErrorgen(_LinearOperator):
                 scale, U = _mt.to_unitary(basis[termLbl[1]])
                 scale *= _np.sqrt(d) / 2  # mimics rho1's _np.sqrt(d) / 2 scaling in `hamiltonian_to_lindbladian`
                 Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-                    _Polynomial({(k,): -1j * scale}, mpv), U, IDENT, self._evotype))
+                    _Polynomial({(k,): -1j * scale}, mpv), U, IDENT, self._evotype, self.state_space))
                 Lterms.append(_term.RankOnePolynomialOpTerm.create_from(_Polynomial({(k,): +1j * scale}, mpv),
                                                                         IDENT, U.conjugate().T, self._evotype,
                                                                         self.state_space))
@@ -825,7 +716,7 @@ class LindbladErrorgen(_LinearOperator):
             _ot.lindblad_errorgen_projections(
                 errgen, self.ham_basis, self.other_basis, self.matrix_basis, normalize=False,
                 return_generators=False, other_mode=self.nonham_mode,
-                sparse=self._sparse_bases)  # in std basis
+                sparse=bool(self._rep_type == 'sparse superop'))  # in std basis
 
         self.paramvals = _ot.lindblad_projections_to_paramvals(
             hamC, otherC, self.param_mode, self.nonham_mode, truncate)
@@ -838,12 +729,6 @@ class LindbladErrorgen(_LinearOperator):
         error generator matrix using the current parameters and updates self._rep
         accordingly (by rewriting its data).
         """
-        if self._rep_type == 'lindblad':
-            # the code below is for updating sparse or dense matrix representations.  If our
-            # evotype has a native Lindblad representation, maybe in the FUTURE we should
-            # call an update method of it here?
-            return
-
         dim = self.dim
         hamCoeffs, otherCoeffs = _ot.paramvals_to_lindblad_projections(
             self.paramvals, self.ham_basis_size, self.other_basis_size,
@@ -851,7 +736,18 @@ class LindbladErrorgen(_LinearOperator):
         onenorm = 0.0
 
         #Finally, build operation matrix from generators and coefficients:
-        if self._sparse_bases:
+        if self._rep_type == 'lindblad errorgen':
+            # the code below is for updating sparse or dense matrix representations.  If our
+            # evotype has a native Lindblad representation, maybe in the FUTURE we should
+            # call an update method of it here?
+
+            #Still need to update onenorm - FUTURE: maybe put this logic inside rep?
+            if hamCoeffs is not None:
+                onenorm += _np.dot(self.hamGens_1norms, _np.abs(hamCoeffs))
+            if otherCoeffs is not None:
+                onenorm += _np.dot(self.otherGens_1norms, _np.abs(otherCoeffs.flat))
+
+        elif self._rep_type == 'sparse superop':  # then bases & errgen are sparse
             coeffs = None
             data = self._data_scratch
             data.fill(0.0)  # data starts at zero
@@ -859,6 +755,7 @@ class LindbladErrorgen(_LinearOperator):
             if hamCoeffs is not None:
                 onenorm += _np.dot(self.hamGens_1norms, _np.abs(hamCoeffs))
                 if otherCoeffs is not None:
+                    onenorm += _np.dot(self.otherGens_1norms, _np.abs(otherCoeffs.flat))
                     coeffs = _np.concatenate((hamCoeffs, otherCoeffs.flat), axis=0)
                 else:
                     coeffs = hamCoeffs
@@ -868,28 +765,6 @@ class LindbladErrorgen(_LinearOperator):
 
             if coeffs is not None:
                 _mt.csr_sum_flat(data, coeffs, self._CSRSumIndices, self._CSRSumData, self._CSRSumPtr)
-
-            #TODO: REMOVE
-            # data.fill(0.0)  # data starts at zero
-            #
-            # if hamCoeffs is not None:
-            #     # lnd_error_gen = sum([c*gen for c,gen in zip(hamCoeffs, self.hamGens)])
-            #     _mt.csr_sum(data, hamCoeffs, self.hamGens, self.hamCSRSumIndices)
-            #     onenorm += _np.dot(self.hamGens_1norms, _np.abs(hamCoeffs))
-            #
-            # if otherCoeffs is not None:
-            #     if self.nonham_mode == "diagonal":
-            #         # lnd_error_gen += sum([c*gen for c,gen in zip(otherCoeffs, self.otherGens)])
-            #         _mt.csr_sum(data, otherCoeffs, self.otherGens, self.otherCSRSumIndices)
-            #         onenorm += _np.dot(self.otherGens_1norms, _np.abs(otherCoeffs))
-            #
-            #     else:  # nonham_mode in ("diag_affine", "all")
-            #         # lnd_error_gen += sum([c*gen for cRow,genRow in zip(otherCoeffs, self.otherGens)
-            #         #                      for c,gen in zip(cRow,genRow)])
-            #         _mt.csr_sum(data, otherCoeffs.flat,
-            #                     [oGen for oGenRow in self.otherGens for oGen in oGenRow],
-            #                     self.otherCSRSumIndices)
-            #         onenorm += _np.dot(self.otherGens_1norms, _np.abs(otherCoeffs.flat))
 
             #Don't perform this check as this function is called a *lot* and it
             # could adversely impact performance
@@ -925,7 +800,9 @@ class LindbladErrorgen(_LinearOperator):
                 "Imaginary error gen norm: %g" % _np.linalg.norm(lnd_error_gen.imag)
             #print("errgen pre-real = \n"); _mt.print_mx(lnd_error_gen,width=4,prec=1)
             self._rep.base[:, :] = lnd_error_gen.real
+
         self._onenorm_upbound = onenorm
+        #assert(self._onenorm_upbound >= _np.linalg.norm(self.to_dense(), ord=1) - 1e-6)  #DEBUG
 
     def to_dense(self, on_space='minimal'):
         """
@@ -943,7 +820,7 @@ class LindbladErrorgen(_LinearOperator):
         -------
         numpy.ndarray
         """
-        if self._rep_type == 'lindblad':
+        if self._rep_type == 'lindblad errorgen':
             assert(on_space in ('minimal', 'HilbertSchmidt'))
             #Then we need to do similar things to __init__ for a dense rep - maybe consolidate?
             hamCoeffs, otherCoeffs = _ot.paramvals_to_lindblad_projections(
@@ -967,7 +844,7 @@ class LindbladErrorgen(_LinearOperator):
                 "Imaginary error gen norm: %g" % _np.linalg.norm(lnd_error_gen.imag)
             return lnd_error_gen.real
 
-        elif self._rep_type == 'sparse':
+        elif self._rep_type == 'sparse superop':
             return self.to_sparse(on_space).toarray()
         else:  # dense rep
             return self._rep.to_dense(on_space)
@@ -980,10 +857,7 @@ class LindbladErrorgen(_LinearOperator):
         -------
         scipy.sparse.csr_matrix
         """
-        _warnings.warn(("Constructing the sparse matrix of a LindbladDenseOp."
-                        "  Usually this is *NOT* a sparse matrix (the exponential of a"
-                        " sparse matrix isn't generally sparse)!"))
-        if self._rep_type == 'lindblad':
+        if self._rep_type == 'lindblad errorgen':
             assert(on_space in ('minimal', 'HilbertSchmidt'))
             #Need to do similar things to __init__ - maybe consolidate?
             hamCoeffs, otherCoeffs = _ot.paramvals_to_lindblad_projections(
@@ -1005,7 +879,7 @@ class LindbladErrorgen(_LinearOperator):
                                           for c, gen in zip(cRow, genRow)])
 
             return lnd_error_gen
-        elif self._rep_type == 'sparse':
+        elif self._rep_type == 'sparse superop':
             assert(on_space in ('minimal', 'HilbertSchmidt'))
             return _sps.csr_matrix((self._rep.data, self._rep.indices, self._rep.indptr),
                                    shape=(self.dim, self.dim))
@@ -1024,7 +898,7 @@ class LindbladErrorgen(_LinearOperator):
     #    OpRep
     #    """
     #    if self._evotype == "densitymx":
-    #        if self._sparse_bases:
+    #        if self._rep_type == 'sparse superop':
     #            A = self.err_gen_mx
     #            return replib.DMOpRepSparse(
     #                _np.ascontiguousarray(A.data),
@@ -1074,7 +948,7 @@ class LindbladErrorgen(_LinearOperator):
             is a `(vtape,ctape)` 2-tuple formed by concatenating together the
             output of :method:`Polynomial.compact`.
         """
-        assert(self._native_lindblad_rep), \
+        assert(self._rep_type == 'lindblad errorgen'), \
             "Only evotypes with native Lindblad errorgen representations can utilize Taylor terms"
         assert(order == 0), \
             "Error generators currently treat all terms as 0-th order; nothing else should be requested!"
@@ -1205,7 +1079,7 @@ class LindbladErrorgen(_LinearOperator):
         None
         """
         assert(len(v) == self.num_params)
-        self.paramvals = v
+        self.paramvals[:] = v
         self._update_rep()
         self.dirty = dirty_value
 
@@ -1489,13 +1363,14 @@ class LindbladErrorgen(_LinearOperator):
         -------
         None
         """
+        from pygsti.models import gaugegroup as _gaugegroup
         if isinstance(s, _gaugegroup.UnitaryGaugeGroupElement) or \
            isinstance(s, _gaugegroup.TPSpamGaugeGroupElement):
             U = s.transform_matrix
             Uinv = s.transform_matrix_inverse
 
             #conjugate Lindbladian exponent by U:
-            err_gen_mx = self.to_sparse() if self._rep_type == 'sparse' else self.to_dense()
+            err_gen_mx = self.to_sparse() if self._rep_type == 'sparse superop' else self.to_dense()
             err_gen_mx = _mt.safe_dot(Uinv, _mt.safe_dot(err_gen_mx, U))
             trunc = bool(isinstance(s, _gaugegroup.UnitaryGaugeGroupElement))
             self._set_params_from_matrix(err_gen_mx, truncate=trunc)
@@ -1543,7 +1418,7 @@ class LindbladErrorgen(_LinearOperator):
     #       isinstance(s, _gaugegroup.TPSpamGaugeGroupElement):
     #        U = s.transform_matrix
     #        Uinv = s.transform_matrix_inverse
-    #        err_gen_mx = self.to_sparse() if self._rep_type == 'sparse' else self.to_dense()
+    #        err_gen_mx = self.to_sparse() if self._rep_type == 'sparse superop' else self.to_dense()
     #
     #        #just act on postfactor and Lindbladian exponent:
     #        if typ == "prep":
@@ -1766,7 +1641,7 @@ class LindbladErrorgen(_LinearOperator):
         numpy array
             Array of derivatives, shape == (dimension^2, num_params)
         """
-        if self._rep_type == 'sparse':
+        if self._rep_type == 'sparse superop':
             #raise NotImplementedError(("LindbladErrorgen.deriv_wrt_params(...) can only be called "
             #                           "when using *dense* basis elements!"))
             _warnings.warn("Using finite differencing to compute LindbladErrorGen derivative!")
@@ -1822,9 +1697,9 @@ class LindbladErrorgen(_LinearOperator):
         numpy array
             Hessian with shape (dimension^2, num_params1, num_params2)
         """
-        if self._sparse_bases:
-            raise NotImplementedError(("LindbladErrorgen.hessian_wrt_params(...) can only be called when using *dense*"
-                                       " basis elements!"))  # needed because the _d2_odp2 function assumes dense mxs
+        if self._rep_type == 'sparse superop':
+            raise NotImplementedError(("LindbladErrorgen.hessian_wrt_params(...) can only be called when using a"
+                                       " *dense* rep!"))  # needed because the _d2_odp2 function assumes dense mxs
 
         dim = self.dim
         bsH = self.ham_basis_size
@@ -1876,3 +1751,131 @@ class LindbladErrorgen(_LinearOperator):
         s = "Lindblad error generator with dim = %d, num params = %d\n" % \
             (self.dim, self.num_params)
         return s
+
+
+class LindbladParameterization(object):
+    """
+    An object encapsulating a particular way of parameterizing a LindbladErrorgen
+
+    A `LindbladParameterization` is a high-level parameterization-type (e.g. `"H+S"`)
+    that contains two "modes" - one describing the number (and structure) of the
+    non-Hamiltonian Lindblad coefficients (`nonham_mode') and one describing how the
+    Lindblad coefficients are converted to/from parameters (`param_mode`).
+
+    Parameters
+    ----------
+    nonham_mode : str
+        The "non-Hamiltonian mode" describes which non-Hamiltonian Lindblad
+        coefficients are stored in a LindbladOp, and is one
+        of `"diagonal"` (only the diagonal elements of the full coefficient
+        matrix as a 1D array), `"diag_affine"` (a 2-by-d array of the diagonal
+        coefficients on top of the affine projections), or `"all"` (the entire
+        coefficient matrix).
+
+    param_mode : str
+        The "parameter mode" describes how the Lindblad coefficients/projections
+        are converted into parameter values.  This can be:
+        `"unconstrained"` (coefficients are independent unconstrained parameters),
+        `"cptp"` (independent parameters but constrained so map is CPTP),
+        `"depol"` (all non-Ham. diagonal coeffs are the *same, positive* value), or
+        `"reldepol"` (same as `"depol"` but no positivity constraint).
+
+    ham_params_allowed, nonham_params_allowed : bool
+        Whether or not Hamiltonian and non-Hamiltonian parameters are allowed.
+    """
+
+    @classmethod
+    def from_lindblad_terms(cls, errs):
+        """
+        Helper function giving minimal Lindblad parameterization needed for specified errors.
+
+        Parameters
+        ----------
+        errs : dict
+            Error dictionary with keys as `(termType, basisLabel)` tuples, where
+            `termType` can be `"H"` (Hamiltonian), `"S"` (Stochastic), or `"A"`
+            (Affine), and `basisLabel` is a string of I, X, Y, or Z to describe a
+            Pauli basis element appropriate for the gate (i.e. having the same
+            number of letters as there are qubits in the gate).  For example, you
+            could specify a 0.01-radian Z-rotation error and 0.05 rate of Pauli-
+            stochastic X errors on a 1-qubit gate by using the error dictionary:
+            `{('H','Z'): 0.01, ('S','X'): 0.05}`.
+
+        Returns
+        -------
+        parameterization : str
+            Parameterization string for constructing Lindblad error generators.
+        """
+        paramtypes = []
+        if any([nm[0] == 'H' for nm in errs]): paramtypes.append('H')
+        if any([nm[0] == 'S' for nm in errs]): paramtypes.append('S')
+        if any([nm[0] == 'A' for nm in errs]): paramtypes.append('A')
+        if any([nm[0] == 'S' and isinstance(nm, tuple) and len(nm) == 3 for nm in errs]):
+            # parameterization must be "CPTP" if there are any ('S',b1,b2) keys
+            parameterization = "CPTP"
+        else:
+            parameterization = '+'.join(paramtypes)
+        return cls.cast(parameterization)
+
+    @classmethod
+    def cast(cls, obj):
+        """
+        Converts a string into a LindbladParameterization object if necessary.
+
+        Parameters
+        ----------
+        obj : str or LindbladParameterization
+            The object to convert.
+
+        Returns
+        -------
+        LindbladParameterization
+        """
+        if isinstance(obj, LindbladParameterization):
+            return obj
+
+        param_type = obj
+        if param_type == "CPTP":
+            nonham_mode = "all"; param_mode = "cptp"
+        elif param_type == "H":
+            nonham_mode = "all"; param_mode = "cptp"  # these don't matter since there's no non-ham errors
+        elif param_type in ("H+S", "S"):
+            nonham_mode = "diagonal"; param_mode = "cptp"
+        elif param_type in ("H+s", "s"):
+            nonham_mode = "diagonal"; param_mode = "unconstrained"
+        elif param_type in ("H+S+A", "S+A"):
+            nonham_mode = "diag_affine"; param_mode = "cptp"
+        elif param_type in ("H+s+A", "s+A"):
+            nonham_mode = "diag_affine"; param_mode = "unconstrained"
+        elif param_type in ("H+D", "D"):
+            nonham_mode = "diagonal"; param_mode = "depol"
+        elif param_type in ("H+d", "d"):
+            nonham_mode = "diagonal"; param_mode = "reldepol"
+        elif param_type in ("H+D+A", "D+A"):
+            nonham_mode = "diag_affine"; param_mode = "depol"
+        elif param_type in ("H+d+A", "d+A"):
+            nonham_mode = "diag_affine"; param_mode = "reldepol"
+        elif param_type == "GLND":
+            nonham_mode = "all"; param_mode = "unconstrained"
+        else:
+            raise ValueError("Unrecognized base type in `param_type`=%s" % param_type)
+
+        ham_allowed = True if (("H" == param_type)
+                               or ("H+" in param_type)
+                               or param_type in ("CPTP", "GLND")) else False
+        nonham_allowed = False if param_type == "H" else True
+        return cls(nonham_mode, param_mode, ham_allowed, nonham_allowed, param_type)
+
+    def __init__(self, nonham_mode, param_mode, ham_params_allowed, nonham_params_allowed, abbrev=None):
+        self.nonham_mode = nonham_mode
+        self.param_mode = param_mode
+        self.ham_params_allowed = ham_params_allowed
+        self.nonham_params_allowed = nonham_params_allowed
+        self.abbrev = abbrev
+
+    def __str__(self):
+        if self.abbrev is not None:
+            return self.abbrev
+        else:
+            return "CustomLindbladParam(%s,%s,%s,%s)" % (self.nonham_mode, self.param_mode,
+                                                         str(self.ham_params_allowed), str(self.nonham_params_allowed))

@@ -10,25 +10,38 @@
 
 import numpy as _np
 
+
+from . import ibmq_athens
+from . import ibmq_belem
+from . import ibmq_bogota
 from . import ibmq_burlington
+from . import ibmq_cambridge
+from . import ibmq_casablanca
 from . import ibmq_essex
+from . import ibmq_guadalupe
+from . import ibmq_lima
 from . import ibmq_london
 from . import ibmq_manhattan
 from . import ibmq_melbourne
 from . import ibmq_ourense
+from . import ibmq_quito
+from . import ibmq_rome
 from . import ibmq_rueschlikon
+from . import ibmq_santiago
+from . import ibmq_sydney
 from . import ibmq_tenerife
+from . import ibmq_toronto
 from . import ibmq_vigo
 from . import ibmq_yorktown
 from . import rigetti_agave
 from . import rigetti_aspen4
 from . import rigetti_aspen6
 from . import rigetti_aspen7
-from ...baseobjs import processorspec as _pspec
-from ...construction import modelconstruction as _mconst
-from ...models import oplessmodel as _oplessmodel
-from ...modelmembers.povms import povm as _povm
-from ...tools import rbtools as _anl
+from pygsti.processors import QubitProcessorSpec as _QubitProcessorSpec
+from pygsti.processors import CliffordCompilationRules as _CliffordCompilationRules
+from pygsti.models import oplessmodel as _oplessmodel, modelconstruction as _mconst
+from pygsti.modelmembers.povms import povm as _povm
+from pygsti.tools import rbtools as _anl
 
 
 def get_device_specs(devname):
@@ -37,20 +50,32 @@ def get_device_specs(devname):
 
 def _get_dev_specs(devname):
 
-    if devname == 'ibmq_melbourne' or devname == 'ibmq_16_melbourne': dev = ibmq_melbourne
-    elif devname == 'ibmq_ourense': dev = ibmq_ourense
-    elif devname == 'ibmq_rueschlikon': dev = ibmq_rueschlikon
-    elif devname == 'ibmq_tenerife': dev = ibmq_tenerife
-    elif devname == 'ibmq_vigo': dev = ibmq_vigo
-    elif devname == 'ibmq_essex': dev = ibmq_essex
+    if devname == 'ibmq_athens': dev = ibmq_athens
+    elif devname == 'ibmq_belem': dev = ibmq_belem
+    elif devname == 'ibmq_bogota': dev = ibmq_bogota
     elif devname == 'ibmq_burlington': dev = ibmq_burlington
+    elif devname == 'ibmq_cambridge': dev = ibmq_cambridge
+    elif devname == 'ibmq_casablanca': dev = ibmq_casablanca
+    elif devname == 'ibmq_essex': dev = ibmq_essex
+    elif devname == 'ibmq_guadalupe': dev = ibmq_guadalupe
+    elif devname == 'ibmq_lima': dev = ibmq_lima
     elif devname == 'ibmq_london': dev = ibmq_london
+    elif devname == 'ibmq_manhattan': dev = ibmq_manhattan
+    elif devname == 'ibmq_melbourne' or devname == 'ibmq_16_melbourne': dev = ibmq_melbourne
+    elif devname == 'ibmq_ourense': dev = ibmq_ourense
+    elif devname == 'ibmq_quito': dev = ibmq_quito
+    elif devname == 'ibmq_rome': dev = ibmq_rome
+    elif devname == 'ibmq_rueschlikon': dev = ibmq_rueschlikon
+    elif devname == 'ibmq_santiago': dev = ibmq_santiago
+    elif devname == 'ibmq_sydney': dev = ibmq_sydney
+    elif devname == 'ibmq_tenerife': dev = ibmq_tenerife
+    elif devname == 'ibmq_toronto': dev = ibmq_toronto
+    elif devname == 'ibmq_vigo': dev = ibmq_vigo
     elif devname == 'ibmq_yorktown' or devname == 'ibmqx2': dev = ibmq_yorktown
     elif devname == 'rigetti_agave': dev = rigetti_agave
     elif devname == 'rigetti_aspen4': dev = rigetti_aspen4
     elif devname == 'rigetti_aspen6': dev = rigetti_aspen6
     elif devname == 'rigetti_aspen7': dev = rigetti_aspen7
-    elif devname == 'ibmq_manhattan': dev = ibmq_manhattan
     else:
         raise ValueError("This device name is not known!")
 
@@ -64,14 +89,39 @@ def get_edgelist(device):
     return specs.edgelist
 
 
-def create_processor_spec(device, one_qubit_gates, qubitsubset=None, removeedges=[],
-                          construct_clifford_compilations={'paulieq': ('1Qcliffords',),
-                                                           'absolute': ('paulis', '1Qcliffords')},
-                          construct_models=('clifford', 'target'),
-                          verbosity=0):
+def create_clifford_processor_spec(device, one_qubit_gates, qubitsubset=None, removeedges=(),
+                                   clifford_compilation_type='absolute', what_to_compile=('1Qcliffords',),
+                                   verbosity=0):
+    """
+    TODO: docstring
+
+    Parameters
+    ----------
+    device
+    one_qubit_gates
+    qubitsubset
+    removeedges
+    clifford_compilation_type
+    what_to_compile
+    verbosity
+
+    Returns
+    -------
+    QubitProcessorSpec
+    """
+    native_pspec = create_processor_spec(device, one_qubit_gates, qubitsubset, removeedges)
+    clifford_compilation = _CliffordCompilationRules.create_standard(
+        native_pspec, clifford_compilation_type, what_to_compile, verbosity)
+    clifford_pspec = clifford_compilation.apply_to_processorspec(native_pspec)
+    return clifford_pspec
+
+
+def create_processor_spec(device, one_qubit_gates, qubitsubset=None, removeedges=()):
     """
     todo
 
+    clifford compilation type & what_to_compile = {'paulieq': ('1Qcliffords',),
+                                           'absolute': ('paulis', '1Qcliffords')}
     """
     dev = _get_dev_specs(device)
 
@@ -99,12 +149,7 @@ def create_processor_spec(device, one_qubit_gates, qubitsubset=None, removeedges
 
     availability = {two_qubit_gate: edgelist}
     #print(availability)
-    pspec = _pspec.ProcessorSpec(total_qubits, gate_names, availability=availability,
-                                 construct_clifford_compilations=construct_clifford_compilations,
-                                 construct_models=construct_models,
-                                 verbosity=verbosity, qubit_labels=qubits)
-
-    return pspec
+    return _QubitProcessorSpec(total_qubits, gate_names, availability=availability, qubit_labels=qubits)
 
 
 def create_error_rates_model(caldata, device, one_qubit_gates, one_qubit_gates_to_native={}, calformat=None,
@@ -354,8 +399,8 @@ def create_local_depolarizing_model(caldata, device, one_qubit_gates, one_qubit_
     else:
         edgelist = [edge for edge in devspecs.edgelist if set(edge).issubset(set(qubits))]
 
-    print(qubits)
-    print(edgelist)
+    #print(qubits)
+    #print(edgelist)
 
     model = _mconst.create_localnoise_model(n_qubits=len(qubits),
                                             qubit_labels=qubits,

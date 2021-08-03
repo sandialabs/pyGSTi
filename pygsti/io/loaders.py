@@ -14,11 +14,11 @@ import os as _os
 import pathlib as _pathlib
 import warnings as _warnings
 
-from . import metadir as _metadir
-from . import stdinput as _stdinput
-from .. import baseobjs as _baseobjs
-from .. import circuits as _circuits
-from .. import datasets as _datasets
+from pygsti.io import metadir as _metadir
+from pygsti.io import stdinput as _stdinput
+from pygsti import baseobjs as _baseobjs
+from pygsti import circuits as _circuits
+from pygsti import data as _data
 
 
 def load_dataset(filename, cache=False, collision_action="aggregate",
@@ -82,7 +82,7 @@ def load_dataset(filename, cache=False, collision_action="aggregate",
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
     try:
         # a saved Dataset object is ok
-        ds = _datasets.DataSet(file_to_load_from=filename)
+        ds = _data.DataSet(file_to_load_from=filename)
     except:
 
         #Parser functions don't take a VerbosityPrinter yet, and so
@@ -96,7 +96,7 @@ def load_dataset(filename, cache=False, collision_action="aggregate",
                _os.path.getmtime(filename) < _os.path.getmtime(cache_filename):
                 try:
                     printer.log("Loading from cache file: %s" % cache_filename)
-                    ds = _datasets.DataSet(file_to_load_from=cache_filename)
+                    ds = _data.DataSet(file_to_load_from=cache_filename)
                     return ds
                 except: print("WARNING: Failed to load from cache file")  # pragma: no cover
             else:
@@ -170,7 +170,7 @@ def load_multidataset(filename, cache=False, collision_action="aggregate",
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
     try:
         # a saved MultiDataset object is ok
-        mds = _datasets.MultiDataSet(file_to_load_from=filename)
+        mds = _data.MultiDataSet(file_to_load_from=filename)
     except:
 
         #Parser functions don't take a VerbosityPrinter yet, and so
@@ -184,7 +184,7 @@ def load_multidataset(filename, cache=False, collision_action="aggregate",
                _os.path.getmtime(filename) < _os.path.getmtime(cache_filename):
                 try:
                     printer.log("Loading from cache file: %s" % cache_filename)
-                    mds = _datasets.MultiDataSet(file_to_load_from=cache_filename)
+                    mds = _data.MultiDataSet(file_to_load_from=cache_filename)
                     return mds
                 except: print("WARNING: Failed to load from cache file")  # pragma: no cover
             else:

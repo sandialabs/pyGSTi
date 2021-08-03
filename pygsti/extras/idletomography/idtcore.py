@@ -21,9 +21,8 @@ from .idtresults import IdleTomographyResults as _IdleTomographyResults
 from ... import baseobjs as _baseobjs
 from ... import models as _models
 from ... import tools as _tools
-from ...construction import modelconstruction as _modelconstruction
+from ...models import modelconstruction as _modelconstruction
 from ...modelmembers import states as _state
-from ...modelmembers import povms as _povm
 from ...modelmembers import operations as _op
 from ...baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from ...circuits.circuit import Circuit as _Circuit
@@ -593,7 +592,8 @@ def determine_paulidicts(model):
 
         if isinstance(g, _op.EmbeddedOp):
             #Note: an embedded gate need not use the *same* state space labels as the model
-            lbls = [cur_sslbls[g.state_space_labels.labels[0].index(locLbl)] for locLbl in g.targetLabels]
+            g_sslbls = g.state_space.tensor_product_block_labels(0)
+            lbls = [cur_sslbls[g_sslbls.index(locLbl)] for locLbl in g.target_labels]
             # TODO: add to StateSpaceLabels functionality to make sure two are compatible, and to translate between
             # them, & make sub-labels?
             return extract_action(g.embedded_op, lbls, ql)
@@ -632,9 +632,9 @@ def determine_paulidicts(model):
             continue  # skip gates that don't have 1Q-like labels
         qubit_label = gl.sslbls[0]  # the qubit this gate is supposed to act on
         try:
-            assert(len(model.state_space_labels.labels) == 1), "Assumes a single state space sector"
+            assert(model.state_space.num_tensor_product_blocks == 1), "Assumes a single state space sector"
             action_on_qubit = extract_action(gate,
-                                             model.state_space_labels.labels[0],
+                                             model.state_space.tensor_product_block_labels(0),
                                              qubit_label)
         except ValueError:
             continue  # skip gates that we can't extract action from

@@ -12,12 +12,12 @@ class ExperimentDesignTester(BaseCase):
         cls.gst_design = std.get_gst_experiment_design(4)
 
     def test_promotion(self):
-        circuits = pygsti.construction.to_circuits(["{}@(0)", "Gxpi2:0", "Gypi2:0"])
+        circuits = pygsti.circuits.to_circuits(["{}@(0)", "Gxpi2:0", "Gypi2:0"])
         edesign1 = pygsti.protocols.ExperimentDesign(circuits)
         combined_edesign1 = edesign1.promote_to_combined('ed1')
         self.assertTrue(isinstance(combined_edesign1, pygsti.protocols.CombinedExperimentDesign))
 
-        circuits2 = pygsti.construction.to_circuits(["Gxpi2:0^2", "Gypi2:0^2"])
+        circuits2 = pygsti.circuits.to_circuits(["Gxpi2:0^2", "Gypi2:0^2"])
         edesign2 = pygsti.protocols.CircuitListsDesign([circuits, circuits2])
 
         combined_edesign2 = edesign2.promote_to_combined('ed2')
@@ -28,19 +28,19 @@ class ExperimentDesignTester(BaseCase):
         self.assertEqual(set(combined_edesign3.keys()), set(['ednested']))
 
     def test_add_to_combined_design(self):
-        circuits1 = pygsti.construction.to_circuits(["{}@(0)", "Gxpi2:0", "Gypi2:0"])
-        circuits2 = pygsti.construction.to_circuits(["Gxpi2:0^2", "Gypi2:0^2"])
+        circuits1 = pygsti.circuits.to_circuits(["{}@(0)", "Gxpi2:0", "Gypi2:0"])
+        circuits2 = pygsti.circuits.to_circuits(["Gxpi2:0^2", "Gypi2:0^2"])
 
         edesign1 = pygsti.protocols.ExperimentDesign(circuits1)
         edesign2 = pygsti.protocols.ExperimentDesign(circuits2)
 
         combined_edesign = pygsti.protocols.CombinedExperimentDesign({"one": edesign1, "two": edesign2})
 
-        edesign3 = pygsti.protocols.ExperimentDesign(pygsti.construction.to_circuits(["Gxpi2:0", "Gypi2:0^2"]))
+        edesign3 = pygsti.protocols.ExperimentDesign(pygsti.circuits.to_circuits(["Gxpi2:0", "Gypi2:0^2"]))
         combined_edesign['three'] = edesign3
 
         with self.assertRaises(ValueError):
-            edesign4 = pygsti.protocols.ExperimentDesign(pygsti.construction.to_circuits(["Gypi2:0^4"]))
+            edesign4 = pygsti.protocols.ExperimentDesign(pygsti.circuits.to_circuits(["Gypi2:0^4"]))
             combined_edesign['four'] = edesign4
             
     #These might be more "system tests"

@@ -13,8 +13,8 @@ The LinearOperator class and supporting functionality.
 import numpy as _np
 
 from pygsti.baseobjs.opcalc import bulk_eval_compact_polynomials_complex as _bulk_eval_compact_polynomials_complex
-from .. import modelmember as _modelmember
-from ...tools import optools as _ot
+from pygsti.modelmembers import modelmember as _modelmember
+from pygsti.tools import optools as _ot
 
 
 #Note on initialization sequence of Operations within a Model:
@@ -191,40 +191,6 @@ class LinearOperator(_modelmember.ModelMember):
 
         #Build a State around output_rep
         return _state.StaticState(output_rep.to_dense(on_space='minimal'), self._evotype, self.state_space)
-        #REMOVE
-        #return _sv.StabilizerSPAMVec(sframe=_stabilizer.StabilizerFrame(
-        #        output_rep.smatrix, output_rep.pvectors, output_rep.amps))
-
-    #TODO REMOVE - no need to do anything beyond base class version
-    #@property
-    #def dirty(self):
-    #    """
-    #    Whether this operator is "dirty" - i.e. may have had its parameters changed.
-    #    """
-    #    return _modelmember.ModelMember.dirty.fget(self)  # call base class
-    #
-    #@dirty.setter
-    #def dirty(self, value):  # need this otherwise dirty prop is read-only
-    #    """
-    #    Whether this operator is "dirty" - i.e. may have had its parameters changed.
-    #    """
-    #    _modelmember.ModelMember.dirty.fset(self, value)  # call base class setter
-
-    #def __getstate__(self):
-    #    st = super(LinearOperator, self).__getstate__()
-    #    st['_cachedrep'] = None  # can't pickle this!
-    #    return st
-    #def copy(self, parent=None, memo=None):
-    #    """
-    #    Copy this LinearOperator.
-    #
-    #    Parameters
-    #    ----------
-    #    parent : Model, optional
-    #        The parent model to set for the copy.
-    #    """
-    #    self._cachedrep = None  # deepcopy in ModelMember.copy can't copy CReps!
-    #    return _modelmember.ModelMember.copy(self, parent, memo)
 
     def to_sparse(self, on_space='minimal'):
         """
@@ -338,8 +304,7 @@ class LinearOperator(_modelmember.ModelMember):
                     cpolys[0], cpolys[1], v, (len(terms_at_order),))  # an array of coeffs
                 terms_at_order = [t.copy_with_magnitude(abs(coeff)) for coeff, t in zip(coeffs, terms_at_order)]
 
-                # CHECK - to ensure term magnitudes are being set correctly (i.e. are in sync with evaluated coeffs)
-                # REMOVE later
+                # DEBUG CHECK - that term magnitudes are being set correctly (i.e. are in sync with evaluated coeffs)
                 # for t in terms_at_order:
                 #     vt, ct = t._rep.coeff.compact_complex()
                 #     coeff_array = _bulk_eval_compact_polynomials_complex(vt, ct, self.parent.to_vector(), (1,))
@@ -372,7 +337,7 @@ class LinearOperator(_modelmember.ModelMember):
         sorted_terms = sorted(terms, key=lambda t: t[1].magnitude, reverse=True)
         first_order_indices = [i for i, t in enumerate(sorted_terms) if t[0] == 1]
 
-        #DEBUG TODO REMOVE
+        #DEBUG CHECK term magnitudes
         #chk1 = sum([t[1].magnitude for t in sorted_terms])
         #chk2 = self.total_term_magnitude
         #print("HIGHMAG ",self.__class__.__name__, len(sorted_terms), " maxorder=",max_taylor_order,
@@ -428,7 +393,7 @@ class LinearOperator(_modelmember.ModelMember):
             cpolys[0], cpolys[1], v, (len(terms_at_order),))  # an array of coeffs
         terms_at_order = [t.copy_with_magnitude(abs(coeff)) for coeff, t in zip(coeffs, terms_at_order)]
 
-        #CHECK - to ensure term magnitudes are being set correctly (i.e. are in sync with evaluated coeffs) REMOVE later
+        # DEBUG CHECK that term magnitudes are being set correctly (i.e. are in sync with evaluated coeffs)
         #for t in terms_at_order:
         #    vt,ct = t._rep.coeff.compact_complex()
         #    coeff_array = _bulk_eval_compact_polynomials_complex(vt,ct,self.parent.to_vector(),(1,))

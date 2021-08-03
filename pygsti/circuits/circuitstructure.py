@@ -16,7 +16,7 @@ import copy as _copy
 import numpy as _np
 
 from pygsti.circuits.circuit import Circuit as _Circuit
-from .circuitlist import CircuitList as _CircuitList
+from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 
 
 class CircuitPlaquette(object):

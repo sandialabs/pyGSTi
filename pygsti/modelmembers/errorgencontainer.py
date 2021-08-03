@@ -139,7 +139,7 @@ class ErrorGeneratorContainer(object):
 
     def set_errorgen_coefficients(self, lindblad_term_dict, action="update", logscale_nonham=False, truncate=False):
         """
-        Sets the coefficients of terms in the error generator of this :class:`LindbladOp`.
+        Sets the coefficients of terms in the error generator of this operation.
 
         The dictionary `lindblad_term_dict` has tuple-keys describing the type of term and the basis
         elements used to construct it, e.g. `('H','X')`.
@@ -185,7 +185,7 @@ class ErrorGeneratorContainer(object):
 
     def set_error_rates(self, lindblad_term_dict, action="update"):
         """
-        Sets the coeffcients of terms in the error generator of this :class:`LindbladOp`.
+        Sets the coeffcients of terms in the error generator of this operation.
 
         Values are set so that the contributions of the resulting channel's
         error rate are given by the values in `lindblad_term_dict`.  See

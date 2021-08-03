@@ -1,9 +1,7 @@
 """
 Symplectic representation utility functions
 """
-import numpy as _np
 
-from . import matrixmod2 as _mtx
 # ***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -11,9 +9,14 @@ from . import matrixmod2 as _mtx
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
-# ***************************************************************************************************
-from ..baseobjs.label import Label as _Label
-from ..baseobjs.smartcache import smart_cached
+#***************************************************************************************************
+import numpy as _np
+import copy as _copy
+
+from scipy.sparse.construct import rand
+from pygsti.baseobjs.label import Label as _Label
+from pygsti.baseobjs.smartcache import smart_cached
+from pygsti.tools import matrixmod2 as _mtx
 
 try:
     from . import fastcalc as _fastcalc
@@ -1057,8 +1060,8 @@ def symplectic_rep_of_clifford_circuit(circuit, srep_dict=None, pspec=None):
         specified (and it is ignored if it is specified). Otherwise it must be
         specified.
 
-    pspec : ProcessorSpec, optional
-        A ProcessorSpec that contains a Clifford model that defines the symplectic
+    pspec : QubitProcessorSpec, optional
+        A QubitProcessorSpec that contains a Clifford model that defines the symplectic
         action of all of the gates in `circuit`. If this is not None it over-rides
         `srep_dict`. Both `pspec` and `srep_dict` can only be None if the circuit
         contains only gates with names that are hard-coded into pyGSTi.
@@ -1077,7 +1080,7 @@ def symplectic_rep_of_clifford_circuit(circuit, srep_dict=None, pspec=None):
         srep_dict = {}
     srep_dict.update(compute_internal_gate_symplectic_representations())
     if pspec is not None:
-        srep_dict.update(pspec.models['clifford'].compute_clifford_symplectic_reps())
+        srep_dict.update(pspec.compute_clifford_symplectic_reps())
 
     # The initial action of the circuit before any layers are applied.
     s = _np.identity(2 * n, int)
@@ -1167,7 +1170,7 @@ def symplectic_rep_of_clifford_layer(layer, n=None, q_labels=None, srep_dict=Non
 
     for sub_lbl in layer.components:
         matrix, phase = srep_dict[sub_lbl.name]
-        nforgate = sub_lbl.number_of_qubits
+        nforgate = sub_lbl.num_qubits
         sub_lbl_qubits = sub_lbl.qubits if (sub_lbl.qubits is not None) else q_labels
         for ind1, qlabel1 in enumerate(sub_lbl_qubits):
             qindex1 = q_labels.index(qlabel1)
@@ -1458,7 +1461,7 @@ def unitary_to_symplectic(u, flagnonclifford=True):
     return s, p
 
 
-def random_symplectic_matrix(n, convention='standard'):
+def random_symplectic_matrix(n, convention='standard', rand_state=None):
     """
     Returns a symplectic matrix of dimensions 2n x 2n sampled uniformly at random from the symplectic group S(n).
 
@@ -1478,12 +1481,15 @@ def random_symplectic_matrix(n, convention='standard'):
         convention used throughout most of the code. In the case of 'directsum', the
         symplectic form is the direct sum of n 2x2 bit-flip matrices.
 
+    rand_state: RandomState, optional
+        A np.random.RandomState object for seeding RNG
+
     Returns
     -------
     s : numpy array
         A uniformly sampled random symplectic matrix.
     """
-    index = random_symplectic_index(n)
+    index = random_symplectic_index(n, rand_state)
     s = compute_symplectic_matrix(index, n)
 
     if convention == 'standard':
@@ -1492,7 +1498,7 @@ def random_symplectic_matrix(n, convention='standard'):
     return s
 
 
-def random_clifford(n):
+def random_clifford(n, rand_state=None):
     """
     Returns a Clifford, in the symplectic representation, sampled uniformly at random from the n-qubit Clifford group.
 
@@ -1505,6 +1511,9 @@ def random_clifford(n):
     n : int
         The number of qubits the Clifford group is over.
 
+    rand_state: RandomState, optional
+        A np.random.RandomState object for seeding RNG
+
     Returns
     -------
     s : numpy array
@@ -1512,13 +1521,16 @@ def random_clifford(n):
     p : numpy array
         The phase vector representating the uniformly sampled random Clifford.
     """
-    s = random_symplectic_matrix(n, convention='standard')
-    p = random_phase_vector(s, n)
+    if rand_state is None:
+        rand_state = _np.random.RandomState()
+
+    s = random_symplectic_matrix(n, convention='standard', rand_state=rand_state)
+    p = random_phase_vector(s, n, rand_state=rand_state)
 
     return s, p
 
 
-def random_phase_vector(s, n):
+def random_phase_vector(s, n, rand_state=None):
     """
     Generates a uniformly random phase vector for a n-qubit Clifford.
 
@@ -1534,12 +1546,18 @@ def random_phase_vector(s, n):
     n : int
         The number of qubits the Clifford group is over.
 
+    rand_state: RandomState, optional
+        A np.random.RandomState object for seeding RNG
+
     Returns
     -------
     p : numpy array
         A phase vector sampled uniformly at random from all those phase
         vectors that, as a pair with `s`, define a valid n-qubit Clifford.
     """
+    if rand_state is None:
+        rand_state = _np.random.RandomState()
+
     p = _np.zeros(2 * n, int)
 
     # A matrix to hold all possible phase vectors -- half of which do not, when
@@ -1566,7 +1584,7 @@ def random_phase_vector(s, n):
     allowed_values = _np.reshape(all_values[possible], (2 * n, 2))
 
     # Sample a uniformly random valid phase vector.
-    index = _np.random.randint(2, size=2 * n)
+    index = rand_state.randint(2, size=2 * n)
     for i in range(0, 2 * n):
         p[i] = allowed_values[i, index[i]]
 
@@ -2075,7 +2093,7 @@ def compute_symplectic_label(gn, n=None):
     return gnidx
 
 
-def random_symplectic_index(n):
+def random_symplectic_index(n, rand_state=None):
     """
     The index of a uniformly random 2n x 2n symplectic matrix over the finite field containing 0 and 1.
 
@@ -2087,12 +2105,18 @@ def random_symplectic_index(n):
     n : int
         Number of qubits (half dimension of symplectic matrix).
 
+    rand_state: RandomState, optional
+        A np.random.RandomState object for seeding RNG
+
     Returns
     -------
     numpy.ndarray
     """
     cardinality = compute_num_symplectics(n)
     max_integer = 9223372036854775808  # The maximum integer of int64 type
+
+    if rand_state is None:
+        rand_state = _np.random.RandomState()
 
     def zeros_string(k):
         zeros_str = ''
@@ -2101,7 +2125,7 @@ def random_symplectic_index(n):
         return zeros_str
 
     if cardinality <= max_integer:
-        index = _np.random.randint(cardinality)
+        index = rand_state.randint(cardinality)
 
     else:
         digits1 = len(str(cardinality))
@@ -2115,7 +2139,7 @@ def random_symplectic_index(n):
             temp = 0
             for i in range(0, n):
                 add = zeros_string(m)
-                sample = _np.random.randint(10**digits2, dtype=_np.int64)
+                sample = rand_state.randint(10**digits2, dtype=_np.int64)
                 for j in range(0, i):
                     add += zeros_string(digits2)
                 add += str(sample)
@@ -2123,7 +2147,7 @@ def random_symplectic_index(n):
                     add += zeros_string(digits2)
                 temp += int(add)
 
-            add = str(_np.random.randint(10**m, dtype=_np.int64)) + zeros_string(n * digits2)
+            add = str(rand_state.randint(10**m, dtype=_np.int64)) + zeros_string(n * digits2)
             index = int(add) + temp
 
     return index

@@ -15,11 +15,12 @@ import collections as _collections
 
 import numpy as _np
 
-from .complementeffect import ComplementPOVMEffect as _ComplementPOVMEffect
-from .effect import POVMEffect as _POVMEffect
-from .fulleffect import FullPOVMEffect as _FullPOVMEffect
-from .povm import POVM as _POVM
-from .. import modelmember as _mm
+from pygsti.modelmembers.povms.complementeffect import ComplementPOVMEffect as _ComplementPOVMEffect
+from pygsti.modelmembers.povms.effect import POVMEffect as _POVMEffect
+from pygsti.modelmembers.povms.fulleffect import FullPOVMEffect as _FullPOVMEffect
+from pygsti.modelmembers.povms.povm import POVM as _POVM
+from pygsti.modelmembers import modelmember as _mm
+from pygsti.evotypes import Evotype as _Evotype
 
 
 class _BasePOVM(_POVM):
@@ -65,6 +66,9 @@ class _BasePOVM(_POVM):
         else:
             self.complement_label = None
 
+        if evotype is not None:
+            evotype = _Evotype.cast(evotype)  # e.g., resolve "default"
+
         #Copy each effect vector and set it's parent and gpindices.
         # Assume each given effect vector's parameters are independent.
         copied_items = []
@@ -78,7 +82,7 @@ class _BasePOVM(_POVM):
                 effect = _FullPOVMEffect(v, evotype, state_space)
 
             if evotype is None: evotype = effect.evotype
-            else: assert(evotype == effect.evotype or evotype == "default"), \
+            else: assert(evotype == effect.evotype), \
                 "All effect vectors must have the same evolution type"
 
             if state_space is None: state_space = effect.state_space

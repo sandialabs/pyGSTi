@@ -15,7 +15,7 @@ import pickle as _pickle
 import numpy as _np
 
 from pygsti.objectivefns.wildcardbudget import update_circuit_probs as _update_circuit_probs
-from .optimize import minimize as _minimize
+from pygsti.optimize.optimize import minimize as _minimize
 
 
 def optimize_wildcard_budget_neldermead(budget, L1weights, wildcard_objfn, two_dlogl_threshold,
@@ -97,13 +97,6 @@ def optimize_wildcard_budget_neldermead(budget, L1weights, wildcard_objfn, two_d
 
         def _wildcard_objective(wv):
             return _wildcard_fit_criteria(wv) + eta * L1term(wv)
-
-        #TODO REMOVE
-        #import bpdb; bpdb.set_trace()
-        #Wvec_init[:] = 0.0; print("TEST budget 0\n", _wildcard_objective(Wvec_init))
-        #Wvec_init[:] = 1e-5; print("TEST budget 1e-5\n", _wildcard_objective(Wvec_init))
-        #Wvec_init[:] = 0.1; print("TEST budget 0.1\n", _wildcard_objective(Wvec_init))
-        #Wvec_init[:] = 1.0; print("TEST budget 1.0\n", _wildcard_objective(Wvec_init))
 
         if printer.verbosity > 1:
             printer.log(("NOTE: optimizing wildcard budget with verbose progress messages"
@@ -220,23 +213,6 @@ def _get_critical_circuit_budgets(objfn, redbox_threshold):
             else:  # fits poorly (red box!), must increase budget
                 lbound = mid
         percircuit_budget = (ubound + lbound) / 2
-
-        #TODO REMOVE (OLD)
-        #percircuit_budget = 0; step = 1e-5
-        #while True:
-        #    #dlogl_per_outcome = objfn.raw_objfn.terms(p, n, N, f)
-        #    dlogl_per_outcome = N * f * _np.log(f / p)
-        #    dlogl = float(_np.sum(dlogl_per_outcome))  # for this circuit
-        #    if 2 * dlogl <= redbox_threshold: break
-        #
-        #    chis = objfn.raw_objfn.dterms(p, n, N, f)
-        #    maxes = _np.array(_np.abs(chis - _np.max(chis)) < 1.e-8, dtype=int)
-        #    mins = _np.array(_np.abs(chis - _np.min(chis)) < 1.e-8, dtype=int)
-        #    add_to = step * mins / sum(mins)
-        #    take_from = step * maxes / sum(maxes)
-        #    p += add_to - take_from
-        #    percircuit_budget += step
-
         critical_percircuit_budgets[i] = percircuit_budget
 
     global_critical_percircuit_budgets = layout.allgather_local_array('c', critical_percircuit_budgets)
@@ -346,29 +322,6 @@ def _agg_dlogl_hessian(current_probs, objfn, percircuit_budget_deriv, probs_deri
     agg_dlogl_hessian_wrt_percircuit_budgets = _np.zeros(num_circuits)
     for i in range(num_circuits):
         elInds = layout.indices_for_index(i)
-
-        #OLD REMOVE
-        #chis = chi_elements[elInds]  # ~ f/p
-        #Nloc = N[elInds]
-        #max_chi = _np.max(chis)
-        #min_chi = _np.min(chis)
-        #if (max_chi - min_chi) < TOL:  # Special case when all f==p - nothing more to change
-        #    agg_dlogl_hessian_wrt_percircuit_budgets[i] = 0
-        #    continue
-        #
-        #max_mask = _np.abs(chis - max_chi) < TOL
-        #min_mask = _np.abs(chis - min_chi) < TOL
-        ## maxes = _np.array(max_mask, dtype=int)
-        ## mins = _np.array(min_mask, dtype=int)
-        #
-        #freqs = f[layout.indices_for_index(i)]
-        #lambdas_max = freqs[max_mask] / (sum(freqs[max_mask]) + 1e-100)  # 1e-100 handles when all(freqs[mask] == 0)
-        #lambdas_min = freqs[min_mask] / (sum(freqs[min_mask]) + 1e-100)
-        #
-        #dchi = dchi_elements[layout.indices_for_index(i)]  # ~ f/p**2
-        #agg_dlogl_hessian_wrt_percircuit_budgets[i] = \
-        #    2 * Nloc[0] * (sum(dchi[max_mask] * lambdas_max**2)
-        #                   + sum(dchi[min_mask] * lambdas_min**2))
 
         # agg_dlogl(p(W))
         # d(agg_dlogl)/dW = dagg_dlogl(p(W)) * dp_dW  (directional derivative of agg_dlogl)
@@ -519,25 +472,14 @@ def optimize_wildcard_budget_cvxopt(budget, L1weights, objfn, two_dlogl_threshol
                                                  two_dlogl_threshold)]).reshape((1, 1)))  # shape (m,1)
         Df = _cvxopt.matrix(_np.empty((1, n), 'd'))  # shape (m, n)
         Df[0, :] = _agg_dlogl_deriv(current_probs, objfn, percircuit_budget_deriv, p_deriv)
-        #print("DB: rank Df=", _np.linalg.matrix_rank(Df))  # REMOVE
 
         if z is None:
-            #print("DB wvec = ", ",".join(["%.3g" % vv for vv in x]), "=> %g" % f[0], ["%g" % vv for vv in Df])
-            #if debug: check_fd(x, False)
             return f, Df
 
         # additionally, compute H = z_0 * Hessian(f_0)(wv)
         H = _cvxopt.matrix(z[0] * _agg_dlogl_hessian(current_probs, objfn, percircuit_budget_deriv, p_deriv))
-        #DEBUG REMOVE
-        #print("rank Hf=", _np.linalg.matrix_rank(H), " z[0]=",z[0])
-        #print(H)
-        #print(_np.linalg.eigvals(H))
         evals = _np.linalg.eigvals(H)
         assert(_np.all(evals >= -1e-8))  # tests *global* H
-        #print("DB wvec = ", ",".join(["%.3g" % vv for vv in x]), "=> f=%g" % f[0])
-        #print("  Df = ",["%g" % vv for vv in Df])
-        #print("  evals(H)= ", ["%g" % vv for vv in evals], " z=",z[0])
-        #if debug: check_fd(x, True)
         return f, Df, H
 
     #check_fd([0.0001] * n, True)

@@ -12,9 +12,9 @@ Variables for working with the a model containing X(pi/4) and Z(pi/2) gates.
 
 import sys as _sys
 
-from ...construction import circuitconstruction as _strc
-from ...construction import modelconstruction as _setc
-from ...construction import stdtarget as _stdtarget
+from ...circuits import circuitconstruction as _strc
+from ...models import modelconstruction as _setc
+from .. import stdtarget as _stdtarget
 
 description = "X(pi/4) and Z(pi/2) gates"
 
@@ -43,10 +43,14 @@ germs = _strc.to_circuits([('Gx',),
 germs_lite = germs[0:4]
 
 #Construct a target model:  X(pi/4), Z(pi/2)
-_target_model = _setc.create_explicit_model([('Q0',)], ['Gx', 'Gz'],
-                                           ["X(pi/4,Q0)", "Z(pi/2,Q0)"])
+_target_model = _setc.create_explicit_model_from_expressions([('Q0',)], ['Gx', 'Gz'],
+                                                             ["X(pi/4,Q0)", "Z(pi/2,Q0)"])
 
 _gscache = {("full", "auto"): _target_model}
+
+
+def processor_spec():
+    return target_model('static').create_processor_spec(None)
 
 
 def target_model(parameterization_type="full", sim_type="auto"):

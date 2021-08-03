@@ -22,14 +22,14 @@ class TestCoreMethods(AlgorithmsBase):
         self.assertAlmostEqual(mdl_lgst.frobeniusdist(mdl_lgst_verb),0)
 
         print("GG = ",mdl_lgst.default_gauge_group)
-        mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst,self.model, {'spam':1.0, 'gates': 1.0}, check_jac=True)
+        mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst, self.model, {'spam':1.0, 'gates': 1.0}, check_jac=True)
         mdl_clgst = pygsti.contract(mdl_lgst_go, "CPTP")
 
         # RUN BELOW LINES TO SEED SAVED GATESET FILES
         if regenerate_references():
-            pygsti.io.write_model(mdl_lgst,compare_files + "/lgst.model", "Saved LGST Model before gauge optimization")
-            pygsti.io.write_model(mdl_lgst_go,compare_files + "/lgst_go.model", "Saved LGST Model after gauge optimization")
-            pygsti.io.write_model(mdl_clgst,compare_files + "/clgst.model", "Saved LGST Model after G.O. and CPTP contraction")
+            pygsti.io.write_model(mdl_lgst, compare_files + "/lgst.model", "Saved LGST Model before gauge optimization")
+            pygsti.io.write_model(mdl_lgst_go, compare_files + "/lgst_go.model", "Saved LGST Model after gauge optimization")
+            pygsti.io.write_model(mdl_clgst, compare_files + "/clgst.model", "Saved LGST Model after G.O. and CPTP contraction")
 
         mdl_lgst_compare = pygsti.io.load_model(compare_files + "/lgst.model")
         mdl_lgst_go_compare = pygsti.io.load_model(compare_files + "/lgst_go.model")
@@ -41,18 +41,18 @@ class TestCoreMethods(AlgorithmsBase):
 
     def test_LGST_no_sample_error(self):
         #change rep-count type so dataset can hold fractional counts for sampleError = 'none'
-        oldType = pygsti.datasets.dataset.Repcount_type
-        pygsti.datasets.dataset.Repcount_type = np.float64
-        ds = pygsti.construction.simulate_data(self.datagen_gateset, self.lgstStrings,
-                                                    num_samples=10000, sample_error='none')
-        pygsti.datasets.dataset.Repcount_type = oldType
+        oldType = pygsti.data.dataset.Repcount_type
+        pygsti.data.dataset.Repcount_type = np.float64
+        ds = pygsti.data.simulate_data(self.datagen_gateset, self.lgstStrings,
+                                               num_samples=10000, sample_error='none')
+        pygsti.data.dataset.Repcount_type = oldType
 
         mdl_lgst = pygsti.run_lgst(ds, self.fiducials, self.fiducials, self.model, svd_truncate_to=4, verbosity=0)
         print("DATAGEN:")
         print(self.datagen_gateset)
         print("\nLGST RAW:")
         print(mdl_lgst)
-        mdl_lgst = pygsti.gaugeopt_to_target(mdl_lgst,self.datagen_gateset, {'spam':1.0, 'gates': 1.0}, check_jac=False)
+        mdl_lgst = pygsti.gaugeopt_to_target(mdl_lgst, self.datagen_gateset, {'spam':1.0, 'gates': 1.0}, check_jac=False)
         print("\nAfter gauge opt:")
         print(mdl_lgst)
         print(mdl_lgst.strdiff(self.datagen_gateset))
@@ -65,8 +65,8 @@ class TestCoreMethods(AlgorithmsBase):
         nSamplesList = np.array([ 16, 128, 1024, 8192 ])
         diffs = []
         for nSamples in nSamplesList:
-            ds = pygsti.construction.simulate_data(my_datagen_gateset, self.lgstStrings, nSamples,
-                                                        sample_error='binomial', seed=100)
+            ds = pygsti.data.simulate_data(my_datagen_gateset, self.lgstStrings, nSamples,
+                                                   sample_error='binomial', seed=100)
             mdl_lgst = pygsti.run_lgst(ds, self.fiducials, self.fiducials, self.model, svd_truncate_to=4, verbosity=0)
             mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst, my_datagen_gateset, {'spam':1.0, 'gate': 1.0}, check_jac=True)
             diffs.append( my_datagen_gateset.frobeniusdist(mdl_lgst_go) )

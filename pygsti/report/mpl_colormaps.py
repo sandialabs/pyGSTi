@@ -14,8 +14,8 @@ import gc as _gc
 
 import numpy as _np
 
-from .plothelpers import _eformat
-from ..circuits.circuit import Circuit as _Circuit
+from pygsti.report.plothelpers import _eformat
+from pygsti.circuits.circuit import Circuit as _Circuit
 
 try:
     import matplotlib as _matplotlib

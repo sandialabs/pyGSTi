@@ -13,8 +13,8 @@ Defines the ReportTable class
 
 from collections import OrderedDict as _OrderedDict
 
-from .convert import convert_dict as _convert_dict
-from .row import Row
+from pygsti.report.convert import convert_dict as _convert_dict
+from pygsti.report.row import Row
 
 
 class ReportTable(object):
