@@ -86,7 +86,7 @@ def _get_next_lbls(s, start, end, create_subcircuits, integerize_sslbls, segment
             if exponent == 0: interlayer_marker_inds = ()
             else:  # exponent > 1
                 base_marker_inds = interlayer_marker_inds[:]  # a new list
-                for k in range(1,exponent):
+                for k in range(1, exponent):
                     offset = len(lbls_list) * k
                     interlayer_marker_inds.extend(map(lambda x: x + offset, base_marker_inds))
 

@@ -163,7 +163,7 @@ def _op_seq_to_str(seq, line_labels, occurrence_id, compilable_layer_indices):
         else:
             marker = '|'; marked_set = uncompilable_set
 
-        str_processed = [(str(layer_el) + '~') if (i in compilable_set) else str(layer_el)
+        str_processed = [(str(layer_el) + marker) if (i in marked_set) else str(layer_el)
                          for i, layer_el in enumerate(processed_seq)]
         return ''.join(str_processed) + _op_seq_str_suffix(line_labels, occurrence_id)
 
@@ -455,8 +455,8 @@ class Circuit(object):
                 if compilable_layer_indices is None:  # Also acts as "auto"
                     compilable_layer_indices = chk_compilable_inds
                 elif compilable_layer_indices != chk_compilable_inds:
-                    raise ValueError(("Error intializing Circuit: "
-                                      " `compilable_layer_indices` and markers in `layer_labels` do not match: %s != %s")
+                    raise ValueError(("Error intializing Circuit: `compilable_layer_indices` and markers"
+                                      " in `layer_labels` do not match: %s != %s")
                                      % (compilable_layer_indices, chk_compilable_inds))
 
         if expand_subcircuits == "default":
@@ -506,8 +506,8 @@ class Circuit(object):
                 if compilable_layer_indices is None:  # Also acts as "auto"
                     compilable_layer_indices = chk_compilable_inds
                 elif compilable_layer_indices != chk_compilable_inds:
-                    raise ValueError(("Error intializing Circuit: "
-                                      " `compilable_layer_indices` and markers in `layer_labels` do not match: %s != %s")
+                    raise ValueError(("Error intializing Circuit:  `compilable_layer_indices` and markers"
+                                      " in `layer_labels` do not match: %s != %s")
                                      % (compilable_layer_indices, chk_compilable_inds))
 
         if layer_labels is None:
@@ -1686,9 +1686,9 @@ class Circuit(object):
         #Shift compilable layer indices as needed
         if len(self._compilable_layer_indices_tup) > 0:  # begins with __CMPLBL__
             deleted_indices = set(layers)
-            new_inds = list(filter(lambda x: x not in deleted_indices,  self._compilable_layer_indices_tup[1:]))
+            new_inds = list(filter(lambda x: x not in deleted_indices, self._compilable_layer_indices_tup[1:]))
             for deleted_i in reversed(sorted(deleted_indices)):
-                new_inds = [i if (i < deleted_i) else (i-1) for i in new_inds]  # Note: i never == deleted_i (filtered)
+                new_inds = [i if (i < deleted_i) else (i - 1) for i in new_inds]  # Note i never == deleted_i (filtered)
             self._compilable_layer_indices_tup = ('__CMPLBL__',) + tuple(new_inds)
 
     def delete_lines(self, lines, delete_straddlers=False):
@@ -2896,7 +2896,7 @@ class Circuit(object):
         self._labels = list(reversed(self._labels))  # reverses the layer order
         #FUTURE: would need to reverse_inplace each layer too, if layer can have *sublayers*
 
-        if len(self._compilable_layer_indices_tup) > 0: # begins with __CMPLBL__
+        if len(self._compilable_layer_indices_tup) > 0:  # begins with __CMPLBL__
             depth = len(self._labels)
             self._compilable_layer_indices_tup = ('__CMPLBL__',) \
                 + tuple([(depth - 1 - i) for i in self._compilable_layer_indices_tup[1:]])
