@@ -56,8 +56,9 @@ class ParserTester(StdInputBase, IOBase):
                         ("rho0*Gx*Mdefault", ('rho0', 'Gx', 'Mdefault'))]
 
         for s, expected in string_tests:
-            result, line_labels, occurrence_id = self.std.parse_circuit_raw(s, lookup=lkup)
+            result, line_labels, occurrence_id, compilable_indices = self.std.parse_circuit_raw(s, lookup=lkup)
             self.assertEqual(line_labels, None)
+            self.assertEqual(compilable_indices, None)
             circuit_result = Circuit(result, line_labels="auto", expand_subcircuits=True)
             #use "auto" line labels since none are parsed.
             self.assertEqual(circuit_result.tup, expected)
@@ -111,11 +112,11 @@ class ParserTester(StdInputBase, IOBase):
                           "MyFav (G1G2)^3"]
         self.assertEqual(
             self.std.parse_dictline(dictline_tests[0]),
-            ('1', ('G1', 'G2', 'G3'), 'G1G2G3', None, None)
+            ('1', ('G1', 'G2', 'G3'), 'G1G2G3', None, None, None)
         )
         self.assertEqual(
             self.std.parse_dictline(dictline_tests[1]),
-            ('MyFav', (CircuitLabel('', ('G1', 'G2'), None, 3),), '(G1G2)^3', None, None)
+            ('MyFav', (CircuitLabel('', ('G1', 'G2'), None, 3),), '(G1G2)^3', None, None, None)
         )
 
 
