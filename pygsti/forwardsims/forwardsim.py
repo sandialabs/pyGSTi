@@ -107,8 +107,11 @@ class ForwardSimulator(object):
     @model.setter
     def model(self, val):
         self._model = val
-        evotype = None if val is None else self._model.evotype
-        self._set_evotype(evotype)  # alert the class of the evotype (allows loading evotype-specific calc functions)
+        try:
+            evotype = None if val is None else self._model.evotype
+            self._set_evotype(evotype)  # alert the class of the evotype (allows loading evotype-specific calc functions)
+        except AttributeError:
+            pass  # not all models have an evotype (OK)
 
     def _set_evotype(self, evotype):
         """ Called when the evotype being used (defined by the parent model) changes.
