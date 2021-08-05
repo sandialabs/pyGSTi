@@ -32,32 +32,40 @@ cdef class OpRep(_basereps_cython.OpRep):
     def __reduce__(self):
         return (OpRep, ())
 
+    def __pygsti_reduce__(self):
+        return self.__reduce__()
+
     def __dealloc__(self):
         if self.c_rep != NULL:
             del self.c_rep
 
     @property
     def dim(self):
-        return self.c_rep._dim
+        if self.c_rep == NULL:  # OpRepExpErrorgen case
+            return self.state_space.udim
+        else:
+            return self.c_rep._dim
 
     def acton(self, StateRep state not None):
-        cdef StateRep out_state = StateRep(_np.empty(self.c_rep._dim, dtype=_np.complex128))
+        cdef StateRep out_state = StateRepDensePure(_np.empty(self.c_rep._dim, dtype=_np.complex128),
+                                                    state.basis, self.state_space)
         self.c_rep.acton(state.c_state, out_state.c_state)
         return out_state
 
     def adjoint_acton(self, StateRep state not None):
-        cdef StateRep out_state = StateRep(_np.empty(self.c_rep._dim, dtype=_np.complex128))
+        cdef StateRep out_state = StateRepDensePure(_np.empty(self.c_rep._dim, dtype=_np.complex128),
+                                                    state.basis, self.state_space)
         self.c_rep.adjoint_acton(state.c_state, out_state.c_state)
         return out_state
 
     def aslinearoperator(self):
         def mv(v):
             if v.ndim == 2 and v.shape[1] == 1: v = v[:,0]
-            in_state = StateRep(_np.ascontiguousarray(v, _np.complex128))
+            in_state = StateRepDensePure(_np.ascontiguousarray(v, _np.complex128), None, self.state_space)
             return self.acton(in_state).to_dense('Hilbert')
         def rmv(v):
             if v.ndim == 2 and v.shape[1] == 1: v = v[:,0]
-            in_state = StateRep(_np.ascontiguousarray(v, _np.complex128))
+            in_state = StateRepDensePure(_np.ascontiguousarray(v, _np.complex128), None, self.state_space)
             return self.adjoint_acton(in_state).to_dense('Hilbert')
         dim = self.c_rep._dim
         return LinearOperator((dim,dim), matvec=mv, rmatvec=rmv, dtype=_np.complex128)
@@ -98,8 +106,6 @@ cdef class OpRepDenseUnitary(OpRep):
                 (self.base, self.basis, self.state_space, self.base.flags.writeable))
 
     def __setstate__(self, state):
-        assert(self.c_rep == NULL)
-
         data, basis, state_space, writable = state
         self.base = _np.require(data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
         self.base.flags.writeable = writable
@@ -141,6 +147,9 @@ cdef class OpRepStandard(OpRepDenseUnitary):
 
     def __reduce__(self):
         return (OpRepStandard, (self.name, self.basis, self.state_space))
+
+    def __setstate__(self, state):
+        pass  # must define this becuase base class does - need to override it
 
 
 #class OpRepStochastic(OpRepDense):
@@ -218,7 +227,7 @@ cdef class OpRepEmbedded(OpRep):
         tensorProdBlkLabels = state_space.tensor_product_block_labels(iTensorProdBlk)
         # count possible *density-matrix-space* indices of each component of the tensor product block
         cdef _np.ndarray[_np.int64_t, ndim=1, mode='c'] num_basis_els = \
-            _np.array([state_space.label_dimension(l) for l in tensorProdBlkLabels], _np.int64)
+            _np.array([state_space.label_udimension(l) for l in tensorProdBlkLabels], _np.int64)
 
         # Separate the components of the tensor product that are not operated on, i.e. that our
         # final map just acts as identity w.r.t.
@@ -234,7 +243,7 @@ cdef class OpRepEmbedded(OpRep):
         cdef INT ncomponents_in_active_block = len(state_space.tensor_product_block_labels(active_block_index))
         cdef INT embedded_dim = embedded_rep.dim
         cdef _np.ndarray[_np.int64_t, ndim=1, mode='c'] blocksizes = \
-            _np.array([_np.product(state_space.tensor_product_block_dimensions(k))
+            _np.array([_np.product(state_space.tensor_product_block_udimensions(k))
                        for k in range(nblocks)], _np.int64)
         cdef INT i, j
 
@@ -343,16 +352,48 @@ cdef class OpRepRepeated(OpRep):
         return OpRepRepeated(self.repeated_rep.copy(), self.num_repetitions, self.state_space.copy())
 
 
+cdef class OpRepExpErrorgen(OpRep):
+    cdef public object errorgen_rep
+
+    def __init__(self, errorgen_rep):
+        self.errorgen_rep = errorgen_rep
+        self.state_space = errorgen_rep.state_space
+        self.c_rep = NULL  # cannot act with this rep type for now
+        # (really we could flesh it out more and fail acton() when the errorgen
+        #  cannot be exponentiated/made dense?)
+
+    def errgenrep_has_changed(self, onenorm_upperbound):
+        pass
+
+    def acton(self, StateRep state not None):
+        raise AttributeError("Cannot currently act with statevec.OpRepExpErrorgen - for terms only!")
+
+    def adjoint_acton(self, StateRep state not None):
+        raise AttributeError("Cannot currently act with statevec.OpRepExpErrorgen - for terms only!")
+
+    def __reduce__(self):
+        return (OpRepExpErrorgen, (self.errorgen_rep,))
+
+    def copy(self):
+        return _copy.deepcopy(self)  # I think this should work using reduce/setstate framework TODO - test and maybe put in base class?
+
+
 cdef class OpRepLindbladErrorgen(OpRep):
     cdef public object Lterms
     cdef public object Lterm_coeffs
     cdef public object LtermdictAndBasis
 
     def __cinit__(self, lindblad_term_dict, basis, state_space):
-        super(OpRepLindbladErrorgen, self).__init__(state_space)
         self.Lterms = None
         self.Lterm_coeffs = None
         self.LtermdictAndBasis = (lindblad_term_dict, basis)
+        self.state_space = state_space
+
+    def acton(self, StateRep state not None):
+        raise AttributeError("Cannot currently act with statevec.OpRepLindbladErrorgen - for terms only!")
+
+    def adjoint_acton(self, StateRep state not None):
+        raise AttributeError("Cannot currently act with statevec.OpRepLindbladErrorgen - for terms only!")
 
     def __reduce__(self):
         return (OpRepLindbladErrorgen, (self.LtermdictAndBasis[0], self.LtermdictAndBasis[1], self.state_space))

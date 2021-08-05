@@ -23,18 +23,102 @@ from .experrorgenop import ExpErrorgenOp
 from .fullarbitraryop import FullArbitraryOp
 from .fulltpop import FullTPOp
 from .fullunitaryop import FullUnitaryOp
-from .lindbladerrorgen import LindbladErrorgen
+from .lindbladerrorgen import LindbladErrorgen, LindbladParameterization
 from .linearop import LinearOperator
 from .linearop import finite_difference_deriv_wrt_params, finite_difference_hessian_wrt_params
 from .lpdenseop import LinearlyParamArbitraryOp
-from .opfactory import OpFactory
+from .opfactory import OpFactory, EmbeddedOpFactory, EmbeddingOpFactory, ComposedOpFactory
+from .repeatedop import RepeatedOp
 from .staticarbitraryop import StaticArbitraryOp
 from .staticcliffordop import StaticCliffordOp
 from .staticstdop import StaticStandardOp
 from .staticunitaryop import StaticUnitaryOp
 from .stochasticop import StochasticNoiseOp
+from pygsti.baseobjs import statespace as _statespace
 from pygsti.tools import basistools as _bt
 from pygsti.tools import optools as _ot
+
+
+def create_from_unitary_mx(unitary_mx, op_type, basis='pp', stdname=None, evotype='default', state_space=None):
+    """ TODO: docstring - note that op_type can be a list/tuple of types in order of precedence """
+    op_type_preferences = (op_type,) if isinstance(op_type, str) else op_type
+    U = unitary_mx
+    if state_space is None:
+        state_space = _statespace.default_space_for_udim(U.shape[0])
+
+    for typ in op_type_preferences:
+        try:
+            if typ == 'static standard' and stdname is not None:
+                op = StaticStandardOp(stdname, basis, evotype, state_space)
+            elif typ == 'static clifford':
+                op = StaticCliffordOp(U, None, basis, evotype, state_space)
+            elif typ == 'static unitary':
+                op = StaticUnitaryOp(U, basis, evotype, state_space)
+            elif typ == "full unitary":
+                op = FullUnitaryOp(U, basis, evotype, state_space)
+            elif typ in ('static', 'full', 'full TP', 'linear'):
+                superop_mx = _bt.change_basis(_ot.unitary_to_process_mx(U), 'std', basis)
+                op = create_from_superop_mx(superop_mx, op_type, basis, stdname, evotype, state_space)
+            elif _ot.is_valid_lindblad_paramtype(typ):  # maybe "lindblad XXX" where XXX is a valid lindblad type?
+                if _np.allclose(U, _np.identity(U.shape[0], 'd')):
+                    unitary_postfactor = None
+                else:
+                    unitary_postfactor = create_from_unitary_mx(
+                        U, ('static standard', 'static clifford', 'static unitary'),
+                        basis, stdname, evotype, state_space)
+
+                proj_basis = 'pp' if state_space.is_entirely_qubits else basis
+                errorgen = LindbladErrorgen.from_error_generator(state_space.dim, typ, proj_basis, basis,
+                                                                 truncate=True, evotype=evotype,
+                                                                 state_space=state_space)
+
+                op = ExpErrorgenOp(errorgen) if (unitary_postfactor is None) \
+                    else ComposedOp([unitary_postfactor, ExpErrorgenOp(errorgen)])
+
+                if op.dim <= 16:  # only do this for up to 2Q operations, otherwise to_dense is too expensive
+                    expected_superop_mx = _bt.change_basis(_ot.unitary_to_process_mx(U), 'std', basis)
+                    assert (_np.linalg.norm(op.to_dense('HilbertSchmidt') - expected_superop_mx) < 1e-6), \
+                        "Failure to create Lindblad operation (maybe due the complex log's branch cut?)"
+            else:
+                raise ValueError("Unknown operation type '%s'!" % str(typ))
+
+            return op  # if we get to here, then we've successfully created an op to return
+        except (ValueError, AssertionError, AttributeError):
+            pass  # move on to next type
+
+    raise ValueError("Could not create an operator of type(s) %s from the given unitary op!" % (str(op_type)))
+
+
+def create_from_superop_mx(superop_mx, op_type, basis='pp', stdname=None, evotype='default', state_space=None):
+    op_type_preferences = (op_type,) if isinstance(op_type, str) else op_type
+
+    for typ in op_type_preferences:
+        try:
+            if typ == "static":  # "static arbitrary"?
+                op = StaticArbitraryOp(superop_mx, evotype, state_space)
+            elif typ == "full":  # "full arbitrary"?
+                op = FullArbitraryOp(superop_mx, evotype, state_space)
+            elif typ == "full TP":
+                op = FullTPOp(superop_mx, evotype, state_space)
+            elif typ == "linear":  # "linear arbitrary"?
+                real = _np.isclose(_np.linalg.norm(superop_mx.imag), 0)
+                op = LinearlyParamArbitraryOp(superop_mx, _np.array([]), {}, real, evotype, state_space)
+            else:
+                #Anything else we try to convert to a unitary and convert the unitary
+                from pygsti.tools import jamiolkowski as _jt; RANK_TOL = 1e-6
+                J = _jt.fast_jamiolkowski_iso_std(superop_mx, op_mx_basis=basis)  # Choi mx basis doesn't matter
+                if _np.linalg.matrix_rank(J, RANK_TOL) > 1:
+                    raise ValueError("`superop_mx` is not a unitary action!")
+
+                std_superop_mx = _bt.change_basis(superop_mx, basis, 'std')
+                unitary_mx = _ot.process_mx_to_unitary(std_superop_mx)
+                op = create_from_unitary_mx(unitary_mx, typ, basis, stdname, evotype, state_space)
+
+            return op  # if we get to here, then we've successfully created an op to return
+        except (ValueError, AssertionError):
+            pass  # move on to next type
+
+    raise ValueError("Could not create an operator of type(s) %s from the given superop!" % (str(op_type)))
 
 
 def convert(operation, to_type, basis, extra=None):
@@ -49,7 +133,7 @@ def convert(operation, to_type, basis, extra=None):
     operation : LinearOperator
         LinearOperator to convert
 
-    to_type : {"full","TP","static","static unitary","clifford",LINDBLAD}
+    to_type : {"full","full TP","static","static unitary","clifford",LINDBLAD}
         The type of parameterizaton to convert to.  "LINDBLAD" is a placeholder
         for the various Lindblad parameterization types.  See
         :method:`Model.set_all_parameterizations` for more details.
@@ -68,92 +152,87 @@ def convert(operation, to_type, basis, extra=None):
         The converted operation, usually a distinct
         object from the operation object passed as input.
     """
-    if to_type == "full":
-        if isinstance(operation, FullArbitraryOp):
-            return operation  # no conversion necessary
-        else:
-            return FullArbitraryOp(operation.to_dense(), operation.evotype, operation.state_space)
+    to_types = to_type if isinstance(to_type, (tuple, list)) else (to_type,)  # HACK to support multiple to_type values
+    for to_type in to_types:
+        try:
+            if to_type == "full":
+                if isinstance(operation, FullArbitraryOp):
+                    return operation  # no conversion necessary
+                else:
+                    return FullArbitraryOp(operation.to_dense(), operation.evotype, operation.state_space)
 
-    elif to_type == "TP":
-        if isinstance(operation, FullTPOp):
-            return operation  # no conversion necessary
-        else:
-            return FullTPOp(operation.to_dense(), operation.evotype, operation.state_space)
-            # above will raise ValueError if conversion cannot be done
+            elif to_type == "full TP":
+                if isinstance(operation, FullTPOp):
+                    return operation  # no conversion necessary
+                else:
+                    return FullTPOp(operation.to_dense(), operation.evotype, operation.state_space)
+                    # above will raise ValueError if conversion cannot be done
 
-    elif to_type == "linear":
-        if isinstance(operation, LinearlyParamArbitraryOp):
-            return operation  # no conversion necessary
-        elif isinstance(operation, StaticArbitraryOp):
-            real = _np.isclose(_np.linalg.norm(operation.imag), 0)
-            return LinearlyParamArbitraryOp(operation.to_dense(), _np.array([]), {}, real,
-                                            operation.evotype, operation.state_space)
-        else:
-            raise ValueError("Cannot convert type %s to LinearlyParamArbitraryOp"
-                             % type(operation))
+            elif to_type == "linear":
+                if isinstance(operation, LinearlyParamArbitraryOp):
+                    return operation  # no conversion necessary
+                elif isinstance(operation, StaticArbitraryOp):
+                    real = _np.isclose(_np.linalg.norm(operation.imag), 0)
+                    return LinearlyParamArbitraryOp(operation.to_dense(), _np.array([]), {}, real,
+                                                    operation.evotype, operation.state_space)
+                else:
+                    raise ValueError("Cannot convert type %s to LinearlyParamArbitraryOp"
+                                     % type(operation))
 
-    elif to_type == "static":
-        if isinstance(operation, StaticArbitraryOp):
-            return operation  # no conversion necessary
-        else:
-            return StaticArbitraryOp(operation.to_dense(), operation.evotype, operation.state_space)
+            elif to_type == "static":
+                if isinstance(operation, StaticArbitraryOp):
+                    return operation  # no conversion necessary
+                else:
+                    return StaticArbitraryOp(operation.to_dense(), operation.evotype, operation.state_space)
 
-    elif to_type == "static unitary":
-        op_std = _bt.change_basis(operation, basis, 'std')
-        unitary = _ot.process_mx_to_unitary(op_std)
-        return StaticUnitaryOp(unitary, basis, operation.evotype, operation.state_space)
+            elif to_type == "static unitary":
+                op_std = _bt.change_basis(operation, basis, 'std')
+                unitary = _ot.process_mx_to_unitary(op_std)
+                return StaticUnitaryOp(unitary, basis, operation.evotype, operation.state_space)
 
-    elif _ot.is_valid_lindblad_paramtype(to_type):
-        # e.g. "H+S terms","H+S clifford terms"
+            elif _ot.is_valid_lindblad_paramtype(to_type):
 
-        #REMOVE
-        #_, evotype = _ot.split_lindblad_paramtype(to_type)
-        #LindbladOpType = LindbladOp
-        #if evotype in ("svterm", "cterm") else \
-        #    LindbladDenseOp
+                unitary_postfactor = None
+                if isinstance(operation, (FullArbitraryOp, FullTPOp, StaticArbitraryOp)):
+                    from pygsti.tools import jamiolkowski as _jt
+                    RANK_TOL = 1e-6  # Below:  Choi mx basis doesn't matter
+                    J = _jt.fast_jamiolkowski_iso_std(operation.to_dense(), op_mx_basis=basis)
+                    if _np.linalg.matrix_rank(J, RANK_TOL) == 1:  # when 'operation' is unitary, separate it
+                        unitary_op = _ot.process_mx_to_unitary(_bt.change_basis(operation.to_dense(), basis, 'std'))
+                        unitary_postfactor = StaticUnitaryOp(unitary_op, basis, operation.evotype,
+                                                             operation.state_space)
+                elif isinstance(operation, StaticUnitaryOp):
+                    unitary_postfactor = operation.copy()
 
-        unitary_postfactor = None
-        if isinstance(operation, (FullArbitraryOp, FullTPOp, StaticArbitraryOp)):
-            from pygsti.tools import jamiolkowski as _jt
-            RANK_TOL = 1e-6
-            J = _jt.fast_jamiolkowski_iso_std(operation.to_dense(), op_mx_basis=basis)  # Choi mx basis doesn't matter
-            if _np.linalg.matrix_rank(J, RANK_TOL) == 1:  # when 'operation' is unitary, separate it
-                unitary_op = _ot.process_mx_to_unitary(_bt.change_basis(operation.to_dense(), basis, 'std'))
-                unitary_postfactor = StaticUnitaryOp(unitary_op, basis, operation.evotype, operation.state_space)
+                proj_basis = 'pp' if operation.state_space.is_entirely_qubits else basis
+                if unitary_postfactor is not None:
+                    errorgen = LindbladErrorgen.from_error_generator(operation.state_space.dim, to_type, proj_basis,
+                                                                     basis, truncate=True, evotype=operation.evotype,
+                                                                     state_space=operation.state_space)
+                    ret = ComposedOp([unitary_postfactor, ExpErrorgenOp(errorgen)])
+                else:
+                    errorgen = LindbladErrorgen.from_operation_matrix(operation.to_dense('HilbertSchmidt'), to_type,
+                                                                      proj_basis, mx_basis=basis, truncate=True,
+                                                                      evotype=operation.evotype,
+                                                                      state_space=operation.state_space)
+                    ret = ExpErrorgenOp(errorgen)
 
-        proj_basis = 'pp' if operation.state_space.is_entirely_qubits else basis
-        nonham_mode, param_mode, use_ham_basis, use_nonham_basis = \
-            LindbladErrorgen.decomp_paramtype(to_type)
-        ham_basis = proj_basis if use_ham_basis else None
-        nonham_basis = proj_basis if use_nonham_basis else None
+                if ret.dim <= 16:  # only do this for up to 2Q operations, otherwise to_dense is too expensive
+                    assert(_np.linalg.norm(operation.to_dense('HilbertSchmidt') - ret.to_dense('HilbertSchmidt'))
+                           < 1e-6), "Failure to create CPTP operation (maybe due the complex log's branch cut?)"
+                return ret
 
-        if unitary_postfactor is not None:
-            errorgen = LindbladErrorgen.from_error_generator(_np.zeros((operation.state_space.dim,
-                                                                        operation.state_space.dim), 'd'),
-                                                             ham_basis, nonham_basis, param_mode, nonham_mode,
-                                                             basis, truncate=True, evotype=operation.evotype)
-            ret = ComposedOp([unitary_postfactor, ExpErrorgenOp(errorgen)])
-        else:
-            errorgen = LindbladErrorgen.from_operation_matrix(operation.to_dense(), ham_basis, nonham_basis,
-                                                              param_mode, nonham_mode, truncate=True, mx_basis=basis,
-                                                              evotype=operation.evotype)
-            ret = ExpErrorgenOp(errorgen)
+            elif to_type == "static clifford":
+                if isinstance(operation, StaticCliffordOp):
+                    return operation  # no conversion necessary
 
-        if ret.dim <= 16:  # only do this for up to 2Q operations, otherwise to_dense is too expensive
-            assert(_np.linalg.norm(operation.to_dense() - ret.to_dense()) < 1e-6), \
-                "Failure to create CPTP operation (maybe due the complex log's branch cut?)"
-        return ret
+                # assume operation represents a unitary op (otherwise
+                #  would need to change Model dim, which isn't allowed)
+                return StaticCliffordOp(operation)
+        except:
+            pass  # try next to_type
 
-    elif to_type == "static clifford":
-        if isinstance(operation, StaticCliffordOp):
-            return operation  # no conversion necessary
-
-        # assume operation represents a unitary op (otherwise
-        #  would need to change Model dim, which isn't allowed)
-        return StaticCliffordOp(operation)
-
-    else:
-        raise ValueError("Invalid to_type argument: %s" % to_type)
+    raise ValueError("Could not convert operation to to type(s): %s" % str(to_types))
 
 
 def check_deriv_wrt_params(operation, deriv_to_check=None, wrt_filter=None, eps=1e-7):

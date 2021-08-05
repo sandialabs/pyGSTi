@@ -28,15 +28,15 @@ from .opreps cimport OpRep, OpCRep
 ctypedef long long INT
 ctypedef unsigned long long UINT
 
-cdef extern from "statecreps.h" namespace "CReps":
+cdef extern from "statecreps.h" namespace "CReps_densitymx":
     cdef cppclass StateCRep:
         pass
 
-cdef extern from "opcreps.h" namespace "CReps":
+cdef extern from "opcreps.h" namespace "CReps_densitymx":
     cdef cppclass OpCRep:
         pass
     
-cdef extern from "effectcreps.h" namespace "CReps":
+cdef extern from "effectcreps.h" namespace "CReps_densitymx":
     cdef cppclass EffectCRep:
         EffectCRep() except +
         EffectCRep(INT) except +

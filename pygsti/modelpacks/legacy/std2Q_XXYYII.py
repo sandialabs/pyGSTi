@@ -251,7 +251,7 @@ germs_lite = _strc.to_circuits(
      ], line_labels=('*',))
 
 #Construct the target model
-_target_model = _setc.create_explicit_model(
+_target_model = _setc.create_explicit_model_from_expressions(
     [('Q0', 'Q1')], ['Gii', 'Gix', 'Giy', 'Gxi', 'Gyi', 'Gxx', 'Gyy', 'Gxy', 'Gyx'],
     ["I(Q0):I(Q1)", "I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)",
      "Y(pi/2,Q0):I(Q1)", "X(pi/2,Q0):X(pi/2,Q1)", "Y(pi/2,Q0):Y(pi/2,Q1)",
@@ -259,6 +259,10 @@ _target_model = _setc.create_explicit_model(
     effect_labels=['00', '01', '10', '11'], effect_expressions=["0", "1", "2", "3"])
 
 _gscache = {("full", "auto"): _target_model}
+
+
+def processor_spec():
+    return target_model('static').create_processor_spec(None)
 
 
 def target_model(parameterization_type="full", sim_type="auto"):

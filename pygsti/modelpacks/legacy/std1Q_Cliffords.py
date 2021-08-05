@@ -40,9 +40,13 @@ expressions = ["I(Q0)", "X(pi/2,Q0):Y(pi/2,Q0)", "Y(-pi/2,Q0):X(-pi/2,Q0)",
                "X(pi,Q0):Y(-pi/2,Q0)", "Y(pi,Q0):X(pi/2,Q0)", "X(pi/2,Q0):Y(-pi/2,Q0):X(pi/2,Q0)",
                "Y(pi/2,Q0)", "Y(pi,Q0):X(-pi/2,Q0)", "X(-pi/2,Q0):Y(pi/2,Q0):X(pi/2,Q0)"]
 
-_target_model = _setc.create_explicit_model([('Q0',)], gates, expressions)
+_target_model = _setc.create_explicit_model_from_expressions([('Q0',)], gates, expressions)
 
 _gscache = {("full", "auto"): _target_model}
+
+
+def processor_spec():
+    return target_model('static').create_processor_spec(None)
 
 
 def target_model(parameterization_type="full", sim_type="auto"):

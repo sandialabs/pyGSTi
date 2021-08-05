@@ -184,7 +184,6 @@ def mapfill_probs_atom(fwdsim, np.ndarray[double, mode="c", ndim=1] array_to_fil
                          elabel_indices_per_circuit, final_indices_per_circuit, fwdsim.model.dim)
 
     free_rhocache(rho_cache)  #delete cache entries
-    #REMOVE if resource_alloc.comm is not None: resource_alloc.comm.barrier()  # ??
 
 
 cdef dm_mapfill_probs(double[:] array_to_fill,
@@ -280,13 +279,12 @@ cdef dm_mapfill_probs(double[:] array_to_fill,
 
 
 def mapfill_dprobs_atom(fwdsim,
-                           np.ndarray[double, ndim=2] array_to_fill,
-                           dest_indices,
-                           dest_param_indices,
-                           layout_atom, param_indices, resource_alloc):
+                        np.ndarray[double, ndim=2] array_to_fill,
+                        dest_indices,
+                        dest_param_indices,
+                        layout_atom, param_indices, resource_alloc):
 
     cdef double eps = 1e-7 #hardcoded?
-    #REMOVE if resource_alloc.comm is not None: resource_alloc.comm.barrier()  # ??
 
     if param_indices is None:
         param_indices = list(range(fwdsim.model.num_params))
@@ -295,10 +293,6 @@ def mapfill_dprobs_atom(fwdsim,
 
     param_indices = _slct.to_array(param_indices)
     dest_param_indices = _slct.to_array(dest_param_indices)
-
-    #TODO REMOVE: it seems fine, and even beneficial, that dest_indices is a slice
-    #dest_indices = _slct.to_array(dest_indices)  # make sure this is an array and not a slice
-    #dest_indices = np.ascontiguousarray(dest_indices)
 
     #Get (extension-type) representation objects
     # NOTE: the circuit_layer_operator(lbl) functions cache the returned operation
@@ -325,13 +319,6 @@ def mapfill_dprobs_atom(fwdsim,
     cdef vector[vector[INT]] elabel_indices_per_circuit = convert_dict_of_intlists(layout_atom.elbl_indices_by_expcircuit)
     cdef vector[vector[INT]] final_indices_per_circuit = convert_dict_of_intlists(layout_atom.elindices_by_expcircuit)
 
-    #REMOVE - we don't do any further distribution here
-    #all_slices, my_slice, owners, sub_resource_alloc = \
-    #    _mpit.distribute_slice(slice(0, len(param_indices)), resource_alloc)
-    #my_param_indices = param_indices[my_slice]
-    #st = my_slice.start  # beginning of where my_param_indices results get placed into dpr_cache
-
-    #REMOVE if sub_resource_alloc.comm is None or sub_resource_alloc.comm.rank == 0:  # only compute on 0th rank
     orig_vec = fwdsim.model.to_vector().copy()
     fwdsim.model.from_vector(orig_vec, close=False)  # ensure we call with close=False first
 
@@ -347,7 +334,7 @@ def mapfill_dprobs_atom(fwdsim,
     #Get a map from global parameter indices to the desired
     # final index within array_to_fill
     iParamToFinal = {i: dest_index for i, dest_index in zip(param_indices, dest_param_indices)}
-    
+
     for i in range(fwdsim.model.num_params):
         #print("dprobs cache %d of %d" % (i,self.Np))
         if i in iParamToFinal:
@@ -433,7 +420,7 @@ def mapfill_TDloglpp_terms(fwdsim, array_to_fill, dest_indices, num_outcomes, la
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
 def mapfill_TDterms(fwdsim, objective, array_to_fill, dest_indices, num_outcomes,
-                       layout_atom, dataset_rows, comm, outcomes_cache, double fnarg1, double fnarg2):
+                    layout_atom, dataset_rows, comm, outcomes_cache, double fnarg1, double fnarg2):
 
     cdef INT i, j, k, l, kinit, nTotOutcomes
     cdef double cur_probtotal, t, t0, n_i, n, N  # note: n, N can be a floats!
@@ -619,7 +606,7 @@ def mapfill_timedep_dterms(fwdsim, array_to_fill, dest_indices, dest_param_indic
     _mpit.gather_slices(all_slices, owners, array_to_fill, [], axes=1, comm=comm)
 
     #REMOVE
-    # DEBUG LINE USED FOR MONITORION N-QUBIT GST TESTS
+    # DEBUG LINE USED FOR MONITORING N-QUBIT GST TESTS
     #print("DEBUG TIME: dpr_cache(Np=%d, dim=%d, cachesize=%d, treesize=%d, napplies=%d) in %gs" %
     #      (fwdsim.model.num_params, fwdsim.model.dim, cacheSize, len(layout_atom), layout_atom.get_num_applies(), _time.time()-tStart)) #DEBUG
 

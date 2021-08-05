@@ -6,13 +6,11 @@ import unittest
 import pygsti
 import numpy as np
 from pygsti.modelpacks.legacy import std1Q_XYI
-from pygsti.objects import Label as L
-import pygsti.construction as pc
 
 from ..testutils import BaseTestCase
 
 
-class MyTimeDependentIdle(pygsti.obj.DenseOperator):
+class MyTimeDependentIdle(pygsti.modelmembers.operations.DenseOperator):
     """And idle that depolarizes over time with a parameterized rate"""
     def __init__(self, initial_depol_rate):
         #initialize with no noise
@@ -40,10 +38,11 @@ class MyTimeDependentIdle(pygsti.obj.DenseOperator):
 
         # .base is a member of DenseOperator and is a numpy array that is
         # the dense Pauli transfer matrix of this operator
-        self.base[:,:] = np.array([[1,   0,   0,   0],
+        self._ptr[:,:] = np.array([[1,   0,   0,   0],
                                    [0,   a,   0,   0],
                                    [0,   0,   a,   0],
                                    [0,   0,   0,   a]],'d')
+        self._ptr_has_changed()
 
     def transform(self, S):
         # Update self with inverse(S) * self * S (used in gauge optimization)
@@ -56,12 +55,12 @@ class TimeDependentTestCase(BaseTestCase):
         super(TimeDependentTestCase, self).setUp()
 
     def test_time_dependent_datagen(self):
-        mdl = std1Q_XYI.target_model("TP",sim_type="map")
+        mdl = std1Q_XYI.target_model("full TP",sim_type="map")
         mdl.operations['Gi'] = MyTimeDependentIdle(1.0)
 
         #Create a time-dependent dataset (simulation of time-dependent model):
-        circuits = std1Q_XYI.prepStrs + pygsti.construction.to_circuits([('Gi',), ('Gi', 'Gx', 'Gi', 'Gx')]) # just pick some circuits
-        ds = pygsti.construction.simulate_data(mdl, circuits, num_samples=100,
+        circuits = std1Q_XYI.prepStrs + pygsti.circuits.to_circuits([('Gi',), ('Gi', 'Gx', 'Gi', 'Gx')]) # just pick some circuits
+        ds = pygsti.data.simulate_data(mdl, circuits, num_samples=100,
                                                sample_error='none', seed=1234, times=[0,0.1,0.2])
 
         self.assertArraysEqual(ds[('Gi',)].time, np.array([0.,  0.,  0.1, 0.1, 0.2, 0.2]))
@@ -69,7 +68,7 @@ class TimeDependentTestCase(BaseTestCase):
         self.assertArraysEqual(ds[('Gi',)].outcomes, [('0',), ('1',), ('0',), ('1',), ('0',), ('1',)])
 
         # sparse data
-        ds2 = pygsti.construction.simulate_data(mdl, circuits, num_samples=100,
+        ds2 = pygsti.data.simulate_data(mdl, circuits, num_samples=100,
                                                 sample_error='none', seed=1234, times=[0,0.1,0.2],
                                                 record_zero_counts=False)
         self.assertArraysEqual(ds2[('Gi',)].time, np.array([0.,  0.1, 0.1, 0.2, 0.2]))
@@ -83,21 +82,21 @@ class TimeDependentTestCase(BaseTestCase):
         germs = std1Q_XYI.germs
         maxLengths = [1, 2]
 
-        target_model = std1Q_XYI.target_model("TP", sim_type="map")
+        target_model = std1Q_XYI.target_model("full TP", sim_type="map")
         mdl_datagen = target_model.depolarize(op_noise=0.01, spam_noise=0.001)
-        edesign = pygsti.protocols.StandardGSTDesign(target_model, prep_fiducials,
+        edesign = pygsti.protocols.StandardGSTDesign(target_model.create_processor_spec(), prep_fiducials,
                                                      meas_fiducials, germs, maxLengths)
 
         # *sparse*, time-independent data
-        ds = pygsti.construction.simulate_data(mdl_datagen, edesign.all_circuits_needing_data, num_samples=10,
+        ds = pygsti.data.simulate_data(mdl_datagen, edesign.all_circuits_needing_data, num_samples=10,
                                                sample_error="binomial", seed=1234, times=[0],
                                                record_zero_counts=False)
         data = pygsti.protocols.ProtocolData(edesign, ds)
 
-        target_model.sim = pygsti.objects.MapForwardSimulator(max_cache_size=0)  # No caching allowed for time-dependent calcs
+        target_model.sim = pygsti.forwardsims.MapForwardSimulator(max_cache_size=0)  # No caching allowed for time-dependent calcs
         self.assertEqual(ds.degrees_of_freedom(aggregate_times=False), 126)
 
-        builders = pygsti.protocols.GSTObjFnBuilders([pygsti.objects.TimeDependentPoissonPicLogLFunction.builder()], [])
+        builders = pygsti.protocols.GSTObjFnBuilders([pygsti.objectivefns.TimeDependentPoissonPicLogLFunction.builder()], [])
         gst = pygsti.protocols.GateSetTomography(target_model, gaugeopt_suite=None,
                                                  objfn_builders=builders)
         results = gst.run(data)
@@ -127,22 +126,22 @@ class TimeDependentTestCase(BaseTestCase):
         germs = std1Q_XYI.germs
         maxLengths = [1, 2]
 
-        target_model = std1Q_XYI.target_model("TP",sim_type="map")
+        target_model = std1Q_XYI.target_model("full TP",sim_type="map")
         mdl_datagen = target_model.depolarize(op_noise=0.01, spam_noise=0.001)
         mdl_datagen.operations['Gi'] = MyTimeDependentIdle(1.0)
-        edesign = pygsti.protocols.StandardGSTDesign(target_model, prep_fiducials,
+        edesign = pygsti.protocols.StandardGSTDesign(target_model.create_processor_spec(), prep_fiducials,
                                                      meas_fiducials, germs, maxLengths)
 
         # *sparse*, time-independent data
-        ds = pygsti.construction.simulate_data(mdl_datagen, edesign.all_circuits_needing_data, num_samples=1000,
-                                               sample_error="binomial", seed=1234, times=[0, 0.1, 0.2],
-                                               record_zero_counts=False)
+        ds = pygsti.data.simulate_data(mdl_datagen, edesign.all_circuits_needing_data, num_samples=1000,
+                                       sample_error="binomial", seed=1234, times=[0, 0.1, 0.2],
+                                       record_zero_counts=False)
         self.assertEqual(ds.degrees_of_freedom(aggregate_times=False), 500)
 
         target_model.operations['Gi'] = MyTimeDependentIdle(0.0)  # start assuming no time dependent decay 0
-        target_model.sim = pygsti.objects.MapForwardSimulator(max_cache_size=0)  # No caching allowed for time-dependent calcs
+        target_model.sim = pygsti.forwardsims.MapForwardSimulator(max_cache_size=0)  # No caching allowed for time-dependent calcs
 
-        builders = pygsti.protocols.GSTObjFnBuilders([pygsti.objects.TimeDependentPoissonPicLogLFunction.builder()], [])
+        builders = pygsti.protocols.GSTObjFnBuilders([pygsti.objectivefns.TimeDependentPoissonPicLogLFunction.builder()], [])
         gst = pygsti.protocols.GateSetTomography(target_model, gaugeopt_suite=None,
                                                  objfn_builders=builders, optimizer={'tol': 1e-4})
         data = pygsti.protocols.ProtocolData(edesign, ds)

@@ -17,7 +17,7 @@ from pygsti.tools.matrixtools import _fas
 
 
 def propagate_staterep(staterep, operationreps):
-    ret = staterep
+    ret = staterep.actionable_staterep()
     for oprep in operationreps:
         ret = oprep.acton(ret)
     return ret
@@ -82,16 +82,8 @@ def mapfill_dprobs_atom(fwdsim, mx_to_fill, dest_indices, dest_param_indices, la
     param_indices = _slct.to_array(param_indices)
     dest_param_indices = _slct.to_array(dest_param_indices)
 
-    #REMOVE - no further distribution in _block fns
-    #all_slices, my_slice, owners, sub_resource_alloc = \
-    #    _mpit.distribute_slice(slice(0, len(param_indices)), resource_alloc)
-    #my_param_indices = param_indices[my_slice]
-    #st = my_slice.start  # beginning of where my_param_indices results
-    # get placed into dpr_cache
-
     #Get a map from global parameter indices to the desired
     # final index within mx_to_fill (fpoffset = final parameter offset)
-    #REMOVE iParamToFinal = {i: dest_param_indices[st + ii] for ii, i in enumerate(my_param_indices)}
     iParamToFinal = {i: dest_index for i, dest_index in zip(param_indices, dest_param_indices)}
 
     orig_vec = fwdsim.model.to_vector().copy()
@@ -115,10 +107,6 @@ def mapfill_dprobs_atom(fwdsim, mx_to_fill, dest_indices, dest_param_indices, la
     fwdsim.model.from_vector(orig_vec, close=True)
     _smt.cleanup_shared_ndarray(shm)
     _smt.cleanup_shared_ndarray(shm2)
-
-    #REMOVE
-    #Now each rank-0 sub_resource_alloc processor has filled the relavant parts of mx_to_fill, so gather together:
-    #_mpit.gather_slices(all_slices, owners, mx_to_fill, [], axes=1, comm=resource_alloc)
 
 
 def mapfill_TDchi2_terms(fwdsim, array_to_fill, dest_indices, num_outcomes, layout_atom, dataset_rows,
@@ -187,8 +175,6 @@ def mapfill_TDterms(fwdsim, objfn, array_to_fill, dest_indices, num_outcomes, la
     cacheSize = layout_atom.cache_size
 
     EVecs = [fwdsim.model._circuit_layer_operator(elbl, 'povm') for elbl in layout_atom.full_effect_labels]
-    #OLD REMOVE: elabels_as_outcomes = [(_ot.effect_label_to_outcome(e),) for e in layout_atom.full_effect_labels]
-    #OLD REMOVE: outcome_to_elabel_index = {outcome: i for i, outcome in enumerate(elabels_as_outcomes)}
 
     assert(cacheSize == 0)  # so all elements have None as start and remainder[0] is a prep label
     #if clip_to is not None:
@@ -233,20 +219,17 @@ def mapfill_TDterms(fwdsim, objfn, array_to_fill, dest_indices, num_outcomes, la
 
             t = t0
             rhoVec.set_time(t)
-            rho = rhoVec._rep
+            rho = rhoVec._rep.actionable_staterep()
             t += rholabel.time
-            #if t0 < 10: print("BEGIN rho = ",rho.to_dense())  # REMOVE
 
             for gl in remainder:
                 op = fwdsim.model._circuit_layer_operator(gl, 'op')
                 op.set_time(t); t += gl.time  # time in gate label == gate duration?
                 rho = op._rep.acton(rho)
-                #if t0 < 10: print("  ",gl," ==> rho = ",rho.to_dense()) # REMOVE
 
             j = outcome_to_elbl_index[outcome]
             E = EVecs[j]; E.set_time(t)
             p = E._rep.probability(rho)  # outcome probability
-            #if t0 < 10: print("  E=",E.to_dense(), "=> p=",p) # REMOVE
             N = totalCnts[t0]
             f = Nreps / N
 
@@ -259,13 +242,7 @@ def mapfill_TDterms(fwdsim, objfn, array_to_fill, dest_indices, num_outcomes, la
             omitted_p = 1.0 - cur_probtotal if (lastInds[t0] == k and outcome_cnts[t0] < nTotOutcomes) else 0.0
             # and cur_probtotal < 1.0?
 
-            #DEBUG REMOVE
-            #if t0 <= 10:
-            #print("t=", t0, " rem=",remainder, " p,f,n,N,o = ",p,f,Nreps,N,omitted_p, " ==> ",
-            #      objfn(p, f, Nreps, N, omitted_p))
-
             array_to_fill[elbl_to_final_index[j]] += objfn(p, f, Nreps, N, omitted_p)
-        #print("DB: ar[", final_indices, "] = ", [array_to_fill[kk] for kk in final_indices]) # REMOVE
 
 
 def mapfill_TDdchi2_terms(fwdsim, array_to_fill, dest_indices, dest_param_indices, num_outcomes, layout_atom,
@@ -329,18 +306,8 @@ def mapfill_timedep_dterms(fwdsim, array_to_fill, dest_indices, dest_param_indic
             iFinal = iParamToFinal[i]
             vec = orig_vec.copy(); vec[i] += eps
             fwdsim.model.from_vector(vec, close=True)
-            #print("\n EPS ",i)  # DEBUG REMOVE
             fillfn(vals2, slice(0, nEls), num_outcomes, layout_atom, dataset_rows, subComm)
             _fas(array_to_fill, [dest_indices, iFinal], (vals2 - vals) / eps)
-
-            #DEBUG REMOVE
-            #dbval = _np.linalg.norm((vals2 - vals) / eps)
-            #if iFinal == 29:
-            #print("DB: ",iFinal, dbval, " val=",vals2)
-            #print("  deriv = ",(vals2 - vals) / eps)
-            ##if dbval > 1e7:
-            # import bpdb; bpdb.set_trace()
-            #pass
 
     fwdsim.model.from_vector(orig_vec, close=True)
 
@@ -348,7 +315,6 @@ def mapfill_timedep_dterms(fwdsim, array_to_fill, dest_indices, dest_param_indic
     # so gather together:
     _mpit.gather_slices(all_slices, owners, array_to_fill, [], axes=1, comm=comm)
 
-    #REMOVE
     # DEBUG LINE USED FOR MONITORION N-QUBIT GST TESTS
     #print("DEBUG TIME: dpr_cache(Np=%d, dim=%d, cachesize=%d, treesize=%d, napplies=%d) in %gs" %
     #      (fwdsim.model.num_params, fwdsim.model.dim, cache_size, len(layout_atom),

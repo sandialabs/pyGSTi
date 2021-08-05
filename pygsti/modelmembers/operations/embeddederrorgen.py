@@ -66,35 +66,6 @@ class EmbeddedErrorgen(_EmbeddedOp):
             my_basis_dim = self.state_space.dim
             self.matrix_basis = _Basis.cast(embedded_matrix_basis.name, my_basis_dim, sparse=True)
 
-            #OLD: constructs a subset of this errorgen's full mxbasis, but not the whole thing:
-            #self.matrix_basis = _Basis(
-            #    name="embedded_" + embedded_matrix_basis.name,
-            #    matrices=[self._embed_basis_mx(mx) for mx in
-            #              embedded_matrix_basis.get_composite_matrices()],
-            #    sparse=True)
-
-        #OLD: when a generators "rep" was self.err_gen_mx
-        #if errgen_to_embed._evotype == "densitymx":
-        #    self._construct_errgen_matrix()
-        #else:
-        #    self.err_gen_mx = None
-
-    #TODO REMOVE (UNUSED)
-    #def _construct_errgen_matrix(self):
-    #    #Always construct a sparse errgen matrix, so just use
-    #    # base class's .to_sparse() (which calls embedded errorgen's
-    #    # .to_sparse(), which will convert a dense->sparse embedded
-    #    # error generator, but this is fine).
-    #    self.err_gen_mx = self.tosparse()
-
-    #TODO REMOVE (UNUSED)
-    #def _embed_basis_mx(self, mx):
-    #    """ Take a dense or sparse basis matrix and embed it. """
-    #    mxAsGate = StaticArbitraryOp(mx) if isinstance(mx, _np.ndarray) \
-    #        else StaticArbitraryOp(mx.todense())  # assume mx is a sparse matrix
-    #    return EmbeddedOp(self.state_space, self.targetLabels,
-    #                      mxAsGate).tosparse()  # always convert to *sparse* basis els
-
     def from_vector(self, v, close=False, dirty_value=True):
         """
         Initialize the operation using a vector of parameters.

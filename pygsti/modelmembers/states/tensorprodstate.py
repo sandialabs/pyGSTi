@@ -65,41 +65,8 @@ class TensorProductState(_State):
         self.Np = sum([fct.num_params for fct in factors])
         assert(off == self.Np)
 
-    #REMOVE
-    #def _fill_fast_kron(self):
-    #    """ Fills in self._fast_kron_array based on current self.factors """
-    #    if self._prep_or_effect == "prep":
-    #        for i, factor_dim in enumerate(self._fast_kron_factordims):
-    #            self._fast_kron_array[i][0:factor_dim] = self.factors[i].to_dense()
-    #    else:
-    #        factorPOVMs = self.factors
-    #        for i, (factor_dim, Elbl) in enumerate(zip(self._fast_kron_factordims, self.effectLbls)):
-    #            self._fast_kron_array[i][0:factor_dim] = factorPOVMs[i][Elbl].to_dense()
-
     def _update_rep(self):
         self._rep.reps_have_changed()
-    #    if self._evotype in ("statevec", "densitymx"):
-    #        if self._prep_or_effect == "prep":
-    #            self._rep.base[:] = self.to_dense()
-    #        else:
-    #            self._fill_fast_kron()  # updates effect reps
-    #    elif self._evotype == "stabilizer":
-    #        if self._prep_or_effect == "prep":
-    #            #we need to update self._rep, which is a SBStateRep object.  For now, we
-    #            # kinda punt and just create a new rep and copy its data over to the existing
-    #            # rep instead of having some kind of update method within SBStateRep...
-    #            # (TODO FUTURE - at least a .copy_from method?)
-    #            sframe_factors = [f.to_dense() for f in self.factors]  # StabilizerFrame for each factor
-    #            new_rep = _stabilizer.sframe_kronecker(sframe_factors).to_rep()
-    #            self._rep.smatrix[:, :] = new_rep.smatrix[:, :]
-    #            self._rep.pvectors[:, :] = new_rep.pvectors[:, :]
-    #            self._rep.amps[:, :] = new_rep.amps[:, :]
-    #        else:
-    #            pass  # I think the below (e.g. 'outcomes') is not altered by any parameters
-    #            #factor_povms = self.factors
-    #            #factorVecs = [factor_povms[i][self.effectLbls[i]] for i in range(1, len(factor_povms))]
-    #            #outcomes = _np.array(list(_itertools.chain(*[f.outcomes for f in factorVecs])), _np.int64)
-    #            #rep = replib.SBEffectRep(outcomes)
 
     @property
     def parameter_labels(self):

@@ -18,6 +18,7 @@ import scipy.sparse as _sps
 import scipy.sparse.linalg as _spsl
 
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
+from pygsti.modelmembers.operations.lindbladerrorgen import LindbladParameterization as _LindbladParameterization
 from pygsti.modelmembers import modelmember as _modelmember, term as _term
 from pygsti.modelmembers.errorgencontainer import ErrorGeneratorContainer as _ErrorGeneratorContainer
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
@@ -47,21 +48,6 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         self.errorgen = errorgen  # don't copy (allow object reuse)
 
         evotype = self.errorgen._evotype
-
-        #TODO REMOVE
-        #if evotype in ("svterm", "cterm"):
-        #    dense_rep = True  # we need *dense* unitary postfactors for the term-based processing below
-        #
-        ## make unitary postfactor sparse when dense_rep == False and vice versa.
-        ## (This doens't have to be the case, but we link these two "sparseness" notions:
-        ##  when we perform matrix exponentiation in a "sparse" way we assume the matrices
-        ##  are large and so the unitary postfactor (if present) should be sparse).
-        ## FUTURE: warn if there is a sparsity mismatch btwn basis and postfactor?
-        #if unitary_postfactor is not None:
-        #    if self.dense_rep and _sps.issparse(unitary_postfactor):
-        #        unitary_postfactor = unitary_postfactor.toarray()  # sparse -> dense
-        #    elif not self.dense_rep and not _sps.issparse(unitary_postfactor):
-        #        unitary_postfactor = _sps.csr_matrix(_np.asarray(unitary_postfactor))  # dense -> sparse
 
         #Create representation object
         rep_type_order = ('dense', 'experrgen') if evotype.prefer_dense_reps else ('experrgen', 'dense')
@@ -129,24 +115,6 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         # We need to override this method so that error map has its
         # parent reset correctly.
         if memo is not None and id(self) in memo: return memo[id(self)]
-
-        #TODO REMOVE
-        #if self.unitary_postfactor is None:
-        #    upost = None
-        #elif self._evotype == "densitymx":
-        #    upost = self.unitary_postfactor
-        #else:
-        #    #self.unitary_postfactor is actually the *unitary* not the postfactor
-        #    termtype = "dense" if self._evotype == "svterm" else "clifford"
-        #
-        #    # automatically "up-convert" operation to StaticCliffordOp if needed
-        #    if termtype == "clifford":
-        #        assert(isinstance(self.unitary_postfactor, StaticCliffordOp))  # see __init__
-        #        U = self.unitary_postfactor.unitary
-        #    else: U = self.unitary_postfactor
-        #    op_std = _ot.unitary_to_process_mx(U)
-        #    upost = _bt.change_basis(op_std, 'std', self.errorgen.matrix_basis)
-
         cls = self.__class__  # so that this method works for derived classes too
         copyOfMe = cls(self.errorgen.copy(parent, memo))
         return self._copy_gpindices(copyOfMe, parent, memo)
@@ -159,18 +127,34 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
             # compute matrix-exponential explicitly
             self.exp_err_gen = _spl.expm(self.errorgen.to_dense(on_space='HilbertSchmidt'))  # used in deriv_wrt_params
 
-            #TODO REMOVE
-            #if self.unitary_postfactor is not None:
-            #    dense = _np.dot(self.exp_err_gen, self.unitary_postfactor)
-            #else: dense = self.exp_err_gen
             dense = self.exp_err_gen
             self._rep.base.flags.writeable = True
             self._rep.base[:, :] = dense
             self._rep.base.flags.writeable = False
             self.base_deriv = None
             self.base_hessian = None
-        elif not close:
+        else:  # if not close:
             self._rep.errgenrep_has_changed(self.errorgen.onenorm_upperbound())
+
+            #CHECK that sparsemx action is correct (DEBUG CHECK)
+            #from pygsti.modelmembers.states import StaticState
+            #Mdense = _spl.expm(self.errorgen.to_dense())
+            #if Mdense.shape == (4,4):
+            #    for i in range(4):
+            #        v = _np.zeros(4); v[i] = 1.0
+            #
+            #        staterep = StaticState(v)._rep
+            #        check_acton = self._rep.acton(staterep).data
+            #
+            #        #check_sparse_scipy = _spsl.expm_multiply(self.errorgen.to_sparse(), v.copy())
+            #        prep = _mt.expm_multiply_prep(self.errorgen.to_sparse())
+            #        check_sparse = _mt.expm_multiply_fast(prep, v)
+            #        check_dense = _np.dot(Mdense, v)
+            #
+            #        diff = _np.linalg.norm(check_dense - check_acton)
+            #        #diff2 = _np.linalg.norm(check_sparse_scipy - check_sparse)
+            #        if diff > 1e-6: # or diff2 > 1e-3:
+            #            print("PROBLEM (%d)!!" % i, " Expop diff = ", diff)
 
     def set_gpindices(self, gpindices, parent, memo=None):
         """
@@ -212,24 +196,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
 
         else:
             # Construct a dense version from scratch (more time consuming)
-            exp_errgen = _spl.expm(self.errorgen.to_dense(on_space))
-
-            #TODO REMOVE
-            #if self.unitary_postfactor is not None:
-            #    if self._evotype in ("svterm", "cterm"):
-            #        if self._evotype == "cterm":
-            #            assert(isinstance(self.unitary_postfactor, StaticCliffordOp))  # see __init__
-            #            U = self.unitary_postfactor.unitary
-            #        else: U = self.unitary_postfactor
-            #        op_std = _ot.unitary_to_process_mx(U)
-            #        upost = _bt.change_basis(op_std, 'std', self.errorgen.matrix_basis)
-            #    else:
-            #        upost = self.unitary_postfactor
-            #
-            #    dense = _mt.safe_dot(exp_errgen, upost)
-            #else:
-            dense = exp_errgen
-            return dense
+            return _spl.expm(self.errorgen.to_dense(on_space))
 
     #FUTURE: maybe remove this function altogether, as it really shouldn't be called
     def to_sparse(self, on_space='minimal'):
@@ -248,55 +215,10 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         -------
         scipy.sparse.csr_matrix
         """
-        _warnings.warn(("Constructing the sparse matrix of a LindbladDenseOp."
-                        "  Usually this is *NOT* acutally sparse (the exponential of a"
-                        " sparse matrix isn't generally sparse)!"))
         if self._rep_type == 'dense':
             return _sps.csr_matrix(self.to_dense(on_space))
         else:
-            exp_err_gen = _spsl.expm(self.errorgen.to_sparse(on_space).tocsc()).tocsr()
-            #TODO REMOVE
-            #if self.unitary_postfactor is not None:
-            #    return exp_err_gen.dot(self.unitary_postfactor)
-            #else:
-            return exp_err_gen
-
-    #def torep(self):
-    #    """
-    #    Return a "representation" object for this operation.
-    #
-    #    Such objects are primarily used internally by pyGSTi to compute
-    #    things like probabilities more efficiently.
-    #
-    #    Returns
-    #    -------
-    #    OpRep
-    #    """
-    #    if self._evotype == "densitymx":
-    #        if self.sparse_expm:
-    #            if self.unitary_postfactor is None:
-    #                Udata = _np.empty(0, 'd')
-    #                Uindices = Uindptr = _np.empty(0, _np.int64)
-    #            else:
-    #                assert(_sps.isspmatrix_csr(self.unitary_postfactor)), \
-    #                    "Internal error! Unitary postfactor should be a *sparse* CSR matrix!"
-    #                Udata = self.unitary_postfactor.data
-    #                Uindptr = _np.ascontiguousarray(self.unitary_postfactor.indptr, _np.int64)
-    #                Uindices = _np.ascontiguousarray(self.unitary_postfactor.indices, _np.int64)
-    #
-    #            mu, m_star, s, eta = self.err_gen_prep
-    #            errorgen_rep = self.errorgen.torep()
-    #            return replib.DMOpRepLindblad(errorgen_rep,
-    #                                           mu, eta, m_star, s,
-    #                                           Udata, Uindices, Uindptr) # HERE
-    #        else:
-    #            if self.unitary_postfactor is not None:
-    #                dense = _np.dot(self.exp_err_gen, self.unitary_postfactor)
-    #            else: dense = self.exp_err_gen
-    #            return replib.DMOpRepDense(_np.ascontiguousarray(dense, 'd'))
-    #    else:
-    #        raise ValueError("Invalid evotype '%s' for %s.torep(...)" %
-    #                         (self._evotype, self.__class__.__name__))
+            return _spsl.expm(self.errorgen.to_sparse(on_space).tocsc()).tocsr()
 
     def deriv_wrt_params(self, wrt_filter=None):
         """
@@ -658,7 +580,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         # case this term-exponentiation step will need to become more complicated...
         errgen_terms = self.errorgen.taylor_order_terms(0, max_polynomial_vars)
 
-        #DEBUG: CHECK MAGS OF ERRGEN COEFFS  REMOVE
+        #DEBUG CHECK MAGS OF ERRGEN COEFFS
         #poly_coeffs = [t.coeff for t in errgen_terms]
         #tapes = [poly.compact(complex_coeff_tape=True) for poly in poly_coeffs]
         #if len(tapes) > 0:
@@ -681,40 +603,6 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         egvec = self.errorgen.to_vector()   # we need errorgen's vector (usually not in rep) to perform evaluation
         errgen_terms = [egt.copy_with_magnitude(abs(egt.coeff.evaluate(egvec))) for egt in errgen_terms]
 
-        #DEBUG!!!  REMOVE
-        #import bpdb; bpdb.set_trace()
-        #loc_terms = _term.exponentiate_terms_above_mag(errgen_terms, order, postTerm, min_term_mag=-1)
-        #loc_terms_chk = _term.exponentiate_terms(errgen_terms, order, postTerm)
-        #assert(len(loc_terms) == len(loc_terms2))
-        #poly_coeffs = [t.coeff for t in loc_terms_chk]
-        #tapes = [poly.compact(complex_coeff_tape=True) for poly in poly_coeffs]
-        #if len(tapes) > 0:
-        #    vtape = _np.concatenate([t[0] for t in tapes])
-        #    ctape = _np.concatenate([t[1] for t in tapes])
-        #else:
-        #    vtape = _np.empty(0, _np.int64)
-        #    ctape = _np.empty(0, complex)
-        #v = self.to_vector()
-        #coeffs = _bulk_eval_compact_polynomials_complex(
-        #    vtape, ctape, v, (len(loc_terms_chk),))  # an array of coeffs
-        #for coeff, t, t2 in zip(coeffs, loc_terms, loc_terms_chk):
-        #    coeff2 = t.coeff.evaluate(v)
-        #    if not _np.isclose(coeff,coeff2):
-        #        assert(False), "STOP"
-        #    t.set_magnitude(abs(coeff))
-
-        #for ii,t in enumerate(loc_terms):
-        #    coeff1 = t.coeff.evaluate(egvec)
-        #    if not _np.isclose(abs(coeff1), t.magnitude):
-        #        assert(False),"STOP"
-        #    #t.set_magnitude(abs(t.coeff.evaluate(egvec)))
-
-        #FUTURE:  maybe use bulk eval of compact polys? Something like this:
-        #coeffs = _bulk_eval_compact_polynomials_complex(
-        #    cpolys[0], cpolys[1], v, (len(terms_at_order),))  # an array of coeffs
-        #for coeff, t in zip(coeffs, terms_at_order):
-        #    t.set_magnitude(abs(coeff))
-
         terms = []
         for term in _term.exponentiate_terms_above_mag(errgen_terms, order,
                                                        postTerm, min_term_mag=min_term_mag):
@@ -722,8 +610,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
             #compact_poly_coeff = poly_coeff.compact(complex_coeff_tape=True)
             term.mapvec_indices_inplace(mapvec)  # local -> global indices
 
-            # CHECK - to ensure term magnitudes are being set correctly (i.e. are in sync with evaluated coeffs)
-            # REMOVE later
+            # DEBUG CHECK - to ensure term magnitudes are being set correctly (i.e. are in sync with evaluated coeffs)
             # t = term
             # vt, ct = t._rep.coeff.compact_complex()
             # coeff_array = _bulk_eval_compact_polynomials_complex(vt, ct, self.parent.to_vector(), (1,))
@@ -751,11 +638,6 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         """
         # return exp( mag of errorgen ) = exp( sum of absvals of errgen term coeffs )
         # (unitary postfactor has weight == 1.0 so doesn't enter)
-        #TODO REMOVE:
-        #print("  DB: LindbladOp.get_totat_term_magnitude: (errgen type =",self.errorgen.__class__.__name__)
-        #egttm = self.errorgen.total_term_magnitude
-        #print("  DB: exp(", egttm, ") = ",_np.exp(egttm))
-        #return _np.exp(egttm)
         return _np.exp(min(self.errorgen.total_term_magnitude, MAX_EXPONENT))
         #return _np.exp(self.errorgen.total_term_magnitude)  # overflows sometimes
 
@@ -794,22 +676,10 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         None
         """
         #assert(_np.allclose(U, _np.linalg.inv(Uinv)))
-
         #just conjugate postfactor and Lindbladian exponent by U:
-        #REMOVE
-        #if self.unitary_postfactor is not None:
-        #    self.unitary_postfactor = _mt.safe_dot(Uinv, _mt.safe_dot(self.unitary_postfactor, U))
         self.errorgen.transform_inplace(s)
         self._update_rep()  # needed to rebuild exponentiated error gen
         self.dirty = True
-
-        #CHECK WITH OLD (passes) TODO move to unit tests?
-        #tMx = _np.dot(Uinv,_np.dot(self.base, U)) #Move above for checking
-        #tOp = LindbladDenseOp(tMx,self.unitary_postfactor,
-        #                                self.ham_basis, self.other_basis,
-        #                                self.cptp,self.nonham_diagonal_only,
-        #                                True, self.matrix_basis)
-        #assert(_np.linalg.norm(tOp.paramvals - self.paramvals) < 1e-6)
 
     def spam_transform_inplace(self, s, typ):
         """
@@ -840,8 +710,8 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         assert(typ in ('prep', 'effect')), "Invalid `typ` argument: %s" % typ
         from pygsti.models import gaugegroup as _gaugegroup
 
-        if isinstance(s, _gaugegroup.UnitaryGaugeGroupElement) or \
-           isinstance(s, _gaugegroup.TPSpamGaugeGroupElement):
+        if isinstance(s, _gaugegroup.UnitaryGaugeGroupElement) \
+           or isinstance(s, _gaugegroup.TPSpamGaugeGroupElement):
             U = s.transform_matrix
             Uinv = s.transform_matrix_inverse
             mx = self.to_dense(on_space='minimal') if self._rep_type == 'dense' else self.to_sparse(on_space='minimal')
@@ -854,12 +724,11 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
 
             errgen_cls = self.errorgen.__class__
             #Note: this only really works for LindbladErrorGen objects now... make more general in FUTURE?
-            truncate = True  # because of finite precision errors
-            transformed_errgen = errgen_cls.from_operation_matrix(mx, self.errorgen.ham_basis,
-                                                                  self.errorgen.other_basis,
-                                                                  self.errorgen.param_mode,
-                                                                  self.errorgen.nonham_mode,
-                                                                  truncate, self.errorgen.matrix_basis,
+            truncate = 1e-5  # looser truncation, but can't be 'True' since we need to throw errors when appropriate
+            param = _LindbladParameterization(self.errorgen.nonham_mode, self.errorgen.param_mode,
+                                              len(self.errorgen.ham_basis) > 0, len(self.errorgen.other_basis) > 0)
+            transformed_errgen = errgen_cls.from_operation_matrix(mx, param, self.errorgen.lindblad_basis,
+                                                                  self.errorgen.matrix_basis, truncate,
                                                                   self.errorgen.evotype)
             self.errorgen.from_vector(transformed_errgen.to_vector())
 

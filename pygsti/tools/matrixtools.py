@@ -1650,9 +1650,12 @@ else:
         -------
         numpy.ndarray
         """
+        #Note: copy v for now since it's modified by simple_core fn
         A, mu, m_star, s, eta = prep_a
-        return _fastcalc.custom_expm_multiply_simple_core(A.data, A.indptr, A.indices,
-                                                          v, mu, m_star, s, tol, eta)
+        indices = _np.array(A.indices, dtype=int)  # convert to 64-bit ints if needed
+        indptr = _np.array(A.indptr, dtype=int)
+        return _fastcalc.custom_expm_multiply_simple_core(A.data, indptr, indices,
+                                                          v.copy(), mu, m_star, s, tol, eta)
 
 
 def _custom_expm_multiply_simple_core(a, b, mu, m_star, s, tol, eta):  # t == 1.0 replaced below
@@ -1802,8 +1805,7 @@ def sparse_onenorm(a):
     return max(abs(a).sum(axis=0).flat)
 
 
-#REMOVE debug argument?
-def ndarray_base(a, debug=False):
+def ndarray_base(a, verbosity=0):
     """
     Get the base memory object for numpy array `a`.
 
@@ -1814,18 +1816,18 @@ def ndarray_base(a, debug=False):
     a : numpy.ndarray
         Array to get base of.
 
-    debug : bool, optional
-        Enable additional debugging.
+    verbosity : int, optional
+        Print additional debugging information if this is > 0.
 
     Returns
     -------
     numpy.ndarray
     """
-    if debug: print("ndarray_base debug:")
+    if verbosity: print("ndarray_base debug:")
     while a.base is not None:
-        if debug: print(" -> base = ", id(a.base))
+        if verbosity: print(" -> base = ", id(a.base))
         a = a.base
-    if debug: print(" ==> ", id(a))
+    if verbosity: print(" ==> ", id(a))
     return a
 
 

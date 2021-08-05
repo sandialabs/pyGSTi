@@ -241,6 +241,10 @@ _target_model = _qutrit.create_qutrit_model(error_scale=0, x_angle=_pi / 2, y_an
 _gscache = {("full", "auto"): _target_model}
 
 
+def processor_spec():
+    return target_model('static').create_processor_spec(None)
+
+
 def target_model(parameterization_type="full", sim_type="auto"):
     """
     Returns a copy of the target model in the given parameterization.

@@ -1,8 +1,9 @@
 import unittest
 
+import pygsti.circuits.gstcircuits as gstcircuits
+import pygsti.models.modelconstruction as mc
 import pygsti.algorithms.fiducialselection as fidsel
 import pygsti.algorithms.germselection as germsel
-import pygsti.construction as constr
 from ..testutils import BaseTestCase
 
 
@@ -14,8 +15,8 @@ class AutoExperimentDesignTestCase(BaseTestCase):
     def test_auto_experiment_design(self):
         # Let's construct a 1-qubit $X(\pi/2)$, $Y(\pi/2)$, $I$ model for which we will need to find germs and fiducials.
 
-        target_model = constr.create_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gy'],
-                                         ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"])
+        target_model = mc.create_explicit_model_from_expressions([('Q0',)], ['Gi', 'Gx', 'Gy'],
+                                                                     ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"])
 
 
         # ## Hands-off
@@ -47,7 +48,7 @@ class AutoExperimentDesignTestCase(BaseTestCase):
 
 
         maxLengths = [0] + [2**n for n in range(8 + 1)]
-        listOfExperiments = constr.create_lsgst_circuits(target_model.operations.keys(), prepFiducials,
+        listOfExperiments = gstcircuits.create_lsgst_circuits(target_model.operations.keys(), prepFiducials,
                                                               measFiducials, germs, maxLengths)
 
 

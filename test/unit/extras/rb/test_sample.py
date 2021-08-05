@@ -1,5 +1,5 @@
 from pygsti.baseobjs import Label
-from pygsti.processors import ProcessorPack
+from pygsti.processors import QubitProcessorSpec
 from ...util import BaseCase
 
 
@@ -11,20 +11,20 @@ class RBSampleTester(BaseCase):
     def setUpClass(cls):
         super(RBSampleTester, cls).setUpClass()
         glist = ['Gxpi2', 'Gypi2', 'Gcnot']  # 'Gi',
-        cls.pspec_1 = ProcessorPack(4, glist, verbosity=0, qubit_labels=['Q0', 'Q1', 'Q2', 'Q3'])
+        cls.pspec_1 = QubitProcessorSpec(4, glist, qubit_labels=['Q0', 'Q1', 'Q2', 'Q3'], geometry='line')
 
         # # XXX this takes nearly a minute to construct on my machine....
         # glist = ['Gxpi', 'Gypi', 'Gzpi', 'Gh', 'Gp', 'Gcphase']  # 'Gi',
         # availability = {'Gcphase': [(0, 1), (1, 2)]}
-        # cls.pspec_2 = ProcessorPack(3, glist, availability=availability, verbosity=0)
+        # cls.pspec_2 = QubitProcessorSpec(3, glist, availability=availability, geometry='line')
 
         # XXX is this an OK test fixture? see above.
         glist = ['Gxpi2', 'Gypi2', 'Gcphase']  # 'Gi',
         availability = {'Gcphase': [(0, 1), (1, 2)]}
-        cls.pspec_2 = ProcessorPack(3, glist, availability=availability, verbosity=0)
+        cls.pspec_2 = QubitProcessorSpec(3, glist, availability=availability, geometry='line')
 
         glist = ['Gxpi2', 'Gxmpi2', 'Gypi2', 'Gympi2', 'Gcnot']  # 'Gi',
-        cls.pspec_inv = ProcessorPack(4, glist, verbosity=0, qubit_labels=['Q0', 'Q1', 'Q2', 'Q3'])
+        cls.pspec_inv = QubitProcessorSpec(4, glist, qubit_labels=['Q0', 'Q1', 'Q2', 'Q3'], geometry='line')
 
     def test_clifford_rb_experiment(self):
         self.skipTest("RB analysis is known to be broken.  Skip tests until it gets fixed.")
@@ -52,7 +52,7 @@ class RBSampleTester(BaseCase):
 
     def test_circuit_layer_by_pairing_qubits(self):
         self.skipTest("RB analysis is known to be broken.  Skip tests until it gets fixed.")
-        n = self.pspec_1.number_of_qubits
+        n = self.pspec_1.num_qubits
         layer = sample.circuit_layer_by_pairing_qubits(
             self.pspec_1, two_q_prob=0.0, one_q_gate_names='all',
             two_q_gate_names='all', modelname='clifford'
@@ -79,12 +79,12 @@ class RBSampleTester(BaseCase):
 
     def test_circuit_layer_by_Qelimination(self):
         self.skipTest("RB analysis is known to be broken.  Skip tests until it gets fixed.")
-        n = self.pspec_2.number_of_qubits
+        n = self.pspec_2.num_qubits
         layer = sample.circuit_layer_by_Qelimination(
             self.pspec_2, two_q_prob=0.0, one_q_gates='all',
             two_q_gates='all', modelname='clifford'
         )
-        self.assertEqual(len(layer), self.pspec_2.number_of_qubits)
+        self.assertEqual(len(layer), self.pspec_2.num_qubits)
         layer = sample.circuit_layer_by_Qelimination(
             self.pspec_2, two_q_prob=1.0, one_q_gates='all',
             two_q_gates='all', modelname='clifford'
@@ -93,7 +93,7 @@ class RBSampleTester(BaseCase):
 
     def test_circuit_layer_by_co2Qgates(self):
         self.skipTest("RB analysis is known to be broken.  Skip tests until it gets fixed.")
-        n = self.pspec_1.number_of_qubits
+        n = self.pspec_1.num_qubits
         C01 = Label('Gcnot', ('Q0', 'Q1'))
         C23 = Label('Gcnot', ('Q2', 'Q3'))
         co2Qgates = [[], [C01, C23]]
@@ -147,7 +147,7 @@ class RBSampleTester(BaseCase):
             self.pspec_1, one_q_gate_names='all', pdist='uniform',
             modelname='clifford'
         )
-        self.assertEqual(len(layer), self.pspec_1.number_of_qubits)
+        self.assertEqual(len(layer), self.pspec_1.num_qubits)
         layer = sample.circuit_layer_of_oneQgates(
             self.pspec_1, subsetQs=['Q1', 'Q2'],
             one_q_gate_names=['Gx', 'Gy'], pdist=[1., 0.],
@@ -178,7 +178,7 @@ class RBSampleTester(BaseCase):
         circuit = sample.random_circuit(self.pspec_2, length=100, sampler='Qelimination',
                                         samplerargs=[0.1, ], addlocal=True)
         self.assertEqual(circuit.depth, 201)
-        self.assertLessEqual(len(circuit.get_layer(0)), self.pspec_2.number_of_qubits)
+        self.assertLessEqual(len(circuit.get_layer(0)), self.pspec_2.num_qubits)
 
         circuit = sample.random_circuit(self.pspec_1, length=100, sampler='pairingQs')
         # TODO assert correctness

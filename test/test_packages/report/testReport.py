@@ -170,7 +170,7 @@ class TestReport(ReportBaseCase):
         qtys['pdfinfo'] = "PDFINFO"
 
         ws = pygsti.report.Workspace()
-        printer = pygsti.obj.VerbosityPrinter(1)
+        printer = pygsti.baseobjs.VerbosityPrinter(1)
         qtys['targetGatesBoxTable'] = ws.GatesTable(mdl_tgt, display_as="boxes")
 
         # 3) populate template file => report file
@@ -300,7 +300,7 @@ class TestReport(ReportBaseCase):
         #mh.fill_std_qtys(qtys, connected=True, render_math=True, CSSnames=[]) #test connected=True case HERE
 
         # ---- evaluate_call ----
-        printer = pygsti.obj.VerbosityPrinter(1)
+        printer = pygsti.baseobjs.VerbosityPrinter(1)
         stdout, stderr, returncode = mh.process_call(['ls','foobar.foobar'])
         with self.assertRaises(subprocess.CalledProcessError):
             mh.evaluate_call(['ls','foobar.foobar'], stdout, stderr, returncode, printer)

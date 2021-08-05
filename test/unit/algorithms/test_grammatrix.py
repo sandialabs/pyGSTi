@@ -21,7 +21,7 @@ class GramMatrixTester(DataSetInstance, BaseCase):
         self.assertEqual(basis, [('Gx',), ('Gy',)])
 
     def test_max_gram_rank_and_evals(self):
-        model = models.create_explicit_model([('Q0',)], ['Gx', 'Gy'],
-                                        ["X(pi/4,Q0)", "Y(pi/4,Q0)"])
+        model = models.create_explicit_model_from_expressions([('Q0',)], ['Gx', 'Gy'],
+                                                              ["X(pi/4,Q0)", "Y(pi/4,Q0)"])
         rank, evals, tgt_evals = gm.max_gram_rank_and_eigenvalues(self.ds, model)
         self.assertEqual(rank, 1)

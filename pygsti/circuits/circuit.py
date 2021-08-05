@@ -144,7 +144,7 @@ def _op_seq_str_suffix(line_labels, occurrence_id):
             else "@(" + ','.join(map(str, line_labels)) + ")@" + str(occurrence_id)
 
 
-def _op_seq_to_str(seq, line_labels, occurrence_id):
+def _op_seq_to_str(seq, line_labels, occurrence_id, compilable_layer_indices):
     """ Used for creating default string representations. """
     if len(seq) == 0:  # special case of empty operation sequence (for speed)
         return "{}" + _op_seq_str_suffix(line_labels, occurrence_id)
@@ -152,7 +152,20 @@ def _op_seq_to_str(seq, line_labels, occurrence_id):
     def process_lists(el): return el if not isinstance(el, list) else \
         ('[%s]' % ''.join(map(str, el)) if (len(el) != 1) else str(el[0]))
 
-    return ''.join(map(str, map(process_lists, seq))) + _op_seq_str_suffix(line_labels, occurrence_id)
+    if len(compilable_layer_indices) == 0:
+        return ''.join(map(str, map(process_lists, seq))) + _op_seq_str_suffix(line_labels, occurrence_id)
+    else:
+        processed_seq = list(map(process_lists, seq))
+        compilable_set = set(compilable_layer_indices)
+        uncompilable_set = set(range(len(processed_seq))) - set(compilable_layer_indices)
+        if len(compilable_set) <= len(uncompilable_set):
+            marker = '~'; marked_set = compilable_set
+        else:
+            marker = '|'; marked_set = uncompilable_set
+
+        str_processed = [(str(layer_el) + marker) if (i in marked_set) else str(layer_el)
+                         for i, layer_el in enumerate(processed_seq)]
+        return ''.join(str_processed) + _op_seq_str_suffix(line_labels, occurrence_id)
 
 
 def to_label(x):
@@ -260,6 +273,14 @@ class Circuit(object):
         allow multiple copies of the same ciruit to be stored in a
         dictionary or :class:`DataSet`.
 
+    compilable_layer_indices : tuple, optional
+        The circuit-layer indices that may be internally altered (but retaining the
+        same target operation) and/or combined with the following circuit layer
+        by a hardware compiler.when executing this circuit.  Layers that are
+        not "compilable" are effectively followed by a *barrier* which prevents
+        the hardward compiler from restructuring the circuit across the layer
+        boundary.
+
     Attributes
     ----------
     default_expand_subcircuits : bool
@@ -320,7 +341,7 @@ class Circuit(object):
 
     def __init__(self, layer_labels=(), line_labels='auto', num_lines=None, editable=False,
                  stringrep=None, name='', check=True, expand_subcircuits="default",
-                 occurrence=None):
+                 occurrence=None, compilable_layer_indices=None):
         """
         Creates a new Circuit object, encapsulating a quantum circuit.
 
@@ -401,12 +422,20 @@ class Circuit(object):
             occurrence ids are *not* equivalent.  Occurrence values effectively
             allow multiple copies of the same ciruit to be stored in a
             dictionary or :class:`DataSet`.
+
+        compilable_layer_indices : tuple, optional
+            The circuit-layer indices that may be internally altered (but retaining the
+            same target operation) and/or combined with the following circuit layer
+            by a hardware compiler.when executing this circuit.  Layers that are
+            not "compilable" are effectively followed by a *barrier* which prevents
+            the hardward compiler from restructuring the circuit across the layer
+            boundary.
         """
         from pygsti.circuits.circuitparser import CircuitParser as _CircuitParser
         layer_labels_objs = None  # layer_labels elements as Label objects (only if needed)
         if isinstance(layer_labels, str):
             cparser = _CircuitParser(); cparser.lookup = None
-            layer_labels, chk_labels, chk_occurrence = cparser.parse(layer_labels)
+            layer_labels, chk_labels, chk_occurrence, chk_compilable_inds = cparser.parse(layer_labels)
             if chk_labels is not None:
                 if line_labels == 'auto':
                     line_labels = chk_labels
@@ -422,6 +451,14 @@ class Circuit(object):
                                       " `occurrence` and occurrence ID in `layer_labels` do not match: %s != %s")
                                      % (occurrence, chk_occurrence))
 
+            if chk_compilable_inds is not None:
+                if compilable_layer_indices is None:  # Also acts as "auto"
+                    compilable_layer_indices = chk_compilable_inds
+                elif compilable_layer_indices != chk_compilable_inds:
+                    raise ValueError(("Error intializing Circuit: `compilable_layer_indices` and markers"
+                                      " in `layer_labels` do not match: %s != %s")
+                                     % (compilable_layer_indices, chk_compilable_inds))
+
         if expand_subcircuits == "default":
             expand_subcircuits = Circuit.default_expand_subcircuits
         if expand_subcircuits and layer_labels is not None:
@@ -432,7 +469,7 @@ class Circuit(object):
         if stringrep is not None and (layer_labels is None or check):
             cparser = _CircuitParser()
             cparser.lookup = None  # lookup - functionality removed as it wasn't used
-            chk, chk_labels, chk_occurrence = cparser.parse(stringrep)  # tuple of Labels
+            chk, chk_labels, chk_occurrence, chk_compilable_inds = cparser.parse(stringrep)  # tuple of Labels
             if expand_subcircuits and chk is not None:
                 chk = tuple(_itertools.chain(*[x.expand_subcircuits() for x in map(to_label, chk)]))
                 #print("DB: Check Layer labels = ",chk)
@@ -464,6 +501,14 @@ class Circuit(object):
                     raise ValueError(("Error intializing Circuit: "
                                       " `occurrence` and occurrence ID in `layer_labels` do not match: %s != %s")
                                      % (occurrence, chk_occurrence))
+
+            if chk_compilable_inds is not None:
+                if compilable_layer_indices is None:  # Also acts as "auto"
+                    compilable_layer_indices = chk_compilable_inds
+                elif compilable_layer_indices != chk_compilable_inds:
+                    raise ValueError(("Error intializing Circuit:  `compilable_layer_indices` and markers"
+                                      " in `layer_labels` do not match: %s != %s")
+                                     % (compilable_layer_indices, chk_compilable_inds))
 
         if layer_labels is None:
             raise ValueError("Must specify `stringrep` when `layer_labels` is None")
@@ -516,8 +561,15 @@ class Circuit(object):
             labels = [_label_to_nested_lists_of_simple_labels(layer_lbl)
                       for layer_lbl in layer_labels]
 
+        # check that all the compilable layer indices are valid
+        if compilable_layer_indices is not None:
+            max_layer_index = len(labels) - 1
+            if any([(i < 0 or i > max_layer_index) for i in compilable_layer_indices]):
+                raise ValueError("Entry our of range in `compilable_layer_indices`!")
+            compilable_layer_indices = tuple(compilable_layer_indices)
+
         #Set *all* class attributes (separated so can call bare_init separately for fast internal creation)
-        self._bare_init(labels, my_line_labels, editable, name, stringrep, occurrence)
+        self._bare_init(labels, my_line_labels, editable, name, stringrep, occurrence, compilable_layer_indices)
 
         # # Special case: layer_labels can be a single CircuitLabel or Circuit
         # # (Note: a Circuit would work just fine, as a list of layers, but this performs some extra checks)
@@ -538,15 +590,19 @@ class Circuit(object):
         #    self._static = not editable
 
     @classmethod
-    def _fastinit(cls, labels, line_labels, editable, name='', stringrep=None, occurrence=None):
+    def _fastinit(cls, labels, line_labels, editable, name='', stringrep=None, occurrence=None,
+                  compilable_layer_indices=None):
         ret = cls.__new__(cls)
         ret._bare_init(labels, line_labels, editable, name, stringrep, occurrence)
         return ret
 
-    def _bare_init(self, labels, line_labels, editable, name='', stringrep=None, occurrence=None):
+    def _bare_init(self, labels, line_labels, editable, name='', stringrep=None, occurrence=None,
+                   compilable_layer_indices=None):
         self._labels = labels
         self._line_labels = line_labels
         self._occurrence_id = occurrence
+        self._compilable_layer_indices_tup = ('__CMPLBL__',) + compilable_layer_indices \
+            if (compilable_layer_indices is not None) else ()  # always a tuple, but can be empty.
         self._static = not editable
         #self._reps = reps # repetitions: default=1, which remains unless we initialize from a CircuitLabel...
         self._name = name  # can be None
@@ -653,13 +709,34 @@ class Circuit(object):
         """
         if self._occurrence_id is None:
             if self._line_labels in (('*',), ()):  # No line labels
-                return self.layertup
+                return self.layertup + self._compilable_layer_indices_tup
             else:
-                return self.layertup + ('@',) + self._line_labels
+                return self.layertup + ('@',) + self._line_labels + self._compilable_layer_indices_tup
         else:
             linelbl_tup = () if self._line_labels in (('*',), ()) else self._line_labels
-            return self.layertup + ('@',) + linelbl_tup + ('@', self._occurrence_id)
+            return self.layertup + ('@',) + linelbl_tup + ('@', self._occurrence_id) \
+                + self._compilable_layer_indices_tup
             # Note: we *always* need line labels (even if they're empty) when using occurrence id
+
+    @property
+    def compilable_layer_indices(self):
+        """ Tuple of the layer indices corresponding to "compilable" layers."""
+        if len(self._compilable_layer_indices_tup) > 0:  # then begins with __CMPLBL__
+            return self._compilable_layer_indices_tup[1:]
+        else:
+            return ()
+
+    @compilable_layer_indices.setter
+    def compilable_layer_indices(self, val):
+        self._compilable_layer_indices_tup = ('__CMPLBL__',) + tuple(val) \
+            if (val is not None) else ()  # always a tuple, but can be empty.
+
+    @property
+    def compilable_by_layer(self):
+        """ Boolean array indicating whether each layer is "compilable" or not."""
+        ret = _np.zeros(self.depth, dtype=bool)
+        ret[list(self.compilable_layer_indices)] = True
+        return ret
 
     @property
     def str(self):
@@ -671,7 +748,8 @@ class Circuit(object):
         str
         """
         if self._str is None:
-            generated_str = _op_seq_to_str(self._labels, self.line_labels, self._occurrence_id)  # lazy generation
+            generated_str = _op_seq_to_str(self._labels, self.line_labels, self._occurrence_id,
+                                           self.compilable_layer_indices)  # lazy generation
             if self._static:  # if we're read-only then cache the string one and for all,
                 self._str = generated_str  # otherwise keep generating it as needed (unless it's set by the user?)
             return generated_str
@@ -709,7 +787,7 @@ class Circuit(object):
              "Set editable=True when calling pygsti.obj.Circuit to create editable circuit.")
         from pygsti.circuits.circuitparser import CircuitParser as _CircuitParser
         cparser = _CircuitParser()
-        chk, chk_labels, chk_occurrence = cparser.parse(value)
+        chk, chk_labels, chk_occurrence, chk_compilable_inds = cparser.parse(value)
 
         if not all([my_layer in (chk_lbl, [chk_lbl]) for chk_lbl, my_layer in zip(chk, self._labels)]):
             raise ValueError(("Cannot set .str to %s because it doesn't"
@@ -725,6 +803,11 @@ class Circuit(object):
                 raise ValueError(("Cannot set .str to %s because occurrence evaluates to"
                                   " %s which is != this circuit's occurrence (%s).") %
                                  (value, str(chk_occurrence), str(self._occurrence_id)))
+        if chk_compilable_inds is not None:
+            if self.compilable_layer_indices != chk_compilable_inds:
+                raise ValueError(("Cannot set .str to %s because compilable layer indices eval to"
+                                  " %s which is != this circuit's indices (%s).") %
+                                 (value, str(chk_compilable_inds), str(self.compilable_layer_indices)))
 
         self._str = value
 
@@ -1220,6 +1303,13 @@ class Circuit(object):
         if lines is None:  # insert complete layers
             for i in range(num_to_insert):
                 self._labels.insert(insert_before, [])
+
+            #Shift compilable layer indices as needed
+            if len(self._compilable_layer_indices_tup) > 0:  # then begins with __CMPLBL__
+                shifted_inds = [i if (i < insert_before) else (i + num_to_insert)
+                                for i in self._compilable_layer_indices_tup[1:]]
+                self._compilable_layer_indices_tup = ('__CMPLBL__',) + tuple(shifted_inds)
+
         else:  # insert layers only on given lines - shift existing labels to right
             for i in range(num_to_insert):
                 self._labels.append([])  # add blank layers at end
@@ -1237,6 +1327,7 @@ class Circuit(object):
                         self._labels[i + num_to_insert].append(lbl)  # and put it in the destination layer
                 for k in reversed(inds_to_delete):
                     del self._labels[i][k]
+            #Note: do not adjust compilable indices when only partial layers are inserted
 
     def _append_idling_layers_inplace(self, num_to_insert, lines=None):
         """
@@ -1544,6 +1635,7 @@ class Circuit(object):
                 elif not clear_straddlers and not sslbls.issubset(lines):
                     raise ValueError("Cannot operate on a block that is straddled by %s!" % str(_Label(l)))
             self._labels[i] = new_layer
+        self._compilable_layer_indices_tup = ()
 
     def clear_labels(self, layers=None, lines=None, clear_straddlers=False):
         """
@@ -1590,6 +1682,14 @@ class Circuit(object):
         layers = self._proc_layers_arg(layers)
         for i in reversed(sorted(layers)):
             del self._labels[i]
+
+        #Shift compilable layer indices as needed
+        if len(self._compilable_layer_indices_tup) > 0:  # begins with __CMPLBL__
+            deleted_indices = set(layers)
+            new_inds = list(filter(lambda x: x not in deleted_indices, self._compilable_layer_indices_tup[1:]))
+            for deleted_i in reversed(sorted(deleted_indices)):
+                new_inds = [i if (i < deleted_i) else (i - 1) for i in new_inds]  # Note i never == deleted_i (filtered)
+            self._compilable_layer_indices_tup = ('__CMPLBL__',) + tuple(new_inds)
 
     def delete_lines(self, lines, delete_straddlers=False):
         """
@@ -2352,11 +2452,11 @@ class Circuit(object):
             cpy = self.copy(editable=False)  # convert our layers to Labels
             return Circuit._fastinit(tuple([new_layer if lbl == old_layer else lbl
                                             for lbl in cpy._labels]), self.line_labels, editable=False,
-                                     occurrence=self.occurrence)
+                                     occurrence=self.occurrence, compilable_layer_indices=self.compilable_layer_indices)
         else:  # static case: so self._labels is a tuple of Labels
             return Circuit(tuple([new_layer if lbl == old_layer else lbl
                                   for lbl in self._labels]), self.line_labels, editable=False,
-                           occurrence=self.occurrence)
+                           occurrence=self.occurrence, compilable_layer_indices=self.compilable_layer_indices)
 
     def replace_layers_with_aliases(self, alias_dict):
         """
@@ -2461,10 +2561,9 @@ class Circuit(object):
         """
         assert(not self._static), "Cannot edit a read-only circuit!"
 
-        # If it's a CompilationLibrary, it has this attribute. When it's a CompilationLibrary we use the
-        # .get_compilation_of method, which will look to see if a compilation for a gate is already available (with
-        # `allowed_filter` taken account of) and if not it will attempt to construct it.
-        if hasattr(compilation, 'templates'):
+        from pygsti.processors import CompilationRules as _CompilationRules
+        from pygsti.processors import CliffordCompilationRules as _CliffordCompilationRules
+        if isinstance(compilation, _CliffordCompilationRules):
             # The function we query to find compilations
             def get_compilation(gate):
                 # Use try, because it will fail if it cannot construct a compilation, and this is fine under some
@@ -2474,11 +2573,17 @@ class Circuit(object):
                     return circuit
                 except:
                     return None
-        # Otherwise, we assume it's a dict.
-        else:
+
+        elif isinstance(compilation, _CompilationRules):
             assert(allowed_filter is None), \
-                "`allowed_filter` can only been not None if the compilation is a CompilationLibrary!"
-            # The function we query to find compilations
+                "`allowed_filter` can only been not None if the compilation is a CliffordCompilationRules object!"
+
+            def get_compilation(gate):
+                return compilation.specific_compilations.get(gate, None)
+
+        else:  # Otherwise, we assume it's a dict.
+            assert(allowed_filter is None), \
+                "`allowed_filter` can only been not None if the compilation is a CliffordCompilationRules object!"
 
             def get_compilation(gate):
                 return compilation.get(gate, None)
@@ -2791,6 +2896,11 @@ class Circuit(object):
         self._labels = list(reversed(self._labels))  # reverses the layer order
         #FUTURE: would need to reverse_inplace each layer too, if layer can have *sublayers*
 
+        if len(self._compilable_layer_indices_tup) > 0:  # begins with __CMPLBL__
+            depth = len(self._labels)
+            self._compilable_layer_indices_tup = ('__CMPLBL__',) \
+                + tuple([(depth - 1 - i) for i in self._compilable_layer_indices_tup[1:]])
+
     def _combine_one_q_gates_inplace(self, one_q_gate_relations):
         """
         Compresses sequences of 1-qubit gates in the circuit, using the provided gate relations.
@@ -2813,8 +2923,8 @@ class Circuit(object):
             idle gates in place of the previous 1-qubit gates.  Note that `None` can be used as `name3`
             to signify that the result is the identity (no gate labels).
 
-            If a ProcessorSpec object has been created for the gates/device in question, the
-            ProcessorSpec.oneQgate_relations is the appropriate (and auto-generated) `one_q_gate_relations`.
+            If a QubitProcessorSpec object has been created for the gates/device in question, the
+            QubitProcessorSpec.oneQgate_relations is the appropriate (and auto-generated) `one_q_gate_relations`.
 
             Note that this function will not compress sequences of 1-qubit gates that cannot be compressed by
             independently inspecting sequential non-idle pairs (as would be the case with, for example,
@@ -2956,9 +3066,7 @@ class Circuit(object):
         for ilayer, layer_labels in enumerate(self._labels):
             if layer_labels == []:
                 inds_to_remove.append(ilayer)
-        for ilayer in reversed(inds_to_remove):
-            del self._labels[ilayer]
-
+        self.delete_layers(inds_to_remove)
         return bool(len(inds_to_remove) > 0)  # whether compression was implemented
 
     def compress_depth_inplace(self, one_q_gate_relations=None, verbosity=0):
@@ -2986,8 +3094,8 @@ class Circuit(object):
             1-qubit gates will be compressed into a single possibly non-idle 1-qubit gate followed by
             idle gates in place of the previous 1-qubit gates.
 
-            If a ProcessorSpec object has been created for the gates/device in question, the
-            ProcessorSpec.oneQgate_relations is the appropriate (and auto-generated) `one_q_gate_relations`.
+            If a QubitProcessorSpec object has been created for the gates/device in question, the
+            QubitProcessorSpec.oneQgate_relations is the appropriate (and auto-generated) `one_q_gate_relations`.
 
             Note that this function will not compress sequences of 1-qubit gates that cannot be compressed by
             independently inspecting sequential non-idle pairs (as would be the case with, for example,
@@ -4036,7 +4144,12 @@ class Circuit(object):
 
         Parameters
         ----------
-        model : TODO docstring
+        model : Model
+            The model used to provide necessary details regarding the expansion, including:
+
+            - default SPAM layers
+            - definitions of instrument-containing layers
+            - expansions of individual instruments and POVMs
 
         Returns
         -------

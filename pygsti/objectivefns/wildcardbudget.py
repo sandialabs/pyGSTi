@@ -764,42 +764,6 @@ def _get_nextalpha_breakpoint(remaining_ratios):
 
     return j, alpha, beta, best_dct['typ']
 
-#OLD REMOVE
-#def _get_minalpha_breakpoint(remaining_ratios, a, b, c, qvec, fvec, ratio_vec):
-    #k, r = sorted([(kx, rx) for kx, rx in enumerate(ratio_vec)
-    #               if kx in remaining_indices], key=lambda x: abs(1.0 - x[1]))[0]
-    #pushedSD = 0.0
-    #
-    #if k in a:
-    #    alpha_break = r
-    #    beta_break = _beta_fn(alpha_break, a, b, c, qvec, fvec)
-    #    #print("alpha-break = %g -> beta-break = %g" % (alpha_break,beta_break))
-    #    AorBorC = "A"
-    #elif k in b:
-    #    beta_break = r
-    #    if len(a) > 0:
-    #        alpha_break = _alpha_fn(beta_break, a, b, c, qvec, fvec)
-    #
-    #        if sum(fvec[a]) * alpha_break <= sum(qvec[a]):  # check if alpha_break gets set too large
-    #            pushedSD = 0.0  # ok - alpha_break doesn't push sum_fA beyond its "target", sum_qA
-    #        else:
-    #            # because there must be some weight in set-D (zero-freq but nonzero prob)
-    #            # the alpha as computed above will push sum_fA too much - we instead just
-    #            # push sum_fA right to sum_qA and dump the rest into pushedSD
-    #            alpha_break = sum(qvec[a]) / sum(fvec[a])
-    #            pushedSD = 1.0 - (alpha_break * sum(fvec[a]) + beta_break * sum(fvec[b]) + sum(qvec[c]))
-    #
-    #        #print("beta-break = %g -> alpha-break = %g" % (beta_break,alpha_break))
-    #    else:  # need to push set D to compensate
-    #        alpha_break = 0.0  # value doesn't matter
-    #        pushedSD = _pushedD_fn(beta_break, b, c, qvec, fvec)
-    #    AorBorC = "B"
-    #else:
-    #    alpha_break = beta_break = 1e100  # sentinel so it gets sorted at end
-    #    AorBorC = "C"
-    ##print("chksum = ", _chk_sum(alpha_break, beta_break))
-    #return (k, alpha_break, beta_break, pushedSD, AorBorC)
-
 
 def _chk_sum(alpha, beta, fvec, A, B, C):
     return alpha * sum(fvec[A]) + beta * sum(fvec[B]) + sum(fvec[C])
@@ -923,51 +887,6 @@ def update_circuit_probs(probs, freqs, circuit_budget):
                 dct['alpha'] = _alpha_fn(dct['beta'], A, B, C, qvec, fvec, None)
     else:
         assert(False), "TVD should eventually reach zero: qvec=%s, fvec=%s, W=%g" % (str(qvec), str(fvec), W)
-
-    #OLD REMOVE
-    #while len(remaining_indices) > 0:
-    #    assert(len(A) > 0 or len(B) > 0)  # then we can step `alpha` up and preserve the overall probability:
-    #    j, alpha0, beta0, pushedSD0, AorBorC = _get_minalpha_breakpoint(remaining_indices, A, B, C,
-    #                                                                    qvec, fvec, ratio_vec)
-    #    remaining_indices.remove(j)
-    #
-    #    # will keep getting smaller with each iteration
-    #    TVD_at_breakpt = _compute_tvd(A, B, D, alpha0, beta0, pushedSD0, qvec, fvec)
-    #    #Note: does't matter if we move j from A or B -> C before calling this, as alpha0 is set so results is
-    #    #the same
-    #
-    #    if debug: print("break: j=", j, " alpha=", alpha0, " beta=",
-    #                    beta0, " A?=", AorBorC, " TVD = ", TVD_at_breakpt)
-    #    if TVD_at_breakpt <= W + tol:
-    #        break  # exit loop
-    #
-    #    #Move
-    #    if AorBorC == "A":
-    #        if debug:
-    #            beta_chk1 = _beta_fn(alpha0, A, B, C, qvec, fvec)
-    #        Alst = list(A); del Alst[Alst.index(j)]; A = _np.array(Alst, int)
-    #        Clst = list(C); Clst.append(j); C = _np.array(Clst, int)  # move A -> C
-    #        if debug:
-    #            beta_chk2 = _beta_fn(alpha0, A, B, C, qvec, fvec)
-    #            print("CHKA: ", alpha0, beta0, beta_chk1, beta_chk2)
-    #
-    #    elif AorBorC == "B":
-    #        if debug:
-    #            alpha_chk1 = _alpha_fn(beta0, A, B, C, qvec, fvec)
-    #        Blst = list(B); del Blst[Blst.index(j)]; B = _np.array(Blst, int)
-    #        Clst = list(C); Clst.append(j); C = _np.array(Clst, int)  # move B -> C
-    #        if debug:
-    #            alpha_chk2 = _alpha_fn(beta0, A, B, C, qvec, fvec)
-    #            print("CHKB: ", alpha0, beta0, alpha_chk1, alpha_chk2)
-    #
-    #    else:
-    #        pass
-    #
-    #    if debug: TVD_at_breakpt_chk = _compute_tvd(A, B, D, alpha0, beta0, pushedSD0, qvec, fvec)
-    #    if debug: print(" --> A=", A, " B=", B, " C=", C, " chk = ", TVD_at_breakpt_chk)
-    #
-    #else:
-    #    assert(False), "TVD should eventually reach zero: qvec=%s, fvec=%s, W=%g" % (str(qvec), str(fvec), W)
 
     #Now A,B,C are fixed to what they need to be for our given W
     if debug: print("Final A=", A, "B=", B, "C=", C, "W=", W, "qvec=", qvec, 'fvec=', fvec)

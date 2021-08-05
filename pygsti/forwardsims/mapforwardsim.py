@@ -148,7 +148,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         if method_name == 'bulk_fill_timedep_dchi2': return ('p',)  # just an additional parameter vector
         return super()._array_types_for_method(method_name)
 
-    def __init__(self, model=None, max_cache_size=None, num_atoms=None, processor_grid=None, param_blk_sizes=None):
+    def __init__(self, model=None, max_cache_size=0, num_atoms=None, processor_grid=None, param_blk_sizes=None):
         #super().__init__(model, num_atoms, processor_grid, param_blk_sizes)
         _DistributableForwardSimulator.__init__(self, model, num_atoms, processor_grid, param_blk_sizes)
         self._max_cache_size = max_cache_size

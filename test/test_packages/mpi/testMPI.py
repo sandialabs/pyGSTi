@@ -23,8 +23,8 @@ class ParallelTest(object):
         exp_design = std.get_gst_experiment_design(4)
         mdl_datagen = std.target_model().depolarize(op_noise=0.1, spam_noise=0.01)
 
-        ds_serial = pygsti.construction.simulate_data(mdl_datagen, exp_design, 1000, seed=1234, comm=None)
-        ds_parallel = pygsti.construction.simulate_data(mdl_datagen, exp_design, 1000, seed=1234, comm=comm)
+        ds_serial = pygsti.data.simulate_data(mdl_datagen, exp_design, 1000, seed=1234, comm=None)
+        ds_parallel = pygsti.data.simulate_data(mdl_datagen, exp_design, 1000, seed=1234, comm=comm)
 
         if comm is None or comm.rank == 0:
             assert (set(ds_serial.keys()) == set(ds_parallel.keys()))
@@ -36,10 +36,10 @@ class ParallelTest(object):
 
         exp_design = std.get_gst_experiment_design(4)
         mdl_datagen = std.target_model().depolarize(op_noise=0.1, spam_noise=0.01)
-        ds = pygsti.construction.simulate_data(mdl_datagen, exp_design, 1000, seed=1234, comm=comm)
+        ds = pygsti.data.simulate_data(mdl_datagen, exp_design, 1000, seed=1234, comm=comm)
         data = pygsti.protocols.ProtocolData(exp_design, ds)
 
-        initial_model = std.target_model("TP")
+        initial_model = std.target_model("full TP")
         proto = pygsti.protocols.GateSetTomography(initial_model, verbosity=1,
                                                    optimizer={'maxiter': 100, 'serial_solve_proc_threshold': 100})
 
@@ -62,7 +62,7 @@ class ParallelTest(object):
     
         #Get some operation sequences
         maxLengths = [1, 2, 4]
-        circuits = pygsti.construction.create_lsgst_circuits(
+        circuits = pygsti.circuits.create_lsgst_circuits(
             list(std.target_model().operations.keys()), std.prep_fiducials(),
             std.meas_fiducials(), std.germs(), maxLengths)
     
@@ -103,7 +103,7 @@ class ParallelTest(object):
 
         #Get some operation sequences
         maxLengths = [1,2,4,8]
-        gstrs = pygsti.construction.create_lsgst_circuits(
+        gstrs = pygsti.circuits.create_lsgst_circuits(
             std.target_model(), std.fiducials(), std.fiducials(), std.germs(), maxLengths)
 
         #Check bulk products
@@ -144,15 +144,15 @@ class ParallelTest(object):
         mdl = std.target_model()
         exp_design = std.get_gst_experiment_design(1)
         mdl_datagen = mdl.depolarize(op_noise=0.01, spam_noise=0.01)
-        ds = pygsti.construction.simulate_data(mdl_datagen, exp_design, 1000, seed=1234, comm=comm)
+        ds = pygsti.data.simulate_data(mdl_datagen, exp_design, 1000, seed=1234, comm=comm)
     
-        builder = pygsti.obj.ObjectiveFunctionBuilder.create_from(objfn)
+        builder = pygsti.objectivefns.ObjectiveFunctionBuilder.create_from(objfn)
         builder.additional_args['array_types'] = ('EP', 'EPP')  # HACK - todo this better
     
         if sim == 'map':
-            mdl.sim = pygsti.obj.MapForwardSimulator(num_atoms=natoms)
+            mdl.sim = pygsti.forwardsims.MapForwardSimulator(num_atoms=natoms)
         elif sim == 'matrix':
-            mdl.sim = pygsti.obj.MatrixForwardSimulator(num_atoms=natoms)
+            mdl.sim = pygsti.forwardsims.MatrixForwardSimulator(num_atoms=natoms)
         else:
             raise RuntimeError("Improper sim type passed by test_objfn_generator")
 
@@ -214,15 +214,15 @@ class ParallelTest(object):
     
         #Get some operation sequences
         maxLengths = [1]
-        circuits = pygsti.construction.create_lsgst_circuits(
+        circuits = pygsti.circuits.create_lsgst_circuits(
             list(std.target_model().operations.keys()), std.prep_fiducials(),
             std.meas_fiducials(), std.germs(), maxLengths)
         nP = mdl.num_params
 
         if sim == 'map':
-            mdl.sim = pygsti.obj.MapForwardSimulator(num_atoms=natoms, param_blk_sizes=(nparams, nparams))
+            mdl.sim = pygsti.forwardsims.MapForwardSimulator(num_atoms=natoms, param_blk_sizes=(nparams, nparams))
         elif sim == 'matrix':
-            mdl.sim = pygsti.obj.MatrixForwardSimulator(num_atoms=natoms, param_blk_sizes=(nparams, nparams))
+            mdl.sim = pygsti.forwardsims.MatrixForwardSimulator(num_atoms=natoms, param_blk_sizes=(nparams, nparams))
         else:
             raise RuntimeError("Improper sim type passed by test_fills_generator")
 
@@ -286,9 +286,9 @@ class ParallelTest(object):
         comm = self.ralloc.comm
 
         #Test output of each rank to separate file:
-        pygsti.obj.VerbosityPrinter._comm_path = "./"
-        pygsti.obj.VerbosityPrinter._comm_file_name = "mpi_test_output"
-        printer = pygsti.obj.VerbosityPrinter(verbosity=2, comm=comm)
+        pygsti.baseobjs.VerbosityPrinter._comm_path = "./"
+        pygsti.baseobjs.VerbosityPrinter._comm_file_name = "mpi_test_output"
+        printer = pygsti.baseobjs.VerbosityPrinter(verbosity=2, comm=comm)
         printer.log("HELLO!")
     #
     #
@@ -306,28 +306,28 @@ class PureMPIParallel_Test(ParallelTest):
     def setup_class(cls):
         # Turn off all shared memory usage
         os.environ['PYGSTI_USE_SHARED_MEMORY'] = "0"
-        cls.ralloc = pygsti.obj.ResourceAllocation(wcomm)
+        cls.ralloc = pygsti.baseobjs.ResourceAllocation(wcomm)
 
 #class OnePerHostShmemParallel_Test(ParallelTest):
 #    @classmethod
 #    def setup_class(cls):
 #        # Use 1 host per shared memory group (i.e. no shared mem communication)
 #        os.environ['PYGSTI_MAX_HOST_PROCS'] = "1"
-#        cls.ralloc = pygsti.obj.ResourceAllocation(wcomm)
+#        cls.ralloc = pygsti.baseobjs.ResourceAllocation(wcomm)
 #
 #class TwoPerHostShmemParallel_Test(ParallelTest):
 #    @classmethod
 #    def setup_class(cls):
 #        # Use 2 hosts per shared memory group (i.e. mixed MPI + shared mem if more than 2 procs)
 #        os.environ['PYGSTI_MAX_HOST_PROCS'] = "2"
-#        cls.ralloc = pygsti.obj.ResourceAllocation(wcomm)
+#        cls.ralloc = pygsti.baseobjs.ResourceAllocation(wcomm)
 #
 #class AllShmemParallel_Test(ParallelTest):
 #    @classmethod
 #    def setup_class(cls):
 #        # Set as many procs per host as possible to use shared memory
 #        os.environ['PYGSTI_MAX_HOST_PROCS'] = str(wcomm.size)
-#        cls.ralloc = pygsti.obj.ResourceAllocation(wcomm)
+#        cls.ralloc = pygsti.baseobjs.ResourceAllocation(wcomm)
 
 
 if __name__ == '__main__':
@@ -339,7 +339,7 @@ if __name__ == '__main__':
     #Eriks manual runs so that debugger can start (I couldn't figure out how to set options to nose)
     #tester = PureMPIParallel_Test()
     #tester.setup_class()
-    #tester.ralloc = pygsti.obj.ResourceAllocation(wcomm)
+    #tester.ralloc = pygsti.baseobjs.ResourceAllocation(wcomm)
     ##tester.run_objfn_values('matrix','logl',4)
     #tester.run_fills('map',1, None)
     #tester.run_fills('map',4, None)

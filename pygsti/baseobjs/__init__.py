@@ -15,5 +15,7 @@ from .verbosityprinter import VerbosityPrinter
 from .profiler import Profiler
 from .basis import Basis, BuiltinBasis, ExplicitBasis, TensorProdBasis, DirectSumBasis
 from .label import Label, CircuitLabel
-from .processorspec import ProcessorSpec
+from .outcomelabeldict import OutcomeLabelDict
+from .statespace import StateSpace, QubitSpace, ExplicitStateSpace
 from .resourceallocation import ResourceAllocation
+from .qubitgraph import QubitGraph

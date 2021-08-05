@@ -299,7 +299,7 @@ class LabelTup(Label, tuple):
         return self.sslbls
 
     @property
-    def number_of_qubits(self):  # Used in Circuit
+    def num_qubits(self):  # Used in Circuit
         """
         The number of qubits this label "acts" on (an integer). `None` if `self.ssbls is None`.
         """
@@ -562,7 +562,7 @@ class LabelTupWithTime(Label, tuple):
         return self.sslbls
 
     @property
-    def number_of_qubits(self):  # Used in Circuit
+    def num_qubits(self):  # Used in Circuit
         """
         The number of qubits this label "acts" on (an integer). `None` if `self.ssbls is None`.
         """
@@ -799,7 +799,7 @@ class LabelStr(Label, str):
         return None
 
     @property
-    def number_of_qubits(self):  # Used in Circuit
+    def num_qubits(self):  # Used in Circuit
         """
         The number of qubits this label "acts" on (an integer). `None` if `self.ssbls is None`.
         """
@@ -994,7 +994,7 @@ class LabelTupTup(Label, tuple):
         return self.sslbls
 
     @property
-    def number_of_qubits(self):  # Used in Circuit
+    def num_qubits(self):  # Used in Circuit
         """
         The number of qubits this label "acts" on (an integer). `None` if `self.ssbls is None`.
         """
@@ -1161,11 +1161,6 @@ class LabelTupTup(Label, tuple):
         ret = []
         expanded_comps = [x.expand_subcircuits() for x in self.components]
 
-        #DEBUG TODO REMOVE
-        #print("DB: expaned comps:")
-        #for i,x in enumerate(expanded_comps):
-        #    print(i,": ",x)
-
         for i in range(self.depth):  # depth == # of layers when expanded
             ec = []
             for expanded_comp in expanded_comps:
@@ -1267,7 +1262,7 @@ class LabelTupTupWithTime(Label, tuple):
         return self.sslbls
 
     @property
-    def number_of_qubits(self):  # Used in Circuit
+    def num_qubits(self):  # Used in Circuit
         """
         The number of qubits this label "acts" on (an integer). `None` if `self.ssbls is None`.
         """
@@ -1435,11 +1430,6 @@ class LabelTupTupWithTime(Label, tuple):
         ret = []
         expanded_comps = [x.expand_subcircuits() for x in self.components]
 
-        #DEBUG TODO REMOVE
-        #print("DB: expaned comps:")
-        #for i,x in enumerate(expanded_comps):
-        #    print(i,": ",x)
-
         for i in range(self.depth):  # depth == # of layers when expanded
             ec = []
             for expanded_comp in expanded_comps:
@@ -1498,7 +1488,6 @@ class CircuitLabel(Label, tuple):
         time : float
             The time at which this label occurs (can be relative or absolute)
         """
-        #if name is None: name = '' # backward compatibility (temporary - TODO REMOVE)
         assert(isinstance(reps, _numbers.Integral) and isinstance(name, str)
                ), "Invalid name or reps: %s %s" % (str(name), str(reps))
         tupOfLabels = tuple((Label(tup) for tup in tup_of_layers))  # Note: tup can also be a Label obj
@@ -1554,7 +1543,7 @@ class CircuitLabel(Label, tuple):
         return self.sslbls
 
     @property
-    def number_of_qubits(self):  # Used in Circuit
+    def num_qubits(self):  # Used in Circuit
         """
         The number of qubits this label "acts" on (an integer). `None` if `self.ssbls is None`.
         """
@@ -1733,8 +1722,6 @@ class CircuitLabel(Label, tuple):
             A tuple of component Labels (none of which should be
             :class:`CircuitLabel`s).
         """
-        #REMOVE print("Expanding subcircuit components: ",self.components)
-        #REMOVE print(" --> ",[ x.expand_subcircuits() for x in self.components ])
         return tuple(_itertools.chain(*[x.expand_subcircuits() for x in self.components])) * self.reps
 
     __hash__ = tuple.__hash__  # this is why we derive from tuple - using the
@@ -1857,7 +1844,7 @@ class LabelTupWithArgs(Label, tuple):
         return self.sslbls
 
     @property
-    def number_of_qubits(self):  # Used in Circuit
+    def num_qubits(self):  # Used in Circuit
         """
         The number of qubits this label "acts" on (an integer). `None` if `self.ssbls is None`.
         """
@@ -2114,7 +2101,7 @@ class LabelTupTupWithArgs(Label, tuple):
         return self.sslbls
 
     @property
-    def number_of_qubits(self):  # Used in Circuit
+    def num_qubits(self):  # Used in Circuit
         """
         The number of qubits this label "acts" on (an integer). `None` if `self.ssbls is None`.
         """

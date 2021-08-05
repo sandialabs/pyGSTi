@@ -216,7 +216,7 @@ class TPStateTester(MutableDenseStateBase, BaseCase):
 
     def test_convert(self):
         basis = Basis.cast("pp", 4)
-        conv = states.convert(self.vec, "TP", basis)
+        conv = states.convert(self.vec, "full TP", basis)
         # TODO assert correctness
 
 

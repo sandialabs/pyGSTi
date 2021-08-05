@@ -92,20 +92,21 @@ class CPTPContractBigKickTester(CPTPContractLGSTTester, ContractBigKickModelBase
     pass
 
 
-class XPContractLGSTTester(ContractFunctionWithDataset, ContractLGSTModelBase, BaseCase):
-    target = "XP"
-
-
-class XPContractBigKickTester(XPContractLGSTTester, ContractBigKickModelBase):
-    pass
-
-
-class XPTPContractLGSTTester(ContractFunctionWithDataset, ContractLGSTModelBase, BaseCase):
-    target = "XPTP"
-
-
-class XPTPContractBigKickTester(XPTPContractLGSTTester, ContractBigKickModelBase):
-    pass
+#Removed these after removing the unused "forbidden_prob" function from tools/likelihoodfns.py
+#class XPContractLGSTTester(ContractFunctionWithDataset, ContractLGSTModelBase, BaseCase):
+#    target = "XP"
+#
+#
+#class XPContractBigKickTester(XPContractLGSTTester, ContractBigKickModelBase):
+#    pass
+#
+#
+#class XPTPContractLGSTTester(ContractFunctionWithDataset, ContractLGSTModelBase, BaseCase):
+#    target = "XPTP"
+#
+#
+#class XPTPContractBigKickTester(XPTPContractLGSTTester, ContractBigKickModelBase):
+#    pass
 
 
 class VSPAMContractLGSTTester(ContractFunctionBase, ContractLGSTModelBase, BaseCase):
