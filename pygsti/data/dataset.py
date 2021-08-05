@@ -530,6 +530,30 @@ class _DataSetRow(object):
             else:  # need to add a new label & entry to reps[]
                 raise NotImplementedError("Cannot create new outcome labels by assignment")
 
+    def get(self, index_or_outcome_label, default_value):
+        """
+        The the number of counts for an index or outcome label.
+
+        If the index or outcome is nor present, `default_value` is returned.
+
+        Parameters
+        ----------
+        index_or_outcome_label : int or str or tuple
+            The index or outcome label to lookup.
+
+        default_value : object
+            The value to return if this data row doesn't contain data
+            at the given index.
+
+        Returns
+        -------
+        int or float
+        """
+        try:
+            return self[index_or_outcome_label]
+        except KeyError:
+            return default_value
+
     def _get_single_count(self, outcome_label, timestamp=None):
         if timestamp is not None:
             tslc = _np.where(_np.isclose(self.time, timestamp))[0]

@@ -2,6 +2,7 @@ from ..util import BaseCase
 
 import pygsti
 import pandas
+import os
 import numpy as np
 from pygsti.protocols import vbdataframe as _vbdataframe
 
@@ -9,7 +10,7 @@ class TestVBDataFrame(BaseCase):
 
     def test_vbdataframe_1(self):
         
-        df = pandas.read_csv('test_dataframe_1.csv')
+        df = pandas.read_csv(os.path.join(os.path.dirname(__file__),'test_dataframe_1.csv'))
 
         depths = [0, 4, 8, 12, 20, 28, 40, 56, 80, 112, 160, 224, 316]
         vbdf = _vbdataframe.VBDataFrame(df, x_values=depths)
@@ -75,7 +76,7 @@ class TestVBDataFrame(BaseCase):
 
     def test_vbdataframe_2(self):
         
-        df = pandas.read_csv('test_dataframe_2.csv')
+        df = pandas.read_csv(os.path.join(os.path.dirname(__file__),'test_dataframe_2.csv'))
 
         vbdf = _vbdataframe.VBDataFrame(df)
 

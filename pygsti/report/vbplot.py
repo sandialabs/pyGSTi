@@ -13,48 +13,40 @@ Matplotlib volumetric benchmarking plotting routines.
 import numpy as _np
 
 try:
-    import matplotlib as _matplotlib
     import matplotlib.pyplot as _plt
     from matplotlib.colors import ListedColormap as _ListedColormap
     from matplotlib import cm as _cm
-except ImportError:
-    raise ValueError(("While not a core requirement of pyGSTi, Matplotlib is "
-                      "required to generate VB plots.  It looks like you "
-                      "don't have it installed on your system (it failed to "
-                      "import)."))
-
-try:
     import seaborn as _sns
+
+    _sns.set_style('white')
+    _sns.set_style('ticks')
+
+    # Utility color maps.
+    blues = _sns.color_palette(_sns.color_palette("Blues", 200)).as_hex()
+    blues[0] = '#ffffff'
+    blues = _ListedColormap(blues)
+
+    reds = _sns.color_palette(_sns.color_palette("Reds", 200)).as_hex()
+    reds[0] = '#ffffff'
+    reds = _ListedColormap(reds)
+
+    greens = _sns.color_palette(_sns.color_palette("Greens", 200)).as_hex()
+    greens[0] = '#ffffff'
+    greens = _ListedColormap(greens)
+
+    binary_blue = _sns.color_palette(_sns.color_palette("Blues", 200)).as_hex()
+    binary_blue[0] = '#ffffff'
+    binary_blue = _ListedColormap([binary_blue[0], binary_blue[50]])
+
+    spectral = _cm.get_cmap('Spectral')
+
+    # The default color map.
+    my_cmap = blues
+
 except ImportError:
-    raise ValueError(("While not a core requirement of pyGSTi, Seaborn is "
-                      "required to generate VB plots.  It looks like you "
-                      "don't have it installed on your system (it failed to "
-                      "import)."))
-
-_sns.set_style('white')
-_sns.set_style('ticks')
-
-# Utility color maps.
-blues = _sns.color_palette(_sns.color_palette("Blues", 200)).as_hex()
-blues[0] = '#ffffff'
-blues = _ListedColormap(blues)
-
-reds = _sns.color_palette(_sns.color_palette("Reds", 200)).as_hex()
-reds[0] = '#ffffff'
-reds = _ListedColormap(reds)
-
-greens = _sns.color_palette(_sns.color_palette("Greens", 200)).as_hex()
-greens[0] = '#ffffff'
-greens = _ListedColormap(greens)
-
-binary_blue = _sns.color_palette(_sns.color_palette("Blues", 200)).as_hex()
-binary_blue[0] = '#ffffff'
-binary_blue = _ListedColormap([binary_blue[0], binary_blue[50]])
-
-spectral = _cm.get_cmap('Spectral')
-
-# The default color map.
-my_cmap = blues
+    _plt = None
+    _sns = None
+    my_cmap = None
 
 
 def empty_volumetric_plot(figsize=None, y_values=None, x_values=None, title=None, xlabel='Depth', ylabel='Width'):
@@ -85,6 +77,11 @@ def empty_volumetric_plot(figsize=None, y_values=None, x_values=None, title=None
     ------
     fig, ax : matplolib fig and ax.
     """
+    if _plt is None or _sns is None:
+        raise ValueError(("While not a core requirement of pyGSTi, Matplotlib and Seaborn are "
+                          "required to generate VB plots.  It looks like you "
+                          "don't have them installed on your system (it failed to import)."))
+
     fig, ax = _plt.subplots(figsize=figsize)
     ax.set_aspect('equal')
     _plt.xlabel(xlabel, fontsize=20)

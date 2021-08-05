@@ -314,7 +314,7 @@ class SummaryStatistics(_proto.Protocol):
         """
         def success_counts(dsrow, circ, idealout):
             if dsrow.total == 0: return 0  # shortcut?
-            return dsrow.counts.get(tuple(idealout), 0.)
+            return dsrow.get(tuple(idealout), 0.)
 
         def hamming_distance_counts(dsrow, circ, idealout):
             nQ = len(circ.line_labels)  # number of qubits
