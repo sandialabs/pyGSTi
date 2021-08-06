@@ -58,7 +58,7 @@ class FirstOrderGaugeInvariantStore(object):
         self.norm_order = norm_order
 
         self.errorgen_space_labels = [(op_label, elem_lbl) for op_label in self.primitive_op_labels
-                                      for elem_lbl in self.elem_errorgen_labels_by_op[op_label]]
+                                      for elem_lbl in self.elem_errorgen_labels_by_op[op_label]]  # same as flattened self.errgen_space_op_elem_labels
         assert(len(self.errorgen_space_labels) == self.fogi_directions.shape[0])
 
         #fogv_directions = _mt.nice_nullspace(self.fogi_directions.T)  # can be dependent!

@@ -163,7 +163,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
         vector_L2_norm2s = [_np.linalg.norm(local_fogi_vecs[:, j])**2 for j in range(local_fogi_vecs.shape[1])]
         local_fogi_dirs = local_fogi_vecs / _np.array(vector_L2_norm2s)[None, :]  # gives us *dir*-norm we want  # DUAL NORM
 
-        assert(_mt.columns_are_orthogonal(local_fogi_dirs))  # Note for Cnot in 2Q_XYICNOT (check?)
+        assert(_mt.columns_are_orthogonal(local_fogi_dirs))  # Not for Cnot in 2Q_XYICNOT (check?)
 
         new_fogi_dirs = _np.zeros((fogi_dirs.shape[0], local_fogi_dirs.shape[1]), local_fogi_dirs.dtype)
         new_fogi_dirs[op_errgen_indices[op_label], :] = local_fogi_dirs  # "juice" this op

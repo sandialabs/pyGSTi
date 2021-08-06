@@ -687,7 +687,7 @@ class EmbeddedOp(_LinearOperator):
         """
         return self.errorgen_coefficients(return_basis=False, logscale_nonham=True)
 
-    def set_errorgen_coefficients(self, lindblad_term_dict, action="update", logscale_nonham=False):
+    def set_errorgen_coefficients(self, lindblad_term_dict, action="update", logscale_nonham=False, truncate=True):
         """
         Sets the coefficients of terms in the error generator of this operation.
 
@@ -719,6 +719,12 @@ class EmbeddedOp(_LinearOperator):
             the corresponding value given in `lindblad_term_dict`.  This is what is
             performed by the function :method:`set_error_rates`.
 
+        truncate : bool, optional
+            Whether to allow adjustment of the errogen coefficients in
+            order to meet constraints (e.g. to preserve CPTP) when necessary.
+            If False, then an error is thrown when the given coefficients
+            cannot be set as specified.
+
         Returns
         -------
         None
@@ -728,7 +734,7 @@ class EmbeddedOp(_LinearOperator):
         for k, val in lindblad_term_dict.items():
             unembedded_key = (k[0],) + tuple([_EmbeddedBasis.unembed_label(x, self.target_labels) for x in k[1:]])
             unembedded_Ltermdict[unembedded_key] = val
-        self.embedded_op.set_errorgen_coefficients(unembedded_Ltermdict, action, logscale_nonham)
+        self.embedded_op.set_errorgen_coefficients(unembedded_Ltermdict, action, logscale_nonham, truncate)
 
         if self._rep_type == 'dense': self._update_denserep()
         self.dirty = True

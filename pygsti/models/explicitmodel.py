@@ -1575,8 +1575,16 @@ class ExplicitOpModel(_mdl.OpModel):
         other_errorgen_coefficient_labels = _collections.OrderedDict()
         for op_label in primitive_op_labels:  # Note: "ga" stands for "gauge action" in variable names below
             op = self.operations[op_label]
-            op_mx = op.unitary_postfactor.to_dense()  # assumes a LindbladOp and low num qubits
-            U = _bt.change_basis(op_mx, self.basis, 'std')
+
+            # TODO: more general decomposition of op - here it must be Composed(UnitaryOp, ExpErrorGen) or just ExpErrorGen
+            if isinstance(op, _op.ExpErrorgenOp):  # assume just an identity op
+                U = _np.identity(op.state_space.dim, 'd')
+            elif isinstance(op, _op.ComposedOp):  # assume first element gives unitary
+                op_mx = op.factorops[0].to_dense()  # assumes a LindbladOp and low num qubits
+                U = _bt.change_basis(op_mx, self.basis, 'std')
+            else:
+                raise ValueError("Could not extract target unitary from %s op!" % str(type(op)))
+
             ham_ga_matrices[op_label] = _fogit.first_order_ham_gauge_action_matrix(U, ham_basis)
             other_ga_matrices[op_label] = _fogit.first_order_other_gauge_action_matrix(U, other_basis, other_mode)
             errgen_labels = op.errorgen_coefficient_labels()

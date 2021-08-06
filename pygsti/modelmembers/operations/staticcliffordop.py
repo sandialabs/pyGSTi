@@ -13,13 +13,14 @@ Defines the StaticCliffordOp class
 import numpy as _np
 
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
+from pygsti.modelmembers.errorgencontainer import NoErrorGeneratorInterface as _NoErrorGeneratorInterface
 from pygsti.modelmembers import term as _term
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
 
 
-class StaticCliffordOp(_LinearOperator):
+class StaticCliffordOp(_LinearOperator, _NoErrorGeneratorInterface):
     """
     A Clifford operation, represented via a symplectic matrix.
 
