@@ -49,12 +49,7 @@ v
     """
 
     def __init__(self, state_space):
-        if isinstance(state_space, _statespace.StateSpace):
-            self._state_space = state_space
-        else:
-            #Maybe change to a different default?
-            self._state_space = _statespace.CustomStateSpace(state_space)
-
+        self._state_space = _statespace.StateSpace.cast(state_space)
         self._num_modeltest_params = None
         self._hyperparams = {}
         self._paramvec = _np.zeros(0, 'd')

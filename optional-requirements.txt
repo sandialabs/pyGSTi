@@ -11,5 +11,5 @@ cython
 cvxopt
 cvxpy
 nose
-
+seaborn
 

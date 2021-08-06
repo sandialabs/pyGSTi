@@ -93,7 +93,8 @@ class StateRepComputational(StateRep):
     def __init__(self, zvals, basis, state_space):
 
         #Convert zvals to dense vec:
-        assert(basis.name == 'pp'), "Only Pauli-product-basis computational states are supported so far"
+        assert(basis.name == 'pp' or basis.name.split('*') == ['pp'] * (basis.name.count('*') + 1)), \
+            "Only Pauli-product-basis computational states are supported so far"
         self.basis = basis
         factor_dim = 4
         v0 = 1.0 / _np.sqrt(2) * _np.array((1, 0, 0, 1), 'd')  # '0' qubit state as Pauli dmvec

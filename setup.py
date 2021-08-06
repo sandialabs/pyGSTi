@@ -66,7 +66,8 @@ extras = {
         'psutil',
         'rednose',
         'zmq',
-        'jinja2'
+        'jinja2',
+        'seaborn'
     ]
 }
 
