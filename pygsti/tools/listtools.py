@@ -10,8 +10,9 @@ Utility functions for working with lists
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as _np
 import itertools as _itertools
+
+import numpy as _np
 
 
 def remove_duplicates_in_place(l, index_to_test=None):
@@ -55,8 +56,8 @@ def remove_duplicates(l, index_to_test=None):
 
     Parameters
     ----------
-    l : list
-        The list to remove duplicates from.
+    l : iterable
+        The list/set to remove duplicates from.
 
     index_to_test : int, optional
         If not None, the index within the elements of l to test.  For

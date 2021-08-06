@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
+import sys
+
 import pygsti
-import sys, time
+
 
 def f(x):
     if x == 1 or x == 0:

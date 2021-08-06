@@ -15,12 +15,11 @@ import warnings as _warnings
 import numpy as _np
 import numpy.linalg as _nla
 
-from .. import objects as _objs
-from .. import construction as _constr
-from ..tools import mpitools as _mpit
-from ..tools import slicetools as _slct
-from . import grasp as _grasp
-from . import scoring as _scoring
+from pygsti.algorithms import grasp as _grasp
+from pygsti.algorithms import scoring as _scoring
+from pygsti import circuits as _circuits
+from pygsti import baseobjs as _baseobjs
+from pygsti.tools import mpitools as _mpit
 
 FLOATSIZE = 8  # in bytes: TODO: a better way
 
@@ -132,7 +131,7 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
     list of Circuit
         A list containing the germs making up the germ set.
     """
-    printer = _objs.VerbosityPrinter.create_printer(verbosity, comm)
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm)
     modelList = _setup_model_list(target_model, randomize,
                                   randomization_strength, num_gs_copies, seed)
     gates = list(target_model.operations.keys())
@@ -140,11 +139,11 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
     if candidate_germ_counts is None: candidate_germ_counts = {6: 'all upto'}
     for germLength, count in candidate_germ_counts.items():
         if count == "all upto":
-            availableGermsList.extend(_constr.list_all_circuits_without_powers_and_cycles(
+            availableGermsList.extend(_circuits.list_all_circuits_without_powers_and_cycles(
                 gates, max_length=germLength))
         else:
             seed = None if candidate_seed is None else candidate_seed + germLength
-            availableGermsList.extend(_constr.list_random_circuits_onelen(
+            availableGermsList.extend(_circuits.list_random_circuits_onelen(
                 gates, germLength, count, seed=seed))
 
     if algorithm_kwargs is None:
@@ -974,7 +973,7 @@ def _bulk_twirled_deriv(model, circuits, eps=1e-6, check=False, comm=None):
         # This function assumes model has no spam elements so `lookup` below
         #  gives indexes into products computed by evalTree.
 
-    resource_alloc = _objs.ResourceAllocation(comm=comm)
+    resource_alloc = _baseobjs.ResourceAllocation(comm=comm)
     dProds, prods = model.sim.bulk_dproduct(circuits, flat=True, return_prods=True, resource_alloc=resource_alloc)
     op_dim = model.dim
     fd = op_dim**2  # flattened gate dimension
@@ -1218,7 +1217,7 @@ def find_germs_depthfirst(model_list, germs_list, randomize=True,
     list
         A list of the built-up germ set (a list of :class:`Circuit` objects).
     """
-    printer = _objs.VerbosityPrinter.create_printer(verbosity)
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
 
     model_list = _setup_model_list(model_list, randomize,
                                    randomization_strength, num_copies, seed)
@@ -1399,7 +1398,7 @@ def find_germs_breadthfirst(model_list, germs_list, randomize=True,
     if comm is not None and comm.Get_size() > 1:
         from mpi4py import MPI  # not at top so pygsti doesn't require mpi4py
 
-    printer = _objs.VerbosityPrinter.create_printer(verbosity, comm)
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm)
 
     model_list = _setup_model_list(model_list, randomize,
                                    randomization_strength, num_copies, seed)
@@ -1734,7 +1733,7 @@ def find_germs_integer_slack(model_list, germs_list, randomize=True,
     :class:`~pygsti.objects.Model`
     :class:`~pygsti.objects.Circuit`
     """
-    printer = _objs.VerbosityPrinter.create_printer(verbosity)
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
 
     model_list = _setup_model_list(model_list, randomize,
                                    randomization_strength, num_copies, seed)
@@ -2066,7 +2065,7 @@ def find_germs_grasp(model_list, germs_list, alpha, randomize=True,
     finalGermList : list of Circuit
         Sublist of `germs_list` specifying the final, optimal set of germs.
     """
-    printer = _objs.VerbosityPrinter.create_printer(verbosity)
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
 
     model_list = _setup_model_list(model_list, randomize,
                                    randomization_strength, num_copies, seed)

@@ -1,4 +1,3 @@
-import pygsti
 import pickle
 
 def load():

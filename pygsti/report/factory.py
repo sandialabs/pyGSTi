@@ -10,38 +10,31 @@ Report generation functions.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import pickle as _pickle
+import collections as _collections
 import os as _os
 import time as _time
-import collections as _collections
 import warnings as _warnings
 import zipfile as _zipfile
+
 import numpy as _np
 
-from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from ..objects import DataComparator as _DataComparator
-from ..objects import objectivefns as _objfns
-from ..tools import timed_block as _timed_block
-
-from ..tools.mpitools import distribute_indices as _distribute_indices
-from ..tools.legacytools import deprecate as _deprecated_fn
-
-from .. import tools as _tools
-from .. import objects as _objs
-from .. import _version
-
-from . import workspace as _ws
-from . import autotitle as _autotitle
-from . import merge_helpers as _merge
-from . import reportables as _reportables
-from . import Report as _Report
-from . import section as _section
-from .notebook import Notebook as _Notebook
-from ..objects.label import Label as _Lbl
-from ..modelpacks import RBModelPack as _RBModelPack
-from ..objects.circuitlist import CircuitList as _CircuitList
-from ..objects.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
-from ..objects.labeldicts import StateSpaceLabels as _StateSpaceLabels
+from pygsti.report import Report as _Report
+from pygsti.report import autotitle as _autotitle
+from pygsti.report import merge_helpers as _merge
+from pygsti.report import reportables as _reportables
+from pygsti.report import section as _section
+from pygsti.report import workspace as _ws
+from pygsti import _version
+from pygsti import tools as _tools
+from pygsti.models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
+from pygsti.baseobjs.statespace import StateSpace as _StateSpace
+from pygsti.objectivefns import objectivefns as _objfns
+from pygsti.circuits.circuit import Circuit as _Circuit
+from pygsti.circuits.circuitlist import CircuitList as _CircuitList
+from pygsti.circuits.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
+from pygsti.baseobjs.label import Label as _Lbl
+from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from pygsti.tools.legacytools import deprecate as _deprecated_fn
 
 #maybe import these from drivers.longsequence so they stay synced?
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]  # ".wildcard" (not a separate estimate anymore)
@@ -250,10 +243,6 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
     switchBd.add("params", (0, 1))
     switchBd.add("objfn_builder", (0, 1))
     switchBd.add("objfn_builder_modvi", (0, 1))
-    #switchBd.add("objective_tvd_tuple", (0, 1))    #REMOVE
-    #switchBd.add("objective_modvi", (0, 1))    #REMOVE
-    #switchBd.add("mpc", (0, 1))    #REMOVE
-    #switchBd.add("mpc_modvi", (0, 1))    #REMOVE
     switchBd.add("clifford_compilation", (0, 1))
     switchBd.add("meta_stdout", (0, 1))
     switchBd.add("profiler", (0, 1))
@@ -335,24 +324,6 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
                 'final_objfn_builder', _objfns.ObjectiveFunctionBuilder.create_from('logl'))
             switchBd.params[d, i] = est.parameters
 
-            #REMOVE
-            #def rpt_objective(opt_objective):
-            #    """ If optimized using just LGST, compute logl values """
-            #    if opt_objective == "lgst": return "logl"
-            #    else: return opt_objective
-            #switchBd.params[d, i] = est.parameters
-            #switchBd.objective[d, i] = rpt_objective(est.parameters['objective'])
-            #switchBd.objective_tvd_tuple[d, i] = (rpt_objective(est.parameters['objective']), 'tvd')
-            #switchBd.objective_modvi[d, i] = rpt_objective(est_modvi.parameters['objective'])
-            #if est.parameters['objective'] == "logl":
-            #    switchBd.mpc[d, i] = est.parameters['minProbClip']
-            #    switchBd.mpc_modvi[d, i] = est_modvi.parameters['minProbClip']
-            #elif est.parameters['objective'] == "chi2":
-            #    switchBd.mpc[d, i] = est.parameters['minProbClipForWeighting']
-            #    switchBd.mpc_modvi[d, i] = est_modvi.parameters['minProbClipForWeighting']
-            #else:  # "lgst" - just use defaults for logl
-            #    switchBd.mpc[d, i] = 1e-4
-            #    switchBd.mpc_modvi[d, i] = 1e-4
             switchBd.clifford_compilation[d, i] = est.parameters.get("clifford compilation", 'auto')
             if switchBd.clifford_compilation[d, i] == 'auto':
                 switchBd.clifford_compilation[d, i] = find_std_clifford_compilation(
@@ -478,7 +449,7 @@ def _construct_idtresults(idt_idle_op, idt_pauli_dicts, gst_results_dict, printe
         return {}
 
     idt_results_dict = {}
-    GiStr = _objs.Circuit((idt_idle_op,))
+    GiStr = _Circuit((idt_idle_op,))
 
     from ..extras import idletomography as _idt
     autodict = bool(idt_pauli_dicts == "auto")
@@ -1049,7 +1020,7 @@ def find_std_clifford_compilation(model, verbosity=0):
         The Clifford compilation dictionary (if one can be found).
     """
     printer = _VerbosityPrinter.create_printer(verbosity)
-    if not isinstance(model, _objs.ExplicitOpModel):
+    if not isinstance(model, _ExplicitOpModel):
         return None  # only match explicit models
 
     import importlib
@@ -1102,9 +1073,10 @@ def find_std_clifford_compilation(model, verbosity=0):
                    "smq2Q_XYZICNOT")
     for module_name in smq_modules:
         mod = importlib.import_module("pygsti.modelpacks." + module_name)
-        qubit_labels = model.state_space_labels.labels[0]  # this usually gets the qubit labels
+        if model.state_space.num_tensor_product_blocks > 1: continue  # only try to match for single-TPB cases
+        qubit_labels = model.state_space.tensor_product_block_labels(0)  # this usually gets the qubit labels
         if len(mod._sslbls) != len(qubit_labels): continue  # wrong number of qubits!
-        if _StateSpaceLabels.cast(mod._sslbls).dim != _StateSpaceLabels.cast(qubit_labels).dim: continue
+        if _StateSpace.cast(mod._sslbls).dim != _StateSpace.cast(qubit_labels).dim: continue
 
         target_model = mod.target_model(qubit_labels=qubit_labels)
         if target_model.dim == model.dim and \
@@ -1112,6 +1084,7 @@ def find_std_clifford_compilation(model, verbosity=0):
            set(target_model.preps.keys()) == set(model.preps.keys()) and \
            set(target_model.povms.keys()) == set(model.povms.keys()):
             if target_model.frobeniusdist(model) < 1e-6:
+                from pygsti.modelpacks import RBModelPack as _RBModelPack
                 if isinstance(mod, _RBModelPack):
                     printer.log("Found standard clifford compilation from %s" % module_name)
                     return mod.clifford_compilation(qubit_labels)
@@ -1260,7 +1233,7 @@ def construct_standard_report(results, title="auto",
     if 'ShowUnmodeledError' in flags:
         sections.append(_section.GoodnessUnmodeledSection())
 
-    # Perform idle tomography on datasets if desired (need to do
+    # Perform idle tomography on data if desired (need to do
     #  this before creating main switchboard)
     printer.log("Running idle tomography")
     try:
@@ -1478,7 +1451,7 @@ def construct_nqnoise_report(results, title="auto",
     if 'ShowScaling' in flags:
         sections.append(_section.GoodnessScalingSection())
 
-    # Perform idle tomography on datasets if desired (need to do
+    # Perform idle tomography on data if desired (need to do
     #  this before creating main switchboard)
     printer.log("Running idle tomography")
     try:
@@ -1589,7 +1562,6 @@ def create_drift_report(results, title='auto', ws=None, verbosity=1):
     Report : A constructed report object
     """
     from ..protocols import StabilityAnalysisResults as _StabilityAnalysisResults
-    from ..extras.drift.stabilityanalyzer import StabilityAnalyzer
     from ..extras.drift import driftreport
     assert(isinstance(results, _StabilityAnalysisResults)), \
         "Support for multiple results as a Dict is not yet included!"

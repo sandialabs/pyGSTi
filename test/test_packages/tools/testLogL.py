@@ -1,8 +1,9 @@
-from ..testutils import BaseTestCase, compare_files, temp_files
-from pygsti.modelpacks.legacy import std1Q_XYI as std
-import pygsti
+import os
+import psutil
 
-import psutil, os
+import pygsti
+from ..testutils import BaseTestCase, compare_files
+
 
 class LogLTestCase(BaseTestCase):
     def test_memory(self):
@@ -10,10 +11,10 @@ class LogLTestCase(BaseTestCase):
         def musage(prefix):
             p = psutil.Process(os.getpid())
             print(prefix, p.memory_info()[0])
-        current_mem = pygsti.objects.profiler._get_mem_usage
+        current_mem = pygsti.baseobjs.profiler._get_mem_usage
 
         musage("Initial")
-        ds = pygsti.objects.DataSet(file_to_load_from=compare_files + "/analysis.dataset")
+        ds = pygsti.data.DataSet(file_to_load_from=compare_files + "/analysis.dataset")
         model = pygsti.io.load_model(compare_files + "/analysis.model")
         musage("Pt1")
         
@@ -23,10 +24,10 @@ class LogLTestCase(BaseTestCase):
                                 poisson_picture=True, mem_limit=0) # No memory for you
 
         musage("Pt2")
-        L = pygsti.logl_hessian(model, ds, prob_clip_interval=(-1e6,1e6),
+        L = pygsti.logl_hessian(model, ds, prob_clip_interval=(-1e6, 1e6),
                                 poisson_picture=True, mem_limit=None, verbosity=10) # Reference: no mem limit
         musage("Pt3")
-        L1 = pygsti.logl_hessian(model, ds, prob_clip_interval=(-1e6,1e6),
+        L1 = pygsti.logl_hessian(model, ds, prob_clip_interval=(-1e6, 1e6),
                                  poisson_picture=True, mem_limit=1024.0**3, verbosity=10) # Limit memory (1GB)
         musage("Pt4")
         #L2 = pygsti.logl_hessian(model, ds,prob_clip_interval=(-1e6,1e6),
@@ -57,8 +58,8 @@ class LogLTestCase(BaseTestCase):
     def test_hessian_mpi(self):
         from mpi4py import MPI
         comm = MPI.COMM_WORLD
-        current_mem = pygsti.objects.profiler._get_mem_usage
-        ds   = pygsti.objects.DataSet(file_to_load_from=compare_files + "/analysis.dataset")
+        current_mem = pygsti.baseobjs.profiler._get_mem_usage
+        ds   = pygsti.data.DataSet(file_to_load_from=compare_files + "/analysis.dataset")
         model = pygsti.io.load_model(compare_files + "/analysis.model")
         L = pygsti.logl_hessian(model, ds,
                                 prob_clip_interval=(-1e6,1e6), mem_limit=500*1024**2+current_mem(),

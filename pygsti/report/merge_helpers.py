@@ -12,16 +12,14 @@ Helper functions for creating HTML documents by "merging" with a template
 
 import collections as _collections
 import os as _os
-import shutil as _shutil
-import webbrowser as _webbrowser
-
 import re as _re
+import shutil as _shutil
 import subprocess as _subprocess
-
+import webbrowser as _webbrowser
 from pathlib import Path
 
-from ..tools import timed_block as _timed_block
-from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from pygsti.tools import timed_block as _timed_block
 
 try:
     from jinja2.runtime import Undefined as _Undefined

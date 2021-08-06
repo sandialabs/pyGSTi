@@ -1,9 +1,9 @@
 """Shared test fixtures for pygsti.algorithms unit tests"""
-from ..util import Namespace
-
-from pygsti.modelpacks.legacy import std1Q_XYI as std
-import pygsti.construction as pc
 import pygsti.algorithms as alg
+import pygsti.circuits as circuits
+import pygsti.data as data
+from pygsti.modelpacks.legacy import std1Q_XYI as std
+from ..util import Namespace
 
 ns = Namespace()
 ns.model = std.target_model()
@@ -22,21 +22,21 @@ def datagen_gateset(self):
 
 @ns.memo
 def lgstStrings(self):
-    return pc.create_lgst_circuits(
+    return circuits.create_lgst_circuits(
         self.fiducials, self.fiducials, self.opLabels
     )
 
 
 @ns.memo
 def elgstStrings(self):
-    return pc.create_elgst_lists(
+    return circuits.create_elgst_lists(
         self.opLabels, self.germs, self.maxLengthList
     )
 
 
 @ns.memo
 def lsgstStrings(self):
-    return pc.create_lsgst_circuit_lists(
+    return circuits.create_lsgst_circuit_lists(
         self.opLabels, self.fiducials, self.fiducials,
         self.germs, self.maxLengthList
     )
@@ -44,11 +44,11 @@ def lsgstStrings(self):
 
 @ns.memo
 def ds(self):
-    expList = pc.create_lsgst_circuits(
+    expList = circuits.create_lsgst_circuits(
         self.opLabels, self.fiducials, self.fiducials,
         self.germs, self.maxLengthList
     )
-    return pc.simulate_data(
+    return data.simulate_data(
         self.datagen_gateset, expList,
         num_samples=1000, sample_error='binomial', seed=_SEED
     )
@@ -56,7 +56,7 @@ def ds(self):
 
 @ns.memo
 def ds_lgst(self):
-    return pc.simulate_data(
+    return data.simulate_data(
         self.datagen_gateset, self.lgstStrings,
         num_samples=10000, sample_error='binomial', seed=_SEED
     )

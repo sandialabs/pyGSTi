@@ -1,14 +1,10 @@
-import unittest
-import pygsti
 import numpy as np
-import sys
-import warnings
-import os
 import plotly.graph_objs as go
 
-from ..testutils import BaseTestCase, temp_files, compare_files
+import pygsti
 from pygsti.report import colormaps as cmap
 from pygsti.report.figure import ReportFigure
+from ..testutils import BaseTestCase, temp_files
 
 
 class ColormapTests(BaseTestCase):

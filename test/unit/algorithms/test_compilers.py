@@ -1,10 +1,12 @@
 import numpy as np
 
-from ..util import BaseCase, Namespace
-
-from pygsti.objects import Circuit, ProcessorSpec, Label
-from pygsti.tools import symplectic
 from pygsti.algorithms import compilers
+from pygsti.baseobjs import Label
+from pygsti.processors import QubitProcessorSpec
+from pygsti.processors import CliffordCompilationRules
+from pygsti.circuits import Circuit
+from pygsti.tools import symplectic
+from ..util import BaseCase, Namespace
 
 ## Immutable test fixture data
 fixture_1Q = Namespace(
@@ -15,8 +17,12 @@ fixture_1Q = Namespace(
                            [0, 1]], dtype=np.int8),
     clifford_phase=np.array([0, 2])
 )
-fixture_1Q.pspec = ProcessorSpec(num_qubits=1, gate_names=['Gcnot', 'Gh', 'Gp', 'Gxpi', 'Gypi', 'Gzpi'],
-                                 construct_models=('target','clifford'))
+fixture_1Q.pspec = QubitProcessorSpec(num_qubits=1, gate_names=['Gcnot', 'Gh', 'Gp', 'Gxpi', 'Gypi', 'Gzpi'], geometry='line')
+fixture_1Q.clifford_abs = CliffordCompilationRules.create_standard(fixture_1Q.pspec, compile_type="absolute",
+                                                                   what_to_compile=("1Qcliffords","paulis"), verbosity=1)
+fixture_1Q.clifford_peq = CliffordCompilationRules.create_standard(fixture_1Q.pspec, compile_type="paulieq",
+                                                                   what_to_compile=("1Qcliffords","allcnots"), verbosity=1)
+                                             
 fixture_2Q = Namespace(
     n=2,
     qubit_labels=['Q0', 'Q1'],
@@ -29,10 +35,15 @@ fixture_2Q = Namespace(
                            [0, 1, 0, 1]]),
     clifford_phase=np.array([2, 0, 1, 3])
 )
-fixture_2Q.pspec = ProcessorSpec(
-    fixture_2Q.n, gate_names=fixture_2Q.gate_names, availability=fixture_2Q.availability,
-    qubit_labels=fixture_2Q.qubit_labels, construct_models=('target','clifford')
-)
+fixture_2Q.pspec = QubitProcessorSpec(fixture_2Q.n, gate_names=fixture_2Q.gate_names,
+                                      availability=fixture_2Q.availability,
+                                      qubit_labels=fixture_2Q.qubit_labels, geometry='line')
+fixture_2Q.clifford_abs = CliffordCompilationRules.create_standard(fixture_2Q.pspec, compile_type="absolute",
+                                             what_to_compile=("1Qcliffords","paulis"), verbosity=1)
+fixture_2Q.clifford_peq = CliffordCompilationRules.create_standard(fixture_2Q.pspec, compile_type="paulieq",
+                                             what_to_compile=("1Qcliffords","allcnots"), verbosity=1)
+
+
 # Totally arbitrary CNOT circuit
 fixture_2Q.cnot_circuit = Circuit(layer_labels=[
     Label('CNOT', ('Q1', 'Q0')),
@@ -58,10 +69,13 @@ fixture_3Q = Namespace(
                            [0, 0, 1, 0, 0, 1]]),
     clifford_phase=np.array([2, 2, 3, 1, 1, 2])
 )
-fixture_3Q.pspec = ProcessorSpec(
-    fixture_3Q.n, gate_names=fixture_3Q.gate_names, availability=fixture_3Q.availability,
-    qubit_labels=fixture_3Q.qubit_labels, construct_models=('target','clifford')
-)
+fixture_3Q.pspec = QubitProcessorSpec(fixture_3Q.n, gate_names=fixture_3Q.gate_names,
+                                      availability=fixture_3Q.availability,
+                                      qubit_labels=fixture_3Q.qubit_labels, geometry='line')
+fixture_3Q.clifford_abs = CliffordCompilationRules.create_standard(fixture_3Q.pspec, compile_type="absolute",
+                                                                   what_to_compile=("1Qcliffords","paulis"), verbosity=1)
+fixture_3Q.clifford_peq = CliffordCompilationRules.create_standard(fixture_3Q.pspec, compile_type="paulieq",
+                                                                   what_to_compile=("1Qcliffords","allcnots"), verbosity=1)
 
 
 class CompilersTester(BaseCase):
@@ -95,7 +109,9 @@ class CompileSymplecticTester(BaseCase):
 class CompileSymplecticPspecTester(CompileSymplecticTester):
     def setUp(self):
         super(CompileSymplecticPspecTester, self).setUp()
-        self.options.update(pspec=fixture_2Q.pspec)
+        self.options.update(pspec=fixture_2Q.pspec,
+                            absolute_compilation=fixture_2Q.clifford_abs,
+                            paulieq_compilation=fixture_2Q.clifford_peq)
 
 
 class CompileSymplecticSubsetTester(CompileSymplecticTester):
@@ -103,6 +119,8 @@ class CompileSymplecticSubsetTester(CompileSymplecticTester):
         super(CompileSymplecticSubsetTester, self).setUp()
         self.options.update(
             pspec=fixture_3Q.pspec,
+            absolute_compilation=fixture_3Q.clifford_abs,
+            paulieq_compilation=fixture_3Q.clifford_peq,
             qubit_labels=['Q1', 'Q2'],
             iterations=2,
             algorithms=['BGGE', 'ROGGE', 'iAGvGE']
@@ -140,6 +158,8 @@ class CompileClifford1QPspecTester(CompileClifford1QTester):
         super(CompileClifford1QPspecTester, self).setUp()
         self.options.update(
             pspec=fixture_2Q.pspec,
+            absolute_compilation=fixture_2Q.clifford_abs,
+            paulieq_compilation=fixture_2Q.clifford_peq,
             qubit_labels=['Q1'],
             prefixpaulis=False,
             paulirandomize=True
@@ -153,7 +173,9 @@ class CompileClifford2QTester(CompileClifford1QTester):
 class CompileClifford2QPspecTester(CompileClifford2QTester):
     def setUp(self):
         super(CompileClifford2QPspecTester, self).setUp()
-        self.options.update(pspec=fixture_2Q.pspec)
+        self.options.update(pspec=fixture_2Q.pspec,
+                            absolute_compilation=fixture_2Q.clifford_abs,
+                            paulieq_compilation=fixture_2Q.clifford_peq)
 
 
 class CompileCliffordSubsetTester(CompileClifford2QTester):
@@ -161,6 +183,8 @@ class CompileCliffordSubsetTester(CompileClifford2QTester):
         super(CompileCliffordSubsetTester, self).setUp()
         self.options.update(
             pspec=fixture_3Q.pspec,
+            absolute_compilation=fixture_3Q.clifford_abs,
+            paulieq_compilation=fixture_3Q.clifford_peq,
             qubit_labels=['Q1', 'Q2'],
             prefixpaulis=True,
             paulirandomize=True
@@ -189,6 +213,7 @@ class CompileCNOTCircuitBase(object):
         compiled = compilers.compile_cnot_circuit(
             fixture_2Q.cnot_circuit_sym,
             fixture_2Q.pspec,
+            fixture_2Q.clifford_abs,
             algorithm=self.algorithm,
             aargs=self.aargs
         )
@@ -198,6 +223,7 @@ class CompileCNOTCircuitBase(object):
         compiled = compilers.compile_cnot_circuit(
             fixture_2Q.cnot_circuit_sym,
             fixture_3Q.pspec,
+            fixture_3Q.clifford_abs,
             qubit_labels=fixture_2Q.qubit_labels,
             algorithm=self.algorithm,
             aargs=self.aargs
@@ -284,6 +310,8 @@ class CompileStabilizerCOCAGE1QTester(CompileStabilizerBase, BaseCase):
         self.fixture = fixture_1Q
         self.options.update(
             pspec=self.fixture.pspec,
+            absolute_compilation=self.fixture.clifford_abs,
+            paulieq_compilation=self.fixture.clifford_peq,
             algorithm='COCAGE',
             paulirandomize=False
         )
@@ -294,7 +322,9 @@ class CompileStabilizerCOCAGE2QTester(CompileStabilizerCOCAGE1QTester):
         super(CompileStabilizerCOCAGE2QTester, self).setUp()
         self.fixture = fixture_2Q
         self.options.update(
-            pspec=self.fixture.pspec
+            pspec=self.fixture.pspec,
+            absolute_compilation=self.fixture.clifford_abs,
+            paulieq_compilation=self.fixture.clifford_peq,
         )
 
 
@@ -312,7 +342,9 @@ class CompileStabilizerROCAGE2QTester(CompileStabilizerROCAGE1QTester):
         super(CompileStabilizerROCAGE2QTester, self).setUp()
         self.fixture = fixture_2Q
         self.options.update(
-            pspec=self.fixture.pspec
+            pspec=self.fixture.pspec,
+            absolute_compilation=self.fixture.clifford_abs,
+            paulieq_compilation=self.fixture.clifford_peq,
         )
 
 
@@ -321,6 +353,8 @@ class CompileStabilizer1QSubsetTester(CompileStabilizerCOCAGE1QTester):
         super(CompileStabilizer1QSubsetTester, self).setUp()
         self.options.update(
             pspec=fixture_3Q.pspec,
+            absolute_compilation=fixture_3Q.clifford_abs,
+            paulieq_compilation=fixture_3Q.clifford_peq,
             qubit_labels=['Q1', ],
             algorithm='COiCAGE',
             paulirandomize=False

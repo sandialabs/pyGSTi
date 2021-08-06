@@ -12,8 +12,9 @@ The standard unitaries and gate names, used internal compilers and short-hand mo
 
 import numpy as _np
 import scipy.linalg as _spl
-from . import optools as _gts
-from . import symplectic as _symp
+
+from pygsti.tools import optools as _ot
+from pygsti.tools import symplectic as _symp
 
 
 def internal_gate_unitaries():
@@ -110,8 +111,8 @@ def is_gate_this_standard_unitary(gate_unitary, standard_gate_name):
     if _np.shape(gate_unitary) != _np.shape(std_unitaries[standard_gate_name]):
         return False
     else:
-        pm_input = _gts.unitary_to_pauligate(gate_unitary)
-        pm_std = _gts.unitary_to_pauligate(std_unitaries[standard_gate_name])
+        pm_input = _ot.unitary_to_pauligate(gate_unitary)
+        pm_std = _ot.unitary_to_pauligate(std_unitaries[standard_gate_name])
         equal = _np.allclose(pm_input, pm_std)
         return equal
 
@@ -387,6 +388,7 @@ def standard_gatenames_quil_conversions():
 
     return std_gatenames_to_quil
 
+
 def standard_gatenames_chp_conversions():
     """
     A dictionary converting the gates with standard names to CHP native operations.
@@ -410,22 +412,22 @@ def standard_gatenames_chp_conversions():
     std_gatenames_to_chp = {}
 
     # Native gates for CHP
-    std_gatenames_to_chp['h']  = ['h 0']
-    std_gatenames_to_chp['p']  = ['p 0']
-    std_gatenames_to_chp['c']  = ['c 0 1']
-    std_gatenames_to_chp['m']  = ['m 0']
+    std_gatenames_to_chp['h'] = ['h 0']
+    std_gatenames_to_chp['p'] = ['p 0']
+    std_gatenames_to_chp['c'] = ['c 0 1']
+    std_gatenames_to_chp['m'] = ['m 0']
 
     # Cliffords
-    std_gatenames_to_chp['Gc0']  = []
-    std_gatenames_to_chp['Gc1']  = ['h 0', 'p 0', 'h 0', 'p 0']
-    std_gatenames_to_chp['Gc2']  = ['h 0', 'p 0']
-    std_gatenames_to_chp['Gc3']  = ['h 0', 'p 0', 'p 0', 'h 0']
-    std_gatenames_to_chp['Gc4']  = ['p 0', 'h 0', 'p 0', 'p 0']
-    std_gatenames_to_chp['Gc5']  = ['h 0', 'p 0', 'p 0', 'p 0']
-    std_gatenames_to_chp['Gc6']  = ['h 0', 'p 0', 'p 0', 'h 0', 'p 0', 'p 0']
-    std_gatenames_to_chp['Gc7']  = ['h 0', 'p 0', 'h 0', 'p 0', 'p 0', 'p 0']
-    std_gatenames_to_chp['Gc8']  = ['h 0', 'p 0', 'h 0', 'p 0', 'p 0', 'h 0']
-    std_gatenames_to_chp['Gc9']  = ['p 0', 'p 0']
+    std_gatenames_to_chp['Gc0'] = []
+    std_gatenames_to_chp['Gc1'] = ['h 0', 'p 0', 'h 0', 'p 0']
+    std_gatenames_to_chp['Gc2'] = ['h 0', 'p 0']
+    std_gatenames_to_chp['Gc3'] = ['h 0', 'p 0', 'p 0', 'h 0']
+    std_gatenames_to_chp['Gc4'] = ['p 0', 'h 0', 'p 0', 'p 0']
+    std_gatenames_to_chp['Gc5'] = ['h 0', 'p 0', 'p 0', 'p 0']
+    std_gatenames_to_chp['Gc6'] = ['h 0', 'p 0', 'p 0', 'h 0', 'p 0', 'p 0']
+    std_gatenames_to_chp['Gc7'] = ['h 0', 'p 0', 'h 0', 'p 0', 'p 0', 'p 0']
+    std_gatenames_to_chp['Gc8'] = ['h 0', 'p 0', 'h 0', 'p 0', 'p 0', 'h 0']
+    std_gatenames_to_chp['Gc9'] = ['p 0', 'p 0']
     std_gatenames_to_chp['Gc10'] = ['p 0', 'h 0']
     std_gatenames_to_chp['Gc11'] = ['p 0', 'p 0', 'h 0', 'p 0']
     std_gatenames_to_chp['Gc12'] = ['h 0']
@@ -552,6 +554,7 @@ def standard_gatenames_openqasm_conversions(version='u3'):
 
         def Gz_theta_map(gatearg):
             return '(0, 0, ' + gatearg[0] + ')'
+
         def Gczr_theta_map(gatearg):
             return '(' + gatearg[0] + ')'
         std_gatenames_to_argmap = {}
@@ -650,7 +653,7 @@ def qasm_u3(theta, phi, lamb, output='unitary'):
         return u3_unitary
 
     elif output == 'superoperator':
-        u3_superoperator = _gts.unitary_to_pauligate(u3_unitary)
+        u3_superoperator = _ot.unitary_to_pauligate(u3_unitary)
         return u3_superoperator
 
     else: raise ValueError("The `output` string is invalid!")

@@ -12,10 +12,6 @@ Variables for working with the a model containing Idle, Z(pi/2) and rot(X=pi/2, 
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from collections import OrderedDict
-from pygsti.construction import circuitconstruction as _strc
-from pygsti.construction import modelconstruction as _setc
-
 from pygsti.modelpacks._modelpack import GSTModelPack
 
 
@@ -63,10 +59,10 @@ class _Module(GSTModelPack):
         (('Gzpi2', 0), ('Gzpi2', 0), ('Gn', 0), ('Gzpi2', 0), ('Gn', 0), ('Gn', 0)): [(0, 0), (0, 2), (1, 1), (4, 0), (4, 2), (5, 5)]
     }
 
-    def _target_model(self, sslbls):
+    def _target_model(self, sslbls, **kwargs):
         return self._build_explicit_target_model(
             sslbls, [('Gzpi2', 0), ('Gn', 0)],
-            ['Z(pi/2,{0})', 'N(pi/2, sqrt(3)/2, 0, -0.5, {0})'])
+            ['Z(pi/2,{0})', 'N(pi/2, sqrt(3)/2, 0, -0.5, {0})'], **kwargs)
 
 
 import sys

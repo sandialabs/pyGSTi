@@ -1,12 +1,9 @@
 #!/usr/bin/env python3
-import pickle
-import pygsti
 import uuid
 
-from pprint import pprint
-
-from pygsti.tools import timed_block
+import pygsti
 import pygsti.construction as pc
+from pygsti.tools import timed_block
 
 
 def main():

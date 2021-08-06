@@ -10,22 +10,21 @@ Defines the Estimate class.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as _np
 import collections as _collections
-import warnings as _warnings
 import copy as _copy
+import warnings as _warnings
 
-from ..objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+import numpy as _np
+
 from pygsti import tools as _tools
-from ..objects import objectivefns as _objfns
-from ..objects.confidenceregionfactory import ConfidenceRegionFactory as _ConfidenceRegionFactory
-from ..objects.circuit import Circuit as _Circuit
-from ..objects.explicitmodel import ExplicitOpModel as _ExplicitOpModel
-from ..objects.circuitlist import CircuitList as _CircuitList
-from ..objects.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
-from ..objects.objectivefns import TimeIndependentMDCObjectiveFunction as _TIMDCObjFn
-from ..objects.objectivefns import CachedObjectiveFunction as _CachedObjectiveFunction
-from ..objects.objectivefns import ModelDatasetCircuitsStore as _ModelDatasetCircuitStore
+from pygsti.objectivefns.objectivefns import CachedObjectiveFunction as _CachedObjectiveFunction
+from pygsti.objectivefns.objectivefns import ModelDatasetCircuitsStore as _ModelDatasetCircuitStore
+from pygsti.protocols.confidenceregionfactory import ConfidenceRegionFactory as _ConfidenceRegionFactory
+from pygsti.models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
+from pygsti.objectivefns import objectivefns as _objfns
+from pygsti.circuits.circuitlist import CircuitList as _CircuitList
+from pygsti.circuits.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
+from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 
 #Class for holding confidence region factory keys
 CRFkey = _collections.namedtuple('CRFkey', ['model', 'circuit_list'])
@@ -531,8 +530,8 @@ class Estimate(object):
                 for y in gss.used_ys:
                     sub_mxs.append([])
                     for x in gss.used_xs:
-                        plaq = gss.get_plaquette(x, y, empty_if_missing=True)
-                        scaling_mx = _np.nan * _np.ones((plaq.rows, plaq.cols), 'd')
+                        plaq = gss.plaquette(x, y, empty_if_missing=True)
+                        scaling_mx = _np.nan * _np.ones((plaq.num_rows, plaq.num_cols), 'd')
                         for i, j, opstr in plaq:
                             scaling_mx[i, j] = 1.0
                         sub_mxs[-1].append(scaling_mx)
@@ -541,7 +540,30 @@ class Estimate(object):
                 return p.dataset
 
     def final_mdc_store(self, resource_alloc=None, array_types=('e', 'ep')):
-        """ TODO: docstring """
+        """
+        The final (not intermediate) model-dataset-circuit storage object (MDC store) for this estimate.
+
+        This object is created and cached as needed, and combined the final model, data set,
+        and circuit list for this estimate.
+
+        Parameters
+        ----------
+        resource_alloc : ResourceAllocation
+            The resource allocation object used to create the MDC store.  This can just be left as
+            `None` unless multiple processors are being utilized.  Note that this argument is only
+            used when a MDC store needs to be created -- if this estimate has already created one
+            then this argument is ignored.
+
+        array_types : tuple
+            A tuple of array types passed to the MDC store constructor (if a new MDC store needs
+            to be created).  These affect how memory is allocated within the MDC store object and
+            can enable (or disable) the use of certain MDC store functionality later on (e.g. the
+            use of Jacobian or Hessian quantities).
+
+        Returns
+        -------
+        ModelDatasetCircuitsStore
+        """
         #Note: default array_types include 'ep' so, e.g. robust-stat re-optimization is possible.
         if self.parameters.get('final_mdc_store', None) is None:
             assert(self.parent is not None), "Estimate must be linked with parent before objectivefn can be created"
@@ -553,7 +575,25 @@ class Estimate(object):
         return self.parameters['final_mdc_store']
 
     def final_objective_fn(self, resource_alloc=None):
-        """ TODO: docstring """
+        """
+        The final (not intermediate) objective function object for this estimate.
+
+        This object is created and cached as needed, and is the evaluated (and sometimes
+        optimized) objective function associated with this estimate.  Often this is a
+        log-likelihood or chi-squared function, or a close variant.
+
+        Parameters
+        ----------
+        resource_alloc : ResourceAllocation
+            The resource allocation object used to create the MDC store underlying the objective function.
+            This can just be left as `None` unless multiple processors are being utilized.  Note that this
+            argument is only used when an underlying MDC store needs to be created -- if this estimate has
+            already created a MDC store then this argument is ignored.
+
+        Returns
+        -------
+        MDCObjectiveFunction
+        """
         if self.parameters.get('final_objfn', None) is None:
             mdc_store = self.final_mdc_store(resource_alloc)
             #objfn_builder = self.parameters['final_objfn_builder']
@@ -563,7 +603,28 @@ class Estimate(object):
         return self.parameters['final_objfn']
 
     def final_objective_fn_cache(self, resource_alloc=None):
-        """ TODO: docstring """
+        """
+        The final (not intermediate) *serializable* ("cached") objective function object for this estimate.
+
+        This is an explicitly serializable version of the final objective function, useful because is often
+        doesn't need be constructed.  To become serializable, however, the objective function is stripped of
+        any MPI comm or multi-processor information (since this may be different between loading and saving).
+        This makes the cached objective function convenient for fast calls/usages of the objective function.
+
+        Parameters
+        ----------
+        resource_alloc : ResourceAllocation
+            The resource allocation object used to create the MDC store underlying the objective function.
+            This can just be left as `None` unless multiple processors are being utilized - and in this case
+            the *cached* objective function doesn't even benefit from these processors (but calls to
+            :method:`final_objective_fn` will return an objective function setup for multiple processors).
+            Note that this argument is only used when there is no existing cached objective function and
+            an underlying MDC store needs to be created.
+
+        Returns
+        -------
+        CachedObjectiveFunction
+        """
         if self.parameters.get('final_objfn_cache', None) is None:
             objfn = self.final_objective_fn(resource_alloc)
             self.parameters['final_objfn_cache'] = _CachedObjectiveFunction(objfn)

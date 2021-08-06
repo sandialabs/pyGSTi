@@ -10,10 +10,13 @@ pyGSTi Reporting Python Package
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-#Import the most important/useful routines of each module into
+
+from .notebook import Notebook
+# Import the most important/useful routines of each module into
 # the package namespace
 from .report import Report
 from .reportables import *
-from .factory import *
 from .workspace import Workspace
-from .notebook import Notebook
+
+from .factory import *
+from .vbplot import *

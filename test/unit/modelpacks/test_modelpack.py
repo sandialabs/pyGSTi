@@ -1,7 +1,6 @@
-from ..util import BaseCase
-
-from pygsti.construction.circuitconstruction import to_circuits
+from pygsti.circuits.circuitconstruction import to_circuits
 from pygsti.modelpacks import smq1Q_XYZI, smq2Q_XYICPHASE
+from ..util import BaseCase
 
 
 class ModelpackBase:

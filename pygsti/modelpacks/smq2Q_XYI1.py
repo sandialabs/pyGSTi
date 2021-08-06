@@ -13,8 +13,6 @@ Variables for working with the a model containing Idle, X(pi/2) and Y(pi/2) gate
 #***************************************************************************************************
 
 from collections import OrderedDict
-from pygsti.construction import circuitconstruction as _strc
-from pygsti.construction import modelconstruction as _setc
 
 from pygsti.modelpacks._modelpack import GSTModelPack, RBModelPack
 
@@ -89,11 +87,11 @@ class _Module(GSTModelPack, RBModelPack):
         (('Gxpi2', 0), ('Gxpi2', 0), ('Gypi2', 0)): [(1, 3), (1, 4), (3, 5), (5, 0), (5, 4), (5, 5)]
     }
 
-    def _target_model(self, sslbls):
+    def _target_model(self, sslbls, **kwargs):
         return self._build_explicit_target_model(
             sslbls, [(), ('Gxpi2', 0), ('Gypi2', 0)],
             ['I({0})', 'X(pi/2,{0})', 'Y(pi/2,{0})'],
-            effect_labels=['0', '1'], effect_expressions=['0', '1'])
+            effect_labels=['0', '1'], effect_expressions=['0', '1'], **kwargs)
 
 
 import sys

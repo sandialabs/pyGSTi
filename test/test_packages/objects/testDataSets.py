@@ -1,19 +1,19 @@
-import unittest
 import collections
-import pickle
-import pygsti
-import numpy as np
-import warnings
 import os
-from pygsti.modelpacks.legacy import std1Q_XYI as std
+import pickle
+import unittest
 
+import numpy as np
+
+import pygsti
 from ..testutils import BaseTestCase, compare_files, temp_files, regenerate_references
+
 
 class TestDataSetMethods(BaseTestCase):
 
     def test_from_scratch(self):
         # Create a dataset from scratch
-        ds = pygsti.objects.DataSet(outcome_labels=['0','1'])
+        ds = pygsti.data.DataSet(outcome_labels=['0', '1'])
         ds.add_count_dict( ('Gx',), {'0': 10, '1': 90} )
         ds[ ('Gx',) ] = {'0': 10, '1': 90}
         ds[ ('Gx',) ]['0'] = 10
@@ -22,7 +22,7 @@ class TestDataSetMethods(BaseTestCase):
             ds[ ('Gx',) ]['new'] = 20 # assignment can't create *new* outcome labels (yet)
         ds.add_count_dict( ('Gy','Gy'), {'FooBar': 10, '1': 90 }) # OK to add outcome labels on the fly
         ds.add_count_dict( ('Gy','Gy'), {'1': 90 }) # now all outcome labels OK now
-        ds.add_count_dict( ('Gy','Gy'),pygsti.obj.labeldicts.OutcomeLabelDict([('0',10), ('1',90)]))
+        ds.add_count_dict(('Gy','Gy'), pygsti.baseobjs.OutcomeLabelDict([('0', 10), ('1', 90)]))
         ds.done_adding_data()
 
         #Pickle and unpickle
@@ -38,9 +38,9 @@ class TestDataSetMethods(BaseTestCase):
         # Invoke the DataSet constructor other ways
         gstrs = [ ('Gx',), ('Gx','Gy'), ('Gy',) ]
         gstrInds = collections.OrderedDict( [ (('Gx',),0),  (('Gx','Gy'),1), (('Gy',),2) ] )
-        gstrInds_static = collections.OrderedDict( [ (pygsti.obj.Circuit(('Gx',)),slice(0,2)),
-                                                     (pygsti.obj.Circuit(('Gx','Gy')),slice(2,4)),
-                                                     (pygsti.obj.Circuit(('Gy',)),slice(4,6)) ] )
+        gstrInds_static = collections.OrderedDict([(pygsti.circuits.Circuit(('Gx',)), slice(0, 2)),
+                                                   (pygsti.circuits.Circuit(('Gx', 'Gy')), slice(2, 4)),
+                                                   (pygsti.circuits.Circuit(('Gy',)), slice(4, 6))])
         olInds = collections.OrderedDict( [ ('0',0),  ('1',1) ] )
 
         oli = np.array([0,1],'i')
@@ -52,9 +52,9 @@ class TestDataSetMethods(BaseTestCase):
         time_nonstc = [ np.zeros(2,'d'), np.zeros(2,'d'), np.zeros(2,'d') ]
         reps_nonstc = [ 10*np.ones(2,'i'), 10*np.ones(2,'i'), 10*np.ones(2,'i') ]
 
-        ds2 = pygsti.objects.DataSet(oli_nonstc, time_nonstc, reps_nonstc,
+        ds2 = pygsti.data.DataSet(oli_nonstc, time_nonstc, reps_nonstc,
                                      circuits=gstrs, outcome_labels=['0','1'])
-        ds4 = pygsti.objects.DataSet(oli_static, time_static, reps_static,
+        ds4 = pygsti.data.DataSet(oli_static, time_static, reps_static,
                                      circuit_indices=gstrInds_static, outcome_labels=['0','1'], static=True)
 
         ds2.add_counts_from_dataset(ds)
@@ -81,7 +81,7 @@ class TestDataSetMethods(BaseTestCase):
             ds2.load(streamfile)
 
         #Test loading a deprecated dataset file
-        #dsDeprecated = pygsti.objects.DataSet(file_to_load_from=compare_files + "/deprecated.dataset")
+        #dsDeprecated = pygsti.data.DataSet(file_to_load_from=compare_files + "/deprecated.dataset")
 
 
 
@@ -118,36 +118,36 @@ Gx^4 20 80
 
     def test_generate_fake_data(self):
 
-        model = pygsti.construction.create_explicit_model([('Q0',)],['Gi','Gx','Gy','Gz'],
-                                                     [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)", "Z(pi/2,Q0)"])
+        model = pygsti.models.modelconstruction.create_explicit_model_from_expressions([('Q0',)], ['Gi', 'Gx', 'Gy', 'Gz'],
+                                                                           [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)", "Z(pi/2,Q0)"])
 
         depol_gateset = model.depolarize(op_noise=0.1,spam_noise=0)
 
-        fids  = pygsti.construction.to_circuits( [ (), ('Gx',), ('Gy'), ('Gx','Gx') ] )
-        germs = pygsti.construction.to_circuits( [ ('Gi',), ('Gx',), ('Gy'), ('Gi','Gi','Gi')] )
-        circuits = pygsti.construction.create_circuits(
+        fids  = pygsti.circuits.to_circuits([(), ('Gx',), ('Gy'), ('Gx', 'Gx')])
+        germs = pygsti.circuits.to_circuits([('Gi',), ('Gx',), ('Gy'), ('Gi', 'Gi', 'Gi')])
+        circuits = pygsti.circuits.create_circuits(
             "f0+T(germ,N)+f1", f0=fids, f1=fids, germ=germs, N=3,
-            T=pygsti.construction.repeat_with_max_length,
+            T=pygsti.circuits.repeat_with_max_length,
             order=["germ","f0","f1"])
         pygsti.remove_duplicates_in_place(circuits)
 
-        ds_none = pygsti.construction.simulate_data(depol_gateset, circuits,
-                                                        num_samples=1000, sample_error='none')
-        ds_round = pygsti.construction.simulate_data(depol_gateset, circuits,
-                                                          num_samples=1000, sample_error='round')
-        ds_otherds = pygsti.construction.simulate_data(ds_none, circuits,
-                                                             num_samples=None, sample_error='none')
+        ds_none = pygsti.data.simulate_data(depol_gateset, circuits,
+                                                    num_samples=1000, sample_error='none')
+        ds_round = pygsti.data.simulate_data(depol_gateset, circuits,
+                                                     num_samples=1000, sample_error='round')
+        ds_otherds = pygsti.data.simulate_data(ds_none, circuits,
+                                                       num_samples=None, sample_error='none')
 
         # TO SEED SAVED FILE, RUN BELOW LINES:
         if regenerate_references():
-            pygsti.io.write_dataset(compare_files + "/Fake_Dataset_none.txt", ds_none,  circuits)
+            pygsti.io.write_dataset(compare_files + "/Fake_Dataset_none.txt", ds_none, circuits)
             pygsti.io.write_dataset(compare_files + "/Fake_Dataset_round.txt", ds_round, circuits)
 
         bDeepTesting = bool( 'PYGSTI_DEEP_TESTING' in os.environ and
                              os.environ['PYGSTI_DEEP_TESTING'].lower() in ("yes","1","true") )
-          #Do not test *random* datasets for equality unless "deep testing", since different
+          #Do not test *random* data for equality unless "deep testing", since different
           # versions/installs of numpy give different random numbers and we don't expect
-          # datasets will be equal.
+          # data will be equal.
 
 
         saved_ds = pygsti.io.load_dataset(compare_files + "/Fake_Dataset_none.txt", cache=True)
@@ -183,9 +183,9 @@ Gx^4 20 80 20 80
         with self.assertRaises(ValueError):
             pygsti.io.load_multidataset(temp_files + "/BadTinyMultiDataset.txt")
 
-        gstrInds = collections.OrderedDict( [ (pygsti.obj.Circuit(('Gx',)),slice(0,2)),
-                                              (pygsti.obj.Circuit(('Gx','Gy')),slice(2,4)),
-                                              (pygsti.obj.Circuit(('Gy',)),slice(4,6)) ] )
+        gstrInds = collections.OrderedDict([(pygsti.circuits.Circuit(('Gx',)), slice(0, 2)),
+                                            (pygsti.circuits.Circuit(('Gx', 'Gy')), slice(2, 4)),
+                                            (pygsti.circuits.Circuit(('Gy',)), slice(4, 6))])
         olInds = collections.OrderedDict( [ ('0',0),  ('1',1) ] )
 
         ds1_oli = np.array( [0,1]*3, 'i' ) # 3 operation sequences * 2 outcome labels
@@ -200,12 +200,12 @@ Gx^4 20 80 20 80
         mds_time = collections.OrderedDict( [ ('ds1', ds1_time), ('ds2', ds2_time) ] )
         mds_rep = collections.OrderedDict( [ ('ds1', ds1_rep), ('ds2', ds2_rep) ] )
 
-        mds2 = pygsti.objects.MultiDataSet(mds_oli, mds_time, mds_rep, circuit_indices=gstrInds,
+        mds2 = pygsti.data.MultiDataSet(mds_oli, mds_time, mds_rep, circuit_indices=gstrInds,
                                            outcome_labels=['0','1'])
-        mds3 = pygsti.objects.MultiDataSet(mds_oli, mds_time, mds_rep, circuit_indices=gstrInds,
+        mds3 = pygsti.data.MultiDataSet(mds_oli, mds_time, mds_rep, circuit_indices=gstrInds,
                                            outcome_label_indices=olInds)
-        mds4 = pygsti.objects.MultiDataSet(outcome_labels=['0','1'])
-        mds5 = pygsti.objects.MultiDataSet()
+        mds4 = pygsti.data.MultiDataSet(outcome_labels=['0', '1'])
+        mds5 = pygsti.data.MultiDataSet()
 
         #Create a multidataset with time dependence and no rep counts
 
@@ -216,12 +216,12 @@ Gx^4 20 80 20 80
 
         mds_oli = collections.OrderedDict( [ ('ds1', ds1_oli), ('ds2', ds2_oli) ] )
         mds_time = collections.OrderedDict( [ ('ds1', ds1_time), ('ds2', ds2_time) ] )
-        mdsNoReps = pygsti.objects.MultiDataSet(mds_oli, mds_time, None, circuit_indices=gstrInds,
+        mdsNoReps = pygsti.data.MultiDataSet(mds_oli, mds_time, None, circuit_indices=gstrInds,
                                                 outcome_labels=['0','1'])
 
 
-        #Create some datasets to test adding datasets to multidataset
-        ds = pygsti.objects.DataSet(outcome_labels=['0','1'])
+        #Create some data to test adding data to multidataset
+        ds = pygsti.data.DataSet(outcome_labels=['0', '1'])
         ds.add_count_dict( (), {'0': 10, '1': 90} )
         ds.add_count_dict( ('Gx',), {'0': 10, '1': 90} )
         ds.add_count_dict( ('Gx','Gy'), {'0': 20, '1':80} )
@@ -250,34 +250,34 @@ Gx^4 20 80 20 80
         mdsNoReps.load(temp_files + "/multidataset_noreps.saved")
         with open(temp_files + "/multidataset.stream","rb") as streamfile:
             multiDS.load(streamfile)
-        multiDS2 = pygsti.obj.MultiDataSet(file_to_load_from=temp_files + "/multidataset.saved")
+        multiDS2 = pygsti.data.MultiDataSet(file_to_load_from=temp_files + "/multidataset.saved")
 
         #Finally, add a dataset w/reps to a multidataset without them
         mdsNoReps.add_dataset('DSwReps', mds2['ds1'])
 
     def test_tddataset_construction(self):
         #Create a non-static already initialized dataset
-        circuits = pygsti.construction.to_circuits([('Gx',), ('Gy','Gx')])
+        circuits = pygsti.circuits.to_circuits([('Gx',), ('Gy', 'Gx')])
         gatestringIndices = collections.OrderedDict([ (mdl,i) for i,mdl in enumerate(circuits)])
         oliData = [ np.array([0,1,0]), np.array([1,1,0]) ]
         timeData = [ np.array([1.0,2.0,3.0]), np.array([4.0,5.0,6.0]) ]
         repData = [ np.array([1,1,1]), np.array([2,2,2]) ]
         oli = collections.OrderedDict( [(('0',),0), (('1',),1)] )
-        ds = pygsti.objects.DataSet(oliData, timeData, repData, circuits, None,
-                                      ['0','1'], None,  static=False)
-        ds = pygsti.objects.DataSet(oliData, timeData, repData, None, gatestringIndices,
-                                      None, oli, static=False) #provide operation sequence & spam label index dicts instead of lists
-        ds = pygsti.objects.DataSet(oliData, timeData, None, None, gatestringIndices,
-                                      None, oli) #no rep data is OK - just assumes 1; bStatic=False is default
+        ds = pygsti.data.DataSet(oliData, timeData, repData, circuits, None,
+                                    ['0','1'], None, static=False)
+        ds = pygsti.data.DataSet(oliData, timeData, repData, None, gatestringIndices,
+                                    None, oli, static=False) #provide operation sequence & spam label index dicts instead of lists
+        ds = pygsti.data.DataSet(oliData, timeData, None, None, gatestringIndices,
+                                    None, oli) #no rep data is OK - just assumes 1; bStatic=False is default
 
         #Test loading a non-static set from a saved file
         ds.save(temp_files + "/test_tddataset.saved")
-        ds3 = pygsti.objects.DataSet(file_to_load_from=temp_files + "/test_tddataset.saved")
+        ds3 = pygsti.data.DataSet(file_to_load_from=temp_files + "/test_tddataset.saved")
 
 
         #Create an static already initialized dataset
-        ds = pygsti.objects.DataSet(outcome_labels=['0','1'])
-        CIR = pygsti.objects.Circuit #no auto-convert to Circuits when using circuit_indices
+        ds = pygsti.data.DataSet(outcome_labels=['0', '1'])
+        CIR = pygsti.circuits.Circuit #no auto-convert to Circuits when using circuit_indices
         gatestringIndices = collections.OrderedDict([ #always need this when creating a static dataset
             ( CIR(('Gx',)) , slice(0,3) ),                 # (now a dict of *slices* into flattened 1D
             ( CIR(('Gy','Gx')), slice(3,6) ) ])            #  data arrays)
@@ -285,16 +285,16 @@ Gx^4 20 80 20 80
         timeData = np.array([1.0,2.0,3.0,4.0,5.0,6.0])
         repData = np.array([1,1,1,2,2,2])
         oli = collections.OrderedDict( [(('0',),0), (('1',),1)] )
-        ds = pygsti.objects.DataSet(oliData, timeData, repData, None, gatestringIndices,
-                                      ['0','1'], None,  static=True)
-        ds = pygsti.objects.DataSet(oliData, timeData, repData, None, gatestringIndices,
-                                      None, oli, static=True) #provide spam label index dict instead of list
-        ds = pygsti.objects.DataSet(oliData, timeData, None, None, gatestringIndices,
-                                      None, oli, static=True) #no rep data is OK - just assumes 1
+        ds = pygsti.data.DataSet(oliData, timeData, repData, None, gatestringIndices,
+                                    ['0','1'], None, static=True)
+        ds = pygsti.data.DataSet(oliData, timeData, repData, None, gatestringIndices,
+                                    None, oli, static=True) #provide spam label index dict instead of list
+        ds = pygsti.data.DataSet(oliData, timeData, None, None, gatestringIndices,
+                                    None, oli, static=True) #no rep data is OK - just assumes 1
 
         #Test loading a static set from a saved file
         ds.save(temp_files + "/test_tddataset.saved")
-        ds3 = pygsti.objects.DataSet(file_to_load_from=temp_files + "/test_tddataset.saved")
+        ds3 = pygsti.data.DataSet(file_to_load_from=temp_files + "/test_tddataset.saved")
 
     def test_tddataset_methods(self):
         # Create a dataset from scratch
@@ -326,7 +326,7 @@ Gx^4 20 80 20 80
             print( len(ds[opstr]) )
             print("\n")
 
-        ds = pygsti.objects.DataSet(outcome_labels=['0','1'])
+        ds = pygsti.data.DataSet(outcome_labels=['0', '1'])
         ds.add_raw_series_data( ('Gx',),
                             ['0','0','1','0','1','0','1','1','1','0'],
                             [0.0, 0.2, 0.5, 0.6, 0.7, 0.9, 1.1, 1.3, 1.35, 1.5], None)
@@ -435,6 +435,7 @@ Gy 11001100
             pygsti.io.load_time_dependent_dataset(temp_files + "/BadTDDataset.txt")
 
 
+    @unittest.skip("We probably won't be able to unpickle old files given the amount of refactoring")
     def test_load_old_dataset(self):
         #pygsti.obj.results.enable_old_python_results_unpickling()
         with pygsti.io.enable_old_object_unpickling():

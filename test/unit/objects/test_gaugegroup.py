@@ -1,11 +1,16 @@
 import numpy as np
 
+from pygsti.modelmembers import operations as op
+from pygsti.models import gaugegroup as ggrp
+from pygsti.baseobjs.statespace import QubitSpace
 from ..util import BaseCase
-
-from pygsti.objects import gaugegroup as ggrp, operation as op
 
 
 class GaugeGroupBase(object):
+
+    def setUp(self):
+        self.state_space = QubitSpace(1)
+    
     def test_construction(self):
         params = self.gg.initial_params
         self.assertEqual(len(params), self.n_params)
@@ -72,7 +77,8 @@ class OpGaugeGroupTester(GaugeGroupBase, BaseCase):
     element_type = ggrp.OpGaugeGroupElement
 
     def setUp(self):
-        self.gg = ggrp.OpGaugeGroup(op.FullDenseOp(np.identity(4, 'd')),
+        GaugeGroupBase.setUp(self)
+        self.gg = ggrp.OpGaugeGroup(op.FullArbitraryOp(np.identity(4, 'd'), state_space=self.state_space),
                                     ggrp.OpGaugeGroupElement, 'myGateGaugeGroupName')
 
 
@@ -81,7 +87,8 @@ class FullGaugeGroupTester(GaugeGroupBase, BaseCase):
     element_type = ggrp.FullGaugeGroupElement
 
     def setUp(self):
-        self.gg = ggrp.FullGaugeGroup(4)
+        GaugeGroupBase.setUp(self)
+        self.gg = ggrp.FullGaugeGroup(self.state_space)
 
 
 class TPGaugeGroupTester(GaugeGroupBase, BaseCase):
@@ -89,7 +96,8 @@ class TPGaugeGroupTester(GaugeGroupBase, BaseCase):
     element_type = ggrp.TPGaugeGroupElement
 
     def setUp(self):
-        self.gg = ggrp.TPGaugeGroup(4)
+        GaugeGroupBase.setUp(self)
+        self.gg = ggrp.TPGaugeGroup(self.state_space)
 
 
 class DiagGaugeGroupTester(GaugeGroupBase, BaseCase):
@@ -97,7 +105,8 @@ class DiagGaugeGroupTester(GaugeGroupBase, BaseCase):
     element_type = ggrp.DiagGaugeGroupElement
 
     def setUp(self):
-        self.gg = ggrp.DiagGaugeGroup(4)
+        GaugeGroupBase.setUp(self)
+        self.gg = ggrp.DiagGaugeGroup(self.state_space)
 
 
 class TPDiagGaugeGroupTester(GaugeGroupBase, BaseCase):
@@ -105,7 +114,8 @@ class TPDiagGaugeGroupTester(GaugeGroupBase, BaseCase):
     element_type = ggrp.TPDiagGaugeGroupElement
 
     def setUp(self):
-        self.gg = ggrp.TPDiagGaugeGroup(4)
+        GaugeGroupBase.setUp(self)
+        self.gg = ggrp.TPDiagGaugeGroup(self.state_space)
 
 
 class SpamGaugeGroupTester(GaugeGroupBase, BaseCase):
@@ -113,7 +123,8 @@ class SpamGaugeGroupTester(GaugeGroupBase, BaseCase):
     element_type = ggrp.SpamGaugeGroupElement
 
     def setUp(self):
-        self.gg = ggrp.SpamGaugeGroup(4)
+        GaugeGroupBase.setUp(self)
+        self.gg = ggrp.SpamGaugeGroup(self.state_space)
 
 
 class TrivialGaugeGroupTester(GaugeGroupBase, BaseCase):
@@ -121,4 +132,5 @@ class TrivialGaugeGroupTester(GaugeGroupBase, BaseCase):
     element_type = ggrp.TrivialGaugeGroupElement
 
     def setUp(self):
-        self.gg = ggrp.TrivialGaugeGroup(4)
+        GaugeGroupBase.setUp(self)
+        self.gg = ggrp.TrivialGaugeGroup(self.state_space)

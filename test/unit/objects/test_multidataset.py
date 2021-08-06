@@ -1,11 +1,11 @@
-import numpy as np
-from collections import OrderedDict
 import pickle
+from collections import OrderedDict
 
+import numpy as np
+
+from pygsti.circuits import Circuit
+from pygsti.data import MultiDataSet, DataSet
 from ..util import BaseCase
-
-from pygsti.objects import MultiDataSet, DataSet, Circuit
-
 
 # module-level test fixtures
 gstrInds = OrderedDict([(Circuit(('Gx',)), slice(0, 2)),

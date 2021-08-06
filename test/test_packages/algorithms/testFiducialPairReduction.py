@@ -1,14 +1,12 @@
-import unittest
-import os
-import pygsti
-from pygsti.modelpacks.legacy import std1Q_XYI as std
-from pygsti.algorithms import germselection
-from ..testutils import compare_files, temp_files, regenerate_references
-
-import numpy as np
 import pickle
+import unittest
 
+import pygsti
+from pygsti.algorithms import germselection
+from pygsti.modelpacks.legacy import std1Q_XYI as std
 from .algorithmsTestCase import AlgorithmTestCase
+from ..testutils import compare_files, regenerate_references
+
 
 class FiducialPairReductionTestCase(AlgorithmTestCase):
     def test_memlimit(self):
@@ -115,8 +113,8 @@ class FiducialPairReductionTestCase(AlgorithmTestCase):
             mem_limit=int(2*(1024)**3))
 
         nAmplified = pygsti.alg.test_fiducial_pairs(fidPairsDict, target_model, prep_fiducials,
-                                         meas_fiducials, germs,
-                                         verbosity=3, mem_limit=None)
+                                                    meas_fiducials, germs,
+                                                    verbosity=3, mem_limit=None)
 
         print("PFPR: %d AMPLIFIED out of %d total (non-spam non-gauge) params" % (nAmplified, nTotal))
         self.assertEqual(nAmplified, 34)

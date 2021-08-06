@@ -1,11 +1,13 @@
-import numpy as np
-from collections import OrderedDict
 import pickle
+from collections import OrderedDict
 
+import numpy as np
+
+import pygsti.circuits as pc
+from pygsti.baseobjs import outcomelabeldict as ld
+from pygsti.circuits import Circuit
+from pygsti.data import DataSet
 from ..util import BaseCase
-
-import pygsti.construction as pc
-from pygsti.objects import DataSet, labeldicts as ld, Circuit
 
 
 class DataSetTester(BaseCase):

@@ -1,15 +1,15 @@
-from ..util import BaseCase
-
-from pygsti.modelpacks.legacy import std1Q_XYI, std2Q_XYICNOT
+from pygsti.data import simulate_data
 from pygsti.modelpacks import smq1Q_XYI
-from pygsti.objects import TrivialGaugeGroup, FreqWeightedChi2Function
-from pygsti.objects.objectivefns import PoissonPicDeltaLogLFunction
-from pygsti.protocols import gst
-from pygsti.protocols.protocol import ProtocolData, Protocol
-from pygsti.protocols.estimate import Estimate
-from pygsti.construction import simulate_data, create_lsgst_circuits
-from pygsti.tools import two_delta_logl_nsigma, two_delta_logl
+from pygsti.modelpacks.legacy import std1Q_XYI, std2Q_XYICNOT
+from pygsti.objectivefns.objectivefns import PoissonPicDeltaLogLFunction
+from pygsti.models.gaugegroup import TrivialGaugeGroup
+from pygsti.objectivefns import FreqWeightedChi2Function
 from pygsti.optimize.customlm import CustomLMOptimizer
+from pygsti.protocols import gst
+from pygsti.protocols.estimate import Estimate
+from pygsti.protocols.protocol import ProtocolData, Protocol
+from pygsti.tools import two_delta_logl
+from ..util import BaseCase
 
 
 class GSTUtilTester(BaseCase):
@@ -93,7 +93,7 @@ class StandardGSTDesignTester(BaseCase):
     """
 
     def test_creation(self):
-        gst.GateSetTomographyDesign(smq1Q_XYI.target_model(),
+        gst.GateSetTomographyDesign(smq1Q_XYI.processor_spec(),
                                     smq1Q_XYI.prep_fiducials(),
                                     smq1Q_XYI.meas_fiducials(),
                                     smq1Q_XYI.germs(),
@@ -116,7 +116,7 @@ class GSTInitialModelTester(BaseCase):
         im2 = gst.GSTInitialModel.cast(im)
         self.assertTrue(im2 is im)
 
-        im3 = gst.GSTInitialModel.cast(self.edesign.target_model)
+        im3 = gst.GSTInitialModel.cast(self.edesign.create_target_model())
         self.assertEqual(im3.starting_point, "User-supplied-Model")
 
     def test_get_model_target(self):
@@ -124,11 +124,11 @@ class GSTInitialModelTester(BaseCase):
         im = gst.GSTInitialModel()  # default is to use the target
         mdl = im.get_model(self.edesign, None, None, None)
         self.assertEqual(im.starting_point, 'target')
-        self.assertTrue(mdl is self.edesign.target_model)
+        self.assertTrue(self.edesign.create_target_model().frobeniusdist(mdl) < 1e-6)
 
     def test_get_model_custom(self):
         #Custom model
-        custom_model = self.edesign.target_model.rotate(max_rotate=0.05, seed=1234)
+        custom_model = self.edesign.create_target_model('full','full').rotate(max_rotate=0.05, seed=1234)
         im = gst.GSTInitialModel(custom_model)  # default is to use the target
         mdl = im.get_model(self.edesign, None, None, None)
         self.assertEqual(im.starting_point, "User-supplied-Model")
@@ -136,7 +136,7 @@ class GSTInitialModelTester(BaseCase):
 
     def test_get_model_depolarized(self):
         #Depolarized start
-        depol_model = self.edesign.target_model.depolarize(op_noise=0.1)
+        depol_model = self.edesign.create_target_model('full', 'full').depolarize(op_noise=0.1)
         im = gst.GSTInitialModel(depolarize_start=0.1)  # default is to use the target
         mdl = im.get_model(self.edesign, None, None, None)
         self.assertEqual(im.starting_point, 'target')
@@ -144,13 +144,13 @@ class GSTInitialModelTester(BaseCase):
 
     def test_get_model_lgst(self):
         #LGST
-        datagen_model = self.edesign.target_model.depolarize(op_noise=0.1)
+        datagen_model = self.edesign.create_target_model('full').depolarize(op_noise=0.1)
         ds = simulate_data(datagen_model, self.edesign.all_circuits_needing_data, 1000, sample_error='none')  # no error for reproducibility
 
-        im1 = gst.GSTInitialModel(self.edesign.target_model, "LGST")
+        im1 = gst.GSTInitialModel(self.edesign.create_target_model('full'), "LGST")
         mdl1 = im1.get_model(self.edesign, None, ds, None)
 
-        im2 = gst.GSTInitialModel(self.edesign.target_model, "LGST-if-possible")
+        im2 = gst.GSTInitialModel(self.edesign.create_target_model('full'), "LGST-if-possible")
         mdl2 = im2.get_model(self.edesign, None, ds, None)
 
         self.assertTrue(mdl1.frobeniusdist(mdl2) < 1e-6)
@@ -224,6 +224,7 @@ class GateSetTomographyTester(BaseProtocolData, BaseCase):
         proto = gst.GateSetTomography(smq1Q_XYI.target_model("CPTP"), 'stdgaugeopt', name="testGST")
         results = proto.run(self.gst_data)
 
+
         mdl_result = results.estimates["testGST"].models['stdgaugeopt']
         twoDLogL = two_delta_logl(mdl_result, self.gst_data.dataset)
         self.assertLessEqual(twoDLogL, 1.0)  # should be near 0 for perfect data
@@ -256,10 +257,10 @@ class StandardGSTTester(BaseProtocolData, BaseCase):
     """
 
     def test_run(self):
-        proto = gst.StandardGST(modes="TP,CPTP,Target")
+        proto = gst.StandardGST(modes="full TP,CPTP,Target")
         results = proto.run(self.gst_data)
 
-        mdl_result = results.estimates["TP"].models['stdgaugeopt']
+        mdl_result = results.estimates["full TP"].models['stdgaugeopt']
         twoDLogL = two_delta_logl(mdl_result, self.gst_data.dataset)
         self.assertLessEqual(twoDLogL, 1.0)  # should be near 0 for perfect data
 

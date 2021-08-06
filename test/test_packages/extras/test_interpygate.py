@@ -1,18 +1,11 @@
-from ..testutils import BaseTestCase, compare_files, temp_files, regenerate_references
-import unittest
-import numpy as np
-import pickle
-import time
-import warnings
+import numpy as _np
+from scipy.linalg import expm as _expm
 
 import pygsti
 from pygsti.extras import interpygate as interp
-from pygsti.tools import change_basis
 from pygsti.extras.interpygate.process_tomography import run_process_tomography, vec, unvec
-
-from scipy.linalg import logm as _logm, expm as _expm
-import numpy as _np
-import scipy as _sp
+from pygsti.tools import change_basis
+from ..testutils import BaseTestCase
 
 try:
     from mpi4py import MPI
@@ -136,7 +129,7 @@ class InterpygateTestCase(BaseTestCase):
         target_mxs = example_process.create_process_matrices(_np.array([1.0, 0.0, 0.0, 0.0, 0.0]), [[_np.pi / 2]], comm=_comm)
         if _comm is None or _comm.rank == 0:
             target_mx = target_mxs[0]
-            target_op = pygsti.obj.StaticDenseOp(target_mx)
+            target_op = pygsti.modelmembers.operations.StaticArbitraryOp(target_mx)
             print(target_op)
             if _comm is not None: _comm.bcast(target_op, root=0)
         else:
@@ -171,17 +164,18 @@ class InterpygateTestCase(BaseTestCase):
         self.assertArraysAlmostEqual(expected, interp_op.to_dense())
 
     def test_timedep_factory(self):
-        class TargetOpFactory(pygsti.obj.OpFactory):
+        class TargetOpFactory(pygsti.modelmembers.operations.OpFactory):
             def __init__(self):
                 self.process = ExampleProcess_timedep()
-                pygsti.obj.OpFactory.__init__(self, dim=4, evotype="densitymx")
+                ss = pygsti.baseobjs.QubitSpace(1)
+                pygsti.modelmembers.operations.OpFactory.__init__(self, ss, evotype="densitymx")
 
             def create_object(self, args=None, sslbls=None):
                 assert(sslbls is None)  # don't worry about sslbls for now -- these are for factories that can create gates placed at arbitrary circuit locations
                 assert(len(args) == 2)  # t (time), omega
                 t, omega = args
                 mx = self.process.create_process_matrices(_np.array([omega, 0.0, 0.0, 0.0, 0.0]), [[t]], comm=None)[0]
-                return pygsti.obj.StaticDenseOp(mx)
+                return pygsti.modelmembers.operations.StaticArbitraryOp(mx)
 
         arg_ranges = [_np.linspace(_np.pi / 2, _np.pi / 2 + .5, 10),  # time
                       (0.9, 1.1, 2)  # omega
@@ -226,7 +220,7 @@ class InterpygateTestCase(BaseTestCase):
         example_process = ExampleProcess()
         target_mx = example_process.create_process_matrix(_np.array([1.0, 0.0, 0.0, 0.0, 0.0, _np.pi / 2]), comm=_comm)
         if _comm is None or _comm.rank == 0:
-            target_op = pygsti.obj.StaticDenseOp(target_mx)
+            target_op = pygsti.modelmembers.operations.StaticArbitraryOp(target_mx)
             print(target_op)
             if _comm: _comm.bcast(target_op, root=0)
         else:
@@ -260,17 +254,18 @@ class InterpygateTestCase(BaseTestCase):
         self.assertArraysAlmostEqual(expected, interp_op.to_dense())
 
     def test_timeindep_factory(self):
-        class TargetOpFactory(pygsti.obj.OpFactory):
+        class TargetOpFactory(pygsti.modelmembers.operations.OpFactory):
             def __init__(self):
                 self.process = ExampleProcess()
-                pygsti.obj.OpFactory.__init__(self, dim=4, evotype="densitymx")
+                ss = pygsti.baseobjs.QubitSpace(1)
+                pygsti.modelmembers.operations.OpFactory.__init__(self, ss, evotype="densitymx")
 
             def create_object(self, args=None, sslbls=None):
                 assert(sslbls is None)  # don't worry about sslbls for now -- these are for factories that can create gates placed at arbitrary circuit locations
                 assert(len(args) == 2)  # t (time), omega
                 t, omega = args
                 mx = self.process.create_process_matrix(_np.array([omega, 0.0, 0.0, 0.0, 0.0, t]), comm=None)
-                return pygsti.obj.StaticDenseOp(mx)
+                return pygsti.modelmembers.operations.StaticArbitraryOp(mx)
 
         arg_ranges = [_np.linspace(_np.pi / 2, _np.pi / 2 + .5, 10),  # time
                       (0.9, 1.1, 2)  # omega

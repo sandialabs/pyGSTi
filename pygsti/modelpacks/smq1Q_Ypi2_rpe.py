@@ -12,8 +12,9 @@ Variables for working with the a partial model the X(pi/2)
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from pygsti import objects as _obj
 import numpy as _np
+
+from ..circuits.circuit import Circuit as _Circuit
 from ..protocols import rpe as _rpe
 
 
@@ -39,14 +40,14 @@ def get_rpe_experiment_design(max_max_length, qubit_labels=None, req_counts=None
 
     assert(qubit_labels is None or qubit_labels == (0,)), "Only qubit_labels=(0,) is supported so far"
     return _rpe.RobustPhaseEstimationDesign(
-        _obj.Circuit([('Gypi2', 0)], line_labels=(0,)),
+        _Circuit([('Gypi2', 0)], line_labels=(0,)),
         [2**i for i in range(int(max_log_lengths) + 1)],
-        _obj.Circuit([], line_labels=(0,)),
-        _obj.Circuit([('Gypi2', 0)], line_labels=(0,)),
+        _Circuit([], line_labels=(0,)),
+        _Circuit([('Gypi2', 0)], line_labels=(0,)),
         ['1'],
         ['0'],
-        _obj.Circuit([], line_labels=(0,)),
-        _obj.Circuit([], line_labels=(0,)),
+        _Circuit([], line_labels=(0,)),
+        _Circuit([], line_labels=(0,)),
         ['0'],
         ['1'],
         qubit_labels=qubit_labels,

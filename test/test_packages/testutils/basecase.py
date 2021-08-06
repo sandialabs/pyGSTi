@@ -50,10 +50,10 @@ class BaseTestCase(unittest.TestCase):
         print('Running tests from %s' % os.getcwd())
 
         #Set Model objects to "strict" mode for testing
-        pygsti.objects.ExplicitOpModel._strict = True
+        pygsti.models.ExplicitOpModel._strict = True
 
         #enable extra paramter-vector integrity checking
-        pygsti.objects.Model._pcheck = True
+        pygsti.models.Model._pcheck = True
 
     def tearDown(self):
         os.chdir(self.old)

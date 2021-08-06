@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import subprocess
+
 import matplotlib.pyplot as plt
+
 
 def main():
     avg = lambda l : sum(l) / len(list(l))

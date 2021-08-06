@@ -1,15 +1,13 @@
-import os
 import numpy as np
 
-from ..util import BaseCase
-
-
-from pygsti.modelpacks.legacy import std1Q_XYI as std1Q
-from pygsti.construction.modelconstruction import _basis_create_operation
 import pygsti.tools.basistools as bt
-from pygsti.objects import ExplicitOpModel, Basis, labeldicts as _ld
-
+from pygsti.models.modelconstruction import _basis_create_operation
+from pygsti.modelpacks.legacy import std1Q_XYI as std1Q
+from pygsti.models import ExplicitOpModel
+from pygsti.baseobjs import statespace
+from pygsti.baseobjs import Basis
 from pygsti.tools import jamiolkowski as j
+from ..util import BaseCase
 
 
 class JamiolkowskiBasisTester(BaseCase):
@@ -19,6 +17,7 @@ class JamiolkowskiBasisTester(BaseCase):
 
         # density matrix == 3x3 block diagonal matrix: a 2x2 block followed by a 1x1 block
         self.stateSpaceDims = [(4,), (1,)]
+        self.stateSpaceUDims = [(2,), (1,)]
         self.std = Basis.cast('std', 9)
         self.gm = Basis.cast('gm', 9)
         self.stdSmall = Basis.cast('std', [4, 1])
@@ -28,7 +27,7 @@ class JamiolkowskiBasisTester(BaseCase):
         self.stateSpaceLabels = [('Qhappy',), ('Lsad',)]
 
         # Adjust for deprecation of _create_operation
-        self.sslbls = _ld.StateSpaceLabels(self.stateSpaceLabels, self.stateSpaceDims)
+        self.sslbls = statespace.ExplicitStateSpace(self.stateSpaceLabels, self.stateSpaceUDims)
 
         #Build a test gate   -- old # X(pi,Qhappy)*LX(pi,0,2)
         self.testGate = _basis_create_operation(self.sslbls, "LX(pi,0,2)", self.stdSmall)

@@ -8,27 +8,27 @@
 #***************************************************************************************************
 """ Idle Tomography reporting and plotting functions """
 
-import time as _time
-import numpy as _np
-import itertools as _itertools
 import collections as _collections
-import warnings as _warnings
+import itertools as _itertools
 import os as _os
+import time as _time
+import warnings as _warnings
 
-from ... import _version
-from ...objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from ...objects import Circuit as _Circuit
-from ...objects import DataComparator as _DataComparator
-from ...report import workspace as _ws
-from ...report import workspaceplots as _wp
-from ...report import table as _reporttable
-from ...report import figure as _reportfigure
-from ...report import merge_helpers as _merge
-from ...report import autotitle as _autotitle
-from ...tools import timed_block as _timed_block
-from . import pauliobjs as _pobjs
-
+import numpy as _np
 import plotly.graph_objs as go
+
+from pygsti.extras.idletomography import pauliobjs as _pobjs
+from pygsti import _version
+from pygsti.circuits import Circuit as _Circuit
+from pygsti.data import DataComparator as _DataComparator
+from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from pygsti.report import autotitle as _autotitle
+from pygsti.report import figure as _reportfigure
+from pygsti.report import merge_helpers as _merge
+from pygsti.report import table as _reporttable
+from pygsti.report import workspace as _ws
+from pygsti.report import workspaceplots as _wp
+from pygsti.tools import timed_block as _timed_block
 
 
 class IdleTomographyObservedRatesTable(_ws.WorkspaceTable):
@@ -671,36 +671,6 @@ def _create_switchboard(ws, results_dict):
     for d, dslbl in enumerate(dataset_labels):
         switchBd.results[d] = results_dict[dslbl]
 
-    #OLD TODO REMOVE
-    # errortype_labels = None
-    # errorop_labels = None
-    # for results in results_dict.values():
-    #     errorop_labels = _add_new_labels(errorop_labels, [str(e).strip() for e in results.error_list])
-    #     errortype_labels   = _add_new_labels(errortype_labels, list(results.intrinsic_rates.keys()))
-    # errortype_labels = list(sorted(errortype_labels))
-    #
-    # multidataset = bool(len(dataset_labels) > 1)
-    #
-    # switchBd = ws.Switchboard(
-    #     ["Dataset","ErrorType","ErrorOp"],
-    #     [dataset_labels,errortype_labels,errorop_labels],
-    #     ["dropdown","dropdown","dropdown"], [0,0,0],
-    #     show=[multidataset,False,False] # only show dataset dropdown (for sidebar)
-    # )
-    #
-    # switchBd.add("results",(0,))
-    # switchBd.add("errortype",(1,))
-    # switchBd.add("errorop",(2,))
-    #
-    # for d,dslbl in enumerate(dataset_labels):
-    #     switchBd.results[d] = results_dict[dslbl]
-    #
-    # for i,etyp in enumerate(errortype_labels):
-    #     switchBd.errortype[i] = etyp
-    #
-    # for i,eop in enumerate(errorop_labels):
-    #     switchBd.errorop[i] = eop
-
     return switchBd, dataset_labels
 
 
@@ -905,28 +875,6 @@ def create_idletomography_report(results, filename, title="auto",
                 for j in range(len(dataset_labels)):
                     indices.append((i, j))
 
-            #REMOVE (for using comm)
-            #if comm is not None:
-            #    _, indexDict, _ = _distribute_indices(indices, comm)
-            #    rank = comm.Get_rank()
-            #    for k, v in indexDict.items():
-            #        if v == rank:
-            #            d1, d2 = k
-            #            dslbl1 = dataset_labels[d1]
-            #            dslbl2 = dataset_labels[d2]
-            #
-            #            ds1 = results_dict[dslbl1].dataset
-            #            ds2 = results_dict[dslbl2].dataset
-            #            dsComp[(d1, d2)] = _DataComparator(
-            #                [ds1, ds2], ds_names=[dslbl1, dslbl2])
-            #    dicts = comm.gather(dsComp, root=0)
-            #    if rank == 0:
-            #        for d in dicts:
-            #            for k, v in d.items():
-            #                d1, d2 = k
-            #                dscmp_switchBd.dscmp[d1, d2] = v
-            #                all_dsComps[(d1,d2)] = v
-            #else:
             for d1, d2 in indices:
                 dslbl1 = dataset_labels[d1]
                 dslbl2 = dataset_labels[d2]

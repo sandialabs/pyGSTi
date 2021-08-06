@@ -1,16 +1,14 @@
 import unittest
+
+from pygsti.baseobjs.label import Label as L
+
 import pygsti
-import numpy as np
-import warnings
-import pickle
-import os
+import pygsti.models.modelconstruction as mc
+from pygsti.processors.processorspec import QubitProcessorSpec as _ProcessorSpec
+from pygsti.serialization import jsoncodec
+from pygsti.baseobjs import label
+from ..testutils import BaseTestCase, temp_files
 
-import pygsti.construction as pc
-from pygsti.io import jsoncodec
-from pygsti.objects import label
-from pygsti.objects.label import Label as L
-
-from ..testutils import BaseTestCase, compare_files, temp_files
 
 class LabelTestCase(BaseTestCase):
 
@@ -36,15 +34,15 @@ class LabelTestCase(BaseTestCase):
             if isinstance(l, label.LabelTupTup):
                 print("  comps: ", ", ".join(["%s (%s)" % (c,str(type(c))) for c in l.components]))
 
-            j = jsoncodec.encode_obj(l,False)
+            j = jsoncodec.encode_obj(l, False)
             #print("Json: ",j)
-            l3 = jsoncodec.decode_obj(j,False)
+            l3 = jsoncodec.decode_obj(j, False)
             #print("Unjsoned ", l3, " a ",type(l3))
             self.assertEqual(type(l),type(l3))
 
     def test_loadsave(self):
         #test saving and loading "parallel" operation labels
-        gslist = pygsti.construction.to_circuits( [('Gx','Gy'), (('Gx',0),('Gy',1)), ((('Gx',0),('Gy',1)),('Gcnot',0,1)) ])
+        gslist = pygsti.circuits.to_circuits([('Gx', 'Gy'), (('Gx', 0), ('Gy', 1)), ((('Gx', 0), ('Gy', 1)), ('Gcnot', 0, 1))])
 
         pygsti.io.write_circuit_list(temp_files + "/test_gslist.txt", gslist)
         gslist2 = pygsti.io.load_circuit_list(temp_files + "/test_gslist.txt")
@@ -53,12 +51,13 @@ class LabelTestCase(BaseTestCase):
     def test_layerlizzard(self):
         #Test this here b/c auto-gators are associated with parallel operation labels
         availability = {'Gcnot': [(0,1)]}
-        mdl = pc.create_cloudnoise_model_from_hops_and_weights(
-            2, ['Gx','Gy','Gcnot'], {}, None, availability,
-            None, "line", max_idle_weight=1, maxhops=1,
+
+        pspec = _ProcessorSpec(2, ['Gx', 'Gy', 'Gcnot'], {}, availability, 'line')
+        mdl = mc.create_cloud_crosstalk_model_from_hops_and_weights(
+            pspec, max_idle_weight=0, maxhops=1,
             extra_weight_1_hops=0, extra_gate_weight=1,
-            simulator="map", parameterization="H+S",
-            sparse_lindblad_basis=True, sparse_lindblad_reps=True)
+            simulator="map", gate_type="H+S", spam_type="H+S")
+
         # mdl[('Gx',0)].factorops  # Composed([fullTargetOp,fullIdleErr,fullLocalErr])
         self.assertEqual( set(mdl.primitive_op_labels), set([L('Gx',0), L('Gy',0), L('Gx',1), L('Gy',1), L('Gcnot',(0,1))]))
 
@@ -68,7 +67,7 @@ class LabelTestCase(BaseTestCase):
         with self.assertRaises(KeyError):
             mdl.operation_blks[parallelLbl]
 
-        opstr = pygsti.obj.Circuit( (parallelLbl,) )
+        opstr = pygsti.circuits.Circuit((parallelLbl,))
         probs = mdl.probabilities(opstr)
         print(probs)
 

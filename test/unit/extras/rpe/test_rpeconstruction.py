@@ -1,10 +1,6 @@
-import numpy as np
-
-from ...util import BaseCase
-
-from pygsti.objects import Circuit
-import pygsti.construction as pc
 import pygsti.extras.rpe.rpeconstruction as rc
+from pygsti.circuits import Circuit
+from ...util import BaseCase
 
 
 class RPEConstructionFuncBase(object):

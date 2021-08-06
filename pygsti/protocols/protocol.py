@@ -1,32 +1,26 @@
 """
 Protocol object
 """
-#***************************************************************************************************
+import collections as _collections
+import copy as _copy
+# ***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
-#***************************************************************************************************
-import numpy as _np
+# ***************************************************************************************************
 import itertools as _itertools
-import os as _os
-import copy as _copy
-import json as _json
-import pickle as _pickle
 import pathlib as _pathlib
-import importlib as _importlib
-import collections as _collections
 
-from .treenode import TreeNode as _TreeNode
-from .. import construction as _cnst
-from .. import objects as _objs
-from .. import io as _io
-from ..objects import circuit as _cir
-from ..objects.circuitlist import CircuitList as _CircuitList
-from ..tools import listtools as _lt
-from ..tools import NamedDict as _NamedDict
+from pygsti.protocols.treenode import TreeNode as _TreeNode
+from pygsti import io as _io
+from pygsti import circuits as _circuits
+from pygsti import data as _data
+from pygsti.tools import NamedDict as _NamedDict
+from pygsti.tools import listtools as _lt
+from pygsti.tools.dataframetools import _process_dataframe
 
 
 class Protocol(object):
@@ -650,7 +644,7 @@ class ExperimentDesign(_TreeNode):
         # 'text-circuit-list' - a text circuit list file
         # 'json' - a json file
         # 'pickle' - a python pickle file (use only if really needed!)
-        typ = 'pickle' if isinstance(self.all_circuits_needing_data, _objs.CircuitList) else 'text-circuit-list'
+        typ = 'pickle' if isinstance(self.all_circuits_needing_data, _circuits.CircuitList) else 'text-circuit-list'
         self.auxfile_types = {'all_circuits_needing_data': typ,
                               'alt_actual_circuits_executed': 'text-circuit-list',
                               'default_protocols': 'dict-of-protocolobjs'}
@@ -790,9 +784,9 @@ class ExperimentDesign(_TreeNode):
         return base
 
     def _truncate_to_circuits_inplace(self, circuits_to_keep):
-        self.all_circuits_needing_data = _CircuitList.cast(self.all_circuits_needing_data)
+        self.all_circuits_needing_data = _circuits.CircuitList.cast(self.all_circuits_needing_data)
         if self.alt_actual_circuits_executed is not None:
-            self.alt_actual_circuits_executed = _CircuitList.cast(self.alt_actual_circuits_executed)
+            self.alt_actual_circuits_executed = _circuits.CircuitList.cast(self.alt_actual_circuits_executed)
 
             allc = []; actualc = []
             if isinstance(circuits_to_keep, set):
@@ -816,7 +810,7 @@ class ExperimentDesign(_TreeNode):
             sub_design._truncate_to_design_inplace(other_design)
 
     def _truncate_to_available_data_inplace(self, dataset):
-        self.all_circuits_needing_data = _CircuitList.cast(self.all_circuits_needing_data)
+        self.all_circuits_needing_data = _circuits.CircuitList.cast(self.all_circuits_needing_data)
         ds_circuits = self.all_circuits_needing_data.apply_aliases()
         circuits_to_keep = [c for c, ds_c in zip(self.all_circuits_needing_data, ds_circuits) if ds_c in dataset]
         self._truncate_to_circuits_inplace(circuits_to_keep)
@@ -1033,7 +1027,7 @@ class CircuitListsDesign(ExperimentDesign):
         CircuitListsDesign
         """
 
-        if isinstance(circuit_lists, _objs.PlaquetteGridCircuitStructure):
+        if isinstance(circuit_lists, _circuits.PlaquetteGridCircuitStructure):
             master = circuit_lists
             circuit_lists = [master.truncate(xs_to_keep=master.xs[0:i + 1]) for i in range(len(master.xs))]
             nested = True  # (by this construction)
@@ -1054,7 +1048,7 @@ class CircuitListsDesign(ExperimentDesign):
 
         super().__init__(all_circuits, qubit_labels)
         self.auxfile_types['circuit_lists'] = 'pickle' \
-            if any([isinstance(lst, _objs.CircuitList) for lst in circuit_lists]) else 'text-circuit-lists'
+            if any([isinstance(lst, _circuits.CircuitList) for lst in circuit_lists]) else 'text-circuit-lists'
 
     def truncate_to_lists(self, list_indices_to_keep):
         """
@@ -1074,7 +1068,7 @@ class CircuitListsDesign(ExperimentDesign):
                                   qubit_labels=self.qubit_labels, nested=self.nested)
 
     def _truncate_to_circuits_inplace(self, circuits_to_keep):
-        truncated_circuit_lists = [_CircuitList.cast(lst).truncate(circuits_to_keep)
+        truncated_circuit_lists = [_circuits.CircuitList.cast(lst).truncate(circuits_to_keep)
                                    for lst in self.circuit_lists]
         self.circuit_lists = truncated_circuit_lists
         self.nested = False  # we're not sure whether the truncated lists are nested
@@ -1086,7 +1080,7 @@ class CircuitListsDesign(ExperimentDesign):
         super()._truncate_to_design_inplace(other_design)
 
     def _truncate_to_available_data_inplace(self, dataset):
-        truncated_lists = [_CircuitList.cast(clist).truncate_to_dataset(dataset)
+        truncated_lists = [_circuits.CircuitList.cast(clist).truncate_to_dataset(dataset)
                            for clist in self.circuit_lists]
         self.circuit_lists = truncated_lists
         #self.nested = False
@@ -1247,8 +1241,8 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
             for tds in truncated_ds.values(): tds.add_std_nqubit_outcome_labels(len(self[sub_name].qubit_labels))
         else:
             truncated_ds = dataset.truncate(sub_circuits)  # maybe have filter_dataset also do this?
-            #truncated_ds.add_outcome_labels(dataset.outcome_labels)  # make sure truncated ds has all outcomes
-            truncated_ds.add_std_nqubit_outcome_labels(len(self[sub_name].qubit_labels))
+            truncated_ds.add_outcome_labels(dataset.outcome_labels)  # make sure truncated ds has all outcomes
+            #truncated_ds.add_std_nqubit_outcome_labels(len(self[sub_name].qubit_labels))  # can be very SLOW
         return ProtocolData(self[sub_name], truncated_ds)
 
     def __setitem__(self, key, val):
@@ -1387,7 +1381,7 @@ class SimultaneousExperimentDesign(ExperimentDesign):
 
             padded_circuit_lists = [list() for des in edesigns]
             for subcircuits in zip(*circuits_per_edesign):
-                c = _cir.Circuit(num_lines=0, editable=True)  # Creates a empty circuit over no wires
+                c = _circuits.Circuit(num_lines=0, editable=True)  # Creates a empty circuit over no wires
                 padded_subcircuits = pad(subcircuits)
                 for subc in padded_subcircuits:
                     if subc is not None:
@@ -1426,7 +1420,7 @@ class SimultaneousExperimentDesign(ExperimentDesign):
         -------
         ProtocolData
         """
-        if isinstance(dataset, _objs.MultiDataSet):
+        if isinstance(dataset, _data.MultiDataSet):
             raise NotImplementedError("SimultaneousExperimentDesigns don't work with multi-pass data yet.")
 
         all_circuits = self.all_circuits_needing_data
@@ -1436,10 +1430,10 @@ class SimultaneousExperimentDesign(ExperimentDesign):
         qubit_indices = [qubit_index[ql] for ql in qubit_labels]  # order determined by first circuit (see above)
 
         if isinstance(dataset, dict):  # then do filtration "element-wise"
-            filtered_ds = {k: _cnst.filter_dataset(ds, qubit_labels, qubit_indices) for k, ds in dataset.items()}
+            filtered_ds = {k: _data.filter_dataset(ds, qubit_labels, qubit_indices) for k, ds in dataset.items()}
             for fds in filtered_ds.values(): fds.add_std_nqubit_outcome_labels(len(qubit_labels))
         else:
-            filtered_ds = _cnst.filter_dataset(dataset, qubit_labels, qubit_indices)  # Marginalize dataset
+            filtered_ds = _data.filter_dataset(dataset, qubit_labels, qubit_indices)  # Marginalize dataset
             filtered_ds.add_std_nqubit_outcome_labels(len(qubit_labels))  # ensure filtered_ds has appropriate outcomes
 
         if sub_design.alt_actual_circuits_executed:
@@ -1490,7 +1484,7 @@ class FreeformDesign(ExperimentDesign):
         circuits = {}
         for index, row in df.iterrows():
             data = {k: v for k, v in row.items() if k != 'Circuit'}
-            circuits[_objs.Circuit(row['Circuit'])] = data
+            circuits[_circuits.Circuit(row['Circuit'])] = data
         return cls(circuits, qubit_labels)
 
     @classmethod
@@ -1627,7 +1621,7 @@ class ProtocolData(_TreeNode):
                 #FUTURE: use MultiDataSet, BUT in addition to init_from_dict we'll need to add truncate, filter, and
                 # process_circuits support for MultiDataSet objects -- for now (above) we just use dicts of DataSets.
                 #raise NotImplementedError("Need to implement MultiDataSet.init_from_dict!")
-                #dataset = _objs.MultiDataSet.init_from_dict(
+                #dataset = _data.MultiDataSet.init_from_dict(
                 #    {pth.name: _io.load_dataset(pth, verbosity=0) for pth in dataset_files})
 
         cache = _io.metadir._read_json_or_pkl_files_to_dict(data_dir / 'cache')
@@ -1664,7 +1658,7 @@ class ProtocolData(_TreeNode):
         self.cache = cache if (cache is not None) else {}
         self.tags = {}
 
-        if isinstance(self.dataset, (_objs.MultiDataSet, dict)):  # can be a dict of DataSets instead of a multidataset
+        if isinstance(self.dataset, (_data.MultiDataSet, dict)):  # can be dict of DataSets instead of a multi-ds
             for dsname in self.dataset:
                 if dsname not in self.cache: self.cache[dsname] = {}  # create separate caches for each pass
             self._passdatas = {dsname: ProtocolData(self.edesign, ds, self.cache[dsname])
@@ -1733,7 +1727,7 @@ class ProtocolData(_TreeNode):
         -------
         bool
         """
-        return isinstance(self.dataset, (_objs.MultiDataSet, dict))
+        return isinstance(self.dataset, (_data.MultiDataSet, dict))
 
     #def underlying_tree_paths(self):
     #    return self.edesign.get_tree_paths()
@@ -1806,7 +1800,7 @@ class ProtocolData(_TreeNode):
                 assert(len(list(data_dir.glob('*.txt'))) == 0), "There shouldn't be *.txt files in %s!" % str(data_dir)
             else:
                 data_dir.mkdir(exist_ok=True)
-                if isinstance(self.dataset, (_objs.MultiDataSet, dict)):
+                if isinstance(self.dataset, (_data.MultiDataSet, dict)):
                     for dsname, ds in self.dataset.items():
                         _io.write_dataset(data_dir / (dsname + '.txt'), ds)
                 else:
@@ -1865,7 +1859,7 @@ class ProtocolData(_TreeNode):
         pandas.DataFrame
         """
         cdict = _NamedDict('Circuit', None)
-        if isinstance(self.dataset, _objs.FreeformDataSet):
+        if isinstance(self.dataset, _data.FreeformDataSet):
             for cir, i in self.dataset.cirIndex.items():
                 d = _NamedDict('ValueName', 'category', items=self.dataset._info[i])
                 if isinstance(self.edesign, FreeformDesign):
@@ -2700,7 +2694,7 @@ class DataCountsSimulator(DataSimulator):
         -------
         ProtocolData
         """
-        from ..construction.datasetconstruction import simulate_data as _simulate_data
+        from pygsti.data.datasetconstruction import simulate_data as _simulate_data
         ds = _simulate_data(self.model, edesign.all_circuits_needing_data, self.num_samples,
                             self.sample_error, self.seed, self.rand_state,
                             self.alias_dict, self.collision_action,
@@ -2723,42 +2717,3 @@ def _convert_nameddict_attributes(obj):
         elif len(tup) == 3: attr, key, typ = tup
         keys_vals_types.append((key, getattr(obj, attr), typ))
     return keys_vals_types
-
-
-def _drop_constant_cols(df):
-    to_drop = [col for col in df.columns if len(df[col].unique()) == 1]
-    return df.drop(columns=to_drop)
-
-
-def _reset_index(df):
-    '''Returns DataFrame with index as columns - works with Categorical indices unlike DataFrame.reset_index'''
-    import pandas as _pd
-    index_df = df.index.to_frame(index=False)
-    df = df.reset_index(drop=True)
-    # In merge is important the order in which you pass the dataframes
-    # if the index contains a Categorical. I.e.,
-    # pd.merge(df, index_df, left_index=True, right_index=True) does not work.
-    return _pd.merge(index_df, df, left_index=True, right_index=True)
-
-
-def _process_dataframe(df, pivot_valuename, pivot_value, drop_columns, preserve_order=False):
-    """ See to_dataframe docstrings for argument descriptions. """
-    if drop_columns:
-        if drop_columns is True: drop_columns = (True,)
-        for col in drop_columns:
-            df = _drop_constant_cols(df) if (col is True) else df.drop(columns=col)
-
-    if pivot_valuename is not None or pivot_value is not None:
-        if pivot_valuename is None: pivot_valuename = "ValueName"
-        if pivot_value is None: pivot_value = "Value"
-        index_columns = list(df.columns)
-        index_columns.remove(pivot_valuename)
-        index_columns.remove(pivot_value)
-        df_all_index_but_value = df.set_index(index_columns + [pivot_valuename])
-        df_unstacked = df_all_index_but_value[pivot_value].unstack()
-        if preserve_order:  # a documented bug in pandas is unstack sorts - this tries to fix (HACK)
-            #df_unstacked = df_unstacked.reindex(df_all_index_but_value.index.get_level_values(0))
-            df_unstacked = df_unstacked.reindex(df_all_index_but_value.index.get_level_values(0).unique())
-        df = _reset_index(df_unstacked)
-
-    return df

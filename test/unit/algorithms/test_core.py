@@ -1,12 +1,14 @@
 import numpy as np
 
-from ..util import BaseCase
-from . import fixtures
-
-import pygsti.construction as pc
-from pygsti.objects import Circuit, Label, Chi2Function, FreqWeightedChi2Function, \
-    PoissonPicDeltaLogLFunction, CircuitList
+import pygsti.circuits as pc
+import pygsti.data as pdata
 from pygsti.algorithms import core
+from pygsti.baseobjs import Label
+from pygsti.circuits import Circuit, CircuitList
+from pygsti.objectivefns import Chi2Function, FreqWeightedChi2Function, \
+    PoissonPicDeltaLogLFunction
+from . import fixtures
+from ..util import BaseCase
 
 
 class CoreStdData(object):
@@ -77,7 +79,7 @@ class CoreLGSTTester(CoreStdData, BaseCase):
 
     def test_do_lgst_raises_on_incomplete_ab_matrix(self):
         incomplete_strings = self.lgstStrings[5:]  # drop first 5 strings...
-        bad_ds = pc.simulate_data(
+        bad_ds = pdata.simulate_data(
             self.datagen_gateset, incomplete_strings,
             num_samples=10, sample_error='none')
         with self.assertRaises(KeyError):
@@ -88,7 +90,7 @@ class CoreLGSTTester(CoreStdData, BaseCase):
 
     def test_do_lgst_raises_on_incomplete_x_matrix(self):
         incomplete_strings = self.lgstStrings[:-5]  # drop last 5 strings...
-        bad_ds = pc.simulate_data(
+        bad_ds = pdata.simulate_data(
             self.datagen_gateset, incomplete_strings,
             num_samples=10, sample_error='none')
         with self.assertRaises(KeyError):

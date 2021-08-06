@@ -1,13 +1,9 @@
-import unittest
-import warnings
-import pickle
 import collections
-import pygsti
 import os
+
+import pygsti
 from pygsti.modelpacks.legacy import std1Q_XYI as std
 from ..testutils import BaseTestCase, compare_files, temp_files, regenerate_references
-
-import numpy as np
 
 
 class ReportBaseCase(BaseTestCase):
@@ -33,33 +29,33 @@ class ReportBaseCase(BaseTestCase):
         #  #only use the first EVec
 
         op_labels = std.gates
-        cls.lgstStrings = pygsti.construction.create_lgst_circuits(std.fiducials, std.fiducials, op_labels)
+        cls.lgstStrings = pygsti.circuits.create_lgst_circuits(std.fiducials, std.fiducials, op_labels)
         cls.maxLengthList = [1,2,4,8]
 
-        cls.lsgstStrings = pygsti.construction.create_lsgst_circuit_lists(
+        cls.lsgstStrings = pygsti.circuits.create_lsgst_circuit_lists(
             op_labels, std.fiducials, std.fiducials, std.germs, cls.maxLengthList)
-        cls.lsgstStructs = pygsti.construction.make_lsgst_structs(
+        cls.lsgstStructs = pygsti.circuits.make_lsgst_structs(
             op_labels, std.fiducials, std.fiducials, std.germs, cls.maxLengthList)
 
 
         # RUN BELOW LINES TO GENERATE ANALYSIS DATASET (SAVE)
         if regenerate_references():
-            ds = pygsti.construction.simulate_data(datagen_gateset, cls.lsgstStrings[-1], num_samples=1000,
-                                                        sample_error='binomial', seed=100)
+            ds = pygsti.data.simulate_data(datagen_gateset, cls.lsgstStrings[-1], num_samples=1000,
+                                                   sample_error='binomial', seed=100)
             ds.save(compare_files + "/reportgen.dataset")
-            ds2 = pygsti.construction.simulate_data(datagen_gateset2, cls.lsgstStrings[-1], num_samples=1000,
-                                                         sample_error='binomial', seed=100)
+            ds2 = pygsti.data.simulate_data(datagen_gateset2, cls.lsgstStrings[-1], num_samples=1000,
+                                                    sample_error='binomial', seed=100)
             ds2.save(compare_files + "/reportgen2.dataset")
 
 
-        cls.ds = pygsti.objects.DataSet(file_to_load_from=compare_files + "/reportgen.dataset")
-        cls.ds2 = pygsti.objects.DataSet(file_to_load_from=compare_files + "/reportgen2.dataset")
+        cls.ds = pygsti.data.DataSet(file_to_load_from=compare_files + "/reportgen.dataset")
+        cls.ds2 = pygsti.data.DataSet(file_to_load_from=compare_files + "/reportgen2.dataset")
 
         mdl_lgst = pygsti.run_lgst(cls.ds, std.fiducials, std.fiducials, target_model, svd_truncate_to=4, verbosity=0)
         mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst, target_model, {'gates': 1.0, 'spam': 0.0})
         cls.mdl_clgst = pygsti.contract(mdl_lgst_go, "CPTP")
         cls.mdl_clgst_tp = pygsti.contract(cls.mdl_clgst, "vSPAM")
-        cls.mdl_clgst_tp.set_all_parameterizations("TP")
+        cls.mdl_clgst_tp.set_all_parameterizations("full TP")
 
         #Compute results for MC2GST
         lsgst_gatesets_prego, *_ = pygsti.run_iterative_gst(
@@ -72,7 +68,7 @@ class ReportBaseCase(BaseTestCase):
         )
 
         experiment_design = pygsti.protocols.StandardGSTDesign(
-            target_model, std.fiducials, std.fiducials, std.germs, cls.maxLengthList
+            target_model.create_processor_spec(), std.fiducials, std.fiducials, std.germs, cls.maxLengthList
         )
         data = pygsti.protocols.ProtocolData(experiment_design, cls.ds)
         protocol = pygsti.protocols.StandardGST()
@@ -102,7 +98,7 @@ class ReportBaseCase(BaseTestCase):
 
         #Compute results for MLGST with TP constraint
         # Use run_long_sequence_gst with a non-mark dataset to trigger data scaling
-        tp_target = target_model.copy(); tp_target.set_all_parameterizations("TP")
+        tp_target = target_model.copy(); tp_target.set_all_parameterizations("full TP")
 
 
         cls.ds3 = cls.ds.copy_nonstatic()
@@ -110,8 +106,8 @@ class ReportBaseCase(BaseTestCase):
         cls.ds3.done_adding_data()
 
         cls.results_logL = pygsti.run_long_sequence_gst(cls.ds3, tp_target, std.fiducials, std.fiducials,
-                                                       std.germs, cls.maxLengthList, verbosity=0,
-                                                       advanced_options={'tolerance': 1e-6, 'starting_point': 'LGST',
+                                                        std.germs, cls.maxLengthList, verbosity=0,
+                                                        advanced_options={'tolerance': 1e-6, 'starting_point': 'LGST',
                                                                         'on_bad_fit': ["robust","Robust","robust+","Robust+"],
                                                                         'bad_fit_threshold': -1.0,
                                                                         'germ_length_limits': {('Gx','Gi','Gi'): 2} })
@@ -130,7 +126,7 @@ class ReportBaseCase(BaseTestCase):
         #                          'weights': None, 'defaultDirectory': temp_files + "",
         #                          'defaultBasename': "MyDefaultReportName"})
         #
-        #tp_target = target_model.copy(); tp_target.set_all_parameterizations("TP")
+        #tp_target = target_model.copy(); tp_target.set_all_parameterizations("full TP")
         #gaugeOptParams = gaugeOptParams.copy() #just to be safe
         #gaugeOptParams['model'] = lsgst_gatesets_TP[-1]  #so can gauge-propagate CIs
         #gaugeOptParams['target_model'] = tp_target  #so can gauge-propagate CIs

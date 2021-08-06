@@ -10,20 +10,13 @@ circuit mirroring functions.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from ..objects import circuit as _cir
-from ..objects import label as _lbl
-from ..tools import symplectic as _symp
-#from .. import construction as _cnst
-from .. import objects as _objs
-#from .. import io as _io
-from .. import tools as _tools
-#from ..tools import group as _rbobjs
-from .. import protocols as _protocols
-
 import numpy as _np
 import copy as _copy
 import random as _random
-#import itertools as _itertools
+
+from pygsti.circuits import circuit as _cir
+from pygsti.baseobjs import label as _lbl
+from pygsti.tools import symplectic as _symp
 
 
 def _pvec_to_pauli_layer(pvec, pauli_labels, qubit_labels):

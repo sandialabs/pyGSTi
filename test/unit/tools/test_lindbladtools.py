@@ -1,9 +1,8 @@
 import numpy as np
 import scipy.sparse as sps
 
-from ..util import BaseCase
-
 from pygsti.tools import lindbladtools as lt
+from ..util import BaseCase
 
 
 class LindbladToolsTester(BaseCase):

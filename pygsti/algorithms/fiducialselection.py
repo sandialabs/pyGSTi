@@ -12,11 +12,13 @@ Functions for selecting a complete set of fiducials for a GST analysis.
 
 import numpy as _np
 import scipy
-from ..tools import frobeniusdist_squared
-from .. import objects as _objs
-from .. import construction as _constr
-from . import grasp as _grasp
-from . import scoring as _scoring
+
+from pygsti.algorithms import grasp as _grasp
+from pygsti.algorithms import scoring as _scoring
+from pygsti import circuits as _circuits
+from pygsti import baseobjs as _baseobjs
+from pygsti.modelmembers.povms import ComplementPOVMEffect as _ComplementPOVMEffect
+from pygsti.tools import frobeniusdist_squared
 
 
 def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
@@ -84,7 +86,7 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
     measFidList : list of Circuits
         A list containing the circuits for the measurement fiducials.
     """
-    printer = _objs.VerbosityPrinter.create_printer(verbosity)
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
     if ops_to_omit is None:
         ops_to_omit = []
 
@@ -98,7 +100,7 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
             if frobeniusdist_squared(target_model.operations[gate], Identity) < eq_thresh:
                 fidOps.remove(gate)
 
-    availableFidList = _constr.list_all_circuits(fidOps, 0, max_fid_length)
+    availableFidList = _circuits.list_all_circuits(fidOps, 0, max_fid_length)
 
     if algorithm_kwargs is None:
         # Avoid danger of using empty dict for default value.
@@ -295,7 +297,7 @@ def create_meas_mxs(model, meas_fid_list):
     outputMatList = []
     for povm in model.povms.values():
         for E in povm.values():
-            if isinstance(E, _objs.ComplementSPAMVec): continue  # complement is dependent on others
+            if isinstance(E, _ComplementPOVMEffect): continue  # complement is dependent on others
             outputMat = _np.zeros([dimE, numFid], float)
             for i, measFid in enumerate(meas_fid_list):
                 outputMat[:, i] = _np.dot(E.T, model.sim.product(measFid))[0, :]
@@ -633,7 +635,7 @@ def _find_fiducials_integer_slack(model, fid_list, prep_or_meas=None,
         Only returned if `return_all=True`.  The internal dictionary
         mapping weights (as a tuple) to scores.
     """
-    printer = _objs.VerbosityPrinter.create_printer(verbosity)
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
 
     if not xor(fixed_slack, slack_frac):
         raise ValueError("One and only one of fixed_slack or slack_frac should "
@@ -942,7 +944,7 @@ def _find_fiducials_grasp(model, fids_list, prep_or_meas, alpha,
         Only returned if `return_all=True`.  A list of the best solution
         (a solution is a list of fiducial circuits) for each grasp iteration.
     """
-    printer = _objs.VerbosityPrinter.create_printer(verbosity)
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
 
     if prep_or_meas not in ['prep', 'meas']:
         raise ValueError("'{}' is an invalid value for prep_or_meas (must be "

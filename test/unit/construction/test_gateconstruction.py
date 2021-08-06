@@ -1,10 +1,7 @@
-import itertools
 import numpy as np
 
+import pygsti.tools.gatetools as gc
 from ..util import BaseCase
-
-import pygsti.construction.gateconstruction as gc
-import pygsti.tools.basistools as bt
 
 
 class GateConstructionTester(BaseCase):

@@ -11,8 +11,8 @@ Defines the Cell class
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from .formatters import format_dict as _format_dict
-from .convert import convert_dict as _convert_dict
+from pygsti.report.convert import convert_dict as _convert_dict
+from pygsti.report.formatters import format_dict as _format_dict
 
 
 class Cell(object):

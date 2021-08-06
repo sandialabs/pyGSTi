@@ -12,12 +12,12 @@ Functions for generating report tables in different formats
 #***************************************************************************************************
 
 
-from .convert import converter
+from pygsti.report.convert import converter
 html = converter('html')  # Retrieve low-level formatters
 latex = converter('latex')
 
-from .formatter import Formatter as _Formatter
-from ..objects.reportableqty import ReportableQty as _ReportableQty
+from pygsti.report.formatter import Formatter as _Formatter
+from pygsti.report.reportableqty import ReportableQty as _ReportableQty
 
 import numpy as _np
 import numbers as _numbers

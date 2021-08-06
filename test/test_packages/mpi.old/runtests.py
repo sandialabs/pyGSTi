@@ -1,6 +1,6 @@
 import nose
-from nose.plugins import Plugin
 from mpi4py import MPI
+from nose.plugins import Plugin
 
 is_root = MPI.COMM_WORLD.Get_rank() == 0
 
@@ -33,7 +33,6 @@ class MpiOutput(Plugin):
 
 if __name__ == '__main__':
     import sys
-    import os
 
     # This didn't work, mpich2 would tend to crash *shrug*
     #if MPI.COMM_WORLD.Get_size() == 1:

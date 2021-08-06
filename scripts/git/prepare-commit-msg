@@ -1,7 +1,10 @@
 #!/usr/bin/env python
-from __future__   import print_function
-from hooksettings import no_ci_triggered # File extensions that don't trigger Travis CI
-import subprocess, sys, os
+from __future__ import print_function
+
+import subprocess
+import sys
+
+from hooksettings import no_ci_triggered  # File extensions that don't trigger Travis CI
 
 output       = subprocess.check_output(['git', 'diff', '--name-only',
                                                        '--cached'])

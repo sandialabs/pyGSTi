@@ -11,8 +11,8 @@ Defines the Row class
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from .cell import Cell
-from ..objects.reportableqty import ReportableQty as _ReportableQty
+from pygsti.report.reportableqty import ReportableQty as _ReportableQty
+from pygsti.report.cell import Cell
 
 
 class Row(object):

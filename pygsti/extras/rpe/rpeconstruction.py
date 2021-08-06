@@ -9,10 +9,12 @@
 #***************************************************************************************************
 
 import numpy as _np
-from . import rpetools as _rpetools
-from ... import construction as _cnst
-from ... import objects as _objs
-from ... import tools as _tools
+
+from pygsti.extras.rpe import rpetools as _rpetools
+from pygsti import models as _models
+from pygsti import data as _data
+from pygsti import tools as _tools
+from pygsti.circuits.circuit import Circuit as _Circuit
 
 
 def create_parameterized_rpe_model(alpha_true, epsilon_true, aux_rot, spam_depol,
@@ -73,20 +75,20 @@ def create_parameterized_rpe_model(alpha_true, epsilon_true, aux_rot, spam_depol
     ELabels = rpeconfig_inst.ELabels
 
     if with_id:
-        outputModel = _cnst.create_explicit_model(
+        outputModel = _models.create_explicit_model_from_expressions(
             [('Q0',)], ['Gi', loose_axis_gate_label, fixed_axis_gate_label],
             ["I(Q0)", loose_axis_label + "(%s,Q0)" % epsilon_true, fixed_axis_label + "(%s,Q0)" % alpha_true],
             prep_labels=["rho0"], prep_expressions=rhoExpressions,
             effect_labels=ELabels, effect_expressions=EExpressions)
     else:
-        outputModel = _cnst.create_explicit_model(
+        outputModel = _models.create_explicit_model_from_expressions(
             [('Q0',)], [loose_axis_gate_label, fixed_axis_gate_label],
             [loose_axis_label + "(%s,Q0)" % epsilon_true, fixed_axis_label + "(%s,Q0)" % alpha_true],
             prep_labels=["rho0"], prep_expressions=rhoExpressions,
             effect_labels=ELabels, effect_expressions=EExpressions)
 
     if aux_rot != 0:
-        modelAux1 = _cnst.create_explicit_model(
+        modelAux1 = _models.create_explicit_model_from_expressions(
             [('Q0',)], ['Gi', auxiliary_axis_gate_label, fixed_axis_gate_label],
             ["I(Q0)", auxiliary_axis_label + "(%s,Q0)" % aux_rot, fixed_axis_label + "(pi/2,Q0)"],
             prep_labels=["rho0"], prep_expressions=rhoExpressions,
@@ -191,10 +193,10 @@ def create_rpe_angle_circuit_lists(k_list, angle_name, rpeconfig_inst):
     cosStrList = []
     sinStrList = []
     for k in k_list:
-        cosStrList += [_objs.Circuit(cos_prep_tuple + cos_germ_tuple * k + cos_meas_tuple,
-                                     stringrep=cos_prep_str + '(' + cos_germ_str + ')^' + str(k) + cos_meas_str)]
-        sinStrList += [_objs.Circuit(sin_prep_tuple + sin_germ_tuple * k + sin_meas_tuple,
-                                     stringrep=sin_prep_str + '(' + sin_germ_str + ')^' + str(k) + sin_meas_str)]
+        cosStrList += [_Circuit(cos_prep_tuple + cos_germ_tuple * k + cos_meas_tuple,
+                                stringrep=cos_prep_str + '(' + cos_germ_str + ')^' + str(k) + cos_meas_str)]
+        sinStrList += [_Circuit(sin_prep_tuple + sin_germ_tuple * k + sin_meas_tuple,
+                                stringrep=sin_prep_str + '(' + sin_germ_str + ')^' + str(k) + sin_meas_str)]
     return cosStrList, sinStrList
 
 
@@ -261,7 +263,7 @@ def create_rpe_angle_circuits_dict(log2k_max_or_k_list, rpeconfig_inst):
 def create_rpe_dataset(model_or_dataset, string_list_d, n_samples, sample_error='binomial', seed=None):
     """
     Generate a fake RPE DataSet using the probabilities obtained from a model.
-    Is a thin wrapper for pygsti.construction.simulate_data, changing
+    Is a thin wrapper for pygsti.data.simulate_data, changing
     default behavior of sample_error, and taking a dictionary of operation sequences
     as input.
 
@@ -313,6 +315,6 @@ def create_rpe_dataset(model_or_dataset, string_list_d, n_samples, sample_error=
     DataSet
        A static data set filled with counts for the specified operation sequences.
     """
-    return _cnst.simulate_data(model_or_dataset,
+    return _data.simulate_data(model_or_dataset,
                                string_list_d['totalStrList'],
                                n_samples, sample_error=sample_error, seed=seed)

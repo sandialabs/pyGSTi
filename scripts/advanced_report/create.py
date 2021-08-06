@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-import numpy as np
-import pygsti
 import pickle
+
+import pygsti
 from pygsti.construction import std1Q_XYI
 
 #The usual GST setup: we're going to run GST on the standard XYI 1-qubit gateset
@@ -17,9 +17,9 @@ gs_datagen1 = gs_target.depolarize(gate_noise=0.1, spam_noise=0.001)
 gs_datagen2 = gs_target.depolarize(gate_noise=0.05, spam_noise=0.01).rotate(rotate=0.01)
 
 ds1 = pygsti.construction.simulate_data(gs_datagen1, listOfExperiments, n_samples=1000,
-                                            sample_error="binomial", seed=1234)
+                                        sample_error="binomial", seed=1234)
 ds2 = pygsti.construction.simulate_data(gs_datagen2, listOfExperiments, n_samples=1000,
-                                            sample_error="binomial", seed=1234)
+                                        sample_error="binomial", seed=1234)
 ds3 = ds1.copy_nonstatic(); ds3.add_counts_from_dataset(ds2); ds3.done_adding_data()
 
 #Run GST on all three datasets

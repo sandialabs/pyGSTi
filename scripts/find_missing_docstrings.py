@@ -4,7 +4,7 @@
 import argparse
 import ast
 from pathlib import Path
-from typing import Iterable, Union, Optional
+from typing import Iterable
 
 try:
     from colors import color

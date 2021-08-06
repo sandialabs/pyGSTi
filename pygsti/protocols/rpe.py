@@ -10,12 +10,13 @@ RPE Protocol objects
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 # ***************************************************************************************************
 
-from . import protocol as _proto
-from ..algorithms.robust_phase_estimation import RobustPhaseEstimation as _RobustPhaseEstimation
-
-import collections as _collections
 import argparse as _argparse
+import collections as _collections
+
 import numpy as _np
+
+from pygsti.protocols import protocol as _proto
+from pygsti.algorithms.robust_phase_estimation import RobustPhaseEstimation as _RobustPhaseEstimation
 
 
 class RobustPhaseEstimationDesign(_proto.CircuitListsDesign):

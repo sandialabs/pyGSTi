@@ -4,22 +4,25 @@ This module defines type-differentiation for low level formatting types.
 Its main function, convert, takes any item x, a specs dictionary, and a format (ie 'html')
 and returns a formatted version of x using the format
 """
-#***************************************************************************************************
+import functools
+
+import numpy as _np
+
+from pygsti.report.reportableqty import ReportableQty as _ReportableQty
+# ***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
-#***************************************************************************************************
-from . import html
-from . import latex
-from . import python
-
-import numpy as _np
-import functools
-from .. import objects as _objs
-from ..objects.reportableqty import ReportableQty as _ReportableQty
+# ***************************************************************************************************
+from pygsti.report import html
+from pygsti.report import latex
+from pygsti.report import python
+from pygsti.modelmembers import operations as _op
+from pygsti.modelmembers import povms as _povm
+from pygsti.modelmembers import states as _state
 
 
 def functions_in(module):
@@ -79,9 +82,7 @@ def item_type(x):
     """
     if isinstance(x, _ReportableQty):
         return 'reportable'
-    if isinstance(x, _np.ndarray) or \
-       isinstance(x, _objs.LinearOperator) or \
-       isinstance(x, _objs.SPAMVec):
+    if isinstance(x, (_np.ndarray, _op.LinearOperator, _state.State, _povm.POVMEffect)):
         d = calc_dim(x)
         if d == 0: return 'value'
         if d == 1: return 'vector'
@@ -119,9 +120,7 @@ def convert(x, specs, fmt):
     """
 
     #Squeeze arrays before formatting
-    if isinstance(x, _np.ndarray) or \
-       isinstance(x, _objs.LinearOperator) or \
-       isinstance(x, _objs.SPAMVec):
+    if isinstance(x, (_np.ndarray, _op.LinearOperator, _state.State, _povm.POVMEffect)):
         x = _np.squeeze(x)
 
     t = item_type(x)

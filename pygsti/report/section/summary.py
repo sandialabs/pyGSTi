@@ -8,9 +8,9 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from . import Section as _Section
+from pygsti.report.section import Section as _Section
 
-from .. import workspace as _ws
+from pygsti.report import workspace as _ws
 
 
 class SummarySection(_Section):

@@ -1,9 +1,9 @@
-import numpy as np
 import copy
 
-from ..util import BaseCase
+import numpy as np
 
-from pygsti.objects import reportableqty as rq
+from pygsti.report import reportableqty as rq
+from ..util import BaseCase
 
 
 class NonHermitianReportableQtyTester(BaseCase):

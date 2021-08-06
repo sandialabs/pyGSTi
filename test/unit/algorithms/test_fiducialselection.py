@@ -1,10 +1,9 @@
 import numpy as np
 
-from ..util import BaseCase
-from . import fixtures
-
-import pygsti.construction as pc
 import pygsti.algorithms.fiducialselection as fs
+import pygsti.circuits as pc
+from . import fixtures
+from ..util import BaseCase
 
 
 class FiducialSelectionUtilTester(BaseCase):

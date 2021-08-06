@@ -7,21 +7,19 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as _np
 import ast as _ast
-import warnings as _warnings
-import pickle as _pickle
-import os as _os
 import json as _json
+import os as _os
+import pickle as _pickle
+import warnings as _warnings
 
+from pygsti.extras.rb import benchmarker as _benchmarker
+from pygsti.extras.rb import dataset as _dataset
 # todo : update
-from . import analysis as _results
-from . import sample as _sample
-from . import dataset as _dataset
-from . import benchmarker as _benchmarker
-from ... import io as _io
-from ...objects import circuit as _cir
-from ...objects import multidataset as _mds
+from pygsti.extras.rb import sample as _sample
+from pygsti import io as _io
+from pygsti.circuits import circuit as _cir
+from pygsti.data import multidataset as _mds
 
 
 #def load_benchmarking_data(basedir):
@@ -40,12 +38,12 @@ def load_benchmarker(directory, load_datasets=True, verbosity=1):
     dscomparator = globaldict['dscomparator']
 
     if load_datasets:
-        dskeys = [dskey.name for dskey in _os.scandir(directory + '/datasets') if dskey.is_dir()]
+        dskeys = [dskey.name for dskey in _os.scandir(directory + '/data') if dskey.is_dir()]
         multidsdict = {dskey: _mds.MultiDataSet()for dskey in dskeys}
 
         for dskey in dskeys:
             for passnum in range(numpasses):
-                dsfn = directory + '/datasets/{}/ds{}.txt'.format(dskey, passnum)
+                dsfn = directory + '/data/{}/ds{}.txt'.format(dskey, passnum)
                 ds = _io.load_dataset(dsfn, collision_action='keepseparate', record_zero_counts=False,
                                       ignore_zero_count_lines=False, verbosity=verbosity)
                 multidsdict[dskey].add_dataset(passnum, ds)
@@ -182,7 +180,7 @@ def write_benchmarker(benchmarker, outdir, overwrite=False, verbosity=0):
                     _json.dump(summarydict, f, indent=4)
 
     for dskey in benchmarker.multids.keys():
-        fdir = outdir + '/datasets/{}'.format(dskey)
+        fdir = outdir + '/data/{}'.format(dskey)
         _os.makedirs(fdir)
         for dsind in benchmarker.multids[dskey].keys():
             fname = fdir + '/ds{}.txt'.format(dsind)
@@ -686,7 +684,7 @@ def write_rb_summary_data_to_file(ds, filename):
     todo
 
     """
-    numqubits = ds.number_of_qubits
+    numqubits = ds.num_qubits
     with open(filename, 'w') as f:
 
         descriptor_string = ds.descriptor.split("\n")
@@ -745,14 +743,14 @@ def write_rb_summary_data_to_file(ds, filename):
 #     Format 1 (`is_counts_data` is True):
 
 #         # The number of qubits
-#         The number of qubits (this line is optional if `number_of_qubits` is specified)
+#         The number of qubits (this line is optional if `num_qubits` is specified)
 #         # RB length // Success counts // Total counts // Circuit depth // Circuit two-qubit gate count
 #         Between 3 and 5 columns of data (the last two columns are expected only if `contains_circuit_data` is True).
 
 #     Format 2 (`is_counts_data` is False):
 
 #         # The number of qubits
-#         The number of qubits (this line is optional if `number_of_qubits` is specified)
+#         The number of qubits (this line is optional if `num_qubits` is specified)
 #         # RB length // Survival probabilities // Circuit depth // Circuit two-qubit gate count
 #         Between 2 and 4 columns of data (the last two columns are expected only if `contains_circuit_data` is True).
 
@@ -775,7 +773,7 @@ def write_rb_summary_data_to_file(ds, filename):
 #         they run any analysis on the data). But it is useful to be able to set this to False for simulated
 #         data obtained from perfect outcome sampling.
 
-#     number_of_qubits : int, optional.
+#     num_qubits : int, optional.
 #         The number of qubits the data is for. Must be specified if this isn't in the input file.
 
 #     total_counts : int, optional

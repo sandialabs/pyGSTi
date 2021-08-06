@@ -11,19 +11,15 @@ Defines interpolated gate and factory classes
 #***************************************************************************************************
 
 
-import numpy as _np
-import pickle as _pickle
-from scipy.interpolate import LinearNDInterpolator as _linND
-from scipy.linalg import logm as _logm, expm as _expm
 import itertools as _itertools
-import copy as _copy
-import pathlib as _pathlib
 
-from ...tools.basistools import change_basis as _change_basis
+import numpy as _np
+from scipy.interpolate import LinearNDInterpolator as _linND
+
+from ...modelmembers.operations import DenseOperator as _DenseOperator
+from ...modelmembers.operations.opfactory import OpFactory as _OpFactory
+from ...baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from ...tools import optools as _ot
-from ...objects.operation import DenseOperator as _DenseOperator
-from ...objects.opfactory import OpFactory as _OpFactory
-from ...objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 
 
 #TODO move elsewhere?
@@ -184,7 +180,7 @@ class InterpolatedOpFactory(_OpFactory):
         dim = self.base_interpolator.qty_shape[0]
         assert(self.base_interpolator.qty_shape == (dim, dim)), \
             "Base interpolator must interpolate a square matrix value!"
-        assert(target_factory.dim == dim), "Target factory dim must match interpolated matrix dim!"
+        assert(target_factory.state_space.dim == dim), "Target factory dim must match interpolated matrix dim!"
 
         num_interp_params = self.base_interpolator.num_params
         self.num_factory_args = len(self._argument_indices)
@@ -380,7 +376,8 @@ class InterpolatedDenseOp(_DenseOperator):
         fullv[self._parameterized_indices] = self._paramvec
         fullv[self._frozen_indices] = self._frozen_values
         errorgen = self.base_interpolator(fullv)
-        self.base[:, :] = _ot.operation_from_error_generator(errorgen, self.target_op.to_dense(), 'logGTi')
+        self._ptr[:, :] = _ot.operation_from_error_generator(errorgen, self.target_op.to_dense(), 'logGTi')
+        self._ptr_has_changed()
 
         if self.aux_interpolator is not None:
             self.aux_info = self.aux_interpolator(fullv)

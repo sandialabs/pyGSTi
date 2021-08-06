@@ -10,8 +10,7 @@ Stability analysis protocol objects
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from . import protocol as _proto
-from ..extras import drift as _drift
+from pygsti.protocols import protocol as _proto
 
 
 class StabilityAnalysisDesign(_proto.ExperimentDesign):
@@ -423,6 +422,7 @@ class StabilityAnalysis(_proto.Protocol):
         -------
         StabilityAnalysisResults
         """
+        from ..extras import drift as _drift
         ds = data.dataset  # dataset
 
         if self.verbosity > 0: print(" - Formatting the data...", end='')

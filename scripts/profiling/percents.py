@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
-import subprocess, sys
+import sys
 from collections import namedtuple
-from pprint import pprint
 
 FuncInfo = namedtuple('FuncInfo', ['calls', 'time', 'fname'])
 

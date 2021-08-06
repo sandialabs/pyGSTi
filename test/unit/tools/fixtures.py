@@ -1,8 +1,8 @@
 """Shared test fixtures for pygsti.tools unit tests"""
-from ..util import Namespace
-
 import pygsti
 from pygsti.modelpacks.legacy import std1Q_XYI as std
+from pygsti.baseobjs import profiler
+from ..util import Namespace
 
 ns = Namespace()
 ns.model = std.target_model()
@@ -10,7 +10,7 @@ ns.opLabels = list(ns.model.operations.keys())
 ns.fiducials = std.fiducials
 ns.germs = std.germs
 ns.maxLengthList = [0, 1, 2, 4, 8]
-ns.CM = pygsti.objects.profiler._get_mem_usage()
+ns.CM = profiler._get_mem_usage()
 
 
 @ns.memo
@@ -20,14 +20,14 @@ def datagen_gateset(self):
 
 @ns.memo
 def expList(self):
-    return pygsti.construction.create_lsgst_circuits(
+    return pygsti.circuits.create_lsgst_circuits(
         self.opLabels, self.fiducials, self.fiducials, self.germs, self.maxLengthList)
 
 
 @ns.memo
 def dataset(self):
     # Was previously written to disk as 'analysis.dataset'
-    return pygsti.construction.simulate_data(
+    return pygsti.data.simulate_data(
         self.datagen_gateset, self.expList, num_samples=10000,
         sample_error='binomial', seed=100
     )
@@ -50,7 +50,7 @@ def mdl_clgst(self):
 
 @ns.memo
 def lsgstStrings(self):
-    return pygsti.construction.create_lsgst_circuit_lists(
+    return pygsti.circuits.create_lsgst_circuit_lists(
         self.opLabels, self.fiducials, self.fiducials, self.germs,
         self.maxLengthList
     )
@@ -58,7 +58,7 @@ def lsgstStrings(self):
 
 @ns.memo
 def mdl_lsgst(self):
-    chi2_builder = pygsti.obj.Chi2Function.builder(
+    chi2_builder = pygsti.objectivefns.Chi2Function.builder(
         regularization={'min_prob_clip_for_weighting': 1e-6},
         penalties={'prob_clip_interval': (-1e6, 1e6)})
     models, _, _ = pygsti.algorithms.core.run_iterative_gst(

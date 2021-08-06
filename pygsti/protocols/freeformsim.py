@@ -10,31 +10,12 @@ ModelTest Protocol objects
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import time as _time
-import os as _os
 import numpy as _np
-import numpy.random as _rndm
-import pickle as _pickle
-import collections as _collections
-import warnings as _warnings
-import scipy.optimize as _spo
-from scipy.stats import chi2 as _chi2
 
-from . import protocol as _proto
-from .. import objects as _objs
-from .. import algorithms as _alg
-from .. import construction as _construction
-from .. import io as _io
-from .. import tools as _tools
-
-from pygsti.protocols.estimate import Estimate as _Estimate
-from ..objects import wildcardbudget as _wild
-from ..objects.profiler import DummyProfiler as _DummyProfiler
-from ..objects import objectivefns as _objfns
-from ..objects.circuitlist import CircuitList as _CircuitList
-from ..objects.resourceallocation import ResourceAllocation as _ResourceAllocation
-from ..objects.objectivefns import ModelDatasetCircuitsStore as _ModelDatasetCircuitStore
-from ..construction import datasetconstruction as _dcnst
+from pygsti.protocols import protocol as _proto
+from pygsti.circuits.circuit import Circuit as _Circuit
+from pygsti.data.freedataset import FreeformDataSet as _FreeformDataSet
+from pygsti.modelmembers import states as _state
 
 
 class FreeformDataSimulator(_proto.DataSimulator):
@@ -81,14 +62,14 @@ class FreeformDataSimulator(_proto.DataSimulator):
         -------
         ProtocolData
         """
-        dataset = _objs.FreeformDataSet(circuits=edesign.all_circuits_needing_data)
+        dataset = _FreeformDataSet(circuits=edesign.all_circuits_needing_data)
         for c in edesign.all_circuits_needing_data:
             dataset[c] = self.compute_freeform_data(c)
         return _proto.ProtocolData(edesign, dataset)
 
     def apply_fn(self, series):
         import pandas as _pd
-        circuit = _objs.Circuit.cast(series['Circuit'])  # parse string circuit
+        circuit = _Circuit.cast(series['Circuit'])  # parse string circuit
         info = self.compute_freeform_data(circuit)
         return _pd.Series(info)  # TODO FIX THIS
 
@@ -133,7 +114,8 @@ class ModelFreeformSimulator(FreeformDataSimulator):
         if include_final_state or include_probabilities:
             ret = [mx]
             rho = model.circuit_layer_operator(prep, 'prep')
-            final_state = _objs.StaticSPAMVec(_np.dot(mx, rho.to_dense()))
+            final_state = _state.StaticState(_np.dot(mx, rho.to_dense(on_space='HilbertSchmidt')),
+                                             model.evotype, model.state_space)
             if include_final_state:
                 ret.append(final_state)
             if include_probabilities:

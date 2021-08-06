@@ -1,15 +1,16 @@
 # XXX rewrite or remove
 
-import numpy as np
 from unittest import mock
 
-from ..util import BaseCase
+import numpy as np
 
-import pygsti.construction as pc
-from pygsti.objects import ExplicitOpModel, Label as L
-from pygsti.objects import Circuit
-from pygsti.objects.forwardsim import ForwardSimulator
-from pygsti.objects.mapforwardsim import MapForwardSimulator
+import pygsti.models as models
+from pygsti.forwardsims.forwardsim import ForwardSimulator
+from pygsti.forwardsims.mapforwardsim import MapForwardSimulator
+from pygsti.models import ExplicitOpModel
+from pygsti.circuits import Circuit
+from pygsti.baseobjs import Label as L
+from ..util import BaseCase
 
 
 def Ls(*args):
@@ -54,7 +55,7 @@ class ForwardSimBase(object):
     @classmethod
     def setUpClass(cls):
         ExplicitOpModel._strict = False
-        cls.model = pc.create_explicit_model(
+        cls.model = models.create_explicit_model_from_expressions(
             [('Q0',)], ['Gi', 'Gx', 'Gy'],
             ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"]
         )
@@ -67,6 +68,7 @@ class ForwardSimBase(object):
 
     def test_bulk_fill_probs(self):
         pmx = np.empty(self.nEls, 'd')
+        print(self.fwdsim.model._opcaches)
         self.fwdsim.bulk_fill_probs(pmx, self.layout)
         # TODO assert correctness
 

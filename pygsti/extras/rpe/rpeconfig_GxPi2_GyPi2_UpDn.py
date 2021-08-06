@@ -9,6 +9,7 @@
 #***************************************************************************************************
 
 import numpy as _np
+
 from . import RPEconfig as _RPEconfig
 
 rpeconfig_gxpi2_gypi2_updn_dict = {}

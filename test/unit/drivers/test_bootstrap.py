@@ -1,10 +1,8 @@
-from ..util import BaseCase
-from . import fixtures as pkg
-
-from pygsti import algorithms as alg, construction as pc
-from pygsti.objects import DataSet
-from pygsti.modelpacks.legacy import std1Q_XYI as std
+from pygsti import algorithms as alg, circuits as pc
 from pygsti.drivers import bootstrap as bs
+from pygsti.modelpacks.legacy import std1Q_XYI as std
+from . import fixtures as pkg
+from ..util import BaseCase
 
 
 class BootstrapBase(BaseCase):
@@ -15,7 +13,7 @@ class BootstrapBase(BaseCase):
         cls.germs = pkg.germs
         cls.ds = pkg.dataset
         tp_target = std.target_model()
-        tp_target.set_all_parameterizations("TP")
+        tp_target.set_all_parameterizations("full TP")
         cls.mdl = alg.run_lgst(
             cls.ds, cls.fiducials, cls.fiducials, target_model=tp_target, svd_truncate_to=4, verbosity=0
         )
@@ -132,7 +130,7 @@ class BootstrapUtilityTester(BootstrapBase):
             return mdl.dim
 
         tp_target = std.target_model()
-        tp_target.set_all_parameterizations("TP")
+        tp_target.set_all_parameterizations("full TP")
 
         bs._model_stdev(gsFn, self.bootgs_p)
         bs._model_mean(gsFn, self.bootgs_p)

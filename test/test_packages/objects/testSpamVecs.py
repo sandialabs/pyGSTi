@@ -1,22 +1,22 @@
-import unittest
-import pygsti
-import numpy as np
-import pickle
 import itertools
+import pickle
+import unittest
 
-from numpy.random import random,seed
+import numpy as np
+from numpy.random import random, seed
 
+import pygsti
+from pygsti.models import modelconstruction
 from pygsti.modelpacks.legacy import std1Q_XYI
-from  pygsti.objects import SPAMVec, DenseSPAMVec
-import pygsti.construction as pc
-from pygsti.construction import modelconstruction
+from pygsti.modelmembers.states import State
+from pygsti.modelmembers import states
+from pygsti.modelmembers import povms
+from ..testutils import BaseTestCase
 
-
-from ..testutils import BaseTestCase, compare_files, temp_files
 
 class SPAMVecTestCase(BaseTestCase):
-    def test_cptp_spamvec(self):
-        vec = pygsti.obj.CPTPSPAMVec([1/np.sqrt(2),0,0,1/np.sqrt(2) - 0.1], "pp")
+    def test_cptp_state(self):
+        vec = states.CPTPState([1 / np.sqrt(2), 0, 0, 1 / np.sqrt(2) - 0.1], "pp")
         print(vec)
         print(vec.base.shape)
 
@@ -26,7 +26,7 @@ class SPAMVecTestCase(BaseTestCase):
         print(v)
         print(vec)
 
-        vec_std = pygsti.change_basis(vec,"pp","std")
+        vec_std = pygsti.change_basis(vec, "pp", "std")
         print(vec_std)
 
         def analyze(spamvec):
@@ -39,7 +39,7 @@ class SPAMVecTestCase(BaseTestCase):
 
         print( analyze(vec) )
 
-        pygsti.objects.spamvec.check_deriv_wrt_params(vec)
+        states.check_deriv_wrt_params(vec)
 
 
         seed(1234)
@@ -50,7 +50,7 @@ class SPAMVecTestCase(BaseTestCase):
             r = 2*(randvec-0.5)
             vec.from_vector(r)
             evs = analyze(vec)
-            pygsti.objects.spamvec.check_deriv_wrt_params(vec)
+            states.check_deriv_wrt_params(vec)
             #print(r, "->", evs)
         print("OK1")
 
@@ -60,7 +60,7 @@ class SPAMVecTestCase(BaseTestCase):
             r = 10*(randvec-0.5)
             vec.from_vector(r)
             evs = analyze(vec)
-            pygsti.objects.spamvec.check_deriv_wrt_params(vec)
+            states.check_deriv_wrt_params(vec)
             #print(r, "->", evs)
         print("OK2")
 
@@ -70,19 +70,19 @@ class SPAMVecTestCase(BaseTestCase):
 
     #TODO
     def test_complement_spamvec(self):
-        model = pygsti.construction.create_explicit_model(
+        model = pygsti.models.modelconstruction.create_explicit_model_from_expressions(
             [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"])
 
         E0 = model.povms['Mdefault']['0']
         E1 = model.povms['Mdefault']['1']
-        Ec = pygsti.obj.ComplementSPAMVec(
-            modelconstruction._create_identity_vec([4],"pp"),
+        Ec = povms.ComplementPOVMEffect(
+            modelconstruction._create_identity_vec([4], "pp"),
             [E0])
         print(Ec.gpindices)
 
         #Test TPPOVM which uses a complement evec
-        model.povms['Mtest'] = pygsti.obj.TPPOVM( [('+',E0),('-',E1)] )
+        model.povms['Mtest'] = povms.TPPOVM([('+', E0), ('-', E1)])
         E0 = model.povms['Mtest']['+']
         Ec = model.povms['Mtest']['-']
 
@@ -115,9 +115,9 @@ class SPAMVecTestCase(BaseTestCase):
 
 
     def test_povms(self):
-        model = pygsti.construction.create_explicit_model(
+        model = pygsti.models.modelconstruction.create_explicit_model_from_expressions(
             [('Q0',)],['Gi'], ["I(Q0)"])
-        gateset2Q = pygsti.construction.create_explicit_model(
+        gateset2Q = pygsti.models.modelconstruction.create_explicit_model_from_expressions(
             [('Q0','Q1')],['Gi'], ["I(Q0)"])
 
         povm = model.povms['Mdefault'].copy()
@@ -126,19 +126,19 @@ class SPAMVecTestCase(BaseTestCase):
         model.povms['Munconstrained'] = povm # so gpindices get setup
 
         with self.assertRaises(ValueError):
-            pygsti.obj.povm.convert(povm, "foobar", model.basis)
+            povms.convert(povm, "foobar", model.basis)
         with self.assertRaises(ValueError):
-            pygsti.obj.UnconstrainedPOVM( "NotAListOrDict" )
+            povms.UnconstrainedPOVM("NotAListOrDict")
 
         povm['0'] = E0 # assignment
-        tp_povm = pygsti.obj.povm.convert(povm, "TP", model.basis)
+        tp_povm = povms.convert(povm, "TP", model.basis)
         tp_povm['0'] = E0 # ok
         with self.assertRaises(KeyError):
             tp_povm['1'] = E0 # can't assign complement vector
         model.povms['Mtp'] = tp_povm # so gpindices get setup
 
         factorPOVMs = [povm, povm.copy()]
-        tensor_povm = pygsti.obj.TensorProdPOVM( factorPOVMs )
+        tensor_povm = povms.TensorProductPOVM(factorPOVMs)
         gateset2Q.povms['Mtensor'] = tensor_povm # so gpindices get setup
 
         for i,p in enumerate([povm, tp_povm, tensor_povm]):
@@ -150,9 +150,11 @@ class SPAMVecTestCase(BaseTestCase):
             s = pickle.dumps(p)
             x = pickle.loads(s)
 
-            T = pygsti.objects.FullGaugeGroupElement(
-                np.array( [ [0,1],
-                            [1,0] ], 'd') )
+            T = pygsti.models.gaugegroup.FullGaugeGroupElement(
+                np.array( [ [1,0,0,0],
+                            [0,0,1,0],
+                            [0,1,0,0],
+                            [0,0,0,1]], 'd') )
 
             v = p.to_vector()
             p.from_vector(v)
@@ -175,20 +177,20 @@ class SPAMVecTestCase(BaseTestCase):
                 pass #OK - tensorprod doesn't allow transform for instance
 
     def test_compbasis_povm(self):
-        cv = pygsti.obj.ComputationalSPAMVec([0,1],'densitymx')
-        v = modelconstruction._basis_create_spam_vector("1", pygsti.obj.Basis.cast("pp",4**2))
+        cv = states.ComputationalBasisState([0, 1], 'pp', 'densitymx')
+        v = modelconstruction._basis_create_spam_vector("1", pygsti.baseobjs.Basis.cast("pp", 4 ** 2))
         self.assertTrue(np.linalg.norm(cv.to_dense()-v.flat) < 1e-6)
 
-        cv = pygsti.obj.ComputationalSPAMVec([0,0,1],'densitymx')
-        v = modelconstruction._basis_create_spam_vector("1", pygsti.obj.Basis.cast("pp",4**3))
+        cv = states.ComputationalBasisState([0, 0, 1], 'pp', 'densitymx')
+        v = modelconstruction._basis_create_spam_vector("1", pygsti.baseobjs.Basis.cast("pp", 4 ** 3))
         self.assertTrue(np.linalg.norm(cv.to_dense()-v.flat) < 1e-6)
 
-        cv = pygsti.obj.ComputationalSPAMVec([0,0,1],'densitymx')
-        v = modelconstruction._basis_create_spam_vector("1", pygsti.obj.Basis.cast("pp",4**3))
+        cv = states.ComputationalBasisState([0, 0, 1], 'pp', 'densitymx')
+        v = modelconstruction._basis_create_spam_vector("1", pygsti.baseobjs.Basis.cast("pp", 4 ** 3))
         self.assertTrue(np.linalg.norm(cv.to_dense()-v.flat) < 1e-6)
 
-        cv = pygsti.obj.ComputationalSPAMVec([0,0,1],'densitymx')
-        v = modelconstruction._basis_create_spam_vector("1", pygsti.obj.Basis.cast("pp",4**3))
+        cv = states.ComputationalBasisState([0, 0, 1], 'pp', 'densitymx')
+        v = modelconstruction._basis_create_spam_vector("1", pygsti.baseobjs.Basis.cast("pp", 4 ** 3))
         self.assertTrue(np.linalg.norm(cv.to_dense()-v.flat) < 1e-6)
 
         #Only works with Python replib (only there is to_dense implemented)
@@ -203,15 +205,15 @@ class SPAMVecTestCase(BaseTestCase):
 
         nqubits = 3
         iterover = [(0,1)]*nqubits
-        items = [ (''.join(map(str,outcomes)), pygsti.obj.ComputationalSPAMVec(outcomes,"densitymx",'effect'))
+        items = [ (''.join(map(str,outcomes)), povms.ComputationalBasisPOVMEffect(outcomes, 'pp', "densitymx"))
                   for outcomes in itertools.product(*iterover) ]
-        povm = pygsti.obj.UnconstrainedPOVM(items)
+        povm = povms.UnconstrainedPOVM(items)
         self.assertEqual(povm.num_params,0)
 
         mdl = std1Q_XYI.target_model()
-        mdl.preps['rho0'] = pygsti.obj.ComputationalSPAMVec([0],'densitymx')
-        mdl.povms['Mdefault'] = pygsti.obj.UnconstrainedPOVM({'0': pygsti.obj.ComputationalSPAMVec([0],'densitymx','effect'),
-                                                             '1': pygsti.obj.ComputationalSPAMVec([1],'densitymx','effect')})
+        mdl.preps['rho0'] = states.ComputationalBasisState([0], 'pp', 'densitymx')
+        mdl.povms['Mdefault'] = povms.UnconstrainedPOVM({'0': povms.ComputationalBasisPOVMEffect([0], 'pp', 'densitymx'),
+                                                         '1': povms.ComputationalBasisPOVMEffect([1], 'pp', 'densitymx')})
 
         ps0 = mdl.probabilities(())
         ps1 = mdl.probabilities(('Gx',))

@@ -10,26 +10,24 @@ Defines the Workspace class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import itertools as _itertools
 import collections as _collections
-import os as _os
-import shutil as _shutil
-import numpy as _np
-#import uuid        as _uuid
-import random as _random
 import inspect as _inspect
+import itertools as _itertools
+import os as _os
 import pickle as _pickle
-
+# import uuid        as _uuid
+import random as _random
+import shutil as _shutil
 import subprocess as _subprocess
-
-from .. import objects as _objs
-from ..tools import compattools as _compat
-from ..objects.smartcache import CustomDigestError as _CustomDigestError
-
-from . import plotly_plot_ex as _plotly_ex
-from . import merge_helpers as _merge
-
 from pprint import pprint as _pprint
+
+import numpy as _np
+
+from pygsti.report import merge_helpers as _merge
+from pygsti.report import plotly_plot_ex as _plotly_ex
+from pygsti import baseobjs as _baseobjs
+from pygsti.baseobjs.smartcache import CustomDigestError as _CustomDigestError
+from pygsti.baseobjs import _compatibility as _compat
 
 _PYGSTI_WORKSPACE_INITIALIZED = False
 VALIDATE_PLOTLY = False  # False increases performance of report rendering; set to True to debug
@@ -207,7 +205,7 @@ class Workspace(object):
             filename with cached workspace results
         """
         self._register_components(False)
-        self.smartCache = _objs.SmartCache()
+        self.smartCache = _baseobjs.SmartCache()
         if cachefile is not None:
             self.load_cache(cachefile)
         self.smartCache.add_digest(ws_custom_digest)
@@ -2148,7 +2146,7 @@ class WorkspaceTable(WorkspaceOutput):
             render_includes = self.options.get('render_includes', True)
             leave_src = self.options.get('leave_includes_src', False)
             W, H = self.options.get('page_size', (6.5, 8.0))
-            printer = _objs.VerbosityPrinter(1)  # TEMP - add verbosity arg?
+            printer = _baseobjs.VerbosityPrinter(1)  # TEMP - add verbosity arg?
 
             #Note: in both cases output_dir needs to be the *relative* path
             # between the current directory and the output directory if
@@ -2890,7 +2888,7 @@ class WorkspaceText(WorkspaceOutput):
             leave_src = self.options.get('leave_includes_src', False)
             render_includes = self.options.get('render_includes', True)
             W, H = self.options.get('page_size', (6.5, 8.0))
-            printer = _objs.VerbosityPrinter(1)  # TEMP - add verbosity arg?
+            printer = _baseobjs.VerbosityPrinter(1)  # TEMP - add verbosity arg?
 
             #Note: in both cases output_dir needs to be the *relative* path
             # between the current directory and the output directory if

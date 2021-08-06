@@ -10,28 +10,12 @@ Volumetric Benchmarking Protocol objects
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import time as _time
-import os as _os
 import numpy as _np
-import pickle as _pickle
-import collections as _collections
-import warnings as _warnings
-import copy as _copy
-import scipy.optimize as _spo
-from scipy.stats import chi2 as _chi2
 
-from . import protocol as _proto
-from .modeltest import ModelTest as _ModelTest
-from .. import objects as _objs
-from .. import algorithms as _alg
-from .. import construction as _construction
-from .. import io as _io
-from .. import tools as _tools
-
-from ..objects import wildcardbudget as _wild
-from ..objects.profiler import DummyProfiler as _DummyProfiler
-from ..objects import objectivefns as _objfns
-from ..algorithms import randomcircuit as _rc
+from pygsti.protocols import protocol as _proto
+from pygsti.models.oplessmodel import SuccessFailModel as _SuccessFailModel
+from pygsti import tools as _tools
+from pygsti.algorithms import randomcircuit as _rc
 
 
 class ByDepthDesign(_proto.CircuitListsDesign):
@@ -112,8 +96,8 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
 
     Parameters
     ----------
-    pspec : ProcessorSpec
-       The ProcessorSpec for the device that the experiment is being generated for. The `pspec` is always
+    pspec : QubitProcessorSpec
+       The QubitProcessorSpec for the device that the experiment is being generated for. The `pspec` is always
        handed to the sampler, as the first argument of the sampler function.
 
     depths : list of ints
@@ -142,7 +126,7 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
 
     qubit_labels : list, optional
         If not None, a list of the qubits that the RB circuit is to be sampled for. This should
-        be all or a subset of the qubits in the device specified by the ProcessorSpec `pspec`.
+        be all or a subset of the qubits in the device specified by the QubitProcessorSpec `pspec`.
         If None, it is assumed that the RB circuit should be over all the qubits. Note that the
         ordering of this list is the order of the ``wires'' in the returned circuit, but is otherwise
         irrelevant.
@@ -154,9 +138,9 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
         corresponds to sampling according to rb.sampler.circuit_layer_of_oneQgates [which is not
         a valid option for n-qubit MRB -- it results in sim. 1-qubit MRB -- but it is not explicitly
         forbidden by this function]. If `sampler` is a function, it should be a function that takes
-        as the first argument a ProcessorSpec, and returns a random circuit layer as a list of gate
+        as the first argument a QubitProcessorSpec, and returns a random circuit layer as a list of gate
         Label objects. Note that the default 'Qelimination' is not necessarily the most useful
-        in-built sampler, but it is the only sampler that requires no parameters beyond the ProcessorSpec
+        in-built sampler, but it is the only sampler that requires no parameters beyond the QubitProcessorSpec
         *and* works for arbitrary connectivity devices. See the docstrings for each of these samplers
         for more information.
 
@@ -203,7 +187,7 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
 
         qubit_labels : list, optional
             If not None, a list of the qubits that the RB circuit is to be sampled for. This should
-            be all or a subset of the qubits in the device specified by the ProcessorSpec `pspec`.
+            be all or a subset of the qubits in the device specified by the QubitProcessorSpec `pspec`.
             If None, it is assumed that the RB circuit should be over all the qubits. Note that the
             ordering of this list is the order of the ``wires'' in the returned circuit, but is otherwise
             irrelevant.
@@ -215,9 +199,9 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
             corresponds to sampling according to rb.sampler.circuit_layer_of_oneQgates [which is not
             a valid option for n-qubit MRB -- it results in sim. 1-qubit MRB -- but it is not explicitly
             forbidden by this function]. If `sampler` is a function, it should be a function that takes
-            as the first argument a ProcessorSpec, and returns a random circuit layer as a list of gate
+            as the first argument a QubitProcessorSpec, and returns a random circuit layer as a list of gate
             Label objects. Note that the default 'Qelimination' is not necessarily the most useful
-            in-built sampler, but it is the only sampler that requires no parameters beyond the ProcessorSpec
+            in-built sampler, but it is the only sampler that requires no parameters beyond the QubitProcessorSpec
             *and* works for arbitrary connectivity devices. See the docstrings for each of these samplers
             for more information.
 
@@ -309,7 +293,7 @@ class SummaryStatistics(_proto.Protocol):
     """
     summary_statistics = ('success_counts', 'total_counts', 'hamming_distance_counts',
                           'success_probabilities', 'polarization', 'adjusted_success_probabilities')
-    circuit_statistics = ('twoQgate_count', 'circuit_depth', 'idealout', 'circuit_index', 'circuit_width')
+    circuit_statistics = ('two_q_gate_count', 'depth', 'idealout', 'circuit_index', 'width')
     # dscmp_statistics = ('tvds', 'pvals', 'jsds', 'llrs', 'sstvds')
 
     def __init__(self, name):
@@ -330,7 +314,7 @@ class SummaryStatistics(_proto.Protocol):
         """
         def success_counts(dsrow, circ, idealout):
             if dsrow.total == 0: return 0  # shortcut?
-            return dsrow[idealout]
+            return dsrow.get(tuple(idealout), 0.)
 
         def hamming_distance_counts(dsrow, circ, idealout):
             nQ = len(circ.line_labels)  # number of qubits
@@ -340,13 +324,17 @@ class SummaryStatistics(_proto.Protocol):
                 for outcome_lbl, counts in dsrow.counts.items():
                     outbitstring = outcome_lbl[-1]
                     hamming_distance_counts[_tools.rbtools.hamming_distance(outbitstring, idealout[-1])] += counts
-            return list(hamming_distance_counts)  # why a list?
+            return hamming_distance_counts
 
         def adjusted_success_probability(hamming_distance_counts):
-            """ TODO: docstring """
-            hamming_distance_pdf = _np.array(hamming_distance_counts) / _np.sum(hamming_distance_counts)
-            adjSP = _np.sum([(-1 / 2)**n * hamming_distance_pdf[n] for n in range(len(hamming_distance_pdf))])
-            return adjSP
+
+            """ A scaled success probability that is useful for mirror circuit benchmarks """
+            if _np.sum(hamming_distance_counts) == 0.:
+                return 0.
+            else:
+                hamming_distance_pdf = _np.array(hamming_distance_counts) / _np.sum(hamming_distance_counts)
+                adjSP = _np.sum([(-1 / 2)**n * hamming_distance_pdf[n] for n in range(len(hamming_distance_pdf))])
+                return adjSP
 
         def get_summary_values(icirc, circ, dsrow, idealout):
             sc = success_counts(dsrow, circ, idealout)
@@ -380,11 +368,11 @@ class SummaryStatistics(_proto.Protocol):
         NamedDict
         """
         def get_circuit_values(icirc, circ, dsrow, idealout):
-            ret = {'twoQgate_count': circ.two_q_gate_count(),
-                   'circuit_depth': circ.depth,
+            ret = {'two_q_gate_count': circ.two_q_gate_count(),
+                   'depth': circ.depth,
                    'idealout': idealout,
                    'circuit_index': icirc,
-                   'circuit_width': len(circ.line_labels)}
+                   'width': len(circ.line_labels)}
             ret.update(dsrow.aux)  # note: will only get aux data from *first* pass in multi-pass data
             return ret
 
@@ -510,7 +498,7 @@ class SummaryStatistics(_proto.Protocol):
 
     def _add_bootstrap_qtys(self, data_cache, num_qtys, finitecounts=True):
         """
-        Adds bootstrapped "summary datasets".
+        Adds bootstrapped "summary data".
 
         The bootstrap is over both the finite counts of each circuit and
         over the circuits at each length.
@@ -523,7 +511,7 @@ class SummaryStatistics(_proto.Protocol):
             A cache of already-existing bootstraps.
 
         num_qtys : int, optional
-            The number of bootstrapped datasets to construct.
+            The number of bootstrapped data to construct.
 
         finitecounts : bool, optional
             Whether finite counts should be used, i.e. whether the bootstrap samples
@@ -606,8 +594,8 @@ class ByDepthSummaryStatistics(SummaryStatistics):
     statistics_to_compute : tuple, optional
         A sequence of the statistic names to compute. Allowed names are:
        'success_counts', 'total_counts', 'hamming_distance_counts', 'success_probabilities', 'polarization',
-       'adjusted_success_probabilities', 'twoQgate_count', 'circuit_depth', 'idealout', 'circuit_index',
-       and 'circuit_width'.
+       'adjusted_success_probabilities', 'two_q_gate_count', 'depth', 'idealout', 'circuit_index',
+       and 'width'.
 
     names_to_compute : tuple, optional
         A sequence of user-defined names for the statistics in `statistics_to_compute`.  If `None`, then
@@ -659,7 +647,7 @@ class ByDepthSummaryStatistics(SummaryStatistics):
 
             statistic_per_depth = data.cache[statistic]
 
-        elif isinstance(self.custom_data_src, _objs.SuccessFailModel):  # then simulate all the circuits in `data`
+        elif isinstance(self.custom_data_src, _SuccessFailModel):  # then simulate all the circuits in `data`
             assert(statistic in ('success_probabilities', 'polarization')), \
                 "Only success probabilities or polarizations can be simulated!"
             sfmodel = self.custom_data_src

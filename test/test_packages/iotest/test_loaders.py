@@ -1,11 +1,10 @@
 import numpy as np
 
+import pygsti
+from pygsti import io
+from pygsti.io import loaders
 from . import IOBase, with_temp_path
 from .references import generator as io_gen
-
-from pygsti import io
-import pygsti.construction as pc
-from pygsti.io import loaders
 
 
 class LoadersTester(IOBase):
@@ -80,10 +79,10 @@ class LoadersTester(IOBase):
     def test_load_model_alt_format(self):
         mdl_formats = loaders.load_model(str(self.reference_path('formatExample.model')))
 
-        rotXPi = pc.modelconstruction._create_operation([(4,)], [('Q0',)], "X(pi,Q0)")
-        rotYPi = pc.modelconstruction._create_operation([(4,)], [('Q0',)], "Y(pi,Q0)")
-        rotXPiOv2 = pc.modelconstruction._create_operation([(4,)], [('Q0',)], "X(pi/2,Q0)")
-        rotYPiOv2 = pc.modelconstruction._create_operation([(4,)], [('Q0',)], "Y(pi/2,Q0)")
+        rotXPi = pygsti.models.modelconstruction._create_operation([(4,)], [('Q0',)], "X(pi,Q0)")
+        rotYPi = pygsti.models.modelconstruction._create_operation([(4,)], [('Q0',)], "Y(pi,Q0)")
+        rotXPiOv2 = pygsti.models.modelconstruction._create_operation([(4,)], [('Q0',)], "X(pi/2,Q0)")
+        rotYPiOv2 = pygsti.models.modelconstruction._create_operation([(4,)], [('Q0',)], "Y(pi/2,Q0)")
 
         self.assertArraysAlmostEqual(mdl_formats.operations['Gi'], np.identity(4, 'd'))
         self.assertArraysAlmostEqual(mdl_formats.operations['Gx'], rotXPiOv2)

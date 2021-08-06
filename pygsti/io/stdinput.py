@@ -10,20 +10,28 @@ Text-parsing classes and functions to read input files.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import re as _re
+import ast as _ast
 import os as _os
+import re as _re
 import sys as _sys
 import time as _time
-import numpy as _np
-import ast as _ast
 import warnings as _warnings
-from scipy.linalg import expm as _expm
 from collections import OrderedDict as _OrderedDict
 
-from .. import objects as _objs
-from .. import tools as _tools
+import numpy as _np
+from scipy.linalg import expm as _expm
 
-from . import CircuitParser as _CircuitParser
+from pygsti import baseobjs as _baseobjs
+from pygsti import tools as _tools
+from pygsti.modelmembers import instruments as _instrument
+from pygsti.modelmembers import operations as _op
+from pygsti.modelmembers import povms as _povm
+from pygsti.modelmembers import states as _state
+from pygsti.baseobjs import statespace as _statespace
+from pygsti.models import gaugegroup as _gaugegroup
+from pygsti.circuits.circuit import Circuit as _Circuit
+from pygsti.circuits.circuitparser import CircuitParser as _CircuitParser
+from pygsti.data import DataSet as _DataSet, MultiDataSet as _MultiDataSet
 
 # A dictionary mapping qubit string representations into created
 # :class:`Circuit` objects, which can improve performance by reducing
@@ -108,14 +116,17 @@ class StdInputParser(object):
         if self.use_global_parse_cache:
             circuit = _global_parse_cache[create_subcircuits].get(s, None)
         if circuit is None:  # wasn't in cache
-            layer_tuple, line_lbls, occurrence_id = self.parse_circuit_raw(s, lookup, create_subcircuits)
+            layer_tuple, line_lbls, occurrence_id, compilable_indices = \
+                self.parse_circuit_raw(s, lookup, create_subcircuits)
             if line_lbls is None:  # if there are no line labels then we need to use "auto" and do a full init
-                circuit = _objs.Circuit(layer_tuple, stringrep=s, line_labels="auto",
-                                        expand_subcircuits=False, check=False, occurrence=occurrence_id)
+                circuit = _Circuit(layer_tuple, stringrep=s, line_labels="auto",
+                                   expand_subcircuits=False, check=False, occurrence=occurrence_id,
+                                   compilable_layer_indices=compilable_indices)
                 #Note: never expand subcircuits since parse_circuit_raw already does this w/create_subcircuits arg
             else:
-                circuit = _objs.Circuit._fastinit(layer_tuple, line_lbls, editable=False,
-                                                  name='', stringrep=s, occurrence=occurrence_id)
+                circuit = _Circuit._fastinit(layer_tuple, line_lbls, editable=False,
+                                             name='', stringrep=s, occurrence=occurrence_id,
+                                             compilable_layer_indices=compilable_indices)
 
             if self.use_global_parse_cache:
                 _global_parse_cache[create_subcircuits][s] = circuit
@@ -144,14 +155,25 @@ class StdInputParser(object):
 
         Returns
         -------
-        tuple of operation labels
-            Representing the circuit.
+        label_tuple: tuple
+            Tuple of operation labels representing the circuit's layers.
+        line_labels: tuple or None
+            A tuple or `None` giving the parsed line labels (follwing the '@' symbol) of the circuit.
+        occurrence_id: int or None
+            The "occurence id" - an integer following a second '@' symbol that identifies a particular
+            copy of this circuit.
+        compilable_indices : tuple or None
+            A tuple of layer indices (into `label_tuple`) marking the layers that can be "compiled",
+            and are *not* followed by a barrier so they can be compiled with following layers.  This
+            is non-`None` only when there are explicit markers within the circuit string indicating
+            the presence or absence of barriers.
         """
         self._circuit_parser.lookup = lookup
-        circuit_tuple, circuit_labels, occurrence_id = self._circuit_parser.parse(s, create_subcircuits)
+        circuit_tuple, circuit_labels, occurrence_id, compilable_indices = \
+            self._circuit_parser.parse(s, create_subcircuits)
         # print "DB: result = ",result
         # print "DB: stack = ",self.exprStack
-        return circuit_tuple, circuit_labels, occurrence_id
+        return circuit_tuple, circuit_labels, occurrence_id, compilable_indices
 
     def parse_dataline(self, s, lookup={}, expected_counts=-1, create_subcircuits=True,
                        line_labels=None):
@@ -239,6 +261,11 @@ class StdInputParser(object):
             The line labels of the cirucit.
         occurrence : object
             Circuit's occurrence id, or `None` if there is none.
+        compilable_indices : tuple or None
+            A tuple of layer indices (into `label_tuple`) marking the layers that can be "compiled",
+            and are *not* followed by a barrier so they can be compiled with following layers.  This
+            is non-`None` only when there are explicit markers within the circuit string indicating
+            the presence or absence of barriers.
         """
         label = r'\s*([a-zA-Z0-9_]+)\s+'
         match = _re.match(label, s)
@@ -246,8 +273,8 @@ class StdInputParser(object):
             raise ValueError("'{}' is not a valid dictline".format(s))
         circuitLabel = match.group(1)
         circuitStr = s[match.end():]
-        circuitTuple, circuitLineLabels, occurrence_id = self._circuit_parser.parse(circuitStr)
-        return circuitLabel, circuitTuple, circuitStr, circuitLineLabels, occurrence_id
+        circuitTuple, circuitLineLabels, occurrence_id, compilable_indices = self._circuit_parser.parse(circuitStr)
+        return circuitLabel, circuitTuple, circuitStr, circuitLineLabels, occurrence_id, compilable_indices
 
     def parse_stringfile(self, filename, line_labels="auto", num_lines=None, create_subcircuits=True):
         """
@@ -289,14 +316,16 @@ class StdInputParser(object):
                     # can be cached, and cache assumes "auto" behavior
                     circuit = self.parse_circuit(line, {}, create_subcircuits)
                 else:
-                    layer_lbls, parsed_line_lbls, occurrence_id = self.parse_circuit_raw(line, {}, create_subcircuits)
+                    layer_lbls, parsed_line_lbls, occurrence_id, compilable_indices = \
+                        self.parse_circuit_raw(line, {}, create_subcircuits)
                     if parsed_line_lbls is None:
                         parsed_line_lbls = line_labels  # default to the passed-in argument
                         #nlines = num_lines
                     #else: nlines = None  # b/c we've got a valid line_lbls
-                    circuit = _objs.Circuit._fastinit(layer_lbls, parsed_line_lbls, editable=False,
-                                                      name='', stringrep=line.strip(), occurrence=occurrence_id)
-                    #circuit = _objs.Circuit(layer_lbls, stringrep=line.strip(),
+                    circuit = _Circuit._fastinit(layer_lbls, parsed_line_lbls, editable=False,
+                                                 name='', stringrep=line.strip(), occurrence=occurrence_id,
+                                                 compilable_layer_indices=compilable_indices)
+                    #circuit = _Circuit(layer_lbls, stringrep=line.strip(),
                     #                        line_labels=parsed_line_lbls, num_lines=nlines,
                     #                        expand_subcircuits=False, check=False, occurrence=occurrence_id)
                     ##Note: never expand subcircuits since parse_circuit_raw already does this w/create_subcircuits arg
@@ -322,10 +351,11 @@ class StdInputParser(object):
             for line in dictfile:
                 line = line.strip()
                 if len(line) == 0 or line[0] == '#': continue
-                label, tup, s, lineLbls, occurrence_id = self.parse_dictline(line)
+                label, tup, s, lineLbls, occurrence_id, compilable_indices = self.parse_dictline(line)
                 if lineLbls is None: lineLbls = "auto"
-                lookupDict[label] = _objs.Circuit(tup, stringrep=s, line_labels=lineLbls,
-                                                  check=False, occurrence=occurrence_id)
+                lookupDict[label] = _Circuit(tup, stringrep=s, line_labels=lineLbls,
+                                             check=False, occurrence=occurrence_id,
+                                             compilable_layer_indices=compilable_indices)
         return lookupDict
 
     def parse_datafile(self, filename, show_progress=True,
@@ -419,8 +449,8 @@ class StdInputParser(object):
             _os.chdir(orig_cwd)
 
         #Read data lines of data file
-        dataset = _objs.DataSet(outcome_labels=outcomeLabels, collision_action=collision_action,
-                                comment="\n".join(preamble_comments))
+        dataset = _DataSet(outcome_labels=outcomeLabels, collision_action=collision_action,
+                           comment="\n".join(preamble_comments))
 
         if outcome_labels_specified_in_preamble and (fixed_column_outcome_labels is not None):
             fixed_column_outcome_indices = [dataset.olIndex[ol] for ol in fixed_column_outcome_labels]
@@ -486,7 +516,7 @@ class StdInputParser(object):
                     try:
                         circuit, valueList = \
                             self.parse_dataline(dataline, lookupDict, nDataCols,
-                                                create_subcircuits=not _objs.Circuit.default_expand_subcircuits)
+                                                create_subcircuits=not _Circuit.default_expand_subcircuits)
 
                         commentDict = parse_comment(comment, filename, iLine)
 
@@ -514,7 +544,7 @@ class StdInputParser(object):
                                     dataset.add_outcome_labels(outcome_labels, update_ol=False)
                                     outcome_indices = [dataset.olIndex[ol] for ol in outcome_labels]
                             else:  # assume valueList is a list of (outcomeLabel, count) tuples -- see parse_dataline
-                                outcome_labels, count_values = zip(*valueList)
+                                outcome_labels, count_values = zip(*valueList) if len(valueList) else ([], [])
                                 if not outcome_labels_specified_in_preamble:
                                     dataset.add_outcome_labels(outcome_labels, update_ol=False)
                                 outcome_indices = [dataset.olIndex[ol] for ol in outcome_labels]
@@ -583,83 +613,6 @@ class StdInputParser(object):
         dataset.done_adding_data()
         return dataset
 
-    #TODO: REMOVE - unless we want to support frequency/total count columns again and take performance hit.
-    #def _extract_labels_from_col_labels(self, col_labels):
-    #    outcomeLabels = []; countCols = []; freqCols = []; impliedCountTotCol1Q = (-1, -1)
-    #
-    #    def str_to_outcome(x):  # always return a tuple as the "outcome label" (even if length 1)
-    #        return tuple(x.strip().split(":"))
-    #
-    #    for i, colLabel in enumerate(col_labels):
-    #        if colLabel.endswith(' count'):
-    #            outcomeLabel = str_to_outcome(colLabel[:-len(' count')])
-    #            if outcomeLabel not in outcomeLabels: outcomeLabels.append(outcomeLabel)
-    #            countCols.append((outcomeLabel, i))
-    #
-    #        elif colLabel.endswith(' frequency'):
-    #            if 'count total' not in col_labels:
-    #                raise ValueError("Frequency columns specified without count total")
-    #            else: iTotal = col_labels.index('count total')
-    #            outcomeLabel = str_to_outcome(colLabel[:-len(' frequency')])
-    #            if outcomeLabel not in outcomeLabels: outcomeLabels.append(outcomeLabel)
-    #            freqCols.append((outcomeLabel, i, iTotal))
-    #
-    #    if 'count total' in col_labels:
-    #        if ('1',) in outcomeLabels and ('0',) not in outcomeLabels:
-    #            outcomeLabels.append(('0',))
-    #            impliedCountTotCol1Q = ('0',), col_labels.index('count total')
-    #        elif ('0',) in outcomeLabels and ('1',) not in outcomeLabels:
-    #            outcomeLabels.append(('1',))
-    #            impliedCountTotCol1Q = '1', col_labels.index('count total')
-    #        #TODO - add standard count completion for 2Qubit case?
-    #
-    #    fillInfo = (countCols, freqCols, impliedCountTotCol1Q)
-    #    return outcomeLabels, fillInfo
-    #
-    #def _fill_data_count_dict(self, count_dict, fill_info, col_values):
-    #    if 'BAD' in col_values:
-    #        return  # indicates entire row is known to be bad (no counts)
-    #
-    #    #Note: can use setitem_unsafe here because count_dict is a OutcomeLabelDict and
-    #    # by construction (see str_to_outcome in _extract_labels_from_col_labels) the
-    #    # outcome labels in fill_info are *always* tuples.
-    #    if fill_info is not None:
-    #        countCols, freqCols, impliedCountTotCol1Q = fill_info
-    #
-    #        for outcomeLabel, iCol in countCols:
-    #            if col_values[iCol] == '--': continue  # skip blank sentinels
-    #            if col_values[iCol] > 0 and col_values[iCol] < 1:
-    #                _warnings.warn("Count column (%d) contains value(s) between 0 and 1 - "
-    #                               "could this be a frequency?" % iCol)
-    #            assert(not isinstance(col_values[iCol], tuple)), \
-    #                "Expanded-format count not allowed with column-key header"
-    #            count_dict.setitem_unsafe(outcomeLabel, col_values[iCol])
-    #
-    #        for outcomeLabel, iCol, iTotCol in freqCols:
-    #            if col_values[iCol] == '--' or col_values[iTotCol] == '--': continue  # skip blank sentinels
-    #            if col_values[iCol] < 0 or col_values[iCol] > 1.0:
-    #                _warnings.warn("Frequency column (%d) contains value(s) outside of [0,1.0] interval - "
-    #                               "could this be a count?" % iCol)
-    #            assert(not isinstance(col_values[iTotCol], tuple)), \
-    #                "Expanded-format count not allowed with column-key header"
-    #            count_dict.setitem_unsafe(outcomeLabel, col_values[iCol] * col_values[iTotCol])
-    #
-    #        if impliedCountTotCol1Q[1] >= 0:
-    #            impliedOutcomeLabel, impliedCountTotCol = impliedCountTotCol1Q
-    #            if impliedOutcomeLabel == ('0',):
-    #                count_dict.setitem_unsafe(('0',), col_values[impliedCountTotCol] - count_dict[('1',)])
-    #            else:
-    #                count_dict.setitem_unsafe(('1',), col_values[impliedCountTotCol] - count_dict[('0',)])
-    #
-    #    else:  # assume col_values is a list of (outcomeLabel, count) tuples
-    #        for tup in col_values:
-    #            assert(isinstance(tup, tuple)), \
-    #                ("Outcome labels must be specified with"
-    #                 "count data when there's no column-key header")
-    #            assert(len(tup) == 2), "Invalid count! (parsed to %s)" % str(tup)
-    #            count_dict.setitem_unsafe(tup[0], tup[1])
-    #    return count_dict
-
     def parse_multidatafile(self, filename, show_progress=True,
                             collision_action="aggregate", record_zero_counts=True, ignore_zero_count_lines=True):
         """
@@ -726,8 +679,8 @@ class StdInputParser(object):
         #Read data lines of data file
         datasets = _OrderedDict()
         for dsLabel, outcomeLabels in dsOutcomeLabels.items():
-            datasets[dsLabel] = _objs.DataSet(outcome_labels=outcomeLabels,
-                                              collision_action=collision_action)
+            datasets[dsLabel] = _DataSet(outcome_labels=outcomeLabels,
+                                         collision_action=collision_action)
 
         dsCountDicts = _OrderedDict()
         for dsLabel in dsOutcomeLabels: dsCountDicts[dsLabel] = {}
@@ -739,7 +692,7 @@ class StdInputParser(object):
 
         display_progress = _create_display_progress_fn(show_progress)
         warnings = []  # to display *after* display progress
-        mds = _objs.MultiDataSet(comment="\n".join(preamble_comments))
+        mds = _MultiDataSet(comment="\n".join(preamble_comments))
 
         with open(filename, 'r') as inputfile:
             for (iLine, line) in enumerate(inputfile):
@@ -756,7 +709,7 @@ class StdInputParser(object):
                 try:
                     circuit, valueList = \
                         self.parse_dataline(dataline, lookupDict, nDataCols,
-                                            create_subcircuits=not _objs.Circuit.default_expand_subcircuits)
+                                            create_subcircuits=not _Circuit.default_expand_subcircuits)
 
                     commentDict = {}
                     comment = comment.strip()
@@ -944,7 +897,7 @@ class StdInputParser(object):
         outcomeLabels = outcomeLabelAbbrevs.values()
 
         #Read data lines of data file
-        dataset = _objs.DataSet(outcome_labels=outcomeLabels)
+        dataset = _DataSet(outcome_labels=outcomeLabels)
         with open(filename, 'r') as f:
             nLines = sum(1 for line in f)
         nSkip = int(nLines / 100.0)
@@ -1000,12 +953,13 @@ def parse_model(filename):
     -------
     Model
     """
+    from ..models import ExplicitOpModel as _ExplicitOpModel
     basis = 'pp'  # default basis to load as
 
     basis_abbrev = "pp"  # default assumed basis
     basis_dim = None
     gaugegroup_name = None
-    state_space_labels = None
+    state_space = None
 
     #First try to find basis:
     with open(filename) as inputfile:
@@ -1027,37 +981,37 @@ def parse_model(filename):
                     _warnings.warn(("Unknown GAUGEGROUP name %s.  Default gauge"
                                     "group will be set to None") % gaugegroup_name)
             elif line.startswith("STATESPACE:"):
-                tpbs_lbls = []; tpbs_dims = []
+                tpbs_lbls = []; tpbs_udims = []
                 tensor_prod_blk_strs = line[len("STATESPACE:"):].split("+")
                 for tpb_str in tensor_prod_blk_strs:
-                    tpb_lbls = []; tpb_dims = []
+                    tpb_lbls = []; tpb_udims = []
                     for lbl_and_dim in tpb_str.split("*"):
                         start = lbl_and_dim.index('(')
                         end = lbl_and_dim.rindex(')')
                         lbl, dim = lbl_and_dim[:start], lbl_and_dim[start + 1:end]
                         tpb_lbls.append(lbl.strip())
-                        tpb_dims.append(int(dim.strip()))
+                        tpb_udims.append(int(_np.sqrt(int(dim.strip()))))
                     tpbs_lbls.append(tuple(tpb_lbls))
-                    tpbs_dims.append(tuple(tpb_dims))
-                state_space_labels = _objs.StateSpaceLabels(tpbs_lbls, tpbs_dims)
+                    tpbs_udims.append(tuple(tpb_udims))
+                state_space = _statespace.ExplicitStateSpace(tpbs_lbls, tpbs_udims)
 
     if basis_dim is not None:
         # then specfy a dimensionful basis at the outset
         # basis_dims should be just a single int now that the *vector-space* dimension
-        basis = _objs.BuiltinBasis(basis_abbrev, basis_dim)
+        basis = _baseobjs.BuiltinBasis(basis_abbrev, basis_dim)
     else:
         # otherwise we'll try to infer one from state space labels
-        if state_space_labels is not None:
-            basis = _objs.Basis.cast(basis_abbrev, state_space_labels.dim)
+        if state_space is not None:
+            basis = _baseobjs.Basis.cast(basis_abbrev, state_space.dim)
         else:
             raise ValueError("Cannot infer basis dimension!")
 
-    if state_space_labels is None:
+    if state_space is None:
         assert(basis_dim is not None)  # b/c of logic above
-        state_space_labels = _objs.StateSpaceLabels(['*'], [basis_dim])
+        state_space = _statespace.ExplicitStateSpace(['*'], [int(round(_np.sqrt(basis_dim)))])
         # special '*' state space label w/entire dimension inferred from BASIS line
 
-    mdl = _objs.ExplicitOpModel(state_space_labels, basis)
+    mdl = _ExplicitOpModel(state_space, basis)
 
     state = "look for label or property"
     cur_obj = None
@@ -1102,8 +1056,9 @@ def parse_model(filename):
 
                 elif len(parts) >= 2:  # then this is a '<type>: <label>' line => new cur_obj
                     typ = parts[0].strip()
-                    label = _objs.Label(name=parts[1].strip() if parts[1].strip() != "[]" else (),
-                                        state_space_labels=tuple(map(to_int, parts[2:])) if len(parts) > 2 else None)
+                    label = _baseobjs.Label(name=parts[1].strip() if parts[1].strip() != "[]" else (),
+                                            state_space_labels=tuple(map(to_int, parts[2:]))
+                                            if len(parts) > 2 else None)
 
                     # place any existing cur_obj
                     if cur_obj is not None:
@@ -1202,10 +1157,10 @@ def parse_model(filename):
 
         #Preps
         if cur_typ == "PREP":
-            mdl.preps[cur_label] = _objs.FullSPAMVec(
-                get_liouville_mx(obj), typ="prep")
+            mdl.preps[cur_label] = _state.FullState(
+                get_liouville_mx(obj))
         elif cur_typ == "TP-PREP":
-            mdl.preps[cur_label] = _objs.TPSPAMVec(
+            mdl.preps[cur_label] = _state.TPState(
                 get_liouville_mx(obj))
         elif cur_typ == "CPTP-PREP":
             props = obj['properties']
@@ -1214,12 +1169,13 @@ def parse_model(filename):
             nQubits = _np.log2(qty.size) / 2.0
             bQubits = bool(abs(nQubits - round(nQubits)) < 1e-10)  # integer # of qubits?
             proj_basis = "pp" if (basis == "pp" or bQubits) else basis
-            errorMap = _objs.LindbladDenseOp.from_operation_matrix(
-                qty, None, proj_basis, proj_basis, truncate=False, mx_basis=basis)  # unitary postfactor = Id
-            pureVec = _objs.StaticSPAMVec(_np.transpose(_eval_row_list(props["PureVec"], b_complex=False)), typ="prep")
-            mdl.preps[cur_label] = _objs.LindbladSPAMVec(pureVec, errorMap, "prep")
+            errorgen = _op.LinbladErrorgen.from_operation_matrix(
+                qty, proj_basis, proj_basis, truncate=False, mx_basis=basis)
+            errorMap = _op.ExpErrorgenOp(errorgen)
+            pureVec = _state.StaticState(_np.transpose(_eval_row_list(props["PureVec"], b_complex=False)))
+            mdl.preps[cur_label] = _state.ComposedState(pureVec, errorMap)
         elif cur_typ == "STATIC-PREP":
-            mdl.preps[cur_label] = _objs.StaticSPAMVec(get_liouville_mx(obj), typ="prep")
+            mdl.preps[cur_label] = _state.StaticState(get_liouville_mx(obj))
 
         #POVMs
         elif cur_typ in ("POVM", "TP-POVM", "CPTP-POVM"):
@@ -1227,18 +1183,18 @@ def parse_model(filename):
             for sub_obj in obj['objects']:
                 sub_typ = sub_obj['type']
                 if sub_typ == "EFFECT":
-                    Evec = _objs.FullSPAMVec(get_liouville_mx(sub_obj), typ="effect")
+                    Evec = _povm.FullPOVMEffect(get_liouville_mx(sub_obj))
                 elif sub_typ == "STATIC-EFFECT":
-                    Evec = _objs.StaticSPAMVec(get_liouville_mx(sub_obj), typ="effect")
+                    Evec = _povm.StaticPOVMEffect(get_liouville_mx(sub_obj))
                 #elif sub_typ == "CPTP-EFFECT":
                 #    Evec = _objs.LindbladSPAMVec.from_spam_vector(qty,qty,"effect")
                 effects.append((sub_obj['label'], Evec))
 
             if cur_typ == "POVM":
-                mdl.povms[cur_label] = _objs.UnconstrainedPOVM(effects)
+                mdl.povms[cur_label] = _povm.UnconstrainedPOVM(effects)
             elif cur_typ == "TP-POVM":
                 assert(len(effects) > 1), "TP-POVMs must have at least 2 elements!"
-                mdl.povms[cur_label] = _objs.TPPOVM(effects)
+                mdl.povms[cur_label] = _povm.TPPOVM(effects)
             elif cur_typ == "CPTP-POVM":
                 props = obj['properties']
                 assert("ErrgenMx" in props)  # and it must always be a Liouville rep!
@@ -1246,47 +1202,55 @@ def parse_model(filename):
                 nQubits = _np.log2(qty.size) / 2.0
                 bQubits = bool(abs(nQubits - round(nQubits)) < 1e-10)  # integer # of qubits?
                 proj_basis = "pp" if (basis == "pp" or bQubits) else basis
-                errorMap = _objs.LindbladDenseOp.from_operation_matrix(
-                    qty, None, proj_basis, proj_basis, truncate=False, mx_basis=basis)  # unitary postfactor = Id
-                base_povm = _objs.UnconstrainedPOVM(effects)  # could try to detect a ComputationalBasisPOVM in FUTURE
-                mdl.povms[cur_label] = _objs.LindbladPOVM(errorMap, base_povm)
+                errorgen = _op.LinbladErrorgen.from_operation_matrix(
+                    qty, proj_basis, proj_basis, truncate=False, mx_basis=basis)
+                errorMap = _op.ExpErrorgenOp(errorgen)
+                base_povm = _povm.UnconstrainedPOVM(effects)  # could try to detect a ComputationalBasisPOVM in FUTURE
+                mdl.povms[cur_label] = _povm.ComposedPOVM(errorMap, base_povm)
             else: assert(False), "Logic error!"
 
         elif cur_typ == "GATE":
-            mdl.operations[cur_label] = _objs.FullDenseOp(
+            mdl.operations[cur_label] = _op.FullArbitraryOp(
                 get_liouville_mx(obj))
         elif cur_typ == "TP-GATE":
-            mdl.operations[cur_label] = _objs.TPDenseOp(
+            mdl.operations[cur_label] = _op.FullTPOp(
                 get_liouville_mx(obj))
-        elif cur_typ == "CPTP-GATE":
-            qty = get_liouville_mx(obj)
-            try:
-                unitary_post = get_liouville_mx(obj, "Ref")
-            except ValueError:
-                unitary_post = None
-            nQubits = _np.log2(qty.shape[0]) / 2.0
-            bQubits = bool(abs(nQubits - round(nQubits)) < 1e-10)  # integer # of qubits?
-            proj_basis = "pp" if (basis == "pp" or bQubits) else basis
-            mdl.operations[cur_label] = _objs.LindbladDenseOp.from_operation_matrix(
-                qty, unitary_post, proj_basis, proj_basis, truncate=False, mx_basis=basis)
+        elif cur_typ == "COMPOSED-GATE":
+            i = 0; qtys = []
+            while True:
+                try:
+                    qtys.append(get_liouville_mx(obj, '%d' % i))
+                except Exception:
+                    break
+                i += 1
+
+            mdl.operations[cur_label] = _op.ComposedOp(
+                [_op.StaticArbitraryOp(qty, evotype='default') for qty in qtys])
+
+            #Utilize this when we fix this:
+            #nQubits = _np.log2(qty.shape[0]) / 2.0
+            #bQubits = bool(abs(nQubits - round(nQubits)) < 1e-10)  # integer # of qubits?
+            #proj_basis = "pp" if (basis == "pp" or bQubits) else basis
+            #_op.ExpErrogenOp(_op.LinbladErrorgen.from_operation_matrix(
+            #qty, proj_basis, proj_basis, truncate=False, mx_basis=basis))
 
         elif cur_typ == "STATIC-GATE":
-            mdl.operations[cur_label] = _objs.StaticDenseOp(get_liouville_mx(obj))
+            mdl.operations[cur_label] = _op.StaticArbitraryOp(get_liouville_mx(obj))
 
         elif cur_typ in ("Instrument", "TP-Instrument"):
             matrices = []
             for sub_obj in obj['objects']:
                 sub_typ = sub_obj['type']
                 qty = get_liouville_mx(sub_obj)
-                mxOrOp = _objs.StaticDenseOp(qty) if cur_typ == "STATIC-IGATE" \
+                mxOrOp = _op.StaticArbitraryOp(qty) if cur_typ == "STATIC-IGATE" \
                     else qty  # just add numpy array `qty` to matrices list
                 # and it will be made into a fully-param gate.
                 matrices.append((sub_obj['label'], mxOrOp))
 
             if cur_typ == "Instrument":
-                mdl.instruments[cur_label] = _objs.Instrument(matrices)
+                mdl.instruments[cur_label] = _instrument.Instrument(matrices)
             elif cur_typ == "TP-Instrument":
-                mdl.instruments[cur_label] = _objs.TPInstrument(matrices)
+                mdl.instruments[cur_label] = _instrument.TPInstrument(matrices)
             else: assert(False), "Logic error!"
         else:
             raise ValueError("Unknown type: %s!" % cur_typ)
@@ -1294,11 +1258,11 @@ def parse_model(filename):
     #Add default gauge group -- the full group because
     # we add FullyParameterizedGates above.
     if gaugegroup_name == "Full":
-        mdl.default_gauge_group = _objs.FullGaugeGroup(mdl.dim)
+        mdl.default_gauge_group = _gaugegroup.FullGaugeGroup(mdl.state_space, mdl.evotype)
     elif gaugegroup_name == "TP":
-        mdl.default_gauge_group = _objs.TPGaugeGroup(mdl.dim)
+        mdl.default_gauge_group = _gaugegroup.TPGaugeGroup(mdl.state_space, mdl.evotype)
     elif gaugegroup_name == "Unitary":
-        mdl.default_gauge_group = _objs.UnitaryGaugeGroup(mdl.dim, mdl.basis)
+        mdl.default_gauge_group = _gaugegroup.UnitaryGaugeGroup(mdl.state_space, mdl.basis, mdl.evotype)
     else:
         mdl.default_gauge_group = None
 

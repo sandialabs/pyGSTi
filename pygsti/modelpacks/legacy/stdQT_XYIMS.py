@@ -10,12 +10,12 @@
 Variables for working with the a qutrit model containing Idle, X(pi/2) and Y(pi/2) and Molmer-Sorenson gates.
 """
 import sys as _sys
-from ...construction import circuitconstruction as _strc
-from ...construction import modelconstruction as _setc
-from ...construction import stdtarget as _stdtarget
-from ...construction import qutrit as _qutrit
-from collections import OrderedDict as _OrderedDict
+
 from numpy import pi as _pi
+
+from ...circuits import circuitconstruction as _strc
+from ...models import qutrit as _qutrit
+from .. import stdtarget as _stdtarget
 
 description = "Idle, symmetric X(pi/2), symmetric Y(pi/2), and Molmer-Sorenson gates"
 
@@ -239,6 +239,10 @@ _target_model = _qutrit.create_qutrit_model(error_scale=0, x_angle=_pi / 2, y_an
                                           ms_global=_pi / 2, ms_local=0, basis="qt")
 
 _gscache = {("full", "auto"): _target_model}
+
+
+def processor_spec():
+    return target_model('static').create_processor_spec(None)
 
 
 def target_model(parameterization_type="full", sim_type="auto"):

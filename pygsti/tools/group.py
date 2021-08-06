@@ -10,11 +10,9 @@ Encapsulates a group in terms of matrices and relations
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from .. import drivers as _drivers
-from ..modelpacks.legacy import std1Q_Cliffords
+from functools import reduce as _reduce
 
 import numpy as _np
-from functools import reduce as _reduce
 
 
 def is_integer(x):
@@ -42,6 +40,7 @@ def construct_1q_clifford_group():
     -------
     MatrixGroup
     """
+    from pygsti.modelpacks.legacy import std1Q_Cliffords
     mdl = std1Q_Cliffords.target_model()
     return MatrixGroup(mdl.operations.values(), mdl.operations.keys())
 

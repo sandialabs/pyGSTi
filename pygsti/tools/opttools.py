@@ -11,13 +11,14 @@ This module defines tools for optimization and profiling
 #***************************************************************************************************
 
 
-from time import time
-from contextlib import contextmanager
 from collections import defaultdict
+from contextlib import contextmanager
 from datetime import datetime
 from functools import lru_cache
-from ..tools.legacytools import deprecate
-import warnings
+from time import time
+
+from pygsti.tools.legacytools import deprecate
+
 
 # note that this decorator ignores **kwargs
 

@@ -1,12 +1,11 @@
 import unittest
+
 from nose.tools import raises
 
-from ..util import BaseCase
-
-from pygsti.io.circuitparser import slowcircuitparser
+from pygsti.circuits.circuitparser import slowcircuitparser
 
 try:
-    from pygsti.io.circuitparser import fastcircuitparser
+    from pygsti.circuits.circuitparser import fastcircuitparser
     _FASTCIRCUITPARSER_LOADED = True
 except ImportError:
     _FASTCIRCUITPARSER_LOADED = False
@@ -15,9 +14,10 @@ except ImportError:
 def _test_circuit_parser(parser):
 
     def test_parse_circuit(string, expected):
-        results, line_labels, occurrence = parser.parse_circuit(string, create_subcircuits=True, integerize_sslbls=True)
+        results, line_labels, occurrence, compilable_indices = parser.parse_circuit(string, create_subcircuits=True, integerize_sslbls=True)
         assert line_labels is None
         assert occurrence is None
+        assert compilable_indices is None
         flat_results = [lbl for item in results for lbl in item.expand_subcircuits()]
         for result_label, expected_label in zip(flat_results, expected):
             assert result_label == expected_label

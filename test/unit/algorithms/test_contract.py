@@ -1,8 +1,7 @@
-from ..util import BaseCase
-from . import fixtures
-
-from pygsti.objects import UnconstrainedPOVM
 from pygsti.algorithms.contract import contract
+from pygsti.modelmembers.povms import UnconstrainedPOVM
+from . import fixtures
+from ..util import BaseCase
 
 
 class ContractFunctionBase(object):
@@ -93,30 +92,31 @@ class CPTPContractBigKickTester(CPTPContractLGSTTester, ContractBigKickModelBase
     pass
 
 
-class XPContractLGSTTester(ContractFunctionWithDataset, ContractLGSTModelBase, BaseCase):
-    target = "XP"
-
-
-class XPContractBigKickTester(XPContractLGSTTester, ContractBigKickModelBase):
-    pass
-
-
-class XPTPContractLGSTTester(ContractFunctionWithDataset, ContractLGSTModelBase, BaseCase):
-    target = "XPTP"
-
-
-class XPTPContractBigKickTester(XPTPContractLGSTTester, ContractBigKickModelBase):
-    pass
+#Removed these after removing the unused "forbidden_prob" function from tools/likelihoodfns.py
+#class XPContractLGSTTester(ContractFunctionWithDataset, ContractLGSTModelBase, BaseCase):
+#    target = "XP"
+#
+#
+#class XPContractBigKickTester(XPContractLGSTTester, ContractBigKickModelBase):
+#    pass
+#
+#
+#class XPTPContractLGSTTester(ContractFunctionWithDataset, ContractLGSTModelBase, BaseCase):
+#    target = "XPTP"
+#
+#
+#class XPTPContractBigKickTester(XPTPContractLGSTTester, ContractBigKickModelBase):
+#    pass
 
 
 class VSPAMContractLGSTTester(ContractFunctionBase, ContractLGSTModelBase, BaseCase):
     target = "vSPAM"
 
     def test_contract_with_bad_effect(self):
-        self.model.povms['Mdefault'] = UnconstrainedPOVM([('0', [100.0, 0, 0, 0])])  # E eigvals all > 1.0
+        self.model.povms['Mdefault'] = UnconstrainedPOVM([('0', [100.0, 0, 0, 0])], evotype='default')  # E eigvals all > 1.0
         result = contract(self.model, self.target, **self.options)
         # TODO assert correctness
-        self.model.povms['Mdefault'] = UnconstrainedPOVM([('0', [-100.0, 0, 0, 0])])  # E eigvals all < 0
+        self.model.povms['Mdefault'] = UnconstrainedPOVM([('0', [-100.0, 0, 0, 0])], evotype='default')  # E eigvals all < 0
         result = contract(self.model, self.target, **self.options)
         # TODO assert correctness
 

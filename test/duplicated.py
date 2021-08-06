@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
+import os
+import subprocess
+
 from helpers.automation_tools import directory, get_packages
-import subprocess, os
 
 exclude = ['__pycache__']
 

@@ -10,20 +10,16 @@ Functions related to computation of the log-likelihood.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import warnings as _warnings
+
 import numpy as _np
 import scipy.stats as _stats
-import warnings as _warnings
-import itertools as _itertools
-import time as _time
-import sys as _sys
-from collections import OrderedDict as _OrderedDict
-from . import basistools as _bt
-from . import listtools as _lt
-from . import jamiolkowski as _jam
-from . import mpitools as _mpit
-from . import slicetools as _slct
-from ..objects import objectivefns as _objfns
-from ..objects.smartcache import smart_cached
+
+from pygsti.tools import basistools as _bt
+from pygsti.tools import jamiolkowski as _jam
+from pygsti.tools import listtools as _lt
+
+#from ..baseobjs.smartcache import smart_cached
 
 TOL = 1e-20
 
@@ -259,6 +255,7 @@ def logl_per_circuit(model, dataset, circuits=None,
         Values are the log-likelihood contributions of the corresponding
         circuit aggregated over outcomes.
     """
+    from ..objectivefns import objectivefns as _objfns
     regularization = {'min_prob_clip': min_prob_clip, 'radius': radius} if poisson_picture \
         else {'min_prob_clip': min_prob_clip}  # non-poisson-pic logl has no radius
     obj_max = _objfns._objfn(_objfns.MaxLogLFunction, model, dataset, circuits,
@@ -341,6 +338,7 @@ def logl_jacobian(model, dataset, circuits=None,
     numpy array
         array of shape (M,), where M is the length of the vectorized model.
     """
+    from ..objectivefns import objectivefns as _objfns
     regularization = {'min_prob_clip': min_prob_clip, 'radius': radius} if poisson_picture \
         else {'min_prob_clip': min_prob_clip}  # non-poisson-pic logl has no radius
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
@@ -415,6 +413,7 @@ def logl_hessian(model, dataset, circuits=None,
     numpy array
         array of shape (M,M), where M is the length of the vectorized model.
     """
+    from ..objectivefns import objectivefns as _objfns
     regularization = {'min_prob_clip': min_prob_clip, 'radius': radius} if poisson_picture \
         else {'min_prob_clip': min_prob_clip}  # non-poisson-pic logl has no radius
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
@@ -501,6 +500,7 @@ def logl_approximate_hessian(model, dataset, circuits=None,
     numpy array
         array of shape (M,M), where M is the length of the vectorized model.
     """
+    from ..objectivefns import objectivefns as _objfns
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
     obj = _objfns._objfn(obj_cls, model, dataset, circuits,
                          {'min_prob_clip': min_prob_clip,
@@ -549,6 +549,7 @@ def logl_max(model, dataset, circuits=None, poisson_picture=True,
     -------
     float
     """
+    from ..objectivefns import objectivefns as _objfns
     obj_max = _objfns._objfn(_objfns.MaxLogLFunction, model, dataset, circuits, mdc_store=mdc_store,
                              op_label_aliases=op_label_aliases, poisson_picture=poisson_picture, method_names=('fn',))
     return obj_max.fn()  # gathers internally
@@ -592,6 +593,7 @@ def logl_max_per_circuit(model, dataset, circuits=None,
         Values are the maximum log-likelihood contributions of the corresponding
         circuit aggregated over outcomes.
     """
+    from ..objectivefns import objectivefns as _objfns
     obj_max = _objfns._objfn(_objfns.MaxLogLFunction, model, dataset, circuits, mdc_store=mdc_store,
                              op_label_aliases=op_label_aliases, poisson_picture=poisson_picture,
                              method_names=('percircuit',))
@@ -751,6 +753,7 @@ def two_delta_logl(model, dataset, circuits=None,
     Nsigma, pvalue : float
         Only returned when `dof_calc_method` is not None.
     """
+    from ..objectivefns import objectivefns as _objfns
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
     obj = _objfns._objfn(obj_cls, model, dataset, circuits,
                          {'min_prob_clip': min_prob_clip,
@@ -865,6 +868,7 @@ def two_delta_logl_per_circuit(model, dataset, circuits=None,
     Nsigma, pvalue : numpy.ndarray
         Only returned when `dof_calc_method` is not None.
     """
+    from ..objectivefns import objectivefns as _objfns
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
     obj = _objfns._objfn(obj_cls, model, dataset, circuits,
                          {'min_prob_clip': min_prob_clip,
@@ -898,142 +902,142 @@ def two_delta_logl_per_circuit(model, dataset, circuits=None,
 
 
 #UNUSED (REMOVE?)
-def forbidden_prob(model, dataset):
-    """
-    Compute the sum of the out-of-range probabilities generated by model, using only circuits in `dataset`.
-
-    A non-zero value indicates that model is not in XP for the supplied dataset.
-
-    Parameters
-    ----------
-    model : Model
-        model to generate probabilities.
-
-    dataset : DataSet
-        data set to obtain circuits.  Dataset counts are
-        used to check for zero or all counts being under a
-        single spam label, in which case out-of-bounds probabilities
-        are ignored because they contribute zero to the logl sum.
-
-    Returns
-    -------
-    float
-        sum of the out-of-range probabilities.
-    """
-    forbidden_prob = 0
-
-    for mdl, dsrow in dataset.items():
-        probs = model.probabilities(mdl)
-        for (spamlabel, p) in probs.items():
-            if p < TOL:
-                if round(dsrow[spamlabel]) == 0: continue  # contributes zero to the sum
-                else: forbidden_prob += abs(TOL - p) + TOL
-            elif p > 1 - TOL:
-                if round(dsrow[spamlabel]) == dsrow.total: continue  # contributes zero to the sum
-                else: forbidden_prob += abs(p - (1 - TOL)) + TOL
-
-    return forbidden_prob
-
-
-#UNUSED (REMOVE?)
-def prep_penalty(rho_vec, basis):
-    """
-    Penalty assigned to a state preparation (rho) vector rho_vec.
-
-    State preparation density matrices must be positive semidefinite
-    and trace == 1.  A positive return value indicates an these
-    criteria are not met and the rho-vector is invalid.
-
-    Parameters
-    ----------
-    rho_vec : numpy array
-        rho vector array of shape (N,1) for some N.
-
-    basis : {"std", "gm", "pp", "qt"}
-        The abbreviation for the basis used to interpret rho_vec
-        ("gm" = Gell-Mann, "pp" = Pauli-product, "std" = matrix unit,
-         "qt" = qutrit, or standard).
-
-    Returns
-    -------
-    float
-    """
-    # rho_vec must be positive semidefinite and trace = 1
-    rho_mx = _bt.vec_to_stdmx(_np.asarray(rho_vec), basis)
-    evals = _np.linalg.eigvals(rho_mx)  # could use eigvalsh, but wary of this since eigh can be wrong...
-    sum_of_neg = sum([-ev.real for ev in evals if ev.real < 0])
-    trace_penalty = abs(rho_vec[0, 0] - (1.0 / _np.sqrt(rho_mx.shape[0])))
-    # 0th el is coeff of I(dxd)/sqrt(d) which has trace sqrt(d)
-    #print "Sum of neg = ",sumOfNeg  #DEBUG
-    #print "Trace Penalty = ",tracePenalty  #DEBUG
-    return sum_of_neg + trace_penalty
-
-
-#UNUSED (REMOVE?)
-def effect_penalty(effect_vec, basis):
-    """
-    Penalty assigned to a POVM effect vector effect_vec.
-
-    Effects must have eigenvalues between 0 and 1.  A positive return
-    value indicates this criterion is not met and the E-vector is
-    invalid.
-
-    Parameters
-    ----------
-    effect_vec : numpy array
-        effect vector array of shape (N,1) for some N.
-
-    basis : {"std", "gm", "pp", "qt"}
-        The abbreviation for the basis used to interpret effect_vec
-        ("gm" = Gell-Mann, "pp" = Pauli-product, "std" = matrix unit,
-         "qt" = qutrit, or standard).
-
-    Returns
-    -------
-    float
-    """
-    # effect_vec must have eigenvalues between 0 and 1
-    effect_mx = _bt.vec_to_stdmx(_np.asarray(effect_vec), basis)
-    evals = _np.linalg.eigvals(effect_mx)  # could use eigvalsh, but wary of this since eigh can be wrong...
-    sum_of_penalties = 0
-    for ev in evals:
-        if ev.real < 0: sum_of_penalties += -ev.real
-        if ev.real > 1: sum_of_penalties += ev.real - 1.0
-    return sum_of_penalties
-
-
-#UNUSED (REMOVE?)
-def cptp_penalty(model, include_spam_penalty=True):
-    """
-    The sum of all negative Choi matrix eigenvalues.
-
-    If `include_spam_penalty` is True, also add the rho-vector
-    and E-vector penalties of model.  A non-zero value indicates
-    that the model is not CPTP.
-
-    Parameters
-    ----------
-    model : Model
-        the model to compute CPTP penalty for.
-
-    include_spam_penalty : bool, optional
-        if True, also test model for invalid SPAM
-        operation(s) and return sum of CPTP penalty
-        with rhoVecPenlaty(...) and effect_penalty(...)
-        for each rho and E vector.
-
-    Returns
-    -------
-    float
-        CPTP penalty (possibly with added spam penalty).
-    """
-    ret = _jam.sum_of_negative_choi_eigenvalues(model)
-    if include_spam_penalty:
-        b = model.basis
-        ret += sum([prep_penalty(r, b) for r in model.preps.values()])
-        ret += sum([effect_penalty(e, b) for povm in model.povms.values()
-                    for e in povm.values()])
-    return ret
+# def forbidden_prob(model, dataset):
+#     """
+#     Compute the sum of the out-of-range probabilities generated by model, using only circuits in `dataset`.
+#
+#     A non-zero value indicates that model is not in XP for the supplied dataset.
+#
+#     Parameters
+#     ----------
+#     model : Model
+#         model to generate probabilities.
+#
+#     dataset : DataSet
+#         data set to obtain circuits.  Dataset counts are
+#         used to check for zero or all counts being under a
+#         single spam label, in which case out-of-bounds probabilities
+#         are ignored because they contribute zero to the logl sum.
+#
+#     Returns
+#     -------
+#     float
+#         sum of the out-of-range probabilities.
+#     """
+#     forbidden_prob = 0
+#
+#     for mdl, dsrow in dataset.items():
+#         probs = model.probabilities(mdl)
+#         for (spamlabel, p) in probs.items():
+#             if p < TOL:
+#                 if round(dsrow[spamlabel]) == 0: continue  # contributes zero to the sum
+#                 else: forbidden_prob += abs(TOL - p) + TOL
+#             elif p > 1 - TOL:
+#                 if round(dsrow[spamlabel]) == dsrow.total: continue  # contributes zero to the sum
+#                 else: forbidden_prob += abs(p - (1 - TOL)) + TOL
+#
+#     return forbidden_prob
+#
+#
+# #UNUSED (REMOVE?)
+# def prep_penalty(rho_vec, basis):
+#     """
+#     Penalty assigned to a state preparation (rho) vector rho_vec.
+#
+#     State preparation density matrices must be positive semidefinite
+#     and trace == 1.  A positive return value indicates an these
+#     criteria are not met and the rho-vector is invalid.
+#
+#     Parameters
+#     ----------
+#     rho_vec : numpy array
+#         rho vector array of shape (N,1) for some N.
+#
+#     basis : {"std", "gm", "pp", "qt"}
+#         The abbreviation for the basis used to interpret rho_vec
+#         ("gm" = Gell-Mann, "pp" = Pauli-product, "std" = matrix unit,
+#          "qt" = qutrit, or standard).
+#
+#     Returns
+#     -------
+#     float
+#     """
+#     # rho_vec must be positive semidefinite and trace = 1
+#     rho_mx = _bt.vec_to_stdmx(_np.asarray(rho_vec), basis)
+#     evals = _np.linalg.eigvals(rho_mx)  # could use eigvalsh, but wary of this since eigh can be wrong...
+#     sum_of_neg = sum([-ev.real for ev in evals if ev.real < 0])
+#     trace_penalty = abs(rho_vec[0] - (1.0 / _np.sqrt(rho_mx.shape[0])))
+#     # 0th el is coeff of I(dxd)/sqrt(d) which has trace sqrt(d)
+#     #print "Sum of neg = ",sumOfNeg  #DEBUG
+#     #print "Trace Penalty = ",tracePenalty  #DEBUG
+#     return sum_of_neg + trace_penalty
+#
+#
+# #UNUSED (REMOVE?)
+# def effect_penalty(effect_vec, basis):
+#     """
+#     Penalty assigned to a POVM effect vector effect_vec.
+#
+#     Effects must have eigenvalues between 0 and 1.  A positive return
+#     value indicates this criterion is not met and the E-vector is
+#     invalid.
+#
+#     Parameters
+#     ----------
+#     effect_vec : numpy array
+#         effect vector array of shape (N,1) for some N.
+#
+#     basis : {"std", "gm", "pp", "qt"}
+#         The abbreviation for the basis used to interpret effect_vec
+#         ("gm" = Gell-Mann, "pp" = Pauli-product, "std" = matrix unit,
+#          "qt" = qutrit, or standard).
+#
+#     Returns
+#     -------
+#     float
+#     """
+#     # effect_vec must have eigenvalues between 0 and 1
+#     effect_mx = _bt.vec_to_stdmx(_np.asarray(effect_vec), basis)
+#     evals = _np.linalg.eigvals(effect_mx)  # could use eigvalsh, but wary of this since eigh can be wrong...
+#     sum_of_penalties = 0
+#     for ev in evals:
+#         if ev.real < 0: sum_of_penalties += -ev.real
+#         if ev.real > 1: sum_of_penalties += ev.real - 1.0
+#     return sum_of_penalties
+#
+#
+# #UNUSED (REMOVE?)
+# def cptp_penalty(model, include_spam_penalty=True):
+#     """
+#     The sum of all negative Choi matrix eigenvalues.
+#
+#     If `include_spam_penalty` is True, also add the rho-vector
+#     and E-vector penalties of model.  A non-zero value indicates
+#     that the model is not CPTP.
+#
+#     Parameters
+#     ----------
+#     model : Model
+#         the model to compute CPTP penalty for.
+#
+#     include_spam_penalty : bool, optional
+#         if True, also test model for invalid SPAM
+#         operation(s) and return sum of CPTP penalty
+#         with rhoVecPenlaty(...) and effect_penalty(...)
+#         for each rho and E vector.
+#
+#     Returns
+#     -------
+#     float
+#         CPTP penalty (possibly with added spam penalty).
+#     """
+#     ret = _jam.sum_of_negative_choi_eigenvalues(model)
+#     if include_spam_penalty:
+#         b = model.basis
+#         ret += sum([prep_penalty(r.to_dense(on_space='minimal'), b) for r in model.preps.values()])
+#         ret += sum([effect_penalty(e.to_dense(on_space='minimal'), b) for povm in model.povms.values()
+#                     for e in povm.values()])
+#     return ret
 
 
 def two_delta_logl_term(n, p, f, min_prob_clip=1e-6, poisson_picture=True):
@@ -1063,7 +1067,7 @@ def two_delta_logl_term(n, p, f, min_prob_clip=1e-6, poisson_picture=True):
     -------
     float or numpy array
     """
-
+    from ..objectivefns import objectivefns as _objfns
     #Allow this function to pass NaNs through silently, since
     # fiducial pair reduction may pass inputs with nan's legitimately and the desired
     # behavior is to just let the nan's pass through to nan's in the output.
@@ -1082,118 +1086,3 @@ def two_delta_logl_term(n, p, f, min_prob_clip=1e-6, poisson_picture=True):
     if not _np.isscalar(f):
         ret[nan_indices] = _np.nan
     return ret
-
-
-#TODO REMOVE
-##############################################################################################
-#   FUNCTIONS FOR HESSIAN ANALYSIS (which take derivatives of the log(likelihood) function)  #
-##############################################################################################
-
-
-#def dlogl_analytic(model, dataset):
-#    nP = model.num_params
-#    result = _np.zeros([1,nP])
-#    dPmx = dpr_plus(model, [circuit for circuit in dataset])
-#
-#    for (k,d) in enumerate(dataset.values()):
-#        p = model.PrPlus(d.circuit)
-#        if _np.fabs(p) < TOL and round(d.nPlus) == 0: continue
-#        if _np.fabs(p - 1) < TOL and round(d.nMinus) == 0: continue
-#
-#        for i in range(nP):
-#            #pre = ((1-p)*d.nPlus - p*d.nMinus) / (p*(1-p))
-#            #print "%d: Pre(%s) = " % (i,d.circuit), pre, "  (p = %g, np = %g)" % (p, d.nPlus)
-#            result[0,i] += ((1-p)*d.nPlus - p*d.nMinus) / (p*(1-p)) * dPmx[i,k]
-#
-#    return result
-#
-#
-#def dlogl_finite_diff(model, dataset):
-#    return numerical_deriv(logl, model, dataset, 1)
-#
-#def logl_hessian_finite_diff(model, dataset):
-#    return numerical_deriv(dlogl_finite_diff, model, dataset, model.num_params)
-#
-#def logl_hessian_at_ml(model, circuits, nSamples):
-#    return nSamples * logl_hessian_at_ML_per_sample(model, circuits)
-#
-#def logl_hessian_at_ML_per_sample(model, circuits):
-#    nP = model.num_params
-#    result = _np.zeros([nP,nP])
-#
-#    dPmx = dpr_plus(model, circuits)
-#
-#    for (k,s) in enumerate(circuits):
-#        p = model.PrPlus(s)
-#        if _np.fabs(p) < TOL: continue
-#        if _np.fabs(p - 1) < TOL: continue
-#        for i in range(nP):
-#            for j in range(nP):
-#                result[i,j] += -1.0/(p*(1-p)) * dPmx[i,k] * dPmx[j,k]
-#
-#    return result
-#
-#
-#
-#def dpr_plus(model, circuits):
-#    DELTA = 1e-7
-#    nP = model.num_params
-#    n_circuits = len(circuits)
-#    result = _np.zeros([nP,n_circuits])
-#
-#    for (j,s) in enumerate(circuits):
-#        fMid = model.PrPlus(s)
-#
-#        for i in range(nP):
-#            mdl = model.copy()
-#            mdl.add_to_param(i,DELTA)
-#            fRight = mdl.PrPlus(s)
-#            mdl.add_to_param(i,-2*DELTA)
-#            fLeft = mdl.PrPlus(s)
-#
-#            if fRight is None and fLeft is None:
-#                raise ValueError("Cannot take derivative - both sides are out of bounds!")
-#            if fRight is None:
-#                dP = (fMid - fLeft) / DELTA
-#            elif fLeft is None:
-#                dP = (fRight - fMid) / DELTA
-#            else:
-#                dP = (fRight - fLeft) / (2*DELTA)
-#
-#            result[i,j] = dP
-#
-#    return result
-#
-#
-#def numerical_deriv(fnToDifferentiate, model, dataset, resultLen):
-#    DELTA = 1e-6
-#    nP = model.num_params
-#    result = _np.zeros([resultLen,nP])
-#
-#    fMid = fnToDifferentiate(model, dataset)
-#    if fMid is None: return None
-#
-#    for i in range(nP):
-#        mdl = model.copy()
-#        mdl.add_to_param(i,DELTA)
-#        fRight = fnToDifferentiate(mdl, dataset)
-#
-#        mdl = model.copy()
-#        mdl.add_to_param(i,-DELTA)
-#        fLeft = fnToDifferentiate(mdl, dataset)
-#
-#        #print "DEBUG: %d: l,m,r = " % i,(fLeft,fMid,fRight)
-#        if fRight is None and fLeft is None:
-#            raise ValueError("numerical_deriv cannot take derivative - both sides are out of bounds!")
-#
-#        if fRight is None:
-#            df = (fMid - fLeft) / DELTA
-#        elif fLeft is None:
-#            df = (fRight - fMid) / DELTA
-#        else:
-#            df = (fRight - fLeft) / (2*DELTA)
-#
-#        #print "DEBUG: df(%d) = " % i,df
-#        result[:,i] = _np.transpose(df)
-#
-#    return result
