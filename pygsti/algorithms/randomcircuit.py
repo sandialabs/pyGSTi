@@ -2318,7 +2318,7 @@ def sample_one_q_clifford_layer_as_compiled_circuit(pspec, absolute_compilation,
     oneQclifford_circuit.done_editing()
 
     if len(oneQclifford_circuit) == 0:
-        oneQclifford_circuit = _cir.Circuit(layer_labels='[]', line_labels=qubits)
+        oneQclifford_circuit = _cir.Circuit(([],), line_labels=qubits)
 
     return oneQclifford_circuit
 
@@ -3034,7 +3034,7 @@ def create_random_germpower_mirror_circuits(pspec, absolute_compilation, depths,
 
     if localclifford:
         # Sample a compiled 1Q Cliffords layer
-        oneQclifford_circuit_out = sample_one_q_clifford_layer_as_compiled_circuit(pspec, qubit_labels=qubit_labels,
+        oneQclifford_circuit_out = sample_one_q_clifford_layer_as_compiled_circuit(pspec, absolute_compilation, qubit_labels=qubit_labels,
                                                                                    rand_state=rand_state)
         # Generate the inverse in the same way as before (note that this will not be the same in some
         # circumstances as finding the inverse Cliffords and using the compilations for those. It doesn't
@@ -3067,7 +3067,7 @@ def create_random_germpower_mirror_circuits(pspec, absolute_compilation, depths,
             # If .....
             if not fixed_versus_depth:
                 # Sample a compiled 1Q Cliffords layer
-                oneQclifford_circuit_out = sample_one_q_clifford_layer_as_compiled_circuit(pspec,
+                oneQclifford_circuit_out = sample_one_q_clifford_layer_as_compiled_circuit(pspec, absolute_compilation,
                                                                                            qubit_labels=qubit_labels,
                                                                                            rand_state=rand_state)
                 # Generate the inverse in the same way as before (note that this will not be the same in some
