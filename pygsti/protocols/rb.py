@@ -811,39 +811,39 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
             self.add_default_protocol(RB(name='RB', datatype='adjusted_success_probabilities', defaultfit='A-fixed'))
 
 
+### JORDAN'S CODE THAT IS BEING INTEGRATED INTO THE ABOVE PROTOCOL.
+# def generate_czr_experiment_design(num_circs, depths, qubit_set, pspec, twoQgate_density=0, circuit_type='cz',
+#                                     angles=[_np.pi/2, -1*_np.pi/2]):
 
-def generate_czr_experiment_design(num_circs, depths, qubit_set, pspec, twoQgate_density=0, circuit_type='cz',
-                                    angles=[_np.pi/2, -1*_np.pi/2]):
+#     depths = depths
+#     qs = qubit_set
+#     k = num_circs #number of circuits to create
+#     pspec = pspec
+#     n = len(qs)
 
-    depths = depths
-    qs = qubit_set
-    k = num_circs #number of circuits to create
-    pspec = pspec
-    n = len(qs)
+#     # IS THIS ORDERING WRONG?
+#     if circuit_type == 'cz':
+#         mirroring_func = _mirroring.create_nc_mirror_circuit
+#     if circuit_type == 'czr': 
+#         mirroring_func = _mirroring.create_cz_mirror_circuit
 
-    # IS THIS ORDERING WRONG?
-    if circuit_type == 'cz':
-        mirroring_func = _mirroring.create_nc_mirror_circuit
-    if circuit_type == 'czr': 
-        mirroring_func = _mirroring.create_cz_mirror_circuit
+#     # The exact details of the random circuit sampling distribution.
+#     sampler = 'edgegrab'
+#     twoQmean = n * twoQgate_density / 2   
+#     mcs_by_depth = {d:[] for d in depths}
+#     if circuit_type == 'cz':
+#         two_q_gate_args_lists = None
+#     if circuit_type == 'czr':
+#         two_q_gate_args_lists = {'Gczr': angles}
 
-    # The exact details of the random circuit sampling distribution.
-    sampler = 'edgegrab'
-    twoQmean = n * twoQgate_density / 2   
-    mcs_by_depth = {d:[] for d in depths}
-    if circuit_type == 'cz':
-        two_q_gate_args_lists = None
-    if circuit_type == 'czr':
-        two_q_gate_args_lists = {'Gczr': angles}
-
-    for d in depths:
-        circs = [_rc.sample_random_haar_and_cz_circuit(pspec, int(d/2), qubit_labels=qs, mean_two_q_gates=twoQmean,
-                                                       two_q_gate_args_lists=two_q_gate_args_lists) for _ in range(k)]
-        mcs = [(a, [b]) for a, b in [mirroring_func(c, pspec) for c in circs]]
-        mcs_by_depth[d].extend(mcs)
+#     for d in depths:
+#         circs = [_rc.sample_random_haar_and_cz_circuit(pspec, int(d/2), qubit_labels=qs, mean_two_q_gates=twoQmean,
+#                                                        two_q_gate_args_lists=two_q_gate_args_lists) for _ in range(k)]
+#         mcs = [(a, [b]) for a, b in [mirroring_func(c, pspec) for c in circs]]
+#         mcs_by_depth[d].extend(mcs)
     
-    edesign = _protocols.MirrorRBDesign.from_existing_circuits(mcs_by_depth)
-    return edesign
+#     edesign = _protocols.MirrorRBDesign.from_existing_circuits(mcs_by_depth)
+#     return edesign
 
 
 class RandomizedBenchmarking(_vb.SummaryStatistics):
