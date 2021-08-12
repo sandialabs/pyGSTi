@@ -57,6 +57,11 @@ class TestCliffordRBDesign(BaseCase):
         self.assertTrue(all([str(sd) == str(md) for sd, md in zip(serial_design.all_circuits_needing_data,
                                                         mp_design.all_circuits_needing_data)]))
 
+        tmodel = pygsti.models.create_crosstalk_free_model(self.pspec)
+
+        [[self.assertAlmostEqual(c.simulate(tmodel)[bs],1.) for c, bs in zip(cl, bsl)] for cl, bsl in zip(mp_design.circuit_lists, mp_design.idealout_lists)]
+
+
 
 class TestDirectRBDesign(BaseCase):
 
@@ -102,6 +107,11 @@ class TestDirectRBDesign(BaseCase):
             addlocal=False, lsargs=(), randomizeout=self.randomizeout, cliffordtwirl=True,
             conditionaltwirl=True, citerations=self.citerations, compilerargs=self.compiler_args,
             partitioned=False, seed=self.seed, verbosity=self.verbosity, num_processes=num_mp_procs)
+
+        
+        tmodel = pygsti.models.create_crosstalk_free_model(self.pspec)
+
+        [[self.assertAlmostEqual(c.simulate(tmodel)[bs],1.) for c, bs in zip(cl, bsl)] for cl, bsl in zip(mp_design.circuit_lists, mp_design.idealout_lists)]
         
         # for sd_circ, md_circ in zip(serial_design.all_circuits_needing_data, mp_design.all_circuits_needing_data):
         #     if str(sd_circ) != str(md_circ): print('MISMATCH!')
