@@ -531,6 +531,7 @@ class StdInputParser(object):
                         if 'BAD' in valueList:  # entire line is known to be BAD => no data for this circuit
                             oliArray = _np.zeros(0, dataset.oliType)
                             countArray = _np.zeros(0, dataset.repType)
+                            count_values = []
                         else:
                             if fixed_column_outcome_labels is not None:
                                 if outcome_labels_specified_in_preamble:
@@ -569,15 +570,20 @@ class StdInputParser(object):
                         dataset.add_count_arrays(circuit, oliArray, countArray,
                                                  record_zero_counts=record_zero_counts, aux=commentDict)
                     else:
+                        current_item.clear()
                         current_item['circuit'] = circuit
-                        looking_for = "circuit_data" if (with_times is True) else "circuit_data_or_line"
+                        current_item['aux'] = commentDict
                         last_circuit, last_commentDict = circuit, commentDict  # for circuit_data_or_line processing
+                        looking_for = "circuit_data" if (with_times is True) else "circuit_data_or_line"
 
                 elif looking_for == "circuit_data":
                     if len(line) == 0:
                         #add current item & look for next one
-                        dataset.add_raw_series_data(current_item['circuit'], current_item['outcomes'],
-                                                    current_item['times'], current_item.get('repetitions', None),
+                        # Note: if last line was just a circuit (without any following data lines)
+                        # then current_item will only have 'circuit' & 'aux' keys, so we need to use .get(...) below
+                        dataset.add_raw_series_data(current_item['circuit'], current_item.get('outcomes', []),
+                                                    current_item.get('times', []),
+                                                    current_item.get('repetitions', None),
                                                     record_zero_counts=record_zero_counts,
                                                     aux=current_item.get('aux', None),
                                                     update_ol=False)  # for performance - to this once at the end.
@@ -599,10 +605,10 @@ class StdInputParser(object):
                         else:
                             raise ValueError("Invalid circuit data-line prefix: '%s'" % parts[0])
 
-        if looking_for == "circuit_data" and current_item:
+        if looking_for in ("circuit_data", "circuit_data_or_line") and current_item:
             #add final circuit info (no blank line at end of file)
-            dataset.add_raw_series_data(current_item['circuit'], current_item['outcomes'],
-                                        current_item['times'], current_item.get('repetitions', None),
+            dataset.add_raw_series_data(current_item['circuit'], current_item.get('outcomes', []),
+                                        current_item.get('times', []), current_item.get('repetitions', None),
                                         record_zero_counts=record_zero_counts, aux=current_item.get('aux', None),
                                         update_ol=False)  # for performance - to this once at the end.
 
