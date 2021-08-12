@@ -26,6 +26,7 @@ from pygsti.modelmembers import operations as _op
 from pygsti.modelmembers import povms as _povm
 from pygsti.modelmembers import states as _state
 from pygsti.modelmembers.operations import opfactory as _opfactory
+from pygsti.modelmembers.modelmembergraph import ModelMemberGraph as _MMGraph
 from pygsti.baseobjs.basis import BuiltinBasis as _BuiltinBasis
 from pygsti.baseobjs.label import Label as _Lbl, CircuitLabel as _CircuitLabel
 from pygsti.tools import basistools as _bt
@@ -332,6 +333,18 @@ class LocalNoiseModel(_ImplicitOpModel):
     def create_processor_spec(self):
         import copy as _copy
         return _copy.deepcopy(self.processor_spec)
+    
+    def create_modelmember_graph(self):
+        self._clean_paramvec() # Rebuild params to ensure accurate comparisons with MMGraphs
+        return _MMGraph({
+            'prep_blks_layers': self.prep_blks['layers'],
+            'povm_blks_layers': self.povm_blks['layers'],
+            'operation_blks_layers': self.operation_blks['layers'],
+            'operation_blks_gates': self.operation_blks['gates'],
+            'instrument_blks_layers': self.instrument_blks['layers'],
+            'factories_gates': self.factories['gates'],
+            'factories_layers': self.factories['layers'],
+        })
 
 
 class _SimpleCompLayerRules(_LayerRules):

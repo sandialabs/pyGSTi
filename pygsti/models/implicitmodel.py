@@ -17,6 +17,7 @@ import uuid as _uuid
 from pygsti.models import model as _mdl
 from pygsti.modelmembers import operations as _op
 from pygsti.modelmembers import povms as _povm
+from pygsti.modelmembers.modelmembergraph import ModelMemberGraph as _MMGraph
 from pygsti.baseobjs.label import Label as _Label
 
 
@@ -312,6 +313,15 @@ class ImplicitOpModel(_mdl.OpModel):
         self._opcaches.update(simplified_op_blks)
         self._opcaches['complete-layers'] = {}  # used to hold final layers (of any type) if needed
 
+    def create_modelmember_graph(self):
+        self._clean_paramvec() # Rebuild params to ensure accurate comparisons with MMGraphs
+        return _MMGraph({
+            'prep_blks': self.prep_blks,
+            'povm_blks': self.povm_blks,
+            'operation_blks': self.operation_blks,
+            'instrument_blks': self.instrument_blks,
+            'factories': self.factories,
+        })
 
 def _init_spam_layers(model, prep_layers, povm_layers):
     """ Helper function for initializing the .prep_blks and .povm_blks elements of an implicit model"""

@@ -1514,6 +1514,17 @@ class OpModel(Model):
         ret = Model.copy(self)
         if OpModel._pcheck: ret._check_paramvec()
         return ret
+    
+    def create_modelmember_graph(self):
+        """
+        Generate a ModelMemberGraph for the model.
+
+        Returns
+        -------
+        ModelMemberGraph
+            A directed graph capturing dependencies among model members
+        """
+        raise NotImplementedError("Derived classes must implement this")
 
 
 def _default_param_bounds(num_params):

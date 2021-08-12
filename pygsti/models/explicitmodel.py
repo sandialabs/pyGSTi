@@ -27,6 +27,7 @@ from pygsti.modelmembers import instruments as _instrument
 from pygsti.modelmembers import operations as _op
 from pygsti.modelmembers import povms as _povm
 from pygsti.modelmembers import states as _state
+from pygsti.modelmembers.modelmembergraph import ModelMemberGraph as _MMGraph
 from pygsti.modelmembers.operations import opfactory as _opfactory
 from pygsti.baseobjs.basis import BuiltinBasis as _BuiltinBasis, DirectSumBasis as _DirectSumBasis
 from pygsti.baseobjs.label import Label as _Label, CircuitLabel as _CircuitLabel
@@ -1474,6 +1475,15 @@ class ExplicitOpModel(_mdl.OpModel):
 
         return _QubitProcessorSpec(nqubits, list(gate_unitaries.keys()), gate_unitaries, availability,
                                    qubit_labels=qubit_labels)
+    
+    def create_modelmember_graph(self):
+        return _MMGraph({
+            'preps': self.preps,
+            'povms': self.povms,
+            'operations': self.operations,
+            'instruments': self.instruments,
+            'factories': self.factories,
+        })
 
 
 class ExplicitLayerRules(_LayerRules):

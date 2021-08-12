@@ -539,6 +539,69 @@ class ModelMember(ModelChild):
             if id(self) in memo: return memo[id(self)]
             memo[id(self.parent)] = None  # so deepcopy uses None instead of copying parent
         return self._copy_gpindices(_copy.deepcopy(self, memo), parent, memo)
+    
+    def is_similar(self, other):
+        """Comparator returning whether two ModelMembers are the same type
+        and parameterization.
+        
+        ModelMembers with internal parameterization information (e.g.
+        LindbladErrorgen) should overload this function to account for that.
+
+        Parameters
+        ---------
+        other: ModelMember
+            ModelMember to compare to
+        
+        Returns
+        -------
+        bool
+            True if type/parameterization matches
+        """
+        if type(self) != type(other): return False
+
+        # Recursive check on submembers
+        if len(self.submembers()) != len(other.submembers()): return False
+        for sm1, sm2 in zip(self.submembers(), other.submembers()):
+            if not sm1.is_similar(sm2): return False
+        
+        return True
+
+    def is_equivalent(self, other, rtol=1e-5, atol=1e-8):
+        """Comparator returning whether two ModelMembers are equivalent.
+
+        This uses is_similar for type checking and NumPy allclose for parameter
+        checking, so is unlikely to be needed to overload.
+
+        Note that this only checks for NUMERICAL equivalence, not whether the objects
+        are the same.
+
+        Parameters
+        ---------
+        other: ModelMember
+            ModelMember to compare to
+        rtol: float
+            Relative tolerance for parameter vector comparison passed to NumPy
+        atol: float
+            Absolute tolerance for parameter vector comparison passed to NumPy
+        
+        Returns
+        -------
+        bool
+            True if type/parameterization AND parameter vectors match
+        """
+        if not self.is_similar(other): return False
+
+        if not _np.allclose(self.to_vector(), other.to_vector(), rtol=rtol, atol=atol):
+            return False
+        
+        # Recursive check on submembers
+        if len(self.submembers()) != len(other.submembers()): return False
+        for sm1, sm2 in zip(self.submembers(), other.submembers()):
+            # Technically calling is_equivalent here is extra type check work,
+            # but this is safer in case is_equivalent is overloaded in derived classes
+            if not sm1.is_equivalent(sm2): return False
+
+        return True
 
     def _copy_gpindices(self, op_obj, parent, memo):
         """ Helper function for implementing copy in derived classes """
