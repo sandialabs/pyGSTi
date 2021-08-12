@@ -111,6 +111,8 @@ class QubitProcessorSpec(ProcessorSpec):
                  geometry=None, qubit_labels=None, nonstd_gate_symplecticreps=None, aux_info=None):
         assert(type(num_qubits) is int), "The number of qubits, n, should be an integer!"
         if nonstd_gate_unitaries is None: nonstd_gate_unitaries = {}
+        assert(not (num_qubits > 1 and availability is None and geometry is None)), \
+            "For multi-qubit processors you must specify either the geometry or the availability!"
 
         #Store inputs for adding models later
         self.gate_names = tuple(gate_names[:])  # copy & cast to tuple

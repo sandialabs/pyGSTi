@@ -376,7 +376,7 @@ class DirectRBDesign(_vb.BenchmarkingDesign):
 
     @classmethod
     def from_existing_circuits(cls, circuits_and_idealouts_by_depth, qubit_labels=None,
-                               sampler='Qelimination', samplerargs=[], addlocal=False,
+                               sampler='edgegrab', samplerargs=[0.25, ], addlocal=False,
                                lsargs=(), randomizeout=False, cliffordtwirl=True, conditionaltwirl=True,
                                citerations=20, compilerargs=(), partitioned=False,
                                descriptor='A DRB experiment', add_default_protocol=False):
@@ -491,7 +491,7 @@ class DirectRBDesign(_vb.BenchmarkingDesign):
         return self
 
     def __init__(self, pspec, clifford_compilations, depths, circuits_per_depth, qubit_labels=None,
-                 sampler='Qelimination', samplerargs=[],
+                 sampler='edgegrab', samplerargs=[0.25, ],
                  addlocal=False, lsargs=(), randomizeout=False, cliffordtwirl=True, conditionaltwirl=True,
                  citerations=20, compilerargs=(), partitioned=False, descriptor='A DRB experiment',
                  add_default_protocol=False, seed=None, verbosity=1, num_processes=1):
@@ -618,7 +618,7 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
         irrelevant.
 
     sampler : str or function, optional
-        If a string, this should be one of: {'pairingQs', 'Qelimination', 'co2Qgates', 'local'}.
+        If a string, this should be one of: {'edgegrab', 'Qelimination', 'co2Qgates', 'local'}.
         Except for 'local', this corresponds to sampling layers according to the sampling function
         in rb.sampler named circuit_layer_by* (with * replaced by 'sampler'). For 'local', this
         corresponds to sampling according to rb.sampler.circuit_layer_of_oneQgates [which is not
@@ -657,7 +657,7 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
     @classmethod
     def from_existing_circuits(cls, circuits_and_idealouts_by_depth, qubit_labels=None,
                                circuit_type='clifford',
-                               sampler='Qelimination', samplerargs=(), localclifford=True,
+                               sampler='edgegrab', samplerargs=(0.25, ), localclifford=True,
                                paulirandomize=True, descriptor='A mirror RB experiment',
                                add_default_protocol=False):
         """
@@ -674,48 +674,8 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
             of `(circuit, ideal_outcome)` 2-tuples giving each RB circuit and its
             ideal (correct) outcome.
 
-        qubit_labels : list, optional
-            If not None, a list of the qubits that the RB circuit is to be sampled for. This should
-            be all or a subset of the qubits in the device specified by the QubitProcessorSpec `pspec`.
-            If None, it is assumed that the RB circuit should be over all the qubits. Note that the
-            ordering of this list is the order of the ``wires'' in the returned circuit, but is otherwise
-            irrelevant.
-
-        sampler : str or function, optional
-            If a string, this should be one of: {'pairingQs', 'Qelimination', 'co2Qgates', 'local'}.
-            Except for 'local', this corresponds to sampling layers according to the sampling function
-            in rb.sampler named circuit_layer_by* (with * replaced by 'sampler'). For 'local', this
-            corresponds to sampling according to rb.sampler.circuit_layer_of_oneQgates [which is not
-            a valid option for n-qubit MRB -- it results in sim. 1-qubit MRB -- but it is not explicitly
-            forbidden by this function]. If `sampler` is a function, it should be a function that takes
-            as the first argument a QubitProcessorSpec, and returns a random circuit layer as a list of gate
-            Label objects. Note that the default 'Qelimination' is not necessarily the most useful
-            in-built sampler, but it is the only sampler that requires no parameters beyond the QubitProcessorSpec
-            *and* works for arbitrary connectivity devices. See the docstrings for each of these samplers
-            for more information.
-
-        samplerargs : list, optional
-            A list of arguments that are handed to the sampler function, specified by `sampler`.
-            The first argument handed to the sampler is `pspec` and `samplerargs` lists the
-            remaining arguments handed to the sampler.
-
-        localclifford : bool, optional
-            Whether to start the circuit with uniformly random 1-qubit Cliffords and all of the
-            qubits (compiled into the native gates of the device).
-
-        paulirandomize : bool, optional
-            Whether to have uniformly random Pauli operators on all of the qubits before and
-            after all of the layers in the "out" and "back" random circuits. At length 0 there
-            is a single layer of random Pauli operators (in between two layers of 1-qubit Clifford
-            gates if `localclifford` is True); at length l there are 2l+1 Pauli layers as there
-            are
-
-        descriptor : str, optional
-            A string describing the generated experiment. Stored in the returned dictionary.
-
-        add_default_protocol : bool, optional
-            Whether to add a default RB protocol to the experiment design, which can be run
-            later (once data is taken) by using a :class:`DefaultProtocolRunner` object.
+        
+        See init docstring for details on all other parameters.
 
         Returns
         -------
@@ -732,9 +692,8 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
                               add_default_protocol)
         return self
 
-    # todo : update the default sampler to edgegrab? 
     def __init__(self, pspec, depths, circuits_per_depth, qubit_labels=None, circuit_type='clifford',
-                 clifford_compilations=None, sampler='Qelimination', samplerargs=(),
+                 clifford_compilations=None, sampler='edgegrab', samplerargs=(0.25, ),
                  localclifford=True, paulirandomize=True, descriptor='A mirror RB experiment',
                  add_default_protocol=False, seed=None, num_processes=1, verbosity=1):
 
@@ -766,14 +725,14 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
 
             elif circuit_type in ('cz+zxzxz-clifford', 'clifford+zxzxz-haar', 'cz(theta)+zxzxz-haar'):
                 assert(sampler == 'edgegrab'), "Unless circuit_type = 'clifford' the only valid sampler is 'edgegrab'."
-                twoQmean = samplerargs[0]
+                two_q_gate_density = samplerargs[0]
                 if len(samplerargs) >= 2:
                     two_q_gate_args_lists = samplerargs[1]
                 else:
                     # Default sampler arguments.
                     two_q_gate_args_lists = {'Gczr': [(str(_np.pi / 2),), (str(-_np.pi / 2),)]}
 
-                circs = [_rc.sample_random_cz_zxzxz_circuit(pspec, l // 2, qubit_labels=qubit_labels, mean_two_q_gates=twoQmean,
+                circs = [_rc.sample_random_cz_zxzxz_circuit(pspec, l // 2, qubit_labels=qubit_labels, two_q_gate_density=two_q_gate_density,
                                                             two_q_gate_args_lists=two_q_gate_args_lists) for _ in range(circuits_per_depth)]
 
                 mirroring_type = circuit_type.split('-')[0]
@@ -809,41 +768,6 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
 
         if add_default_protocol:
             self.add_default_protocol(RB(name='RB', datatype='adjusted_success_probabilities', defaultfit='A-fixed'))
-
-
-### JORDAN'S CODE THAT IS BEING INTEGRATED INTO THE ABOVE PROTOCOL.
-# def generate_czr_experiment_design(num_circs, depths, qubit_set, pspec, twoQgate_density=0, circuit_type='cz',
-#                                     angles=[_np.pi/2, -1*_np.pi/2]):
-
-#     depths = depths
-#     qs = qubit_set
-#     k = num_circs #number of circuits to create
-#     pspec = pspec
-#     n = len(qs)
-
-#     # IS THIS ORDERING WRONG?
-#     if circuit_type == 'cz':
-#         mirroring_func = _mirroring.create_nc_mirror_circuit
-#     if circuit_type == 'czr': 
-#         mirroring_func = _mirroring.create_cz_mirror_circuit
-
-#     # The exact details of the random circuit sampling distribution.
-#     sampler = 'edgegrab'
-#     twoQmean = n * twoQgate_density / 2   
-#     mcs_by_depth = {d:[] for d in depths}
-#     if circuit_type == 'cz':
-#         two_q_gate_args_lists = None
-#     if circuit_type == 'czr':
-#         two_q_gate_args_lists = {'Gczr': angles}
-
-#     for d in depths:
-#         circs = [_rc.sample_random_haar_and_cz_circuit(pspec, int(d/2), qubit_labels=qs, mean_two_q_gates=twoQmean,
-#                                                        two_q_gate_args_lists=two_q_gate_args_lists) for _ in range(k)]
-#         mcs = [(a, [b]) for a, b in [mirroring_func(c, pspec) for c in circs]]
-#         mcs_by_depth[d].extend(mcs)
-    
-#     edesign = _protocols.MirrorRBDesign.from_existing_circuits(mcs_by_depth)
-#     return edesign
 
 
 class RandomizedBenchmarking(_vb.SummaryStatistics):

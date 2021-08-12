@@ -71,7 +71,7 @@ def sample_compiled_haar_random_one_qubit_gates_zxzxz_circuit(pspec, zname='Gzr'
     return circ
 
 
-def sample_random_cz_zxzxz_circuit(pspec, length, qubit_labels=None, mean_two_q_gates=1,
+def sample_random_cz_zxzxz_circuit(pspec, length, qubit_labels=None, two_q_gate_density=0.25,
                                       two_q_gate_args_lists={'Gczr': [(str(_np.pi / 2),), (str(-_np.pi / 2),)]}):
     '''
     TODO
@@ -86,7 +86,7 @@ def sample_random_cz_zxzxz_circuit(pspec, length, qubit_labels=None, mean_two_q_
         #append new layer to circuit
         circuit.append_circuit_inplace(new_layer)
         #generate 2q gate layer
-        sampled_layer = sample_circuit_layer_by_edgegrab(pspec, qubit_labels=qubit_labels, mean_two_q_gates=mean_two_q_gates,
+        sampled_layer = sample_circuit_layer_by_edgegrab(pspec, qubit_labels=qubit_labels, two_q_gate_density=two_q_gate_density,
                                                          one_q_gate_names=[], gate_args_lists=two_q_gate_args_lists)
         if sampled_layer == []: new_layer = _cir.Circuit(layer_labels=[[]], line_labels=qubit_labels)
         else: new_layer = _cir.Circuit([sampled_layer])
@@ -139,137 +139,139 @@ def find_all_sets_of_compatible_two_q_gates(edgelist, n, gatename='Gcnot', aslab
     return co2Qgates
 
 
-def sample_circuit_layer_by_pairing_qubits(pspec, qubit_labels=None, two_q_prob=0.5, one_q_gate_names='all',
-                                           two_q_gate_names='all', modelname='clifford', rand_state=None):
-    """
-    Creates a circuit by randomply placing 2-qubit gates on qubit pairs.
+# TJP: I am not aware this is ever used anymore, and it's functionality is possibly even included in the
+# other samplers.
+# def sample_circuit_layer_by_pairing_qubits(pspec, qubit_labels=None, two_q_prob=0.5, one_q_gate_names='all',
+#                                            two_q_gate_names='all', modelname='clifford', rand_state=None):
+#     """
+#     Creates a circuit by randomply placing 2-qubit gates on qubit pairs.
 
-    Samples a random circuit layer by pairing up qubits and picking a two-qubit gate for a pair
-    with the specificed probability. This sampler *assumes* all-to-all connectivity, and does
-    not check that this condition is satisfied (more generally, it assumes that all gates can be
-    applied in parallel in any combination that would be well-defined).
+#     Samples a random circuit layer by pairing up qubits and picking a two-qubit gate for a pair
+#     with the specificed probability. This sampler *assumes* all-to-all connectivity, and does
+#     not check that this condition is satisfied (more generally, it assumes that all gates can be
+#     applied in parallel in any combination that would be well-defined).
 
-    The sampler works as follows: If there are an odd number of qubits, one qubit is chosen at
-    random to have a uniformly random 1-qubit gate applied to it (from all possible 1-qubit gates,
-    or those in `one_q_gate_names` if not None). Then, the remaining qubits are paired up, uniformly
-    at random. A uniformly random 2-qubit gate is then chosen for a pair with probability `two_q_prob`
-    (from all possible 2-qubit gates, or those in `two_q_gate_names` if not None). If a 2-qubit gate
-    is not chosen to act on a pair, then each qubit is independently and uniformly randomly assigned
-    a 1-qubit gate.
+#     The sampler works as follows: If there are an odd number of qubits, one qubit is chosen at
+#     random to have a uniformly random 1-qubit gate applied to it (from all possible 1-qubit gates,
+#     or those in `one_q_gate_names` if not None). Then, the remaining qubits are paired up, uniformly
+#     at random. A uniformly random 2-qubit gate is then chosen for a pair with probability `two_q_prob`
+#     (from all possible 2-qubit gates, or those in `two_q_gate_names` if not None). If a 2-qubit gate
+#     is not chosen to act on a pair, then each qubit is independently and uniformly randomly assigned
+#     a 1-qubit gate.
 
-    Parameters
-    ----------
-    pspec : QubitProcessorSpec
-        The QubitProcessorSpec for the device that the circuit layer is being sampled for. This
-        function assumes all-to-all connectivity, but does not check this is satisfied. Unless
-        `qubit_labels` is not None, a circuit layer is sampled over all the qubits in `pspec`.
+#     Parameters
+#     ----------
+#     pspec : QubitProcessorSpec
+#         The QubitProcessorSpec for the device that the circuit layer is being sampled for. This
+#         function assumes all-to-all connectivity, but does not check this is satisfied. Unless
+#         `qubit_labels` is not None, a circuit layer is sampled over all the qubits in `pspec`.
 
-    qubit_labels : list, optional
-        If not None, a list of the qubits to sample the circuit layer for. This is a subset of
-        `pspec.qubit_labels`. If None, the circuit layer is sampled to acton all the qubits
-        in `pspec`.
+#     qubit_labels : list, optional
+#         If not None, a list of the qubits to sample the circuit layer for. This is a subset of
+#         `pspec.qubit_labels`. If None, the circuit layer is sampled to acton all the qubits
+#         in `pspec`.
 
-    two_q_prob : float, optional
-        A probability for a two-qubit gate to be applied to a pair of qubits. So, the expected
-        number of 2-qubit gates in the sampled layer is two_q_prob*floor(n/2).
+#     two_q_prob : float, optional
+#         A probability for a two-qubit gate to be applied to a pair of qubits. So, the expected
+#         number of 2-qubit gates in the sampled layer is two_q_prob*floor(n/2).
 
-    one_q_gate_names : 'all' or list, optional
-        If not 'all', a list of the names of the 1-qubit gates to be sampled from when applying
-        a 1-qubit gate to a qubit. If this is 'all', the full set of 1-qubit gate names is extracted
-        from the QubitProcessorSpec.
+#     one_q_gate_names : 'all' or list, optional
+#         If not 'all', a list of the names of the 1-qubit gates to be sampled from when applying
+#         a 1-qubit gate to a qubit. If this is 'all', the full set of 1-qubit gate names is extracted
+#         from the QubitProcessorSpec.
 
-    two_q_gate_names : 'all' or list, optional
-        If not 'all', a list of the names of the 2-qubit gates to be sampled from when applying
-        a 2-qubit gate to a pair of qubits. If this is 'all', the full set of 2-qubit gate names is
-        extracted from the QubitProcessorSpec.
+#     two_q_gate_names : 'all' or list, optional
+#         If not 'all', a list of the names of the 2-qubit gates to be sampled from when applying
+#         a 2-qubit gate to a pair of qubits. If this is 'all', the full set of 2-qubit gate names is
+#         extracted from the QubitProcessorSpec.
 
-    modelname : str, optional
-        Only used if one_q_gate_names or two_q_gate_names is None. Specifies which of the
-        `pspec.models` to use to extract the gate-set. The `clifford` default is suitable
-        for Clifford or direct RB, but will not use any non-Clifford gates in the gate-set.
+#     modelname : str, optional
+#         Only used if one_q_gate_names or two_q_gate_names is None. Specifies which of the
+#         `pspec.models` to use to extract the gate-set. The `clifford` default is suitable
+#         for Clifford or direct RB, but will not use any non-Clifford gates in the gate-set.
 
-    rand_state: RandomState, optional
-        A np.random.RandomState object for seeding RNG
+#     rand_state: RandomState, optional
+#         A np.random.RandomState object for seeding RNG
 
-    Returns
-    -------
-    list of Labels
-        A list of gate Labels that defines a "complete" circuit layer (there is one and only
-        one gate acting on each qubit in `pspec` or `qubit_labels`).
-    """
-    if rand_state is None:
-        rand_state = _np.random.RandomState()
+#     Returns
+#     -------
+#     list of Labels
+#         A list of gate Labels that defines a "complete" circuit layer (there is one and only
+#         one gate acting on each qubit in `pspec` or `qubit_labels`).
+#     """
+#     if rand_state is None:
+#         rand_state = _np.random.RandomState()
 
-    if qubit_labels is None: n = pspec.num_qubits
-    else:
-        assert(isinstance(qubit_labels, list) or isinstance(qubit_labels, tuple)), "SubsetQs must be a list or a tuple!"
-        n = len(qubit_labels)
+#     if qubit_labels is None: n = pspec.num_qubits
+#     else:
+#         assert(isinstance(qubit_labels, list) or isinstance(qubit_labels, tuple)), "SubsetQs must be a list or a tuple!"
+#         n = len(qubit_labels)
 
-    # If the one qubit and/or two qubit gate names are only specified as 'all', construct them.
-    if (one_q_gate_names == 'all') or (two_q_gate_names == 'all'):
-        if one_q_gate_names == 'all':
-            oneQpopulate = True
-            one_q_gate_names = []
-        else:
-            oneQpopulate = False
-        if two_q_gate_names == 'all':
-            twoQpopulate = True
-            two_q_gate_names = []
-        else:
-            twoQpopulate = False
+#     # If the one qubit and/or two qubit gate names are only specified as 'all', construct them.
+#     if (one_q_gate_names == 'all') or (two_q_gate_names == 'all'):
+#         if one_q_gate_names == 'all':
+#             oneQpopulate = True
+#             one_q_gate_names = []
+#         else:
+#             oneQpopulate = False
+#         if two_q_gate_names == 'all':
+#             twoQpopulate = True
+#             two_q_gate_names = []
+#         else:
+#             twoQpopulate = False
 
-        operationlist = pspec.models[modelname].primitive_op_labels
-        for gate in operationlist:
-            if oneQpopulate:
-                if (gate.num_qubits == 1) and (gate.name not in one_q_gate_names):
-                    one_q_gate_names.append(gate.name)
-            if twoQpopulate:
-                if (gate.num_qubits == 2) and (gate.name not in two_q_gate_names):
-                    two_q_gate_names.append(gate.name)
+#         operationlist = pspec.models[modelname].primitive_op_labels
+#         for gate in operationlist:
+#             if oneQpopulate:
+#                 if (gate.num_qubits == 1) and (gate.name not in one_q_gate_names):
+#                     one_q_gate_names.append(gate.name)
+#             if twoQpopulate:
+#                 if (gate.num_qubits == 2) and (gate.name not in two_q_gate_names):
+#                     two_q_gate_names.append(gate.name)
 
-    # Basic variables required for sampling the circuit layer.
-    if qubit_labels is None:
-        qubits = list(pspec.qubit_labels[:])  # copy this list
-    else:
-        qubits = list(qubit_labels[:])  # copy this list
-    sampled_layer = []
-    num_oneQgatenames = len(one_q_gate_names)
-    num_twoQgatenames = len(two_q_gate_names)
+#     # Basic variables required for sampling the circuit layer.
+#     if qubit_labels is None:
+#         qubits = list(pspec.qubit_labels[:])  # copy this list
+#     else:
+#         qubits = list(qubit_labels[:])  # copy this list
+#     sampled_layer = []
+#     num_oneQgatenames = len(one_q_gate_names)
+#     num_twoQgatenames = len(two_q_gate_names)
 
-    # If there is an odd number of qubits, begin by picking one to have a 1-qubit gate.
-    if n % 2 != 0:
-        q = qubits[rand_state.randint(0, n)]
-        name = one_q_gate_names[rand_state.randint(0, num_oneQgatenames)]
-        del qubits[q]  # XXX is this correct?
-        sampled_layer.append(_lbl.Label(name, q))
+#     # If there is an odd number of qubits, begin by picking one to have a 1-qubit gate.
+#     if n % 2 != 0:
+#         q = qubits[rand_state.randint(0, n)]
+#         name = one_q_gate_names[rand_state.randint(0, num_oneQgatenames)]
+#         del qubits[q]  # XXX is this correct?
+#         sampled_layer.append(_lbl.Label(name, q))
 
-    # Go through n//2 times until all qubits have been paired up and gates on them sampled
-    for i in range(n // 2):
+#     # Go through n//2 times until all qubits have been paired up and gates on them sampled
+#     for i in range(n // 2):
 
-        # Pick two of the remaining qubits : each qubit that is picked is deleted from the list.
-        index = rand_state.randint(0, len(qubits))
-        q1 = qubits[index]
-        del qubits[index]
-        index = rand_state.randint(0, len(qubits))
-        q2 = qubits[index]
-        del qubits[index]
+#         # Pick two of the remaining qubits : each qubit that is picked is deleted from the list.
+#         index = rand_state.randint(0, len(qubits))
+#         q1 = qubits[index]
+#         del qubits[index]
+#         index = rand_state.randint(0, len(qubits))
+#         q2 = qubits[index]
+#         del qubits[index]
 
-        # Flip a coin to decide whether to act a two-qubit gate on that qubit
-        if rand_state.binomial(1, two_q_prob) == 1:
-            # If there is more than one two-qubit gate on the pair, pick a uniformly random one.
-            name = two_q_gate_names[rand_state.randint(0, num_twoQgatenames)]
-            sampled_layer.append(_lbl.Label(name, (q1, q2)))
-        else:
-            # Independently, pick uniformly random 1-qubit gates to apply to each qubit.
-            name1 = one_q_gate_names[rand_state.randint(0, num_oneQgatenames)]
-            name2 = one_q_gate_names[rand_state.randint(0, num_oneQgatenames)]
-            sampled_layer.append(_lbl.Label(name1, q1))
-            sampled_layer.append(_lbl.Label(name2, q2))
+#         # Flip a coin to decide whether to act a two-qubit gate on that qubit
+#         if rand_state.binomial(1, two_q_prob) == 1:
+#             # If there is more than one two-qubit gate on the pair, pick a uniformly random one.
+#             name = two_q_gate_names[rand_state.randint(0, num_twoQgatenames)]
+#             sampled_layer.append(_lbl.Label(name, (q1, q2)))
+#         else:
+#             # Independently, pick uniformly random 1-qubit gates to apply to each qubit.
+#             name1 = one_q_gate_names[rand_state.randint(0, num_oneQgatenames)]
+#             name2 = one_q_gate_names[rand_state.randint(0, num_oneQgatenames)]
+#             sampled_layer.append(_lbl.Label(name1, q1))
+#             sampled_layer.append(_lbl.Label(name2, q2))
 
-    return sampled_layer
+#     return sampled_layer
 
 
-def sample_circuit_layer_by_edgegrab(pspec, qubit_labels=None, mean_two_q_gates=1, one_q_gate_names=None, 
+def sample_circuit_layer_by_edgegrab(pspec, qubit_labels=None, two_q_gate_density=0.25, one_q_gate_names=None, 
                                      gate_args_lists=None, rand_state=None):
     """
     <TODO summary>
@@ -319,6 +321,7 @@ def sample_circuit_layer_by_edgegrab(pspec, qubit_labels=None, mean_two_q_gates=
         edgelist = [e for e in edgelist if not any([q in e for q in edge])]
 
     num2Qgates = len(selectededges)
+    mean_two_q_gates = len(qubits) * two_q_gate_density / 2
     assert(num2Qgates >= mean_two_q_gates), "Device has insufficient connectivity!"
 
     if mean_two_q_gates > 0:
@@ -357,8 +360,7 @@ def sample_circuit_layer_by_edgegrab(pspec, qubit_labels=None, mean_two_q_gates=
     return sampled_layer
 
 
-def sample_circuit_layer_by_q_elimination(pspec, qubit_labels=None, two_q_prob=0.5, one_q_gates='all',
-                                          two_q_gates='all', modelname='clifford', rand_state=None):
+def sample_circuit_layer_by_q_elimination(pspec, qubit_labels=None, two_q_prob=0.5, rand_state=None):
     """
     Samples a random circuit layer by eliminating qubits one by one.
 
@@ -386,31 +388,11 @@ def sample_circuit_layer_by_q_elimination(pspec, qubit_labels=None, two_q_prob=0
         `pspec.qubit_labels`. If None, the circuit layer is sampled to acton all the qubits
         in `pspec`.
 
-    two_q_prob : float or None, optional
-        None or a probability for a two-qubit gate to be applied to a pair of qubits. If
-        None, sampling is uniform over all gates available on a qubit. If a float, if a
-        2-qubit can is still possible on a qubit at that stage of the sampling, this is
+    two_q_prob : float, optional
+        If a 2-qubit can is still possible on a qubit at that stage of the sampling, this is
         the probability a 2-qubit gate is chosen for that qubit. The expected number of
         2-qubit gates per layer depend on this quantity and the connectivity graph of
         the device.
-
-    one_q_gates : 'all' or list, optional
-        If not 'all', a list of the 1-qubit gates to sample from, in the form of Label
-        objects. This is *not* just gate names (e.g. "Gh"), but Labels each containing
-        the gate name and the qubit it acts on. So it is possible to specify different
-        1-qubit models on different qubits. If this is 'all', the full set of possible
-        1-qubit gates is extracted from the QubitProcessorSpec.
-
-    two_q_gates : 'all' or list, optional
-        If not 'all', a list of the 2-qubit gates to sample from, in the form of Label
-        objects. This is *not* just gate names (e.g. "Gcnot"), but Labels each containing
-        the gate name and the qubits it acts on. If this is 'all', the full set of possible
-        2-qubit gates is extracted from the QubitProcessorSpec.
-
-    modelname : str, optional
-        Only used if one_q_gate_names or two_q_gate_names is None. Specifies the which of the
-        `pspec.models` to use to extract the model. The `clifford` default is suitable
-        for Clifford or direct RB, but will not use any non-Clifford gates in the model.
 
     rand_state: RandomState, optional
         A np.random.RandomState object for seeding RNG
@@ -432,39 +414,7 @@ def sample_circuit_layer_by_q_elimination(pspec, qubit_labels=None, two_q_prob=0
     if rand_state is None:
         rand_state = _np.random.RandomState()
 
-    # If one_q_gates is specified, use the given list.
-    if one_q_gates != 'all':
-        oneQgates_available = _copy.copy(one_q_gates)
-    # If one_q_gates is not specified, extract this list from the QubitProcessorSpec
-    else:
-        oneQgates_available = list(pspec.models[modelname].primitive_op_labels)
-        d = len(oneQgates_available)
-        for i in range(0, d):
-            # If it's not a 1-qubit gate, we delete it.
-            if oneQgates_available[d - 1 - i].num_qubits != 1:
-                del oneQgates_available[d - 1 - i]
-            # If it's not a gate on the allowed qubits, we delete it.
-            elif oneQgates_available[d - 1 - i].qubits[0] not in qubits:
-                del oneQgates_available[d - 1 - i]
-
-    # If two_q_gates is specified, use the given list.
-    if two_q_gates != 'all':
-        twoQgates_available = _copy.copy(two_q_gates)
-    # If two_q_gates is not specified, extract this list from the QubitProcessorSpec
-    else:
-        twoQgates_available = list(pspec.models[modelname].primitive_op_labels)
-        d = len(twoQgates_available)
-        for i in range(0, d):
-            # If it's not a 2-qubit gate, we delete it.
-            if twoQgates_available[d - 1 - i].num_qubits != 2:
-                del twoQgates_available[d - 1 - i]
-            # If it's not a gate on the allowed qubits, we delete it.
-            elif not set(twoQgates_available[d - 1 - i].qubits).issubset(set(qubits)):
-                del twoQgates_available[d - 1 - i]
-
-    # If the `two_q_prob` is not None, we specify a weighting towards 2-qubit gates
-    if two_q_prob is not None:
-        weighting = [1 - two_q_prob, two_q_prob]
+    possible_ops = pspec.compute_ops_on_qubits()
 
     # Prep the sampling variables.
     sampled_layer = []
@@ -479,69 +429,35 @@ def sample_circuit_layer_by_q_elimination(pspec, qubit_labels=None, two_q_prob=0
         q = remaining_qubits[r]
         del remaining_qubits[r]
 
-        # Find the 1Q gates that act on q.
-        oneQgates_remaining_on_q = []
-        ll = len(oneQgates_available)
-        for i in range(0, ll):
-            if q in oneQgates_available[ll - 1 - i].qubits:
-                oneQgates_remaining_on_q.append(oneQgates_available[ll - 1 - i])
-                del oneQgates_available[ll - 1 - i]
-
-        # Find the 2Q gates that act on q and a remaining qubit.
-        twoQgates_remaining_on_q = []
-        ll = len(twoQgates_available)
-        for i in range(0, ll):
-            if q in twoQgates_available[ll - 1 - i].qubits:
-                twoQgates_remaining_on_q.append(twoQgates_available[ll - 1 - i])
-                del twoQgates_available[ll - 1 - i]
-
-        # If two_q_prob is None, there is no weighting towards 2-qubit gates.
-        if two_q_prob is None:
-            nrm = len(oneQgates_remaining_on_q) + len(twoQgates_remaining_on_q)
-            weighting = [len(oneQgates_remaining_on_q) / nrm, len(twoQgates_remaining_on_q) / nrm]
+        oneq_ops_on_q = possible_ops[(q,)]
+        twoq_ops_on_q = []
+        for q2 in remaining_qubits:
+            twoq_ops_on_q += possible_ops[(q, q2)]
+            twoq_ops_on_q += possible_ops[(q2, q)]
 
         # Decide whether to to implement a 2-qubit gate or a 1-qubit gate.
-        if len(twoQgates_remaining_on_q) == 0:
-            xx = 1
+        if len(twoq_ops_on_q) == 0:
+            do_twoq_gate = False
         else:
-            xx = rand_state.choice([1, 2], p=weighting)
+            do_twoq_gate = rand_state.choice([False, True], p=[1 - two_q_prob, two_q_prob])
 
-        # Implement a 1-qubit gate on qubit q.
-        if xx == 1:
-            # Sample the gate
-            r = rand_state.randint(0, len(oneQgates_remaining_on_q))
-            sampled_layer.append(oneQgates_remaining_on_q[r])
-            # We have assigned gates to 1 of the remaining qubits.
-            num_qubits_used += 1
+        # Implement a random 1-qubit gate on qubit q.
+        if not do_twoq_gate:
+            sampled_layer.append(oneq_ops_on_q[rand_state.randint(0, len(oneq_ops_on_q))])
+            num_qubits_used += 1.  # We have assigned gates to 1 of the remaining qubits.
 
         # Implement a 2-qubit gate on qubit q.
-        if xx == 2:
-            # Sample the gate
-            r = rand_state.randint(0, len(twoQgates_remaining_on_q))
-            sampled_layer.append(twoQgates_remaining_on_q[r])
+        else:
+            lbl = twoq_ops_on_q[rand_state.randint(0, len(twoq_ops_on_q))]
+            sampled_layer.append(lbl)
 
             # Find the label of the other qubit in the sampled gate.
-            other_qubit = twoQgates_remaining_on_q[r].qubits[0]
+            other_qubit = lbl.qubits[0]
             if other_qubit == q:
-                other_qubit = twoQgates_remaining_on_q[r].qubits[1]
+                other_qubit = lbl.qubits[1]
 
-            # Delete the gates on this other qubit from the 1-qubit gate list.
-            ll = len(oneQgates_available)
-            for i in range(0, ll):
-                if other_qubit in oneQgates_available[ll - 1 - i].qubits:
-                    del oneQgates_available[ll - 1 - i]
-
-            # Delete the gates on this other qubit from the 2-qubit gate list.
-            ll = len(twoQgates_available)
-            for i in range(0, ll):
-                if other_qubit in twoQgates_available[ll - 1 - i].qubits:
-                    del twoQgates_available[ll - 1 - i]
-
-            # Delete this other qubit from remaining qubits list.
-            del remaining_qubits[remaining_qubits.index(other_qubit)]
-
-            # We have assigned gates to 2 of the remaining qubits.
-            num_qubits_used += 2
+            del remaining_qubits[remaining_qubits.index(other_qubit)] 
+            num_qubits_used += 2  
 
     return sampled_layer
 
@@ -666,7 +582,7 @@ def sample_circuit_layer_by_co2_q_gates(pspec, qubit_labels, co2_q_gates, co2_q_
         assert(isinstance(qubit_labels, list) or isinstance(qubit_labels, tuple)), "SubsetQs must be a list or a tuple!"
         remaining_qubits = list(qubit_labels[:])  # copy this list
     else:
-        remaining_qubits = pspec.qubit_labels[:]  # copy this list
+        remaining_qubits = list(pspec.qubit_labels[:]) # copy this list
 
     # Go through the 2-qubit gates in the sector, and apply each one with probability two_q_prob
     for i in range(0, len(twoqubitgates)):
