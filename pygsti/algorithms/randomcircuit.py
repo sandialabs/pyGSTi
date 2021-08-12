@@ -746,7 +746,7 @@ def create_random_circuit(pspec, length, qubit_labels=None, sampler='Qeliminatio
         in `pspec`.
 
     sampler : str or function, optional
-        If a string, this should be one of: {'pairingQs', 'Qelimination', 'co2Qgates', 'local'}.
+        If a string, this should be one of: {'edgegrab'', 'Qelimination', 'co2Qgates', 'local'}.
         Except for 'local', this corresponds to sampling layers according to the sampling function
         in rb.sampler named circuit_layer_by* (with * replaced by 'sampler'). For 'local', this
         corresponds to sampling according to rb.sampler.circuit_layer_of_oneQgates. If this is a
@@ -796,8 +796,9 @@ def create_random_circuit(pspec, length, qubit_labels=None, sampler='Qeliminatio
 
     if isinstance(sampler, str):
 
-        if sampler == 'pairingQs': sampler = sample_circuit_layer_by_pairing_qubits
-        elif sampler == 'Qelimination': sampler = sample_circuit_layer_by_q_elimination
+        # Removed redundant sampler
+        #if sampler == 'pairingQs': sampler = sample_circuit_layer_by_pairing_qubits
+        if sampler == 'Qelimination': sampler = sample_circuit_layer_by_q_elimination
         elif sampler == 'co2Qgates':
             sampler = sample_circuit_layer_by_co2_q_gates
             assert(len(samplerargs) >= 1), \
