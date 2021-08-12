@@ -656,6 +656,7 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
 
     @classmethod
     def from_existing_circuits(cls, circuits_and_idealouts_by_depth, qubit_labels=None,
+                               circuit_type='clifford',
                                sampler='Qelimination', samplerargs=(), localclifford=True,
                                paulirandomize=True, descriptor='A mirror RB experiment',
                                add_default_protocol=False):
@@ -726,13 +727,14 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
         circuits_per_depth = [len(circuits_and_idealouts_by_depth[d]) for d in depths]
         self = cls.__new__(cls)
         self._init_foundation(depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
+                              circuit_type,
                               sampler, samplerargs, localclifford, paulirandomize, descriptor,
                               add_default_protocol)
         return self
 
+    # todo : update the default sampler to edgegrab? 
     def __init__(self, pspec, depths, circuits_per_depth, qubit_labels=None, circuit_type='clifford',
-                 clifford_compilations=None,
-                 sampler='Qelimination', samplerargs=(),
+                 clifford_compilations=None, sampler='Qelimination', samplerargs=(),
                  localclifford=True, paulirandomize=True, descriptor='A mirror RB experiment',
                  add_default_protocol=False, seed=None, num_processes=1, verbosity=1):
 
@@ -754,34 +756,31 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
             # future: port the starmap functionality to the non-clifford case and merge the two methods
             # by just callling `create_mirror_rb_circuit` but with a different argument.   
             if circuit_type == 'clifford':
-                args_list = [(pspec, l)] * circuits_per_depth
-                kwargs_list = [dict(qubit_labels=qubit_labels, clifford_compilations=clifford_compilations['absolute'],
-                                    sampler=sampler,
+                args_list = [(pspec, clifford_compilations['absolute'], l)] * circuits_per_depth
+                kwargs_list = [dict(qubit_labels=qubit_labels, sampler=sampler,
                                     samplerargs=samplerargs, localclifford=localclifford,
                                     paulirandomize=paulirandomize,
                                     seed=lseed + i) for i in range(circuits_per_depth)]
                 results = _tools.mptools.starmap_with_kwargs(_rc.create_mirror_rb_circuit, circuits_per_depth,
                                                              num_processes, args_list, kwargs_list)
 
-            if circuit_type == '1qhaar+cz' or circuit_type == '1qhaar+czr':
-                 # IS THIS ORDERING WRONG?
-                if circuit_type == '1qhaar+cz':
-                    mirroring_func = _mirroring.create_nc_mirror_circuit
-                if circuit_type == '1qhaar+czr': 
-                    mirroring_func = _mirroring.create_cz_mirror_circuit
-
-                # The exact details of the random circuit sampling distribution.
-                assert(sampler == 'edgegrab')
+            elif circuit_type in ('cz+zxzxz-clifford', 'clifford+zxzxz-haar', 'cz(theta)+zxzxz-haar'):
+                assert(sampler == 'edgegrab'), "Unless circuit_type = 'clifford' the only valid sampler is 'edgegrab'."
                 twoQmean = samplerargs[0]
-                #mcs_by_depth = {d: [] for d in depths}
-                if circuit_type == '1qhaar+cz':
-                    two_q_gate_args_lists = None
-                if circuit_type == 'czr':
+                if len(samplerargs) >= 2:
                     two_q_gate_args_lists = samplerargs[1]
+                else:
+                    # Default sampler arguments.
+                    two_q_gate_args_lists = {'Gczr': [(str(_np.pi / 2),), (str(-_np.pi / 2),)]}
 
-                circs = [_rc.sample_random_haar_and_cz_circuit(pspec, l // 2, qubit_labels=qubit_labels, mean_two_q_gates=twoQmean,
-                                                               two_q_gate_args_lists=two_q_gate_args_lists) for _ in range(circuits_per_depth)]
-                results = [(a, [b]) for a, b in [mirroring_func(c, pspec) for c in circs]]
+                circs = [_rc.sample_random_cz_zxzxz_circuit(pspec, l // 2, qubit_labels=qubit_labels, mean_two_q_gates=twoQmean,
+                                                            two_q_gate_args_lists=two_q_gate_args_lists) for _ in range(circuits_per_depth)]
+
+                mirroring_type = circuit_type.split('-')[0]
+                results = [(a, [b]) for a, b in [_mirroring.create_mirror_circuit(c, pspec, circ_type=mirroring_type) for c in circs]]
+
+            else:
+                raise ValueError('Invalid option for `circuit_type`!')
 
             circuits_at_depth = []
             idealouts_at_depth = []
@@ -793,15 +792,16 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
             ideal_outs.append(idealouts_at_depth)
 
         self._init_foundation(depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
-                              sampler, samplerargs, localclifford, paulirandomize, descriptor,
+                              circuit_type, sampler, samplerargs, localclifford, paulirandomize, descriptor,
                               add_default_protocol)
 
     def _init_foundation(self, depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
-                         sampler, samplerargs, localclifford, paulirandomize, descriptor,
+                         circuit_type, sampler, samplerargs, localclifford, paulirandomize, descriptor,
                          add_default_protocol):
         super().__init__(depths, circuit_lists, ideal_outs, qubit_labels, remove_duplicates=False)
         self.circuits_per_depth = circuits_per_depth
         self.descriptor = descriptor
+        self.circuit_type = circuit_type
         self.sampler = sampler
         self.samplerargs = samplerargs
         self.localclifford = localclifford

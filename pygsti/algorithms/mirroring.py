@@ -123,13 +123,15 @@ def create_mirror_circuit(circ, pspec, circ_type='clifford+zxzxz'):
     _, gate_inverse = pspec.compute_one_qubit_gate_relations()
     gate_inverse.update(pspec.compute_multiqubit_inversion_relations())  # add multiQ inverse
 
+    assert(circ_type in ('clifford+zxzxz', 'cz(theta)+zxzxz'))
+
     def compute_gate_inverse(gate_label):
 
         if gate_label.name in gate_inverse.keys():
             return _lbl.Label(gate_inverse[gate_label.name], gate_label.qubits)
         else:
             if gate_label.name == 'Gzr' or gate_label.name == 'Gczr':
-                return _lbl.Label('Gzr', gate_label.qubits, args=(str(-1*float(gate_label.args[0])),))
+                return _lbl.Label(gate_label.name, gate_label.qubits, args=(str(-1*float(gate_label.args[0])),))
             else:
                 raise ValueError("Cannot invert gate with name {}".format(gate_label.name))
 
@@ -160,7 +162,7 @@ def create_mirror_circuit(circ, pspec, circ_type='clifford+zxzxz'):
     d_ind = 0
     while d_ind < d:
         layer = circ.layer(d - d_ind - 1)
-        if layer[0].name == zrotname:  # ask if it's a Zrot layer. It's necessary for the whole layer to have Zrot gates
+        if len(layer) > 0 and layer[0].name == zrotname:  # ask if it's a Zrot layer. It's necessary for the whole layer to have Zrot gates
             #get the entire arbitrary 1q unitaries: Zrot-Xpi/2-Zrot-Xpi/2-Zrot
             current_layers = circ[d - d_ind - 5: d - d_ind]
             #recompile inverse of current layer 
@@ -184,25 +186,10 @@ def create_mirror_circuit(circ, pspec, circ_type='clifford+zxzxz'):
             d_ind += 5
 
         else:
-            if circ_type == 'clifford+zxzxz':
-                #create quasi-inverse. Right now, it's ust inverting every gate in the original layer, so a simple inverse
-                inverse_layer = [_lbl.Label(gate_inverse[gate.name], gate.qubits) for gate in layer]
-                # Add the inverse layer that we've constructed to the end of the circuit
-                c.append_circuit_inplace(_cir.Circuit([inverse_layer]))
-                d_ind += 1
-            elif circ_type == 'cz(theta)+zxzxz':
-                invlayer = []
-                for g in layer:
-                    if g.name == czrotname: 
-                        gate_qubits = g.qubits
-                        #get gate args
-                        theta = float(g.args[0])
-                        invlayer.append(_lbl.Label(czrotname, gate_qubits, args=(str(-1*theta),)))
-                    else:
-                        invlayer.append(g)
-                c.append_circuit_inplace(_cir.Circuit([invlayer]))
-                d_ind += 1    
-            
+            inverse_layer = [compute_gate_inverse(gate_label) for gate_label in layer]
+            c.append_circuit_inplace(_cir.Circuit([inverse_layer], line_labels=c.line_labels))
+            d_ind += 1
+
     #now that we've built the simple mirror circuit, let's add pauli frame randomization
     d_ind = 0
     mc = []
@@ -212,7 +199,7 @@ def create_mirror_circuit(circ, pspec, circ_type='clifford+zxzxz'):
 
     while d_ind<d:
         layer = c.layer(d_ind)
-        if layer[0].name == zrotname:  #ask if it's a Zrot layer. It's necessary for the whole layer to have Zrot gates
+        if len(layer) > 0 and layer[0].name == zrotname:  #ask if it's a Zrot layer. It's necessary for the whole layer to have Zrot gates
             #if the layer is 1Q unitaries, pauli randomize
             current_layers = c[d_ind:d_ind + 5]
             
@@ -256,11 +243,10 @@ def create_mirror_circuit(circ, pspec, circ_type='clifford+zxzxz'):
         else:
             if circ_type == 'clifford+zxzxz':
                 net_paulis_as_layer = [_lbl.Label(pauli_labels[net_paulis[qubits[i]]], qubits[i]) for i in range(n)]
-                net_paulis = {qubits[i]:pn for i, pn in enumerate(_symp.find_pauli_number(_symp.symplectic_rep_of_clifford_circuit(_cir.Circuit([layer, net_paulis_as_layer, layer]), srep_dict=srep_dict)[1]))}
+                net_paulis = {qubits[i]: pn for i, pn in enumerate(_symp.find_pauli_number(_symp.symplectic_rep_of_clifford_circuit(_cir.Circuit([layer, net_paulis_as_layer, layer]), srep_dict=srep_dict)[1]))}
                 
                 mc.append(layer)
                 #we need to account for how the net pauli changes when it gets passed through the clifford layers
-                d_ind += 1
 
             if circ_type == 'cz(theta)+zxzxz':
                 quasi_inv_layer = []
@@ -286,8 +272,8 @@ def create_mirror_circuit(circ, pspec, circ_type='clifford+zxzxz'):
                     #add to circuit
                     mc.append([quasi_inv_layer])
                     
-                    #increment position in circuit    
-                    d_ind += 1
+            #increment position in circuit    
+            d_ind += 1
      
     #update the target pauli
     #pauli_layer = [_lbl.Label(pauli_labels[net_paulis[i]], qubits[i]) for i in range(len(qubits))]
