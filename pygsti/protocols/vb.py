@@ -168,7 +168,7 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
     """
     @classmethod
     def from_existing_circuits(cls, circuits_and_idealouts_by_depth, qubit_labels=None,
-                               sampler='edgegrab', samplerargs=(1 / 4), localclifford=True,
+                               sampler='edgegrab', samplerargs=(0.125,), localclifford=True,
                                paulirandomize=True, fixed_versus_depth=False,
                                descriptor='A random germ mirror circuit experiment'):
         """
@@ -240,8 +240,8 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
                               sampler, samplerargs, localclifford, paulirandomize, fixed_versus_depth, descriptor)
         return self
 
-    def __init__(self, pspec, clifford_compilations, depths, circuits_per_depth, qubit_labels=None, 
-                 sampler='edgegrab', samplerargs=(1 / 4,),
+    def __init__(self, pspec, depths, circuits_per_depth, qubit_labels=None, clifford_compilations=None,
+                 sampler='edgegrab', samplerargs=(0.125,),
                  localclifford=True, paulirandomize=True, fixed_versus_depth=False,
                  descriptor='A random germ mirror circuit experiment'):
 
@@ -249,9 +249,12 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
         circuit_lists = [[] for d in depths]
         ideal_outs = [[] for d in depths]
 
+        assert(clifford_compilations is not None)
+        abs_clifford_compilations = clifford_compilations['absolute']
+
         for j in range(circuits_per_depth):
             circtemp, outtemp, junk = _rc.create_random_germpower_mirror_circuits(
-                pspec, clifford_compilations, depths, qubit_labels=qubit_labels, localclifford=localclifford,
+                pspec, abs_clifford_compilations, depths, qubit_labels=qubit_labels, localclifford=localclifford,
                 paulirandomize=paulirandomize, interacting_qs_density=samplerargs[0],
                 fixed_versus_depth=fixed_versus_depth)
             for ind in range(len(depths)):

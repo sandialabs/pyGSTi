@@ -321,7 +321,10 @@ def sample_circuit_layer_by_edgegrab(pspec, qubit_labels=None, two_q_gate_densit
         edgelist = [e for e in edgelist if not any([q in e for q in edge])]
 
     num2Qgates = len(selectededges)
-    mean_two_q_gates = len(qubits) * two_q_gate_density / 2
+    if len(qubits) > 1:
+        mean_two_q_gates = len(qubits) * two_q_gate_density / 2
+    else:
+        mean_two_q_gates = 0
     assert(num2Qgates >= mean_two_q_gates), "Device has insufficient connectivity!"
 
     if mean_two_q_gates > 0:
@@ -2751,19 +2754,10 @@ def create_random_germ(pspec, depths, interacting_qs_density, qubit_labels, rand
 
     width = len(qubits)
 
+    if width == 1: 
+        interacting_qs_density = 0
+
     germcircuit = _cir.Circuit(layer_labels=[], line_labels=qubits, editable=True)
-
-#     germlength = {}
-#     for q in qubits:
-#         glp = 0
-#         while rand_state.binomial(1, 0.2) == 1:
-#             glp += 1
-#         germlength[q] = 2 ** glp
-
-#     circleng = max(list(germlength.values()))
-#     #print(circleng)
-#     subgerm = {}
-#     poweredsubgerm = {}
 
     rand = rand_state.rand()
     if rand < 4 / 8:
@@ -2783,24 +2777,6 @@ def create_random_germ(pspec, depths, interacting_qs_density, qubit_labels, rand
 
     germ_depth = R * max_subgerm_depth
 
-    #print(max_subgerm_depth, R, germ_depth)
-
-    # gcirclenpower = 0
-    # while rand_state.binomial(1, 0.5) == 1:
-    #     gcirclenpower += 1
-
-    # if interacting_qs_density > 0:
-    #     logw = int(_np.floor(_np.log2(len(qubits))))
-    #     log2 = int(_np.log2(1 / interacting_qs_density))
-
-    #     mingermlengthpower = min(0, 1 + log2 - logw)
-    #     #int(_np.ceil(_np.log2(1 / (len(qubits) * interacting_qs_density * 0.5))))
-    # else:
-    #     mingermlengthpower = 0
-
-    # gcirclenpower = max(gcirclenpower, mingermlengthpower)
-    # print(mingermlengthpower, gcirclenpower)
-
     subgerm_depth = {}
     for q in qubits:
         subgerm_depth_power = 0
@@ -2808,11 +2784,6 @@ def create_random_germ(pspec, depths, interacting_qs_density, qubit_labels, rand
             subgerm_depth_power += 1
         subgerm_depth[q] = 2 ** subgerm_depth_power
 
-    #print(2**gcirclenpower)
-    #print(germlength)
-    #circleng = 2**gcirclenpower  #max(list(germlength.values()))
-    #print(circleng)
-    #print(circleng)
     subgerm = {}
     repeated_subgerm = {}
     clifford_ops_on_qubits = pspec.compute_clifford_ops_on_qubits()
@@ -2827,15 +2798,9 @@ def create_random_germ(pspec, depths, interacting_qs_density, qubit_labels, rand
         layer = [repeated_subgerm[q][l] for q in qubits]
         germcircuit.insert_layer_inplace(layer, 0)
 
-    #tempgermcircuit = germcircuit.copy()
-
     if interacting_qs_density > 0:
 
         assert(germ_depth * width * interacting_qs_density >= 2)
-        #while len(germcircuit) * len(qubits) * interacting_qs_density * 0.5 < 1:
-        #
-        #    germcircuit.append_circuit_inplace(tempgermcircuit)
-
         #print(len(qubits))
         num2Qtoadd = int(_np.floor(germ_depth * width * interacting_qs_density / 2))
         #print(num2Qtoadd)
@@ -2863,19 +2828,8 @@ def create_random_germ(pspec, depths, interacting_qs_density, qubit_labels, rand
         for l in edgelistdict.keys():
             edge_and_depth_list += [(l, edge) for edge in edgelistdict[l]]
 
-        #print(edgelistdict)
         clifford_ops_on_qubits = pspec.compute_clifford_ops_on_qubits()
         for i in range(num2Qtoadd):
-
-            # OLD VERSION
-            # #print(i)
-            # depthposition = list(edgelistdict.keys())[rand_state.randint(0, len(edgelistdict))]
-            # edgeind = rand_state.randint(0, len(edgelistdict[depthposition]))
-            # edge = edgelistdict[depthposition][edgeind]
-            # del edgelistdict[depthposition][edgeind]
-            # if len(edgelistdict[depthposition]) == 0:
-            #     #print('removing depth {}'.format(depthposition))
-            #     del edgelistdict[depthposition]
 
             sampind = rand_state.randint(0, len(edge_and_depth_list))
             (depthposition, edge) = edge_and_depth_list[sampind]
@@ -2887,14 +2841,10 @@ def create_random_germ(pspec, depths, interacting_qs_density, qubit_labels, rand
 
             newlayer = []
             newlayer = [op] + [gate for gate in germcircuit[depthposition] if gate.qubits[0] not in edge]
-            #print(newlayer)
             germcircuit.delete_layers(depthposition)
             germcircuit.insert_layer_inplace(newlayer, depthposition)
 
         germcircuit.done_editing()
-        #newgermcircuit = _cir.Circuit(layer_labels=[], line_labels=qubits, editable=True)
-        #for layer in germcircuit:
-        #    newgermcircuit.insert_layer_inplace(layer,0)
 
     return germcircuit
 
