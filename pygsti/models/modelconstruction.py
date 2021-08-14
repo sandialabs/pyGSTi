@@ -843,7 +843,10 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
                         else:
                             if isinstance(gate_unitary, (int, _np.int64)):  # interpret gate_unitary as identity
                                 gate_unitary = _np.identity(2**gate_unitary, 'd')  # turn into explicit identity op
-                            embedded_unitary = _embed_unitary(state_space, inds, gate_unitary)
+                            if gate_unitary.shape[0] == state_space.udim:  # no need to embed!
+                                embedded_unitary = gate_unitary
+                            else:
+                                embedded_unitary = _embed_unitary(state_space, inds, gate_unitary)
                             ideal_gate = _op.create_from_unitary_mx(embedded_unitary, ideal_gate_type, 'pp',
                                                                     None, evotype, state_space)
 

@@ -422,17 +422,19 @@ class GSTInitialModel(object):
         Model
         """
 
-        if self.target_model is None:
-            if isinstance(edesign, HasProcessorSpec):
-                typ = 'full' if (self.starting_point in ("LGST", "LGST-if-possible")
-                                 or self.contract_start_to_cptp
-                                 or self.depolarize_start > 0
-                                 or self.randomize_start > 0) else 'auto'
-                target_model = edesign.create_target_model(typ)
+        def _get_target_model():  # a fn so we don't run this code unless we actually need a target model
+            if self.target_model is None:
+                if isinstance(edesign, HasProcessorSpec):
+                    typ = 'full' if (self.starting_point in ("LGST", "LGST-if-possible")
+                                     or self.contract_start_to_cptp
+                                     or self.depolarize_start > 0
+                                     or self.randomize_start > 0) else 'auto'
+                    target_model = edesign.create_target_model(typ)
+                else:
+                    target_model = None
             else:
-                target_model = None
-        else:
-            target_model = self.target_model
+                target_model = self.target_model
+            return target_model
 
         #Get starting point (model), which is used to compute other quantities
         # Note: should compute on rank 0 and distribute?
@@ -443,7 +445,7 @@ class GSTInitialModel(object):
         elif starting_pt in ("LGST", "LGST-if-possible"):
             #lgst_advanced = advancedOptions.copy(); lgst_advanced.update({'estimateLabel': "LGST", 'onBadFit': []})
 
-            mdl_start = self.model if (self.model is not None) else target_model
+            mdl_start = self.model if (self.model is not None) else _get_target_model()
             if mdl_start is None:
                 raise ValueError(("LGST requires a model. Specify an initial model or use an experiment"
                                   " design with a target model"))
@@ -470,14 +472,14 @@ class GSTInitialModel(object):
                     mdl_start = self.model
                 else:
                     starting_pt = "target"
-                    mdl_start = target_model
+                    mdl_start = _get_target_model()
 
             if starting_pt == "LGST":
                 lgst_results = lgst.run(lgst_data)
                 mdl_start = lgst_results.estimates['LGST'].models['lgst_gaugeopt']
 
         elif starting_pt == "target":
-            mdl_start = target_model
+            mdl_start = _get_target_model()
         else:
             raise ValueError("Invalid starting point: %s" % starting_pt)
 
