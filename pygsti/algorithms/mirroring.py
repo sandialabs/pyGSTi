@@ -284,7 +284,7 @@ def create_mirror_circuit(circ, pspec, circ_type='clifford+zxzxz'):
 
     # Calculate the bit string that this mirror circuit should output, from the final telescoped Pauli.
     target_bitstring = ''.join(['1' if p == 2 else '0' for p in telp_p[n:]])
-    mirror_circuit = _cir.Circuit(mc)
+    mirror_circuit = _cir.Circuit(mc, line_labels=circ.line_labels)
                 
     return mirror_circuit, target_bitstring
 
