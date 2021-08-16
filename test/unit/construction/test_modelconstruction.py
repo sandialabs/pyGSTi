@@ -150,7 +150,7 @@ class ModelConstructionTester(BaseCase):
 
     def test_build_crosstalk_free_model_depolarize_parameterizations(self):
         nQubits = 2
-        pspec = _ProcessorSpec(nQubits, ('Gi',))
+        pspec = _ProcessorSpec(nQubits, ('Gi',), geometry='line')
 
         # Test depolarizing
         mdl_depol1 = mc.create_crosstalk_free_model(
@@ -217,7 +217,7 @@ class ModelConstructionTester(BaseCase):
 
     def test_build_crosstalk_free_model_stochastic_parameterizations(self):
         nQubits = 2
-        pspec = _ProcessorSpec(nQubits, ('Gi',))
+        pspec = _ProcessorSpec(nQubits, ('Gi',), geometry='line')
 
         # Test stochastic
         mdl_sto1 = mc.create_crosstalk_free_model(
@@ -257,7 +257,7 @@ class ModelConstructionTester(BaseCase):
 
     def test_build_crosstalk_free_model_lindblad_parameterizations(self):
         nQubits = 2
-        pspec = _ProcessorSpec(nQubits, ('Gi',))
+        pspec = _ProcessorSpec(nQubits, ('Gi',), geometry='line')
 
         # Test Lindblad
         mdl_lb1 = mc.create_crosstalk_free_model(
@@ -330,7 +330,7 @@ class ModelConstructionTester(BaseCase):
             return scipy.linalg.expm(1j * float(a) * sigmaZ)
         fn.udim = 2
 
-        pspec = _ProcessorSpec(nQubits, ('Gx', 'Gy', 'Gcnot', 'Ga'), nonstd_gate_unitaries={'Ga': fn})
+        pspec = _ProcessorSpec(nQubits, ('Gx', 'Gy', 'Gcnot', 'Ga'), nonstd_gate_unitaries={'Ga': fn}, geometry='line')
         cfmdl = mc.create_crosstalk_free_model(pspec)
 
         c = pygsti.circuits.Circuit("Gx:1Ga;0.3:1Gx:1@(0,1)")
@@ -366,7 +366,7 @@ class ModelConstructionTester(BaseCase):
 
         xrot_fact = XRotationOpFactory()
 
-        pspec = _ProcessorSpec(nQubits, ('Gi', 'Gxr'), nonstd_gate_unitaries={'Gxr': fn})
+        pspec = _ProcessorSpec(nQubits, ('Gi', 'Gxr'), nonstd_gate_unitaries={'Gxr': fn},  geometry='line')
         cfmdl = mc.create_crosstalk_free_model(pspec, custom_gates={'Gxr': xrot_fact})
 
         c = pygsti.circuits.Circuit("Gxr;3.1415926536:1@(0,1)")

@@ -1158,9 +1158,9 @@ def _setup_local_gates(processor_spec, evotype, modelnoise=None, custom_gates=No
                     gatedict[key] = _op.ComposedOp([ideal_gate, noiseop])
 
         else:  # a factory, given by the unitary-valued function U: args -> unitary
-            local_state_space = _statespace.default_space_for_udim(U.udim)
+            local_state_space = _statespace.default_space_for_udim(U(None).shape[0])  # OR possibly U.udim in future
             ideal_factory = _opfactory.UnitaryOpFactory(U, local_state_space, 'pp', evotype)
-            noiseop = modelnoise.create_errormap(key, evotype, ideal_gate.state_space, target_labels=None)
+            noiseop = modelnoise.create_errormap(key, evotype, ideal_factory.state_space, target_labels=None)
             gatedict[key] = _opfactory.ComposedOpFactory([ideal_factory, noiseop]) \
                 if (noiseop is not None) else ideal_factory
     return gatedict
