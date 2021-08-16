@@ -272,15 +272,18 @@ class StandardGSTDesign(GateSetTomographyDesign):
         self.fpr_keep_seed = keep_seed
 
         #TODO: add a line_labels arg to create_lsgst_circuit_lists and pass qubit_labels in?
-        processor_spec = _load_pspec(processorspec_filename_or_obj)
+        processor_spec_or_model = _load_pspec_or_model(processorspec_filename_or_obj)
         lists = _circuits.create_lsgst_circuit_lists(
-            processor_spec, self.prep_fiducials, self.meas_fiducials, self.germs,
+            processor_spec_or_model, self.prep_fiducials, self.meas_fiducials, self.germs,
             self.maxlengths, self.fiducial_pairs, self.truncation_method, self.nested,
             self.fpr_keep_fraction, self.fpr_keep_seed, self.include_lgst,
             self.aliases, self.circuit_rules, dscheck, action_if_missing,
             self.germ_length_limits, verbosity)
         #FUTURE: add support for "advanced options" (probably not in __init__ though?):
         # trunc_scheme=advancedOptions.get('truncScheme', "whole germ powers")
+
+        processor_spec = processor_spec_or_model.create_processor_spec() \
+                         if isinstance(processor_spec_or_model, _Model) else processor_spec_or_model
 
         super().__init__(processor_spec, lists, None, qubit_labels, self.nested)
         self.auxfile_types['prep_fiducials'] = 'text-circuit-list'
@@ -1400,6 +1403,14 @@ def _load_model(model_filename_or_obj):
         return _io.load_model(model_filename_or_obj)
     else:
         return model_filename_or_obj  # assume a Model object
+
+def _load_pspec_or_model(processorspec_or_model_filename_or_obj):
+    if isinstance(processorspec_or_model_filename_or_obj, str):
+        # if a filename is given, just try to load a processor spec (can't load a model file yet)
+        with open(processorspec_or_model_filename_or_obj, 'rb') as f:
+            return _pickle.load(f)
+    else:
+        return processorspec_or_model_filename_or_obj
 
 
 def _load_fiducials_and_germs(prep_fiducial_list_or_filename,
