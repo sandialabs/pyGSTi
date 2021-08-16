@@ -175,7 +175,7 @@ class NQNoiseConstructionTester(BaseCase):
             return scipy.linalg.expm(1j * float(a) * sigmaZ)
         fn.udim = 2
 
-        pspec = _QubitProcessorSpec(nQubits, ('Gx', 'Gy', 'Gcnot', 'Ga'), nonstd_gate_unitaries={'Ga': fn})
+        pspec = _QubitProcessorSpec(nQubits, ('Gx', 'Gy', 'Gcnot', 'Ga'), nonstd_gate_unitaries={'Ga': fn}, geometry='line')
         ccmdl = mc.create_cloud_crosstalk_model(pspec)
         c = Circuit("Gx:1Ga;0.3:1Gx:1@(0,1)")
         p1 = ccmdl.probabilities(c)

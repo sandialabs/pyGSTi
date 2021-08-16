@@ -288,8 +288,8 @@ class VBDataFrame(object):
                             print('at ({}, {}) selected {}'.format(x, y, column_value_selection))
                         # For all rows where (self.x_axis,self.y_axis) value is (x,y), filter out all values where
                         # column_label does not equal column_value_selection
-                        df = df[(df[column_label] == column_value_selection) ^ (df[self.y_axis] != y)
-                                ^ (df[self.x_axis] != x)]
+                        df = df[(df[column_label] == column_value_selection) | (df[self.y_axis] != y)
+                                | (df[self.x_axis] != x)]
                         
         else:
             for y in self.y_values:
@@ -336,7 +336,7 @@ class VBDataFrame(object):
                         print('at {} = {}, selected {}'.format(self.y_axis, y, column_value_selection))
                     # For all rows where self.y_axis value is y, filter out all values where column_label does
                     # not equal column_value_selection
-                    df = df[(df[column_label] == column_value_selection) ^ (df[self.y_axis] != y)]
+                    df = df[(df[column_label] == column_value_selection) | (df[self.y_axis] != y)]
 
         return VBDataFrame(df, self.x_axis, self.y_axis, self.x_values.copy(), self.y_values.copy(), self.edesign)
 
@@ -388,11 +388,11 @@ class VBDataFrame(object):
         for x in self.x_values:
             for y in self.y_values:
                 if statistic == 'monotonic_min':
-                    tempdf_xy = df[df[self.x_axis] <= x][df[self.y_axis] <= y]
+                    tempdf_xy = df[(df[self.x_axis] <= x) & (df[self.y_axis] <= y)]
                 elif statistic == 'monotonic_max':
-                    tempdf_xy = df[df[self.x_axis] >= x][df[self.y_axis] >= y]
+                    tempdf_xy = df[(df[self.x_axis] >= x) & (df[self.y_axis] >= y)]
                 else:
-                    tempdf_xy = df[df[self.x_axis] == x][df[self.y_axis] == y]
+                    tempdf_xy = df[(df[self.x_axis] == x) & (df[self.y_axis] == y)]
                 if all(_np.isnan(tempdf_xy[metric])) or len(tempdf_xy[metric]) == 0:
                     if no_data_action == 'discard':
                         pass
