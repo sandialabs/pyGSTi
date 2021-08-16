@@ -31,7 +31,9 @@ class ProcessorSpec(object):
     proccesor geometry.  Processor specifications do not include any information about how
     operations are parameterized or can be adjusted (at least not yet).
     """
-    pass  # base class for potentially other types of processors (not composed of just qubits)
+    # base class for potentially other types of processors (not composed of just qubits)
+    def __init__(self):
+        pass
 
 
 class QubitProcessorSpec(ProcessorSpec):
@@ -180,7 +182,7 @@ class QubitProcessorSpec(ProcessorSpec):
         self._symplectic_reps = {}  # lazily-evaluated symplectic representations for Clifford gates
         if nonstd_gate_symplecticreps is not None:
             self._symplectic_reps.update(nonstd_gate_symplecticreps)
-        super(ProcessorSpec, self).__init__()  # todo : Why did this need to be changed from QubitProcessorSpec?
+        super(QubitProcessorSpec, self).__init__()
 
     @property
     def num_qubits(self):
@@ -214,6 +216,7 @@ class QubitProcessorSpec(ProcessorSpec):
         if unitary is None: return self.num_qubits  # unitary=None => identity on all qubits
         if isinstance(unitary, (int, _np.int64)): return unitary  # unitary=int => identity in n qubits
         return int(round(_np.log2(unitary(None).shape[0] if callable(unitary) else unitary.shape[0])))
+        # OR possibly unitary.udim in future
 
     def resolved_availability(self, gate_name, tuple_or_function="auto"):
         """

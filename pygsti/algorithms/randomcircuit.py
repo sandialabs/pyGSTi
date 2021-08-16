@@ -29,7 +29,7 @@ from pygsti.tools import compilationtools as _comp
 
 def sample_haar_random_one_qubit_unitary_parameters():
     """
-    TODO
+    TODO: docstring
     """
     psi, chi = 2 * _np.pi * _np.random.rand(2)
     psi = psi - _np.pi
@@ -45,7 +45,7 @@ def sample_haar_random_one_qubit_unitary_parameters():
 
 def sample_compiled_haar_random_one_qubit_gates_zxzxz_circuit(pspec, zname='Gzr', xname='Gxpi2', qubit_labels=None):
     """
-    TODO #generate layer of random unitaries and make a series of circuit layers with the compiled versions of these
+    TODO: docstring  #generate layer of random unitaries and make a series of circuit layers with the compiled versions of these
     """
     if qubit_labels is not None:
         n = len(qubit_labels)
@@ -74,7 +74,7 @@ def sample_compiled_haar_random_one_qubit_gates_zxzxz_circuit(pspec, zname='Gzr'
 def sample_random_cz_zxzxz_circuit(pspec, length, qubit_labels=None, two_q_gate_density=0.25,
                                       two_q_gate_args_lists={'Gczr': [(str(_np.pi / 2),), (str(-_np.pi / 2),)]}):
     '''
-    TODO
+    TODO: docstring
     Generates a forward circuits with benchmark depth d for non-clifford mirror randomized benchmarking. 
     The circuits alternate Haar-random 1q unitaries and layers of Gczr gates
     '''
@@ -101,6 +101,7 @@ def sample_random_cz_zxzxz_circuit(pspec, length, qubit_labels=None, two_q_gate_
 
 def find_all_sets_of_compatible_two_q_gates(edgelist, n, gatename='Gcnot', aslabel=False):
     """
+    TODO: docstring
     <TODO summary>
 
     Parameters
@@ -274,6 +275,7 @@ def find_all_sets_of_compatible_two_q_gates(edgelist, n, gatename='Gcnot', aslab
 def sample_circuit_layer_by_edgegrab(pspec, qubit_labels=None, two_q_gate_density=0.25, one_q_gate_names=None, 
                                      gate_args_lists=None, rand_state=None):
     """
+    TODO: docstring
     <TODO summary>
 
     Parameters
@@ -2724,6 +2726,7 @@ def create_mirror_rb_circuit(pspec, absolute_compilation, length, qubit_labels=N
 
 def create_random_germ(pspec, depths, interacting_qs_density, qubit_labels, rand_state=None):
     """
+    TODO: docstring
     <TODO summary>
 
     Parameters
@@ -2856,6 +2859,7 @@ def create_random_germpower_circuits(pspec, depths, interacting_qs_density, qubi
     #from pygsti.circuits import circuit as _cir
 
     """
+    TODO: docstring
     <TODO summary>
 
     Parameters
@@ -2926,6 +2930,7 @@ def create_random_germpower_mirror_circuits(pspec, absolute_compilation, depths,
                                             paulirandomize=True, interacting_qs_density=1 / 8, fixed_versus_depth=False,
                                             seed=None):
     """
+    TODO: docstring
     length : consistent with RB length.
 
     Parameters

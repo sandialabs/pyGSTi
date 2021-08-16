@@ -429,7 +429,7 @@ def find_premultipled_pauli(s, p_implemented, p_target, qubit_labels=None):
 
 def find_pauli_layer(pvec, qubit_labels, pauli_labels=['I', 'X', 'Y', 'Z']):
     """
-    TODO
+    TODO: docstring
     """
     paulis_as_int_list = find_pauli_number(pvec)
     return [(pauli_labels[p], q) for p, q in zip(paulis_as_int_list, qubit_labels)]
@@ -437,7 +437,7 @@ def find_pauli_layer(pvec, qubit_labels, pauli_labels=['I', 'X', 'Y', 'Z']):
 
 def find_pauli_number(pvec):
     """
-    TODO
+    TODO: docstring
     """
     n = len(pvec) // 2
     v = (pvec[0:n] // 2) + 2 * (pvec[n:] // 2)
