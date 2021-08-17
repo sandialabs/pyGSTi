@@ -1563,12 +1563,116 @@ class ExplicitOpModel(_mdl.OpModel):
 
         return _LinearInterposer(F)
 
-    def setup_fogi(self, ham_basis, other_basis, other_mode="all",
-                   op_label_abbrevs=None, reparameterize=False, reduce_to_model_space=True, constructive=False,
+    def setup_fogi(self, initial_gauge_basis, create_complete_basis_fn=None,
+                   op_label_abbrevs=None, reparameterize=False, reduce_to_model_space=True,
                    dependent_fogi_action='drop'):
+        # ExplicitOpModel-specific - and assumes model's ops have specific structure (see extract_std_target*) !!
+        primitive_op_labels = list(self.operations.keys())
+
+        #BEGIN NEW STUFF
+        primitive_prep_labels = list(self.preps.keys())
+        primitive_effect_labels = list(self.effects.keys())  # TODO
+
+        # "initial" gauge space is the space of error generators initially considered as
+        # gauge transformations.  It can be reduced by the errors allowed on operations (by
+        # their type and support).
+
+        def extract_std_target_mx(op):
+            # TODO: more general decomposition of op - here it must be Composed(UnitaryOp, ExpErrorGen) or just ExpErrorGen
+            if isinstance(op, _op.ExpErrorgenOp):  # assume just an identity op
+                U = _np.identity(op.state_space.dim, 'd')
+            elif isinstance(op, _op.ComposedOp):  # assume first element gives unitary
+                op_mx = op.factorops[0].to_dense()  # assumes a LindbladOp and low num qubits
+                U = _bt.change_basis(op_mx, self.basis, 'std')
+            else:
+                raise ValueError("Could not extract target matrix from %s op!" % str(type(op)))
+            return U
+
+        def extract_std_target_vec(v):
+            raise NotImplementedError()  # TODO
+
+        if create_complete_basis_fn is None:
+            assert(isinstance(initial_gauge_basis, CompleteElementaryErrorgenBasis)), \
+                ("Must supply a custom `create_complete_basis_fn` if initial gauge basis is not a complete basis!")
+
+            def create_complete_basis_fn(target_sslbls):
+                return initial_gauge_basis.create_subbasis(target_sslbls, retain_max_weights=False)
+
+        # get gauge action matrices on the initial space
+        gauge_action_matrices = _collections.OrderedDict()
+        gauge_action_gauge_spaces = _collections.OrderedDict()
+        errorgen_coefficient_labels = _collections.OrderedDict()  # by operation
+        for op_label in primitive_op_labels:  # Note: "ga" stands for "gauge action" in variable names below
+            op = self.operations[op_label]
+            U = extract_std_target_mx(op)
+            target_sslbls = op_label.sslbls
+            op_gauge_basis = initial_gauge_basis.create_subspace(target_sslbls)  # pick out the gauge space labels that overlap w/target
+            initial_row_basis = create_complete_basis_fn(target_sslbls)
+            
+            #support_sslbls, gauge_errgen_basis = get_overlapping_labels(gauge_errgen_space_labels, target_sslble)
+
+            mx, row_basis = _fogit.first_order_gauge_action_matrix(U, target_sslbls, self.state_space,
+                                                                   op_gauge_basis, initial_row_basis)
+            # what is support of each gauge action matrix... should be on same support as gauge action space but include all possible elem errorgens
+            #  also this must be a subset of the errorgen space of the op - so maybe just take the errorgen space for this op?
+            # but problem (?) - two gates cancel contribution for a disallowed errorgen? - how to find a linear combo of gauge elemgens that is valid?
+
+
+            #HERE - now we have native mx, next:
+            # - remove all all-zero rows from mx (and corresponding basis labels) -- DONE withn first_order_ham_gauge_action_matrix now
+            # - make linear combos of basis els so that all (nonzero) disallowed rows become zero, i.e.,
+            #    find nullspace of the matrix formed from the (nonzero) disallowed rows of mx.
+            # - promote op_gauge_basis => op_gauge_space (with linear combos)
+            allowed_lbls = op.errorgen_coefficient_labels()
+            allowed_lbls_set = set(allowed_lbls)
+            disallowed_indices = [i for i, lbl in enumerate(row_basis.labels) if lbl not in allowed_lbls_set]
+
+            if reduce_to_model_space and len(disallowed_indices) > 0:
+                disallowed_rows = mx[disallowed_indices, :]  # TODO - update to sparse-matrix compatible op
+                allowed_gauge_linear_combos = _mt.nice_nullspace(disallowed_rows, tol=1e-4)
+                mx = mx.dot(allowed_gauge_linear_combos)  # TODO - update to sparse-matrix compatible op
+                #ga_by_op = {k: _np.dot(v, allowed_gauge_linear_combos) for k, v in ga_by_op.items()}
+                op_gauge_space = ErrorgenSpace([(allowed_gauge_linear_combos, op_gauge_basis)])
+            else:
+                allowed_gauge_linear_combos = None
+                op_gauge_space = ErrorgenSpace([(IDENTITY, op_gauge_basis)])  # but do we need to store identity? could we just use the basis as a space here?
+
+            errorgen_coefficient_labels[op_label] = allowed_lbls
+            gauge_action_matrices[op_label] = mx
+            gauge_action_gauge_spaces[op_label] = op_gauge_space
+
+
+        #HERE - now do something similar for SPAM (but first get gates logic working all the way within the FOGIStore construction)
+            
+        for prep_label in primitive_prep_labels:
+            # something similar - but gauge action is trivial; we care about irrelevant vs. relevant (& relational) partition of gauge errgen space:
+            # - get target sslbls 
+            prep = self.preps[prep_label]
+            v = extract_std_target_vec(prep)
+            target_sslbls = prep_label.sslbls  # (but often it's the entire space)
+            support_sslbls, gauge_errgen_basis = get_overlapping_labels(gauge_errgen_space_labels, target_sslble)  # usually the entire gauge errgen space
+            # HERE - get subspace of gauge_errgen_basis (maybe linear combos? - so as vectors?) that is *relevant* to this vec, i.e. for which M.v != 0
+            relevant_space[prep_label] = get_relevant_space(v, gauge_errgen_basis)
+
+            errorgen_coefficient_labels[prep_label] = prep.errorgen_coefficient_labels()
+
+        for effect_label in primitive_effect_labels:
+            pass # something similar
+
+        self.fogi_store = _FOGIStore(gauge_action_matrices, gauge_action_gauge_spaces,
+                                     errorgen_coefficient_labels,  # gauge_errgen_space_labels,
+                                     op_label_abbrevs, reduce_to_model_space, dependent_fogi_action, norm_order=XXX)
+        #END NEW STUFF - below is OLD (was working) code
+
+        
+    
+    def _old_setup_fogi(self, ham_basis, other_basis, other_mode="all",
+                        op_label_abbrevs=None, reparameterize=False, reduce_to_model_space=True,
+                        dependent_fogi_action='drop'):
 
         # ExplicitOpModel-specific - and assumes model's ops are LindbladOp objects !!
         primitive_op_labels = list(self.operations.keys())
+
         ham_ga_matrices = _collections.OrderedDict()
         other_ga_matrices = _collections.OrderedDict()
         ham_errorgen_coefficient_labels = _collections.OrderedDict()

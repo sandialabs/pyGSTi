@@ -689,7 +689,7 @@ class GateSetTomography(_proto.Protocol):
         be cast to a :class:`GSTObjFnBuilders` object.
 
     optimizer : Optimizer, optional
-        The optimizer to use.  Can also be anything that can be case to a :class:`Optimizer`.
+        The optimizer to use.  Can also be anything that can be cast to a :class:`Optimizer`.
 
     badfit_options : GSTBadFitOptions, optional
         Options specifying what post-processing actions should be performed if the GST

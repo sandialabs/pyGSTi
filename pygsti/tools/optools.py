@@ -1632,6 +1632,31 @@ def _assert_shape(ar, shape, sparse=False):
             raise NotImplementedError("Number of dimensions must be <= 4!")
 
 
+def lindblad_error_generator(label, basis_1q, normalize, sparse=False):
+    """
+    TODO: docstring  - labels can be, e.g. ('H', 'XX') and basis should be a 1-qubit basis w/single-char labels
+    """
+
+    if label[0] == 'H':
+        B = reduce(_np.kron, [basis_1q[bel] for bel in label[1]])
+        ret = _lt.hamiltonian_to_lindbladian(B, sparse)  # in std basis
+    elif label[0] == 'S':
+        Lm = reduce(_np.kron, [basis_1q[bel] for bel in label[1]])
+        Ln = reduce(_np.kron, [basis_1q[bel] for bel in label[2]]) \
+            if len(label) > 2 else Lm
+        ret = _lt.nonham_lindbladian(Lm, Lm, sparse)
+    else:
+        raise ValueError("Invalid elementary error generator label: %s" % str(label))
+
+    if normalize:
+        normfn = _spsl.norm if sparse else _np.linalg.norm
+        norm = normfn(ret)  # same as norm(term.flat)
+        if not _np.isclose(norm, 0):
+            ret /= norm  # normalize projector
+            assert(_np.isclose(normfn(ret), 1.0))
+    return ret
+
+
 def lindblad_error_generators(dmbasis_ham, dmbasis_other, normalize,
                               other_mode="all"):
     """

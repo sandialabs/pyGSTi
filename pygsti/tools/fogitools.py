@@ -17,6 +17,73 @@ from . import matrixtools as _mt
 from . import optools as _ot
 
 
+#TODO: should gauge_errorgen_space.state_space == model_state_space always, and so remove arg?
+def first_order_gauge_action_matrix(clifford_superop_mx, target_sslbls, model_state_space,
+                                    elemgen_gauge_basis, elemgen_row_basis):
+    """
+    Returns a matrix for computing the *offset* of a given gate's error generator due to a local gauge action.
+    Note: clifford_superop must be in the *std* basis!
+    TODO: docstring
+    """
+
+    #Utilize EmbeddedOp to perform superop embedding
+    from pygsti.modelmembers.operations import EmbeddedOp as _EmbeddedOp, StaticArbitraryOp as _StaticArbitraryOp
+
+    def _embed(mx, target_labels, state_space):
+        op = _EmbeddedOp(state_space, target_labels, _StaticArbitraryOp(mx, 'densitymx_slow'))
+        return op.to_dense('HilbertSchmidt')  # or to_sparse, if efficient enough (for sparse math below)
+
+    action_mx = _sps.lil_matrix((elemgen_row_basis.size, elemgen_gauge_basis.size), 'd')  # TODO - get syntax correct
+    nonzero_rows = set()
+    nonzero_row_labels = {}
+    TOL = 1e-12  # ~ machine precision
+    
+    for j, (gen_sslbls, gen) in enumerate(elemgen_gauge_basis.elemgen_supports_and_matrices()):
+        action_sslbls = tuple(sorted(set(gen_sslbls) + set(target_sslbls)))  # (union) - joint support of ops
+        action_space = model_state_space.create_subspace(action_sslbls)
+
+        gen_expanded = _embed(gen, gen_sslbls, action_space)  # expand gen to shared action_space
+        U_expanded = _embed(clifford_superop_mx, target_sslbls, action_space)  # expand to shared action_space
+        conjugated_gen = _np.dot(U_expanded, _np.dot(gen_expanded, _np.conjugate(U_expanded.T)))  # sparse math?
+        gauge_action_deriv = gen_expanded - conjugated_gen  # (on action_space)
+
+        action_row_basis = elemgen_row_basis.create_subbasis(action_sslbls)  # spans all *possible* error generators - a full basis for gauge_action_deriv
+        #global_row_space.add_labels(row_space.labels)  # labels would need to contain sslbls too
+        action_row_labels = action_row_basis.labels
+        global_row_indices = elemgen_row_basis.label_indices(action_row_labels)
+
+        # Note: could avoid this projection and conjugation math above if we knew gen was Pauli action and U was clifford (TODO!)
+        for i, row_label, (gen2_sslbls, gen2) in zip(global_row_indices, action_row_labels,
+                                                     action_row_basis.elemgen_supports_and_matrices()):
+            #if not is_subset(gen2_sslbls, space):
+            #    continue  # no overlap/component when gen2 is nontrivial (and assumed orthogonal to identity) on a factor space where gauge_action_deriv is zero
+
+            gen2_expanded = _embed(gen2, gen2_sslbls, action_space)  # embed gen2 into action_space
+            val = _np.vdot(gen2_expanded.flat, gauge_action_deriv.flat)
+            assert(abs(val.imag) < TOL)  # all values should be real, I think...
+            if abs(val) > TOL:
+                if i not in nonzero_rows:
+                    nonzero_rows.add(i)
+                    nonzero_row_labels[i] = row_label
+                action_mx[i, j] = val
+
+        #TODO HERE: check that decomposition into components adds to entire gauge_action_deriv (checks "completeness" of row basis
+
+    #return action_mx
+    
+    #Remove all all-zero rows and cull these elements out of the row_basis.  Actually,
+    # just construct a new matrix and basis
+    nonzero_row_indices = list(sorted(nonzero_rows))
+    labels = [nonzero_row_labels[i] for i in nonzero_row_indices]
+    culled_action_mx = _sps.lil_matrix((len(nonzero_rows), elemgen_gauge_basis.size), 'd')
+    for ii, i in enumerate(nonzero_row_indices):
+        culled_action_mx[ii, :] = action_mx[i, :]
+    updated_row_basis = ExplicitElementaryErrorgenBasis(elemgen_row_basis.state_space, labels)
+
+    return culled_action_mx, updated_row_basis
+
+
+#OLD REMOVE?:
 def first_order_ham_gauge_action_matrix(clifford_superop, dmbasis_ham):
     #Note: clifford_superop must be in the *std* basis!
     normalize = True  # I think ?
@@ -35,6 +102,7 @@ def first_order_ham_gauge_action_matrix(clifford_superop, dmbasis_ham):
     return ham_action_mx
 
 
+#OLD REMOVE?:
 def first_order_other_gauge_action_matrix(clifford_superop, dmbasis_other, other_mode="all"):
     #Note: clifford_superop must be in the *std* basis!
     normalize = True  # I think ?
