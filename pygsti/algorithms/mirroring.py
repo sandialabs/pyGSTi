@@ -177,17 +177,17 @@ def create_mirror_circuit(circ, pspec, circ_type='clifford+zxzxz'):
                 theta3_layer = [_lbl.Label(zrotname, qubits[i], args=(str(layer_new_params[i][2]),)) for i in range(len(layer_new_params))]
 
             #add to mirror circuit
-            c.append_circuit_inplace(_cir.Circuit([theta3_layer]))
-            c.append_circuit_inplace(_cir.Circuit([Xpi2layer]))
-            c.append_circuit_inplace(_cir.Circuit([theta2_layer]))
-            c.append_circuit_inplace(_cir.Circuit([Xpi2layer]))
-            c.append_circuit_inplace(_cir.Circuit([theta1_layer]))
+            c.append_circuit_inplace(_cir.Circuit([theta3_layer], line_labels=circ.line_labels))
+            c.append_circuit_inplace(_cir.Circuit([Xpi2layer], line_labels=circ.line_labels))
+            c.append_circuit_inplace(_cir.Circuit([theta2_layer], line_labels=circ.line_labels))
+            c.append_circuit_inplace(_cir.Circuit([Xpi2layer], line_labels=circ.line_labels))
+            c.append_circuit_inplace(_cir.Circuit([theta1_layer], line_labels=circ.line_labels))
             
             d_ind += 5
 
         else:
             inverse_layer = [compute_gate_inverse(gate_label) for gate_label in layer]
-            c.append_circuit_inplace(_cir.Circuit([inverse_layer], line_labels=c.line_labels))
+            c.append_circuit_inplace(_cir.Circuit([inverse_layer], line_labels=circ.line_labels))
             d_ind += 1
 
     #now that we've built the simple mirror circuit, let's add pauli frame randomization
@@ -209,7 +209,9 @@ def create_mirror_circuit(circ, pspec, circ_type='clifford+zxzxz'):
 
             net_paulis_as_layer = [_lbl.Label(pauli_labels[net_paulis[q]], q) for q in qubits]
             #compute new net pauli based on previous pauli
-            net_pauli_numbers = _symp.find_pauli_number(_symp.symplectic_rep_of_clifford_circuit(_cir.Circuit(new_paulis_as_layer + net_paulis_as_layer), srep_dict=srep_dict)[1])
+            temp_circ = _cir.Circuit(new_paulis_as_layer + net_paulis_as_layer, line_labels=circ.line_labels)
+            net_pauli_numbers = _symp.find_pauli_number(_symp.symplectic_rep_of_clifford_circuit(temp_circ, 
+                                                                                                srep_dict=srep_dict)[1])
             # THIS WAS THE (THETA) VERSIONS
             #net_paulis_as_layer = [_lbl.Label(pauli_labels[net_paulis[q]], q) for q in qubits]
             #net_pauli_numbers = _symp.find_pauli_number(_symp.symplectic_rep_of_clifford_circuit(_cir.Circuit(new_paulis_as_layer+net_paulis_as_layer), pspec=pspec)[1])
@@ -243,7 +245,7 @@ def create_mirror_circuit(circ, pspec, circ_type='clifford+zxzxz'):
         else:
             if circ_type == 'clifford+zxzxz':
                 net_paulis_as_layer = [_lbl.Label(pauli_labels[net_paulis[qubits[i]]], qubits[i]) for i in range(n)]
-                net_paulis = {qubits[i]: pn for i, pn in enumerate(_symp.find_pauli_number(_symp.symplectic_rep_of_clifford_circuit(_cir.Circuit([layer, net_paulis_as_layer, layer]), srep_dict=srep_dict)[1]))}
+                net_paulis = {qubits[i]: pn for i, pn in enumerate(_symp.find_pauli_number(_symp.symplectic_rep_of_clifford_circuit(_cir.Circuit([layer, net_paulis_as_layer, layer], line_labels=circ.line_labels), srep_dict=srep_dict)[1]))}
                 
                 mc.append(layer)
                 #we need to account for how the net pauli changes when it gets passed through the clifford layers
@@ -267,8 +269,7 @@ def create_mirror_circuit(circ, pspec, circ_type='clifford+zxzxz'):
                                     if q2 != q:
                                         correction_angles[q2] += -1*theta
                     else:
-                        gate_qubit = g.qubits
-                        quasi_inv_layer.append(_lbl.Label('Gc0', gate_qubit))
+                        quasi_inv_layer.append(_lbl.Label(compute_gate_inverse(g)))
                     #add to circuit
                     mc.append([quasi_inv_layer])
                     
@@ -279,7 +280,7 @@ def create_mirror_circuit(circ, pspec, circ_type='clifford+zxzxz'):
     #pauli_layer = [_lbl.Label(pauli_labels[net_paulis[i]], qubits[i]) for i in range(len(qubits))]
     # The version from (THETA)
     pauli_layer = [_lbl.Label(pauli_labels[net_paulis[q]], q) for q in qubits]
-    conjugation_circ = _cir.Circuit([pauli_layer])
+    conjugation_circ = _cir.Circuit([pauli_layer], line_labels=circ.line_labels)
     telp_s, telp_p = _symp.symplectic_rep_of_clifford_circuit(conjugation_circ, srep_dict=srep_dict)
 
     # Calculate the bit string that this mirror circuit should output, from the final telescoped Pauli.
