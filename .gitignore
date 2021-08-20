@@ -21,6 +21,8 @@ hooks/etc/permissions.yml
 /.eggs/
 .ropeproject
 .vscode
+doc/_autosummary
+doc/build
 
 # Test Metadata #
 #################
