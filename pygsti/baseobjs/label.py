@@ -1900,7 +1900,10 @@ class LabelTupWithArgs(Label, tuple):
         # FUTURE: use LabelTupWithArgs here instead of Label?
 
     def strip_args(self):
-        return LabelTup.__new__(LabelTup, (self[0],) + self[self[1]:])  # make a new LabelTup (no args)
+        if self.sslbls is not None:
+            return LabelTup.__new__(LabelTup, (self[0],) + self[self[1]:])  # make a new LabelTup (no args)
+        else:  # special case of sslbls == None, which is just a string label without its args
+            return LabelStr.__new__(LabelStr, self[0])
 
     def __str__(self):
         """
