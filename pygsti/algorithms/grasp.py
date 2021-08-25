@@ -143,7 +143,7 @@ def _grasp_construct_feasible_solution(elements, score_fn, rcl_fn, feasible_thre
         raise ValueError('Must provide either feasible_fn or '
                          'feasible_threshold!')
 
-    feasible = False
+    feasible = feasible_fn(soln) if feasibleTest == 'function' else score_fn(soln) <= feasible_threshold
 
     while _np.any(weights == 0) and not feasible:
         candidateIdxs = _np.where(weights == 0)[0]
