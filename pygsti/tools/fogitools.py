@@ -11,13 +11,12 @@ Utility functions for computing and working with first-order-gauge-invariant (FO
 #***************************************************************************************************
 
 import numpy as _np
-
+import scipy.sparse as _sps
 
 from . import matrixtools as _mt
 from . import optools as _ot
 
 
-#TODO: should gauge_errorgen_space.state_space == model_state_space always, and so remove arg?
 def first_order_gauge_action_matrix(clifford_superop_mx, target_sslbls, model_state_space,
                                     elemgen_gauge_basis, elemgen_row_basis):
     """
@@ -28,23 +27,39 @@ def first_order_gauge_action_matrix(clifford_superop_mx, target_sslbls, model_st
 
     #Utilize EmbeddedOp to perform superop embedding
     from pygsti.modelmembers.operations import EmbeddedOp as _EmbeddedOp, StaticArbitraryOp as _StaticArbitraryOp
+    from pygsti.models.fogistore import ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis
 
     def _embed(mx, target_labels, state_space):
-        op = _EmbeddedOp(state_space, target_labels, _StaticArbitraryOp(mx, 'densitymx_slow'))
-        return op.to_dense('HilbertSchmidt')  # or to_sparse, if efficient enough (for sparse math below)
+        if mx.shape[0] == state_space.dim:
+            return mx  # no embedding needed
+        else:
+            dummy_op = _EmbeddedOp(state_space, target_labels,
+                                   _StaticArbitraryOp(_np.identity(mx.shape[0], 'd'), 'densitymx_slow'))
+            embeddedOp = _sps.identity(state_space.dim, mx.dtype, format='lil')
+            scale = _np.sqrt(4**len(target_labels) / state_space.dim)  # is this correct??
 
-    action_mx = _sps.lil_matrix((elemgen_row_basis.size, elemgen_gauge_basis.size), 'd')  # TODO - get syntax correct
+            #fill in embedded_op contributions (always overwrites the diagonal
+            # of finalOp where appropriate, so OK it starts as identity)
+            for i, j, gi, gj in dummy_op._iter_matrix_elements('HilbertSchmidt'):
+                embeddedOp[i, j] = mx[gi, gj] * scale
+            #return embeddedOp.tocsr()  # Note: if sparse, assure that this is in CSR or CSC -- probably CSC -- for fast products
+            return embeddedOp.todense()
+
+    action_mx = _sps.lil_matrix((len(elemgen_row_basis), len(elemgen_gauge_basis)), dtype=clifford_superop_mx.dtype)
     nonzero_rows = set()
     nonzero_row_labels = {}
     TOL = 1e-12  # ~ machine precision
-    
-    for j, (gen_sslbls, gen) in enumerate(elemgen_gauge_basis.elemgen_supports_and_matrices()):
-        action_sslbls = tuple(sorted(set(gen_sslbls) + set(target_sslbls)))  # (union) - joint support of ops
+
+    for j, (gen_sslbls, gen) in enumerate(elemgen_gauge_basis.elemgen_supports_and_matrices):
+        action_sslbls = tuple(sorted(set(gen_sslbls).union(target_sslbls)))  # (union) - joint support of ops
         action_space = model_state_space.create_subspace(action_sslbls)
 
         gen_expanded = _embed(gen, gen_sslbls, action_space)  # expand gen to shared action_space
         U_expanded = _embed(clifford_superop_mx, target_sslbls, action_space)  # expand to shared action_space
-        conjugated_gen = _np.dot(U_expanded, _np.dot(gen_expanded, _np.conjugate(U_expanded.T)))  # sparse math?
+        if _sps.issparse(gen_expanded):
+            conjugated_gen = U_expanded.dot(gen_expanded.dot(U_expanded.transpose().conjugate()))  # sparse matrices
+        else:
+            conjugated_gen = _np.dot(U_expanded, _np.dot(gen_expanded, _np.conjugate(U_expanded.T)))
         gauge_action_deriv = gen_expanded - conjugated_gen  # (on action_space)
 
         action_row_basis = elemgen_row_basis.create_subbasis(action_sslbls)  # spans all *possible* error generators - a full basis for gauge_action_deriv
@@ -54,12 +69,18 @@ def first_order_gauge_action_matrix(clifford_superop_mx, target_sslbls, model_st
 
         # Note: could avoid this projection and conjugation math above if we knew gen was Pauli action and U was clifford (TODO!)
         for i, row_label, (gen2_sslbls, gen2) in zip(global_row_indices, action_row_labels,
-                                                     action_row_basis.elemgen_supports_and_matrices()):
+                                                     action_row_basis.elemgen_supports_and_matrices):
             #if not is_subset(gen2_sslbls, space):
             #    continue  # no overlap/component when gen2 is nontrivial (and assumed orthogonal to identity) on a factor space where gauge_action_deriv is zero
 
             gen2_expanded = _embed(gen2, gen2_sslbls, action_space)  # embed gen2 into action_space
-            val = _np.vdot(gen2_expanded.flat, gauge_action_deriv.flat)
+            if _sps.issparse(gen2_expanded):
+                flat_gen2_expanded_conj = gen2_expanded.reshape((1, _np.product(gen2_expanded.shape))).conjugate()
+                flat_gauge_action_deriv = gauge_action_deriv.reshape((_np.product(gauge_action_deriv.shape), 1))
+                val = flat_gen2_expanded_conj.dot(flat_gauge_action_deriv)[0, 0]
+            else:
+                val = _np.vdot(gen2_expanded.flat, gauge_action_deriv.flat)
+
             assert(abs(val.imag) < TOL)  # all values should be real, I think...
             if abs(val) > TOL:
                 if i not in nonzero_rows:
@@ -70,15 +91,20 @@ def first_order_gauge_action_matrix(clifford_superop_mx, target_sslbls, model_st
         #TODO HERE: check that decomposition into components adds to entire gauge_action_deriv (checks "completeness" of row basis
 
     #return action_mx
-    
+
     #Remove all all-zero rows and cull these elements out of the row_basis.  Actually,
     # just construct a new matrix and basis
     nonzero_row_indices = list(sorted(nonzero_rows))
     labels = [nonzero_row_labels[i] for i in nonzero_row_indices]
-    culled_action_mx = _sps.lil_matrix((len(nonzero_rows), elemgen_gauge_basis.size), 'd')
+
+    data = []; col_indices = []; rowptr = [0]  # build up a CSR matrix manually from nonzero rows
     for ii, i in enumerate(nonzero_row_indices):
-        culled_action_mx[ii, :] = action_mx[i, :]
-    updated_row_basis = ExplicitElementaryErrorgenBasis(elemgen_row_basis.state_space, labels)
+        col_indices.extend(action_mx.rows[i])
+        data.extend(action_mx.data[i])
+        rowptr.append(len(data))
+    culled_action_mx = _sps.csr_matrix((data, col_indices, rowptr),
+                                       shape=(len(nonzero_rows), len(elemgen_gauge_basis)), dtype=action_mx.dtype)
+    updated_row_basis = _ExplicitElementaryErrorgenBasis(elemgen_row_basis.state_space, labels)
 
     return culled_action_mx, updated_row_basis
 
@@ -177,8 +203,17 @@ def construct_gauge_space_for_model(primitive_op_labels, gauge_action_matrices,
     return allop_ga_mx, ga_by_op, elgen_lbls_by_op, allowed_gauge_linear_combos
 
 
+def _create_op_errgen_indices_dict(primitive_op_labels, errorgen_coefficient_labels):
+    op_errgen_indices = {}; off = 0  # tells us which indices of errgen-set space map to which ops
+    for op_label in primitive_op_labels:
+        num_coeffs = len(errorgen_coefficient_labels[op_label])
+        op_errgen_indices[op_label] = slice(off, off + num_coeffs)
+        off += num_coeffs
+    return op_errgen_indices
+
+
 def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
-                              errorgen_coefficient_labels, gauge_elemgen_labels,
+                              errorgen_coefficient_labels, op_errgen_indices, gauge_space,
                               op_label_abbrevs=None, dependent_fogi_action='drop', norm_order=None):
     """ TODO: docstring """
     assert(dependent_fogi_action in ('drop', 'mark'))
@@ -194,26 +229,60 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
     #Get lists of the present (existing within the model) labels for each operation
     if op_label_abbrevs is None: op_label_abbrevs = {}
 
-    op_errgen_indices = {}; off = 0  # tells us which indices of errgen-set space map to which ops
-    for op_label in primitive_op_labels:
-        num_coeffs = len(errorgen_coefficient_labels[op_label])
-        op_errgen_indices[op_label] = slice(off, off + num_coeffs)
-        off += num_coeffs
-    num_elem_errgens = off
+    if op_errgen_indices is None:
+        op_errgen_indices = _create_op_errgen_indices_dict(primitive_op_labels, errorgen_coefficient_labels)
+    num_elem_errgens = sum([len(labels) for labels in errorgen_coefficient_labels.values()])
 
     #Step 1: construct FOGI quantities and reference frame for each op
     ccomms = {}
-    fogi_opsets = []
-    fogi_dirs = _np.zeros((num_elem_errgens, 0), complex)  # columns = dual vectors ("directions") in error-gen space
-    fogi_rs = _np.zeros(0, 'd')
-    fogi_names = []
-    fogi_abbrev_names = []
-    fogi_gaugespace_dirs = []  # columns
-    dependent_vec_indices = []
+
+    fogi_dirs = _sps.csc_matrix((num_elem_errgens, 0), dtype=complex)  # columns = dual vectors ("directions") in error-gen space
+    fogi_meta = []  # elements correspond to matrix columns
+
+    dep_fogi_dirs = _sps.csc_matrix((num_elem_errgens, 0), dtype=complex)  # dependent columns we still want to track
+    dep_fogi_meta = []  # elements correspond to matrix columns
+
+    def add_relational_fogi_dirs(dirs_to_add, gauge_vecs, gauge_dirs, initial_dirs, metadata,
+                                 existing_opset, new_op_label, new_opset):
+        """ Note: gauge_vecs and gauge_dirs are the same up to a normalization - maybe combine? """
+        vecs_to_add, nrms = _mt.normalize_columns(dirs_to_add, ord=norm_order, return_norms=True)  # f_hat_vec = f / nrm
+        vector_L2_norm2s = _mt.column_norms(vecs_to_add)**2  # L2 norm squared
+        vector_L2_norm2s[vector_L2_norm2s == 0.0] = 1.0  # avoid division of zero-column by zero
+        dirs_to_add = _mt.scale_columns(vecs_to_add, 1 / vector_L2_norm2s)
+        # above gives us *dir*-norm we want  # DUAL NORM
+        # f_hat = f_hat_vec / L2^2 = f / (nrm * L2^2) = (1 / (nrm * L2^2)) * f
+
+        resulting_dirs = _sps.hstack((initial_dirs, dirs_to_add))  # errgen-space NORMALIZED
+
+        full_gauge_vecs = _np.dot(gauge_space.vectors, gauge_vecs)  # in gauge_space's basis
+        gauge_names = elem_vec_names(full_gauge_vecs, gauge_space.elemgen_basis.labels)
+        gauge_names_abbrev = elem_vec_names(full_gauge_vecs, gauge_space.elemgen_basis.labels, include_type=False)
+        names = ["ga(%s)_%s - ga(%s)_%s" % (
+            iname, "|".join([op_label_abbrevs.get(l, str(l)) for l in existing_opset]),
+            iname, op_label_abbrevs.get(new_op_label, str(new_op_label))) for iname in gauge_names]
+        abbrev_names = ["ga(%s)" % iname for iname in gauge_names_abbrev]
+
+        for j, (name, name_abbrev, nrm, L2norm2) in enumerate(zip(names, abbrev_names, nrms, vector_L2_norm2s)):
+            metadata.append({'name': name, 'abbrev': name_abbrev, 'r': 1 / (nrm * L2norm2),
+                              'gaugespace_dir': gauge_dirs[:, j], 'opset': new_opset})
+            # Note intersection_space is a subset of the *gauge-space*, and so its basis,
+            # placed under gaugespace_dirs keys, is for gauge-space, not errorgen-space.
+
+        return resulting_dirs
+
+
+    #fogi_gaugespace_dirs = []  # columns
+    #fogi_opsets = []    
+    #fogi_rs = _np.zeros(0, 'd')
+    #fogi_names = []
+    #fogi_abbrev_names = []
+    #
+    #dependent_vec_indices = []
 
     for op_label in primitive_op_labels:
         #print("##", op_label)
         ga = gauge_action_matrices[op_label]
+        # currently `ga` is a dense matrix, if SPARSE need to update nullspace and pinv math below
 
         #Get commutant and communtant-complement spaces
         commutant = _mt.nice_nullspace(ga)  # columns = *gauge* elem gen directions
@@ -221,7 +290,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
 
         # Note: local/new_fogi_dirs are orthogonal but not necessarily normalized (so need to
         #  normalize to get inverse, but *don't* need pseudo-inverse).
-        local_fogi_dirs = _mt.nice_nullspace(ga.T)  # "conjugate space" to gauge action
+        local_fogi_dirs = _mt.nice_nullspace(ga.T)  # "conjugate space" to gauge action SPARSE?
 
         #NORMALIZE FOGI DIRS to have norm 1 - based on mapping between unit-variance
         # gaussian distribution of target-gateset perturbations in the usual errorgen-set-space
@@ -233,23 +302,31 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
 
         assert(_mt.columns_are_orthogonal(local_fogi_dirs))  # Not for Cnot in 2Q_XYICNOT (check?)
 
-        new_fogi_dirs = _np.zeros((fogi_dirs.shape[0], local_fogi_dirs.shape[1]), local_fogi_dirs.dtype)
+        new_fogi_dirs = _sps.lil_matrix((num_elem_errgens, local_fogi_dirs.shape[1]), dtype=local_fogi_dirs.dtype)
         new_fogi_dirs[op_errgen_indices[op_label], :] = local_fogi_dirs  # "juice" this op
-        fogi_dirs = _np.concatenate((fogi_dirs, new_fogi_dirs), axis=1)
-        fogi_rs = _np.concatenate((fogi_rs, _np.zeros(new_fogi_dirs.shape[1], 'd')))
-        assert(_mt.columns_are_orthogonal(fogi_dirs))
+        fogi_dirs = _sps.hstack((fogi_dirs, new_fogi_dirs.tocsc()))
 
-        fogi_gaugespace_dirs.extend([None] * new_fogi_dirs.shape[1])  # local qtys don't have corresp. gauge dirs
-        fogi_opsets.extend([(op_label,)] * new_fogi_dirs.shape[1])
+        #assert(_mt.columns_are_orthogonal(fogi_dirs))  # sparse version?
+
+        #REMOVE fogi_rs = _np.concatenate((fogi_rs, _np.zeros(local_fogi_dirs.shape[1], 'd')))
+        #REMOVE fogi_gaugespace_dirs.extend([None] * new_fogi_dirs.shape[1])  # local qtys don't have corresp. gauge dirs
+        #REMOVE fogi_opsets.extend([(op_label,)] * new_fogi_dirs.shape[1])
 
         #LABELS
         op_elemgen_labels = errorgen_coefficient_labels[op_label]
         errgen_names = elem_vec_names(local_fogi_vecs, op_elemgen_labels)
         errgen_names_abbrev = elem_vec_names(local_fogi_vecs, op_elemgen_labels, include_type=False)
-        fogi_names.extend(["%s_%s" % ((("(%s)" % egname) if (' ' in egname) else egname),
-                                      op_label_abbrevs.get(op_label, str(op_label)))
-                           for egname in errgen_names])
-        fogi_abbrev_names.extend(errgen_names_abbrev)
+
+        for egname, egname_abbrev in zip(errgen_names, errgen_names_abbrev):
+            egname_with_op = "%s_%s" % ((("(%s)" % egname) if (' ' in egname) else egname),
+                                        op_label_abbrevs.get(op_label, str(op_label)))
+            fogi_meta.append({'name': egname_with_op, 'abbrev': egname_abbrev, 'r': 0,
+                              'gaugespace_dir': None, 'opset': (op_label,)})
+
+        #REMOVE fogi_names.extend(["%s_%s" % ((("(%s)" % egname) if (' ' in egname) else egname),
+        #REMOVE                               op_label_abbrevs.get(op_label, str(op_label)))
+        #REMOVE                    for egname in errgen_names])
+        #REMOVE fogi_abbrev_names.extend(errgen_names_abbrev)
 
         complement = _mt.nice_nullspace(commutant.T)  # complement of commutant - where op is faithful rep
         assert(_mt.columns_are_orthogonal(complement))
@@ -262,11 +339,11 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
 
     smaller_sets = [(op_label,) for op_label in primitive_op_labels]
     max_size = len(primitive_op_labels)
-    num_indep_fogi_dirs = fogi_dirs.shape[1]
+    #REMOVE num_indep_fogi_dirs = fogi_dirs.shape[1]
     for set_size in range(1, max_size):
         larger_sets = []
-        num_indep_vecs_from_smaller_sets = num_indep_fogi_dirs
-        num_vecs_from_smaller_sets = fogi_dirs.shape[1]
+        num_indep_vecs_from_smaller_sets = fogi_dirs.shape[1]
+        #REMOVE num_vecs_from_smaller_sets = fogi_dirs.shape[1]
         for op_label in primitive_op_labels:
             for existing_set in smaller_sets:
                 if op_label in existing_set: continue
@@ -426,99 +503,43 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                         #    import bpdb; bpdb.set_trace()
                         #    print("prob")
 
-                        new_fogi_dirs = _np.zeros((fogi_dirs.shape[0], local_fogi_dirs.shape[1]),
-                                                  local_fogi_dirs.dtype); off = 0
+                        new_fogi_dirs = _sps.lil_matrix((num_elem_errgens, local_fogi_dirs.shape[1]),
+                                                        dtype=local_fogi_dirs.dtype); off = 0
                         for ol in existing_set + (op_label,):  # NOT new_set here b/c concat order below
                             n = len(errorgen_coefficient_labels[ol])
                             new_fogi_dirs[op_errgen_indices[ol], :] = local_fogi_dirs[off:off + n, :]; off += n
+                        new_fogi_dirs = new_fogi_dirs.tocsc()
 
-                        indep_cols = _mt.independent_columns(_np.concatenate((fogi_dirs, new_fogi_dirs), axis=1),
-                                                             start_col=fogi_dirs.shape[1],
-                                                             start_independent=num_indep_fogi_dirs)
-                        rel_indep_cols = [c - fogi_dirs.shape[1] for c in indep_cols]
+                        # figure out which directions are independent
+                        indep_cols = _mt.independent_columns(new_fogi_dirs, fogi_dirs)
+
                         if dependent_fogi_action == "drop":
-                            rel_cols_to_add = rel_indep_cols
-                            rel_cols_to_mark = []
+                            dep_cols_to_add = []
                         elif dependent_fogi_action == "mark":
+                            #Still add, as dependent fogi quantities, those that are independent of
+                            # all the smaller-size op sets but dependent only on other sets of the current size.
                             smallset_indep_cols = _mt.independent_columns(
-                                _np.concatenate((fogi_dirs[:, 0:num_vecs_from_smaller_sets], new_fogi_dirs), axis=1),
-                                start_col=num_vecs_from_smaller_sets,
-                                start_independent=num_indep_vecs_from_smaller_sets)
-                            rel_indep_cols_set = set(rel_indep_cols)  # just for lookup speed
-                            rel_cols_to_add = [c - num_vecs_from_smaller_sets for c in smallset_indep_cols]
-                            rel_cols_to_mark = [c for c in rel_cols_to_add if c not in rel_indep_cols_set]
+                                new_fogi_dirs, fogi_dirs[:, 0:num_indep_vecs_from_smaller_sets])
+                            indep_cols_set = set(indep_cols)  # just for faster lookup
+                            dep_cols_to_add = [i for i in smallset_indep_cols if i not in indep_cols_set]
+                        else:
+                            raise ValueError("Invalid `dependent_fogi_action` value: %s" % str(dependent_fogi_action))
 
-                        dependent_vec_indices.extend([c + fogi_dirs.shape[1] for c in rel_cols_to_mark])
-                        num_indep_fogi_dirs += len(indep_cols)  # the total number of independent columns
+                        # add new_fogi_dirs[:, indep_cols] to fogi_dirs w/meta data
+                        fogi_dirs = add_relational_fogi_dirs(new_fogi_dirs[:, indep_cols],
+                                                             _np.take(int_vecs, indep_cols, axis=1),
+                                                             _np.take(intersection_space, indep_cols, axis=1),
+                                                             fogi_dirs, fogi_meta, existing_set, op_label, new_set)
 
-                        vecs_to_add, nrms = _mt.normalize_columns(new_fogi_dirs[:, rel_cols_to_add], ord=norm_order,
-                                                                  return_norms=True)  # f_hat_vec = f / nrm
-                        vector_L2_norm2s = [_np.linalg.norm(vecs_to_add[:, j])**2 for j in range(vecs_to_add.shape[1])]
-                        dirs_to_add = vecs_to_add / _np.array(vector_L2_norm2s)[None, :]  # gives us *dir*-norm we want  # DUAL NORM
-                        # f_hat = f_hat_vec / L2^2 = f / (nrm * L2^2) = (1 / (nrm * L2^2)) * f
-
-                        fogi_dirs = _np.concatenate((fogi_dirs, dirs_to_add), axis=1)  # errgen-space NORMALIZED
-                        fogi_rs = _np.concatenate((fogi_rs, 1 / (nrms * _np.array(vector_L2_norm2s))))
-
-                        fogi_opsets.extend([new_set] * dirs_to_add.shape[1])
+                        # add new_fogi_dirs[:, dep_cols_to_add] to dep_fogi_dirs w/meta data
+                        dep_fogi_dirs = add_relational_fogi_dirs(new_fogi_dirs[:, dep_cols_to_add],
+                                                                 _np.take(int_vecs, dep_cols_to_add, axis=1),
+                                                                 _np.take(intersection_space, dep_cols_to_add, axis=1),
+                                                                 dep_fogi_dirs, dep_fogi_meta, existing_set,
+                                                                 op_label, new_set)
 
                         #if dependent_fogi_action == "drop":  # we could construct these, but would make fogi qtys messy
                         #    assert(_mt.columns_are_orthogonal(fogi_dirs))
-
-                        #OLD -REMOVE
-                        #indep_cols = []  # debug = []
-                        #if dependent_fogi_action == "drop":
-                        #    for j in range(new_fogi_dirs.shape[1]):
-                        #        test = _np.concatenate((fogi_dirs, new_fogi_dirs[:, j:j + 1]), axis=1)
-                        #        if _np.linalg.matrix_rank(test, tol=1e-7) == num_indep_fogi_dirs + 1:
-                        #            #assert(_mt.columns_are_orthogonal(test))  # there's no reason this needs to be true
-                        #            indep_cols.append(j)
-                        #            fogi_dirs = test
-                        #            num_indep_fogi_dirs += 1
-                        #            #debug.append("IND")
-                        #        #else:
-                        #        #    debug.append('-')
-                        #elif dependent_fogi_action == "mark":
-                        #    for j in range(new_fogi_dirs.shape[1]):
-                        #        test = _np.concatenate((fogi_dirs[:, 0:num_vecs_from_smaller_sets],
-                        #                                new_fogi_dirs[:, j:j + 1]), axis=1)
-                        #        test2 = _np.concatenate((fogi_dirs, new_fogi_dirs[:, j:j + 1]), axis=1)
-                        #        #U, s, Vh = _np.linalg.svd(test2)
-                        #        if _np.linalg.matrix_rank(test2, tol=1e-7) == num_indep_fogi_dirs + 1:
-                        #            # new vec is indep w/everything
-                        #            indep_cols.append(j)
-                        #            fogi_dirs = test2
-                        #            num_indep_fogi_dirs += 1
-                        #            #debug.append("IND")
-                        #        elif _np.linalg.matrix_rank(test, tol=1e-7) == num_indep_vecs_from_smaller_sets + 1:
-                        #            # new vec is indep w/fogi vecs from smaller sets, so dependency must just be
-                        #            # among other vecs for this same size.  Which vecs we keep is arbitrary here,
-                        #            # so keep this vec and "mark" it as a linearly dependent vec.
-                        #            indep_cols.append(j)  # keep this vec
-                        #            fogi_dirs = test2
-                        #            dependent_vec_indices.append(fogi_dirs.shape[1] - 1)  # but mark it
-                        #            #debug.append("DEP")
-                        #        #else:
-                        #        #    debug.append('-')
-                        #        # else new vec is dependent on *smaller* size fogi vecs - omit it then
-                        #print("DEBUG: ",debug)  # TODO: REMOVE this and 'debug' uses above
-
-                        #intersection_space_to_add = _np.take(intersection_space, rel_cols_to_add, axis=1)
-                        #intersection_space_to_add = _np.dot(gauge_linear_combos, indep_intersection_space) \
-                        #    if (gauge_linear_combos is not None) else intersection_space_to_add
-
-                        int_vecs_to_add = _np.take(int_vecs, rel_cols_to_add, axis=1)  # make labels from *vectors*
-                        intersection_names = elem_vec_names(int_vecs_to_add, gauge_elemgen_labels)
-                        intersection_names_abbrev = elem_vec_names(int_vecs_to_add, gauge_elemgen_labels,
-                                                                   include_type=False)
-                        fogi_names.extend(["ga(%s)_%s - ga(%s)_%s" % (
-                            iname, "|".join([op_label_abbrevs.get(l, str(l)) for l in existing_set]),
-                            iname, op_label_abbrevs.get(op_label, str(op_label))) for iname in intersection_names])
-                        fogi_abbrev_names.extend(["ga(%s)" % iname for iname in intersection_names_abbrev])
-
-                        fogi_gaugespace_dirs.extend([intersection_space[:, j] for j in rel_cols_to_add])
-                        # Note intersection_space is a subset of the *gauge-space*, and so its basis,
-                        # placed in fogi_gaugespace_dirs, is for gauge-space, not errorgen-space.
 
                         #print("Fogi vecs:\n"); _mt.print_mx(local_fogi_dirs)
                         #print("Ham Intersection names: ", intersection_names)
@@ -535,8 +556,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
     #print("Names = \n", '\n'.join(["%d: %s" % (i, v) for i, v in enumerate(fogi_names)]))
     #print("Rank = ", _np.linalg.matrix_rank(fogi_dirs))
 
-    return (fogi_opsets, fogi_dirs, fogi_rs, fogi_gaugespace_dirs, dependent_vec_indices, op_errgen_indices,
-            fogi_names, fogi_abbrev_names)
+    return (fogi_dirs, fogi_meta, dep_fogi_dirs, dep_fogi_meta)
 
 
 #def create_fogi_dir_labels(fogi_opsets, fogi_dirs, fogi_rs, fogi_gaugespace_dirs, errorgen_coefficients):
@@ -858,11 +878,14 @@ def compute_maximum_relational_errors(primitive_op_labels, errorgen_coefficients
 def op_elem_vec_name(vec, elem_op_labels, op_label_abbrevs):
     name = ""
     for i, (op_lbl, elem_lbl) in enumerate(elem_op_labels):
-        val = vec[i]
+        sslbls, local_lbl = elem_lbl
+        sslbls_str = ''.join(map(str, sslbls))
+        val = vec[i][0,0] if _sps.issparse(vec[i]) else vec[i]
         if abs(val) < 1e-6: continue
         sign = ' + ' if val > 0 else ' - '
         abs_val_str = '' if _np.isclose(abs(val), 1.0) else ("%g " % abs(val))  # was %.1g
-        name += sign + abs_val_str + "%s(%s)_%s" % (elem_lbl[0], ','.join(elem_lbl[1:]),
+        basis_str = ','.join(["%s:%s" % (bel, sslbls_str) for bel in local_lbl[1:]])
+        name += sign + abs_val_str + "%s(%s)_%s" % (local_lbl[0], basis_str,
                                                     op_label_abbrevs.get(op_lbl, str(op_lbl)))
     if name.startswith(' + '): name = name[3:]  # strip leading +
     if name.startswith(' - '): name = '-' + name[3:]  # strip leading spaces
@@ -879,14 +902,17 @@ def elem_vec_name(vec, elem_labels, include_type=True):
     """ TODO: docstring """
     name = ""
     for i, elem_lbl in enumerate(elem_labels):
+        sslbls, local_lbl = elem_lbl
+        sslbls_str = ''.join(map(str, sslbls))
         val = vec[i]
         if abs(val) < 1e-6: continue
         sign = ' + ' if val > 0 else ' - '
         abs_val_str = '' if _np.isclose(abs(val), 1.0) else ("%g " % abs(val))  # was %.1g
+        basis_str = ','.join(["%s:%s" % (bel, sslbls_str) for bel in local_lbl[1:]])
         if include_type:
-            name += sign + abs_val_str + "%s(%s)" % (elem_lbl[0], ','.join(elem_lbl[1:]))
+            name += sign + abs_val_str + "%s(%s)" % (local_lbl[0], basis_str)
         else:
-            name += sign + abs_val_str + "%s" % (','.join(elem_lbl[1:]))  # 'H' or 'S'
+            name += sign + abs_val_str + "%s" % basis_str  # 'H' or 'S'
 
     if name.startswith(' + '): name = name[3:]  # strip leading +
     if name.startswith(' - '): name = '-' + name[3:]  # strip leading spaces

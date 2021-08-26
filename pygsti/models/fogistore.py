@@ -11,10 +11,15 @@ Defines the FirstOrderGaugeInvariantStore class and supporting functionality.
 #***************************************************************************************************
 
 import numpy as _np
+import scipy.sparse as _sps
 import copy as _copy
 import warnings as _warnings
-from ..tools import matrixtools as _mt
-from ..tools import fogitools as _fogit
+import itertools as _itertools
+import collections as _collections
+from pygsti.baseobjs import Basis as _Basis
+from pygsti.tools import matrixtools as _mt
+from pygsti.tools import optools as _ot
+from pygsti.tools import fogitools as _fogit
 
 
 #BEGIN NEW CODE - just support code; could put this somewhere else:
@@ -30,13 +35,18 @@ class ElementaryErrorgenBasis(object):
         """ TODO: docstring """
         return [self.label_index(lbl) for lbl in labels]
 
+    def __len__(self):
+        """ Number of elementary errorgen elements in this basis """
+        return len(self.labels)
+
 
 class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
 
-    def __init__(self, state_space, labels):
+    def __init__(self, state_space, labels, basis1q=None):
         # TODO: docstring - labels must be of form (sslbls, elementary_errorgen_lbl)
         self._labels = tuple(labels) if not isinstance(labels, tuple) else labels
         self._label_indices = _collections.OrderedDict([(lbl, i) for i, lbl in enumerate(self._labels)])
+        self.basis_1q = basis1q if (basis1q is not None) else _Basis.cast('pp', 4)
 
         self.state_space = state_space
         assert(self.state_space.is_entirely_qubits()), "FOGI only works for models containing just qubits (so far)"
@@ -52,7 +62,8 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
     def elemgen_supports_and_matrices(self):
         if self._cached_elements is None:
             self._cached_elements = tuple(
-                ((support, _ot.lindblad_error_generator(elemgen_label, self.basis_1q, normalize=True, sparse=False))
+                ((support, _ot.lindblad_error_generator(elemgen_label, self.basis_1q, normalize=True,
+                                                        sparse=False, tensorprod_basis=True))
                  for support, elemgen_label in self.labels))
         return self._cached_elements
 
@@ -61,11 +72,11 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
         TODO: docstring
         """
         return self._label_indices[label]
-    
-    @property
-    def sslbls(self):
-        """ The support of this errorgen space, e.g., the qubits where its elements may be nontrivial """
-        return self.sslbls
+
+    #@property
+    #def sslbls(self):
+    #    """ The support of this errorgen space, e.g., the qubits where its elements may be nontrivial """
+    #    return self.sslbls
 
     def create_subbasis(self, must_overlap_with_these_sslbls):
         """
@@ -83,7 +94,7 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
                                         if overlaps(lbl[0])])
 
         sub_state_space = self.state_space.create_subspace(sub_sslbls)
-        return ExplicitElementaryErrorgenBasis(sub_state_space, sub_labels)
+        return ExplicitElementaryErrorgenBasis(sub_state_space, sub_labels, self.basis_1q)
 
     def union(self, other_basis):
         present_labels = self._label_indices.copy()  # an OrderedDict, indices don't matter here
@@ -96,7 +107,7 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
                     present_labels[other_lbl] = True
 
         union_state_space = self.state_space.union(other_basis.state_space)
-        return ExplicitElementaryErrorgenBasis(self.state_space, tuple(present_labels.keys()))
+        return ExplicitElementaryErrorgenBasis(union_state_space, tuple(present_labels.keys()), self.basis_1q)
 
     def intersection(self, other_basis):
         if isinstance(other_basis, ExplicitElementaryErrorgenBasis):
@@ -106,7 +117,17 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
             common_labels = tuple((lbl for lbl in self.labels if lbl in other_labels))
 
         intersection_state_space = self.state_space.intersection(other_basis.state_space)
-        return ExplicitElementaryErrorgenBasis(intersection_state_space, common_labels)
+        return ExplicitElementaryErrorgenBasis(intersection_state_space, common_labels, self.basis_1q)
+
+    def difference(self, other_basis):
+        if isinstance(other_basis, ExplicitElementaryErrorgenBasis):
+            remaining_labels = tuple((lbl for lbl in self.labels if lbl not in other_basis._label_indices))
+        else:
+            other_labels = set(other_basis.labels)
+            remaining_labels = tuple((lbl for lbl in self.labels if lbl not in other_labels))
+
+        remaining_state_space = self.state_space  # TODO: see if we can reduce this space based on remaining_labels?
+        return ExplicitElementaryErrorgenBasis(remaining_state_space, remaining_labels, self.basis_1q)
 
 
 class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
@@ -118,6 +139,11 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
     @classmethod
     def _create_diag_labels_for_support(cls, support, type_str, nontrivial_bels):
         weight = len(support)
+
+        def _basis_el_strs(possible_bels, wt):
+            for els in _itertools.product(*([possible_bels] * wt)):
+                yield ''.join(els)
+
         return [(support, (type_str, bel)) for bel in _basis_el_strs(nontrivial_bels, weight)]
 
     @classmethod
@@ -142,13 +168,13 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
             return ret
 
     @classmethod
-    def _create_ordered_labels(cls, type_str, basis_1q, state_space, mode='diag',
+    def _create_ordered_labels(cls, type_str, basis_1q, state_space, mode='diagonal',
                                max_weight=None, must_overlap_with_these_sslbls=None,
                                include_offsets=False):
         offsets = {}
         labels = []
         #labels_by_support = _collections.OrderedDict()
-        all_bels = basis_1q.labels[0:]
+        #all_bels = basis_1q.labels[0:]
         trivial_bel = [basis_1q.labels[0]]
         nontrivial_bels = basis_1q.labels[1:]  # assume first element is identity
 
@@ -158,12 +184,12 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
             max_weight = len(sslbls)
 
         # Let k be len(nontrivial_bels)
-        if mode == "diag":
+        if mode == "diagonal":
             # --> for each set of n qubit labels, there are k^n Hamiltonian terms with weight n
             for weight in range(1, max_weight + 1):
                 for support in _itertools.combinations(sslbls, weight):  # NOTE: combinations *MUST* be deterministic
                     if (must_overlap_with_these_sslbls is not None
-                       and len(must_overlap_with_these_sslbls.intersection(support)) == 0):
+                       and len(set(must_overlap_with_these_sslbls).intersection(support)) == 0):
                         continue
                     offsets[support] = len(labels)
                     labels.extend(cls._create_diag_labels_for_support(support, type_str, nontrivial_bels))
@@ -199,7 +225,7 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
         return (labels, offsets) if include_offsets else labels
 
     @classmethod
-    def _create_ordered_label_offsets(cls, type_str, basis_1q, state_space, mode='diag',
+    def _create_ordered_label_offsets(cls, type_str, basis_1q, state_space, mode='diagonal',
                                       max_weight=None, must_overlap_with_these_sslbls=None,
                                       return_total_support=False):
         """ same as _create_ordered_labels but doesn't actually create the labels - just counts them to get offsets. """
@@ -215,12 +241,12 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
             max_weight = len(sslbls)
 
         # Let k be len(nontrivial_bels)
-        if mode == "diag":
+        if mode == "diagonal":
             # --> for each set of n qubit labels, there are k^n Hamiltonian terms with weight n
             for weight in range(1, max_weight + 1):
                 for support in _itertools.combinations(sslbls, weight):  # NOTE: combinations *MUST* be deterministic
                     if (must_overlap_with_these_sslbls is not None
-                       and len(must_overlap_with_these_sslbls.intersection(support)) == 0):
+                       and len(set(must_overlap_with_these_sslbls).intersection(support)) == 0):
                         continue
                     offsets[support] = off
                     off += n1Q_nontrivial_bels**weight
@@ -269,19 +295,19 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
         assert(self.state_space.is_entirely_qubits()), "FOGI only works for models containing just qubits (so far)"
 
         self._h_offsets, hsup = self._create_ordered_label_offsets('H', self._basis_1q, self.state_space,
-                                                                   'diag', self._max_ham_weight,
+                                                                   'diagonal', self._max_ham_weight,
                                                                    self._must_overlap_with_these_sslbls,
                                                                    return_total_support=True)
         self._hs_border = self._h_offsets['END']
         self._s_offsets, ssup = self._create_ordered_label_offsets('S', self._basis_1q, self.state_space,
-                                                                   other_mode, self._other_ham_weight,
+                                                                   other_mode, self._max_other_weight,
                                                                    self._must_overlap_with_these_sslbls,
                                                                    return_total_support=True)
 
         #Note: state space can have additional labels that aren't in support
         # (this is, I think, only true when must_overlap_with_these_sslbls != None)
         sslbls = self.state_space.tensor_product_block_labels(0)  # all the model's state space labels
-        present_sslbls = hsup + ssup  # set union
+        present_sslbls = hsup.union(ssup)  # set union
         if set(sslbls) == present_sslbls:
             self.sslbls = sslbls  # the "support" of this space - the qubit labels
         elif present_sslbls.issubset(sslbls):
@@ -319,23 +345,28 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
         #                      (IXX,XXI) #   on right, loop over all possible choices of at least one, an at most m,
         #                      (IXX,XXX) #    nontrivial indices to place within the m nontrivial left indices (1 & 2 in this case)
 
+    def __len__(self):
+        """ Number of elementary errorgen elements in this basis """
+        return self._h_offsets['END'] + self._s_offsets['END']
+
     def to_explicit_basis(self):
-        return ExplicitElementaryErrorgenBasis(self.state_space, self.labels)        
+        return ExplicitElementaryErrorgenBasis(self.state_space, self.labels, self._basis_1q)
 
     @property
     def labels(self):
         hlabels = self._create_ordered_labels('H', self._basis_1q, self.state_space,
-                                              'diag', self._max_ham_weight,
+                                              'diagonal', self._max_ham_weight,
                                               self._must_overlap_with_these_sslbls)
         slabels = self._create_ordered_labels('S', self._basis_1q, self.state_space,
-                                              self._other_mode, self._other_ham_weight,
+                                              self._other_mode, self._max_other_weight,
                                               self._must_overlap_with_these_sslbls)
         return tuple(hlabels + slabels)
 
     @property
     def elemgen_supports_and_matrices(self):
         return tuple(((support,
-                       _ot.lindblad_error_generator(elemgen_label, self.basis_1q, normalize=True, sparse=False))
+                       _ot.lindblad_error_generator(elemgen_label, self._basis_1q, normalize=True,
+                                                    sparse=False, tensorprod_basis=True))
                       for support, elemgen_label in self.labels))
 
     def label_index(self, label):
@@ -346,12 +377,11 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
         type_str = elemgen_lbl[0]
         trivial_bel = self._basis_1q.labels[0]  # assumes first element is identity
         nontrivial_bels = self._basis_1q.labels[1:]
-        
-        if type_str == 'H' or (type_str == 'S' and self._other_mode == 'diag'):
+
+        if type_str == 'H' or (type_str == 'S' and self._other_mode == 'diagonal'):
             base = self._h_offsets[support] if (type_str == 'H') else (self._hs_border + self._s_offsets[support])
             indices = {lbl: i for i, lbl in enumerate(self._create_diag_labels_for_support(support, type_str,
                                                                                            nontrivial_bels))}
-            
         elif elemgen_lbl[0] == 'S':
             assert(self._other_mode == 'all'), "Invalid 'other' mode: %s" % str(self._other_mode)
             assert(len(trivial_bel) == 1)  # assumes this is a single character
@@ -365,11 +395,11 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
             raise ValueError("Invalid label type: %s" % str(elemgen_lbl[0]))
 
         return base + indices[label]
-    
-    @property
-    def sslbls(self):
-        """ The support of this errorgen space, e.g., the qubits where its elements may be nontrivial """
-        return self.sslbls
+
+    #@property
+    #def sslbls(self):
+    #    """ The support of this errorgen space, e.g., the qubits where its elements may be nontrivial """
+    #    return self.sslbls
 
     def create_subbasis(self, must_overlap_with_these_sslbls, retain_max_weights=True):
         """
@@ -396,6 +426,9 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
             return other_basis.intersection(self)
         else:
             return self.to_explicit_basis().intersection(other_basis)
+
+    def difference(self, other_basis):
+        return self.to_explicit_basis().difference(other_basis)
 
 
 #OLD - maybe not needed?
@@ -436,9 +469,9 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
 #                    yield ''.join(els)
 #
 #            labels = {}
-#            all_bels = self.basis_1q.labels[1:]  # assume first element is identity            
+#            all_bels = self.basis_1q.labels[1:]  # assume first element is identity
 #            nontrivial_bels = self.basis_1q.labels[1:]  # assume first element is identity
-#            
+#
 #            max_weight = self._max_ham_weight if (self._max_ham_weight is not None) else len(self.sslbls)
 #            for weight in range(1, max_weight + 1):
 #                for support in _itertools.combinations(self.sslbls, weight):
@@ -502,7 +535,7 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
 #        if self._cached_label_indices is None:
 #            self.labels  # triggers building of labels
 #        return self._cached_label_indices[label]
-#    
+#
 #    @property
 #    def sslbls(self):
 #        """ The support of this errorgen space, e.g., the qubits where its elements may be nontrivial """
@@ -520,7 +553,6 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
 #                                     self._must_overlap_with_these_sslbls)
 
 
-
 class ErrorgenSpace(object):
     """
     A vector space of error generators, spanned by some basis.
@@ -529,9 +561,11 @@ class ErrorgenSpace(object):
     within the space of all error generators.
     """
 
-    def __init__(self, items=None):
+    def __init__(self, vectors, basis):
+        self.vectors = vectors
+        self.elemgen_basis = basis
         #Question: have multiple bases or a single one?
-        self._vectors = [] if (items is None) else items  # list of (basis, vectors_mx) pairs
+        #self._vectors = [] if (items is None) else items  # list of (basis, vectors_mx) pairs
         # map sslbls => (vectors, basis) where basis.sslbls == sslbls
         # or basis => vectors if bases can hash well(?)
 
@@ -539,59 +573,51 @@ class ErrorgenSpace(object):
         """
         TODO: docstring
         """
+        #Note: currently we assume self.vectors is a *dense* numpy array, but this may/should be expanded to
+        # work with or solely utilize SPARSE matrices in the future.
+        dtype = self.vectors.dtype
+
         if free_on_unspecified_space:
-            pass
+            common_basis = self.elemgen_basis.union(other_space.elemgen_basis)
+            diff_self = common_basis.difference(self.elemgen_basis)
+            diff_other = common_basis.difference(other_space.elemgen_basis)
+            Vl, Vli, Wl, Wli = (self.vectors.shape[1], len(diff_self), other_space.vectors.shape[1], len(diff_other))
 
-        
+            #Fill in matrix to take nullspace of: [ V I | W I ] where V and W are self's and other_space's vectors
+            # in the common basis and I's stand for filling in the identity on rows corresponding to missing elements
+            # in each spaces basis, respectively.
+            i = 0  # column offset
+            VIWI = _np.zeros((len(common_basis), Vl + Vli + Wl + Wli), dtype)  # SPARSE in future?
+            VIWI[common_basis.label_indices(self.elemgen_basis.labels), 0:Vl] = self.vectors[:, :]; i += Vl
+            VIWI[common_basis.label_indices(diff_self.labels), i:i + Vli] = _np.identity(Vli, dtype); i += Vli
+            VIWI[common_basis.label_indices(other_space.elemgen_basis.labels), i:i + Wl] = other_space.vectors[:, :]
+            i += Wl
+            VIWI[common_basis.label_indices(diff_other.labels), i:i + Wli] = _np.identity(Wli, dtype)
+
+            ns = _mt.nullspace(VIWI)
+            intersection_vecs = _np.dot(VIWI[:, 0:(Vl + Vli)], ns[0:(Vl + Vli), :])  # on common_basis
+
         else:
-            # For each "W_i" (other-space blocks), find all the "V_i" (this-space blocks)
-            # that overlap with the W_i block
-            for other_basis, other_vecs in other_space._vectors:
-                # Step 1: get a common basis of relevant elements
-                nCols = 0
-                for my_basis, my_vecs in self._vectors:
-                    if len(intersection(my_basis, other_basis)) > 0:
-                        # add V_i to the list of relevant spaces
-                        relevant_Vs.append((my_basis, my_vecs))
-                        nCols += my_vecs.shape[1]
-                    
-                #Form a basis
-                common_basis = union_of_bases([other_basis] + [basis for basis, vs in relevant_Vs])
-                intersection_basis = intersection_of_bases([other_basis] + [union_of_bases([basis for basis, vs in relevant_Vs])])
+            common_basis = self.elemgen_basis.intersection(other_space.elemgen_basis)
+            Vl, Wl = (self.vectors.shape[1], other_space.vectors.shape[1])
 
-                # create matrix [V, -W], padded as needed:
-                nCols += other_vecs.shape[1]
-                M = _np.zeros((common_basis.dim, nCols), 'd')
-                offset = 0
-                for basis, vs in relevant_Vs:
-                    # place vs in M:
-                    rows = common_basis.indices_of(basis)
-                    M[rows, offset:offset+vs.shape[1]] = vs
-                    offset += vs.shape[1]
-                VWborder = offset
-                rows = common_basis.indices_of(other_basis)
-                M[rows, offset:offset+other_vecs.shape[1]] = -other_vecs
+            #Fill in matrix to take nullspace of: [ V | W ] restricted to rows corresponding to shared elementary
+            # error generators (if one space has a elemgen in its basis that the other doesn't, then any intersection
+            # vector cannot contain this elemgen).
+            VW = _np.zeros((len(common_basis), Vl + Wl), dtype)  # SPARSE in future?
+            VW[:, 0:Vl] = self.vectors[self.elemgen_basis.label_indices(common_basis.labels), :]
+            VW[:, Vl:] = other_space.vectors[other_space.elemgen_basis.label_indices(common_basis.labels), :]
 
-                # compute nullspace
-                nullsp = _mt.nullspace(M)
+            ns = _mt.nullspace(VW)
+            intersection_vecs = _np.dot(VW[:, 0:Vl], ns[0:Vl, :])  # on common_basis
 
-                # get intersection basis
-                intersection_vecs = _np.dot(M[:,0:VWborder], nullsp[0:VWborder,:])
-                rows = common_basis.indices_of(intersection_basis)
-                intersection_vecs = intersection_vecs[rows, :]
-
-            #HERE TODO - need to take union of intersection_vecs and basis for all W_i (I think?)
-            
-            return ErrorgenSpace((intersection_basis, intersection_vecs))
-                
+        return ErrorgenSpace(intersection_vecs, common_basis)
 
     def union(self, other_space):
         """
         TODO: docstring
         """
-
-        pass
-        
+        raise NotImplementedError("TODO in FUTURE")
 
 
 #class LowWeightErrorgenSpace(ErrorgenSpace):
@@ -613,7 +639,7 @@ class FirstOrderGaugeInvariantStore(object):
     Currently, it is only compatible with :class:`ExplicitOpModel` objects.
     """
 
-    def __init__(self, gauge_action_matrices_by_op, gauge_action_gauge_spaces, errorgen_coefficient_labels_by_op,
+    def __init__(self, gauge_action_matrices_by_op, gauge_action_gauge_spaces_by_op, errorgen_coefficient_labels_by_op,
                  op_label_abbrevs=None, reduce_to_model_space=True,
                  dependent_fogi_action='drop', norm_order=None):
         """
@@ -623,63 +649,136 @@ class FirstOrderGaugeInvariantStore(object):
         self.primitive_op_labels = tuple(gauge_action_matrices_by_op.keys())
 
         # Construct common gauge space by special way of intersecting the gauge spaces for all the ops
+        # Note: the gauge_space of each op is constructed (see `setup_fogi`) so that the gauge action is
+        #  zero on any elementary error generator not in the elementary-errorgen basis associated with
+        #  gauge_space (gauge_space is the span of linear combos of a elemgen basis that was chosen to
+        #  include all possible non-trivial (non-zero) gauge actions by the operator (gauge action is the
+        #  *difference* K - UKU^dag in the Lindblad mapping under gauge transform exp(K),  L -> L + K - UKU^dag)
         common_gauge_space = None
-        for op_label, gauge_space in gauge_action_gauge_spaces.items():
+        for op_label, gauge_space in gauge_action_gauge_spaces_by_op.items():
+            print("DEBUG gauge space of ", op_label, "has dim", gauge_space.vectors.shape[1])
             if common_gauge_space is None:
                 common_gauge_space = gauge_space
             else:
-                common_gauge_space = common_gauge_space.instersection(gauge_space,
-                                                                      free_on_unspecified_space=True)
+                common_gauge_space = common_gauge_space.intersection(gauge_space,
+                                                                     free_on_unspecified_space=True)
 
-        #HERE - need to updates gauge_action_per_op to use common gauge space
-        # OR change construction to build single sparse matrix and find linear combos at once like low-qubit case
-        #  -- maybe that method would work just as well?
-
-        self.elem_errorgen_labels_by_op = errorgen_coefficient_labels_by_op  # I think this is correct (?) -- maybe we want the row spaces?
-
-        #self.allop_gauge_action, self.gauge_action_for_op, self.elem_errorgen_labels_by_op, self.gauge_linear_combos = \
-        #    _fogit.construct_gauge_space_for_model(self.primitive_op_labels, gauge_action_matrices_by_op,
-        #                                           errorgen_coefficient_labels_by_op, elem_errorgen_labels,
-        #                                           reduce_to_model_space)
-
-        self.errgen_space_op_elem_labels = tuple([(op_label, elem_lbl) for op_label in self.primitive_op_labels
-                                                  for elem_lbl in self.elem_errorgen_labels_by_op[op_label]])
-
-        #if self.gauge_linear_combos is not None:
-        #    self._gauge_space_dim = self.gauge_linear_combos.shape[1]
-        #    self.gauge_elemgen_labels = [('G', str(i)) for i in range(self._gauge_space_dim)]
-        #else:
-        #    self._gauge_space_dim = len(elem_errorgen_labels)
-        #    self.gauge_elemgen_labels = elem_errorgen_labels
+        # column space of self.fogi_directions
+        print("DEBUG common gauge space of has dim", common_gauge_space.vectors.shape[1])
         self.gauge_space = common_gauge_space
 
-        (self.fogi_opsets, self.fogi_directions, self.fogi_r_factors, self.fogi_gaugespace_directions,
-         self.dependent_dir_indices, self.op_errorgen_indices, self.fogi_labels, self.abbrev_fogi_labels) = \
+        # row space of self.fogi_directions - "errgen-set space" lookups
+        # -- maybe make this into an "ErrgenSetSpace" object in FUTURE?
+        self.elem_errorgen_labels_by_op = errorgen_coefficient_labels_by_op
+
+        #HERE - need to build this out of row spaces?
+        self.op_errorgen_indices = _fogit._create_op_errgen_indices_dict(self.primitive_op_labels,
+                                                                         self.elem_errorgen_labels_by_op)
+        self.errorgen_space_op_elem_labels = tuple([(op_label, elem_lbl) for op_label in self.primitive_op_labels
+                                                    for elem_lbl in self.elem_errorgen_labels_by_op[op_label]])
+
+        num_elem_errgens = sum([len(labels) for labels in self.elem_errorgen_labels_by_op.values()])
+        allop_gauge_action = _sps.lil_matrix((num_elem_errgens, self.gauge_space.vectors.shape[1]), dtype=complex)
+
+        # Now update (restrict) each op's gauge_action to use common gauge space
+        # - need to write the vectors of the common (final) gauge space, w_i, as linear combos of
+        #   the op's original gauge space vectors, v_i.
+        # - ignore elemgens that are not in the op's orig_gauge_space's elemgen basis
+        # W = V * alpha, and we want to find alpha.  W and V are the vectors in the op's elemgen basis
+        #  (these could be seen as staring in the union of the common gauge's and op's elemgen
+        #   bases - which would just be the common gauge's elemgen basis since it's strictly larger -
+        #   restricted to the op's elemben basis)
+        for op_label, orig_gauge_space in gauge_action_gauge_spaces_by_op.items():
+            print("DEBUG: ", op_label, orig_gauge_space.vectors.shape, len(orig_gauge_space.elemgen_basis))
+            gauge_action = gauge_action_matrices_by_op[op_label]  # a sparse matrix
+
+            op_elemgen_lbls = orig_gauge_space.elemgen_basis.labels
+            W = common_gauge_space.vectors[common_gauge_space.elemgen_basis.label_indices(op_elemgen_lbls), :]
+            V = orig_gauge_space.vectors
+            alpha = _np.dot(_np.linalg.pinv(V), W)  # make SPARSE compatible in future if space vectors are sparse
+            alpha = _sps.csr_matrix(alpha)  # convert to dense -> CSR for now, as if we did sparse math above
+
+            # update gauge action to use common gauge space
+            sparse_gauge_action = gauge_action.dot(alpha)
+            allop_gauge_action[self.op_errorgen_indices[op_label], :] = sparse_gauge_action[:, :]
+            gauge_action_matrices_by_op[op_label] = sparse_gauge_action.toarray()  # make **DENSE** here
+            # Hopefully matrices aren't too larget after this reduction and dense matrices are ok,
+            # otherwise we need to change downstream nullspace and pseduoinverse operations to be sparse compatible.
+
+            #FUTURE: if update above creates zero-rows in gauge action matrix, maybe remove
+            # these rows from the row basis, i.e. self.elem_errorgen_labels_by_op[op_label]
+
+        self.gauge_action_for_op = gauge_action_matrices_by_op
+
+        (indep_fogi_directions, indep_fogi_metadata, dep_fogi_directions, dep_fogi_metadata) = \
             _fogit.construct_fogi_quantities(self.primitive_op_labels, self.gauge_action_for_op,
-                                             self.elem_errorgen_labels_by_op, self.gauge_space,
-                                             op_label_abbrevs, dependent_fogi_action, norm_order)
+                                             self.elem_errorgen_labels_by_op, self.op_errorgen_indices,
+                                             self.gauge_space, op_label_abbrevs, dependent_fogi_action, norm_order)
+        self.fogi_directions = _sps.hstack((indep_fogi_directions, dep_fogi_directions))
+        self.fogi_metadata = indep_fogi_metadata + dep_fogi_metadata  # list concatenation
+        self.dependent_dir_indices = _np.arange(len(indep_fogi_metadata), len(self.fogi_metadata))
+        for j, meta in enumerate(self.fogi_metadata):
+            meta['raw'] = _fogit.op_elem_vec_name(self.fogi_directions[:, j], self.errorgen_space_op_elem_labels,
+                                                  op_label_abbrevs if (op_label_abbrevs is not None) else {})
 
-        #HERE - haven't looked at updates below here -- now updating on construct_fogi_quantities
-        
-        self.norm_order = norm_order
+        assert(len(self.errorgen_space_op_elem_labels) == self.fogi_directions.shape[0])
 
-        self.errorgen_space_labels = [(op_label, elem_lbl) for op_label in self.primitive_op_labels
-                                      for elem_lbl in self.elem_errorgen_labels_by_op[op_label]]  # same as flattened self.errgen_space_op_elem_labels
-        assert(len(self.errorgen_space_labels) == self.fogi_directions.shape[0])
+        # Note: currently PUNT on doing below with sparse math, as a sparse nullspace routine is unavailable
 
+        #First order gauge *variant* directions (the complement of FOGI directions in errgen set space)
+        # (directions in errorgen space that correspond to gauge transformations -- to first order)
         #fogv_directions = _mt.nice_nullspace(self.fogi_directions.T)  # can be dependent!
-        fogv_directions = _mt.nullspace(self.fogi_directions.T)  # complement of fogi directions
-
-        pinv_allop_gauge_action = _np.linalg.pinv(self.allop_gauge_action, rcond=1e-7)  # errgen-set -> gauge-gen space
-        gauge_space_directions = _np.dot(pinv_allop_gauge_action, fogv_directions)  # in gauge-generator space
-        self.gauge_space_directions = gauge_space_directions
-
-        self.fogv_labels = ["%d gauge action" % i for i in range(gauge_space_directions.shape[1])]
+        self.fogv_directions = _mt.nullspace(self.fogi_directions.toarray().T)  # complement of fogi directions
+        self.fogv_directions = _sps.csc_matrix(self.fogv_directions)  # as though we used sparse math above
+        self.fogv_labels = ["%d gauge action" % i for i in range(self.fogv_directions.shape[1])]
         #self.fogv_labels = ["%s gauge action" % nm
         #                    for nm in _fogit.elem_vec_names(gauge_space_directions, gauge_elemgen_labels)]
-        self.fogv_directions = fogv_directions
-        # - directions in errorgen space that correspond to gauge transformations (to first order)
 
+        #Get gauge-space directions corresponding to the fogv directions
+        self.allop_gauge_action = allop_gauge_action
+        pinv_allop_gauge_action = _np.linalg.pinv(self.allop_gauge_action.toarray(), rcond=1e-7)  # errgen-set -> gauge-gen space
+        gauge_space_directions = _np.dot(pinv_allop_gauge_action, self.fogv_directions)  # in gauge-generator space
+        self.gauge_space_directions = gauge_space_directions
+
+        #Notes on error-gen vs gauge-gen space:
+        # self.fogi_directions and self.fogv_directions are dual vectors in error-generator space,
+        # i.e. with elements corresponding to the elementary error generators given by self.errorgen_space_op_elem_labels
+        # self.fogi_gaugespace_directions contains, when applicable, a gauge-space direction that
+        # correspondings to the FOGI quantity in self.fogi_directions.  Such a gauge-space direction
+        # exists for relational FOGI quantities, where the FOGI quantity is constructed by taking the
+        # *difference* of a gauge-space action (given by the gauge-space direction) on two operations
+        # (or sets of operations).
+
+        #Store auxiliary info for later use
+        self.norm_order = norm_order
+        self._dependent_fogi_action = dependent_fogi_action
+
+        #Assertions to check that everything looks good
+        if True:
+            fogi_dirs = self.fogi_directions.toarray()  # don't bother with sparse math yet
+            fogv_dirs = self.fogv_directions.toarray()
+
+            # We must reduce X_gauge_action to the "in-model gauge space" before testing whether the computed vecs are FOGI:
+            assert(_np.linalg.norm(_np.dot(self.allop_gauge_action.toarray().T, fogi_dirs)) < 1e-8)
+
+            #Check that pseudo-inverse was computed correctly (~ matrices are full rank)
+            # fogi_coeffs = dot(fogi_directions.T, elem_errorgen_vec), where elem_errorgen_vec is filled from model params,
+            #                 since fogi_directions columns are *dual* vectors in error-gen space.  Thus, to go in reverse:
+            # elem_errogen_vec = dot(pinv_fogi_dirs_T, fogi_coeffs), where dot(fogi_directions.T, pinv_fogi_dirs_T) == I
+            # (This will only be the case when fogi_vecs are linearly independent, so when dependent_indices == 'drop')
+
+            if dependent_fogi_action == 'drop':
+                #assert(_mt.columns_are_orthogonal(self.fogi_directions))  # not true unless we construct them so...
+                assert(_np.linalg.norm(_np.dot(fogi_dirs.T, _np.linalg.pinv(fogi_dirs.T))
+                                       - _np.identity(fogi_dirs.shape[1], 'd')) < 1e-6)
+
+            # A similar relationship should always hold for the gauge directions, except for these we never
+            #  keep linear dependencies
+            assert(_mt.columns_are_orthogonal(fogv_dirs))
+            assert(_np.linalg.norm(_np.dot(fogv_dirs.T, _np.linalg.pinv(fogv_dirs.T))
+                                   - _np.identity(fogv_dirs.shape[1], 'd')) < 1e-6)
+
+    def find_nice_fogiv_directions(self):
         # BELOW: an attempt to find nice FOGV directions - but we'd like all the vecs to be
         #  orthogonal and this seems to interfere with that, so we'll just leave the fogv dirs messy for now.
         #
@@ -687,7 +786,7 @@ class FirstOrderGaugeInvariantStore(object):
         # # then propagate this mixing to fogv_directions = dot(allop_gauge_action, mixed_gauge_space_directions)
         # mix = _np.linalg.pinv(gauge_space_directions)[:, 0:fogv_directions.shape[1]]  # use "full-rank" part of pinv
         # mixed_gauge_space_dirs = _np.dot(gauge_space_directions, mix)
-        # 
+        #
         # #TODO - better mix matrix?
         # #print("gauge_space_directions shape = ",gauge_space_directions.shape)
         # #print("mixed_gauge_space_dirs = ");  _mt.print_mx(gauge_space_directions, width=6, prec=2)
@@ -703,7 +802,7 @@ class FirstOrderGaugeInvariantStore(object):
         # #full_mix = _np.dot(Vh.T, _np.dot(_np.diag(inv_s), U.T))  # _np.linalg.pinv(gauge_space_directions)
         # #full_mixed_gauge_space_dirs = _np.dot(gauge_space_directions, full_mix)
         # #print("full_mixed_gauge_space_dirs = ");  _mt.print_mx(full_mixed_gauge_space_dirs, width=6, prec=2)
-        # 
+        #
         # self.fogv_labels = ["%s gauge action" % nm
         #                     for nm in _fogit.elem_vec_names(mixed_gauge_space_dirs, gauge_elemgen_labels)]
         # self.fogv_directions = _np.dot(self.allop_gauge_action, mixed_gauge_space_dirs)
@@ -713,45 +812,12 @@ class FirstOrderGaugeInvariantStore(object):
         #pinv_allop_gauge_action = _np.linalg.pinv(self.allop_gauge_action, rcond=1e-7)  # maps error -> gauge-gen space
         #gauge_space_directions = _np.dot(pinv_allop_gauge_action, self.fogv_directions)  # in gauge-generator space
         #assert(_np.linalg.matrix_rank(gauge_space_directions) <= self._gauge_space_dim)  # should be nearly full rank
-
-
-        #Notes on error-gen vs gauge-gen space:
-        # self.fogi_directions and self.fogv_directions are dual vectors in error-generator space,
-        # i.e. with elements corresponding to the elementary error generators given by self.errorgen_space_labels.
-        # self.fogi_gaugespace_directions contains, when applicable, a gauge-space direction that
-        # correspondings to the FOGI quantity in self.fogi_directions.  Such a gauge-space direction
-        # exists for relational FOGI quantities, where the FOGI quantity is constructed by taking the
-        # *difference* of a gauge-space action (given by the gauge-space direction) on two operations
-        # (or sets of operations).
-
-        self.raw_fogi_labels = _fogit.op_elem_vec_names(self.fogi_directions,
-                                                        self.errorgen_space_labels, op_label_abbrevs)
-
-        # We must reduce X_gauge_action to the "in-model gauge space" before testing whether the computed vecs are FOGI:
-        assert(_np.linalg.norm(_np.dot(self.allop_gauge_action.T, self.fogi_directions)) < 1e-8)
-
-        #Check that pseudo-inverse was computed correctly (~ matrices are full rank)
-        # fogi_coeffs = dot(fogi_directions.T, elem_errorgen_vec), where elem_errorgen_vec is filled from model params,
-        #                 since fogi_directions columns are *dual* vectors in error-gen space.  Thus, to go in reverse:
-        # elem_errogen_vec = dot(pinv_fogi_dirs_T, fogi_coeffs), where dot(fogi_directions.T, pinv_fogi_dirs_T) == I
-        # (This will only be the case when fogi_vecs are linearly independent, so when dependent_indices == 'drop')
-        self._dependent_fogi_action = dependent_fogi_action
-        if dependent_fogi_action == 'drop':
-            #assert(_mt.columns_are_orthogonal(self.fogi_directions))  # not true unless we construct them so...
-            assert(_np.linalg.norm(_np.dot(self.fogi_directions.T, _np.linalg.pinv(self.fogi_directions.T))
-                                   - _np.identity(self.fogi_directions.shape[1], 'd')) < 1e-6)
-
-        # A similar relationship should always hold for the gauge directions, except for these we never
-        #  keep linear dependencies
-        assert(_mt.columns_are_orthogonal(self.fogv_directions))
-        assert(_np.linalg.norm(_np.dot(self.fogv_directions.T, _np.linalg.pinv(self.fogv_directions.T))
-                               - _np.identity(self.fogv_directions.shape[1], 'd')) < 1e-6)
-
+        pass
 
     #TODO: REMOVE (just kept for reference)
     def __OLDinit__(self, gauge_action_matrices_by_op, errorgen_coefficient_labels_by_op,
-                 elem_errorgen_labels, op_label_abbrevs=None, reduce_to_model_space=True,
-                 dependent_fogi_action='drop', norm_order=None):
+                    elem_errorgen_labels, op_label_abbrevs=None, reduce_to_model_space=True,
+                    dependent_fogi_action='drop', norm_order=None):
         """
         TODO: docstring
         """
@@ -765,8 +831,8 @@ class FirstOrderGaugeInvariantStore(object):
                                                    errorgen_coefficient_labels_by_op, elem_errorgen_labels,
                                                    reduce_to_model_space)
 
-        self.errgen_space_op_elem_labels = tuple([(op_label, elem_lbl) for op_label in self.primitive_op_labels
-                                                  for elem_lbl in self.elem_errorgen_labels_by_op[op_label]])
+        self.errorgen_space_op_elem_labels = tuple([(op_label, elem_lbl) for op_label in self.primitive_op_labels
+                                                    for elem_lbl in self.elem_errorgen_labels_by_op[op_label]])
 
         if self.gauge_linear_combos is not None:
             self._gauge_space_dim = self.gauge_linear_combos.shape[1]
@@ -806,7 +872,7 @@ class FirstOrderGaugeInvariantStore(object):
         # # then propagate this mixing to fogv_directions = dot(allop_gauge_action, mixed_gauge_space_directions)
         # mix = _np.linalg.pinv(gauge_space_directions)[:, 0:fogv_directions.shape[1]]  # use "full-rank" part of pinv
         # mixed_gauge_space_dirs = _np.dot(gauge_space_directions, mix)
-        # 
+        #
         # #TODO - better mix matrix?
         # #print("gauge_space_directions shape = ",gauge_space_directions.shape)
         # #print("mixed_gauge_space_dirs = ");  _mt.print_mx(gauge_space_directions, width=6, prec=2)
@@ -822,7 +888,7 @@ class FirstOrderGaugeInvariantStore(object):
         # #full_mix = _np.dot(Vh.T, _np.dot(_np.diag(inv_s), U.T))  # _np.linalg.pinv(gauge_space_directions)
         # #full_mixed_gauge_space_dirs = _np.dot(gauge_space_directions, full_mix)
         # #print("full_mixed_gauge_space_dirs = ");  _mt.print_mx(full_mixed_gauge_space_dirs, width=6, prec=2)
-        # 
+        #
         # self.fogv_labels = ["%s gauge action" % nm
         #                     for nm in _fogit.elem_vec_names(mixed_gauge_space_dirs, gauge_elemgen_labels)]
         # self.fogv_directions = _np.dot(self.allop_gauge_action, mixed_gauge_space_dirs)
@@ -832,7 +898,6 @@ class FirstOrderGaugeInvariantStore(object):
         #pinv_allop_gauge_action = _np.linalg.pinv(self.allop_gauge_action, rcond=1e-7)  # maps error -> gauge-gen space
         #gauge_space_directions = _np.dot(pinv_allop_gauge_action, self.fogv_directions)  # in gauge-generator space
         #assert(_np.linalg.matrix_rank(gauge_space_directions) <= self._gauge_space_dim)  # should be nearly full rank
-
 
         #Notes on error-gen vs gauge-gen space:
         # self.fogi_directions and self.fogv_directions are dual vectors in error-generator space,
@@ -872,7 +937,7 @@ class FirstOrderGaugeInvariantStore(object):
 
     @property
     def gauge_space_dim(self):
-        return self._gauge_space_dim
+        return self.gauge_space.vectors.shape[1]
 
     @property
     def num_fogi_directions(self):
@@ -884,11 +949,10 @@ class FirstOrderGaugeInvariantStore(object):
 
     def fogi_errorgen_direction_labels(self, typ='normal'):
         """ typ can be 'raw' or 'abbrev' too """
-        if typ == 'normal': labels = self.fogi_labels
-        elif typ == 'raw': labels = self.raw_fogi_labels
-        elif typ == 'abrev': labels = self.abbrev_fogi_labels
+        if typ == 'normal': return tuple([meta['name'] for meta in self.fogi_metadata])
+        elif typ == 'raw': return tuple([meta['raw'] for meta in self.fogi_metadata])
+        elif typ == 'abrev': return tuple([meta['abbrev'] for meta in self.fogi_metadata])
         else: raise ValueError("Invalid `typ` argument: %s" % str(typ))
-        return tuple(labels)
 
     def fogv_errorgen_direction_labels(self, typ='normal'):
         if typ == 'normal': labels = self.fogv_labels
@@ -896,30 +960,30 @@ class FirstOrderGaugeInvariantStore(object):
         return tuple(labels)
 
     def errorgen_vec_to_fogi_components_array(self, errorgen_vec):
-        fogi_coeffs = _np.dot(self.fogi_directions.T, errorgen_vec)
+        fogi_coeffs = self.fogi_directions.transpose().dot(errorgen_vec)
         assert(_np.linalg.norm(fogi_coeffs.imag) < 1e-8)
         return fogi_coeffs.real
 
     def errorgen_vec_to_fogv_components_array(self, errorgen_vec):
-        fogv_coeffs = _np.dot(self.fogv_directions.T, errorgen_vec)
+        fogv_coeffs = self.fogv_directions.transpose().dot(errorgen_vec)
         assert(_np.linalg.norm(fogv_coeffs.imag) < 1e-8)
         return fogv_coeffs.real
 
     def opcoeffs_to_fogi_components_array(self, op_coeffs):
         errorgen_vec = _np.zeros(self.errorgen_space_dim, 'd')
-        for i, (op_label, elem_lbl) in enumerate(self.errgen_space_op_elem_labels):
+        for i, (op_label, elem_lbl) in enumerate(self.errorgen_space_op_elem_labels):
             errorgen_vec[i] += op_coeffs[op_label].get(elem_lbl, 0.0)
         return self.errorgen_vec_to_fogi_components_array(errorgen_vec)
 
     def opcoeffs_to_fogv_components_array(self, op_coeffs):
         errorgen_vec = _np.zeros(self.errorgen_space_dim, 'd')
-        for i, (op_label, elem_lbl) in enumerate(self.errgen_space_op_elem_labels):
+        for i, (op_label, elem_lbl) in enumerate(self.errorgen_space_op_elem_labels):
             errorgen_vec[i] += op_coeffs[op_label].get(elem_lbl, 0.0)
         return self.errorgen_vec_to_fogv_components_array(errorgen_vec)
 
     def opcoeffs_to_fogiv_components_array(self, op_coeffs):
         errorgen_vec = _np.zeros(self.errorgen_space_dim, 'd')
-        for i, (op_label, elem_lbl) in enumerate(self.errgen_space_op_elem_labels):
+        for i, (op_label, elem_lbl) in enumerate(self.errorgen_space_op_elem_labels):
             errorgen_vec[i] += op_coeffs[op_label].get(elem_lbl, 0.0)
         return self.errorgen_vec_to_fogi_components_array(errorgen_vec), \
             self.errorgen_vec_to_fogv_components_array(errorgen_vec)
@@ -928,25 +992,28 @@ class FirstOrderGaugeInvariantStore(object):
         assert(self._dependent_fogi_action == 'drop'), \
             ("Cannot convert *from* fogi components to an errorgen-set vec when fogi directions are linearly-dependent!"
              "  (Set `dependent_fogi_action='drop'` to ensure directions are independent.)")
-        return _np.dot(_np.linalg.pinv(self.fogi_directions.T, rcond=1e-7), fogi_components)
+        # DENSE - need to use sparse solve to enact sparse pinv on vector TODO
+        return _np.dot(_np.linalg.pinv(self.fogi_directions.toarray().T, rcond=1e-7), fogi_components)
 
     def fogv_components_array_to_errorgen_vec(self, fogv_components):
         assert(self._dependent_fogi_action == 'drop'), \
             ("Cannot convert *from* fogv components to an errorgen-set vec when fogi directions are linearly-dependent!"
              "  (Set `dependent_fogi_action='drop'` to ensure directions are independent.)")
-        return _np.dot(_np.linalg.pinv(self.fogv_directions.T, rcond=1e-7), fogv_components)
+        # DENSE - need to use sparse solve to enact sparse pinv on vector TODO
+        return _np.dot(_np.linalg.pinv(self.fogv_directions.toarray().T, rcond=1e-7), fogv_components)
 
     def fogiv_components_array_to_errorgen_vec(self, fogi_components, fogv_components):
         assert(self._dependent_fogi_action == 'drop'), \
             ("Cannot convert *from* fogiv components to an errorgen-set vec when fogi directions are "
              "linearly-dependent!  (Set `dependent_fogi_action='drop'` to ensure directions are independent.)")
+        # DENSE - need to use sparse solve to enact sparse pinv on vector TODO
         return _np.dot(_np.linalg.pinv(
-            _np.concatenate((self.fogi_directions, self.fogv_directions), axis=1).T,
+            _np.concatenate((self.fogi_directions.asarray(), self.fogv_directions.asarray()), axis=1).T,
             rcond=1e-7), _np.concatenate((fogi_components, fogv_components)))
 
     def errorgen_vec_to_opcoeffs(self, errorgen_vec):
         op_coeffs = {op_label: {} for op_label in self.primitive_op_labels}
-        for (op_label, elem_lbl), coeff_value in zip(self.errgen_space_op_elem_labels, errorgen_vec):
+        for (op_label, elem_lbl), coeff_value in zip(self.errorgen_space_op_elem_labels, errorgen_vec):
             op_coeffs[op_label][elem_lbl] = coeff_value
         return op_coeffs
 
@@ -974,7 +1041,7 @@ class FirstOrderGaugeInvariantStore(object):
 
         # Construct a dict of information for each elementary error-gen basis element (the basis for error-gen space)
         elemgen_info = {}
-        for k, (op_label, eglabel) in enumerate(self.errgen_space_op_elem_labels):
+        for k, (op_label, eglabel) in enumerate(self.errorgen_space_op_elem_labels):
             elemgen_info[k] = {
                 'type': eglabel[0],
                 'qubits': set([i for bel_lbl in eglabel[1:] for i, char in enumerate(bel_lbl) if char != 'I']),
@@ -984,18 +1051,18 @@ class FirstOrderGaugeInvariantStore(object):
 
         bins = {}
         dependent_indices = set(self.dependent_dir_indices)  # indices of one set of linearly dep. fogi dirs
-        for i in range(self.num_fogi_directions):
-            fogi_dir = self.fogi_directions[:, i]
-            label = self.fogi_labels[i]
-            label_raw = self.raw_fogi_labels[i]
-            label_abbrev = self.abbrev_fogi_labels[i]
-            gauge_dir = self.fogi_gaugespace_directions[i]
-            r_factor = self.fogi_r_factors[i]
+        for i, meta in enumerate(self.fogi_metadata):
+            fogi_dir = self.fogi_directions[:, i].asarray()
+            label = meta['name']
+            label_raw = meta['raw']
+            label_abbrev = meta['abbrev']
+            gauge_dir = meta['gaugespace_dir']
+            r_factor = meta['r']
 
             present_elgen_indices = _np.where(_np.abs(fogi_dir) > tol)[0]
 
             #Aggregate elemgen_info data for all elemgens that contribute to this FOGI qty (as determined by `tol`)
-            ops_involved = set(); qubits_acted_upon = set(); types = set(); basismx = None
+            ops_involved = set(); qubits_acted_upon = set(); types = set(); # basismx = None
             for k in present_elgen_indices:
                 k_info = elemgen_info[k]
                 ops_involved.add(k_info['op_label'])
@@ -1058,7 +1125,7 @@ class FirstOrderGaugeInvariantStore(object):
                     _merge_into(dest[k], d, offset, nlevels_to_merge - 1, store_index)
 
         bins = {}
-        nLevels = 3 # ops_involved, types, qubits_acted_upon
+        nLevels = 3  # ops_involved, types, qubits_acted_upon
         for i, (sub_bins, offset) in enumerate(zip(binned_fogi_infos, index_offsets)):
             _merge_into(bins, sub_bins, offset, nLevels, i)
         return bins

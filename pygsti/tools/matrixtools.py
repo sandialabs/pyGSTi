@@ -266,7 +266,7 @@ def normalize_columns(m, return_norms=False, ord=None):
 
     Parameters
     ----------
-    m : numpy.ndarray
+    m : numpy.ndarray or scipy sparse matrix
         The matrix.
 
     return_norms : bool, optional
@@ -274,7 +274,7 @@ def normalize_columns(m, return_norms=False, ord=None):
         of the columns (before they were normalized).
 
     ord : int, optional
-        The order of the norm.  See :function:`numpy.linal.norm`.
+        The order of the norm.  See :function:`numpy.linalg.norm`.
 
     Returns
     -------
@@ -285,12 +285,67 @@ def normalize_columns(m, return_norms=False, ord=None):
         Only returned when `return_norms=True`, a 1-dimensional array
         of the pre-normalization norm of each column.
     """
-    norms = _np.array([_np.linalg.norm(m[:, j], ord=ord) for j in range(m.shape[1])])
+    norms = column_norms(m, ord)
     norms[norms == 0.0] = 1.0  # avoid division of zero-column by zero
-    if return_norms:
-        return m / norms[None, :], norms
+    normalized_m = scale_columns(m, 1 / norms)
+    return (normalized_m, norms) if return_norms else normalized_m
+
+
+def column_norms(m, ord=None):
+    """
+    Compute the norms of the columns of a matrix.
+
+    Parameters
+    ----------
+    m : numpy.ndarray or scipy sparse matrix
+        The matrix.
+
+    ord : int, optional
+        The order of the norm.  See :function:`numpy.linalg.norm`.
+
+    Returns
+    -------
+    numpy.ndarray
+        A 1-dimensional array of the column norms (length is number of columns of `m`).
+    """
+    if _sps.issparse(m):
+        #this could be done more efficiently, e.g. by converting to csc and taking column norms directly
+        norms = _np.array([_np.linalg.norm(m[:, j].todense(), ord=ord) for j in range(m.shape[1])])
     else:
-        return m / norms[None, :]
+        norms = _np.array([_np.linalg.norm(m[:, j], ord=ord) for j in range(m.shape[1])])
+    return norms
+
+
+def scale_columns(m, scale_values):
+    """
+    Scale each column of a matrix by a given value.
+
+    Usually used for normalization purposes, when the
+    matrix columns represent vectors.
+
+    Parameters
+    ----------
+    m : numpy.ndarray or scipy sparse matrix
+        The matrix.
+
+    scale_values : numpy.ndarray
+        A 1-dimensional array of scale values, one per
+        column of `m`.
+
+    Returns
+    -------
+    numpy.ndarray or scipy sparse matrix
+        A copy of `m` with scaled columns, possibly with different sparsity structure.
+    """
+    if _sps.issparse(m):
+        assert(len(scale_values) == m.shape[1])
+
+        m_csc = _sps.csc_matrix(m)
+        for j, scale in enumerate(scale_values):
+            m_csc.data[m_csc.indptr[j]:m_csc.indptr[j + 1]] *= scale
+        return m_csc
+    else:
+        return m * scale_values[None, :]
 
 
 def columns_are_orthogonal(m, tol=1e-7, debug=True):
@@ -354,45 +409,61 @@ def columns_are_orthonormal(m, tol=1e-7):
     return bool(_np.allclose(check, _np.identity(check.shape[0], 'd'), atol=tol))
 
 
-def independent_columns(m, start_col=0, start_independent=None):
+def independent_columns(m, initial_independent_cols=None, tol=1e-7):
     """
-    Computes the indices of the linealrly-independent columns in a matrix.
+    Computes the indices of the linearly-independent columns in a matrix.
 
-    Optionally starts at given column offset, for use when some number of
-    columns are already known to be linearly independent.
+    Optionally starts with a "base" matrix of independent columns, so that
+    the returned indices indicate the columns of `m` that are independent
+    of all the base columns and the other independent columns of `m`.
 
     Parameters
     ----------
-    m : numpy.ndarray
+    m : numpy.ndarray or scipy sparse matrix
         The matrix.
 
-    start_col : int, optional
-        An offset giving the first column to consider for independence.
+    initial_independent_cols : numpy.ndarray or scipy sparse matrix, optional
+        If not `None`, a matrix of known-to-be independent columns so to test the
+        columns of `m` with respect to (in addition to the already chosen independent
+        columns of `m`.
 
-    start_independent : int, optional
-        The number of independent columns in the first `start_col` cols.
-        If `None`, then taken to equal `start_col`, i.e. the first
-        `start_col` columns (not considered for independend) are all
-        assumed to be linearly independent.
-
+    tol : float, optional
+        Tolerance threshold used to decide whether a singular value is nonzero
+        (it is if it's is greater than `tol`).
 
     Returns
     -------
     list
-        A list of the independent-column indices of `m` (starting from `start_col`).
+        A list of the independent-column indices of `m`.
     """
-    col_mask = _np.zeros(m.shape[1], dtype=bool)
-    col_mask[0:start_col] = True
-
-    num_indep_cols = start_col if (start_independent is None) else start_independent
     indep_cols = []
-    for j in range(start_col, m.shape[1]):
-        col_mask[j] = True
-        if _np.linalg.matrix_rank(m[:, col_mask], tol=1e-7) == num_indep_cols + 1:
-            indep_cols.append(j)
-            num_indep_cols += 1
-        else:
-            col_mask[j] = False
+
+    if not _sps.issparse(m):
+        running_indep_cols = initial_independent_cols.copy() \
+            if (initial_independent_cols is not None) else _np.empty((m.shape[0], 0), m.dtype)
+        num_indep_cols = running_indep_cols.shape[0]
+
+        for j in range(m.shape[1]):
+            trial = _np.concatenate((running_indep_cols, m[:, j]), axis=1)
+            if _np.linalg.matrix_rank(trial, tol=tol) == num_indep_cols + 1:
+                running_indep_cols = trial
+                indep_cols.append(j)
+                num_indep_cols += 1
+
+    else:  # sparse case
+
+        running_indep_cols = initial_independent_cols.copy() \
+            if (initial_independent_cols is not None) else _sps.csc_matrix((m.shape[0], 0), dtype=m.dtype)
+        num_indep_cols = running_indep_cols.shape[0]
+
+        for j in range(m.shape[1]):
+            trial = _sps.hstack((running_indep_cols, m[:, j]))
+            lowest_sval = _spsl.svds(trial, k=1, which="SM", return_singular_vectors=False)
+            if lowest_sval > tol:  # trial fogi dirs still linearly independent (full rank)
+                running_indep_cols = trial
+                indep_cols.append(j)
+            # else trial column made fogi dirs linearly dependent and so don't tally indep column
+
     return indep_cols
 
 

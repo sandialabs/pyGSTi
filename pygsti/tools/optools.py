@@ -17,6 +17,7 @@ import numpy as _np
 import scipy.linalg as _spl
 import scipy.sparse as _sps
 import scipy.sparse.linalg as _spsl
+import functools as _functools
 
 from pygsti.tools import basistools as _bt
 from pygsti.tools import jamiolkowski as _jam
@@ -1632,19 +1633,19 @@ def _assert_shape(ar, shape, sparse=False):
             raise NotImplementedError("Number of dimensions must be <= 4!")
 
 
-def lindblad_error_generator(label, basis_1q, normalize, sparse=False):
+def lindblad_error_generator(label, basis_1q, normalize, sparse=False, tensorprod_basis=False):
     """
     TODO: docstring  - labels can be, e.g. ('H', 'XX') and basis should be a 1-qubit basis w/single-char labels
     """
 
     if label[0] == 'H':
-        B = reduce(_np.kron, [basis_1q[bel] for bel in label[1]])
+        B = _functools.reduce(_np.kron, [basis_1q[bel] for bel in label[1]])
         ret = _lt.hamiltonian_to_lindbladian(B, sparse)  # in std basis
     elif label[0] == 'S':
-        Lm = reduce(_np.kron, [basis_1q[bel] for bel in label[1]])
-        Ln = reduce(_np.kron, [basis_1q[bel] for bel in label[2]]) \
+        Lm = _functools.reduce(_np.kron, [basis_1q[bel] for bel in label[1]])
+        Ln = _functools.reduce(_np.kron, [basis_1q[bel] for bel in label[2]]) \
             if len(label) > 2 else Lm
-        ret = _lt.nonham_lindbladian(Lm, Lm, sparse)
+        ret = _lt.nonham_lindbladian(Lm, Ln, sparse)
     else:
         raise ValueError("Invalid elementary error generator label: %s" % str(label))
 
@@ -1654,6 +1655,16 @@ def lindblad_error_generator(label, basis_1q, normalize, sparse=False):
         if not _np.isclose(norm, 0):
             ret /= norm  # normalize projector
             assert(_np.isclose(normfn(ret), 1.0))
+
+    if tensorprod_basis:
+        # convert from "flat" std basis to tensorprod of std bases (same elements but in
+        # a different order).  Important if want to also construct ops by kroneckering the
+        # returned maps with, e.g., identities
+        nQubits = int(round(_np.log(ret.shape[0]) / _np.log(4))); assert(ret.shape[0] == 4**nQubits)
+        current_basis = _Basis.cast('std', ret.shape[0])
+        tensorprod_basis = _Basis.cast('std', [(4,) * nQubits])
+        ret = _bt.change_basis(ret, current_basis, tensorprod_basis)
+
     return ret
 
 
