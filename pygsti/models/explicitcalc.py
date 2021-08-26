@@ -462,14 +462,6 @@ class ExplicitOpModelCalc(object):
                                        "parameters for Models with non-dense "
                                        "member representations"))
 
-        #REMOVE
-        #if any([not isinstance(gate,_op.DenseOperator) for gate in self.operations.values()]) or \
-        #   any([not isinstance(vec,_sv.DenseSPAMVec) for vec in self.preps.values()]) or \
-        #   any([not isinstance(vec,_sv.DenseSPAMVec) for vec in self.effects.values()]):
-        #    raise NotImplementedError(("Cannot (yet) extract gauge/non-gauge "
-        #                               "parameters for Models with non-dense "
-        #                               "member representations"))
-
         bSkipEcs = True  # Whether we should artificially skip complement-type
         # effect vecs, which is historically what we've done, even though
         # this seems somewhat wrong.  Not skipping them will alter the

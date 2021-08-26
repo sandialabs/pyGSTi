@@ -14,22 +14,21 @@ Helper functions for standard model modules.
 
 import gzip as _gzip
 import itertools as _itertools
+import collections as _collections
 import os as _os
 import pickle as _pickle
-import sys as _sys
-import time as _time
 
 import numpy as _np
 
-from pygsti.circuits import gstcircuits as _stdlists
 from pygsti.baseobjs import polynomial as _polynomial
-from pygsti.tools import mpitools as _mpit
+from pygsti.baseobjs import statespace as _statespace
+from pygsti.circuits import circuitconstruction as _gsc
+from pygsti.tools.legacytools import deprecate as _deprecated_fn
 
 
 def _get_cachefile_names(std_module, param_type, simulator, py_version):
     """ Get the standard cache file names for a module """
-
-    # TODO REMOVE? - no more "H+S terms" parametype
+    # No more "H+S terms" parametype
     # if param_type == "H+S terms":
     #     cachePath = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
     #                               "../construction/caches")
@@ -338,7 +337,7 @@ def _copy_target(std_module, param_type, simulator="auto", gscache=None):
     mdl = std_module._target_model.copy()
     mdl.set_all_parameterizations(param_type)  # automatically sets simulator
 
-    #TODO REMOVE - no more "H+S terms" paramtype
+    # No more "H+S terms" paramtype (update in FUTURE?)
     # if param_type == "H+S terms":
     #     assert(simulator == "auto" or isinstance(simulator, _TermFSim)), "Invalid `simulator` argument!"
     #     # Note: don't update `simulator` variable here as it's used below for setting gscache element.
@@ -364,3 +363,190 @@ def _copy_target(std_module, param_type, simulator="auto", gscache=None):
         gscache[(param_type, simulator)] = mdl
 
     return mdl.copy()
+
+
+@_deprecated_fn("the pre-build SMQ modelpacks under `pygsti.modelpacks`")
+def stdmodule_to_smqmodule(std_module):
+    """
+    Converts a pyGSTi "standard module" to a "standard multi-qubit module".
+
+    PyGSTi provides a number of 1- and 2-qubit models corrsponding to commonly
+    used gate sets, along with related meta-information.  Each such
+    model+metadata is stored in a "standard module" beneath `pygsti.modelpacks.legacy`
+    (e.g. `pygsti.modelpacks.legacy.std1Q_XYI` is the standard module for modeling a
+    single-qubit quantum processor which can perform X(pi/2), Y(pi/2) and idle
+    operations).  Because they deal with just 1- and 2-qubit models, multi-qubit
+    labelling conventions are not used to improve readability.  For example, a
+    "X(pi/2)" gate is labelled "Gx" (in a 1Q context) or "Gix" (in a 2Q context)
+    rather than "Gx:0" or "Gx:1" respectively.
+
+    There are times, however, when you many *want* a standard module with this
+    multi-qubit labelling convention (e.g. performing 1Q-GST on the 3rd qubit
+    of a 5-qubit processor).  We call such a module a standard *multi-qubit*
+    module, and these typically begin with `"smq"` rather than `"std"`.
+
+    Standard multi-qubit modules are *created* by this function.  For example,
+    If you want the multi-qubit version of `pygsti.modelpacks.legacy.std1Q_XYI`
+    you must:
+
+    1. import `std1Q_XYI` (`from pygsti.modelpacks.legacy import std1Q_XYI`)
+    2. call this function (i.e. `stdmodule_to_smqmodule(std1Q_XYI)`)
+    3. import `smq1Q_XYI` (`from pygsti.modelpacks.legacy import smq1Q_XYI`)
+
+    The `smq1Q_XYI` module will look just like the `std1Q_XYI` module but use
+    multi-qubit labelling conventions.
+
+    .. deprecated:: v0.9.9
+        `stdmodule_to_smqmodule` will be removed in future versions of
+        pyGSTi. Instead, import pre-built SMQ modelpacks directly from
+        `pygsti.modelpacks`.
+
+    Parameters
+    ----------
+    std_module : Module
+        The standard module to convert to a standard-multi-qubit module.
+
+    Returns
+    -------
+    Module
+        The new module, although it's better to import this using the appropriate
+        "smq"-prefixed name as described above.
+    """
+    from types import ModuleType as _ModuleType
+    import sys as _sys
+    import importlib
+
+    std_module_name_parts = std_module.__name__.split('.')
+    std_module_name_parts[-1] = std_module_name_parts[-1].replace('std', 'smq')
+    new_module_name = '.'.join(std_module_name_parts)
+
+    try:
+        return importlib.import_module(new_module_name)
+    except ImportError:
+        pass  # ok, this is what the rest of the function is for
+
+    out_module = {}
+    std_target_model = std_module.target_model()  # could use ._target_model to save a copy
+    dim = std_target_model.dim
+    if dim == 4:
+        sslbls = [0]
+        find_replace_labels = {'Gi': (), 'Gx': ('Gx', 0), 'Gy': ('Gy', 0),
+                               'Gz': ('Gz', 0), 'Gn': ('Gn', 0)}
+        find_replace_strs = [((oldgl,), (newgl,)) for oldgl, newgl
+                             in find_replace_labels.items()]
+    elif dim == 16:
+        sslbls = [0, 1]
+        find_replace_labels = {'Gii': (),
+                               'Gxi': ('Gx', 0), 'Gyi': ('Gy', 0), 'Gzi': ('Gz', 0),
+                               'Gix': ('Gx', 1), 'Giy': ('Gy', 1), 'Giz': ('Gz', 1),
+                               'Gxx': ('Gxx', 0, 1), 'Gxy': ('Gxy', 0, 1),
+                               'Gyx': ('Gxy', 0, 1), 'Gyy': ('Gyy', 0, 1),
+                               'Gcnot': ('Gcnot', 0, 1), 'Gcphase': ('Gcphase', 0, 1)}
+        find_replace_strs = [((oldgl,), (newgl,)) for oldgl, newgl
+                             in find_replace_labels.items()]
+        #find_replace_strs.append( (('Gxx',), (('Gx',0),('Gx',1))) )
+        #find_replace_strs.append( (('Gxy',), (('Gx',0),('Gy',1))) )
+        #find_replace_strs.append( (('Gyx',), (('Gy',0),('Gx',1))) )
+        #find_replace_strs.append( (('Gyy',), (('Gy',0),('Gy',1))) )
+    else:
+        #TODO: add qutrit?
+        raise ValueError("Unsupported model dimension: %d" % dim)
+
+    def upgrade_dataset(ds):
+        """
+        Update DataSet `ds` in-place to use  multi-qubit style labels.
+        """
+        ds.process_circuits_inplace(lambda s: _gsc.manipulate_circuit(
+            s, find_replace_strs, sslbls))
+
+    out_module['find_replace_gatelabels'] = find_replace_labels
+    out_module['find_replace_circuits'] = find_replace_strs
+    out_module['upgrade_dataset'] = upgrade_dataset
+
+    # gate names
+    out_module['gates'] = [find_replace_labels.get(nm, nm) for nm in std_module.gates]
+
+    #Fully-parameterized target model (update labels)
+    from pygsti.models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
+    state_space = _statespace.ExplicitStateSpace(sslbls)
+    new_target_model = _ExplicitOpModel(state_space, std_target_model.basis.copy())
+    new_target_model._evotype = std_target_model._evotype
+    new_target_model._default_gauge_group = std_target_model._default_gauge_group
+
+    #Note: setting object ._state_space is a bit of a hack here, and assumes
+    # that these are "simple" objects that don't contain other sub-members that
+    # need to have their state spaces updated too.
+    for lbl, obj in std_target_model.preps.items():
+        new_lbl = find_replace_labels.get(lbl, lbl)
+        new_obj = obj.copy(); new_obj._state_space = state_space
+        new_target_model.preps[new_lbl] = new_obj
+    for lbl, obj in std_target_model.povms.items():
+        new_lbl = find_replace_labels.get(lbl, lbl)
+        new_obj = obj.copy(); new_obj._state_space = state_space
+        for effect in new_obj.values():
+            effect._state_space = state_space
+        new_target_model.povms[new_lbl] = new_obj
+    for lbl, obj in std_target_model.operations.items():
+        new_lbl = find_replace_labels.get(lbl, lbl)
+        new_obj = obj.copy(); new_obj._state_space = state_space
+        new_target_model.operations[new_lbl] = new_obj
+    for lbl, obj in std_target_model.instruments.items():
+        new_lbl = find_replace_labels.get(lbl, lbl)
+        new_obj = obj.copy(); new_obj._state_space = state_space
+        for member in new_obj.values():
+            member._state_space = state_space
+        new_target_model.instruments[new_lbl] = new_obj
+    out_module['_target_model'] = new_target_model
+
+    # _stdtarget and _gscache need to be *locals* as well so target_model(...) works
+    _stdtarget = importlib.import_module('.stdtarget', 'pygsti.modelpacks')
+    _gscache = {("full", "auto"): new_target_model}
+    out_module['_stdtarget'] = _stdtarget
+    out_module['_gscache'] = _gscache
+
+    def target_model(parameterization_type="full", simulator="auto"):
+        """
+        Returns a copy of the target model in the given parameterization.
+
+        Parameters
+        ----------
+        parameterization_type : {"TP", "CPTP", "H+S", "S", ... }
+            The gate and SPAM vector parameterization type. See
+            :function:`Model.set_all_parameterizations` for all allowed values.
+
+        simulator : ForwardSimulator or {"auto", "matrix", "map"}
+            The simulator (or type) to be used for model calculations (leave as
+            "auto" if you're not sure what this is).
+
+        Returns
+        -------
+        Model
+        """
+        return _stdtarget._copy_target(_sys.modules[new_module_name], parameterization_type,
+                                       simulator, _gscache)
+    out_module['target_model'] = target_model
+
+    # circuit lists
+    circuitlist_names = ['germs', 'germs_lite', 'prepStrs', 'effectStrs', 'fiducials']
+    for nm in circuitlist_names:
+        if hasattr(std_module, nm):
+            out_module[nm] = _gsc.manipulate_circuits(getattr(std_module, nm), find_replace_strs, sslbls)
+
+    # clifford compilation (keys are lists of operation labels)
+    if hasattr(std_module, 'clifford_compilation'):
+        new_cc = _collections.OrderedDict()
+        for ky, val in std_module.clifford_compilation.items():
+            new_val = [find_replace_labels.get(lbl, lbl) for lbl in val]
+            new_cc[ky] = new_val
+
+    passthrough_names = ['global_fidPairs', 'pergerm_fidPairsDict', 'global_fidPairs_lite', 'pergerm_fidPairsDict_lite']
+    for nm in passthrough_names:
+        if hasattr(std_module, nm):
+            out_module[nm] = getattr(std_module, nm)
+
+    #Create the new module
+    new_module = _ModuleType(str(new_module_name))  # str(.) converts to native string for Python 2 compatibility
+    for k, v in out_module.items():
+        setattr(new_module, k, v)
+    _sys.modules[new_module_name] = new_module
+    return new_module

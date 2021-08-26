@@ -19,7 +19,7 @@ def runMC2GSTAnalysis(myspecs, mygerms, gsTarget, seed,
                       min_prob_clip_for_weighting=1e-4, fidPairList=None,
                       comm=None):
     rhoStrs, EStrs = pygsti.construction.get_spam_strs(myspecs)
-    lgstStrings = pygsti.construction.create_lgst_circuits(
+    lgstStrings = pygsti.circuits.create_lgst_circuits(
         myspecs, list(gsTarget.operations.keys()))
     lsgstStrings = pygsti.construction.create_lsgst_circuit_lists(
             list(gsTarget.operations.keys()), rhoStrs, EStrs, mygerms, maxLs, fidPairList )
@@ -35,7 +35,7 @@ def runMC2GSTAnalysis(myspecs, mygerms, gsTarget, seed,
 
 
     mdl_dataGen = gsTarget.depolarize(op_noise=0.1)
-    dsFake = pygsti.construction.simulate_data(
+    dsFake = pygsti.data.simulate_data(
         mdl_dataGen, allRequiredStrs, nSamples, sample_error="multinomial",
         seed=seed)
 

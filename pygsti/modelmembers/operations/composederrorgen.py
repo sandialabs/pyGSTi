@@ -57,8 +57,9 @@ class ComposedErrorgen(_LinearOperator):
             state_space = errgens_to_compose[0].state_space
         else:
             state_space = _statespace.StateSpace.cast(state_space)
+
         assert(all([state_space.is_compatible_with(eg.state_space) for eg in errgens_to_compose])), \
-            "All error generators must have compatible state spaces (%d expected)!" % str(state_space)
+            "All error generators must have compatible state spaces (%s expected)!" % str(state_space)
 
         if evotype == "auto":
             evotype = errgens_to_compose[0]._evotype
@@ -355,9 +356,6 @@ class ComposedErrorgen(_LinearOperator):
         derivMx = _np.zeros((d2**2, self.num_params), 'd')
         for eg, rel_indices in zip(self.factors, self._submember_rpindices):
             factor_deriv = eg.deriv_wrt_params(None)  # do filtering at end
-            #REMOVE
-            #rel_gpindices = _modelmember._decompose_gpindices(
-            #    self.gpindices, eg.gpindices)
             derivMx[:, rel_indices] += factor_deriv[:, :]
 
         if wrt_filter is None:
@@ -440,6 +438,29 @@ class ComposedErrorgen(_LinearOperator):
         None
         """
         self.factors.extend(factors_to_add)
+        if self._rep is not None:
+            self._rep.reinit_factor_reps([op._rep for op in self.factors])
+        if self.parent:  # need to alert parent that *number* (not just value)
+            self.parent._mark_for_rebuild(self)  # of our params may have changed
+
+    def insert(self, insert_at, *factors_to_insert):
+        """
+        Insert one or more factors into this operator.
+
+        Parameters
+        ----------
+        insert_at : int
+            The index at which to insert `factors_to_insert`.  The factor at this
+            index and those after it are shifted back by `len(factors_to_insert)`.
+
+        *factors_to_insert : LinearOperator
+            One or multiple factor operators to insert within this operator.
+
+        Returns
+        -------
+        None
+        """
+        self.factors[insert_at:insert_at] = list(factors_to_insert)
         if self._rep is not None:
             self._rep.reinit_factor_reps([op._rep for op in self.factors])
         if self.parent:  # need to alert parent that *number* (not just value)
@@ -532,9 +553,6 @@ class ComposedErrorgen(_LinearOperator):
         assert(self.gpindices is not None), "Must set a ComposedErrorgen's .gpindices before calling parameter_labels"
         vl = _np.empty(self.num_params, dtype=object)
         for eg, factor_local_inds in zip(self.factors, self._submember_rpindices):
-            #REMOVE
-            #factor_local_inds = _modelmember._decompose_gpindices(
-            #    self.gpindices, eg.gpindices)
             vl[factor_local_inds] = eg.parameter_labels
         return vl
 
@@ -562,9 +580,6 @@ class ComposedErrorgen(_LinearOperator):
         assert(self.gpindices is not None), "Must set a ComposedErrorgen's .gpindices before calling to_vector"
         v = _np.empty(self.num_params, 'd')
         for eg, factor_local_inds in zip(self.factors, self._submember_rpindices):
-            #REMOVE
-            #factor_local_inds = _modelmember._decompose_gpindices(
-            #    self.gpindices, eg.gpindices)
             v[factor_local_inds] = eg.to_vector()
         return v
 
@@ -594,9 +609,6 @@ class ComposedErrorgen(_LinearOperator):
         """
         assert(self.gpindices is not None), "Must set a ComposedErrorgen's .gpindices before calling from_vector"
         for eg, factor_local_inds in zip(self.factors, self._submember_rpindices):
-            #REMOVE
-            #factor_local_inds = _modelmember._decompose_gpindices(
-            #    self.gpindices, eg.gpindices)
             eg.from_vector(v[factor_local_inds], close, dirty_value)
         self.dirty = dirty_value
 
@@ -678,7 +690,7 @@ class ComposedErrorgen(_LinearOperator):
         # In this case, since composed error generators are just summed, the total term
         # magnitude is just the sum of the components
 
-        #DEBUG TODO REMOVE
+        #DEBUG CHECK (can REMOVE)
         #factor_ttms = [eg.get_total_term_magnitude() for eg in self.factors]
         #print("DB: ComposedErrorgen.total_term_magnitude = sum(",factor_ttms,") -- ",
         #      [eg.__class__.__name__ for eg in self.factors])
@@ -713,9 +725,6 @@ class ComposedErrorgen(_LinearOperator):
         """
         ret = _np.zeros(self.num_params, 'd')
         for eg, eg_local_inds in zip(self.factors, self._submember_rpindices):
-            #REMOVE
-            #eg_local_inds = _modelmember._decompose_gpindices(
-            #    self.gpindices, eg.gpindices)
             ret[eg_local_inds] += eg.total_term_magnitude_deriv
         return ret
 

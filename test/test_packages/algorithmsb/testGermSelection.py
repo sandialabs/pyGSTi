@@ -15,13 +15,13 @@ class GermSelectionTestCase(AlgorithmTestCase):
         # max_length   = 6
         gates        = list(std.target_model().operations.keys())
         superGermSet = [] #OLD: pygsti.construction.list_all_circuits_without_powers_and_cycles(gates, max_length)
-        superGermSet.extend( pygsti.construction.list_all_circuits_without_powers_and_cycles(
+        superGermSet.extend( pygsti.circuits.list_all_circuits_without_powers_and_cycles(
             gates, max_length=3) )
-        superGermSet.extend( pygsti.construction.list_random_circuits_onelen(
+        superGermSet.extend( pygsti.circuits.list_random_circuits_onelen(
             gates, 4, 10, seed=2017)) # add 10 random candidates of length 4
-        superGermSet.extend( pygsti.construction.list_random_circuits_onelen(
+        superGermSet.extend( pygsti.circuits.list_random_circuits_onelen(
             gates, 5, 10, seed=2017)) # add 10 random candidates of length 5
-        superGermSet.extend( pygsti.construction.list_random_circuits_onelen(
+        superGermSet.extend( pygsti.circuits.list_random_circuits_onelen(
             gates, 6, 10, seed=2017)) # add 10 random candidates of length 6
         superGermSet.extend(std.germs) #so we know we have enough good ones!
 
@@ -30,7 +30,7 @@ class GermSelectionTestCase(AlgorithmTestCase):
                                            threshold=threshold, verbosity=1, iterations=1,
                                            l1_penalty=1.0, return_all=False)
 
-        forceStrs = pygsti.construction.to_circuits([('Gx',), ('Gy')])
+        forceStrs = pygsti.circuits.to_circuits([('Gx',), ('Gy')])
         bestSoln, initialSolns, localSolns = \
             pygsti.alg.find_germs_grasp(model_list=gatesetNeighborhood, germs_list=superGermSet,
                                         alpha=0.1, randomize=False, seed=2014, score_func='all',
@@ -38,7 +38,7 @@ class GermSelectionTestCase(AlgorithmTestCase):
                                         l1_penalty=1.0, return_all=True, force=forceStrs)
 
         # try case with incomplete initial germ set
-        incompleteSet = pygsti.construction.to_circuits([('Gx',), ('Gy')])
+        incompleteSet = pygsti.circuits.to_circuits([('Gx',), ('Gy')])
         soln = pygsti.alg.find_germs_grasp(model_list=gatesetNeighborhood, germs_list=incompleteSet,
                                            alpha=0.1, randomize=False, seed=2014, score_func='worst',
                                            threshold=threshold, verbosity=1, iterations=1,
@@ -56,7 +56,7 @@ class GermSelectionTestCase(AlgorithmTestCase):
 
         max_length   = 6
         gates        = std.target_model().operations.keys()
-        superGermSet = pygsti.construction.list_all_circuits_without_powers_and_cycles(gates, max_length)
+        superGermSet = pygsti.circuits.list_all_circuits_without_powers_and_cycles(gates, max_length)
 
           # with small memory limit
         with self.assertRaises(MemoryError):

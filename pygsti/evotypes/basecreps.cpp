@@ -1,5 +1,6 @@
 #define NULL 0
 
+#include <algorithm>
 #include <iostream>
 #include <complex>
 #include <assert.h>
@@ -78,21 +79,21 @@ namespace CReps {
       std::unordered_map<PolynomialVarsIndex, dcomplex>::iterator itk;
     dcomplex val, newval;
     PolynomialVarsIndex k;
-
+    
     for(it2 = other._coeffs.begin(); it2 != other._coeffs.end(); ++it2) {
       k = it2->first; // key
       val = it2->second; // value
       itk = _coeffs.find(k);
       if(itk != _coeffs.end()) {
-	newval = itk->second + val;
-	if(std::abs(newval) > 1e-12) {
-	  itk->second = newval; // note: += doens't work here (complex Cython?)
-	} else {
-	  _coeffs.erase(itk);
-	}
+          newval = itk->second + val;
+          if(std::abs(newval) > 1e-12) {
+              itk->second = newval; // note: += doens't work here (complex Cython?)
+          } else {
+              _coeffs.erase(itk);
+          }
       }
       else if(std::abs(val) > 1e-12) {
-	_coeffs[k] = val;
+          _coeffs[k] = val;
       }
     }
   }

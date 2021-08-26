@@ -15,7 +15,7 @@ from .. cimport basereps_cython as _basereps_cython
 ctypedef long long INT
 ctypedef unsigned long long UINT
 
-cdef extern from "statecreps.h" namespace "CReps":
+cdef extern from "statecreps.h" namespace "CReps_stabilizer":
 
     cdef cppclass StateCRep:
         StateCRep(INT*, INT*, double complex*, INT, INT) except +

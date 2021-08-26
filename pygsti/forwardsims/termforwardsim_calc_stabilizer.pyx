@@ -35,7 +35,7 @@ import time as pytime
 import numpy as np
 
 #import itertools as _itertools
-from ..opcalc import fastopcalc as _fastopcalc
+from pygsti.baseobjs.opcalc import fastopcalc as _fastopcalc
 #from scipy.sparse.linalg import LinearOperator
 
 cdef double SMALL = 1e-5
@@ -643,15 +643,6 @@ def create_circuitsetup_cacheel(fwdsim, rholabel, elabels, circuit, repcache, mi
             hmterms, foat_indices = op.highmagnitude_terms(
                 min_term_mag, max_taylor_order=fwdsim.max_order, max_polynomial_vars=mpv)
 
-            #TODO REMOVE
-            #if glbl in check_opcache:
-            #    if np.linalg.norm( check_opcache[glbl].to_vector() - op.to_vector() ) > 1e-6:
-            #        print("HERE!!!")
-            #        raise ValueError("HERE!!!")
-            #else:
-            #    check_opcache[glbl] = op
-
-
             #DEBUG CHECK TERM MAGNITUDES make sense
             #chk_tot_mag = sum([t.magnitude for t in hmterms])
             #chk_tot_mag2 = op.total_term_magnitude()
@@ -830,18 +821,18 @@ cdef double c_find_best_pathmagnitude_threshold(
                                               threshold_guess, pathmagnitude_gap / (3.0*max_paths), max_paths,
                                               achieved_sum_of_pathmags, npaths)  # 3.0 is heuristic
 
-    #DEBUG TODO REMOVE - CHECK that counting paths using this threshold gives the same results
-    cdef INT NO_LIMIT = 1000000000
-    cdef vector[double] check_mags = vector[double](numEs)
-    cdef vector[INT] check_npaths = vector[INT](numEs)
-    for i in range(numEs):
-        check_mags[i] = 0.0; check_npaths[i] = 0
-    count_paths_upto_threshold(factor_lists, threshold, numEs,
-                               foat_indices_per_op, e_indices, NO_LIMIT,
-                               check_mags, check_npaths)
-    for i in range(numEs):
-        assert(abs(achieved_sum_of_pathmags[i] - check_mags[i]) < 1e-8)
-        assert(npaths[i] == check_npaths[i])
+    #DEBUG CHECK that counting paths using this threshold gives the same results (can REMOVE)
+    #cdef INT NO_LIMIT = 1000000000
+    #cdef vector[double] check_mags = vector[double](numEs)
+    #cdef vector[INT] check_npaths = vector[INT](numEs)
+    #for i in range(numEs):
+    #    check_mags[i] = 0.0; check_npaths[i] = 0
+    #count_paths_upto_threshold(factor_lists, threshold, numEs,
+    #                           foat_indices_per_op, e_indices, NO_LIMIT,
+    #                           check_mags, check_npaths)
+    #for i in range(numEs):
+    #    assert(abs(achieved_sum_of_pathmags[i] - check_mags[i]) < 1e-8)
+    #    assert(npaths[i] == check_npaths[i])
 
     #print("Threshold = ",threshold)
     #print("Mags = ",achieved_sum_of_pathmags)
@@ -1339,8 +1330,6 @@ cdef bool count_paths(vector[INT]& b, vector[vector_TermCRep_ptr_ptr]& oprep_lis
                     if nzeros == 0:
                         pathmags[e_indices[b[n-1]]] += mag
                     nPaths[e_indices[b[n-1]]] += 1
-                    #if e_indices[b[n-1]] == 0:  # TODO REMOVE
-                    #    print nPaths[e_indices[b[n-1]]], mag, pathmags[e_indices[b[n-1]]], b, current_mag, deref(oprep_lists[i])[b[i]]._magnitude, deref(oprep_lists[i])[orig_bi-1]._magnitude, incd, i, "*2"
                     if nPaths[e_indices[b[n-1]]] == max_npaths: return True
                     #print("FOAT Adding ",b)
                     ## --------------------------
@@ -1361,8 +1350,6 @@ cdef bool count_paths(vector[INT]& b, vector[vector_TermCRep_ptr_ptr]& oprep_lis
                             if nzeros == 0:  # if numerator was zero above, mag2 will be zero, so we still won't add anyting (good)
                                 pathmags[e_indices[b[n-1]]] += mag2
                             nPaths[e_indices[b[n-1]]] += 1
-                            #if e_indices[b[n-1]] == 0:  # TODO REMOVE
-                            #    print nPaths[e_indices[b[n-1]]], mag2, pathmags[e_indices[b[n-1]]], b, mag, incd, i, " *3"
                             if nPaths[e_indices[b[n-1]]] == max_npaths: return True
                             #print("FOAT Adding ",b)
                             ## --------------------------
@@ -1423,7 +1410,7 @@ cdef double pathmagnitude_threshold(vector[vector_TermCRep_ptr_ptr] oprep_lists,
 
         try_larger_threshold = 1 # True
         for i in range(nEffects):
-            #if(mags[i] > target_sum_of_pathmags[i]): #DEBUG TODO REMOVE
+            #if(mags[i] > target_sum_of_pathmags[i]): #DEBUG CHECK
             #    print "MAGS TOO LARGE!!! mags=",mags[i]," target_sum=",target_sum_of_pathmags[i]
 
             if(mags[i] < target_sum_of_pathmags[i]):

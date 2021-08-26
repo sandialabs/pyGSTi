@@ -19,6 +19,7 @@ import types as _types
 import uuid as _uuid
 
 import numpy as _np
+import scipy.sparse as _sps
 
 
 def _class_hasattr(instance, attr):
@@ -89,10 +90,11 @@ def encode_obj(py_obj, binary):
             red = py_obj.__pygsti_reduce__()  # returns class, construtor_args, state
             assert(callable(red[0]))
             init_args = red[1] if len(red) > 1 else []
-            state = red[2] if len(red) > 2 else {}
-            if state is None: state = {}
+            state = red[2] if len(red) > 2 else ()
+            if state is None: state = ()
+            if not isinstance(state, dict): state = {'__state_obj__': state}  # when state is, e.g, a tuple
             if red[0] is not py_obj.__class__:
-                state['__init_fn__'] = (red[0].__module__, red[0].__name__)
+                state['__init_fn__'] = (red[0].__module__, red[0].__name__)  # Note: 'object' type has module == None
             state.update({'__init_args__': init_args})
         elif _class_hasattr(py_obj, '__pygsti_getstate__'):
             state = py_obj.__pygsti_getstate__()  # must return a dict
@@ -223,11 +225,37 @@ def _encode_std_obj(py_obj, binary):
             kind = 'V'
             descr = _tobin(py_obj.dtype.descr) if binary else _tostr(py_obj.dtype.descr)
         else:
-            kind = ''
+            kind = py_obj.dtype.kind  # can be '' or 'O' (for object types)
             descr = _tobin(py_obj.dtype.str) if binary else _tostr(py_obj.dtype.str)
-        data = py_obj.tobytes() if binary else _tostr(_base64.b64encode(py_obj.tobytes()))
-        if(py_obj.dtype == _np.object): raise TypeError("Cannot serialize object ndarrays!")
+
+        if kind == 'O':
+            #Special case of object arrays:  store flattened array data
+            data = [encode_obj(el, binary) for el in py_obj.flat]
+            assert(len(data) == _np.product(py_obj.shape))
+        else:
+            data = py_obj.tobytes() if binary else _tostr(_base64.b64encode(py_obj.tobytes()))
+
         return {'__ndarray__': data,
+                'dtype': descr,
+                'kind': kind,
+                'shape': py_obj.shape}
+
+    #Scipy sparse matrix encoding
+    elif isinstance(py_obj, _sps.csr_matrix):
+        # If the dtype is structured, store the interface description;
+        # otherwise, store the corresponding array protocol type string:
+        if py_obj.dtype.kind == 'V':
+            kind = 'V'
+            descr = _tobin(py_obj.dtype.descr) if binary else _tostr(py_obj.dtype.descr)
+        else:
+            kind = py_obj.dtype.kind  # can be '' or 'O' (for object types)
+            descr = _tobin(py_obj.dtype.str) if binary else _tostr(py_obj.dtype.str)
+        if kind == 'O':
+            raise TypeError("Cannot serialize sparse matrices of *objects*!")
+
+        return {'__scipy_csrmatrix__': encode_obj(py_obj.data, binary),
+                'indices': encode_obj(py_obj.indices, binary),
+                'indptr': encode_obj(py_obj.indptr, binary),
                 'dtype': descr,
                 'kind': kind,
                 'shape': py_obj.shape}
@@ -291,7 +319,10 @@ def decode_obj(json_obj, binary):
 
             if B('__init_fn__') in json_obj:  # construct via this function instead of class_.__init__
                 ifn_modname, ifn_fnname = decode_obj(json_obj[B('__init_fn__')], binary)
-                initfn = getattr(_importlib.import_module(_tostr(ifn_modname)), _tostr(ifn_fnname))
+                if ifn_modname is None and ifn_fnname == "__new__":  # special behavior
+                    initfn = class_.__new__
+                else:
+                    initfn = getattr(_importlib.import_module(_tostr(ifn_modname)), _tostr(ifn_fnname))
             else:
                 initfn = class_  # just use the class a the callable initialization function
 
@@ -310,12 +341,13 @@ def decode_obj(json_obj, binary):
             for k, v in json_obj.items():
                 if k in (B('__pygstiobj__'), B('__init_args__'), B('__std_base__')): continue
                 state_dict[_tostr(k)] = decode_obj(v, binary)
+            state_obj = state_dict.get('__state_obj__', state_dict)
 
             #Set state
             if _class_hasattr(instance, '__pygsti_setstate__'):
-                instance.__pygsti_setstate__(state_dict)
+                instance.__pygsti_setstate__(state_obj)
             elif _class_hasattr(instance, '__setstate__'):
-                instance.__setstate__(state_dict)
+                instance.__setstate__(state_obj)
             elif hasattr(instance, '__dict__'):  # just update __dict__
                 instance.__dict__.update(state_dict)
             elif len(state_dict) > 0:
@@ -446,9 +478,27 @@ def _decode_std_obj(json_obj, binary):
                      for d in json_obj[B('dtype')]]
         else:
             descr = json_obj[B('dtype')]
-        data = json_obj[B('__ndarray__')] if binary else \
-            _base64.b64decode(json_obj[B('__ndarray__')])
-        return _np.fromstring(data, dtype=_np.dtype(descr)).reshape(json_obj[B('shape')])
+
+        if json_obj[B('kind')] == 'O':  # special decoding for object-type arrays
+            data = [decode_obj(el, binary) for el in json_obj[B('__ndarray__')]]
+            flat_ar = _np.empty(len(data), dtype=_np.dtype(descr))
+            for i, el in enumerate(data):
+                flat_ar[i] = el  # can't just make a np.array(data) because data may be, e.g., tuples
+            return flat_ar.reshape(json_obj[B('shape')])
+        else:
+            data = json_obj[B('__ndarray__')] if binary else \
+                _base64.b64decode(json_obj[B('__ndarray__')])
+            return _np.fromstring(data, dtype=_np.dtype(descr)).reshape(json_obj[B('shape')])
+    elif B('__scipy_csrmatrix__') in json_obj:
+        if json_obj[B('kind')] == 'V':
+            descr = [tuple(_tostr(t) if isinstance(t, bytes) else t for t in d)
+                     for d in json_obj[B('dtype')]]
+        else:
+            descr = json_obj[B('dtype')]
+        data = decode_obj(json_obj[B('__scipy_csrmatrix__')], binary)
+        indices = decode_obj(json_obj[B('indices')], binary)
+        indptr = decode_obj(json_obj[B('indptr')], binary)
+        return _sps.csr_matrix((data, indices, indptr), dtype=_np.dtype(descr))
     elif B('__npgeneric__') in json_obj:
         data = json_obj[B('__npgeneric__')] if binary else \
             _base64.b64decode(json_obj[B('__npgeneric__')])

@@ -522,6 +522,63 @@ class ResourceAllocation(object):
             participating_local = local if participating else 0.0
         return self.comm.allreduce(participating_local, op=MPI.SUM)
 
+    def allreduce_min(self, result, local, unit_ralloc=None):
+        """
+        Take elementwise min of local arrays on different processors, potentially using a *unit* resource allocation.
+
+        Similar to a normal MPI reduce call (with MPI.MIN type), but more easily integrates
+        with a hierarchy of processor divisions, or nested comms, by taking a `unit_ralloc`
+        argument.  This is essentially another comm that specifies the groups of processors
+        that have all computed the same local array.  So, when performing the min operation, only
+        processors with `unit_ralloc.rank == 0` contribute.
+
+        Parameters
+        ----------
+        result : numpy.ndarray, possibly shared
+            The destination "global" array, with the same shape as all the local arrays
+            being operated on.  This can be any shape (including any number of dimensions).  When
+            shared memory is being used, i.e. when this :class:`ResourceAllocation` object
+            has a nontrivial inter-host comm, this array must be allocated as a shared array
+            using *this* ralloc or a larger so that `result` is shared between all the processors
+            for this resource allocation's intra-host communicator.  This allows a speedup when
+            shared memory is used by distributing computation of `result` over each host's
+            processors and performing these sums in parallel.
+
+        local : numpy.ndarray
+            The locally computed quantity.  This can be a shared-memory array, but need
+            not be.
+
+        unit_ralloc : ResourceAllocation, optional
+            A resource allocation (essentially a comm) for the group of processors that
+            all compute the same local result, so that only the `unit_ralloc.rank == 0`
+            processors will contribute to the sum operation.  If `None`, then it is
+            assumed that all processors compute different local results.
+
+        Returns
+        -------
+        None
+        """
+        from mpi4py import MPI
+        participating = unit_ralloc is None or unit_ralloc.comm is None or unit_ralloc.comm.rank == 0
+
+        if self.host_comm is not None:
+            #Barrier-min on host within shared mem
+            if self.host_comm.rank == 0: result.fill(-1e100)  # sentinel
+            self.host_comm.barrier()  # make sure all zero-outs above complete
+            for i in range(self.host_comm.size):
+                if i == self.host_comm.rank and participating:
+                    _np.minimum(result, local, out=result)
+                self.host_comm.barrier()  # synchonize adding to shared mem
+            if self.host_comm.rank == 0:
+                mind_across_hosts = self.interhost_comm.allreduce(result, op=MPI.MIN)
+                result[(slice(None, None),) * result.ndim] = mind_across_hosts
+            self.host_comm.barrier()  # wait for allreduce and assignment to complete on non-hostroot procs
+        elif self.comm is not None:
+            participating_local = local if participating else +1e100
+            result[(slice(None, None),) * result.ndim] = self.comm.allreduce(participating_local, op=MPI.MIN)
+        else:
+            result[(slice(None, None),) * result.ndim] = local
+
     def allreduce_max(self, result, local, unit_ralloc=None):
         """
         Take elementwise max of local arrays on different processors, potentially using a *unit* resource allocation.

@@ -43,7 +43,7 @@ class ModelBase(object):
         #OK for these tests, since we test user interface?
         #Set Model objects to "strict" mode for testing
         ExplicitOpModel._strict = False
-        cls._model = models.create_explicit_model(
+        cls._model = models.create_explicit_model_from_expressions(
             [('Q0',)], ['Gi', 'Gx', 'Gy'],
             ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"],
             **cls.build_options)
@@ -70,17 +70,17 @@ class ModelBase(object):
 
 class FullModelBase(ModelBase):
     """Base class for test cases using a full-parameterized model"""
-    build_options = {'parameterization': 'full'}
+    build_options = {'gate_type': 'full'}
 
 
 class TPModelBase(ModelBase):
     """Base class for test cases using a TP-parameterized model"""
-    build_options = {'parameterization': 'TP'}
+    build_options = {'gate_type': 'full TP'}
 
 
 class StaticModelBase(ModelBase):
     """Base class for test cases using a static-parameterized model"""
-    build_options = {'parameterization': 'static'}
+    build_options = {'gate_type': 'static'}
 
 
 ##
@@ -104,7 +104,7 @@ class GeneralMethodBase(object):
         )
 
     def test_set_all_parameterizations_TP(self):
-        self.model.set_all_parameterizations("TP")
+        self.model.set_all_parameterizations("full TP")
         self._assert_model_params(
             nOperations=3,
             nSPVecs=1,
@@ -160,10 +160,10 @@ class GeneralMethodBase(object):
         self.assertArraysAlmostEqual(self.model['Gi'], Gi_test_matrix)
 
     def test_strdiff(self):
-        other = models.create_explicit_model(
+        other = models.create_explicit_model_from_expressions(
             [('Q0',)], ['Gi', 'Gx', 'Gy'],
             ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"],
-            parameterization='TP'
+            gate_type='full TP'
         )
         self.model.strdiff(other)
         # TODO assert correctness
@@ -299,6 +299,22 @@ class GeneralMethodBase(object):
         #DEBUG print(); print(self.model.parameter_labels)
         self.assertEqual(self.model.num_params, 27)
         self.assertEqual(set(lbls_save), set(self.model.parameter_labels))  # ok if ordering if different
+
+    def test_parameter_bounds(self):
+        self.model.set_all_parameterizations("H+S")
+        self.model.num_params  # rebuild parameter vector -- but this should be done by set_all_parameterizations?!
+        
+        self.assertTrue(self.model.parameter_bounds is None)
+        self.assertTrue(self.model['Gx'].parameter_bounds is None)
+
+        new_bounds = np.ones((6,2), 'd')
+        new_bounds[:,0] = -0.01  # lower bounds
+        new_bounds[:,1] = +0.01  # upper bounds
+        self.model['Gx'].parameter_bounds = new_bounds
+
+        self.model.num_params  # should rebuild parameter vector -- maybe .parameter_bounds should (but rebuild call it!)
+        Gx_indices = self.model['Gx'].gpindices
+        self.assertArraysAlmostEqual(self.model.parameter_bounds[Gx_indices], new_bounds)
 
 
 class ThresholdMethodBase(object):

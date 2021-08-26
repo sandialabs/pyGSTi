@@ -37,12 +37,20 @@ cdef class StateRep(_basereps_cython.StateRep):
     def __reduce__(self):
         return (StateRep, (), (self.data.flags.writeable,))
 
+    def __pygsti_reduce__(self):
+        return self.__reduce__()
+
     def __setstate__(self, state):
         writeable, = state
         self.data.flags.writeable = writeable
 
     def copy_from(self, other):
         self.data[:] = other.data[:]
+
+    def actionable_staterep(self):
+        # return a state rep that can be acted on by op reps or mapped to
+        # a probability/amplitude by POVM effect reps.
+        return self  # for most classes, the rep itself is actionable
 
     def to_dense(self, on_space):
         if on_space not in ('minimal', 'HilbertSchmidt'):
@@ -64,7 +72,7 @@ cdef class StateRep(_basereps_cython.StateRep):
 
 
 cdef class StateRepDense(StateRep):
-    def __cinit__(self, _np.ndarray[double, ndim=1, mode='c'] data, state_space):
+    def __cinit__(self, _np.ndarray[double, ndim=1] data, state_space):
         self._cinit_base(data, state_space)
 
     def __reduce__(self):
@@ -107,7 +115,8 @@ cdef class StateRepComputational(StateRep):
     def __cinit__(self, zvals, basis, state_space):
 
         #Convert zvals to dense vec:
-        assert(basis.name == 'pp'), "Only Pauli-product-basis computational states are supported so far"
+        assert(basis.name == 'pp' or basis.name.split('*') == ['pp'] * (basis.name.count('*') + 1)), \
+            "Only Pauli-product-basis computational states are supported so far"
         self.basis = basis
         factor_dim = 4
         v0 = 1.0 / _np.sqrt(2) * _np.array((1, 0, 0, 1), 'd')  # '0' qubit state as Pauli dmvec

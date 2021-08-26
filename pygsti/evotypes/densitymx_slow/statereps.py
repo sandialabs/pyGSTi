@@ -43,6 +43,11 @@ class StateRep(_basereps.StateRep):
     def copy_from(self, other):
         self.data[:] = other.data
 
+    def actionable_staterep(self):
+        # return a state rep that can be acted on by op reps or mapped to
+        # a probability/amplitude by POVM effect reps.
+        return self  # for most classes, the rep itself is actionable
+
     def to_dense(self, on_space):
         if on_space not in ('minimal', 'HilbertSchmidt'):
             raise ValueError("'densitymx' evotype cannot produce Hilbert-space ops!")
@@ -88,7 +93,8 @@ class StateRepComputational(StateRep):
     def __init__(self, zvals, basis, state_space):
 
         #Convert zvals to dense vec:
-        assert(basis.name == 'pp'), "Only Pauli-product-basis computational states are supported so far"
+        assert(basis.name == 'pp' or basis.name.split('*') == ['pp'] * (basis.name.count('*') + 1)), \
+            "Only Pauli-product-basis computational states are supported so far"
         self.basis = basis
         factor_dim = 4
         v0 = 1.0 / _np.sqrt(2) * _np.array((1, 0, 0, 1), 'd')  # '0' qubit state as Pauli dmvec
@@ -147,152 +153,3 @@ class StateRepTensorProduct(StateRep):
 
     def __reduce__(self):
         return (StateRepTensorProduct, (self.factor_reps, self.state_space), (self.data.flags.writeable,))
-
-    #REMOVE - or do something with this for a to_dense method?
-    #def _fill_fast_kron(self):
-    #    """ Fills in self._fast_kron_array based on current self.factors """
-    #    for i, factor_dim in enumerate(self._fast_kron_factordims):
-    #        self._fast_kron_array[i][0:factor_dim] = self.factors[i].to_dense()
-
-#        if self._evotype in ("statevec", "densitymx"):
-#            if self._prep_or_effect == "prep":
-#                self._rep.base[:] = self.to_dense()
-#            else:
-#                self._fill_fast_kron()  # updates effect reps
-#        elif self._evotype == "stabilizer":
-#            if self._prep_or_effect == "prep":
-#                #we need to update self._rep, which is a SBStateRep object.  For now, we
-#                # kinda punt and just create a new rep and copy its data over to the existing
-#                # rep instead of having some kind of update method within SBStateRep...
-#                # (TODO FUTURE - at least a .copy_from method?)
-#                sframe_factors = [f.to_dense() for f in self.factors]  # StabilizerFrame for each factor
-#                new_rep = _stabilizer.sframe_kronecker(sframe_factors).to_rep()
-#                self._rep.smatrix[:, :] = new_rep.smatrix[:, :]
-#                self._rep.pvectors[:, :] = new_rep.pvectors[:, :]
-#                self._rep.amps[:, :] = new_rep.amps[:, :]
-#            else:
-#                pass  # I think the below (e.g. 'outcomes') is not altered by any parameters
-#                #factor_povms = self.factors
-#                #factorVecs = [factor_povms[i][self.effectLbls[i]] for i in range(1, len(factor_povms))]
-#                #outcomes = _np.array(list(_itertools.chain(*[f.outcomes for f in factorVecs])), _np.int64)
-#                #rep = replib.SBEffectRep(outcomes)
-#
-#    def to_dense(self):  # from tensorprodstate
-#        if self._evotype in ("statevec", "densitymx"):
-#            if len(self.factors) == 0: return _np.empty(0, complex if self._evotype == "statevec" else 'd')
-#            #NOTE: moved a fast version of to_dense to replib - could use that if need a fast to_dense call...
-#
-#            ret = self.factors[0].to_dense()  # factors are just other SPAMVecs
-#            for i in range(1, len(self.factors)):
-#                ret = _np.kron(ret, self.factors[i].to_dense())
-#            return ret
-#        elif self._evotype == "stabilizer":
-#
-#            # => self.factors should all be StabilizerSPAMVec objs
-#            #Return stabilizer-rep tuple, just like StabilizerSPAMVec
-#            sframe_factors = [f.to_dense() for f in self.factors]
-#            return _stabilizer.sframe_kronecker(sframe_factors)
-#        else:  # self._evotype in ("svterm","cterm")
-#            raise NotImplementedError("to_dense() not implemented for %s evolution type" % self._evotype)
-#
-#
-#
-#    def init_from_dense_vec(self, vec):
-#
-#
-#        pass
-#
-#    def init_from_dense_purevec(self, purevec):
-#
-#        if not isinstance(pure_state_vec, _State):
-#            pure_state_vec = StaticState(_State._to_vector(pure_state_vec), 'statevec')
-#        self.pure_state_vec = pure_state_vec
-#        self.basis = dm_basis  # only used for dense conversion
-#
-#        pure_evo = pure_state_vec._evotype
-#        if pure_evo == "statevec":
-#            if evotype not in ("densitymx", "svterm"):
-#                raise ValueError(("`evotype` arg must be 'densitymx' or 'svterm'"
-#                                  " when `pure_state_vec` evotype is 'statevec'"))
-#        elif pure_evo == "stabilizer":
-#            if evotype not in ("cterm",):
-#                raise ValueError(("`evotype` arg must be 'densitymx' or 'svterm'"
-#                                  " when `pure_state_vec` evotype is 'statevec'"))
-#        else:
-#            raise ValueError("`pure_state_vec` evotype must be 'statevec' or 'stabilizer' (not '%s')" % pure_evo)
-#
-#        dim = self.pure_state_vec.dim**2
-#
-#        pass
-#
-#    def init_from_zvalues(self, zvals):
-#        pass
-#
-#    @property
-#    def base(self):
-#        pass  # numpy array of dense super-bra (real) vector
-#
-#
-#    @property
-#    def purebase(self):
-#        pass  # numpy array of dense pure-state (complex) vector
-#
-#
-#    def copy_from(self, other_state_rep):
-#        pass
-#
-#
-#
-#        dtype = complex if evotype == "statevec" else 'd'
-#        if evotype == "statevec":
-#            rep = replib.SVStateRep(vec)
-#        elif evotype == "densitymx":
-#            rep = replib.DMStateRep(vec)
-#        else:
-#            raise ValueError("Invalid evotype for DenseSPAMVec: %s" % evotype)
-#
-#
-#    #Computational:
-#           if evotype == "statevec":
-#                rep = replib.SVStateRep(self.to_dense())
-#            elif evotype == "densitymx":
-#                vec = _np.require(self.to_dense(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
-#                rep = replib.DMStateRep(vec)
-#            elif evotype == "stabilizer":
-#                sframe = _stabilizer.StabilizerFrame.from_zvals(len(self._zvals), self._zvals)
-#                rep = sframe.to_rep()
-#            else:
-#                rep = dim  # no representations for term-based evotypes
-#
-#
-#    def init_as_tensor_product_of_states(self, state_factors):
-#
-#        #Create representation
-#        dim = _np.product([fct.dim for fct in factors])
-#        if evotype == "statevec":
-#            rep = replib.SVStateRep(_np.ascontiguousarray(_np.zeros(dim, complex)))
-#        elif evotype == "densitymx":
-#            vec = _np.require(_np.zeros(dim, 'd'), requirements=['OWNDATA', 'C_CONTIGUOUS'])
-#            rep = replib.DMStateRep(vec)
-#        elif evotype == "stabilizer":
-#            #Rep is stabilizer-rep tuple, just like StabilizerSPAMVec
-#            sframe_factors = [f.to_dense() for f in self.factors]  # StabilizerFrame for each factor
-#            rep = _stabilizer.sframe_kronecker(sframe_factors).to_rep()
-#        else:  # self._evotype in ("svterm","cterm")
-#            rep = dim  # no reps for term-based evotypes
-#
-#
-#
-#
-##UPDATE REP? (from tensorprod)
-#                                if self._prep_or_effect == "prep":
-#                #we need to update self._rep, which is a SBStateRep object.  For now, we
-#                # kinda punt and just create a new rep and copy its data over to the existing
-#                # rep instead of having some kind of update method within SBStateRep...
-#                # (TODO FUTURE - at least a .copy_from method?)
-#                sframe_factors = [f.to_dense() for f in self.factors]  # StabilizerFrame for each factor
-#                new_rep = _stabilizer.sframe_kronecker(sframe_factors).to_rep()
-#                self._rep.smatrix[:, :] = new_rep.smatrix[:, :]
-#                self._rep.pvectors[:, :] = new_rep.pvectors[:, :]
-#                self._rep.amps[:, :] = new_rep.amps[:, :]
-#            else:

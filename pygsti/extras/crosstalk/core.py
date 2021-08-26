@@ -685,7 +685,7 @@ def crosstalk_detection_experiment(pspec, lengths, circuits_per_length, circuit_
     if isinstance(structure,str):
         assert(structure == '1Q'), "The only default `structure` option is the string '1Q'"
         structure = tuple([(q,) for q in pspec.qubit_labels])
-        n = pspec.number_of_qubits
+        n = pspec.num_qubits
     else:
         assert(isinstance(structure,list) or isinstance(structure,tuple)), \
             "If not a string, `structure` must be a list or tuple."
@@ -697,7 +697,7 @@ def crosstalk_detection_experiment(pspec, lengths, circuits_per_length, circuit_
                 "The qubits in the tuples/lists of `structure must all be unique!"
 
         assert(set(qubits_used).issubset(set(pspec.qubit_labels))), \
-            "The qubits to benchmark must all be in the ProcessorSpec `pspec`!"
+            "The qubits to benchmark must all be in the QubitProcessorSpec `pspec`!"
         n = len(qubits_used)
 
     experiment_dict['spec']['structure'] = structure
@@ -803,7 +803,7 @@ def crosstalk_detection_experiment2(pspec, lengths, circuits_per_length, circuit
     if isinstance(structure, str):
         assert(structure == '1Q'), "The only default `structure` option is the string '1Q'"
         structure = tuple([(q,) for q in pspec.qubit_labels])
-        n = pspec.number_of_qubits
+        n = pspec.num_qubits
     else:
         assert(isinstance(structure, list) or isinstance(structure, tuple)), \
             "If not a string, `structure` must be a list or tuple."
@@ -815,7 +815,7 @@ def crosstalk_detection_experiment2(pspec, lengths, circuits_per_length, circuit
                 "The qubits in the tuples/lists of `structure must all be unique!"
 
         assert(set(qubits_used).issubset(set(pspec.qubit_labels))), \
-            "The qubits to benchmark must all be in the ProcessorSpec `pspec`!"
+            "The qubits to benchmark must all be in the QubitProcessorSpec `pspec`!"
         n = len(qubits_used)
 
     experiment_dict['spec']['circuits_per_length'] = circuits_per_length * multiplier * n
@@ -958,7 +958,7 @@ def crosstalk_detection_experiment3(pspec, lengths, circuit_population_sz, inclu
     if isinstance(structure,str):
         assert(structure == '1Q'), "The only default `structure` option is the string '1Q'"
         structure = tuple([(q,) for q in pspec.qubit_labels])
-        n = pspec.number_of_qubits
+        n = pspec.num_qubits
     else:
         assert(isinstance(structure,list) or isinstance(structure,tuple)), \
             "If not a string, `structure` must be a list or tuple."
@@ -970,7 +970,7 @@ def crosstalk_detection_experiment3(pspec, lengths, circuit_population_sz, inclu
                 "The qubits in the tuples/lists of `structure must all be unique!"
 
         assert(set(qubits_used).issubset(set(pspec.qubit_labels))), \
-            "The qubits to benchmark must all be in the ProcessorSpec `pspec`!"
+            "The qubits to benchmark must all be in the QubitProcessorSpec `pspec`!"
         n = len(qubits_used)
 
     assert(isprime(circuit_population_sz)), "circuit_population_sz must be prime"

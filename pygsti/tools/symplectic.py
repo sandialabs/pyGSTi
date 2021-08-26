@@ -427,6 +427,23 @@ def find_premultipled_pauli(s, p_implemented, p_target, qubit_labels=None):
     return pauli_layer
 
 
+def find_pauli_layer(pvec, qubit_labels, pauli_labels=['I', 'X', 'Y', 'Z']):
+    """
+    TODO: docstring
+    """
+    paulis_as_int_list = find_pauli_number(pvec)
+    return [(pauli_labels[p], q) for p, q in zip(paulis_as_int_list, qubit_labels)]
+
+
+def find_pauli_number(pvec):
+    """
+    TODO: docstring
+    """
+    n = len(pvec) // 2
+    v = (pvec[0:n] // 2) + 2 * (pvec[n:] // 2)
+    return [[0, 3, 1, 2][i] for i in v]  # [0,0]=I, [2,0]=Z, [0,2]=X, and [2,2]=Y.
+
+
 def compose_cliffords(s1, p1, s2, p2, do_checks=True):
     """
     Multiplies two cliffords in the symplectic representation.
@@ -1060,8 +1077,8 @@ def symplectic_rep_of_clifford_circuit(circuit, srep_dict=None, pspec=None):
         specified (and it is ignored if it is specified). Otherwise it must be
         specified.
 
-    pspec : ProcessorSpec, optional
-        A ProcessorSpec that contains a Clifford model that defines the symplectic
+    pspec : QubitProcessorSpec, optional
+        A QubitProcessorSpec that contains a Clifford model that defines the symplectic
         action of all of the gates in `circuit`. If this is not None it over-rides
         `srep_dict`. Both `pspec` and `srep_dict` can only be None if the circuit
         contains only gates with names that are hard-coded into pyGSTi.
@@ -1080,7 +1097,7 @@ def symplectic_rep_of_clifford_circuit(circuit, srep_dict=None, pspec=None):
         srep_dict = {}
     srep_dict.update(compute_internal_gate_symplectic_representations())
     if pspec is not None:
-        srep_dict.update(pspec.models['clifford'].compute_clifford_symplectic_reps())
+        srep_dict.update(pspec.compute_clifford_symplectic_reps())
 
     # The initial action of the circuit before any layers are applied.
     s = _np.identity(2 * n, int)
@@ -1170,7 +1187,7 @@ def symplectic_rep_of_clifford_layer(layer, n=None, q_labels=None, srep_dict=Non
 
     for sub_lbl in layer.components:
         matrix, phase = srep_dict[sub_lbl.name]
-        nforgate = sub_lbl.number_of_qubits
+        nforgate = sub_lbl.num_qubits
         sub_lbl_qubits = sub_lbl.qubits if (sub_lbl.qubits is not None) else q_labels
         for ind1, qlabel1 in enumerate(sub_lbl_qubits):
             qindex1 = q_labels.index(qlabel1)

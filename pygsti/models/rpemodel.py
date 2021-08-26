@@ -55,14 +55,14 @@ def make_rpe_model(alpha_true, epsilon_true, y_rot, spam_depol, gate_depol=None,
     """
 
     if with_id:
-        outputModel = _setc.create_explicit_model(
+        outputModel = _setc.create_explicit_model_from_expressions(
             [('Q0',)], ['Gi', 'Gx', 'Gz'],
             ["I(Q0)", "X(%s,Q0)" % epsilon_true, "Z(%s,Q0)" % alpha_true],
             prep_labels=["rho0"], prep_expressions=["0"],
             effect_labels=["E0", "Ec"], effect_expressions=["0", "complement"],
             spamdefs={'0': ('rho0', 'E0'), '1': ('rho0', 'Ec')})
     else:
-        outputModel = _setc.create_explicit_model(
+        outputModel = _setc.create_explicit_model_from_expressions(
             [('Q0',)], ['Gx', 'Gz'],
             ["X(%s,Q0)" % epsilon_true, "Z(%s,Q0)" % alpha_true],
             prep_labels=["rho0"], prep_expressions=["0"],
@@ -70,7 +70,7 @@ def make_rpe_model(alpha_true, epsilon_true, y_rot, spam_depol, gate_depol=None,
             spamdefs={'0': ('rho0', 'E0'), '1': ('rho0', 'Ec')})
 
     if y_rot != 0:
-        modelAux1 = _setc.create_explicit_model(
+        modelAux1 = _setc.create_explicit_model_from_expressions(
             [('Q0',)], ['Gi', 'Gy', 'Gz'],
             ["I(Q0)", "Y(%s,Q0)" % y_rot, "Z(pi/2,Q0)"],
             prep_labels=["rho0"], prep_expressions=["0"],
@@ -112,18 +112,20 @@ def rpe_ensemble_test(alpha_true, epsilon_true, y_rot, spam_depol, log2k_max, n,
     #percentAlphaError = 100*_np.abs((_np.pi/2-alpha_true)/alpha_true)
     #percentEpsilonError = 100*_np.abs((_np.pi/4 - epsilon_true)/epsilon_true)
 
-    simModel = _setc.create_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gz'],
-                                           ["I(Q0)", "X(" + str(epsilon_true) + ",Q0)",
-                                            "Z(" + str(alpha_true) + ",Q0)"],
-                                           prep_labels=["rho0"], prep_expressions=["0"],
-                                           effect_labels=["E0", "Ec"], effect_expressions=["0", "complement"],
-                                           spamdefs={'0': ('rho0', 'E0'), '1': ('rho0', 'Ec')})
+    simModel = _setc.create_explicit_model_from_expressions([('Q0',)], ['Gi', 'Gx', 'Gz'],
+                                                            ["I(Q0)", "X(" + str(epsilon_true) + ",Q0)",
+                                                             "Z(" + str(alpha_true) + ",Q0)"],
+                                                            prep_labels=["rho0"], prep_expressions=["0"],
+                                                            effect_labels=["E0", "Ec"],
+                                                            effect_expressions=["0", "complement"],
+                                                            spamdefs={'0': ('rho0', 'E0'), '1': ('rho0', 'Ec')})
 
-    modelAux1 = _setc.create_explicit_model([('Q0',)], ['Gi', 'Gy', 'Gz'],
-                                            ["I(Q0)", "Y(" + str(y_rot) + ",Q0)", "Z(pi/2,Q0)"],
-                                            prep_labels=["rho0"], prep_expressions=["0"],
-                                            effect_labels=["E0", "Ec"], effect_expressions=["0", "complement"],
-                                            spamdefs={'0': ('rho0', 'E0'), '1': ('rho0', 'Ec')})
+    modelAux1 = _setc.create_explicit_model_from_expressions([('Q0',)], ['Gi', 'Gy', 'Gz'],
+                                                             ["I(Q0)", "Y(" + str(y_rot) + ",Q0)", "Z(pi/2,Q0)"],
+                                                             prep_labels=["rho0"], prep_expressions=["0"],
+                                                             effect_labels=["E0", "Ec"],
+                                                             effect_expressions=["0", "complement"],
+                                                             spamdefs={'0': ('rho0', 'E0'), '1': ('rho0', 'Ec')})
 
     simModel.operations['Gx'] = _op.FullArbitraryOp(
         _np.dot(_np.dot(_np.linalg.inv(modelAux1.operations['Gy']), simModel.operations['Gx']),

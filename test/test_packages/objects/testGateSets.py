@@ -10,13 +10,13 @@ import pickle
 import os
 
 from ..testutils import BaseTestCase, compare_files, temp_files
-#from pygsti.objects.mapforwardsim import MapForwardSimulator
+#from pygsti.forwardsims.mapforwardsim import MapForwardSimulator
 
 #Note: calcs expect tuples (or Circuits) of *Labels*
-from pygsti.objects import Label as L
+from pygsti.baseobjs import Label as L
 
 from pygsti.modelpacks.legacy import std1Q_XYI
-from pygsti.io import enable_old_object_unpickling
+#from pygsti.io import enable_old_object_unpickling
 from pygsti.baseobjs._compatibility import patched_uuid
 
 def Ls(*args):
@@ -36,21 +36,21 @@ class GateSetTestCase(BaseTestCase):
 
         #OK for these tests, since we test user interface?
         #Set Model objects to "strict" mode for testing
-        pygsti.objects.ExplicitOpModel._strict = False
+        pygsti.models.ExplicitOpModel._strict = False
 
-        self.model = pygsti.construction.create_explicit_model(
+        self.model = pygsti.models.modelconstruction.create_explicit_model_from_expressions(
             [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"])
 
-        self.tp_gateset = pygsti.construction.create_explicit_model(
+        self.tp_gateset = pygsti.models.modelconstruction.create_explicit_model_from_expressions(
             [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
-            parameterization="TP")
+            gate_type="full TP")
 
-        self.static_gateset = pygsti.construction.create_explicit_model(
+        self.static_gateset = pygsti.models.modelconstruction.create_explicit_model_from_expressions(
             [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
-            parameterization="static")
+            gate_type="static")
 
         self.mgateset = self.model.copy()
         #self.mgateset._calcClass = MapForwardSimulator
@@ -76,19 +76,19 @@ class TestGateSetMethods(GateSetTestCase):
 
         #Artificially reset the "smallness" threshold for scaling to be
         # sure to engate the scaling machinery
-        PORIG = pygsti.objects.matrixforwardsim._PSMALL; pygsti.objects.matrixforwardsim._PSMALL = 10
+        PORIG = pygsti.forwardsims.matrixforwardsim._PSMALL; pygsti.forwardsims.matrixforwardsim._PSMALL = 10
         bulk_prods_scaled, scaleVals3 = self.model.sim.bulk_product([gatestring1,gatestring2], scale=True)
         bulk_prods3 = scaleVals3[:,None,None] * bulk_prods_scaled
-        pygsti.objects.matrixforwardsim._PSMALL = PORIG
+        pygsti.forwardsims.matrixforwardsim._PSMALL = PORIG
         self.assertArraysAlmostEqual(bulk_prods3[0],p1)
         self.assertArraysAlmostEqual(bulk_prods3[1],p2)
 
     def test_hessians(self):
-        gatestring0 = pygsti.obj.Circuit(('Gi', 'Gx'))
-        gatestring1 = pygsti.obj.Circuit(('Gx', 'Gy'))
-        gatestring2 = pygsti.obj.Circuit(('Gx', 'Gy', 'Gy'))
+        gatestring0 = pygsti.circuits.Circuit(('Gi', 'Gx'))
+        gatestring1 = pygsti.circuits.Circuit(('Gx', 'Gy'))
+        gatestring2 = pygsti.circuits.Circuit(('Gx', 'Gy', 'Gy'))
 
-        circuitList = pygsti.construction.to_circuits([gatestring0, gatestring1, gatestring2])
+        circuitList = pygsti.circuits.to_circuits([gatestring0, gatestring1, gatestring2])
         layout = self.model.sim.create_layout([gatestring0,gatestring1,gatestring2], array_types=('E','EPP'))
         mlayout = self.mgateset.sim.create_layout([gatestring0,gatestring1,gatestring2], array_types=('E','EPP'))
 
@@ -242,7 +242,7 @@ class TestGateSetMethods(GateSetTestCase):
 
     @unittest.skip("FakeComm is no longer sufficient - we need to run this using actual comms of different sizes")
     def test_tree_construction_mem_limit(self):
-        circuits = pygsti.construction.to_circuits(
+        circuits = pygsti.circuits.to_circuits(
             [('Gx',),
              ('Gy',),
              ('Gx','Gy'),
@@ -347,6 +347,7 @@ class TestGateSetMethods(GateSetTestCase):
     @unittest.skip("TODO: add backward compatibility for old gatesets?")
     def test_load_old_gateset(self):
         #pygsti.obj.results.enable_old_python_results_unpickling()
+        from pygsti.io import enable_old_object_unpickling
         with enable_old_object_unpickling(), patched_uuid():
             with open(compare_files + "/pygsti0.9.6.gateset.pkl", 'rb') as f:
                 mdl = pickle.load(f)

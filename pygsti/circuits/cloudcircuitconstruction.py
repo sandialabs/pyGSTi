@@ -13,33 +13,20 @@ Defines classes which represent gates, as well as supporting functions
 import collections as _collections
 import itertools as _itertools
 import warnings as _warnings
-
 import numpy as _np
-import scipy as _scipy
 
-from pygsti.circuits import circuitconstruction as _gsc
-from pygsti.circuits.circuitparser import CircuitParser as _CircuitParser
-from pygsti.models.modelconstruction import _parameterization_from_errgendict
 from pygsti import baseobjs as _baseobjs
-from pygsti.baseobjs import qubitgraph as _qgraph, statespace as _statespace
-from pygsti.evotypes import Evotype as _Evotype
-from pygsti.forwardsims.mapforwardsim import MapForwardSimulator as _MapFSim
-from pygsti.forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
-from pygsti.forwardsims.termforwardsim import TermForwardSimulator as _TermFSim
-from pygsti.modelmembers import operations as _op
-from pygsti.modelmembers import povms as _povm
-from pygsti.modelmembers import states as _state
-from pygsti.modelmembers.operations import opfactory as _opfactory
-from pygsti.models.cloudnoisemodel import CloudNoiseModel as _CloudNoiseModel
-from pygsti.models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
-from pygsti.circuits.circuit import Circuit as _Circuit
-from pygsti.circuits.circuitstructure import GermFiducialPairPlaquette as _GermFiducialPairPlaquette, \
-    PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
-from pygsti.baseobjs.basis import BuiltinBasis as _BuiltinBasis
+from pygsti.baseobjs import statespace as _statespace
 from pygsti.baseobjs.label import Label as _Lbl
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+
+from pygsti.circuits import circuitconstruction as _gsc
+from pygsti.circuits.circuit import Circuit as _Circuit
+from pygsti.circuits.circuitstructure import GermFiducialPairPlaquette as _GermFiducialPairPlaquette, \
+    PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
+
 from pygsti.tools import basistools as _bt
 from pygsti.tools import internalgates as _itgs
 from pygsti.tools import listtools as _lt
@@ -51,909 +38,14 @@ from pygsti.tools.legacytools import deprecate as _deprecated_fn
 RANK_TOL = 1e-9
 
 
-@_deprecated_fn("This function is overly specific and will be removed soon.")
-def _nparams_xycnot_cloudnoise_model(num_qubits, geometry="line", max_idle_weight=1, maxhops=0,
-                                     extra_weight_1_hops=0, extra_gate_weight=0, require_connected=False,
-                                     independent_1q_gates=True, zz_only=False, bidirectional_cnots=True, verbosity=0):
-    """
-    Compute the number of parameters in a particular :class:`CloudNoiseModel`.
-
-    Returns the number of parameters in the :class:`CloudNoiseModel` containing
-    X(pi/2), Y(pi/2) and CNOT gates using the specified arguments without
-    actually constructing the model (useful for considering parameter-count
-    scaling).
-
-    Parameters
-    ----------
-    num_qubits : int
-        The total number of qubits.
-
-    geometry : {"line","ring","grid","torus"} or QubitGraph
-        The type of connectivity among the qubits, specifying a
-        graph used to define neighbor relationships.  Alternatively,
-        a :class:`QubitGraph` object may be passed directly.
-
-    max_idle_weight : int, optional
-        The maximum-weight for errors on the global idle gate.
-
-    maxhops : int
-        The locality constraint: for a gate, errors (of weight up to the
-        maximum weight for the gate) are allowed to occur on the gate's
-        target qubits and those reachable by hopping at most `maxhops` times
-        from a target qubit along nearest-neighbor links (defined by the
-        `geometry`).
-
-    extra_weight_1_hops : int, optional
-        Additional hops (adds to `maxhops`) for weight-1 errors.  A value > 0
-        can be useful for allowing just weight-1 errors (of which there are
-        relatively few) to be dispersed farther from a gate's target qubits.
-        For example, a crosstalk-detecting model might use this.
-
-    extra_gate_weight : int, optional
-        Addtional weight, beyond the number of target qubits (taken as a "base
-        weight" - i.e. weight 2 for a 2Q gate), allowed for gate errors.  If
-        this equals 1, for instance, then 1-qubit gates can have up to weight-2
-        errors and 2-qubit gates can have up to weight-3 errors.
-
-    require_connected : bool, optional
-        If True, then high-weight errors only occur on connected (via `geometry`) qubits.
-        For example in a line of qubits there would not be weight-2 errors on qubits 1 and 3.
-
-    independent_1q_gates : bool, optional
-        If True, 1Q gates on different qubits have separate (distinct) parameters.  If
-        False, the 1Q gates of each type (e.g. an pi/2 X gate) for different qubits share
-        the same set of parameters.
-
-    zz_only : bool, optional
-        If True, the only high-weight errors allowed are of "Z^n" type.
-
-    bidirectional_cnots : bool
-        Whether CNOT gates can be performed in either direction (and each direction should
-        be treated as an indepedent gate)
-
-    verbosity : int, optional
-        An integer >= 0 dictating how much output to send to stdout.
-
-    Returns
-    -------
-    int
-    """
-    # noise can be either a seed or a random array that is long enough to use
-
-    printer = _VerbosityPrinter.create_printer(verbosity)
-    printer.log("Computing parameters for a %d-qubit %s model" % (num_qubits, geometry))
-
-    qubitGraph = _baseobjs.QubitGraph.common_graph(num_qubits, geometry, directed=True, all_directions=True)
-    #printer.log("Created qubit graph:\n"+str(qubitGraph))
-
-    def idle_count_nparams(max_weight):
-        """Parameter count of a `build_nqn_global_idle`-constructed gate"""
-        ret = 0
-        possible_err_qubit_inds = _np.arange(num_qubits)
-        for wt in range(1, max_weight + 1):
-            nErrTargetLocations = qubitGraph.connected_combos(possible_err_qubit_inds, wt)
-            if zz_only and wt > 1: basisSizeWoutId = 1**wt  # ( == 1)
-            else: basisSizeWoutId = 3**wt  # (X,Y,Z)^wt
-            nErrParams = 2 * basisSizeWoutId  # H+S terms
-            ret += nErrTargetLocations * nErrParams
-        return ret
-
-    def op_count_nparams(target_qubit_inds, weight_maxhops_tuples, debug=False):
-        """Parameter count of a `build_nqn_composed_gate`-constructed gate"""
-        ret = 0
-        #Note: no contrib from idle noise (already parameterized)
-        for wt, maxHops in weight_maxhops_tuples:
-            possible_err_qubit_inds = _np.array(qubitGraph.radius(target_qubit_inds, maxHops), _np.int64)
-            if require_connected:
-                nErrTargetLocations = qubitGraph.connected_combos(possible_err_qubit_inds, wt)
-            else:
-                nErrTargetLocations = _scipy.special.comb(len(possible_err_qubit_inds), wt)
-            if zz_only and wt > 1: basisSizeWoutId = 1**wt  # ( == 1)
-            else: basisSizeWoutId = 3**wt  # (X,Y,Z)^wt
-            nErrParams = 2 * basisSizeWoutId  # H+S terms
-            if debug:
-                print(" -- wt%d, hops%d: inds=%s locs = %d, eparams=%d, total contrib = %d" %
-                      (wt, maxHops, str(possible_err_qubit_inds), nErrTargetLocations,
-                       nErrParams, nErrTargetLocations * nErrParams))
-            ret += nErrTargetLocations * nErrParams
-        return ret
-
-    nParams = _collections.OrderedDict()
-
-    printer.log("Creating Idle:")
-    nParams[_Lbl('Gi')] = idle_count_nparams(max_idle_weight)
-
-    #1Q gates: X(pi/2) & Y(pi/2) on each qubit
-    weight_maxhops_tuples_1Q = [(1, maxhops + extra_weight_1_hops)] + \
-                               [(1 + x, maxhops) for x in range(1, extra_gate_weight + 1)]
-
-    if independent_1q_gates:
-        for i in range(num_qubits):
-            printer.log("Creating 1Q X(pi/2) and Y(pi/2) gates on qubit %d!!" % i)
-            nParams[_Lbl("Gx", i)] = op_count_nparams((i,), weight_maxhops_tuples_1Q)
-            nParams[_Lbl("Gy", i)] = op_count_nparams((i,), weight_maxhops_tuples_1Q)
-    else:
-        printer.log("Creating common 1Q X(pi/2) and Y(pi/2) gates")
-        rep = int(num_qubits / 2)
-        nParams[_Lbl("Gxrep")] = op_count_nparams((rep,), weight_maxhops_tuples_1Q)
-        nParams[_Lbl("Gyrep")] = op_count_nparams((rep,), weight_maxhops_tuples_1Q)
-
-    #2Q gates: CNOT gates along each graph edge
-    weight_maxhops_tuples_2Q = [(1, maxhops + extra_weight_1_hops), (2, maxhops)] + \
-                               [(2 + x, maxhops) for x in range(1, extra_gate_weight + 1)]
-    seen_pairs = set()
-    for i, j in qubitGraph.edges():  # note: all edges have i<j so "control" of CNOT is always lower index (arbitrary)
-        if bidirectional_cnots is False:
-            ordered_tup = (i, j) if i <= j else (j, i)
-            if ordered_tup in seen_pairs: continue
-            else: seen_pairs.add(ordered_tup)
-
-        printer.log("Creating CNOT gate between qubits %d and %d!!" % (i, j))
-        nParams[_Lbl("Gcnot", (i, j))] = op_count_nparams((i, j), weight_maxhops_tuples_2Q)
-
-    #SPAM
-    nPOVM_1Q = 4  # params for a single 1Q POVM
-    nParams[_Lbl('rho0')] = 3 * num_qubits  # 3 b/c each component is TP
-    nParams[_Lbl('Mdefault')] = nPOVM_1Q * num_qubits  # num_qubits 1Q-POVMs
-
-    return nParams, sum(nParams.values())
-
-
-def create_cloudnoise_model_from_hops_and_weights(
-        num_qubits, gate_names, nonstd_gate_unitaries=None, custom_gates=None,
-        availability=None, qubit_labels=None, geometry="line",
-        max_idle_weight=1, max_spam_weight=1, maxhops=0,
-        extra_weight_1_hops=0, extra_gate_weight=0,
-        rough_noise=None, sparse_lindblad_basis=False, sparse_lindblad_reps=False,
-        simulator="auto", parameterization="H+S", evotype='default',
-        spamtype="lindblad", add_idle_noise_to_all_gates=True,
-        errcomp_type="gates", independent_clouds=True,
-        return_clouds=False, verbosity=0):  # , debug=False):
-    """
-    Create a n-qubit model using a low-weight and geometrically local error model.
-
-    The model contains a common "global idle" operation which is applied within
-    every circuit layer to model a potentially high-weight background noise process.
-
-    This type of model is referred to as a "cloud noise" model because
-    noise specific to a gate may act on a neighborhood or cloud around
-    the gate's target qubits.  This type of model is generally useful
-    for performing GST on a multi-qubit system, whereas local-noise
-    models (:class:`LocalNoiseModel` objects, created by, e.g.,
-    :function:`create_standard localnoise_model`) are more useful for
-    representing static (non-parameterized) models.
-
-    The following standard gate names may be specified as elements to
-    `gate_names` without the need to supply their corresponding unitaries
-    (as one must when calling the constructor directly):
-
-    - 'Gi' : the 1Q idle operation
-    - 'Gx','Gy','Gz' : 1Q pi/2 rotations
-    - 'Gxpi','Gypi','Gzpi' : 1Q pi rotations
-    - 'Gh' : Hadamard
-    - 'Gp' : phase
-    - 'Gcphase','Gcnot','Gswap' : standard 2Q gates
-
-    Furthermore, if additional "non-standard" gates are needed,
-    they are specified by their *unitary* gate action, even if
-    the final model propagates density matrices (as opposed
-    to state vectors).
-
-    Parameters
-    ----------
-    num_qubits : int
-        The total number of qubits.
-
-    gate_names : list
-        A list of string-type gate names (e.g. `"Gx"`) either taken from
-        the list of builtin "standard" gate names given above or from the
-        keys of `nonstd_gate_unitaries`.  These are the typically 1- and 2-qubit
-        gates that are repeatedly embedded (based on `availability`) to form
-        the resulting model.
-
-    nonstd_gate_unitaries : dict, optional
-        A dictionary of numpy arrays which specifies the unitary gate action
-        of the gate names given by the dictionary's keys.  As an advanced
-        behavior, a unitary-matrix-returning function which takes a single
-        argument - a tuple of label arguments - may be given instead of a
-        single matrix to create an operation *factory* which allows
-        continuously-parameterized gates.  This function must also return
-        an empty/dummy unitary when `None` is given as it's argument.
-
-    custom_gates : dict
-        A dictionary that associates with gate labels
-        :class:`LinearOperator`, :class:`OpFactory`, or `numpy.ndarray`
-        objects.  These objects describe the full action of the gate or
-        primitive-layer they're labeled by (so if the model represents
-        states by density matrices these objects are superoperators, not
-        unitaries), and override any standard construction based on builtin
-        gate names or `nonstd_gate_unitaries`.  Keys of this dictionary must
-        be string-type gate *names* -- they cannot include state space labels
-        -- and they must be *static* (have zero parameters) because they
-        represent only the ideal behavior of each gate -- the cloudnoise
-        operations represent the parameterized noise.  To fine-tune how this
-        noise is parameterized, call the :class:`CloudNoiseModel` constructor
-        directly.
-
-    availability : dict, optional
-        A dictionary whose keys are the same gate names as in
-        `gate_names` and whose values are lists of qubit-label-tuples.  Each
-        qubit-label-tuple must have length equal to the number of qubits
-        the corresponding gate acts upon, and causes that gate to be
-        embedded to act on the specified qubits.  For example,
-        `{ 'Gx': [(0,),(1,),(2,)], 'Gcnot': [(0,1),(1,2)] }` would cause
-        the `1-qubit `'Gx'`-gate to be embedded three times, acting on qubits
-        0, 1, and 2, and the 2-qubit `'Gcnot'`-gate to be embedded twice,
-        acting on qubits 0 & 1 and 1 & 2.  Instead of a list of tuples,
-        values of `availability` may take the special values:
-
-        - `"all-permutations"` and `"all-combinations"` equate to all possible
-        permutations and combinations of the appropriate number of qubit labels
-        (deterined by the gate's dimension).
-        - `"all-edges"` equates to all the vertices, for 1Q gates, and all the
-        edges, for 2Q gates of the graphy given by `geometry`.
-        - `"arbitrary"` or `"*"` means that the corresponding gate can be placed
-        on any target qubits via an :class:`EmbeddingOpFactory` (uses less
-        memory but slower than `"all-permutations"`.
-
-        If a gate name (element of `gate_names`) is not present in `availability`,
-        the default is `"all-edges"`.
-
-    qubit_labels : tuple, optional
-        The circuit-line labels for each of the qubits, which can be integers
-        and/or strings.  Must be of length `num_qubits`.  If None, then the
-        integers from 0 to `num_qubits-1` are used.
-
-    geometry : {"line","ring","grid","torus"} or QubitGraph
-        The type of connectivity among the qubits, specifying a
-        graph used to define neighbor relationships.  Alternatively,
-        a :class:`QubitGraph` object with node labels equal to
-        `qubit_labels` may be passed directly.
-
-    max_idle_weight : int, optional
-        The maximum-weight for errors on the global idle gate.
-
-    max_spam_weight : int, optional
-        The maximum-weight for SPAM errors when `spamtype == "linblad"`.
-
-    maxhops : int
-        The locality constraint: for a gate, errors (of weight up to the
-        maximum weight for the gate) are allowed to occur on the gate's
-        target qubits and those reachable by hopping at most `maxhops` times
-        from a target qubit along nearest-neighbor links (defined by the
-        `geometry`).
-
-    extra_weight_1_hops : int, optional
-        Additional hops (adds to `maxhops`) for weight-1 errors.  A value > 0
-        can be useful for allowing just weight-1 errors (of which there are
-        relatively few) to be dispersed farther from a gate's target qubits.
-        For example, a crosstalk-detecting model might use this.
-
-    extra_gate_weight : int, optional
-        Addtional weight, beyond the number of target qubits (taken as a "base
-        weight" - i.e. weight 2 for a 2Q gate), allowed for gate errors.  If
-        this equals 1, for instance, then 1-qubit gates can have up to weight-2
-        errors and 2-qubit gates can have up to weight-3 errors.
-
-    rough_noise : tuple or numpy.ndarray, optional
-        If not None, noise to place on the gates, the state prep and the povm.
-        This can either be a `(seed,strength)` 2-tuple, or a long enough numpy
-        array (longer than what is needed is OK).  These values specify random
-        `gate.from_vector` initialization for the model, and as such applies an
-        often unstructured and unmeaningful type of noise.
-
-    sparse_lindblad_basis : bool, optional
-        Whether the embedded Lindblad-parameterized gates within the constructed
-        `num_qubits`-qubit gates use sparse bases or not.  When sparse, these
-        Lindblad gates - especially those with high-weight action or errors - take
-        less memory, but their simulation is slightly slower.  Usually it's fine to
-        leave this as the default (False), except when considering unusually
-        high-weight errors.
-
-    sparse_lindblad_reps : bool, optional
-        Whether created Lindblad operations use sparse (more memory efficient but
-        slower action) or dense representations.
-
-    simulator : ForwardSimulator or {"auto", "matrix", "map"}
-        The simulator used to compute predicted probabilities for the
-        resulting :class:`Model`.  Usually `"auto"` is fine, the default for
-        each `evotype` is usually what you want.  Setting this to something
-        else is expert-level tuning.
-
-    parameterization : str, optional
-        Can be any Lindblad parameterization base type (e.g. CPTP,
-        H+S+A, H+S, S, D, etc.) This is the type of parameterizaton to use in
-        the constructed model.
-
-    evotype : Evotype or str, optional
-        The evolution type of this model, describing how states are
-        represented.  The special value `"default"` is equivalent
-        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
-
-    spamtype : { "static", "lindblad", "tensorproduct" }
-        Specifies how the SPAM elements of the returned `Model` are formed.
-        Static elements are ideal (perfect) operations with no parameters, i.e.
-        no possibility for noise.  Lindblad SPAM operations are the "normal"
-        way to allow SPAM noise, in which case error terms up to weight
-        `max_spam_weight` are included.  Tensor-product operations require that
-        the state prep and POVM effects have a tensor-product structure; the
-        "tensorproduct" mode exists for historical reasons and is *deprecated*
-        in favor of `"lindblad"`; use it only if you know what you're doing.
-
-    add_idle_noise_to_all_gates : bool, optional
-        Whether the global idle should be added as a factor following the
-        ideal action of each of the non-idle gates.
-
-    errcomp_type : {"gates","errorgens"}
-        How errors are composed when creating layer operations in the returned
-        model.  `"gates"` means that the errors on multiple gates in a single
-        layer are composed as separate and subsequent processes.  Specifically,
-        the layer operation has the form `Composed(target,idleErr,cloudErr)`
-        where `target` is a composition of all the ideal gate operations in the
-        layer, `idleErr` is idle error (`.operation_blks['layers']['globalIdle']`),
-        and `cloudErr` is the composition (ordered as layer-label) of cloud-
-        noise contributions, i.e. a map that acts as the product of exponentiated
-        error-generator matrices.  `"errorgens"` means that layer operations
-        have the form `Composed(target, error)` where `target` is as above and
-        `error` results from composing the idle and cloud-noise error
-        *generators*, i.e. a map that acts as the exponentiated sum of error
-        generators (ordering is irrelevant in this case).
-
-    independent_clouds : bool, optional
-        Currently this must be set to True.  In a future version, setting to
-        true will allow all the clouds of a given gate name to have a similar
-        cloud-noise process, mapped to the full qubit graph via a stencil.
-
-    return_clouds : bool, optional
-        Whether to return a dictionary of "cloud" objects, used for constructing
-        the circuits necessary for probing the returned Model's
-        parameters.  Used primarily internally within pyGSTi.
-
-    verbosity : int, optional
-        An integer >= 0 dictating how much output to send to stdout.
-
-    Returns
-    -------
-    Model
-    """
-    mdl = _CloudNoiseModel.from_hops_and_weights(
-        num_qubits, gate_names, nonstd_gate_unitaries, custom_gates,
-        availability, qubit_labels, geometry,
-        max_idle_weight, max_spam_weight, maxhops,
-        extra_weight_1_hops, extra_gate_weight,
-        simulator, parameterization, evotype, spamtype,
-        add_idle_noise_to_all_gates, errcomp_type,
-        independent_clouds, sparse_lindblad_basis,
-        sparse_lindblad_reps, verbosity)
-
-    #Insert noise on everything using rough_noise (really shouldn't be used!)
-    if rough_noise is not None:
-        vec = mdl.to_vector()
-        assert(spamtype == "lindblad"), "Can only apply rough noise when spamtype == lindblad"
-        assert(_np.linalg.norm(vec) / len(vec) < 1e-6)  # make sure our base is zero
-        if isinstance(rough_noise, tuple):  # use as (seed, strength)
-            seed, strength = rough_noise
-            rndm = _np.random.RandomState(seed)
-            vec += _np.abs(rndm.random_sample(len(vec)) * strength)  # abs b/c some params need to be positive
-        else:  # use as a vector
-            vec += rough_noise[0:len(vec)]
-        mdl.from_vector(vec)
-
-    if return_clouds:
-        #FUTURE - just return cloud *keys*? (operation label values are never used
-        # downstream, but may still be useful for debugging, so keep for now)
-        return mdl, mdl.clouds
-    else:
-        return mdl
-
-
-def create_cloud_crosstalk_model(num_qubits, gate_names, nonstd_gate_unitaries={}, custom_gates={},
-                                 depolarization_strengths={}, stochastic_error_probs={}, lindblad_error_coeffs={},
-                                 depolarization_parameterization='depolarize', stochastic_parameterization='stochastic',
-                                 lindblad_parameterization='auto', availability=None, qubit_labels=None,
-                                 geometry="line", evotype="default", simulator="auto", independent_gates=False,
-                                 sparse_lindblad_basis=False, sparse_lindblad_reps=False, errcomp_type="errorgens",
-                                 add_idle_noise_to_all_gates=True, verbosity=0):
-    """
-    Create a n-qubit model that may contain crosstalk errors.
-
-    This function constructs a :class:`CloudNoiseModel` that may place noise on
-    a gate that affects arbitrary qubits, i.e. qubits in addition to the target
-    qubits of the gate.  These errors are specified uing a dictionary of error
-    rates.
-
-    Parameters
-    ----------
-    num_qubits : int
-        The number of qubits
-
-    gate_names : list
-        A list of string-type gate names (e.g. `"Gx"`) either taken from
-        the list of builtin "standard" gate names given above or from the
-        keys of `nonstd_gate_unitaries`.  These are the typically 1- and 2-qubit
-        gates that are repeatedly embedded (based on `availability`) to form
-        the resulting model.
-
-    error_rates : dict
-        A dictionary whose keys are primitive-layer and gate labels (e.g.
-        `("Gx",0)` or `"Gx"`) and whose values are "error-dictionaries"
-        that determine the type and amount of error placed on each item.
-        Error-dictionary keys are `(termType, basisLabel)` tuples, where
-        `termType` can be `"H"` (Hamiltonian), `"S"` (Stochastic), or `"A"`
-        (Affine), and `basisLabel` is a string of I, X, Y, or Z to describe a
-        Pauli basis element appropriate for the gate (i.e. having the same
-        number of letters as there are qubits in the gate).  For example, you
-        could specify a 0.01-radian Z-rotation error and 0.05 rate of Pauli-
-        stochastic X errors on a 1-qubit gate by using the error dictionary:
-        `{('H','Z'): 0.01, ('S','X'): 0.05}`.  Furthermore, basis elements
-        may be directed at specific qubits using a color followed by a comma-
-        separated qubit-label-list.  For example, `('S',"XX:0,1")` would
-        mean a weight-2 XX stochastic error on qubits 0 and 1, and this term
-        could be placed in the error dictionary for a gate that is only
-        supposed to target qubit 0, for instance.  In addition to the primitive
-        label names, the special values `"prep"`, `"povm"`, and `"idle"` may be
-        used as keys of `error_rates` to specify the error on the state
-        preparation, measurement, and global idle, respectively.
-
-    nonstd_gate_unitaries : dict, optional
-        A dictionary of numpy arrays which specifies the unitary gate action
-        of the gate names given by the dictionary's keys.  As an advanced
-        behavior, a unitary-matrix-returning function which takes a single
-        argument - a tuple of label arguments - may be given instead of a
-        single matrix to create an operation *factory* which allows
-        continuously-parameterized gates.  This function must also return
-        an empty/dummy unitary when `None` is given as it's argument.
-
-    custom_gates : dict, optional
-        A dictionary that associates with gate labels
-        :class:`LinearOperator`, :class:`OpFactory`, or `numpy.ndarray`
-        objects.  These objects override any other behavior for constructing
-        their designated operations (e.g. from `error_rates` or
-        `nonstd_gate_unitaries`).  Note: currently these objects must
-        be *static*, and keys of this dictionary must by strings - there's
-        no way to specify the "cloudnoise" part of a gate via this dict
-        yet, only the "target" part.
-
-    depolarization_strengths : dict, optional
-        A dictionary whose keys are gate names (e.g. `"Gx"`) and whose values
-        are floats that specify the strength of uniform depolarization.
-
-    stochastic_error_probs : dict, optional
-        A dictionary whose keys are gate names (e.g. `"Gx"`) and whose values
-        are tuples that specify Pauli-stochastic rates for each of the non-trivial
-        Paulis (so a 3-tuple would be expected for a 1Q gate and a 15-tuple for a 2Q gate).
-
-    lindblad_error_coeffs : dict, optional
-        A dictionary whose keys are gate names (e.g. `"Gx"`) and whose values
-        are dictionaries corresponding to the `lindblad_term_dict` kwarg taken
-        by `LindbladErrorgen`. Keys are `(termType, basisLabel1, <basisLabel2>)`
-        tuples, where `termType` can be `"H"` (Hamiltonian), `"S"`
-        (Stochastic), or `"A"` (Affine).  Hamiltonian and Affine terms always
-        have a single basis label (so key is a 2-tuple) whereas Stochastic
-        tuples with 1 basis label indicate a *diagonal* term, and are the
-        only types of terms allowed when `nonham_mode != "all"`.  Otherwise,
-        Stochastic term tuples can include 2 basis labels to specify
-        "off-diagonal" non-Hamiltonian Lindblad terms.  Basis labels can be
-        strings or integers.  Values are complex coefficients.
-
-    depolarization_parameterization : str of {"depolarize", "stochastic", or "lindblad"}
-        Determines whether a DepolarizeOp, StochasticNoiseOp, or LindbladErrorgen
-        is used to parameterize the depolarization noise, respectively.
-        When "depolarize" (the default), a DepolarizeOp is created with the strength given
-        in `depolarization_strengths`. When "stochastic", the depolarization strength is split
-        evenly among the stochastic channels of a StochasticOp. When "lindblad", the depolarization
-        strength is split evenly among the coefficients of the stochastic error generators
-        (which are exponentiated to form a LindbladErrorgen with the "depol" parameterization).
-
-    stochastic_parameterization : str of {"stochastic", or "lindblad"}
-        Determines whether a StochasticNoiseOp or LindbladErrorgen is used to parameterize the
-        stochastic noise, respectively. When "stochastic", elements of `stochastic_error_probs`
-        are used as coefficients in a linear combination of stochastic channels (the default).
-        When "lindblad", the elements of `stochastic_error_probs` are coefficients of
-        stochastic error generators (which are exponentiated to form a LindbladErrorgen with the
-        "cptp" parameterization).
-
-    lindblad_parameterization : "auto" or a LindbladErrorgen paramtype
-        Determines the parameterization of the LindbladErrorgen. When "auto" (the default), the parameterization
-        is inferred from the types of error generators specified in the `lindblad_error_coeffs` dictionaries.
-        When not "auto", the parameterization type is passed through to the LindbladErrorgen.
-
-    availability : dict, optional
-        A dictionary whose keys are the same gate names as in
-        `gate_names` and whose values are lists of qubit-label-tuples.  Each
-        qubit-label-tuple must have length equal to the number of qubits
-        the corresponding gate acts upon, and causes that gate to be
-        embedded to act on the specified qubits.  For example,
-        `{ 'Gx': [(0,),(1,),(2,)], 'Gcnot': [(0,1),(1,2)] }` would cause
-        the `1-qubit `'Gx'`-gate to be embedded three times, acting on qubits
-        0, 1, and 2, and the 2-qubit `'Gcnot'`-gate to be embedded twice,
-        acting on qubits 0 & 1 and 1 & 2.  Instead of a list of tuples,
-        values of `availability` may take the special values:
-
-        - `"all-permutations"` and `"all-combinations"` equate to all possible
-        permutations and combinations of the appropriate number of qubit labels
-        (deterined by the gate's dimension).
-        - `"all-edges"` equates to all the vertices, for 1Q gates, and all the
-        edges, for 2Q gates of the graphy given by `geometry`.
-        - `"arbitrary"` or `"*"` means that the corresponding gate can be placed
-        on any target qubits via an :class:`EmbeddingOpFactory` (uses less
-        memory but slower than `"all-permutations"`.
-
-        If a gate name (element of `gate_names`) is not present in `availability`,
-        the default is `"all-edges"`.
-
-    qubit_labels : tuple, optional
-        The circuit-line labels for each of the qubits, which can be integers
-        and/or strings.  Must be of length `num_qubits`.  If None, then the
-        integers from 0 to `num_qubits-1` are used.
-
-    geometry : {"line","ring","grid","torus"} or QubitGraph
-        The type of connectivity among the qubits, specifying a
-        graph used to define neighbor relationships.  Alternatively,
-        a :class:`QubitGraph` object with node labels equal to
-        `qubit_labels` may be passed directly.
-
-    evotype : Evotype or str, optional
-        The evolution type of this model, describing how states are
-        represented.  The special value `"default"` is equivalent
-        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
-
-    simulator : ForwardSimulator or {"auto", "matrix", "map"}
-        The simulator used to compute predicted probabilities for the
-        resulting :class:`Model`.  Using `"auto"` selects `"matrix"` when there
-        are 2 qubits or less, and otherwise selects `"map"`.
-
-    independent_gates : bool, optional
-        Whether gates are allowed independent cloud noise or not.  If False,
-        then all gates with the same name (e.g. "Gx") will have the *same*
-        noise.  If True, then gates with the same name acting on different
-        qubits may have different noise.
-
-    sparse_lindblad_basis : bool, optional
-        Whether the embedded Lindblad-parameterized gates within the constructed
-        `num_qubits`-qubit gates use sparse bases or not.  When sparse, these
-        Lindblad gates - especially those with high-weight action or errors - take
-        less memory, but their simulation is slightly slower.  Usually it's fine to
-        leave this as the default (False), except when considering unusually
-        high-weight errors.
-
-    sparse_lindblad_reps : bool, optional
-        Whether created Lindblad operations use sparse (more memory efficient but
-        slower action) or dense representations.
-
-    errcomp_type : {"gates","errorgens"}
-        How errors are composed when creating layer operations in the returned
-        model.  `"gates"` means that the errors on multiple gates in a single
-        layer are composed as separate and subsequent processes.  `"errorgens"`
-        means that layer operations have the form `Composed(target, error)`
-        where `target` is as above and `error` results from composing the idle
-        and cloud-noise error *generators*, i.e. a map that acts as the
-        exponentiated sum of error generators (ordering is irrelevant in
-        this case).
-
-    add_idle_noise_to_all_gates : bool, optional
-        Whether the global idle should be added as a factor following the
-        ideal action of each of the non-idle gates when constructing layer
-        operations.
-
-    verbosity : int, optional
-        An integer >= 0 dictating how much output to send to stdout.
-
-    Returns
-    -------
-    CloudNoiseModel
-    """
-    # E.g. error_rates could == {'Gx': {('H','X'): 0.1, ('S','Y'): 0.2} } # Lindblad, b/c val is dict
-    #                        or {'Gx': 0.1 } # Depolarization b/c val is a float
-    #                        or {'Gx': (0.1,0.2,0.2) } # Pauli-Stochastic b/c val is a tuple
-    # (same as those of a crosstalk-free model) PLUS additional ones which specify which
-    # qubits the error operates (not necessarily the target qubits of the gate in question)
-    # for example: { 'Gx:Q0': { ('H','X:Q1'): 0.01, ('S','XX:Q0,Q1'): 0.01} }
-
-    #NOTE: to have "independent_gates=False" and specify error rates for "Gx" vs "Gx:Q0", we
-    # need to have some ability to stencil a gate's cloud based on different target-qubits in
-    # the qubit graph.
-    printer = _VerbosityPrinter.create_printer(verbosity)
-
-    if depolarization_strengths or stochastic_error_probs:
-        raise NotImplementedError("Cloud noise models can currently only be built with `lindbad_error_coeffs`")
-
-    if qubit_labels is None:
-        qubit_labels = tuple(range(num_qubits))
-
-    if isinstance(qubit_labels, _statespace.StateSpace):
-        #Special experimental behavior - allow user to specify a StateSpace directly as `qubit_labels`
-        state_space = qubit_labels
-        qubit_labels = [lbl for lbl in state_space.tensor_product_block_labels(0)
-                        if state_space.label_dimension(lbl) == 4]  # get all qubit labels from 1st TPB
-    else:
-        state_space = _statespace.QubitSpace(qubit_labels)
-        assert(state_space.num_qubits == num_qubits), "Number of qubit labels != `num_qubits`!"
-    evotype = _Evotype.cast(evotype)
-
-    if isinstance(geometry, _qgraph.QubitGraph):
-        qubitGraph = geometry
-    else:
-        qubitGraph = _qgraph.QubitGraph.common_graph(num_qubits, geometry, directed=True,
-                                                     qubit_labels=qubit_labels, all_directions=True)
-        printer.log("Created qubit graph:\n" + str(qubitGraph))
-
-    orig_lindblad_error_coeffs = lindblad_error_coeffs.copy()
-
-    cparser = _CircuitParser()
-    cparser.lookup = None  # lookup - functionality removed as it wasn't used
-    for k, v in orig_lindblad_error_coeffs.items():
-        if isinstance(k, str) and ":" in k:  # then parse this to get a label, allowing, e.g. "Gx:0"
-            lbls, _, _ = cparser.parse(k)
-            assert(len(lbls) == 1), "Only single primitive-gate labels allowed as keys! (not %s)" % str(k)
-            assert(all([sslbl in qubitGraph.node_names for sslbl in lbls[0].sslbls])), \
-                "One or more invalid qubit names in: %s" % k
-            del lindblad_error_coeffs[k]
-            lindblad_error_coeffs[lbls[0]] = v
-        elif isinstance(k, _Lbl):
-            if k.sslbls is not None:
-                assert(all([sslbl in qubitGraph.node_names for sslbl in k.sslbls])), \
-                    "One or more invalid qubit names in the label: %s" % str(k)
-
-    def _map_stencil_sslbls(stencil_sslbls, target_lbls):  # deals with graph directions
-        ret = [qubitGraph.resolve_relative_nodelabel(s, target_lbls) for s in stencil_sslbls]
-        if any([x is None for x in ret]): return None  # signals there is a non-present dirs, e.g. end of chain
-        return ret
-
-    def create_error(target_labels, errs=None, stencil=None, return_what="auto"):  # err = an error rates dict
-        """
-        Create an error generator or error superoperator based on the error dictionary
-        `errs`.  This function is used to construct error for SPAM and gate layer operations.
-
-        Parameters
-        ----------
-        target_labels : tuple
-            The target labels of the gate/primitive layer we're constructing an
-            error for.  This is needed for knowing the size of the target op and
-            for using "@" syntax within stencils.
-
-        errs : dict
-            A error-dictionary specifying what types of errors we need to construct.
-
-        stencil : None or OrderedDict
-            Instead of specifying `errs`, one can specify `stencil` to tell us how
-            and *with what* to construct an error -- `stencil` will contain keys
-            that are tuples of "stencil labels" and values which are error generators,
-            specifying errors that occur on certain "real" qubits by mapping the
-            stencil qubits to real qubits using `target_labels` as an anchor.
-
-        return_what : {"auto", "stencil", "errmap", "errgen"}, optional
-            What type of object should be returned.  "auto" causes either an
-            "errmap" (a superoperator) or "errgen" (an error generator) to
-            be selected based on the outside-scope value of `errcomp_type`.
-
-        Returns
-        -------
-        LinearOperator or OrderedDict
-            The former in the "errmap" and "errgen" cases, the latter in the
-            "stencil" case.
-        """
-        target_nQubits = len(target_labels)
-
-        if return_what == "auto":  # then just base return type on errcomp_type
-            return_what == "errgen" if errcomp_type == "errorgens" else "errmap"
-
-        assert(stencil is None or errs is None), "Cannot specify both `errs` and `stencil`!"
-
-        if errs is None:
-            if stencil is None:
-                if return_what == "stencil":
-                    new_stencil = _collections.OrderedDict()  # return an empty stencil
-                    return new_stencil
-                errgen = _op.ComposedErrorgen([], evotype, state_space)
-            else:
-                # stencil is valid: apply it to create errgen
-                embedded_errgens = []
-                for stencil_sslbls, lind_errgen in stencil.items():
-                    # Note: stencil_sslbls should contain directions like "up" or integer indices of target qubits.
-                    error_sslbls = _map_stencil_sslbls(stencil_sslbls, target_labels)  # deals with graph directions
-                    if error_sslbls is None: continue  # signals not all direction were present => skip this term
-                    op_to_embed = lind_errgen.copy() if independent_gates else lind_errgen  # copy for independent gates
-                    #REMOVE print("DB: Applying stencil: ",state_space, error_sslbls,op_to_embed.dim)
-                    embedded_errgen = _op.EmbeddedErrorgen(state_space, error_sslbls, op_to_embed)
-                    embedded_errgens.append(embedded_errgen)
-                errgen = _op.ComposedErrorgen(embedded_errgens, evotype, state_space)
-        else:
-            #We need to build a stencil (which may contain QubitGraph directions) or an effective stencil
-            assert(stencil is None)  # checked by above assert too
-
-            # distinct sets of qubits upon which a single (high-weight) error term acts:
-            distinct_errorqubits = _collections.OrderedDict()
-            if isinstance(errs, dict):  # either for creating a stencil or an error
-                for nm, val in errs.items():
-                    #REMOVE print("DB: Processing: ",nm, val)
-                    if isinstance(nm, str): nm = (nm[0], nm[1:])  # e.g. "HXX" => ('H','XX')
-                    err_typ, basisEls = nm[0], nm[1:]
-                    sslbls = None
-                    local_nm = [err_typ]
-                    for bel in basisEls:  # e.g. bel could be "X:Q0" or "XX:Q0,Q1"
-                        #REMOVE print("Basis el: ",bel)
-                        # OR "X:<n>" where n indexes a target qubit or "X:<dir>" where dir indicates
-                        # a graph *direction*, e.g. "up"
-                        if ':' in bel:
-                            bel_name, bel_sslbls = bel.split(':')  # should have form <name>:<comma-separated-sslbls>
-                            bel_sslbls = bel_sslbls.split(',')  # e.g. ('Q0','Q1')
-                            integerized_sslbls = []
-                            for ssl in bel_sslbls:
-                                try: integerized_sslbls.append(int(ssl))
-                                except: integerized_sslbls.append(ssl)
-                            bel_sslbls = tuple(integerized_sslbls)
-                        else:
-                            bel_name = bel
-                            bel_sslbls = target_labels
-                        #REMOVE print("DB: Nm + sslbls: ",bel_name,bel_sslbls)
-
-                        if sslbls is None:
-                            sslbls = bel_sslbls
-                        else:
-                            #Note: sslbls should always be the same if there are multiple basisEls,
-                            #  i.e for nm == ('S',bel1,bel2)
-                            assert(sslbls == bel_sslbls), \
-                                "All basis elements of the same error term must operate on the *same* state!"
-                        local_nm.append(bel_name)  # drop the state space labels, e.g. "XY:Q0,Q1" => "XY"
-
-                    # keep track of errors by the qubits they act on, as only each such
-                    # set will have it's own LindbladErrorgen
-                    sslbls = tuple(sorted(sslbls))
-                    local_nm = tuple(local_nm)  # so it's hashable
-                    if sslbls not in distinct_errorqubits:
-                        distinct_errorqubits[sslbls] = _collections.OrderedDict()
-                    if local_nm in distinct_errorqubits[sslbls]:
-                        distinct_errorqubits[sslbls][local_nm] += val
-                    else:
-                        distinct_errorqubits[sslbls][local_nm] = val
-
-            elif isinstance(errs, float):  # depolarization, action on only target qubits
-                sslbls = tuple(range(target_nQubits)) if return_what == "stencil" else target_labels
-                # Note: we use relative target indices in a stencil
-                basis = _BuiltinBasis('pp', 4**target_nQubits, sparse=sparse_lindblad_basis)  # assume Pauli basis?
-                distinct_errorqubits[sslbls] = _collections.OrderedDict()
-                perPauliRate = errs / len(basis.labels)
-                for bl in basis.labels:
-                    distinct_errorqubits[sslbls][('S', bl)] = perPauliRate
-            else:
-                raise ValueError("Invalid `error_rates` value: %s (type %s)" % (str(errs), type(errs)))
-
-            new_stencil = _collections.OrderedDict()
-            for error_sslbls, local_errs_for_these_sslbls in distinct_errorqubits.items():
-                local_nQubits = len(error_sslbls)  # weight of this group of errors which act on the same qubits
-                local_state_space = _statespace.QubitSpace(local_nQubits)
-                basis = _BuiltinBasis('pp', local_state_space.dim, sparse=sparse_lindblad_basis)
-                # assume we're always given els in a Pauli basis?
-
-                #Sanity check to catch user errors that would be hard to interpret if they get caught further down
-                for nm in local_errs_for_these_sslbls:
-                    for bel in nm[1:]:  # bel should be a *local* (bare) basis el name, e.g. "XX" but not "XX:Q0,Q1"
-                        if bel not in basis.labels:
-                            raise ValueError("In %s: invalid basis element label `%s` where one of {%s} was expected" %
-                                             (str(errs), str(bel), ', '.join(basis.labels)))
-
-                parameterization = _parameterization_from_errgendict(local_errs_for_these_sslbls)
-                #REMOVE print("DB: Param from ", local_errs_for_these_sslbls, " = ",parameterization)
-                nonham_mode, param_mode, _, _ = _op.LindbladErrorgen.decomp_paramtype(parameterization)
-                lind_errgen = _op.LindbladErrorgen(local_state_space, local_errs_for_these_sslbls, basis, param_mode,
-                                                   nonham_mode, truncate=False, mx_basis="pp", evotype=evotype)
-                #REMOVE print("DB: Adding to stencil: ",error_sslbls,lind_errgen.dim,local_state_space)
-                new_stencil[error_sslbls] = lind_errgen
-
-            if return_what == "stencil":  # then we just return the stencil, not the error map or generator
-                return new_stencil
-
-            #Use stencil to create error map or generator.  Here `new_stencil` is not a "true" stencil
-            # in that it should contain only absolute labels (it wasn't created in stencil="create" mode)
-            embedded_errgens = []
-            for error_sslbls, lind_errgen in new_stencil.items():
-                #Then use the stencils for these steps later (if independent errgens is False especially?)
-                #REMOVE print("DB: Creating from stencil: ",state_space, error_sslbls)
-                embedded_errgen = _op.EmbeddedErrorgen(state_space, error_sslbls, lind_errgen)
-                embedded_errgens.append(embedded_errgen)
-            errgen = _op.ComposedErrorgen(embedded_errgens, evotype, state_space)
-
-        #If we get here, we've created errgen, which we either return or package into a map:
-        if return_what == "errmap":
-            return _op.ExpErrorgenOp(errgen)
-        else:
-            return errgen
-
-    #Process "auto" simulator
-    if simulator == "auto":
-        simulator = _MapFSim() if num_qubits > 2 else _MatrixFSim()
-    elif simulator == "map":
-        simulator = _MapFSim()
-    elif simulator == "matrix":
-        simulator = _MatrixFSim()
-
-    #Global Idle
-    if 'idle' in lindblad_error_coeffs:
-        printer.log("Creating Idle:")
-        global_idle_layer = create_error(qubit_labels, lindblad_error_coeffs['idle'], return_what="errmap")
-    else:
-        global_idle_layer = None
-
-    #SPAM
-    if 'prep' in lindblad_error_coeffs:
-        prepPure = _state.ComputationalBasisState([0] * num_qubits, 'pp', evotype, state_space)
-        prepNoiseMap = create_error(qubit_labels, lindblad_error_coeffs['prep'], return_what="errmap")
-        prep_layers = [_state.ComposedState(prepPure, prepNoiseMap)]
-    else:
-        prep_layers = [_state.ComputationalBasisState([0] * num_qubits, 'pp', evotype, state_space)]
-
-    if 'povm' in lindblad_error_coeffs:
-        povmNoiseMap = create_error(qubit_labels, lindblad_error_coeffs['povm'], return_what="errmap")
-        povm_layers = [_povm.ComposedPOVM(povmNoiseMap, None, 'pp')]
-    else:
-        povm_layers = [_povm.ComputationalBasisPOVM(num_qubits, evotype, state_space=state_space)]
-
-    stencils = _collections.OrderedDict()
-
-    def build_cloudnoise_fn(lbl):
-        # lbl will be for a particular gate and target qubits.  If we have error rates for this specific gate
-        # and target qubits (i.e this primitive layer op) then we should build it directly (and independently,
-        # regardless of the value of `independent_gates`) using these rates.  Otherwise, if we have a stencil
-        # for this gate, then we should use it to construct the output, using a copy when gates are independent
-        # and a reference to the *same* stencil operations when `independent_gates==False`.
-        if lbl in lindblad_error_coeffs:
-            # specific instructions for this primitive layer
-            return create_error(lbl.sslbls, errs=lindblad_error_coeffs[lbl])
-        elif lbl.name in stencils:
-            return create_error(lbl.sslbls, stencil=stencils[lbl.name])  # use existing stencil
-        elif lbl.name in lindblad_error_coeffs:
-            stencils[lbl.name] = create_error(lbl.sslbls, lindblad_error_coeffs[lbl.name],
-                                              return_what='stencil')  # create stencil
-            return create_error(lbl.sslbls, stencil=stencils[lbl.name])  # and then use it
-        else:
-            return create_error(lbl, None)
-
-    def build_cloudkey_fn(lbl):
-        #FUTURE: Get a list of all the qubit labels `lbl`'s cloudnoise error touches and form this into a key
-        # For now, we just punt and return a key based on the target labels
-        cloud_key = tuple(lbl.sslbls)
-        return cloud_key
-
-    # gate_names => gatedict
-    if custom_gates is None: custom_gates = {}
-    if nonstd_gate_unitaries is None: nonstd_gate_unitaries = {}
-    std_unitaries = _itgs.standard_gatename_unitaries()
-
-    gatedict = _collections.OrderedDict()
-    for name in gate_names:
-        if name in custom_gates:
-            gatedict[name] = custom_gates[name]
-        else:
-            U = nonstd_gate_unitaries.get(name, std_unitaries.get(name, None))
-            if U is None: raise KeyError("'%s' gate unitary needs to be provided by `nonstd_gate_unitaries` arg" % name)
-            if callable(U):  # then assume a function: args -> unitary
-                U0 = U(None)  # U fns must return a sample unitary when passed None to get size.
-                local_state_space = _statespace.default_space_for_udim(U0.shape[0])
-                gatedict[name] = _opfactory.UnitaryOpFactory(U, local_state_space, 'pp', evotype)
-            else:
-                gatedict[name] = _bt.change_basis(_ot.unitary_to_process_mx(U), "std", 'pp')
-                # assume evotype is a densitymx or term type
-
-    #Add anything from custom_gates directly if it wasn't added already
-    for lbl, gate in custom_gates.items():
-        if lbl not in gate_names: gatedict[lbl] = gate
-
-    return _CloudNoiseModel(num_qubits, gatedict, availability, qubit_labels, geometry,
-                            global_idle_layer, prep_layers, povm_layers,
-                            build_cloudnoise_fn, build_cloudkey_fn,
-                            simulator, evotype, errcomp_type,
-                            add_idle_noise_to_all_gates, sparse_lindblad_reps, printer)
-
-
-# -----------------------------------------------------------------------------------
-#  nqnoise gate sequence construction methods
-# -----------------------------------------------------------------------------------
-
-#Note: these methods assume a Model with:
-# Gx and Gy gates on each qubit that are pi/2 rotations
-# a prep labeled "rho0"
-# a povm labeled "Mdefault" - so effects labeled "Mdefault_N" for N=0->2^nQubits-1
+# # -----------------------------------------------------------------------------------
+# #  nqnoise gate sequence construction methods
+# # -----------------------------------------------------------------------------------
+#
+# #Note: these methods assume a Model with:
+# # Gx and Gy gates on each qubit that are pi/2 rotations
+# # a prep labeled "rho0"
+# # a povm labeled "Mdefault" - so effects labeled "Mdefault_N" for N=0->2^nQubits-1
 
 
 def _onqubit(s, i_qubit):
@@ -1093,6 +185,7 @@ def _find_amped_polynomials_for_syntheticidle(qubit_filter, idle_str, model, sin
 
     # Assert that model uses termorder, as doing L1-L0 to extract the "amplified" part
     # relies on only expanding to *first* order.
+    from pygsti.forwardsims.termforwardsim import TermForwardSimulator as _TermFSim
     assert(isinstance(model.sim, _TermFSim) and model.sim.max_order == 1), \
         '`model` must use a 1-st order Term-type forward simulator!'
 
@@ -1306,6 +399,7 @@ def _test_amped_polynomials_for_syntheticidle(fidpairs, idle_str, model, prep_lb
     """
     #Assert that model uses termorder:1, as doing L1-L0 to extract the "amplified" part
     # relies on only expanding to *first* order.
+    from pygsti.forwardsims.termforwardsim import TermForwardSimulator as _TermFSim
     assert(isinstance(model.sim, _TermFSim) and model.sim.max_order == 1), \
         '`model` must use a 1-st order Term-type forward simulator!'
 
@@ -1467,6 +561,7 @@ def _find_amped_polynomials_for_clifford_syntheticidle(qubit_filter, core_filter
 
     #Assert that model uses termorder:1, as doing L1-L0 to extract the "amplified" part
     # relies on only expanding to *first* order.
+    from pygsti.forwardsims.termforwardsim import TermForwardSimulator as _TermFSim
     assert(isinstance(model.sim, _TermFSim) and model.sim.max_order == 1), \
         '`model` must use a 1-st order Term-type forward simulator!'
     polynomial_vindices_per_int = _Polynomial._vindices_per_int(model.num_params)
@@ -2096,6 +1191,8 @@ def _compute_reps_for_synthetic_idle(model, germ_str, nqubits, core_qubits):
     -------
     int
     """
+    from pygsti.modelmembers import operations as _op
+
     # First, get a dense representation of germ_str on core_qubits
     # Note: only works with one level of embedding...
     def extract_gate(g):
@@ -2110,12 +1207,12 @@ def _compute_reps_for_synthetic_idle(model, germ_str, nqubits, core_qubits):
                 if core_ql in qubit_labels: new_qubit_labels.append(core_ql)  # same convention!
                 #elif ("Q%d" % core_ql) in qubit_labels: new_qubit_labels.append("Q%d" % core_ql)  # HACK!
             ss = _statespace.QubitSpace(new_qubit_labels)
-            assert(all([(tgt in new_qubit_labels) for tgt in g.targetLabels]))  # all target qubits should be kept!
-            if len(new_qubit_labels) == len(g.targetLabels):
+            assert(all([(tgt in new_qubit_labels) for tgt in g.target_labels]))  # all target qubits should be kept!
+            if len(new_qubit_labels) == len(g.target_labels):
                 # embedded gate acts on entire core-qubit space:
                 return g.embedded_op
             else:
-                return _op.EmbeddedOp(ss, g.targetLabels, g.embedded_op)
+                return _op.EmbeddedOp(ss, g.target_labels, g.embedded_op)
 
         elif isinstance(g, _op.ComposedOp):
             return _op.ComposedOp([extract_gate(f) for f in g.factorops])
@@ -2128,7 +1225,7 @@ def _compute_reps_for_synthetic_idle(model, germ_str, nqubits, core_qubits):
     for gl in germ_str:
         if gl not in core_gates:
             core_gates[gl] = extract_gate(model.operation_blks['layers'][gl])
-        product = _np.dot(core_gates[gl], product)
+        product = _np.dot(core_gates[gl].to_dense('HilbertSchmidt'), product)
 
     # Then just do matrix products until we hit the identity (or a large order)
     reps = 1; target = _np.identity(core_dim, 'd')
@@ -2207,8 +1304,8 @@ def _get_candidates_for_core(model, core_qubits, candidate_counts, seed_start):
 
 @_deprecated_fn("Use pygsti.circuits.create_standard_cloudnoise_circuits(...).")
 def _create_xycnot_cloudnoise_circuits(num_qubits, max_lengths, geometry, cnot_edges, max_idle_weight=1, maxhops=0,
-                                       extra_weight_1_hops=0, extra_gate_weight=0, paramroot="H+S",
-                                       sparse=False, verbosity=0, cache=None, idle_only=False,
+                                       extra_weight_1_hops=0, extra_gate_weight=0, parameterization="H+S",
+                                       verbosity=0, cache=None, idle_only=False,
                                        idt_pauli_dicts=None, algorithm="greedy", comm=None):
 
     """
@@ -2262,14 +1359,6 @@ def _create_xycnot_cloudnoise_circuits(num_qubits, max_lengths, geometry, cnot_e
         The "root" (no trailing " terms", etc.) parameterization used for the
         cloud noise model (which specifies what needs to be amplified).
 
-    sparse : bool, optional
-        Whether the embedded Lindblad-parameterized gates within the constructed
-        `num_qubits`-qubit gates use sparse bases or not.  When sparse, these
-        Lindblad gates - especially those with high-weight action or errors - take
-        less memory, but their simulation is slightly slower.  Usually it's fine to
-        leave this as the default (False), except when considering unusually
-        high-weight errors.
-
     verbosity : int, optional
         An integer >= 0 dictating how much output to send to stdout.
 
@@ -2306,391 +1395,41 @@ def _create_xycnot_cloudnoise_circuits(num_qubits, max_lengths, geometry, cnot_e
     list
         A list of :class:`Circuit`s
     """
-    from pygsti.modelpacks.legacy import std1Q_XY  # the base model for 1Q gates
-    from pygsti.modelpacks.legacy import std2Q_XYICNOT  # the base model for 2Q (CNOT) gate
+    from pygsti.processors import QubitProcessorSpec as _QubitProcessorSpec
 
-    tgt1Q = std1Q_XY.target_model("static")
-    tgt2Q = std2Q_XYICNOT.target_model("static")
-    Gx = tgt1Q.operations['Gx']
-    Gy = tgt1Q.operations['Gy']
-    Gcnot = tgt2Q.operations['Gcnot']
-    gatedict = _collections.OrderedDict([('Gx', Gx), ('Gy', Gy), ('Gcnot', Gcnot)])
+    #from pygsti.modelpacks import smq1Q_XYI  # the base model for 1Q gates
+    #from pygsti.modelpacks import smq2Q_XYICNOT  # the base model for 2Q (CNOT) gate
+    #evotype = "statevec"  # needed to match internals of create_cloudnoise_circuits
+    #tgt1Q = smq1Q_XYI.target_model("static unitary", evotype=evotype)
+    #tgt2Q = smq2Q_XYICNOT.target_model("static unitary", evotype=evotype)
+    #Gx = tgt1Q.operations[('Gxpi2', 0)]
+    #Gy = tgt1Q.operations[('Gypi2', 0)]
+    #Gcnot = tgt2Q.operations[('Gcnot', 0, 1)]
+    #Gii = tgt2Q.operations[()]
+    #gatedict = _collections.OrderedDict([('Gx', Gx), ('Gy', Gy), ('Gcnot', Gcnot), ('(idle)', Gii)])
     availability = {}
     if cnot_edges is not None: availability['Gcnot'] = cnot_edges
 
-    if paramroot in ("H+S", "S", "H+D", "D",
-                     "H+s", "s", "H+d", "d"):  # no affine - can get away w/1 fewer fiducials
+    if parameterization in ("H+S", "S", "H+D", "D",
+                            "H+s", "s", "H+d", "d"):  # no affine - can get away w/1 fewer fiducials
         singleQfiducials = [(), ('Gx',), ('Gy',)]
     else:
         singleQfiducials = [(), ('Gx',), ('Gy',), ('Gx', 'Gx')]
 
-    return create_cloudnoise_circuits(num_qubits, max_lengths, singleQfiducials,
-                                      gatedict, availability, geometry, max_idle_weight, maxhops,
-                                      extra_weight_1_hops, extra_gate_weight, paramroot,
-                                      sparse, True, verbosity, cache, idle_only,
-                                      idt_pauli_dicts, algorithm, comm=comm)
+    processor_spec = _QubitProcessorSpec(num_qubits, ['Gx', 'Gy', 'Gcnot', '(idle)'],
+                                         availability=availability, geometry=geometry)
+    return create_cloudnoise_circuits(processor_spec, max_lengths, singleQfiducials,
+                                      max_idle_weight, maxhops,
+                                      extra_weight_1_hops, extra_gate_weight, parameterization,
+                                      verbosity, cache, idle_only, idt_pauli_dicts, algorithm, comm=comm)
 
 
-def create_standard_localnoise_circuits(num_qubits, max_lengths, single_q_fiducials,
-                                        gate_names, nonstd_gate_unitaries=None,
-                                        availability=None, geometry="line",
-                                        paramroot="H+S", sparse_lindblad_basis=False, sparse_lindblad_reps=True,
-                                        verbosity=0, cache=None, idle_only=False, idt_pauli_dicts=None,
-                                        algorithm="greedy", idle_op_str=((),), comm=None):
+def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
+                               max_idle_weight=1, maxhops=0, extra_weight_1_hops=0, extra_gate_weight=0,
+                               parameterization="H+S", verbosity=0, cache=None, idle_only=False,
+                               idt_pauli_dicts=None, algorithm="greedy", idle_op_str=((),), comm=None):
     """
-    Find a set of circuits that amplifies all the parameters of a local noise model.
-
-    Create a set of `fiducial1+germ^power+fiducial2` sequences which amplify
-    all of the parameters of a :class:`LocalNoiseModel` created by passing the
-    arguments of this function to :function:`create_localnoise_model`
-
-    Note that this function essentialy performs fiducial selection, germ
-    selection, and fiducial-pair reduction simultaneously.  It is used to
-    generate a short (ideally minimal) list of sequences needed for multi-
-    qubit GST.
-
-    This function allows the local noise model to be created by specifing
-    standard gate names or additional gates as *unitary* operators.  Some
-    example gate names are:
-
-        - 'Gx','Gy','Gz' : 1Q pi/2 rotations
-        - 'Gxpi','Gypi','Gzpi' : 1Q pi rotations
-        - 'Gh' : Hadamard
-        - 'Gp' : phase
-        - 'Gcphase','Gcnot','Gswap' : standard 2Q gates
-
-    Parameters
-    ----------
-    num_qubits : int
-        The number of qubits
-
-    max_lengths : list
-        A list of integers specifying the different maximum lengths for germ
-        powers.  Typically these values start a 1 and increase by powers of
-        2, e.g. `[1,2,4,8,16]`.
-
-    single_q_fiducials : list
-        A list of gate-name-tuples, e.g. `[(), ('Gx',), ('Gy',), ('Gx','Gx')]`,
-        which form a set of 1-qubit fiducials for the given model (compatible
-        with both the gates it posseses and their parameterizations - for
-        instance, only `[(), ('Gx',), ('Gy',)]` is needed for just Hamiltonian
-        and Stochastic errors.
-
-    gate_names : list
-        A list of string-type gate names (e.g. `"Gx"`) either taken from
-        the list of builtin "standard" gate names given above or from the
-        keys of `nonstd_gate_unitaries`.  These are the typically 1- and 2-qubit
-        gates that are repeatedly embedded (based on `availability`) to form
-        the resulting model.
-
-    nonstd_gate_unitaries : dict, optional
-        A dictionary of numpy arrays which specifies the unitary gate action
-        of the gate names given by the dictionary's keys.  As an advanced
-        behavior, a unitary-matrix-returning function which takes a single
-        argument - a tuple of label arguments - may be given instead of a
-        single matrix to create an operation *factory* which allows
-        continuously-parameterized gates.  This function must also return
-        an empty/dummy unitary when `None` is given as it's argument.
-
-    availability : dict, optional
-        A dictionary whose keys are the same gate names as in
-        `gate_names` and whose values are lists of qubit-label-tuples.  Each
-        qubit-label-tuple must have length equal to the number of qubits
-        the corresponding gate acts upon, and causes that gate to be
-        embedded to act on the specified qubits.  For example,
-        `{ 'Gx': [(0,),(1,),(2,)], 'Gcnot': [(0,1),(1,2)] }` would cause
-        the `1-qubit `'Gx'`-gate to be embedded three times, acting on qubits
-        0, 1, and 2, and the 2-qubit `'Gcnot'`-gate to be embedded twice,
-        acting on qubits 0 & 1 and 1 & 2.  Instead of a list of tuples,
-        values of `availability` may take the special values:
-
-        - `"all-permutations"` and `"all-combinations"` equate to all possible
-        permutations and combinations of the appropriate number of qubit labels
-        (deterined by the gate's dimension).
-        - `"all-edges"` equates to all the vertices, for 1Q gates, and all the
-        edges, for 2Q gates of the graphy given by `geometry`.
-        - `"arbitrary"` or `"*"` means that the corresponding gate can be placed
-        on any target qubits via an :class:`EmbeddingOpFactory` (uses less
-        memory but slower than `"all-permutations"`.
-
-        If a gate name (element of `gate_names`) is not present in `availability`,
-        the default is `"all-edges"`.
-
-    geometry : {"line","ring","grid","torus"} or QubitGraph
-        The type of connectivity among the qubits, specifying a
-        graph used to define neighbor relationships.  Alternatively,
-        a :class:`QubitGraph` object may be passed directly.
-
-    paramroot : {"CPTP", "H+S+A", "H+S", "S", "H+D+A", "D+A", "D"}
-        The "root" (no trailing " terms", etc.) parameterization used for the
-        cloud noise model (which specifies what needs to be amplified).
-
-    sparse_lindblad_basis : bool, optional
-        Whether the embedded Lindblad-parameterized gates within the constructed
-        `num_qubits`-qubit gates use sparse bases or not.  When sparse, these
-        Lindblad gates - especially those with high-weight action or errors - take
-        less memory, but their simulation is slightly slower.  Usually it's fine to
-        leave this as the default (False), except when considering unusually
-        high-weight errors.
-
-    sparse_lindblad_reps : bool, optional
-        Whether created Lindblad operations use sparse (more memory efficient but
-        slower action) or dense representations.
-
-    verbosity : int, optional
-        The level of detail printed to stdout.  0 means silent.
-
-    cache : dict, optional
-        A cache dictionary which holds template information so that repeated
-        calls to `create_standard_cloudnoise_circuits` can draw on the same
-        pool of templates.
-
-    idle_only : bool, optional
-        If True, only sequences for the idle germ are returned.  This is useful
-        for idle tomography in particular.
-
-    idt_pauli_dicts : tuple, optional
-        A (prepDict,measDict) tuple of dicts that maps a 1-qubit Pauli basis
-        string (e.g. 'X' or '-Y') to a sequence of gate *names*.  If given,
-        the idle-germ fiducial pairs chosen by this function are restricted
-        to those where either 1) each qubit is prepared and measured in the
-        same basis or 2) each qubits is prepared and measured in different
-        bases (note: '-X' and 'X" are considered the *same* basis).  This
-        restriction makes the resulting sequences more like the "standard"
-        ones of idle tomography, and thereby easier to interpret.
-
-    algorithm : {"greedy","sequential"}
-        The algorithm is used internall by
-        :function:`_find_amped_polynomials_for_syntheticidle`.  You should leave this
-        as the default unless you know what you're doing.
-
-    idle_op_str : Circuit or tuple, optional
-        The circuit or label that is used to indicate a completely
-        idle layer (all qubits idle).
-
-    comm : mpi4py.MPI.Comm, optional
-        When not ``None``, an MPI communicator for distributing the computation
-        across multiple processors.
-
-    Returns
-    -------
-    PlaquetteGridCircuitStructure
-        An object holding a structured (using germ and fiducial sub-sequences)
-        list of circuits.
-    """
-    #Same as cloudnoise but no hopping. -- should max_idle_weight == 0?
-    return create_standard_cloudnoise_circuits(num_qubits, max_lengths, single_q_fiducials,
-                                               gate_names, nonstd_gate_unitaries,
-                                               availability, geometry,
-                                               max_idle_weight=1, maxhops=0, extra_weight_1_hops=0,
-                                               extra_gate_weight=0,
-                                               paramroot=paramroot,
-                                               sparse_lindblad_basis=sparse_lindblad_basis,
-                                               sparse_lindblad_reps=sparse_lindblad_reps,
-                                               verbosity=verbosity,
-                                               cache=cache, idle_only=idle_only,
-                                               idt_pauli_dicts=idt_pauli_dicts, algorithm=algorithm,
-                                               idle_op_str=idle_op_str, comm=comm)
-
-
-def create_standard_cloudnoise_circuits(num_qubits, max_lengths, single_q_fiducials,
-                                        gate_names, nonstd_gate_unitaries=None,
-                                        availability=None, geometry="line",
-                                        max_idle_weight=1, maxhops=0, extra_weight_1_hops=0, extra_gate_weight=0,
-                                        paramroot="H+S", sparse_lindblad_basis=False, sparse_lindblad_reps=True,
-                                        verbosity=0, cache=None, idle_only=False, idt_pauli_dicts=None,
-                                        algorithm="greedy", idle_op_str=((),), comm=None):
-    """
-    Finds a set of circuits that amplifies all the parameters of a cloud-noise model.
-
-    Create a set of `fiducial1+germ^power+fiducial2` sequences which amplify
-    all of the parameters of a :class:`CloudNoiseModel` created by passing the
-    arguments of this function to :function:`create_cloudnoise_model_from_hops_and_weights`.
-
-    Note that this function essentialy performs fiducial selection, germ
-    selection, and fiducial-pair reduction simultaneously.  It is used to
-    generate a short (ideally minimal) list of sequences needed for multi-
-    qubit GST.
-
-    This function allows the cloud noise model to be created by specifing
-    standard gate names or additional gates as *unitary* operators.  Some
-    example gate names are:
-
-        - 'Gx','Gy','Gz' : 1Q pi/2 rotations
-        - 'Gxpi','Gypi','Gzpi' : 1Q pi rotations
-        - 'Gh' : Hadamard
-        - 'Gp' : phase
-        - 'Gcphase','Gcnot','Gswap' : standard 2Q gates
-
-    Parameters
-    ----------
-    num_qubits : int
-        The number of qubits
-
-    max_lengths : list
-        A list of integers specifying the different maximum lengths for germ
-        powers.  Typically these values start a 1 and increase by powers of
-        2, e.g. `[1,2,4,8,16]`.
-
-    single_q_fiducials : list
-        A list of gate-name-tuples, e.g. `[(), ('Gx',), ('Gy',), ('Gx','Gx')]`,
-        which form a set of 1-qubit fiducials for the given model (compatible
-        with both the gates it posseses and their parameterizations - for
-        instance, only `[(), ('Gx',), ('Gy',)]` is needed for just Hamiltonian
-        and Stochastic errors.
-
-    gate_names : list
-        A list of string-type gate names (e.g. `"Gx"`) either taken from
-        the list of builtin "standard" gate names given above or from the
-        keys of `nonstd_gate_unitaries`.  These are the typically 1- and 2-qubit
-        gates that are repeatedly embedded (based on `availability`) to form
-        the resulting model.
-
-    nonstd_gate_unitaries : dict, optional
-        A dictionary of numpy arrays which specifies the unitary gate action
-        of the gate names given by the dictionary's keys.  As an advanced
-        behavior, a unitary-matrix-returning function which takes a single
-        argument - a tuple of label arguments - may be given instead of a
-        single matrix to create an operation *factory* which allows
-        continuously-parameterized gates.  This function must also return
-        an empty/dummy unitary when `None` is given as it's argument.
-
-    availability : dict, optional
-        A dictionary whose keys are the same gate names as in
-        `gate_names` and whose values are lists of qubit-label-tuples.  Each
-        qubit-label-tuple must have length equal to the number of qubits
-        the corresponding gate acts upon, and causes that gate to be
-        embedded to act on the specified qubits.  For example,
-        `{ 'Gx': [(0,),(1,),(2,)], 'Gcnot': [(0,1),(1,2)] }` would cause
-        the `1-qubit `'Gx'`-gate to be embedded three times, acting on qubits
-        0, 1, and 2, and the 2-qubit `'Gcnot'`-gate to be embedded twice,
-        acting on qubits 0 & 1 and 1 & 2.  Instead of a list of tuples,
-        values of `availability` may take the special values:
-
-        - `"all-permutations"` and `"all-combinations"` equate to all possible
-        permutations and combinations of the appropriate number of qubit labels
-        (deterined by the gate's dimension).
-        - `"all-edges"` equates to all the vertices, for 1Q gates, and all the
-        edges, for 2Q gates of the graphy given by `geometry`.
-        - `"arbitrary"` or `"*"` means that the corresponding gate can be placed
-        on any target qubits via an :class:`EmbeddingOpFactory` (uses less
-        memory but slower than `"all-permutations"`.
-
-        If a gate name (element of `gate_names`) is not present in `availability`,
-        the default is `"all-edges"`.
-
-    geometry : {"line","ring","grid","torus"} or QubitGraph
-        The type of connectivity among the qubits, specifying a
-        graph used to define neighbor relationships.  Alternatively,
-        a :class:`QubitGraph` object may be passed directly.
-
-    max_idle_weight : int, optional
-        The maximum-weight for errors on the global idle gate.
-
-    maxhops : int
-        The locality constraint: for a gate, errors (of weight up to the
-        maximum weight for the gate) are allowed to occur on the gate's
-        target qubits and those reachable by hopping at most `maxhops` times
-        from a target qubit along nearest-neighbor links (defined by the
-        `geometry`).
-
-    extra_weight_1_hops : int, optional
-        Additional hops (adds to `maxhops`) for weight-1 errors.  A value > 0
-        can be useful for allowing just weight-1 errors (of which there are
-        relatively few) to be dispersed farther from a gate's target qubits.
-        For example, a crosstalk-detecting model might use this.
-
-    extra_gate_weight : int, optional
-        Addtional weight, beyond the number of target qubits (taken as a "base
-        weight" - i.e. weight 2 for a 2Q gate), allowed for gate errors.  If
-        this equals 1, for instance, then 1-qubit gates can have up to weight-2
-        errors and 2-qubit gates can have up to weight-3 errors.
-
-    paramroot : {"CPTP", "H+S+A", "H+S", "S", "H+D+A", "D+A", "D"}
-        The "root" (no trailing " terms", etc.) parameterization used for the
-        cloud noise model (which specifies what needs to be amplified).
-
-    sparse_lindblad_basis : bool, optional
-        Whether the embedded Lindblad-parameterized gates within the constructed
-        `num_qubits`-qubit gates use sparse bases or not.  When sparse, these
-        Lindblad gates - especially those with high-weight action or errors - take
-        less memory, but their simulation is slightly slower.  Usually it's fine to
-        leave this as the default (False), except when considering unusually
-        high-weight errors.
-
-    sparse_lindblad_reps : bool, optional
-        Whether created Lindblad operations use sparse (more memory efficient but
-        slower action) or dense representations.
-
-    verbosity : int, optional
-        The level of detail printed to stdout.  0 means silent.
-
-    cache : dict, optional
-        A cache dictionary which holds template information so that repeated
-        calls to `create_standard_cloudnoise_circuits` can draw on the same
-        pool of templates.
-
-    idle_only : bool, optional
-        If True, only sequences for the idle germ are returned.  This is useful
-        for idle tomography in particular.
-
-    idt_pauli_dicts : tuple, optional
-        A (prepDict,measDict) tuple of dicts that maps a 1-qubit Pauli basis
-        string (e.g. 'X' or '-Y') to a sequence of gate *names*.  If given,
-        the idle-germ fiducial pairs chosen by this function are restricted
-        to those where either 1) each qubit is prepared and measured in the
-        same basis or 2) each qubits is prepared and measured in different
-        bases (note: '-X' and 'X" are considered the *same* basis).  This
-        restriction makes the resulting sequences more like the "standard"
-        ones of idle tomography, and thereby easier to interpret.
-
-    algorithm : {"greedy","sequential"}
-        The algorithm is used internall by
-        :function:`_find_amped_polynomials_for_syntheticidle`.  You should leave this
-        as the default unless you know what you're doing.
-
-    idle_op_str : Circuit or tuple, optional
-        The circuit or label that is used to indicate a completely
-        idle layer (all qubits idle).
-
-    comm : mpi4py.MPI.Comm, optional
-        When not ``None``, an MPI communicator for distributing the computation
-        across multiple processors.
-
-    Returns
-    -------
-    PlaquetteGridCircuitStructure
-        An object holding a structured (using germ and fiducial sub-sequences)
-        list of circuits.
-    """
-
-    if nonstd_gate_unitaries is None: nonstd_gate_unitaries = {}
-    std_unitaries = _itgs.standard_gatename_unitaries()
-
-    gatedict = _collections.OrderedDict()
-    for name in gate_names:
-        U = nonstd_gate_unitaries.get(name, std_unitaries.get(name, None))
-        if U is None: raise KeyError("'%s' gate unitary needs to be provided by `nonstd_gate_unitaries` arg" % name)
-        if callable(U):  # then assume a function: args -> unitary
-            raise NotImplementedError("Factories are not allowed to passed to create_standard_cloudnoise_circuits yet")
-        gatedict[name] = _bt.change_basis(_ot.unitary_to_process_mx(U), "std", "pp")
-        # assume evotype is a densitymx or term type
-
-    return create_cloudnoise_circuits(num_qubits, max_lengths, single_q_fiducials,
-                                      gatedict, availability, geometry, max_idle_weight, maxhops,
-                                      extra_weight_1_hops, extra_gate_weight, paramroot,
-                                      sparse_lindblad_basis, sparse_lindblad_reps, verbosity, cache,
-                                      idle_only, idt_pauli_dicts, algorithm, idle_op_str, comm)
-
-
-def create_cloudnoise_circuits(num_qubits, max_lengths, single_q_fiducials,
-                               gatedict, availability, geometry, max_idle_weight=1, maxhops=0,
-                               extra_weight_1_hops=0, extra_gate_weight=0, paramroot="H+S",
-                               sparse_lindblad_basis=False, sparse_lindblad_reps=True, verbosity=0,
-                               cache=None, idle_only=False, idt_pauli_dicts=None, algorithm="greedy",
-                               idle_op_str=((),), comm=None):
-    """
-    Finds a set of circuits that amplify all the parameters of a clould-noise model.
+    Constructs a set of circuits that amplify all the parameters of a clould-noise model.
 
     Create a set of `fiducial1+germ^power+fiducial2` sequences which amplify
     all of the parameters of a `CloudNoiseModel` created by passing the
@@ -2704,8 +1443,10 @@ def create_cloudnoise_circuits(num_qubits, max_lengths, single_q_fiducials,
 
     Parameters
     ----------
-    num_qubits : int
-        The number of qubits
+    processor_spec : ProcessorSpec
+        Defines the prcoessor interface (API) for which circuits are created.  This
+        API includes the number of qubits and their labels, gate names, qubit geometry
+        or gate availability, etc.
 
     max_lengths : list
         A list of integers specifying the different maximum lengths for germ
@@ -2718,38 +1459,6 @@ def create_cloudnoise_circuits(num_qubits, max_lengths, single_q_fiducials,
         with both the gates it posseses and their parameterizations - for
         instance, only `[(), ('Gx',), ('Gy',)]` is needed for just Hamiltonian
         and Stochastic errors.
-
-    gatedict : dict
-        A dictionary whose keys are gate labels and values are gates, specifying
-        the gates of the :class:`CloudNoiseModel` this function obtains circuits for.
-
-    availability : dict, optional
-        A dictionary whose keys are the same gate names as in
-        `gatedict` and whose values are lists of qubit-label-tuples.  Each
-        qubit-label-tuple must have length equal to the number of qubits
-        the corresponding gate acts upon, and causes that gate to be
-        embedded to act on the specified qubits.  For example,
-        `{ 'Gx': [(0,),(1,),(2,)], 'Gcnot': [(0,1),(1,2)] }` would cause
-        the `1-qubit `'Gx'`-gate to be embedded three times, acting on qubits
-        0, 1, and 2, and the 2-qubit `'Gcnot'`-gate to be embedded twice,
-        acting on qubits 0 & 1 and 1 & 2.  Instead of a list of tuples,
-        values of `availability` may take the special values:
-
-        - `"all-permutations"` and `"all-combinations"` equate to all possible
-        permutations and combinations of the appropriate number of qubit labels
-        (deterined by the gate's dimension).
-        - `"all-edges"` equates to all the vertices, for 1Q gates, and all the
-        edges, for 2Q gates of the graphy given by `geometry`.
-        - `"arbitrary"` or `"*"` means that the corresponding gate can be placed
-        on any target qubits via an :class:`EmbeddingOpFactory` (uses less
-        memory but slower than `"all-permutations"`.
-
-        If a gate name (a key of `gatedict`) is not present in `availability`,
-        the default is `"all-edges"`.
-
-    geometry : {"line","ring","grid","torus"} or QubitGraph
-        The type of connectivity among the qubits, specifying a
-        graph used to define neighbor relationships.
 
     max_idle_weight : int, optional
         The maximum-weight for errors on the global idle gate.
@@ -2773,22 +1482,9 @@ def create_cloudnoise_circuits(num_qubits, max_lengths, single_q_fiducials,
         this equals 1, for instance, then 1-qubit gates can have up to weight-2
         errors and 2-qubit gates can have up to weight-3 errors.
 
-    paramroot : {"CPTP", "H+S+A", "H+S", "S", "H+D+A", "D+A", "D"}
+    parameterization : {"CPTP", "H+S+A", "H+S", "S", "H+D+A", "D+A", "D"}
         The parameterization used to define which parameters need to be
-        amplified.  Note this is only the "root", e.g. you shouldn't pass
-        "H+S terms" here, since the latter is implied by "H+S" when necessary.
-
-    sparse_lindblad_basis : bool, optional
-        Whether the embedded Lindblad-parameterized gates within the constructed
-        `num_qubits`-qubit gates use sparse bases or not.  When sparse, these
-        Lindblad gates - especially those with high-weight action or errors - take
-        less memory, but their simulation is slightly slower.  Usually it's fine to
-        leave this as the default (False), except when considering unusually
-        high-weight errors.
-
-    sparse_lindblad_reps : bool, optional
-        Whether created Lindblad operations use sparse (more memory efficient but
-        slower action) or dense representations.
+        amplified.
 
     verbosity : int, optional
         The level of detail printed to stdout.  0 means silent.
@@ -2856,41 +1552,34 @@ def create_cloudnoise_circuits(num_qubits, max_lengths, single_q_fiducials,
     #   the needed L values, we simply iterate through the cloudbanks
     #   and "tile" the template sequences, converting them to real
     #   sequences with as many clouds in parallel as possible.
+    from pygsti.models.modelconstruction import create_cloud_crosstalk_model_from_hops_and_weights \
+        as _create_cloud_crosstalk_model_from_hops_and_weights
+    from pygsti.forwardsims.mapforwardsim import MapForwardSimulator as _MapFSim
+    from pygsti.forwardsims.termforwardsim import TermForwardSimulator as _TermFSim
+    from pygsti.processors import QubitProcessorSpec as _QubitProcessorSpec
 
     if cache is None: cache = {}
     if 'Idle gatename fidpair lists' not in cache:
         cache['Idle gatename fidpair lists'] = {}
     if 'Cloud templates' not in cache:
         cache['Cloud templates'] = _collections.defaultdict(list)
-    assert(sparse_lindblad_reps is True), "Must set sparse_lindblad_reps=True` when creating cloudnoise circuits!"
-    # b/c we need to avoid dense reps when using the term simulator
-
-    #REMOVE?  (wait until we get terms working again)
-    #ptermstype = paramroot + " terms"
-    #the parameterization type used for constructing Models
-    # that will be used to construct 1st order prob polynomials.
 
     printer = _VerbosityPrinter.create_printer(verbosity, comm)
     printer.log("Creating full model")
 
-    if isinstance(geometry, _baseobjs.QubitGraph):
-        qubitGraph = geometry
-    else:
-        qubitGraph = _baseobjs.QubitGraph.common_graph(num_qubits, geometry, directed=False)
-        printer.log("Created qubit graph:\n" + str(qubitGraph))
-    all_qubit_labels = qubitGraph.node_names
+    all_qubit_labels = processor_spec.qubit_labels  # generalize to 1st TPB labels (TODO)
+    global_idle_lbl = processor_spec.global_idle_layer_label
 
-    model = _CloudNoiseModel.from_hops_and_weights(
-        num_qubits, tuple(gatedict.keys()), None, gatedict,
-        availability, None, qubitGraph,
+    evotype = 'statevec'  # could make this an arg, but only term-sim compatible evotypes allowed
+    model = _create_cloud_crosstalk_model_from_hops_and_weights(
+        processor_spec, None,
         max_idle_weight, 0, maxhops, extra_weight_1_hops, extra_gate_weight,
         verbosity=printer - 5,
         simulator=_TermFSim(mode="taylor-order", max_order=1),
-        parameterization=paramroot,
-        evotype="terms:statevec",
-        errcomp_type="gates",
-        sparse_lindblad_basis=sparse_lindblad_basis,
-        sparse_lindblad_reps=sparse_lindblad_reps)
+        gate_type=parameterization,
+        spam_type=parameterization,
+        evotype=evotype,
+        errcomp_type="gates")
     clouds = model.clouds
     #Note: maxSpamWeight=0 above b/c we don't care about amplifying SPAM errors (?)
     #print("DB: GATES = ",model.operation_blks['layers'].keys())
@@ -2902,18 +1591,19 @@ def create_cloudnoise_circuits(num_qubits, max_lengths, single_q_fiducials,
     # set of qubits that have a non-trivial ideal action applied to them.
     # The 'qubits' of a cloud are all the qubits that have any action -
     # ideal or error - except that which is the same as the Gi gate.
-
-    ideal_model = _CloudNoiseModel.from_hops_and_weights(
-        num_qubits, tuple(gatedict.keys()), None, gatedict,
-        availability, None, qubitGraph,
+    ideal_model = _create_cloud_crosstalk_model_from_hops_and_weights(
+        processor_spec, None,
         0, 0, 0, 0, 0,
         verbosity=printer - 5,
         simulator=_MapFSim(),
-        parameterization=paramroot,
-        errcomp_type="gates")
+        gate_type=parameterization,
+        spam_type=parameterization,
+        errcomp_type="gates",
+        evotype=evotype)
     # for testing for synthetic idles - so no " terms"
 
     Np = model.num_params
+    num_qubits = len(all_qubit_labels)
     idle_op_str = _Circuit(idle_op_str, num_lines=num_qubits)
     prepLbl = _Lbl("rho0")
     effectLbls = [_Lbl("Mdefault_%s" % l) for l in model._effect_labels_for_povm('Mdefault')]
@@ -2924,18 +1614,18 @@ def create_cloudnoise_circuits(num_qubits, max_lengths, single_q_fiducials,
     # - actually better to pass qubitGraph here so we get the correct qubit labels (node labels of graph)
     # - actually *don't* pass qubitGraph as this gives the wrong # of qubits when max_idle_weight < num_qubits!
     printer.log("Creating \"idle error\" model on %d qubits" % max_idle_weight)
-    idle_model = _CloudNoiseModel.from_hops_and_weights(
-        max_idle_weight, tuple(gatedict.keys()), None, gatedict, {}, None, 'line',  # qubitGraph
+    idle_pspec = _QubitProcessorSpec(max_idle_weight, processor_spec.gate_names, processor_spec.nonstd_gate_unitaries,
+                                     {}, 'line')  # qubitGraph
+    idle_model = _create_cloud_crosstalk_model_from_hops_and_weights(
+        idle_pspec, None,
         max_idle_weight, 0, maxhops, extra_weight_1_hops,
         extra_gate_weight, verbosity=printer - 5,
         simulator=_TermFSim(mode="taylor-order", max_order=1),
-        parameterization=paramroot, evotype="terms:statevec",
-        errcomp_type="gates",
-        sparse_lindblad_basis=sparse_lindblad_basis,
-        sparse_lindblad_reps=sparse_lindblad_reps)
+        gate_type=parameterization, spam_type=parameterization, evotype="statevec",
+        errcomp_type="gates")
     idle_model._clean_paramvec()  # allocates/updates .gpindices of all blocks
     # these are the params we want to amplify at first...
-    idle_params = idle_model.operation_blks['layers']['globalIdle'].gpindices
+    idle_params = idle_model.circuit_layer_operator(global_idle_lbl, typ='op').gpindices
 
     if max_idle_weight in cache['Idle gatename fidpair lists']:
         printer.log("Getting cached sequences needed for max-weight=%d errors on the idle gate" % max_idle_weight)
@@ -3008,17 +1698,17 @@ def create_cloudnoise_circuits(num_qubits, max_lengths, single_q_fiducials,
             if syntheticIdleWt not in cache['Idle gatename fidpair lists']:
                 printer.log("Getting sequences needed for max-weight=%d errors" % syntheticIdleWt)
                 printer.log(" on the idle gate (for %d-Q synthetic idles)" % gateWt)
-                sidle_model = _CloudNoiseModel.from_hops_and_weights(
-                    syntheticIdleWt, tuple(gatedict.keys()), None, gatedict, {}, None, 'line',
+                sidle_pspec = _QubitProcessorSpec(syntheticIdleWt, processor_spec.gate_names,
+                                                  processor_spec.nonstd_gate_unitaries, {}, 'line')
+                sidle_model = _create_cloud_crosstalk_model_from_hops_and_weights(
+                    sidle_pspec, None,
                     max_idle_weight, 0, maxhops, extra_weight_1_hops,
                     extra_gate_weight, verbosity=printer - 5,
                     simulator=_TermFSim(mode="taylor-order", max_order=1),
-                    parameterization=paramroot, evotype="terms:statevec", errcomp_type="gates",
-                    sparse_lindblad_basis=sparse_lindblad_basis,
-                    sparse_lindblad_reps=sparse_lindblad_reps)
+                    gate_type=parameterization, spam_type=parameterization, evotype="statevec", errcomp_type="gates")
                 sidle_model._clean_paramvec()  # allocates/updates .gpindices of all blocks
                 # these are the params we want to amplify...
-                idle_params = sidle_model.operation_blks['layers']['globalIdle'].gpindices
+                idle_params = sidle_model.circuit_layer_operator(global_idle_lbl, typ='op').gpindices
 
                 _, _, idle_gatename_fidpair_lists = _find_amped_polynomials_for_syntheticidle(
                     list(range(syntheticIdleWt)), idle_op_str, sidle_model,
@@ -3028,7 +1718,7 @@ def create_cloudnoise_circuits(num_qubits, max_lengths, single_q_fiducials,
                 cache['Idle gatename fidpair lists'][syntheticIdleWt] = idle_gatename_fidpair_lists
 
     #Look for and add additional germs to amplify the *rest* of the model's parameters
-    Gi_nparams = model.operation_blks['layers']['globalIdle'].num_params  # assumes nqnoise (Implicit) model
+    Gi_nparams = model.circuit_layer_operator(global_idle_lbl, typ='op').num_params  # assumes nqnoise (Implicit) model
     SPAM_nparams = sum([obj.num_params for obj in _itertools.chain(model.prep_blks['layers'].values(),
                                                                    model.povm_blks['layers'].values())])
     Np_to_amplify = model.num_params - Gi_nparams - SPAM_nparams
@@ -3058,7 +1748,7 @@ def create_cloudnoise_circuits(num_qubits, max_lengths, single_q_fiducials,
         # amplified for another cloud with core exaclty equal to the gate's target qubits (e.g. [0])
         wrtParams = set()
         # OK b/c model.num_params called above
-        Gi_params = set(_slct.to_array(model.operation_blks['layers']['globalIdle'].gpindices))
+        Gi_params = set(_slct.to_array(model.circuit_layer_operator(global_idle_lbl, typ='op').gpindices))
         pure_op_labels = []
         for gl in model.primitive_op_labels:  # take this as the set of "base"/"serial" operations
             if gl.sslbls is None: continue  # gates that act on everything (usually just the identity Gi gate)
@@ -3185,14 +1875,16 @@ def create_cloudnoise_circuits(num_qubits, max_lengths, single_q_fiducials,
         cloud_class_key = get_cloud_key(cloud_dict, maxhops, extra_weight_1_hops, extra_gate_weight)
         cloud_class_templates = cache['Cloud templates'][cloud_class_key]
         for cloud_template in cloud_class_templates:
-            template_to_cloud_map = map_cloud_template(cloud_dict, pure_op_labels, qubitGraph, cloud_template)
+            template_to_cloud_map = map_cloud_template(cloud_dict, pure_op_labels,
+                                                       processor_spec.qubit_graph, cloud_template)
             if template_to_cloud_map is not None:  # a cloud template is found!
                 template_glabels, template_graph, _ = cloud_template
                 printer.log("Found cached template for this cloud: %d qubits, gates: %s, map: %s" %
                             (len(cloud_qubits), template_glabels, template_to_cloud_map), 2)
                 break
         else:
-            cloud_template, template_to_cloud_map = create_cloud_template(cloud_dict, pure_op_labels, qubitGraph)
+            cloud_template, template_to_cloud_map = create_cloud_template(cloud_dict, pure_op_labels,
+                                                                          processor_spec.qubit_graph)
             cloud_class_templates.append(cloud_template)
             printer.log("Created a new template for this cloud: %d qubits, gates: %s, map: %s" %
                         (len(cloud_qubits), cloud_template[0], template_to_cloud_map), 2)
@@ -3811,189 +2503,3 @@ def _fidpairs_to_gatename_fidpair_list(fidpairs, num_qubits):
         gatenames_per_qubit = tuple([(tuple(x[0]), tuple(x[1])) for x in gatenames_per_qubit])
         gatename_fidpair_list.append(gatenames_per_qubit)
     return gatename_fidpair_list
-
-
-@_deprecated_fn("the pre-build SMQ modelpacks under `pygsti.modelpacks`")
-def stdmodule_to_smqmodule(std_module):
-    """
-    Converts a pyGSTi "standard module" to a "standard multi-qubit module".
-
-    PyGSTi provides a number of 1- and 2-qubit models corrsponding to commonly
-    used gate sets, along with related meta-information.  Each such
-    model+metadata is stored in a "standard module" beneath `pygsti.modelpacks.legacy`
-    (e.g. `pygsti.modelpacks.legacy.std1Q_XYI` is the standard module for modeling a
-    single-qubit quantum processor which can perform X(pi/2), Y(pi/2) and idle
-    operations).  Because they deal with just 1- and 2-qubit models, multi-qubit
-    labelling conventions are not used to improve readability.  For example, a
-    "X(pi/2)" gate is labelled "Gx" (in a 1Q context) or "Gix" (in a 2Q context)
-    rather than "Gx:0" or "Gx:1" respectively.
-
-    There are times, however, when you many *want* a standard module with this
-    multi-qubit labelling convention (e.g. performing 1Q-GST on the 3rd qubit
-    of a 5-qubit processor).  We call such a module a standard *multi-qubit*
-    module, and these typically begin with `"smq"` rather than `"std"`.
-
-    Standard multi-qubit modules are *created* by this function.  For example,
-    If you want the multi-qubit version of `pygsti.modelpacks.legacy.std1Q_XYI`
-    you must:
-
-    1. import `std1Q_XYI` (`from pygsti.modelpacks.legacy import std1Q_XYI`)
-    2. call this function (i.e. `stdmodule_to_smqmodule(std1Q_XYI)`)
-    3. import `smq1Q_XYI` (`from pygsti.modelpacks.legacy import smq1Q_XYI`)
-
-    The `smq1Q_XYI` module will look just like the `std1Q_XYI` module but use
-    multi-qubit labelling conventions.
-
-    .. deprecated:: v0.9.9
-        `stdmodule_to_smqmodule` will be removed in future versions of
-        pyGSTi. Instead, import pre-built SMQ modelpacks directly from
-        `pygsti.modelpacks`.
-
-    Parameters
-    ----------
-    std_module : Module
-        The standard module to convert to a standard-multi-qubit module.
-
-    Returns
-    -------
-    Module
-        The new module, although it's better to import this using the appropriate
-        "smq"-prefixed name as described above.
-    """
-    from types import ModuleType as _ModuleType
-    import sys as _sys
-    import importlib
-
-    std_module_name_parts = std_module.__name__.split('.')
-    std_module_name_parts[-1] = std_module_name_parts[-1].replace('std', 'smq')
-    new_module_name = '.'.join(std_module_name_parts)
-
-    try:
-        return importlib.import_module(new_module_name)
-    except ImportError:
-        pass  # ok, this is what the rest of the function is for
-
-    out_module = {}
-    std_target_model = std_module.target_model()  # could use ._target_model to save a copy
-    dim = std_target_model.dim
-    if dim == 4:
-        sslbls = [0]
-        find_replace_labels = {'Gi': (), 'Gx': ('Gx', 0), 'Gy': ('Gy', 0),
-                               'Gz': ('Gz', 0), 'Gn': ('Gn', 0)}
-        find_replace_strs = [((oldgl,), (newgl,)) for oldgl, newgl
-                             in find_replace_labels.items()]
-    elif dim == 16:
-        sslbls = [0, 1]
-        find_replace_labels = {'Gii': (),
-                               'Gxi': ('Gx', 0), 'Gyi': ('Gy', 0), 'Gzi': ('Gz', 0),
-                               'Gix': ('Gx', 1), 'Giy': ('Gy', 1), 'Giz': ('Gz', 1),
-                               'Gxx': ('Gxx', 0, 1), 'Gxy': ('Gxy', 0, 1),
-                               'Gyx': ('Gxy', 0, 1), 'Gyy': ('Gyy', 0, 1),
-                               'Gcnot': ('Gcnot', 0, 1), 'Gcphase': ('Gcphase', 0, 1)}
-        find_replace_strs = [((oldgl,), (newgl,)) for oldgl, newgl
-                             in find_replace_labels.items()]
-        #find_replace_strs.append( (('Gxx',), (('Gx',0),('Gx',1))) )
-        #find_replace_strs.append( (('Gxy',), (('Gx',0),('Gy',1))) )
-        #find_replace_strs.append( (('Gyx',), (('Gy',0),('Gx',1))) )
-        #find_replace_strs.append( (('Gyy',), (('Gy',0),('Gy',1))) )
-    else:
-        #TODO: add qutrit?
-        raise ValueError("Unsupported model dimension: %d" % dim)
-
-    def upgrade_dataset(ds):
-        """
-        Update DataSet `ds` in-place to use  multi-qubit style labels.
-        """
-        ds.process_circuits_inplace(lambda s: _gsc.manipulate_circuit(
-            s, find_replace_strs, sslbls))
-
-    out_module['find_replace_gatelabels'] = find_replace_labels
-    out_module['find_replace_circuits'] = find_replace_strs
-    out_module['upgrade_dataset'] = upgrade_dataset
-
-    # gate names
-    out_module['gates'] = [find_replace_labels.get(nm, nm) for nm in std_module.gates]
-
-    #Fully-parameterized target model (update labels)
-    state_space = _statespace.ExplicitStateSpace(sslbls)
-    new_target_model = _ExplicitOpModel(state_space, std_target_model.basis.copy())
-    new_target_model._evotype = std_target_model._evotype
-    new_target_model._default_gauge_group = std_target_model._default_gauge_group
-
-    #Note: setting object ._state_space is a bit of a hack here, and assumes
-    # that these are "simple" objects that don't contain other sub-members that
-    # need to have their state spaces updated too.
-    for lbl, obj in std_target_model.preps.items():
-        new_lbl = find_replace_labels.get(lbl, lbl)
-        new_obj = obj.copy(); new_obj._state_space = state_space
-        new_target_model.preps[new_lbl] = new_obj
-    for lbl, obj in std_target_model.povms.items():
-        new_lbl = find_replace_labels.get(lbl, lbl)
-        new_obj = obj.copy(); new_obj._state_space = state_space
-        for effect in new_obj.values():
-            effect._state_space = state_space
-        new_target_model.povms[new_lbl] = new_obj
-    for lbl, obj in std_target_model.operations.items():
-        new_lbl = find_replace_labels.get(lbl, lbl)
-        new_obj = obj.copy(); new_obj._state_space = state_space
-        new_target_model.operations[new_lbl] = new_obj
-    for lbl, obj in std_target_model.instruments.items():
-        new_lbl = find_replace_labels.get(lbl, lbl)
-        new_obj = obj.copy(); new_obj._state_space = state_space
-        for member in new_obj.values():
-            member._state_space = state_space
-        new_target_model.instruments[new_lbl] = new_obj
-    out_module['_target_model'] = new_target_model
-
-    # _stdtarget and _gscache need to be *locals* as well so target_model(...) works
-    _stdtarget = importlib.import_module('.stdtarget', 'pygsti.modelpacks')
-    _gscache = {("full", "auto"): new_target_model}
-    out_module['_stdtarget'] = _stdtarget
-    out_module['_gscache'] = _gscache
-
-    def target_model(parameterization_type="full", simulator="auto"):
-        """
-        Returns a copy of the target model in the given parameterization.
-
-        Parameters
-        ----------
-        parameterization_type : {"TP", "CPTP", "H+S", "S", ... }
-            The gate and SPAM vector parameterization type. See
-            :function:`Model.set_all_parameterizations` for all allowed values.
-
-        simulator : ForwardSimulator or {"auto", "matrix", "map"}
-            The simulator (or type) to be used for model calculations (leave as
-            "auto" if you're not sure what this is).
-
-        Returns
-        -------
-        Model
-        """
-        return _stdtarget._copy_target(_sys.modules[new_module_name], parameterization_type,
-                                       simulator, _gscache)
-    out_module['target_model'] = target_model
-
-    # circuit lists
-    circuitlist_names = ['germs', 'germs_lite', 'prepStrs', 'effectStrs', 'fiducials']
-    for nm in circuitlist_names:
-        if hasattr(std_module, nm):
-            out_module[nm] = _gsc.manipulate_circuits(getattr(std_module, nm), find_replace_strs, sslbls)
-
-    # clifford compilation (keys are lists of operation labels)
-    if hasattr(std_module, 'clifford_compilation'):
-        new_cc = _collections.OrderedDict()
-        for ky, val in std_module.clifford_compilation.items():
-            new_val = [find_replace_labels.get(lbl, lbl) for lbl in val]
-            new_cc[ky] = new_val
-
-    passthrough_names = ['global_fidPairs', 'pergerm_fidPairsDict', 'global_fidPairs_lite', 'pergerm_fidPairsDict_lite']
-    for nm in passthrough_names:
-        if hasattr(std_module, nm):
-            out_module[nm] = getattr(std_module, nm)
-
-    #Create the new module
-    new_module = _ModuleType(str(new_module_name))  # str(.) converts to native string for Python 2 compatibility
-    for k, v in out_module.items():
-        setattr(new_module, k, v)
-    _sys.modules[new_module_name] = new_module
-    return new_module

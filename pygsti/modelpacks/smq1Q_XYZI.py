@@ -80,10 +80,10 @@ class _Module(GSTModelPack):
         (('Gxpi2', 0), ('Gxpi2', 0), ('Gzpi2', 0)): [(0, 0), (0, 4), (1, 5), (2, 3), (2, 5), (5, 5)]
     }
 
-    def _target_model(self, sslbls, evotype):
+    def _target_model(self, sslbls, **kwargs):
         return self._build_explicit_target_model(
             sslbls, [(), ('Gxpi2', 0), ('Gypi2', 0), ('Gzpi2', 0)],
-            ['I({0})', 'X(pi/2,{0})', 'Y(pi/2,{0})', 'Z(pi/2,{0})'], evotype=evotype)
+            ['I({0})', 'X(pi/2,{0})', 'Y(pi/2,{0})', 'Z(pi/2,{0})'], **kwargs)
 
 
 import sys

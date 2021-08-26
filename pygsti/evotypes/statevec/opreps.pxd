@@ -20,7 +20,7 @@ cimport numpy as _np
 cimport cython
 
 from .. cimport basereps_cython as _basereps_cython
-from .statereps cimport StateRep, StateCRep
+from .statereps cimport StateRep, StateCRep, StateRepDensePure
 
 
 #Use 64-bit integers
@@ -28,7 +28,7 @@ ctypedef long long INT
 ctypedef unsigned long long UINT
 
 
-cdef extern from "opcreps.h" namespace "CReps":
+cdef extern from "opcreps.h" namespace "CReps_statevec":
     cdef cppclass OpCRep:
         OpCRep(INT) except +
         StateCRep* acton(StateCRep*, StateCRep*)

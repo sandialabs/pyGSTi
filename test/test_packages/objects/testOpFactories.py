@@ -7,10 +7,10 @@ from pygsti.modelpacks.legacy import std1Q_XYI
 from ..testutils import BaseTestCase
 
 
-class XRotationOpFactory(pygsti.obj.OpFactory):
+class XRotationOpFactory(pygsti.modelmembers.operations.OpFactory):
     def __init__(self):
         dim = 4
-        pygsti.obj.OpFactory.__init__(self, dim, "densitymx")
+        pygsti.modelmembers.operations.OpFactory.__init__(self, dim, "densitymx")
         
     def create_object(self, args=None, sslbls=None):
         assert(sslbls is None) # we don't use these, and they're only non-None when we're expected to use them
@@ -25,10 +25,10 @@ class XRotationOpFactory(pygsti.obj.OpFactory):
                             [0,   0,   b,   c]],'d')
         #print("Superop = \n",superop)
 
-        return pygsti.obj.StaticDenseOp(superop)
+        return pygsti.modelmembers.operations.StaticArbitraryOp(superop)
 
 
-class XRotationOp(pygsti.obj.DenseOperator):
+class XRotationOp(pygsti.modelmembers.operations.DenseOperator):
     def __init__(self, target_angle, initial_params=(0,0)):
         #initialize with no noise
         self.target_angle = target_angle
@@ -52,20 +52,21 @@ class XRotationOp(pygsti.obj.DenseOperator):
         b = a*2*np.cos(theta)*np.sin(theta)
         c = a*(np.cos(theta)**2 - np.sin(theta)**2)
         
-        # .base is a member of DenseOperator and is a numpy array that is 
+        # ._ptr is a member of DenseOperator and is a numpy array that is 
         # the dense Pauli transfer matrix of this operator
-        self.base[:,:] = np.array([[1,   0,   0,   0],
+        self._ptr[:,:] = np.array([[1,   0,   0,   0],
                                    [0,   a,   0,   0],
                                    [0,   0,   c,  -b],
                                    [0,   0,   b,   c]],'d')
+        self._ptr_has_changed()
         self.dirty = dirty_value
 
         
-class ParamXRotationOpFactory(pygsti.obj.OpFactory):
+class ParamXRotationOpFactory(pygsti.modelmembers.operations.OpFactory):
     def __init__(self):
         dim = 4  # 1-qubit
         self.params = np.array([0,0],'d')  #initialize with no noise
-        pygsti.obj.OpFactory.__init__(self, dim, "densitymx")
+        pygsti.modelmembers.operations.OpFactory.__init__(self, dim, "densitymx")
         
     def create_object(self, args=None, sslbls=None):
         assert(sslbls is None) # we don't use these, and they're only non-None when we're expected to use them
@@ -94,13 +95,13 @@ class OpFactoryTestCase(BaseTestCase):
         Gxrot_factory = XRotationOpFactory()
 
         nQubits = 1
-        mdl = pygsti.obj.LocalNoiseModel.from_parameterization(
-            nQubits, ('Gi','Gx','Gy'))
+        pspec = pygsti.processors.QubitProcessorSpec(nQubits, ('Gi','Gx','Gy'))
+        mdl = pygsti.models.modelconstruction.create_crosstalk_free_model(pspec)
         mdl.factories['layers'][('Gxrot',0)] = Gxrot_factory
 
-        c1 = pygsti.obj.Circuit('Gxrot;1.57:0')
-        c2 = pygsti.obj.Circuit([('Gxrot', ';', 1.57, 0)])
-        c3 = pygsti.obj.Circuit([('Gy', 0), ('Gy', 0), ('Gx', 0), ('Gxrot', ';', 1.25, 0), ('Gx', 0)])
+        c1 = pygsti.circuits.Circuit('Gxrot;1.57:0')
+        c2 = pygsti.circuits.Circuit([('Gxrot', ';', 1.57, 0)])
+        c3 = pygsti.circuits.Circuit([('Gy', 0), ('Gy', 0), ('Gx', 0), ('Gxrot', ';', 1.25, 0), ('Gx', 0)])
 
         p1 = mdl.probabilities(c1)
         p2 = mdl.probabilities(c2)
@@ -116,23 +117,24 @@ class OpFactoryTestCase(BaseTestCase):
     def test_embedded_opfactory_2Q(self):
         nQubits = 2
         Gxrot_factory = XRotationOpFactory()
-        mdl = pygsti.obj.LocalNoiseModel.from_parameterization(
-            nQubits, ('Gi','Gx','Gy'))
-        mdl.factories['layers'][('Gxrot',0)] = pygsti.objects.EmbeddedOpFactory((0, 1), (0,), Gxrot_factory, dense=True)
-        mdl.factories['layers'][('Gxrot',1)] = pygsti.objects.EmbeddedOpFactory((0, 1), (1,), Gxrot_factory, dense=True)
 
-        c = pygsti.obj.Circuit([('Gxrot', ';3.14', 0), ('Gxrot', ';1.5', 1)])
+        pspec = pygsti.processors.QubitProcessorSpec(nQubits, ('Gi','Gx','Gy'), geometry='line')
+        mdl = pygsti.models.modelconstruction.create_crosstalk_free_model(pspec)
+        mdl.factories['layers'][('Gxrot',0)] = pygsti.modelmembers.operations.EmbeddedOpFactory((0, 1), (0,), Gxrot_factory)
+        mdl.factories['layers'][('Gxrot',1)] = pygsti.modelmembers.operations.EmbeddedOpFactory((0, 1), (1,), Gxrot_factory)
+
+        c = pygsti.circuits.Circuit([('Gxrot', ';3.14', 0), ('Gxrot', ';1.5', 1)])
         p = mdl.probabilities(c)
         self.assertAlmostEqual(p[('11',)], 0.46463110452654444)
 
     def test_embedding_opfactory_2Q(self):
         nQubits = 2
         Gxrot_factory = XRotationOpFactory()
-        mdl = pygsti.obj.LocalNoiseModel.from_parameterization(
-            nQubits, ('Gi','Gx','Gy'))
-        mdl.factories['layers']['Gxrot'] = pygsti.objects.EmbeddingOpFactory((0, 1), Gxrot_factory, dense=True)
+        pspec = pygsti.processors.QubitProcessorSpec(nQubits, ('Gi','Gx','Gy'), geometry='line')
+        mdl = pygsti.models.modelconstruction.create_crosstalk_free_model(pspec)
+        mdl.factories['layers']['Gxrot'] = pygsti.modelmembers.operations.EmbeddingOpFactory((0, 1), Gxrot_factory)
 
-        c = pygsti.obj.Circuit([('Gxrot', ';3.14', 0), [('Gxrot', ';1.5', 1), ('Gx', 0)]])
+        c = pygsti.circuits.Circuit([('Gxrot', ';3.14', 0), [('Gxrot', ';1.5', 1), ('Gx', 0)]])
 
         p = mdl.probabilities(c)
         self.assertAlmostEqual(p[('10',)], 0.2681106285986824)
@@ -143,14 +145,14 @@ class OpFactoryTestCase(BaseTestCase):
         Gxrot_param_factory = ParamXRotationOpFactory()
 
         nQubits = 1
-        mdl = pygsti.obj.LocalNoiseModel.from_parameterization(
-            nQubits, ('Gi','Gx','Gy'))
+        pspec = pygsti.processors.QubitProcessorSpec(nQubits, ('Gi','Gx','Gy'))  # no geometry needed for a 1-qubit spec
+        mdl = pygsti.models.modelconstruction.create_crosstalk_free_model(pspec)
         mdl.factories['layers'][('Gxrot',0)] = Gxrot_param_factory
         self.assertEqual(mdl.num_params, 2)
 
         #see that parent and gpindices of ops created by factory are correctly set
         mdl.from_vector( np.array([0.1,0.02]) )
-        op = mdl.circuit_layer_operator(pygsti.obj.Label(('Gxrot', ';1.57', 0)), 'op')
+        op = mdl.circuit_layer_operator(pygsti.baseobjs.Label(('Gxrot', ';1.57', 0)), 'op')
         self.assertArraysAlmostEqual( op.to_dense(),
                                       np.array([[1,   0,    0,   0],
                                                 [0, 0.9,    0,   0],
@@ -161,8 +163,8 @@ class OpFactoryTestCase(BaseTestCase):
         self.assertArraysAlmostEqual( mdl.to_vector(), np.array([0.1, 0.02]) )
         self.assertArraysAlmostEqual( op.to_vector(), np.array([0.1, 0.02]) )
 
-        c1 = pygsti.obj.Circuit('Gxrot;2.5:0')
-        #ALT: c1 = pygsti.obj.Circuit([('Gxrot', ';', np.pi, 0)])
+        c1 = pygsti.circuits.Circuit('Gxrot;2.5:0')
+        #ALT: c1 = pygsti.circuits.Circuit([('Gxrot', ';', np.pi, 0)])
 
         #Test that probs change appropriately when the model parameters are
         # given new (different) values.

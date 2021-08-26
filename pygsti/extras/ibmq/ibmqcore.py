@@ -8,7 +8,7 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from ... import objects as _obj
+from ... import data as _data
 from ...protocols import ProtocolData as _ProtocolData
 import numpy as _np
 import time as _time
@@ -83,8 +83,8 @@ class IBMQExperiment(dict):
             The ExperimentDesign to be run on IBM Q. This can be a combined experiment design (e.g., a GST
             design combined with an RB design).
 
-        pspec: ProcessorSpec
-            A ProcessorSpec that represents the IBM Q device being used. This can be created using the
+        pspec: QubitProcessorSpec
+            A QubitProcessorSpec that represents the IBM Q device being used. This can be created using the
             extras.devices.create_processor_spec(). The ProcessorSpecs qubit ordering *must* correspond
             to that of the IBM device (which will be the case if you create it using that function).
              I.e., pspecs qubits should be labelled Q0 through Qn-1 and the labelling of the qubits
@@ -161,7 +161,7 @@ class IBMQExperiment(dict):
             print("Constructing job for circuit batch {} of {}".format(batch_idx + 1, num_batches))
             #openqasm_circuit_ids = []
             for circ_idx, circ in enumerate(circuit_batch):
-                pygsti_openqasm_circ = circ.convert_to_openqasm(num_qubits=pspec.number_of_qubits,
+                pygsti_openqasm_circ = circ.convert_to_openqasm(num_qubits=pspec.num_qubits,
                                                                 standard_gates_version='x-sx-rz')
                 qiskit_qc = _qiskit.QuantumCircuit.from_qasm_str(pygsti_openqasm_circ)
 
@@ -272,7 +272,7 @@ class IBMQExperiment(dict):
         """
         self['batch_result_object'] = []
         #get results from backend jobs and add to dict
-        ds = _obj.DataSet()
+        ds = _data.DataSet()
         for exp_idx, qjob in enumerate(self['qjob']):
             print("Querying IBMQ for results objects for batch {}...".format(exp_idx))
             batch_result = qjob.result()

@@ -111,7 +111,7 @@ class DriftTestCase(BaseTestCase):
         fiducials = [pygsti.objects.Circuit(None, stringrep=fs) for fs in fiducial_strs]
         germs = [pygsti.objects.Circuit(None, stringrep=mdl) for mdl in germ_strs]
         max_lengths = [256, ]
-        gssList = pygsti.construction.make_lsgst_structs(std1Q_XYI.gates, fiducials, fiducials, germs, max_lengths)
+        gssList = pygsti.circuits.make_lsgst_structs(std1Q_XYI.gates, fiducials, fiducials, germs, max_lengths)
         gss = gssList[-1]
 
         # Test the integrated routine

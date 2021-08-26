@@ -1,11 +1,13 @@
 import copy
 import pickle
 import unittest
+import numpy as np
 
 from pygsti.circuits import circuit
 from pygsti.baseobjs import Label, CircuitLabel
-from pygsti.processors import ProcessorPack
+from pygsti.processors import QubitProcessorSpec
 from pygsti.tools import symplectic
+from pygsti.models import modelconstruction as mc
 from ..util import BaseCase
 
 
@@ -225,6 +227,33 @@ class CircuitTester(BaseCase):
             circuit.Circuit(None)
         with self.assertRaises(ValueError):
             circuit.Circuit(('foobar',), stringrep="foobar", check=True)  # lexer illegal character
+
+    def test_circuit_barriers(self):
+        labels = [Label('Gi', 'Q0'), Label('Gx', 'Q8'), Label('Gy', 'Q1')]
+        c = circuit.Circuit(layer_labels=labels, line_labels=['Q0', 'Q1', 'Q8', 'Q12'])
+        self.assertEqual(c.compilable_layer_indices, ())  # default = nothing is compilable
+
+        c = circuit.Circuit(layer_labels=labels, line_labels=['Q0', 'Q1', 'Q8', 'Q12'],
+                            compilable_layer_indices=(1,2))
+        self.assertEqual(c.compilable_layer_indices, (1,2))
+
+        c.compilable_layer_indices = (1,)  # test setter
+        self.assertEqual(c.compilable_layer_indices, (1,))
+        self.assertArraysEqual(c.compilable_by_layer, np.array([False,True,False]))
+        
+
+        expected_tup = (Label(('Gi', 'Q0')), Label(('Gx', 'Q8')), Label(('Gy', 'Q1')), '@', 'Q0', 'Q1', 'Q8', 'Q12', '__CMPLBL__', 1)
+        self.assertEqual(c.tup, expected_tup)
+
+        cstr = "Gi:Q0Gx:Q8~Gy:Q1@(Q0,Q1,Q8,Q12)"
+        c2 = circuit.Circuit(cstr)
+        self.assertEqual(c,c2)
+        self.assertEqual(c.str, cstr)
+        self.assertEqual(c2.str, cstr)
+
+        cstr3 = "Gi:Q0|Gx:Q8Gy:Q1|@(Q0,Q1,Q8,Q12)"
+        c3 = circuit.Circuit(cstr3)
+        self.assertEqual(c,c3)
 
 
 class CircuitMethodTester(BaseCase):
@@ -478,11 +507,12 @@ MEASURE 2 ro[2]
         n = 4
         qubit_labels = ['Q' + str(i) for i in range(n)]
         gate_names = ['Gh', 'Gp', 'Gxpi', 'Gpdag', 'Gcnot']  # 'Gi',
-        ps = ProcessorPack(n, gate_names=gate_names, qubit_labels=qubit_labels, construct_models=('target','clifford'))
+        ps = QubitProcessorSpec(n, gate_names=gate_names, qubit_labels=qubit_labels, geometry='line')
 
         # Tests the circuit simulator
+        mdl = mc.create_crosstalk_free_model(ps)
         c = circuit.Circuit(layer_labels=[Label('Gh', 'Q0'), Label('Gcnot', ('Q0', 'Q1'))], line_labels=['Q0', 'Q1'])
-        out = c.simulate(ps.models['target'])
+        out = c.simulate(mdl)
         self.assertLess(abs(out['00'] - 0.5), 10**-10)
         self.assertLess(abs(out['11'] - 0.5), 10**-10)
 

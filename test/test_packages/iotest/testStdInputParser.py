@@ -48,9 +48,10 @@ class TestStdInputParser(BaseTestCase):
         #print "String Tests:"
         for s,expected in string_tests:
             #print("%s ==> " % s, expected)
-            result, line_labels, occurrence_id = std.parse_circuit_raw(s, lookup=lkup, create_subcircuits=False)
+            result, line_labels, occurrence_id, compilable_indices = std.parse_circuit_raw(s, lookup=lkup, create_subcircuits=False)
             self.assertEqual(line_labels, None)
-            circuit_result = pygsti.obj.Circuit(result, line_labels="auto", expand_subcircuits=True)
+            self.assertEqual(compilable_indices, None)
+            circuit_result = pygsti.circuits.Circuit(result, line_labels="auto", expand_subcircuits=True)
               #use "auto" line labels since none are parsed.
             self.assertEqual(circuit_result.tup, expected)
 
@@ -110,7 +111,7 @@ class TestStdInputParser(BaseTestCase):
 
         std = pygsti.io.StdInputParser()
 
-        from pygsti.objects import CircuitLabel as CL
+        from pygsti.baseobjs import CircuitLabel as CL
 
         self.assertEqual( std.parse_dataline(dataline_tests[0],expected_counts=2), (['G1', 'G2', 'G3'], [0.1, 100.0]))
         self.assertEqual( std.parse_dataline(dataline_tests[1],expected_counts=2), (['G1', 'G2', 'G3'], [0.798, 100.0]))
@@ -124,8 +125,8 @@ class TestStdInputParser(BaseTestCase):
             std.parse_dataline("1.0 2.0") #just data cols (no circuit col!)
 
 
-        self.assertEqual( std.parse_dictline(dictline_tests[0]), ('1', ('G1', 'G2', 'G3'), 'G1G2G3', None, None))
-        self.assertEqual( std.parse_dictline(dictline_tests[1]), ('MyFav', (CL('',('G1', 'G2'),None,3),) , '(G1G2)^3', None, None))
+        self.assertEqual( std.parse_dictline(dictline_tests[0]), ('1', ('G1', 'G2', 'G3'), 'G1G2G3', None, None, None))
+        self.assertEqual( std.parse_dictline(dictline_tests[1]), ('MyFav', (CL('',('G1', 'G2'),None,3),) , '(G1G2)^3', None, None, None))
           # OLD (before subcircuit parsing) the above result should have been: ('G1', 'G2', 'G1', 'G2', 'G1', 'G2')
 
         #print "Dataline Tests:"
@@ -798,9 +799,9 @@ BASIS: pp
         #print " ==> model1:\n", gs1
         #print " ==> model2:\n", gs2
 
-        rotXPi   = pygsti.construction.modelconstruction._create_operation([(4,)], [('Q0',)], "X(pi,Q0)")
-        rotXPiOv2   = pygsti.construction.modelconstruction._create_operation([(4,)], [('Q0',)], "X(pi/2,Q0)")
-        rotYPiOv2   = pygsti.construction.modelconstruction._create_operation([(4,)], [('Q0',)], "Y(pi/2,Q0)")
+        rotXPi   = pygsti.models.modelconstruction._create_operation([(4,)], [('Q0',)], "X(pi,Q0)")
+        rotXPiOv2   = pygsti.models.modelconstruction._create_operation([(4,)], [('Q0',)], "X(pi/2,Q0)")
+        rotYPiOv2   = pygsti.models.modelconstruction._create_operation([(4,)], [('Q0',)], "Y(pi/2,Q0)")
 
         self.assertArraysAlmostEqual(gs1.operations['G1'],rotXPiOv2)
         self.assertArraysAlmostEqual(gs1.operations['G2'],rotYPiOv2)
@@ -823,10 +824,10 @@ BASIS: pp
             for s in ["(Gx:0)Gy:1", "(Gx:0)^4Gy:1", "[Gx:0Gy:1]","[Gx:0Gy:1]^2","[Gx:0[Gz:2Gy:1]]Gz:0",
                       "[Gx:0(Gz:2Gy:1)]Gz:0", "[Gx:0[Gz:2Gy:1]^2]", "[Gx:0([Gz:2Gy:1]^2)]"]:
                 print("FROM ",s,":")
-                c = pygsti.obj.Circuit(None, stringrep=s, expand_subcircuits=expand)
+                c = pygsti.circuits.Circuit(None, stringrep=s, expand_subcircuits=expand)
                 print(c)
                 # c._print_labelinfo() #DEBUG - TODO: could check this structure as part of this test
-                c2 = pygsti.obj.Circuit(c, stringrep=c.str, expand_subcircuits=expand)
+                c2 = pygsti.circuits.Circuit(c, stringrep=c.str, expand_subcircuits=expand)
                 self.assertEqual(c, c2)
                 print("\n\n")
 

@@ -1,6 +1,6 @@
 import unittest
 
-from pygsti.objects.mapforwardsim import MapForwardSimulator
+from pygsti.forwardsims.mapforwardsim import MapForwardSimulator
 
 import pygsti
 from pygsti.modelpacks import smq1Q_XY
@@ -11,7 +11,7 @@ class LayoutTestCase(BaseTestCase):
 
     def setUp(self):
         super(LayoutTestCase, self).setUp()
-        self.circuits = pygsti.construction.to_circuits(["Gxpi2:0", "Gypi2:0", "Gxpi2:0Gxpi2:0",
+        self.circuits = pygsti.circuits.to_circuits(["Gxpi2:0", "Gypi2:0", "Gxpi2:0Gxpi2:0",
                                                          "Gypi2:0Gypi2:0", "Gxpi2:0Gypi2:0"])
         self.model = smq1Q_XY.target_model()
 
@@ -48,14 +48,14 @@ class LayoutTestCase(BaseTestCase):
         self.assertEqual(layout.circuits, layout_copy.circuits)
 
     def test_base_layout(self):
-        self._test_layout(pygsti.objects.copalayout.CircuitOutcomeProbabilityArrayLayout.create_from(self.circuits[:], self.model))
+        self._test_layout(pygsti.layouts.copalayout.CircuitOutcomeProbabilityArrayLayout.create_from(self.circuits[:], self.model))
 
     def test_map_layout(self):
-        self._test_layout(pygsti.objects.maplayout.MapCOPALayout(self.circuits[:], self.model))
+        self._test_layout(pygsti.layouts.maplayout.MapCOPALayout(self.circuits[:], self.model))
         #TODO: test split layouts
 
     def test_matrix_layout(self):
-        self._test_layout(pygsti.objects.matrixlayout.MatrixCOPALayout(self.circuits[:], self.model))
+        self._test_layout(pygsti.layouts.matrixlayout.MatrixCOPALayout(self.circuits[:], self.model))
 
     #SCRATCH
     #    # An additional specific test added from debugging mapevaltree splitting

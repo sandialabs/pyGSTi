@@ -56,8 +56,8 @@ def remove_duplicates(l, index_to_test=None):
 
     Parameters
     ----------
-    l : list
-        The list to remove duplicates from.
+    l : iterable
+        The list/set to remove duplicates from.
 
     index_to_test : int, optional
         If not None, the index within the elements of l to test.  For

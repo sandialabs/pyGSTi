@@ -518,8 +518,6 @@ class ComposedState(_State):  # , _ErrorMapContainer
             output of :method:`Polynomial.compact`.
         """
         if order not in self.terms:
-            if self._evotype not in ('svterm', 'cterm'):
-                raise ValueError("Invalid evolution type %s for calling `taylor_order_terms`" % self._evotype)
             assert(self.gpindices is not None), "ComposedSstate must be added to a Model before use!"
 
             state_terms = self.state_vec.taylor_order_terms(0, max_polynomial_vars); assert(len(state_terms) == 1)

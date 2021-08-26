@@ -218,7 +218,7 @@ class InterpolatedOpFactory(_OpFactory):
         dim = self.base_interpolator.qty_shape[0]
         assert(self.base_interpolator.qty_shape == (dim, dim)), \
             "Base interpolator must interpolate a square matrix value!"
-        assert(target_factory.dim == dim), "Target factory dim must match interpolated matrix dim!"
+        assert(target_factory.state_space.dim == dim), "Target factory dim must match interpolated matrix dim!"
 
         num_interp_params = self.base_interpolator.num_params
         self.num_factory_args = len(self._argument_indices)
@@ -416,7 +416,6 @@ class InterpolatedDenseOp(_DenseOperator):
         errorgen = self.base_interpolator(fullv)
         self._ptr[:, :] = _ot.operation_from_error_generator(errorgen, self.target_op.to_dense(), 'logGTi')
         self._ptr_has_changed()
-            
         if self.aux_interpolator is not None:
             self.aux_info = self.aux_interpolator(fullv)
         self.dirty = dirty_value

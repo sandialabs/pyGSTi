@@ -31,11 +31,13 @@ from pygsti import models as _models
 from pygsti import optimize as _opt
 from pygsti import tools as _tools
 from pygsti import baseobjs as _baseobjs
+from pygsti.processors import QubitProcessorSpec as _QubitProcessorSpec
 from pygsti.modelmembers import operations as _op
 from pygsti.models import Model as _Model
 from pygsti.objectivefns import objectivefns as _objfns, wildcardbudget as _wild
 from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
+from pygsti.modelmembers import states as _states, povms as _povms
 
 #For results object:
 
@@ -44,29 +46,68 @@ ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]
 DEFAULT_BAD_FIT_THRESHOLD = 2.0
 
 
-class HasTargetModel(object):
+class HasProcessorSpec(object):
     """
-    Adds to an experiment design a target model
+    Adds to an experiment design a `processor_spec` attribute
 
     Parameters
     ----------
-    target_model_filename_or_obj : Model or str
-        Target model or path to a file containing a model.
+    processorspec_filename_or_obj : QubitProcessorSpec or str
+        The processor API used by this experiment design.
     """
 
-    def __init__(self, target_model_filename_or_obj):
-        self.target_model = _load_model(target_model_filename_or_obj)
-        self.auxfile_types['target_model'] = 'pickle'
+    def __init__(self, processorspec_filename_or_obj):
+        self.processor_spec = _load_pspec(processorspec_filename_or_obj)
+        self.auxfile_types['processor_spec'] = 'pickle'
+
+    def create_target_model(self, gate_type='auto', prep_type='auto', povm_type='auto'):
+        """
+        Create a target model for this experiment design.
+
+        An explicit model is created based on the processor spec.  If a different type
+        of model is needed, consider creating the model manually via the construction
+        functions in the `pygsti.models.modelconstruction` module using this experiment
+        design's `.processor_spec` attribute.
+
+        Parameters
+        ----------
+        gate_type : str, optional
+            The type of gate objects to create.  Currently `"auto"` is the same as `"static"`.
+
+        prep_type : str, optional
+            The type of state preparation objects to create.  `"auto"` selects a type based
+            on the value of `gate_type`.
+
+        povm_type : str, optional
+            The type of POVM objects to create.  `"auto"` selects a type based
+            on the value of `gate_type`.
+
+        Returns
+        -------
+        Model
+        """
+        # Create a static explicit model as the target model, based on the processor spec
+        if gate_type == "auto":
+            gate_type = "static"
+        if prep_type == "auto":
+            prep_type = _states.get_state_type_from_op_type(gate_type)
+        if povm_type == "auto":
+            povm_type = _povms.get_povm_type_from_op_type(gate_type)
+
+        return _models.modelconstruction._create_explicit_model(
+            self.processor_spec, None, evotype='default', simulator='auto',
+            ideal_gate_type=gate_type, ideal_prep_type=prep_type, ideal_povm_type=povm_type,
+            embed_gates=False, basis='pp')
 
 
-class GateSetTomographyDesign(_proto.CircuitListsDesign, HasTargetModel):
+class GateSetTomographyDesign(_proto.CircuitListsDesign, HasProcessorSpec):
     """
     Minimal experiment design needed for GST
 
     Parameters
     ----------
-    target_model_filename_or_obj : Model or str
-        Target model or the path to a file containing the target model.
+    processorspec_filename_or_obj : QubitProcessorSpec or str
+        The processor API used by this experiment design.
 
     circuit_lists : list
         Per-GST-iteration circuit lists, giving the circuits to run at each GST
@@ -91,10 +132,10 @@ class GateSetTomographyDesign(_proto.CircuitListsDesign, HasTargetModel):
         when `all_circuits_needing_data` is given).
     """
 
-    def __init__(self, target_model_filename_or_obj, circuit_lists, all_circuits_needing_data=None,
+    def __init__(self, processorspec_filename_or_obj, circuit_lists, all_circuits_needing_data=None,
                  qubit_labels=None, nested=False, remove_duplicates=True):
         super().__init__(circuit_lists, all_circuits_needing_data, qubit_labels, nested, remove_duplicates)
-        HasTargetModel.__init__(self, target_model_filename_or_obj)
+        HasProcessorSpec.__init__(self, processorspec_filename_or_obj)
 
 
 class StandardGSTDesign(GateSetTomographyDesign):
@@ -103,8 +144,8 @@ class StandardGSTDesign(GateSetTomographyDesign):
 
     Parameters
     ----------
-    target_model_filename_or_obj : Model or str
-        Target model or the path to a file containing the target model.
+    processorspec_filename_or_obj : QubitProcessorSpec or str
+        The processor API used by this experiment design.
 
     prep_fiducial_list_or_filename : list or str
         A list of preparation fiducial :class:`Circuit`s or the path to a filename containing them.
@@ -201,7 +242,7 @@ class StandardGSTDesign(GateSetTomographyDesign):
         (after it's gathered) corresponding to this design via a :class:`DefaultRunner`.
     """
 
-    def __init__(self, target_model_filename_or_obj, prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
+    def __init__(self, processorspec_filename_or_obj, prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
                  germ_list_or_filename, max_lengths, germ_length_limits=None, fiducial_pairs=None, keep_fraction=1,
                  keep_seed=None, include_lgst=True, nest=True, circuit_rules=None, op_label_aliases=None,
                  dscheck=None, action_if_missing="raise", qubit_labels=None, verbosity=0,
@@ -231,9 +272,9 @@ class StandardGSTDesign(GateSetTomographyDesign):
         self.fpr_keep_seed = keep_seed
 
         #TODO: add a line_labels arg to create_lsgst_circuit_lists and pass qubit_labels in?
-        target_model = _load_model(target_model_filename_or_obj)
+        processor_spec_or_model = _load_pspec_or_model(processorspec_filename_or_obj)
         lists = _circuits.create_lsgst_circuit_lists(
-            target_model, self.prep_fiducials, self.meas_fiducials, self.germs,
+            processor_spec_or_model, self.prep_fiducials, self.meas_fiducials, self.germs,
             self.maxlengths, self.fiducial_pairs, self.truncation_method, self.nested,
             self.fpr_keep_fraction, self.fpr_keep_seed, self.include_lgst,
             self.aliases, self.circuit_rules, dscheck, action_if_missing,
@@ -241,7 +282,10 @@ class StandardGSTDesign(GateSetTomographyDesign):
         #FUTURE: add support for "advanced options" (probably not in __init__ though?):
         # trunc_scheme=advancedOptions.get('truncScheme', "whole germ powers")
 
-        super().__init__(target_model, lists, None, qubit_labels, self.nested)
+        processor_spec = processor_spec_or_model.create_processor_spec() \
+                         if isinstance(processor_spec_or_model, _Model) else processor_spec_or_model
+
+        super().__init__(processor_spec, lists, None, qubit_labels, self.nested)
         self.auxfile_types['prep_fiducials'] = 'text-circuit-list'
         self.auxfile_types['meas_fiducials'] = 'text-circuit-list'
         self.auxfile_types['germs'] = 'text-circuit-list'
@@ -286,7 +330,7 @@ class StandardGSTDesign(GateSetTomographyDesign):
             gll = self.germ_length_limits.copy() if (self.germ_length_limits is not None) else {}
             gll.update(germ_length_limits)
 
-        ret = StandardGSTDesign(self.target_model, self.prep_fiducials, self.meas_fiducials,
+        ret = StandardGSTDesign(self.processor_spec, self.prep_fiducials, self.meas_fiducials,
                                 self.germs, max_lengths, gll, self.fiducial_pairs,
                                 self.fpr_keep_fraction, self.fpr_keep_seed, self.include_lgst, self.nested,
                                 self.circuit_rules, self.aliases, dscheck, action_if_missing, self.qubit_labels,
@@ -340,10 +384,11 @@ class GSTInitialModel(object):
         """
         return obj if isinstance(obj, GSTInitialModel) else cls(obj)
 
-    def __init__(self, model=None, starting_point=None, depolarize_start=0, randomize_start=0,
+    def __init__(self, model=None, target_model=None, starting_point=None, depolarize_start=0, randomize_start=0,
                  lgst_gaugeopt_tol=1e-6, contract_start_to_cptp=False):
         # Note: starting_point can be an initial model or string
         self.model = model
+        self.target_model = target_model
         if starting_point is None:
             self.starting_point = "target" if (model is None) else "User-supplied-Model"
         else:
@@ -380,7 +425,19 @@ class GSTInitialModel(object):
         Model
         """
 
-        target_model = edesign.target_model if isinstance(edesign, HasTargetModel) else None
+        def _get_target_model():  # a fn so we don't run this code unless we actually need a target model
+            if self.target_model is None:
+                if isinstance(edesign, HasProcessorSpec):
+                    typ = 'full' if (self.starting_point in ("LGST", "LGST-if-possible")
+                                     or self.contract_start_to_cptp
+                                     or self.depolarize_start > 0
+                                     or self.randomize_start > 0) else 'auto'
+                    target_model = edesign.create_target_model(typ)
+                else:
+                    target_model = None
+            else:
+                target_model = self.target_model
+            return target_model
 
         #Get starting point (model), which is used to compute other quantities
         # Note: should compute on rank 0 and distribute?
@@ -390,7 +447,8 @@ class GSTInitialModel(object):
 
         elif starting_pt in ("LGST", "LGST-if-possible"):
             #lgst_advanced = advancedOptions.copy(); lgst_advanced.update({'estimateLabel': "LGST", 'onBadFit': []})
-            mdl_start = self.model if (self.model is not None) else target_model
+
+            mdl_start = self.model if (self.model is not None) else _get_target_model()
             if mdl_start is None:
                 raise ValueError(("LGST requires a model. Specify an initial model or use an experiment"
                                   " design with a target model"))
@@ -417,14 +475,14 @@ class GSTInitialModel(object):
                     mdl_start = self.model
                 else:
                     starting_pt = "target"
-                    mdl_start = target_model
+                    mdl_start = _get_target_model()
 
             if starting_pt == "LGST":
                 lgst_results = lgst.run(lgst_data)
                 mdl_start = lgst_results.estimates['LGST'].models['lgst_gaugeopt']
 
         elif starting_pt == "target":
-            mdl_start = target_model
+            mdl_start = _get_target_model()
         else:
             raise ValueError("Invalid starting point: %s" % starting_pt)
 
@@ -781,7 +839,7 @@ class GateSetTomography(_proto.Protocol):
         #TODO: add qtys about fit from optimums_list
 
         ret = ModelEstimateResults(data, self)
-        target_model = data.edesign.target_model if isinstance(data.edesign, HasTargetModel) else None
+        target_model = data.edesign.create_target_model() if isinstance(data.edesign, HasProcessorSpec) else None
         estimate = _Estimate.create_gst_estimate(ret, target_model, mdl_start, mdl_lsgst_list, parameters)
         ret.add_estimate(estimate, estimate_key=self.name)
 
@@ -874,7 +932,7 @@ class LinearGateSetTomography(_proto.Protocol):
         if len(edesign.circuit_lists) != 1:
             raise ValueError("There must be at exactly one circuit list in the input experiment design!")
 
-        target_model = self.target_model if (self.target_model is not None) else edesign.target_model
+        target_model = self.target_model if (self.target_model is not None) else edesign.create_target_model()
         if isinstance(target_model, _models.ExplicitOpModel):
             if not all([(isinstance(g, _op.FullArbitraryOp)
                          or isinstance(g, _op.FullTPOp))
@@ -906,7 +964,7 @@ class LinearGateSetTomography(_proto.Protocol):
         self.check_if_runnable(data)
 
         edesign = data.edesign
-        target_model = self.target_model if (self.target_model is not None) else edesign.target_model
+        target_model = self.target_model if (self.target_model is not None) else edesign.create_target_model()
 
         if isinstance(edesign, _proto.CircuitListsDesign):
             circuit_list = edesign.circuit_lists[0]
@@ -935,7 +993,7 @@ class LinearGateSetTomography(_proto.Protocol):
 
         # Note: this returns a model with the *same* parameterizations as target_model
         mdl_lgst = _alg.run_lgst(ds, edesign.prep_fiducials, edesign.meas_fiducials, target_model,
-                                 op_labels, svd_truncate_to=target_model.dim,
+                                 op_labels, svd_truncate_to=target_model.state_space.dim,
                                  op_label_aliases=aliases, verbosity=printer)
         final_store = _objfns.ModelDatasetCircuitsStore(mdl_lgst, ds, circuit_list, resource_alloc,
                                                         array_types=('E',), verbosity=printer)
@@ -953,7 +1011,7 @@ class LinearGateSetTomography(_proto.Protocol):
                                    'final iteration estimate': mdl_lgst},
                              parameters)
         ret.add_estimate(estimate, estimate_key=self.name)
-        return _add_gaugeopt_and_badfit(ret, self.name, data.edesign.target_model, self.gaugeopt_suite,
+        return _add_gaugeopt_and_badfit(ret, self.name, target_model, self.gaugeopt_suite,
                                         self.gaugeopt_target, self.unreliable_ops, self.badfit_options,
                                         None, resource_alloc, printer)
 
@@ -1102,7 +1160,7 @@ class StandardGST(_proto.Protocol):
                 printer.show_progress(i, len(modes), prefix='-- Std Practice: ', suffix=' (%s) --' % mode)
 
                 if mode == "Target":
-                    model_to_test = data.edesign.target_model.copy()  # no parameterization change
+                    model_to_test = data.edesign.create_target_model()  # no parameterization change
                     mdltest = _ModelTest(model_to_test, None, self.gaugeopt_suite, self.gaugeopt_target,
                                          mt_builder, self.badfit_options, verbosity=printer - 1, name=mode)
                     result = mdltest.run(data, memlimit, comm)
@@ -1117,7 +1175,7 @@ class StandardGST(_proto.Protocol):
                 else:
                     #Try to interpret `mode` as a parameterization
                     parameterization = mode  # for now, 1-1 correspondence
-                    initial_model = data.edesign.target_model.copy()
+                    initial_model = data.edesign.create_target_model()
 
                     try:
                         initial_model.set_all_parameterizations(parameterization)
@@ -1332,11 +1390,27 @@ def _update_gaugeopt_dict_from_suitename(gaugeopt_suite_dict, root_lbl, suite_na
         raise ValueError("Unknown gauge-optimization suite '%s'" % suite_name)
 
 
+def _load_pspec(processorspec_filename_or_obj):
+    if not isinstance(processorspec_filename_or_obj, _QubitProcessorSpec):
+        with open(processorspec_filename_or_obj, 'rb') as f:
+            return _pickle.load(f)
+    else:
+        return processorspec_filename_or_obj
+
+
 def _load_model(model_filename_or_obj):
     if isinstance(model_filename_or_obj, str):
         return _io.load_model(model_filename_or_obj)
     else:
         return model_filename_or_obj  # assume a Model object
+
+def _load_pspec_or_model(processorspec_or_model_filename_or_obj):
+    if isinstance(processorspec_or_model_filename_or_obj, str):
+        # if a filename is given, just try to load a processor spec (can't load a model file yet)
+        with open(processorspec_or_model_filename_or_obj, 'rb') as f:
+            return _pickle.load(f)
+    else:
+        return processorspec_or_model_filename_or_obj
 
 
 def _load_fiducials_and_germs(prep_fiducial_list_or_filename,
@@ -1405,72 +1479,6 @@ def _add_gaugeopt_and_badfit(results, estlbl, target_model, gaugeopt_suite, gaug
 
     return results
 
-
-##TODO REMOVE
-#def OLD_package_into_results(callerProtocol, data, target_model, mdl_start, lsgstLists,
-#                          parameters, mdl_lsgst_list, gaugeopt_suite, gaugeopt_target,
-#                          comm, memLimit, output_pkl, verbosity,
-#                          profiler, evaltree_cache=None):
-#    # advanced_options, opt_args,
-#    """
-#    Performs all of the post-optimization processing common to
-#    run_long_sequence_gst and do_model_evaluation.
-#
-#    Creates a Results object to be returned from run_long_sequence_gst
-#    and do_model_evaluation (passed in as 'callerName').  Performs
-#    gauge optimization, and robust data scaling (with re-optimization
-#    if needed and opt_args is not None - i.e. only for
-#    run_long_sequence_gst).
-#    """
-#    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm)
-#    tref = _time.time()
-#    callerName = callerProtocol.name
-#
-#    #ret = advancedOptions.get('appendTo', None)
-#    #if ret is None:
-#    ret = ModelEstimateResults(data, callerProtocol)
-#    #else:
-#    #    # a dummy object to check compatibility w/ret2
-#    #    dummy = ModelEstimateResults(data, callerProtocol)
-#    #    ret.add_estimates(dummy)  # does nothing, but will complain when appropriate
-#
-#    #add estimate to Results
-#    profiler.add_time('%s: results initialization' % callerName, tref); tref = _time.time()
-#
-#    #Do final gauge optimization to *final* iteration result only
-#    if gaugeopt_suite:
-#        if gaugeopt_target is None: gaugeopt_target = target_model
-#        _add_gauge_opt(ret, estlbl, gaugeopt_suite, gaugeopt_target,
-#                      mdl_lsgst_list[-1], comm, advancedOptions, printer - 1)
-#        profiler.add_time('%s: gauge optimization' % callerName, tref)
-#
-#    #Perform extra analysis if a bad fit was obtained - do this *after* gauge-opt b/c it mimics gaugeopts
-#    badFitThreshold = advancedOptions.get('badFitThreshold', DEFAULT_BAD_FIT_THRESHOLD)
-#    onBadFit = advancedOptions.get('onBadFit', [])  # ["wildcard"]) #["Robust+"]) # empty list => 'do nothing'
-#    badfit_opts = advancedOptions.get('badFitOptions', {'wildcard_budget_includes_spam': True,
-#                                                        'wildcard_smart_init': True})
-#    _add_badfit_estimates(ret, estlbl, onBadFit, badFitThreshold, badfit_opts, opt_args, evaltree_cache,
-#                         comm, memLimit, printer)
-#    profiler.add_time('%s: add badfit estimates' % callerName, tref); tref = _time.time()
-#
-#    #Add recorded info (even robust-related info) to the *base*
-#    #   estimate label's "stdout" meta information
-#    if printer.is_recording():
-#        ret.estimates[estlbl].meta['stdout'] = printer.stop_recording()
-#
-#    #Write results to a pickle file if desired
-#    if output_pkl and (comm is None or comm.Get_rank() == 0):
-#        if isinstance(output_pkl, str):
-#            with open(output_pkl, 'wb') as pklfile:
-#                _pickle.dump(ret, pklfile)
-#        else:
-#            _pickle.dump(ret, output_pkl)
-#
-#    return ret
-
-
-#def _add_gauge_opt(estimate, gaugeOptParams, target_model, starting_model,
-#                  comm=None, verbosity=0):
 
 def _add_gauge_opt(results, base_est_label, gaugeopt_suite, target_model, starting_model,
                    unreliable_ops, comm=None, verbosity=0):
@@ -1761,7 +1769,7 @@ def _compute_robust_scaling(scale_typ, objfn_cache, mdc_objfn):
 def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options, verbosity):
     """
     Create a wildcard budget for a model estimate.
-    TODO: docstring (update)
+    TODO: update docstring
 
     Parameters
     ----------
@@ -2022,7 +2030,7 @@ def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options,
 def _reoptimize_with_weights(mdc_objfn, circuit_weights_dict, optimizer, verbosity):
     """
     Re-optimize a model after data counts have been scaled by circuit weights.
-    TODO: docstring
+    TODO: update docstring
 
     Parameters
     ----------
@@ -2159,21 +2167,6 @@ class ModelEstimateResults(_proto.ProtocolResults):
 
             circuit_lists['final'] = circuit_lists['iteration'][-1]
 
-            #TODO REMOVE
-            ##We currently expect to have these keys (in future have users check for them?)
-            #if 'prep fiducials' not in circuit_lists: circuit_lists['prep fiducials'] = []
-            #if 'meas fiducials' not in circuit_lists: circuit_lists['meas fiducials'] = []
-            #if 'germs' not in circuit_lists: circuit_lists['germs'] = []
-
-            #I think these are UNUSED - TODO REMOVE
-            #circuit_lists['all'] = _tools.remove_duplicates(
-            #    list(_itertools.chain(*circuit_lists['iteration']))) # USED?
-            #running_set = set(); delta_lsts = []
-            #for lst in circuit_lists['iteration']:
-            #    delta_lst = [x for x in lst if (x not in running_set)]
-            #    delta_lsts.append(delta_lst); running_set.update(delta_lst)
-            #circuit_lists['iteration delta'] = delta_lsts  # *added* at each iteration
-
         self.circuit_lists = circuit_lists
         self.estimates = _collections.OrderedDict()
 
@@ -2302,11 +2295,6 @@ class ModelEstimateResults(_proto.ProtocolResults):
                            + " want to do this.")
 
         self.estimates[estimate_key] = estimate
-
-        #TODO REMOVE
-        ##Set gate sequence related parameters inherited from Results
-        #self.estimates[estimate_key].parameters['max length list'] = \
-        #    self.circuit_structs['final'].Ls
 
     def add_model_test(self, target_model, themodel,
                        estimate_key='test', gaugeopt_keys="auto"):

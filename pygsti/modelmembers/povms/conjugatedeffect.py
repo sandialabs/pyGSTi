@@ -13,6 +13,7 @@ The ConjugatedStatePOVMEffect class and supporting functionality.
 import copy as _copy
 
 from pygsti.modelmembers.povms.effect import POVMEffect as _POVMEffect
+from pygsti.modelmembers import term as _term
 from pygsti.tools import matrixtools as _mt
 
 
@@ -307,3 +308,55 @@ class ConjugatedStatePOVMEffect(DenseEffectInterface, _POVMEffect):
             Hessian with shape (dimension, num_params1, num_params2)
         """
         return self.state.hessian_wrt_params(wrt_filter1, wrt_filter2)
+
+    def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
+        """
+        Get the `order`-th order Taylor-expansion terms of this state vector.
+
+        This function either constructs or returns a cached list of the terms at
+        the given order.  Each term is "rank-1", meaning that it is a state
+        preparation followed by or POVM effect preceded by actions on a
+        density matrix `rho` of the form:
+
+        `rho -> A rho B`
+
+        The coefficients of these terms are typically polynomials of the
+        State's parameters, where the polynomial's variable indices index the
+        *global* parameters of the State's parent (usually a :class:`Model`)
+        , not the State's local parameter array (i.e. that returned from
+        `to_vector`).
+
+        Parameters
+        ----------
+        order : int
+            The order of terms to get.
+
+        max_polynomial_vars : int, optional
+            maximum number of variables the created polynomials can have.
+
+        return_coeff_polys : bool
+            Whether a parallel list of locally-indexed (using variable indices
+            corresponding to *this* object's parameters rather than its parent's)
+            polynomial coefficients should be returned as well.
+
+        Returns
+        -------
+        terms : list
+            A list of :class:`RankOneTerm` objects.
+        coefficients : list
+            Only present when `return_coeff_polys == True`.
+            A list of *compact* polynomial objects, meaning that each element
+            is a `(vtape,ctape)` 2-tuple formed by concatenating together the
+            output of :method:`Polynomial.compact`.
+        """
+        ret = self.state.taylor_order_terms(order, max_polynomial_vars, return_coeff_polys)
+        state_terms = ret[0] if return_coeff_polys else ret
+
+        evotype = self.evotype
+        effect_terms = []
+        for state_term in state_terms:
+            assert(isinstance(state_term, _term.RankOnePolynomialPrepTerm))
+            effect_term = _term.RankOnePolynomialEffectTerm(evotype.conjugate_state_term_rep(state_term._rep), evotype)
+            effect_terms.append(effect_term)
+
+        return (effect_terms, ret[1]) if return_coeff_polys else effect_terms

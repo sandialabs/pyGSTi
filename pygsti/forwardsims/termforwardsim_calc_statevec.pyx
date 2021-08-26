@@ -16,11 +16,11 @@ from libc cimport time
 from libcpp cimport bool
 from libcpp.vector cimport vector
 from cython.operator cimport dereference as deref
-from ..evotypes.basereps_cython cimport PolynomialRep, PolynomialCRep, PolynomialVarsIndex
-from ..evotypes.statevec.statereps cimport StateRep, StateCRep
-from ..evotypes.statevec.opreps cimport OpRep, OpCRep
-from ..evotypes.statevec.effectreps cimport EffectRep, EffectCRep
-from ..evotypes.statevec.termreps cimport TermRep, TermCRep, TermDirectRep, TermDirectCRep
+from pygsti.evotypes.basereps_cython cimport PolynomialRep, PolynomialCRep, PolynomialVarsIndex
+from pygsti.evotypes.statevec.statereps cimport StateRep, StateCRep
+from pygsti.evotypes.statevec.opreps cimport OpRep, OpCRep, OpCRep_DenseUnitary
+from pygsti.evotypes.statevec.effectreps cimport EffectRep, EffectCRep
+from pygsti.evotypes.statevec.termreps cimport TermRep, TermCRep, TermDirectRep, TermDirectCRep
 
 from libc.stdlib cimport malloc, free
 from libc.math cimport log10, sqrt
@@ -35,7 +35,7 @@ import time as pytime
 import numpy as np
 
 #import itertools as _itertools
-from ..opcalc import fastopcalc as _fastopcalc
+from pygsti.baseobjs.opcalc import fastopcalc as _fastopcalc
 #from scipy.sparse.linalg import LinearOperator
 
 cdef double SMALL = 1e-5
@@ -127,7 +127,7 @@ cdef vector[vector[TermCRep_ptr]] extract_cterms(python_termrep_lists, INT max_o
 
 
 def prs_as_polynomials(fwdsim, rholabel, elabels, circuit, polynomial_vindices_per_int,
-                          comm=None, mem_limit=None, fastmode=True):
+                       comm=None, mem_limit=None, fastmode=True):
 
     # Create gatelable -> int mapping to be used throughout
     distinct_gateLabels = sorted(set(circuit))
@@ -232,8 +232,6 @@ cdef vector[PolynomialCRep*] c_prs_as_polynomials(
         #  free them (or assign them to new PolynomialRep wrapper objs)
 
     for order in range(max_order+1):
-        #print("DB: pr_as_polynomial order=",order)
-
         #for p in partition_into(order, N):
         for i in range(N+2): p[i] = 0 # clear p
         factor_lists = vector[vector_TermCRep_ptr_ptr](N+2)
@@ -265,7 +263,6 @@ cdef vector[PolynomialCRep*] c_prs_as_polynomials(
                 factor_lists[N+1] = &E_term_reps[p[N+1]]
                 Einds = &E_term_indices[p[N+1]]
 
-                #print "DB: Order1 "
                 innerloop_fn(factor_lists,Einds,&prps,dim) #, prps_chk)
                 p[i] = 0
 
@@ -343,7 +340,7 @@ cdef void pr_as_polynomial_innerloop(vector[vector_TermCRep_ptr_ptr] factor_list
     #for factors in _itertools.product(*factor_lists):
     while(True):
         # In this loop, b holds "current" indices into factor_lists
-        factor = deref(factor_lists[0])[b[0]] # the last factor (an Evec)
+        factor = deref(factor_lists[0])[b[0]]
         coeff = deref(factor._coeff) # an unordered_map (copies to new "coeff" variable)
 
         for i in range(1,nFactorLists):
@@ -387,7 +384,6 @@ cdef void pr_as_polynomial_innerloop(vector[vector_TermCRep_ptr_ptr] factor_list
             factor._pre_ops[j].acton(prop1,prop2)
             tprop = prop1; prop1 = prop2; prop2 = tprop # final state in prop1
         pRight = EVec.amplitude(prop1).conjugate()
-
 
         #Add result to appropriate polynomial
         result = coeff  # use a reference?
@@ -626,14 +622,13 @@ def create_circuitsetup_cacheel(fwdsim, rholabel, elabels, circuit, repcache, mi
             hmterms, foat_indices = op.highmagnitude_terms(
                 min_term_mag, max_taylor_order=fwdsim.max_order, max_polynomial_vars=mpv)
 
-            #TODO REMOVE
+            #DEBUG CHECK
             #if glbl in check_opcache:
             #    if np.linalg.norm( check_opcache[glbl].to_vector() - op.to_vector() ) > 1e-6:
             #        print("HERE!!!")
             #        raise ValueError("HERE!!!")
             #else:
             #    check_opcache[glbl] = op
-
 
             #DEBUG CHECK TERM MAGNITUDES make sense
             #chk_tot_mag = sum([t.magnitude for t in hmterms])
@@ -813,18 +808,18 @@ cdef double c_find_best_pathmagnitude_threshold(
                                               threshold_guess, pathmagnitude_gap / (3.0*max_paths), max_paths,
                                               achieved_sum_of_pathmags, npaths)  # 3.0 is heuristic
 
-    #DEBUG TODO REMOVE - CHECK that counting paths using this threshold gives the same results
-    cdef INT NO_LIMIT = 1000000000
-    cdef vector[double] check_mags = vector[double](numEs)
-    cdef vector[INT] check_npaths = vector[INT](numEs)
-    for i in range(numEs):
-        check_mags[i] = 0.0; check_npaths[i] = 0
-    count_paths_upto_threshold(factor_lists, threshold, numEs,
-                               foat_indices_per_op, e_indices, NO_LIMIT,
-                               check_mags, check_npaths)
-    for i in range(numEs):
-        assert(abs(achieved_sum_of_pathmags[i] - check_mags[i]) < 1e-8)
-        assert(npaths[i] == check_npaths[i])
+    #DEBUG CHECK that counting paths using this threshold gives the same results (can REMOVE)
+    #cdef INT NO_LIMIT = 1000000000
+    #cdef vector[double] check_mags = vector[double](numEs)
+    #cdef vector[INT] check_npaths = vector[INT](numEs)
+    #for i in range(numEs):
+    #    check_mags[i] = 0.0; check_npaths[i] = 0
+    #count_paths_upto_threshold(factor_lists, threshold, numEs,
+    #                           foat_indices_per_op, e_indices, NO_LIMIT,
+    #                           check_mags, check_npaths)
+    #for i in range(numEs):
+    #    assert(abs(achieved_sum_of_pathmags[i] - check_mags[i]) < 1e-8)
+    #    assert(npaths[i] == check_npaths[i])
 
     #print("Threshold = ",threshold)
     #print("Mags = ",achieved_sum_of_pathmags)
@@ -1321,8 +1316,6 @@ cdef bool count_paths(vector[INT]& b, vector[vector_TermCRep_ptr_ptr]& oprep_lis
                     if nzeros == 0:
                         pathmags[e_indices[b[n-1]]] += mag
                     nPaths[e_indices[b[n-1]]] += 1
-                    #if e_indices[b[n-1]] == 0:  # TODO REMOVE
-                    #    print nPaths[e_indices[b[n-1]]], mag, pathmags[e_indices[b[n-1]]], b, current_mag, deref(oprep_lists[i])[b[i]]._magnitude, deref(oprep_lists[i])[orig_bi-1]._magnitude, incd, i, "*2"
                     if nPaths[e_indices[b[n-1]]] == max_npaths: return True
                     #print("FOAT Adding ",b)
                     ## --------------------------
@@ -1343,8 +1336,6 @@ cdef bool count_paths(vector[INT]& b, vector[vector_TermCRep_ptr_ptr]& oprep_lis
                             if nzeros == 0:  # if numerator was zero above, mag2 will be zero, so we still won't add anyting (good)
                                 pathmags[e_indices[b[n-1]]] += mag2
                             nPaths[e_indices[b[n-1]]] += 1
-                            #if e_indices[b[n-1]] == 0:  # TODO REMOVE
-                            #    print nPaths[e_indices[b[n-1]]], mag2, pathmags[e_indices[b[n-1]]], b, mag, incd, i, " *3"
                             if nPaths[e_indices[b[n-1]]] == max_npaths: return True
                             #print("FOAT Adding ",b)
                             ## --------------------------
@@ -1405,7 +1396,7 @@ cdef double pathmagnitude_threshold(vector[vector_TermCRep_ptr_ptr] oprep_lists,
 
         try_larger_threshold = 1 # True
         for i in range(nEffects):
-            #if(mags[i] > target_sum_of_pathmags[i]): #DEBUG TODO REMOVE
+            #if(mags[i] > target_sum_of_pathmags[i]): #DEBUG CHECK
             #    print "MAGS TOO LARGE!!! mags=",mags[i]," target_sum=",target_sum_of_pathmags[i]
 
             if(mags[i] < target_sum_of_pathmags[i]):
