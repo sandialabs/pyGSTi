@@ -82,7 +82,7 @@ class CHPForwardSimulator(_WeakForwardSimulator):
                 # Op layers
                 for op_label in op_labels:
                     op = self.model.circuit_layer_operator(op_label, 'op')
-                    tmp.write(op.chp_str())
+                    tmp.write(op._rep.chp_str())
 
                 # POVM (sort of, actually using it more like a straight PVM)
                 povm = self.model.circuit_layer_operator(_Label(povm_label.name), 'povm')

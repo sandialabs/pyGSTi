@@ -84,7 +84,7 @@ class OpRepComposed(OpRep):
     def __init__(self, factor_op_reps, state_space):
         state_space = _StateSpace.cast(state_space)
         self.factor_reps = factor_op_reps
-        super(OpRepComposed, self).__init__(state_space)
+        super(OpRepComposed, self).__init__([], state_space)
 
     def reinit_factor_op_reps(self, factor_op_reps):
         self.factors_reps = factor_op_reps
@@ -178,8 +178,6 @@ class OpRepStochastic(OpRep):
         s : str
             String of CHP code
         """
-        assert (self._evotype == 'chp'), "Must have 'chp' evotype to use get_chp_str"
-
         rates = self.rates
         all_rates = [*rates, 1.0 - sum(rates)]  # Include identity so that probabilities are 1
         index = self.rand_state.choice(self.basis.size, p=all_rates)
@@ -190,4 +188,4 @@ class OpRepStochastic(OpRep):
 
         rep = self.stochastic_superop_reps[index]
         self.chp_ops = rep.chp_ops  # set our chp_ops so call to base-class property below uses these
-        return OpRep.chp_str.fget(self)
+        return OpRep.chp_str(self)
