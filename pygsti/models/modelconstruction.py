@@ -1114,6 +1114,10 @@ def _setup_local_gates(processor_spec, evotype, modelnoise=None, custom_gates=No
                                      + list(custom_gates.keys())
                                      + list(modelnoise.keys()))
 
+    # Cache ideal ops to ensure only one copy for each name
+    ideal_gates = {}
+    ideal_factories = {}
+
     gatedict = _collections.OrderedDict()
     for key in all_keys:
         # Use custom gate directly as error gate
@@ -1146,7 +1150,10 @@ def _setup_local_gates(processor_spec, evotype, modelnoise=None, custom_gates=No
                 gatedict[key] = noiseop
 
         elif not callable(U):  # normal operation (not a factory)
-            ideal_gate = _op.create_from_unitary_mx(U, ideal_gate_type, 'pp', stdname, evotype, state_space=None)
+            ideal_gate = ideal_gates.get(name, None)
+            if ideal_gate is None:
+                ideal_gate = _op.create_from_unitary_mx(U, ideal_gate_type, 'pp', stdname, evotype, state_space=None)
+                ideal_gates[name] = ideal_gate
             noiseop = modelnoise.create_errormap(key, evotype, ideal_gate.state_space, target_labels=None)
             # Note: above line creates a *local* noise op, working entirely in the ideal gate's target space.
             #   This means it will fail to create error maps with a given (non-local/stencil) set of sslbls, as desired
@@ -1161,8 +1168,11 @@ def _setup_local_gates(processor_spec, evotype, modelnoise=None, custom_gates=No
                     gatedict[key] = _op.ComposedOp([ideal_gate, noiseop])
 
         else:  # a factory, given by the unitary-valued function U: args -> unitary
-            local_state_space = _statespace.default_space_for_udim(U(None).shape[0])  # OR possibly U.udim in future
-            ideal_factory = _opfactory.UnitaryOpFactory(U, local_state_space, 'pp', evotype)
+            ideal_factory = ideal_factories.get(name, None)
+            if ideal_factory is None:
+                local_state_space = _statespace.default_space_for_udim(U(None).shape[0]) # OR possibly U.udim in future
+                ideal_factory = _opfactory.UnitaryOpFactory(U, local_state_space, 'pp', evotype)
+                ideal_factories[name] = ideal_factory
             noiseop = modelnoise.create_errormap(key, evotype, ideal_factory.state_space, target_labels=None)
             gatedict[key] = _opfactory.ComposedOpFactory([ideal_factory, noiseop]) \
                 if (noiseop is not None) else ideal_factory
@@ -1175,7 +1185,7 @@ def create_crosstalk_free_model(processor_spec, custom_gates=None,
                                 lindblad_parameterization='auto',
                                 evotype="default", simulator="auto", on_construction_error='raise',
                                 independent_gates=False, independent_spam=True, ensure_composed_gates=False,
-                                ideal_gate_type='auto', ideal_spam_type='computational'):
+                                ideal_gate_type='auto', ideal_spam_type='computational', implicit_idle_mode='none'):
     """
     Create a n-qubit "crosstalk-free" model.
 
@@ -1294,6 +1304,14 @@ def create_crosstalk_free_model(processor_spec, custom_gates=None,
     ideal_spam_type : str or tuple, optional
         Similar to `ideal_gate_type` but for SPAM elements (state preparations
         and POVMs).
+    
+    implicit_idle_mode : {'none', 'add_global'}
+        The way idel operations are added implicitly within the created model. `"none"`
+        doesn't add any "extra" idle operations when there is a layer that contains some
+        gates but not gates on all the qubits.  `"add_global"` adds the global idle operation,
+        i.e., the operation for a global idle layer (zero gates - a completely empty layer),
+        to every layer that is simulated, using the global idle as a background idle that always
+        occurs regardless of the operation.
 
     Returns
     -------
@@ -1316,13 +1334,14 @@ def create_crosstalk_free_model(processor_spec, custom_gates=None,
 
     return _create_crosstalk_free_model(processor_spec, _ComposedOpModelNoise(modelnoises), custom_gates, evotype,
                                         simulator, on_construction_error, independent_gates, independent_spam,
-                                        ensure_composed_gates, ideal_gate_type, ideal_spam_type, ideal_spam_type)
+                                        ensure_composed_gates, ideal_gate_type, ideal_spam_type, ideal_spam_type,
+                                        implicit_idle_mode)
 
 
 def _create_crosstalk_free_model(processor_spec, modelnoise, custom_gates=None, evotype="default", simulator="auto",
                                  on_construction_error='raise', independent_gates=False, independent_spam=True,
                                  ensure_composed_gates=False, ideal_gate_type='auto', ideal_prep_type='auto',
-                                 ideal_povm_type='auto'):
+                                 ideal_povm_type='auto', implicit_idle_mode='none'):
     """
     Create a n-qubit "crosstalk-free" model.
 
@@ -1360,7 +1379,8 @@ def _create_crosstalk_free_model(processor_spec, modelnoise, custom_gates=None, 
     modelnoise.warn_about_zero_counters()
     return _LocalNoiseModel(processor_spec, gatedict, prep_layers, povm_layers,
                             evotype, simulator, on_construction_error,
-                            independent_gates, ensure_composed_gates)
+                            independent_gates, ensure_composed_gates,
+                            implicit_idle_mode)
 
 
 def create_cloud_crosstalk_model(processor_spec, custom_gates=None,
@@ -1368,7 +1388,7 @@ def create_cloud_crosstalk_model(processor_spec, custom_gates=None,
                                  depolarization_parameterization='depolarize', stochastic_parameterization='stochastic',
                                  lindblad_parameterization='auto', evotype="default", simulator="auto",
                                  independent_gates=False, independent_spam=True, errcomp_type="errorgens",
-                                 implicit_idle_mode="add_global", verbosity=0):
+                                 implicit_idle_mode="none", verbosity=0):
     """
     Create a n-qubit "cloud-crosstalk" model.
 
@@ -1478,7 +1498,7 @@ def create_cloud_crosstalk_model(processor_spec, custom_gates=None,
         in terms of Lindblad error coefficients.
 
     implicit_idle_mode : {'none', 'add_global'}
-        The way idel operations are added implicitly within the created model. `"nonw"`
+        The way idel operations are added implicitly within the created model. `"none"`
         doesn't add any "extra" idle operations when there is a layer that contains some
         gates but not gates on all the qubits.  `"add_global"` adds the global idle operation,
         i.e., the operation for a global idle layer (zero gates - a completely empty layer),
@@ -1572,7 +1592,7 @@ def create_cloud_crosstalk_model(processor_spec, custom_gates=None,
 def _create_cloud_crosstalk_model(processor_spec, modelnoise, custom_gates=None,
                                   evotype="default", simulator="auto", independent_gates=False,
                                   independent_spam=True, errcomp_type="errorgens",
-                                  implicit_idle_mode="add_global", verbosity=0):
+                                  implicit_idle_mode="none", verbosity=0):
     """
     Create a n-qubit "cloud-crosstalk" model.
 
@@ -1670,7 +1690,7 @@ def create_cloud_crosstalk_model_from_hops_and_weights(
         maxhops=0, extra_weight_1_hops=0, extra_gate_weight=0,
         simulator="auto", evotype='default',
         gate_type="H+S", spam_type="H+S",
-        implicit_idle_mode="add_global", errcomp_type="gates",
+        implicit_idle_mode="none", errcomp_type="gates",
         independent_gates=True, independent_spam=True,
         connected_highweight_errors=True,
         verbosity=0):

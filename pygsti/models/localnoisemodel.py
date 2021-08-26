@@ -167,7 +167,7 @@ class LocalNoiseModel(_ImplicitOpModel):
 
     def __init__(self, processor_spec, gatedict, prep_layers=None, povm_layers=None, evotype="default",
                  simulator="auto", on_construction_error='raise',
-                 independent_gates=False, ensure_composed_gates=False, implicit_idle_mode="add_global"):
+                 independent_gates=False, ensure_composed_gates=False, implicit_idle_mode="none"):
 
         qubit_labels = processor_spec.qubit_labels
         state_space = _statespace.QubitSpace(qubit_labels)
