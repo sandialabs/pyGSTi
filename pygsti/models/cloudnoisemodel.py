@@ -176,7 +176,7 @@ class CloudNoiseModel(_ImplicitOpModel):
                  prep_layers=None, povm_layers=None,
                  build_cloudnoise_fn=None, build_cloudkey_fn=None,
                  simulator="map", evotype="default", errcomp_type="gates",
-                 implicit_idle_mode="add_global", verbosity=0):
+                 implicit_idle_mode="none", verbosity=0):
 
         qubit_labels = processor_spec.qubit_labels
         state_space = _statespace.QubitSpace(qubit_labels)
