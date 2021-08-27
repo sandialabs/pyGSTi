@@ -16,7 +16,6 @@ import warnings as _warnings
 from pygsti.extras.rb import benchmarker as _benchmarker
 from pygsti.extras.rb import dataset as _dataset
 # todo : update
-from pygsti.extras.rb import sample as _sample
 from pygsti import io as _io
 from pygsti.circuits import circuit as _cir
 from pygsti.data import multidataset as _mds
