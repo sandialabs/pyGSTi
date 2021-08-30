@@ -36,7 +36,7 @@ class TestModelMemberGraph(BaseCase):
         self.assertFalse(ex_mmg4.is_equivalent(ex_mmg1))
     
     def test_localnoise_model_comparisons(self):
-        pspec = QubitProcessorSpec(2, ['Gi', 'Gxpi2', 'Gypi2'])
+        pspec = QubitProcessorSpec(2, ['Gi', 'Gxpi2', 'Gypi2'], geometry='line')
 
         ln_mdl1 = create_crosstalk_free_model(pspec,
                                               depolarization_strengths={('Gxpi2', 0): 0.1},
