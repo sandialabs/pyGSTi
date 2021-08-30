@@ -12,4 +12,5 @@ cvxopt
 cvxpy
 nose
 seaborn
+pcalg
 
