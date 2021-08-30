@@ -272,15 +272,18 @@ class StandardGSTDesign(GateSetTomographyDesign):
         self.fpr_keep_seed = keep_seed
 
         #TODO: add a line_labels arg to create_lsgst_circuit_lists and pass qubit_labels in?
-        processor_spec = _load_pspec(processorspec_filename_or_obj)
+        processor_spec_or_model = _load_pspec_or_model(processorspec_filename_or_obj)
         lists = _circuits.create_lsgst_circuit_lists(
-            processor_spec, self.prep_fiducials, self.meas_fiducials, self.germs,
+            processor_spec_or_model, self.prep_fiducials, self.meas_fiducials, self.germs,
             self.maxlengths, self.fiducial_pairs, self.truncation_method, self.nested,
             self.fpr_keep_fraction, self.fpr_keep_seed, self.include_lgst,
             self.aliases, self.circuit_rules, dscheck, action_if_missing,
             self.germ_length_limits, verbosity)
         #FUTURE: add support for "advanced options" (probably not in __init__ though?):
         # trunc_scheme=advancedOptions.get('truncScheme', "whole germ powers")
+
+        processor_spec = processor_spec_or_model.create_processor_spec() \
+                         if isinstance(processor_spec_or_model, _Model) else processor_spec_or_model
 
         super().__init__(processor_spec, lists, None, qubit_labels, self.nested)
         self.auxfile_types['prep_fiducials'] = 'text-circuit-list'
@@ -422,17 +425,19 @@ class GSTInitialModel(object):
         Model
         """
 
-        if self.target_model is None:
-            if isinstance(edesign, HasProcessorSpec):
-                typ = 'full' if (self.starting_point in ("LGST", "LGST-if-possible")
-                                 or self.contract_start_to_cptp
-                                 or self.depolarize_start > 0
-                                 or self.randomize_start > 0) else 'auto'
-                target_model = edesign.create_target_model(typ)
+        def _get_target_model():  # a fn so we don't run this code unless we actually need a target model
+            if self.target_model is None:
+                if isinstance(edesign, HasProcessorSpec):
+                    typ = 'full' if (self.starting_point in ("LGST", "LGST-if-possible")
+                                     or self.contract_start_to_cptp
+                                     or self.depolarize_start > 0
+                                     or self.randomize_start > 0) else 'auto'
+                    target_model = edesign.create_target_model(typ)
+                else:
+                    target_model = None
             else:
-                target_model = None
-        else:
-            target_model = self.target_model
+                target_model = self.target_model
+            return target_model
 
         #Get starting point (model), which is used to compute other quantities
         # Note: should compute on rank 0 and distribute?
@@ -443,7 +448,7 @@ class GSTInitialModel(object):
         elif starting_pt in ("LGST", "LGST-if-possible"):
             #lgst_advanced = advancedOptions.copy(); lgst_advanced.update({'estimateLabel': "LGST", 'onBadFit': []})
 
-            mdl_start = self.model if (self.model is not None) else target_model
+            mdl_start = self.model if (self.model is not None) else _get_target_model()
             if mdl_start is None:
                 raise ValueError(("LGST requires a model. Specify an initial model or use an experiment"
                                   " design with a target model"))
@@ -470,14 +475,14 @@ class GSTInitialModel(object):
                     mdl_start = self.model
                 else:
                     starting_pt = "target"
-                    mdl_start = target_model
+                    mdl_start = _get_target_model()
 
             if starting_pt == "LGST":
                 lgst_results = lgst.run(lgst_data)
                 mdl_start = lgst_results.estimates['LGST'].models['lgst_gaugeopt']
 
         elif starting_pt == "target":
-            mdl_start = target_model
+            mdl_start = _get_target_model()
         else:
             raise ValueError("Invalid starting point: %s" % starting_pt)
 
@@ -1398,6 +1403,14 @@ def _load_model(model_filename_or_obj):
         return _io.load_model(model_filename_or_obj)
     else:
         return model_filename_or_obj  # assume a Model object
+
+def _load_pspec_or_model(processorspec_or_model_filename_or_obj):
+    if isinstance(processorspec_or_model_filename_or_obj, str):
+        # if a filename is given, just try to load a processor spec (can't load a model file yet)
+        with open(processorspec_or_model_filename_or_obj, 'rb') as f:
+            return _pickle.load(f)
+    else:
+        return processorspec_or_model_filename_or_obj
 
 
 def _load_fiducials_and_germs(prep_fiducial_list_or_filename,

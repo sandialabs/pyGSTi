@@ -12,23 +12,34 @@ Packages
 --------
 
 .. autosummary::
-   :toctree: _auto
+   :toctree: _autosummary
+   :template: custom-module-template.rst
+   :recursive:
+   
 
    .. This list must be manually updated with all
    .. the pygsti subpackages we want documented
 
    pygsti.algorithms
-   pygsti.construction
+   pygsti.baseobjs
+   pygsti.circuits
+   pygsti.data
    pygsti.drivers
+   pygsti.evotypes
+   pygsti.extras
+   pygsti.forwardsims
    pygsti.io
+   pygsti.layouts
+   pygsti.modelmembers
    pygsti.modelpacks
-   pygsti.objects
+   pygsti.models
+   pygsti.objectivefns
    pygsti.optimize
+   pygsti.processors
    pygsti.protocols
    pygsti.report
+   pygsti.serialization
    pygsti.tools
-   pygsti.extras.rpe
-   pygsti.extras.drift
 
 License & Copyright
 -------------------

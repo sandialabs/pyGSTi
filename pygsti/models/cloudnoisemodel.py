@@ -176,7 +176,7 @@ class CloudNoiseModel(_ImplicitOpModel):
                  prep_layers=None, povm_layers=None,
                  build_cloudnoise_fn=None, build_cloudkey_fn=None,
                  simulator="map", evotype="default", errcomp_type="gates",
-                 implicit_idle_mode="add_global", verbosity=0):
+                 implicit_idle_mode="none", verbosity=0):
 
         qubit_labels = processor_spec.qubit_labels
         state_space = _statespace.QubitSpace(qubit_labels)
@@ -242,9 +242,9 @@ class CloudNoiseModel(_ImplicitOpModel):
 
             gate_unitary = self.processor_spec.gate_unitaries[gn]
             resolved_avail = self.processor_spec.resolved_availability(gn)
-            gate_is_factory = callable(gate_unitary)
-
             gate = mm_gatedict.get(gn, None)  # a static op or factory, no need to consider if "independent" (no params)
+            gate_is_factory = callable(gate_unitary) or isinstance(gate, _opfactory.OpFactory)
+
             if gate is not None:  # (a gate name may not be in gatedict if it's an identity without any noise)
                 if gate_is_factory:
                     self.factories['gates'][_Lbl(gn)] = gate

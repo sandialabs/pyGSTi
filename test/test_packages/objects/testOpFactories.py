@@ -118,7 +118,7 @@ class OpFactoryTestCase(BaseTestCase):
         nQubits = 2
         Gxrot_factory = XRotationOpFactory()
 
-        pspec = pygsti.processors.QubitProcessorSpec(nQubits, ('Gi','Gx','Gy'))
+        pspec = pygsti.processors.QubitProcessorSpec(nQubits, ('Gi','Gx','Gy'), geometry='line')
         mdl = pygsti.models.modelconstruction.create_crosstalk_free_model(pspec)
         mdl.factories['layers'][('Gxrot',0)] = pygsti.modelmembers.operations.EmbeddedOpFactory((0, 1), (0,), Gxrot_factory)
         mdl.factories['layers'][('Gxrot',1)] = pygsti.modelmembers.operations.EmbeddedOpFactory((0, 1), (1,), Gxrot_factory)
@@ -130,7 +130,7 @@ class OpFactoryTestCase(BaseTestCase):
     def test_embedding_opfactory_2Q(self):
         nQubits = 2
         Gxrot_factory = XRotationOpFactory()
-        pspec = pygsti.processors.QubitProcessorSpec(nQubits, ('Gi','Gx','Gy'))
+        pspec = pygsti.processors.QubitProcessorSpec(nQubits, ('Gi','Gx','Gy'), geometry='line')
         mdl = pygsti.models.modelconstruction.create_crosstalk_free_model(pspec)
         mdl.factories['layers']['Gxrot'] = pygsti.modelmembers.operations.EmbeddingOpFactory((0, 1), Gxrot_factory)
 
@@ -145,7 +145,7 @@ class OpFactoryTestCase(BaseTestCase):
         Gxrot_param_factory = ParamXRotationOpFactory()
 
         nQubits = 1
-        pspec = pygsti.processors.QubitProcessorSpec(nQubits, ('Gi','Gx','Gy'))
+        pspec = pygsti.processors.QubitProcessorSpec(nQubits, ('Gi','Gx','Gy'))  # no geometry needed for a 1-qubit spec
         mdl = pygsti.models.modelconstruction.create_crosstalk_free_model(pspec)
         mdl.factories['layers'][('Gxrot',0)] = Gxrot_param_factory
         self.assertEqual(mdl.num_params, 2)

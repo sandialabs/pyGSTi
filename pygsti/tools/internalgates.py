@@ -563,6 +563,7 @@ def standard_gatenames_openqasm_conversions(version='u3'):
 
     elif version == 'x-sx-rz':
         std_gatenames_to_qasm = {}
+        std_gatenames_to_qasm['Gcphase'] = 'cz'
         std_gatenames_to_qasm['Gcnot'] = 'cx'
         std_gatenames_to_qasm['Gi'] = ['rz(0.)']
         std_gatenames_to_qasm['Gx'] = ['sx']
