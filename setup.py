@@ -68,7 +68,8 @@ extras = {
         'zmq',
         'jinja2',
         'seaborn'
-    ]
+    ],
+    'crosstalk': ['pcalg']
 }
 
 # Add `complete' target, which will install all extras listed above
