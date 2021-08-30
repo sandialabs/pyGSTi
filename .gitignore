@@ -23,6 +23,7 @@ hooks/etc/permissions.yml
 .vscode
 doc/_autosummary
 doc/build
+.venv
 
 # Test Metadata #
 #################
