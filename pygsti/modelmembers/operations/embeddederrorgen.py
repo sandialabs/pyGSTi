@@ -131,27 +131,30 @@ class EmbeddedErrorgen(_EmbeddedOp):
             A Basis mapping the basis labels used in the
             keys of `Ltermdict` to basis matrices.
         """
-        embedded_coeffs = self.embedded_op.coefficients(return_basis, logscale_nonham)
-        embedded_Ltermdict = _collections.OrderedDict()
+        return self.embedded_op.coefficients(return_basis, logscale_nonham)
 
-        if return_basis:
-            # embed basis
-            Ltermdict, basis = embedded_coeffs
-            embedded_basis = _EmbeddedBasis(basis, self.state_space, self.targetLabels)
-            bel_map = {lbl: embedded_lbl for lbl, embedded_lbl in zip(basis.labels, embedded_basis.labels)}
-
-            #go through and embed Ltermdict labels
-            for k, val in Ltermdict.items():
-                embedded_key = (k[0],) + tuple([bel_map[x] for x in k[1:]])
-                embedded_Ltermdict[embedded_key] = val
-            return embedded_Ltermdict, embedded_basis
-        else:
-            #go through and embed Ltermdict labels
-            Ltermdict = embedded_coeffs
-            for k, val in Ltermdict.items():
-                embedded_key = (k[0],) + tuple([_EmbeddedBasis.embed_label(x, self.targetLabels) for x in k[1:]])
-                embedded_Ltermdict[embedded_key] = val
-            return embedded_Ltermdict
+        #REMOVE: no need to embed/unembed labels anymore - now labels are *global*
+        #embedded_coeffs = self.embedded_op.coefficients(return_basis, logscale_nonham)
+        #embedded_Ltermdict = _collections.OrderedDict()
+        #
+        #if return_basis:
+        #    # embed basis
+        #    Ltermdict, basis = embedded_coeffs
+        #    embedded_basis = _EmbeddedBasis(basis, self.state_space, self.targetLabels)
+        #    bel_map = {lbl: embedded_lbl for lbl, embedded_lbl in zip(basis.labels, embedded_basis.labels)}
+        #
+        #    #go through and embed Ltermdict labels
+        #    for k, val in Ltermdict.items():
+        #        embedded_key = (k[0],) + tuple([bel_map[x] for x in k[1:]])
+        #        embedded_Ltermdict[embedded_key] = val
+        #    return embedded_Ltermdict, embedded_basis
+        #else:
+        #    #go through and embed Ltermdict labels
+        #    Ltermdict = embedded_coeffs
+        #    for k, val in Ltermdict.items():
+        #        embedded_key = (k[0],) + tuple([_EmbeddedBasis.embed_label(x, self.targetLabels) for x in k[1:]])
+        #        embedded_Ltermdict[embedded_key] = val
+        #    return embedded_Ltermdict
 
     def coefficient_labels(self):
         """
@@ -163,7 +166,9 @@ class EmbeddedErrorgen(_EmbeddedOp):
             A tuple of (<type>, <basisEl1> [,<basisEl2]) elements identifying the elementary error
             generators of this gate.
         """
-        return tuple([_EmbeddedBasis.embed_label(x, self.targetLabels) for x in self.embedded_op.coefficient_labels()])
+        #REMOVE: no need to embed/unembed labels anymore - now labels are *global*
+        #return tuple([_EmbeddedBasis.embed_label(x, self.targetLabels) for x in self.embedded_op.coefficient_labels()])
+        return self.embedded_op.coefficient_labels()
 
     def coefficients_array(self):
         """
@@ -275,11 +280,14 @@ class EmbeddedErrorgen(_EmbeddedOp):
         -------
         None
         """
-        unembedded_Ltermdict = _collections.OrderedDict()
-        for k, val in lindblad_term_dict.items():
-            unembedded_key = (k[0],) + tuple([_EmbeddedBasis.unembed_label(x, self.targetLabels) for x in k[1:]])
-            unembedded_Ltermdict[unembedded_key] = val
-        self.embedded_op.set_coefficients(unembedded_Ltermdict, action, logscale_nonham, truncate)
+        #REMOVE: no need to embed/unembed labels anymore - now labels are *global*
+        #unembedded_Ltermdict = _collections.OrderedDict()
+        #for k, val in lindblad_term_dict.items():
+        #    unembedded_key = (k[0],) + tuple([_EmbeddedBasis.unembed_label(x, self.targetLabels) for x in k[1:]])
+        #    unembedded_Ltermdict[unembedded_key] = val
+        #self.embedded_op.set_coefficients(unembedded_Ltermdict, action, logscale_nonham, truncate)
+
+        self.embedded_op.set_coefficients(lindblad_term_dict, action, logscale_nonham, truncate)
 
     def set_error_rates(self, lindblad_term_dict, action="update"):
         """

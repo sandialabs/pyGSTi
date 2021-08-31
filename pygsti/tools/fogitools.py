@@ -459,7 +459,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
     #dependent_vec_indices = []
 
     for op_label in primitive_op_labels:
-        #print("##", op_label)
+        print("##", op_label)
         ga = gauge_action_matrices[op_label]
         # currently `ga` is a dense matrix, if SPARSE need to update nullspace and pinv math below
 
@@ -471,6 +471,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
             commutant = _mt.nice_nullspace(ga)  # columns = *gauge* elem gen directions
             complement = _mt.nice_nullspace(commutant.T)  # complement of commutant - where op is faithful rep
             ccomms[(op_label,)] = complement
+            print("  Skipping - SPAM, no intrinsic qtys")
             continue
 
         #Get commutant and communtant-complement spaces
@@ -488,6 +489,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
         local_fogi_vecs = _mt.normalize_columns(local_fogi_dirs, ord=norm_order)  # this gives us *vec*-norm we want
         vector_L2_norm2s = [_np.linalg.norm(local_fogi_vecs[:, j])**2 for j in range(local_fogi_vecs.shape[1])]
         local_fogi_dirs = local_fogi_vecs / _np.array(vector_L2_norm2s)[None, :]  # gives us *dir*-norm we want  # DUAL NORM
+        print("  New intrinsic qtys = ", local_fogi_dirs.shape[1])
 
         assert(_mt.columns_are_orthogonal(local_fogi_dirs))  # Not for Cnot in 2Q_XYICNOT (check?)
 

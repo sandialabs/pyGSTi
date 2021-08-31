@@ -1609,7 +1609,6 @@ class ExplicitOpModel(_mdl.OpModel):
 
         if reduce_to_model_space:
             allowed_lbls = op.errorgen_coefficient_labels()
-            #allowed_lbls = _upgrade_pauli_errorgen_coefficient_labels(allowed_lbls, all_sslbls)
             allowed_lbls_set = set(allowed_lbls)
             allowed_row_basis = _ExplicitElementaryErrorgenBasis(self.state_space, allowed_lbls, basis1q=None)  # (Pauli basis)
             disallowed_indices = [i for i, lbl in enumerate(row_basis.labels) if lbl not in allowed_lbls_set]
@@ -1847,15 +1846,6 @@ class ExplicitOpModel(_mdl.OpModel):
     def fogi_errorgen_components_array(self, include_fogv=False, normalized_elem_gens=True):
         op_coeffs = self.errorgen_coefficients(normalized_elem_gens)
 
-        # HACK upgrade op_coeffs to be compatible
-        #upgraded_op_coeffs = _collections.OrderedDict()
-        #model_sslbls = self.state_space.tensor_product_block_labels(0)
-        #for op_label, coeff_dict in op_coeffs.items():
-        #    upgraded_coeff_dict = {_upgrade_pauli_errorgen_coefficient_labels([lbl], model_sslbls)[0]: val
-        #                           for lbl, val in coeff_dict.items()}
-        #    upgraded_op_coeffs[op_label] = upgraded_coeff_dict
-        #op_coeffs = upgraded_op_coeffs  # replace with upgraded elemgen labels
-
         if include_fogv:
             fogi_coeffs, fogv_coeffs = self.fogi_store.opcoeffs_to_fogiv_components_array(op_coeffs)
             return _np.concatenate((fogi_coeffs, fogv_coeffs))
@@ -1942,36 +1932,3 @@ class ExplicitLayerRules(_LayerRules):
             return model.operations[layerlbl]
         else:
             return _opfactory.op_from_factories(model.factories, layerlbl)
-
-
-def _upgrade_pauli_errorgen_coefficient_labels(elemgen_lbls, model_sslbls):
-    """
-    Currently a HACK to bridge the FOGI-format elementary errorgen labels: (sslbls, ('H'/'S', <nontrivial basis els>))
-    with the I-containing format used by models & ops: ('H'/'S', <basis els>)
-    E.g. ('H', 'IX') vs ((1,), 'H', 'X')
-
-    Maybe a better way to do this is op.errorgen_coefficient_labels(model_sslbls=all_sslbls)?
-    """
-    upgraded_lbls = []
-    for lbl in elemgen_lbls:
-        if isinstance(lbl[0], str):  # e.g. 'H' or 'S'
-            sslbls = model_sslbls
-            local_lbl = lbl
-        else:
-            sslbls = lbl[0]
-            local_lbl = lbl[1]
-
-        typ = local_lbl[0]; bels = local_lbl[1:]
-        sslbls_nonidentity = []  # the state space labels corresponding to non-identity generator action
-        bels_nonidentity = [''] * len(bels)
-        for i, pauli_letters in enumerate(zip(*bels)):
-            if all([l == 'I' for l in pauli_letters]):  # if all i-th basis els are identity
-                continue
-
-            #otherwise add to "nonidentity" basis element labels and sslbls
-            for ii, l in enumerate(pauli_letters):
-                bels_nonidentity[ii] += l
-            sslbls_nonidentity.append(sslbls[i])
-
-        upgraded_lbls.append((tuple(sslbls_nonidentity), tuple([typ] + bels_nonidentity)))
-    return upgraded_lbls

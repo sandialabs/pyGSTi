@@ -1166,15 +1166,15 @@ class LindbladErrorgen(_LinearOperator):
         labels = []
         LEEL = _LocalElementaryErrorgenLabel  # shorthand
         if self.ham_basis is not None:
-            labels.extend([LEEL('H', basis_lbl) for basis_lbl in self.ham_basis.labels[1:]])
+            labels.extend([LEEL('H', (basis_lbl,)) for basis_lbl in self.ham_basis.labels[1:]])
         if self.other_basis is not None:
             if self.nonham_mode == "diagonal":
-                labels.extend([LEEL('S', basis_lbl) for basis_lbl in self.other_basis.labels[1:]])
+                labels.extend([LEEL('S', (basis_lbl,)) for basis_lbl in self.other_basis.labels[1:]])
             elif self.nonham_mode == "diag_affine":
-                labels.extend([LEEL('S', basis_lbl) for basis_lbl in self.other_basis.labels[1:]])
-                labels.extend([LEEL('A', basis_lbl) for basis_lbl in self.other_basis.labels[1:]])
+                labels.extend([LEEL('S', (basis_lbl,)) for basis_lbl in self.other_basis.labels[1:]])
+                labels.extend([LEEL('A', (basis_lbl,)) for basis_lbl in self.other_basis.labels[1:]])
             else:  # 'all' mode
-                labels.extend([LEEL('S', basis_lbl1, basis_lbl2)
+                labels.extend([LEEL('S', (basis_lbl1, basis_lbl2))
                                for basis_lbl1 in self.other_basis.labels[1:]
                                for basis_lbl2 in self.other_basis.labels[1:]])
 

@@ -1634,18 +1634,19 @@ def _assert_shape(ar, shape, sparse=False):
             raise NotImplementedError("Number of dimensions must be <= 4!")
 
 
-def lindblad_error_generator(label, basis_1q, normalize, sparse=False, tensorprod_basis=False):
+def lindblad_error_generator(errorgen_type, basis_element_labels, basis_1q, normalize,
+                             sparse=False, tensorprod_basis=False):
     """
     TODO: docstring  - labels can be, e.g. ('H', 'XX') and basis should be a 1-qubit basis w/single-char labels
     """
 
-    if label[0] == 'H':
-        B = _functools.reduce(_np.kron, [basis_1q[bel] for bel in label[1]])
+    if errorgen_type == 'H':
+        B = _functools.reduce(_np.kron, [basis_1q[bel] for bel in basis_element_labels[0]])
         ret = _lt.hamiltonian_to_lindbladian(B, sparse)  # in std basis
-    elif label[0] == 'S':
-        Lm = _functools.reduce(_np.kron, [basis_1q[bel] for bel in label[1]])
-        Ln = _functools.reduce(_np.kron, [basis_1q[bel] for bel in label[2]]) \
-            if len(label) > 2 else Lm
+    elif errorgen_type == 'S':
+        Lm = _functools.reduce(_np.kron, [basis_1q[bel] for bel in basis_element_labels[0]])
+        Ln = _functools.reduce(_np.kron, [basis_1q[bel] for bel in basis_element_labels[1]]) \
+            if len(basis_element_labels) > 1 else Lm
         ret = _lt.nonham_lindbladian(Lm, Ln, sparse)
     else:
         raise ValueError("Invalid elementary error generator label: %s" % str(label))

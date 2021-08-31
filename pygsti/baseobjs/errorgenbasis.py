@@ -14,6 +14,7 @@ import itertools as _itertools
 import collections as _collections
 
 from pygsti.baseobjs import Basis as _Basis
+from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel
 from pygsti.tools import optools as _ot
 
 
@@ -56,9 +57,10 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
     def elemgen_supports_and_matrices(self):
         if self._cached_elements is None:
             self._cached_elements = tuple(
-                ((support, _ot.lindblad_error_generator(elemgen_label, self.basis_1q, normalize=True,
-                                                        sparse=False, tensorprod_basis=True))
-                 for support, elemgen_label in self.labels))
+                ((elemgen_label.sslbls, _ot.lindblad_error_generator(
+                    elemgen_label.errorgen_type, elemgen_label.basis_element_labels,
+                    self.basis_1q, normalize=True, sparse=False, tensorprod_basis=True))
+                 for elemgen_label in self.labels))
         return self._cached_elements
 
     def label_index(self, label):
@@ -138,7 +140,8 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
             for els in _itertools.product(*([possible_bels] * wt)):
                 yield ''.join(els)
 
-        return [(support, (type_str, bel)) for bel in _basis_el_strs(nontrivial_bels, weight)]
+        return [_GlobalElementaryErrorgenLabel(type_str, (bel,), support)
+                for bel in _basis_el_strs(nontrivial_bels, weight)]
 
     @classmethod
     def _create_all_labels_for_support(cls, support, left_support, type_str, trivial_bel, nontrivial_bels):
@@ -148,7 +151,7 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
         if len(left_weight) < n:  # n1 < n
             factors = [nontrivial_bels if x in left_support else trivial_bel for x in support] \
                 + [all_bels if x in left_support else nontrivial_bels for x in support]
-            return [(support, (type_str, ''.join(beltup[0:n]), ''.join(beltup[n:])))
+            return [_GlobalElementaryErrorgenLabel(type_str, (''.join(beltup[0:n]), ''.join(beltup[n:])), support)
                     for beltup in _itertools.product(*factors)]
             # (factors == left_factors + right_factors above)
         else:  # n1 == n
@@ -157,7 +160,7 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
                 left_bel = ''.join(left_beltup)
                 right_it = _itertools.product(*([all_bels] * n))  # better itertools call here TODO
                 right_it.next()  # advance past first (all I) element - assume trivial el = first!!
-                ret.extend([(support, (type_str, left_bel, ''.join(right_beltup)))
+                ret.extend([_GlobalElementaryErrorgenLabel(type_str, (left_bel, ''.join(right_beltup)), support)
                             for right_beltup in right_it])
             return ret
 
@@ -358,37 +361,39 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
 
     @property
     def elemgen_supports_and_matrices(self):
-        return tuple(((support,
-                       _ot.lindblad_error_generator(elemgen_label, self._basis_1q, normalize=True,
-                                                    sparse=False, tensorprod_basis=True))
-                      for support, elemgen_label in self.labels))
+        return tuple(((elemgen_label.sslbls,
+                       _ot.lindblad_error_generator(elemgen_label.errorgen_type, elemgen_label.basis_element_labels,
+                                                    self._basis_1q, normalize=True, sparse=False,
+                                                    tensorprod_basis=True))
+                      for elemgen_label in self.labels))
 
-    def label_index(self, label):
+    def label_index(self, elemgen_label):
         """
         TODO: docstring
         """
-        support, elemgen_lbl = label
-        type_str = elemgen_lbl[0]
+        support = elemgen_label.sslbls
+        elemgen_type = elemgen_label.errorgen_type
+        bels = elemgen_label.basis_element_labels
         trivial_bel = self._basis_1q.labels[0]  # assumes first element is identity
         nontrivial_bels = self._basis_1q.labels[1:]
 
-        if type_str == 'H' or (type_str == 'S' and self._other_mode == 'diagonal'):
-            base = self._h_offsets[support] if (type_str == 'H') else (self._hs_border + self._s_offsets[support])
-            indices = {lbl: i for i, lbl in enumerate(self._create_diag_labels_for_support(support, type_str,
+        if elemgen_type == 'H' or (elemgen_type == 'S' and self._other_mode == 'diagonal'):
+            base = self._h_offsets[support] if (elemgen_type == 'H') else (self._hs_border + self._s_offsets[support])
+            indices = {lbl: i for i, lbl in enumerate(self._create_diag_labels_for_support(support, elemgen_type,
                                                                                            nontrivial_bels))}
-        elif elemgen_lbl[0] == 'S':
+        elif elemgen_type == 'S':
             assert(self._other_mode == 'all'), "Invalid 'other' mode: %s" % str(self._other_mode)
             assert(len(trivial_bel) == 1)  # assumes this is a single character
-            nontrivial_inds = [i for i, letter in enumerate(elemgen_lbl[1]) if letter != trivial_bel]
+            nontrivial_inds = [i for i, letter in enumerate(bels[0]) if letter != trivial_bel]
             left_support = tuple([self.sslbls[i] for i in nontrivial_inds])
             base = self._hs_border + self._s_offsets[(support, left_support)]
 
             indices = {lbl: i for i, lbl in enumerate(self._create_all_labels_for_support(
                 support, left_support, 'S', [trivial_bel], nontrivial_bels))}
         else:
-            raise ValueError("Invalid label type: %s" % str(elemgen_lbl[0]))
+            raise ValueError("Invalid label type: %s" % str(elemgen_type))
 
-        return base + indices[label]
+        return base + indices[elemgen_label]
 
     #@property
     #def sslbls(self):
