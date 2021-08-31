@@ -1069,14 +1069,17 @@ def compute_maximum_relational_errors(primitive_op_labels, errorgen_coefficients
 def op_elem_vec_name(vec, elem_op_labels, op_label_abbrevs):
     name = ""
     for i, (op_lbl, elem_lbl) in enumerate(elem_op_labels):
-        sslbls, local_lbl = elem_lbl
+        sslbls = elem_lbl.sslbls  # assume a *global* elem errogen label
+        egtype = elem_lbl.errorgen_type
+        bels = elem_lbl.basis_element_labels
+
         sslbls_str = ''.join(map(str, sslbls))
         val = vec[i][0,0] if _sps.issparse(vec[i]) else vec[i]
         if abs(val) < 1e-6: continue
         sign = ' + ' if val > 0 else ' - '
         abs_val_str = '' if _np.isclose(abs(val), 1.0) else ("%g " % abs(val))  # was %.1g
-        basis_str = ','.join(["%s:%s" % (bel, sslbls_str) for bel in local_lbl[1:]])
-        name += sign + abs_val_str + "%s(%s)_%s" % (local_lbl[0], basis_str,
+        basis_str = ','.join(["%s:%s" % (bel, sslbls_str) for bel in bels])
+        name += sign + abs_val_str + "%s(%s)_%s" % (egtype, basis_str,
                                                     op_label_abbrevs.get(op_lbl, str(op_lbl)))
     if name.startswith(' + '): name = name[3:]  # strip leading +
     if name.startswith(' - '): name = '-' + name[3:]  # strip leading spaces
@@ -1093,15 +1096,18 @@ def elem_vec_name(vec, elem_labels, include_type=True):
     """ TODO: docstring """
     name = ""
     for i, elem_lbl in enumerate(elem_labels):
-        sslbls, local_lbl = elem_lbl
+        sslbls = elem_lbl.sslbls  # assume a *global* elem errogen label
+        egtype = elem_lbl.errorgen_type
+        bels = elem_lbl.basis_element_labels
+
         sslbls_str = ''.join(map(str, sslbls))
         val = vec[i]
         if abs(val) < 1e-6: continue
         sign = ' + ' if val > 0 else ' - '
         abs_val_str = '' if _np.isclose(abs(val), 1.0) else ("%g " % abs(val))  # was %.1g
-        basis_str = ','.join(["%s:%s" % (bel, sslbls_str) for bel in local_lbl[1:]])
+        basis_str = ','.join(["%s:%s" % (bel, sslbls_str) for bel in bels])
         if include_type:
-            name += sign + abs_val_str + "%s(%s)" % (local_lbl[0], basis_str)
+            name += sign + abs_val_str + "%s(%s)" % (egtype, basis_str)
         else:
             name += sign + abs_val_str + "%s" % basis_str  # 'H' or 'S'
 

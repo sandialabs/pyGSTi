@@ -1609,7 +1609,7 @@ class ExplicitOpModel(_mdl.OpModel):
 
         if reduce_to_model_space:
             allowed_lbls = op.errorgen_coefficient_labels()
-            allowed_lbls = _upgrade_pauli_errorgen_coefficient_labels(allowed_lbls, all_sslbls)
+            #allowed_lbls = _upgrade_pauli_errorgen_coefficient_labels(allowed_lbls, all_sslbls)
             allowed_lbls_set = set(allowed_lbls)
             allowed_row_basis = _ExplicitElementaryErrorgenBasis(self.state_space, allowed_lbls, basis1q=None)  # (Pauli basis)
             disallowed_indices = [i for i, lbl in enumerate(row_basis.labels) if lbl not in allowed_lbls_set]
@@ -1848,13 +1848,13 @@ class ExplicitOpModel(_mdl.OpModel):
         op_coeffs = self.errorgen_coefficients(normalized_elem_gens)
 
         # HACK upgrade op_coeffs to be compatible
-        upgraded_op_coeffs = _collections.OrderedDict()
-        model_sslbls = self.state_space.tensor_product_block_labels(0)
-        for op_label, coeff_dict in op_coeffs.items():
-            upgraded_coeff_dict = {_upgrade_pauli_errorgen_coefficient_labels([lbl], model_sslbls)[0]: val
-                                   for lbl, val in coeff_dict.items()}
-            upgraded_op_coeffs[op_label] = upgraded_coeff_dict
-        op_coeffs = upgraded_op_coeffs  # replace with upgraded elemgen labels
+        #upgraded_op_coeffs = _collections.OrderedDict()
+        #model_sslbls = self.state_space.tensor_product_block_labels(0)
+        #for op_label, coeff_dict in op_coeffs.items():
+        #    upgraded_coeff_dict = {_upgrade_pauli_errorgen_coefficient_labels([lbl], model_sslbls)[0]: val
+        #                           for lbl, val in coeff_dict.items()}
+        #    upgraded_op_coeffs[op_label] = upgraded_coeff_dict
+        #op_coeffs = upgraded_op_coeffs  # replace with upgraded elemgen labels
 
         if include_fogv:
             fogi_coeffs, fogv_coeffs = self.fogi_store.opcoeffs_to_fogiv_components_array(op_coeffs)

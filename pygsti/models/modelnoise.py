@@ -1005,7 +1005,7 @@ class LindbladNoise(OpNoise):
         return cls(Ltermdict, parameterization)
 
     def __init__(self, error_coeffs, parameterization='auto'):
-        self.error_coeffs = error_coeffs
+        self.error_coeffs = error_coeffs  # keys are LocalElementaryErrorgenLabel objects
         self.parameterization = parameterization
 
     def create_errorgen(self, evotype, state_space):

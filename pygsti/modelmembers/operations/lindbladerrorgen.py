@@ -11,6 +11,7 @@ The LindbladErrorgen class and supporting functionality.
 #***************************************************************************************************
 
 import warnings as _warnings
+import collections as _collections
 
 import numpy as _np
 import scipy.sparse as _sps
@@ -25,6 +26,8 @@ from pygsti.evotypes import Evotype as _Evotype
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.baseobjs.basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
+from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LocalElementaryErrorgenLabel
+from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel
 from pygsti.tools import basistools as _bt
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import optools as _ot
@@ -321,10 +324,6 @@ class LindbladErrorgen(_LinearOperator):
         # maybe allow ('XY','Q1','Q4')? format when can assume single-letter labels.
         # - could add standard basis dict items so labels like "X", "XY", etc. are understood?
 
-        state_space = _statespace.StateSpace.cast(state_space)
-        parameterization = LindbladParameterization.from_lindblad_terms(lindblad_term_dict) \
-            if parameterization == "auto" else LindbladParameterization.cast(parameterization)
-
         #Decide on our rep-type ahead of time so we know whether to make bases sparse
         # (a LindbladErrorgen with a sparse rep => sparse bases and similar with dense rep)
         evotype = _Evotype.cast(evotype)
@@ -337,9 +336,19 @@ class LindbladErrorgen(_LinearOperator):
             raise ValueError("Evotype doesn't support any of the representations a LindbladErrorgen requires.")
         sparse_bases = bool(self._rep_type == 'sparse superop')  # we use sparse bases iff we have a sparse rep
 
-        # Store superop dimension
-        dim = state_space.dim
+        state_space = _statespace.StateSpace.cast(state_space)
+        dim = state_space.dim  # Store superop dimension
         self.lindblad_basis = _Basis.cast(lindblad_basis, dim, sparse=sparse_bases)
+
+        #convert lindblad term dict to use *local* labels (ok to specify w/global labels)
+        identity_label_1Q = 'I'  # maybe we could get this from a 1Q basis somewhere?
+        sslbls = state_space.tensor_product_block_labels(0)  # just take first TPB labels as all labels
+        lindblad_term_dict = _collections.OrderedDict(
+            [(_LocalElementaryErrorgenLabel.cast(lbl, sslbls, identity_label_1Q), val)
+             for lbl, val in lindblad_term_dict.items()])
+
+        parameterization = LindbladParameterization.from_lindblad_terms(lindblad_term_dict) \
+            if parameterization == "auto" else LindbladParameterization.cast(parameterization)
         self.nonham_mode = parameterization.nonham_mode
         self.param_mode = parameterization.param_mode
 
@@ -559,12 +568,13 @@ class LindbladErrorgen(_LinearOperator):
         # terms later.
         IDENT = None  # sentinel for the do-nothing identity op
         Lterms = []
-        for termLbl in lindblad_term_dict:
-            termType = termLbl[0]
+        for termLbl in lindblad_term_dict:  # assumed to contain *local* elem errgen labels as keys
+            termType = termLbl.errorgen_type
+            bels = termLbl.basis_element_labels
             if termType == "H":  # Hamiltonian
-                k = hamBasisIndices[termLbl[1]]  # index of parameter
+                k = hamBasisIndices[bels[0]]  # index of parameter
                 # ensure all Rank1Term operators are *unitary*, so we don't need to track their "magnitude"
-                scale, U = _mt.to_unitary(basis[termLbl[1]])
+                scale, U = _mt.to_unitary(basis[bels[0]])
                 scale *= _np.sqrt(d) / 2  # mimics rho1's _np.sqrt(d) / 2 scaling in `hamiltonian_to_lindbladian`
                 Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
                     _Polynomial({(k,): -1j * scale}, mpv), U, IDENT, self._evotype, self.state_space))
@@ -577,8 +587,8 @@ class LindbladErrorgen(_LinearOperator):
                     if self.param_mode in ("depol", "reldepol"):  # => same single param for all stochastic terms
                         k = numHamParams + 0  # index of parameter
                     else:
-                        k = numHamParams + otherBasisIndices[termLbl[1]]  # index of parameter
-                    scale, U = _mt.to_unitary(basis[termLbl[1]])  # ensure all Rank1Term operators are *unitary*
+                        k = numHamParams + otherBasisIndices[bels[0]]  # index of parameter
+                    scale, U = _mt.to_unitary(basis[bels[0]])  # ensure all Rank1Term operators are *unitary*
                     scale *= _np.sqrt(d)  # mimics "rho1 *= d" scaling in `nonham_lindbladian`
                     Lm = Ln = U
                     # power to raise parameter to in order to get coeff
@@ -600,10 +610,10 @@ class LindbladErrorgen(_LinearOperator):
                     ))
 
                 else:
-                    i = otherBasisIndices[termLbl[1]]  # index of row in "other" coefficient matrix
-                    j = otherBasisIndices[termLbl[2]]  # index of col in "other" coefficient matrix
-                    scalem, Um = _mt.to_unitary(basis[termLbl[1]])  # ensure all Rank1Term operators are *unitary*
-                    scalen, Un = _mt.to_unitary(basis[termLbl[2]])  # ensure all Rank1Term operators are *unitary*
+                    i = otherBasisIndices[bels[0]]  # index of row in "other" coefficient matrix
+                    j = otherBasisIndices[bels[1]]  # index of col in "other" coefficient matrix
+                    scalem, Um = _mt.to_unitary(basis[bels[0]])  # ensure all Rank1Term operators are *unitary*
+                    scalen, Un = _mt.to_unitary(basis[bels[1]])  # ensure all Rank1Term operators are *unitary*
                     Lm, Ln = Um, Un
                     scale = scalem * scalen
                     scale *= d  # mimics "rho1 *= d" scaling in `nonham_lindbladian`
@@ -648,15 +658,15 @@ class LindbladErrorgen(_LinearOperator):
             elif termType == "A":  # Affine
                 assert(self.nonham_mode == "diag_affine")
                 if self.param_mode in ("depol", "reldepol"):  # => same single param for all stochastic terms
-                    k = numHamParams + 1 + otherBasisIndices[termLbl[1]]  # index of parameter
+                    k = numHamParams + 1 + otherBasisIndices[bels[0]]  # index of parameter
                 else:
-                    k = numHamParams + numOtherBasisEls + otherBasisIndices[termLbl[1]]  # index of parameter
+                    k = numHamParams + numOtherBasisEls + otherBasisIndices[bels[0]]  # index of parameter
 
-                # rho -> basis[termLbl[1]] * I = basis[termLbl[1]] * sum{ P_i rho P_i } where Pi's
+                # rho -> basis[bels[0]] * I = basis[bels[0]] * sum{ P_i rho P_i } where Pi's
                 #  are the normalized paulis (including the identity), and rho has trace == 1
                 #  (all but "I/d" component of rho are annihilated by pauli sum; for the I/d component, all
                 #   d^2 of the terms in the sum is P/sqrt(d) * I/d * P/sqrt(d) == I/d^2, so the result is just "I")
-                scale, U = _mt.to_unitary(basis[termLbl[1]])  # ensure all Rank1Term operators are *unitary*
+                scale, U = _mt.to_unitary(basis[bels[0]])  # ensure all Rank1Term operators are *unitary*
                 L = U
                 # Note: only works when `d` corresponds to integral # of qubits!
                 Bmxs = _bt.basis_matrices("pp", dim, sparse=False)
@@ -1128,14 +1138,20 @@ class LindbladErrorgen(_LinearOperator):
         Ltermdict_and_maybe_basis = _ot.projections_to_lindblad_terms(
             hamC, otherC, self.ham_basis, self.other_basis, self.nonham_mode, return_basis)
 
+        #convert to *global* lindblad terms
+        identity_label_1Q = 'I'  # maybe we could get this from a 1Q basis somewhere?
+        sslbls = self.state_space.tensor_product_block_labels(0)  # just take first TPB labels as all labels
+        Ltermdict, basis = Ltermdict_and_maybe_basis if return_basis else Ltermdict_and_maybe_basis, None
+        Ltermdict = _collections.OrderedDict([(_GlobalElementaryErrorgenLabel.cast(k, sslbls, identity_label_1Q), v)
+                                              for k, v in Ltermdict.items()])
+
         if logscale_nonham:
-            Ltermdict = Ltermdict_and_maybe_basis[0] if return_basis else Ltermdict_and_maybe_basis
             dim = self.dim
             for k in Ltermdict.keys():
-                if k[0] == "S":  # reverse mapping: err_coeff -> err_rate
+                if k.errorgen_type == "S":  # reverse mapping: err_coeff -> err_rate
                     Ltermdict[k] = (1 - _np.exp(-dim * Ltermdict[k])) / dim  # err_rate = (1-exp(-d^2*errgen_coeff))/d^2
 
-        return Ltermdict_and_maybe_basis
+        return (Ltermdict, basis) if return_basis else Ltermdict
 
     def coefficient_labels(self):
         """
@@ -1148,18 +1164,25 @@ class LindbladErrorgen(_LinearOperator):
             generators of this gate.
         """
         labels = []
+        LEEL = _LocalElementaryErrorgenLabel  # shorthand
         if self.ham_basis is not None:
-            labels.extend([('H', basis_lbl) for basis_lbl in self.ham_basis.labels[1:]])
+            labels.extend([LEEL('H', basis_lbl) for basis_lbl in self.ham_basis.labels[1:]])
         if self.other_basis is not None:
             if self.nonham_mode == "diagonal":
-                labels.extend([('S', basis_lbl) for basis_lbl in self.other_basis.labels[1:]])
+                labels.extend([LEEL('S', basis_lbl) for basis_lbl in self.other_basis.labels[1:]])
             elif self.nonham_mode == "diag_affine":
-                labels.extend([('S', basis_lbl) for basis_lbl in self.other_basis.labels[1:]])
-                labels.extend([('A', basis_lbl) for basis_lbl in self.other_basis.labels[1:]])
+                labels.extend([LEEL('S', basis_lbl) for basis_lbl in self.other_basis.labels[1:]])
+                labels.extend([LEEL('A', basis_lbl) for basis_lbl in self.other_basis.labels[1:]])
             else:  # 'all' mode
-                labels.extend([('S', basis_lbl1, basis_lbl2)
+                labels.extend([LEEL('S', basis_lbl1, basis_lbl2)
                                for basis_lbl1 in self.other_basis.labels[1:]
                                for basis_lbl2 in self.other_basis.labels[1:]])
+
+        #convert to *global* lindblad terms
+        identity_label_1Q = 'I'  # maybe we could get this from a 1Q basis somewhere?
+        sslbls = self.state_space.tensor_product_block_labels(0)  # just take first TPB labels as all labels
+        labels = [_GlobalElementaryErrorgenLabel.cast(local_lbl, sslbls, identity_label_1Q) for local_lbl in labels]
+
         return tuple(labels)
 
     def coefficients_array(self):
@@ -1291,12 +1314,19 @@ class LindbladErrorgen(_LinearOperator):
         """
         existing_Ltermdict, basis = self.coefficients(return_basis=True, logscale_nonham=False)
 
+        #convert keys to global elementary errorgen labels:
+        identity_label_1Q = 'I'  # maybe we could get this from a 1Q basis somewhere?
+        sslbls = self.state_space.tensor_product_block_labels(0)  # just take first TPB labels as all labels
+        lindblad_term_dict = _collections.OrderedDict(
+            [(_GlobalElementaryErrorgenLabel.cast(k, sslbls, identity_label_1Q), v)
+             for k, v in lindblad_term_dict.items()])
+        
         if action == "reset":
             for k in existing_Ltermdict:
                 existing_Ltermdict[k] = 0.0
 
         for k, v in lindblad_term_dict.items():
-            if logscale_nonham and k[0] == "S":
+            if logscale_nonham and k.errorgen_type == "S":
                 # treat the value being set in lindblad_term_dict as the *channel* stochastic error rate, and
                 # set the errgen coefficient to the value that would, in a depolarizing channel, give
                 # that per-Pauli (or basis-el general?) stochastic error rate. See lindbladtools.py also.
@@ -1312,6 +1342,11 @@ class LindbladErrorgen(_LinearOperator):
                 existing_Ltermdict[k] += v
             else:
                 raise ValueError('Invalid `action` argument: must be one of "update", "add", or "reset"')
+
+        #convert existing_Ltermdict keys to *local* labels for use with lindblad_terms_to_projections:
+        existing_Ltermdict = _collections.OrderedDict(
+            [(_LocalElementaryErrorgenLabel.cast(lbl, sslbls, identity_label_1Q), val)
+             for lbl, val in existing_Ltermdict.items()])
 
         hamC, otherC, _, _ = \
             _ot.lindblad_terms_to_projections(existing_Ltermdict, basis, self.nonham_mode)
@@ -1838,10 +1873,10 @@ class LindbladParameterization(object):
             Parameterization string for constructing Lindblad error generators.
         """
         paramtypes = []
-        if any([nm[0] == 'H' for nm in errs]): paramtypes.append('H')
-        if any([nm[0] == 'S' for nm in errs]): paramtypes.append('S')
-        if any([nm[0] == 'A' for nm in errs]): paramtypes.append('A')
-        if any([nm[0] == 'S' and isinstance(nm, tuple) and len(nm) == 3 for nm in errs]):
+        if any([lbl.errorgen_type == 'H' for lbl in errs]): paramtypes.append('H')
+        if any([lbl.errorgen_type == 'S' for lbl in errs]): paramtypes.append('S')
+        if any([lbl.errorgen_type == 'A' for lbl in errs]): paramtypes.append('A')
+        if any([lbl.errorgen_type == 'S' and len(lbl.basis_element_labels) == 2 for lbl in errs]):
             # parameterization must be "CPTP" if there are any ('S',b1,b2) keys
             parameterization = "CPTP"
         else:
