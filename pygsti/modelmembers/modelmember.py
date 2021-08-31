@@ -10,6 +10,7 @@ Defines the ModelChild and ModelMember classes, which represent Model members
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from collections import OrderedDict
 import copy as _copy
 
 import numpy as _np
@@ -602,6 +603,81 @@ class ModelMember(ModelChild):
             if not sm1.is_equivalent(sm2): return False
 
         return True
+    
+    def to_memoized_dict(self, mmg_memo):
+        """Create a serializable dict with references to other objects in the memo.
+
+        Parameters
+        ----------
+        mmg_memo: dict
+            Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
+            are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
+            the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
+        
+        Returns
+        -------
+        mm_dict: dict
+            A dict representation of this ModelMember ready for serialization
+            This must have at least the following fields:
+                module, class, submembers, params, state_space, evotype
+            Additional fields may be added by derived classes.
+        """
+        mm_dict = OrderedDict()
+        mm_dict['module'] =  self.__module__
+        mm_dict['class'] = self.__class__.__name__
+        mm_dict['submembers'] = []
+        mm_dict['params'] = list(self.to_vector())
+        mm_dict['state_space'] = str(self.state_space)
+        mm_dict['evotype'] = str(self.evotype)
+        
+        # Dereference submembers
+        for sm in self.submembers():
+            try:
+                mm_node = mmg_memo[id(sm)]
+                mm_dict['submembers'].append(mm_node.serialize_id)
+            except KeyError:
+                print('Each submember must be in the memo.')
+                print('Submember Id: ', id(sm), ', Submember: \n', sm)
+                print('Memo:\n')
+                for k,v in mmg_memo.items():
+                    print('  Id: ', k, ', Serialize Id: ', v.serialize_id, end=', ')
+                    print('  ModelMember:\n', v.mm)
+
+        return mm_dict
+    
+    @classmethod
+    def from_memoized_dict(cls, mm_dict, serial_memo):
+        """Deserialize a ModelMember object and relink submembers from a memo.
+
+        Parameters
+        ----------
+        mm_dict: dict
+            A dict representation of this ModelMember ready for deserialization
+            This must have at least the following fields:
+                type, submembers, params, state_space, evotype
+
+        serial_memo: dict
+            Keys are serialize_ids and values are ModelMembers. This is NOT the same as
+            other memos in ModelMember, (e.g. copy(), allocate_gpindices(), etc.).
+            This is similar but not the same as mmg_memo in to_memoized_dict(),
+            as we do not need to build a ModelMemberGraph for deserialization.
+        
+        Returns
+        -------
+        ModelMember
+            An initialized object
+        """
+        needed_tags = ['module', 'class', 'submembers', 'params', 'state_space', 'evotype']
+        assert all([tag in mm_dict.keys() for tag in needed_tags]), 'Must provide all needed tags: %s' % needed_tags
+        
+        assert mm_dict['module'] == cls.__module__.name, "Module must match"
+        assert mm_dict['class'] == cls.__class__.name, "Class must match"
+        assert len(mm_dict['submembers']) == 0, 'ModelMember base class has no submembers'
+
+        obj = cls(mm_dict['state_space'], mm_dict['evotype'])
+        obj.from_vector(mm_dict['params'])
+
+        return obj
 
     def _copy_gpindices(self, op_obj, parent, memo):
         """ Helper function for implementing copy in derived classes """

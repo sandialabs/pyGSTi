@@ -121,20 +121,31 @@ class ModelMemberGraph(object):
         # If here, everything checks out
         return True
     
-    def serialize(self, precision=12):
+    def create_serialization_dict(self):
         """Serialize the ModelMemberGraph object.
-
-        Parameters
-        ----------
-        precision: int
-            Number of decimals in numerical parameters
         
+        Calls underlying to_memoized_dict on each ModelMember,
+        as well as adding necessary metadata for the collection
+        of ModelMembers - e.g., OrderedMemberDict keys for root nodes.
+
         Returns
         -------
-        serial: str
-            Serialized string of the ModelMemberGraph
+        sdict: dict
+            Flat dict of the ModelMemberGraph for serialization.
+            Keys are serialize_ids, values are derefernced dicts for each
+            individual ModelMember.
         """
-        pass
+        sdict = OrderedDict()
+        for mm_id, mm_node in self.mm_memo.items():
+            sdict[mm_node.serialize_id] = mm_node.mm.to_memoized_dict(self.mm_memo)
+        
+        # Tag extra metadata for root nodes
+        for mm_type, root_nodes in self.mm_nodes.items():
+            for lbl, mm_node in root_nodes.items():
+                sdict[mm_node.serialize_id]['memberdict_type'] = mm_type
+                sdict[mm_node.serialize_id]['memberdict_label'] = lbl
+        
+        return sdict
 
     def print_graph(self, indent=0):
         def print_subgraph(node, indent=0, name=None):
