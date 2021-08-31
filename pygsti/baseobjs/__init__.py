@@ -19,3 +19,5 @@ from .outcomelabeldict import OutcomeLabelDict
 from .statespace import StateSpace, QubitSpace, ExplicitStateSpace
 from .resourceallocation import ResourceAllocation
 from .qubitgraph import QubitGraph
+from .errorgenbasis import ElementaryErrorgenBasis, ExplicitElementaryErrorgenBasis, CompleteElementaryErrorgenBasis
+from .errorgenspace import ErrorgenSpace

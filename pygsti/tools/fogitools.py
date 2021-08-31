@@ -27,7 +27,7 @@ def first_order_gauge_action_matrix(clifford_superop_mx, target_sslbls, model_st
 
     #Utilize EmbeddedOp to perform superop embedding
     from pygsti.modelmembers.operations import EmbeddedOp as _EmbeddedOp, StaticArbitraryOp as _StaticArbitraryOp
-    from pygsti.models.fogistore import ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis
+    from pygsti.baseobjs.errorgenbasis import ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis
 
     def _embed(mx, target_labels, state_space):
         if mx.shape[0] == state_space.dim:
@@ -119,7 +119,7 @@ def first_order_gauge_action_matrix_for_prep(prep_superket_vec, target_sslbls, m
 
     #Utilize EmbeddedOp to perform superop embedding
     from pygsti.modelmembers.operations import EmbeddedOp as _EmbeddedOp, StaticArbitraryOp as _StaticArbitraryOp
-    from pygsti.models.fogistore import ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis
+    from pygsti.baseobjs.errorgenbasis import ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis
 
     def _embed(mx, target_labels, state_space):  # SAME as in fn above
         if mx.shape[0] == state_space.dim:
@@ -207,7 +207,7 @@ def first_order_gauge_action_matrix_for_povm(povm_superbra_vecs, target_sslbls, 
 
     #Utilize EmbeddedOp to perform superop embedding
     from pygsti.modelmembers.operations import EmbeddedOp as _EmbeddedOp, StaticArbitraryOp as _StaticArbitraryOp
-    from pygsti.models.fogistore import ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis
+    from pygsti.baseobjs.errorgenbasis import ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis
 
     def _embed(mx, target_labels, state_space):  # SAME as in fn above
         if mx.shape[0] == state_space.dim:

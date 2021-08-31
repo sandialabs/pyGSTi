@@ -459,10 +459,12 @@ def independent_columns(m, initial_independent_cols=None, tol=1e-7):
 
         for j in range(m.shape[1]):
             trial = _sps.hstack((running_indep_cols, m[:, j]))
+
             try:
                 lowest_sval = _spsl.svds(trial, k=1, which="SM", return_singular_vectors=False)
             except _ArpackNoConvergence:
                 lowest_sval = 0  # assume lack of convergence means smallest singular value was too small (?)
+
             if lowest_sval > tol:  # trial fogi dirs still linearly independent (full rank)
                 running_indep_cols = trial
                 indep_cols.append(j)

@@ -1576,9 +1576,9 @@ class ExplicitOpModel(_mdl.OpModel):
     def _format_gauge_action_matrix(self, mx, op, reduce_to_model_space, row_basis, op_gauge_basis,
                                     create_complete_basis_fn):
 
-        from .fogistore import CompleteElementaryErrorgenBasis as _CompleteElementaryErrorgenBasis
-        from .fogistore import ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis
-        from .fogistore import ErrorgenSpace as _ErrorgenSpace
+        from pygsti.baseobjs.errorgenbasis import CompleteElementaryErrorgenBasis as _CompleteElementaryErrorgenBasis
+        from pygsti.baseobjs.errorgenbasis import ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis
+        from pygsti.baseobjs.errorgenspace import ErrorgenSpace as _ErrorgenSpace
         import scipy.sparse as _sps
 
         #Next:
@@ -1636,9 +1636,10 @@ class ExplicitOpModel(_mdl.OpModel):
     def setup_fogi(self, initial_gauge_basis, create_complete_basis_fn=None,
                    op_label_abbrevs=None, reparameterize=False, reduce_to_model_space=True,
                    dependent_fogi_action='drop'):
-        from .fogistore import CompleteElementaryErrorgenBasis as _CompleteElementaryErrorgenBasis
-        from .fogistore import ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis
-        from .fogistore import ErrorgenSpace as _ErrorgenSpace
+
+        from pygsti.baseobjs.errorgenbasis import CompleteElementaryErrorgenBasis as _CompleteElementaryErrorgenBasis
+        from pygsti.baseobjs.errorgenbasis import ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis
+        from pygsti.baseobjs.errorgenspace import ErrorgenSpace as _ErrorgenSpace
         import scipy.sparse as _sps
 
         # ExplicitOpModel-specific - and assumes model's ops have specific structure (see extract_std_target*) !!
