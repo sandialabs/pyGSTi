@@ -388,3 +388,73 @@ class ComposedPOVM(_POVM):
         s = "Lindblad-parameterized POVM of length %d\n" \
             % (len(self))
         return s
+
+    def errorgen_coefficient_labels(self):
+        """
+        The elementary error-generator labels corresponding to the elements of :method:`errorgen_coefficients_array`.
+
+        Returns
+        -------
+        tuple
+            A tuple of (<type>, <basisEl1> [,<basisEl2]) elements identifying the elementary error
+            generators of this gate.
+        """
+        return self.error_map.errorgen_coefficient_labels()
+
+    def errorgen_coefficients_array(self):
+        """
+        The weighted coefficients of this POVM's error generator in terms of "standard" error generators.
+
+        Constructs a 1D array of all the coefficients returned by :method:`errorgen_coefficients`,
+        weighted so that different error generators can be weighted differently when a
+        `errorgen_penalty_factor` is used in an objective function.
+
+        Returns
+        -------
+        numpy.ndarray
+            A 1D array of length equal to the number of coefficients in the linear combination
+            of standard error generators that is this state preparation's error generator.
+        """
+        return self.error_map.errorgen_coefficients_array()
+
+    def errorgen_coefficients(self, return_basis=False, logscale_nonham=False):
+        """
+        Constructs a dictionary of the Lindblad-error-generator coefficients of this POVM.
+
+        Note that these are not necessarily the parameter values, as these
+        coefficients are generally functions of the parameters (so as to keep
+        the coefficients positive, for instance).
+
+        Parameters
+        ----------
+        return_basis : bool, optional
+            Whether to also return a :class:`Basis` containing the elements
+            with which the error generator terms were constructed.
+
+        logscale_nonham : bool, optional
+            Whether or not the non-hamiltonian error generator coefficients
+            should be scaled so that the returned dict contains:
+            `(1 - exp(-d^2 * coeff)) / d^2` instead of `coeff`.  This
+            essentially converts the coefficient into a rate that is
+            the contribution this term would have within a depolarizing
+            channel where all stochastic generators had this same coefficient.
+            This is the value returned by :method:`error_rates`.
+
+        Returns
+        -------
+        lindblad_term_dict : dict
+            Keys are `(termType, basisLabel1, <basisLabel2>)`
+            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            or `"A"` (Affine).  Hamiltonian and Affine terms always have a
+            single basis label (so key is a 2-tuple) whereas Stochastic tuples
+            have 1 basis label to indicate a *diagonal* term and otherwise have
+            2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
+            terms.  Basis labels are integers starting at 0.  Values are complex
+            coefficients.
+        basis : Basis
+            A Basis mapping the basis labels used in the
+            keys of `lindblad_term_dict` to basis matrices.
+        """
+        return self.error_map.errorgen_coefficients(return_basis, logscale_nonham)
+
+    #TODO - add more errorgen coefficient related methods as in ComposedOp

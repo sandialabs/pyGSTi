@@ -671,7 +671,6 @@ class FirstOrderGaugeInvariantStore(object):
         # -- maybe make this into an "ErrgenSetSpace" object in FUTURE?
         self.elem_errorgen_labels_by_op = errorgen_coefficient_labels_by_op
 
-        #HERE - need to build this out of row spaces?
         self.op_errorgen_indices = _fogit._create_op_errgen_indices_dict(self.primitive_op_labels,
                                                                          self.elem_errorgen_labels_by_op)
         self.errorgen_space_op_elem_labels = tuple([(op_label, elem_lbl) for op_label in self.primitive_op_labels

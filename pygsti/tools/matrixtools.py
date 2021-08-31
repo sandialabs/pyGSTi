@@ -452,13 +452,17 @@ def independent_columns(m, initial_independent_cols=None, tol=1e-7):
 
     else:  # sparse case
 
+        from scipy.sparse.linalg.eigen.arpack.arpack import ArpackNoConvergence as _ArpackNoConvergence
         running_indep_cols = initial_independent_cols.copy() \
             if (initial_independent_cols is not None) else _sps.csc_matrix((m.shape[0], 0), dtype=m.dtype)
         num_indep_cols = running_indep_cols.shape[0]
 
         for j in range(m.shape[1]):
             trial = _sps.hstack((running_indep_cols, m[:, j]))
-            lowest_sval = _spsl.svds(trial, k=1, which="SM", return_singular_vectors=False)
+            try:
+                lowest_sval = _spsl.svds(trial, k=1, which="SM", return_singular_vectors=False)
+            except _ArpackNoConvergence:
+                lowest_sval = 0  # assume lack of convergence means smallest singular value was too small (?)
             if lowest_sval > tol:  # trial fogi dirs still linearly independent (full rank)
                 running_indep_cols = trial
                 indep_cols.append(j)

@@ -43,7 +43,7 @@ def first_order_gauge_action_matrix(clifford_superop_mx, target_sslbls, model_st
             for i, j, gi, gj in dummy_op._iter_matrix_elements('HilbertSchmidt'):
                 embeddedOp[i, j] = mx[gi, gj] * scale
             #return embeddedOp.tocsr()  # Note: if sparse, assure that this is in CSR or CSC -- probably CSC -- for fast products
-            return embeddedOp.todense()
+            return embeddedOp.toarray()
 
     action_mx = _sps.lil_matrix((len(elemgen_row_basis), len(elemgen_gauge_basis)), dtype=clifford_superop_mx.dtype)
     nonzero_rows = set()
@@ -91,6 +91,185 @@ def first_order_gauge_action_matrix(clifford_superop_mx, target_sslbls, model_st
         #TODO HERE: check that decomposition into components adds to entire gauge_action_deriv (checks "completeness" of row basis
 
     #return action_mx
+
+    #Remove all all-zero rows and cull these elements out of the row_basis.  Actually,
+    # just construct a new matrix and basis
+    nonzero_row_indices = list(sorted(nonzero_rows))
+    labels = [nonzero_row_labels[i] for i in nonzero_row_indices]
+
+    data = []; col_indices = []; rowptr = [0]  # build up a CSR matrix manually from nonzero rows
+    for ii, i in enumerate(nonzero_row_indices):
+        col_indices.extend(action_mx.rows[i])
+        data.extend(action_mx.data[i])
+        rowptr.append(len(data))
+    culled_action_mx = _sps.csr_matrix((data, col_indices, rowptr),
+                                       shape=(len(nonzero_rows), len(elemgen_gauge_basis)), dtype=action_mx.dtype)
+    updated_row_basis = _ExplicitElementaryErrorgenBasis(elemgen_row_basis.state_space, labels)
+
+    return culled_action_mx, updated_row_basis
+
+
+def first_order_gauge_action_matrix_for_prep(prep_superket_vec, target_sslbls, model_state_space,
+                                             elemgen_gauge_basis, elemgen_row_basis):
+    """
+    Returns a matrix for computing the *offset* of a given gate's error generator due to a local gauge action.
+    Note: clifford_superop must be in the *std* basis!
+    TODO: docstring
+    """
+
+    #Utilize EmbeddedOp to perform superop embedding
+    from pygsti.modelmembers.operations import EmbeddedOp as _EmbeddedOp, StaticArbitraryOp as _StaticArbitraryOp
+    from pygsti.models.fogistore import ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis
+
+    def _embed(mx, target_labels, state_space):  # SAME as in fn above
+        if mx.shape[0] == state_space.dim:
+            return mx  # no embedding needed
+        else:
+            dummy_op = _EmbeddedOp(state_space, target_labels,
+                                   _StaticArbitraryOp(_np.identity(mx.shape[0], 'd'), 'densitymx_slow'))
+            embeddedOp = _sps.identity(state_space.dim, mx.dtype, format='lil')
+            scale = _np.sqrt(4**len(target_labels) / state_space.dim)  # is this correct??
+
+            #fill in embedded_op contributions (always overwrites the diagonal
+            # of finalOp where appropriate, so OK it starts as identity)
+            for i, j, gi, gj in dummy_op._iter_matrix_elements('HilbertSchmidt'):
+                embeddedOp[i, j] = mx[gi, gj] * scale
+            #return embeddedOp.tocsr()  # Note: if sparse, assure that this is in CSR or CSC -- probably CSC -- for fast products
+            return embeddedOp.toarray()
+
+    element_action_mx = _sps.lil_matrix((prep_superket_vec.shape[0], len(elemgen_gauge_basis)),
+                                        dtype=prep_superket_vec.dtype)
+    for j, (gen_sslbls, gen) in enumerate(elemgen_gauge_basis.elemgen_supports_and_matrices):
+        action_sslbls = tuple(sorted(set(gen_sslbls).union(target_sslbls)))  # (union) - joint support of ops
+        action_space = model_state_space.create_subspace(action_sslbls)
+        #Note: action_space is always (?) going to be the full model_state_space, since target_sslbls for a prep
+        # should always be all the sslbls of the model (I think...)
+
+        gen_expanded = _embed(gen, gen_sslbls, action_space)  # expand gen to shared action_space
+        if _sps.issparse(gen_expanded):
+            gauge_action_deriv = gen_expanded.dot(prep_superket_vec)  # sparse matrices
+        else:
+            gauge_action_deriv = _np.dot(gen_expanded, prep_superket_vec)
+        element_action_mx[:, j] = gauge_action_deriv[:, None]
+
+    #To identify set of vectors {v_i} such that {element_action_mx * v_i} span the range of element_action_mx,
+    # we find the SVD of element_action_mx and use the columns of V:
+    TOL = 1e-7
+    U, s, Vh = _np.linalg.svd(element_action_mx.toarray(), full_matrices=False)  # DENSE - could perhaps use sparse SVD here?
+    n = _np.count_nonzero(s > TOL)
+    relevant_basis = Vh[0:n, :].T  #conjugate?
+
+    for j in range(relevant_basis.shape[1]):  # normalize columns so largest element is +1.0
+        i_max = _np.argmax(_np.abs(relevant_basis[:, j]))
+        if abs(relevant_basis[i_max, j]) > 1e-6:
+            relevant_basis[:, j] /= relevant_basis[i_max, j]
+    relevant_basis = _mt.normalize_columns(relevant_basis)
+
+    # "gauge action" matrix is just the identity on the *relevant* space of gauge transformations:
+    action_mx_pre = _np.dot(relevant_basis, relevant_basis.T)  # row basis == elemgen_gauge_basis
+    action_mx = _sps.lil_matrix((len(elemgen_row_basis), len(elemgen_gauge_basis)),
+                                dtype=prep_superket_vec.dtype)
+    nonzero_rows = set()
+    nonzero_row_labels = {}
+
+    #Convert row-space to be over elemgen_row_basis instead of a elemgen_gauge_basis
+    for i, glbl in enumerate(elemgen_gauge_basis.labels):
+        new_i = elemgen_row_basis.label_index(glbl)
+        if _np.linalg.norm(action_mx_pre[i, :]) > 1e-8:
+            action_mx[new_i, :] = action_mx_pre[i, :]
+            nonzero_rows.add(i)
+            nonzero_row_labels[i] = glbl
+
+    #Remove all all-zero rows and cull these elements out of the row_basis.  Actually,
+    # just construct a new matrix and basis
+    nonzero_row_indices = list(sorted(nonzero_rows))
+    labels = [nonzero_row_labels[i] for i in nonzero_row_indices]
+
+    data = []; col_indices = []; rowptr = [0]  # build up a CSR matrix manually from nonzero rows
+    for ii, i in enumerate(nonzero_row_indices):
+        col_indices.extend(action_mx.rows[i])
+        data.extend(action_mx.data[i])
+        rowptr.append(len(data))
+    culled_action_mx = _sps.csr_matrix((data, col_indices, rowptr),
+                                       shape=(len(nonzero_rows), len(elemgen_gauge_basis)), dtype=action_mx.dtype)
+    updated_row_basis = _ExplicitElementaryErrorgenBasis(elemgen_row_basis.state_space, labels)
+
+    return culled_action_mx, updated_row_basis
+
+
+def first_order_gauge_action_matrix_for_povm(povm_superbra_vecs, target_sslbls, model_state_space,
+                                             elemgen_gauge_basis, elemgen_row_basis):
+    """
+    Returns a matrix for computing the *offset* of a given gate's error generator due to a local gauge action.
+    Note: clifford_superop must be in the *std* basis!
+    TODO: docstring
+    """
+
+    #Utilize EmbeddedOp to perform superop embedding
+    from pygsti.modelmembers.operations import EmbeddedOp as _EmbeddedOp, StaticArbitraryOp as _StaticArbitraryOp
+    from pygsti.models.fogistore import ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis
+
+    def _embed(mx, target_labels, state_space):  # SAME as in fn above
+        if mx.shape[0] == state_space.dim:
+            return mx  # no embedding needed
+        else:
+            dummy_op = _EmbeddedOp(state_space, target_labels,
+                                   _StaticArbitraryOp(_np.identity(mx.shape[0], 'd'), 'densitymx_slow'))
+            embeddedOp = _sps.identity(state_space.dim, mx.dtype, format='lil')
+            scale = _np.sqrt(4**len(target_labels) / state_space.dim)  # is this correct??
+
+            #fill in embedded_op contributions (always overwrites the diagonal
+            # of finalOp where appropriate, so OK it starts as identity)
+            for i, j, gi, gj in dummy_op._iter_matrix_elements('HilbertSchmidt'):
+                embeddedOp[i, j] = mx[gi, gj] * scale
+            #return embeddedOp.tocsr()  # Note: if sparse, assure that this is in CSR or CSC -- probably CSC -- for fast products
+            return embeddedOp.toarray()
+
+    element_action_mx = _sps.lil_matrix((sum([v.shape[0] for v in povm_superbra_vecs]), len(elemgen_gauge_basis)),
+                                        dtype=povm_superbra_vecs[0].dtype)
+    for j, (gen_sslbls, gen) in enumerate(elemgen_gauge_basis.elemgen_supports_and_matrices):
+        action_sslbls = tuple(sorted(set(gen_sslbls).union(target_sslbls)))  # (union) - joint support of ops
+        action_space = model_state_space.create_subspace(action_sslbls)
+        #Note: action_space is always (?) going to be the full model_state_space, since target_sslbls for a prep
+        # should always be all the sslbls of the model (I think...)
+
+        #Currently, this applies same vector to *all* povm effects - i.e. treats as a ComposedPOVM
+        gen_expanded = _embed(gen, gen_sslbls, action_space)  # expand gen to shared action_space
+        if _sps.issparse(gen_expanded):
+            gauge_action_deriv = _sps.vstack([gen_expanded.dot(v) for v in povm_superbra_vecs])  # sparse matrices
+        else:
+            gauge_action_deriv = _np.concatenate([_np.dot(gen_expanded, v) for v in povm_superbra_vecs])
+        element_action_mx[:, j] = gauge_action_deriv[:, None]
+
+    #FROM HERE DOWN same as for prep vector (concat effects treated like one big prep vector)
+
+    #To identify set of vectors {v_i} such that {element_action_mx * v_i} span the range of element_action_mx,
+    # we find the SVD of element_action_mx and use the columns of V:
+    TOL = 1e-7
+    U, s, Vh = _np.linalg.svd(element_action_mx.toarray(), full_matrices=False)  # DENSE - could perhaps use sparse SVD here?
+    n = _np.count_nonzero(s > TOL)
+    relevant_basis = Vh[0:n, :].T  #conjugate?
+
+    for j in range(relevant_basis.shape[1]):  # normalize columns so largest element is +1.0
+        i_max = _np.argmax(_np.abs(relevant_basis[:, j]))
+        if abs(relevant_basis[i_max, j]) > 1e-6:
+            relevant_basis[:, j] /= relevant_basis[i_max, j]
+    relevant_basis = _mt.normalize_columns(relevant_basis)
+
+    # "gauge action" matrix is just the identity on the *relevant* space of gauge transformations:
+    action_mx_pre = _np.dot(relevant_basis, relevant_basis.T)  # row basis == elemgen_gauge_basis
+    action_mx = _sps.lil_matrix((len(elemgen_row_basis), len(elemgen_gauge_basis)),
+                                dtype=povm_superbra_vecs[0].dtype)
+    nonzero_rows = set()
+    nonzero_row_labels = {}
+
+    #Convert row-space to be over elemgen_row_basis instead of a elemgen_gauge_basis
+    for i, glbl in enumerate(elemgen_gauge_basis.labels):
+        new_i = elemgen_row_basis.label_index(glbl)
+        if _np.linalg.norm(action_mx_pre[i, :]) > 1e-8:
+            action_mx[new_i, :] = action_mx_pre[i, :]
+            nonzero_rows.add(i)
+            nonzero_row_labels[i] = glbl
 
     #Remove all all-zero rows and cull these elements out of the row_basis.  Actually,
     # just construct a new matrix and basis
@@ -264,7 +443,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
 
         for j, (name, name_abbrev, nrm, L2norm2) in enumerate(zip(names, abbrev_names, nrms, vector_L2_norm2s)):
             metadata.append({'name': name, 'abbrev': name_abbrev, 'r': 1 / (nrm * L2norm2),
-                              'gaugespace_dir': gauge_dirs[:, j], 'opset': new_opset})
+                             'gaugespace_dir': gauge_dirs[:, j], 'opset': new_opset})
             # Note intersection_space is a subset of the *gauge-space*, and so its basis,
             # placed under gaugespace_dirs keys, is for gauge-space, not errorgen-space.
 
@@ -283,6 +462,16 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
         #print("##", op_label)
         ga = gauge_action_matrices[op_label]
         # currently `ga` is a dense matrix, if SPARSE need to update nullspace and pinv math below
+
+        if isinstance(op_label, str) and (op_label.startswith('rho') or op_label.startswith('M')):
+            # Note: the "commutant" constructed in this way also includes irrelevant gauge directions,
+            #  and for SPAM ops we know there are actually *no* local FOGI quantities and the entire
+            #  "commutant" is irrelevant.  So below we perform similar math as for gates, but don't add
+            #  any intrinsic FOGI quantities.  TODO - make this more general?
+            commutant = _mt.nice_nullspace(ga)  # columns = *gauge* elem gen directions
+            complement = _mt.nice_nullspace(commutant.T)  # complement of commutant - where op is faithful rep
+            ccomms[(op_label,)] = complement
+            continue
 
         #Get commutant and communtant-complement spaces
         commutant = _mt.nice_nullspace(ga)  # columns = *gauge* elem gen directions
@@ -350,7 +539,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                 new_set = tuple(sorted(existing_set + (op_label,)))
                 if new_set in larger_sets: continue
 
-                # print("\n##", existing_set, "+", op_label)
+                print("\n##", existing_set, "+", op_label)
 
                 # Merge existing set + op_label => new set of larger size
                 ccommA = ccomms.get(existing_set, None)  # Note: commutant-complements are in *gauge* space,
@@ -366,6 +555,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                     #assert(_mt.columns_are_orthogonal(intersection_space))  # Not always true
 
                     if intersection_space.shape[1] > 0:
+                        print(" ==> intersection space dim = ", intersection_space.shape[1])
                         # Then each basis vector of the intersection space defines a gauge-invariant ("fogi")
                         # direction via the difference between that gauge direction's action on A and B:
                         gauge_action = _np.concatenate([gauge_action_matrices[ol] for ol in existing_set]
@@ -512,6 +702,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
 
                         # figure out which directions are independent
                         indep_cols = _mt.independent_columns(new_fogi_dirs, fogi_dirs)
+                        print(" ==> %d independent columns" % len(indep_cols))
 
                         if dependent_fogi_action == "drop":
                             dep_cols_to_add = []

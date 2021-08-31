@@ -1494,9 +1494,19 @@ class ExplicitOpModel(_mdl.OpModel):
 
             op_coeffs = {op_label: rescale(self.operations[op_label].errorgen_coefficients())
                          for op_label in self.operations}
+            op_coeffs.update({prep_label: rescale(self.preps[prep_label].errorgen_coefficients())
+                              for prep_label in self.preps})
+            op_coeffs.update({povm_label: rescale(self.povms[povm_label].errorgen_coefficients())
+                              for povm_label in self.povms})
+
         else:
             op_coeffs = {op_label: self.operations[op_label].errorgen_coefficients()
                          for op_label in self.operations}
+            op_coeffs.update({prep_label: self.preps[prep_label].errorgen_coefficients()
+                              for prep_label in self.preps})
+            op_coeffs.update({povm_label: self.povms[povm_label].errorgen_coefficients()
+                              for povm_label in self.povms})
+
         return op_coeffs
 
     def _add_reparameterization(self, primitive_op_labels,
@@ -1563,6 +1573,66 @@ class ExplicitOpModel(_mdl.OpModel):
 
         return _LinearInterposer(F)
 
+    def _format_gauge_action_matrix(self, mx, op, reduce_to_model_space, row_basis, op_gauge_basis,
+                                    create_complete_basis_fn):
+
+        from .fogistore import CompleteElementaryErrorgenBasis as _CompleteElementaryErrorgenBasis
+        from .fogistore import ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis
+        from .fogistore import ErrorgenSpace as _ErrorgenSpace
+        import scipy.sparse as _sps
+
+        #Next:
+        # - make linear combos of basis els so that all (nonzero) disallowed rows become zero, i.e.,
+        #    find nullspace of the matrix formed from the (nonzero) disallowed rows of mx.
+        # - promote op_gauge_basis => op_gauge_space (linear combos of the same elementary basis - op_gauge_basis)
+        all_sslbls = self.state_space.tensor_product_block_labels(0)
+
+        if reduce_to_model_space:
+            allowed_lbls = op.errorgen_coefficient_labels()
+            allowed_lbls = _upgrade_pauli_errorgen_coefficient_labels(allowed_lbls, all_sslbls)
+            allowed_lbls_set = set(allowed_lbls)
+            allowed_row_basis = _ExplicitElementaryErrorgenBasis(self.state_space, allowed_lbls, basis1q=None)  # (Pauli basis)
+            disallowed_indices = [i for i, lbl in enumerate(row_basis.labels) if lbl not in allowed_lbls_set]
+
+            if len(disallowed_indices) > 0:
+                disallowed_rows = mx[disallowed_indices, :]  # a sparse (lil) matrix
+                allowed_gauge_linear_combos = _mt.nice_nullspace(disallowed_rows.toarray(), tol=1e-4)  # DENSE for now
+                mx = _sps.csr_matrix(mx.dot(allowed_gauge_linear_combos))  # dot sometimes/always returns dense array
+                op_gauge_space = _ErrorgenSpace(allowed_gauge_linear_combos, op_gauge_basis)  # use DENSE mxs in errogen spaces for now
+                print("DEBUG => mx reduced to ",mx.shape)
+            else:
+                op_gauge_space = _ErrorgenSpace(_np.identity(len(op_gauge_basis), 'd'), op_gauge_basis)
+        else:
+            allowed_row_basis = create_complete_basis_fn(all_sslbls)
+            op_gauge_space = _ErrorgenSpace(_np.identity(len(op_gauge_basis), 'd'),
+                                            op_gauge_basis)  # do we need to store identity? could we just use the basis as a space here? or 'None' is special?
+
+        # "reshape" mx so rows correspond to allowed_row_basis (the op's allowed labels)
+        # (maybe make this into a subroutine?)
+        assert(_sps.isspmatrix_csr(mx))
+        data = []; col_indices = []; rowptr = [0]  # build up a CSR matrix manually
+        allowed_lbls_set = set(allowed_row_basis.labels)
+        allowed_row_indices = [(i, allowed_row_basis.label_index(lbl))
+                               for i, lbl in enumerate(row_basis.labels) if lbl in allowed_lbls_set]
+
+        for i, new_i in sorted(allowed_row_indices, key=lambda x: x[1]):
+            # transfer i-th row of mx (whose rose are in row_basis) to new_i-th row of new mx
+
+            # - first increment rowptr as needed
+            while len(rowptr) <= new_i:
+                rowptr.append(len(data))
+
+            # - then add data
+            col_indices.extend(mx.indices[mx.indptr[i]:mx.indptr[i + 1]])
+            data.extend(mx.data[mx.indptr[i]:mx.indptr[i + 1]])
+            rowptr.append(len(data))
+        while len(rowptr) <= len(allowed_row_basis):  # fill in rowptr for any (empty) ending rows
+            rowptr.append(len(data))
+        allowed_rowspace_mx = _sps.csr_matrix((data, col_indices, rowptr),
+                                              shape=(len(allowed_row_basis), mx.shape[1]), dtype=mx.dtype)
+
+        return allowed_rowspace_mx, allowed_row_basis, op_gauge_space
+
     def setup_fogi(self, initial_gauge_basis, create_complete_basis_fn=None,
                    op_label_abbrevs=None, reparameterize=False, reduce_to_model_space=True,
                    dependent_fogi_action='drop'):
@@ -1576,7 +1646,7 @@ class ExplicitOpModel(_mdl.OpModel):
 
         #BEGIN NEW STUFF
         primitive_prep_labels = list(self.preps.keys())
-        primitive_effect_labels = list(self.effects.keys())  # TODO
+        primitive_povm_labels = list(self.povms.keys())
 
         # "initial" gauge space is the space of error generators initially considered as
         # gauge transformations.  It can be reduced by the errors allowed on operations (by
@@ -1596,7 +1666,12 @@ class ExplicitOpModel(_mdl.OpModel):
             return U
 
         def extract_std_target_vec(v):
-            raise NotImplementedError()  # TODO
+            #TODO - make more sophisticated...
+            dim = v.state_space.dim
+            nQubits = int(round(_np.log(dim) / _np.log(4))); assert(dim == 4**nQubits)
+            tensorprod_std_basis = _Basis.cast('std', [(4,) * nQubits])
+            v = _bt.change_basis(v.to_dense(), self.basis, tensorprod_std_basis)  # 'std' is incorrect
+            return v
 
         if create_complete_basis_fn is None:
             assert(isinstance(initial_gauge_basis, _CompleteElementaryErrorgenBasis)), \
@@ -1630,76 +1705,54 @@ class ExplicitOpModel(_mdl.OpModel):
             # (DONE: - remove all all-zero rows from mx (and corresponding basis labels) )
             # Note: row_basis is a simple subset of initial_row_basis
 
-            #Next:
-            # - make linear combos of basis els so that all (nonzero) disallowed rows become zero, i.e.,
-            #    find nullspace of the matrix formed from the (nonzero) disallowed rows of mx.
-            # - promote op_gauge_basis => op_gauge_space (linear combos of the same elementary basis - op_gauge_basis)
-            all_sslbls = self.state_space.tensor_product_block_labels(0)
-
-            if reduce_to_model_space:
-                allowed_lbls = op.errorgen_coefficient_labels()
-                allowed_lbls = _upgrade_pauli_errorgen_coefficient_labels(allowed_lbls, all_sslbls)
-                allowed_lbls_set = set(allowed_lbls)
-                allowed_row_basis = _ExplicitElementaryErrorgenBasis(self.state_space, allowed_lbls, basis1q=None)  # (Pauli basis)
-                disallowed_indices = [i for i, lbl in enumerate(row_basis.labels) if lbl not in allowed_lbls_set]
-
-                if len(disallowed_indices) > 0:
-                    disallowed_rows = mx[disallowed_indices, :]  # a sparse (lil) matrix
-                    allowed_gauge_linear_combos = _mt.nice_nullspace(disallowed_rows.toarray(), tol=1e-4)  # DENSE for now
-                    mx = _sps.csr_matrix(mx.dot(allowed_gauge_linear_combos))  # dot sometimes/always returns dense array
-                    op_gauge_space = _ErrorgenSpace(allowed_gauge_linear_combos, op_gauge_basis)  # use DENSE mxs in errogen spaces for now
-                    print("DEBUG => mx reduced to ",mx.shape)
-                else:
-                    op_gauge_space = _ErrorgenSpace(_np.identity(len(op_gauge_basis), 'd'), op_gauge_basis)
-            else:
-                allowed_row_basis = create_complete_basis_fn(all_sslbls)
-                op_gauge_space = _ErrorgenSpace(_np.identity(len(op_gauge_basis), 'd'),
-                                                op_gauge_basis)  # do we need to store identity? could we just use the basis as a space here? or 'None' is special?
-
-            # "reshape" mx so rows correspond to allowed_row_basis (the op's allowed labels)
-            # (maybe make this into a subroutine?)
-            assert(_sps.isspmatrix_csr(mx))
-            data = []; col_indices = []; rowptr = [0]  # build up a CSR matrix manually
-            allowed_lbls_set = set(allowed_row_basis.labels)
-            allowed_row_indices = [(i, allowed_row_basis.label_index(lbl))
-                                   for i, lbl in enumerate(row_basis.labels) if lbl in allowed_lbls_set]
-
-            for i, new_i in sorted(allowed_row_indices, key=lambda x: x[1]):
-                # transfer i-th row of mx (whose rose are in row_basis) to new_i-th row of new mx
-
-                # - first increment rowptr as needed
-                while len(rowptr) <= new_i:
-                    rowptr.append(len(data))
-
-                # - then add data
-                col_indices.extend(mx.indices[mx.indptr[i]:mx.indptr[i + 1]])
-                data.extend(mx.data[mx.indptr[i]:mx.indptr[i + 1]])
-                rowptr.append(len(data))
-            while len(rowptr) <= len(allowed_row_basis):  # fill in rowptr for any (empty) ending rows
-                rowptr.append(len(data))
-            allowed_rowspace_mx = _sps.csr_matrix((data, col_indices, rowptr),
-                                                  shape=(len(allowed_row_basis), mx.shape[1]), dtype=mx.dtype)
+            allowed_rowspace_mx, allowed_row_basis, op_gauge_space = \
+                self._format_gauge_action_matrix(mx, op, reduce_to_model_space, row_basis, op_gauge_basis,
+                                                 create_complete_basis_fn)
 
             errorgen_coefficient_labels[op_label] = allowed_row_basis.labels
             gauge_action_matrices[op_label] = allowed_rowspace_mx
             gauge_action_gauge_spaces[op_label] = op_gauge_space
             print("DEBUG => final allowed_rowspace_mx shape =",allowed_rowspace_mx.shape)
 
-        #HERE - now do something similar for SPAM (but first get gates logic working all the way within the FOGIStore construction)
-        #for prep_label in primitive_prep_labels:
-        #    # something similar - but gauge action is trivial; we care about irrelevant vs. relevant (& relational) partition of gauge errgen space:
-        #    # - get target sslbls 
-        #    prep = self.preps[prep_label]
-        #    v = extract_std_target_vec(prep)
-        #    target_sslbls = prep_label.sslbls  # (but often it's the entire space)
-        #    support_sslbls, gauge_errgen_basis = get_overlapping_labels(gauge_errgen_space_labels, target_sslble)  # usually the entire gauge errgen space
-        #    # HERE - get subspace of gauge_errgen_basis (maybe linear combos? - so as vectors?) that is *relevant* to this vec, i.e. for which M.v != 0
-        #    relevant_space[prep_label] = get_relevant_space(v, gauge_errgen_basis)
-        #
-        #    errorgen_coefficient_labels[prep_label] = prep.errorgen_coefficient_labels()
-        #
-        #for effect_label in primitive_effect_labels:
-        #    pass # something similar
+        # Similar for SPAM
+        for prep_label in primitive_prep_labels:
+            prep = self.preps[prep_label]
+            v = extract_std_target_vec(prep)
+            target_sslbls = prep_label.sslbls if (prep_label.sslbls is not None and v.shape[0] < self.state_space.dim) \
+                else self.state_space.tensor_product_block_labels(0)
+            op_gauge_basis = initial_gauge_basis.create_subbasis(target_sslbls)  # pick out the gauge space labels that overlap w/target
+            initial_row_basis = create_complete_basis_fn(target_sslbls)
+
+            mx, row_basis = _fogit.first_order_gauge_action_matrix_for_prep(v, target_sslbls, self.state_space,
+                                                                            op_gauge_basis, initial_row_basis)
+
+            allowed_rowspace_mx, allowed_row_basis, op_gauge_space = \
+                self._format_gauge_action_matrix(mx, prep, reduce_to_model_space, row_basis, op_gauge_basis,
+                                                 create_complete_basis_fn)
+
+            errorgen_coefficient_labels[prep_label] = allowed_row_basis.labels
+            gauge_action_matrices[prep_label] = allowed_rowspace_mx
+            gauge_action_gauge_spaces[prep_label] = op_gauge_space
+
+        for povm_label in primitive_povm_labels:
+            povm = self.povms[povm_label]
+            vecs = [extract_std_target_vec(effect) for effect in povm.values()]
+            target_sslbls = povm_label.sslbls if (povm_label.sslbls is not None
+                                                  and vecs[0].shape[0] < self.state_space.dim) \
+                else self.state_space.tensor_product_block_labels(0)
+            op_gauge_basis = initial_gauge_basis.create_subbasis(target_sslbls)  # pick out the gauge space labels that overlap w/target
+            initial_row_basis = create_complete_basis_fn(target_sslbls)
+
+            mx, row_basis = _fogit.first_order_gauge_action_matrix_for_povm(vecs, target_sslbls, self.state_space,
+                                                                            op_gauge_basis, initial_row_basis)
+
+            allowed_rowspace_mx, allowed_row_basis, op_gauge_space = \
+                self._format_gauge_action_matrix(mx, povm, reduce_to_model_space, row_basis, op_gauge_basis,
+                                                 create_complete_basis_fn)
+
+            errorgen_coefficient_labels[povm_label] = allowed_row_basis.labels
+            gauge_action_matrices[povm_label] = allowed_rowspace_mx
+            gauge_action_gauge_spaces[povm_label] = op_gauge_space
 
         norm_order = 2 # NOTE - this may should be 1 for normalizing 'S' quantities -- FUTURE need to put this intelligence into FOGIStore!
         self.fogi_store = _FOGIStore(gauge_action_matrices, gauge_action_gauge_spaces,
