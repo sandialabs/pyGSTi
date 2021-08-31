@@ -57,7 +57,7 @@ class LocalNoiseModelInstanceTester(BaseCase):
 
         mdl_local = create_crosstalk_free_model(pspec_2Q, {'idle': noisy_idle},
                                                 ideal_gate_type='static', independent_gates=False,
-                                                ensure_composed_gates=False)
+                                                ensure_composed_gates=False, implicit_idle_mode='add_global')
 
         assert(set(mdl_local.operation_blks['gates'].keys()) == set(["Gx", "Gy", "Gcnot", "idle"]))
         assert(set(mdl_local.operation_blks['layers'].keys()) == set(
@@ -93,7 +93,8 @@ class LocalNoiseModelInstanceTester(BaseCase):
 
         mdl_local = create_crosstalk_free_model(pspec_2Q, {'idle': noisy_idle},
                                                 ideal_gate_type='H+S+A', ideal_spam_type="lindblad H+S+A",
-                                                independent_gates=False, ensure_composed_gates=False)
+                                                independent_gates=False, ensure_composed_gates=False,
+                                                implicit_idle_mode='add_global')
 
         self.assertEqual(set(mdl_local.operation_blks['gates'].keys()), set(["Gx", "Gy", "Gcnot", "idle"]))
         assert(set(mdl_local.operation_blks['layers'].keys()) == set(

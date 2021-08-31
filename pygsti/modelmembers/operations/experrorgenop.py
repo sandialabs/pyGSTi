@@ -26,7 +26,7 @@ from pygsti.tools import matrixtools as _mt
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 MAX_EXPONENT = _np.log(_np.finfo('d').max) - 10.0  # so that exp(.) doesn't overflow
-
+SPAM_TRANSFORM_TRUNCATE = 1e-4
 
 class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
     """
@@ -724,7 +724,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
 
             errgen_cls = self.errorgen.__class__
             #Note: this only really works for LindbladErrorGen objects now... make more general in FUTURE?
-            truncate = 1e-5  # looser truncation, but can't be 'True' since we need to throw errors when appropriate
+            truncate = SPAM_TRANSFORM_TRUNCATE  # can't just be 'True' since we need to throw errors when appropriate
             param = _LindbladParameterization(self.errorgen.nonham_mode, self.errorgen.param_mode,
                                               len(self.errorgen.ham_basis) > 0, len(self.errorgen.other_basis) > 0)
             transformed_errgen = errgen_cls.from_operation_matrix(mx, param, self.errorgen.lindblad_basis,

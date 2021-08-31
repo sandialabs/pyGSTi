@@ -72,6 +72,9 @@ class Evotype(object):
         self.__dict__.update(state)
         self.module = _importlib.import_module("pygsti.evotypes." + self.name)
 
+    def __hash__(self):
+        return hash((self.name, self.prefer_dense_reps))
+
     def __eq__(self, other_evotype):
         if isinstance(other_evotype, Evotype):
             return self.name == other_evotype.name

@@ -167,7 +167,7 @@ class LocalNoiseModel(_ImplicitOpModel):
 
     def __init__(self, processor_spec, gatedict, prep_layers=None, povm_layers=None, evotype="default",
                  simulator="auto", on_construction_error='raise',
-                 independent_gates=False, ensure_composed_gates=False, implicit_idle_mode="add_global"):
+                 independent_gates=False, ensure_composed_gates=False, implicit_idle_mode="none"):
 
         qubit_labels = processor_spec.qubit_labels
         state_space = _statespace.QubitSpace(qubit_labels)
@@ -221,6 +221,7 @@ class LocalNoiseModel(_ImplicitOpModel):
             if not independent_gates:  # then get our "template" gate ready
                 # for non-independent gates, need to specify gate name alone (no sslbls):
                 gate = mm_gatedict.get(gateName, None)
+                gate_is_factory = gate_is_factory or isinstance(gate, _opfactory.OpFactory)
 
                 if gate is not None:  # (a gate name may not be in gatedict if it's an identity without any noise)
                     if ensure_composed_gates and not isinstance(gate, _op.ComposedOp) and not gate_is_factory:
@@ -266,7 +267,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                         #Allow elements of `gatedict` that *have* sslbls override the
                         # default copy/reference of the "name-only" gate:
                         base_gate = mm_gatedict[_Lbl(gateName, inds)]
-                        assert(gate_is_factory == isinstance(base_gate, _opfactory.OpFactory))
+                        gate_is_factory = gate_is_factory or isinstance(base_gate, _opfactory.OpFactory)
 
                         if gate_is_factory:
                             self.factories['gates'][_Lbl(gateName, inds)] = base_gate
@@ -275,6 +276,7 @@ class LocalNoiseModel(_ImplicitOpModel):
 
                     elif independent_gates:  # then we need to ~copy `gate` so it has indep params
                         gate = mm_gatedict.get(gateName, None)  # was set to `None` above; reset here
+                        gate_is_factory = gate_is_factory or isinstance(gate, _opfactory.OpFactory)
 
                         if gate is not None:  # (may be False if gate is an identity without any noise)
                             if ensure_composed_gates and not gate_is_factory:

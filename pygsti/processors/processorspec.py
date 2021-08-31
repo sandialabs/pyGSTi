@@ -31,7 +31,9 @@ class ProcessorSpec(object):
     proccesor geometry.  Processor specifications do not include any information about how
     operations are parameterized or can be adjusted (at least not yet).
     """
-    pass  # base class for potentially other types of processors (not composed of just qubits)
+    # base class for potentially other types of processors (not composed of just qubits)
+    def __init__(self):
+        pass
 
 
 class QubitProcessorSpec(ProcessorSpec):
@@ -111,6 +113,8 @@ class QubitProcessorSpec(ProcessorSpec):
                  geometry=None, qubit_labels=None, nonstd_gate_symplecticreps=None, aux_info=None):
         assert(type(num_qubits) is int), "The number of qubits, n, should be an integer!"
         if nonstd_gate_unitaries is None: nonstd_gate_unitaries = {}
+        assert(not (num_qubits > 1 and availability is None and geometry is None)), \
+            "For multi-qubit processors you must specify either the geometry or the availability!"
 
         #Store inputs for adding models later
         self.gate_names = tuple(gate_names[:])  # copy & cast to tuple
@@ -211,7 +215,8 @@ class QubitProcessorSpec(ProcessorSpec):
         unitary = self.gate_unitaries[gate_name]
         if unitary is None: return self.num_qubits  # unitary=None => identity on all qubits
         if isinstance(unitary, (int, _np.int64)): return unitary  # unitary=int => identity in n qubits
-        return int(round(_np.log2(unitary.udim if callable(unitary) else unitary.shape[0])))
+        return int(round(_np.log2(unitary(None).shape[0] if callable(unitary) else unitary.shape[0])))
+        # OR possibly unitary.udim in future
 
     def resolved_availability(self, gate_name, tuple_or_function="auto"):
         """
@@ -499,6 +504,7 @@ class QubitProcessorSpec(ProcessorSpec):
                             gate_inverse[gname2] = gname1
         return gate_inverse
 
+    ### TODO: do we still need this?
     def compute_clifford_ops_on_qubits(self):
         """
         Constructs a dictionary mapping tuples of state space labels to the clifford operations available on them.
@@ -518,13 +524,32 @@ class QubitProcessorSpec(ProcessorSpec):
 
         return clifford_ops_on_qubits
 
+    def compute_ops_on_qubits(self):
+        """
+        Constructs a dictionary mapping tuples of state space labels to the operations available on them.
+
+        Returns
+        -------
+        dict
+            A dictionary with keys that are state space label tuples and values that are lists
+            of gate labels, giving the available gates on those target labels.
+        """
+        ops_on_qubits = _collections.defaultdict(list)
+        for gn in self.gate_names:
+            #if gn in clifford_gates:
+            for sslbls in self.resolved_availability(gn, 'tuple'):
+                ops_on_qubits[sslbls].append(_Lbl(gn, sslbls))
+
+        return ops_on_qubits
+
+    ### TODO: do we still need this?
     def compute_clifford_2Q_connectivity(self):
         """
         Constructs a graph encoding the connectivity between qubits via 2-qubit Clifford gates.
 
         Returns
         -------
-       QubitGraph
+        QubitGraph
             A graph with nodes equal to the qubit labels and edges present whenever there is
             a 2-qubit Clifford gate between the vertex qubits.
         """
@@ -539,6 +564,26 @@ class QubitProcessorSpec(ProcessorSpec):
                     CtwoQ_connectivity[qubit_labels.index(sslbls[0]), qubit_labels.index(sslbls[1])] = True
 
         return _qgraph.QubitGraph(qubit_labels, CtwoQ_connectivity)
+
+    def compute_2Q_connectivity(self):
+        """
+        Constructs a graph encoding the connectivity between qubits via 2-qubit gates.
+
+        Returns
+        -------
+        QubitGraph
+            A graph with nodes equal to the qubit labels and edges present whenever there is
+            a 2-qubit gate between the vertex qubits.
+        """
+        # Generate qubitgraph for the multi-qubit gates.
+        twoQ_connectivity = _np.zeros((self.num_qubits, self.num_qubits), dtype=bool)
+        qubit_labels = self.qubit_labels
+        for gn in self.gate_names:
+            if self.gate_num_qubits(gn) == 2:
+                for sslbls in self.resolved_availability(gn, 'tuple'):
+                    twoQ_connectivity[qubit_labels.index(sslbls[0]), qubit_labels.index(sslbls[1])] = True
+
+        return _qgraph.QubitGraph(qubit_labels, twoQ_connectivity)
 
     def subset(self, gate_names_to_include):
         """

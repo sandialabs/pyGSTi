@@ -1241,7 +1241,11 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
             for tds in truncated_ds.values(): tds.add_std_nqubit_outcome_labels(len(self[sub_name].qubit_labels))
         else:
             truncated_ds = dataset.truncate(sub_circuits)  # maybe have filter_dataset also do this?
-            truncated_ds.add_outcome_labels(dataset.outcome_labels)  # make sure truncated ds has all outcomes
+            sub_nqubits = len(self[sub_name].qubit_labels)
+            outcome_labels = tuple(filter(lambda ol: (len(ol) != 1
+                                                      or any([letter not in ('0', '1') for letter in ol[0]])
+                                                      or len(ol[0]) == sub_nqubits), dataset.outcome_labels))
+            truncated_ds.add_outcome_labels(outcome_labels)  # make sure truncated ds has all outcomes
             #truncated_ds.add_std_nqubit_outcome_labels(len(self[sub_name].qubit_labels))  # can be very SLOW
         return ProtocolData(self[sub_name], truncated_ds)
 

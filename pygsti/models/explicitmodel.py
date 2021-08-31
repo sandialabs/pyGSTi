@@ -1449,24 +1449,44 @@ class ExplicitOpModel(_mdl.OpModel):
         nqubits = self.state_space.num_qubits
         gate_unitaries = _collections.OrderedDict()
         availability = {}
+
+        def add_availability(opkey, op):
+            if opkey == _Label(()) or opkey.is_simple():
+                if opkey == _Label(()):  # special case: turn empty tuple labels into "(idle)" gate in processor spec
+                    gn = "(idle)"
+                    sslbls = None
+                elif opkey.is_simple():
+                    gn = opkey.name
+                    sslbls = opkey.sslbls
+                    #if sslbls is not None:
+                    #    observed_sslbls.update(sslbls)
+
+                if gn not in gate_unitaries or gate_unitaries[gn] is None:
+                    U = _ot.process_mx_to_unitary(_bt.change_basis(
+                        op.to_dense('HilbertSchmidt'), self.basis, 'std')) \
+                        if (op is not None) else None  # U == None indicates "unknown, up until this point"
+                    gate_unitaries[gn] = U
+
+                    if gn in availability:
+                        if sslbls not in availability[gn]:
+                            availability[gn].append(sslbls)
+                    else:
+                        availability[gn] = [sslbls]
+                elif sslbls not in availability[gn]:
+                    availability[gn].append(sslbls)
+
+            else:  # a COMPOUND label with components => process each component separately
+                for component in opkey.components:
+                    add_availability(component, None)  # recursive call - the reason we need this to be a function!
+
+        #Check that there aren't any undetermined unitaries
+        unknown_unitaries = [k for k, v in gate_unitaries.items() if v is None]
+        if len(unknown_unitaries) > 0:
+            raise ValueError("Unitary not specfied for %s gate(s)!" % str(unknown_unitaries))
+
         #observed_sslbls = set()
         for opkey, op in self.operations.items():  # TODO: need to deal with special () idle label
-            if opkey == _Label(()):  # special case: turn empty tuple labels into "(idle)" gate in processor spec
-                gn = "(idle)"
-                sslbls = None
-            else:
-                gn = opkey.name
-                sslbls = opkey.sslbls
-                #if sslbls is not None:
-                #    observed_sslbls.update(sslbls)
-
-            if gn not in gate_unitaries:
-                U = _ot.process_mx_to_unitary(_bt.change_basis(op.to_dense('HilbertSchmidt'),
-                                                               self.basis, 'std'))
-                gate_unitaries[gn] = U
-                availability[gn] = [sslbls]
-            else:
-                availability[gn].append(sslbls)
+            add_availability(opkey, op)
 
         if qubit_labels == 'auto':
             qubit_labels = self.state_space.tensor_product_block_labels(0)

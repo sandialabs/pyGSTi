@@ -17,6 +17,7 @@ from pygsti.protocols import vb as _vb
 from pygsti import tools as _tools
 from pygsti.algorithms import randomcircuit as _rc
 from pygsti.algorithms import rbfit as _rbfit
+from pygsti.algorithms import mirroring as _mirroring
 
 
 class CliffordRBDesign(_vb.BenchmarkingDesign):
@@ -375,7 +376,7 @@ class DirectRBDesign(_vb.BenchmarkingDesign):
 
     @classmethod
     def from_existing_circuits(cls, circuits_and_idealouts_by_depth, qubit_labels=None,
-                               sampler='Qelimination', samplerargs=[], addlocal=False,
+                               sampler='edgegrab', samplerargs=[0.25, ], addlocal=False,
                                lsargs=(), randomizeout=False, cliffordtwirl=True, conditionaltwirl=True,
                                citerations=20, compilerargs=(), partitioned=False,
                                descriptor='A DRB experiment', add_default_protocol=False):
@@ -490,7 +491,7 @@ class DirectRBDesign(_vb.BenchmarkingDesign):
         return self
 
     def __init__(self, pspec, clifford_compilations, depths, circuits_per_depth, qubit_labels=None,
-                 sampler='Qelimination', samplerargs=[],
+                 sampler='edgegrab', samplerargs=[0.25, ],
                  addlocal=False, lsargs=(), randomizeout=False, cliffordtwirl=True, conditionaltwirl=True,
                  citerations=20, compilerargs=(), partitioned=False, descriptor='A DRB experiment',
                  add_default_protocol=False, seed=None, verbosity=1, num_processes=1):
@@ -617,7 +618,7 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
         irrelevant.
 
     sampler : str or function, optional
-        If a string, this should be one of: {'pairingQs', 'Qelimination', 'co2Qgates', 'local'}.
+        If a string, this should be one of: {'edgegrab', 'Qelimination', 'co2Qgates', 'local'}.
         Except for 'local', this corresponds to sampling layers according to the sampling function
         in rb.sampler named circuit_layer_by* (with * replaced by 'sampler'). For 'local', this
         corresponds to sampling according to rb.sampler.circuit_layer_of_oneQgates [which is not
@@ -655,7 +656,8 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
 
     @classmethod
     def from_existing_circuits(cls, circuits_and_idealouts_by_depth, qubit_labels=None,
-                               sampler='Qelimination', samplerargs=(), localclifford=True,
+                               circuit_type='clifford',
+                               sampler='edgegrab', samplerargs=(0.25, ), localclifford=True,
                                paulirandomize=True, descriptor='A mirror RB experiment',
                                add_default_protocol=False):
         """
@@ -672,48 +674,8 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
             of `(circuit, ideal_outcome)` 2-tuples giving each RB circuit and its
             ideal (correct) outcome.
 
-        qubit_labels : list, optional
-            If not None, a list of the qubits that the RB circuit is to be sampled for. This should
-            be all or a subset of the qubits in the device specified by the QubitProcessorSpec `pspec`.
-            If None, it is assumed that the RB circuit should be over all the qubits. Note that the
-            ordering of this list is the order of the ``wires'' in the returned circuit, but is otherwise
-            irrelevant.
-
-        sampler : str or function, optional
-            If a string, this should be one of: {'pairingQs', 'Qelimination', 'co2Qgates', 'local'}.
-            Except for 'local', this corresponds to sampling layers according to the sampling function
-            in rb.sampler named circuit_layer_by* (with * replaced by 'sampler'). For 'local', this
-            corresponds to sampling according to rb.sampler.circuit_layer_of_oneQgates [which is not
-            a valid option for n-qubit MRB -- it results in sim. 1-qubit MRB -- but it is not explicitly
-            forbidden by this function]. If `sampler` is a function, it should be a function that takes
-            as the first argument a QubitProcessorSpec, and returns a random circuit layer as a list of gate
-            Label objects. Note that the default 'Qelimination' is not necessarily the most useful
-            in-built sampler, but it is the only sampler that requires no parameters beyond the QubitProcessorSpec
-            *and* works for arbitrary connectivity devices. See the docstrings for each of these samplers
-            for more information.
-
-        samplerargs : list, optional
-            A list of arguments that are handed to the sampler function, specified by `sampler`.
-            The first argument handed to the sampler is `pspec` and `samplerargs` lists the
-            remaining arguments handed to the sampler.
-
-        localclifford : bool, optional
-            Whether to start the circuit with uniformly random 1-qubit Cliffords and all of the
-            qubits (compiled into the native gates of the device).
-
-        paulirandomize : bool, optional
-            Whether to have uniformly random Pauli operators on all of the qubits before and
-            after all of the layers in the "out" and "back" random circuits. At length 0 there
-            is a single layer of random Pauli operators (in between two layers of 1-qubit Clifford
-            gates if `localclifford` is True); at length l there are 2l+1 Pauli layers as there
-            are
-
-        descriptor : str, optional
-            A string describing the generated experiment. Stored in the returned dictionary.
-
-        add_default_protocol : bool, optional
-            Whether to add a default RB protocol to the experiment design, which can be run
-            later (once data is taken) by using a :class:`DefaultProtocolRunner` object.
+        
+        See init docstring for details on all other parameters.
 
         Returns
         -------
@@ -725,12 +687,13 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
         circuits_per_depth = [len(circuits_and_idealouts_by_depth[d]) for d in depths]
         self = cls.__new__(cls)
         self._init_foundation(depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
+                              circuit_type,
                               sampler, samplerargs, localclifford, paulirandomize, descriptor,
                               add_default_protocol)
         return self
 
-    def __init__(self, pspec, clifford_compilations, depths, circuits_per_depth, qubit_labels=None,
-                 sampler='Qelimination', samplerargs=(),
+    def __init__(self, pspec, depths, circuits_per_depth, qubit_labels=None, circuit_type='clifford',
+                 clifford_compilations=None, sampler='edgegrab', samplerargs=(0.25, ),
                  localclifford=True, paulirandomize=True, descriptor='A mirror RB experiment',
                  add_default_protocol=False, seed=None, num_processes=1, verbosity=1):
 
@@ -749,13 +712,34 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
                 print('- Sampling {} circuits at MRB length {} ({} of {} depths) with seed {}'.format(
                     circuits_per_depth, l, lnum + 1, len(depths), lseed))
 
-            args_list = [(pspec, clifford_compilations['absolute'], l)] * circuits_per_depth
-            kwargs_list = [dict(qubit_labels=qubit_labels, sampler=sampler,
-                                samplerargs=samplerargs, localclifford=localclifford,
-                                paulirandomize=paulirandomize,
-                                seed=lseed + i) for i in range(circuits_per_depth)]
-            results = _tools.mptools.starmap_with_kwargs(_rc.create_mirror_rb_circuit, circuits_per_depth,
-                                                         num_processes, args_list, kwargs_list)
+            # future: port the starmap functionality to the non-clifford case and merge the two methods
+            # by just callling `create_mirror_rb_circuit` but with a different argument.   
+            if circuit_type == 'clifford':
+                args_list = [(pspec, clifford_compilations['absolute'], l)] * circuits_per_depth
+                kwargs_list = [dict(qubit_labels=qubit_labels, sampler=sampler,
+                                    samplerargs=samplerargs, localclifford=localclifford,
+                                    paulirandomize=paulirandomize,
+                                    seed=lseed + i) for i in range(circuits_per_depth)]
+                results = _tools.mptools.starmap_with_kwargs(_rc.create_mirror_rb_circuit, circuits_per_depth,
+                                                             num_processes, args_list, kwargs_list)
+
+            elif circuit_type in ('cz+zxzxz-clifford', 'clifford+zxzxz-haar', 'cz(theta)+zxzxz-haar'):
+                assert(sampler == 'edgegrab'), "Unless circuit_type = 'clifford' the only valid sampler is 'edgegrab'."
+                two_q_gate_density = samplerargs[0]
+                if len(samplerargs) >= 2:
+                    two_q_gate_args_lists = samplerargs[1]
+                else:
+                    # Default sampler arguments.
+                    two_q_gate_args_lists = {'Gczr': [(str(_np.pi / 2),), (str(-_np.pi / 2),)]}
+
+                circs = [_rc.sample_random_cz_zxzxz_circuit(pspec, l // 2, qubit_labels=qubit_labels, two_q_gate_density=two_q_gate_density,
+                                                            two_q_gate_args_lists=two_q_gate_args_lists) for _ in range(circuits_per_depth)]
+
+                mirroring_type = circuit_type.split('-')[0]
+                results = [(a, [b]) for a, b in [_mirroring.create_mirror_circuit(c, pspec, circ_type=mirroring_type) for c in circs]]
+
+            else:
+                raise ValueError('Invalid option for `circuit_type`!')
 
             circuits_at_depth = []
             idealouts_at_depth = []
@@ -767,15 +751,16 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
             ideal_outs.append(idealouts_at_depth)
 
         self._init_foundation(depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
-                              sampler, samplerargs, localclifford, paulirandomize, descriptor,
+                              circuit_type, sampler, samplerargs, localclifford, paulirandomize, descriptor,
                               add_default_protocol)
 
     def _init_foundation(self, depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
-                         sampler, samplerargs, localclifford, paulirandomize, descriptor,
+                         circuit_type, sampler, samplerargs, localclifford, paulirandomize, descriptor,
                          add_default_protocol):
         super().__init__(depths, circuit_lists, ideal_outs, qubit_labels, remove_duplicates=False)
         self.circuits_per_depth = circuits_per_depth
         self.descriptor = descriptor
+        self.circuit_type = circuit_type
         self.sampler = sampler
         self.samplerargs = samplerargs
         self.localclifford = localclifford
