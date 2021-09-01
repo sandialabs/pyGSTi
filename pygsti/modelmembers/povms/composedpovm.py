@@ -457,4 +457,49 @@ class ComposedPOVM(_POVM):
         """
         return self.error_map.errorgen_coefficients(return_basis, logscale_nonham)
 
+    def set_errorgen_coefficients(self, lindblad_term_dict, action="update", logscale_nonham=False, truncate=True):
+        """
+        Sets the coefficients of terms in the error generator of this POVM.
+
+        The dictionary `lindblad_term_dict` has tuple-keys describing the type of term and the basis
+        elements used to construct it, e.g. `('H','X')`.
+
+        Parameters
+        ----------
+        lindblad_term_dict : dict
+            Keys are `(termType, basisLabel1, <basisLabel2>)`
+            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            or `"A"` (Affine).  Hamiltonian and Affine terms always have a
+            single basis label (so key is a 2-tuple) whereas Stochastic tuples
+            have 1 basis label to indicate a *diagonal* term and otherwise have
+            2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
+            terms.  Values are the coefficients of these error generators,
+            and should be real except for the 2-basis-label case.
+
+        action : {"update","add","reset"}
+            How the values in `lindblad_term_dict` should be combined with existing
+            error-generator coefficients.
+
+        logscale_nonham : bool, optional
+            Whether or not the values in `lindblad_term_dict` for non-hamiltonian
+            error generators should be interpreted as error *rates* (of an
+            "equivalent" depolarizing channel, see :method:`errorgen_coefficients`)
+            instead of raw coefficients.  If True, then the non-hamiltonian
+            coefficients are set to `-log(1 - d^2*rate)/d^2`, where `rate` is
+            the corresponding value given in `lindblad_term_dict`.  This is what is
+            performed by the function :method:`set_error_rates`.
+
+        truncate : bool, optional
+            Whether to allow adjustment of the errogen coefficients in
+            order to meet constraints (e.g. to preserve CPTP) when necessary.
+            If False, then an error is thrown when the given coefficients
+            cannot be set as specified.
+
+        Returns
+        -------
+        None
+        """
+        self.error_map.set_errorgen_coefficients(lindblad_term_dict, action, logscale_nonham, truncate)
+        self.dirty = True
+
     #TODO - add more errorgen coefficient related methods as in ComposedOp

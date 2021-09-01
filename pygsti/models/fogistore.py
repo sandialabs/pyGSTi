@@ -397,7 +397,7 @@ class FirstOrderGaugeInvariantStore(object):
              "linearly-dependent!  (Set `dependent_fogi_action='drop'` to ensure directions are independent.)")
         # DENSE - need to use sparse solve to enact sparse pinv on vector TODO
         return _np.dot(_np.linalg.pinv(
-            _np.concatenate((self.fogi_directions.asarray(), self.fogv_directions.asarray()), axis=1).T,
+            _np.concatenate((self.fogi_directions.toarray(), self.fogv_directions.toarray()), axis=1).T,
             rcond=1e-7), _np.concatenate((fogi_components, fogv_components)))
 
     def errorgen_vec_to_opcoeffs(self, errorgen_vec):
@@ -441,7 +441,7 @@ class FirstOrderGaugeInvariantStore(object):
         bins = {}
         dependent_indices = set(self.dependent_dir_indices)  # indices of one set of linearly dep. fogi dirs
         for i, meta in enumerate(self.fogi_metadata):
-            fogi_dir = self.fogi_directions[:, i].asarray()
+            fogi_dir = self.fogi_directions[:, i].toarray()
             label = meta['name']
             label_raw = meta['raw']
             label_abbrev = meta['abbrev']

@@ -1510,7 +1510,7 @@ class ExplicitOpModel(_mdl.OpModel):
                          factor of d2 baked into it.
                 """
                 d2 = _np.sqrt(self.dim); d = _np.sqrt(d2)
-                return {lbl: (val / d if lbl[0] == 'H' else val) for lbl, val in coeffs.items()}
+                return {lbl: (val / d if lbl.errorgen_type == 'H' else val) for lbl, val in coeffs.items()}
 
             op_coeffs = {op_label: rescale(self.operations[op_label].errorgen_coefficients())
                          for op_label in self.operations}
@@ -1573,7 +1573,7 @@ class ExplicitOpModel(_mdl.OpModel):
             used_param_indices.update(param_indices)
 
             for i, lbl in enumerate(lbls):
-                if lbl[0] == 'H':
+                if lbl.errorgen_type == 'H':
                     invDeriv_ham[param_indices, ham_space_labels_indx[(op_label, lbl)]] = inv_deriv[:, i]
                 else:  # lbl[0] == 'S':
                     invDeriv_other[param_indices, other_space_labels_indx[(op_label, lbl)]] = inv_deriv[:, i]
@@ -1812,8 +1812,10 @@ class ExplicitOpModel(_mdl.OpModel):
             ham_ga_matrices[op_label] = _fogit.first_order_ham_gauge_action_matrix(U, ham_basis)
             other_ga_matrices[op_label] = _fogit.first_order_other_gauge_action_matrix(U, other_basis, other_mode)
             errgen_labels = op.errorgen_coefficient_labels()
-            ham_errorgen_coefficient_labels[op_label] = list(filter(lambda lbl: lbl[0] == 'H', errgen_labels))
-            other_errorgen_coefficient_labels[op_label] = list(filter(lambda lbl: lbl[0] == 'S', errgen_labels))
+            ham_errorgen_coefficient_labels[op_label] = list(filter(lambda lbl: lbl.errorgen_type == 'H',
+                                                                    errgen_labels))
+            other_errorgen_coefficient_labels[op_label] = list(filter(lambda lbl: lbl.errogen_type == 'S',
+                                                                      errgen_labels))
             #Note: the *_ga_matrices are built by constructing normalized elem-error-gen-superoperators,
             # acting on them, and using the same superoperators to project the result.  This works fine when
             # the superops are orthogonal (H+S gens) but may not give the right gauge action matrix when they're
@@ -1867,13 +1869,18 @@ class ExplicitOpModel(_mdl.OpModel):
         if not normalized_elem_gens:
             def inv_rescale(coeffs):  # the inverse of the rescaling applied in fogi_errorgen_components_array
                 d2 = _np.sqrt(self.dim); d = _np.sqrt(d2)
-                return {lbl: (val * d if lbl[0] == 'H' else val) for lbl, val in coeffs.items()}
+                return {lbl: (val * d if lbl.errorgen_type == 'H' else val) for lbl, val in coeffs.items()}
         else:
             def inv_rescale(coeffs): return coeffs
 
         for op_label, coeff_dict in op_coeffs.items():
-            raise NotImplementedError('need to "downgrade" elemgen labels in coeff_dict to work with set_errorgen_coefficients')
-            self.operations[op_label].set_errorgen_coefficients(inv_rescale(coeff_dict), truncate=truncate)
+            #TODO: update this conditional to something more robust (same conditiona in fogitools.py too)
+            if isinstance(op_label, str) and op_label.startswith('rho'):
+                self.preps[op_label].set_errorgen_coefficients(inv_rescale(coeff_dict), truncate=truncate)
+            elif isinstance(op_label, str) and op_label.startswith('M'):
+                self.povms[op_label].set_errorgen_coefficients(inv_rescale(coeff_dict), truncate=truncate)
+            else:
+                self.operations[op_label].set_errorgen_coefficients(inv_rescale(coeff_dict), truncate=truncate)
 
 
 class ExplicitLayerRules(_LayerRules):

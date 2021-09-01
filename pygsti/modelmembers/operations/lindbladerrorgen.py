@@ -1141,7 +1141,7 @@ class LindbladErrorgen(_LinearOperator):
         #convert to *global* lindblad terms
         identity_label_1Q = 'I'  # maybe we could get this from a 1Q basis somewhere?
         sslbls = self.state_space.tensor_product_block_labels(0)  # just take first TPB labels as all labels
-        Ltermdict, basis = Ltermdict_and_maybe_basis if return_basis else Ltermdict_and_maybe_basis, None
+        Ltermdict, basis = Ltermdict_and_maybe_basis if return_basis else (Ltermdict_and_maybe_basis, None)
         Ltermdict = _collections.OrderedDict([(_GlobalElementaryErrorgenLabel.cast(k, sslbls, identity_label_1Q), v)
                                               for k, v in Ltermdict.items()])
 
