@@ -10,7 +10,10 @@ Defines the ErrorGeneratorContainer helper class.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import numpy as _np
+
 from pygsti.baseobjs.basis import BuiltinBasis as _BuiltinBasis
+
 
 class ErrorGeneratorContainer(object):
     """

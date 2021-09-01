@@ -1649,7 +1649,7 @@ def lindblad_error_generator(errorgen_type, basis_element_labels, basis_1q, norm
             if len(basis_element_labels) > 1 else Lm
         ret = _lt.nonham_lindbladian(Lm, Ln, sparse)
     else:
-        raise ValueError("Invalid elementary error generator label: %s" % str(label))
+        raise ValueError("Invalid elementary error generator type: %s" % str(errorgen_type))
 
     if normalize:
         normfn = _spsl.norm if sparse else _np.linalg.norm
