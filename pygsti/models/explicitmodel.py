@@ -1538,7 +1538,8 @@ class ExplicitOpModel(_mdl.OpModel):
         # Ingredients:
         #  MX : fogi_coeffs -> op_coeffs  e.g. pinv(ham_fogi_dirs.T)
         #  deriv =  op_params -> op_coeffs  e.g. d(op_coeffs)/d(op_params) implemented by ops
-        #  fogi_deriv = d(fogi_coeffs)/d(fogi_params) : fogi_params -> fogi_coeffs  - near I (these are nearly identical apart from some squaring?)
+        #  fogi_deriv = d(fogi_coeffs)/d(fogi_params) : fogi_params -> fogi_coeffs  - near I (these are
+        #                                                    nearly identical apart from some squaring?)
         #
         #  so:    d(op_params) = inv(Deriv) * MX * fogi_deriv * d(fogi_params)
         #         d(op_params)/d(fogi_params) = inv(Deriv) * MX * fogi_deriv
@@ -1610,21 +1611,22 @@ class ExplicitOpModel(_mdl.OpModel):
         if reduce_to_model_space:
             allowed_lbls = op.errorgen_coefficient_labels()
             allowed_lbls_set = set(allowed_lbls)
-            allowed_row_basis = _ExplicitElementaryErrorgenBasis(self.state_space, allowed_lbls, basis1q=None)  # (Pauli basis)
+            allowed_row_basis = _ExplicitElementaryErrorgenBasis(self.state_space, allowed_lbls, basis1q=None)
             disallowed_indices = [i for i, lbl in enumerate(row_basis.labels) if lbl not in allowed_lbls_set]
 
             if len(disallowed_indices) > 0:
                 disallowed_rows = mx[disallowed_indices, :]  # a sparse (lil) matrix
                 allowed_gauge_linear_combos = _mt.nice_nullspace(disallowed_rows.toarray(), tol=1e-4)  # DENSE for now
                 mx = _sps.csr_matrix(mx.dot(allowed_gauge_linear_combos))  # dot sometimes/always returns dense array
-                op_gauge_space = _ErrorgenSpace(allowed_gauge_linear_combos, op_gauge_basis)  # use DENSE mxs in errogen spaces for now
-                print("DEBUG => mx reduced to ",mx.shape)
+                op_gauge_space = _ErrorgenSpace(allowed_gauge_linear_combos, op_gauge_basis)  # DENSE mxs in eg-spaces
+                print("DEBUG => mx reduced to ", mx.shape)
             else:
                 op_gauge_space = _ErrorgenSpace(_np.identity(len(op_gauge_basis), 'd'), op_gauge_basis)
         else:
             allowed_row_basis = create_complete_basis_fn(all_sslbls)
             op_gauge_space = _ErrorgenSpace(_np.identity(len(op_gauge_basis), 'd'),
-                                            op_gauge_basis)  # do we need to store identity? could we just use the basis as a space here? or 'None' is special?
+                                            op_gauge_basis)
+            # Note: above, do we need to store identity? could we just use the basis as a space here? or 'None'?
 
         # "reshape" mx so rows correspond to allowed_row_basis (the op's allowed labels)
         # (maybe make this into a subroutine?)
@@ -1673,7 +1675,8 @@ class ExplicitOpModel(_mdl.OpModel):
         # their type and support).
 
         def extract_std_target_mx(op):
-            # TODO: more general decomposition of op - here it must be Composed(UnitaryOp, ExpErrorGen) or just ExpErrorGen
+            # TODO: more general decomposition of op - here it must be Composed(UnitaryOp, ExpErrorGen)
+            #       or just ExpErrorGen
             if isinstance(op, _op.ExpErrorgenOp):  # assume just an identity op
                 U = _np.identity(op.state_space.dim, 'd')
             elif isinstance(op, _op.ComposedOp):  # assume first element gives unitary
@@ -1708,18 +1711,19 @@ class ExplicitOpModel(_mdl.OpModel):
             op = self.operations[op_label]
             U = extract_std_target_mx(op)
 
+            # below: special logic for, e.g., 2Q explicit models with 2Q gate matched with Gx:0 label
             target_sslbls = op_label.sslbls if (op_label.sslbls is not None and U.shape[0] < self.state_space.dim) \
-                else self.state_space.tensor_product_block_labels(0)  # special logic for, e.g., 2Q explicit models with 2Q gate matched with Gx:0 label
-            op_gauge_basis = initial_gauge_basis.create_subbasis(target_sslbls)  # pick out the gauge space labels that overlap w/target
+                else self.state_space.tensor_product_block_labels(0)
+            op_gauge_basis = initial_gauge_basis.create_subbasis(target_sslbls)  # gauge space lbls that overlap target
             # Note: can assume gauge action is zero (U acts as identity) on all basis elements not in op_gauge_basis
 
             initial_row_basis = create_complete_basis_fn(target_sslbls)
 
             #support_sslbls, gauge_errgen_basis = get_overlapping_labels(gauge_errgen_space_labels, target_sslbls)
-            print("DEBUG -- ",op_label)
+            print("DEBUG -- ", op_label)
             mx, row_basis = _fogit.first_order_gauge_action_matrix(U, target_sslbls, self.state_space,
                                                                    op_gauge_basis, initial_row_basis)
-            print("DEBUG => mx is ",mx.shape)
+            print("DEBUG => mx is ", mx.shape)
             # Note: mx is a sparse lil matrix
             # mx cols => op_gauge_basis, mx rows => row_basis, as zero rows have already been removed
             # (DONE: - remove all all-zero rows from mx (and corresponding basis labels) )
@@ -1732,7 +1736,7 @@ class ExplicitOpModel(_mdl.OpModel):
             errorgen_coefficient_labels[op_label] = allowed_row_basis.labels
             gauge_action_matrices[op_label] = allowed_rowspace_mx
             gauge_action_gauge_spaces[op_label] = op_gauge_space
-            print("DEBUG => final allowed_rowspace_mx shape =",allowed_rowspace_mx.shape)
+            print("DEBUG => final allowed_rowspace_mx shape =", allowed_rowspace_mx.shape)
 
         # Similar for SPAM
         for prep_label in primitive_prep_labels:
@@ -1740,7 +1744,7 @@ class ExplicitOpModel(_mdl.OpModel):
             v = extract_std_target_vec(prep)
             target_sslbls = prep_label.sslbls if (prep_label.sslbls is not None and v.shape[0] < self.state_space.dim) \
                 else self.state_space.tensor_product_block_labels(0)
-            op_gauge_basis = initial_gauge_basis.create_subbasis(target_sslbls)  # pick out the gauge space labels that overlap w/target
+            op_gauge_basis = initial_gauge_basis.create_subbasis(target_sslbls)  # gauge space lbls that overlap target
             initial_row_basis = create_complete_basis_fn(target_sslbls)
 
             mx, row_basis = _fogit.first_order_gauge_action_matrix_for_prep(v, target_sslbls, self.state_space,
@@ -1760,7 +1764,7 @@ class ExplicitOpModel(_mdl.OpModel):
             target_sslbls = povm_label.sslbls if (povm_label.sslbls is not None
                                                   and vecs[0].shape[0] < self.state_space.dim) \
                 else self.state_space.tensor_product_block_labels(0)
-            op_gauge_basis = initial_gauge_basis.create_subbasis(target_sslbls)  # pick out the gauge space labels that overlap w/target
+            op_gauge_basis = initial_gauge_basis.create_subbasis(target_sslbls)  # gauge space lbls that overlap target
             initial_row_basis = create_complete_basis_fn(target_sslbls)
 
             mx, row_basis = _fogit.first_order_gauge_action_matrix_for_povm(vecs, target_sslbls, self.state_space,
@@ -1774,7 +1778,8 @@ class ExplicitOpModel(_mdl.OpModel):
             gauge_action_matrices[povm_label] = allowed_rowspace_mx
             gauge_action_gauge_spaces[povm_label] = op_gauge_space
 
-        norm_order = 2 # NOTE - this may should be 1 for normalizing 'S' quantities -- FUTURE need to put this intelligence into FOGIStore!
+        norm_order = 2  # NOTE - this may should be 1 for normalizing 'S' quantities
+        #  -- FUTURE need to put this intelligence into FOGIStore!
         self.fogi_store = _FOGIStore(gauge_action_matrices, gauge_action_gauge_spaces,
                                      errorgen_coefficient_labels,  # gauge_errgen_space_labels,
                                      op_label_abbrevs, reduce_to_model_space, dependent_fogi_action,
@@ -1800,7 +1805,8 @@ class ExplicitOpModel(_mdl.OpModel):
         for op_label in primitive_op_labels:  # Note: "ga" stands for "gauge action" in variable names below
             op = self.operations[op_label]
 
-            # TODO: more general decomposition of op - here it must be Composed(UnitaryOp, ExpErrorGen) or just ExpErrorGen
+            # TODO: more general decomposition of op - here it must be Composed(UnitaryOp, ExpErrorGen)
+            #       or just ExpErrorGen
             if isinstance(op, _op.ExpErrorgenOp):  # assume just an identity op
                 U = _np.identity(op.state_space.dim, 'd')
             elif isinstance(op, _op.ComposedOp):  # assume first element gives unitary

@@ -674,7 +674,7 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
             of `(circuit, ideal_outcome)` 2-tuples giving each RB circuit and its
             ideal (correct) outcome.
 
-        
+
         See init docstring for details on all other parameters.
 
         Returns
@@ -713,7 +713,7 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
                     circuits_per_depth, l, lnum + 1, len(depths), lseed))
 
             # future: port the starmap functionality to the non-clifford case and merge the two methods
-            # by just callling `create_mirror_rb_circuit` but with a different argument.   
+            # by just callling `create_mirror_rb_circuit` but with a different argument.
             if circuit_type == 'clifford':
                 args_list = [(pspec, clifford_compilations['absolute'], l)] * circuits_per_depth
                 kwargs_list = [dict(qubit_labels=qubit_labels, sampler=sampler,
@@ -732,11 +732,14 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
                     # Default sampler arguments.
                     two_q_gate_args_lists = {'Gczr': [(str(_np.pi / 2),), (str(-_np.pi / 2),)]}
 
-                circs = [_rc.sample_random_cz_zxzxz_circuit(pspec, l // 2, qubit_labels=qubit_labels, two_q_gate_density=two_q_gate_density,
-                                                            two_q_gate_args_lists=two_q_gate_args_lists) for _ in range(circuits_per_depth)]
+                circs = [_rc.sample_random_cz_zxzxz_circuit(pspec, l // 2, qubit_labels=qubit_labels,
+                                                            two_q_gate_density=two_q_gate_density,
+                                                            two_q_gate_args_lists=two_q_gate_args_lists)
+                         for _ in range(circuits_per_depth)]
 
                 mirroring_type = circuit_type.split('-')[0]
-                results = [(a, [b]) for a, b in [_mirroring.create_mirror_circuit(c, pspec, circ_type=mirroring_type) for c in circs]]
+                results = [(a, [b]) for a, b in [_mirroring.create_mirror_circuit(c, pspec, circ_type=mirroring_type)
+                                                 for c in circs]]
 
             else:
                 raise ValueError('Invalid option for `circuit_type`!')

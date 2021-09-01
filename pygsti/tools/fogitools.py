@@ -43,7 +43,7 @@ def first_order_gauge_action_matrix(clifford_superop_mx, target_sslbls, model_st
             # of finalOp where appropriate, so OK it starts as identity)
             for i, j, gi, gj in dummy_op._iter_matrix_elements('HilbertSchmidt'):
                 embeddedOp[i, j] = mx[gi, gj] * scale
-            #return embeddedOp.tocsr()  # Note: if sparse, assure that this is in CSR or CSC -- probably CSC -- for fast products
+            #return embeddedOp.tocsr()  # Note: if sparse, assure that this is in CSR or CSC for fast products
             return embeddedOp.toarray()
 
     action_mx = _sps.lil_matrix((len(elemgen_row_basis), len(elemgen_gauge_basis)), dtype=clifford_superop_mx.dtype)
@@ -63,16 +63,18 @@ def first_order_gauge_action_matrix(clifford_superop_mx, target_sslbls, model_st
             conjugated_gen = _np.dot(U_expanded, _np.dot(gen_expanded, _np.conjugate(U_expanded.T)))
         gauge_action_deriv = gen_expanded - conjugated_gen  # (on action_space)
 
-        action_row_basis = elemgen_row_basis.create_subbasis(action_sslbls)  # spans all *possible* error generators - a full basis for gauge_action_deriv
+        action_row_basis = elemgen_row_basis.create_subbasis(action_sslbls)  # spans all *possible* error generators
+        # - a full basis for gauge_action_deriv
         #global_row_space.add_labels(row_space.labels)  # labels would need to contain sslbls too
         action_row_labels = action_row_basis.labels
         global_row_indices = elemgen_row_basis.label_indices(action_row_labels)
 
-        # Note: could avoid this projection and conjugation math above if we knew gen was Pauli action and U was clifford (TODO!)
+        # Note: can avoid this projection and conjugation math above if we know gen is Pauli action and U is clifford
         for i, row_label, (gen2_sslbls, gen2) in zip(global_row_indices, action_row_labels,
                                                      action_row_basis.elemgen_supports_and_matrices):
             #if not is_subset(gen2_sslbls, space):
-            #    continue  # no overlap/component when gen2 is nontrivial (and assumed orthogonal to identity) on a factor space where gauge_action_deriv is zero
+            #    continue  # no overlap/component when gen2 is nontrivial (and assumed orthogonal to identity)
+            #              # on a factor space where gauge_action_deriv is zero
 
             gen2_expanded = _embed(gen2, gen2_sslbls, action_space)  # embed gen2 into action_space
             if _sps.issparse(gen2_expanded):
@@ -89,7 +91,8 @@ def first_order_gauge_action_matrix(clifford_superop_mx, target_sslbls, model_st
                     nonzero_row_labels[i] = row_label
                 action_mx[i, j] = val
 
-        #TODO HERE: check that decomposition into components adds to entire gauge_action_deriv (checks "completeness" of row basis
+        #TODO HERE: check that decomposition into components adds to entire gauge_action_deriv
+        #  (checks "completeness" of row basis)
 
     #return action_mx
 
@@ -135,7 +138,7 @@ def first_order_gauge_action_matrix_for_prep(prep_superket_vec, target_sslbls, m
             # of finalOp where appropriate, so OK it starts as identity)
             for i, j, gi, gj in dummy_op._iter_matrix_elements('HilbertSchmidt'):
                 embeddedOp[i, j] = mx[gi, gj] * scale
-            #return embeddedOp.tocsr()  # Note: if sparse, assure that this is in CSR or CSC -- probably CSC -- for fast products
+            #return embeddedOp.tocsr()  # Note: if sparse, assure that this is in CSR or CSC for fast products
             return embeddedOp.toarray()
 
     element_action_mx = _sps.lil_matrix((prep_superket_vec.shape[0], len(elemgen_gauge_basis)),
@@ -156,7 +159,7 @@ def first_order_gauge_action_matrix_for_prep(prep_superket_vec, target_sslbls, m
     #To identify set of vectors {v_i} such that {element_action_mx * v_i} span the range of element_action_mx,
     # we find the SVD of element_action_mx and use the columns of V:
     TOL = 1e-7
-    U, s, Vh = _np.linalg.svd(element_action_mx.toarray(), full_matrices=False)  # DENSE - could perhaps use sparse SVD here?
+    U, s, Vh = _np.linalg.svd(element_action_mx.toarray(), full_matrices=False)  # DENSE - use sparse SVD here?
     n = _np.count_nonzero(s > TOL)
     relevant_basis = Vh[0:n, :].T.conjugate()
 
@@ -223,7 +226,7 @@ def first_order_gauge_action_matrix_for_povm(povm_superbra_vecs, target_sslbls, 
             # of finalOp where appropriate, so OK it starts as identity)
             for i, j, gi, gj in dummy_op._iter_matrix_elements('HilbertSchmidt'):
                 embeddedOp[i, j] = mx[gi, gj] * scale
-            #return embeddedOp.tocsr()  # Note: if sparse, assure that this is in CSR or CSC -- probably CSC -- for fast products
+            #return embeddedOp.tocsr()  # Note: if sparse, assure that this is in CSR or CSC for fast products
             return embeddedOp.toarray()
 
     element_action_mx = _sps.lil_matrix((sum([v.shape[0] for v in povm_superbra_vecs]), len(elemgen_gauge_basis)),
@@ -247,7 +250,7 @@ def first_order_gauge_action_matrix_for_povm(povm_superbra_vecs, target_sslbls, 
     #To identify set of vectors {v_i} such that {element_action_mx * v_i} span the range of element_action_mx,
     # we find the SVD of element_action_mx and use the columns of V:
     TOL = 1e-7
-    U, s, Vh = _np.linalg.svd(element_action_mx.toarray(), full_matrices=False)  # DENSE - could perhaps use sparse SVD here?
+    U, s, Vh = _np.linalg.svd(element_action_mx.toarray(), full_matrices=False)  # DENSE - use sparse SVD here?
     n = _np.count_nonzero(s > TOL)
     relevant_basis = Vh[0:n, :].T.conjugate()
 
@@ -409,7 +412,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
     #Step 1: construct FOGI quantities and reference frame for each op
     ccomms = {}
 
-    fogi_dirs = _sps.csc_matrix((num_elem_errgens, 0), dtype=complex)  # columns = dual vectors ("directions") in error-gen space
+    fogi_dirs = _sps.csc_matrix((num_elem_errgens, 0), dtype=complex)  # dual vectors ("directions") in eg-set space
     fogi_meta = []  # elements correspond to matrix columns
 
     dep_fogi_dirs = _sps.csc_matrix((num_elem_errgens, 0), dtype=complex)  # dependent columns we still want to track
@@ -443,15 +446,6 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
 
         return resulting_dirs
 
-
-    #fogi_gaugespace_dirs = []  # columns
-    #fogi_opsets = []    
-    #fogi_rs = _np.zeros(0, 'd')
-    #fogi_names = []
-    #fogi_abbrev_names = []
-    #
-    #dependent_vec_indices = []
-
     for op_label in primitive_op_labels:
         print("##", op_label)
         ga = gauge_action_matrices[op_label]
@@ -483,7 +477,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
         # of errorgen-superops arising from *un-normalized* (traditional) Pauli matrices.
         local_fogi_vecs = _mt.normalize_columns(local_fogi_dirs, ord=norm_order)  # this gives us *vec*-norm we want
         vector_L2_norm2s = [_np.linalg.norm(local_fogi_vecs[:, j])**2 for j in range(local_fogi_vecs.shape[1])]
-        local_fogi_dirs = local_fogi_vecs / _np.array(vector_L2_norm2s)[None, :]  # gives us *dir*-norm we want  # DUAL NORM
+        local_fogi_dirs = local_fogi_vecs / _np.array(vector_L2_norm2s)[None, :]  # gives *dir*-norm we want # DUAL NORM
         print("  New intrinsic qtys = ", local_fogi_dirs.shape[1])
         #assert(_np.linalg.norm(local_fogi_dirs.imag) < 1e-6)  # ok for H+S but not for CPTP models
 
@@ -496,7 +490,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
         #assert(_mt.columns_are_orthogonal(fogi_dirs))  # sparse version?
 
         #REMOVE fogi_rs = _np.concatenate((fogi_rs, _np.zeros(local_fogi_dirs.shape[1], 'd')))
-        #REMOVE fogi_gaugespace_dirs.extend([None] * new_fogi_dirs.shape[1])  # local qtys don't have corresp. gauge dirs
+        #REMOVE fogi_gaugespace_dirs.extend([None] * new_fogi_dirs.shape[1])  # local qtys don't have corresp gauge dirs
         #REMOVE fogi_opsets.extend([(op_label,)] * new_fogi_dirs.shape[1])
 
         #LABELS
@@ -668,9 +662,10 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                         #
                         #    print("Test restricted to intersection space:")
                         #    restricted_ga = _np.dot(gauge_action, intersection_space)
-                        #    restricted_inv_diff_gauge_action = _np.concatenate((_np.linalg.pinv(restricted_ga[0:n, :], rcond=1e-7),
-                        #                                                        -_np.linalg.pinv(restricted_ga[n:, :], rcond=1e-7)),
-                        #                                                       axis=1).T
+                        #    restricted_inv_diff_gauge_action = _np.concatenate(
+                        #                    (_np.linalg.pinv(restricted_ga[0:n, :], rcond=1e-7),
+                        #                     -_np.linalg.pinv(restricted_ga[n:, :], rcond=1e-7)),
+                        #                     axis=1).T
                         #    restricted_local_fogi_dirs = restricted_inv_diff_gauge_action
                         #    print(_np.linalg.norm(_np.dot(gauge_action.T, restricted_local_fogi_dirs)))
                         #    ga = restricted_ga[0:n, :]
@@ -1080,7 +1075,7 @@ def op_elem_vec_name(vec, elem_op_labels, op_label_abbrevs):
         bels = elem_lbl.basis_element_labels
 
         sslbls_str = ''.join(map(str, sslbls))
-        val = vec[i][0,0] if _sps.issparse(vec[i]) else vec[i]
+        val = vec[i][0, 0] if _sps.issparse(vec[i]) else vec[i]
         if abs(val) < 1e-6: continue
         sign = ' + ' if val > 0 else ' - '
         abs_val_str = '' if _np.isclose(abs(val), 1.0) else ("%g " % abs(val))  # was %.1g

@@ -34,9 +34,6 @@ class ModelParamsInterposer(object):
         assert(self.num_params == self.num_op_params)
         return _np.identity(self.num_params, 'd')
 
-    def ops_paramlbls_to_model_paramlbls(self, w):
-        return w
-
 
 class LinearInterposer(ModelParamsInterposer):
     """
@@ -64,7 +61,7 @@ class LinearInterposer(ModelParamsInterposer):
         # This can and should be improved later - particularly this will be awful when labels (els of wl) are tuples.
         ret = []
         for irow in range(self.inv_transform_matrix.shape[0]):
-            lbl = ' + '.join(["%g%s" % (coeff, str(lbl)) for coeff, lbl in zip(self.inv_transform_matrix[irow,:], wl)])
+            lbl = ' + '.join(["%g%s" % (coeff, str(lbl)) for coeff, lbl in zip(self.inv_transform_matrix[irow, :], wl)])
             ret.append(lbl)
         return ret
 

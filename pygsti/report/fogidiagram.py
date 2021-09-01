@@ -239,7 +239,7 @@ class FOGIDiagram(object):
             if self.impact_mode == 'max':
                 for op_label in op_set:
                     errgen_vec = _np.dot(self.fogi_stores[si].gauge_action_for_op[op_label], gauge_dir)
-                    errgen_op = _create_errgen_op(errgen_vec, self.gauge_basis_mxs)  # NOTE: won't work for reduced models
+                    errgen_op = _create_errgen_op(errgen_vec, self.gauge_basis_mxs)  # WON'T work for reduced models
                     ret[op_label] = _mt.jamiolkowski_angle(errgen_op)  # impact angle for op_label
             elif self.impact_mode == 'current':
                 # use partition the current gauge's errorgen-vec, after projecting onto the given (relational) FOGI
@@ -249,7 +249,7 @@ class FOGIDiagram(object):
                 projected_e = _np.dot(_np.linalg.pinv(fogi_dirs).T, comps)
                 for op_label in op_set:
                     errgen_vec = projected_e[self.fogi_stores[si].op_errorgen_indices[op_label]]
-                    errgen_op = _create_errgen_op(errgen_vec, self.gauge_basis_mxs)  # NOTE: won't work for reduced models
+                    errgen_op = _create_errgen_op(errgen_vec, self.gauge_basis_mxs)  # WON'T work for reduced models
                     ret[op_label] = _mt.jamiolkowski_angle(errgen_op)  # impact angle for op_label
 
             ret['min_jangle'] = min([v for k, v in ret.items() if k != 'go_jangle'])
@@ -1199,9 +1199,9 @@ class FOGIStackedBarDiagram(FOGIDiagram):
         super().__init__(fogi_stores, op_coefficients, model_dim, op_to_target_qubits, impact_mode)
 
     def render_svg(self, outfile=None, cell_fontsize=10, axes_fontsize=10, qty_key='bytarget'):
-        d = _draw.Drawing(600, 600, origin='center', displayInline=False)
+        #d = _draw.Drawing(600, 600, origin='center', displayInline=False)
 
-        barplot_infos = {}  # want to index this dict by [op_label][err_type][intrinsic_or_relative][support][Species]
+        #barplot_infos = {}  # want to index this dict by [op_label][err_type][intrinsic_or_relative][support][Species]
         # and have result be a list of ?
         for op_set, op_fogi_infos_by_type in self.fogi_infos.items():
             pass

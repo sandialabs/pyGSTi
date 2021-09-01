@@ -20,10 +20,10 @@ def _calculate_summary_statistic(x, statistic, lower_cutoff=None):
     of statistic(x) and lower_cutoff if lower_cutoff is not None.
     """
     if len(x) == 0 or _np.all(_np.isnan(x)): return _np.NaN
-    if statistic == 'mean': func = _np.nanmean  
+    if statistic == 'mean': func = _np.nanmean
     elif statistic == 'max' or statistic == 'monotonic_max': func = _np.nanmax
     elif statistic == 'min' or statistic == 'monotonic_min': func = _np.nanmin
-    elif statistic == 'min_w_nan': func = _np.min 
+    elif statistic == 'min_w_nan': func = _np.min
     else:
         raise ValueError("{} is an unknown statistic!".format(statistic))
     v = func(x)
@@ -54,14 +54,14 @@ def classify_circuit_shape(success_probabilities, total_counts, threshold, signi
     Utility function for computing "capability regions", as introduced in "Measuring the
     Capabilities of Quantum Computers" arXiv:2008.11294.
 
-    Returns an integer that classifies the input list of success probabilities (SPs) as 
-    either 
+    Returns an integer that classifies the input list of success probabilities (SPs) as
+    either
 
     -- "success": all SPs above the specified threshold, specified by the int 2.
     -- "indeterminate": some SPs are above and some are below the threshold, specified by the int 1.
     -- "fail": all SPs are below the threshold, specified by the int 0.
 
-    This classification is based on a hypothesis test whereby the null hypothesis is "success" 
+    This classification is based on a hypothesis test whereby the null hypothesis is "success"
     or "fail". That is, the set of success probabilities are designated to be "indeterminate"
     only if there is statistically significant evidence that at least one success probabilities
     is above the threshold, and at least one is below. The details of this hypothesis testing
@@ -93,9 +93,9 @@ def classify_circuit_shape(success_probabilities, total_counts, threshold, signi
     # NaN data is typically used to correspond to execution failure. If all of the circuits
     # fail to execute we classify this as "fail" (set here), but otherwise we ignore any
     # NaN instances.
-    if all([_np.isnan(s) for s in success_probabilities]): 
+    if all([_np.isnan(s) for s in success_probabilities]):
         return 0
-    
+
     def pVal(p, total_counts, threshold, direction):
         """
         The p-value for a log-likelihood ratio test for whether p is above or below
@@ -108,11 +108,11 @@ def classify_circuit_shape(success_probabilities, total_counts, threshold, signi
         llr = -2 * s * (_np.log(threshold) - _np.log(p))
         llr += -2 * (total_counts - s) * (_np.log(1 - threshold) - _np.log(1 - p))
         return 1 - _chi2.cdf(llr, 1)
-    
+
     # Calculates the p values. This ignores nan values in the success probabilitis list.
     pvalsAbove = [pVal(p, c, threshold, 'above') for p, c in zip(success_probabilities, total_counts) if c > 0]
     pvalsBelow = [pVal(p, c, threshold, 'below') for p, c in zip(success_probabilities, total_counts) if c > 0]
-    
+
     # Implements the hypothesis test (this is a Benjamini-Hochberg test).
     pvalsAbove.sort()
     pvalsBelow.sort()
@@ -121,7 +121,7 @@ def classify_circuit_shape(success_probabilities, total_counts, threshold, signi
     test_below = [pval < significance * (k + 1) / m for k, pval in enumerate(pvalsBelow)]
     reject_all_above = any(test_above)
     reject_all_below = any(test_below)
-    
+
     # If the hypothesis test doesn't reject the hypothesis that they're all above the threshold, and it does
     # reject the hypothesis that they're all below the threshold we say that all the circuits
     # suceeded.
@@ -132,7 +132,7 @@ def classify_circuit_shape(success_probabilities, total_counts, threshold, signi
     # failed.
     elif (not reject_all_below) and reject_all_above:
         return 0
-    # If we're certain that there's at least one circuit above the threshold and at least one below, we 
+    # If we're certain that there's at least one circuit above the threshold and at least one below, we
     # say that this is an "indeterminate" shape.
     elif reject_all_above and reject_all_below:
         return 1
@@ -161,7 +161,7 @@ class VBDataFrame(object):
 
         Parameters
         ----------
-        df : Pandas DataFrame 
+        df : Pandas DataFrame
             A DataFrame that contains the volumetric benchmarking data. This sort of
             DataFrame can be created using ByBepthSummaryStatics protocols and the
             to_dataframe() method of the created results object.
@@ -183,12 +183,12 @@ class VBDataFrame(object):
         edesign : ExperimentDesign or None, optional
             The ExperimentDesign that corresponds to the data in the dataframe. This
             is not currently used by any methods in the VBDataFrame.
-        """        
+        """
         self.dataframe = df
         self.x_axis = x_axis
         self.y_axis = y_axis
         self.edesign = edesign
-        
+
         if x_values is None:
             self.x_values = list(set(df[x_axis]))
             self.x_values.sort()
@@ -202,7 +202,7 @@ class VBDataFrame(object):
 
     def select_column_value(self, column_label, column_value):
         """
-        Filters the dataframe, by discarding all rows of the 
+        Filters the dataframe, by discarding all rows of the
         dataframe for which the column labelled `column_label`
         does not have `column_value`.
 
@@ -222,12 +222,12 @@ class VBDataFrame(object):
         """
         df = self.dataframe[self.dataframe[column_label] == column_value]
         return VBDataFrame(df, self.x_axis, self.y_axis, self.x_values.copy(), self.y_values.copy(), self.edesign)
-    
+
     def filter_data(self, column_label, metric='polarization', statistic='mean', indep_x=True, threshold=1 / _np.e,
                     verbosity=0):
         """
         Filters the dataframe, by selecting the "best" value at each (x, y) (typically corresponding to circuit
-        shape) for the column specified by `column_label`. Returns a VBDataFrame whose data that contains only 
+        shape) for the column specified by `column_label`. Returns a VBDataFrame whose data that contains only
         one value for the column labelled by `column_label` for each (x, y).
 
         Parameters
@@ -262,7 +262,7 @@ class VBDataFrame(object):
         Returns
         -------
         VBDataFrame
-            A new VBDataFrame that has had the filtering applied to its dataframe. 
+            A new VBDataFrame that has had the filtering applied to its dataframe.
         """
         df = self.dataframe.copy()
 
@@ -290,7 +290,7 @@ class VBDataFrame(object):
                         # column_label does not equal column_value_selection
                         df = df[(df[column_label] == column_value_selection) | (df[self.y_axis] != y)
                                 | (df[self.x_axis] != x)]
-                        
+
         else:
             for y in self.y_values:
                 tempdf_y = df[df[self.y_axis] == y]
@@ -307,7 +307,7 @@ class VBDataFrame(object):
                     current_best_selections = []
                     current_best_selections_score = []
                     for cv in possible_column_values:
-                        scores_for_cv = [_calculate_summary_statistic(tempdf_y[(tempdf_y[column_label] == cv) 
+                        scores_for_cv = [_calculate_summary_statistic(tempdf_y[(tempdf_y[column_label] == cv)
                                          & (tempdf_y[self.x_axis] == x)][metric], statistic)for x in self.x_values]
                         above_threshold = [s > threshold if not _np.isnan(s) else _np.nan for s in scores_for_cv]
                         try:
@@ -331,7 +331,7 @@ class VBDataFrame(object):
 
                     best_selection_index = _np.argmax(current_best_selections_score)
                     column_value_selection = current_best_selections[best_selection_index]
-                    
+
                     if verbosity > 0:
                         print('at {} = {}, selected {}'.format(self.y_axis, y, column_value_selection))
                     # For all rows where self.y_axis value is y, filter out all values where column_label does
@@ -344,8 +344,8 @@ class VBDataFrame(object):
         """
         Converts the data into a dictionary, for plotting in a volumetric benchmarking plot. For each
         (x, y) value (as specified by the axes of this VBDataFrame, and typically circuit shape),
-        pools all of the data specified by `metric` with that (x, y) and computes the statistic on 
-        that data defined by `statistic`. 
+        pools all of the data specified by `metric` with that (x, y) and computes the statistic on
+        that data defined by `statistic`.
 
         Parameters
         ----------
@@ -360,7 +360,7 @@ class VBDataFrame(object):
             - 'mean': the mean.
             - 'monotonic_max': the maximum of all the data with (x, y) values that are that large or larger
             - 'monotonic_min': the minimum of all the data with (x, y) values that are that small or smaller
-        
+
         All these options ignore nan values.
 
         lower_cutoff : float, optional
@@ -373,7 +373,7 @@ class VBDataFrame(object):
             - If 'nan' then when there is no data, or only NaN data, for an (x,y) value then this (x,y)
               value will be a key in the returned dictionary and its value will be NaN.
             - If 'min' then when there is no data, or only NaN data, for an (x,y) value then this (x,y)
-              value will be a key in the returned dictionary and its value will be the minimal value 
+              value will be a key in the returned dictionary and its value will be the minimal value
               allowed for this statistic, as specified by `lower_cutoff`.
 
         Returns
@@ -402,14 +402,14 @@ class VBDataFrame(object):
                         vb[x, y] = _np.nan
                 else:
                     vb[x, y] = _calculate_summary_statistic(tempdf_xy[metric], statistic, lower_cutoff=lower_cutoff)
-                
+
         return vb
 
     def capability_regions(self, metric='polarization', threshold=1 / _np.e, significance=0.05, monotonic=True,
                            nan_data_action='discard'):
         """
-        Computes a "capability region" from the data,  as introduced in "Measuring the Capabilities of Quantum 
-        Computers" arXiv:2008.11294. Classifies each (x,y) value (as specified by the x and y axes of 
+        Computes a "capability region" from the data,  as introduced in "Measuring the Capabilities of Quantum
+        Computers" arXiv:2008.11294. Classifies each (x,y) value (as specified by the x and y axes of
         the VBDataFrame, which are typically width and depth) as either "success" (the int 2), "indeterminate"
         (the int 1), "fail" (the int 0), or "no data" (NaN).
 
@@ -457,8 +457,8 @@ class VBDataFrame(object):
                         sp_threshold = 0  # Doesn't matter what the threshold is as there's no data.
                 else:
                     sp_threshold = threshold
- 
-                capreg[x, y] = classify_circuit_shape(tempdf_xy['success_probabilities'], tempdf_xy['total_counts'], 
+
+                capreg[x, y] = classify_circuit_shape(tempdf_xy['success_probabilities'], tempdf_xy['total_counts'],
                                                       sp_threshold, significance)
 
         if monotonic:
@@ -466,7 +466,7 @@ class VBDataFrame(object):
                 for i, y in enumerate(self.y_values[1:]):
                     if capreg[x, y] > capreg[x, self.y_values[i]]:
                         capreg[x, y] = capreg[x, self.y_values[i]]
-            for y in self.y_values:       
+            for y in self.y_values:
                 for i, x in enumerate(self.x_values[1:]):
                     if capreg[x, y] > capreg[self.x_values[i], y]:
                         capreg[x, y] = capreg[self.x_values[i], y]

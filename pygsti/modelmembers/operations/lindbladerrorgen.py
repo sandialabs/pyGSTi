@@ -1320,7 +1320,7 @@ class LindbladErrorgen(_LinearOperator):
         lindblad_term_dict = _collections.OrderedDict(
             [(_GlobalElementaryErrorgenLabel.cast(k, sslbls, identity_label_1Q), v)
              for k, v in lindblad_term_dict.items()])
-        
+
         if action == "reset":
             for k in existing_Ltermdict:
                 existing_Ltermdict[k] = 0.0

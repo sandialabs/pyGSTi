@@ -476,7 +476,7 @@ class StateSpace(object):
         ret_tpb_udims = []
         ret_tpb_types = []
 
-        #Step 1: add all of the labels of `self`, checking that overlaps are consistent as we go:
+        # Step 1: add all of the labels of `self`, checking that overlaps are consistent as we go:
         for iTPB, (lbls, udims, typs) in enumerate(zip(self.tensor_product_blocks_labels,
                                                        self.tensor_product_blocks_udimensions,
                                                        self.tensor_product_blocks_types)):
@@ -496,8 +496,7 @@ class StateSpace(object):
             ret_tpb_udims.append(ret_udims)
             ret_tpb_types.append(ret_types)
 
-
-        #Step 2: add any non-overlapping labels from other_state_space
+        # Step 2: add any non-overlapping labels from other_state_space
         for iTPB, (lbls, udims, typs) in enumerate(zip(other_state_space.tensor_product_blocks_labels,
                                                        other_state_space.tensor_product_blocks_udimensions,
                                                        other_state_space.tensor_product_blocks_types)):

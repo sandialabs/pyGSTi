@@ -74,7 +74,7 @@ class GlobalElementaryErrorgenLabel(ElementaryErrorgenLabel):
             return obj
         elif isinstance(obj, LocalElementaryErrorgenLabel):
             assert(sslbls is not None), "Cannot convert local -> global elementary errogen label without `sslbls`!"
-            nonidentity_indices = [i for i in range(len(sslbls)) \
+            nonidentity_indices = [i for i in range(len(sslbls))
                                    if any([bel[i] != identity_label for bel in obj.basis_element_labels])]
             global_bels = []
             for local_bel in obj.basis_element_labels:

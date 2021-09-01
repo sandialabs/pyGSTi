@@ -124,14 +124,16 @@ class FirstOrderGaugeInvariantStore(object):
         #                    for nm in _fogit.elem_vec_names(gauge_space_directions, gauge_elemgen_labels)]
 
         #Get gauge-space directions corresponding to the fogv directions
+        # (pinv_allop_gauge_action takes errorgen-set -> gauge-gen space)
         self.allop_gauge_action = allop_gauge_action
-        pinv_allop_gauge_action = _np.linalg.pinv(self.allop_gauge_action.toarray(), rcond=1e-7)  # errgen-set -> gauge-gen space
+        pinv_allop_gauge_action = _np.linalg.pinv(self.allop_gauge_action.toarray(), rcond=1e-7)
         gauge_space_directions = _np.dot(pinv_allop_gauge_action, self.fogv_directions)  # in gauge-generator space
         self.gauge_space_directions = gauge_space_directions
 
         #Notes on error-gen vs gauge-gen space:
         # self.fogi_directions and self.fogv_directions are dual vectors in error-generator space,
-        # i.e. with elements corresponding to the elementary error generators given by self.errorgen_space_op_elem_labels
+        # i.e. with elements corresponding to the elementary error generators given by
+        # self.errorgen_space_op_elem_labels.
         # self.fogi_gaugespace_directions contains, when applicable, a gauge-space direction that
         # correspondings to the FOGI quantity in self.fogi_directions.  Such a gauge-space direction
         # exists for relational FOGI quantities, where the FOGI quantity is constructed by taking the
@@ -147,12 +149,13 @@ class FirstOrderGaugeInvariantStore(object):
             fogi_dirs = self.fogi_directions.toarray()  # don't bother with sparse math yet
             fogv_dirs = self.fogv_directions.toarray()
 
-            # We must reduce X_gauge_action to the "in-model gauge space" before testing whether the computed vecs are FOGI:
+            # We must reduce X_gauge_action to the "in-model gauge space" before testing if the computed vecs are FOGI:
             assert(_np.linalg.norm(_np.dot(self.allop_gauge_action.toarray().T, fogi_dirs)) < 1e-8)
 
             #Check that pseudo-inverse was computed correctly (~ matrices are full rank)
-            # fogi_coeffs = dot(fogi_directions.T, elem_errorgen_vec), where elem_errorgen_vec is filled from model params,
-            #                 since fogi_directions columns are *dual* vectors in error-gen space.  Thus, to go in reverse:
+            # fogi_coeffs = dot(fogi_directions.T, elem_errorgen_vec), where elem_errorgen_vec is filled from model
+            #                 params, since fogi_directions columns are *dual* vectors in error-gen space.  Thus,
+            #                 to go in reverse:
             # elem_errogen_vec = dot(pinv_fogi_dirs_T, fogi_coeffs), where dot(fogi_directions.T, pinv_fogi_dirs_T) == I
             # (This will only be the case when fogi_vecs are linearly independent, so when dependent_indices == 'drop')
 
@@ -238,7 +241,8 @@ class FirstOrderGaugeInvariantStore(object):
         self.norm_order = norm_order
 
         self.errorgen_space_labels = [(op_label, elem_lbl) for op_label in self.primitive_op_labels
-                                      for elem_lbl in self.elem_errorgen_labels_by_op[op_label]]  # same as flattened self.errgen_space_op_elem_labels
+                                      for elem_lbl in self.elem_errorgen_labels_by_op[op_label]]
+        # above is same as flattened self.errgen_space_op_elem_labels
         assert(len(self.errorgen_space_labels) == self.fogi_directions.shape[0])
 
         #fogv_directions = _mt.nice_nullspace(self.fogi_directions.T)  # can be dependent!
@@ -451,7 +455,7 @@ class FirstOrderGaugeInvariantStore(object):
             present_elgen_indices = _np.where(_np.abs(fogi_dir) > tol)[0]
 
             #Aggregate elemgen_info data for all elemgens that contribute to this FOGI qty (as determined by `tol`)
-            ops_involved = set(); qubits_acted_upon = set(); types = set(); # basismx = None
+            ops_involved = set(); qubits_acted_upon = set(); types = set()  # basismx = None
             for k in present_elgen_indices:
                 k_info = elemgen_info[k]
                 ops_involved.add(k_info['op_label'])
