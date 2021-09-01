@@ -2329,7 +2329,7 @@ def lindblad_terms_to_projections(lindblad_term_dict, basis, other_mode="all"):
                 if bels[0] not in otherBasisLabels:
                     otherBasisLabels.append(bels[0])
             else:
-                assert(len(bels) == 3), "Stochastic term labels should have form ('S',<bel1>, <bel2>)"
+                assert(len(bels) == 2), "Stochastic term labels should have form ('S',<bel1>, <bel2>)"
                 if bels[0] not in otherBasisLabels:
                     otherBasisLabels.append(bels[0])
                 if bels[1] not in otherBasisLabels:

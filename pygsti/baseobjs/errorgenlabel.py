@@ -39,6 +39,8 @@ class LocalElementaryErrorgenLabel(ElementaryErrorgenLabel):
             return cls(obj.errorgen_type, local_bels)
         elif isinstance(obj, str):
             return cls(obj[0], (obj[1:],))  # e.g. "HXX" => ('H','XX')
+        elif isinstance(obj, (tuple, list)):
+            return cls(obj[0], obj[1:])  # e.g. ('H','XX') or ('S', 'X', 'Y')
         else:
             raise ValueError("Cannot convert %s to a local elementary errorgen label!" % str(obj))
 
