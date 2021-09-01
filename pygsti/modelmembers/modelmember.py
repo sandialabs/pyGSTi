@@ -626,7 +626,6 @@ class ModelMember(ModelChild):
         mm_dict['module'] =  self.__module__
         mm_dict['class'] = self.__class__.__name__
         mm_dict['submembers'] = []
-        mm_dict['params'] = list(self.to_vector())
         mm_dict['state_space'] = str(self.state_space)
         mm_dict['evotype'] = str(self.evotype)
         
@@ -654,7 +653,7 @@ class ModelMember(ModelChild):
         mm_dict: dict
             A dict representation of this ModelMember ready for deserialization
             This must have at least the following fields:
-                type, submembers, params, state_space, evotype
+                module, class, submembers, state_space, evotype
 
         serial_memo: dict
             Keys are serialize_ids and values are ModelMembers. This is NOT the same as
@@ -667,7 +666,7 @@ class ModelMember(ModelChild):
         ModelMember
             An initialized object
         """
-        needed_tags = ['module', 'class', 'submembers', 'params', 'state_space', 'evotype']
+        needed_tags = ['module', 'class', 'submembers', 'state_space', 'evotype']
         assert all([tag in mm_dict.keys() for tag in needed_tags]), 'Must provide all needed tags: %s' % needed_tags
         
         assert mm_dict['module'] == cls.__module__.name, "Module must match"
@@ -675,7 +674,6 @@ class ModelMember(ModelChild):
         assert len(mm_dict['submembers']) == 0, 'ModelMember base class has no submembers'
 
         obj = cls(mm_dict['state_space'], mm_dict['evotype'])
-        obj.from_vector(mm_dict['params'])
 
         return obj
 

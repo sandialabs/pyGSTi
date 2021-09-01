@@ -5,9 +5,7 @@ from pygsti.modelpacks import smq2Q_XYICNOT
 from pygsti.modelmembers import operations as _op
 from pygsti.processors import QubitProcessorSpec
 
-import sys
-sys.path.append('..')
-from util import BaseCase
+from ..util import BaseCase
 
 
 class TestModelMemberGraph(BaseCase):

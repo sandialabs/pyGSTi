@@ -10,6 +10,7 @@ The DenseOperator class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from collections import OrderedDict
 import copy as _copy
 
 import numpy as _np
@@ -315,6 +316,30 @@ class DenseOperator(DenseOperatorInterface, _LinearOperator):
         numpy.ndarray
         """
         return self._rep.to_dense(on_space)  # both types of possible reps implement 'to_dense'
+    
+    def to_memoized_dict(self, mmg_memo):
+        """Create a serializable dict with references to other objects in the memo.
+
+        Parameters
+        ----------
+        mmg_memo: dict
+            Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
+            are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
+            the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
+        
+        Returns
+        -------
+        mm_dict: dict
+            A dict representation of this ModelMember ready for serialization
+            This must have at least the following fields:
+                module, class, submembers, params, state_space, evotype
+            Additional fields may be added by derived classes.
+        """
+        mm_dict = super().to_memoized_dict(mmg_memo)
+
+        mm_dict['dense_matrix'] = self.to_dense().tolist()
+
+        return mm_dict
 
 
 class DenseUnitaryOperator(DenseOperatorInterface, _LinearOperator):
@@ -491,3 +516,27 @@ class DenseUnitaryOperator(DenseOperatorInterface, _LinearOperator):
             self.dirty = True
         else:
             raise ValueError("Invalid transform for this DenseUnitaryOperation: type %s" % str(type(s)))
+    
+    def to_memoized_dict(self, mmg_memo):
+        """Create a serializable dict with references to other objects in the memo.
+
+        Parameters
+        ----------
+        mmg_memo: dict
+            Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
+            are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
+            the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
+        
+        Returns
+        -------
+        mm_dict: dict
+            A dict representation of this ModelMember ready for serialization
+            This must have at least the following fields:
+                module, class, submembers, params, state_space, evotype
+            Additional fields may be added by derived classes.
+        """
+        mm_dict = super().to_memoized_dict(mmg_memo)
+        
+        mm_dict['dense_matrix'] = self.to_dense().tolist()
+
+        return mm_dict
