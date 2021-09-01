@@ -65,6 +65,7 @@ class FirstOrderGaugeInvariantStore(object):
                                                                          self.elem_errorgen_labels_by_op)
         self.errorgen_space_op_elem_labels = tuple([(op_label, elem_lbl) for op_label in self.primitive_op_labels
                                                     for elem_lbl in self.elem_errorgen_labels_by_op[op_label]])
+        # above is same as flattened self.elem_errorgen_labels_by_op - labels final "row basis" of fogi dirs
 
         num_elem_errgens = sum([len(labels) for labels in self.elem_errorgen_labels_by_op.values()])
         allop_gauge_action = _sps.lil_matrix((num_elem_errgens, self.gauge_space.vectors.shape[1]), dtype=complex)
@@ -242,7 +243,7 @@ class FirstOrderGaugeInvariantStore(object):
 
         self.errorgen_space_labels = [(op_label, elem_lbl) for op_label in self.primitive_op_labels
                                       for elem_lbl in self.elem_errorgen_labels_by_op[op_label]]
-        # above is same as flattened self.errgen_space_op_elem_labels
+        # above is same as flattened self.errgen_space_op_elem_labels - labels final "row basis" of fogi dirs
         assert(len(self.errorgen_space_labels) == self.fogi_directions.shape[0])
 
         #fogv_directions = _mt.nice_nullspace(self.fogi_directions.T)  # can be dependent!

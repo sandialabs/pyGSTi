@@ -1529,9 +1529,7 @@ class ExplicitOpModel(_mdl.OpModel):
 
         return op_coeffs
 
-    def _add_reparameterization(self, primitive_op_labels,
-                                ham_fogi_dirs, ham_space_labels,
-                                other_fogi_dirs, other_space_labels):
+    def _add_reparameterization(self, primitive_op_labels, fogi_dirs, errgenset_space_labels):
         # Create re-parameterization map from "fogi" parameters to old/existing model parameters
         # Note: fogi_coeffs = dot(ham_fogi_dirs.T, errorgen_vec)
         #       errorgen_vec = dot(pinv(ham_fogi_dirs.T), fogi_coeffs)
@@ -1556,17 +1554,22 @@ class ExplicitOpModel(_mdl.OpModel):
         #      rows->gpindices and cols->elem_label-match.
 
         nOpParams = self.num_params  # the number of parameters *before* any reparameterization.  TODO: better way?
-        ham_space_labels_indx = _collections.OrderedDict(
-            [(lbl, i) for i, lbl in enumerate(ham_space_labels)])
-        other_space_labels_indx = _collections.OrderedDict(
-            [(lbl, i) for i, lbl in enumerate(other_space_labels)])
+        errgenset_space_labels_indx = _collections.OrderedDict(
+            [(lbl, i) for i, lbl in enumerate(errgenset_space_labels)])
 
-        invDeriv_ham = _np.zeros((nOpParams, ham_fogi_dirs.shape[0]), 'd')
-        invDeriv_other = _np.zeros((nOpParams, other_fogi_dirs.shape[0]), 'd')
+        invDeriv = _np.zeros((nOpParams, fogi_dirs.shape[0]), 'd')
 
         used_param_indices = set()
         for op_label in primitive_op_labels:
-            op = self.operations[op_label]
+
+            #TODO: update this conditional to something more robust (same conditiona in fogitools.py too)
+            if isinstance(op_label, str) and op_label.startswith('rho'):
+                op = self.preps[op_label]
+            elif isinstance(op_label, str) and op_label.startswith('M'):
+                op = self.povms[op_label]
+            else:
+                op = self.operations[op_label]
+
             lbls = op.errorgen_coefficient_labels()  # length num_coeffs
             param_indices = op.gpindices_as_array()  # length num_params
             deriv = op.errorgen_coefficients_array_deriv_wrt_params()  # shape == (num_coeffs, num_params)
@@ -1574,19 +1577,15 @@ class ExplicitOpModel(_mdl.OpModel):
             used_param_indices.update(param_indices)
 
             for i, lbl in enumerate(lbls):
-                if lbl.errorgen_type == 'H':
-                    invDeriv_ham[param_indices, ham_space_labels_indx[(op_label, lbl)]] = inv_deriv[:, i]
-                else:  # lbl[0] == 'S':
-                    invDeriv_other[param_indices, other_space_labels_indx[(op_label, lbl)]] = inv_deriv[:, i]
+                invDeriv[param_indices, errgenset_space_labels_indx[(op_label, lbl)]] = inv_deriv[:, i]
 
         unused_param_indices = sorted(list(set(range(nOpParams)) - used_param_indices))
         prefix_mx = _np.zeros((nOpParams, len(unused_param_indices)), 'd')
         for j, indx in enumerate(unused_param_indices):
             prefix_mx[indx, j] = 1.0
 
-        F_ham = _np.dot(invDeriv_ham, _np.linalg.pinv(ham_fogi_dirs.T))
-        F_other = _np.dot(invDeriv_other, _np.linalg.pinv(other_fogi_dirs.T))
-        F = _np.concatenate((prefix_mx, F_ham, F_other), axis=1)
+        F = _np.dot(invDeriv, _np.linalg.pinv(fogi_dirs.T))
+        F = _np.concatenate((prefix_mx, F), axis=1)
 
         #Not sure if these are needed: "coefficients" have names, but maybe "parameters" shoudn't?
         #fogi_param_names = ["P%d" % i for i in range(len(unused_param_indices))] \
@@ -1785,11 +1784,11 @@ class ExplicitOpModel(_mdl.OpModel):
                                      op_label_abbrevs, reduce_to_model_space, dependent_fogi_action,
                                      norm_order=norm_order)
 
-        #if reparameterize:
-        #    self.param_interposer = self._add_reparameterization(
-        #        primitive_op_labels,
-        #        self.ham_fogi_store.fogi_directions, self.ham_fogi_store.errgen_space_op_elem_labels,
-        #        self.other_fogi_store.fogi_directions, self.other_fogi_store.errgen_space_op_elem_labels)
+        if reparameterize:
+            self.param_interposer = self._add_reparameterization(
+                primitive_op_labels + primitive_prep_labels + primitive_povm_labels,
+                self.fogi_store.fogi_directions.toarray(),  # DENSE now (leave sparse in FUTURE?)
+                self.fogi_store.errorgen_space_op_elem_labels)
 
     def _old_setup_fogi(self, ham_basis, other_basis, other_mode="all",
                         op_label_abbrevs=None, reparameterize=False, reduce_to_model_space=True,

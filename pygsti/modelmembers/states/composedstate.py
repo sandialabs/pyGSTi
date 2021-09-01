@@ -898,4 +898,17 @@ class ComposedState(_State):  # , _ErrorMapContainer
         self._update_rep()
         self.dirty = True
 
+    def errorgen_coefficients_array_deriv_wrt_params(self):
+        """
+        The jacobian of :method:`errogen_coefficients_array` with respect to this state's parameters.
+
+        Returns
+        -------
+        numpy.ndarray
+            A 2D array of shape `(num_coeffs, num_params)` where `num_coeffs` is the number of
+            coefficients of this operation's error generator and `num_params` is this operation's
+            number of parameters.
+        """
+        return self.error_map.errorgen_coefficients_array_deriv_wrt_params()
+
     #TODO - add more errorgen coefficient related methods as in ComposedOp

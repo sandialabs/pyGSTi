@@ -173,28 +173,38 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
         """
         dim = self.model.evotype.minimal_dim(self.model.state_space)
         gate = self.model.circuit_layer_operator(op_label, 'op')
-        op_wrtFilter, gpindices = self._process_wrt_filter(wrt_filter, gate)
 
         # Allocate memory for the final result
-        num_op_params = self.model._param_interposer.num_op_params \
-            if (self.model._param_interposer is not None) else self.model.num_params
-        num_deriv_cols = num_op_params if (wrt_filter is None) else len(wrt_filter)  # num *op* params
-        flattened_dprod = _np.zeros((dim**2, num_deriv_cols), 'd')
-
-        if _slct.length(gpindices) > 0:  # works for arrays too
-            # Compute the derivative of the entire circuit with respect to the
-            # gate's parameters and fill appropriate columns of flattened_dprod.
-            #gate = self.model.operation[op_label] UNNEEDED (I think)
-            _fas(flattened_dprod, [None, gpindices],
-                 gate.deriv_wrt_params(op_wrtFilter))  # (dim**2, n_params in wrt_filter for op_label)
+        num_deriv_cols = self.model.num_params if (wrt_filter is None) else len(wrt_filter)
+        #num_op_params = self.model._param_interposer.num_op_params \
+        #    if (self.model._param_interposer is not None) else self.model.num_params
 
         #Note: deriv_wrt_params is more accurately deriv wrt *op* params when there is an interposer
         # d(op)/d(params) = d(op)/d(op_params) * d(op_params)/d(params)
         if self.model._param_interposer is not None:
-            assert(wrt_filter is None), "Interposers not compatible with wrt-filters yet"
-            flattened_dprod = _np.dot(flattened_dprod,
-                                      self.model._param_interposer.deriv_op_params_wrt_model_params())
-            num_deriv_cols = self.model._param_interposer.num_params  # num *model* params
+            #When there is an interposer, we compute derivs wrt *all* the ops params (inefficient?),
+            # then apply interposer, then take desired wrt_filter columns:
+            assert(self.model._param_interposer.num_params == self.model.num_params)
+            num_op_params = self.model._param_interposer.num_op_params
+            deriv_wrt_op_params = _np.zeros((dim**2, num_op_params), 'd')
+            deriv_wrt_op_params[:, gate.gpindices] = gate.deriv_wrt_params()  # *don't* apply wrt filter here
+            deriv_wrt_params = _np.dot(deriv_wrt_op_params,
+                                       self.model._param_interposer.deriv_op_params_wrt_model_params())
+            # deriv_wrt_params is a derivative matrix with respect to *all* the model's parameters, so
+            # now just take requested subset:
+            flattened_dprod = deriv_wrt_params[:, wrt_filter] if (wrt_filter is not None) else deriv_wrt_params
+        else:
+            #Simpler case of no interposer: use _process_wrt_filter to "convert" from op params to model params
+            # (the desired op params are just some subset, given by gpindices and op_wrtFilter, of the model parameters)
+            flattened_dprod = _np.zeros((dim**2, num_deriv_cols), 'd')
+            op_wrtFilter, gpindices = self._process_wrt_filter(wrt_filter, gate)
+
+            if _slct.length(gpindices) > 0:  # works for arrays too
+                # Compute the derivative of the entire circuit with respect to the
+                # gate's parameters and fill appropriate columns of flattened_dprod.
+                #gate = self.model.operation[op_label] UNNEEDED (I think)
+                _fas(flattened_dprod, [None, gpindices],
+                     gate.deriv_wrt_params(op_wrtFilter))  # (dim**2, n_params in wrt_filter for op_label)
 
         if flat:
             return flattened_dprod
