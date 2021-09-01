@@ -238,11 +238,12 @@ def first_order_gauge_action_matrix_for_povm(povm_superbra_vecs, target_sslbls, 
         # should always be all the sslbls of the model (I think...)
 
         #Currently, this applies same vector to *all* povm effects - i.e. treats as a ComposedPOVM
+        # Note: gauge acts on effects as: dot(v, gen_expanded.T.conj) = dot(gen_expanded.conj, v)
         gen_expanded = _embed(gen, gen_sslbls, action_space)  # expand gen to shared action_space
         if _sps.issparse(gen_expanded):
-            gauge_action_deriv = _sps.vstack([gen_expanded.dot(v) for v in povm_superbra_vecs])  # sparse matrices
+            gauge_action_deriv = _sps.vstack([gen_expanded.conjugate().dot(v) for v in povm_superbra_vecs])
         else:
-            gauge_action_deriv = _np.concatenate([_np.dot(gen_expanded, v) for v in povm_superbra_vecs])
+            gauge_action_deriv = _np.concatenate([_np.dot(gen_expanded.conjugate(), v) for v in povm_superbra_vecs])
         element_action_mx[:, j] = gauge_action_deriv[:, None]
 
     #FROM HERE DOWN same as for prep vector (concat effects treated like one big prep vector)
