@@ -17,6 +17,35 @@ from pygsti.modelmembers.modelmember import ModelMember
 
 class ModelMemberGraph(object):
     """A directed acyclic graph of dependencies of ModelMembers"""
+
+    @classmethod
+    def load_modelmembers_from_serialization_dict(cls, sdict):
+        """Create a nested dictionary of model members from a previously serialized graph.
+        
+        Parameters
+        ----------
+        sdict: dict
+            Flat dict of the ModelMemberGraph that was serialized by a
+            prior call to :method:`ModelMemberGraph.create_serialization_dict`.
+
+        Returns
+        -------
+        dict
+        """
+        from pygsti.io.metadir import _from_memoized_dict
+
+        mm_nodes = {}
+        mm_serial = {}
+        for mm_node_serialized_id, mm_node_dict in sdict.items():
+            mm_serial[mm_node_serialized_id] = _from_memoized_dict(mm_node_dict, mm_serial, underscore=False)
+            if 'memberdict_type' in mm_node_dict and 'memberdict_label' in mm_node_dict:
+                mm_type, lbl = mm_node_dict['memberdict_type'], mm_node_dict['memberdict_label']
+                if mm_type not in mm_nodes:
+                    mm_nodes[mm_type] = {}
+                mm_nodes[mm_type][lbl] = mm_serial[mm_node_serialized_id]
+        
+        return mm_nodes
+    
     def __init__(self, mm_dicts):
         """Generate a directed acyclic graph of ModelMember dependencies for an OpModel.
 

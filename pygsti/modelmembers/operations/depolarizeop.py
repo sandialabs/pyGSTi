@@ -132,10 +132,40 @@ class DepolarizeOp(_StochasticNoiseOp):
         mm_dict = super().to_memoized_dict(mmg_memo)
 
         del mm_dict['rates']
-        mm_dict['strength'] = self.params[0]**2 * (self.basis.size - 1)
+        num_rates = self.basis.size - 1
+        mm_dict['strength'] = self.params[0]**2 * num_rates
 
         return mm_dict
 
+    @classmethod
+    def from_memoized_dict(cls, mm_dict, serial_memo):
+        """Deserialize a ModelMember object and relink submembers from a memo.
+
+        Parameters
+        ----------
+        mm_dict: dict
+            A dict representation of this ModelMember ready for deserialization
+            This must have at least the following fields:
+                module, class, submembers, state_space, evotype
+
+        serial_memo: dict
+            Keys are serialize_ids and values are ModelMembers. This is NOT the same as
+            other memos in ModelMember, (e.g. copy(), allocate_gpindices(), etc.).
+            This is similar but not the same as mmg_memo in to_memoized_dict(),
+            as we do not need to build a ModelMemberGraph for deserialization.
+        
+        Returns
+        -------
+        ModelMember
+            An initialized object
+        """
+        from pygsti.io.metadir import _from_memoized_dict
+        cls._check_memoized_dict(mm_dict, serial_memo)
+
+        state_space = _from_memoized_dict(mm_dict['state_space'])
+        basis = _from_memoized_dict(mm_dict['basis'])
+        return cls(state_space, basis, mm_dict['evotype'], mm_dict['strength'], seed_or_state=None)
+        # Note: we currently don't serialize random seed/state - that gets reset w/serialization
 
     def __str__(self):
         s = "Depolarize noise operation map with dim = %d, num params = %d\n" % \

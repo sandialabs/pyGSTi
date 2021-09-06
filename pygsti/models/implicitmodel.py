@@ -323,6 +323,7 @@ class ImplicitOpModel(_mdl.OpModel):
             'factories': self.factories,
         })
 
+
 def _init_spam_layers(model, prep_layers, povm_layers):
     """ Helper function for initializing the .prep_blks and .povm_blks elements of an implicit model"""
     # SPAM (same as for cloud noise model)

@@ -1505,6 +1505,49 @@ class ExplicitOpModel(_mdl.OpModel):
             'factories': self.factories,
         })
 
+    def _to_memoized_dict(self, memo):
+        state = {'module': self.__class__.__module__,
+                 'class': self.__class__.__name__,
+                 'state_space': self.state_space._to_memoized_dict({}),
+                 'basis': self.basis._to_memoized_dict({}),
+                 'default_gate_type': self.operations.default_param,
+                 'default_prep_type': self.preps.default_param,
+                 'default_povm_type': self.povms.default_param,
+                 'default_instrument_type': self.instruments.default_param,
+                 'prep_prefix': self.preps._prefix,
+                 'effect_prefix': self.effects_prefix,
+                 'gate_prefix': self.operations._prefix,
+                 'povm_prefix': self.povms._prefix,
+                 'instrument_prefix': self.instruments._prefix,
+                 'evotype': str(self.evotype),  # TODO or serialize?
+                 'simulator': self.sim._to_memoized_dict({}),  # TODO --- forwardsim needs to be serializable ----------------------------
+                 }
+
+        mmgraph = self.create_modelmember_graph()
+        state['modelmembers'] = mmgraph.create_serialization_dict()
+        return state
+
+    @classmethod
+    def _from_memoized_dict(cls, state, memo):
+        from pygsti.io.metadir import _from_memoized_dict
+        state_space = _from_memoized_dict(state['state_space'])
+        basis = _from_memoized_dict(state['basis'])
+        modelmembers = _MMGraph.load_modelmembers_from_serialization_dict(state['modelmembers'])
+        simulator = _from_memoized_dict(state['simulator'])
+
+        mdl = cls(state_space, basis, state['default_gate_type'],
+                  state['default_prep_type'], state['default_povm_type'],
+                  state['default_instrument_type'], state['prep_prefix'] state['effect_prefix'],
+                  state['gate_prefix'], state['povm_prefix'], state['instrument_prefix'],
+                  simulator, state['evotype'])
+        
+        mdl.preps.update(modelmembers['preps'])
+        mdl.povms.update(modelmembers['povms'])
+        mdl.operations.update(modelmembers['operations'])
+        mdl.instruments.update(modelmembers['instruments'])
+        mdl.factories.update(modelmembers['factories'])
+        return mdl
+
 
 class ExplicitLayerRules(_LayerRules):
     """ Rule: layer must appear explicitly as a "primitive op" """

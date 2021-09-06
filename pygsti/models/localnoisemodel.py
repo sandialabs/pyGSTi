@@ -348,6 +348,48 @@ class LocalNoiseModel(_ImplicitOpModel):
             'factories_layers': self.factories['layers'],
         })
 
+    def _to_memoized_dict(self, memo):
+        state = {'module': self.__class__.__module__,
+                 'class': self.__class__.__name__,
+                 'processor_spec': self.processor_spec._to_memoized_dict({})
+                 'state_space': self.state_space._to_memoized_dict({}),
+                 #'basis': self.basis._to_memoized_dict({}),
+                 'layer_rules': self.layer_rules._to_memoized_dict({}), # --- TODO --- layerrules need to be serializable ------------------
+                 'evotype': str(self.evotype),  # TODO or serialize?
+                 'simulator': self.sim._to_memoized_dict({}),  # TODO --- forwardsim needs to be serializable ----------------------------
+                 }
+        mmgraph = self.create_modelmember_graph()
+        state['modelmembers'] = mmgraph.create_serialization_dict()
+        return state
+
+    @classmethod
+    def _from_memoized_dict(cls, state, memo):
+        from pygsti.io.metadir import _from_memoized_dict
+        state_space = _from_memoized_dict(state['state_space'])
+        #basis = _from_memoized_dict(state['basis'])
+        modelmembers = _MMGraph.load_modelmembers_from_serialization_dict(state['modelmembers'])
+        simulator = _from_memoized_dict(state['simulator'])
+        layerrules = _from_memoized_dict(state['layer_rules'])
+        processor_spec = _from_memoized_dict(state['processor_spec'])
+
+        # __init__ does too much, so we need to create an alternate __init__ function here:
+        mdl = cls.__new__(cls)
+        mdl.processor_spec = processor_spec
+        _ImplicitOpModel.__init__(mdl, state_space, layer_rules, 'pp',
+                                  simulator=simulator, evotype=state['evotype'])
+
+        flags = {'auto_embed': False, 'match_parent_statespace': False,
+                 'match_parent_evotype': True, 'cast_to_type': None}
+        mdl.prep_blks['layers'] = _OrderedMemberDict(self, None, None, flags, modelmembers['prep_blks_layers'])
+        mdl.povm_blks['layers'] = _OrderedMemberDict(self, None, None, flags, modelmembers['povm_blks_layers'])
+        mdl.operation_blks['layers'] = _OrderedMemberDict(self, None, None, flags, modelmembers['operation_blks_layers'])
+        mdl.operation_blks['gates'] = _OrderedMemberDict(self, None, None, flags, modelmembers['operation_blks_gates'])
+        mdl.instrument_blks['layers'] = _OrderedMemberDict(self, None, None, flags, modelmembers['instrument_blks_layers'])
+        mdl.factories['gates'] = _OrderedMemberDict(self, None, None, flags, modelmembers['factories_gates'])
+        mdl.factories['layers'] = _OrderedMemberDict(self, None, None, flags, modelmembers['factories_layers'])
+
+        return mdl
+
 
 class _SimpleCompLayerRules(_LayerRules):
 

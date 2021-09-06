@@ -1521,6 +1521,12 @@ class OpModel(Model):
         """
         raise NotImplementedError("Derived classes must implement this")
 
+    @classmethod
+    def _from_dir_partial(self, state, memo):
+        #HERE
+        pass
+
+
 
 def _default_param_bounds(num_params):
     """Construct an array to hold parameter bounds that starts with no bounds (all bounds +-inf) """

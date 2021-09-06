@@ -643,7 +643,18 @@ class ModelMember(ModelChild):
                     print('  ModelMember:\n', v.mm)
 
         return mm_dict
-    
+
+    @classmethod
+    def _check_memoized_dict(cls, mm_dict, serial_memo):
+        """Performs simple checks to ensure that `mm_dict` corresponds to the 
+           actual class( `cls`) being created, and that all submembers are present in `serial_memo` """
+        needed_tags = ['module', 'class', 'submembers', 'state_space', 'evotype']
+        assert all([tag in mm_dict.keys() for tag in needed_tags]), 'Must provide all needed tags: %s' % needed_tags
+
+        assert mm_dict['module'] == cls.__module__.name, "Module must match"
+        assert mm_dict['class'] == cls.__class__.name, "Class must match"
+        assert all([(sub_id in serial_memo) for sub_id in mm_dict['submembers']]), "Not all sub-members exist!"
+
     @classmethod
     def from_memoized_dict(cls, mm_dict, serial_memo):
         """Deserialize a ModelMember object and relink submembers from a memo.
@@ -666,16 +677,10 @@ class ModelMember(ModelChild):
         ModelMember
             An initialized object
         """
-        needed_tags = ['module', 'class', 'submembers', 'state_space', 'evotype']
-        assert all([tag in mm_dict.keys() for tag in needed_tags]), 'Must provide all needed tags: %s' % needed_tags
-        
-        assert mm_dict['module'] == cls.__module__.name, "Module must match"
-        assert mm_dict['class'] == cls.__class__.name, "Class must match"
+        cls._check_memoized_dict(mm_dict, serial_memo)
+
         assert len(mm_dict['submembers']) == 0, 'ModelMember base class has no submembers'
-
-        obj = cls(mm_dict['state_space'], mm_dict['evotype'])
-
-        return obj
+        return cls(mm_dict['state_space'], mm_dict['evotype'])
 
     def _copy_gpindices(self, op_obj, parent, memo):
         """ Helper function for implementing copy in derived classes """

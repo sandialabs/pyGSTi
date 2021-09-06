@@ -62,11 +62,15 @@ def _class_for_name(module_and_class_name):
     return c
 
 
-def _from_memoized_dict(memoized_dict, memo=None):
+def _from_memoized_dict(memoized_dict, memo=None, underscore=True):
     if memo is None: memo = {}
     if memoized_dict is None: return None
-    return _class_for_name(memoized_dict['module']
-                           + '.' + memoized_dict['class'])._from_memoized_dict(memoized_dict, memo)
+    if underscore:
+        return _class_for_name(memoized_dict['module']
+                               + '.' + memoized_dict['class'])._from_memoized_dict(memoized_dict, memo)
+    else:
+        return _class_for_name(memoized_dict['module']
+                               + '.' + memoized_dict['class']).from_memoized_dict(memoized_dict, memo)
 
 
 # ****************** Serialization into a directory with a meta.json *********************
