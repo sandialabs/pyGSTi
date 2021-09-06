@@ -15,6 +15,7 @@ import warnings as _warnings
 import json as _json
 
 import numpy as _np
+import json
 
 from pygsti.io import loaders as _loaders
 from pygsti import circuits as _circuits
@@ -459,6 +460,12 @@ def write_model(model, filename, title=None):
         elif isinstance(model.default_gauge_group, _gaugegroup.UnitaryGaugeGroup):
             output.write("GAUGEGROUP: Unitary\n")
 
+def write_model_json(model, filename):
+    mmgraph = model.create_modelmember_graph()
+    model_dict = mmgraph.create_serialization_dict()
+
+    with open(filename, 'w') as f:
+        json.dump(model_dict, f, indent=2)
 
 def write_empty_protocol_data(edesign, dirname, sparse="auto", clobber_ok=False):
     """

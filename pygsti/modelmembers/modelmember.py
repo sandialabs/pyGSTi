@@ -10,6 +10,7 @@ Defines the ModelChild and ModelMember classes, which represent Model members
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from collections import OrderedDict
 import copy as _copy
 
 import numpy as _np
@@ -539,6 +540,142 @@ class ModelMember(ModelChild):
             if id(self) in memo: return memo[id(self)]
             memo[id(self.parent)] = None  # so deepcopy uses None instead of copying parent
         return self._copy_gpindices(_copy.deepcopy(self, memo), parent, memo)
+    
+    def is_similar(self, other):
+        """Comparator returning whether two ModelMembers are the same type
+        and parameterization.
+        
+        ModelMembers with internal parameterization information (e.g.
+        LindbladErrorgen) should overload this function to account for that.
+
+        Parameters
+        ---------
+        other: ModelMember
+            ModelMember to compare to
+        
+        Returns
+        -------
+        bool
+            True if type/parameterization matches
+        """
+        if type(self) != type(other): return False
+
+        # Recursive check on submembers
+        if len(self.submembers()) != len(other.submembers()): return False
+        for sm1, sm2 in zip(self.submembers(), other.submembers()):
+            if not sm1.is_similar(sm2): return False
+        
+        return True
+
+    def is_equivalent(self, other, rtol=1e-5, atol=1e-8):
+        """Comparator returning whether two ModelMembers are equivalent.
+
+        This uses is_similar for type checking and NumPy allclose for parameter
+        checking, so is unlikely to be needed to overload.
+
+        Note that this only checks for NUMERICAL equivalence, not whether the objects
+        are the same.
+
+        Parameters
+        ---------
+        other: ModelMember
+            ModelMember to compare to
+        rtol: float
+            Relative tolerance for parameter vector comparison passed to NumPy
+        atol: float
+            Absolute tolerance for parameter vector comparison passed to NumPy
+        
+        Returns
+        -------
+        bool
+            True if type/parameterization AND parameter vectors match
+        """
+        if not self.is_similar(other): return False
+
+        if not _np.allclose(self.to_vector(), other.to_vector(), rtol=rtol, atol=atol):
+            return False
+        
+        # Recursive check on submembers
+        if len(self.submembers()) != len(other.submembers()): return False
+        for sm1, sm2 in zip(self.submembers(), other.submembers()):
+            # Technically calling is_equivalent here is extra type check work,
+            # but this is safer in case is_equivalent is overloaded in derived classes
+            if not sm1.is_equivalent(sm2): return False
+
+        return True
+    
+    def to_memoized_dict(self, mmg_memo):
+        """Create a serializable dict with references to other objects in the memo.
+
+        Parameters
+        ----------
+        mmg_memo: dict
+            Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
+            are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
+            the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
+        
+        Returns
+        -------
+        mm_dict: dict
+            A dict representation of this ModelMember ready for serialization
+            This must have at least the following fields:
+                module, class, submembers, params, state_space, evotype
+            Additional fields may be added by derived classes.
+        """
+        mm_dict = OrderedDict()
+        mm_dict['module'] =  self.__module__
+        mm_dict['class'] = self.__class__.__name__
+        mm_dict['submembers'] = []
+        mm_dict['state_space'] = str(self.state_space)
+        mm_dict['evotype'] = str(self.evotype)
+        
+        # Dereference submembers
+        for sm in self.submembers():
+            try:
+                mm_node = mmg_memo[id(sm)]
+                mm_dict['submembers'].append(mm_node.serialize_id)
+            except KeyError:
+                print('Each submember must be in the memo.')
+                print('Submember Id: ', id(sm), ', Submember: \n', sm)
+                print('Memo:\n')
+                for k,v in mmg_memo.items():
+                    print('  Id: ', k, ', Serialize Id: ', v.serialize_id, end=', ')
+                    print('  ModelMember:\n', v.mm)
+
+        return mm_dict
+    
+    @classmethod
+    def from_memoized_dict(cls, mm_dict, serial_memo):
+        """Deserialize a ModelMember object and relink submembers from a memo.
+
+        Parameters
+        ----------
+        mm_dict: dict
+            A dict representation of this ModelMember ready for deserialization
+            This must have at least the following fields:
+                module, class, submembers, state_space, evotype
+
+        serial_memo: dict
+            Keys are serialize_ids and values are ModelMembers. This is NOT the same as
+            other memos in ModelMember, (e.g. copy(), allocate_gpindices(), etc.).
+            This is similar but not the same as mmg_memo in to_memoized_dict(),
+            as we do not need to build a ModelMemberGraph for deserialization.
+        
+        Returns
+        -------
+        ModelMember
+            An initialized object
+        """
+        needed_tags = ['module', 'class', 'submembers', 'state_space', 'evotype']
+        assert all([tag in mm_dict.keys() for tag in needed_tags]), 'Must provide all needed tags: %s' % needed_tags
+        
+        assert mm_dict['module'] == cls.__module__.name, "Module must match"
+        assert mm_dict['class'] == cls.__class__.name, "Class must match"
+        assert len(mm_dict['submembers']) == 0, 'ModelMember base class has no submembers'
+
+        obj = cls(mm_dict['state_space'], mm_dict['evotype'])
+
+        return obj
 
     def _copy_gpindices(self, op_obj, parent, memo):
         """ Helper function for implementing copy in derived classes """
