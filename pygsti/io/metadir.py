@@ -62,15 +62,25 @@ def _class_for_name(module_and_class_name):
     return c
 
 
+def _from_memoized_dict(memoized_dict, memo=None):
+    if memo is None: memo = {}
+    if memoized_dict is None: return None
+    return _class_for_name(memoized_dict['module']
+                           + '.' + memoized_dict['class'])._from_memoized_dict(memoized_dict, memo)
+
+
 # ****************** Serialization into a directory with a meta.json *********************
 def _get_auxfile_ext(typ):
     #get expected extension
     if typ == 'text-circuit-list': ext = '.txt'
-    elif typ == 'text-circuit-lists': ext = '.txt'
-    elif typ == 'list-of-protocolobjs': ext = ''
-    elif typ == 'dict-of-protocolobjs': ext = ''
-    elif typ == 'dict-of-resultsobjs': ext = ''
-    elif typ == 'protocolobj': ext = ''
+    #elif typ == 'text-circuit-lists': ext = '.txt'
+    #elif typ == 'list-of-protocolobjs': ext = ''
+    #elif typ == 'dict-of-protocolobjs': ext = ''
+    #elif typ == 'dict-of-resultsobjs': ext = ''
+    elif typ == 'protocolobj': ext = ''  # a directory
+    elif typ == 'protocolresults': ext = ''  # a directory
+    elif typ == 'serialized-object': ext = '.json'
+    elif typ == 'circuit-str-json': ext = '.json'
     elif typ == 'json': ext = '.json'
     elif typ == 'pickle': ext = '.pkl'
     elif typ == 'none': ext = '.NA'
@@ -128,10 +138,6 @@ def load_meta_based_dir(root_dir, auxfile_types_member='auxfile_types',
     """
     root_dir = _pathlib.Path(root_dir)
     ret = {}
-    max_size = quick_load if isinstance(quick_load, int) else QUICK_LOAD_MAX_SIZE
-
-    def should_skip_loading(path):
-        return quick_load and (path.stat().st_size >= max_size)
 
     with open(str(root_dir / 'meta.json'), 'r') as f:
         meta = _json.load(f)
@@ -147,70 +153,163 @@ def load_meta_based_dir(root_dir, auxfile_types_member='auxfile_types',
 
     for key, typ in meta[auxfile_types_member].items():
         if key in ignore_meta: continue  # don't load -> members items in ignore_meta
-        ext = _get_auxfile_ext(typ)
 
-        #Process cases with non-standard expected path(s)
-        if typ == 'none':  # member is serialized separatey and shouldn't be touched
-            continue
-        elif typ == 'reset':  # 'reset' doesn't write and loads in as None
-            val = None  # no file exists for this member
-
-        elif typ == 'text-circuit-lists':
-            i = 0; val = []
-            while True:
-                pth = root_dir / (key + str(i) + ext)
-                if not pth.exists(): break
-                if should_skip_loading(pth):
-                    val.append(None)
-                else:
-                    val.append(_load.load_circuit_list(pth))
-                i += 1
-
-        elif typ == 'protocolobj':
-            protocol_dir = root_dir / (key + ext)
-            val = _cls_from_meta_json(protocol_dir).from_dir(protocol_dir, quick_load=quick_load)
-
-        elif typ == 'list-of-protocolobjs':
-            i = 0; val = []
-            while True:
-                pth = root_dir / (key + str(i) + ext)
-                if not pth.exists(): break
-                val.append(_cls_from_meta_json(pth).from_dir(pth, quick_load=quick_load)); i += 1
-
-        elif typ == 'dict-of-protocolobjs':
-            keys = meta[key]; paths = [root_dir / (key + "_" + k + ext) for k in keys]
-            val = {k: _cls_from_meta_json(pth).from_dir(pth, quick_load=quick_load) for k, pth in zip(keys, paths)}
-
-        elif typ == 'dict-of-resultsobjs':
-            keys = meta[key]; paths = [root_dir / (key + "_" + k + ext) for k in keys]
-            val = {k: _cls_from_meta_json(pth)._from_dir_partial(pth, quick_load=quick_load)
-                   for k, pth in zip(keys, paths)}
-
-        else:  # cases with 'standard' expected path
-
-            pth = root_dir / (key + ext)
-            if pth.is_dir():
-                raise ValueError("Expected path: %s is a dir!" % pth)
-            elif not pth.exists() or should_skip_loading(pth):
-                val = None  # missing files => None values
-            elif typ == 'text-circuit-list':
-                val = _load.load_circuit_list(pth)
-            elif typ == 'json':
-                with open(str(pth), 'r') as f:
-                    val = _json.load(f)
-            elif typ == 'pickle':
-                with open(str(pth), 'rb') as f:
-                    val = _pickle.load(f)
-            else:
-                raise ValueError("Invalid aux-file type: %s" % typ)
-
-        ret[key] = val
+        bLoaded, val = _load_auxfile_member(root_dir, key, typ, meta.get(key, None), quick_load)
+        if bLoaded:
+            ret[key] = val
+        elif val is True:  # val is value of whether to set value to None
+            ret[key] = None  # Note: could just have bLoaded be True in this case and val=None
 
     if separate_auxfiletypes:
         del ret[auxfile_types_member]
         return ret, meta[auxfile_types_member]
     else:
         return ret
+
+
+#REMOVE!!!
+#                    pth = root_dir / (key + str(i) + ext)
+#                    if not pth.exists(): break
+#                    if should_skip_loading(pth):
+#                        val.append(None)
+#                    else:
+#                        val.append(_load.load_circuit_list(pth))
+#
+#
+#            
+#        
+#        for sub_typ in typ.split(':'):  # allows, e.g. "list:" or "dict:" prefixes
+#            
+#            
+#            
+#            
+#        ext = _get_auxfile_ext(typ)
+#
+#        #Process cases with non-standard expected path(s)
+#        if typ == 'none':  # member is serialized separatey and shouldn't be touched
+#            continue
+#        elif typ == 'reset':  # 'reset' doesn't write and loads in as None
+#            val = None  # no file exists for this member
+#
+#        elif typ == 'text-circuit-lists':
+#            i = 0; val = []
+#            while True:
+#                pth = root_dir / (key + str(i) + ext)
+#                if not pth.exists(): break
+#                if should_skip_loading(pth):
+#                    val.append(None)
+#                else:
+#                    val.append(_load.load_circuit_list(pth))
+#                i += 1
+#
+#        elif typ == 'protocolobj':
+#            protocol_dir = root_dir / (key + ext)
+#            val = _cls_from_meta_json(protocol_dir).from_dir(protocol_dir, quick_load=quick_load)
+#
+#        elif typ == 'list-of-protocolobjs':
+#            i = 0; val = []
+#            while True:
+#                pth = root_dir / (key + str(i) + ext)
+#                if not pth.exists(): break
+#                val.append(_cls_from_meta_json(pth).from_dir(pth, quick_load=quick_load)); i += 1
+#
+#        elif typ == 'dict-of-protocolobjs':
+#            keys = meta[key]; paths = [root_dir / (key + "_" + k + ext) for k in keys]
+#            val = {k: _cls_from_meta_json(pth).from_dir(pth, quick_load=quick_load) for k, pth in zip(keys, paths)}
+#
+#        elif typ == 'dict-of-resultsobjs':
+#            keys = meta[key]; paths = [root_dir / (key + "_" + k + ext) for k in keys]
+#            val = {k: _cls_from_meta_json(pth)._from_dir_partial(pth, quick_load=quick_load)
+#                   for k, pth in zip(keys, paths)}
+#
+#        else:  # cases with 'standard' expected path
+#
+#            pth = root_dir / (key + ext)
+#            if pth.is_dir():
+#                raise ValueError("Expected path: %s is a dir!" % pth)
+#            elif not pth.exists() or should_skip_loading(pth):
+#                val = None  # missing files => None values
+#            elif typ == 'text-circuit-list':
+#                val = _load.load_circuit_list(pth)
+#            elif typ == 'json':
+#                with open(str(pth), 'r') as f:
+#                    val = _json.load(f)
+#            elif typ == 'pickle':
+#                with open(str(pth), 'rb') as f:
+#                    val = _pickle.load(f)
+#            else:
+#                raise ValueError("Invalid aux-file type: %s" % typ)
+#
+#        ret[key] = val
+
+
+def _load_auxfile_member(root_dir, filenm, typ, metadata, quick_load):
+    subtypes = typ.split(':')
+    cur_typ = subtypes[0]
+    next_typ = ':'.join(subtypes[1:])
+
+    max_size = quick_load if isinstance(quick_load, int) else QUICK_LOAD_MAX_SIZE
+
+    def should_skip_loading(path):
+        return quick_load and (path.stat().st_size >= max_size)
+
+    if cur_typ == 'list':
+        i = 0; val = []
+        while True:
+            filenm_so_far = filenm + str(i)
+            meta = metadata[i] if (metadata is not None) else None
+            bLoaded, el = _load_auxfile_member(root_dir, filenm_so_far, next_typ, meta, quick_load)
+            if bLoaded:
+                val.append(el)
+            else:
+                break
+            i += 1
+
+    elif cur_typ == 'dict':
+        keys = list(metadata.keys())  # sort?
+        val = {}
+        for k in keys:
+            filenm_so_far = filenm + "_" + k
+            meta = metadata.get(k, None)
+            bLoaded, v = _load_auxfile_member(root_dir, filenm_so_far, next_typ, meta, quick_load)
+            if bLoaded:
+                val[k] = v
+            else:
+                raise ValueError("Failed to load dictionary key " + str(k))
+
+    else:
+        #Simple types that just load the given file
+        ext = _get_auxfile_ext(cur_typ)
+        pth = root_dir / (filenm + ext)
+        if not pth.exists():
+            return False, True  # failure to load, but not explicitly skipped, so set_to_None=True
+        if cur_typ == 'none':  # member is serialized separatey and shouldn't be touched
+            return False, False  # explicitly don't load or set value (so set_to_None=False)
+
+        if should_skip_loading(pth):
+            val = None  # load 'None' instead of actual data (skip loading this file)
+        elif cur_typ == 'reset':  # 'reset' doesn't write and loads in as None
+            val = None  # no file exists for this member
+        elif cur_typ == 'text-circuit-list':
+            val = _load.load_circuit_list(pth)
+        elif cur_typ == 'protocolobj':
+            val = _cls_from_meta_json(pth).from_dir(pth, quick_load=quick_load)
+        elif cur_typ == 'resultsobj':
+            val = _cls_from_meta_json(pth)._from_dir_partial(pth, quick_load=quick_load)
+        elif cur_typ == 'serialized-object':
+            val = _load.load_serializable_object(pth)
+        elif cur_typ == 'circuit-str-json':
+            val = _load.load_circuits_as_strs(pth)
+        elif typ == 'json':
+            with open(str(pth), 'r') as f:
+                val = _json.load(f)
+        elif typ == 'pickle':
+            with open(str(pth), 'rb') as f:
+                val = _pickle.load(f)
+        else:
+            raise ValueError("Invalid aux-file type: %s" % typ)
+
+    return True, val  # loading successful - 2nd element is value loaded
 
 
 def write_meta_based_dir(root_dir, valuedict, auxfile_types=None, init_meta=None):
@@ -268,54 +367,114 @@ def write_meta_based_dir(root_dir, valuedict, auxfile_types=None, init_meta=None
 
     for auxnm, typ in auxfile_types.items():
         val = valuedict[auxnm]
-        ext = _get_auxfile_ext(typ)
-
-        if typ == 'text-circuit-lists':
-            for i, circuit_list in enumerate(val):
-                pth = root_dir / (auxnm + str(i) + ext)
-                _write.write_circuit_list(pth, circuit_list)
-
-        elif typ == 'protocolobj':
-            val.write(root_dir / (auxnm + ext))
-
-        elif typ == 'list-of-protocolobjs':
-            for i, obj in enumerate(val):
-                pth = root_dir / (auxnm + str(i) + ext)
-                obj.write(pth)
-
-        elif typ == 'dict-of-protocolobjs':
-            meta[auxnm] = list(val.keys())  # just save a list of the keys in the metadata
-            for k, obj in val.items():
-                obj_dirname = auxnm + "_" + k + ext  # keys must be strings
-                obj.write(root_dir / obj_dirname)
-
-        elif typ == 'dict-of-resultsobjs':
-            meta[auxnm] = list(val.keys())  # just save a list of the keys in the metadata
-            for k, obj in val.items():
-                obj_dirname = auxnm + "_" + k + ext  # keys must be strings
-                obj._write_partial(root_dir / obj_dirname)
-
-        else:
-            # standard path cases
-            pth = root_dir / (auxnm + ext)
-
-            if val is None:   # None values don't get written
-                pass
-            elif typ == 'text-circuit-list':
-                _write.write_circuit_list(pth, val)
-            elif typ == 'json':
-                with open(str(pth), 'w') as f:
-                    _json.dump(val, f)
-            elif typ == 'pickle':
-                with open(str(pth), 'wb') as f:
-                    _pickle.dump(val, f)
-            elif typ in ('none', 'reset'):
-                pass
-            else:
-                raise ValueError("Invalid aux-file type: %s" % typ)
+        auxmeta = _write_auxfile_member(root_dir, auxnm, typ, val)
+        if auxmeta is not None:
+            meta[auxnm] = auxmeta  # metadata about auxfile(s) for this auxnm
 
     with open(str(root_dir / 'meta.json'), 'w') as f:
         _json.dump(meta, f)
+
+    #REMOVE
+    #for auxnm, typ in auxfile_types.items():
+    #    val = valuedict[auxnm]
+    #    ext = _get_auxfile_ext(typ)
+    #
+    #    if typ == 'text-circuit-lists':
+    #        for i, circuit_list in enumerate(val):
+    #            pth = root_dir / (auxnm + str(i) + ext)
+    #            _write.write_circuit_list(pth, circuit_list)
+    #
+    #    elif typ == 'protocolobj':
+    #        val.write(root_dir / (auxnm + ext))
+    #
+    #    elif typ == 'list-of-protocolobjs':
+    #        for i, obj in enumerate(val):
+    #            pth = root_dir / (auxnm + str(i) + ext)
+    #            obj.write(pth)
+    #
+    #    elif typ == 'dict-of-protocolobjs':
+    #        meta[auxnm] = list(val.keys())  # just save a list of the keys in the metadata
+    #        for k, obj in val.items():
+    #            obj_dirname = auxnm + "_" + k + ext  # keys must be strings
+    #            obj.write(root_dir / obj_dirname)
+    #
+    #    elif typ == 'dict-of-resultsobjs':
+    #        meta[auxnm] = list(val.keys())  # just save a list of the keys in the metadata
+    #        for k, obj in val.items():
+    #            obj_dirname = auxnm + "_" + k + ext  # keys must be strings
+    #            obj._write_partial(root_dir / obj_dirname)
+    #
+    #    else:
+    #        # standard path cases
+    #        pth = root_dir / (auxnm + ext)
+    #
+    #        if val is None:   # None values don't get written
+    #            pass
+    #        elif typ == 'text-circuit-list':
+    #            _write.write_circuit_list(pth, val)
+    #        elif typ == 'json':
+    #            with open(str(pth), 'w') as f:
+    #                _json.dump(val, f)
+    #        elif typ == 'pickle':
+    #            with open(str(pth), 'wb') as f:
+    #                _pickle.dump(val, f)
+    #        elif typ in ('none', 'reset'):
+    #            pass
+    #        else:
+    #            raise ValueError("Invalid aux-file type: %s" % typ)
+
+
+def _write_auxfile_member(root_dir, filenm, typ, val):
+    subtypes = typ.split(':')
+    cur_typ = subtypes[0]
+    next_typ = ':'.join(subtypes[1:])
+
+    if cur_typ == 'list':
+        metadata = []
+        for i, el in enumerate(val):
+            filenm_so_far = filenm + str(i)
+            meta = _write_auxfile_member(root_dir, filenm_so_far, next_typ, el)
+            metadata.append(meta)
+        if all([x is None for x in metadata]):
+            metadata = None  # keep file clean by not writing metadata with no information
+
+    elif cur_typ == 'dict':
+        metadata = {}
+        for k, v in val.items():
+            filenm_so_far = filenm + "_" + k
+            meta = _write_auxfile_member(root_dir, filenm_so_far, next_typ, v)
+            metadata[k] = meta
+
+    else:
+        #Simple types that just write the given file
+        metadata = None
+        ext = _get_auxfile_ext(cur_typ)
+        pth = root_dir / (filenm + ext)
+
+        if val is None:   # None values don't get written
+            pass
+        elif cur_typ in ('none', 'reset'):  # explicitly don't get written
+            pass
+        elif cur_typ == 'text-circuit-list':
+            _write.write_circuit_list(pth, val)
+        elif cur_typ == 'protocolobj':
+            val.write(pth)
+        elif cur_typ == 'resultsobj':
+            val._write_partial(pth)
+        elif cur_typ == 'serialized-object':
+            _write.write_serializable_object(pth, val)
+        elif cur_typ == 'circuit-str-json':
+            _write.write_circuits_as_strs(pth, val)
+        elif typ == 'json':
+            with open(str(pth), 'w') as f:
+                _json.dump(val, f, indent=4)
+        elif typ == 'pickle':
+            with open(str(pth), 'wb') as f:
+                _pickle.dump(val, f)
+        else:
+            raise ValueError("Invalid aux-file type: %s" % typ)
+
+    return metadata
 
 
 def _cls_from_meta_json(dirname):

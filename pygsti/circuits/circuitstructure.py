@@ -56,6 +56,25 @@ class CircuitPlaquette(object):
         self.num_rows = num_rows
         self.num_cols = num_cols
 
+    def _to_memoized_dict(self, memo):  # memo holds already serialized objects
+        state = {'module': self.__class__.__module__,
+                 'class': self.__class__.__name__,
+                 'num_rows': self.num_rows,
+                 'num_cols': self.num_cols,
+                 'elements': [(ij_key, c.str) for ij_key, c in self.elements.items()]
+                 # Note: tuples cannot be keys in JSON
+                 }
+        return state
+
+    @classmethod
+    def _from_memoized_dict(cls, state, memo):  # memo holds already de-serialized objects
+        from pygsti.io import stdinput as _stdinput
+        std = _stdinput.StdInputParser()
+        elements = {tuple(ij): std.parse_circuit(s, create_subcircuits=_Circuit.default_expand_subcircuits)
+                    for ij, s in state['elements']}
+        return cls(elements, state['num_rows'], state['num_cols'], op_label_aliases=None)
+        # Note: parent structure will set op_label_aliases, so we don't serialize it
+
     @property
     def circuits(self):
         yield from self.elements.values()
@@ -222,8 +241,8 @@ class FiducialPairPlaquette(CircuitPlaquette):
         that is sandwiched between fiducial pairs.
 
     fidpairs : list or dict
-        A list or dict of `(prepStr, effectStr)` tuples specifying how
-        `elements` is generated from `base`, i.e. by `prepStr + base + effectStr`.
+        A list or dict of `(prepFiducial, effectFiducial)` tuples specifying how
+        `elements` is generated from `base`, i.e. by `prepFiducial + base + effectFiducial`.
         If a dictionary, then `(i, j)` keys give the row and column indices of
         that fiducial pair (in the case of a list, items are placed sequentially by row.
 
@@ -253,6 +272,28 @@ class FiducialPairPlaquette(CircuitPlaquette):
         super().__init__(_collections.OrderedDict([((i, j), prep + base + meas)
                                                    for (i, j), (prep, meas) in fidpairs.items()]),
                          num_rows, num_cols, op_label_aliases)
+
+    def _to_memoized_dict(self, memo):  # memo holds already serialized objects
+        state = {'module': self.__class__.__module__,
+                 'class': self.__class__.__name__,
+                 'num_rows': self.num_rows,
+                 'num_cols': self.num_cols,
+                 'base_circuit': self.base.str,
+                 'fiducial_pairs': [(ij_key, fidpair[0].str, fidpair[1].str)
+                                    for ij_key, fidpair in self.fidpairs.items()]
+                 }
+        return state
+
+    @classmethod
+    def _from_memoized_dict(cls, state, memo):  # memo holds already de-serialized objects
+        from pygsti.io import stdinput as _stdinput
+        std = _stdinput.StdInputParser()
+        base = std.parse_circuit(state['base_circuit'], create_subcircuits=_Circuit.default_expand_subcircuits)
+        fidpairs = {tuple(ij): (std.parse_circuit(prepfid, create_subcircuits=_Circuit.default_expand_subcircuits),
+                                std.parse_circuit(measfid, create_subcircuits=_Circuit.default_expand_subcircuits))
+                    for ij, prepfid, measfid  in state['fiducial_pairs']}
+        return cls(base, fidpairs, state['num_rows'], state['num_cols'], op_label_aliases=None)
+        # Note: parent structure will set op_label_aliases, so we don't serialize it
 
     def process_circuits(self, processor_fn, updated_aliases=None):
         """
@@ -396,6 +437,29 @@ class GermFiducialPairPlaquette(FiducialPairPlaquette):
         self.germ = germ
         self.power = power
         super().__init__(germ**power, fidpairs, num_rows, num_cols, op_label_aliases)
+
+    def _to_memoized_dict(self, memo):  # memo holds already serialized objects
+        state = {'module': self.__class__.__module__,
+                 'class': self.__class__.__name__,
+                 'num_rows': self.num_rows,
+                 'num_cols': self.num_cols,
+                 'germ': self.germ.str,
+                 'power': self.power,
+                 'fiducial_pairs': [(ij_key, fidpair[0].str, fidpair[1].str)
+                                    for ij_key, fidpair in self.fidpairs.items()]
+                 }
+        return state
+
+    @classmethod
+    def _from_memoized_dict(cls, state, memo):  # memo holds already de-serialized objects
+        from pygsti.io import stdinput as _stdinput
+        std = _stdinput.StdInputParser()
+        germ = std.parse_circuit(state['germ'], create_subcircuits=_Circuit.default_expand_subcircuits)
+        fidpairs = {tuple(ij): (std.parse_circuit(prepfid, create_subcircuits=_Circuit.default_expand_subcircuits),
+                                std.parse_circuit(measfid, create_subcircuits=_Circuit.default_expand_subcircuits))
+                    for ij, prepfid, measfid in state['fiducial_pairs']}
+        return cls(germ, state['power'], fidpairs, state['num_rows'], state['num_cols'], op_label_aliases=None)
+        # Note: parent structure will set op_label_aliases, so we don't serialize it
 
     def process_circuits(self, processor_fn, updated_aliases=None):
         """
@@ -578,6 +642,78 @@ class PlaquetteGridCircuitStructure(_CircuitList):
             _np.array([circuit_weights_dict.get(c, 0.0) for c in circuits], 'd')
         super().__init__(circuits, op_label_aliases, circuit_weights, name)
 
+    def _to_memoized_dict(self, memo):  # memo holds already serialized objects
+        assert(self.op_label_aliases is None), "We don't serialize members of op_label_aliases yet."
+
+        def _gettype(vals):
+            if all([isinstance(v, int) for v in vals]): return "int"
+            if all([isinstance(v, str) for v in vals]): return "str"
+            if all([isinstance(v, _Circuit) for v in vals]): return "circuit"
+            raise ValueError("Unknown/mixed type(s) to serialize!")
+
+        def _encodeval(typ, val):
+            if typ in ("int", "str"): return val
+            if typ == "circuit": return val.str
+            assert(False), "Internal logic error!"
+
+        xtype = _gettype(self.xs)
+        ytype = _gettype(self.ys)
+
+        state = {'module': self.__class__.__module__,
+                 'class': self.__class__.__name__,
+                 'name': self.name,
+                 'xvalues': [_encodeval(xtype, x) for x in self.xs],
+                 'yvalues': [_encodeval(ytype, y) for y in self.ys],
+                 'xtype': xtype,
+                 'ytype': ytype,
+                 'xlabel': self.xlabel,  # str
+                 'ylabel': self.ylabel,  # str
+                 'op_label_aliases': self.op_label_aliases,  # dict
+                 'additional_circuits_location': self._addl_location,
+                 'plaquettes': [((_encodeval(xtype, x), _encodeval(ytype, y)), p._to_memoized_dict(memo))
+                                for (x, y), p in self._plaquettes.items()],
+                 'additional_circuits': [c.str for c in self._additional_circuits],
+                 'circuit_weights': ({c.str: weight for c, weight in self.circuit_weights}
+                                     if (self.circuit_weights is not None) else None)
+                 }
+
+        #state['plaquette_types'] = XXX
+        #state['datacols'] = {
+        #    'Circuit': [circuits]
+        #    'PlaquetteX':
+        #    'PlaquetteY':
+        #    'X':
+        #    'Y':
+        #    'weight':
+        #    # additional circuits have sentinels for Plaquette coords?
+
+        return state
+
+    @classmethod
+    def _from_memoized_dict(cls, state, memo):  # memo holds already de-serialized objects
+        from pygsti.io import stdinput as _stdinput
+        from pygsti.io.metadir import _from_memoized_dict
+        std = _stdinput.StdInputParser()
+
+        def _decodeval(typ, val):
+            if typ in ("int", "str"): return val
+            if typ == "circuit": return std.parse_circuit(val, create_subcircuits=_Circuit.default_expand_subcircuits)
+            raise ValueError("Unknown x/y type: %s" % str(typ))
+
+        plaquettes = {(_decodeval(state['xtype'], x), _decodeval(state['ytype'], y)): _from_memoized_dict(d)
+                      for (x, y), d in state['plaquettes']}
+        additional_circuits = [std.parse_circuit(s, create_subcircuits=_Circuit.default_expand_subcircuits)
+                               for s in state['additional_circuits']]
+        circuit_weights = ({std.parse_circuit(s, create_subcircuits=_Circuit.default_expand_subcircuits): weight
+                           for s, weight in state['circuit_weights'].items()}
+                           if (state['circuit_weights'] is not None) else None)
+        xvalues = tuple([_decodeval(state['xtype'], x) for x in state['xvalues']])
+        yvalues = tuple([_decodeval(state['ytype'], y) for y in state['yvalues']])
+
+        return cls(plaquettes, xvalues, yvalues, state['xlabel'], state['ylabel'],
+                   additional_circuits, state['op_label_aliases'], circuit_weights,
+                   state['additional_circuits_location'], name=state['name'])
+    
     @property
     def plaquettes(self):
         return self._plaquettes

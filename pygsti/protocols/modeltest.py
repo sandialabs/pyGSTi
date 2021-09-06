@@ -36,15 +36,14 @@ class ModelTest(_proto.Protocol):
         The ideal or desired model of perfect operations.  It is often useful to bundle this
         together with `model_to_test` so that comparison metrics can be easily computed.
 
-    gaugeopt_suite : str or list or dict, optional
-        Specifies which gauge optimizations to perform.  Often set to `None` to indicate
-        no gauge optimization.  See :class:`GateSetTomography` for more details.
-
-    gaugeopt_target : Model, optional
-        If not None, a model to be used as the "target" for gauge-
-        optimization (only).  This argument is useful when you want to
-        gauge optimize toward something other than the *ideal* target gates,
-        which are used as the default when `gaugeopt_target` is None.
+    gaugeopt_suite : GSTGaugeOptSuite, optional
+        Specifies which gauge optimizations to perform on each estimate.  Can also
+        be any object that can be cast to a :class:`GSTGaugeOptSuite` object, such
+        as a string or list of strings (see below) specifying built-in sets of gauge
+        optimizations.  This object also optionally stores an alternate target model
+        for gauge optimization.  This model is used as the "target" for gauge-
+        optimization (only), and is useful when you want to gauge optimize toward
+        something other than the *ideal* target gates.
 
     objfn_builder : ObjectiveFunctionBuilder
         The objective function (builder) that is used to compare the model to data,
@@ -93,7 +92,7 @@ class ModelTest(_proto.Protocol):
         else: raise ValueError("Cannot build a objective-fn builder from '%s'" % str(type(obj)))
 
     def __init__(self, model_to_test, target_model=None, gaugeopt_suite=None,
-                 gaugeopt_target=None, objfn_builder=None, badfit_options=None,
+                 objfn_builder=None, badfit_options=None,
                  set_trivial_gauge_group=True, verbosity=2, name=None):
 
         from .gst import GSTBadFitOptions as _GSTBadFitOptions
@@ -107,7 +106,6 @@ class ModelTest(_proto.Protocol):
         self.model_to_test = model_to_test
         self.target_model = target_model
         self.gaugeopt_suite = gaugeopt_suite
-        self.gaugeopt_target = gaugeopt_target
         self.badfit_options = _GSTBadFitOptions.cast(badfit_options)
         self.verbosity = verbosity
 
@@ -115,8 +113,7 @@ class ModelTest(_proto.Protocol):
 
         self.auxfile_types['model_to_test'] = 'pickle'
         self.auxfile_types['target_model'] = 'pickle'
-        self.auxfile_types['gaugeopt_suite'] = 'pickle'  # TODO - better later? - json?
-        self.auxfile_types['gaugeopt_target'] = 'pickle'  # TODO - better later? - json?
+        self.auxfile_types['gaugeopt_suite'] = 'serialized-object'
         self.auxfile_types['badfit_options'] = 'pickle'  # SS: Had issues using json, unclear what was not serializable
         self.auxfile_types['objfn_builders'] = 'pickle'
 
@@ -211,5 +208,5 @@ class ModelTest(_proto.Protocol):
             models['target'] = target_model
         ret.add_estimate(_Estimate(ret, models, parameters), estimate_key=self.name)
         return _add_gaugeopt_and_badfit(ret, self.name, target_model, self.gaugeopt_suite,
-                                        self.gaugeopt_target, self.unreliable_ops, self.badfit_options,
+                                        self.unreliable_ops, self.badfit_options,
                                         None, resource_alloc, printer)

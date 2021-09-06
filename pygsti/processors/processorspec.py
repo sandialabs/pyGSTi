@@ -184,6 +184,51 @@ class QubitProcessorSpec(ProcessorSpec):
             self._symplectic_reps.update(nonstd_gate_symplecticreps)
         super(QubitProcessorSpec, self).__init__()
 
+    def _to_memoized_dict(self, memo):  # memo holds already serialized objects
+
+        def _encodemx(mx):
+            enc = str if _np.iscomplexobj(mx) else (lambda x: x)
+            encoded = _np.array([enc(x) for x in mx.flat])
+            return encoded.reshape(mx.shape).tolist()
+
+        state = {'module': self.__class__.__module__,
+                 'class': self.__class__.__name__,
+                 'qubit_labels': list(self.qubit_labels),
+                 'gate_names': list(self.gate_names),  # TODO: what if labels and not just strings?
+                 'availability': self.availability,  # should just have native types
+                 'geometry': self.qubit_graph._to_memoized_dict(memo),
+                 'nonstd_gate_unitaries': {k: _encodemx(mx) for k, mx in self.nonstd_gate_unitaries.items()},
+                 'symplectic_reps': {k: (_encodemx(s), _encodemx(p)) for k, (s, p) in self._symplectic_reps.items()},
+                 'aux_info': self.aux_info
+                 }
+        return state
+
+    @classmethod
+    def _from_memoized_dict(cls, state, memo):  # memo holds already de-serialized objects
+        from pygsti.io.metadir import _from_memoized_dict
+
+        def _decodemx(mx):
+            basemx = _np.array(mx)
+            if basemx.dtype.kind == 'U':  # character type array => complex numbers as strings
+                decoded = _np.array([complex(x) for x in basemx.flat])
+                decoded = decoded.reshape(basemx.shape)
+            else:
+                decoded = basemx
+            return decoded
+
+        def _tuplize(x):
+            if isinstance(x, (list, tuple)):
+                return tuple((_tuplize(el) for el in x))
+            return x
+
+        nonstd_gate_unitaries = {k: _decodemx(mx) for k, mx in state['nonstd_gate_unitaries'].items()}
+        symplectic_reps = {k: (_decodemx(s), _decodemx(p)) for k, (s, p) in state['symplectic_reps'].items()}
+        availability = {k: _tuplize(v) for k, v in state['availability'].items()}
+        geometry = _from_memoized_dict(state['geometry'])
+
+        return cls(len(state['qubit_labels']), state['gate_names'], nonstd_gate_unitaries, availability,
+                   geometry, state['qubit_labels'], symplectic_reps, state['aux_info'])
+
     @property
     def num_qubits(self):
         """ The number of qubits. """

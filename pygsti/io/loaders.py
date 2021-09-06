@@ -13,6 +13,7 @@ Functions for loading GST objects from text files.
 import os as _os
 import pathlib as _pathlib
 import warnings as _warnings
+import json as _json
 
 from pygsti.io import metadir as _metadir
 from pygsti.io import stdinput as _stdinput
@@ -312,6 +313,39 @@ def load_circuit_list(filename, read_raw_strings=False, line_labels='auto', num_
         create_subcircuits = not _circuits.Circuit.default_expand_subcircuits
         std = _stdinput.StdInputParser()
         return std.parse_stringfile(filename, line_labels, num_lines, create_subcircuits)
+
+
+def load_serializable_object(filename):
+    """ TODO: docstring """
+    if str(filename).endswith('.json'):
+        with open(filename, 'r') as f:
+            json_dict = _json.load(f)
+            return _metadir._from_memoized_dict(json_dict)
+    else:
+        raise ValueError("Cannot determine format from extension of filename: %s" % str(filename))
+
+
+def load_circuits_as_strs(filename):
+    """ TODO: docstring - load various Circuit-containing standard objects from a file where
+        they have been replaced by their string representations """
+    from pygsti.circuits import Circuit as _Circuit
+    std = _stdinput.StdInputParser()
+
+    def _replace_strs_with_circuits(x):
+        if isinstance(x, (list, tuple)):
+            return [_replace_strs_with_circuits(el) for el in x]
+        if isinstance(x, dict):
+            return {_replace_strs_with_circuits(k): _replace_strs_with_circuits(v) for k, v in x.items}
+        if isinstance(x, str):
+            return std.parse_circuit(x, create_subcircuits=_Circuit.default_expand_subcircuits)
+        return x
+
+    if str(filename).endswith('.json'):
+        with open(filename, 'r') as f:
+            json_dict = _json.load(f)
+            return _replace_strs_with_circuits(json_dict)
+    else:
+        raise ValueError("Cannot determine format from extension of filename: %s" % str(filename))
 
 
 def load_protocol_from_dir(dirname, quick_load=False, comm=None):
