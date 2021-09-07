@@ -111,11 +111,11 @@ class ModelTest(_proto.Protocol):
 
         self.objfn_builders = [self.create_objective_builder(objfn_builder)]
 
-        self.auxfile_types['model_to_test'] = 'pickle'
-        self.auxfile_types['target_model'] = 'pickle'
+        self.auxfile_types['model_to_test'] = 'serialized-object'
+        self.auxfile_types['target_model'] = 'serialized-object'
         self.auxfile_types['gaugeopt_suite'] = 'serialized-object'
-        self.auxfile_types['badfit_options'] = 'pickle'  # SS: Had issues using json, unclear what was not serializable
-        self.auxfile_types['objfn_builders'] = 'pickle'
+        self.auxfile_types['badfit_options'] = 'serialized-object'
+        self.auxfile_types['objfn_builders'] = 'serialized-object'
 
         #Advanced options that could be changed by users who know what they're doing
         self.profile = 1

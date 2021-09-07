@@ -223,6 +223,47 @@ class CustomLMOptimizer(Optimizer):
         self.called_objective_methods = ('lsvec', 'dlsvec')  # the objective function methods we use (for mem estimate)
         self.serial_solve_proc_threshold = serial_solve_proc_threshold
 
+    def _to_memoized_dict(self, memo):
+        state = {'module': self.__class__.__module__,
+                 'class': self.__class__.__name__,
+                 'maximum_iterations': self.maxiter,
+                 'maximum_function_evaluations': self.maxfev,
+                 'tolerance': self.tol,
+                 'number_of_finite_difference_iterations': self.fditer,
+                 'number_of_first_stage_finite_difference_iterations': self.first_fditer,
+                 'damping_mode': self.damping_mode,
+                 'damping_basis': self.damping_basis,
+                 'damping_clip': self.damping_clip,
+                 'use_acceleration': self.use_acceleration,
+                 'uphill_step_threshold': self.uphill_step_threshold,
+                 'initial_mu_and_nu': self.init_munu,
+                 'out_of_bounds_check_interval': self.oob_check_interva,
+                 'out_of_bounds_action': self.oob_action,
+                 'out_of_bounds_check_mode': self.oob_check_mode,
+                 'array_types': self.array_types,
+                 'called_objective_function_methods': self.called_objective_methods,
+                 'serial_solve_number_of_processors_threshold': self.serial_solve_proc_threshold
+                 }
+        return state
+
+    @classmethod
+    def _from_memoized_dict(cls, state, memo):
+        return cls(maxiter=state['maximum_iterations'],
+                   maxfev=state['maximum_function_evaluations'],
+                   tol=state['tolerance'],
+                   fditer=state['number_of_finite_difference_iterations'],
+                   first_fditer=state['number_of_first_stage_finite_difference_iterations'],
+                   damping_mode=state['damping_mode'],
+                   damping_basis=state['damping_basis'],
+                   damping_clip=state['damping_clip'],
+                   use_acceleration=state['use_acceleration'],
+                   uphill_step_threshold=state['uphill_step_threshold'],
+                   init_munu=state['init_mu_and_nu'],
+                   oob_check_interval=state['out_of_bounds_check_interval'],
+                   oob_action=state['out_of_bounds_action'],
+                   oob_check_mode=state['out_of_bounds_check_mode'],
+                   serial_solve_proc_threshold=state['serial_solve_number_of_processors_threshold'])
+
     def run(self, objective, profiler, printer):
 
         """

@@ -65,6 +65,18 @@ def parse_circuit(code, create_subcircuits=True, integerize_sslbls=True):
     return tuple(result), labels, occurrence_id, compilable_indices
 
 
+def parse_label(code, integerize_sslbls=True):
+    create_subcircuits = False
+    segment = 1  # segment for gates/instruments - what about reading rho/M labels - add arg?
+    interlayer_marker = u''  # matches nothing - no interlayer markerg
+
+    lbls_list, _, _, _ = _get_next_lbls(code, 0, len(code), create_subcircuits, integerize_sslbls,
+                                        segment, interlayer_marker)
+    if len(lbls_list) != 1:
+        raise ValueError("Invalid label, could not parse: '%s'" % str(code))
+    return lbls_list[0]
+
+
 def _get_next_lbls(s, start, end, create_subcircuits, integerize_sslbls, segment, interlayer_marker):
     if s[start] == "(":
         i = start + 1

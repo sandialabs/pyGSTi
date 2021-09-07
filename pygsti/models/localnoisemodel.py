@@ -29,6 +29,7 @@ from pygsti.modelmembers.operations import opfactory as _opfactory
 from pygsti.modelmembers.modelmembergraph import ModelMemberGraph as _MMGraph
 from pygsti.baseobjs.basis import BuiltinBasis as _BuiltinBasis
 from pygsti.baseobjs.label import Label as _Lbl, CircuitLabel as _CircuitLabel
+from pygsti.circuits.circuitparser import parse_label as _parse_label
 from pygsti.tools import basistools as _bt
 from pygsti.tools import internalgates as _itgs
 from pygsti.tools import optools as _ot
@@ -404,6 +405,18 @@ class _SimpleCompLayerRules(_LayerRules):
             self._add_global_idle_to_all_layers = True
         else:
             raise ValueError("Invalid `implicit_idle_mode`: '%s'" % str(implicit_idle_mode))
+
+    def _to_memoized_dict(self, memo):
+        state = {'module': self.__class__.__module__,
+                 'class': self.__class__.__name__,
+                 'global_idle_layer_label': str(self.global_idle_layer_label),
+                 'implicit_idle_mode': self.implicit_idle_mode,
+                 }
+        return state
+
+    @classmethod
+    def _from_memoized_dict(cls, state, memo):        
+        return cls(_parse_labels(state['global_idle_layer_label']), state['implicit_idle_mode'])
 
     def prep_layer_operator(self, model, layerlbl, caches):
         """

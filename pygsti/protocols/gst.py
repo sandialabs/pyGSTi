@@ -703,6 +703,21 @@ class GSTObjFnBuilders(object):
         self.iteration_builders = iteration_builders
         self.final_builders = final_builders
 
+    def _to_memoized_dict(self, memo):
+        state = {'module': self.__class__.__module__,
+                 'class': self.__class__.__name__,
+                 'iteration_builders': [b._to_memoized_dict({}) for b in self.iteration_builders],
+                 'final_builders': [b._to_memoized_dict({}) for b in self.final_builders]
+                 }
+        return state
+
+    @classmethod
+    def _from_memoized_dict(cls, state, memo):
+        from pygsti.io.metadir import _from_memoized_dict
+        iteration_builders = [_from_memoized_dict(b) for b in state['iteration_builders']]
+        final_builders = [_from_memoized_dict(b) for b in state['final_builders']]
+        return cls(iteration_builders, final_builders)
+
 
 class GSTGaugeOptSuite(object):
     """
@@ -1058,11 +1073,11 @@ class GateSetTomography(_proto.Protocol):
         self.iteration_builders = objfn_builders.iteration_builders
         self.final_builders = objfn_builders.final_builders
 
-        self.auxfile_types['initial_model'] = 'pickle'
+        self.auxfile_types['initial_model'] = 'serialize-object'
         self.auxfile_types['badfit_options'] = 'serialized-object'
-        self.auxfile_types['optimizer'] = 'pickle'  # TODO - better later? - json?
-        self.auxfile_types['iteration_builders'] = 'pickle'  # TODO - better later? - json?
-        self.auxfile_types['final_builders'] = 'pickle'  # TODO - better later? - json?
+        self.auxfile_types['optimizer'] = 'serialized-object'
+        self.auxfile_types['iteration_builders'] = 'serialized-object'
+        self.auxfile_types['final_builders'] = 'serialized-object'
         self.auxfile_types['gaugeopt_suite'] = 'serialized-object'
 
         #Advanced options that could be changed by users who know what they're doing
@@ -1397,11 +1412,11 @@ class StandardGST(_proto.Protocol):
         self.badfit_options = GSTBadFitOptions.cast(badfit_options)
         self.verbosity = verbosity
 
-        self.auxfile_types['models_to_test'] = 'pickle'
+        self.auxfile_types['models_to_test'] = 'dict:serialized-object'
         self.auxfile_types['gaugeopt_suite'] = 'serialized-object'
-        self.auxfile_types['objfn_builders'] = 'pickle'  # TODO - better later? - json?
-        self.auxfile_types['optimizer'] = 'pickle'  # TODO - better later? - json?
-        self.auxfile_types['badfit_options'] = 'pickle'  # TODO - better later? - json?
+        self.auxfile_types['objfn_builders'] = 'serialized-object'
+        self.auxfile_types['optimizer'] = 'serialized-object'
+        self.auxfile_types['badfit_options'] = 'serialized-object'
 
         #Advanced options that could be changed by users who know what they're doing
         self.starting_point = {}  # a dict whose keys are modes

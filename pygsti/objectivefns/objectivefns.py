@@ -221,6 +221,24 @@ class ObjectiveFunctionBuilder(object):
         self.penalties = penalties
         self.additional_args = kwargs
 
+    def _to_memoized_dict(self, memo):
+        state = {'module': self.__class__.__module__,
+                 'class': self.__class__.__name__,
+                 'name': self.name,
+                 'description': self.description,
+                 'class_to_build': self.cls_to_build.__module__ + '.' + self.cls_to_build.__name__,
+                 'regularization': self.regularization,
+                 'penalties': self.penalties,
+                 'additional_arguments': self.additional_args,
+                 }
+        return state
+
+    @classmethod
+    def _from_memoized_dict(cls, state, memo):
+        from pygsti.io.metadir import _class_for_name
+        return cls(_class_for_name(state['class_to_build']), state['name'], state['description'],
+                   state['regularization'], state['penalties'], *state['additional_arguments'])
+
     def compute_array_types(self, method_names, forwardsim):
         return self.cls_to_build.compute_array_types(method_names, forwardsim)
 

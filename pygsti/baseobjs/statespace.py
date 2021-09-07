@@ -463,6 +463,17 @@ class QubitSpace(StateSpace):
         else:
             self.qubit_labels = tuple(nqubits_or_labels)
 
+    def _to_memoized_dict(self, memo):
+        state = {'module': self.__class__.__module__,
+                 'class': self.__class__.__name__,
+                 'qubit_labels': self.qubit_labels
+                 }
+        return state
+
+    @classmethod
+    def _from_memoized_dict(cls, state, memo):
+        return cls(state['qubit_labels'])
+
     @property
     def udim(self):
         """
@@ -671,7 +682,7 @@ class ExplicitStateSpace(StateSpace):
         #    assert(dims is None and types is None), "Clobbering non-None 'dims' and/or 'types' arguments"
         #    dims = [tuple((label_list.labeldims[lbl] for lbl in tpbLbls))
         #            for tpbLbls in label_list.labels]
-        #    types = [tuple((label_list.labeltypes[lbl] for lbl in tpbLbls))
+        #    types = [tuple((label_list.label_types[lbl] for lbl in tpbLbls))
         #             for tpbLbls in label_list.labels]
         #    label_list = label_list.labels
 
@@ -706,15 +717,15 @@ class ExplicitStateSpace(StateSpace):
                     raise ValueError("'%s' is an invalid state-space label (must be a string or integer)" % lbl)
 
         # Get the type of each labeled space
-        self.labeltypes = {}
+        self.label_types = {}
         if types is None:  # use defaults
             for tpbLabels in self.labels:  # loop over tensor-prod-blocks
                 for lbl in tpbLabels:
-                    self.labeltypes[lbl] = 'C' if (isinstance(lbl, str) and lbl.startswith('C')) else 'Q'  # default
+                    self.label_types[lbl] = 'C' if (isinstance(lbl, str) and lbl.startswith('C')) else 'Q'  # default
         else:
             for tpbLabels, tpbTypes in zip(self.labels, types):
                 for lbl, typ in zip(tpbLabels, tpbTypes):
-                    self.labeltypes[lbl] = typ
+                    self.label_types[lbl] = typ
 
         # Get the dimension of each labeled space
         self.label_udims = {}
@@ -764,6 +775,20 @@ class ExplicitStateSpace(StateSpace):
             self._nqubits = len(self.labels[0])  # there's a well-defined number of qubits
         else:
             self._nqubits = None
+
+    def _to_memoized_dict(self, memo):
+        state = {'module': self.__class__.__module__,
+                 'class': self.__class__.__name__,
+                 'labels': self.labels,
+                 'unitary_space_dimensions': [[self.label_udims[l] for l in tpb] for tpb in self.labels],
+                 'types': [[self.label_types[l] for l in tpb] for tpb in self.labels]
+                 }
+        return state
+
+    @classmethod
+    def _from_memoized_dict(cls, state, memo):
+        from pygsti.io.metadir import _from_memoized_dict
+        return cls(state['labels'], state['unitary_space_dimensions'], state['types'])
 
     @property
     def udim(self):
@@ -843,7 +868,7 @@ class ExplicitStateSpace(StateSpace):
         -------
         tuple of tuples
         """
-        return tuple([tuple([self.labeltypes[lbl] for lbl in tpb_labels]) for tpb_labels in self.labels])
+        return tuple([tuple([self.label_types[lbl] for lbl in tpb_labels]) for tpb_labels in self.labels])
 
     def label_dimension(self, label):
         """
@@ -903,12 +928,12 @@ class ExplicitStateSpace(StateSpace):
         -------
         str
         """
-        return self.labeltypes[label]
+        return self.label_types[label]
 
     def __str__(self):
         if len(self.labels) == 0: return "ZeroDimSpace"
         return ' + '.join(
-            ['*'.join(["%s(%d%s)" % (lbl, self.label_dims[lbl], 'c' if (self.labeltypes[lbl] == 'C') else '')
+            ['*'.join(["%s(%d%s)" % (lbl, self.label_dims[lbl], 'c' if (self.label_types[lbl] == 'C') else '')
                        for lbl in tpb]) for tpb in self.labels])
 
 

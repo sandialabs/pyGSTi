@@ -153,6 +153,19 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         _DistributableForwardSimulator.__init__(self, model, num_atoms, processor_grid, param_blk_sizes)
         self._max_cache_size = max_cache_size
 
+    def _to_memoized_dict(self, memo):
+        state = {'module': self.__class__.__module__,
+                 'class': self.__class__.__name__,
+                 'max_cache_size': self._max_cache_size
+                 # (don't serialize parent model or processor distribution info)
+                 }
+        return state
+
+    @classmethod
+    def _from_memoized_dict(cls, state, memo):
+        #Note: resets processor-distribution information
+        return cls(None, state['max_cache_size'])
+
     def copy(self):
         """
         Return a shallow copy of this MapForwardSimulator

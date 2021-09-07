@@ -195,6 +195,37 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         self.path_fraction_threshold = path_fraction_threshold if mode == "pruned" else 0.0
         self.oob_check_interval = oob_check_interval if mode == "pruned" else 0
 
+    def _to_memoized_dict(self, memo):
+        state = {'module': self.__class__.__module__,
+                 'class': self.__class__.__name__,
+                 'mode': self.mode,
+                 'max_taylor_order': self.max_order,
+                 'desired_pathintegral_approximation_error': self.desired_pathmagnitude_gap,
+                 'allowed_pathintegral_approximation_error': self.allowed_perr,
+                 'approximation_error_heuristic': self.perr_heuristic,
+                 'minimum_retained_term_magnitude': self.min_term_mag,
+                 'maximum_paths_per_outcome': self.max_paths_per_outcome,
+                 'maximum_pathset_stages': self.max_term_stages,
+                 'path_fraction_threshold': self.path_fraction_threshold,
+                 'out_of_bounds_check_interval': self.oob_check_interval,
+                 # (don't serialize parent model or processor distribution info)
+                 }
+        return state
+
+    @classmethod
+    def _from_memoized_dict(cls, state, memo):
+        #Note: resets processor-distribution information
+        return cls(state['mode'], state['max_taylor_order'],
+                   state['desired_pathintegral_approximation_error'],
+                   state['allowed_pathintegral_approximation_error'],
+                   state['minimum_retained_term_magnitude'],
+                   state['maximum_paths_per_outcome'],
+                   state['approximation_error_heuristic'],
+                   state['maximum_pathset_stages'],
+                   state['path_fraction_threshold'],
+                   state['out_of_bounds_check_interval'],
+                   cache=None, num_atoms=None, processor_grid=None, param_blk_sizes=None)
+
     def _set_evotype(self, evotype):
         """ Called when the evotype being used (defined by the parent model) changes.
             `evotype` will be `None` when the current model is None"""

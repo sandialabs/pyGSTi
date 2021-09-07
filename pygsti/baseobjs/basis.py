@@ -920,6 +920,42 @@ class ExplicitBasis(Basis):
 
         super(ExplicitBasis, self).__init__(name, longname, real, sparse)
 
+    def _to_memoized_dict(self, memo):
+        def _encodemx(mx):  # nearly the same as in processor spec
+            if self.sparse:
+                raise NotImplementedError("Cannot serialize sparse matrices nicely yet!")
+            else:
+                enc = str if _np.iscomplexobj(mx) else (lambda x: x)
+                encoded = _np.array([enc(x) for x in mx.flat])
+                return encoded.reshape(mx.shape).tolist()
+
+        state = {'module': self.__class__.__module__,
+                 'class': self.__class__.__name__,
+                 'name': self.name,
+                 'longname': self.longname,
+                 'real': self.real,
+                 'sparse': self.sparse,
+                 'labels': self.labels,
+                 'elements': [_encodemx(el) for el in self.elements]
+                 }
+        return state
+
+    @classmethod
+    def _from_memoized_dict(cls, state, memo):
+
+        def _decodemx(mx):  # Same as in processorspec
+            basemx = _np.array(mx)
+            if basemx.dtype.kind == 'U':  # character type array => complex numbers as strings
+                decoded = _np.array([complex(x) for x in basemx.flat])
+                decoded = decoded.reshape(basemx.shape)
+            else:
+                decoded = basemx
+            return decoded
+
+        return cls([_decodemx(el) for el in state['elements']],
+                   state['labels'], state['name'], state['longname'], state['real'],
+                   state['sparse'])
+
     @property
     def dim(self):
         """
@@ -997,6 +1033,21 @@ class BuiltinBasis(LazyBasis):
         real = _basis_constructor_dict[name].real
 
         super(BuiltinBasis, self).__init__(name, longname, real, sparse)
+
+    def _to_memoized_dict(self, memo):
+        state = {'module': self.__class__.__module__,
+                 'class': self.__class__.__name__,
+                 'name': self.name,
+                 'sparse': self.sparse,
+                 'state_space': self.state_space._to_memoized_dict({})
+                 }
+        return state
+
+    @classmethod
+    def _from_memoized_dict(cls, state, memo):
+        from pygsti.io.metadir import _from_memoized_dict
+        statespace = _from_memoized_dict(state['state_space'])
+        return cls(state['name'], statespace, state['sparse'])
 
     @property
     def dim(self):
@@ -1135,6 +1186,21 @@ class DirectSumBasis(LazyBasis):
 
         #Init everything but elements and labels & their number/size
         super(DirectSumBasis, self).__init__(name, longname, real, sparse)
+
+    def _to_memoized_dict(self, memo):
+        state = {'module': self.__class__.__module__,
+                 'class': self.__class__.__name__,
+                 'name': self.name,
+                 'longname': self.longname,
+                 'component_bases': [b._to_memoized_dict({}) for b in self.component_bases]
+                 }
+        return state
+
+    @classmethod
+    def _from_memoized_dict(cls, state, memo):
+        from pygsti.io.metadir import _from_memoized_dict
+        component_bases = [_from_memoized_dict(b) for b in state['component_bases']]
+        return cls(component_bases, state['name'], state['longname'])
 
     @property
     def dim(self):
@@ -1430,6 +1496,21 @@ class TensorProdBasis(LazyBasis):
 
         super(TensorProdBasis, self).__init__(name, longname, real, sparse)
 
+    def _to_memoized_dict(self, memo):
+        state = {'module': self.__class__.__module__,
+                 'class': self.__class__.__name__,
+                 'name': self.name,
+                 'longname': self.longname,
+                 'component_bases': [b._to_memoized_dict({}) for b in self.component_bases]
+                 }
+        return state
+
+    @classmethod
+    def _from_memoized_dict(cls, state, memo):
+        from pygsti.io.metadir import _from_memoized_dict
+        component_bases = [_from_memoized_dict(b) for b in state['component_bases']]
+        return cls(component_bases, state['name'], state['longname'])
+        
     @property
     def dim(self):
         """
@@ -1704,6 +1785,23 @@ class EmbeddedBasis(LazyBasis):
         sparse = basis_to_embed.sparse
 
         super(EmbeddedBasis, self).__init__(name, longname, real, sparse)
+
+    def _to_memoized_dict(self, memo):
+        state = {'module': self.__class__.__module__,
+                 'class': self.__class__.__name__,
+                 'name': self.name,
+                 'longname': self.longname,
+                 'state_space': self.state_space._to_memoized_dict({}),
+                 'embedded_basis': self.embedded_basis._to_memoized_dict({})
+                 }
+        return state
+
+    @classmethod
+    def _from_memoized_dict(cls, state, memo):
+        from pygsti.io.metadir import _from_memoized_dict
+        basis_to_embed = _from_memoized_dict(state['embedded_basis'])
+        state_space = _from_memoized_dict(state['state_space'])
+        return cls(basis_to_embed, state_space, state['target_labels'], state['name'], state['longname'])
 
     @property
     def dim(self):

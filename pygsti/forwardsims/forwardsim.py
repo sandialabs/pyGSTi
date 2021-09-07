@@ -95,6 +95,17 @@ class ForwardSimulator(object):
         #self.prepreps = { lbl:p.torep('prep') for lbl,p in preps.items() }
         #self.effectreps = { lbl:e.torep('effect') for lbl,e in effects.items() }
 
+    def _to_memoized_dict(self, memo):
+        state = {'module': self.__class__.__module__,
+                 'class': self.__class__.__name__,
+                 # (don't serialize parent model)
+                 }
+        return state
+
+    @classmethod
+    def _from_memoized_dict(cls, state, memo):        
+        return cls(None)
+
     def __getstate__(self):
         state_dict = self.__dict__.copy()
         state_dict['_model'] = None  # don't serialize parent model (will cause recursion)

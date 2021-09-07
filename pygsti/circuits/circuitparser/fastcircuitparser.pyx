@@ -100,6 +100,21 @@ def parse_circuit(unicode code, bool create_subcircuits, bool integerize_sslbls)
 
     return tuple(result), labels, occurrence_id, compilable_indices
 
+
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
+def parse_label(unicode code, bool integerize_sslbls=True):
+    create_subcircuits = False
+    segment = 1  # segment for gates/instruments - what about reading rho/M labels - add arg?
+    interlayer_marker = u''  # matches nothing - no interlayer markerg
+
+    lbls_list, _, _, _ = get_next_lbls(code, 0, len(code), create_subcircuits, integerize_sslbls,
+                                       segment, interlayer_marker)
+    if len(lbls_list) != 1:
+        raise ValueError("Invalid label, could not parse: '%s'" % str(code))
+    return lbls[0]
+
+
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
 cdef get_next_lbls(unicode s, INT start, INT end, bool create_subcircuits, bool integerize_sslbls, INT segment,
