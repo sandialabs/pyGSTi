@@ -62,16 +62,33 @@ class HasProcessorSpec(object):
 
     def create_target_model(self, gate_type='auto', prep_type='auto', povm_type='auto'):
         """
-        TODO: docstring
+        Create a target model for this experiment design.
 
-        auto gate type is static
-        auto spam type means match gate type or 'computational' if gate_type is auto
+        An explicit model is created based on the processor spec.  If a different type
+        of model is needed, consider creating the model manually via the construction
+        functions in the `pygsti.models.modelconstruction` module using this experiment
+        design's `.processor_spec` attribute.
+
+        Parameters
+        ----------
+        gate_type : str, optional
+            The type of gate objects to create.  Currently `"auto"` is the same as `"static"`.
+
+        prep_type : str, optional
+            The type of state preparation objects to create.  `"auto"` selects a type based
+            on the value of `gate_type`.
+
+        povm_type : str, optional
+            The type of POVM objects to create.  `"auto"` selects a type based
+            on the value of `gate_type`.
 
         Returns
         -------
         Model
         """
         # Create a static explicit model as the target model, based on the processor spec
+        if gate_type == "auto":
+            gate_type = "static"
         if prep_type == "auto":
             prep_type = _states.get_state_type_from_op_type(gate_type)
         if povm_type == "auto":
@@ -255,15 +272,18 @@ class StandardGSTDesign(GateSetTomographyDesign):
         self.fpr_keep_seed = keep_seed
 
         #TODO: add a line_labels arg to create_lsgst_circuit_lists and pass qubit_labels in?
-        processor_spec = _load_pspec(processorspec_filename_or_obj)
+        processor_spec_or_model = _load_pspec_or_model(processorspec_filename_or_obj)
         lists = _circuits.create_lsgst_circuit_lists(
-            processor_spec, self.prep_fiducials, self.meas_fiducials, self.germs,
+            processor_spec_or_model, self.prep_fiducials, self.meas_fiducials, self.germs,
             self.maxlengths, self.fiducial_pairs, self.truncation_method, self.nested,
             self.fpr_keep_fraction, self.fpr_keep_seed, self.include_lgst,
             self.aliases, self.circuit_rules, dscheck, action_if_missing,
             self.germ_length_limits, verbosity)
         #FUTURE: add support for "advanced options" (probably not in __init__ though?):
         # trunc_scheme=advancedOptions.get('truncScheme', "whole germ powers")
+
+        processor_spec = processor_spec_or_model.create_processor_spec() \
+                         if isinstance(processor_spec_or_model, _Model) else processor_spec_or_model
 
         super().__init__(processor_spec, lists, None, qubit_labels, self.nested)
         self.auxfile_types['prep_fiducials'] = 'text-circuit-list'
@@ -405,17 +425,19 @@ class GSTInitialModel(object):
         Model
         """
 
-        if self.target_model is None:
-            if isinstance(edesign, HasProcessorSpec):
-                typ = 'full' if (self.starting_point in ("LGST", "LGST-if-possible")
-                                 or self.contract_start_to_cptp
-                                 or self.depolarize_start > 0
-                                 or self.randomize_start > 0) else 'auto'
-                target_model = edesign.create_target_model(typ)
+        def _get_target_model():  # a fn so we don't run this code unless we actually need a target model
+            if self.target_model is None:
+                if isinstance(edesign, HasProcessorSpec):
+                    typ = 'full' if (self.starting_point in ("LGST", "LGST-if-possible")
+                                     or self.contract_start_to_cptp
+                                     or self.depolarize_start > 0
+                                     or self.randomize_start > 0) else 'auto'
+                    target_model = edesign.create_target_model(typ)
+                else:
+                    target_model = None
             else:
-                target_model = None
-        else:
-            target_model = self.target_model
+                target_model = self.target_model
+            return target_model
 
         #Get starting point (model), which is used to compute other quantities
         # Note: should compute on rank 0 and distribute?
@@ -426,7 +448,7 @@ class GSTInitialModel(object):
         elif starting_pt in ("LGST", "LGST-if-possible"):
             #lgst_advanced = advancedOptions.copy(); lgst_advanced.update({'estimateLabel': "LGST", 'onBadFit': []})
 
-            mdl_start = self.model if (self.model is not None) else target_model
+            mdl_start = self.model if (self.model is not None) else _get_target_model()
             if mdl_start is None:
                 raise ValueError(("LGST requires a model. Specify an initial model or use an experiment"
                                   " design with a target model"))
@@ -453,14 +475,14 @@ class GSTInitialModel(object):
                     mdl_start = self.model
                 else:
                     starting_pt = "target"
-                    mdl_start = target_model
+                    mdl_start = _get_target_model()
 
             if starting_pt == "LGST":
                 lgst_results = lgst.run(lgst_data)
                 mdl_start = lgst_results.estimates['LGST'].models['lgst_gaugeopt']
 
         elif starting_pt == "target":
-            mdl_start = target_model
+            mdl_start = _get_target_model()
         else:
             raise ValueError("Invalid starting point: %s" % starting_pt)
 
@@ -1382,6 +1404,14 @@ def _load_model(model_filename_or_obj):
     else:
         return model_filename_or_obj  # assume a Model object
 
+def _load_pspec_or_model(processorspec_or_model_filename_or_obj):
+    if isinstance(processorspec_or_model_filename_or_obj, str):
+        # if a filename is given, just try to load a processor spec (can't load a model file yet)
+        with open(processorspec_or_model_filename_or_obj, 'rb') as f:
+            return _pickle.load(f)
+    else:
+        return processorspec_or_model_filename_or_obj
+
 
 def _load_fiducials_and_germs(prep_fiducial_list_or_filename,
                               meas_fiducial_list_or_filename,
@@ -1449,72 +1479,6 @@ def _add_gaugeopt_and_badfit(results, estlbl, target_model, gaugeopt_suite, gaug
 
     return results
 
-
-##TODO REMOVE
-#def OLD_package_into_results(callerProtocol, data, target_model, mdl_start, lsgstLists,
-#                          parameters, mdl_lsgst_list, gaugeopt_suite, gaugeopt_target,
-#                          comm, memLimit, output_pkl, verbosity,
-#                          profiler, evaltree_cache=None):
-#    # advanced_options, opt_args,
-#    """
-#    Performs all of the post-optimization processing common to
-#    run_long_sequence_gst and do_model_evaluation.
-#
-#    Creates a Results object to be returned from run_long_sequence_gst
-#    and do_model_evaluation (passed in as 'callerName').  Performs
-#    gauge optimization, and robust data scaling (with re-optimization
-#    if needed and opt_args is not None - i.e. only for
-#    run_long_sequence_gst).
-#    """
-#    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm)
-#    tref = _time.time()
-#    callerName = callerProtocol.name
-#
-#    #ret = advancedOptions.get('appendTo', None)
-#    #if ret is None:
-#    ret = ModelEstimateResults(data, callerProtocol)
-#    #else:
-#    #    # a dummy object to check compatibility w/ret2
-#    #    dummy = ModelEstimateResults(data, callerProtocol)
-#    #    ret.add_estimates(dummy)  # does nothing, but will complain when appropriate
-#
-#    #add estimate to Results
-#    profiler.add_time('%s: results initialization' % callerName, tref); tref = _time.time()
-#
-#    #Do final gauge optimization to *final* iteration result only
-#    if gaugeopt_suite:
-#        if gaugeopt_target is None: gaugeopt_target = target_model
-#        _add_gauge_opt(ret, estlbl, gaugeopt_suite, gaugeopt_target,
-#                      mdl_lsgst_list[-1], comm, advancedOptions, printer - 1)
-#        profiler.add_time('%s: gauge optimization' % callerName, tref)
-#
-#    #Perform extra analysis if a bad fit was obtained - do this *after* gauge-opt b/c it mimics gaugeopts
-#    badFitThreshold = advancedOptions.get('badFitThreshold', DEFAULT_BAD_FIT_THRESHOLD)
-#    onBadFit = advancedOptions.get('onBadFit', [])  # ["wildcard"]) #["Robust+"]) # empty list => 'do nothing'
-#    badfit_opts = advancedOptions.get('badFitOptions', {'wildcard_budget_includes_spam': True,
-#                                                        'wildcard_smart_init': True})
-#    _add_badfit_estimates(ret, estlbl, onBadFit, badFitThreshold, badfit_opts, opt_args, evaltree_cache,
-#                         comm, memLimit, printer)
-#    profiler.add_time('%s: add badfit estimates' % callerName, tref); tref = _time.time()
-#
-#    #Add recorded info (even robust-related info) to the *base*
-#    #   estimate label's "stdout" meta information
-#    if printer.is_recording():
-#        ret.estimates[estlbl].meta['stdout'] = printer.stop_recording()
-#
-#    #Write results to a pickle file if desired
-#    if output_pkl and (comm is None or comm.Get_rank() == 0):
-#        if isinstance(output_pkl, str):
-#            with open(output_pkl, 'wb') as pklfile:
-#                _pickle.dump(ret, pklfile)
-#        else:
-#            _pickle.dump(ret, output_pkl)
-#
-#    return ret
-
-
-#def _add_gauge_opt(estimate, gaugeOptParams, target_model, starting_model,
-#                  comm=None, verbosity=0):
 
 def _add_gauge_opt(results, base_est_label, gaugeopt_suite, target_model, starting_model,
                    unreliable_ops, comm=None, verbosity=0):
@@ -1805,7 +1769,7 @@ def _compute_robust_scaling(scale_typ, objfn_cache, mdc_objfn):
 def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options, verbosity):
     """
     Create a wildcard budget for a model estimate.
-    TODO: docstring (update)
+    TODO: update docstring
 
     Parameters
     ----------
@@ -2066,7 +2030,7 @@ def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options,
 def _reoptimize_with_weights(mdc_objfn, circuit_weights_dict, optimizer, verbosity):
     """
     Re-optimize a model after data counts have been scaled by circuit weights.
-    TODO: docstring
+    TODO: update docstring
 
     Parameters
     ----------
@@ -2203,21 +2167,6 @@ class ModelEstimateResults(_proto.ProtocolResults):
 
             circuit_lists['final'] = circuit_lists['iteration'][-1]
 
-            #TODO REMOVE
-            ##We currently expect to have these keys (in future have users check for them?)
-            #if 'prep fiducials' not in circuit_lists: circuit_lists['prep fiducials'] = []
-            #if 'meas fiducials' not in circuit_lists: circuit_lists['meas fiducials'] = []
-            #if 'germs' not in circuit_lists: circuit_lists['germs'] = []
-
-            #I think these are UNUSED - TODO REMOVE
-            #circuit_lists['all'] = _tools.remove_duplicates(
-            #    list(_itertools.chain(*circuit_lists['iteration']))) # USED?
-            #running_set = set(); delta_lsts = []
-            #for lst in circuit_lists['iteration']:
-            #    delta_lst = [x for x in lst if (x not in running_set)]
-            #    delta_lsts.append(delta_lst); running_set.update(delta_lst)
-            #circuit_lists['iteration delta'] = delta_lsts  # *added* at each iteration
-
         self.circuit_lists = circuit_lists
         self.estimates = _collections.OrderedDict()
 
@@ -2346,11 +2295,6 @@ class ModelEstimateResults(_proto.ProtocolResults):
                            + " want to do this.")
 
         self.estimates[estimate_key] = estimate
-
-        #TODO REMOVE
-        ##Set gate sequence related parameters inherited from Results
-        #self.estimates[estimate_key].parameters['max length list'] = \
-        #    self.circuit_structs['final'].Ls
 
     def add_model_test(self, target_model, themodel,
                        estimate_key='test', gaugeopt_keys="auto"):

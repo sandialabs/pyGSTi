@@ -1805,8 +1805,7 @@ def sparse_onenorm(a):
     return max(abs(a).sum(axis=0).flat)
 
 
-#REMOVE debug argument?
-def ndarray_base(a, debug=False):
+def ndarray_base(a, verbosity=0):
     """
     Get the base memory object for numpy array `a`.
 
@@ -1817,18 +1816,18 @@ def ndarray_base(a, debug=False):
     a : numpy.ndarray
         Array to get base of.
 
-    debug : bool, optional
-        Enable additional debugging.
+    verbosity : int, optional
+        Print additional debugging information if this is > 0.
 
     Returns
     -------
     numpy.ndarray
     """
-    if debug: print("ndarray_base debug:")
+    if verbosity: print("ndarray_base debug:")
     while a.base is not None:
-        if debug: print(" -> base = ", id(a.base))
+        if verbosity: print(" -> base = ", id(a.base))
         a = a.base
-    if debug: print(" ==> ", id(a))
+    if verbosity: print(" ==> ", id(a))
     return a
 
 

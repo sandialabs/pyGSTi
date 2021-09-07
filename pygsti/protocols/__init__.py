@@ -18,3 +18,4 @@ from .rb import *
 from .rpe import *
 from .stability import *
 from .vb import *
+from .vbdataframe import *

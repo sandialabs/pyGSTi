@@ -74,7 +74,6 @@ cdef class PolynomialRep:
         cdef INT indx, nxt, i, m, k, new_i, new_indx;
         cdef INT divisor = self.c_polynomial._max_num_vars + 1
 
-        #REMOVE print "MAPPING divisor=", divisor
         cdef PolynomialVarsIndex new_PolynomialVarsIndex
         cdef unordered_map[PolynomialVarsIndex, complex] new_coeffs
         cdef vector[INT].iterator vit
@@ -83,29 +82,24 @@ cdef class PolynomialRep:
         while(it != self.c_polynomial._coeffs.end()): # for each coefficient
             i_vec = deref(it).first._parts  # the vector[INT] beneath this PolynomialVarsIndex
             new_PolynomialVarsIndex = PolynomialVarsIndex(i_vec.size())
-            #REMOVE print " ivec =", i_vec
 
             #map i_vec -> new_PolynomialVarsIndex
             vit = i_vec.begin(); k = 0
             while(vit != i_vec.end()):
                 indx = deref(vit)
                 new_indx = 0; m=1
-                #REMOVE print "begin indx ",indx
                 while indx != 0:
                     nxt = indx // divisor
                     i = indx - nxt * divisor
                     indx = nxt
-                    #REMOVE print indx, " -> nxt=", nxt, " i=",i
 
                     # i-1 is variable index (the thing we map)
                     new_i = mapfv[i-1]+1
                     new_indx += new_i * m
-                    #REMOVE print "   new_i=",new_i," m=",m," => new_indx=",new_indx
                     m *= divisor
-                #REMOVE print "Setting new ivec[",k,"] = ",new_indx
+
                 new_PolynomialVarsIndex._parts[k] = new_indx
                 inc(vit); k += 1
-            #REMOVE print " new_ivec =", new_PolynomialVarsIndex._parts
             new_coeffs[new_PolynomialVarsIndex] = deref(it).second
             inc(it)
 
@@ -178,12 +172,10 @@ cdef class PolynomialRep:
 
         while(it != self.c_polynomial._coeffs.end()):
             vs = self.c_polynomial.int_to_vinds( deref(it).first )
-            #REMOVE print "-> ", (deref(it).first)._parts, vs
             nVarIndices += vs.size()
             vinds.push_back( pair[PolynomialVarsIndex, vector[INT]](deref(it).first, vs) )
             inc(it)
 
-        #REMOVE print "COMP: ",nTerms, nVarIndices
         vtape = _np.empty(1 + nTerms + nVarIndices, _np.int64) # "variable" tape
         ctape = _np.empty(nTerms, _np.complex128) # "coefficient tape"
 

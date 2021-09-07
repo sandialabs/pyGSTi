@@ -427,6 +427,23 @@ def find_premultipled_pauli(s, p_implemented, p_target, qubit_labels=None):
     return pauli_layer
 
 
+def find_pauli_layer(pvec, qubit_labels, pauli_labels=['I', 'X', 'Y', 'Z']):
+    """
+    TODO: docstring
+    """
+    paulis_as_int_list = find_pauli_number(pvec)
+    return [(pauli_labels[p], q) for p, q in zip(paulis_as_int_list, qubit_labels)]
+
+
+def find_pauli_number(pvec):
+    """
+    TODO: docstring
+    """
+    n = len(pvec) // 2
+    v = (pvec[0:n] // 2) + 2 * (pvec[n:] // 2)
+    return [[0, 3, 1, 2][i] for i in v]  # [0,0]=I, [2,0]=Z, [0,2]=X, and [2,2]=Y.
+
+
 def compose_cliffords(s1, p1, s2, p2, do_checks=True):
     """
     Multiplies two cliffords in the symplectic representation.

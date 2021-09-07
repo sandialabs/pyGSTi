@@ -23,6 +23,7 @@ from . import ibmq_lima
 from . import ibmq_london
 from . import ibmq_manhattan
 from . import ibmq_melbourne
+from . import ibmq_montreal
 from . import ibmq_ourense
 from . import ibmq_quito
 from . import ibmq_rome
@@ -62,6 +63,7 @@ def _get_dev_specs(devname):
     elif devname == 'ibmq_london': dev = ibmq_london
     elif devname == 'ibmq_manhattan': dev = ibmq_manhattan
     elif devname == 'ibmq_melbourne' or devname == 'ibmq_16_melbourne': dev = ibmq_melbourne
+    elif devname == 'ibmq_montreal': dev = ibmq_montreal
     elif devname == 'ibmq_ourense': dev = ibmq_ourense
     elif devname == 'ibmq_quito': dev = ibmq_quito
     elif devname == 'ibmq_rome': dev = ibmq_rome

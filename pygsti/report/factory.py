@@ -243,10 +243,6 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
     switchBd.add("params", (0, 1))
     switchBd.add("objfn_builder", (0, 1))
     switchBd.add("objfn_builder_modvi", (0, 1))
-    #switchBd.add("objective_tvd_tuple", (0, 1))    #REMOVE
-    #switchBd.add("objective_modvi", (0, 1))    #REMOVE
-    #switchBd.add("mpc", (0, 1))    #REMOVE
-    #switchBd.add("mpc_modvi", (0, 1))    #REMOVE
     switchBd.add("clifford_compilation", (0, 1))
     switchBd.add("meta_stdout", (0, 1))
     switchBd.add("profiler", (0, 1))
@@ -328,24 +324,6 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
                 'final_objfn_builder', _objfns.ObjectiveFunctionBuilder.create_from('logl'))
             switchBd.params[d, i] = est.parameters
 
-            #REMOVE
-            #def rpt_objective(opt_objective):
-            #    """ If optimized using just LGST, compute logl values """
-            #    if opt_objective == "lgst": return "logl"
-            #    else: return opt_objective
-            #switchBd.params[d, i] = est.parameters
-            #switchBd.objective[d, i] = rpt_objective(est.parameters['objective'])
-            #switchBd.objective_tvd_tuple[d, i] = (rpt_objective(est.parameters['objective']), 'tvd')
-            #switchBd.objective_modvi[d, i] = rpt_objective(est_modvi.parameters['objective'])
-            #if est.parameters['objective'] == "logl":
-            #    switchBd.mpc[d, i] = est.parameters['minProbClip']
-            #    switchBd.mpc_modvi[d, i] = est_modvi.parameters['minProbClip']
-            #elif est.parameters['objective'] == "chi2":
-            #    switchBd.mpc[d, i] = est.parameters['minProbClipForWeighting']
-            #    switchBd.mpc_modvi[d, i] = est_modvi.parameters['minProbClipForWeighting']
-            #else:  # "lgst" - just use defaults for logl
-            #    switchBd.mpc[d, i] = 1e-4
-            #    switchBd.mpc_modvi[d, i] = 1e-4
             switchBd.clifford_compilation[d, i] = est.parameters.get("clifford compilation", 'auto')
             if switchBd.clifford_compilation[d, i] == 'auto':
                 switchBd.clifford_compilation[d, i] = find_std_clifford_compilation(

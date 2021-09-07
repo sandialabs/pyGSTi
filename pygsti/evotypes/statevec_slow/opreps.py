@@ -264,7 +264,7 @@ class OpRepExpErrorgen(OpRep):
 
     def errgenrep_has_changed(self, onenorm_upperbound):
         pass
-    
+
     def acton(self, state):
         raise AttributeError("Cannot currently act with statevec.OpRepExpErrorgen - for terms only!")
 

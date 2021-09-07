@@ -34,7 +34,6 @@ def run_model_test(model_filename_or_object,
                    advanced_options=None, comm=None, mem_limit=None,
                    output_pkl=None, verbosity=2):
     """
-    TODO: update docstring - processorspec_filename_or_object
     Compares a :class:`Model`'s predictions to a `DataSet` using GST-like circuits.
 
     This routine tests a Model model against a DataSet using a specific set of
@@ -64,9 +63,11 @@ def run_model_test(model_filename_or_object,
         or by the filename of a dataset file (assumed to be a pickled `DataSet`
         if extension is 'pkl' otherwise assumed to be in pyGSTi's text format).
 
-    target_model_filename_or_object : Model or string
-        The target model, specified either directly or by the filename of a
-        model file (text format).
+    processorspec_filename_or_object : ProcessorSpec or string
+        A specification of the processor this model test is to be run on, given either
+        directly or by the filename of a processor-spec file (text format).  The
+        processor specification contains basic interface-level information about the
+        processor being tested, e.g., its state space and available gates.
 
     prep_fiducial_list_or_filename : (list of Circuits) or string
         The state preparation fiducial circuits, specified either directly
@@ -166,7 +167,6 @@ def run_linear_gst(data_filename_or_set, processorspec_filename_or_object,
                    gauge_opt_params=None, advanced_options=None, comm=None,
                    mem_limit=None, output_pkl=None, verbosity=2):
     """
-    TODO: update docstring -processorspec_filename_or_object
     Perform Linear Gate Set Tomography (LGST).
 
     This function differs from the lower level :function:`run_lgst` function
@@ -184,9 +184,11 @@ def run_linear_gst(data_filename_or_set, processorspec_filename_or_object,
         or by the filename of a dataset file (assumed to be a pickled `DataSet`
         if extension is 'pkl' otherwise assumed to be in pyGSTi's text format).
 
-    target_model_filename_or_object : Model or string
-        The target model, specified either directly or by the filename of a
-        model file (text format).
+    processorspec_filename_or_object : ProcessorSpec or string
+        A specification of the processor that LGST is to be run on, given either
+        directly or by the filename of a processor-spec file (text format).  The
+        processor specification contains basic interface-level information about the
+        processor being tested, e.g., its state space and available gates.
 
     prep_fiducial_list_or_filename : (list of Circuits) or string
         The state preparation fiducial circuits, specified either directly
@@ -274,7 +276,6 @@ def run_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
                           advanced_options=None, comm=None, mem_limit=None,
                           output_pkl=None, verbosity=2):
     """
-    TODO: update docstring - processorspec_filename_or_obj
     Perform long-sequence GST (LSGST).
 
     This analysis fits a model (`target_model_filename_or_object`) to data
@@ -448,7 +449,6 @@ def run_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_ob
                                advanced_options=None, comm=None, mem_limit=None,
                                output_pkl=None, verbosity=2):
     """
-    TODO: update docstring - processorspec_filename_or_obj
     A more fundamental interface for performing end-to-end GST.
 
     Similar to :func:`run_long_sequence_gst` except this function takes
@@ -561,7 +561,6 @@ def run_stdpractice_gst(data_filename_or_set, processorspec_filename_or_object,
                         gaugeopt_target=None, models_to_test=None, comm=None, mem_limit=None,
                         advanced_options=None, output_pkl=None, verbosity=2):
     """
-    TODO: update docstring
     Perform end-to-end GST analysis using standard practices.
 
     This routines is an even higher-level driver than
@@ -578,9 +577,11 @@ def run_stdpractice_gst(data_filename_or_set, processorspec_filename_or_object,
         or by the filename of a dataset file (assumed to be a pickled `DataSet`
         if extension is 'pkl' otherwise assumed to be in pyGSTi's text format).
 
-    target_model_filename_or_object : Model or string
-        The target model, specified either directly or by the filename of a
-        model file (text format).
+    processorspec_filename_or_object : ProcessorSpec or string
+        A specification of the processor that GST is to be run on, given either
+        directly or by the filename of a processor-spec file (text format).  The
+        processor specification contains basic interface-level information about the
+        processor being tested, e.g., its state space and available gates.
 
     prep_fiducial_list_or_filename : (list of Circuits) or string
         The state preparation fiducial circuits, specified either directly

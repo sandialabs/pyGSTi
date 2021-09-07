@@ -48,8 +48,9 @@ class TestStdInputParser(BaseTestCase):
         #print "String Tests:"
         for s,expected in string_tests:
             #print("%s ==> " % s, expected)
-            result, line_labels, occurrence_id = std.parse_circuit_raw(s, lookup=lkup, create_subcircuits=False)
+            result, line_labels, occurrence_id, compilable_indices = std.parse_circuit_raw(s, lookup=lkup, create_subcircuits=False)
             self.assertEqual(line_labels, None)
+            self.assertEqual(compilable_indices, None)
             circuit_result = pygsti.circuits.Circuit(result, line_labels="auto", expand_subcircuits=True)
               #use "auto" line labels since none are parsed.
             self.assertEqual(circuit_result.tup, expected)
@@ -124,8 +125,8 @@ class TestStdInputParser(BaseTestCase):
             std.parse_dataline("1.0 2.0") #just data cols (no circuit col!)
 
 
-        self.assertEqual( std.parse_dictline(dictline_tests[0]), ('1', ('G1', 'G2', 'G3'), 'G1G2G3', None, None))
-        self.assertEqual( std.parse_dictline(dictline_tests[1]), ('MyFav', (CL('',('G1', 'G2'),None,3),) , '(G1G2)^3', None, None))
+        self.assertEqual( std.parse_dictline(dictline_tests[0]), ('1', ('G1', 'G2', 'G3'), 'G1G2G3', None, None, None))
+        self.assertEqual( std.parse_dictline(dictline_tests[1]), ('MyFav', (CL('',('G1', 'G2'),None,3),) , '(G1G2)^3', None, None, None))
           # OLD (before subcircuit parsing) the above result should have been: ('G1', 'G2', 'G1', 'G2', 'G1', 'G2')
 
         #print "Dataline Tests:"

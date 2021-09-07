@@ -434,36 +434,6 @@ def predicted_intrinsic_rates(nqubits, maxweight, model,
                 scale = 1 / (_np.sqrt(2)**nTargetQubits)  # not exactly sure how this is derived
                 aff_intrinsic_rates[result_index] = errgen_coeffs[('A', P)] * scale
 
-            #TODO REMOVE (OLD)
-            #if stochastic: sval = stochastic_sub_v[k]
-            #if hamiltonian: hval = hamiltonian_sub_v[k]
-            #if affine: aval = affine_sub_v[k]
-            #
-            #nTargetQubits = len(factor.targetLabels)
-            #
-            #if stochastic:
-            #    # each Stochastic term has two Paulis in it (on either side of rho), each of which is
-            #    # scaled by 1/sqrt(d), so 1/d in total, where d = 2**nqubits
-            #    sscaled_val = sval**2 / (2**nTargetQubits)  # val**2 b/c it's a *stochastic* term parameter
-            #
-            #if hamiltonian:
-            #    # each Hamiltonian term, to fix missing scaling factors in Hamiltonian jacobian
-            #    # elements, needs a sqrt(d) for each trivial ('I') Pauli... ??
-            #    hscaled_val = hval * _np.sqrt(2**(2 - nTargetQubits))  # TODO: figure this out...
-            #    # 1Q: sqrt(2)
-            #    # 2Q: nqubits-targetqubits (sqrt(2) on 1Q)
-            #    # 4Q: sqrt(2)**-2
-            #
-            #if affine:
-            #    ascaled_val = aval * 1 / (_np.sqrt(2)**nTargetQubits)  # not exactly sure how this is derived
-            #    # 1Q: sqrt(2)/6
-            #    # 2Q: 1/3 * 10-2
-            #
-            #result_index = error_labels.index(label)
-            #if hamiltonian: ham_intrinsic_rates[result_index] = hscaled_val
-            #if stochastic: sto_intrinsic_rates[result_index] = sscaled_val
-            #if affine: aff_intrinsic_rates[result_index] = ascaled_val
-
     return ham_intrinsic_rates, sto_intrinsic_rates, aff_intrinsic_rates
 
 

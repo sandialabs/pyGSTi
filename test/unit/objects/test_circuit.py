@@ -1,6 +1,7 @@
 import copy
 import pickle
 import unittest
+import numpy as np
 
 from pygsti.circuits import circuit
 from pygsti.baseobjs import Label, CircuitLabel
@@ -226,6 +227,33 @@ class CircuitTester(BaseCase):
             circuit.Circuit(None)
         with self.assertRaises(ValueError):
             circuit.Circuit(('foobar',), stringrep="foobar", check=True)  # lexer illegal character
+
+    def test_circuit_barriers(self):
+        labels = [Label('Gi', 'Q0'), Label('Gx', 'Q8'), Label('Gy', 'Q1')]
+        c = circuit.Circuit(layer_labels=labels, line_labels=['Q0', 'Q1', 'Q8', 'Q12'])
+        self.assertEqual(c.compilable_layer_indices, ())  # default = nothing is compilable
+
+        c = circuit.Circuit(layer_labels=labels, line_labels=['Q0', 'Q1', 'Q8', 'Q12'],
+                            compilable_layer_indices=(1,2))
+        self.assertEqual(c.compilable_layer_indices, (1,2))
+
+        c.compilable_layer_indices = (1,)  # test setter
+        self.assertEqual(c.compilable_layer_indices, (1,))
+        self.assertArraysEqual(c.compilable_by_layer, np.array([False,True,False]))
+        
+
+        expected_tup = (Label(('Gi', 'Q0')), Label(('Gx', 'Q8')), Label(('Gy', 'Q1')), '@', 'Q0', 'Q1', 'Q8', 'Q12', '__CMPLBL__', 1)
+        self.assertEqual(c.tup, expected_tup)
+
+        cstr = "Gi:Q0Gx:Q8~Gy:Q1@(Q0,Q1,Q8,Q12)"
+        c2 = circuit.Circuit(cstr)
+        self.assertEqual(c,c2)
+        self.assertEqual(c.str, cstr)
+        self.assertEqual(c2.str, cstr)
+
+        cstr3 = "Gi:Q0|Gx:Q8Gy:Q1|@(Q0,Q1,Q8,Q12)"
+        c3 = circuit.Circuit(cstr3)
+        self.assertEqual(c,c3)
 
 
 class CircuitMethodTester(BaseCase):

@@ -216,8 +216,6 @@ class ComputationalBasisPOVMEffect(_POVMEffect):
             output of :method:`Polynomial.compact`.
         """
         if order == 0:  # only 0-th order term exists
-            #REMOVE term_evotype = self._evotype.term_evotype
-            #REMOVE effect = ComputationalBasisPOVMEffect(self._rep.zvals, term_evotype)
             coeff = _Polynomial({(): 1.0}, max_polynomial_vars)
             terms = [_term.RankOnePolynomialEffectTerm.create_from(coeff, self, self,
                                                                    self._evotype, self.state_space)]
@@ -288,21 +286,3 @@ class ComputationalBasisPOVMEffect(_POVMEffect):
         nQubits = len(self._rep.zvals)
         s = "Computational Z-basis POVM effect vec for %d qubits w/z-values: %s" % (nQubits, str(self._rep.zvals))
         return s
-
-#REMOVE:
-#class StabilizerEffectVec(SPAMVec):  # FUTURE: merge this with ComptationalSPAMVec (w/evotype == "stabilizer")?
-#    """
-#    A dummy SPAM vector that points to a set/product of 1-qubit POVM outcomes from stabilizer-state measurements.
-#
-#    Parameters
-#    ----------
-#    outcomes : iterable
-#        A list or other iterable of integer 0 or 1 outcomes specifying
-#        which POVM effect vector this object represents within the
-#        full `stabilizerPOVM`
-#
-#    Attributes
-#    ----------
-#    outcomes : numpy.ndarray
-#        The 0/1 outcomes identifying this effect within its StabilizerZPOVM
-#    """

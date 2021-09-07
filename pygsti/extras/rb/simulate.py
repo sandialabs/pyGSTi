@@ -500,9 +500,6 @@ def circuit_simulator_for_tensored_independent_pauli_errors(circuit, pspec, erro
         A dictionary of simulated measurement outcome counts.
     """
     n = circuit.number_of_lines
-    #TODO REMOVE
-    #if circuit.identity != idle_name:
-    #    circuit.replace_gatename(circuit.identity,idle_name)
 
     if set(circuit.line_labels) != set(pspec.qubit_labels):
         assert(set(circuit.line_labels).issubset(set(pspec.qubit_labels)))
@@ -843,9 +840,6 @@ def create_iid_pauli_error_model(pspec, one_qubit_gate_errorrate, two_qubit_gate
 
         elif gate.num_qubits == 1:
             q = gate.qubits[0]
-
-            # If the idle gate, use the idle error rate
-            #TODO REMOVE if gate.name == pspec.identity: er = idle_errorrate
             er = one_qubit_gate_errorrate
 
             errormodel[gate][pspec.qubit_labels.index(q), :] = error_row(er)

@@ -300,6 +300,22 @@ class GeneralMethodBase(object):
         self.assertEqual(self.model.num_params, 27)
         self.assertEqual(set(lbls_save), set(self.model.parameter_labels))  # ok if ordering if different
 
+    def test_parameter_bounds(self):
+        self.model.set_all_parameterizations("H+S")
+        self.model.num_params  # rebuild parameter vector -- but this should be done by set_all_parameterizations?!
+        
+        self.assertTrue(self.model.parameter_bounds is None)
+        self.assertTrue(self.model['Gx'].parameter_bounds is None)
+
+        new_bounds = np.ones((6,2), 'd')
+        new_bounds[:,0] = -0.01  # lower bounds
+        new_bounds[:,1] = +0.01  # upper bounds
+        self.model['Gx'].parameter_bounds = new_bounds
+
+        self.model.num_params  # should rebuild parameter vector -- maybe .parameter_bounds should (but rebuild call it!)
+        Gx_indices = self.model['Gx'].gpindices
+        self.assertArraysAlmostEqual(self.model.parameter_bounds[Gx_indices], new_bounds)
+
 
 class ThresholdMethodBase(object):
     """Tests for model methods affected by the mapforwardsim smallness threshold"""

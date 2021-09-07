@@ -300,27 +300,12 @@ class ComposedOp(_LinearOperator):
         """
         plabels_per_local_index = _collections.defaultdict(list)
         for operation, factorgate_local_inds in zip(self.factorops, self._submember_rpindices):
-            #REMOVE
-            #factorgate_local_inds = _modelmember._decompose_gpindices(
-            #    self.gpindices, operation.gpindices)
             for i, plbl in zip(_slct.to_array(factorgate_local_inds), operation.parameter_labels):
                 plabels_per_local_index[i].append(plbl)
 
         vl = _np.empty(self.num_params, dtype=object)
         for i in range(self.num_params):
             vl[i] = ', '.join(plabels_per_local_index[i])
-
-        #REMOVE (OLD)
-        #gpa = self.gpindices_as_array()
-        #for i, gpi in zip(range(self.num_params), gpa):
-            #num_duplicates = len(vl[gpa == gpi])  # number of repetitions of this global param index in this composedop
-            #if num_duplicates > 1 and num_duplicates == len(plabels_per_local_index[i]):
-            #    # Special behavior for labeling convenience - when there are duplicate gpindices in
-            #    # both this composed op and the factors, just serialize the labels.
-            #    vl[gpa == gpi] = plabels_per_local_index[i]
-            #else:  # just combine the factorop label names with commas
-            #    vl[gpa == gpi] = ', '.join(plabels_per_local_index[i])
-
         return vl
 
     @property
@@ -489,14 +474,6 @@ class ComposedOp(_LinearOperator):
 
     def _compute_taylor_order_terms(self, order, max_polynomial_vars, gpindices_array):  # separated for profiling
         terms = []
-
-        #DEBUG TODO REMOVE
-        #print("Composed op getting order",order,"terms:")
-        #for i,fop in enumerate(self.factorops):
-        #    print(" ",i,fop.__class__.__name__,"totalmag = ",fop.get_total_term_magnitude())
-        #    hmdebug,_ = fop.highmagnitude_terms(0.00001, True, order)
-        #    print("  hmterms w/max order=",order," have magnitude ",sum([t.magnitude for t in hmdebug]))
-
         for p in _lt.partition_into(order, len(self.factorops)):
             factor_lists = [self.factorops[i].taylor_order_terms(pi, max_polynomial_vars) for i, pi in enumerate(p)]
             for factors in _itertools.product(*factor_lists):

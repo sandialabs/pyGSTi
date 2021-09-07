@@ -530,6 +530,30 @@ class _DataSetRow(object):
             else:  # need to add a new label & entry to reps[]
                 raise NotImplementedError("Cannot create new outcome labels by assignment")
 
+    def get(self, index_or_outcome_label, default_value):
+        """
+        The the number of counts for an index or outcome label.
+
+        If the index or outcome is nor present, `default_value` is returned.
+
+        Parameters
+        ----------
+        index_or_outcome_label : int or str or tuple
+            The index or outcome label to lookup.
+
+        default_value : object
+            The value to return if this data row doesn't contain data
+            at the given index.
+
+        Returns
+        -------
+        int or float
+        """
+        try:
+            return self[index_or_outcome_label]
+        except KeyError:
+            return default_value
+
     def _get_single_count(self, outcome_label, timestamp=None):
         if timestamp is not None:
             tslc = _np.where(_np.isclose(self.time, timestamp))[0]
@@ -1532,7 +1556,34 @@ class DataSet(object):
     def add_count_arrays(self, circuit, outcome_index_array, count_array,
                          record_zero_counts=True, aux=None):
         """
-        TODO: docstring
+        Add the outcomes for a single circuit, formatted as raw data arrays.
+
+        Parameters
+        ----------
+        circuit : Circuit
+            The circuit to add data for.
+
+        outcome_index_array : numpy.ndarray
+            An array of outcome indices, which must be values of `self.olIndex`
+            (which maps outcome labels to indices).
+
+        count_array : numpy.ndarray
+            An array of integer (or sometimes floating point) counts, one corresponding
+            to each outcome index (element of `outcome_index_array`).
+
+        record_zero_counts : bool, optional
+            Whether zero counts (zeros in `count_array` should be stored explicitly or
+            not stored and inferred.  Setting to False reduces the space taken by data
+            sets containing lots of zero counts, but makes some objective function evaluations
+            less precise.
+
+        aux : dict or None, optional
+            If not `None` a dictionary of user-defined auxiliary information that
+            should be associated with this circuit.
+
+        Returns
+        -------
+        None
         """
         if self.collisionAction == "aggregate" and circuit in self:
             iNext = int(max(self[circuit].time)) + 1 \

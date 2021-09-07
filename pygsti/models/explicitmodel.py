@@ -128,13 +128,6 @@ class ExplicitOpModel(_mdl.OpModel):
         self.effects_prefix = effect_prefix
         self._default_gauge_group = None
 
-        #REMOVE
-        #if basis == "auto":
-        #    evotype = _Evotype.cast(evotype)
-        #    basis = "pp" if evotype in ("densitymx", "svterm", "cterm") \
-        #        else "sv"  # ( if evotype in ("statevec","stabilizer") )
-        # TODO - change this based on evotype dimension in FUTURE ????
-
         super(ExplicitOpModel, self).__init__(state_space, basis, evotype, ExplicitLayerRules(), simulator)
 
     @property
@@ -1431,31 +1424,65 @@ class ExplicitOpModel(_mdl.OpModel):
         self._opcaches['op-layers'] = simplified_ops
 
     def create_processor_spec(self, qubit_labels='auto'):
-        """ TODO: docstring """
+        """
+        Create a processor specification from this model with the given qubit labels.
+
+        Currently this only works for models on qubits.
+
+        Parameters
+        ----------
+        qubit_labels : tuple or `"auto"`, optional
+            A tuple of qubit labels, e.g. ('Q0', 'Q1') or (0, 1).  `"auto"`
+            uses the labels in this model's state space labels.
+
+        Returns
+        -------
+        QubitProcessorSpec
+        """
         from pygsti.processors import QubitProcessorSpec as _QubitProcessorSpec
         #go through ops, building up availability and unitaries, then create procesor spec...
 
         nqubits = self.state_space.num_qubits
         gate_unitaries = _collections.OrderedDict()
         availability = {}
+
+        def add_availability(opkey, op):
+            if opkey == _Label(()) or opkey.is_simple():
+                if opkey == _Label(()):  # special case: turn empty tuple labels into "(idle)" gate in processor spec
+                    gn = "(idle)"
+                    sslbls = None
+                elif opkey.is_simple():
+                    gn = opkey.name
+                    sslbls = opkey.sslbls
+                    #if sslbls is not None:
+                    #    observed_sslbls.update(sslbls)
+
+                if gn not in gate_unitaries or gate_unitaries[gn] is None:
+                    U = _ot.process_mx_to_unitary(_bt.change_basis(
+                        op.to_dense('HilbertSchmidt'), self.basis, 'std')) \
+                        if (op is not None) else None  # U == None indicates "unknown, up until this point"
+                    gate_unitaries[gn] = U
+
+                    if gn in availability:
+                        if sslbls not in availability[gn]:
+                            availability[gn].append(sslbls)
+                    else:
+                        availability[gn] = [sslbls]
+                elif sslbls not in availability[gn]:
+                    availability[gn].append(sslbls)
+
+            else:  # a COMPOUND label with components => process each component separately
+                for component in opkey.components:
+                    add_availability(component, None)  # recursive call - the reason we need this to be a function!
+
+        #Check that there aren't any undetermined unitaries
+        unknown_unitaries = [k for k, v in gate_unitaries.items() if v is None]
+        if len(unknown_unitaries) > 0:
+            raise ValueError("Unitary not specfied for %s gate(s)!" % str(unknown_unitaries))
+
         #observed_sslbls = set()
         for opkey, op in self.operations.items():  # TODO: need to deal with special () idle label
-            if opkey == _Label(()):  # special case: turn empty tuple labels into "(idle)" gate in processor spec
-                gn = "(idle)"
-                sslbls = None
-            else:
-                gn = opkey.name
-                sslbls = opkey.sslbls
-                #if sslbls is not None:
-                #    observed_sslbls.update(sslbls)
-
-            if gn not in gate_unitaries:
-                U = _ot.process_mx_to_unitary(_bt.change_basis(op.to_dense('HilbertSchmidt'),
-                                                               self.basis, 'std'))
-                gate_unitaries[gn] = U
-                availability[gn] = [sslbls]
-            else:
-                availability[gn].append(sslbls)
+            add_availability(opkey, op)
 
         if qubit_labels == 'auto':
             qubit_labels = self.state_space.tensor_product_block_labels(0)

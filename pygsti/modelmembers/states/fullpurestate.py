@@ -44,8 +44,7 @@ class FullPureState(_DensePureState):
         self._paramlbls = _np.array(["VecElement Re(%d)" % i for i in range(self.state_space.udim)]
                                     + ["VecElement Im(%d)" % i for i in range(self.state_space.udim)], dtype=object)
 
-    #REMOVE
-    #Cannot set to arbitrary vector
+    #REMOVE (Cannot set to arbitrary vector) - but maybe could set to pure vector?
     #def set_dense(self, vec):
     #    """
     #    Set the dense-vector value of this SPAM vector.

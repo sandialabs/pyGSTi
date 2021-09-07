@@ -1161,11 +1161,6 @@ class LabelTupTup(Label, tuple):
         ret = []
         expanded_comps = [x.expand_subcircuits() for x in self.components]
 
-        #DEBUG TODO REMOVE
-        #print("DB: expaned comps:")
-        #for i,x in enumerate(expanded_comps):
-        #    print(i,": ",x)
-
         for i in range(self.depth):  # depth == # of layers when expanded
             ec = []
             for expanded_comp in expanded_comps:
@@ -1435,11 +1430,6 @@ class LabelTupTupWithTime(Label, tuple):
         ret = []
         expanded_comps = [x.expand_subcircuits() for x in self.components]
 
-        #DEBUG TODO REMOVE
-        #print("DB: expaned comps:")
-        #for i,x in enumerate(expanded_comps):
-        #    print(i,": ",x)
-
         for i in range(self.depth):  # depth == # of layers when expanded
             ec = []
             for expanded_comp in expanded_comps:
@@ -1498,7 +1488,6 @@ class CircuitLabel(Label, tuple):
         time : float
             The time at which this label occurs (can be relative or absolute)
         """
-        #if name is None: name = '' # backward compatibility (temporary - TODO REMOVE)
         assert(isinstance(reps, _numbers.Integral) and isinstance(name, str)
                ), "Invalid name or reps: %s %s" % (str(name), str(reps))
         tupOfLabels = tuple((Label(tup) for tup in tup_of_layers))  # Note: tup can also be a Label obj
@@ -1733,8 +1722,6 @@ class CircuitLabel(Label, tuple):
             A tuple of component Labels (none of which should be
             :class:`CircuitLabel`s).
         """
-        #REMOVE print("Expanding subcircuit components: ",self.components)
-        #REMOVE print(" --> ",[ x.expand_subcircuits() for x in self.components ])
         return tuple(_itertools.chain(*[x.expand_subcircuits() for x in self.components])) * self.reps
 
     __hash__ = tuple.__hash__  # this is why we derive from tuple - using the
@@ -1913,7 +1900,10 @@ class LabelTupWithArgs(Label, tuple):
         # FUTURE: use LabelTupWithArgs here instead of Label?
 
     def strip_args(self):
-        return LabelTup.__new__(LabelTup, (self[0],) + self[self[1]:])  # make a new LabelTup (no args)
+        if self.sslbls is not None:
+            return LabelTup.__new__(LabelTup, (self[0],) + self[self[1]:])  # make a new LabelTup (no args)
+        else:  # special case of sslbls == None, which is just a string label without its args
+            return LabelStr.__new__(LabelStr, self[0])
 
     def __str__(self):
         """

@@ -3630,33 +3630,6 @@ def is_valid_lindblad_paramtype(typ):
                    "GLND", "H+s", "s", "H+s+A", "s+A", "H+d", "d", "H+d+A", "d+A", "H")
 
 
-#REMOVE
-#def split_lindblad_paramtype(typ):
-#    """
-#    Splits a Lindblad-gate parameteriation type into a base-type (e.g. "H+S") and an evolution-type string.
-#
-#    Parameters
-#    ----------
-#    typ : str
-#        The parameterization type, e.g. "H+S terms".
-#
-#    Returns
-#    -------
-#    base_type : str
-#        The "base-parameterization" part of `typ`.
-#    evotype : str
-#        The evolution type corresponding to `typ`.
-#    """
-#    bTyp = typ.split()[0]  # "base" type
-#    evostr = " ".join(typ.split()[1:])
-#
-#    if evostr == "": evotype = "densitymx"
-#    elif evostr == "terms": evotype = "svterm"
-#    elif evostr == "clifford terms": evotype = "cterm"
-#    else: raise ValueError("Unrecognized evotype in `typ`=%s" % typ)
-#    return bTyp, evotype
-
-
 def effect_label_to_outcome(povm_and_effect_lbl):
     """
     Extract the outcome label from a "simplified" effect label.

@@ -28,8 +28,7 @@ from pygsti.tools.legacytools import deprecate as _deprecated_fn
 
 def _get_cachefile_names(std_module, param_type, simulator, py_version):
     """ Get the standard cache file names for a module """
-
-    # TODO REMOVE? - no more "H+S terms" parametype
+    # No more "H+S terms" parametype
     # if param_type == "H+S terms":
     #     cachePath = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
     #                               "../construction/caches")
@@ -338,7 +337,7 @@ def _copy_target(std_module, param_type, simulator="auto", gscache=None):
     mdl = std_module._target_model.copy()
     mdl.set_all_parameterizations(param_type)  # automatically sets simulator
 
-    #TODO REMOVE - no more "H+S terms" paramtype
+    # No more "H+S terms" paramtype (update in FUTURE?)
     # if param_type == "H+S terms":
     #     assert(simulator == "auto" or isinstance(simulator, _TermFSim)), "Invalid `simulator` argument!"
     #     # Note: don't update `simulator` variable here as it's used below for setting gscache element.

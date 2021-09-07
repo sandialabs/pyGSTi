@@ -540,7 +540,30 @@ class Estimate(object):
                 return p.dataset
 
     def final_mdc_store(self, resource_alloc=None, array_types=('e', 'ep')):
-        """ TODO: docstring """
+        """
+        The final (not intermediate) model-dataset-circuit storage object (MDC store) for this estimate.
+
+        This object is created and cached as needed, and combined the final model, data set,
+        and circuit list for this estimate.
+
+        Parameters
+        ----------
+        resource_alloc : ResourceAllocation
+            The resource allocation object used to create the MDC store.  This can just be left as
+            `None` unless multiple processors are being utilized.  Note that this argument is only
+            used when a MDC store needs to be created -- if this estimate has already created one
+            then this argument is ignored.
+
+        array_types : tuple
+            A tuple of array types passed to the MDC store constructor (if a new MDC store needs
+            to be created).  These affect how memory is allocated within the MDC store object and
+            can enable (or disable) the use of certain MDC store functionality later on (e.g. the
+            use of Jacobian or Hessian quantities).
+
+        Returns
+        -------
+        ModelDatasetCircuitsStore
+        """
         #Note: default array_types include 'ep' so, e.g. robust-stat re-optimization is possible.
         if self.parameters.get('final_mdc_store', None) is None:
             assert(self.parent is not None), "Estimate must be linked with parent before objectivefn can be created"
@@ -552,7 +575,25 @@ class Estimate(object):
         return self.parameters['final_mdc_store']
 
     def final_objective_fn(self, resource_alloc=None):
-        """ TODO: docstring """
+        """
+        The final (not intermediate) objective function object for this estimate.
+
+        This object is created and cached as needed, and is the evaluated (and sometimes
+        optimized) objective function associated with this estimate.  Often this is a
+        log-likelihood or chi-squared function, or a close variant.
+
+        Parameters
+        ----------
+        resource_alloc : ResourceAllocation
+            The resource allocation object used to create the MDC store underlying the objective function.
+            This can just be left as `None` unless multiple processors are being utilized.  Note that this
+            argument is only used when an underlying MDC store needs to be created -- if this estimate has
+            already created a MDC store then this argument is ignored.
+
+        Returns
+        -------
+        MDCObjectiveFunction
+        """
         if self.parameters.get('final_objfn', None) is None:
             mdc_store = self.final_mdc_store(resource_alloc)
             #objfn_builder = self.parameters['final_objfn_builder']
@@ -562,7 +603,28 @@ class Estimate(object):
         return self.parameters['final_objfn']
 
     def final_objective_fn_cache(self, resource_alloc=None):
-        """ TODO: docstring """
+        """
+        The final (not intermediate) *serializable* ("cached") objective function object for this estimate.
+
+        This is an explicitly serializable version of the final objective function, useful because is often
+        doesn't need be constructed.  To become serializable, however, the objective function is stripped of
+        any MPI comm or multi-processor information (since this may be different between loading and saving).
+        This makes the cached objective function convenient for fast calls/usages of the objective function.
+
+        Parameters
+        ----------
+        resource_alloc : ResourceAllocation
+            The resource allocation object used to create the MDC store underlying the objective function.
+            This can just be left as `None` unless multiple processors are being utilized - and in this case
+            the *cached* objective function doesn't even benefit from these processors (but calls to
+            :method:`final_objective_fn` will return an objective function setup for multiple processors).
+            Note that this argument is only used when there is no existing cached objective function and
+            an underlying MDC store needs to be created.
+
+        Returns
+        -------
+        CachedObjectiveFunction
+        """
         if self.parameters.get('final_objfn_cache', None) is None:
             objfn = self.final_objective_fn(resource_alloc)
             self.parameters['final_objfn_cache'] = _CachedObjectiveFunction(objfn)

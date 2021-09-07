@@ -500,17 +500,6 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
             assert(goodPairList is not None)
             pairListDict[germ] = goodPairList  # add to final list of per-germ pairs
 
-            #TODO REMOVE: should never be called b/c of ValueError catch above for insufficient fidicials
-            #else:
-            #    #we tried all the way to nPossiblePairs-1 and no success,
-            #    # just return all the pairs
-            #    printer.log(" --> Highest number amplified = %d of %d" %
-            #                (maxRank, gsGerms.num_params))
-            #    listOfAllPairs = [ (prepfid_index,iEStr)
-            #                       for prepfid_index in range(nRhoStrs)
-            #                       for iEStr in range(nEStrs) ]
-            #    pairListDict[germ] = listOfAllPairs
-
     return pairListDict
 
 

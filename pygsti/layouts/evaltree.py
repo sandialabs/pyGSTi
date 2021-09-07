@@ -112,10 +112,8 @@ class EvalTree(list):
                         #if start + b == L: break  # maximal score, so stop looking (this finishes circuit)
                         score = b + best_bite_length(layertup[start + b:],
                                                      [bb for bb in possible_bs if bb <= L - (start + b)])
-                        #REMOVE: print("b=%d is possible: score = %d" % (b, score))
                         if score > best_bite_and_score[1]: best_bite_and_score = (b, score)
                         if score == L: break  # this is a maximal score, so stop looking
-                        #OLD REMOVE: bite = b; break
 
                 if best_bite_and_score[0] is not None:
                     bite = best_bite_and_score[0]
@@ -127,7 +125,6 @@ class EvalTree(list):
                         _bisect.insort(evalDict_keys, 1)
                     evalDict[1][layertup[start:start + 1]] = next_scratch_index; next_scratch_index += 1
                     bite = 1
-                #REMOVE: print("best bite = ",bite)
 
                 bFinal = bool(start + bite == L)
                 evalDict_bite = evalDict[bite]
@@ -178,12 +175,6 @@ class EvalTree(list):
                     iCur = iNew
                 start += bite
                 #nBites += 1
-
-            #DEBUG REMOVE
-            #if db_added_scratch > 100:
-            #    print("DB: Processing circuit: ", circuit.str)
-            #    print("Index %d added %d scratch entries" % (k, db_added_scratch))
-            #    import bpdb; bpdb.set_trace()
 
         if len(circuits_to_evaluate) > 0:
             test_ratios = (100, 10, 3); ratio = len(eval_tree) / len(circuits_to_evaluate)

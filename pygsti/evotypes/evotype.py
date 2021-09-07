@@ -60,17 +60,8 @@ class Evotype(object):
 
     def __init__(self, name, prefer_dense_reps=False):
         self.name = name
-        #REMOVE - and get rid of module_name variable
-        #if ':' in name:
-        #    i = name.index(':')
-        #    module_name, sub_evotype_name = name[0:i], name[i + 1:]  # e.g. 'pathintegral:statevec'
-        #else:
-        #    module_name, sub_evotype_name = name, None
-        module_name = name
-
-        self.module = _importlib.import_module("pygsti.evotypes." + module_name)
+        self.module = _importlib.import_module("pygsti.evotypes." + self.name)
         self.prefer_dense_reps = prefer_dense_reps
-        #REMOVE self.sub_evotype = Evotype(sub_evotype_name) if (sub_evotype_name is not None) else None
 
     def __getstate__(self):
         state = self.__dict__.copy()
@@ -80,6 +71,9 @@ class Evotype(object):
     def __setstate__(self, state):
         self.__dict__.update(state)
         self.module = _importlib.import_module("pygsti.evotypes." + self.name)
+
+    def __hash__(self):
+        return hash((self.name, self.prefer_dense_reps))
 
     def __eq__(self, other_evotype):
         if isinstance(other_evotype, Evotype):
