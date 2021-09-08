@@ -39,7 +39,7 @@ def get_instrument_type_from_op_type(op_type):
         'static clifford': 'static clifford',
         'static': 'static',
         'full': 'full',
-        'full TP': 'TP',
+        'full TP': 'full TP',
     }
 
     instr_type_preferences = []
@@ -47,7 +47,7 @@ def get_instrument_type_from_op_type(op_type):
         instr_type = None
         if _ot.is_valid_lindblad_paramtype(typ):
             # Lindblad types are passed through as TP only (matching current convert logic)
-            instr_type = "TP"
+            instr_type = "full TP"
         else:
             instr_type = instr_conversion.get(typ, None)
 
@@ -100,7 +100,7 @@ def convert(instrument, to_type, basis, extra=None):
     to_types = to_type if isinstance(to_type, (tuple, list)) else (to_type,)  # HACK to support multiple to_type values
     for to_type in to_types:
         try:
-            if to_type == "TP":
+            if to_type == "full TP":
                 if isinstance(instrument, TPInstrument):
                     return instrument
                 else:

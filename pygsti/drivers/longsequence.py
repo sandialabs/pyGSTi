@@ -556,7 +556,7 @@ def run_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_ob
 
 def run_stdpractice_gst(data_filename_or_set, processorspec_filename_or_object,
                         prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
-                        germs_list_or_filename, max_lengths, modes="TP,CPTP,Target",
+                        germs_list_or_filename, max_lengths, modes="full TP,CPTP,Target",
                         gaugeopt_suite='stdgaugeopt',
                         gaugeopt_target=None, models_to_test=None, comm=None, mem_limit=None,
                         advanced_options=None, output_pkl=None, verbosity=2):

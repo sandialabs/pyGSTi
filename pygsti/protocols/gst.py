@@ -1089,7 +1089,7 @@ class StandardGST(_proto.Protocol):
         be used.
     """
 
-    def __init__(self, modes="TP,CPTP,Target",
+    def __init__(self, modes="full TP,CPTP,Target",
                  gaugeopt_suite='stdgaugeopt',
                  gaugeopt_target=None, models_to_test=None,
                  objfn_builders=None, optimizer=None,

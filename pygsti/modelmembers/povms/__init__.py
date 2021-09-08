@@ -56,7 +56,7 @@ def create_from_pure_vectors(pure_vectors, povm_type, basis='pp', evotype='defau
                 effects = [(lbl, create_effect_from_pure_vector(vec, typ, basis, evotype, state_space))
                            for lbl, vec in pure_vectors.items()]
                 povm = UnconstrainedPOVM(effects, evotype, state_space)
-            elif typ == 'TP':
+            elif typ == 'full TP':
                 effects = [(lbl, create_effect_from_pure_vector(vec, "full", basis, evotype, state_space))
                            for lbl, vec in pure_vectors.items()]
                 povm = TPPOVM(effects, evotype, state_space)
@@ -97,7 +97,7 @@ def create_from_dmvecs(superket_vectors, povm_type, basis='pp', evotype='default
                 effects = [(lbl, create_effect_from_dmvec(dmvec, typ, basis, evotype, state_space))
                            for lbl, dmvec in superket_vectors.items()]
                 povm = UnconstrainedPOVM(effects, evotype, state_space)
-            elif typ == 'TP':
+            elif typ == 'full TP':
                 effects = [(lbl, create_effect_from_dmvec(dmvec, 'full', basis, evotype, state_space))
                            for lbl, dmvec in superket_vectors.items()]
                 povm = TPPOVM(effects, evotype, state_space)
@@ -224,7 +224,7 @@ def get_povm_type_from_op_type(op_type):
         'full unitary': 'full pure',
         'static': 'static',
         'full': 'full',
-        'full TP': 'TP',
+        'full TP': 'full TP',
         'linear': 'full',
     }
 
@@ -264,7 +264,7 @@ def convert(povm, to_type, basis, extra=None):
     povm : POVM
         POVM to convert
 
-    to_type : {"full","TP","static","static unitary","H+S terms",
+    to_type : {"full","full TP","static","static unitary","H+S terms",
         "H+S clifford terms","clifford"}
         The type of parameterizaton to convert to.  See
         :method:`Model.set_all_parameterizations` for more details.
@@ -292,7 +292,7 @@ def convert(povm, to_type, basis, extra=None):
                                      for lbl, vec in povm.items()]
                 return UnconstrainedPOVM(converted_effects, povm.evotype, povm.state_space)
 
-            elif to_type == "TP":
+            elif to_type == "full TP":
                 if isinstance(povm, TPPOVM):
                     return povm  # no conversion necessary
                 else:

@@ -168,7 +168,7 @@ class LinearOperator(_modelmember.ModelMember):
         """
         raise NotImplementedError("to_dense(...) not implemented for %s objects!" % self.__class__.__name__)
 
-    def acton(self, state):
+    def acton(self, state, on_space='minimal'):
         """
         Act with this operator upon `state`
 
@@ -190,7 +190,7 @@ class LinearOperator(_modelmember.ModelMember):
         output_rep = self._rep.acton(state._rep)
 
         #Build a State around output_rep
-        return _state.StaticState(output_rep.to_dense(on_space='minimal'), self._evotype, self.state_space)
+        return _state.StaticState(output_rep.to_dense(on_space), self._evotype, self.state_space)
 
     def to_sparse(self, on_space='minimal'):
         """
@@ -760,40 +760,16 @@ class LinearOperator(_modelmember.ModelMember):
 
         return matrix
 
-    def get_chp_str(self, targets=None):
+    def get_chp_str(self):
         """Return a string suitable for printing to a CHP input file after
         probabilistically selecting operation.
-
-        Parameters
-        ----------
-        targets: list of int, optional
-            Qubits to be applied to (if None, uses stored CHP strings directly)
 
         Returns
         -------
         s : str
             String of CHP code
         """
-        assert (self._evotype == 'chp'), 'Only "chp" evotype can use get_chp_str'
-
-        ops = self._rep.chp_ops
-        nqubits = self._rep.nqubits
-
-        if targets is not None:
-            assert len(targets) == nqubits, "Got {0} targets instead of required {1}".format(len(targets), nqubits)
-            target_map = {str(i): str(t) for i, t in enumerate(targets)}
-
-        s = ""
-        for op in ops:
-            # Substitute if alternate targets provided
-            if targets is not None:
-                op_str = ''.join([target_map[c] if c in target_map else c for c in op])
-            else:
-                op_str = op
-
-            s += op_str + '\n'
-
-        return s
+        return self._rep.chp_str()
 
 
 def finite_difference_deriv_wrt_params(operation, wrt_filter, eps=1e-7):

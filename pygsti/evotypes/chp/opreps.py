@@ -22,7 +22,7 @@ from ...tools import internalgates as _itgs
 class OpRep(_basereps.OpRep):
     # Currently the same as StateRep... combine somehow?
     def __init__(self, chp_ops, state_space):
-        self.chp_ops = chp_ops
+        self.base_chp_ops = chp_ops
         self.state_space = _StateSpace.cast(state_space)
 
         assert(self.state_space.num_qubits >= 0), 'State space for "chp" evotype must consist entirely of qubits!'
@@ -33,18 +33,13 @@ class OpRep(_basereps.OpRep):
     @property
     def num_qubits(self):
         return self.state_space.num_qubits
+    
+    @property
+    def chp_ops(self):
+        return self.base_chp_ops
 
-    def chp_str(self, target_labels=None):
-        if target_labels is not None:
-            assert(len(target_labels) == self.num_qubits), \
-                "Got {0} target labels instead of required {1}".format(len(target_labels), self.num_qubits)
-
-            # maps 0-based local op qubit index -> global qubit index
-            global_target_index = {str(i): str(self.qubit_label_to_index[lbl]) for i, lbl in enumerate(target_labels)}
-            op_str = '\n'.join(map(lambda op: _update_chp_op(op, global_target_index), self.chp_ops))
-        else:
-            op_str = '\n'.join(self.chp_ops)
-
+    def chp_str(self):
+        op_str = '\n'.join(self.chp_ops)
         if len(op_str) > 0: op_str += '\n'
         return op_str
 
@@ -88,9 +83,14 @@ class OpRepComposed(OpRep):
 
     def reinit_factor_op_reps(self, factor_op_reps):
         self.factors_reps = factor_op_reps
+    
+    @property
+    def chp_ops(self):
+        ops = []
+        for factor in self.factor_reps:
+            ops.extend(factor.chp_ops)
 
-    def chp_str(self, target_labels=None):
-        return ''.join([factor.chp_str(target_labels) for factor in self.factor_reps])
+        return ops
 
 
 class OpRepEmbedded(OpRep):
@@ -100,7 +100,7 @@ class OpRepEmbedded(OpRep):
         # how to embed cliffords on qubits...
         state_space = _StateSpace.cast(state_space)
         assert(state_space.num_tensor_product_blocks == 1
-               and all([state_space.label_dimension(l) == 2 for l in state_space.tensor_product_block_labels(0)])), \
+               and all([state_space.label_udimension(l) == 2 for l in state_space.tensor_product_block_labels(0)])), \
             "All state space labels must correspond to *qubits*"
 
         #Cache info to speedup representation's acton(...) methods:
@@ -109,12 +109,18 @@ class OpRepEmbedded(OpRep):
         qubit_indices = _np.array([qubitLabels.index(targetLbl)
                                    for targetLbl in target_labels], _np.int64)
 
-        self.target_labels = target_labels
+        self.embedded_labels = target_labels
         self.embedded_rep = embedded_rep
-        embedded_to_local_qubit_indices = {str(i): str(j) for i, j in enumerate(qubit_indices)}
+        # Map 0-based qubit index for embedded op -> full local qubit index
+        self.embedded_to_local_qubit_indices = {str(i): str(j) for i, j in enumerate(qubit_indices)}
 
-        chp_ops = [_update_chp_op(op, embedded_to_local_qubit_indices) for op in self.embedded_rep.chp_ops]
+        # TODO: This doesn't work as nicely for the stochastic op, where chp_ops can be reset between chp_str calls
+        chp_ops = [_update_chp_op(op, self.embedded_to_local_qubit_indices) for op in self.embedded_rep.chp_ops]
         super(OpRepEmbedded, self).__init__(chp_ops, state_space)
+    
+    @property
+    def chp_ops(self):
+        return [_update_chp_op(op, self.embedded_to_local_qubit_indices) for op in self.embedded_rep.chp_ops]
 
 
 class OpRepRepeated(OpRep):
@@ -164,20 +170,9 @@ class OpRepStochastic(OpRep):
 
     def update_rates(self, rates):
         self.rates[:] = rates
-
-    def chp_str(self, target_labels=None):
-        """Return a string suitable for printing to a CHP input file after stochastically selecting operation.
-
-        Parameters
-        ----------
-        targets: list of int
-            Qubits to be applied to (if None, uses stored CHP strings directly)
-
-        Returns
-        -------
-        s : str
-            String of CHP code
-        """
+    
+    @property
+    def chp_ops(self):
         rates = self.rates
         all_rates = [*rates, 1.0 - sum(rates)]  # Include identity so that probabilities are 1
         index = self.rand_state.choice(self.basis.size, p=all_rates)
@@ -187,5 +182,4 @@ class OpRepStochastic(OpRep):
             return ''
 
         rep = self.stochastic_superop_reps[index]
-        self.chp_ops = rep.chp_ops  # set our chp_ops so call to base-class property below uses these
-        return OpRep.chp_str(self)
+        return rep.chp_ops

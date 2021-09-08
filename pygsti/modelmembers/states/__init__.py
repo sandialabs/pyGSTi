@@ -11,6 +11,7 @@ Sub-package holding model state preparation objects.
 #***************************************************************************************************
 
 import numpy as _np
+import warnings as _warnings
 
 from .composedstate import ComposedState
 from .computationalstate import ComputationalBasisState
@@ -254,7 +255,8 @@ def convert(state, to_type, basis, extra=None):
 
             else:
                 raise ValueError("Invalid to_type argument: %s" % to_type)
-        except:
+        except ValueError as e:
+            _warnings.warn('Failed to convert state to type %s with error: %s' % (to_type, e))
             pass
 
     raise ValueError("Could not convert state to to type(s): %s" % str(to_types))

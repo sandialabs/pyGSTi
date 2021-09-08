@@ -174,7 +174,8 @@ class CHPForwardSimulator(_WeakForwardSimulator):
         # where most logic is based on simplify_effects and therefore expensive for many qubits)
         qubit_indices = None
         if povm_label.sslbls is not None:
-            flat_sslbls = [lbl for tbp in self.model.state_space_labels.labels for lbl in tbp]
+            flat_sslbls = [lbl for i in range(self.model.state_space.num_tensor_product_blocks) \
+                for lbl in self.model.state_space.tensor_product_block_labels(i)]
             qubit_indices = [flat_sslbls.index(q) for q in povm_label.sslbls]
 
         # Handle ComputationalBasisPOVM
