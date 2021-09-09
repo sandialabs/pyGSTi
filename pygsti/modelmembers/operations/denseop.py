@@ -366,7 +366,7 @@ class DenseOperator(DenseOperatorInterface, _LinearOperator):
         from pygsti.io.metadir import _from_memoized_dict
         cls._check_memoized_dict(mm_dict, serial_memo)
         m = _np.array(mm_dict['dense_matrix'])
-        state_space = _from_memoized_dict(mm_dict['state_space'])  # TODO - statespace must be memoizable -------------------------------------------------------
+        state_space = _from_memoized_dict(mm_dict['state_space'])
         return cls(m, mm_dict['evotype'], state_space)
     
 
@@ -566,7 +566,7 @@ class DenseUnitaryOperator(DenseOperatorInterface, _LinearOperator):
         mm_dict = super().to_memoized_dict(mmg_memo)
 
         mm_dict['dense_matrix'] = self.to_dense().tolist()
-        mm_dict['basis'] = self._basis._to_memoized_dict({})  # TODO - basis must be memoizable -------------------------------------------------------
+        mm_dict['basis'] = self._basis._to_memoized_dict({})
 
         return mm_dict
 

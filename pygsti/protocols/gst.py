@@ -757,7 +757,9 @@ class GSTGaugeOptSuite(object):
     """
     @classmethod
     def cast(cls, obj):
-        if isinstance(obj, (str, tuple, list)):
+        if isinstance(obj, GSTGaugeOptSuite):
+            return obj
+        elif isinstance(obj, (str, tuple, list)):
             return cls(gaugeopt_suite_names=obj)
         elif isinstance(obj, dict):
             return cls(gaugeopt_argument_dicts=obj)
@@ -828,7 +830,7 @@ class GSTGaugeOptSuite(object):
 
         if self.gaugeopt_argument_dicts is not None:
             for lbl, goparams in self.gaugeopt_argument_dicts.items():
-                
+
                 if hasattr(goparams, 'keys'):  # goparams is a simple dict
                     gaugeopt_suite_dict[lbl] = goparams.copy()
                     gaugeopt_suite_dict[lbl].update({'verbosity': printer})
@@ -966,24 +968,54 @@ class GSTGaugeOptSuite(object):
         else:
             raise ValueError("Unknown gauge-optimization suite '%s'" % suite_name)
 
-    def _to_memoized_dict(self, memo):
+    def __getstate__(self):
+        #Don't pickle comms in gaugeopt argument dicts
+        to_pickle = self.__dict__.copy()
+        if self.gaugeopt_argument_dicts is not None:
+            to_pickle['gaugeopt_argument_dicts'] = _collections.OrderedDict()
+            for lbl, goparams in self.gaugeopt_argument_dicts.items():
+                if hasattr(goparams, "keys"):
+                    if 'comm' in goparams:
+                        goparams = goparams.copy()
+                        goparams['comm'] = None
+                    to_pickle['gaugeopt_argument_dicts'][lbl] = goparams
+                else:  # goparams is a list
+                    new_goparams = []  # new list
+                    for goparams_dict in goparams:
+                        if 'comm' in goparams_dict:
+                            goparams_dict = goparams_dict.copy()
+                            goparams_dict['comm'] = None
+                        new_goparams.append(goparams_dict)
+                    to_pickle['gaugeopt_argument_dicts'][lbl] = new_goparams
+        return to_pickle
+
+    def _to_memoized_dict(self, memo):        
         dicts_to_serialize = {}
-        for lbl, goparams in self.gaugeopt_argument_dicts.items():
-            goparams_list = [goparams] if hasattr(goparams, 'keys') else goparams
-            serialize_list = []
-            for goparams_dict in goparams_list:
-                to_add = goparams_dict.copy()
-                if 'target_model' in to_add:
-                    to_add['target_model'] = goparams_dict['target_model']._to_memoized_dict({})
-                serialize_list.append(to_add)
-            dicts_to_serialize[lbl] = serialize_list  # Note: always a list, even when 1 element (simpler)
+        if self.gaugeopt_argument_dicts is not None:
+            for lbl, goparams in self.gaugeopt_argument_dicts.items():
+                goparams_list = [goparams] if hasattr(goparams, 'keys') else goparams
+                serialize_list = []
+                for goparams_dict in goparams_list:
+                    to_add = goparams_dict.copy()
+                    if 'target_model' in to_add:
+                        to_add['target_model'] = goparams_dict['target_model']._to_memoized_dict({})
+                    if 'model' in to_add:
+                        del to_add['model']  # don't serialize model argument
+                    if '_gaugeGroupEl' in to_add:
+                        to_add['_gaugeGroupEl'] = goparams_dict['_gaugeGroupEl']._to_memoized_dict({})
+                    if 'gauge_group' in to_add:
+                        to_add['gauge_group'] = goparams_dict['gauge_group']._to_memoized_dict({})
+                    if 'verbosity' in to_add and isinstance(to_add['verbosity'], _baseobjs.VerbosityPrinter):
+                        to_add['verbosity'] = goparams_dict['verbosity'].verbosity  # just save as an integer
+                    serialize_list.append(to_add)
+                dicts_to_serialize[lbl] = serialize_list  # Note: always a list, even when 1 element (simpler)
 
         target_to_serialize = self.gaugeopt_target._to_memoized_dict({}) \
             if (self.gaugeopt_target is not None) else None
-        
+
         state = {'module': self.__class__.__module__,
                  'class': self.__class__.__name__,
-                 'gaugeopt_suite_names': self.gaugeopt_suite_name,
+                 'gaugeopt_suite_names': self.gaugeopt_suite_names,
                  'gaugeopt_argument_dicts': dicts_to_serialize,
                  'gaugeopt_target': target_to_serialize
                  }
@@ -999,6 +1031,11 @@ class GSTGaugeOptSuite(object):
                 to_add = serialized_goparams.copy()
                 if 'target_model' in to_add:
                     to_add['target_model'] = _from_memoized_dict(serialized_goparams['target_model'])
+                if '_gaugeGroupEl' in to_add:
+                    to_add['_gaugeGroupEl'] = _from_memoized_dict(serialized_goparams['_gaugeGroupEl'])
+                if 'gauge_group' in to_add:
+                    to_add['gauge_group'] = _from_memoized_dict(serialized_goparams['gauge_group'])
+
                 goparams_list.append(to_add)
             gaugeopt_argument_dicts[lbl] = goparams_list[0] if (len(goparams_list) == 1) else goparams_list
 
@@ -1069,15 +1106,12 @@ class GateSetTomography(_proto.Protocol):
                 optimizer['first_fditer'] = 1 if mdl and isinstance(mdl.sim, _MatrixFSim) else 0
             self.optimizer = _opt.CustomLMOptimizer.cast(optimizer)
 
-        objfn_builders = GSTObjFnBuilders.cast(objfn_builders)
-        self.iteration_builders = objfn_builders.iteration_builders
-        self.final_builders = objfn_builders.final_builders
+        self.objfn_builders = GSTObjFnBuilders.cast(objfn_builders)
 
-        self.auxfile_types['initial_model'] = 'serialize-object'
+        self.auxfile_types['initial_model'] = 'serialized-object'
         self.auxfile_types['badfit_options'] = 'serialized-object'
         self.auxfile_types['optimizer'] = 'serialized-object'
-        self.auxfile_types['iteration_builders'] = 'serialized-object'
-        self.auxfile_types['final_builders'] = 'serialized-object'
+        self.auxfile_types['objfn_builders'] = 'serialized-object'
         self.auxfile_types['gaugeopt_suite'] = 'serialized-object'
 
         #Advanced options that could be changed by users who know what they're doing
@@ -1157,7 +1191,7 @@ class GateSetTomography(_proto.Protocol):
         #Run Long-sequence GST on data
         mdl_lsgst_list, optimums_list, final_objfn = _alg.run_iterative_gst(
             ds, mdl_start, bulk_circuit_lists, self.optimizer,
-            self.iteration_builders, self.final_builders,
+            self.objfn_builders.iteration_builders, self.objfn_builders.final_builders,
             resource_alloc, printer)
 
         tnxt = _time.time(); profiler.add_time('GST: total iterative optimization', tref); tref = tnxt
@@ -1165,8 +1199,8 @@ class GateSetTomography(_proto.Protocol):
         #set parameters
         parameters = _collections.OrderedDict()
         parameters['protocol'] = self  # Estimates can hold sub-Protocols <=> sub-results
-        parameters['final_objfn_builder'] = self.final_builders[-1] if len(self.final_builders) > 0 \
-            else self.iteration_builders[-1]
+        parameters['final_objfn_builder'] = self.objfn_builders.final_builders[-1] \
+            if len(self.objfn_builders.final_builders) > 0 else self.objfn_builders.iteration_builders[-1]
         parameters['final_objfn'] = final_objfn  # Final obj. function evaluated at best-fit point (cache too)
         parameters['final_mdc_store'] = final_objfn  # Final obj. function is also a "MDC store"
         parameters['profiler'] = profiler
@@ -1329,7 +1363,7 @@ class LinearGateSetTomography(_proto.Protocol):
 
         ret = ModelEstimateResults(data, self)
         estimate = _Estimate(ret, {'target': target_model, 'seed': target_model, 'lgst': mdl_lgst,
-                                   'iteration estimates': [mdl_lgst],
+                                   'iteration 0 estimate': mdl_lgst,
                                    'final iteration estimate': mdl_lgst},
                              parameters)
         ret.add_estimate(estimate, estimate_key=self.name)
@@ -1763,7 +1797,7 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options,
 
         # In case we've computed an updated final model, Just keep (?) old estimates of all
         # prior iterations (or use "blank" sentinel once this is supported).
-        mdl_lsgst_list = base_estimate.models['iteration estimates']
+        mdl_lsgst_list = [base_estimate.models['iteration %d estimate' % k] for k in base_estimate.num_iterations]
         mdl_start = base_estimate.models.get('seed', None)
         target_model = base_estimate.models.get('target', None)
 
@@ -2240,6 +2274,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
         ModelEstimateResults
         """
         ret = super().from_dir(dirname, name, preloaded_data, quick_load)  # loads members; doesn't make parent "links"
+        ret.circuit_lists = ret._create_circuit_lists(ret.data.edesign)  # because circuit_lists auxfile_type == 'none'
         for est in ret.estimates.values():
             est.parent = ret  # link estimate to parent results object
         return ret
@@ -2250,32 +2285,33 @@ class ModelEstimateResults(_proto.ProtocolResults):
         """
         super().__init__(data, protocol_instance)
 
-        #Initialize some basic "results" by just exposing the circuit lists more directly
-        circuit_lists = _collections.OrderedDict()
-
-        if init_circuits:
-            edesign = self.data.edesign
-            if isinstance(edesign, _proto.CircuitListsDesign):
-                circuit_lists['iteration'] = [_CircuitList.cast(cl) for cl in edesign.circuit_lists]
-
-                #Set "Ls and germs" info if available
-                if isinstance(edesign, StandardGSTDesign):
-                    circuit_lists['prep fiducials'] = edesign.prep_fiducials
-                    circuit_lists['meas fiducials'] = edesign.meas_fiducials
-                    circuit_lists['germs'] = edesign.germs
-
-            else:
-                #Single iteration
-                circuit_lists['iteration'] = [_CircuitList.cast(edesign.all_circuits_needing_data)]
-
-            circuit_lists['final'] = circuit_lists['iteration'][-1]
-
-        self.circuit_lists = circuit_lists
         self.estimates = _collections.OrderedDict()
+        self.circuit_lists = self._create_circuit_lists(self.data.edesign) \
+            if init_circuits else _collections.OrderedDict()
 
         #Punt on serialization of these qtys for now...
-        self.auxfile_types['circuit_lists'] = 'pickle'
-        self.auxfile_types['estimates'] = 'pickle'
+        self.auxfile_types['circuit_lists'] = 'none'  # derived from edesign
+        self.auxfile_types['estimates'] = 'dict:dir-serialized-object'
+
+    def _create_circuit_lists(self, edesign):
+        #Compute some basic "results" by just exposing edesign circuit lists more directly
+        circuit_lists = _collections.OrderedDict()
+
+        if isinstance(edesign, _proto.CircuitListsDesign):
+            circuit_lists['iteration'] = [_CircuitList.cast(cl) for cl in edesign.circuit_lists]
+
+            #Set "Ls and germs" info if available
+            if isinstance(edesign, StandardGSTDesign):
+                circuit_lists['prep fiducials'] = edesign.prep_fiducials
+                circuit_lists['meas fiducials'] = edesign.meas_fiducials
+                circuit_lists['germs'] = edesign.germs
+
+        else:
+            #Single iteration
+            circuit_lists['iteration'] = [_CircuitList.cast(edesign.all_circuits_needing_data)]
+
+        circuit_lists['final'] = circuit_lists['iteration'][-1]
+        return circuit_lists
 
     @property
     def dataset(self):
@@ -2388,8 +2424,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
                               "*before* adding estimates"))
 
         if 'iteration' in self.circuit_lists:
-            models_by_iter = estimate.models.get('iteration estimates', [])
-            la, lb = len(self.circuit_lists['iteration']), len(models_by_iter)
+            la, lb = len(self.circuit_lists['iteration']), estimate.num_iterations
             assert(la == lb), "Number of iterations (%d) must equal %d!" % (lb, la)
 
         if estimate_key in self.estimates:

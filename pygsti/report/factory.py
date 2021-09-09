@@ -381,10 +381,11 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
             for iL, L in enumerate(swLs):  # allow different results to have different Ls
                 if L in loc_Ls:
                     k = loc_Ls.index(L)
-                    switchBd.mdl_current[d, i, iL] = est.models['iteration estimates'][k]
-                    switchBd.mdl_current_modvi[d, i, iL] = est_modvi.models['iteration estimates'][k]
-            switchBd.mdl_all[d, i] = est.models['iteration estimates']
-            switchBd.mdl_all_modvi[d, i] = est_modvi.models['iteration estimates']
+                    switchBd.mdl_current[d, i, iL] = est.models['iteration %d estimate' % k]
+                    switchBd.mdl_current_modvi[d, i, iL] = est_modvi.models['iteration %d estimate' % k]
+            switchBd.mdl_all[d, i] = [est.models['iteration %d estimate' % k] for k in range(est.num_iterations)]
+            switchBd.mdl_all_modvi[d, i] = [est_modvi.models['iteration %d estimate' % k]
+                                            for k in range(est_modvi.num_iterations)]
 
             if confidence_level is not None:
                 misfit_sigma = est.misfit_sigma()

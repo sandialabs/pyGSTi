@@ -908,7 +908,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
     @classmethod
     def _from_memoized_dict(cls, state, memo):
         #Note: resets processor-distribution information
-        return cls(None, state['model'] == "distribute_by_timestamp")
+        return cls(None, state['mode'] == "distribute_by_timestamp")
 
     def copy(self):
         """

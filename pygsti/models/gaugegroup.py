@@ -13,6 +13,7 @@ GaugeGroup and derived objects, used primarily in gauge optimization
 import numpy as _np
 
 from pygsti.modelmembers import operations as _op
+from pygsti.baseobjs import statespace as _statespace
 
 
 class GaugeGroup(object):
@@ -375,6 +376,19 @@ class OpGaugeGroup(GaugeGroup):
         """
         return self._operation.to_vector()
 
+    def _to_memoized_dict(self, memo):
+        state = {'module': self.__class__.__module__,
+                 'class': self.__class__.__name__,
+                 'state_space_dimension': int(self._operation.state_space.dim),
+                 'evotype': str(self._operation.evotype)
+                 }
+        return state
+
+    @classmethod
+    def _from_memoized_dict(cls, state, memo):
+        #Note: this method assumes the (different) __init__ signature used by derived classes
+        return cls(_statespace.default_space_for_dim(state['state_space_dimension']), state['evotype'])
+
 
 class OpGaugeGroupElement(GaugeGroupElement):
     """
@@ -482,6 +496,20 @@ class OpGaugeGroupElement(GaugeGroupElement):
         int
         """
         return self._operation.num_params
+
+    def _to_memoized_dict(self, memo):
+        from pygsti.io.metadir import _encodemx
+        state = {'module': self.__class__.__module__,
+                 'class': self.__class__.__name__,
+                 'operation_matrix': _encodemx(self._operation.to_dense())
+                 }
+        return state
+
+    @classmethod
+    def _from_memoized_dict(cls, state, memo):  # memo holds already de-serialized objects
+        from pygsti.io.metadir import _decodemx
+        operation_mx = _decodemx(state['operation_matrix'])
+        return cls(operation_mx)
 
 
 class FullGaugeGroup(OpGaugeGroup):
@@ -721,6 +749,21 @@ class UnitaryGaugeGroup(OpGaugeGroup):
         operation = _op.ExpErrorgenOp(errgen)
         OpGaugeGroup.__init__(self, operation, UnitaryGaugeGroupElement, "Unitary")
 
+    def _to_memoized_dict(self, memo):
+        state = {'module': self.__class__.__module__,
+                 'class': self.__class__.__name__,
+                 'state_space_dimension': int(self._operation.state_space.dim),
+                 'basis': self._operation.errorgen.ham_basis._to_memoized_dict({}),
+                 'evotype': str(self._operation.evotype)
+                 }
+        return state
+
+    @classmethod
+    def _from_memoized_dict(cls, state, memo):
+        from pygsti.io.metadir import _from_memoized_dict
+        basis = _from_memoized_dict(state['basis'])
+        return cls(_statespace.default_space_for_dim(state['state_space_dimension']), basis, state['evotype'])
+
 
 class UnitaryGaugeGroupElement(OpGaugeGroupElement):
     """
@@ -921,6 +964,19 @@ class TrivialGaugeGroup(GaugeGroup):
         """
         return _np.empty(0, 'd')
 
+    def _to_memoized_dict(self, memo):
+        state = {'module': self.__class__.__module__,
+                 'class': self.__class__.__name__,
+                 'state_space': self.state_space._to_memoized_dict({}),
+                 }
+        return state
+
+    @classmethod
+    def _from_memoized_dict(cls, state, memo):
+        from pygsti.io.metadir import _from_memoized_dict
+        state_space = _from_memoized_dict(state['state_space'])
+        return cls(state_space)
+
 
 class TrivialGaugeGroupElement(GaugeGroupElement):
     """
@@ -1016,3 +1072,14 @@ class TrivialGaugeGroupElement(GaugeGroupElement):
         int
         """
         return 0
+
+    def _to_memoized_dict(self, memo):
+        state = {'module': self.__class__.__module__,
+                 'class': self.__class__.__name__,
+                 'operation_dimension': self._matrix.shape[0]
+                 }
+        return state
+
+    @classmethod
+    def _from_memoized_dict(cls, state, memo):  # memo holds already de-serialized objects
+        return cls(state['operation_dimension'])

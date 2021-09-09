@@ -237,7 +237,7 @@ class CustomLMOptimizer(Optimizer):
                  'use_acceleration': self.use_acceleration,
                  'uphill_step_threshold': self.uphill_step_threshold,
                  'initial_mu_and_nu': self.init_munu,
-                 'out_of_bounds_check_interval': self.oob_check_interva,
+                 'out_of_bounds_check_interval': self.oob_check_interval,
                  'out_of_bounds_action': self.oob_action,
                  'out_of_bounds_check_mode': self.oob_check_mode,
                  'array_types': self.array_types,

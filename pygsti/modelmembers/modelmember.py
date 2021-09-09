@@ -626,7 +626,7 @@ class ModelMember(ModelChild):
         mm_dict['module'] =  self.__module__
         mm_dict['class'] = self.__class__.__name__
         mm_dict['submembers'] = []
-        mm_dict['state_space'] = str(self.state_space)
+        mm_dict['state_space'] = self.state_space._to_memoized_dict({})
         mm_dict['evotype'] = str(self.evotype)
         
         # Dereference submembers
@@ -651,8 +651,8 @@ class ModelMember(ModelChild):
         needed_tags = ['module', 'class', 'submembers', 'state_space', 'evotype']
         assert all([tag in mm_dict.keys() for tag in needed_tags]), 'Must provide all needed tags: %s' % needed_tags
 
-        assert mm_dict['module'] == cls.__module__.name, "Module must match"
-        assert mm_dict['class'] == cls.__class__.name, "Class must match"
+        assert mm_dict['module'] == cls.__module__, "Module must match"
+        assert mm_dict['class'] == cls.__name__, "Class must match"
         assert all([(sub_id in serial_memo) for sub_id in mm_dict['submembers']]), "Not all sub-members exist!"
 
     @classmethod

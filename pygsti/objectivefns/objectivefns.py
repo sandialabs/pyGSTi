@@ -13,6 +13,7 @@ Defines objective-function objects
 import itertools as _itertools
 import sys as _sys
 import time as _time
+import pathlib as _pathlib
 
 import numpy as _np
 
@@ -6292,6 +6293,33 @@ class CachedObjectiveFunction(object):
     The cache may only have values on the rank-0 proc (??)
     """
 
+    @classmethod
+    def from_dir(cls, dirname, quick_load=False):
+        """
+        Initialize a new CachedObjectiveFunction object from `dirname`.
+
+        quick_load : bool, optional
+            Setting this to True skips the loading of components that may take
+            a long time to load.
+
+        Parameters
+        ----------
+        dirname : str
+            The directory name.
+
+        quick_load : bool, optional
+            Setting this to True skips the loading of components that may take
+            a long time to load.
+
+        Returns
+        -------
+        CachedObjectiveFunction
+        """
+        import pygsti.io as _io
+        ret = cls.__new__(cls)
+        ret.__dict__.update(_io.load_meta_based_dir(_pathlib.Path(dirname), 'auxfile_types', quick_load=quick_load))
+        return ret
+
     def __init__(self, objective_function):
 
         self.layout = objective_function.layout.global_layout
@@ -6321,3 +6349,54 @@ class CachedObjectiveFunction(object):
             self.total_counts = objfn_layout.allgather_local_array('e', objective_function.total_counts)
         else:
             self.probs = self.freqs = self.counts = self.total_counts = None
+
+        self.auxfile_types = {'layout': 'serialized-object',
+                              'model_paramvec': 'numpy-array',
+                              'fn': 'numpy-array',
+                              'chi2k_distributed_fn': 'numpy-array',
+                              'terms': 'numpy-array',
+                              'chi2k_distributed_terms': 'numpy-array',
+                              'percircuit': 'numpy-array',
+                              'chi2k_distributed_percircuit': 'numpy-array',
+                              'probs': 'numpy-array',
+                              'freqs': 'numpy-array',
+                              'counts': 'numpy-array',
+                              'total_counts': 'numpy-array'
+                              }
+
+    def write(self, dirname):
+        """
+        Write this CachedObjectiveFunction to a directory.
+
+        Parameters
+        ----------
+        dirname : str
+            The directory name to write.  This directory will be created
+            if needed, and the files in an existing directory will be
+            overwritten.
+
+        Returns
+        -------
+        None
+        """
+        import pygsti.io as _io
+        _io.write_obj_to_meta_based_dir(self, dirname, 'auxfile_types')
+
+    def _to_memoized_dict(self, memo):
+        state = {'module': self.__class__.__module__,
+                 'class': self.__class__.__name__,
+                 'name': self.name,
+                 'description': self.description,
+                 'class_to_build': self.cls_to_build.__module__ + '.' + self.cls_to_build.__name__,
+                 'regularization': self.regularization,
+                 'penalties': self.penalties,
+                 'additional_arguments': self.additional_args,
+                 }
+        return state
+
+    @classmethod
+    def _from_memoized_dict(cls, state, memo):
+        from pygsti.io.metadir import _class_for_name
+        return cls(_class_for_name(state['class_to_build']), state['name'], state['description'],
+                   state['regularization'], state['penalties'], *state['additional_arguments'])
+

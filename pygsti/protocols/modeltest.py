@@ -192,21 +192,27 @@ class ModelTest(_proto.Protocol):
 
         mdc_store = _ModelDatasetCircuitStore(the_model, ds, bulk_circuit_lists[-1], resource_alloc)
         parameters = _collections.OrderedDict()
-        parameters['raw_objective_values'] = objfn_vals
-        parameters['model_test_values'] = chi2k_distributed_vals
         parameters['final_objfn_builder'] = self.objfn_builders[-1]
         parameters['final_mdc_store'] = mdc_store
         parameters['profiler'] = profiler
+
+        #Separate these out for now, as the parameters arg will be done away with in future
+        # - these "extra" params must be straightforward to serialize
+        extra_parameters = _collections.OrderedDict()
+        extra_parameters['raw_objective_values'] = objfn_vals
+        extra_parameters['model_test_values'] = chi2k_distributed_vals
+
 
         from .gst import _add_gaugeopt_and_badfit
         from .gst import ModelEstimateResults as _ModelEstimateResults
 
         ret = _ModelEstimateResults(data, self)
-        models = {'final iteration estimate': the_model, 'iteration estimates': [the_model] * len(bulk_circuit_lists)}
+        models = {'final iteration estimate': the_model}
+        models.update({('iteration %d estimate' % k): the_model for k in range(len(bulk_circuit_lists))})
         # TODO: come up with better key names? and must we have iteration_estimates?
         if target_model is not None:
             models['target'] = target_model
-        ret.add_estimate(_Estimate(ret, models, parameters), estimate_key=self.name)
+        ret.add_estimate(_Estimate(ret, models, parameters, extra_parameters=extra_parameters), estimate_key=self.name)
         return _add_gaugeopt_and_badfit(ret, self.name, target_model, self.gaugeopt_suite,
                                         self.unreliable_ops, self.badfit_options,
                                         None, resource_alloc, printer)

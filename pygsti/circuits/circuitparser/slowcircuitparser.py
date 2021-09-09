@@ -67,7 +67,7 @@ def parse_circuit(code, create_subcircuits=True, integerize_sslbls=True):
 
 def parse_label(code, integerize_sslbls=True):
     create_subcircuits = False
-    segment = 1  # segment for gates/instruments - what about reading rho/M labels - add arg?
+    segment = 0  # segment for gates/instruments vs. preps vs. povms: 0 = *any*
     interlayer_marker = u''  # matches nothing - no interlayer markerg
 
     lbls_list, _, _, _ = _get_next_lbls(code, 0, len(code), create_subcircuits, integerize_sslbls,

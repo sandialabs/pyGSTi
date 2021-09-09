@@ -204,7 +204,7 @@ class MultiPassProtocol(Protocol):
         if name is None: name = protocol.name + "_multipass"
         super().__init__(name)
         self.protocol = protocol
-        self.auxfile_types['protocol'] = 'protocolobj'
+        self.auxfile_types['protocol'] = 'dir-serialized-object'
 
     def run(self, data, memlimit=None, comm=None):
         """
@@ -649,7 +649,7 @@ class ExperimentDesign(_TreeNode):
             else 'text-circuit-list'
         self.auxfile_types = {'all_circuits_needing_data': typ,
                               'alt_actual_circuits_executed': 'text-circuit-list',
-                              'default_protocols': 'dict:protocolobj'}
+                              'default_protocols': 'dict:dir-serialized-object'}
 
         # because TreeNode takes care of its own serialization:
         self.auxfile_types.update({'_dirs': 'none', '_vals': 'none', '_loaded_from': 'none'})
@@ -1969,7 +1969,7 @@ class ProtocolResults(object):
         self.name = protocol_instance.name  # just for convenience in JSON dir
         self.protocol = protocol_instance
         self.data = data
-        self.auxfile_types = {'data': 'none', 'protocol': 'protocolobj'}
+        self.auxfile_types = {'data': 'none', 'protocol': 'dir-serialized-object'}
 
     def write(self, dirname=None, data_already_written=False):
         """
@@ -2163,7 +2163,7 @@ class MultiPassResults(ProtocolResults):
         super().__init__(data, protocol_instance)
 
         self.passes = _collections.OrderedDict()  # _NamedDict('Pass', 'category') - to_nameddict takes care of this
-        self.auxfile_types['passes'] = 'dict:resultsobj'
+        self.auxfile_types['passes'] = 'dict:partialdir-serialized-object'
 
     def to_nameddict(self):
         """

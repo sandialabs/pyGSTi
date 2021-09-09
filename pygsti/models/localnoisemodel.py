@@ -352,12 +352,12 @@ class LocalNoiseModel(_ImplicitOpModel):
     def _to_memoized_dict(self, memo):
         state = {'module': self.__class__.__module__,
                  'class': self.__class__.__name__,
-                 'processor_spec': self.processor_spec._to_memoized_dict({})
+                 'processor_spec': self.processor_spec._to_memoized_dict({}),
                  'state_space': self.state_space._to_memoized_dict({}),
                  #'basis': self.basis._to_memoized_dict({}),
-                 'layer_rules': self.layer_rules._to_memoized_dict({}), # --- TODO --- layerrules need to be serializable ------------------
-                 'evotype': str(self.evotype),  # TODO or serialize?
-                 'simulator': self.sim._to_memoized_dict({}),  # TODO --- forwardsim needs to be serializable ----------------------------
+                 'layer_rules': self.layer_rules._to_memoized_dict({}),
+                 'evotype': str(self.evotype),
+                 'simulator': self.sim._to_memoized_dict({}),
                  }
         mmgraph = self.create_modelmember_graph()
         state['modelmembers'] = mmgraph.create_serialization_dict()
@@ -370,7 +370,7 @@ class LocalNoiseModel(_ImplicitOpModel):
         #basis = _from_memoized_dict(state['basis'])
         modelmembers = _MMGraph.load_modelmembers_from_serialization_dict(state['modelmembers'])
         simulator = _from_memoized_dict(state['simulator'])
-        layerrules = _from_memoized_dict(state['layer_rules'])
+        layer_rules = _from_memoized_dict(state['layer_rules'])
         processor_spec = _from_memoized_dict(state['processor_spec'])
 
         # __init__ does too much, so we need to create an alternate __init__ function here:

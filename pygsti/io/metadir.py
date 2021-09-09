@@ -10,6 +10,8 @@ Serialization routines to/from a meta.json based directory
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import numpy as _np
+import scipy.sparse as _sps
 import importlib as _importlib
 import json as _json
 import pathlib as _pathlib
@@ -73,6 +75,36 @@ def _from_memoized_dict(memoized_dict, memo=None, underscore=True):
                                + '.' + memoized_dict['class']).from_memoized_dict(memoized_dict, memo)
 
 
+def _encodemx(mx):  # nearly the same as in processor spec
+    if _sps.issparse(mx):
+        csr_mx = _sps.csr_matrix(mx)  # convert to CSR and save in this format
+        return {'sparse_matrix_type': 'csr',
+                'data': _encodemx(csr_mx.data), 'indices': _encodemx(csr_mx.indices),
+                'indptr': _encodemx(csr_mx.indptr), 'shape': csr_mx.shape}
+    else:
+        enc = str if _np.iscomplexobj(mx) else (lambda x: x)
+        encoded = _np.array([enc(x) for x in mx.flat])
+        return encoded.reshape(mx.shape).tolist()
+
+
+def _decodemx(mx):  # ~Same as in processorspec
+    if isinstance(mx, dict): # then a sparse mx
+        assert(mx['sparse_matrix_type'] == 'csr')
+        data = _decodemx(mx['data'])
+        indices = _decodemx(mx['indices'])
+        indptr = _decodemx(mx['indptr'])
+        decoded = _sps.csr_matrix((data, indices, indptr), shape=mx['shape'])
+    else:
+        basemx = _np.array(mx)
+        if basemx.dtype.kind == 'U':  # character type array => complex numbers as strings
+            decoded = _np.array([complex(x) for x in basemx.flat])
+            decoded = decoded.reshape(basemx.shape)
+        else:
+            decoded = basemx
+    return decoded
+
+
+
 # ****************** Serialization into a directory with a meta.json *********************
 def _get_auxfile_ext(typ):
     #get expected extension
@@ -81,10 +113,11 @@ def _get_auxfile_ext(typ):
     #elif typ == 'list-of-protocolobjs': ext = ''
     #elif typ == 'dict-of-protocolobjs': ext = ''
     #elif typ == 'dict-of-resultsobjs': ext = ''
-    elif typ == 'protocolobj': ext = ''  # a directory
-    elif typ == 'protocolresults': ext = ''  # a directory
+    elif typ == 'dir-serialized-object': ext = ''  # a directory
+    elif typ == 'partialdir-serialized-object': ext = ''  # a directory
     elif typ == 'serialized-object': ext = '.json'
     elif typ == 'circuit-str-json': ext = '.json'
+    elif typ == 'numpy-array': ext = '.npy'
     elif typ == 'json': ext = '.json'
     elif typ == 'pickle': ext = '.pkl'
     elif typ == 'none': ext = '.NA'
@@ -258,28 +291,46 @@ def _load_auxfile_member(root_dir, filenm, typ, metadata, quick_load):
         return quick_load and (path.stat().st_size >= max_size)
 
     if cur_typ == 'list':
-        i = 0; val = []
-        while True:
-            filenm_so_far = filenm + str(i)
-            meta = metadata[i] if (metadata is not None) else None
-            bLoaded, el = _load_auxfile_member(root_dir, filenm_so_far, next_typ, meta, quick_load)
-            if bLoaded:
-                val.append(el)
-            else:
-                break
-            i += 1
+        if metadata is None:  # signals that value is None, otherwise would at least be an empty list
+            val = None
+        else:
+            val = []
+            for i, meta in enumerate(metadata):
+                filenm_so_far = filenm + str(i)
+                bLoaded, el = _load_auxfile_member(root_dir, filenm_so_far, next_typ, meta, quick_load)
+                if bLoaded:
+                    val.append(el)
+                else:
+                    break
 
     elif cur_typ == 'dict':
-        keys = list(metadata.keys())  # sort?
-        val = {}
-        for k in keys:
-            filenm_so_far = filenm + "_" + k
-            meta = metadata.get(k, None)
-            bLoaded, v = _load_auxfile_member(root_dir, filenm_so_far, next_typ, meta, quick_load)
-            if bLoaded:
-                val[k] = v
-            else:
-                raise ValueError("Failed to load dictionary key " + str(k))
+        if metadata is None:  # signals that value is None, otherwise would at least be an empty list
+            val = None
+        else:
+            keys = list(metadata.keys())  # sort?
+            val = {}
+            for k in keys:
+                filenm_so_far = filenm + "_" + k
+                meta = metadata.get(k, None)
+                bLoaded, v = _load_auxfile_member(root_dir, filenm_so_far, next_typ, meta, quick_load)
+                if bLoaded:
+                    val[k] = v
+                else:
+                    raise ValueError("Failed to load dictionary key " + str(k))
+
+    elif cur_typ == 'fancykeydict':
+        if metadata is None:  # signals that value is None, otherwise would at least be an empty list
+            val = None
+        else:
+            keymeta_pairs = list(metadata)  # should be a list of (key, metadata_for_value) pairs
+            val = {}
+            for i, (k, meta) in enumerate(keymeta_pairs):
+                filenm_so_far = filenm + "_kvpair" + str(i)
+                bLoaded, el = _load_auxfile_member(root_dir, filenm_so_far, next_typ, meta, quick_load)
+                if bLoaded:
+                    val[k] = v
+                else:
+                    raise ValueError("Failed to load %d-th dictionary key: %s" % (i, str(k)))
 
     else:
         #Simple types that just load the given file
@@ -296,14 +347,16 @@ def _load_auxfile_member(root_dir, filenm, typ, metadata, quick_load):
             val = None  # no file exists for this member
         elif cur_typ == 'text-circuit-list':
             val = _load.load_circuit_list(pth)
-        elif cur_typ == 'protocolobj':
+        elif cur_typ == 'dir-serialized-object':
             val = _cls_from_meta_json(pth).from_dir(pth, quick_load=quick_load)
-        elif cur_typ == 'resultsobj':
+        elif cur_typ == 'partialdir-serialized-object':
             val = _cls_from_meta_json(pth)._from_dir_partial(pth, quick_load=quick_load)
         elif cur_typ == 'serialized-object':
             val = _load.load_serializable_object(pth)
         elif cur_typ == 'circuit-str-json':
             val = _load.load_circuits_as_strs(pth)
+        elif typ == 'numpy-array':
+            val = _np.load(pth)
         elif typ == 'json':
             with open(str(pth), 'r') as f:
                 val = _json.load(f)
@@ -434,20 +487,34 @@ def _write_auxfile_member(root_dir, filenm, typ, val):
     next_typ = ':'.join(subtypes[1:])
 
     if cur_typ == 'list':
-        metadata = []
-        for i, el in enumerate(val):
-            filenm_so_far = filenm + str(i)
-            meta = _write_auxfile_member(root_dir, filenm_so_far, next_typ, el)
-            metadata.append(meta)
-        if all([x is None for x in metadata]):
-            metadata = None  # keep file clean by not writing metadata with no information
+        if val is not None:
+            metadata = []
+            for i, el in enumerate(val):
+                filenm_so_far = filenm + str(i)
+                meta = _write_auxfile_member(root_dir, filenm_so_far, next_typ, el)
+                metadata.append(meta)
+        else:
+            metadata = None
 
     elif cur_typ == 'dict':
-        metadata = {}
-        for k, v in val.items():
-            filenm_so_far = filenm + "_" + k
-            meta = _write_auxfile_member(root_dir, filenm_so_far, next_typ, v)
-            metadata[k] = meta
+        if val is not None:
+            metadata = {}
+            for k, v in val.items():
+                filenm_so_far = filenm + "_" + k
+                meta = _write_auxfile_member(root_dir, filenm_so_far, next_typ, v)
+                metadata[k] = meta
+        else:
+            metadata = None
+
+    elif cur_typ == 'fancykeydict':
+        if val is not None:
+            metadata = []
+            for i, (k, v) in enumerate(val.items()):
+                filenm_so_far = filenm + "_kvpair" + str(i)
+                meta = _write_auxfile_member(root_dir, filenm_so_far, next_typ, v)
+                metadata.append(k, meta)
+        else:
+            metadata = None
 
     else:
         #Simple types that just write the given file
@@ -461,14 +528,16 @@ def _write_auxfile_member(root_dir, filenm, typ, val):
             pass
         elif cur_typ == 'text-circuit-list':
             _write.write_circuit_list(pth, val)
-        elif cur_typ == 'protocolobj':
+        elif cur_typ == 'dir-serialized-object':
             val.write(pth)
-        elif cur_typ == 'resultsobj':
+        elif cur_typ == 'partialdir-serialized-object':
             val._write_partial(pth)
         elif cur_typ == 'serialized-object':
             _write.write_serializable_object(pth, val)
         elif cur_typ == 'circuit-str-json':
             _write.write_circuits_as_strs(pth, val)
+        elif cur_typ == 'numpy-array':
+            _np.save(pth, val)
         elif typ == 'json':
             with open(str(pth), 'w') as f:
                 _json.dump(val, f, indent=4)

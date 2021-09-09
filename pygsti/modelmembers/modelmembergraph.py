@@ -33,13 +33,14 @@ class ModelMemberGraph(object):
         dict
         """
         from pygsti.io.metadir import _from_memoized_dict
+        from pygsti.circuits.circuitparser import parse_label as _parse_label
 
         mm_nodes = {}
         mm_serial = {}
         for mm_node_serialized_id, mm_node_dict in sdict.items():
             mm_serial[mm_node_serialized_id] = _from_memoized_dict(mm_node_dict, mm_serial, underscore=False)
             if 'memberdict_type' in mm_node_dict and 'memberdict_label' in mm_node_dict:
-                mm_type, lbl = mm_node_dict['memberdict_type'], mm_node_dict['memberdict_label']
+                mm_type, lbl = mm_node_dict['memberdict_type'], _parse_label(mm_node_dict['memberdict_label'])
                 if mm_type not in mm_nodes:
                     mm_nodes[mm_type] = {}
                 mm_nodes[mm_type][lbl] = mm_serial[mm_node_serialized_id]
@@ -172,7 +173,7 @@ class ModelMemberGraph(object):
         for mm_type, root_nodes in self.mm_nodes.items():
             for lbl, mm_node in root_nodes.items():
                 sdict[mm_node.serialize_id]['memberdict_type'] = mm_type
-                sdict[mm_node.serialize_id]['memberdict_label'] = lbl
+                sdict[mm_node.serialize_id]['memberdict_label'] = str(lbl)
         
         return sdict
 

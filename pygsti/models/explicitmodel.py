@@ -1537,15 +1537,15 @@ class ExplicitOpModel(_mdl.OpModel):
 
         mdl = cls(state_space, basis, state['default_gate_type'],
                   state['default_prep_type'], state['default_povm_type'],
-                  state['default_instrument_type'], state['prep_prefix'] state['effect_prefix'],
+                  state['default_instrument_type'], state['prep_prefix'], state['effect_prefix'],
                   state['gate_prefix'], state['povm_prefix'], state['instrument_prefix'],
                   simulator, state['evotype'])
-        
-        mdl.preps.update(modelmembers['preps'])
-        mdl.povms.update(modelmembers['povms'])
-        mdl.operations.update(modelmembers['operations'])
-        mdl.instruments.update(modelmembers['instruments'])
-        mdl.factories.update(modelmembers['factories'])
+
+        mdl.preps.update(modelmembers.get('preps', {}))
+        mdl.povms.update(modelmembers.get('povms', {}))
+        mdl.operations.update(modelmembers.get('operations', {}))
+        mdl.instruments.update(modelmembers.get('instruments', {}))
+        mdl.factories.update(modelmembers.get('factories', {}))
         return mdl
 
 

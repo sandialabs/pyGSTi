@@ -921,13 +921,7 @@ class ExplicitBasis(Basis):
         super(ExplicitBasis, self).__init__(name, longname, real, sparse)
 
     def _to_memoized_dict(self, memo):
-        def _encodemx(mx):  # nearly the same as in processor spec
-            if self.sparse:
-                raise NotImplementedError("Cannot serialize sparse matrices nicely yet!")
-            else:
-                enc = str if _np.iscomplexobj(mx) else (lambda x: x)
-                encoded = _np.array([enc(x) for x in mx.flat])
-                return encoded.reshape(mx.shape).tolist()
+        from pygsti.io.metadir import _encodemx
 
         state = {'module': self.__class__.__module__,
                  'class': self.__class__.__name__,
@@ -942,16 +936,7 @@ class ExplicitBasis(Basis):
 
     @classmethod
     def _from_memoized_dict(cls, state, memo):
-
-        def _decodemx(mx):  # Same as in processorspec
-            basemx = _np.array(mx)
-            if basemx.dtype.kind == 'U':  # character type array => complex numbers as strings
-                decoded = _np.array([complex(x) for x in basemx.flat])
-                decoded = decoded.reshape(basemx.shape)
-            else:
-                decoded = basemx
-            return decoded
-
+        from pygsti.io.metadir import _decodemx
         return cls([_decodemx(el) for el in state['elements']],
                    state['labels'], state['name'], state['longname'], state['real'],
                    state['sparse'])
