@@ -2315,9 +2315,9 @@ class PolarEigenvaluePlot(WorkspacePlot):
         data = []
         for i, evals in enumerate(evals_list):
             color = colors[i] if (colors is not None) else "black"
-            trace = go.Scatter(
+            trace = go.Scatterpolar(
                 r=list(_np.absolute(evals).flat),
-                t=list(_np.angle(evals).flatten() * (180.0 / _np.pi)),
+                theta=list(_np.angle(evals).flatten() * (180.0 / _np.pi)),
                 mode='markers',
                 marker=dict(
                     color=color,
@@ -2336,9 +2336,9 @@ class PolarEigenvaluePlot(WorkspacePlot):
             #Add amplified eigenvalues
             if amp is not None:
                 amp_evals = evals**amp
-                trace = go.Scatter(
+                trace = go.Scatterpolar(
                     r=list(_np.absolute(amp_evals).flat),
-                    t=list(_np.angle(amp_evals).flatten() * (180.0 / _np.pi)),
+                    theta=list(_np.angle(amp_evals).flatten() * (180.0 / _np.pi)),
                     showlegend=False,
                     mode='markers',
                     marker=dict(
@@ -2359,15 +2359,17 @@ class PolarEigenvaluePlot(WorkspacePlot):
             #title='Test Polar',
             #font=dict(size=10),
             plot_bgcolor='rgb(240, 240, 240)',
-            radialaxis=dict(
-                range=[0, 1.25]),
-            angularaxis=dict(
-                tickcolor='rgb(180,180,180)',
-                #range=[0,2]
-                #ticktext=['A','B','C','D']
+            polar = dict(
+                radialaxis=dict(
+                    range=[0, 1.25]),
+                angularaxis=dict(
+                    tickcolor='rgb(180,180,180)',
+                    #range=[0,2]
+                    #ticktext=['A','B','C','D']
+                    direction="counterclockwise",
+                    rotation=-90,
+                ),
             ),
-            direction="counterclockwise",
-            orientation=-90
         )
 
         #HACK around plotly bug: Plotly somehow holds residual polar plot data
@@ -2381,9 +2383,9 @@ class PolarEigenvaluePlot(WorkspacePlot):
                 trace['r'] += [1e3] * extra  # pragma: no cover
                 trace['t'] += [0.0] * extra  # pragma: no cover
         while len(data) < 3:
-            data.append(go.Scatter(
+            data.append(go.Scatterpolar(
                 r=[1e3] * 4,
-                t=[0.0] * 4,
+                theta=[0.0] * 4,
                 name="Dummy",
                 mode='markers',
                 showlegend=False,
@@ -2393,7 +2395,7 @@ class PolarEigenvaluePlot(WorkspacePlot):
         pythonVal = {}
         for i, tr in enumerate(data):
             key = tr['name'] if ("name" in tr) else "trace%d" % i
-            pythonVal[key] = {'r': tr['r'], 't': tr['t']}
+            pythonVal[key] = {'r': tr['r'], 'theta': tr['theta']}
 
         return ReportFigure(go.Figure(data=data, layout=layout),
                             None, pythonVal)

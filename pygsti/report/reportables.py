@@ -253,7 +253,7 @@ class GateEigenvalues(_modf.ModelFunction):
         numpy.ndarray
         """
         #avoid calling minweight_match again
-        dMx = nearby_model.operations[self.oplabel] - self.G0
+        dMx = nearby_model.operations[self.oplabel].to_dense() - self.G0.to_dense()
         #evalsM = evals0 + Uinv * (M-M0) * U
         return _np.array([self.evals[k] + _np.dot(self.inv_evecs[k, :], _np.dot(dMx, self.evecs[:, k]))
                           for k in range(dMx.shape[0])])
