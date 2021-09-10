@@ -10,6 +10,8 @@ The NamedDict class
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import numpy as _np
+
 from pygsti.tools import typeddict as _typeddict
 
 
@@ -77,6 +79,69 @@ class NamedDict(dict):
 
     def __reduce__(self):
         return (NamedDict, (self.keyname, self.keytype, self.valname, self.valtype, list(self.items())), None)
+
+    def _to_memoized_dict(self, memo):
+        from pygsti.io.metadir import _encodemx
+        
+        def _serialize(x):
+            #TODO: serialize via _to_memoized_dict once we have a base class
+            if x is None or isinstance(x, (float, int, str)):
+                return x
+            elif isinstance(x, _np.int64):
+                return int(x)
+            elif isinstance(x, NamedDict):
+                return x._to_memoized_dict({})
+            elif isinstance(x, _np.ndarray):
+                return {'named_dict_item_type': 'numpy array', 'itemdata': _encodemx(x)}
+            elif isinstance(x, dict):
+                return {k: _serialize(v) for k, v in x.items()}
+            elif isinstance(x, (tuple, list)):
+                return [_serialize(v) for v in x]
+            else:
+                raise ValueError("Cannot serialize object of type '%s' within values!" % str(type(x)))
+
+        serial_items = []
+        for key, val in self.items():
+            if not isinstance(key, (int, float, str, tuple)):
+                raise ValueError("Keys are not all simply serializable!")
+            serial_val = _serialize(val)
+            serial_items.append((key, serial_val))
+
+        state = {'module': self.__class__.__module__,
+                 'class': self.__class__.__name__,
+                 'key_name': self.keyname,
+                 'key_type': self.keytype,
+                 'value_name': self.valname,
+                 'value_type': self.valtype,
+                 'items': serial_items
+                 }
+        return state
+
+    @classmethod
+    def _from_memoized_dict(cls, state, memo):  # memo holds already de-serialized objects
+        from pygsti.io.metadir import _decodemx, _from_memoized_dict
+
+        def _deserialize(x):
+            if x is None or isinstance(x, (float, int, str)):
+                return x
+            elif isinstance(x, dict):
+                if 'module' in x and 'class' in x:
+                    return _from_memoized_dict(x)
+                elif 'named_dict_item_type' in x:
+                    if x['named_dict_item_type'] == 'numpy array':
+                        return _decodemx(x['itemdata'])
+                    else:
+                        raise ValueError("Unrecognized `named_dict_item_type`: %s" % str(x['named_dict_item_type']))
+                else:  # assume a normal dictionary
+                    return {k: _deserialize(v) for k, v in x.items()}
+            elif isinstance(x, list):
+                return [_deserialize(v) for v in x]
+            else:
+                raise ValueError("Cannot decode object of type '%s' within serialized values!" % str(type(x)))
+
+        items = [(k, _deserialize(v)) for k, v in state['items']]
+
+        return cls(state['key_name'], state['key_type'], state['value_name'], state['value_type'], items)
 
     def to_dataframe(self):
         """

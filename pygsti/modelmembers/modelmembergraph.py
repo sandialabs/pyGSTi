@@ -37,7 +37,8 @@ class ModelMemberGraph(object):
 
         mm_nodes = {}
         mm_serial = {}
-        for mm_node_serialized_id, mm_node_dict in sdict.items():
+        for mm_node_serialized_id_str, mm_node_dict in sdict.items():
+            mm_node_serialized_id = int(mm_node_serialized_id_str)  # convert string keys back to integers
             mm_serial[mm_node_serialized_id] = _from_memoized_dict(mm_node_dict, mm_serial, underscore=False)
             if 'memberdict_type' in mm_node_dict and 'memberdict_label' in mm_node_dict:
                 mm_type, lbl = mm_node_dict['memberdict_type'], _parse_label(mm_node_dict['memberdict_label'])
@@ -167,13 +168,14 @@ class ModelMemberGraph(object):
         """
         sdict = OrderedDict()
         for mm_id, mm_node in self.mm_memo.items():
-            sdict[mm_node.serialize_id] = mm_node.mm.to_memoized_dict(self.mm_memo)
+            sdict[str(mm_node.serialize_id)] = mm_node.mm.to_memoized_dict(self.mm_memo)
         
         # Tag extra metadata for root nodes
         for mm_type, root_nodes in self.mm_nodes.items():
             for lbl, mm_node in root_nodes.items():
-                sdict[mm_node.serialize_id]['memberdict_type'] = mm_type
-                sdict[mm_node.serialize_id]['memberdict_label'] = str(lbl)
+                sdict[str(mm_node.serialize_id)]['memberdict_type'] = mm_type
+                sdict[str(mm_node.serialize_id)]['memberdict_label'] = str(lbl)
+                # serialized-dictionary keys must be *strings*
         
         return sdict
 

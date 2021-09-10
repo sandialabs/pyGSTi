@@ -211,21 +211,22 @@ class CircuitOutcomeProbabilityArrayLayout(object):
             self._element_indices[i_unique] = _slct.list_to_slice(elindices, array_ok=True)
 
     def _to_memoized_dict(self, memo):
-        elindex_outcome_tuples = _collections.OrderedDict()
+        elindex_outcome_tuples = []
         for i_unique, outcomes in self._outcomes.items():
             elindices = _slct.to_array(self._element_indices[i_unique])
             assert(len(outcomes) == len(elindices))
-            elindex_outcome_tuples[i_unique] = list(zip(map(int, elindices), outcomes))
+            elindex_outcome_tuples.append((i_unique, list(zip(map(int, elindices), outcomes))))
             # Note: map to int above to avoid int64 integers which aren't JSON-able
         
         state = {'module': self.__class__.__module__,
                  'class': self.__class__.__name__,
                  'circuits': self.circuits._to_memoized_dict({}),  # a CircuitList
                  'unique_circuits': [c.str for c in self._unique_circuits],
-                 'to_unique': self._to_unique,  # just a dict mapping ints -> ints
+                 'to_unique': [(k, v) for k, v in self._to_unique.items()],  # just a dict mapping ints -> ints
                  'elindex_outcome_tuples': elindex_outcome_tuples,
                  'parameter_dimensions': self._param_dimensions,
                  }
+
         return state
 
     @classmethod
@@ -237,8 +238,10 @@ class CircuitOutcomeProbabilityArrayLayout(object):
         circuits = _from_memoized_dict(state['circuits'])
         unique_circuits = [std.parse_circuit(s, create_subcircuits=_Circuit.default_expand_subcircuits)
                            for s in state['unique_circuits']]
+        to_unique = {k: v for k, v in state['to_unique']}
+        elindex_outcome_tuples = _collections.OrderedDict(state['elindex_outcome_tuples'])
 
-        return cls(circuits, unique_circuits, state['to_unique'], state['elindex_outcome_tuples'],
+        return cls(circuits, unique_circuits, to_unique, elindex_outcome_tuples,
                    unique_complete_circuits=None, param_dimensions=state['parameter_dimensions'],
                    resource_alloc=None)
 

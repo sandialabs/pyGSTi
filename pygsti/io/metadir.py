@@ -16,6 +16,7 @@ import importlib as _importlib
 import json as _json
 import pathlib as _pathlib
 import pickle as _pickle
+import warnings as _warnings
 
 from pygsti.io import loaders as _load
 from pygsti.io import writers as _write
@@ -429,6 +430,7 @@ def write_meta_based_dir(root_dir, valuedict, auxfile_types=None, init_meta=None
             meta[auxnm] = auxmeta  # metadata about auxfile(s) for this auxnm
 
     with open(str(root_dir / 'meta.json'), 'w') as f:
+        _check_jsonable(meta)
         _json.dump(meta, f)
 
     #REMOVE
@@ -540,6 +542,7 @@ def _write_auxfile_member(root_dir, filenm, typ, val):
             _np.save(pth, val)
         elif typ == 'json':
             with open(str(pth), 'w') as f:
+                _check_jsonable(val)
                 _json.dump(val, f, indent=4)
         elif typ == 'pickle':
             with open(str(pth), 'wb') as f:
@@ -589,6 +592,7 @@ def _obj_to_meta_json(obj, dirname):
     """
     meta = {'type': _full_class_name(obj)}
     with open(str(_pathlib.Path(dirname) / 'meta.json'), 'w') as f:
+        _check_jsonable(meta)
         _json.dump(meta, f)
 
 
@@ -649,6 +653,20 @@ def _read_json_or_pkl_files_to_dict(dirname):
     -------
     dict
     """
+
+    def _from_jsonable(x):
+        if x is None or isinstance(x, (float, int, str)):
+            return x
+        elif isinstance(x, dict):
+            if 'module' in x and 'class' in x:
+                return _from_memoized_dict(x)
+            else:  # assume a normal dictionary
+                return {k: _from_jsonable(v) for k, v in x.items()}
+        elif isinstance(x, list):
+            return [_from_jsonable(v) for v in x]
+        else:
+            raise ValueError("Cannot decode object of type '%s' within JSON'd values!" % str(type(x)))
+
     dirname = _pathlib.Path(dirname)
     if not dirname.is_dir():
         return {}
@@ -657,7 +675,8 @@ def _read_json_or_pkl_files_to_dict(dirname):
     for pth in dirname.iterdir():
         if pth.suffix == '.json':
             with open(str(pth), 'r') as f:
-                val = _json.load(f)
+                json_val = _json.load(f)
+            val = _from_jsonable(json_val)
         elif pth.suffix == '.pkl':
             with open(str(pth), 'rb') as f:
                 val = _pickle.load(f)
@@ -690,13 +709,52 @@ def write_dict_to_json_or_pkl_files(d, dirname):
     """
     dirname = _pathlib.Path(dirname)
     dirname.mkdir(exist_ok=True)
+
+    def _to_jsonable(val):
+        if hasattr(val, '_to_memoized_dict'):
+            return val._to_memoized_dict({})
+        elif type(val) == list:  # don't use isinstance here
+            return [_to_jsonable(v) for v in val]
+        elif type(val) == dict:  # don't use isinstance here
+            return {k: _to_jsonable(v) for k, v in val.items()}
+        else:
+            return val
+
     for key, val in d.items():
-        #TODO: fix this - as we can write some things to json that don't get read back correctly,
-        # e.g. dicts with integer keys
-        #try:
-        #    with open(dirname / (key + '.json'), 'w') as f:
-        #        _json.dump(val, f)
-        #except:
-        #try to remove partial json file??
-        with open(str(dirname / (key + '.pkl')), 'wb') as f:
-            _pickle.dump(val, f)
+        try:
+            jsonable = _to_jsonable(val)
+            _check_jsonable(jsonable)
+            with open(dirname / (key + '.json'), 'w') as f:
+                _json.dump(jsonable, f)
+        except Exception as e:
+            fn = str(dirname / (key + '.json'))
+            _warnings.warn("Could not write %s (falling back on pickle format):\n" % fn + str(e))
+            #try to remove partial json file??
+            with open(str(dirname / (key + '.pkl')), 'wb') as f:
+                _pickle.dump(val, f)
+
+
+def _check_jsonable(x):
+    """ Checks that `x` can be properly converted to JSON, detecting
+        errors that the json modules doesn't pick up. E.g. ensures that `x`
+        doesn't contain dicts with non-string-valued keys """
+    if x is None or isinstance(x, (float, int, str)):
+        pass  # no problem
+    elif isinstance(x, (tuple, list)):
+        for i, v in enumerate(x):
+            try:
+                _check_jsonable(v)  # no problem as long as we don't mind tuples -> lists
+            except ValueError as e:
+                raise ValueError(("%d-th element : " % i) + str(e))
+    elif isinstance(x, dict):
+        if any([(not isinstance(k, str)) for k in x.keys()]):
+            nonstr_keys = [k for k in x.keys() if not isinstance(k, str)]
+            raise ValueError("Cannot convert a dictionary with non-string keys to JSON! (it won't decode properly):\n"
+                             + '\n'.join(map(str,nonstr_keys)))
+        for k, v in x.items():
+            try:
+                _check_jsonable(v)
+            except ValueError as e:
+                raise ValueError(("%s key : " % k) + str(e))
+    else:
+        raise ValueError("Cannot serialize object of type '%s' to JSON!" % str(type(x)))
