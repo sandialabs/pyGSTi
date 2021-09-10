@@ -236,7 +236,7 @@ class CircuitOutcomeProbabilityArrayLayout(object):
 
         circuits = _from_memoized_dict(state['circuits'])
         unique_circuits = [std.parse_circuit(s, create_subcircuits=_Circuit.default_expand_subcircuits)
-                           for s in state['additional_circuits']]
+                           for s in state['unique_circuits']]
 
         return cls(circuits, unique_circuits, state['to_unique'], state['elindex_outcome_tuples'],
                    unique_complete_circuits=None, param_dimensions=state['parameter_dimensions'],

@@ -2333,6 +2333,27 @@ class ProtocolResultsDir(_TreeNode):
 
         super().__init__(self.data.edesign._dirs, children)
 
+    def _create_childval(self, key):  # (this is how children are created on-demand)
+        """ Create the value for `key` on demand. """
+        if self.data.edesign._loaded_from and key in self._dirs:
+            dirname = _pathlib.Path(self.data.edesign._loaded_from)
+            subdir = self._dirs[key]
+            subobj_dir = dirname / subdir
+
+            if subobj_dir.exists():
+                submeta_dir = subobj_dir / 'results'
+                if submeta_dir.exists() and (submeta_dir / 'meta.json').exists():
+                    # then use this metadata to determine the results-dir object type
+                    classobj = _io.metadir._cls_from_meta_json(submeta_dir)
+                else:
+                    # otherwise just make the sub-resultsdir object the same type as this one
+                    classobj = self.__class__
+                return classobj.from_dir(subobj_dir, parent=self, name=key, preloaded_data=self.data[key])
+            else:
+                raise ValueError("Expected directory: '%s' doesn't exist!" % str(subobj_dir))
+        else:
+            raise KeyError("Invalid key: %s" % str(key))
+
     def write(self, dirname=None, parent=None):
         """
         Write this "protocol results directory" to a directory.

@@ -100,6 +100,7 @@ class CircuitList(object):
                  }
         return state
 
+    @classmethod
     def _from_memoized_dict(cls, state, memo):  # memo holds already de-serialized objects
         from pygsti.io import stdinput as _stdinput
         std = _stdinput.StdInputParser()
@@ -107,7 +108,7 @@ class CircuitList(object):
                     for s in state['circuits']]
         circuit_weights = _np.array(state['circuit_weights'], 'd') if (state['circuit_weights'] is not None) else None
         ret = cls(circuits, state['op_label_aliases'], circuit_weights, state['name'])
-        ret.uuid = _uuid.uuid4(state['uuid'])
+        ret.uuid = _uuid.UUID(state['uuid'])
         return ret
 
     # Mimic list / tuple

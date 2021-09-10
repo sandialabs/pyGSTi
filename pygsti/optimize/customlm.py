@@ -258,7 +258,7 @@ class CustomLMOptimizer(Optimizer):
                    damping_clip=state['damping_clip'],
                    use_acceleration=state['use_acceleration'],
                    uphill_step_threshold=state['uphill_step_threshold'],
-                   init_munu=state['init_mu_and_nu'],
+                   init_munu=state['initial_mu_and_nu'],
                    oob_check_interval=state['out_of_bounds_check_interval'],
                    oob_action=state['out_of_bounds_action'],
                    oob_check_mode=state['out_of_bounds_check_mode'],

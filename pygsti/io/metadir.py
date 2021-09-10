@@ -69,7 +69,7 @@ def _from_memoized_dict(memoized_dict, memo=None, underscore=True):
     if memoized_dict is None: return None
     if underscore:
         return _class_for_name(memoized_dict['module']
-                               + '.' + memoized_dict['class'])._from_memoized_dict(memoized_dict, memo)
+                               + '.' + memoized_dict['class'])._from_memoized_dict(state=memoized_dict, memo=memo)
     else:
         return _class_for_name(memoized_dict['module']
                                + '.' + memoized_dict['class']).from_memoized_dict(memoized_dict, memo)
