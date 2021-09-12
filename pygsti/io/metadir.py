@@ -339,6 +339,8 @@ def _load_auxfile_member(root_dir, filenm, typ, metadata, quick_load):
         pth = root_dir / (filenm + ext)
         if not pth.exists():
             return False, True  # failure to load, but not explicitly skipped, so set_to_None=True
+            # Note: this behavior is needed when, for instance, a member that could be a
+            # serializable object is None instead - in which case we just write nothing and load in None here.
         if cur_typ == 'none':  # member is serialized separatey and shouldn't be touched
             return False, False  # explicitly don't load or set value (so set_to_None=False)
 

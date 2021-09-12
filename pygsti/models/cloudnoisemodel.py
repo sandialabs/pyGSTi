@@ -29,6 +29,7 @@ from pygsti.modelmembers import operations as _op
 from pygsti.modelmembers import povms as _povm
 from pygsti.modelmembers import states as _state
 from pygsti.modelmembers.operations import opfactory as _opfactory
+from pygsti.modelmembers.modelmembergraph import ModelMemberGraph as _MMGraph
 from pygsti.baseobjs.basis import BuiltinBasis as _BuiltinBasis, ExplicitBasis as _ExplicitBasis
 from pygsti.baseobjs.label import Label as _Lbl, CircuitLabel as _CircuitLabel
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
@@ -332,6 +333,55 @@ class CloudNoiseModel(_ImplicitOpModel):
         """
         return self._clouds
 
+    def _to_memoized_dict(self, memo):
+        state = {'module': self.__class__.__module__,
+                 'class': self.__class__.__name__,
+                 'processor_spec': self.processor_spec._to_memoized_dict({}),
+                 #'state_space': self.state_space._to_memoized_dict({}),  # always a QubitStateSpace so far
+                 #'basis': self.basis._to_memoized_dict({}),
+                 'layer_rules': self.layer_rules._to_memoized_dict({}),
+                 'evotype': str(self.evotype),
+                 'simulator': self.sim._to_memoized_dict({}),
+                 'error_composition_mode': self.errcomp_type,
+                 }
+        mmgraph = self.create_modelmember_graph()
+        state['modelmembers'] = mmgraph.create_serialization_dict()
+        return state
+
+    @classmethod
+    def _from_memoized_dict(cls, state, memo):
+        from pygsti.io.metadir import _from_memoized_dict
+        state_space = _from_memoized_dict(state['state_space'])
+        #basis = _from_memoized_dict(state['basis'])
+        modelmembers = _MMGraph.load_modelmembers_from_serialization_dict(state['modelmembers'])
+        simulator = _from_memoized_dict(state['simulator'])
+        layer_rules = _from_memoized_dict(state['layer_rules'])
+        processor_spec = _from_memoized_dict(state['processor_spec'])
+
+        # __init__ does too much, so we need to create an alternate __init__ function here:
+        mdl = cls.__new__(cls)
+        mdl.processor_spec = processor_spec
+        mdl.errcomp_type = state['error_composition_mode']
+        _ImplicitOpModel.__init__(mdl, state_space, layer_rules, 'pp',
+                                  simulator=simulator, evotype=state['evotype'])
+
+        flags = {'auto_embed': False, 'match_parent_statespace': False,
+                 'match_parent_evotype': True, 'cast_to_type': None}
+        mdl.prep_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers['prep_blks|layers'])
+        mdl.povm_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers['povm_blks|layers'])
+        mdl.operation_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers['operation_blks|layers'])
+        mdl.operation_blks['gates'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers['operation_blks|gates'])
+        mdl.operation_blks['cloudnoise'] = _OrderedMemberDict(mdl, None, None, flags,
+                                                              modelmembers['operation_blks|cloudnoise'])
+        mdl.instrument_blks['layers'] = _OrderedMemberDict(mdl, None, None, modelmembers['instrument_blks|layers'])
+        mdl.factories['layers'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers['factories|layers'])
+        mdl.factories['gates'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers['factories|gates'])
+        mdl.factories['cloudnoise'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers['factories|cloudnoise'])
+
+        mdl._clouds = _collections.OrderedDict()
+
+        return mdl
+
 
 class CloudNoiseLayerRules(_LayerRules):
 
@@ -347,6 +397,22 @@ class CloudNoiseLayerRules(_LayerRules):
             self._add_global_idle_to_all_layers = True
         else:
             raise ValueError("Invalid `implicit_idle_mode`: '%s'" % str(implicit_idle_mode))
+
+    def _to_memoized_dict(self, memo):
+        state = {'module': self.__class__.__module__,
+                 'class': self.__class__.__name__,
+                 'error_composition_mode': self.errcomp_type,
+                 'implied_global_idle_label': str(self.implied_global_idle_label),
+                 'implicit_idle_mode': self.implicit_idle_mode,
+                 }
+        return state
+
+    @classmethod
+    def _from_memoized_dict(cls, state, memo):
+        from pygsti.circuits.circuitparser import parse_label as _parse_label
+        return cls(state['error_composition_mode'],
+                   _parse_label(state['implied_global_idle_label']),
+                   state['implicit_idle_mode'])
 
     def prep_layer_operator(self, model, layerlbl, caches):
         """

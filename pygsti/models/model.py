@@ -1521,10 +1521,11 @@ class OpModel(Model):
         """
         raise NotImplementedError("Derived classes must implement this")
 
-    @classmethod
-    def _from_dir_partial(self, state, memo):
-        #HERE
-        pass
+#REMOVE (I think)
+#    @classmethod
+#    def _from_dir_partial(self, state, memo):
+#        #HERE
+#        pass
 
 
 

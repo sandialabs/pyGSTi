@@ -37,6 +37,7 @@ class ModelMemberGraph(object):
 
         mm_nodes = {}
         mm_serial = {}
+
         for mm_node_serialized_id_str, mm_node_dict in sdict.items():
             mm_node_serialized_id = int(mm_node_serialized_id_str)  # convert string keys back to integers
             mm_serial[mm_node_serialized_id] = _from_memoized_dict(mm_node_dict, mm_serial, underscore=False)

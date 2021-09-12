@@ -30,29 +30,12 @@ class OplessModel(_Model):
 
     Parameters
     ----------
-    state_space_labels : StateSpaceLabels or list or tuple
-        The decomposition (with labels) of (pure) state-space this model
-        acts upon.  Regardless of whether the model contains operators or
-        superoperators, this argument describes the Hilbert space dimension
-        and imposed structure.  If a list or tuple is given, it must be
-        of a from that can be passed to `StateSpaceLabels.__init__`.
+    state_space : StateSpace
+        The state space of this model.
     """
 
-    def __init__(self, state_space_labels):
-        """
-        Creates a new Model.  Rarely used except from derived classes
-        `__init__` functions.
-
-        Parameters
-        ----------
-        state_space_labels : StateSpaceLabels or list or tuple
-            The decomposition (with labels) of (pure) state-space this model
-            acts upon.  Regardless of whether the model contains operators or
-            superoperators, this argument describes the Hilbert space dimension
-            and imposed structure.  If a list or tuple is given, it must be
-            of a from that can be passed to `StateSpaceLabels.__init__`.
-        """
-        _Model.__init__(self, state_space_labels)
+    def __init__(self, state_space):
+        _Model.__init__(self, state_space)
 
         #Setting things the rest of pyGSTi expects but probably shouldn't...
         self.basis = None
@@ -162,20 +145,30 @@ class SuccessFailModel(OplessModel):
 
     Parameters
     ----------
-    state_space_labels : StateSpaceLabels or list or tuple
-        The decomposition (with labels) of (pure) state-space this model
-        acts upon.  Regardless of whether the model contains operators or
-        superoperators, this argument describes the Hilbert space dimension
-        and imposed structure.  If a list or tuple is given, it must be
-        of a from that can be passed to `StateSpaceLabels.__init__`.
+    state_space : StateSpace
+        The state space of this model.
 
     use_cache : bool, optional
         Whether a cache should be used to increase performance.
     """
-    def __init__(self, state_space_labels, use_cache=False):
-        OplessModel.__init__(self, state_space_labels)
+    def __init__(self, state_space, use_cache=False):
+        OplessModel.__init__(self, state_space)
         self.use_cache = use_cache
         self._sim = _SuccessFailForwardSimulator(self)
+
+    def _to_memoized_dict(self, memo):
+        state = {'module': self.__class__.__module__,
+                 'class': self.__class__.__name__,
+                 'state_space': self.state_space._to_memoized_dict({}),
+                 'use_cache': self.use_cache
+                 }
+        return state
+
+    @classmethod
+    def _from_memoized_dict(cls, state, memo):
+        from pygsti.io.metadir import _from_memoized_dict
+        state_space = _from_memoized_dict(state['state_space'])
+        return cls(state_space, state['use_cache'])
 
     @property
     def sim(self):

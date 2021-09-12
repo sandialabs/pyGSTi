@@ -314,14 +314,56 @@ class ImplicitOpModel(_mdl.OpModel):
         self._opcaches['complete-layers'] = {}  # used to hold final layers (of any type) if needed
 
     def create_modelmember_graph(self):
-        self._clean_paramvec() # Rebuild params to ensure accurate comparisons with MMGraphs
-        return _MMGraph({
+        self._clean_paramvec()  # Rebuild params to ensure accurate comparisons with MMGraphs
+
+        root_dicts = {
             'prep_blks': self.prep_blks,
             'povm_blks': self.povm_blks,
             'operation_blks': self.operation_blks,
             'instrument_blks': self.instrument_blks,
             'factories': self.factories,
-        })
+        }
+        mm_dicts = {(root_str + "|" + k): mm_dict
+                    for root_str, root_dict in root_dicts.items()
+                    for k, mm_dict in root_dict.items()}
+        return _MMGraph(mm_dicts)
+
+    def _to_memoized_dict(self, memo):
+        state = {'module': self.__class__.__module__,
+                 'class': self.__class__.__name__,
+                 'state_space': self.state_space._to_memoized_dict({}),
+                 'basis': self.basis._to_memoized_dict({}),
+                 'evotype': str(self.evotype),  # TODO or serialize?
+                 'layer_rules': self._layer_rules._to_memoized_dict({}),
+                 'simulator': self.sim._to_memoized_dict({})
+                 }
+
+        mmgraph = self.create_modelmember_graph()
+        state['modelmembers'] = mmgraph.create_serialization_dict()
+        return state
+
+    @classmethod
+    def _from_memoized_dict(cls, state, memo):
+        from pygsti.io.metadir import _from_memoized_dict
+        state_space = _from_memoized_dict(state['state_space'])
+        layer_rules = _from_memoized_dict(state['layer_rules'])
+        basis = _from_memoized_dict(state['basis'])
+        modelmembers = _MMGraph.load_modelmembers_from_serialization_dict(state['modelmembers'])
+        simulator = _from_memoized_dict(state['simulator'])
+
+        mdl = cls(state_space, layer_rules, basis, simulator, state['evotype'])
+
+        root_dicts = {
+            'prep_blks': mdl.prep_blks,
+            'povm_blks': mdl.povm_blks,
+            'operation_blks': mdl.operation_blks,
+            'instrument_blks': mdl.instrument_blks,
+            'factories': mdl.factories,
+        }
+        for mm_key, mm_dict in modelmembers.items():
+            root_key, sub_key = mm_key.split('|')
+            root_dicts[root_key][sub_key].update(mm_dict)  # Note: sub_keys should already be created
+        return mdl
 
 
 def _init_spam_layers(model, prep_layers, povm_layers):

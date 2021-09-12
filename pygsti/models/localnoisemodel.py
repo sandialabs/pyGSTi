@@ -335,19 +335,7 @@ class LocalNoiseModel(_ImplicitOpModel):
 
     def create_processor_spec(self):
         import copy as _copy
-        return _copy.deepcopy(self.processor_spec)
-    
-    def create_modelmember_graph(self):
-        self._clean_paramvec() # Rebuild params to ensure accurate comparisons with MMGraphs
-        return _MMGraph({
-            'prep_blks_layers': self.prep_blks['layers'],
-            'povm_blks_layers': self.povm_blks['layers'],
-            'operation_blks_layers': self.operation_blks['layers'],
-            'operation_blks_gates': self.operation_blks['gates'],
-            'instrument_blks_layers': self.instrument_blks['layers'],
-            'factories_gates': self.factories['gates'],
-            'factories_layers': self.factories['layers'],
-        })
+        return _copy.deepcopy(self.processor_spec)    
 
     def _to_memoized_dict(self, memo):
         state = {'module': self.__class__.__module__,
@@ -381,13 +369,13 @@ class LocalNoiseModel(_ImplicitOpModel):
 
         flags = {'auto_embed': False, 'match_parent_statespace': False,
                  'match_parent_evotype': True, 'cast_to_type': None}
-        mdl.prep_blks['layers'] = _OrderedMemberDict(self, None, None, flags, modelmembers['prep_blks_layers'])
-        mdl.povm_blks['layers'] = _OrderedMemberDict(self, None, None, flags, modelmembers['povm_blks_layers'])
-        mdl.operation_blks['layers'] = _OrderedMemberDict(self, None, None, flags, modelmembers['operation_blks_layers'])
-        mdl.operation_blks['gates'] = _OrderedMemberDict(self, None, None, flags, modelmembers['operation_blks_gates'])
-        mdl.instrument_blks['layers'] = _OrderedMemberDict(self, None, None, flags, modelmembers['instrument_blks_layers'])
-        mdl.factories['gates'] = _OrderedMemberDict(self, None, None, flags, modelmembers['factories_gates'])
-        mdl.factories['layers'] = _OrderedMemberDict(self, None, None, flags, modelmembers['factories_layers'])
+        mdl.prep_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers['prep_blks|layers'])
+        mdl.povm_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers['povm_blks|layers'])
+        mdl.operation_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers['operation_blks|layers'])
+        mdl.operation_blks['gates'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers['operation_blks|gates'])
+        mdl.instrument_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers['instrument_blks|layers'])
+        mdl.factories['gates'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers['factories|gates'])
+        mdl.factories['layers'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers['factories|layers'])
 
         return mdl
 
@@ -415,8 +403,9 @@ class _SimpleCompLayerRules(_LayerRules):
         return state
 
     @classmethod
-    def _from_memoized_dict(cls, state, memo):        
-        return cls(_parse_labels(state['global_idle_layer_label']), state['implicit_idle_mode'])
+    def _from_memoized_dict(cls, state, memo):
+        from pygsti.circuits.circuitparser import parse_label as _parse_label
+        return cls(_parse_label(state['global_idle_layer_label']), state['implicit_idle_mode'])
 
     def prep_layer_operator(self, model, layerlbl, caches):
         """

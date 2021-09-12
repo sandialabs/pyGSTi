@@ -441,6 +441,27 @@ class FitResults(object):
         self.bootstraps = bootstraps
         self.bootstraps_failrate = bootstraps_failrate
 
+    def _to_memoized_dict(self, memo):  # memo holds already serialized objects
+        state = {'module': self.__class__.__module__,
+                 'class': self.__class__.__name__,
+                 'fit_type': self.fittype,
+                 'seed': self.seed,
+                 'r_type': self.rtype,
+                 'success': self.success,
+                 'estimates': self.estimates,
+                 'variable': self.variable,
+                 'stds': self.stds,
+                 'bootstraps': self.bootstraps,
+                 'bootstraps_failrate': self.bootstraps_failrate
+                 }
+        return state
+
+    @classmethod
+    def _from_memoized_dict(cls, state, memo):  # memo holds already de-serialized objects
+        return cls(state['fit_type'], state['seed'], state['r_type'], state['success'],
+                   state['estimates'], state['variable'], state['stds'],
+                   state['bootstraps'], state['bootstraps_failrate'])
+
 # Obsolute RB results class
 # class SimpleRBResults(object):
 #     """
