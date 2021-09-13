@@ -314,7 +314,7 @@ class ComputationalBasisState(_State):
         mm_dict = super().to_memoized_dict(mmg_memo)
 
         mm_dict['zvals'] = self._zvals.tolist()
-        mm_dict['basis'] = self._basis._to_memoized_dict({})
+        mm_dict['basis'] = self._basis.to_nice_serialization()
 
         return mm_dict
 
@@ -340,10 +340,9 @@ class ComputationalBasisState(_State):
         ModelMember
             An initialized object
         """
-        from pygsti.io.metadir import _from_memoized_dict
         cls._check_memoized_dict(mm_dict, serial_memo)
-        state_space = _from_memoized_dict(mm_dict['state_space'])
-        basis = _from_memoized_dict(mm_dict['basis'])
+        state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
+        basis = _Basis.from_nice_serialization(mm_dict['basis'])
         return cls(mm_dict['zvals'], basis, mm_dict['evotype'], state_space)
 
     def __str__(self):

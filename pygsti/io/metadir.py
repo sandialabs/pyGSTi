@@ -20,6 +20,7 @@ import warnings as _warnings
 
 from pygsti.io import loaders as _load
 from pygsti.io import writers as _write
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 
 QUICK_LOAD_MAX_SIZE = 10 * 1024  # 10 kilobytes
@@ -63,47 +64,6 @@ def _class_for_name(module_and_class_name):
     # get the class, will raise AttributeError if class cannot be found
     c = getattr(m, class_name)
     return c
-
-
-def _from_memoized_dict(memoized_dict, memo=None, underscore=True):
-    if memo is None: memo = {}
-    if memoized_dict is None: return None
-    if underscore:
-        return _class_for_name(memoized_dict['module']
-                               + '.' + memoized_dict['class'])._from_memoized_dict(state=memoized_dict, memo=memo)
-    else:
-        return _class_for_name(memoized_dict['module']
-                               + '.' + memoized_dict['class']).from_memoized_dict(memoized_dict, memo)
-
-
-def _encodemx(mx):  # nearly the same as in processor spec
-    if _sps.issparse(mx):
-        csr_mx = _sps.csr_matrix(mx)  # convert to CSR and save in this format
-        return {'sparse_matrix_type': 'csr',
-                'data': _encodemx(csr_mx.data), 'indices': _encodemx(csr_mx.indices),
-                'indptr': _encodemx(csr_mx.indptr), 'shape': csr_mx.shape}
-    else:
-        enc = str if _np.iscomplexobj(mx) else (lambda x: x)
-        encoded = _np.array([enc(x) for x in mx.flat])
-        return encoded.reshape(mx.shape).tolist()
-
-
-def _decodemx(mx):  # ~Same as in processorspec
-    if isinstance(mx, dict): # then a sparse mx
-        assert(mx['sparse_matrix_type'] == 'csr')
-        data = _decodemx(mx['data'])
-        indices = _decodemx(mx['indices'])
-        indptr = _decodemx(mx['indptr'])
-        decoded = _sps.csr_matrix((data, indices, indptr), shape=mx['shape'])
-    else:
-        basemx = _np.array(mx)
-        if basemx.dtype.kind == 'U':  # character type array => complex numbers as strings
-            decoded = _np.array([complex(x) for x in basemx.flat])
-            decoded = decoded.reshape(basemx.shape)
-        else:
-            decoded = basemx
-    return decoded
-
 
 
 # ****************** Serialization into a directory with a meta.json *********************
@@ -355,7 +315,7 @@ def _load_auxfile_member(root_dir, filenm, typ, metadata, quick_load):
         elif cur_typ == 'partialdir-serialized-object':
             val = _cls_from_meta_json(pth)._from_dir_partial(pth, quick_load=quick_load)
         elif cur_typ == 'serialized-object':
-            val = _load.load_serializable_object(pth)
+            val = _NicelySerializable.read(pth)
         elif cur_typ == 'circuit-str-json':
             val = _load.load_circuits_as_strs(pth)
         elif typ == 'numpy-array':
@@ -537,7 +497,9 @@ def _write_auxfile_member(root_dir, filenm, typ, val):
         elif cur_typ == 'partialdir-serialized-object':
             val._write_partial(pth)
         elif cur_typ == 'serialized-object':
-            _write.write_serializable_object(pth, val)
+            assert(isinstance(val, _NicelySerializable)), \
+                "Non-nicely-serializable '%s' object given for a 'serialized-object' auxfile type!" % (str(type(val)))
+            val.write(pth)
         elif cur_typ == 'circuit-str-json':
             _write.write_circuits_as_strs(pth, val)
         elif cur_typ == 'numpy-array':
@@ -661,7 +623,7 @@ def _read_json_or_pkl_files_to_dict(dirname):
             return x
         elif isinstance(x, dict):
             if 'module' in x and 'class' in x:
-                return _from_memoized_dict(x)
+                return _NicelySerializable.from_nice_serialization(x)
             else:  # assume a normal dictionary
                 return {k: _from_jsonable(v) for k, v in x.items()}
         elif isinstance(x, list):
@@ -713,8 +675,8 @@ def write_dict_to_json_or_pkl_files(d, dirname):
     dirname.mkdir(exist_ok=True)
 
     def _to_jsonable(val):
-        if hasattr(val, '_to_memoized_dict'):
-            return val._to_memoized_dict({})
+        if isinstance(val, _NicelySerializable):
+            return val.to_nice_serialization()
         elif type(val) == list:  # don't use isinstance here
             return [_to_jsonable(v) for v in val]
         elif type(val) == dict:  # don't use isinstance here

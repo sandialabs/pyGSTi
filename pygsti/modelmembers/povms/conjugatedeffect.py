@@ -415,7 +415,7 @@ class ConjugatedStatePOVMEffect(DenseEffectInterface, _POVMEffect):
         ModelMember
             An initialized object
         """
-        from pygsti.io.metadir import _from_memoized_dict
+        from pygsti.modelmembers.states import State as _State
         serial_memo_hack = serial_memo.copy()
         serial_memo_hack[0] = None  # HACK to behave as if the submember were loaded
         cls._check_memoized_dict(mm_dict, serial_memo_hack)
@@ -423,6 +423,7 @@ class ConjugatedStatePOVMEffect(DenseEffectInterface, _POVMEffect):
         #Special init that circumvents derived class __init__ method to set state
         # (works when derived class just holds a conjugated state and nothing else)
         ret = cls.__new__(cls)
-        state = _from_memoized_dict(mm_dict['conjugated_state'], serial_memo, underscore=False)
+        state_class = _State._state_class(mm_dict['conjugated_state'])
+        state = state_class.from_memoized_dict(mm_dict['conjugated_state'], serial_memo)
         ConjugatedStatePOVMEffect.__init__(ret, state)  # just call our init function
         return ret

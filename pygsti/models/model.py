@@ -19,6 +19,7 @@ import warnings as _warnings
 import numpy as _np
 
 from pygsti.baseobjs import statespace as _statespace
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.models.layerrules import LayerRules as _LayerRules
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.forwardsims import forwardsim as _fwdsim
@@ -33,7 +34,7 @@ from pygsti.tools import slicetools as _slct
 MEMLIMIT_FOR_NONGAUGE_PARAMS = None
 
 
-class Model(object):
+class Model(_NicelySerializable):
     """
     A predictive model for a Quantum Information Processor (QIP).
 
@@ -41,7 +42,7 @@ class Model(object):
     probabilities of :class:`Circuit` objects based on the action of the
     model's ideal operations plus (potentially) noise which makes the
     outcome probabilities deviate from the perfect ones.
-v
+
     Parameters
     ----------
     state_space : StateSpace
@@ -56,6 +57,11 @@ v
         self._paramlbls = _np.empty(0, dtype=object)
         self._param_bounds = None
         self.uuid = _uuid.uuid4()  # a Model's uuid is like a persistent id(), useful for hashing
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'state_space': self.state_space.to_nice_serialization()})
+        return state
 
     @property
     def state_space(self):

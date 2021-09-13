@@ -19,10 +19,11 @@ from pygsti.layouts.cachedlayout import CachedCOPALayout as _CachedCOPALayout
 from pygsti.layouts.copalayout import CircuitOutcomeProbabilityArrayLayout as _CircuitOutcomeProbabilityArrayLayout
 from pygsti.baseobjs import outcomelabeldict as _ld
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.tools import slicetools as _slct
 
 
-class ForwardSimulator(object):
+class ForwardSimulator(_NicelySerializable):
     """
     A calculator of circuit outcome probability calculations and their derivatives w.r.t. model parameters.
 
@@ -95,15 +96,12 @@ class ForwardSimulator(object):
         #self.prepreps = { lbl:p.torep('prep') for lbl,p in preps.items() }
         #self.effectreps = { lbl:e.torep('effect') for lbl,e in effects.items() }
 
-    def _to_memoized_dict(self, memo):
-        state = {'module': self.__class__.__module__,
-                 'class': self.__class__.__name__,
-                 # (don't serialize parent model)
-                 }
-        return state
+    def _to_nice_serialization(self):
+        # (don't serialize parent model)
+        return super()._to_nice_serialization()
 
     @classmethod
-    def _from_memoized_dict(cls, state, memo):        
+    def _from_nice_serialization(cls, state):        
         return cls(None)
 
     def __getstate__(self):

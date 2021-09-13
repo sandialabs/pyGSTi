@@ -15,6 +15,7 @@ import copy as _copy
 
 import numpy as _np
 
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.tools import listtools as _lt
 from pygsti.tools import slicetools as _slct
 
@@ -91,7 +92,7 @@ class ModelChild(object):
         return d
 
 
-class ModelMember(ModelChild):
+class ModelMember(ModelChild, _NicelySerializable):
     """
     Base class for Model member objects that possess a definite state space, parameters count, and evolution type.
 
@@ -626,7 +627,7 @@ class ModelMember(ModelChild):
         mm_dict['module'] =  self.__module__
         mm_dict['class'] = self.__class__.__name__
         mm_dict['submembers'] = []
-        mm_dict['state_space'] = self.state_space._to_memoized_dict({})
+        mm_dict['state_space'] = self.state_space.to_nice_serialization()
         mm_dict['evotype'] = str(self.evotype)
         
         # Dereference submembers

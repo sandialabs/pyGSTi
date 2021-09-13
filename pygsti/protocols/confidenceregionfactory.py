@@ -21,6 +21,7 @@ import scipy.stats as _stats
 from pygsti import optimize as _opt
 from pygsti import tools as _tools
 from pygsti.models.explicitcalc import P_RANK_TOL
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 
 
@@ -49,7 +50,7 @@ from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrint
 #
 
 
-class ConfidenceRegionFactory(object):
+class ConfidenceRegionFactory(_NicelySerializable):
     """
     An object which is capable of generating confidence intervals/regions.
 
@@ -150,19 +151,18 @@ class ConfidenceRegionFactory(object):
         self.__dict__.update(state_dict)
         self.parent = None  # initialize to None upon unpickling
 
-    def _to_memoized_dict(self, memo):
+    def _to_nice_serialization(self):
         from pygsti.io.metadir import _encodemx
-        state = {'module': self.__class__.__module__,
-                 'class': self.__class__.__name__,
-                 'model_label': self.model_lbl,
-                 'circuit_list_label': self.circuit_list_lbl,
-                 'nonmarkovian_radius_squared': self.nonMarkRadiusSq,
-                 'hessian_matrix': _encodemx(self.hessian) if (self.hessian is not None) else None
-                 }
+        state = super()._to_nice_serialization()
+        state.update({'model_label': self.model_lbl,
+                      'circuit_list_label': self.circuit_list_lbl,
+                      'nonmarkovian_radius_squared': self.nonMarkRadiusSq,
+                      'hessian_matrix': _encodemx(self.hessian) if (self.hessian is not None) else None
+                      })
         return state
 
     @classmethod
-    def _from_memoized_dict(cls, state, memo):
+    def _from_nice_serialization(cls, state):
         from pygsti.io.metadir import _decodemx
         return cls(None, state['model_label'], state['circuit_list_label'],
                    _decodemx(state['hessian_matrix']) if (state['hessian_matrix'] is not None) else None,

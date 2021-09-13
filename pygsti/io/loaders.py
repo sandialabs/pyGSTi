@@ -315,16 +315,6 @@ def load_circuit_list(filename, read_raw_strings=False, line_labels='auto', num_
         return std.parse_stringfile(filename, line_labels, num_lines, create_subcircuits)
 
 
-def load_serializable_object(filename):
-    """ TODO: docstring """
-    if str(filename).endswith('.json'):
-        with open(filename, 'r') as f:
-            json_dict = _json.load(f)
-            return _metadir._from_memoized_dict(json_dict)
-    else:
-        raise ValueError("Cannot determine format from extension of filename: %s" % str(filename))
-
-
 def load_circuits_as_strs(filename):
     """ TODO: docstring - load various Circuit-containing standard objects from a file where
         they have been replaced by their string representations """

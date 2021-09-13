@@ -880,9 +880,8 @@ class EmbeddedOp(_LinearOperator):
         ModelMember
             An initialized object
         """
-        from pygsti.io.metadir import _from_memoized_dict
         cls._check_memoized_dict(mm_dict, serial_memo)
-        state_space = _from_memoized_dict(mm_dict['state_space'])
+        state_space = _StateSpace.from_nice_serialization(mm_dict['state_space'])
         return cls(state_space, mm_dict['target_labels'], serial_memo[mm_dict['submembers'][0]])
 
     def __str__(self):

@@ -159,11 +159,10 @@ class DepolarizeOp(_StochasticNoiseOp):
         ModelMember
             An initialized object
         """
-        from pygsti.io.metadir import _from_memoized_dict
         cls._check_memoized_dict(mm_dict, serial_memo)
 
-        state_space = _from_memoized_dict(mm_dict['state_space'])
-        basis = _from_memoized_dict(mm_dict['basis'])
+        state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
+        basis = _Basis.from_nice_serialization(mm_dict['basis'])
         return cls(state_space, basis, mm_dict['evotype'], mm_dict['strength'], seed_or_state=None)
         # Note: we currently don't serialize random seed/state - that gets reset w/serialization
 

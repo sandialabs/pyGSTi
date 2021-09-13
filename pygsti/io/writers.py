@@ -631,20 +631,6 @@ def fill_in_empty_dataset_with_fake_data(model, dataset_filename, num_samples,
     return ds
 
 
-def write_serializable_object(filename, obj):
-    """ TODO: docstring """
-    from pygsti.io.metadir import _check_jsonable
-    memo = {}
-    json_dict = obj._to_memoized_dict(memo)
-
-    if str(filename).endswith('.json'):
-        with open(filename, 'w') as f:
-            _check_jsonable(json_dict)
-            _json.dump(json_dict, f, indent=4)
-    else:
-        raise ValueError("Cannot determine format from extension of filename: %s" % str(filename))
-
-
 def write_circuits_as_strs(filename, obj):
     """ TODO: docstring - write various Circuit-containing standard objects with circuits
         replaced by their string reps """

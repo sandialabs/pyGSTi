@@ -21,7 +21,8 @@ import scipy.sparse.linalg as _spsl
 from numpy.linalg import inv as _inv
 
 from pygsti.baseobjs.basisconstructors import _basis_constructor_dict
-
+from pygsti.baseobjs.statespace import StateSpace as _StateSpace
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 
 #Helper functions
 def _sparse_equal(a, b, atol=1e-8):
@@ -48,7 +49,7 @@ def _sparse_equal(a, b, atol=1e-8):
     return _np.allclose(V1, V2, atol=atol)
 
 
-class Basis(object):
+class Basis(_NicelySerializable):
     """
     An ordered set of labeled matrices/vectors.
 
@@ -920,24 +921,20 @@ class ExplicitBasis(Basis):
 
         super(ExplicitBasis, self).__init__(name, longname, real, sparse)
 
-    def _to_memoized_dict(self, memo):
-        from pygsti.io.metadir import _encodemx
-
-        state = {'module': self.__class__.__module__,
-                 'class': self.__class__.__name__,
-                 'name': self.name,
-                 'longname': self.longname,
-                 'real': self.real,
-                 'sparse': self.sparse,
-                 'labels': self.labels,
-                 'elements': [_encodemx(el) for el in self.elements]
-                 }
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'name': self.name,
+                      'longname': self.longname,
+                      'real': self.real,
+                      'sparse': self.sparse,
+                      'labels': self.labels,
+                      'elements': [self._encodemx(el) for el in self.elements]
+                      })
         return state
 
     @classmethod
-    def _from_memoized_dict(cls, state, memo):
-        from pygsti.io.metadir import _decodemx
-        return cls([_decodemx(el) for el in state['elements']],
+    def _from_nice_serialization(cls, state):
+        return cls([cls._decodemx(el) for el in state['elements']],
                    state['labels'], state['name'], state['longname'], state['real'],
                    state['sparse'])
 
@@ -1019,19 +1016,17 @@ class BuiltinBasis(LazyBasis):
 
         super(BuiltinBasis, self).__init__(name, longname, real, sparse)
 
-    def _to_memoized_dict(self, memo):
-        state = {'module': self.__class__.__module__,
-                 'class': self.__class__.__name__,
-                 'name': self.name,
-                 'sparse': self.sparse,
-                 'state_space': self.state_space._to_memoized_dict({})
-                 }
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'name': self.name,
+                      'sparse': self.sparse,
+                      'state_space': self.state_space.to_nice_serialization()
+                      })
         return state
 
     @classmethod
-    def _from_memoized_dict(cls, state, memo):
-        from pygsti.io.metadir import _from_memoized_dict
-        statespace = _from_memoized_dict(state['state_space'])
+    def _from_nice_serialization(cls, state):
+        statespace = _StateSpace.from_nice_serialization(state['state_space'])
         return cls(state['name'], statespace, state['sparse'])
 
     @property
@@ -1172,19 +1167,17 @@ class DirectSumBasis(LazyBasis):
         #Init everything but elements and labels & their number/size
         super(DirectSumBasis, self).__init__(name, longname, real, sparse)
 
-    def _to_memoized_dict(self, memo):
-        state = {'module': self.__class__.__module__,
-                 'class': self.__class__.__name__,
-                 'name': self.name,
-                 'longname': self.longname,
-                 'component_bases': [b._to_memoized_dict({}) for b in self.component_bases]
-                 }
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'name': self.name,
+                      'longname': self.longname,
+                      'component_bases': [b.to_nice_serialization() for b in self.component_bases]
+                      })
         return state
 
     @classmethod
-    def _from_memoized_dict(cls, state, memo):
-        from pygsti.io.metadir import _from_memoized_dict
-        component_bases = [_from_memoized_dict(b) for b in state['component_bases']]
+    def _from_nice_serialization(cls, state):
+        component_bases = [Basis.from_nice_serialization(b) for b in state['component_bases']]
         return cls(component_bases, state['name'], state['longname'])
 
     @property
@@ -1481,19 +1474,17 @@ class TensorProdBasis(LazyBasis):
 
         super(TensorProdBasis, self).__init__(name, longname, real, sparse)
 
-    def _to_memoized_dict(self, memo):
-        state = {'module': self.__class__.__module__,
-                 'class': self.__class__.__name__,
-                 'name': self.name,
-                 'longname': self.longname,
-                 'component_bases': [b._to_memoized_dict({}) for b in self.component_bases]
-                 }
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'name': self.name,
+                      'longname': self.longname,
+                      'component_bases': [b.to_nice_serialization() for b in self.component_bases]
+                      })
         return state
 
     @classmethod
-    def _from_memoized_dict(cls, state, memo):
-        from pygsti.io.metadir import _from_memoized_dict
-        component_bases = [_from_memoized_dict(b) for b in state['component_bases']]
+    def _from_nice_serialization(cls, state):
+        component_bases = [Basis.from_nice_serialization(b) for b in state['component_bases']]
         return cls(component_bases, state['name'], state['longname'])
         
     @property
@@ -1771,21 +1762,19 @@ class EmbeddedBasis(LazyBasis):
 
         super(EmbeddedBasis, self).__init__(name, longname, real, sparse)
 
-    def _to_memoized_dict(self, memo):
-        state = {'module': self.__class__.__module__,
-                 'class': self.__class__.__name__,
-                 'name': self.name,
-                 'longname': self.longname,
-                 'state_space': self.state_space._to_memoized_dict({}),
-                 'embedded_basis': self.embedded_basis._to_memoized_dict({})
-                 }
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'name': self.name,
+                      'longname': self.longname,
+                      'state_space': self.state_space.to_nice_serialization(),
+                      'embedded_basis': self.embedded_basis.to_nice_serialization()
+                      })
         return state
 
     @classmethod
-    def _from_memoized_dict(cls, state, memo):
-        from pygsti.io.metadir import _from_memoized_dict
-        basis_to_embed = _from_memoized_dict(state['embedded_basis'])
-        state_space = _from_memoized_dict(state['state_space'])
+    def _from_nice_serialization(cls, state):
+        basis_to_embed = Basis.from_nice_serialization(state['embedded_basis'])
+        state_space = _StateSpace.from_nice_serialization(state['state_space'])
         return cls(basis_to_embed, state_space, state['target_labels'], state['name'], state['longname'])
 
     @property

@@ -38,6 +38,7 @@ from pygsti.tools import basistools as _bt
 from pygsti.tools import internalgates as _itgs
 from pygsti.tools import optools as _ot
 from pygsti.baseobjs.basisconstructors import sqrt2, id2x2, sigmax, sigmay, sigmaz
+from pygsti.processors.processorspec import ProcessorSpec as _ProcessorSpec
 
 
 class CloudNoiseModel(_ImplicitOpModel):
@@ -333,30 +334,23 @@ class CloudNoiseModel(_ImplicitOpModel):
         """
         return self._clouds
 
-    def _to_memoized_dict(self, memo):
-        state = {'module': self.__class__.__module__,
-                 'class': self.__class__.__name__,
-                 'processor_spec': self.processor_spec._to_memoized_dict({}),
-                 #'state_space': self.state_space._to_memoized_dict({}),  # always a QubitStateSpace so far
-                 #'basis': self.basis._to_memoized_dict({}),
-                 'layer_rules': self.layer_rules._to_memoized_dict({}),
-                 'evotype': str(self.evotype),
-                 'simulator': self.sim._to_memoized_dict({}),
-                 'error_composition_mode': self.errcomp_type,
-                 }
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'processor_spec': self.processor_spec.to_nice_serialization(),
+                      'error_composition_mode': self.errcomp_type,
+                      })
         mmgraph = self.create_modelmember_graph()
         state['modelmembers'] = mmgraph.create_serialization_dict()
         return state
 
     @classmethod
-    def _from_memoized_dict(cls, state, memo):
-        from pygsti.io.metadir import _from_memoized_dict
-        state_space = _from_memoized_dict(state['state_space'])
+    def _from_nice_serialization(cls, state):
+        state_space = _statespace.StateSpace.from_nice_serialization(state['state_space'])
         #basis = _from_memoized_dict(state['basis'])
         modelmembers = _MMGraph.load_modelmembers_from_serialization_dict(state['modelmembers'])
-        simulator = _from_memoized_dict(state['simulator'])
-        layer_rules = _from_memoized_dict(state['layer_rules'])
-        processor_spec = _from_memoized_dict(state['processor_spec'])
+        simulator = _FSim.from_nice_serialization(state['simulator'])
+        layer_rules = _LayerRules.from_nice_serialization(state['layer_rules'])
+        processor_spec = _ProcessorSpec.from_nice_serialization(state['processor_spec'])
 
         # __init__ does too much, so we need to create an alternate __init__ function here:
         mdl = cls.__new__(cls)
@@ -398,17 +392,16 @@ class CloudNoiseLayerRules(_LayerRules):
         else:
             raise ValueError("Invalid `implicit_idle_mode`: '%s'" % str(implicit_idle_mode))
 
-    def _to_memoized_dict(self, memo):
-        state = {'module': self.__class__.__module__,
-                 'class': self.__class__.__name__,
-                 'error_composition_mode': self.errcomp_type,
-                 'implied_global_idle_label': str(self.implied_global_idle_label),
-                 'implicit_idle_mode': self.implicit_idle_mode,
-                 }
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'error_composition_mode': self.errcomp_type,
+                      'implied_global_idle_label': str(self.implied_global_idle_label),
+                      'implicit_idle_mode': self.implicit_idle_mode,
+                      })
         return state
 
     @classmethod
-    def _from_memoized_dict(cls, state, memo):
+    def _from_nice_serialization(cls, state):
         from pygsti.circuits.circuitparser import parse_label as _parse_label
         return cls(state['error_composition_mode'],
                    _parse_label(state['implied_global_idle_label']),

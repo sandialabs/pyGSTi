@@ -19,11 +19,12 @@ import numpy as _np
 from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.tools import listtools as _lt
 from pygsti.tools import slicetools as _slct
 
 
-class CircuitOutcomeProbabilityArrayLayout(object):
+class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
     """
     The arrangement of circuit outcome probabilities into a 1D array.
 
@@ -210,32 +211,29 @@ class CircuitOutcomeProbabilityArrayLayout(object):
             self._outcomes[i_unique] = tuple(outcomes)
             self._element_indices[i_unique] = _slct.list_to_slice(elindices, array_ok=True)
 
-    def _to_memoized_dict(self, memo):
+    def _to_nice_serialization(self):
         elindex_outcome_tuples = []
         for i_unique, outcomes in self._outcomes.items():
             elindices = _slct.to_array(self._element_indices[i_unique])
             assert(len(outcomes) == len(elindices))
             elindex_outcome_tuples.append((i_unique, list(zip(map(int, elindices), outcomes))))
             # Note: map to int above to avoid int64 integers which aren't JSON-able
-        
-        state = {'module': self.__class__.__module__,
-                 'class': self.__class__.__name__,
-                 'circuits': self.circuits._to_memoized_dict({}),  # a CircuitList
-                 'unique_circuits': [c.str for c in self._unique_circuits],
-                 'to_unique': [(k, v) for k, v in self._to_unique.items()],  # just a dict mapping ints -> ints
-                 'elindex_outcome_tuples': elindex_outcome_tuples,
-                 'parameter_dimensions': self._param_dimensions,
-                 }
 
+        state = super()._to_nice_serialization()
+        state.update({'circuits': self.circuits.to_nice_serialization(),  # a CircuitList
+                      'unique_circuits': [c.str for c in self._unique_circuits],
+                      'to_unique': [(k, v) for k, v in self._to_unique.items()],  # just a dict mapping ints -> ints
+                      'elindex_outcome_tuples': elindex_outcome_tuples,
+                      'parameter_dimensions': self._param_dimensions,
+                      })
         return state
 
     @classmethod
-    def _from_memoized_dict(cls, state, memo):
+    def _from_nice_serialization(cls, state):
         from pygsti.io import stdinput as _stdinput
-        from pygsti.io.metadir import _from_memoized_dict
         std = _stdinput.StdInputParser()
 
-        circuits = _from_memoized_dict(state['circuits'])
+        circuits = _CircuitList.from_nice_serialization(state['circuits'])
         unique_circuits = [std.parse_circuit(s, create_subcircuits=_Circuit.default_expand_subcircuits)
                            for s in state['unique_circuits']]
         to_unique = {k: v for k, v in state['to_unique']}

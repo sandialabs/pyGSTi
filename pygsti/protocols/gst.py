@@ -21,6 +21,7 @@ import numpy as _np
 from scipy.stats import chi2 as _chi2
 
 from pygsti.baseobjs.profiler import DummyProfiler as _DummyProfiler
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.protocols.estimate import Estimate as _Estimate
 from pygsti.protocols import protocol as _proto
 from pygsti.protocols.modeltest import ModelTest as _ModelTest
@@ -34,6 +35,7 @@ from pygsti import baseobjs as _baseobjs
 from pygsti.processors import QubitProcessorSpec as _QubitProcessorSpec
 from pygsti.modelmembers import operations as _op
 from pygsti.models import Model as _Model
+from pygsti.models.gaugegroup import GaugeGroup as _GaugeGroup, GaugeGroupElement as _GaugeGroupElement
 from pygsti.objectivefns import objectivefns as _objfns, wildcardbudget as _wild
 from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
@@ -341,7 +343,7 @@ class StandardGSTDesign(GateSetTomographyDesign):
         return ret.truncate_to_design(self)
 
 
-class GSTInitialModel(object):
+class GSTInitialModel(_NicelySerializable):
     """
     Specification of a starting point for GST.
 
@@ -515,29 +517,29 @@ class GSTInitialModel(object):
 
         return mdl_start
 
-    def _to_memoized_dict(self, memo):  # memo holds already serialized objects
-        state = {'module': self.__class__.__module__,
-                 'class': self.__class__.__name__,
-                 'starting_point': self.starting_point,  # can be initial model? if so need to memoize...
-                 'depolarize_start': self.depolarize_start,
-                 'randomize_start': self.randomize_start,
-                 'contract_start_to_cptp': self.contract_start_to_cptp,
-                 'lgst_gaugeopt_tol':     self.lgst_gaugeopt_tol,
-                 'model': self.model._to_memoized_dict({}) if (self.model is not None) else None,
-                 'target_model': self.target_model._to_memoized_dict({}) if (self.target_model is not None) else None,
-                 }
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'starting_point': self.starting_point,  # can be initial model? if so need to memoize...
+                      'depolarize_start': self.depolarize_start,
+                      'randomize_start': self.randomize_start,
+                      'contract_start_to_cptp': self.contract_start_to_cptp,
+                      'lgst_gaugeopt_tol':     self.lgst_gaugeopt_tol,
+                      'model': self.model.to_nice_serialization() if (self.model is not None) else None,
+                      'target_model': self.target_model.to_nice_serialization() if (self.target_model is not None) else None,
+                      })
         return state
 
     @classmethod
-    def _from_memoized_dict(cls, state, memo):  # memo holds already de-serialized objects
-        from pygsti.io.metadir import _from_memoized_dict
-        model = _from_memoized_dict(state['model'])
-        target_model = _from_memoized_dict(state['target_model'])
+    def _from_nice_serialization(cls, state):  # memo holds already de-serialized objects
+        model = _Model.from_nice_serialization(state['model']) \
+            if (state['model'] is not None) else None
+        target_model = _Model.from_nice_serialization(state['target_model']) \
+            if (state['target_model'] is not None) else None
         return cls(model, target_model, state['starting_point'], state['depolarize_start'],
                    state['randomize_start'], state['lgst_gaugeopt_tol'], state['contract_start_to_cptp'])
 
 
-class GSTBadFitOptions(object):
+class GSTBadFitOptions(_NicelySerializable):
     """
     Options for post-processing a GST fit that was unsatisfactory.
 
@@ -592,22 +594,21 @@ class GSTBadFitOptions(object):
         self.wildcard_methods = wildcard_methods
         self.wildcard_inadmissable_action = wildcard_inadmissable_action  # can be 'raise' or 'print'
 
-    def _to_memoized_dict(self, memo):  # memo holds already serialized objects
-        state = {'module': self.__class__.__module__,
-                 'class': self.__class__.__name__,
-                 'threshold': self.threshold,
-                 'actions': self.actions,
-                 'wildcard': {'budget_includes_spam': self.wildcard_budget_includes_spam,
-                              'L1_weights': self.wildcard_L1_weights,  # an array?
-                              'primitive_op_labels': self.wildcard_primitive_op_labels,
-                              'initial_budget': self.wildcard_initial_budget,  # serializable?
-                              'methods': self.wildcard_methods,
-                              'indadmissable_action': self.wildcard_inadmissable_action},
-                 }
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'threshold': self.threshold,
+                      'actions': self.actions,
+                      'wildcard': {'budget_includes_spam': self.wildcard_budget_includes_spam,
+                                   'L1_weights': self.wildcard_L1_weights,  # an array?
+                                   'primitive_op_labels': self.wildcard_primitive_op_labels,
+                                   'initial_budget': self.wildcard_initial_budget,  # serializable?
+                                   'methods': self.wildcard_methods,
+                                   'indadmissable_action': self.wildcard_inadmissable_action},
+                      })
         return state
 
     @classmethod
-    def _from_memoized_dict(cls, state, memo):  # memo holds already de-serialized objects
+    def _from_nice_serialization(cls, state):  # memo holds already de-serialized objects
         wildcard = state.get('wildcard', {})
         cls(state['threshold'], tuple(state['actions']),
             wildcard.get('budget_includes_spam', True),
@@ -618,7 +619,7 @@ class GSTBadFitOptions(object):
             wildcard.get('inadmissable_action', 'print'))
 
 
-class GSTObjFnBuilders(object):
+class GSTObjFnBuilders(_NicelySerializable):
     """
     Holds the objective-function builders needed for long-sequence GST.
 
@@ -703,23 +704,24 @@ class GSTObjFnBuilders(object):
         self.iteration_builders = iteration_builders
         self.final_builders = final_builders
 
-    def _to_memoized_dict(self, memo):
-        state = {'module': self.__class__.__module__,
-                 'class': self.__class__.__name__,
-                 'iteration_builders': [b._to_memoized_dict({}) for b in self.iteration_builders],
-                 'final_builders': [b._to_memoized_dict({}) for b in self.final_builders]
-                 }
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({
+            'iteration_builders': [b.to_nice_serialization() for b in self.iteration_builders],
+            'final_builders': [b.to_nice_serialization() for b in self.final_builders]
+            })
         return state
 
     @classmethod
-    def _from_memoized_dict(cls, state, memo):
-        from pygsti.io.metadir import _from_memoized_dict
-        iteration_builders = [_from_memoized_dict(b) for b in state['iteration_builders']]
-        final_builders = [_from_memoized_dict(b) for b in state['final_builders']]
+    def _from_nice_serialization(cls, state):
+        iteration_builders = [_objfns.ObjectiveFunctionBuilder.from_nice_serialization(b)
+                              for b in state['iteration_builders']]
+        final_builders = [_objfns.ObjectiveFunctionBuilder.from_nice_serialization(b)
+                          for b in state['final_builders']]
         return cls(iteration_builders, final_builders)
 
 
-class GSTGaugeOptSuite(object):
+class GSTGaugeOptSuite(_NicelySerializable):
     """
     Holds directives to perform one or more gauge optimizations on a model.
 
@@ -989,7 +991,7 @@ class GSTGaugeOptSuite(object):
                     to_pickle['gaugeopt_argument_dicts'][lbl] = new_goparams
         return to_pickle
 
-    def _to_memoized_dict(self, memo):        
+    def _to_nice_serialization(self):        
         dicts_to_serialize = {}
         if self.gaugeopt_argument_dicts is not None:
             for lbl, goparams in self.gaugeopt_argument_dicts.items():
@@ -998,49 +1000,49 @@ class GSTGaugeOptSuite(object):
                 for goparams_dict in goparams_list:
                     to_add = goparams_dict.copy()
                     if 'target_model' in to_add:
-                        to_add['target_model'] = goparams_dict['target_model']._to_memoized_dict({})
+                        to_add['target_model'] = goparams_dict['target_model'].to_nice_serialization()
                     if 'model' in to_add:
                         del to_add['model']  # don't serialize model argument
                     if '_gaugeGroupEl' in to_add:
-                        to_add['_gaugeGroupEl'] = goparams_dict['_gaugeGroupEl']._to_memoized_dict({})
+                        to_add['_gaugeGroupEl'] = goparams_dict['_gaugeGroupEl'].to_nice_serialization()
                     if 'gauge_group' in to_add:
-                        to_add['gauge_group'] = goparams_dict['gauge_group']._to_memoized_dict({})
+                        to_add['gauge_group'] = goparams_dict['gauge_group'].to_nice_serialization()
                     if 'verbosity' in to_add and isinstance(to_add['verbosity'], _baseobjs.VerbosityPrinter):
                         to_add['verbosity'] = goparams_dict['verbosity'].verbosity  # just save as an integer
                     serialize_list.append(to_add)
                 dicts_to_serialize[lbl] = serialize_list  # Note: always a list, even when 1 element (simpler)
 
-        target_to_serialize = self.gaugeopt_target._to_memoized_dict({}) \
+        target_to_serialize = self.gaugeopt_target.to_nice_serialization() \
             if (self.gaugeopt_target is not None) else None
 
-        state = {'module': self.__class__.__module__,
-                 'class': self.__class__.__name__,
-                 'gaugeopt_suite_names': self.gaugeopt_suite_names,
-                 'gaugeopt_argument_dicts': dicts_to_serialize,
-                 'gaugeopt_target': target_to_serialize
-                 }
+        state = super()._to_nice_serialization()
+        state.update({'gaugeopt_suite_names': self.gaugeopt_suite_names,
+                      'gaugeopt_argument_dicts': dicts_to_serialize,
+                      'gaugeopt_target': target_to_serialize
+                      })
         return state
 
     @classmethod
-    def _from_memoized_dict(cls, state, memo):  # memo holds already de-serialized objects
-        from pygsti.io.metadir import _from_memoized_dict
+    def _from_nice_serialization(cls, state):  # memo holds already de-serialized objects
         gaugeopt_argument_dicts = {}
         for lbl, serialized_goparams_list in state['gaugeopt_argument_dicts'].items():
             goparams_list = []
             for serialized_goparams in serialized_goparams_list:
                 to_add = serialized_goparams.copy()
                 if 'target_model' in to_add:
-                    to_add['target_model'] = _from_memoized_dict(serialized_goparams['target_model'])
+                    to_add['target_model'] = _Model.from_nice_serialization(serialized_goparams['target_model'])
                 if '_gaugeGroupEl' in to_add:
-                    to_add['_gaugeGroupEl'] = _from_memoized_dict(serialized_goparams['_gaugeGroupEl'])
+                    to_add['_gaugeGroupEl'] = _GaugeGroupElement.from_nice_serialization(
+                        serialized_goparams['_gaugeGroupEl'])
                 if 'gauge_group' in to_add:
-                    to_add['gauge_group'] = _from_memoized_dict(serialized_goparams['gauge_group'])
+                    to_add['gauge_group'] = _GaugeGroup.from_nice_serialization(
+                        serialized_goparams['gauge_group'])
 
                 goparams_list.append(to_add)
             gaugeopt_argument_dicts[lbl] = goparams_list[0] if (len(goparams_list) == 1) else goparams_list
 
         if state['gaugeopt_target'] is not None:
-            gaugeopt_target = _from_memoized_dict(state['gaugeopt_target'])
+            gaugeopt_target = _Model.from_nice_serialization(state['gaugeopt_target'])
         else:
             gaugeopt_target = None
 

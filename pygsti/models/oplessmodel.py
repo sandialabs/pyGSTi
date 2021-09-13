@@ -14,6 +14,7 @@ import numpy as _np
 
 from pygsti.models.model import Model as _Model
 from pygsti.baseobjs.opcalc import float_product as prod
+from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.forwardsims.successfailfwdsim import SuccessFailForwardSimulator as _SuccessFailForwardSimulator
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
@@ -156,18 +157,15 @@ class SuccessFailModel(OplessModel):
         self.use_cache = use_cache
         self._sim = _SuccessFailForwardSimulator(self)
 
-    def _to_memoized_dict(self, memo):
-        state = {'module': self.__class__.__module__,
-                 'class': self.__class__.__name__,
-                 'state_space': self.state_space._to_memoized_dict({}),
-                 'use_cache': self.use_cache
-                 }
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'use_cache': self.use_cache
+                      })
         return state
 
     @classmethod
-    def _from_memoized_dict(cls, state, memo):
-        from pygsti.io.metadir import _from_memoized_dict
-        state_space = _from_memoized_dict(state['state_space'])
+    def _from_nice_serialization(cls, state):
+        state_space = _StateSpace.from_nice_serialization(state['state_space'])
         return cls(state_space, state['use_cache'])
 
     @property

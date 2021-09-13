@@ -12,7 +12,7 @@ Modelmember dependency graph related utility functions
 
 from collections import OrderedDict
 
-from pygsti.models.memberdict import OrderedMemberDict
+from pygsti.models.memberdict import OrderedMemberDict as _OrderedMemberDict
 from pygsti.modelmembers.modelmember import ModelMember
 
 class ModelMemberGraph(object):
@@ -32,7 +32,6 @@ class ModelMemberGraph(object):
         -------
         dict
         """
-        from pygsti.io.metadir import _from_memoized_dict
         from pygsti.circuits.circuitparser import parse_label as _parse_label
 
         mm_nodes = {}
@@ -40,7 +39,8 @@ class ModelMemberGraph(object):
 
         for mm_node_serialized_id_str, mm_node_dict in sdict.items():
             mm_node_serialized_id = int(mm_node_serialized_id_str)  # convert string keys back to integers
-            mm_serial[mm_node_serialized_id] = _from_memoized_dict(mm_node_dict, mm_serial, underscore=False)
+            mm_class = ModelMember._state_class(mm_node_dict)  # checks this is a ModelMember-derived class
+            mm_serial[mm_node_serialized_id] = mm_class.from_memoized_dict(mm_node_dict, mm_serial)
             if 'memberdict_type' in mm_node_dict and 'memberdict_label' in mm_node_dict:
                 mm_type, lbl = mm_node_dict['memberdict_type'], _parse_label(mm_node_dict['memberdict_label'])
                 if mm_type not in mm_nodes:
@@ -61,7 +61,7 @@ class ModelMemberGraph(object):
             Dictionary where keys are attribute names and values are OrderedMemberDicts
             from an OpModel, e.g. {'preps': self.preps, etc.} from an ExplicitOpModel
         """
-        if not isinstance(mm_dicts, dict) and not all([isinstance(v, OrderedMemberDict) for v in mm_dicts.values()]):
+        if not isinstance(mm_dicts, dict) and not all([isinstance(v, _OrderedMemberDict) for v in mm_dicts.values()]):
             raise ValueError("Dependency graph requires a dict of attribute name: OrderedMemberDict")
 
         # Memo for MMNodes (OrderedDict for insertion-order in pre-3.6, since we still support 3.5)

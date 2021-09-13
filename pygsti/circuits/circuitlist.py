@@ -13,11 +13,12 @@ import copy as _copy
 import uuid as _uuid
 import numpy as _np
 
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.tools import listtools as _lt
 
 
-class CircuitList(object):
+class CircuitList(_NicelySerializable):
     """
     A unmutable list (a tuple) of :class:`Circuit` objects and associated metadata.
 
@@ -88,7 +89,7 @@ class CircuitList(object):
         self.name = name  # an optional name for this circuit list
         self.uuid = _uuid.uuid4()  # like a persistent id(), useful for peristent (file) caches
 
-    def _to_memoized_dict(self, memo):  # memo holds already serialized objects
+    def _to_nice_serialization(self):  # memo holds already serialized objects
         assert(self.op_label_aliases is None), "We don't serialize members of op_label_aliases yet."
         state = {'module': self.__class__.__module__,
                  'class': self.__class__.__name__,
@@ -101,7 +102,7 @@ class CircuitList(object):
         return state
 
     @classmethod
-    def _from_memoized_dict(cls, state, memo):  # memo holds already de-serialized objects
+    def _from_nice_serialization(cls, state):  # memo holds already de-serialized objects
         from pygsti.io import stdinput as _stdinput
         std = _stdinput.StdInputParser()
         circuits = [std.parse_circuit(s, create_subcircuits=_Circuit.default_expand_subcircuits)

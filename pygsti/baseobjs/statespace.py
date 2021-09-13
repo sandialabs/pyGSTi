@@ -1,10 +1,6 @@
 """
 Defines OrderedDict-derived classes used to store specific pyGSTi objects
 """
-import copy as _copy
-import numbers as _numbers
-import sys as _sys
-
 # ***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -13,10 +9,16 @@ import sys as _sys
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 # ***************************************************************************************************
+
+import copy as _copy
+import numbers as _numbers
+import sys as _sys
 import numpy as _np
 
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 
-class StateSpace(object):
+
+class StateSpace(_NicelySerializable):
     """
     Base class for defining a state space (Hilbert or Hilbert-Schmidt space).
 
@@ -463,15 +465,13 @@ class QubitSpace(StateSpace):
         else:
             self.qubit_labels = tuple(nqubits_or_labels)
 
-    def _to_memoized_dict(self, memo):
-        state = {'module': self.__class__.__module__,
-                 'class': self.__class__.__name__,
-                 'qubit_labels': self.qubit_labels
-                 }
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'qubit_labels': self.qubit_labels})
         return state
 
     @classmethod
-    def _from_memoized_dict(cls, state, memo):
+    def _from_nice_serialization(cls, state):
         return cls(state['qubit_labels'])
 
     @property
@@ -776,18 +776,16 @@ class ExplicitStateSpace(StateSpace):
         else:
             self._nqubits = None
 
-    def _to_memoized_dict(self, memo):
-        state = {'module': self.__class__.__module__,
-                 'class': self.__class__.__name__,
-                 'labels': self.labels,
-                 'unitary_space_dimensions': [[self.label_udims[l] for l in tpb] for tpb in self.labels],
-                 'types': [[self.label_types[l] for l in tpb] for tpb in self.labels]
-                 }
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'labels': self.labels,
+                      'unitary_space_dimensions': [[self.label_udims[l] for l in tpb] for tpb in self.labels],
+                      'types': [[self.label_types[l] for l in tpb] for tpb in self.labels]
+                      })
         return state
 
     @classmethod
-    def _from_memoized_dict(cls, state, memo):
-        from pygsti.io.metadir import _from_memoized_dict
+    def _from_nice_serialization(cls, state):
         return cls(state['labels'], state['unitary_space_dimensions'], state['types'])
 
     @property

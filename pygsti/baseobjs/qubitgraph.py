@@ -15,9 +15,10 @@ import itertools as _itertools
 
 import numpy as _np
 from scipy.sparse.csgraph import floyd_warshall as _fw
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 
 
-class QubitGraph(object):
+class QubitGraph(_NicelySerializable):
     """
     A directed or undirected graph data structure used to represent geometrical layouts of qubits or qubit gates.
 
@@ -252,18 +253,17 @@ class QubitGraph(object):
         self._distance_matrix = None
         self._predecessors = None
 
-    def _to_memoized_dict(self, memo):  # memo holds already serialized objects
-        state = {'module': self.__class__.__module__,
-                 'class': self.__class__.__name__,
-                 'node_names': list(self._nodeinds.keys()),
-                 'directed': self.directed,
-                 'direction_names': self.directions,
-                 'edges': self.edges(include_directions=True)
-                 }
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'node_names': list(self._nodeinds.keys()),
+                      'directed': self.directed,
+                      'direction_names': self.directions,
+                      'edges': self.edges(include_directions=True)
+                      })
         return state
 
     @classmethod
-    def _from_memoized_dict(cls, state, memo):  # memo holds already de-serialized objects
+    def _from_nice_serialization(cls, state):  # memo holds already de-serialized objects
         return cls(state['node_names'], initial_edges=state['edges'],
                    directed=state['directed'], direction_names=state['direction_names'])
 

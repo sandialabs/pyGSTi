@@ -20,6 +20,11 @@ from pygsti.modelmembers import povms as _povm
 from pygsti.modelmembers.modelmembergraph import ModelMemberGraph as _MMGraph
 from pygsti.baseobjs.label import Label as _Label
 
+from pygsti.baseobjs.basis import Basis as _Basis
+from pygsti.baseobjs.statespace import StateSpace as _StateSpace
+from pygsti.models.layerrules import LayerRules as _LayerRules
+from pygsti.forwardsims.forwardsim import ForwardSimulator as _FSim
+
 
 class ImplicitOpModel(_mdl.OpModel):
     """
@@ -328,28 +333,25 @@ class ImplicitOpModel(_mdl.OpModel):
                     for k, mm_dict in root_dict.items()}
         return _MMGraph(mm_dicts)
 
-    def _to_memoized_dict(self, memo):
-        state = {'module': self.__class__.__module__,
-                 'class': self.__class__.__name__,
-                 'state_space': self.state_space._to_memoized_dict({}),
-                 'basis': self.basis._to_memoized_dict({}),
-                 'evotype': str(self.evotype),  # TODO or serialize?
-                 'layer_rules': self._layer_rules._to_memoized_dict({}),
-                 'simulator': self.sim._to_memoized_dict({})
-                 }
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'basis': self.basis.to_nice_serialization(),
+                      'evotype': str(self.evotype),  # TODO or serialize?
+                      'layer_rules': self._layer_rules.to_nice_serialization(),
+                      'simulator': self.sim.to_nice_serialization()
+                     })
 
         mmgraph = self.create_modelmember_graph()
         state['modelmembers'] = mmgraph.create_serialization_dict()
         return state
 
     @classmethod
-    def _from_memoized_dict(cls, state, memo):
-        from pygsti.io.metadir import _from_memoized_dict
-        state_space = _from_memoized_dict(state['state_space'])
-        layer_rules = _from_memoized_dict(state['layer_rules'])
-        basis = _from_memoized_dict(state['basis'])
+    def _from_nice_serialization(cls, state):
+        state_space = _StateSpace.from_nice_serialization(state['state_space'])
+        layer_rules = _LayerRules.from_nice_serialization(state['layer_rules'])
+        basis = _Basis.from_nice_serialization(state['basis'])
         modelmembers = _MMGraph.load_modelmembers_from_serialization_dict(state['modelmembers'])
-        simulator = _from_memoized_dict(state['simulator'])
+        simulator = _FSim.from_nice_serialization(state['simulator'])
 
         mdl = cls(state_space, layer_rules, basis, simulator, state['evotype'])
 

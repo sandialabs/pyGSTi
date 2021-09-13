@@ -20,6 +20,7 @@ from pygsti.optimize import arraysinterface as _ari
 from pygsti.optimize.customsolve import custom_solve as _custom_solve
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 
 # from scipy.optimize import OptimizeResult as _optResult
 
@@ -75,7 +76,7 @@ class OptimizerResult(object):
         self.chi2_k_distributed_qty = chi2_k_distributed_qty
 
 
-class Optimizer(object):
+class Optimizer(_NicelySerializable):
     """
     An optimizer.  Optimizes an objective function.
     """
@@ -223,31 +224,31 @@ class CustomLMOptimizer(Optimizer):
         self.called_objective_methods = ('lsvec', 'dlsvec')  # the objective function methods we use (for mem estimate)
         self.serial_solve_proc_threshold = serial_solve_proc_threshold
 
-    def _to_memoized_dict(self, memo):
-        state = {'module': self.__class__.__module__,
-                 'class': self.__class__.__name__,
-                 'maximum_iterations': self.maxiter,
-                 'maximum_function_evaluations': self.maxfev,
-                 'tolerance': self.tol,
-                 'number_of_finite_difference_iterations': self.fditer,
-                 'number_of_first_stage_finite_difference_iterations': self.first_fditer,
-                 'damping_mode': self.damping_mode,
-                 'damping_basis': self.damping_basis,
-                 'damping_clip': self.damping_clip,
-                 'use_acceleration': self.use_acceleration,
-                 'uphill_step_threshold': self.uphill_step_threshold,
-                 'initial_mu_and_nu': self.init_munu,
-                 'out_of_bounds_check_interval': self.oob_check_interval,
-                 'out_of_bounds_action': self.oob_action,
-                 'out_of_bounds_check_mode': self.oob_check_mode,
-                 'array_types': self.array_types,
-                 'called_objective_function_methods': self.called_objective_methods,
-                 'serial_solve_number_of_processors_threshold': self.serial_solve_proc_threshold
-                 }
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({
+            'maximum_iterations': self.maxiter,
+            'maximum_function_evaluations': self.maxfev,
+            'tolerance': self.tol,
+            'number_of_finite_difference_iterations': self.fditer,
+            'number_of_first_stage_finite_difference_iterations': self.first_fditer,
+            'damping_mode': self.damping_mode,
+            'damping_basis': self.damping_basis,
+            'damping_clip': self.damping_clip,
+            'use_acceleration': self.use_acceleration,
+            'uphill_step_threshold': self.uphill_step_threshold,
+            'initial_mu_and_nu': self.init_munu,
+            'out_of_bounds_check_interval': self.oob_check_interval,
+            'out_of_bounds_action': self.oob_action,
+            'out_of_bounds_check_mode': self.oob_check_mode,
+            'array_types': self.array_types,
+            'called_objective_function_methods': self.called_objective_methods,
+            'serial_solve_number_of_processors_threshold': self.serial_solve_proc_threshold
+            })
         return state
 
     @classmethod
-    def _from_memoized_dict(cls, state, memo):
+    def _from_nice_serialization(cls, state):
         return cls(maxiter=state['maximum_iterations'],
                    maxfev=state['maximum_function_evaluations'],
                    tol=state['tolerance'],

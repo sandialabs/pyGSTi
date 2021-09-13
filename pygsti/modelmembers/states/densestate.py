@@ -253,10 +253,9 @@ class DenseState(DenseStateInterface, _State):
         ModelMember
             An initialized object
         """
-        from pygsti.io.metadir import _from_memoized_dict
         cls._check_memoized_dict(mm_dict, serial_memo)
         vec = _np.array(mm_dict['dense_superket_vector'])
-        state_space = _from_memoized_dict(mm_dict['state_space'])
+        state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
         return cls(vec, mm_dict['evotype'], state_space)
 
 
@@ -345,7 +344,7 @@ class DensePureState(DenseStateInterface, _State):
         mm_dict = super().to_memoized_dict(mmg_memo)
 
         mm_dict['dense_state_vector'] = self.to_dense().tolist()
-        mm_dict['basis'] = self._basis._to_memoized_dict({})
+        mm_dict['basis'] = self._basis.to_nice_serialization()
 
         return mm_dict
 
@@ -371,9 +370,8 @@ class DensePureState(DenseStateInterface, _State):
         ModelMember
             An initialized object
         """
-        from pygsti.io.metadir import _from_memoized_dict
         cls._check_memoized_dict(mm_dict, serial_memo)
         vec = _np.array(mm_dict['dense_state_vector'])
-        state_space = _from_memoized_dict(mm_dict['state_space'])
-        basis = _from_memoized_dict(mm_dict['basis'])
+        state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
+        basis = _Basis.from_nice_serialization(mm_dict['basis'])
         return cls(vec, basis, mm_dict['evotype'], state_space)

@@ -11,6 +11,8 @@ Defines the UnconstrainedPOVM class
 #***************************************************************************************************
 
 from pygsti.modelmembers.povms.basepovm import _BasePOVM
+from pygsti.modelmembers.povms.effect import POVMEffect as _POVMEffect
+from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 
 
 class UnconstrainedPOVM(_BasePOVM):
@@ -88,9 +90,9 @@ class UnconstrainedPOVM(_BasePOVM):
         ModelMember
             An initialized object
         """
-        from pygsti.io.metadir import _from_memoized_dict
         cls._check_memoized_dict(mm_dict, serial_memo)
-        state_space = _from_memoized_dict(mm_dict['state_space'])
-        effects = {lbl: _from_memoized_dict(effect, serial_memo, underscore=False) for lbl, effect in mm_dict['effects']}
+        state_space = _StateSpace.from_nice_serialization(mm_dict['state_space'])
+        effects = {lbl: _POVMEffect._state_class(effect).from_memoized_dict(effect, serial_memo)
+                   for lbl, effect in mm_dict['effects']}
         return cls(effects, mm_dict['evotype'], state_space)
 

@@ -22,6 +22,7 @@ from pygsti.models import explicitcalc as _explicitcalc
 from pygsti.models import model as _mdl, gaugegroup as _gg
 from pygsti.models.memberdict import OrderedMemberDict as _OrderedMemberDict
 from pygsti.models.layerrules import LayerRules as _LayerRules
+from pygsti.forwardsims.forwardsim import ForwardSimulator as _FSim
 from pygsti.forwardsims import matrixforwardsim as _matrixfwdsim
 from pygsti.modelmembers import instruments as _instrument
 from pygsti.modelmembers import operations as _op
@@ -29,6 +30,7 @@ from pygsti.modelmembers import povms as _povm
 from pygsti.modelmembers import states as _state
 from pygsti.modelmembers.modelmembergraph import ModelMemberGraph as _MMGraph
 from pygsti.modelmembers.operations import opfactory as _opfactory
+from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.baseobjs.basis import BuiltinBasis as _BuiltinBasis, DirectSumBasis as _DirectSumBasis
 from pygsti.baseobjs.label import Label as _Label, CircuitLabel as _CircuitLabel
 from pygsti.baseobjs import statespace as _statespace
@@ -1505,35 +1507,32 @@ class ExplicitOpModel(_mdl.OpModel):
             'factories': self.factories,
         })
 
-    def _to_memoized_dict(self, memo):
-        state = {'module': self.__class__.__module__,
-                 'class': self.__class__.__name__,
-                 'state_space': self.state_space._to_memoized_dict({}),
-                 'basis': self.basis._to_memoized_dict({}),
-                 'default_gate_type': self.operations.default_param,
-                 'default_prep_type': self.preps.default_param,
-                 'default_povm_type': self.povms.default_param,
-                 'default_instrument_type': self.instruments.default_param,
-                 'prep_prefix': self.preps._prefix,
-                 'effect_prefix': self.effects_prefix,
-                 'gate_prefix': self.operations._prefix,
-                 'povm_prefix': self.povms._prefix,
-                 'instrument_prefix': self.instruments._prefix,
-                 'evotype': str(self.evotype),  # TODO or serialize?
-                 'simulator': self.sim._to_memoized_dict({}),  # TODO --- forwardsim needs to be serializable ----------------------------
-                 }
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'basis': self.basis.to_nice_serialization(),
+                      'default_gate_type': self.operations.default_param,
+                      'default_prep_type': self.preps.default_param,
+                      'default_povm_type': self.povms.default_param,
+                      'default_instrument_type': self.instruments.default_param,
+                      'prep_prefix': self.preps._prefix,
+                      'effect_prefix': self.effects_prefix,
+                      'gate_prefix': self.operations._prefix,
+                      'povm_prefix': self.povms._prefix,
+                      'instrument_prefix': self.instruments._prefix,
+                      'evotype': str(self.evotype),  # TODO or serialize?
+                      'simulator': self.sim.to_nice_serialization(),  # TODO --- forwardsim needs to be serializable ----------------------------
+                      })
 
         mmgraph = self.create_modelmember_graph()
         state['modelmembers'] = mmgraph.create_serialization_dict()
         return state
 
     @classmethod
-    def _from_memoized_dict(cls, state, memo):
-        from pygsti.io.metadir import _from_memoized_dict
-        state_space = _from_memoized_dict(state['state_space'])
-        basis = _from_memoized_dict(state['basis'])
+    def _from_nice_serialization(cls, state):
+        state_space = _statespace.StateSpace.from_nice_serialization(state['state_space'])
+        basis = _Basis.from_nice_serialization(state['basis'])
         modelmembers = _MMGraph.load_modelmembers_from_serialization_dict(state['modelmembers'])
-        simulator = _from_memoized_dict(state['simulator'])
+        simulator = _FSim. from_nice_serialization(state['simulator'])
 
         mdl = cls(state_space, basis, state['default_gate_type'],
                   state['default_prep_type'], state['default_povm_type'],

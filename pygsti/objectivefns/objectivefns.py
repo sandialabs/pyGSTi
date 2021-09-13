@@ -22,6 +22,7 @@ from pygsti.layouts.distlayout import DistributableCOPALayout as _DistributableC
 from pygsti.tools import slicetools as _slct, mpitools as _mpit, sharedmemtools as _smt
 from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 
 
@@ -113,7 +114,7 @@ def _objfn(objfn_cls, model, dataset, circuits=None,
     #    return len(self.circuits)
 
 
-class ObjectiveFunctionBuilder(object):
+class ObjectiveFunctionBuilder(_NicelySerializable):
     """
     A factory class for building objective functions.
 
@@ -222,20 +223,19 @@ class ObjectiveFunctionBuilder(object):
         self.penalties = penalties
         self.additional_args = kwargs
 
-    def _to_memoized_dict(self, memo):
-        state = {'module': self.__class__.__module__,
-                 'class': self.__class__.__name__,
-                 'name': self.name,
-                 'description': self.description,
-                 'class_to_build': self.cls_to_build.__module__ + '.' + self.cls_to_build.__name__,
-                 'regularization': self.regularization,
-                 'penalties': self.penalties,
-                 'additional_arguments': self.additional_args,
-                 }
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'name': self.name,
+                      'description': self.description,
+                      'class_to_build': self.cls_to_build.__module__ + '.' + self.cls_to_build.__name__,
+                      'regularization': self.regularization,
+                      'penalties': self.penalties,
+                      'additional_arguments': self.additional_args,
+                      })
         return state
 
     @classmethod
-    def _from_memoized_dict(cls, state, memo):
+    def _from_nice_serialization(cls, state):
         from pygsti.io.metadir import _class_for_name
         return cls(_class_for_name(state['class_to_build']), state['name'], state['description'],
                    state['regularization'], state['penalties'], *state['additional_arguments'])
@@ -6280,7 +6280,7 @@ class LogLWildcardFunction(ObjectiveFunction):
         raise NotImplementedError("No jacobian yet")
 
 
-class CachedObjectiveFunction(object):
+class CachedObjectiveFunction(_NicelySerializable):
     """
     Holds various values of an objective function at a particular point.
 
@@ -6382,20 +6382,19 @@ class CachedObjectiveFunction(object):
         import pygsti.io as _io
         _io.write_obj_to_meta_based_dir(self, dirname, 'auxfile_types')
 
-    def _to_memoized_dict(self, memo):
-        state = {'module': self.__class__.__module__,
-                 'class': self.__class__.__name__,
-                 'name': self.name,
-                 'description': self.description,
-                 'class_to_build': self.cls_to_build.__module__ + '.' + self.cls_to_build.__name__,
-                 'regularization': self.regularization,
-                 'penalties': self.penalties,
-                 'additional_arguments': self.additional_args,
-                 }
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'name': self.name,
+                      'description': self.description,
+                      'class_to_build': self.cls_to_build.__module__ + '.' + self.cls_to_build.__name__,
+                      'regularization': self.regularization,
+                      'penalties': self.penalties,
+                      'additional_arguments': self.additional_args,
+                      })
         return state
 
     @classmethod
-    def _from_memoized_dict(cls, state, memo):
+    def _from_nice_serialization(cls, state):
         from pygsti.io.metadir import _class_for_name
         return cls(_class_for_name(state['class_to_build']), state['name'], state['description'],
                    state['regularization'], state['penalties'], *state['additional_arguments'])
