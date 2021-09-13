@@ -85,7 +85,7 @@ def create_from_unitary_mx(unitary_mx, op_type, basis='pp', stdname=None, evotyp
 
             return op  # if we get to here, then we've successfully created an op to return
         except (ValueError, AssertionError, AttributeError) as e:
-            _warnings.warn('Failed to create operator with type %s with error: %s' % (typ, e))
+            #_warnings.warn('Failed to create operator with type %s with error: %s' % (typ, e))
             pass  # move on to next type
 
     raise ValueError("Could not create an operator of type(s) %s from the given unitary op!" % (str(op_type)))
