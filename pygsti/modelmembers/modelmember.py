@@ -541,11 +541,12 @@ class ModelMember(ModelChild, _NicelySerializable):
             if id(self) in memo: return memo[id(self)]
             memo[id(self.parent)] = None  # so deepcopy uses None instead of copying parent
         return self._copy_gpindices(_copy.deepcopy(self, memo), parent, memo)
-    
+
+
     def is_similar(self, other):
         """Comparator returning whether two ModelMembers are the same type
         and parameterization.
-        
+
         ModelMembers with internal parameterization information (e.g.
         LindbladErrorgen) should overload this function to account for that.
 
@@ -553,7 +554,7 @@ class ModelMember(ModelChild, _NicelySerializable):
         ---------
         other: ModelMember
             ModelMember to compare to
-        
+
         Returns
         -------
         bool
@@ -565,7 +566,7 @@ class ModelMember(ModelChild, _NicelySerializable):
         if len(self.submembers()) != len(other.submembers()): return False
         for sm1, sm2 in zip(self.submembers(), other.submembers()):
             if not sm1.is_similar(sm2): return False
-        
+
         return True
 
     def is_equivalent(self, other, rtol=1e-5, atol=1e-8):
@@ -585,7 +586,7 @@ class ModelMember(ModelChild, _NicelySerializable):
             Relative tolerance for parameter vector comparison passed to NumPy
         atol: float
             Absolute tolerance for parameter vector comparison passed to NumPy
-        
+
         Returns
         -------
         bool
@@ -595,7 +596,7 @@ class ModelMember(ModelChild, _NicelySerializable):
 
         if not _np.allclose(self.to_vector(), other.to_vector(), rtol=rtol, atol=atol):
             return False
-        
+
         # Recursive check on submembers
         if len(self.submembers()) != len(other.submembers()): return False
         for sm1, sm2 in zip(self.submembers(), other.submembers()):
@@ -604,7 +605,7 @@ class ModelMember(ModelChild, _NicelySerializable):
             if not sm1.is_equivalent(sm2): return False
 
         return True
-    
+
     def to_memoized_dict(self, mmg_memo):
         """Create a serializable dict with references to other objects in the memo.
 
@@ -614,7 +615,7 @@ class ModelMember(ModelChild, _NicelySerializable):
             Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
             are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
             the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
-        
+
         Returns
         -------
         mm_dict: dict
@@ -629,7 +630,7 @@ class ModelMember(ModelChild, _NicelySerializable):
         mm_dict['submembers'] = []
         mm_dict['state_space'] = self.state_space.to_nice_serialization()
         mm_dict['evotype'] = str(self.evotype)
-        
+
         # Dereference submembers
         for sm in self.submembers():
             try:
@@ -639,7 +640,7 @@ class ModelMember(ModelChild, _NicelySerializable):
                 print('Each submember must be in the memo.')
                 print('Submember Id: ', id(sm), ', Submember: \n', sm)
                 print('Memo:\n')
-                for k,v in mmg_memo.items():
+                for k, v in mmg_memo.items():
                     print('  Id: ', k, ', Serialize Id: ', v.serialize_id, end=', ')
                     print('  ModelMember:\n', v.mm)
 
@@ -647,7 +648,7 @@ class ModelMember(ModelChild, _NicelySerializable):
 
     @classmethod
     def _check_memoized_dict(cls, mm_dict, serial_memo):
-        """Performs simple checks to ensure that `mm_dict` corresponds to the 
+        """Performs simple checks to ensure that `mm_dict` corresponds to the
            actual class( `cls`) being created, and that all submembers are present in `serial_memo` """
         needed_tags = ['module', 'class', 'submembers', 'state_space', 'evotype']
         assert all([tag in mm_dict.keys() for tag in needed_tags]), 'Must provide all needed tags: %s' % needed_tags
@@ -672,7 +673,7 @@ class ModelMember(ModelChild, _NicelySerializable):
             other memos in ModelMember, (e.g. copy(), allocate_gpindices(), etc.).
             This is similar but not the same as mmg_memo in to_memoized_dict(),
             as we do not need to build a ModelMemberGraph for deserialization.
-        
+
         Returns
         -------
         ModelMember

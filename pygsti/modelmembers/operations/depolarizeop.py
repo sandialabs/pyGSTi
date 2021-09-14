@@ -110,7 +110,7 @@ class DepolarizeOp(_StochasticNoiseOp):
         if memo is not None and id(self) in memo: return memo[id(self)]
         copyOfMe = DepolarizeOp(self.state_space, self.basis, self._evotype, self._params_to_rates(self.to_vector())[0])
         return self._copy_gpindices(copyOfMe, parent, memo)
-    
+
     def to_memoized_dict(self, mmg_memo):
         """Create a serializable dict with references to other objects in the memo.
 
@@ -120,7 +120,7 @@ class DepolarizeOp(_StochasticNoiseOp):
             Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
             are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
             the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
-        
+
         Returns
         -------
         mm_dict: dict
@@ -153,7 +153,7 @@ class DepolarizeOp(_StochasticNoiseOp):
             other memos in ModelMember, (e.g. copy(), allocate_gpindices(), etc.).
             This is similar but not the same as mmg_memo in to_memoized_dict(),
             as we do not need to build a ModelMemberGraph for deserialization.
-        
+
         Returns
         -------
         ModelMember

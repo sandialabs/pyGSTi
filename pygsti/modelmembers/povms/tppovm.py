@@ -76,7 +76,7 @@ class TPPOVM(_BasePOVM):
         """
         mm_dict = super().to_memoized_dict(mmg_memo)
 
-        mm_dict['effects'] = [(lbl, effect.to_memoized_dict({})) for lbl, effect in self.items()]  # TEMPORARY!!!!!! ---------------------------------------------
+        mm_dict['effects'] = [(lbl, effect.to_memoized_dict({})) for lbl, effect in self.items()]  # TEMPORARY!!!!!!
 
         return mm_dict
 

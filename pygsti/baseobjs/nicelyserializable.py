@@ -172,7 +172,7 @@ class NicelySerializable(object):
         if str(path).endswith('.json'):
             format = 'json'
         else:
-            raise ValueError("Cannot determine format from extension of filename: %s" % str(filename))
+            raise ValueError("Cannot determine format from extension of filename: %s" % str(path))
 
         with open(str(path), 'w') as f:
             self.dump(f, format)

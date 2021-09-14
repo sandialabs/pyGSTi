@@ -28,6 +28,7 @@ IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 MAX_EXPONENT = _np.log(_np.finfo('d').max) - 10.0  # so that exp(.) doesn't overflow
 SPAM_TRANSFORM_TRUNCATE = 1e-4
 
+
 class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
     """
     An operation parameterized by the coefficients of an exponentiated sum of Lindblad-like terms.

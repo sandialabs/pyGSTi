@@ -833,7 +833,7 @@ class EmbeddedOp(_LinearOperator):
         bool
         """
         return self.embedded_op.has_nonzero_hessian()
-    
+
     def to_memoized_dict(self, mmg_memo):
         """Create a serializable dict with references to other objects in the memo.
 
@@ -843,7 +843,7 @@ class EmbeddedOp(_LinearOperator):
             Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
             are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
             the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
-        
+
         Returns
         -------
         mm_dict: dict
@@ -853,7 +853,7 @@ class EmbeddedOp(_LinearOperator):
             Additional fields may be added by derived classes.
         """
         mm_dict = super().to_memoized_dict(mmg_memo)
-        
+
         mm_dict['target_labels'] = self.target_labels
 
         return mm_dict
@@ -874,7 +874,7 @@ class EmbeddedOp(_LinearOperator):
             other memos in ModelMember, (e.g. copy(), allocate_gpindices(), etc.).
             This is similar but not the same as mmg_memo in to_memoized_dict(),
             as we do not need to build a ModelMemberGraph for deserialization.
-        
+
         Returns
         -------
         ModelMember

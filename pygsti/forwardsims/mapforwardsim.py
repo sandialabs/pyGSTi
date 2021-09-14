@@ -156,7 +156,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
         state.update({'max_cache_size': self._max_cache_size
-                       # (don't serialize parent model or processor distribution info)
+                      # (don't serialize parent model or processor distribution info)
                       })
         return state
 

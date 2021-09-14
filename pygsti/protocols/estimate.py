@@ -146,12 +146,12 @@ class Estimate(object):
         self.circuit_weights = parameters.get('weights', None)
         self.protocol = parameters.get('protocol', None)
         self.profiler = parameters.get('profiler', None)
-        self.final_mdc_store = parameters.get('final_mdc_store', None)
-        self.final_objfn_cache = parameters.get('final_objfn_cache', None)
+        self._final_mdc_store = parameters.get('final_mdc_store', None)
+        self._final_objfn_cache = parameters.get('final_objfn_cache', None)
         self.final_objfn_builder = parameters.get('final_objfn_builder', _objfns.PoissonPicDeltaLogLFunction.builder())
-        self.final_objfn = parameters.get('final_objfn', None)
+        self._final_objfn = parameters.get('final_objfn', None)
 
-        self.extra_parameters = extra_parameters
+        self.extra_parameters = extra_parameters if (extra_parameters is not None) else {}
 
         from .gst import GSTGaugeOptSuite as _GSTGaugeOptSuite
         self._gaugeopt_suite = _GSTGaugeOptSuite(gaugeopt_argument_dicts={})  # used for its serialization capabilities
@@ -174,10 +174,10 @@ class Estimate(object):
                               'confidence_region_factories': 'fancykeydict:serialized-object',
                               'protocol': 'dir-serialized-object',
                               'profiler': 'reset',
-                              'final_mdc_store': 'reset',
-                              'final_objfn_cache': 'dir-serialized-object',
+                              '_final_mdc_store': 'reset',
+                              '_final_objfn_cache': 'dir-serialized-object',
                               'final_objfn_builder': 'serialized-object',
-                              'final_objfn': 'reset',
+                              '_final_objfn': 'reset',
                               '_gaugeopt_suite': 'serialized-object'
                               }
 
@@ -187,13 +187,15 @@ class Estimate(object):
         parameters = _collections.OrderedDict()
         parameters['protocol'] = self.protocol  # Estimates can hold sub-Protocols <=> sub-results
         parameters['profiler'] = self.profiler
-        parameters['final_mdc_store'] = self.final_mdc_store
-        parameters['final_objfn'] = self.final_objfn
-        parameters['final_objfn_cache'] = self.final_objfn_cache
+        parameters['final_mdc_store'] = self._final_mdc_store
+        parameters['final_objfn'] = self._final_objfn
+        parameters['final_objfn_cache'] = self._final_objfn_cache
         parameters['final_objfn_builder'] = self.final_objfn_builder
         parameters['weights'] = self.circuit_weights
+        parameters.update(self.extra_parameters)
         #parameters['raw_objective_values']
         #parameters['model_test_values']
+        return parameters
 
     @property
     def goparameters(self):
@@ -660,14 +662,14 @@ class Estimate(object):
         ModelDatasetCircuitsStore
         """
         #Note: default array_types include 'ep' so, e.g. robust-stat re-optimization is possible.
-        if self.final_mdc_store  is None:
+        if self._final_mdc_store is None:
             assert(self.parent is not None), "Estimate must be linked with parent before objectivefn can be created"
             circuit_list = self.parent.circuit_lists['final']
             mdl = self.models['final iteration estimate']
             ds = self.parent.dataset
-            self.final_mdc_store = _ModelDatasetCircuitStore(mdl, ds, circuit_list, resource_alloc,
-                                                             array_types)
-        return self.final_mdc_store
+            self._final_mdc_store = _ModelDatasetCircuitStore(mdl, ds, circuit_list, resource_alloc,
+                                                              array_types)
+        return self._final_mdc_store
 
     def final_objective_fn(self, resource_alloc=None):
         """
@@ -689,11 +691,11 @@ class Estimate(object):
         -------
         MDCObjectiveFunction
         """
-        if self.final_objfn is None:
+        if self._final_objfn is None:
             mdc_store = self.final_mdc_store(resource_alloc)
             objfn = self.final_objfn_builder.build_from_store(mdc_store)
-            self.final_objfn = objfn
-        return self.final_objfn
+            self._final_objfn = objfn
+        return self._final_objfn
 
     def final_objective_fn_cache(self, resource_alloc=None):
         """
@@ -718,10 +720,10 @@ class Estimate(object):
         -------
         CachedObjectiveFunction
         """
-        if self.final_objfn_cache is None:
+        if self._final_objfn_cache is None:
             objfn = self.final_objective_fn(resource_alloc)
-            self.final_objfn_cache = _CachedObjectiveFunction(objfn)
-        return self.final_objfn_cache
+            self._final_objfn_cache = _CachedObjectiveFunction(objfn)
+        return self._final_objfn_cache
 
     def misfit_sigma(self, resource_alloc=None):
         """
@@ -784,10 +786,10 @@ class Estimate(object):
         view.circuit_weights = self.circuit_weights
         view.protocol = self.protocol
         view.profiler = self.profiler
-        view.final_mdc_store = self.final_mdc_store
-        view.final_objfn_cache = self.final_objfn_cache
+        view._final_mdc_store = self._final_mdc_store
+        view._final_objfn_cache = self._final_objfn_cache
         view.final_objfn_builder = self.final_objfn_builder
-        view.final_objfn = self.final_objfn
+        view._final_objfn = self._final_objfn
         view.extra_parameters = self.extra_parameters
 
         view.models = self.models
@@ -818,13 +820,14 @@ class Estimate(object):
         cpy.circuit_weights = _copy.deepcopy(self.circuit_weights)
         cpy.protocol = _copy.deepcopy(self.protocol)
         cpy.profiler = _copy.deepcopy(self.profiler)
-        cpy.final_mdc_store = _copy.deepcopy(self.final_mdc_store)
-        cpy.final_objfn_cache = _copy.deepcopy(self.final_objfn_cache)
+        cpy._final_mdc_store = _copy.deepcopy(self._final_mdc_store)
+        cpy._final_objfn_cache = _copy.deepcopy(self._final_objfn_cache)
         cpy.final_objfn_builder = _copy.deepcopy(self.final_objfn_builder)
-        cpy.final_objfn = _copy.deepcopy(self.final_objfn)
+        cpy._final_objfn = _copy.deepcopy(self._final_objfn)
         cpy.extra_parameters = _copy.deepcopy(self.extra_parameters)
+        cpy.num_iterations = self.num_iterations
 
-        cpy._gaugopt_suite = _copy.deepcopy(self._gaugeopt_suite)
+        cpy._gaugeopt_suite = _copy.deepcopy(self._gaugeopt_suite)
         cpy.models = self.models.copy()
         cpy.confidence_region_factories = _copy.deepcopy(self.confidence_region_factories)
         cpy.meta = _copy.deepcopy(self.meta)
@@ -855,8 +858,8 @@ class Estimate(object):
 
         # don't pickle MDC objective function or store objects b/c they might contain
         #  comm objects (in their layouts)
-        del to_pickle['final_mdc_store']
-        del to_pickle['final_objfn']
+        del to_pickle['_final_mdc_store']
+        del to_pickle['_final_objfn']
 
         # don't pickle parent (will create circular reference)
         del to_pickle['parent']

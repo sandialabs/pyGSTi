@@ -334,7 +334,7 @@ class ComputationalBasisState(_State):
             other memos in ModelMember, (e.g. copy(), allocate_gpindices(), etc.).
             This is similar but not the same as mmg_memo in to_memoized_dict(),
             as we do not need to build a ModelMemberGraph for deserialization.
-        
+
         Returns
         -------
         ModelMember

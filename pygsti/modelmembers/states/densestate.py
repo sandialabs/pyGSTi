@@ -217,7 +217,7 @@ class DenseState(DenseStateInterface, _State):
             Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
             are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
             the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
-        
+
         Returns
         -------
         mm_dict: dict
@@ -247,7 +247,7 @@ class DenseState(DenseStateInterface, _State):
             other memos in ModelMember, (e.g. copy(), allocate_gpindices(), etc.).
             This is similar but not the same as mmg_memo in to_memoized_dict(),
             as we do not need to build a ModelMemberGraph for deserialization.
-        
+
         Returns
         -------
         ModelMember
@@ -332,7 +332,7 @@ class DensePureState(DenseStateInterface, _State):
             Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
             are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
             the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
-        
+
         Returns
         -------
         mm_dict: dict
@@ -364,7 +364,7 @@ class DensePureState(DenseStateInterface, _State):
             other memos in ModelMember, (e.g. copy(), allocate_gpindices(), etc.).
             This is similar but not the same as mmg_memo in to_memoized_dict(),
             as we do not need to build a ModelMemberGraph for deserialization.
-        
+
         Returns
         -------
         ModelMember

@@ -456,8 +456,9 @@ class GSTInitialModel(_NicelySerializable):
                                   " design with a target model"))
 
             lgst = LGST(mdl_start,
-                        gaugeopt_suite=GSTGaugeOptSuite({'lgst_gaugeopt': {'tol': self.lgst_gaugeopt_tol}},
-                                                        gaugeopt_target=gaugeopt_target),
+                        gaugeopt_suite=GSTGaugeOptSuite(
+                            gaugeopt_argument_dicts={'lgst_gaugeopt': {'tol': self.lgst_gaugeopt_tol}},
+                            gaugeopt_target=gaugeopt_target),
                         badfit_options=None, name="LGST")
 
             try:  # see if LGST can be run on this data
@@ -523,7 +524,7 @@ class GSTInitialModel(_NicelySerializable):
                       'depolarize_start': self.depolarize_start,
                       'randomize_start': self.randomize_start,
                       'contract_start_to_cptp': self.contract_start_to_cptp,
-                      'lgst_gaugeopt_tol':     self.lgst_gaugeopt_tol,
+                      'lgst_gaugeopt_tol': self.lgst_gaugeopt_tol,
                       'model': self.model.to_nice_serialization() if (self.model is not None) else None,
                       'target_model': self.target_model.to_nice_serialization() if (self.target_model is not None) else None,
                       })
@@ -759,7 +760,9 @@ class GSTGaugeOptSuite(_NicelySerializable):
     """
     @classmethod
     def cast(cls, obj):
-        if isinstance(obj, GSTGaugeOptSuite):
+        if obj is None:
+            return cls()  # None -> gaugeopt suite with default args (empty suite)
+        elif isinstance(obj, GSTGaugeOptSuite):
             return obj
         elif isinstance(obj, (str, tuple, list)):
             return cls(gaugeopt_suite_names=obj)
@@ -1212,7 +1215,11 @@ class GateSetTomography(_proto.Protocol):
         #TODO: add qtys about fit from optimums_list
 
         ret = ModelEstimateResults(data, self)
-        target_model = data.edesign.create_target_model() if isinstance(data.edesign, HasProcessorSpec) else None
+        target_model = self.gaugeopt_suite.gaugeopt_target if (self.gaugeopt_suite.gaugeopt_target is not None) \
+            else (data.edesign.create_target_model() if isinstance(data.edesign, HasProcessorSpec) else None)
+        #Note: above code prefers target model in gaugeopt suite to that of edesign - this is TEMPORARY until
+        # processor specs can reliably reconstruct target models (e.g. they don't support instruments yet).
+        # After processor specs work all the way, we should prefer it over the gaugeopt suite's target here.
         estimate = _Estimate.create_gst_estimate(ret, target_model, mdl_start, mdl_lsgst_list, parameters)
         ret.add_estimate(estimate, estimate_key=self.name)
 
@@ -1775,14 +1782,14 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options,
             try:
                 budget_dict = _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options, printer - 1)
                 for chain_name, (unmodeled, active_constraint_list) in budget_dict.items():
-                    base_estimate.parameters[chain_name + "_unmodeled_error"] = unmodeled
-                    base_estimate.parameters[chain_name + "_unmodeled_active_constraints"] \
+                    base_estimate.extra_parameters[chain_name + "_unmodeled_error"] = unmodeled
+                    base_estimate.extra_parameters[chain_name + "_unmodeled_active_constraints"] \
                         = active_constraint_list
                 if len(budget_dict) > 0:  # also store first chain info w/empty chain name (convenience)
                     first_chain = next(iter(budget_dict))
                     unmodeled, active_constraint_list = budget_dict[first_chain]
-                    base_estimate.parameters["unmodeled_error"] = unmodeled
-                    base_estimate.parameters["unmodeled_active_constraints"] = active_constraint_list
+                    base_estimate.extra_parameters["unmodeled_error"] = unmodeled
+                    base_estimate.extra_parameters["unmodeled_active_constraints"] = active_constraint_list
             except NotImplementedError as e:
                 printer.warning("Failed to get wildcard budget - continuing anyway.  Error was:\n" + str(e))
                 new_params['unmodeled_error'] = None
@@ -1799,7 +1806,8 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options,
 
         # In case we've computed an updated final model, Just keep (?) old estimates of all
         # prior iterations (or use "blank" sentinel once this is supported).
-        mdl_lsgst_list = [base_estimate.models['iteration %d estimate' % k] for k in base_estimate.num_iterations]
+        mdl_lsgst_list = [base_estimate.models['iteration %d estimate' % k]
+                          for k in range(base_estimate.num_iterations)]
         mdl_start = base_estimate.models.get('seed', None)
         target_model = base_estimate.models.get('target', None)
 
@@ -1814,8 +1822,10 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options,
         for gokey, gauge_opt_params in base_estimate.goparameters.items():
             if new_final_model is not None:
                 unreliable_ops = ()  # pass this in?
-                _add_gauge_opt(results, base_estimate_label + '.' + badfit_typ, {gokey: gauge_opt_params},
-                               target_model, new_final_model, unreliable_ops, comm, printer - 1)
+                _add_gauge_opt(results, base_estimate_label + '.' + badfit_typ,
+                               GSTGaugeOptSuite(gaugeopt_argument_dicts={gokey: gauge_opt_params},
+                                                gaugeopt_target=target_model),
+                               new_final_model, unreliable_ops, comm, printer - 1)
             else:
                 # add same gauge-optimized result as above
                 go_gs_final = base_estimate.models[gokey]

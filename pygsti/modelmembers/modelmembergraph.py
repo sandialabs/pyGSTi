@@ -15,13 +15,14 @@ from collections import OrderedDict
 from pygsti.models.memberdict import OrderedMemberDict as _OrderedMemberDict
 from pygsti.modelmembers.modelmember import ModelMember
 
+
 class ModelMemberGraph(object):
     """A directed acyclic graph of dependencies of ModelMembers"""
 
     @classmethod
     def load_modelmembers_from_serialization_dict(cls, sdict):
         """Create a nested dictionary of model members from a previously serialized graph.
-        
+
         Parameters
         ----------
         sdict: dict
@@ -46,9 +47,9 @@ class ModelMemberGraph(object):
                 if mm_type not in mm_nodes:
                     mm_nodes[mm_type] = {}
                 mm_nodes[mm_type][lbl] = mm_serial[mm_node_serialized_id]
-        
+
         return mm_nodes
-    
+
     def __init__(self, mm_dicts):
         """Generate a directed acyclic graph of ModelMember dependencies for an OpModel.
 
@@ -66,7 +67,7 @@ class ModelMemberGraph(object):
 
         # Memo for MMNodes (OrderedDict for insertion-order in pre-3.6, since we still support 3.5)
         self.mm_memo = OrderedDict()
-        
+
         # Dict holding all "roots" of the graph
         self.mm_nodes = OrderedDict()
         for mm_type, mm_dict in mm_dicts.items():
@@ -79,12 +80,12 @@ class ModelMemberGraph(object):
 
     def is_similar(self, other):
         """Comparator between two ModelMemberGraph objects for structure only.
-        
+
         Parameters
         ----------
         other: ModelMemberGraph
             Dependency graph to compare to
-        
+
         Returns
         -------
         bool
@@ -99,7 +100,7 @@ class ModelMemberGraph(object):
         ----------
         other: ModelMemberGraph
             Dependency graph to compare to
-        
+
         Returns
         -------
         bool
@@ -109,14 +110,14 @@ class ModelMemberGraph(object):
 
     def _dfs_comparison(self, other, check_params):
         """Helper function for comparators implementing DFS traversal.
-    
+
         Parameters
         ----------
         other: ModelMemberGraph
             Dependency graph to compare to
         check_params: bool
             Whether to check the parameter values (True) or not
-        
+
         Returns
         -------
         bool
@@ -129,13 +130,13 @@ class ModelMemberGraph(object):
                 if not node1.mm.is_equivalent(node2.mm): return False
             else:
                 if not node1.mm.is_similar(node2.mm): return False
-            
+
             # Check children
             if len(node1.children) != len(node2.children): return False
 
             for c1, c2 in zip(node1.children, node2.children):
                 if not dfs_compare(c1, c2): return False
-            
+
             # If here, everything checks out in the subtree
             return True
 
@@ -149,13 +150,13 @@ class ModelMemberGraph(object):
                 node2 = other.mm_nodes[mm_type][lbl]
                 if not dfs_compare(node1, node2):
                     return False
-        
+
         # If here, everything checks out
         return True
-    
+
     def create_serialization_dict(self):
         """Serialize the ModelMemberGraph object.
-        
+
         Calls underlying to_memoized_dict on each ModelMember,
         as well as adding necessary metadata for the collection
         of ModelMembers - e.g., OrderedMemberDict keys for root nodes.
@@ -170,25 +171,25 @@ class ModelMemberGraph(object):
         sdict = OrderedDict()
         for mm_id, mm_node in self.mm_memo.items():
             sdict[str(mm_node.serialize_id)] = mm_node.mm.to_memoized_dict(self.mm_memo)
-        
+
         # Tag extra metadata for root nodes
         for mm_type, root_nodes in self.mm_nodes.items():
             for lbl, mm_node in root_nodes.items():
                 sdict[str(mm_node.serialize_id)]['memberdict_type'] = mm_type
                 sdict[str(mm_node.serialize_id)]['memberdict_label'] = str(lbl)
                 # serialized-dictionary keys must be *strings*
-        
+
         return sdict
 
     def print_graph(self, indent=0):
         def print_subgraph(node, indent=0, name=None):
             if name is not None:
-                print(' '*indent + f'{name}: {node.mm.__class__.__name__} ({node.serialize_id})')
+                print(' ' * indent + f'{name}: {node.mm.__class__.__name__} ({node.serialize_id})')
             else:
-                print(' '*indent + f'{node.mm.__class__.__name__} ({node.serialize_id})')
+                print(' ' * indent + f'{node.mm.__class__.__name__} ({node.serialize_id})')
 
             for child in node.children:
-                print_subgraph(child, indent+2)
+                print_subgraph(child, indent + 2)
 
         for mm_type, mm_dict in self.mm_nodes.items():
             print(f'Modelmember type: {mm_type}')
@@ -207,17 +208,15 @@ class MMGNode(object):
                 subnode = MMGNode(sm, mm_memo)
                 mm_memo[id(sm)] = subnode
                 self.children.append(subnode)
-        
+
         # TODO: Don't need this, just need serialized version?
         # BUt needs to be after recursive call so all children are in memo
         self.serialize_id = len(mm_memo)
         self.mm = mm
         mm_memo[id(mm)] = self
-        
+
         # Determine depth (0 if leaf)
         if len(self.children) == 0:
             self.depth = 0
         else:
             self.depth = max([c.depth for c in self.children]) + 1
-        
-        

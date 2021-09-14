@@ -1746,7 +1746,7 @@ class LindbladErrorgen(_LinearOperator):
         # computes sum of 1-norms of error generator terms multiplied by abs(coeff) values
         # because ||A + B|| <= ||A|| + ||B|| and ||cA|| == abs(c)||A||
         return self._onenorm_upbound
-    
+
     def to_memoized_dict(self, mmg_memo):
         """Create a serializable dict with references to other objects in the memo.
 
@@ -1756,7 +1756,7 @@ class LindbladErrorgen(_LinearOperator):
             Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
             are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
             the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
-        
+
         Returns
         -------
         mm_dict: dict
@@ -1766,7 +1766,7 @@ class LindbladErrorgen(_LinearOperator):
             Additional fields may be added by derived classes.
         """
         mm_dict = super().to_memoized_dict(mmg_memo)
-        
+
         mm_dict['rep_type'] = self._rep_type
         mm_dict['nonham_mode'] = self.nonham_mode
         mm_dict['param_mode'] = self.param_mode
@@ -1774,13 +1774,12 @@ class LindbladErrorgen(_LinearOperator):
         # Need to drop coefficients into something JSON-able
         count = 0
         coeff_dict = {}
-        for k,v in self.coefficients().items():
+        for k, v in self.coefficients().items():
             coeff_dict[count] = {'label': k, 'value': v}
             count += 1
         mm_dict['coefficients'] = coeff_dict
 
         return mm_dict
-
 
     def __str__(self):
         s = "Lindblad error generator with dim = %d, num params = %d\n" % \

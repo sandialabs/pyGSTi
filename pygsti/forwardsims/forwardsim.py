@@ -101,7 +101,7 @@ class ForwardSimulator(_NicelySerializable):
         return super()._to_nice_serialization()
 
     @classmethod
-    def _from_nice_serialization(cls, state):        
+    def _from_nice_serialization(cls, state):
         return cls(None)
 
     def __getstate__(self):
@@ -118,7 +118,7 @@ class ForwardSimulator(_NicelySerializable):
         self._model = val
         try:
             evotype = None if val is None else self._model.evotype
-            self._set_evotype(evotype)  # alert the class of the evotype (allows loading evotype-specific calc functions)
+            self._set_evotype(evotype)  # alert the class of the evotype (allows loading evotype-specific calc fns)
         except AttributeError:
             pass  # not all models have an evotype (OK)
 

@@ -294,7 +294,7 @@ class FiducialPairPlaquette(CircuitPlaquette):
         base = std.parse_circuit(state['base_circuit'], create_subcircuits=_Circuit.default_expand_subcircuits)
         fidpairs = {tuple(ij): (std.parse_circuit(prepfid, create_subcircuits=_Circuit.default_expand_subcircuits),
                                 std.parse_circuit(measfid, create_subcircuits=_Circuit.default_expand_subcircuits))
-                    for ij, prepfid, measfid  in state['fiducial_pairs']}
+                    for ij, prepfid, measfid in state['fiducial_pairs']}
         return cls(base, fidpairs, state['num_rows'], state['num_cols'], op_label_aliases=None)
         # Note: parent structure will set op_label_aliases, so we don't serialize it
 
@@ -712,7 +712,7 @@ class PlaquetteGridCircuitStructure(_CircuitList):
         return cls(plaquettes, xvalues, yvalues, state['xlabel'], state['ylabel'],
                    additional_circuits, state['op_label_aliases'], circuit_weights,
                    state['additional_circuits_location'], name=state['name'])
-    
+
     @property
     def plaquettes(self):
         return self._plaquettes

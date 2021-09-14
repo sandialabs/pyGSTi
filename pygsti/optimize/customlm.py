@@ -244,7 +244,7 @@ class CustomLMOptimizer(Optimizer):
             'array_types': self.array_types,
             'called_objective_function_methods': self.called_objective_methods,
             'serial_solve_number_of_processors_threshold': self.serial_solve_proc_threshold
-            })
+        })
         return state
 
     @classmethod

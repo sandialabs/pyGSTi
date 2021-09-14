@@ -165,82 +165,6 @@ def load_meta_based_dir(root_dir, auxfile_types_member='auxfile_types',
         return ret
 
 
-#REMOVE!!!
-#                    pth = root_dir / (key + str(i) + ext)
-#                    if not pth.exists(): break
-#                    if should_skip_loading(pth):
-#                        val.append(None)
-#                    else:
-#                        val.append(_load.load_circuit_list(pth))
-#
-#
-#            
-#        
-#        for sub_typ in typ.split(':'):  # allows, e.g. "list:" or "dict:" prefixes
-#            
-#            
-#            
-#            
-#        ext = _get_auxfile_ext(typ)
-#
-#        #Process cases with non-standard expected path(s)
-#        if typ == 'none':  # member is serialized separatey and shouldn't be touched
-#            continue
-#        elif typ == 'reset':  # 'reset' doesn't write and loads in as None
-#            val = None  # no file exists for this member
-#
-#        elif typ == 'text-circuit-lists':
-#            i = 0; val = []
-#            while True:
-#                pth = root_dir / (key + str(i) + ext)
-#                if not pth.exists(): break
-#                if should_skip_loading(pth):
-#                    val.append(None)
-#                else:
-#                    val.append(_load.load_circuit_list(pth))
-#                i += 1
-#
-#        elif typ == 'protocolobj':
-#            protocol_dir = root_dir / (key + ext)
-#            val = _cls_from_meta_json(protocol_dir).from_dir(protocol_dir, quick_load=quick_load)
-#
-#        elif typ == 'list-of-protocolobjs':
-#            i = 0; val = []
-#            while True:
-#                pth = root_dir / (key + str(i) + ext)
-#                if not pth.exists(): break
-#                val.append(_cls_from_meta_json(pth).from_dir(pth, quick_load=quick_load)); i += 1
-#
-#        elif typ == 'dict-of-protocolobjs':
-#            keys = meta[key]; paths = [root_dir / (key + "_" + k + ext) for k in keys]
-#            val = {k: _cls_from_meta_json(pth).from_dir(pth, quick_load=quick_load) for k, pth in zip(keys, paths)}
-#
-#        elif typ == 'dict-of-resultsobjs':
-#            keys = meta[key]; paths = [root_dir / (key + "_" + k + ext) for k in keys]
-#            val = {k: _cls_from_meta_json(pth)._from_dir_partial(pth, quick_load=quick_load)
-#                   for k, pth in zip(keys, paths)}
-#
-#        else:  # cases with 'standard' expected path
-#
-#            pth = root_dir / (key + ext)
-#            if pth.is_dir():
-#                raise ValueError("Expected path: %s is a dir!" % pth)
-#            elif not pth.exists() or should_skip_loading(pth):
-#                val = None  # missing files => None values
-#            elif typ == 'text-circuit-list':
-#                val = _load.load_circuit_list(pth)
-#            elif typ == 'json':
-#                with open(str(pth), 'r') as f:
-#                    val = _json.load(f)
-#            elif typ == 'pickle':
-#                with open(str(pth), 'rb') as f:
-#                    val = _pickle.load(f)
-#            else:
-#                raise ValueError("Invalid aux-file type: %s" % typ)
-#
-#        ret[key] = val
-
-
 def _load_auxfile_member(root_dir, filenm, typ, metadata, quick_load):
     subtypes = typ.split(':')
     cur_typ = subtypes[0]
@@ -714,7 +638,7 @@ def _check_jsonable(x):
         if any([(not isinstance(k, str)) for k in x.keys()]):
             nonstr_keys = [k for k in x.keys() if not isinstance(k, str)]
             raise ValueError("Cannot convert a dictionary with non-string keys to JSON! (it won't decode properly):\n"
-                             + '\n'.join(map(str,nonstr_keys)))
+                             + '\n'.join(map(str, nonstr_keys)))
         for k, v in x.items():
             try:
                 _check_jsonable(v)

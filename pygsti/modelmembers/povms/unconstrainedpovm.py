@@ -64,7 +64,7 @@ class UnconstrainedPOVM(_BasePOVM):
         """
         mm_dict = super().to_memoized_dict(mmg_memo)
 
-        mm_dict['effects'] = [(lbl, effect.to_memoized_dict({})) for lbl, effect in self.items()]  # TEMPORARY!!!!!! ---------------------------------------------
+        mm_dict['effects'] = [(lbl, effect.to_memoized_dict({})) for lbl, effect in self.items()]  # TEMPORARY!!!!!!
 
         return mm_dict
 
@@ -84,7 +84,7 @@ class UnconstrainedPOVM(_BasePOVM):
             other memos in ModelMember, (e.g. copy(), allocate_gpindices(), etc.).
             This is similar but not the same as mmg_memo in to_memoized_dict(),
             as we do not need to build a ModelMemberGraph for deserialization.
-        
+
         Returns
         -------
         ModelMember
@@ -95,4 +95,3 @@ class UnconstrainedPOVM(_BasePOVM):
         effects = {lbl: _POVMEffect._state_class(effect).from_memoized_dict(effect, serial_memo)
                    for lbl, effect in mm_dict['effects']}
         return cls(effects, mm_dict['evotype'], state_space)
-

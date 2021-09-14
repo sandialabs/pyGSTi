@@ -6398,4 +6398,3 @@ class CachedObjectiveFunction(_NicelySerializable):
         from pygsti.io.metadir import _class_for_name
         return cls(_class_for_name(state['class_to_build']), state['name'], state['description'],
                    state['regularization'], state['penalties'], *state['additional_arguments'])
-

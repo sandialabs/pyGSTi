@@ -82,7 +82,7 @@ class NamedDict(dict, _NicelySerializable):
         return (NamedDict, (self.keyname, self.keytype, self.valname, self.valtype, list(self.items())), None)
 
     def _to_nice_serialization(self):
-        
+
         def _serialize(x):
             #TODO: serialize via _to_memoized_dict once we have a base class
             if x is None or isinstance(x, (float, int, str)):

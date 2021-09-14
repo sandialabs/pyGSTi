@@ -169,7 +169,7 @@ class ComputationalBasisPOVM(_POVM):
             Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
             are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
             the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
-        
+
         Returns
         -------
         mm_dict: dict
@@ -179,7 +179,7 @@ class ComputationalBasisPOVM(_POVM):
             Additional fields may be added by derived classes.
         """
         mm_dict = super().to_memoized_dict(mmg_memo)
-        
+
         mm_dict['nqubits'] = self.nqubits
 
         return mm_dict

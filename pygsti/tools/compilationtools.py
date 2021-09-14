@@ -24,26 +24,27 @@ def mod_2pi(theta):
 
 
 def pauli_frame_randomize_unitary(theta1, theta2, theta3, net_pauli, recomp_pauli):
-    #takes the z rotation angles for the compiled version of a random unitary and finds the angles for the compiled version of the pauli frame randomized unitary
+    #takes the z rotation angles for the compiled version of a random unitary and finds the angles for the compiled
+    # version of the pauli frame randomized unitary
     #redefine the values so that when the net pauli commutes through, we get the original parameters
     if net_pauli == 1 or net_pauli == 3:
         theta2 *= -1
     if net_pauli == 1 or net_pauli == 2:
         theta3 *= -1
         theta1 *= -1
-        
+
     #change angles to recompile the new pauli into the gate
-    if recomp_pauli == 1 or recomp_pauli == 2: #if x or y
+    if recomp_pauli == 1 or recomp_pauli == 2:  # if x or y
         theta1 = -theta1 + _np.pi
         theta2 = theta2 + _np.pi
-    if recomp_pauli ==2 or recomp_pauli ==3: #if y or z
+    if recomp_pauli ==2 or recomp_pauli ==3:  # if y or z
         theta1 = theta1 + _np.pi
-    
+
     #make everything between -pi and pi.
     theta1 = mod_2pi(theta1)
     theta2 = mod_2pi(theta2)
     theta3 = mod_2pi(theta3)
-    
+
     return (theta1, theta2, theta3)
 
 
@@ -56,5 +57,5 @@ def inv_recompile_unitary(theta1, theta2, theta3):
     theta1 = mod_2pi(_np.pi - theta1)
     theta2 = mod_2pi(-theta2)
     theta3 = mod_2pi(-theta3 + _np.pi)
-    
+
     return (theta1, theta2, theta3)

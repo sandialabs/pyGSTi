@@ -192,7 +192,7 @@ class QubitProcessorSpec(ProcessorSpec):
                       'availability': self.availability,  # should just have native types
                       'geometry': self.qubit_graph.to_nice_serialization(),
                       'nonstd_gate_unitaries': {k: self._encodemx(mx) for k, mx in self.nonstd_gate_unitaries.items()},
-                      'symplectic_reps': {k: (self._encodemx(s), cls._encodemx(p))
+                      'symplectic_reps': {k: (self._encodemx(s), self._encodemx(p))
                                           for k, (s, p) in self._symplectic_reps.items()},
                       'aux_info': self.aux_info
                       })

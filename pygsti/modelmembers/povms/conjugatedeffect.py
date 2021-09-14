@@ -386,10 +386,10 @@ class ConjugatedStatePOVMEffect(DenseEffectInterface, _POVMEffect):
         # done automatically.
         from pygsti.modelmembers.modelmembergraph import MMGNode as _MMGNode
         mmg_memo[id(self.state)] = _MMGNode(self.state, {})
-        
+
         mm_dict = super().to_memoized_dict(mmg_memo)
 
-        mm_dict['conjugated_state'] = self.state.to_memoized_dict({})  # TEMPORARY!!!!!!!! -----------------------------------------------
+        mm_dict['conjugated_state'] = self.state.to_memoized_dict({})  # TEMPORARY!!!!!!!!
 
         return mm_dict
 
@@ -409,7 +409,7 @@ class ConjugatedStatePOVMEffect(DenseEffectInterface, _POVMEffect):
             other memos in ModelMember, (e.g. copy(), allocate_gpindices(), etc.).
             This is similar but not the same as mmg_memo in to_memoized_dict(),
             as we do not need to build a ModelMemberGraph for deserialization.
-        
+
         Returns
         -------
         ModelMember
