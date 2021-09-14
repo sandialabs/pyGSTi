@@ -7,6 +7,7 @@
 *.coverage*
 *.serial
 *.cache
+*.pyd
 .ipynb_checkpoints
 test/test_packages/temp_test_files/*
 jupyter_notebooks/Tutorials/tutorial_files
