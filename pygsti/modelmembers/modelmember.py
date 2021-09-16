@@ -289,14 +289,21 @@ class ModelMember(ModelChild, _NicelySerializable):
         assert(self._parent is None), "Cannot relink parent: parent is not None!"
         self._parent = parent  # assume no dependent objects
 
-    def unlink_parent(self):
+    def unlink_parent(self, force=False):
         """
         Remove the parent-link of this member.
 
         Called when at least one reference (via `key`) to this object is being
         disassociated with `parent`.   If *all* references are to this object
         are now gone, set parent to None, invalidating any gpindices.
-        `starting_index`.
+
+        Parameters
+        ----------
+        force : bool, optional
+            If `True`, then resets parent to `None`, effectively de-allocating
+            the model member's parameters from the parent model, even if the
+            parent still contains references to it.  If `False`, the parent
+            is only set to `None` when its parent contains no reference to it.
 
         Returns
         -------
@@ -305,24 +312,25 @@ class ModelMember(ModelChild, _NicelySerializable):
         for subm in self.submembers():
             subm.unlink_parent()
 
-        if (self.parent is not None) and (self.parent._obj_refcount(self) == 0):
+        if (self.parent is not None) and (force or self.parent._obj_refcount(self) == 0):
             self._parent = None
 
-    def clear_gpindices(self):
-        """
-        Sets gpindices to None, along with any submembers' gpindices.
-
-        This essentially marks these members for parameter re-allocation
-        (e.g. if the number - not just the value - of parameters they have
-        changes).
-
-        Returns
-        -------
-        None
-        """
-        for subm in self.submembers():
-            subm.clear_gpindices()
-        self._gpindices = None
+    # UNUSED - as this doesn't mark parameter for reallocation like it used to
+    #def clear_gpindices(self):
+    #    """
+    #    Sets gpindices to None, along with any submembers' gpindices.
+    #
+    #    This essentially marks these members for parameter re-allocation
+    #    (e.g. if the number - not just the value - of parameters they have
+    #    changes).
+    #
+    #    Returns
+    #    -------
+    #    None
+    #    """
+    #    for subm in self.submembers():
+    #        subm.clear_gpindices()
+    #    self._gpindices = None
 
     def set_gpindices(self, gpindices, parent, memo=None):
         """
@@ -363,9 +371,175 @@ class ModelMember(ModelChild, _NicelySerializable):
 
         self._set_only_my_gpindices(gpindices, parent)
 
+    def shift_gpindices(self, above, amount, parent_filter=None, memo=None):
+        """
+        Shifts this member's gpindices by the given amount.
+
+        Usually called by the parent model when it shifts parameter
+        indices around in its parameter vector.
+
+        Parameters
+        ----------
+        above : int
+            The "insertion point" within the range of indices.  All indices
+            greater than or equal to this index are shifted.
+
+        amount : int
+            The amount to shift indices greater than or equal to `above` by.
+
+        parent_filter : Model or None
+            If a :class:`Model` object, then only those members with indices
+            allocated to this model will be shifted.  It usually makes sense
+            to specify this argument, supplying the parent model whose parameter
+            vector is being shifted.
+
+        memo : set, optional
+            A set keeping track of the object ids that have had their indices
+            set in a root `set_gpindices` call.  Used to prevent duplicate
+            calls and self-referencing loops.  If `memo` contains an object's
+            id (`id(self)`) then this routine will exit immediately.
+
+        Returns
+        -------
+        None
+        """
+        if memo is None: memo = set()
+        elif id(self) in memo: return
+        memo.add(id(self))
+
+        for subm in self.submembers():
+            subm.shift_gpindices(above, amount, parent_filter, memo)
+
+        if amount != 0 and (parent_filter is None or self.parent is parent_filter) and self.gpindices is not None:
+            if isinstance(self.gpindices, slice):
+                if self.gpindices.start >= above:
+                    self._set_only_my_gpindices(_slct.shift(self.gpindices, amount), self.parent)
+            else:
+                shifted = _np.where(self.gpindices >= above, self.gpindices + amount, self.gpindices)
+                self._set_only_my_gpindices(shifted, self.parent)  # works for integer arrays
+
     def _set_only_my_gpindices(self, gpindices, parent):
         self._parent = parent
         self._gpindices = gpindices
+
+    def _collect_parents(self, set_to_fill=None, memo=None):
+        """ Traverse sub-member tree and record all distinct parent Models. Useful for finding
+            the "anticipated parent" model when initializing a member with sub-members """
+        if set_to_fill is None: set_to_fill = set()
+        if memo is None: memo = set()
+        elif id(self) in memo: return
+        memo.add(id(self))
+
+        if len(self.submembers()) > 0:
+            for subm in self.submembers():
+                subm._collect_parents(set_to_fill, memo)
+        if self.parent is not None:
+            set_to_fill.add(self.parent)
+        return set_to_fill
+
+    def gpindices_are_allocated(self, model, memo=None):
+        """
+        Whether or not this model member's parameter indices are allocated within a potential parent model.
+
+        This is used to infer when the model member needs to have its parameter indices
+        reallocated (by its parent model).
+
+        This method is 
+
+        Parameters
+        ----------
+        model : Model
+            Test for parameter allocation with respect to this model.
+
+        memo : dict, optional
+            Used to prevent duplicate calls and self-referencing loops.  If
+            `memo` contains an object's id (`id(self)`) then this routine
+            will exit immediately with a cached value.
+
+        Returns
+        -------
+        bool
+            True if this member's `.gpindices` and those of its sub-members are not None
+            and refer to parameter indices of `model`.
+        """
+        # Note: maybe this routine should always return False if model is None (?)
+        if memo is None: memo = {}
+        elif id(self) in memo: return memo[id(self)]
+
+        allocated = bool(self.gpindices is not None and model is self.parent)  # whether 'self' is allocated
+        if allocated and len(self.submembers()) > 0:  # then also check that submembers are allocated too
+            allocated = all([subm.gpindices_are_allocated(model, memo) for subm in self.submembers()])
+
+        memo[id(self)] = allocated
+        return allocated
+
+    def preallocate_gpindices(self, parent, memo=None):
+        """
+        Computes two key pieces of information for a model preparing to allocate this member.
+
+        These pieces of information are:
+
+        1. the total number of new parameters that would need to be allocated to `parent`
+           in order to have all this model member's parameters allocated to `parent`.
+        2. the largest parameter index from all the parameters already allocated to
+           `parent`.  This is useful for providing an ideal insertion point for the
+           new parameters, once the model has made space for them.
+
+        Note that this function does not update this model member's `.gpindces` or
+        other attributes at all - it just serves as a pre-allocation probe so that
+        the allocating model knows how much space in its parameter vector is needed/
+        requested by this perhaps-not-fully-allocated member.
+
+        Parameters
+        ----------
+        parent : Model
+            The model that parameter allocation is being considered with respect to.
+
+        memo : set, optional
+            Used to prevent duplicate calls and self-referencing loops.  If
+            `memo` contains an object's id (`id(self)`) then this routine
+            will exit immediately..
+
+        Returns
+        -------
+        num_new_params : int
+            the number of parameters that aren't currently allocated to `parent`
+        max_index : int
+            the maximum index of the parameters currently allocated to `parent`
+        """
+        assert(parent is not None), \
+            "Parent model cannot be `None`. Just call allocate_gpindices if there is no parent."
+
+        if memo is None: memo = set()
+        elif id(self) in memo:
+            return (0, -1)  # if already processes then don't need to do so again, and
+            # returning this is saying "don't tally any more new-params or adjust the max index"
+
+        memo.add(id(self))  # don't call this again
+
+        if len(self.submembers()) > 0:
+            #Allocate sub-members
+            max_existing_index = -1; tot_new_params = 0
+            for subm in self.submembers():
+                num_new_params, maxindex = subm.preallocate_gpindices(parent, memo)
+                tot_new_params += num_new_params
+                max_existing_index = max(max_existing_index, maxindex)
+            return tot_new_params, max_existing_index
+
+        else:  # no sub-members
+
+            if self.gpindices is None or parent is not self.parent:
+                # Note: parent == None has the special meaning of "no parent model".  When
+                # a modelmember is called upon to allocate indices to this non-model it
+                # *always* allocates the parameters even if it's self.parent is currently None.
+
+                #default behavior: assume num_params() works even with
+                # gpindices == None and indicate all our parameters should be allocated as "new"
+                return (self.num_params, -1)  # all params new, max existing index = -1 (no existing inds)
+            else:  # assume gpindices is good & everything's allocated already
+                max_existing_index = (self.gpindices.stop - 1) if isinstance(self.gpindices, slice) \
+                    else max(self.gpidices)  # an array
+                return 0, max_existing_index
 
     def allocate_gpindices(self, starting_index, parent, memo=None):
         """
@@ -436,7 +610,11 @@ class ModelMember(ModelChild, _NicelySerializable):
             # print(" >>> DB DEFAULT %d ALLOCATING: " % id(self),
             #       self.gpindices, " parents:",
             #       pp(self.parent), pp(parent))
-            if self.gpindices is None or parent is not self.parent:
+            if self.gpindices is None or parent is None or parent is not self.parent:
+                # Note: parent == None has the special meaning of "no parent model".  When
+                # a modelmember is called upon to allocate indices to this non-model it
+                # *always* allocates the parameters even if it's self.parent is currently None.
+                
                 #default behavior: assume num_params() works even with
                 # gpindices == None and allocate all our parameters as "new"
                 Np = self.num_params
@@ -455,6 +633,44 @@ class ModelMember(ModelChild, _NicelySerializable):
         for subm in self.submembers():
             cnt += subm._obj_refcount(obj)
         return cnt
+
+    def init_gpindices(self):
+        """
+        Initializes this model member's parameter indices by allocating them to an "anticipated" parent model.
+
+        Objects with submembers often rely on having valid `.gpindices` and `.subm_rpindices`
+        attributes, but these aren't set until the object is allocated to a parent model.  This
+        method initializes these attributes in the best way possible *before* receiving the
+        actual parent model.  Typically model members (containing sub-members) are build in two ways:
+
+        1. The sub-members are all un-allocated, i.e. their `.parent` model is `None`
+        2. The sub-members are all allocated to the *same* parent model.
+
+        This method computes an "anticipated parent" model as the common parent of all
+        the submembers (if one exists) or `None`, and calls :method:`allocate_gpindices`
+        using this parent model and a starting index of 0.  This has the desired behavior
+        in the two cases above.  In case 1, parameter indices are set (allocated) but the
+        parent is set to `None`, so that the to-be parent model will see this member as
+        being unallocated.  In case 2, the parent model, if it is the anticipated one,
+        will see that this member's indices are already allocated to it, and won't need
+        to re-allocate them.
+        """
+        all_parents = self._collect_parents()
+        if len(all_parents) == 1:  # all sub-members have a common (non-None) parent model
+            # Next, check that all the sub-members are also *allocated* (have non-None gpindices) to this common parent
+            common_parent = all_parents.__iter__().__next__()
+            if all([subm.gpindices_are_allocated(common_parent) for subm in self.submembers()]):
+                # If so, then we can allocate our gpindices using this common parent
+                num_new_params = self.allocate_gpindices(starting_index=0, parent=common_parent)
+                assert(num_new_params == 0), \
+                    "No new parameters should have needed to be added (all sub-members were already allocated)!"
+                return
+
+        # Otherwise, we'll re-allocate all the indices using parent=None so that gpindices
+        #  and subm_rpindices get set for now, but will trigger a re-allocation when added
+        #  to an actual parent model.  When this re-allocation occurs, the basic properties
+        #  of this member (num_params, etc) should be the same as they are now (with parent=None).
+        self.allocate_gpindices(starting_index=0, parent=None)
 
     def gpindices_as_array(self):
         """

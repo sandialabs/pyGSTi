@@ -265,6 +265,7 @@ class EmbeddedOpFactory(OpFactory):
         self.embedded_factory = factory_to_embed
         self.target_labels = target_labels
         super(EmbeddedOpFactory, self).__init__(state_space, factory_to_embed._evotype)
+        self.init_gpindices()  # initialize our gpindices based on sub-members
 
         #FUTURE: somehow do all the difficult embedded op computation once at construction so we
         # don't need to keep reconstructing an Embedded op in each create_op call.
@@ -405,6 +406,7 @@ class EmbeddingOpFactory(OpFactory):
         self.num_target_labels = num_target_labels
         self.allowed_sslbls_fn = allowed_sslbls_fn
         super(EmbeddingOpFactory, self).__init__(state_space, factory_or_op_to_embed._evotype)
+        self.init_gpindices()  # initialize our gpindices based on sub-members
 
     def create_op(self, args=None, sslbls=None):
         """
@@ -555,6 +557,7 @@ class ComposedOpFactory(OpFactory):
         self.dense = dense
         self.is_factory = [isinstance(f, OpFactory) for f in factories_or_ops_to_compose]
         super(ComposedOpFactory, self).__init__(state_space, evotype)
+        self.init_gpindices()  # initialize our gpindices based on sub-members
 
     def create_op(self, args=None, sslbls=None):
         """

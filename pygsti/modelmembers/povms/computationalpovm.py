@@ -124,7 +124,7 @@ class ComputationalBasisPOVM(_POVM):
             # decompose key into separate factor-effect labels
             outcomes = [(0 if letter == '0' else 1) for letter in key]
             effect = _ComputationalBasisPOVMEffect(outcomes, 'pp', self._evotype, self.state_space)
-            effect.set_gpindices(slice(0, 0, None), self.parent)  # computational vecs have no params
+            assert(effect.allocate_gpindices(0, self.parent) == 0)  # functional! computational vecs have no params
             _collections.OrderedDict.__setitem__(self, key, effect)
             return effect
         else: raise KeyError("%s is not an outcome label of this StabilizerZPOVM" % key)
@@ -153,8 +153,6 @@ class ComputationalBasisPOVM(_POVM):
         -------
         OrderedDict of POVMEffects
         """
-        # Create "simplified" effect vectors, which infer their parent and
-        # gpindices from the set of "factor-POVMs" they're constructed with.
         if prefix: prefix += "_"
         simplified = _collections.OrderedDict(
             [(prefix + k, self[k]) for k in self.keys()])

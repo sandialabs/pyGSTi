@@ -96,24 +96,25 @@ class StochasticNoiseOp(_LinearOperator):
             keys of dicts <=> poly terms, e.g. (1,1) <=> x1^2) """
         return [{(i, i): 1.0} for i in range(self.basis.size - 1)]  # rates are just parameters squared
 
-    def copy(self, parent=None, memo=None):
-        """
-        Copy this object.
-
-        Parameters
-        ----------
-        parent : Model, optional
-            The parent model to set for the copy.
-
-        Returns
-        -------
-        StochasticNoiseOp
-            A copy of this object.
-        """
-        if memo is not None and id(self) in memo: return memo[id(self)]
-        copyOfMe = StochasticNoiseOp(self.state_space, self.basis, self._evotype,
-                                     self._params_to_rates(self.to_vector()))
-        return self._copy_gpindices(copyOfMe, parent, memo)
+    # REMOVE - unnecessary
+    #def copy(self, parent=None, memo=None):
+    #    """
+    #    Copy this object.
+    #
+    #    Parameters
+    #    ----------
+    #    parent : Model, optional
+    #        The parent model to set for the copy.
+    #
+    #    Returns
+    #    -------
+    #    StochasticNoiseOp
+    #        A copy of this object.
+    #    """
+    #    if memo is not None and id(self) in memo: return memo[id(self)]
+    #    copyOfMe = StochasticNoiseOp(self.state_space, self.basis, self._evotype,
+    #                                 self._params_to_rates(self.to_vector()))
+    #    return self._copy_gpindices(copyOfMe, parent, memo)
 
     #to_dense / to_sparse?
     def to_dense(self, on_space='minimal'):

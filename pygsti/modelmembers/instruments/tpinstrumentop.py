@@ -68,12 +68,25 @@ class TPInstrumentOp(_DenseOperator):
         #  of the underlying 'param_ops' operations)
         self.dependents = [0, index + 1] if index < len(param_ops) - 1 \
             else list(range(len(param_ops)))
-        #indices into self.param_ops of the operations this operation depends on
-        self.set_gpindices(_slct.list_to_slice(
-            _np.concatenate([param_ops[i].gpindices_as_array()
-                             for i in self.dependents], axis=0), True, False),
-                           param_ops[0].parent)  # use parent of first param operation
-        # (they should all be the same)
+        self.init_gpindices()
+
+        #TODO REMOVE - now use submembers framework
+        ##indices into self.param_ops of the operations this operation depends on
+        #self.set_gpindices(_slct.list_to_slice(
+        #    _np.concatenate([param_ops[i].gpindices_as_array()
+        #                     for i in self.dependents], axis=0), True, False),
+        #                   param_ops[0].parent)  # use parent of first param operation
+        ## (they should all be the same)
+
+    def submembers(self):
+        """
+        Get the ModelMember-derived objects contained in this one.
+
+        Returns
+        -------
+        list
+        """
+        return [self.param_ops[i] for i in self.dependents]
 
     def _construct_matrix(self):
         """
@@ -175,8 +188,10 @@ class TPInstrumentOp(_DenseOperator):
         numpy array
             The operation parameters as a 1D array with length num_params().
         """
-        raise ValueError(("TPInstrumentOp.to_vector() should never be called"
-                          " - use TPInstrument.to_vector() instead"))
+        v = _np.empty(self.num_params, 'd')
+        for param_op, local_inds in zip(self.submembers(), self._submember_rpindices):
+            v[local_inds] = param_op.to_vector()
+        return v
 
     def from_vector(self, v, close=False, dirty_value=True):
         """
@@ -202,17 +217,20 @@ class TPInstrumentOp(_DenseOperator):
         -------
         None
         """
-        #Rely on the Instrument ordering of it's elements: if we're being called
-        # to init from v then this is within the context of a TPInstrument's operations
-        # having been simplified and now being initialized from a vector (within a
-        # calculator).  We rely on the Instrument elements having their
-        # from_vector() methods called in self.index order.
+        for param_op, local_inds in zip(self.submembers(), self._submember_rpindices):
+            param_op.from_vector(v[local_inds], close, dirty_value)
 
-        if self.index < len(self.param_ops) - 1:  # final element doesn't need to init any param operations
-            for i in self.dependents:  # re-init all my dependents (may be redundant)
-                if i == 0 and self.index > 0: continue  # 0th param-operation already init by index==0 element
-                paramop_local_inds = _mm._decompose_gpindices(
-                    self.gpindices, self.param_ops[i].gpindices)
-                self.param_ops[i].from_vector(v[paramop_local_inds], close, dirty_value)
+        #I dont' think this is still true, though the above, and from_vector in general, may benefit from a memo arg.
+        # #Rely on the Instrument ordering of its elements: if we're being called
+        # # to init from v then this is within the context of a TPInstrument's operations
+        # # having been simplified and now being initialized from a vector (within a
+        # # calculator).  We rely on the Instrument elements having their
+        # # from_vector() methods called in self.index order.
+        # if self.index < len(self.param_ops) - 1:  # final element doesn't need to init any param operations
+        #     for i in self.dependents:  # re-init all my dependents (may be redundant)
+        #         if i == 0 and self.index > 0: continue  # 0th param-operation already init by index==0 element
+        #         paramop_local_inds = _mm._decompose_gpindices(
+        #             self.gpindices, self.param_ops[i].gpindices)
+        #         self.param_ops[i].from_vector(v[paramop_local_inds], close, dirty_value)
 
         self._construct_matrix()

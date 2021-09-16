@@ -438,7 +438,7 @@ class GSTInitialModel(_NicelySerializable):
                 else:
                     target_model = None
             else:
-                target_model = self.target_model
+                target_model = self.target_model.copy()  # copy so don't give actual target as starting point
             return target_model
 
         #Get starting point (model), which is used to compute other quantities

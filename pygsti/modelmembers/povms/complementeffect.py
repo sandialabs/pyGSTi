@@ -56,6 +56,7 @@ class ComplementPOVMEffect(_ConjugatedStatePOVMEffect):
         #    that they index into our local parameter vector.
 
         _ConjugatedStatePOVMEffect.__init__(self, self.identity.copy())
+        self.init_gpindices()  # initialize our gpindices based on sub-members
         self._construct_vector()  # reset's self.base
 
     def _construct_vector(self):
@@ -65,6 +66,17 @@ class ComplementPOVMEffect(_ConjugatedStatePOVMEffect):
         base1d[:] = self.identity.to_dense() - sum([vec.state.to_dense() for vec in self.other_effects])
         base1d.flags.writeable = False
         self._ptr_has_changed()
+
+    def submembers(self):
+        """
+        Get the ModelMember-derived objects contained in this one.
+
+        Returns
+        -------
+        list
+        """
+        # Note: don't include [self.state] because its params aren't ComplementPOVMEffect params
+        return self.other_effects
 
     @property
     def num_params(self):
@@ -118,7 +130,7 @@ class ComplementPOVMEffect(_ConjugatedStatePOVMEffect):
         # we just construct our vector based on them.
         #Note: this is needed for finite-differencing in map-based calculator
         self._construct_vector()
-        self.dirty = dirty_value
+        self.dirty = False  # dirty_value
 
     def deriv_wrt_params(self, wrt_filter=None):
         """

@@ -40,7 +40,7 @@ class StaticStandardOp(_LinearOperator):
     state_space : StateSpace, optional
         The state space for this operation.  If `None` a default state space
         with the appropriate number of qubits is used.
-    """
+    """    
     def __init__(self, name, basis='pp', evotype="default", state_space=None):
         self.name = name
 

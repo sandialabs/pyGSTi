@@ -93,23 +93,24 @@ class DepolarizeOp(_StochasticNoiseOp):
         # so d( sum(abs(rates)) )/dparam_0 = 2*(basis.size-1)*param_0
         return 2 * (self.basis.size - 1) * self.to_vector()
 
-    def copy(self, parent=None, memo=None):
-        """
-        Copy this object.
-
-        Parameters
-        ----------
-        parent : Model, optional
-            The parent model to set for the copy.
-
-        Returns
-        -------
-        DepolarizeOp
-            A copy of this object.
-        """
-        if memo is not None and id(self) in memo: return memo[id(self)]
-        copyOfMe = DepolarizeOp(self.state_space, self.basis, self._evotype, self._params_to_rates(self.to_vector())[0])
-        return self._copy_gpindices(copyOfMe, parent, memo)
+    # REMOVE - unnecessary
+    #def copy(self, parent=None, memo=None):
+    #    """
+    #    Copy this object.
+    #
+    #    Parameters
+    #    ----------
+    #    parent : Model, optional
+    #        The parent model to set for the copy.
+    #
+    #    Returns
+    #    -------
+    #    DepolarizeOp
+    #        A copy of this object.
+    #    """
+    #    if memo is not None and id(self) in memo: return memo[id(self)]
+    #    copyOfMe = DepolarizeOp(self.state_space, self.basis, self._evotype, self._params_to_rates(self.to_vector())[0])
+    #    return self._copy_gpindices(copyOfMe, parent, memo)
 
     def to_memoized_dict(self, mmg_memo):
         """Create a serializable dict with references to other objects in the memo.

@@ -19,6 +19,7 @@ from pygsti.modelmembers import operations as _op
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.tools import matrixtools as _mt
+from pygsti.tools import slicetools as _slct
 from pygsti.baseobjs.label import Label as _Label
 
 
@@ -95,16 +96,19 @@ class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
                 else _statespace.StateSpace.cast(state_space)
 
             # Create gate objects that are used to parameterize this instrument
-            MT = _op.FullTPOp(sum([v for k, v in matrix_list]), evotype, state_space)
-            MT.set_gpindices(slice(0, MT.num_params), self)
+            MT_mx = sum([v for k, v in matrix_list])  # sum-of-instrument-members matrix
+            MT = _op.FullTPOp(MT_mx, evotype, state_space)
+            # REMOVE MT.set_gpindices(slice(0, MT.num_params), self)
             self.param_ops.append(MT)
 
-            dim = MT.dim; off = MT.num_params
+            dim = MT.dim
+            # REMOVE off = MT.num_params
             for k, v in matrix_list[:-1]:
-                Di = _op.FullArbitraryOp(v - MT, evotype, state_space)
-                Di.set_gpindices(slice(off, off + Di.num_params), self)
+                Di = _op.FullArbitraryOp(v - MT_mx, evotype, state_space)
+                #REMOVE Di.set_gpindices(slice(off, off + Di.num_params), self)
                 assert(Di.dim == dim)
-                self.param_ops.append(Di); off += Di.num_params
+                self.param_ops.append(Di)
+                #REMOVE off += Di.num_params
 
             #Create a TPInstrumentOp for each operation matrix
             # Note: TPInstrumentOp sets it's own parent and gpindices
@@ -116,7 +120,7 @@ class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
             #for i,v in enumerate(self.param_ops):
             #    print(i,":\n",v)
             #
-            #print("POST INIT ITEMS:")
+            #print("POST nINIT ITEMS:")
             #for k,v in items:
             #    print(k,":\n",v)
         else:
@@ -124,7 +128,18 @@ class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
 
         _collections.OrderedDict.__init__(self, items)
         _mm.ModelMember.__init__(self, state_space, evotype)
+        self.init_gpindices()
         self._readonly = True
+
+    def submembers(self):
+        """
+        Get the ModelMember-derived objects contained in this one.
+
+        Returns
+        -------
+        list
+        """
+        return list(self.values())  # TPInstrumentOp objects that have self.param_ops as submembers
 
     def __setitem__(self, key, value):
         if self._readonly: raise ValueError("Cannot alter Instrument elements")
@@ -137,7 +152,12 @@ class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
         # strip the numpy array from each element and call __init__ again when
         # unpickling:
         op_matrices = [(lbl, _np.asarray(val)) for lbl, val in self.items()]
-        return (TPInstrument, (op_matrices, self.evotype, self.state_space, []), {'_gpindices': self._gpindices})
+        return (TPInstrument, (op_matrices, self.evotype, self.state_space, []), {'init_gpindices': self._gpindices})
+
+    def __setstate__(self, state):
+        # Re-initialize sub-members (which aren't pickled by re-created via __init__) using the saved gpindices
+        # Note: the parent Model will later re-link to itself, so ok that parent is None here
+        self.set_gpindices(state['init_gpindices'], parent=None)
 
     def __pygsti_reduce__(self):
         return self.__reduce__()
@@ -161,39 +181,47 @@ class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
         -------
         OrderedDict of Gates
         """
-        #Create a "simplified" (Model-referencing) set of param gates
-        param_simplified = []
-        for g in self.param_ops:
-            comp = g.copy()
-            comp.set_gpindices(_mm._compose_gpindices(self.gpindices,
-                                                      g.gpindices), self.parent)
-            param_simplified.append(comp)
+
+        #REMOVE - a model-param referencing copy of param_ops is not needed anymore since
+        # members now contain global model indices already.
+        # #Create a "simplified" (Model-referencing) set of param gates
+        # param_simplified = []
+        # for g in self.param_ops:
+        #     comp = g.copy()
+        #     comp.set_gpindices(_mm._compose_gpindices(self.gpindices,
+        #                                               g.gpindices), self.parent)
+        #     param_simplified.append(comp)
 
         # Create "simplified" elements, which infer their parent and
         # gpindices from the set of "param-gates" they're constructed with.
         if isinstance(prefix, _Label):  # Deal with case when prefix isn't just a string
             simplified = _collections.OrderedDict(
-                [(_Label(prefix.name + "_" + k, prefix.sslbls), _TPInstrumentOp(param_simplified, i))
-                 for i, k in enumerate(self.keys())])
+                [(_Label(prefix.name + "_" + k, prefix.sslbls), v)
+                 for k, v in self.items()])
         else:
             if prefix: prefix += "_"
             simplified = _collections.OrderedDict(
-                [(prefix + k, _TPInstrumentOp(param_simplified, i))
-                 for i, k in enumerate(self.keys())])
+                [(prefix + k, v)
+                 for k, v in self.items()])
         return simplified
 
     @property
-    def parameter_labels(self):
+    def parameter_labels(self):  # same as in Instrument CONSOLIDATE?
         """
         An array of labels (usually strings) describing this model member's parameters.
         """
+        plabels_per_local_index = _collections.defaultdict(list)
+        for operation, factorgate_local_inds in zip(self.submembers(), self._submember_rpindices):
+            for i, plbl in zip(_slct.to_array(factorgate_local_inds), operation.parameter_labels):
+                plabels_per_local_index[i].append(plbl)
+
         vl = _np.empty(self.num_params, dtype=object)
-        for gate in self.param_ops:
-            vl[gate.gpindices] = gate.parameter_labels
+        for i in range(self.num_params):
+            vl[i] = ', '.join(plabels_per_local_index[i])
         return vl
 
     @property
-    def num_elements(self):
+    def num_elements(self):  # same as in Instrument CONSOLIDATE?
         """
         Return the number of total gate elements in this instrument.
 
@@ -208,7 +236,7 @@ class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
         return sum([g.size for g in self.values()])
 
     @property
-    def num_params(self):
+    def num_params(self):  # same as in Instrument CONSOLIDATE?
         """
         Get the number of independent parameters which specify this Instrument.
 
@@ -217,9 +245,9 @@ class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
         int
             the number of independent parameters.
         """
-        return sum([g.num_params for g in self.param_ops])
+        return len(self.gpindices_as_array())
 
-    def to_vector(self):
+    def to_vector(self):  # same as in Instrument but w/.submembers() CONSOLIDATE?
         """
         Extract a vector of the underlying gate parameters from this Instrument.
 
@@ -228,9 +256,10 @@ class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
         numpy array
             a 1D numpy array with length == num_params().
         """
+        assert(self.gpindices is not None), "Must set an Instrument's .gpindices before calling to_vector"
         v = _np.empty(self.num_params, 'd')
-        for gate in self.param_ops:
-            v[gate.gpindices] = gate.to_vector()
+        for operation, factor_local_inds in zip(self.submembers(), self._submember_rpindices):
+            v[factor_local_inds] = operation.to_vector()
         return v
 
     def from_vector(self, v, close=False, dirty_value=True):
@@ -257,10 +286,12 @@ class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
         -------
         None
         """
-        for gate in self.param_ops:
-            gate.from_vector(v[gate.gpindices], close, dirty_value)
+        assert(self.gpindices is not None), "Must set an Instrument's .gpindices before calling from_vector"
+        for operation, factor_local_inds in zip(self.submembers(), self._submember_rpindices):
+            operation.from_vector(v[factor_local_inds], close, dirty_value)
         for instGate in self.values():
             instGate._construct_matrix()
+        self.dirty = dirty_value
 
     def transform_inplace(self, s):
         """

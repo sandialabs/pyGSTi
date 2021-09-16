@@ -165,8 +165,8 @@ class NQubitTestCase(BaseTestCase):
         lsgstLists = gss.truncate(xs_to_keep=maxLengths) # can just use gss as input to pygsti.run_long_sequence_gst_base
 
         mdl_to_optimize = build_XYCNOT_cloudnoise_model(nQubits, "line", cnot_edges, maxIdleWeight=2, maxhops=1,
-                                                         extraWeight1Hops=0, extraGateWeight=1, verbosity=1,
-                                                         simulator="map", parameterization="H+S")
+                                                        extraWeight1Hops=0, extraGateWeight=1, verbosity=1,
+                                                        simulator="map", parameterization="H+S")
         results = pygsti.run_long_sequence_gst_base(ds, mdl_to_optimize,
                                                     lsgstLists, gauge_opt_params=False,
                                                     advanced_options={'tolerance': 1e-1}, verbosity=4)

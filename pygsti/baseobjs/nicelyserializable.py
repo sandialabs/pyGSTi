@@ -263,7 +263,8 @@ class NicelySerializable(object):
 
     def _to_nice_serialization(self):
         state = {'module': self.__class__.__module__,
-                 'class': self.__class__.__name__}
+                 'class': self.__class__.__name__,
+                 'version': 0}
         return state
 
     @classmethod

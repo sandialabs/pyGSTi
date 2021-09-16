@@ -95,6 +95,7 @@ class ComposedOp(_LinearOperator):
         self.local_term_poly_coeffs = {}
 
         _LinearOperator.__init__(self, rep, evotype)
+        self.init_gpindices()  # initialize our gpindices based on sub-members
         if self._rep_type == 'dense': self._update_denserep()  # update dense rep if needed
 
     def _update_denserep(self):
@@ -184,6 +185,7 @@ class ComposedOp(_LinearOperator):
             self._rep.reinit_factor_op_reps([op._rep for op in self.factorops])
         if self.parent:  # need to alert parent that *number* (not just value)
             self.parent._mark_for_rebuild(self)  # if our params may have changed
+            self._parent = None  # mark this object for re-allocation
 
     def insert(self, insert_at, *factorops_to_insert):
         """
@@ -209,6 +211,7 @@ class ComposedOp(_LinearOperator):
             self._rep.reinit_factor_op_reps([op._rep for op in self.factorops])
         if self.parent:  # need to alert parent that *number* (not just value)
             self.parent._mark_for_rebuild(self)  # if our params may have changed
+            self._parent = None  # mark this object for re-allocation
 
     def remove(self, *factorop_indices):
         """
@@ -231,27 +234,29 @@ class ComposedOp(_LinearOperator):
             self._rep.reinit_factor_op_reps([op._rep for op in self.factorops])
         if self.parent:  # need to alert parent that *number* (not just value)
             self.parent._mark_for_rebuild(self)  # of our params may have changed
+            self._parent = None  # mark this object for re-allocation
 
-    def copy(self, parent=None, memo=None):
-        """
-        Copy this object.
-
-        Parameters
-        ----------
-        parent : Model, optional
-            The parent model to set for the copy.
-
-        Returns
-        -------
-        LinearOperator
-            A copy of this object.
-        """
-        # We need to override this method so that factor operations have their
-        # parent reset correctly.
-        if memo is not None and id(self) in memo: return memo[id(self)]
-        cls = self.__class__  # so that this method works for derived classes too
-        copyOfMe = cls([g.copy(parent, memo) for g in self.factorops], self._evotype, self.state_space)
-        return self._copy_gpindices(copyOfMe, parent, memo)
+    # REMOVE - unnecessary and doesn't work correctly when, e.g., multiple factors are the same object
+    #def copy(self, parent=None, memo=None):
+    #    """
+    #    Copy this object.
+    #
+    #    Parameters
+    #    ----------
+    #    parent : Model, optional
+    #        The parent model to set for the copy.
+    #
+    #    Returns
+    #    -------
+    #    LinearOperator
+    #        A copy of this object.
+    #    """
+    #    # We need to override this method so that factor operations have their
+    #    # parent reset correctly.
+    #    if memo is not None and id(self) in memo: return memo[id(self)]
+    #    cls = self.__class__  # so that this method works for derived classes too
+    #    copyOfMe = cls([g.copy(parent, memo) for g in self.factorops], self._evotype, self.state_space)
+    #    return self._copy_gpindices(copyOfMe, parent, memo)
 
     def to_sparse(self, on_space='minimal'):
         """

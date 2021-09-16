@@ -91,14 +91,13 @@ class CircuitList(_NicelySerializable):
 
     def _to_nice_serialization(self):  # memo holds already serialized objects
         assert(self.op_label_aliases is None), "We don't serialize members of op_label_aliases yet."
-        state = {'module': self.__class__.__module__,
-                 'class': self.__class__.__name__,
-                 'name': self.name,
-                 'op_label_aliases': self.op_label_aliases,  # dict
-                 'circuits': [c.str for c in self._circuits],
-                 'circuit_weights': list(self.circuit_weights) if (self.circuit_weights is not None) else None,
-                 'uuid': str(self.uuid)
-                 }
+        state = super()._to_nice_serialization()
+        state.update({'name': self.name,
+                      'op_label_aliases': self.op_label_aliases,  # dict
+                      'circuits': [c.str for c in self._circuits],
+                      'circuit_weights': list(self.circuit_weights) if (self.circuit_weights is not None) else None,
+                      'uuid': str(self.uuid)
+                     })
         return state
 
     @classmethod

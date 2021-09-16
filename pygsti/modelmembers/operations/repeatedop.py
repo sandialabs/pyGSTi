@@ -48,6 +48,7 @@ class RepeatedOp(_LinearOperator):
         evotype = _Evotype.cast(evotype)
         rep = evotype.create_repeated_rep(self.repeated_op._rep, self.num_repetitions, state_space)
         _LinearOperator.__init__(self, rep, evotype)
+        self.init_gpindices()  # initialize our gpindices based on sub-members
 
     def submembers(self):
         """
@@ -76,26 +77,27 @@ class RepeatedOp(_LinearOperator):
         """
         self.repeated_op.set_time(t)
 
-    def copy(self, parent=None, memo=None):
-        """
-        Copy this object.
-
-        Parameters
-        ----------
-        parent : Model, optional
-            The parent model to set for the copy.
-
-        Returns
-        -------
-        LinearOperator
-            A copy of this object.
-        """
-        # We need to override this method so that factor operations have their
-        # parent reset correctly.
-        if memo is not None and id(self) in memo: return memo[id(self)]
-        cls = self.__class__  # so that this method works for derived classes too
-        copyOfMe = cls(self.repeated_op.copy(parent, memo), self.num_repetitions, self._evotype)
-        return self._copy_gpindices(copyOfMe, parent, memo)
+    # REMOVE - unnecessary
+    #def copy(self, parent=None, memo=None):
+    #    """
+    #    Copy this object.
+    #
+    #    Parameters
+    #    ----------
+    #    parent : Model, optional
+    #        The parent model to set for the copy.
+    #
+    #    Returns
+    #    -------
+    #    LinearOperator
+    #        A copy of this object.
+    #    """
+    #    # We need to override this method so that factor operations have their
+    #    # parent reset correctly.
+    #    if memo is not None and id(self) in memo: return memo[id(self)]
+    #    cls = self.__class__  # so that this method works for derived classes too
+    #    copyOfMe = cls(self.repeated_op.copy(parent, memo), self.num_repetitions, self._evotype)
+    #    return self._copy_gpindices(copyOfMe, parent, memo)
 
     def to_sparse(self, on_space='minimal'):
         """

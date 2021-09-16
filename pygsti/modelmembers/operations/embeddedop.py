@@ -77,6 +77,7 @@ class EmbeddedOp(_LinearOperator):
             raise ValueError("Unable to construct representation with evotype: %s" % str(evotype))
 
         _LinearOperator.__init__(self, rep, evotype)
+        self.init_gpindices()  # initialize our gpindices based on sub-members
         if self._rep_type == 'dense': self._update_denserep()
 
     def _update_denserep(self):
@@ -121,27 +122,28 @@ class EmbeddedOp(_LinearOperator):
         """
         self.embedded_op.set_time(t)
 
-    def copy(self, parent=None, memo=None):
-        """
-        Copy this object.
-
-        Parameters
-        ----------
-        parent : Model, optional
-            The parent model to set for the copy.
-
-        Returns
-        -------
-        LinearOperator
-            A copy of this object.
-        """
-        # We need to override this method so that embedded operation has its
-        # parent reset correctly.
-        if memo is not None and id(self) in memo: return memo[id(self)]
-        cls = self.__class__  # so that this method works for derived classes too
-        copyOfMe = cls(self.state_space, self.target_labels,
-                       self.embedded_op.copy(parent, memo))
-        return self._copy_gpindices(copyOfMe, parent, memo)
+    # REMOVE - unnecessary; parent is reset correctly using base class and needless .copy() calls can break dependencies
+    #def copy(self, parent=None, memo=None):
+    #    """
+    #    Copy this object.
+    #
+    #    Parameters
+    #    ----------
+    #    parent : Model, optional
+    #        The parent model to set for the copy.
+    #
+    #    Returns
+    #    -------
+    #    LinearOperator
+    #        A copy of this object.
+    #    """
+    #    # We need to override this method so that embedded operation has its
+    #    # parent reset correctly.
+    #    if memo is not None and id(self) in memo: return memo[id(self)]
+    #    cls = self.__class__  # so that this method works for derived classes too
+    #    copyOfMe = cls(self.state_space, self.target_labels,
+    #                   self.embedded_op.copy(parent, memo))
+    #    return self._copy_gpindices(copyOfMe, parent, memo)
 
     def _iter_matrix_elements_precalc(self, on_space):
         divisor = 1; divisors = []

@@ -375,8 +375,8 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
         #d2 = static_effect.dim
         self.effect_vec = static_effect
         self.error_map = errormap
-        self.terms = {} if evotype in ("svterm", "cterm") else None
-        self.local_term_poly_coeffs = {} if evotype in ("svterm", "cterm") else None
+        self.terms = {}
+        self.local_term_poly_coeffs = {}
         # TODO REMOVE self.direct_terms = {} if evotype in ("svterm","cterm") else None
         # TODO REMOVE self.direct_term_poly_coeffs = {} if evotype in ("svterm","cterm") else None
 
@@ -387,6 +387,7 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
         # an effect that applies a *named* errormap before computing with effectRep
 
         _POVMEffect.__init__(self, rep, evotype)  # sets self.dim
+        self.init_gpindices()  # initialize gpindices and subm_rpindices from sub-members
         #_ErrorMapContainer.__init__(self, self.error_map)
 
     @property
@@ -403,26 +404,27 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
         """
         return [self.error_map]
 
-    def copy(self, parent=None, memo=None):
-        """
-        Copy this object.
-
-        Parameters
-        ----------
-        parent : Model, optional
-            The parent model to set for the copy.
-
-        Returns
-        -------
-        LinearOperator
-            A copy of this object.
-        """
-        # We need to override this method so that embedded gate has its
-        # parent reset correctly.
-        if memo is not None and id(self) in memo: return memo[id(self)]
-        cls = self.__class__  # so that this method works for derived classes too
-        copyOfMe = cls(self.effect_vec, self.error_map.copy(parent))
-        return self._copy_gpindices(copyOfMe, parent, memo)
+    # REMOVE - unnecessary
+    #def copy(self, parent=None, memo=None):
+    #    """
+    #    Copy this object.
+    #
+    #    Parameters
+    #    ----------
+    #    parent : Model, optional
+    #        The parent model to set for the copy.
+    #
+    #    Returns
+    #    -------
+    #    LinearOperator
+    #        A copy of this object.
+    #    """
+    #    # We need to override this method so that embedded gate has its
+    #    # parent reset correctly.
+    #    if memo is not None and id(self) in memo: return memo[id(self)]
+    #    cls = self.__class__  # so that this method works for derived classes too
+    #    copyOfMe = cls(self.effect_vec, self.error_map.copy(parent))
+    #    return self._copy_gpindices(copyOfMe, parent, memo)
 
     def set_gpindices(self, gpindices, parent, memo=None):
         """
@@ -447,7 +449,8 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
         self.local_term_poly_coeffs = {}
         # TODO REMOVE self.direct_terms = {}
         # TODO REMOVE self.direct_term_poly_coeffs = {}
-        _modelmember.ModelMember.set_gpindices(self, gpindices, parent, memo)
+        # TODO REMOVE _modelmember.ModelMember.set_gpindices(self, gpindices, parent, memo)
+        super().set_gpindices(gpindices, parent, memo)
 
     def to_dense(self, on_space='minimal', scratch=None):
         """

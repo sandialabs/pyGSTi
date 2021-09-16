@@ -83,6 +83,17 @@ class MarginalizedPOVM(_POVM):
                 elements_to_sum[mk] = [k]
         self._elements_to_sum = {k: tuple(v) for k, v in elements_to_sum.items()}  # convert to tuples
         super(MarginalizedPOVM, self).__init__(self.povm_to_marginalize.state_space, self.povm_to_marginalize.evotype)
+        self.init_gpindices()  # initialize gpindices and subm_rpindices from sub-members
+
+    def submembers(self):
+        """
+        Get the ModelMember-derived objects contained in this one.
+
+        Returns
+        -------
+        list
+        """
+        return [self.povm_to_marginalize]
 
     def marginalize_effect_label(self, elbl):
         """
@@ -146,7 +157,7 @@ class MarginalizedPOVM(_POVM):
                 else:
                     effect_vec += e.to_dense()
             effect = _StaticPOVMEffect(effect_vec, self._evotype)
-            effect.set_gpindices(slice(0, 0), self.parent)
+            assert(effect.allocate_gpindices(0, self.parent) == 0)  # functional! (do not remove)
             _collections.OrderedDict.__setitem__(self, key, effect)
             return effect
         else: raise KeyError("%s is not an outcome label of this MarginalizedPOVM" % key)
@@ -197,16 +208,6 @@ class MarginalizedPOVM(_POVM):
     #        self, self.error_map.gpindices, parent)
     #    return num_new_params
 
-    #def submembers(self):
-    #    """
-    #    Get the ModelMember-derived objects contained in this one.
-    #
-    #    Returns
-    #    -------
-    #    list
-    #    """
-    #    return [self.povm_to_marginalize]
-    #
     #def relink_parent(self, parent):  # Unnecessary?
     #    """
     #    Sets the parent of this object *without* altering its gpindices.
@@ -265,8 +266,6 @@ class MarginalizedPOVM(_POVM):
         -------
         OrderedDict of POVMEffects
         """
-        # Create "simplified" effect vectors, which infer their parent and
-        # gpindices from the set of "factor-POVMs" they're constructed with.
         if isinstance(prefix, _Label):  # Deal with case when prefix isn't just a string
             simplified = _collections.OrderedDict(
                 [(_Label(prefix.name + '_' + k, prefix.sslbls), self[k]) for k in self.keys()])
