@@ -283,7 +283,7 @@ class StandardGSTDesign(GateSetTomographyDesign):
         # trunc_scheme=advancedOptions.get('truncScheme', "whole germ powers")
 
         processor_spec = processor_spec_or_model.create_processor_spec() \
-                         if isinstance(processor_spec_or_model, _Model) else processor_spec_or_model
+            if isinstance(processor_spec_or_model, _Model) else processor_spec_or_model
 
         super().__init__(processor_spec, lists, None, qubit_labels, self.nested)
         self.auxfile_types['prep_fiducials'] = 'text-circuit-list'
@@ -694,7 +694,7 @@ class GateSetTomography(_proto.Protocol):
         be cast to a :class:`GSTObjFnBuilders` object.
 
     optimizer : Optimizer, optional
-        The optimizer to use.  Can also be anything that can be case to a :class:`Optimizer`.
+        The optimizer to use.  Can also be anything that can be cast to a :class:`Optimizer`.
 
     badfit_options : GSTBadFitOptions, optional
         Options specifying what post-processing actions should be performed if the GST
@@ -1403,6 +1403,7 @@ def _load_model(model_filename_or_obj):
         return _io.load_model(model_filename_or_obj)
     else:
         return model_filename_or_obj  # assume a Model object
+
 
 def _load_pspec_or_model(processorspec_or_model_filename_or_obj):
     if isinstance(processorspec_or_model_filename_or_obj, str):

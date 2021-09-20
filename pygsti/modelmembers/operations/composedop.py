@@ -738,6 +738,18 @@ class ComposedOp(_LinearOperator):
         else:
             return Ltermdict
 
+    def errorgen_coefficient_labels(self):
+        """
+        The elementary error-generator labels corresponding to the elements of :method:`errorgen_coefficients_array`.
+
+        Returns
+        -------
+        tuple
+            A tuple of (<type>, <basisEl1> [,<basisEl2]) elements identifying the elementary error
+            generators of this gate.
+        """
+        return tuple(_itertools.chain(*[op.errorgen_coefficient_labels() for op in self.factorops]))
+
     def errorgen_coefficients_array(self):
         """
         The weighted coefficients of this operation's error generator in terms of "standard" error generators.
@@ -765,7 +777,8 @@ class ComposedOp(_LinearOperator):
             coefficients of this operation's error generator and `num_params` is this operation's
             number of parameters.
         """
-        return _np.concatenate([op.errorgen_coefficients_array_deriv_wrt_params() for op in self.factorops], axis=0)
+        deriv_mxs = [op.errorgen_coefficients_array_deriv_wrt_params() for op in self.factorops]
+        return _np.concatenate([mx for mx in deriv_mxs if mx.size > 0], axis=0)  # allow (0,0)-shaped matrices to be ignored.
 
     def error_rates(self):
         """
@@ -804,7 +817,7 @@ class ComposedOp(_LinearOperator):
         """
         return self.errorgen_coefficients(return_basis=False, logscale_nonham=True)
 
-    def set_errorgen_coefficients(self, lindblad_term_dict, action="update", logscale_nonham=False):
+    def set_errorgen_coefficients(self, lindblad_term_dict, action="update", logscale_nonham=False, truncate=True):
         """
         Sets the coefficients of terms in the error generator of this operation.
 
@@ -836,6 +849,12 @@ class ComposedOp(_LinearOperator):
             the corresponding value given in `lindblad_term_dict`.  This is what is
             performed by the function :method:`set_error_rates`.
 
+        truncate : bool, optional
+            Whether to allow adjustment of the errogen coefficients in
+            order to meet constraints (e.g. to preserve CPTP) when necessary.
+            If False, then an error is thrown when the given coefficients
+            cannot be set as specified.
+
         Returns
         -------
         None
@@ -850,7 +869,7 @@ class ComposedOp(_LinearOperator):
 
             Ltermdict_local = _collections.OrderedDict([(k, v) for k, v in values_to_set.items()
                                                         if k in available_factor_coeffs])
-            op.set_errorgen_coefficients(Ltermdict_local, action, logscale_nonham)
+            op.set_errorgen_coefficients(Ltermdict_local, action, logscale_nonham, truncate)
             for k in Ltermdict_local:
                 del values_to_set[k]  # remove the values that we just set
 

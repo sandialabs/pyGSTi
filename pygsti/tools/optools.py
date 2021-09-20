@@ -17,6 +17,7 @@ import numpy as _np
 import scipy.linalg as _spl
 import scipy.sparse as _sps
 import scipy.sparse.linalg as _spsl
+import functools as _functools
 
 from pygsti.tools import basistools as _bt
 from pygsti.tools import jamiolkowski as _jam
@@ -24,6 +25,7 @@ from pygsti.tools import lindbladtools as _lt
 from pygsti.tools import matrixtools as _mt
 from pygsti.baseobjs.basis import Basis as _Basis, ExplicitBasis as _ExplicitBasis, DirectSumBasis as _DirectSumBasis
 from pygsti.baseobjs.label import Label as _Label
+from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LocalElementaryErrorgenLabel
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 
@@ -1632,6 +1634,42 @@ def _assert_shape(ar, shape, sparse=False):
             raise NotImplementedError("Number of dimensions must be <= 4!")
 
 
+def lindblad_error_generator(errorgen_type, basis_element_labels, basis_1q, normalize,
+                             sparse=False, tensorprod_basis=False):
+    """
+    TODO: docstring  - labels can be, e.g. ('H', 'XX') and basis should be a 1-qubit basis w/single-char labels
+    """
+
+    if errorgen_type == 'H':
+        B = _functools.reduce(_np.kron, [basis_1q[bel] for bel in basis_element_labels[0]])
+        ret = _lt.hamiltonian_to_lindbladian(B, sparse)  # in std basis
+    elif errorgen_type == 'S':
+        Lm = _functools.reduce(_np.kron, [basis_1q[bel] for bel in basis_element_labels[0]])
+        Ln = _functools.reduce(_np.kron, [basis_1q[bel] for bel in basis_element_labels[1]]) \
+            if len(basis_element_labels) > 1 else Lm
+        ret = _lt.nonham_lindbladian(Lm, Ln, sparse)
+    else:
+        raise ValueError("Invalid elementary error generator type: %s" % str(errorgen_type))
+
+    if normalize:
+        normfn = _spsl.norm if sparse else _np.linalg.norm
+        norm = normfn(ret)  # same as norm(term.flat)
+        if not _np.isclose(norm, 0):
+            ret /= norm  # normalize projector
+            assert(_np.isclose(normfn(ret), 1.0))
+
+    if tensorprod_basis:
+        # convert from "flat" std basis to tensorprod of std bases (same elements but in
+        # a different order).  Important if want to also construct ops by kroneckering the
+        # returned maps with, e.g., identities
+        nQubits = int(round(_np.log(ret.shape[0]) / _np.log(4))); assert(ret.shape[0] == 4**nQubits)
+        current_basis = _Basis.cast('std', ret.shape[0])
+        tensorprod_basis = _Basis.cast('std', [(4,) * nQubits])
+        ret = _bt.change_basis(ret, current_basis, tensorprod_basis)
+
+    return ret
+
+
 def lindblad_error_generators(dmbasis_ham, dmbasis_other, normalize,
                               other_mode="all"):
     """
@@ -2145,7 +2183,7 @@ def projections_to_lindblad_terms(ham_projs, other_projs, ham_basis, other_basis
         ham_mxs = ham_basis.elements  # can be sparse
         assert(len(ham_mxs[1:]) == len(ham_projs))
         for coeff, lbl, bmx in zip(ham_projs, ham_lbls[1:], ham_mxs[1:]):  # skip identity
-            Ltermdict[('H', lbl)] = coeff
+            Ltermdict[_LocalElementaryErrorgenLabel('H', [lbl])] = coeff
             set_basis_el(lbl, bmx)
     else:
         ham_lbls = []
@@ -2157,16 +2195,16 @@ def projections_to_lindblad_terms(ham_projs, other_projs, ham_basis, other_basis
         if other_mode == "diagonal":
             assert(len(other_mxs[1:]) == len(other_projs))
             for coeff, lbl, bmx in zip(other_projs, other_lbls[1:], other_mxs[1:]):  # skip identity
-                Ltermdict[('S', lbl)] = coeff
+                Ltermdict[_LocalElementaryErrorgenLabel('S', [lbl])] = coeff
                 set_basis_el(lbl, bmx)
 
         elif other_mode == "diag_affine":
             assert((2, len(other_mxs[1:])) == other_projs.shape)
             for coeff, lbl, bmx in zip(other_projs[0], other_lbls[1:], other_mxs[1:]):  # skip identity
-                Ltermdict[('S', lbl)] = coeff
+                Ltermdict[_LocalElementaryErrorgenLabel('S', [lbl])] = coeff
                 set_basis_el(lbl, bmx)
             for coeff, lbl, bmx in zip(other_projs[1], other_lbls[1:], other_mxs[1:]):  # skip identity
-                Ltermdict[('A', lbl)] = coeff
+                Ltermdict[_LocalElementaryErrorgenLabel('A', [lbl])] = coeff
                 set_basis_el(lbl, bmx)
 
         else:
@@ -2175,7 +2213,7 @@ def projections_to_lindblad_terms(ham_projs, other_projs, ham_basis, other_basis
                 set_basis_el(lbl1, bmx1)
                 for j, (lbl2, bmx2) in enumerate(zip(other_lbls[1:], other_mxs[1:])):  # skip identity
                     set_basis_el(lbl2, bmx2)
-                    Ltermdict[('S', lbl1, lbl2)] = other_projs[i, j]
+                    Ltermdict[_LocalElementaryErrorgenLabel('S', [lbl1, lbl2])] = other_projs[i, j]
     else:
         other_lbls = []
 
@@ -2277,30 +2315,31 @@ def lindblad_terms_to_projections(lindblad_term_dict, basis, other_mode="all"):
     hamBasisLabels = []
     otherBasisLabels = []
     for termLbl, coeff in lindblad_term_dict.items():
-        if isinstance(termLbl, str): termLbl = (termLbl[0], termLbl[1:])  # e.g. "HXX" => ('H','XX')
-        termType = termLbl[0]
+        termLbl = _LocalElementaryErrorgenLabel.cast(termLbl)  # e.g. "HXX" => ('H','XX')
+        termType = termLbl.errorgen_type
+        bels = termLbl.basis_element_labels
         if termType == "H":  # Hamiltonian
-            assert(len(termLbl) == 2), "Hamiltonian term labels should have form ('H',<basis element label>)"
-            if termLbl[1] not in hamBasisLabels:
-                hamBasisLabels.append(termLbl[1])
+            assert(len(bels) == 1), "Hamiltonian term labels should have form ('H',<basis element label>)"
+            if bels[0] not in hamBasisLabels:
+                hamBasisLabels.append(bels[0])
 
         elif termType == "S":  # Stochastic
             if other_mode in ("diagonal", "diag_affine"):
-                assert(len(termLbl) == 2), "Stochastic term labels should have form ('S',<basis element label>)"
-                if termLbl[1] not in otherBasisLabels:
-                    otherBasisLabels.append(termLbl[1])
+                assert(len(bels) == 1), "Stochastic term labels should have form ('S',<basis element label>)"
+                if bels[0] not in otherBasisLabels:
+                    otherBasisLabels.append(bels[0])
             else:
-                assert(len(termLbl) == 3), "Stochastic term labels should have form ('S',<bel1>, <bel2>)"
-                if termLbl[1] not in otherBasisLabels:
-                    otherBasisLabels.append(termLbl[1])
-                if termLbl[2] not in otherBasisLabels:
-                    otherBasisLabels.append(termLbl[2])
+                assert(len(bels) == 2), "Stochastic term labels should have form ('S',<bel1>, <bel2>)"
+                if bels[0] not in otherBasisLabels:
+                    otherBasisLabels.append(bels[0])
+                if bels[1] not in otherBasisLabels:
+                    otherBasisLabels.append(bels[1])
 
         elif termType == "A":  # Affine
             assert(other_mode == "diag_affine"), "Affine labels are only allowed in an affine mode"
-            assert(len(termLbl) == 2), "Affine term labels should have form ('A',<basis element label>)"
-            if termLbl[1] not in otherBasisLabels:
-                otherBasisLabels.append(termLbl[1])
+            assert(len(bels) == 1), "Affine term labels should have form ('A',<basis element label>)"
+            if bels[0] not in otherBasisLabels:
+                otherBasisLabels.append(bels[0])
 
     #Construct bases
     # Note: the lists of basis matrices shouldn't contain the identity, since
@@ -2352,25 +2391,26 @@ def lindblad_terms_to_projections(lindblad_term_dict, basis, other_mode="all"):
     hamBasisIndices = {lbl: i - 1 for i, lbl in enumerate(ham_basis.labels)}      # -1 to compensate for identity as
     otherBasisIndices = {lbl: i - 1 for i, lbl in enumerate(other_basis.labels)}  # first element (not in projections).
     for termLbl, coeff in lindblad_term_dict.items():
-        if isinstance(termLbl, str): termLbl = (termLbl[0], termLbl[1:])  # e.g. "HXX" => ('H','XX')
-        termType = termLbl[0]
+        termLbl = _LocalElementaryErrorgenLabel.cast(termLbl)  # e.g. "HXX" => ('H','XX')
+        termType = termLbl.errorgen_type
+        bels = termLbl.basis_element_labels
         if termType == "H":  # Hamiltonian
-            k = hamBasisIndices[termLbl[1]]  # index of coefficient in array
+            k = hamBasisIndices[bels[0]]  # index of coefficient in array
             hamProjs[k] = coeff
         elif termType == "S":  # Stochastic
             if other_mode == "diagonal":
-                k = otherBasisIndices[termLbl[1]]  # index of coefficient in array
+                k = otherBasisIndices[bels[0]]  # index of coefficient in array
                 otherProjs[k] = coeff
             elif other_mode == "diag_affine":
-                k = otherBasisIndices[termLbl[1]]  # index of coefficient in array
+                k = otherBasisIndices[bels[0]]  # index of coefficient in array
                 otherProjs[0, k] = coeff
             else:  # other_mode == "all"
-                k = otherBasisIndices[termLbl[1]]  # index of row in "other" coefficient matrix
-                j = otherBasisIndices[termLbl[2]]  # index of col in "other" coefficient matrix
+                k = otherBasisIndices[bels[0]]  # index of row in "other" coefficient matrix
+                j = otherBasisIndices[bels[1]]  # index of col in "other" coefficient matrix
                 otherProjs[k, j] = coeff
         elif termType == "A":  # Affine
             assert(other_mode == "diag_affine")
-            k = otherBasisIndices[termLbl[1]]  # index of coefficient in array
+            k = otherBasisIndices[bels[0]]  # index of coefficient in array
             otherProjs[1, k] = coeff
 
     return hamProjs, otherProjs, ham_basis, other_basis
@@ -2566,7 +2606,7 @@ def lindblad_projections_to_paramvals(ham_projs, other_projs, param_mode="cptp",
             if param_mode in ("depol", "reldepol"):
                 # otherParams is a *single-element* 1D vector of the sqrt of each diagonal el
                 assert(param_mode == "reldepol" or all([v >= ttol for v in other_projs])), \
-                    "Lindblad coefficients are not CPTP (truncate == %s)!" % str(truncate)
+                    "Lindblad stochastic coefficients are not positive (truncate == %s)!" % str(truncate)
                 assert(all([_np.isclose(v, other_projs[0], atol=abs(ttol)) for v in other_projs])), \
                     "Diagonal lindblad coefficients are not equal (truncate == %s)!" % str(truncate)
                 if param_mode == "depol":
@@ -2578,7 +2618,7 @@ def lindblad_projections_to_paramvals(ham_projs, other_projs, param_mode="cptp",
 
             elif param_mode == "cptp":  # otherParams is a 1D vector of the sqrts of diagonal els
                 assert(all([v >= ttol for v in other_projs])), \
-                    "Lindblad coefficients are not CPTP (truncate == %s)!" % str(truncate)
+                    "Lindblad stochastic coefficients are not positive (truncate == %s)!" % str(truncate)
                 other_projs = other_projs.clip(1e-16, 1e100)
                 otherParams = _np.sqrt(other_projs.real)  # shape (bsO-1,)
             else:  # "unconstrained": otherParams is a 1D vector of the real diagonal els of other_projs
