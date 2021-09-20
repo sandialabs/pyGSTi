@@ -390,6 +390,14 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
         self.init_gpindices()  # initialize gpindices and subm_rpindices from sub-members
         #_ErrorMapContainer.__init__(self, self.error_map)
 
+    #Note: no to_memoized_dict needed, as ModelMember version does all we need.
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        error_map = serial_memo[mm_dict['submembers'][0]]
+        static_effect = serial_memo[mm_dict['submembers'][1]]
+        return cls(static_effect, error_map)
+
     @property
     def size(self):
         return self.effect_vec.size
@@ -402,7 +410,7 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
         -------
         list
         """
-        return [self.error_map]
+        return [self.error_map, self.effect_vec]
 
     # REMOVE - unnecessary
     #def copy(self, parent=None, memo=None):

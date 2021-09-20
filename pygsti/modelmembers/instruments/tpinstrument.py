@@ -21,6 +21,7 @@ from pygsti.baseobjs import statespace as _statespace
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import slicetools as _slct
 from pygsti.baseobjs.label import Label as _Label
+from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 
 
 class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
@@ -140,6 +141,48 @@ class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
         list
         """
         return list(self.values())  # TPInstrumentOp objects that have self.param_ops as submembers
+
+    def to_memoized_dict(self, mmg_memo):
+        """Create a serializable dict with references to other objects in the memo.
+
+        Parameters
+        ----------
+        mmg_memo: dict
+            Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
+            are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
+            the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
+
+        Returns
+        -------
+        mm_dict: dict
+            A dict representation of this ModelMember ready for serialization
+            This must have at least the following fields:
+                module, class, submembers, params, state_space, evotype
+            Additional fields may be added by derived classes.
+        """
+        mm_dict = super().to_memoized_dict(mmg_memo)
+
+        mm_dict['member_labels'] = list(self.keys())  # labels of the submember effects
+
+        return mm_dict
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        state_space = _StateSpace.from_nice_serialization(mm_dict['state_space'])
+
+        # Alternate __init__ because we already have members built:
+        lbl_member_pairs = [(lbl, serial_memo[subm_serial_id])
+                            for lbl, subm_serial_id in zip(mm_dict['member_labels'], mm_dict['submembers'])]
+        MT_member = next(filter(lambda pair: pair[1].index == len(lbl_member_pairs) - 1, lbl_member_pairs))
+        param_ops = MT_member.submembers()  # the final (TP) member has all the param_ops as its submembers
+
+        ret = TPInstrument.__new__(TPInstrument)
+        ret.param_ops = param_ops
+        ret._readonly = False
+        _collections.OrderedDict.__init__(ret, lbl_member_pairs)
+        _mm.ModelMember.__init__(ret, state_space, mm_dict['evotype'])
+        ret._readonly = True
+        return ret
 
     def __setitem__(self, key, value):
         if self._readonly: raise ValueError("Cannot alter Instrument elements")

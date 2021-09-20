@@ -942,7 +942,15 @@ class OpModel(Model):
                     #wl[:] = [(lbl, obj_plbl) for obj_plbl in obj.parameter_labels]
                     #wb = obj.parameter_bounds if (obj.parameter_bounds is not None) \
                     #    else _default_param_bounds(len(w))
-                    newly_added_indices = slice(len(v), len(v) + (M + 1 - L))
+
+                    #set newly_added_indices to the indices for *obj* that have just been added
+                    added_indices = slice(len(v), len(v) + (M + 1 - L))
+                    if isinstance(obj.gpindices, slice):
+                        newly_added_indices = _slct.intersect(added_indices, obj.gpindices)
+                    else:
+                        newly_added_indices = inds[_np.logical_and(inds >= added_indices.start,
+                                                                   inds < added_indices.stop)]
+
                     v = _np.concatenate((v, _np.empty(M + 1 - L, 'd')), axis=0)  # [v.resize(M+1) doesn't work]
                     vl = _np.concatenate((vl, _np.empty(M + 1 - L, dtype=object)), axis=0)
                     vb = _np.concatenate((vb, _np.empty((M + 1 - L, 2), 'd')), axis=0)
@@ -981,7 +989,7 @@ class OpModel(Model):
             #print("Removal: ",lbl,str(type(obj)),(id(obj.parent) if obj.parent is not None else None),obj.gpindices)
             assert(obj.parent is self and obj.gpindices is not None)
             used_gpindices.update(obj.gpindices_as_array())
-            
+
             #OLD: from when this was step 1:
             #if obj.gpindices is not None:
             #    if obj.parent is self:  # then obj.gpindices lays claim to our parameters

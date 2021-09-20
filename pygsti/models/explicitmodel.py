@@ -407,6 +407,8 @@ class ExplicitOpModel(_mdl.OpModel):
         else:  # typ in ('static','H+S','S', 'H+S terms', ...)
             self.default_gauge_group = _gg.TrivialGaugeGroup(self.state_space)
 
+        self._clean_paramvec()  # param indices were probabaly updated
+
     def __setstate__(self, state_dict):
 
         if "gates" in state_dict:
@@ -1545,6 +1547,7 @@ class ExplicitOpModel(_mdl.OpModel):
         mdl.operations.update(modelmembers.get('operations', {}))
         mdl.instruments.update(modelmembers.get('instruments', {}))
         mdl.factories.update(modelmembers.get('factories', {}))
+        mdl._clean_paramvec()
         return mdl
 
 

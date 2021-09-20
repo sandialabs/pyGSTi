@@ -318,6 +318,7 @@ class CloudNoiseModel(_ImplicitOpModel):
         printer.log("DONE! - created Model with nqubits=%d and op-blks=" % self.state_space.num_qubits)
         for op_blk_lbl, op_blk in self.operation_blks.items():
             printer.log("  %s: %s" % (op_blk_lbl, ', '.join(map(str, op_blk.keys()))))
+        self._clean_paramvec()
 
     def create_processor_spec(self):
         import copy as _copy
@@ -346,7 +347,7 @@ class CloudNoiseModel(_ImplicitOpModel):
     @classmethod
     def _from_nice_serialization(cls, state):
         state_space = _statespace.StateSpace.from_nice_serialization(state['state_space'])
-        #basis = _from_memoized_dict(state['basis'])
+        #basis = _nice_serialization(state['basis'])
         modelmembers = _MMGraph.load_modelmembers_from_serialization_dict(state['modelmembers'])
         simulator = _FSim.from_nice_serialization(state['simulator'])
         layer_rules = _LayerRules.from_nice_serialization(state['layer_rules'])
@@ -361,18 +362,23 @@ class CloudNoiseModel(_ImplicitOpModel):
 
         flags = {'auto_embed': False, 'match_parent_statespace': False,
                  'match_parent_evotype': True, 'cast_to_type': None}
-        mdl.prep_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers['prep_blks|layers'])
-        mdl.povm_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers['povm_blks|layers'])
-        mdl.operation_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers['operation_blks|layers'])
-        mdl.operation_blks['gates'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers['operation_blks|gates'])
+        mdl.prep_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers.get('prep_blks|layers', []))
+        mdl.povm_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers.get('povm_blks|layers', []))
+        mdl.operation_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags,
+                                                          modelmembers.get('operation_blks|layers', []))
+        mdl.operation_blks['gates'] = _OrderedMemberDict(mdl, None, None, flags,
+                                                         modelmembers.get('operation_blks|gates', []))
         mdl.operation_blks['cloudnoise'] = _OrderedMemberDict(mdl, None, None, flags,
-                                                              modelmembers['operation_blks|cloudnoise'])
-        mdl.instrument_blks['layers'] = _OrderedMemberDict(mdl, None, None, modelmembers['instrument_blks|layers'])
-        mdl.factories['layers'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers['factories|layers'])
-        mdl.factories['gates'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers['factories|gates'])
-        mdl.factories['cloudnoise'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers['factories|cloudnoise'])
+                                                              modelmembers.get('operation_blks|cloudnoise', []))
+        mdl.instrument_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags,
+                                                           modelmembers.get('instrument_blks|layers', []))
+        mdl.factories['layers'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers.get('factories|layers', []))
+        mdl.factories['gates'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers.get('factories|gates', []))
+        mdl.factories['cloudnoise'] = _OrderedMemberDict(mdl, None, None, flags,
+                                                         modelmembers.get('factories|cloudnoise', []))
 
         mdl._clouds = _collections.OrderedDict()
+        mdl._clean_paramvec()
 
         return mdl
 
@@ -395,7 +401,8 @@ class CloudNoiseLayerRules(_LayerRules):
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
         state.update({'error_composition_mode': self.errcomp_type,
-                      'implied_global_idle_label': str(self.implied_global_idle_label),
+                      'implied_global_idle_label': (str(self.implied_global_idle_label)
+                                                    if (self.implied_global_idle_label is not None) else None),
                       'implicit_idle_mode': self.implicit_idle_mode,
                       })
         return state
@@ -403,9 +410,9 @@ class CloudNoiseLayerRules(_LayerRules):
     @classmethod
     def _from_nice_serialization(cls, state):
         from pygsti.circuits.circuitparser import parse_label as _parse_label
-        return cls(state['error_composition_mode'],
-                   _parse_label(state['implied_global_idle_label']),
-                   state['implicit_idle_mode'])
+        gi_label = _parse_label(state['implied_global_idle_label']) \
+            if (state['implied_global_idle_label'] is not None) else None
+        return cls(state['error_composition_mode'], gi_label, state['implicit_idle_mode'])
 
     def prep_layer_operator(self, model, layerlbl, caches):
         """

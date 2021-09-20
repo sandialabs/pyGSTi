@@ -167,12 +167,12 @@ class ComposedPovmBase(object):
         indep_mdl['rho0'] = self.base_prep
         indep_mdl['G0'] = noise_op.copy()
         indep_mdl['Mdefault'] = pure_povm
-        indep_mdl.num_params
+        indep_mdl._clean_paramvec()
         
         composed_mdl = ExplicitOpModel(['Q0'], evotype='default')
         composed_mdl['rho0'] = self.base_prep
         composed_mdl['Mdefault'] = self.povm
-        composed_mdl.num_params
+        composed_mdl._clean_paramvec()
         
         # Sanity check
         indep_circ = Circuit(['rho0', 'G0', 'Mdefault'])

@@ -86,6 +86,14 @@ class ComposedErrorgen(_LinearOperator):
         _LinearOperator.__init__(self, rep, evotype)
         self.init_gpindices()  # initialize our gpindices based on sub-members
 
+    #Note: no to_memoized_dict needed, as ModelMember version does all we need.
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
+        errgens_to_compose = [serial_memo[i] for i in mm_dict['submembers']]
+        return cls(errgens_to_compose, mm_dict['evotype'], state_space)
+
     def coefficients(self, return_basis=False, logscale_nonham=False):
         """
         Constructs a dictionary of the Lindblad-error-generator coefficients of this error generator.

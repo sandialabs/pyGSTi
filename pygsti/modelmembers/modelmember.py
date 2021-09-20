@@ -444,8 +444,6 @@ class ModelMember(ModelChild, _NicelySerializable):
         This is used to infer when the model member needs to have its parameter indices
         reallocated (by its parent model).
 
-        This method is 
-
         Parameters
         ----------
         model : Model
@@ -614,7 +612,7 @@ class ModelMember(ModelChild, _NicelySerializable):
                 # Note: parent == None has the special meaning of "no parent model".  When
                 # a modelmember is called upon to allocate indices to this non-model it
                 # *always* allocates the parameters even if it's self.parent is currently None.
-                
+
                 #default behavior: assume num_params() works even with
                 # gpindices == None and allocate all our parameters as "new"
                 Np = self.num_params
@@ -758,7 +756,6 @@ class ModelMember(ModelChild, _NicelySerializable):
             memo[id(self.parent)] = None  # so deepcopy uses None instead of copying parent
         return self._copy_gpindices(_copy.deepcopy(self, memo), parent, memo)
 
-
     def is_similar(self, other):
         """Comparator returning whether two ModelMembers are the same type
         and parameterization.
@@ -841,11 +838,17 @@ class ModelMember(ModelChild, _NicelySerializable):
             Additional fields may be added by derived classes.
         """
         mm_dict = OrderedDict()
-        mm_dict['module'] =  self.__module__
+        mm_dict['module'] = self.__module__
         mm_dict['class'] = self.__class__.__name__
         mm_dict['submembers'] = []
         mm_dict['state_space'] = self.state_space.to_nice_serialization()
         mm_dict['evotype'] = str(self.evotype)
+        mm_dict['model_parameter_indices'] = self._encodemx(self.gpindices_as_array())
+        mm_dict['relative_submember_parameter_indices'] = [list(map(int, _slct.to_array(inds)))
+                                                           for inds in self._submember_rpindices]
+        assert(self._paramlbls is None or isinstance(self._paramlbls, _np.ndarray))
+        mm_dict['parameter_labels'] = self._paramlbls.tolist() if (self._paramlbls is not None) else None
+        mm_dict['parameter_bounds'] = self._encodemx(self._param_bounds)
 
         # Dereference submembers
         for sm in self.submembers():
@@ -874,6 +877,18 @@ class ModelMember(ModelChild, _NicelySerializable):
         assert all([(sub_id in serial_memo) for sub_id in mm_dict['submembers']]), "Not all sub-members exist!"
 
     @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        """
+        For subclasses to implement.  Submember-existence checks are performed,
+        and the gpindices of the return value is set, by the non-underscored
+        :method:`from_memoized_dict` implemented in this class.
+        """
+        #E.g.:
+        # assert len(mm_dict['submembers']) == 0, 'ModelMember base class has no submembers'
+        # return cls(mm_dict['state_space'], mm_dict['evotype'])
+        raise NotImplementedError("Derived classes should implement this!")
+
+    @classmethod
     def from_memoized_dict(cls, mm_dict, serial_memo):
         """Deserialize a ModelMember object and relink submembers from a memo.
 
@@ -897,8 +912,21 @@ class ModelMember(ModelChild, _NicelySerializable):
         """
         cls._check_memoized_dict(mm_dict, serial_memo)
 
-        assert len(mm_dict['submembers']) == 0, 'ModelMember base class has no submembers'
-        return cls(mm_dict['state_space'], mm_dict['evotype'])
+        obj = cls._from_memoized_dict(mm_dict, serial_memo)
+
+        my_gpindices = _slct.list_to_slice(cls._decodemx(mm_dict['model_parameter_indices']), array_ok=True)
+        obj._set_only_my_gpindices(my_gpindices, parent=None)  # parent will get re-linked later (by Model)
+
+        obj._submember_rpindices = tuple([_slct.list_to_slice(inds)
+                                          for inds in mm_dict['relative_submember_parameter_indices']])
+        if mm_dict['parameter_labels'] is not None:
+            obj._paramlbls = _np.empty(len(mm_dict['parameter_labels']), dtype=object)
+            obj._paramlbls[:] = mm_dict['parameter_labels']  # 2-step init because otherwise we end up with a 2D array
+        else:
+            obj._paramlbls = None
+        obj._param_bounds = cls._decodemx(mm_dict['parameter_bounds'])
+
+        return obj
 
     def _copy_gpindices(self, op_obj, parent, memo):
         """ Helper function for implementing copy in derived classes """

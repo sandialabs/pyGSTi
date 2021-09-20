@@ -50,9 +50,12 @@ class TensorProductPOVM(_POVM):
             assert(state_space.dim == dim), "`state_space` is incompatible with the product of the factors' spaces!"
 
         # self.factorPOVMs
-        #  Copy each POVM and set it's parent and gpindices.
-        #  Assume each one's parameters are independent.
-        self.factorPOVMs = [povm.copy() for povm in factor_povms]
+        self.factorPOVMs = factor_povms
+
+        #REMOVE - no need to copy anymore
+        # #  Copy each POVM and set it's parent and gpindices.
+        # #  Assume each one's parameters are independent.
+        # self.factorPOVMs = [povm.copy() for povm in factor_povms]
 
         #off = 0 REMOVE
         for povm in self.factorPOVMs:
@@ -82,6 +85,14 @@ class TensorProductPOVM(_POVM):
 
         super(TensorProductPOVM, self).__init__(state_space, evotype, items)
         self.init_gpindices()  # initialize gpindices and subm_rpindices from sub-members
+
+    #Note: no to_memoized_dict needed, as ModelMember version does all we need.
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
+        factor_povms = [serial_memo[subm_serial_id] for subm_serial_id in mm_dict['submembers']]
+        return cls(factor_povms, mm_dict['evotype'], state_space)
 
     def submembers(self):
         """
@@ -180,7 +191,7 @@ class TensorProductPOVM(_POVM):
         #     povm.set_gpindices(_mm._compose_gpindices(self.gpindices,
         #                                               p.gpindices), self.parent)
         #     factorPOVMs_simplified.append(povm)
-        # 
+        #
         # # Create "simplified" effect vectors, which infer their parent and
         # # gpindices from the set of "factor-POVMs" they're constructed with.
         # # Currently simplify *all* the effects, creating those that haven't been yet (lazy creation)

@@ -12,7 +12,6 @@ Defines the TPPOVM class
 
 from pygsti.modelmembers.povms.basepovm import _BasePOVM
 from pygsti.modelmembers.povms.effect import POVMEffect as _POVMEffect
-from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 
 
 class TPPOVM(_BasePOVM):
@@ -55,55 +54,3 @@ class TPPOVM(_BasePOVM):
                         self[self.complement_label].to_dense().reshape((-1, 1))))
 
         return (TPPOVM, (effects, self.evotype, self.state_space), {'_gpindices': self._gpindices})
-
-    def to_memoized_dict(self, mmg_memo):
-        """Create a serializable dict with references to other objects in the memo.
-
-        Parameters
-        ----------
-        mmg_memo: dict
-            Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
-            are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
-            the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
-
-        Returns
-        -------
-        mm_dict: dict
-            A dict representation of this ModelMember ready for serialization
-            This must have at least the following fields:
-                module, class, submembers, params, state_space, evotype
-            Additional fields may be added by derived classes.
-        """
-        mm_dict = super().to_memoized_dict(mmg_memo)
-
-        mm_dict['effects'] = [(lbl, effect.to_memoized_dict({})) for lbl, effect in self.items()]  # TEMPORARY!!!!!!
-
-        return mm_dict
-
-    @classmethod
-    def from_memoized_dict(cls, mm_dict, serial_memo):
-        """Deserialize a ModelMember object and relink submembers from a memo.
-
-        Parameters
-        ----------
-        mm_dict: dict
-            A dict representation of this ModelMember ready for deserialization
-            This must have at least the following fields:
-                module, class, submembers, state_space, evotype
-
-        serial_memo: dict
-            Keys are serialize_ids and values are ModelMembers. This is NOT the same as
-            other memos in ModelMember, (e.g. copy(), allocate_gpindices(), etc.).
-            This is similar but not the same as mmg_memo in to_memoized_dict(),
-            as we do not need to build a ModelMemberGraph for deserialization.
-
-        Returns
-        -------
-        ModelMember
-            An initialized object
-        """
-        cls._check_memoized_dict(mm_dict, serial_memo)
-        state_space = _StateSpace.from_nice_serialization(mm_dict['state_space'])
-        effects = {lbl: _POVMEffect._state_class(effect).from_memoized_dict(effect, serial_memo)
-                   for lbl, effect in mm_dict['effects']}
-        return cls(effects, mm_dict['evotype'], state_space)

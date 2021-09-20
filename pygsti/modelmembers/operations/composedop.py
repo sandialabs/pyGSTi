@@ -111,6 +111,14 @@ class ComposedOp(_LinearOperator):
         self._rep.base[:, :] = mx
         self._rep.base.flags.writeable = False
 
+    #Note: no to_memoized_dict needed, as ModelMember version does all we need.
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
+        ops_to_compose = [serial_memo[i] for i in mm_dict['submembers']]
+        return cls(ops_to_compose, mm_dict['evotype'], state_space)
+
     def submembers(self):
         """
         Get the ModelMember-derived objects contained in this one.

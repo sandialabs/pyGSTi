@@ -15,6 +15,7 @@ from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOpe
 from pygsti.modelmembers import term as _term
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.baseobjs import statespace as _statespace
+from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
 from pygsti.tools import internalgates as _itgs
 
@@ -40,7 +41,7 @@ class StaticStandardOp(_LinearOperator):
     state_space : StateSpace, optional
         The state space for this operation.  If `None` a default state space
         with the appropriate number of qubits is used.
-    """    
+    """
     def __init__(self, name, basis='pp', evotype="default", state_space=None):
         self.name = name
 
@@ -50,6 +51,7 @@ class StaticStandardOp(_LinearOperator):
             raise ValueError("'%s' does not name a standard operation" % self.name)
         state_space = _statespace.default_space_for_udim(std_unitaries[name].shape[0]) if (state_space is None) \
             else _statespace.StateSpace.cast(state_space)
+        basis = _Basis.cast(basis, state_space.dim)  # basis for Hilbert-Schmidt (superop) space
 
         evotype = _Evotype.cast(evotype)
         rep = evotype.create_standard_rep(name, basis, state_space)
@@ -185,9 +187,15 @@ class StaticStandardOp(_LinearOperator):
         mm_dict = super().to_memoized_dict(mmg_memo)
 
         mm_dict['name'] = self.name
-        mm_dict['basis'] = self._rep.basis
+        mm_dict['basis'] = self._rep.basis.to_nice_serialization()
 
         return mm_dict
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        basis = _Basis.from_nice_serialization(mm_dict['basis'])
+        state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
+        return cls(mm_dict['name'], basis, mm_dict['evotype'], state_space)
 
     def __str__(self):
         s = "%s with name %s and evotype %s\n" % (self.__class__.__name__, self.name, self._evotype)

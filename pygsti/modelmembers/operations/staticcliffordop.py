@@ -16,6 +16,7 @@ from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOpe
 from pygsti.modelmembers import term as _term
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.baseobjs import statespace as _statespace
+from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
 
 
@@ -203,9 +204,19 @@ class StaticCliffordOp(_LinearOperator):
                 module, class, submembers, params, state_space, evotype
             Additional fields may be added by derived classes.
         """
+        U = self.unitary.to_dense() if isinstance(self.unitary, _LinearOperator) else self.unitary  # as in __init__
+
         mm_dict = super().to_memoized_dict(mmg_memo)
-
-        mm_dict['smatrix'] = self.smatrix().tolist()
-        mm_dict['svector'] = self.svector().tolist()
-
+        mm_dict['smatrix'] = self._encodemx(self.smatrix())
+        mm_dict['svector'] = self._encodemx(self.svector())
+        mm_dict['basis'] = self.basis._to_nice_serialization()
+        mm_dict['unitary_matrix'] = self._encodemx(U)
         return mm_dict
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        unitarymx = cls._decodemx(mm_dict['unitary_matrix'])
+        symplecticrep = (cls._decodemx(mm_dict['smatrix']), cls._decodemx(mm_dict['svector']))
+        basis = _Basis._from_nice_serialization(mm_dict['basis'])
+        state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
+        return cls(unitarymx, symplecticrep, basis, mm_dict['evotype'], state_space)

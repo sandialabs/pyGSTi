@@ -67,6 +67,34 @@ class ComplementPOVMEffect(_ConjugatedStatePOVMEffect):
         base1d.flags.writeable = False
         self._ptr_has_changed()
 
+    def to_memoized_dict(self, mmg_memo):
+        """Create a serializable dict with references to other objects in the memo.
+
+        Parameters
+        ----------
+        mmg_memo: dict
+            Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
+            are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
+            the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
+
+        Returns
+        -------
+        mm_dict: dict
+            A dict representation of this ModelMember ready for serialization
+            This must have at least the following fields:
+                module, class, submembers, params, state_space, evotype
+            Additional fields may be added by derived classes.
+        """
+        mm_dict = super().to_memoized_dict(mmg_memo)
+        mm_dict['identity_vector'] = self._encodemx(self.identity.to_dense())
+        return mm_dict
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        identity = cls._decodemx(mm_dict['identity_vector'])
+        other_effects = [serial_memo[i] for i in mm_dict['submembers']]
+        return cls(identity, other_effects)
+
     def submembers(self):
         """
         Get the ModelMember-derived objects contained in this one.

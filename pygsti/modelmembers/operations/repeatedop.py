@@ -275,10 +275,13 @@ class RepeatedOp(_LinearOperator):
             Additional fields may be added by derived classes.
         """
         mm_dict = super().to_memoized_dict(mmg_memo)
-
-        mm_dict['num_repetition'] = self.num_repetitions
-
+        mm_dict['num_repetitions'] = self.num_repetitions
         return mm_dict
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        repeated_op = serial_memo[mm_dict['submembers'][0]]
+        return cls(repeated_op, mm_dict['num_repetitions'], mm_dict['evotype'])
 
     def __str__(self):
         """ Return string representation """

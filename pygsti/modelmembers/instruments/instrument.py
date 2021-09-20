@@ -20,6 +20,7 @@ from pygsti.baseobjs import statespace as _statespace
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import slicetools as _slct
 from pygsti.baseobjs.label import Label as _Label
+from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 
 
 class Instrument(_mm.ModelMember, _collections.OrderedDict):
@@ -110,6 +111,37 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
         list
         """
         return list(self.values())
+
+    def to_memoized_dict(self, mmg_memo):
+        """Create a serializable dict with references to other objects in the memo.
+
+        Parameters
+        ----------
+        mmg_memo: dict
+            Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
+            are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
+            the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
+
+        Returns
+        -------
+        mm_dict: dict
+            A dict representation of this ModelMember ready for serialization
+            This must have at least the following fields:
+                module, class, submembers, params, state_space, evotype
+            Additional fields may be added by derived classes.
+        """
+        mm_dict = super().to_memoized_dict(mmg_memo)
+
+        mm_dict['member_labels'] = list(self.keys())  # labels of the submember effects
+
+        return mm_dict
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        state_space = _StateSpace.from_nice_serialization(mm_dict['state_space'])
+        members = [(lbl, serial_memo[subm_serial_id])
+                   for lbl, subm_serial_id in zip(mm_dict['member_labels'], mm_dict['submembers'])]
+        return cls(members, mm_dict['evotype'], state_space)
 
     #REMOVE
     #No good way to update Instrument on the fly yet...

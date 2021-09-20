@@ -334,6 +334,8 @@ class LocalNoiseModel(_ImplicitOpModel):
                     global_idle_layer_label = layer_rules.global_idle_layer_label = _Lbl('(auto_global_idle)')
                     self.operation_blks['layers'][_Lbl('(auto_global_idle)')] = global_idle
 
+        self._clean_paramvec()
+
     def create_processor_spec(self):
         import copy as _copy
         return _copy.deepcopy(self.processor_spec)    
@@ -349,7 +351,7 @@ class LocalNoiseModel(_ImplicitOpModel):
     @classmethod
     def _from_nice_serialization(cls, state):
         state_space = _statespace.StateSpace.from_nice_serialization(state['state_space'])
-        #basis = _from_memoized_dict(state['basis'])
+        #basis = _from_nice_serialization(state['basis'])
         modelmembers = _MMGraph.load_modelmembers_from_serialization_dict(state['modelmembers'])
         simulator = _FSim.from_nice_serialization(state['simulator'])
         layer_rules = _LayerRules.from_nice_serialization(state['layer_rules'])
@@ -363,13 +365,17 @@ class LocalNoiseModel(_ImplicitOpModel):
 
         flags = {'auto_embed': False, 'match_parent_statespace': False,
                  'match_parent_evotype': True, 'cast_to_type': None}
-        mdl.prep_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers['prep_blks|layers'])
-        mdl.povm_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers['povm_blks|layers'])
-        mdl.operation_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers['operation_blks|layers'])
-        mdl.operation_blks['gates'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers['operation_blks|gates'])
-        mdl.instrument_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers['instrument_blks|layers'])
-        mdl.factories['gates'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers['factories|gates'])
-        mdl.factories['layers'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers['factories|layers'])
+        mdl.prep_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers.get('prep_blks|layers', []))
+        mdl.povm_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers.get('povm_blks|layers', []))
+        mdl.operation_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags,
+                                                          modelmembers.get('operation_blks|layers', []))
+        mdl.operation_blks['gates'] = _OrderedMemberDict(mdl, None, None, flags,
+                                                         modelmembers.get('operation_blks|gates', []))
+        mdl.instrument_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags,
+                                                           modelmembers.get('instrument_blks|layers', []))
+        mdl.factories['gates'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers.get('factories|gates', []))
+        mdl.factories['layers'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers.get('factories|layers', []))
+        mdl._clean_paramvec()
 
         return mdl
 
@@ -390,15 +396,17 @@ class _SimpleCompLayerRules(_LayerRules):
 
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
-        state.update({'global_idle_layer_label': str(self.global_idle_layer_label),
+        state.update({'global_idle_layer_label': (str(self.global_idle_layer_label)
+                                                  if (self.global_idle_layer_label is not None) else None),
                       'implicit_idle_mode': self.implicit_idle_mode,
                       })
         return state
 
     @classmethod
     def _from_nice_serialization(cls, state):
-        from pygsti.circuits.circuitparser import parse_label as _parse_label
-        return cls(_parse_label(state['global_idle_layer_label']), state['implicit_idle_mode'])
+        global_idle_label = _parse_label(state['global_idle_layer_label']) \
+            if (state['global_idle_layer_label'] is not None) else None
+        return cls(global_idle_label, state['implicit_idle_mode'])
 
     def prep_layer_operator(self, model, layerlbl, caches):
         """

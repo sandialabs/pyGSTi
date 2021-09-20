@@ -90,6 +90,13 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         self._update_rep()  # updates self._rep
         #Done with __init__(...)
 
+    #Note: no to_memoized_dict needed, as ModelMember version does all we need.
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        errorgen = serial_memo[mm_dict['submembers'][0]]
+        return cls(errorgen)
+
     def submembers(self):
         """
         Get the ModelMember-derived objects contained in this one.
@@ -728,7 +735,8 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
             errgen_cls = self.errorgen.__class__
             #Note: this only really works for LindbladErrorGen objects now... make more general in FUTURE?
             truncate = SPAM_TRANSFORM_TRUNCATE  # can't just be 'True' since we need to throw errors when appropriate
-            param = _LindbladParameterization(self.errorgen.nonham_mode, self.errorgen.param_mode,
+            param = _LindbladParameterization(self.errorgen.parameterization.nonham_mode,
+                                              self.errorgen.parameterization.param_mode,
                                               len(self.errorgen.ham_basis) > 0, len(self.errorgen.other_basis) > 0)
             transformed_errgen = errgen_cls.from_operation_matrix(mx, param, self.errorgen.lindblad_basis,
                                                                   self.errorgen.matrix_basis, truncate,

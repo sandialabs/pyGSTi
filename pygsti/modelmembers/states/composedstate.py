@@ -392,6 +392,12 @@ class ComposedState(_State):  # , _ErrorMapContainer
         _ErrorMapContainer.__init__(self, self.error_map)
         self.init_gpindices()  # initialize our gpindices based on sub-members
 
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        error_map = serial_memo[mm_dict['submembers'][0]]
+        static_state = serial_memo[mm_dict['submembers'][1]]
+        return cls(static_state, error_map)
+
     def _update_rep(self):
         self._rep.reps_have_changed()
         #stateRep = self.state_vec._rep
@@ -406,7 +412,7 @@ class ComposedState(_State):  # , _ErrorMapContainer
         -------
         list
         """
-        return [self.error_map]
+        return [self.error_map, self.state_vec]
 
     # REMOVE - unnecessary
     #def copy(self, parent=None, memo=None):

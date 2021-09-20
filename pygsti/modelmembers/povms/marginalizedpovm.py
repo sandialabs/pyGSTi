@@ -85,6 +85,36 @@ class MarginalizedPOVM(_POVM):
         super(MarginalizedPOVM, self).__init__(self.povm_to_marginalize.state_space, self.povm_to_marginalize.evotype)
         self.init_gpindices()  # initialize gpindices and subm_rpindices from sub-members
 
+    def to_memoized_dict(self, mmg_memo):
+        """Create a serializable dict with references to other objects in the memo.
+
+        Parameters
+        ----------
+        mmg_memo: dict
+            Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
+            are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
+            the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
+
+        Returns
+        -------
+        mm_dict: dict
+            A dict representation of this ModelMember ready for serialization
+            This must have at least the following fields:
+                module, class, submembers, params, state_space, evotype
+            Additional fields may be added by derived classes.
+        """
+        mm_dict = super().to_memoized_dict(mmg_memo)
+
+        mm_dict['statespace_labels_to_marginalize'] = self.sslbls_to_marginalize
+        mm_dict['statespace_labels_after_marginalizing'] = self.sslbls_after_marginalizing
+
+        return mm_dict
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        return cls(serial_memo[mm_dict['submembrers'][0]], mm_dict['statespace_labels_to_marginalize'],
+                   mm_dict['statespace_labels_after_marginalizing'])
+
     def submembers(self):
         """
         Get the ModelMember-derived objects contained in this one.
@@ -143,8 +173,11 @@ class MarginalizedPOVM(_POVM):
     def __getitem__(self, key):
         """ For lazy creation of effect vectors """
         if _collections.OrderedDict.__contains__(self, key):
-            return _collections.OrderedDict.__getitem__(self, key)
-        elif key in self:  # calls __contains__ to efficiently check for membership
+            ret = _collections.OrderedDict.__getitem__(self, key)
+            if ret.parent is self.parent:  # check for "stale" cached effect vector, and
+                return ret  # ensure we return an effect for our parent!
+
+        if key in self:  # calls __contains__ to efficiently check for membership
             #create effect vector now that it's been requested (lazy creation)
             #FUTURE: maybe have a "SumPOVMEffect" that can add spamvecs to preserve paramterization and avoid dense reps
             effect_vec = None  # Note: currently all marginalized POVMs are *static*, since

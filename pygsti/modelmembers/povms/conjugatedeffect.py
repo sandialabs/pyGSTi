@@ -364,69 +364,15 @@ class ConjugatedStatePOVMEffect(DenseEffectInterface, _POVMEffect):
 
         return (effect_terms, ret[1]) if return_coeff_polys else effect_terms
 
-    def to_memoized_dict(self, mmg_memo):
-        """Create a serializable dict with references to other objects in the memo.
-
-        Parameters
-        ----------
-        mmg_memo: dict
-            Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
-            are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
-            the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
-
-        Returns
-        -------
-        mm_dict: dict
-            A dict representation of this ModelMember ready for serialization
-            This must have at least the following fields:
-                module, class, submembers, params, state_space, evotype
-            Additional fields may be added by derived classes.
-        """
-
-        #TEMPORARY HACK - for now, we manually serialize this objects submembers (just
-        # the conjugated state) first, since this to_memoized_dict is called manually from
-        # a POVM's to_memoized_dict.  Once POVM effects are "submembers" this should be
-        # done automatically.
-        from pygsti.modelmembers.modelmembergraph import MMGNode as _MMGNode
-        mmg_memo[id(self.state)] = _MMGNode(self.state, {})
-
-        mm_dict = super().to_memoized_dict(mmg_memo)
-
-        mm_dict['conjugated_state'] = self.state.to_memoized_dict({})  # TEMPORARY!!!!!!!!
-
-        return mm_dict
+    #Note: no to_memoized_dict needed, as ModelMember version does all we need.
 
     @classmethod
-    def from_memoized_dict(cls, mm_dict, serial_memo):
-        """Deserialize a ModelMember object and relink submembers from a memo.
-
-        Parameters
-        ----------
-        mm_dict: dict
-            A dict representation of this ModelMember ready for deserialization
-            This must have at least the following fields:
-                module, class, submembers, state_space, evotype
-
-        serial_memo: dict
-            Keys are serialize_ids and values are ModelMembers. This is NOT the same as
-            other memos in ModelMember, (e.g. copy(), allocate_gpindices(), etc.).
-            This is similar but not the same as mmg_memo in to_memoized_dict(),
-            as we do not need to build a ModelMemberGraph for deserialization.
-
-        Returns
-        -------
-        ModelMember
-            An initialized object
-        """
-        from pygsti.modelmembers.states import State as _State
-        serial_memo_hack = serial_memo.copy()
-        serial_memo_hack[0] = None  # HACK to behave as if the submember were loaded
-        cls._check_memoized_dict(mm_dict, serial_memo_hack)
-
-        #Special init that circumvents derived class __init__ method to set state
-        # (works when derived class just holds a conjugated state and nothing else)
-        ret = cls.__new__(cls)
-        state_class = _State._state_class(mm_dict['conjugated_state'])
-        state = state_class.from_memoized_dict(mm_dict['conjugated_state'], serial_memo)
-        ConjugatedStatePOVMEffect.__init__(ret, state)  # just call our init function
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        # This method is meant to function for derived classes whose __init__
+        # methods just construct a specific type of state and pass this to
+        # ConjugatedStatePOVMEffect.__init__ (and don't add any other attributes).
+        # This includes FullPOVMEffect, FullPOVMPureEffect, etc.  As such, we need
+        # to construct the object is a more complex way:
+        ret = cls.__new__(cls)  # create a new object of the correct type
+        ConjugatedStatePOVMEffect.__init__(ret, serial_memo[mm_dict['submembers'][0]])  # init via this class's __init__
         return ret

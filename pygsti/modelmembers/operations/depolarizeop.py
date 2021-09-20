@@ -109,7 +109,8 @@ class DepolarizeOp(_StochasticNoiseOp):
     #        A copy of this object.
     #    """
     #    if memo is not None and id(self) in memo: return memo[id(self)]
-    #    copyOfMe = DepolarizeOp(self.state_space, self.basis, self._evotype, self._params_to_rates(self.to_vector())[0])
+    #    copyOfMe = DepolarizeOp(self.state_space, self.basis, self._evotype,
+    #                            self._params_to_rates(self.to_vector())[0])
     #    return self._copy_gpindices(copyOfMe, parent, memo)
 
     def to_memoized_dict(self, mmg_memo):
@@ -139,29 +140,7 @@ class DepolarizeOp(_StochasticNoiseOp):
         return mm_dict
 
     @classmethod
-    def from_memoized_dict(cls, mm_dict, serial_memo):
-        """Deserialize a ModelMember object and relink submembers from a memo.
-
-        Parameters
-        ----------
-        mm_dict: dict
-            A dict representation of this ModelMember ready for deserialization
-            This must have at least the following fields:
-                module, class, submembers, state_space, evotype
-
-        serial_memo: dict
-            Keys are serialize_ids and values are ModelMembers. This is NOT the same as
-            other memos in ModelMember, (e.g. copy(), allocate_gpindices(), etc.).
-            This is similar but not the same as mmg_memo in to_memoized_dict(),
-            as we do not need to build a ModelMemberGraph for deserialization.
-
-        Returns
-        -------
-        ModelMember
-            An initialized object
-        """
-        cls._check_memoized_dict(mm_dict, serial_memo)
-
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
         state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
         basis = _Basis.from_nice_serialization(mm_dict['basis'])
         return cls(state_space, basis, mm_dict['evotype'], mm_dict['strength'], seed_or_state=None)

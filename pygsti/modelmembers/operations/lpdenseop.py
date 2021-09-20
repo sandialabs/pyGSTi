@@ -14,6 +14,7 @@ import numpy as _np
 
 from pygsti.modelmembers.operations.denseop import DenseOperator as _DenseOperator
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
+from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from pygsti.tools import matrixtools as _mt
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
@@ -116,7 +117,7 @@ class LinearlyParamArbitraryOp(_DenseOperator):
         #complex, even if passed all real base matrix
 
         elementExpressions = {}
-        for p, ij_tuples in list(parameter_to_base_indices_map.items()):
+        for p, ij_tuples in parameter_to_base_indices_map.items():
             for i, j in ij_tuples:
                 assert((i, j) not in elementExpressions)  # only one parameter allowed per base index pair
                 elementExpressions[(i, j)] = [LinearlyParameterizedElementTerm(1.0, [p])]
@@ -161,6 +162,54 @@ class LinearlyParamArbitraryOp(_DenseOperator):
         self._ptr.flags.writeable = True
         self._ptr[:, :] = matrix
         self._ptr.flags.writeable = False
+
+    def to_memoized_dict(self, mmg_memo):
+        """Create a serializable dict with references to other objects in the memo.
+
+        Parameters
+        ----------
+        mmg_memo: dict
+            Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
+            are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
+            the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
+
+        Returns
+        -------
+        mm_dict: dict
+            A dict representation of this ModelMember ready for serialization
+            This must have at least the following fields:
+                module, class, submembers, params, state_space, evotype
+            Additional fields may be added by derived classes.
+        """
+        # build mapping for constructor, which has integer keys so ok for serialization
+        param_to_base_indices_map = {}
+        for (i, j), term in self.elementExpressions:
+            assert(len(term.paramIndices) == 1)
+            p = term.paramIndices[0]
+            if p not in param_to_base_indices_map:
+                param_to_base_indices_map[p] = []
+            param_to_base_indices_map[p].append((i, j))
+
+        mm_dict = super().to_memoized_dict(mmg_memo)  # includes 'dense_matrix' from DenseOperator
+        mm_dict['base_matrix'] = self._encodemx(self.baseMatrix)
+        mm_dict['parameter_array'] = self._encodemx(self.parameterArray)
+        mm_dict['parameter_to_base_indices_map'] = param_to_base_indices_map
+        mm_dict['left_transform'] = self._encodemx(self.leftTrans)
+        mm_dict['right_transform'] = self._encodemx(self.rightTrans)
+        mm_dict['enforce_real'] = self.enforceReal
+
+        return mm_dict
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        base_matrix = cls._decodemx(mm_dict['base_matrix'])
+        parameter_array = cls._decodemx(mm_dict['parameter_array'])
+        left_transform = cls._decodemx(mm_dict['left_transform'])
+        right_transform = cls._decodemx(mm_dict['right_transform'])
+        state_space = _StateSpace.from_nice_serialization(mm_dict['state_space'])
+
+        return cls(base_matrix, parameter_array, mm_dict['parameter_to_base_indices_map'],
+                   left_transform, right_transform, mm_dict['enforce_real'], mm_dict['evotype'], state_space)
 
     @property
     def num_params(self):

@@ -304,19 +304,24 @@ class NicelySerializable(object):
 
     @classmethod
     def _encodemx(cls, mx):
-        if _sps.issparse(mx):
+        if mx is None:
+            return None
+        elif _sps.issparse(mx):
             csr_mx = _sps.csr_matrix(mx)  # convert to CSR and save in this format
             return {'sparse_matrix_type': 'csr',
                     'data': cls._encodemx(csr_mx.data), 'indices': cls._encodemx(csr_mx.indices),
                     'indptr': cls._encodemx(csr_mx.indptr), 'shape': csr_mx.shape}
         else:
-            enc = str if _np.iscomplexobj(mx) else (lambda x: x)
+            enc = str if _np.iscomplexobj(mx) else \
+                ((lambda x: int(x)) if (mx.dtype == _np.int64) else (lambda x: x))
             encoded = _np.array([enc(x) for x in mx.flat])
             return encoded.reshape(mx.shape).tolist()
 
     @classmethod
     def _decodemx(cls, mx):
-        if isinstance(mx, dict):  # then a sparse mx
+        if mx is None:
+            decoded = None
+        elif isinstance(mx, dict):  # then a sparse mx
             assert (mx['sparse_matrix_type'] == 'csr')
             data = cls._decodemx(mx['data'])
             indices = cls._decodemx(mx['indices'])

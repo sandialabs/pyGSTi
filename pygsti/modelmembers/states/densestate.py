@@ -228,33 +228,13 @@ class DenseState(DenseStateInterface, _State):
         """
         mm_dict = super().to_memoized_dict(mmg_memo)
 
-        mm_dict['dense_superket_vector'] = self.to_dense().tolist()
+        mm_dict['dense_superket_vector'] = self._encodemx(self.to_dense())
+
         return mm_dict
 
     @classmethod
-    def from_memoized_dict(cls, mm_dict, serial_memo):
-        """Deserialize a ModelMember object and relink submembers from a memo.
-
-        Parameters
-        ----------
-        mm_dict: dict
-            A dict representation of this ModelMember ready for deserialization
-            This must have at least the following fields:
-                module, class, submembers, state_space, evotype
-
-        serial_memo: dict
-            Keys are serialize_ids and values are ModelMembers. This is NOT the same as
-            other memos in ModelMember, (e.g. copy(), allocate_gpindices(), etc.).
-            This is similar but not the same as mmg_memo in to_memoized_dict(),
-            as we do not need to build a ModelMemberGraph for deserialization.
-
-        Returns
-        -------
-        ModelMember
-            An initialized object
-        """
-        cls._check_memoized_dict(mm_dict, serial_memo)
-        vec = _np.array(mm_dict['dense_superket_vector'])
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        vec = cls._decodemx(mm_dict['dense_superket_vector'])
         state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
         return cls(vec, mm_dict['evotype'], state_space)
 
@@ -349,28 +329,7 @@ class DensePureState(DenseStateInterface, _State):
         return mm_dict
 
     @classmethod
-    def from_memoized_dict(cls, mm_dict, serial_memo):
-        """Deserialize a ModelMember object and relink submembers from a memo.
-
-        Parameters
-        ----------
-        mm_dict: dict
-            A dict representation of this ModelMember ready for deserialization
-            This must have at least the following fields:
-                module, class, submembers, state_space, evotype
-
-        serial_memo: dict
-            Keys are serialize_ids and values are ModelMembers. This is NOT the same as
-            other memos in ModelMember, (e.g. copy(), allocate_gpindices(), etc.).
-            This is similar but not the same as mmg_memo in to_memoized_dict(),
-            as we do not need to build a ModelMemberGraph for deserialization.
-
-        Returns
-        -------
-        ModelMember
-            An initialized object
-        """
-        cls._check_memoized_dict(mm_dict, serial_memo)
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
         vec = _np.array(mm_dict['dense_state_vector'])
         state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
         basis = _Basis.from_nice_serialization(mm_dict['basis'])

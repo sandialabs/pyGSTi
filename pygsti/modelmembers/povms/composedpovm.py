@@ -106,6 +106,37 @@ class ComposedPOVM(_POVM):
         _POVM.__init__(self, state_space, evotype, items)
         self.init_gpindices()  # initialize gpindices and subm_rpindices from sub-members
 
+    def to_memoized_dict(self, mmg_memo):
+        """Create a serializable dict with references to other objects in the memo.
+
+        Parameters
+        ----------
+        mmg_memo: dict
+            Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
+            are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
+            the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
+
+        Returns
+        -------
+        mm_dict: dict
+            A dict representation of this ModelMember ready for serialization
+            This must have at least the following fields:
+                module, class, submembers, params, state_space, evotype
+            Additional fields may be added by derived classes.
+        """
+        mm_dict = super().to_memoized_dict(mmg_memo)
+
+        mm_dict['matrix_basis'] = self.matrix_basis.to_nice_serialization()
+
+        return mm_dict
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        errormap = serial_memo[mm_dict['submembers'][0]]
+        base_povm = serial_memo[mm_dict['submembers'][1]] if len(mm_dict['submembers']) > 1 else None
+        mx_basis = _Basis.from_nice_serialization(mm_dict['matrix_basis'])
+        return cls(errormap, base_povm, mx_basis)
+
     def __contains__(self, key):
         """ For lazy creation of effect vectors """
         return bool(key in self.base_povm)
@@ -140,8 +171,11 @@ class ComposedPOVM(_POVM):
     def __getitem__(self, key):
         """ For lazy creation of effect vectors """
         if _collections.OrderedDict.__contains__(self, key):
-            return _collections.OrderedDict.__getitem__(self, key)
-        elif key in self:  # calls __contains__ to efficiently check for membership
+            ret = _collections.OrderedDict.__getitem__(self, key)
+            if ret.parent is self.parent:  # check for "stale" cached effect vector, and
+                return ret  # ensure we return an effect for our parent!
+
+        if key in self:  # calls __contains__ to efficiently check for membership
             #create effect vector now that it's been requested (lazy creation)
             pureVec = self.base_povm[key]
             effect = _ComposedPOVMEffect(pureVec, self.error_map)
@@ -205,7 +239,7 @@ class ComposedPOVM(_POVM):
         -------
         list
         """
-        return [self.error_map]
+        return [self.error_map, self.base_povm] if (self.base_povm is not None) else [self.error_map]
 
     #REMOVE - should be unnecessary as ModelMember base class does this
     #def relink_parent(self, parent):  # Unnecessary?
@@ -285,6 +319,7 @@ class ComposedPOVM(_POVM):
         # Create "simplified" effect vectors, which infer their parent and
         # gpindices from the set of "factor-POVMs" they're constructed with.
         if prefix: prefix += "_"
+
         simplified = _collections.OrderedDict(
             [(prefix + k, self[k]) for k in self.keys()])
         return simplified
