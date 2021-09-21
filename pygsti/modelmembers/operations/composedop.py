@@ -20,6 +20,7 @@ from pygsti.modelmembers import modelmember as _modelmember, term as _term
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.baseobjs.basis import ExplicitBasis as _ExplicitBasis
+from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel
 from pygsti.tools import listtools as _lt
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import slicetools as _slct
@@ -859,7 +860,8 @@ class ComposedOp(_LinearOperator):
         -------
         None
         """
-        values_to_set = lindblad_term_dict.copy()  # so we can remove elements as we set them
+        sslbls = self.state_space.tensor_product_block_labels(0)
+        values_to_set = {_GlobalElementaryErrorgenLabel.cast(k, sslbls): v for k, v in lindblad_term_dict.items()}
 
         for op in self.factorops:
             try:

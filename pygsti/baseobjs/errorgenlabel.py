@@ -83,6 +83,10 @@ class GlobalElementaryErrorgenLabel(ElementaryErrorgenLabel):
                 global_bels.append(''.join([local_bel[i] for i in nonidentity_indices]))
 
             return cls(obj.errorgen_type, global_bels, [sslbls[i] for i in nonidentity_indices])
+        elif isinstance(obj, (str, tuple, list)):
+            # TODO: maybe allow a convenient global format in future, e.g. "HXX:Q0,Q1"
+            # that we would need to distinguish here
+            return cls.cast(LocalElementaryErrorgenLabel.cast(obj), sslbls, identity_label)
         else:
             raise ValueError("Cannot convert %s to a global elementary errorgen label!" % str(obj))
 
