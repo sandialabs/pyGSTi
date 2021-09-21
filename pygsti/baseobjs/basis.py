@@ -248,7 +248,11 @@ class Basis(_NicelySerializable):
                             TensorProdBasis([BuiltinBasis(name, factorDim, sparse) for factorDim in tpbDim]))
                     else:
                         tpbBases.append(BuiltinBasis(name, tpbDim, sparse))
-                return DirectSumBasis(tpbBases)
+
+                if len(tpbBases) == 1:
+                    return tpbBases[0]
+                else:
+                    return DirectSumBasis(tpbBases)
             else:
                 return BuiltinBasis(name, dim, sparse)
         elif isinstance(name_or_basis_or_matrices, (list, tuple, _np.ndarray)):

@@ -150,12 +150,11 @@ class BasisTester(BaseCase):
         pp3 = basis.Basis.cast('pp', [(4, 4)])
         self.assertTrue(isinstance(pp1, basis.BuiltinBasis))
         self.assertTrue(isinstance(pp2, basis.DirectSumBasis))
-        self.assertTrue(isinstance(pp3, basis.DirectSumBasis))
+        self.assertTrue(isinstance(pp3, basis.TensorProdBasis))
         self.assertTrue(isinstance(pp2.component_bases[0], basis.BuiltinBasis))
         self.assertTrue(isinstance(pp2.component_bases[1], basis.BuiltinBasis))
-        self.assertTrue(isinstance(pp3.component_bases[0], basis.TensorProdBasis))
-        self.assertTrue(isinstance(pp3.component_bases[0].component_bases[0], basis.BuiltinBasis))
-        self.assertTrue(isinstance(pp3.component_bases[0].component_bases[1], basis.BuiltinBasis))
+        self.assertTrue(isinstance(pp3.component_bases[0], basis.BuiltinBasis))
+        self.assertTrue(isinstance(pp3.component_bases[1], basis.BuiltinBasis))
 
     def test_tensorprod_basis(self):
         pp1 = basis.Basis.cast('pp', 4)  # 1Q

@@ -199,17 +199,13 @@ def nonham_lindbladian(Lm, Ln, sparse=False):  # noqa N803
     else:
         lindbladian = _np.empty((d**2, d**2), dtype=Lm.dtype)
 
-#    print("BEGIN VERBOSE") #DEBUG!!!
     for i, rho0 in enumerate(basis_matrices('std', d**2)):  # rho0 == input density mx
         rho1 = _mt.safe_dot(Ln, _mt.safe_dot(rho0, Lm_dag)) - 0.5 * (
             _mt.safe_dot(rho0, _mt.safe_dot(Lm_dag, Ln)) + _mt.safe_dot(_mt.safe_dot(Lm_dag, Ln), rho0))
         rho1 *= d
-#        print("rho0[%d] = \n" % i,rho0)
-#        print("rho1[%d] = \n" % i,rho1)
+        # print("rho0[%d] = \n" % i,rho0)
+        # print("rho1[%d] = \n" % i,rho1)
         lindbladian[:, i] = rho1.flatten()[:, None] if sparse else rho1.flatten()
-        # vectorize rho1 & set as linbladian column
-#    print("FINAL = \n",lindbladian)
-#    print("END VERBOSE\n")
 
     if sparse: lindbladian = lindbladian.tocsr()
     return lindbladian

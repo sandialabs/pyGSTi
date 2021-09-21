@@ -11,9 +11,10 @@ The StaticArbitraryOp class and supporting functionality.
 #***************************************************************************************************
 
 from pygsti.modelmembers.operations.denseop import DenseOperator as _DenseOperator
+from pygsti.modelmembers.errorgencontainer import NoErrorGeneratorInterface as _NoErrorGeneratorInterface
 
 
-class StaticArbitraryOp(_DenseOperator):
+class StaticArbitraryOp(_DenseOperator, _NoErrorGeneratorInterface):
     """
     An operation matrix that is completely fixed, or "static" (i.e. that posesses no parameters).
 

@@ -413,6 +413,103 @@ class StateSpace(_NicelySerializable):
         assert(len(labels) == 0), "One or more elements of `labels` is not a valid label for this state space!"
         return ExplicitStateSpace(sub_tpb_labels, sub_tpb_udims, sub_tpb_types)
 
+    def intersection(self, other_state_space):
+        """
+        Create a state space whose labels are the intersection of the labels of this space and one other.
+
+        Dimensions associated with the labels are preserved, as is the ordering of tensor product blocks.
+        If the two spaces have the same label, but their dimensions or indices do not agree, an
+        error is raised.
+
+        Parameters
+        ----------
+        other_state_space : StateSpace
+            The other state space.
+
+        Returns
+        -------
+        StateSpace
+        """
+        ret_tpb_labels = []
+        ret_tpb_udims = []
+        ret_tpb_types = []
+
+        for iTPB, (lbls, udims, typs) in enumerate(zip(self.tensor_product_blocks_labels,
+                                                       self.tensor_product_blocks_udimensions,
+                                                       self.tensor_product_blocks_types)):
+            ret_lbls = []; ret_udims = []; ret_types = []
+            for lbl, udim, typ in zip(lbls, udims, typs):
+                if other_state_space.contains_label(lbl):
+                    other_iTPB = other_state_space.label_tensor_product_block_index(lbl)
+                    other_udim = other_state_space.label_udimension(lbl)
+                    other_typ = other_state_space.label_type(lbl)
+                    if other_iTPB != iTPB or other_udim != udim or other_typ != typ:
+                        raise ValueError(("Cannot take state space union: repeated label '%s' has inconsistent index,"
+                                          " dim, or type!") % str(lbl))
+                    ret_lbls.append(lbl)
+                    ret_udims.append(udim)
+                    ret_types.append(typ)
+
+            if len(ret_lbls) > 0:
+                ret_tpb_labels.append(ret_lbls)
+                ret_tpb_udims.append(ret_udims)
+                ret_tpb_types.append(ret_types)
+
+        return ExplicitStateSpace(ret_tpb_labels, ret_tpb_udims, ret_tpb_types)
+
+    def union(self, other_state_space):
+        """
+        Create a state space whose labels are the union of the labels of this space and one other.
+
+        Dimensions associated with the labels are preserved, as is the tensor product block index.
+        If the two spaces have the same label, but their dimensions or indices do not agree, an
+        error is raised.
+
+        Parameters
+        ----------
+        other_state_space : StateSpace
+            The other state space.
+
+        Returns
+        -------
+        StateSpace
+        """
+        ret_tpb_labels = []
+        ret_tpb_udims = []
+        ret_tpb_types = []
+
+        # Step 1: add all of the labels of `self`, checking that overlaps are consistent as we go:
+        for iTPB, (lbls, udims, typs) in enumerate(zip(self.tensor_product_blocks_labels,
+                                                       self.tensor_product_blocks_udimensions,
+                                                       self.tensor_product_blocks_types)):
+            ret_lbls = []; ret_udims = []; ret_types = []
+            for lbl, udim, typ in zip(lbls, udims, typs):
+                if other_state_space.contains_label(lbl):
+                    other_iTPB = other_state_space.label_tensor_product_block_index(lbl)
+                    other_udim = other_state_space.label_udimension(lbl)
+                    other_typ = other_state_space.label_type(lbl)
+                    if other_iTPB != iTPB or other_udim != udim or other_typ != typ:
+                        raise ValueError(("Cannot take state space union: repeated label '%s' has inconsistent index,"
+                                          " dim, or type!") % str(lbl))
+                ret_lbls.append(lbl)
+                ret_udims.append(udim)
+                ret_types.append(typ)
+            ret_tpb_labels.append(ret_lbls)
+            ret_tpb_udims.append(ret_udims)
+            ret_tpb_types.append(ret_types)
+
+        # Step 2: add any non-overlapping labels from other_state_space
+        for iTPB, (lbls, udims, typs) in enumerate(zip(other_state_space.tensor_product_blocks_labels,
+                                                       other_state_space.tensor_product_blocks_udimensions,
+                                                       other_state_space.tensor_product_blocks_types)):
+            for lbl, udim, typ in zip(lbls, udims, typs):
+                if not self.contains_label(lbl):
+                    ret_tpb_labels[iTPB].append(lbl)
+                    ret_tpb_udims[iTPB].append(udim)
+                    ret_tpb_types[iTPB].append(typ)
+
+        return ExplicitStateSpace(ret_tpb_labels, ret_tpb_udims, ret_tpb_types)
+
     def create_stencil_subspace(self, labels):
         """
         Create a template sub-`StateSpace` object from a set of potentially stencil-type labels.

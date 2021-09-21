@@ -37,7 +37,7 @@ def pauli_frame_randomize_unitary(theta1, theta2, theta3, net_pauli, recomp_paul
     if recomp_pauli == 1 or recomp_pauli == 2:  # if x or y
         theta1 = -theta1 + _np.pi
         theta2 = theta2 + _np.pi
-    if recomp_pauli ==2 or recomp_pauli ==3:  # if y or z
+    if recomp_pauli == 2 or recomp_pauli == 3:  # if y or z
         theta1 = theta1 + _np.pi
 
     #make everything between -pi and pi.

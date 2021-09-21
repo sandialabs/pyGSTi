@@ -10,7 +10,7 @@ The ComposedErrorgen class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-
+import itertools as _itertools
 import collections as _collections
 
 import numpy as _np
@@ -183,6 +183,18 @@ class ComposedErrorgen(_LinearOperator):
         else:
             return Ltermdict
 
+    def coefficient_labels(self):
+        """
+        The elementary error-generator labels corresponding to the elements of :method:`coefficients_array`.
+
+        Returns
+        -------
+        tuple
+            A tuple of (<type>, <basisEl1> [,<basisEl2]) elements identifying the elementary error
+            generators of this gate.
+        """
+        return tuple(_itertools.chain(*[eg.coefficient_labels() for eg in self.factors]))
+
     def coefficients_array(self):
         """
         The weighted coefficients of this error generator in terms of "standard" error generators.
@@ -251,7 +263,7 @@ class ComposedErrorgen(_LinearOperator):
         """
         return self.coefficients(return_basis=False, logscale_nonham=True)
 
-    def set_coefficients(self, lindblad_term_dict, action="update", logscale_nonham=False):
+    def set_coefficients(self, lindblad_term_dict, action="update", logscale_nonham=False, truncate=True):
         """
         Sets the coefficients of terms in this error generator.
 
@@ -283,6 +295,12 @@ class ComposedErrorgen(_LinearOperator):
             the corresponding value given in `lindblad_term_dict`.  This is what is
             performed by the function :method:`set_error_rates`.
 
+        truncate : bool, optional
+            Whether to truncate the projections onto the Lindblad terms in
+            order to meet constraints (e.g. to preserve CPTP) when necessary.
+            If False, then an error is thrown when the given coefficients
+            cannot be parameterized as specified.
+
         Returns
         -------
         None
@@ -305,7 +323,7 @@ class ComposedErrorgen(_LinearOperator):
 
         #Set the L-term coefficients of each factor separately
         for d, eg in zip(perfactor_Ltermdicts, self.factors):
-            eg.set_coefficients(d, action, logscale_nonham)
+            eg.set_coefficients(d, action, logscale_nonham, truncate)
 
     def set_error_rates(self, lindblad_term_dict, action="update"):
         """

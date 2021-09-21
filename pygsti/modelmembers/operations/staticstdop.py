@@ -12,6 +12,7 @@ The StaticStandardOp class and supporting functionality.
 import numpy as _np
 
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
+from pygsti.modelmembers.errorgencontainer import NoErrorGeneratorInterface as _NoErrorGeneratorInterface
 from pygsti.modelmembers import term as _term
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.baseobjs import statespace as _statespace
@@ -20,7 +21,7 @@ from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
 from pygsti.tools import internalgates as _itgs
 
 
-class StaticStandardOp(_LinearOperator):
+class StaticStandardOp(_LinearOperator, _NoErrorGeneratorInterface):
     """
     An operation that is completely fixed, or "static" (i.e. that posesses no parameters)
     that can be constructed from "standard" gate names (as defined in pygsti.tools.internalgates).

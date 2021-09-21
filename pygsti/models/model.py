@@ -467,6 +467,7 @@ class OpModel(Model):
         self._need_to_rebuild = True  # whether we call _rebuild_paramvec() in to_vector() or num_params()
         self.dirty = False  # indicates when objects and _paramvec may be out of sync
         self.sim = simulator  # property setter does nontrivial initialization (do this *last*)
+        self._param_interposer = None
         self._reinit_opcaches()
 
     def __setstate__(self, state_dict):
@@ -643,16 +644,17 @@ class OpModel(Model):
 
         if self.dirty:  # if any member object is dirty (ModelMember.dirty setter should set this value)
             TOL = 1e-8
+            ops_paramvec = self._model_paramvec_to_ops_paramvec(self._paramvec)
 
             #Note: lbl args used *just* for potential debugging - could strip out once
             # we're confident this code always works.
             def clean_single_obj(obj, lbl):  # sync an object's to_vector result w/_paramvec
                 if obj.dirty:
                     w = obj.to_vector()
-                    chk_norm = _np.linalg.norm(self._paramvec[obj.gpindices] - w)
+                    chk_norm = _np.linalg.norm(ops_paramvec[obj.gpindices] - w)
                     #print(lbl, " is dirty! vec = ", w, "  chk_norm = ",chk_norm)
                     if (not _np.isfinite(chk_norm)) or chk_norm > TOL:
-                        self._paramvec[obj.gpindices] = w
+                        ops_paramvec[obj.gpindices] = w
                     obj.dirty = False
 
             def clean_obj(obj, lbl):  # recursive so works with objects that have sub-members
@@ -665,11 +667,12 @@ class OpModel(Model):
 
             #re-update everything to ensure consistency ~ self.from_vector(self._paramvec)
             #print("DEBUG: non-trivially CLEANED paramvec due to dirty elements")
-            for lbl, obj in self._iter_parameterized_objs():
-                obj.from_vector(self._paramvec[obj.gpindices], dirty_value=False)
+            for _, obj in self._iter_parameterized_objs():
+                obj.from_vector(ops_paramvec[obj.gpindices], dirty_value=False)
                 #object is known to be consistent with _paramvec
 
             self.dirty = False
+            self._paramvec[:] = self._ops_paramvec_to_model_paramvec(ops_paramvec)
             self._reinit_opcaches()  # changes to parameter vector structure invalidate cached ops
 
         if OpModel._pcheck: self._check_paramvec()
@@ -862,10 +865,14 @@ class OpModel(Model):
         """ Resizes self._paramvec and updates gpindices & parent members as needed,
             and will initialize new elements of _paramvec, but does NOT change
             existing elements of _paramvec (use _update_paramvec for this)"""
-        v = self._paramvec; Np = len(self._paramvec)  # NOT self.num_params since the latter calls us!
-        vl = self._paramlbls
-        vb = self._param_bounds if (self._param_bounds is not None) else _default_param_bounds(Np)
-        #off = Np; shift = 0
+        w = self._model_paramvec_to_ops_paramvec(self._paramvec)
+        Np = len(w)  # NOT self.num_params since the latter calls us!
+        wl = self._paramlbls
+        wb = self._param_bounds if (self._param_bounds is not None) else _default_param_bounds(Np)
+        #NOTE: interposer doesn't quite work with parameter bounds yet, as we need to convert "model"
+        # bounds to "ops" bounds like we do the parameter vector.  Need something like:
+        #wb = self._model_parambouds_to_ops_parambounds(self._param_bounds) \
+        #    if (self._param_bounds is not None) else _default_param_bounds(Np)
         debug = False
         if debug: print("DEBUG: rebuilding model %s..." % str(id(self)))
 
@@ -883,7 +890,7 @@ class OpModel(Model):
         for lbl, obj in self._iter_parameterized_objs():
 
             completely_allocated = is_allocated[lbl]
-            if debug: print("Processing: ",lbl, " gpindices=", obj.gpindices, " allocated = ", completely_allocated)
+            if debug: print("Processing: ", lbl, " gpindices=", obj.gpindices, " allocated = ", completely_allocated)
 
             #REMOVE
             #if shift > 0: and obj.parent is self and obj.gpindices is not None:  # already allocated indices
@@ -902,9 +909,9 @@ class OpModel(Model):
                     # If so, before allocating anything, make the necessary space in the parameter arrays:
                     for _, o in self._iter_parameterized_objs():
                         o.shift_gpindices(insertion_point, num_new_params, self)
-                    v = _np.insert(v, insertion_point, _np.empty(num_new_params, 'd'))
-                    vl = _np.insert(vl, insertion_point, _np.empty(num_new_params, dtype=object))
-                    vb = _np.insert(vb, insertion_point, _default_param_bounds(num_new_params), axis=0)
+                    w = _np.insert(w, insertion_point, _np.empty(num_new_params, 'd'))
+                    wl = _np.insert(wl, insertion_point, _np.empty(num_new_params, dtype=object))
+                    wb = _np.insert(wb, insertion_point, _default_param_bounds(num_new_params), axis=0)
 
                 # Now allocate (actually updates obj's gpindices).  May be necessary even if
                 # num_new_params == 0 (e.g. a composed op needs to have it's gpindices updated bc
@@ -920,6 +927,7 @@ class OpModel(Model):
                 newly_added_indices = slice(insertion_point, insertion_point + num_added_params) \
                     if num_added_params > 0 else None  # for updating parameter labels below
 
+                #REMOVE
                 # print("objvec len = ",len(objvec), "num_new_params=",num_new_params,
                 #       " gpinds=",obj.gpindices) #," loc=",new_local_inds)
 
@@ -933,41 +941,30 @@ class OpModel(Model):
                 #      % (str(lbl),obj.num_params), obj.gpindices, " off=",off)
             else:
                 inds = obj.gpindices_as_array()
-                M = max(inds) if len(inds) > 0 else -1; L = len(v)
-                if debug: print("DEBUG: %s: existing indices = " % (str(lbl)), obj.gpindices, " M=",M," L=",L)
+                M = max(inds) if len(inds) > 0 else -1; L = len(w)
+                if debug: print("DEBUG: %s: existing indices = " % (str(lbl)), obj.gpindices, " M=", M, " L=", L)
                 if M >= L:
                     #Some indices specified by obj are absent, and must be created.
-                    #w = obj.to_vector()
-                    #wl = _np.empty(obj.num_params, dtype=object)
-                    #wl[:] = [(lbl, obj_plbl) for obj_plbl in obj.parameter_labels]
-                    #wb = obj.parameter_bounds if (obj.parameter_bounds is not None) \
-                    #    else _default_param_bounds(len(w))
 
                     #set newly_added_indices to the indices for *obj* that have just been added
-                    added_indices = slice(len(v), len(v) + (M + 1 - L))
+                    added_indices = slice(len(w), len(w) + (M + 1 - L))
                     if isinstance(obj.gpindices, slice):
                         newly_added_indices = _slct.intersect(added_indices, obj.gpindices)
                     else:
                         newly_added_indices = inds[_np.logical_and(inds >= added_indices.start,
                                                                    inds < added_indices.stop)]
 
-                    v = _np.concatenate((v, _np.empty(M + 1 - L, 'd')), axis=0)  # [v.resize(M+1) doesn't work]
-                    vl = _np.concatenate((vl, _np.empty(M + 1 - L, dtype=object)), axis=0)
-                    vb = _np.concatenate((vb, _np.empty((M + 1 - L, 2), 'd')), axis=0)
-                    #shift += M + 1 - L  # OLD EGN doesn't think we want to shift anything here
-                    #for ii, i in enumerate(inds):
-                    #    if i >= L:
-                    #        v[i] = w[ii]
-                    #        vl[i] = wl[ii]
-                    #        vb[i, :] = wb[ii, :]  # needed, givn vb sync below?
-                    if debug: print("DEBUG:    --> added %d new params" % (M+1-L))
+                    w = _np.concatenate((w, _np.empty(M + 1 - L, 'd')), axis=0)  # [v.resize(M+1) doesn't work]
+                    wl = _np.concatenate((wl, _np.empty(M + 1 - L, dtype=object)), axis=0)
+                    wb = _np.concatenate((wb, _np.empty((M + 1 - L, 2), 'd')), axis=0)
+                    if debug: print("DEBUG:    --> added %d new params" % (M + 1 - L))
                 else:
                     newly_added_indices = None
                 #if M >= 0:  # M == -1 signifies this object has no parameters, so we'll just leave `off` alone
                 #    off = M + 1
 
             #Update max_index_processed_so_far
-            max_gpindex = (obj.gpindices.stop - 1) if isinstance(obj.gpindices, slice) else max(obj.gpindices)            
+            max_gpindex = (obj.gpindices.stop - 1) if isinstance(obj.gpindices, slice) else max(obj.gpindices)
             max_index_processed_so_far = max(max_index_processed_so_far, max_gpindex)
 
             # Update parameter values / labels / bounds.
@@ -975,13 +972,13 @@ class OpModel(Model):
             # - we *always* sync object parameter bounds in case any have changed (when bounds on members are
             #   set/modified, model should be marked for rebuilding)
             # - we only update *new* parameter labels, since we want any modified labels in the model to "stick"
-            v[obj.gpindices] = obj.to_vector()
-            vb[obj.gpindices, :] = obj.parameter_bounds if (obj.parameter_bounds is not None) \
+            w[obj.gpindices] = obj.to_vector()
+            wb[obj.gpindices, :] = obj.parameter_bounds if (obj.parameter_bounds is not None) \
                 else _default_param_bounds(obj.num_params)
             if newly_added_indices is not None:
-                wl = _np.empty(obj.num_params, dtype=object)
-                wl[:] = [(lbl, obj_plbl) for obj_plbl in obj.parameter_labels]
-                vl[newly_added_indices] = wl[_gm._decompose_gpindices(obj.gpindices, newly_added_indices)]
+                obj_paramlbls = _np.empty(obj.num_params, dtype=object)
+                obj_paramlbls[:] = [(lbl, obj_plbl) for obj_plbl in obj.parameter_labels]
+                wl[newly_added_indices] = obj_paramlbls[_gm._decompose_gpindices(obj.gpindices, newly_added_indices)]
 
         #Step 2: remove any unused indices from paramvec and shift accordingly
         used_gpindices = set()
@@ -1005,20 +1002,20 @@ class OpModel(Model):
             #    assert(obj.parent is self or obj.parent is None)
             #    #Note: ok for objects to have parent == None and gpindices == None
 
-        Np = len(v)  # reset Np from possible new params (NOT self.num_params since the latter calls us!)
+        Np = len(w)  # reset Np from possible new params (NOT self.num_params since the latter calls us!)
         indices_to_remove = sorted(set(range(Np)) - used_gpindices)
-        if debug: print("Indices to remove = ",indices_to_remove, " of ",Np)
+        if debug: print("Indices to remove = ", indices_to_remove, " of ", Np)
 
         if len(indices_to_remove) > 0:
             #if debug: print("DEBUG: Removing %d params:"  % len(indices_to_remove), indices_to_remove)
-            v = _np.delete(v, indices_to_remove)
-            vl = _np.delete(vl, indices_to_remove)
-            vb = _np.delete(vb, indices_to_remove, axis=0)
+            w = _np.delete(w, indices_to_remove)
+            wl = _np.delete(wl, indices_to_remove)
+            wb = _np.delete(wb, indices_to_remove, axis=0)
             def get_shift(j): return _bisect.bisect_left(indices_to_remove, j)
             memo = set()  # keep track of which object's gpindices have been set
             for _, obj in self._iter_parameterized_objs():
-                #REMOVE if obj.gpindices is not None and obj.parent is self:  # object is allocated to this model and should be shifted
-                assert(obj.gpindices is not None and obj.parent is self)  # object is allocated to this model and should be shifted
+                # ensure object is allocated to this model and thus should be shifted:
+                assert(obj.gpindices is not None and obj.parent is self)
                 if id(obj) in memo: continue  # already processed
                 if isinstance(obj.gpindices, slice):
                     new_inds = _slct.shift(obj.gpindices,
@@ -1030,10 +1027,10 @@ class OpModel(Model):
                     new_inds = _np.array(new_inds, _np.int64)
                 obj.set_gpindices(new_inds, self, memo)
 
-        self._paramvec = v
-        self._paramlbls = vl
-        self._param_bounds = vb if _param_bounds_are_nontrivial(vb) else None
-        if debug: print("DEBUG: Done rebuild: %d params" % len(v))
+        self._paramvec = self._ops_paramvec_to_model_paramvec(w)
+        self._paramlbls = self._ops_paramlbls_to_model_paramlbls(wl)
+        self._param_bounds = wb if _param_bounds_are_nontrivial(wb) else None
+        if debug: print("DEBUG: Done rebuild: %d op params" % len(w))
 
     def _init_virtual_obj(self, obj):
         """
@@ -1095,16 +1092,42 @@ class OpModel(Model):
         assert(len(v) == self.num_params)
 
         self._paramvec = v.copy()
+        w = self._model_paramvec_to_ops_paramvec(v)
         for _, obj in self._iter_parameterized_objs():
-            obj.from_vector(v[obj.gpindices], close, dirty_value=False)
+            obj.from_vector(w[obj.gpindices], close, dirty_value=False)
             # dirty_value=False => obj.dirty = False b/c object is known to be consistent with _paramvec
 
         # Call from_vector on elements of the cache
         for opcache in self._opcaches.values():
             for obj in opcache.values():
-                obj.from_vector(v[obj.gpindices], close, dirty_value=False)
+                obj.from_vector(w[obj.gpindices], close, dirty_value=False)
 
         if OpModel._pcheck: self._check_paramvec()
+
+    @property
+    def param_interposer(self):
+        return self._param_interposer
+
+    @param_interposer.setter
+    def param_interposer(self, interposer):
+        if self._param_interposer is not None:  # remove existing interposer
+            self._paramvec = self._model_paramvec_to_ops_paramvec(self._paramvec)
+        self._param_interposer = interposer
+        if interposer is not None:  # add new interposer
+            self._clean_paramvec()
+            self._paramvec = self._ops_paramvec_to_model_paramvec(self._paramvec)
+
+    def _model_paramvec_to_ops_paramvec(self, v):
+        return self.param_interposer.model_paramvec_to_ops_paramvec(v) \
+            if (self.param_interposer is not None) else v
+
+    def _ops_paramvec_to_model_paramvec(self, w):
+        return self.param_interposer.ops_paramvec_to_model_paramvec(w) \
+            if (self.param_interposer is not None) else w
+
+    def _ops_paramlbls_to_model_paramlbls(self, w):
+        return self.param_interposer.ops_paramlbls_to_model_paramlbls(w) \
+            if (self.param_interposer is not None) else w
 
     def circuit_outcomes(self, circuit):
         """
@@ -1591,7 +1614,7 @@ class OpModel(Model):
         ret = Model.copy(self)
         if OpModel._pcheck: ret._check_paramvec()
         return ret
-    
+
     def create_modelmember_graph(self):
         """
         Generate a ModelMemberGraph for the model.
@@ -1608,7 +1631,6 @@ class OpModel(Model):
 #    def _from_dir_partial(self, state, memo):
 #        #HERE
 #        pass
-
 
 
 def _default_param_bounds(num_params):

@@ -600,28 +600,31 @@ class EmbeddedOp(_LinearOperator):
             A Basis mapping the basis labels used in the
             keys of `lindblad_term_dict` to basis matrices.
         """
-        #*** Note: this function is nearly identitcal to EmbeddedErrorgen.coefficients() ***
-        embedded_coeffs = self.embedded_op.errorgen_coefficients(return_basis, logscale_nonham)
-        embedded_Ltermdict = _collections.OrderedDict()
+        #*** Note: this function is nearly identical to EmbeddedErrorgen.coefficients() ***
+        return self.embedded_op.errorgen_coefficients(return_basis, logscale_nonham)
 
-        if return_basis:
-            # embed basis
-            Ltermdict, basis = embedded_coeffs
-            embedded_basis = _EmbeddedBasis(basis, self.state_space, self.target_labels)
-            bel_map = {lbl: embedded_lbl for lbl, embedded_lbl in zip(basis.labels, embedded_basis.labels)}
-
-            #go through and embed Ltermdict labels
-            for k, val in Ltermdict.items():
-                embedded_key = (k[0],) + tuple([bel_map[x] for x in k[1:]])
-                embedded_Ltermdict[embedded_key] = val
-            return embedded_Ltermdict, embedded_basis
-        else:
-            #go through and embed Ltermdict labels
-            Ltermdict = embedded_coeffs
-            for k, val in Ltermdict.items():
-                embedded_key = (k[0],) + tuple([_EmbeddedBasis.embed_label(x, self.target_labels) for x in k[1:]])
-                embedded_Ltermdict[embedded_key] = val
-            return embedded_Ltermdict
+        #REMOVE: no need to embed/unembed labels anymore - now labels are *global*
+        #embedded_coeffs = self.embedded_op.errorgen_coefficients(return_basis, logscale_nonham)
+        #embedded_Ltermdict = _collections.OrderedDict()
+        #
+        #if return_basis:
+        #    # embed basis
+        #    Ltermdict, basis = embedded_coeffs
+        #    embedded_basis = _EmbeddedBasis(basis, self.state_space, self.target_labels)
+        #    bel_map = {lbl: embedded_lbl for lbl, embedded_lbl in zip(basis.labels, embedded_basis.labels)}
+        #
+        #    #go through and embed Ltermdict labels
+        #    for k, val in Ltermdict.items():
+        #        embedded_key = (k[0],) + tuple([bel_map[x] for x in k[1:]])
+        #        embedded_Ltermdict[embedded_key] = val
+        #    return embedded_Ltermdict, embedded_basis
+        #else:
+        #    #go through and embed Ltermdict labels
+        #    Ltermdict = embedded_coeffs
+        #    for k, val in Ltermdict.items():
+        #        embedded_key = (k[0],) + tuple([_EmbeddedBasis.embed_label(x, self.target_labels) for x in k[1:]])
+        #        embedded_Ltermdict[embedded_key] = val
+        #    return embedded_Ltermdict
 
     def errorgen_coefficients_array(self):
         """
@@ -689,7 +692,7 @@ class EmbeddedOp(_LinearOperator):
         """
         return self.errorgen_coefficients(return_basis=False, logscale_nonham=True)
 
-    def set_errorgen_coefficients(self, lindblad_term_dict, action="update", logscale_nonham=False):
+    def set_errorgen_coefficients(self, lindblad_term_dict, action="update", logscale_nonham=False, truncate=True):
         """
         Sets the coefficients of terms in the error generator of this operation.
 
@@ -721,16 +724,25 @@ class EmbeddedOp(_LinearOperator):
             the corresponding value given in `lindblad_term_dict`.  This is what is
             performed by the function :method:`set_error_rates`.
 
+        truncate : bool, optional
+            Whether to allow adjustment of the errogen coefficients in
+            order to meet constraints (e.g. to preserve CPTP) when necessary.
+            If False, then an error is thrown when the given coefficients
+            cannot be set as specified.
+
         Returns
         -------
         None
         """
-        #go through and um-embed Ltermdict labels
-        unembedded_Ltermdict = _collections.OrderedDict()
-        for k, val in lindblad_term_dict.items():
-            unembedded_key = (k[0],) + tuple([_EmbeddedBasis.unembed_label(x, self.target_labels) for x in k[1:]])
-            unembedded_Ltermdict[unembedded_key] = val
-        self.embedded_op.set_errorgen_coefficients(unembedded_Ltermdict, action, logscale_nonham)
+        self.embedded_op.set_errorgen_coefficients(lindblad_term_dict, action, logscale_nonham, truncate)
+
+        #REMOVE: no need to embed/unembed labels anymore - now labels are *global*
+        ##go through and um-embed Ltermdict labels
+        #unembedded_Ltermdict = _collections.OrderedDict()
+        #for k, val in lindblad_term_dict.items():
+        #    unembedded_key = (k[0],) + tuple([_EmbeddedBasis.unembed_label(x, self.target_labels) for x in k[1:]])
+        #    unembedded_Ltermdict[unembedded_key] = val
+        #self.embedded_op.set_errorgen_coefficients(unembedded_Ltermdict, action, logscale_nonham, truncate)
 
         if self._rep_type == 'dense': self._update_denserep()
         self.dirty = True

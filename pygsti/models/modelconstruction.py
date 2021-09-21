@@ -1174,7 +1174,7 @@ def _setup_local_gates(processor_spec, evotype, modelnoise=None, custom_gates=No
         else:  # a factory, given by the unitary-valued function U: args -> unitary
             ideal_factory = ideal_factories.get(name, None)
             if ideal_factory is None:
-                local_state_space = _statespace.default_space_for_udim(U(None).shape[0]) # OR possibly U.udim in future
+                local_state_space = _statespace.default_space_for_udim(U(None).shape[0])  # OR possibly U.udim in future
                 ideal_factory = _opfactory.UnitaryOpFactory(U, local_state_space, 'pp', evotype)
                 ideal_factories[name] = ideal_factory
             noiseop = modelnoise.create_errormap(key, evotype, ideal_factory.state_space, target_labels=None)
@@ -1308,7 +1308,7 @@ def create_crosstalk_free_model(processor_spec, custom_gates=None,
     ideal_spam_type : str or tuple, optional
         Similar to `ideal_gate_type` but for SPAM elements (state preparations
         and POVMs).
-    
+
     implicit_idle_mode : {'none', 'add_global'}
         The way idel operations are added implicitly within the created model. `"none"`
         doesn't add any "extra" idle operations when there is a layer that contains some

@@ -118,7 +118,7 @@ class ForwardSimulator(_NicelySerializable):
         self._model = val
         try:
             evotype = None if val is None else self._model.evotype
-            self._set_evotype(evotype)  # alert the class of the evotype (allows loading evotype-specific calc fns)
+            self._set_evotype(evotype)  # alert the class: new evotype! (allows loading evotype-specific calc functions)
         except AttributeError:
             pass  # not all models have an evotype (OK)
 
