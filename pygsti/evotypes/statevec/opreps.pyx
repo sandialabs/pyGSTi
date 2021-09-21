@@ -48,24 +48,24 @@ cdef class OpRep(_basereps_cython.OpRep):
 
     def acton(self, StateRep state not None):
         cdef StateRep out_state = StateRepDensePure(_np.empty(self.c_rep._dim, dtype=_np.complex128),
-                                                    state.basis, self.state_space)
+                                                    self.state_space, state.basis)
         self.c_rep.acton(state.c_state, out_state.c_state)
         return out_state
 
     def adjoint_acton(self, StateRep state not None):
         cdef StateRep out_state = StateRepDensePure(_np.empty(self.c_rep._dim, dtype=_np.complex128),
-                                                    state.basis, self.state_space)
+                                                    self.state_space, state.basis)
         self.c_rep.adjoint_acton(state.c_state, out_state.c_state)
         return out_state
 
     def aslinearoperator(self):
         def mv(v):
             if v.ndim == 2 and v.shape[1] == 1: v = v[:,0]
-            in_state = StateRepDensePure(_np.ascontiguousarray(v, _np.complex128), None, self.state_space)
+            in_state = StateRepDensePure(_np.ascontiguousarray(v, _np.complex128), self.state_space, None)
             return self.acton(in_state).to_dense('Hilbert')
         def rmv(v):
             if v.ndim == 2 and v.shape[1] == 1: v = v[:,0]
-            in_state = StateRepDensePure(_np.ascontiguousarray(v, _np.complex128), None, self.state_space)
+            in_state = StateRepDensePure(_np.ascontiguousarray(v, _np.complex128), self.state_space, None)
             return self.adjoint_acton(in_state).to_dense('Hilbert')
         dim = self.c_rep._dim
         return LinearOperator((dim,dim), matvec=mv, rmatvec=rmv, dtype=_np.complex128)
