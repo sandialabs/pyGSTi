@@ -84,6 +84,7 @@ class EmbeddedPureState(_State):
 
         #Create representation
         #_State.__init__(self, rep, evotype)
+        #self.init_gpindices()  # initialize our gpindices based on sub-members
 
     def to_dense(self, on_space='minimal', scratch=None):
         """

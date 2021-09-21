@@ -1,8 +1,6 @@
 """
 Protocol object
 """
-import collections as _collections
-import copy as _copy
 # ***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -11,6 +9,9 @@ import copy as _copy
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 # ***************************************************************************************************
+import collections as _collections
+import copy as _copy
+import numpy as _np
 import itertools as _itertools
 import pathlib as _pathlib
 
@@ -203,7 +204,7 @@ class MultiPassProtocol(Protocol):
         if name is None: name = protocol.name + "_multipass"
         super().__init__(name)
         self.protocol = protocol
-        self.auxfile_types['protocol'] = 'protocolobj'
+        self.auxfile_types['protocol'] = 'dir-serialized-object'
 
     def run(self, data, memlimit=None, comm=None):
         """
@@ -644,10 +645,11 @@ class ExperimentDesign(_TreeNode):
         # 'text-circuit-list' - a text circuit list file
         # 'json' - a json file
         # 'pickle' - a python pickle file (use only if really needed!)
-        typ = 'pickle' if isinstance(self.all_circuits_needing_data, _circuits.CircuitList) else 'text-circuit-list'
+        typ = 'serialized-object' if isinstance(self.all_circuits_needing_data, _circuits.CircuitList) \
+            else 'text-circuit-list'
         self.auxfile_types = {'all_circuits_needing_data': typ,
                               'alt_actual_circuits_executed': 'text-circuit-list',
-                              'default_protocols': 'dict-of-protocolobjs'}
+                              'default_protocols': 'dict:dir-serialized-object'}
 
         # because TreeNode takes care of its own serialization:
         self.auxfile_types.update({'_dirs': 'none', '_vals': 'none', '_loaded_from': 'none'})
@@ -1047,8 +1049,8 @@ class CircuitListsDesign(ExperimentDesign):
         self.nested = nested
 
         super().__init__(all_circuits, qubit_labels)
-        self.auxfile_types['circuit_lists'] = 'pickle' \
-            if any([isinstance(lst, _circuits.CircuitList) for lst in circuit_lists]) else 'text-circuit-lists'
+        self.auxfile_types['circuit_lists'] = 'list:serialized-object' \
+            if any([isinstance(lst, _circuits.CircuitList) for lst in circuit_lists]) else 'list:text-circuit-list'
 
     def truncate_to_lists(self, list_indices_to_keep):
         """
@@ -1366,27 +1368,29 @@ class SimultaneousExperimentDesign(ExperimentDesign):
             #Build tensor product of circuits
             tensored_circuits = []
             circuits_per_edesign = [des.all_circuits_needing_data[:] for des in edesigns]
-
+            
             #Pad shorter lists with None values
             maxLen = max(map(len, circuits_per_edesign))
             for lst in circuits_per_edesign:
                 if len(lst) < maxLen: lst.extend([None] * (maxLen - len(lst)))
 
-            def pad(subcs):
+            def pad(subcs, actually_padded_mask):
                 maxLen = max([len(c) if (c is not None) else 0 for c in subcs])
                 padded = []
-                for c in subcs:
+                for i, c in enumerate(subcs):
                     if c is not None and len(c) < maxLen:
                         padded.append(c.insert_idling_layers(None, maxLen - len(c)))
+                        actually_padded_mask[i] = True
                     else:
                         padded.append(c)
                 assert(all([len(c) == maxLen for c in padded if c is not None]))
                 return padded
 
+            actually_padded_msk = _np.zeros(len(edesigns), dtype=bool)
             padded_circuit_lists = [list() for des in edesigns]
             for subcircuits in zip(*circuits_per_edesign):
                 c = _circuits.Circuit(num_lines=0, editable=True)  # Creates a empty circuit over no wires
-                padded_subcircuits = pad(subcircuits)
+                padded_subcircuits = pad(subcircuits, actually_padded_msk)  # updates actually_padded array
                 for subc in padded_subcircuits:
                     if subc is not None:
                         c.tensor_circuit_inplace(subc)
@@ -1396,8 +1400,11 @@ class SimultaneousExperimentDesign(ExperimentDesign):
                 for lst, subc in zip(padded_circuit_lists, padded_subcircuits):
                     if subc is not None: lst.append(subc)
 
-            for des, padded_circuits in zip(edesigns, padded_circuit_lists):
-                des.set_actual_circuits_executed(padded_circuits)
+            for i, (padded_circuits, actually_padded) in enumerate(zip(padded_circuit_lists, actually_padded_msk)):
+                if actually_padded:
+                    des = _copy.deepcopy(edesigns[i])  # since we're setting actual circuits executed.
+                    des.set_actual_circuits_executed(padded_circuits)
+                    edesigns[i] = des  # update edesigns list with copy
 
         sub_designs = {des.qubit_labels: des for des in edesigns}
         sub_design_dirs = {qlbls: '_'.join(map(str, qlbls)) for qlbls in sub_designs}
@@ -1962,7 +1969,7 @@ class ProtocolResults(object):
         self.name = protocol_instance.name  # just for convenience in JSON dir
         self.protocol = protocol_instance
         self.data = data
-        self.auxfile_types = {'data': 'none', 'protocol': 'protocolobj'}
+        self.auxfile_types = {'data': 'none', 'protocol': 'dir-serialized-object'}
 
     def write(self, dirname=None, data_already_written=False):
         """
@@ -2156,7 +2163,7 @@ class MultiPassResults(ProtocolResults):
         super().__init__(data, protocol_instance)
 
         self.passes = _collections.OrderedDict()  # _NamedDict('Pass', 'category') - to_nameddict takes care of this
-        self.auxfile_types['passes'] = 'dict-of-resultsobjs'
+        self.auxfile_types['passes'] = 'dict:partialdir-serialized-object'
 
     def to_nameddict(self):
         """
@@ -2325,6 +2332,27 @@ class ProtocolResultsDir(_TreeNode):
             children = children.copy()
 
         super().__init__(self.data.edesign._dirs, children)
+
+    def _create_childval(self, key):  # (this is how children are created on-demand)
+        """ Create the value for `key` on demand. """
+        if self.data.edesign._loaded_from and key in self._dirs:
+            dirname = _pathlib.Path(self.data.edesign._loaded_from)
+            subdir = self._dirs[key]
+            subobj_dir = dirname / subdir
+
+            if subobj_dir.exists():
+                submeta_dir = subobj_dir / 'results'
+                if submeta_dir.exists() and (submeta_dir / 'meta.json').exists():
+                    # then use this metadata to determine the results-dir object type
+                    classobj = _io.metadir._cls_from_meta_json(submeta_dir)
+                else:
+                    # otherwise just make the sub-resultsdir object the same type as this one
+                    classobj = self.__class__
+                return classobj.from_dir(subobj_dir, parent=self, name=key, preloaded_data=self.data[key])
+            else:
+                raise ValueError("Expected directory: '%s' doesn't exist!" % str(subobj_dir))
+        else:
+            raise KeyError("Invalid key: %s" % str(key))
 
     def write(self, dirname=None, parent=None):
         """

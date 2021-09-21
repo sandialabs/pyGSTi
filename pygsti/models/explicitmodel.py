@@ -24,13 +24,16 @@ from pygsti.models.memberdict import OrderedMemberDict as _OrderedMemberDict
 from pygsti.models.layerrules import LayerRules as _LayerRules
 from pygsti.models.modelparaminterposer import LinearInterposer as _LinearInterposer
 from pygsti.models.fogistore import FirstOrderGaugeInvariantStore as _FOGIStore
+from pygsti.forwardsims.forwardsim import ForwardSimulator as _FSim
 from pygsti.forwardsims import matrixforwardsim as _matrixfwdsim
 from pygsti.modelmembers import instruments as _instrument
 from pygsti.modelmembers import operations as _op
 from pygsti.modelmembers import povms as _povm
 from pygsti.modelmembers import states as _state
+from pygsti.modelmembers.modelmembergraph import ModelMemberGraph as _MMGraph
 from pygsti.modelmembers.operations import opfactory as _opfactory
-from pygsti.baseobjs.basis import BuiltinBasis as _BuiltinBasis, DirectSumBasis as _DirectSumBasis, Basis as _Basis
+from pygsti.baseobjs.basis import Basis as _Basis
+from pygsti.baseobjs.basis import BuiltinBasis as _BuiltinBasis, DirectSumBasis as _DirectSumBasis
 from pygsti.baseobjs.label import Label as _Label, CircuitLabel as _CircuitLabel
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.tools import basistools as _bt
@@ -407,6 +410,8 @@ class ExplicitOpModel(_mdl.OpModel):
             self.default_gauge_group = _gg.UnitaryGaugeGroup(self.state_space, basis, self.evotype)
         else:  # typ in ('static','H+S','S', 'H+S terms', ...)
             self.default_gauge_group = _gg.TrivialGaugeGroup(self.state_space)
+
+        self._clean_paramvec()  # param indices were probabaly updated
 
     def __setstate__(self, state_dict):
 
@@ -1498,6 +1503,56 @@ class ExplicitOpModel(_mdl.OpModel):
 
         return _QubitProcessorSpec(nqubits, list(gate_unitaries.keys()), gate_unitaries, availability,
                                    qubit_labels=qubit_labels)
+    
+    def create_modelmember_graph(self):
+        return _MMGraph({
+            'preps': self.preps,
+            'povms': self.povms,
+            'operations': self.operations,
+            'instruments': self.instruments,
+            'factories': self.factories,
+        })
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'basis': self.basis.to_nice_serialization(),
+                      'default_gate_type': self.operations.default_param,
+                      'default_prep_type': self.preps.default_param,
+                      'default_povm_type': self.povms.default_param,
+                      'default_instrument_type': self.instruments.default_param,
+                      'prep_prefix': self.preps._prefix,
+                      'effect_prefix': self.effects_prefix,
+                      'gate_prefix': self.operations._prefix,
+                      'povm_prefix': self.povms._prefix,
+                      'instrument_prefix': self.instruments._prefix,
+                      'evotype': str(self.evotype),  # TODO or serialize?
+                      'simulator': self.sim.to_nice_serialization(),  # TODO --- forwardsim needs to be serializable ----------------------------
+                      })
+
+        mmgraph = self.create_modelmember_graph()
+        state['modelmembers'] = mmgraph.create_serialization_dict()
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        state_space = _statespace.StateSpace.from_nice_serialization(state['state_space'])
+        basis = _Basis.from_nice_serialization(state['basis'])
+        modelmembers = _MMGraph.load_modelmembers_from_serialization_dict(state['modelmembers'])
+        simulator = _FSim. from_nice_serialization(state['simulator'])
+
+        mdl = cls(state_space, basis, state['default_gate_type'],
+                  state['default_prep_type'], state['default_povm_type'],
+                  state['default_instrument_type'], state['prep_prefix'], state['effect_prefix'],
+                  state['gate_prefix'], state['povm_prefix'], state['instrument_prefix'],
+                  simulator, state['evotype'])
+
+        mdl.preps.update(modelmembers.get('preps', {}))
+        mdl.povms.update(modelmembers.get('povms', {}))
+        mdl.operations.update(modelmembers.get('operations', {}))
+        mdl.instruments.update(modelmembers.get('instruments', {}))
+        mdl.factories.update(modelmembers.get('factories', {}))
+        mdl._clean_paramvec()
+        return mdl
 
     def errorgen_coefficients(self, normalized_elem_gens=True):
         """TODO: docstring - returns a nested dict containing all the error generator coefficients for all

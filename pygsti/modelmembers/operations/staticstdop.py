@@ -16,6 +16,7 @@ from pygsti.modelmembers.errorgencontainer import NoErrorGeneratorInterface as _
 from pygsti.modelmembers import term as _term
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.baseobjs import statespace as _statespace
+from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
 from pygsti.tools import internalgates as _itgs
 
@@ -51,6 +52,7 @@ class StaticStandardOp(_LinearOperator, _NoErrorGeneratorInterface):
             raise ValueError("'%s' does not name a standard operation" % self.name)
         state_space = _statespace.default_space_for_udim(std_unitaries[name].shape[0]) if (state_space is None) \
             else _statespace.StateSpace.cast(state_space)
+        basis = _Basis.cast(basis, state_space.dim)  # basis for Hilbert-Schmidt (superop) space
 
         evotype = _Evotype.cast(evotype)
         rep = evotype.create_standard_rep(name, basis, state_space)
@@ -164,6 +166,37 @@ class StaticStandardOp(_LinearOperator, _NoErrorGeneratorInterface):
             An array of length self.num_params
         """
         return _np.empty((0,), 'd')
+
+    def to_memoized_dict(self, mmg_memo):
+        """Create a serializable dict with references to other objects in the memo.
+
+        Parameters
+        ----------
+        mmg_memo: dict
+            Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
+            are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
+            the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
+
+        Returns
+        -------
+        mm_dict: dict
+            A dict representation of this ModelMember ready for serialization
+            This must have at least the following fields:
+                module, class, submembers, params, state_space, evotype
+            Additional fields may be added by derived classes.
+        """
+        mm_dict = super().to_memoized_dict(mmg_memo)
+
+        mm_dict['name'] = self.name
+        mm_dict['basis'] = self._rep.basis.to_nice_serialization()
+
+        return mm_dict
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        basis = _Basis.from_nice_serialization(mm_dict['basis'])
+        state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
+        return cls(mm_dict['name'], basis, mm_dict['evotype'], state_space)
 
     def __str__(self):
         s = "%s with name %s and evotype %s\n" % (self.__class__.__name__, self.name, self._evotype)

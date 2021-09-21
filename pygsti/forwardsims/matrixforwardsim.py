@@ -924,6 +924,18 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         super().__init__(model, num_atoms, processor_grid, param_blk_sizes)
         self._mode = "distribute_by_timestamp" if distribute_by_timestamp else "time_independent"
 
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'mode': self._mode,
+                      # (don't serialize parent model or processor distribution info)
+                      })
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        #Note: resets processor-distribution information
+        return cls(None, state['mode'] == "distribute_by_timestamp")
+
     def copy(self):
         """
         Return a shallow copy of this MatrixForwardSimulator

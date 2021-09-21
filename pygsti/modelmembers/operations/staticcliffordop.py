@@ -17,6 +17,7 @@ from pygsti.modelmembers.errorgencontainer import NoErrorGeneratorInterface as _
 from pygsti.modelmembers import term as _term
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.baseobjs import statespace as _statespace
+from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
 
 
@@ -185,3 +186,38 @@ class StaticCliffordOp(_LinearOperator, _NoErrorGeneratorInterface):
         numpy.ndarray
         """
         return self._rep.to_dense(on_space)  # both types of possible reps implement 'to_dense'
+
+    def to_memoized_dict(self, mmg_memo):
+        """Create a serializable dict with references to other objects in the memo.
+
+        Parameters
+        ----------
+        mmg_memo: dict
+            Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
+            are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
+            the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
+
+        Returns
+        -------
+        mm_dict: dict
+            A dict representation of this ModelMember ready for serialization
+            This must have at least the following fields:
+                module, class, submembers, params, state_space, evotype
+            Additional fields may be added by derived classes.
+        """
+        U = self.unitary.to_dense() if isinstance(self.unitary, _LinearOperator) else self.unitary  # as in __init__
+
+        mm_dict = super().to_memoized_dict(mmg_memo)
+        mm_dict['smatrix'] = self._encodemx(self.smatrix())
+        mm_dict['svector'] = self._encodemx(self.svector())
+        mm_dict['basis'] = self.basis._to_nice_serialization()
+        mm_dict['unitary_matrix'] = self._encodemx(U)
+        return mm_dict
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        unitarymx = cls._decodemx(mm_dict['unitary_matrix'])
+        symplecticrep = (cls._decodemx(mm_dict['smatrix']), cls._decodemx(mm_dict['svector']))
+        basis = _Basis._from_nice_serialization(mm_dict['basis'])
+        state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
+        return cls(unitarymx, symplecticrep, basis, mm_dict['evotype'], state_space)

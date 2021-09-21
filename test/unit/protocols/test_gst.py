@@ -8,6 +8,7 @@ from pygsti.optimize.customlm import CustomLMOptimizer
 from pygsti.protocols import gst
 from pygsti.protocols.estimate import Estimate
 from pygsti.protocols.protocol import ProtocolData, Protocol
+from pygsti.protocols.gst import GSTGaugeOptSuite
 from pygsti.tools import two_delta_logl
 from ..util import BaseCase
 
@@ -39,31 +40,26 @@ class GSTUtilTester(BaseCase):
         model_trivialgg = model_2Q.copy()
         model_trivialgg.default_gauge_group = TrivialGaugeGroup(4)
 
-        d = gst.gaugeopt_suite_to_dictionary("stdgaugeopt", model_1Q, verbosity=1)
-        d2 = gst.gaugeopt_suite_to_dictionary(d, model_1Q, verbosity=1)  # with dictionary - basically a pass-through
+        d = GSTGaugeOptSuite("stdgaugeopt").to_dictionary(model_1Q, verbosity=1)
+        d2 = GSTGaugeOptSuite(gaugeopt_argument_dicts=d).to_dictionary(model_1Q, verbosity=1)  # with dictionary - basically a pass-through
 
-        d = gst.gaugeopt_suite_to_dictionary(("varySpam", "varySpamWt", "varyValidSpamWt", "toggleValidSpam", "none"),
-                                             model_1Q, verbosity=1)
-        d = gst.gaugeopt_suite_to_dictionary(
-            ("varySpam", "varySpamWt", "varyValidSpamWt", "toggleValidSpam", "stdgaugeopt-unreliable2Q"),
-            model_trivialgg, verbosity=1
-        )
+        d = GSTGaugeOptSuite(("varySpam", "varySpamWt", "varyValidSpamWt", "toggleValidSpam", "none")).to_dictionary(
+            model_1Q, verbosity=1)
+        d = GSTGaugeOptSuite(("varySpam", "varySpamWt", "varyValidSpamWt", "toggleValidSpam", "stdgaugeopt-unreliable2Q")).to_dictionary(
+            model_trivialgg, verbosity=1)
 
-        d = gst.gaugeopt_suite_to_dictionary(
-            ("stdgaugeopt", "stdgaugeopt-unreliable2Q"), model_1Q, verbosity=1)  # non-2Q gates
-        d = gst.gaugeopt_suite_to_dictionary(("stdgaugeopt", "stdgaugeopt-unreliable2Q"), model_2Q, verbosity=1)
+        d = GSTGaugeOptSuite(("stdgaugeopt", "stdgaugeopt-unreliable2Q")).to_dictionary(model_1Q, verbosity=1)  # non-2Q gates
+        d = GSTGaugeOptSuite(("stdgaugeopt", "stdgaugeopt-unreliable2Q")).to_dictionary(model_2Q, verbosity=1)
 
         unreliable_ops = ('Gx', 'Gcnot')
-        d = gst.gaugeopt_suite_to_dictionary(
-            ("stdgaugeopt", "stdgaugeopt-unreliable2Q"), model_2Q, unreliable_ops, verbosity=1)
-        d = gst.gaugeopt_suite_to_dictionary(("varySpam", "varySpam-unreliable2Q"),
-                                             model_2Q, unreliable_ops, verbosity=1)
+        d = GSTGaugeOptSuite(("stdgaugeopt", "stdgaugeopt-unreliable2Q")).to_dictionary(model_2Q, unreliable_ops, verbosity=1)
+        d = GSTGaugeOptSuite(("varySpam", "varySpam-unreliable2Q")).to_dictionary(model_2Q, unreliable_ops, verbosity=1)
         # TODO assert correctness
 
-    def test_gaugeopt_suite_to_dictionary_raises_on_bad_suite(self):
+    def test_gaugeopt_suite_raises_on_bad_suite(self):
         model_1Q = std1Q_XYI.target_model()
         with self.assertRaises(ValueError):
-            gst.gaugeopt_suite_to_dictionary("foobar", model_1Q, verbosity=1)
+            GSTGaugeOptSuite("foobar").to_dictionary(model_1Q, verbosity=1)
 
     def test_add_badfit_estimates(self):
         builder = PoissonPicDeltaLogLFunction.builder()
@@ -82,7 +78,8 @@ class GSTUtilTester(BaseCase):
     def test_add_gauge_opt(self):
         res = self.results.copy()
         unreliable = ()
-        gst._add_gauge_opt(res, 'test-estimate', 'stdgaugeopt', self.target_model, self.target_model, unreliable)
+        gaugeopt_suite = GSTGaugeOptSuite('stdgaugeopt', gaugeopt_target=self.target_model)
+        gst._add_gauge_opt(res, 'test-estimate', gaugeopt_suite, self.target_model, unreliable)
         self.assertTrue('stdgaugeopt' in res.estimates['test-estimate'].models)
         self.assertTrue('stdgaugeopt' in res.estimates['test-estimate'].goparameters)
 

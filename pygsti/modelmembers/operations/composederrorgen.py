@@ -84,6 +84,15 @@ class ComposedErrorgen(_LinearOperator):
         rep = evotype.create_sum_rep(factor_reps, state_space)
 
         _LinearOperator.__init__(self, rep, evotype)
+        self.init_gpindices()  # initialize our gpindices based on sub-members
+
+    #Note: no to_memoized_dict needed, as ModelMember version does all we need.
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
+        errgens_to_compose = [serial_memo[i] for i in mm_dict['submembers']]
+        return cls(errgens_to_compose, mm_dict['evotype'], state_space)
 
     def coefficients(self, return_basis=False, logscale_nonham=False):
         """
@@ -460,6 +469,7 @@ class ComposedErrorgen(_LinearOperator):
             self._rep.reinit_factor_reps([op._rep for op in self.factors])
         if self.parent:  # need to alert parent that *number* (not just value)
             self.parent._mark_for_rebuild(self)  # of our params may have changed
+            self._parent = None  # mark this object for re-allocation
 
     def insert(self, insert_at, *factors_to_insert):
         """
@@ -483,6 +493,7 @@ class ComposedErrorgen(_LinearOperator):
             self._rep.reinit_factor_reps([op._rep for op in self.factors])
         if self.parent:  # need to alert parent that *number* (not just value)
             self.parent._mark_for_rebuild(self)  # of our params may have changed
+            self._parent = None  # mark this object for re-allocation
 
     def remove(self, *factor_indices):
         """
@@ -503,27 +514,29 @@ class ComposedErrorgen(_LinearOperator):
             self._rep.reinit_factor_reps([op._rep for op in self.factors])
         if self.parent:  # need to alert parent that *number* (not just value)
             self.parent._mark_for_rebuild(self)  # of our params may have changed
+            self._parent = None  # mark this object for re-allocation
 
-    def copy(self, parent=None, memo=None):
-        """
-        Copy this object.
-
-        Parameters
-        ----------
-        parent : Model, optional
-            The parent model to set for the copy.
-
-        Returns
-        -------
-        LinearOperator
-            A copy of this object.
-        """
-        # We need to override this method so that factors have their
-        # parent reset correctly.
-        if memo is not None and id(self) in memo: return memo[id(self)]
-        cls = self.__class__  # so that this method works for derived classes too
-        copyOfMe = cls([f.copy(parent, memo) for f in self.factors], self._evotype, self.state_space)
-        return self._copy_gpindices(copyOfMe, parent, memo)
+    # REMOVE - unnecessary and doesn't work correctly when, e.g., multiple factors are the same object
+    #def copy(self, parent=None, memo=None):
+    #    """
+    #    Copy this object.
+    #
+    #    Parameters
+    #    ----------
+    #    parent : Model, optional
+    #        The parent model to set for the copy.
+    #
+    #    Returns
+    #    -------
+    #    LinearOperator
+    #        A copy of this object.
+    #    """
+    #    # We need to override this method so that factors have their
+    #    # parent reset correctly.
+    #    if memo is not None and id(self) in memo: return memo[id(self)]
+    #    cls = self.__class__  # so that this method works for derived classes too
+    #    copyOfMe = cls([f.copy(parent, memo) for f in self.factors], self._evotype, self.state_space)
+    #    return self._copy_gpindices(copyOfMe, parent, memo)
 
     def to_sparse(self, on_space='minimal'):
         """

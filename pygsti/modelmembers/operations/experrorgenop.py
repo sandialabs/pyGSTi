@@ -86,8 +86,16 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
 
         _LinearOperator.__init__(self, rep, evotype)
         _ErrorGeneratorContainer.__init__(self, self.errorgen)
+        self.init_gpindices()  # initialize our gpindices based on sub-members
         self._update_rep()  # updates self._rep
         #Done with __init__(...)
+
+    #Note: no to_memoized_dict needed, as ModelMember version does all we need.
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        errorgen = serial_memo[mm_dict['submembers'][0]]
+        return cls(errorgen)
 
     def submembers(self):
         """
@@ -99,26 +107,27 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         """
         return [self.errorgen]
 
-    def copy(self, parent=None, memo=None):
-        """
-        Copy this object.
-
-        Parameters
-        ----------
-        parent : Model, optional
-            The parent model to set for the copy.
-
-        Returns
-        -------
-        LinearOperator
-            A copy of this object.
-        """
-        # We need to override this method so that error map has its
-        # parent reset correctly.
-        if memo is not None and id(self) in memo: return memo[id(self)]
-        cls = self.__class__  # so that this method works for derived classes too
-        copyOfMe = cls(self.errorgen.copy(parent, memo))
-        return self._copy_gpindices(copyOfMe, parent, memo)
+    # REMOVE - unnecessary
+    #def copy(self, parent=None, memo=None):
+    #    """
+    #    Copy this object.
+    #
+    #    Parameters
+    #    ----------
+    #    parent : Model, optional
+    #        The parent model to set for the copy.
+    #
+    #    Returns
+    #    -------
+    #    LinearOperator
+    #        A copy of this object.
+    #    """
+    #    # We need to override this method so that error map has its
+    #    # parent reset correctly.
+    #    if memo is not None and id(self) in memo: return memo[id(self)]
+    #    cls = self.__class__  # so that this method works for derived classes too
+    #    copyOfMe = cls(self.errorgen.copy(parent, memo))
+    #    return self._copy_gpindices(copyOfMe, parent, memo)
 
     def _update_rep(self, close=False):
         """
@@ -726,7 +735,8 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
             errgen_cls = self.errorgen.__class__
             #Note: this only really works for LindbladErrorGen objects now... make more general in FUTURE?
             truncate = SPAM_TRANSFORM_TRUNCATE  # can't just be 'True' since we need to throw errors when appropriate
-            param = _LindbladParameterization(self.errorgen.nonham_mode, self.errorgen.param_mode,
+            param = _LindbladParameterization(self.errorgen.parameterization.nonham_mode,
+                                              self.errorgen.parameterization.param_mode,
                                               len(self.errorgen.ham_basis) > 0, len(self.errorgen.other_basis) > 0)
             transformed_errgen = errgen_cls.from_operation_matrix(mx, param, self.errorgen.lindblad_basis,
                                                                   self.errorgen.matrix_basis, truncate,

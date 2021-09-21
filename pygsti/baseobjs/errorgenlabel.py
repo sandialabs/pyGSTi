@@ -11,6 +11,10 @@ Defines the ElementaryErrorgenLabel class and supporting functionality.
 #***************************************************************************************************
 
 
+def _to_int_or_strip(x):  # (same as in slowcircuitparser.py)
+    return int(x) if x.strip().isdigit() else x.strip()
+
+
 class ElementaryErrorgenLabel(object):
     """
     TODO: docstring - for entire module
@@ -38,7 +42,11 @@ class LocalElementaryErrorgenLabel(ElementaryErrorgenLabel):
                 local_bels.append(''.join(local_bel))
             return cls(obj.errorgen_type, local_bels)
         elif isinstance(obj, str):
-            return cls(obj[0], (obj[1:],))  # e.g. "HXX" => ('H','XX')
+            if obj[1:].startswith('(') and obj.endswith(')'):  # e.g. "H(XX)" or "S(XY,YZ)" as from __str__
+                bels = [x.strip() for x in obj[2:-1].split(',')]
+                return cls(obj[0], bels)
+            else:
+                return cls(obj[0], (obj[1:],))  # e.g. "HXX" => ('H','XX')
         elif isinstance(obj, (tuple, list)):
             return cls(obj[0], obj[1:])  # e.g. ('H','XX') or ('S', 'X', 'Y')
         else:
@@ -83,10 +91,31 @@ class GlobalElementaryErrorgenLabel(ElementaryErrorgenLabel):
                 global_bels.append(''.join([local_bel[i] for i in nonidentity_indices]))
 
             return cls(obj.errorgen_type, global_bels, [sslbls[i] for i in nonidentity_indices])
-        elif isinstance(obj, (str, tuple, list)):
-            # TODO: maybe allow a convenient global format in future, e.g. "HXX:Q0,Q1"
-            # that we would need to distinguish here
-            return cls.cast(LocalElementaryErrorgenLabel.cast(obj), sslbls, identity_label)
+
+        elif isinstance(obj, str):
+            if obj[1:].startswith('(') and obj.endswith(')'):
+                in_parens = obj[2:-1]
+                if ':' in in_parens:  # e.g. "H(XX:Q0,Q1)" or "S(XY,YZ:0,1)" as from __str__
+                    bel_str, sslbl_str = in_parens.split(':')
+                    bels = [x.strip() for x in bel_str.split(',')]
+                    sslbls = [_to_int_or_strip(x) for x in sslbl_str.split(',')]
+                    return cls(obj[0], bels, sslbls)
+                else:  # treat as a local label
+                    return cls.cast(LocalElementaryErrorgenLabel.cast(obj), sslbls, identity_label)
+            else:  # no parenthesis, assume of form "HXX:Q0,Q1" or local label, e.g. "HXX"
+                if ':' in obj:
+                    typ_bel_str, sslbl_str = in_parens.split(':')
+                    sslbls = [_to_int_or_strip(x) for x in sslbl_str.split(',')]
+                    return cls(typ_bel_str[0], (typ_bel_str[1:],), sslbls)
+                else:  # treat as a local label
+                    return cls.cast(LocalElementaryErrorgenLabel.cast(obj), sslbls, identity_label)
+
+        elif isinstance(obj, (tuple, list)):
+            # Allow a tuple-of-tuples format, e.g. ('S', ('XY', 'YZ'), ('Q0', 'Q1'))
+            if isinstance(obj[1], (list, tuple)):  # distinguish vs. local labels
+                return cls(obj[0], obj[1], obj[2])  # ('H', ('XX',), ('Q0', 'Q1'))
+            else:  # e.g. ('H', 'XX')
+                return cls.cast(LocalElementaryErrorgenLabel.cast(obj), sslbls, identity_label)
         else:
             raise ValueError("Cannot convert %s to a global elementary errorgen label!" % str(obj))
 

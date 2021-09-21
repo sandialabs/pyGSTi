@@ -12,8 +12,10 @@ Functions for writing GST objects to text files.
 
 import pathlib as _pathlib
 import warnings as _warnings
+import json as _json
 
 import numpy as _np
+import json
 
 from pygsti.io import loaders as _loaders
 from pygsti import circuits as _circuits
@@ -458,6 +460,12 @@ def write_model(model, filename, title=None):
         elif isinstance(model.default_gauge_group, _gaugegroup.UnitaryGaugeGroup):
             output.write("GAUGEGROUP: Unitary\n")
 
+def write_model_json(model, filename):
+    mmgraph = model.create_modelmember_graph()
+    model_dict = mmgraph.create_serialization_dict()
+
+    with open(filename, 'w') as f:
+        json.dump(model_dict, f, indent=2)
 
 def write_empty_protocol_data(edesign, dirname, sparse="auto", clobber_ok=False):
     """
@@ -621,3 +629,23 @@ def fill_in_empty_dataset_with_fake_data(model, dataset_filename, num_samples,
         fixed_column_mode = bool(len(ds_template.outcome_labels) <= 8 and times is None)
     write_dataset(dataset_filename, ds, fixed_column_mode=fixed_column_mode)
     return ds
+
+
+def write_circuits_as_strs(filename, obj):
+    """ TODO: docstring - write various Circuit-containing standard objects with circuits
+        replaced by their string reps """
+    from pygsti.circuits import Circuit as _Circuit
+
+    def _replace_circuits_with_strs(x):
+        if isinstance(x, (list, tuple)):
+            return [_replace_circuits_with_strs(el) for el in x]
+        if isinstance(x, dict):
+            return {_replace_circuits_with_strs(k): _replace_circuits_with_strs(v) for k, v in x.items}
+        return x.str if isinstance(x, _Circuit) else x
+
+    json_dict = _replace_circuits_with_strs(obj)
+    if str(filename).endswith('.json'):
+        with open(filename, 'w') as f:
+            _json.dump(json_dict, f, indent=4)
+    else:
+        raise ValueError("Cannot determine format from extension of filename: %s" % str(filename))

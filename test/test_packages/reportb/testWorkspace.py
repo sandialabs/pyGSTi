@@ -177,10 +177,13 @@ class TestWorkspace(ReportBaseCase):
 
         tbls.append( w.DataSetOverviewTable(self.ds,max_length_list=[1,2,4,8]) )
         tbls.append( w.FitComparisonTable(self.gss.xs, self.results.circuit_lists['iteration'],
-                                          self.results.estimates['default'].models['iteration estimates'], self.ds) )
+                                          [self.results.estimates['default'].models['iteration %d estimate' % k]
+                                           for k in range(self.results.estimates['default'].num_iterations)], self.ds) )
         with self.assertRaises(ValueError):
             w.FitComparisonTable(self.gss.xs, self.results.circuit_lists['iteration'],
-                                 self.results.estimates['default'].models['iteration estimates'], self.ds, objfn_builder="foobar")
+                                 [self.results.estimates['default'].models['iteration %d estimate' % k]
+                                           for k in range(self.results.estimates['default'].num_iterations)],
+                                 self.ds, objfn_builder="foobar")
 
         tbls.append( w.GaugeRobustErrgenTable(self.mdl, self.tgt) )
 
@@ -345,7 +348,8 @@ class TestWorkspace(ReportBaseCase):
         plts.append( w.ChoiEigenvalueBarPlot(choievals, choieb) )
 
         plts.append( w.FitComparisonBarPlot(self.gss.xs, self.results.circuit_lists['iteration'],
-                                          self.results.estimates['default'].models['iteration estimates'], self.ds,) )
+                                            [self.results.estimates['default'].models['iteration %d estimate' % k]
+                                             for k in range(self.results.estimates['default'].num_iterations)], self.ds) )
         plts.append( w.GramMatrixBarPlot(self.ds,self.tgt) )
 
         plts.append( w.DatasetComparisonHistogramPlot(dsc, nbins=50, frequency=True,

@@ -1045,7 +1045,7 @@ class RandomizedBenchmarkingResults(_proto.ProtocolResults):
         self.rtype = protocol_instance.rtype  # replicated for convenience?
         self.fits = fits
         self.defaultfit = defaultfit
-        self.auxfile_types['fits'] = 'pickle'  # b/c NamedDict don't json
+        self.auxfile_types['fits'] = 'dict:serialized-object'  # b/c NamedDict don't json
 
     def plot(self, fitkey=None, decay=True, success_probabilities=True, size=(8, 5), ylim=None, xlim=None,
              legend=True, title=None, figpath=None):

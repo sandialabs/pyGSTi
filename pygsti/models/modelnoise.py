@@ -511,9 +511,11 @@ class OpModelPerOpNoise(OpModelNoise):
                         [errmaps_to_embed_then_compose[sslbls], local_errormap])
 
         else:  # assume opnoise is an OpNoise object
-            local_errormap = opnoise.create_errormap(evotype, state_space)
             all_target_labels = None if (num_target_labels is None) else \
                 tuple(['@{}'.format(i) for i in range(num_target_labels)])
+            local_state_space = _StencilLabel.cast(all_target_labels).create_local_state_space(state_space) \
+                if (all_target_labels is not None) else state_space
+            local_errormap = opnoise.create_errormap(evotype, local_state_space)
             errmaps_to_embed_then_compose[all_target_labels] = local_errormap
         self._increment_touch_count(opkey)
         return errmaps_to_embed_then_compose

@@ -390,6 +390,13 @@ class ComposedState(_State):  # , _ErrorMapContainer
 
         _State.__init__(self, rep, evotype)
         _ErrorMapContainer.__init__(self, self.error_map)
+        self.init_gpindices()  # initialize our gpindices based on sub-members
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        error_map = serial_memo[mm_dict['submembers'][0]]
+        static_state = serial_memo[mm_dict['submembers'][1]]
+        return cls(static_state, error_map)
 
     def _update_rep(self):
         self._rep.reps_have_changed()
@@ -405,28 +412,29 @@ class ComposedState(_State):  # , _ErrorMapContainer
         -------
         list
         """
-        return [self.error_map]
+        return [self.error_map, self.state_vec]
 
-    def copy(self, parent=None, memo=None):
-        """
-        Copy this object.
-
-        Parameters
-        ----------
-        parent : Model, optional
-            The parent model to set for the copy.
-
-        Returns
-        -------
-        LinearOperator
-            A copy of this object.
-        """
-        # We need to override this method so that embedded gate has its
-        # parent reset correctly.
-        if memo is not None and id(self) in memo: return memo[id(self)]
-        cls = self.__class__  # so that this method works for derived classes too
-        copyOfMe = cls(self.state_vec, self.error_map.copy(parent))
-        return self._copy_gpindices(copyOfMe, parent, memo)
+    # REMOVE - unnecessary
+    #def copy(self, parent=None, memo=None):
+    #    """
+    #    Copy this object.
+    #
+    #    Parameters
+    #    ----------
+    #    parent : Model, optional
+    #        The parent model to set for the copy.
+    #
+    #    Returns
+    #    -------
+    #    LinearOperator
+    #        A copy of this object.
+    #    """
+    #    # We need to override this method so that embedded gate has its
+    #    # parent reset correctly.
+    #    if memo is not None and id(self) in memo: return memo[id(self)]
+    #    cls = self.__class__  # so that this method works for derived classes too
+    #    copyOfMe = cls(self.state_vec, self.error_map.copy(parent))
+    #    return self._copy_gpindices(copyOfMe, parent, memo)
 
     def set_gpindices(self, gpindices, parent, memo=None):
         """
@@ -451,7 +459,8 @@ class ComposedState(_State):  # , _ErrorMapContainer
         self.local_term_poly_coeffs = {}
         # TODO REMOVE self.direct_terms = {}
         # TODO REMOVE self.direct_term_poly_coeffs = {}
-        _modelmember.ModelMember.set_gpindices(self, gpindices, parent, memo)
+        # TODO REmOVE _modelmember.ModelMember.set_gpindices(self, gpindices, parent, memo)
+        super().set_gpindices(gpindices, parent, memo)
 
     def to_dense(self, on_space='minimal', scratch=None):
         """

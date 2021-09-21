@@ -581,6 +581,7 @@ def _create_explicit_model_from_expressions(state_space, basis,
     else:
         ret.default_gauge_group = _gg.TrivialGaugeGroup(ret.state_space)
 
+    ret._clean_paramvec()
     return ret
 
 
@@ -726,6 +727,8 @@ def create_explicit_alias_model(mdl_primitives, alias_dict):
     for gl, opstr in alias_dict.items():
         mdl_new.operations[gl] = mdl_primitives.sim.product(opstr)
         #Creates fully parameterized gates by default...
+
+    mdl_new._clean_paramvec()
     return mdl_new
 
 
@@ -866,6 +869,7 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
         ret.povms[k] = v
 
     modelnoise.warn_about_zero_counters()
+    ret._clean_paramvec()
     return ret
 
 
@@ -1387,7 +1391,7 @@ def create_cloud_crosstalk_model(processor_spec, custom_gates=None,
                                  depolarization_strengths=None, stochastic_error_probs=None, lindblad_error_coeffs=None,
                                  depolarization_parameterization='depolarize', stochastic_parameterization='stochastic',
                                  lindblad_parameterization='auto', evotype="default", simulator="auto",
-                                 independent_gates=False, independent_spam=True, errcomp_type="errorgens",
+                                 independent_gates=False, independent_spam=True, errcomp_type="gates",
                                  implicit_idle_mode="none", verbosity=0):
     """
     Create a n-qubit "cloud-crosstalk" model.

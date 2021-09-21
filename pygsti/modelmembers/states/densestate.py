@@ -11,6 +11,7 @@ The DenseState and DensePureState classes and supporting functionality.
 #***************************************************************************************************
 
 
+import numpy as _np
 import copy as _copy
 
 from pygsti.modelmembers.states.state import State as _State
@@ -207,6 +208,36 @@ class DenseState(DenseStateInterface, _State):
         #don't use scratch since we already have memory allocated
         return self._rep.to_dense(on_space)  # both types of possible state reps implement 'to_dense'
 
+    def to_memoized_dict(self, mmg_memo):
+        """Create a serializable dict with references to other objects in the memo.
+
+        Parameters
+        ----------
+        mmg_memo: dict
+            Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
+            are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
+            the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
+
+        Returns
+        -------
+        mm_dict: dict
+            A dict representation of this ModelMember ready for serialization
+            This must have at least the following fields:
+                module, class, submembers, params, state_space, evotype
+            Additional fields may be added by derived classes.
+        """
+        mm_dict = super().to_memoized_dict(mmg_memo)
+
+        mm_dict['dense_superket_vector'] = self._encodemx(self.to_dense())
+
+        return mm_dict
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        vec = cls._decodemx(mm_dict['dense_superket_vector'])
+        state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
+        return cls(vec, mm_dict['evotype'], state_space)
+
 
 class DensePureState(DenseStateInterface, _State):
     """
@@ -271,3 +302,35 @@ class DensePureState(DenseStateInterface, _State):
         """
         #don't use scratch since we already have memory allocated
         return self._rep.to_dense(on_space)  # both types of possible state reps implement 'to_dense'
+
+    def to_memoized_dict(self, mmg_memo):
+        """Create a serializable dict with references to other objects in the memo.
+
+        Parameters
+        ----------
+        mmg_memo: dict
+            Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
+            are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
+            the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
+
+        Returns
+        -------
+        mm_dict: dict
+            A dict representation of this ModelMember ready for serialization
+            This must have at least the following fields:
+                module, class, submembers, params, state_space, evotype
+            Additional fields may be added by derived classes.
+        """
+        mm_dict = super().to_memoized_dict(mmg_memo)
+
+        mm_dict['dense_state_vector'] = self.to_dense().tolist()
+        mm_dict['basis'] = self._basis.to_nice_serialization()
+
+        return mm_dict
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        vec = _np.array(mm_dict['dense_state_vector'])
+        state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
+        basis = _Basis.from_nice_serialization(mm_dict['basis'])
+        return cls(vec, basis, mm_dict['evotype'], state_space)

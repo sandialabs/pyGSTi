@@ -50,17 +50,21 @@ class TensorProductPOVM(_POVM):
             assert(state_space.dim == dim), "`state_space` is incompatible with the product of the factors' spaces!"
 
         # self.factorPOVMs
-        #  Copy each POVM and set it's parent and gpindices.
-        #  Assume each one's parameters are independent.
-        self.factorPOVMs = [povm.copy() for povm in factor_povms]
+        self.factorPOVMs = factor_povms
 
-        off = 0
+        #REMOVE - no need to copy anymore
+        # #  Copy each POVM and set it's parent and gpindices.
+        # #  Assume each one's parameters are independent.
+        # self.factorPOVMs = [povm.copy() for povm in factor_povms]
+
+        #off = 0 REMOVE
         for povm in self.factorPOVMs:
-            if povm.gpindices is None:
-                off += povm.allocate_gpindices(off, None)
-            else:
-                N = povm.num_params
-                povm.set_gpindices(slice(off, off + N), self); off += N
+            #REMOVE:
+            #if povm.gpindices is None:
+            #    off += povm.allocate_gpindices(off, None)
+            #else:
+            #    N = povm.num_params
+            #    povm.set_gpindices(slice(off, off + N), self); off += N
 
             if evotype == 'auto': evotype = povm._evotype
             else: assert(evotype == povm._evotype), \
@@ -80,6 +84,25 @@ class TensorProductPOVM(_POVM):
             self._factor_lbllens.append(l)
 
         super(TensorProductPOVM, self).__init__(state_space, evotype, items)
+        self.init_gpindices()  # initialize gpindices and subm_rpindices from sub-members
+
+    #Note: no to_memoized_dict needed, as ModelMember version does all we need.
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
+        factor_povms = [serial_memo[subm_serial_id] for subm_serial_id in mm_dict['submembers']]
+        return cls(factor_povms, mm_dict['evotype'], state_space)
+
+    def submembers(self):
+        """
+        Get the ModelMember-derived objects contained in this one.
+
+        Returns
+        -------
+        list
+        """
+        return self.factorPOVMs
 
     def __contains__(self, key):
         """ For lazy creation of effect vectors """
@@ -160,22 +183,27 @@ class TensorProductPOVM(_POVM):
         # be able to properly initialize them, so need to set gpindices
         # appropriately.
 
-        #Create a "simplified" (Model-referencing) set of factor POVMs
-        factorPOVMs_simplified = []
-        for p in self.factorPOVMs:
-            povm = p.copy()
-            povm.set_gpindices(_mm._compose_gpindices(self.gpindices,
-                                                      p.gpindices), self.parent)
-            factorPOVMs_simplified.append(povm)
+        #REMOVE: self.factorPOVMs gpindices now reference Model
+        # #Create a "simplified" (Model-referencing) set of factor POVMs
+        # factorPOVMs_simplified = []
+        # for p in self.factorPOVMs:
+        #     povm = p.copy()
+        #     povm.set_gpindices(_mm._compose_gpindices(self.gpindices,
+        #                                               p.gpindices), self.parent)
+        #     factorPOVMs_simplified.append(povm)
+        #
+        # # Create "simplified" effect vectors, which infer their parent and
+        # # gpindices from the set of "factor-POVMs" they're constructed with.
+        # # Currently simplify *all* the effects, creating those that haven't been yet (lazy creation)
+        # if prefix: prefix += "_"
+        # simplified = _collections.OrderedDict(
+        #     [(prefix + k, _TensorProductPOVMEffect(self.factorPOVMs, self[k].effectLbls, self.state_space))
+        #      for k in self.keys()])
+        # return simplified
 
-        # Create "simplified" effect vectors, which infer their parent and
-        # gpindices from the set of "factor-POVMs" they're constructed with.
         # Currently simplify *all* the effects, creating those that haven't been yet (lazy creation)
         if prefix: prefix += "_"
-        simplified = _collections.OrderedDict(
-            [(prefix + k, _TensorProductPOVMEffect(factorPOVMs_simplified, self[k].effectLbls, self.state_space))
-             for k in self.keys()])
-        return simplified
+        return _collections.OrderedDict([(prefix + k, self[k]) for k in self.keys()])
 
     @property
     def parameter_labels(self):
@@ -183,8 +211,8 @@ class TensorProductPOVM(_POVM):
         An array of labels (usually strings) describing this model member's parameters.
         """
         vl = _np.empty(self.num_params, dtype=object)
-        for povm in self.factorPOVMs:
-            vl[povm.gpindices] = povm.parameter_labels
+        for povm, povm_local_inds in zip(self.factorPOVMs, self._submember_rpindices):
+            vl[povm_local_inds] = povm.parameter_labels
         return vl
 
     @property
@@ -209,8 +237,8 @@ class TensorProductPOVM(_POVM):
             a 1D numpy array with length == num_params().
         """
         v = _np.empty(self.num_params, 'd')
-        for povm in self.factorPOVMs:
-            v[povm.gpindices] = povm.to_vector()
+        for povm, povm_local_inds in zip(self.factorPOVMs, self._submember_rpindices):
+            v[povm_local_inds] = povm.to_vector()
         return v
 
     def from_vector(self, v, close=False, dirty_value=True):
@@ -237,8 +265,8 @@ class TensorProductPOVM(_POVM):
         -------
         None
         """
-        for povm in self.factorPOVMs:
-            povm.from_vector(v[povm.gpindices], close, dirty_value)
+        for povm, povm_local_inds in zip(self.factorPOVMs, self._submember_rpindices):
+            povm.from_vector(v[povm_local_inds], close, dirty_value)
 
     def depolarize(self, amount):
         """

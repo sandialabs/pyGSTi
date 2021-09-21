@@ -88,12 +88,11 @@ class ModelConstructionTester(BaseCase):
         addlErr = pygsti.modelmembers.operations.FullTPOp(np.identity(4, 'd'))  # adds 12 params
         addlErr2 = pygsti.modelmembers.operations.FullTPOp(np.identity(4, 'd'))  # adds 12 params
 
+        mdl.operation_blks['gates']['Gi'].append(addlErr)
         mdl.operation_blks['gates']['Gx'].append(addlErr)
         mdl.operation_blks['gates']['Gy'].append(addlErr2)
-        mdl.operation_blks['gates']['Gi'].append(addlErr)
 
         # TODO: If you call mdl.num_params between the 3 calls above, this second one has an error...
-
         self.assertEqual(mdl.num_params, 24)
 
         # TODO: These are maybe not deterministic? Sometimes are swapped for me...
