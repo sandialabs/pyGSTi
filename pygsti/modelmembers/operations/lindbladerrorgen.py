@@ -1847,12 +1847,13 @@ class LindbladErrorgen(_LinearOperator):
         mm_dict['parameterization'] = self.parameterization.to_nice_serialization()
         mm_dict['lindblad_basis'] = self.lindblad_basis.to_nice_serialization()
         mm_dict['matrix_basis'] = self.matrix_basis.to_nice_serialization()
-        mm_dict['coefficients'] = [(k, v) for k, v in self.coefficients().items()]
+        mm_dict['coefficients'] = [(str(k), v) for k, v in self.coefficients().items()]
         return mm_dict
 
     @classmethod
     def _from_memoized_dict(cls, mm_dict, serial_memo):
-        lindblad_term_dict = {tuple(k): v for k, v in mm_dict['coefficients']}  # convert keys list->tuple
+        lindblad_term_dict = {_GlobalElementaryErrorgenLabel.cast(k): v
+                              for k, v in mm_dict['coefficients']}  # convert keys from str->objects
         parameterization = LindbladParameterization.from_nice_serialization(mm_dict['parameterization'])
         lindblad_basis = _Basis.from_nice_serialization(mm_dict['lindblad_basis'])
         mx_basis = _Basis.from_nice_serialization(mm_dict['matrix_basis'])
