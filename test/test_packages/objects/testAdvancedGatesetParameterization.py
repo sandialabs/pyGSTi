@@ -8,6 +8,7 @@ import pygsti
 from pygsti.modelpacks.legacy import std1Q_XYI
 from pygsti.modelpacks.legacy import std2Q_XYICNOT
 from pygsti.modelmembers.operations import ExpErrorgenOp, ComposedOp, EmbeddedOp, StaticArbitraryOp, LindbladErrorgen
+from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel
 from ..testutils import BaseTestCase
 
 
@@ -140,28 +141,34 @@ class AdvancedParameterizationTestCase(BaseTestCase):
         print(Gx_depol.errorgen_coefficients())
         print("Rates are:")
         print(Gx_depol.error_rates())
+
+        def GEL(tup):
+            return GlobalElementaryErrorgenLabel.cast(tup, sslbls=('Q0',))  # Q0 because std1Q_XYI uses this
         
-        self.assertAlmostEqual(Gx_depol.error_rates()[('S','X')],ps_err)
-        self.assertAlmostEqual(Gx_depol.error_rates()[('S','Y')],ps_err)
-        self.assertAlmostEqual(Gx_depol.error_rates()[('S','Z')],ps_err)
-        self.assertAlmostEqual(Gx_depol.errorgen_coefficients()[('S','X')],expected_coeff)
-        self.assertAlmostEqual(Gx_depol.errorgen_coefficients()[('S','Y')],expected_coeff)
-        self.assertAlmostEqual(Gx_depol.errorgen_coefficients()[('S','Z')],expected_coeff)
+        self.assertAlmostEqual(Gx_depol.error_rates()[GEL(('S','X'))],ps_err)
+        self.assertAlmostEqual(Gx_depol.error_rates()[GEL(('S','Y'))],ps_err)
+        self.assertAlmostEqual(Gx_depol.error_rates()[GEL(('S','Z'))],ps_err)
+        self.assertAlmostEqual(Gx_depol.errorgen_coefficients()[GEL(('S','X'))],expected_coeff)
+        self.assertAlmostEqual(Gx_depol.errorgen_coefficients()[GEL(('S','Y'))],expected_coeff)
+        self.assertAlmostEqual(Gx_depol.errorgen_coefficients()[GEL(('S','Z'))],expected_coeff)
 
     def test_setting_lindblad_hamiltonian_error_rates(self):
         mdl_std1Q_HS = std1Q_XYI.target_model("H+S")
         Gx_rot = mdl_std1Q_HS.operations['Gx'].copy()
+
+        def GEL(tup):
+            return GlobalElementaryErrorgenLabel.cast(tup, sslbls=('Q0',))  # Q0 because std1Q_XYI uses this
 
         #Test 3 different ways of setting rotation angles.
         #Gx_rot.rotate( (0.2,0.0,0) )  # can't do this anymore -- composed ops don't implement set_dense (ok)
         #self.assertAlmostEqual(Gx_rot.errorgen_coefficients()[('H','X')], 0.2)
         #self.assertAlmostEqual(Gx_rot.error_rates()[('H','X')], 0.2)
         Gx_rot.set_error_rates({('H','Y'): 0.1})
-        self.assertAlmostEqual(Gx_rot.errorgen_coefficients()[('H','Y')], 0.1)
-        self.assertAlmostEqual(Gx_rot.error_rates()[('H','Y')], 0.1)
+        self.assertAlmostEqual(Gx_rot.errorgen_coefficients()[GEL(('H','Y'))], 0.1)
+        self.assertAlmostEqual(Gx_rot.error_rates()[GEL(('H','Y'))], 0.1)
         Gx_rot.set_errorgen_coefficients({('H','Z'): 0.3})
-        self.assertAlmostEqual(Gx_rot.errorgen_coefficients()[('H','Z')], 0.3)
-        self.assertAlmostEqual(Gx_rot.error_rates()[('H','Z')], 0.3)
+        self.assertAlmostEqual(Gx_rot.errorgen_coefficients()[GEL(('H','Z'))], 0.3)
+        self.assertAlmostEqual(Gx_rot.error_rates()[GEL(('H','Z'))], 0.3)
         
 
 if __name__ == '__main__':

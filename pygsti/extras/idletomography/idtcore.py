@@ -578,7 +578,7 @@ def determine_paulidicts(model):
         if any([abs(v) > 1e-6 for v in prep.to_vector()]): return None
     else:
         nqubits = int(round(_np.log2(model.dim) / 2))
-        cmp = _state.ComputationalBasisState([0] * nqubits, model._evotype).to_dense()
+        cmp = _state.ComputationalBasisState([0] * nqubits, 'pp', model._evotype).to_dense()
         if _np.linalg.norm(prep.to_dense() - cmp) > 1e-6: return None
 
     def extract_action(g, cur_sslbls, ql):

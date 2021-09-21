@@ -47,6 +47,7 @@ class ModelBase(object):
             [('Q0',)], ['Gi', 'Gx', 'Gy'],
             ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"],
             **cls.build_options)
+
         super(ModelBase, cls).setUpClass()
 
     def setUp(self):
@@ -94,7 +95,7 @@ class GeneralMethodBase(object):
         # TODO does this actually assert correctness?
 
     def test_set_all_parameterizations_full(self):
-        self.model.set_all_parameterizations("full")
+        self.model.set_all_parameterizations("full")        
         self._assert_model_params(
             nOperations=3,
             nSPVecs=1,

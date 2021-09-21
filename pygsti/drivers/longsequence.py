@@ -146,7 +146,7 @@ def run_model_test(model_filename_or_object,
     _update_objfn_builders([builder], advanced_options)
 
     #Create the protocol
-    proto = _proto.ModelTest(_load_model(model_filename_or_object), None, gopt_suite, None,
+    proto = _proto.ModelTest(_load_model(model_filename_or_object), None, gopt_suite,
                              builder, _get_badfit_options(advanced_options),
                              advanced_options.get('set trivial gauge group', True), printer,
                              name=advanced_options.get('estimate_label', None))
@@ -423,9 +423,11 @@ def run_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
 
     if gauge_opt_params is None:
         gauge_opt_params = {'item_weights': {'gates': 1.0, 'spam': 0.001}}
-    gopt_suite = {'go0': gauge_opt_params} if gauge_opt_params else None
+    gopt_suite = _proto.GSTGaugeOptSuite(
+        gaugeopt_argument_dicts=({'go0': gauge_opt_params} if gauge_opt_params else None),
+        gaugeopt_target=target_model)
     initial_model = _get_gst_initial_model(target_model, advanced_options)
-    proto = _proto.GateSetTomography(initial_model, gopt_suite, target_model,
+    proto = _proto.GateSetTomography(initial_model, gopt_suite,
                                      _get_gst_builders(advanced_options),
                                      _get_optimizer(advanced_options, target_model),
                                      _get_badfit_options(advanced_options), printer)
@@ -536,7 +538,7 @@ def run_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_ob
     gopt_suite = {'go0': gauge_opt_params} if gauge_opt_params else None
     initial_model = _get_gst_initial_model(target_model, advanced_options)
 
-    proto = _proto.GateSetTomography(initial_model, gopt_suite, None,
+    proto = _proto.GateSetTomography(initial_model, gopt_suite,
                                      _get_gst_builders(advanced_options),
                                      _get_optimizer(advanced_options, target_model),
                                      _get_badfit_options(advanced_options), printer,
@@ -688,10 +690,15 @@ def run_stdpractice_gst(data_filename_or_set, processorspec_filename_or_object,
                                           advanced_options.get('string_manipulation_rules', None),
                                           advanced_options.get('op_label_aliases', None),
                                           ds, 'drop', verbosity=printer)
+    if gaugeopt_target is not None:
+        if isinstance(gaugeopt_suite, _proto.GSTGaugeOptSuite):
+            raise ValueError("Cannot specify `gaugeopt_target` and have `gaugeopt_suite` be a GSTGaugeOptSuite object!")
+        gaugeopt_suite = _proto.GSTGaugeOptSuite.cast(gaugeopt_suite)
+        gaugeopt_suite.gaugeopt_target = gaugeopt_target
 
     ds = _load_dataset(data_filename_or_set, comm, printer)
     data = _proto.ProtocolData(exp_design, ds)
-    proto = _proto.StandardGST(modes, gaugeopt_suite, gaugeopt_target, models_to_test,
+    proto = _proto.StandardGST(modes, gaugeopt_suite, models_to_test,
                                _get_gst_builders(advanced_options),
                                _get_optimizer(advanced_options, exp_design.create_target_model()),
                                _get_badfit_options(advanced_options), printer,

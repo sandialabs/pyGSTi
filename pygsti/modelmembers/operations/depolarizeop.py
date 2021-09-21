@@ -93,23 +93,58 @@ class DepolarizeOp(_StochasticNoiseOp):
         # so d( sum(abs(rates)) )/dparam_0 = 2*(basis.size-1)*param_0
         return 2 * (self.basis.size - 1) * self.to_vector()
 
-    def copy(self, parent=None, memo=None):
-        """
-        Copy this object.
+    # REMOVE - unnecessary
+    #def copy(self, parent=None, memo=None):
+    #    """
+    #    Copy this object.
+    #
+    #    Parameters
+    #    ----------
+    #    parent : Model, optional
+    #        The parent model to set for the copy.
+    #
+    #    Returns
+    #    -------
+    #    DepolarizeOp
+    #        A copy of this object.
+    #    """
+    #    if memo is not None and id(self) in memo: return memo[id(self)]
+    #    copyOfMe = DepolarizeOp(self.state_space, self.basis, self._evotype,
+    #                            self._params_to_rates(self.to_vector())[0])
+    #    return self._copy_gpindices(copyOfMe, parent, memo)
+
+    def to_memoized_dict(self, mmg_memo):
+        """Create a serializable dict with references to other objects in the memo.
 
         Parameters
         ----------
-        parent : Model, optional
-            The parent model to set for the copy.
+        mmg_memo: dict
+            Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
+            are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
+            the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
 
         Returns
         -------
-        DepolarizeOp
-            A copy of this object.
+        mm_dict: dict
+            A dict representation of this ModelMember ready for serialization
+            This must have at least the following fields:
+                module, class, submembers, params, state_space, evotype
+            Additional fields may be added by derived classes.
         """
-        if memo is not None and id(self) in memo: return memo[id(self)]
-        copyOfMe = DepolarizeOp(self.state_space, self.basis, self._evotype, self._params_to_rates(self.to_vector())[0])
-        return self._copy_gpindices(copyOfMe, parent, memo)
+        mm_dict = super().to_memoized_dict(mmg_memo)
+
+        del mm_dict['rates']
+        num_rates = self.basis.size - 1
+        mm_dict['strength'] = self.params[0]**2 * num_rates
+
+        return mm_dict
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
+        basis = _Basis.from_nice_serialization(mm_dict['basis'])
+        return cls(state_space, basis, mm_dict['evotype'], mm_dict['strength'], seed_or_state=None)
+        # Note: we currently don't serialize random seed/state - that gets reset w/serialization
 
     def __str__(self):
         s = "Depolarize noise operation map with dim = %d, num params = %d\n" % \

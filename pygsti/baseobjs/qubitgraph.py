@@ -15,9 +15,10 @@ import itertools as _itertools
 
 import numpy as _np
 from scipy.sparse.csgraph import floyd_warshall as _fw
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 
 
-class QubitGraph(object):
+class QubitGraph(_NicelySerializable):
     """
     A directed or undirected graph data structure used to represent geometrical layouts of qubits or qubit gates.
 
@@ -252,6 +253,20 @@ class QubitGraph(object):
         self._distance_matrix = None
         self._predecessors = None
 
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'node_names': list(self._nodeinds.keys()),
+                      'directed': self.directed,
+                      'direction_names': self.directions,
+                      'edges': self.edges(include_directions=True)
+                      })
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):  # memo holds already de-serialized objects
+        return cls(state['node_names'], initial_edges=state['edges'],
+                   directed=state['directed'], direction_names=state['direction_names'])
+
     def copy(self):
         """
         Make a copy of this graph.
@@ -374,7 +389,7 @@ class QubitGraph(object):
         self._connectivity[i, j] = False if (self.directions is None) else 0
         self._dirty = True
 
-    def edges(self, double_for_undirected=False):
+    def edges(self, double_for_undirected=False, include_directions=False):
         """
         Get a list of the edges in this graph as 2-tuples of node/qubit labels).
 
@@ -389,6 +404,11 @@ class QubitGraph(object):
             Whether, for the case of an undirected graph, two 2-tuples, giving
             both edge directions, should be included in the returned list.
 
+        include_directions : bool, optional
+            Whether to include direction labels.  If `True` *and* directions
+            are present, a list of `(node1, node2, direction_name)` 3-tuples
+            is returned instead of the usual `(node1, node2)` 2-tuples.
+
         Returns
         -------
         list
@@ -397,9 +417,16 @@ class QubitGraph(object):
         for ilbl, i in self._nodeinds.items():
             for jlbl, j in self._nodeinds.items():
                 if self._connectivity[i, j]:
-                    ret.add((ilbl, jlbl))  # i < j when undirected
-                    if (not self.directed) and double_for_undirected:
-                        ret.add((jlbl, ilbl))
+                    if include_directions and self.directions is not None:
+                        dirname = self.directions[self._connectivity[i, j] - 1]
+                        ret.add((ilbl, jlbl, dirname))  # i < j when undirected
+                        if (not self.directed) and double_for_undirected:
+                            raise ValueError(("Cannot double direction-named edges (no way to tell "
+                                              "what direction name should be)!"))
+                    else:
+                        ret.add((ilbl, jlbl))  # i < j when undirected
+                        if (not self.directed) and double_for_undirected:
+                            ret.add((jlbl, ilbl))
         return sorted(list(ret))
 
     def radius(self, base_nodes, max_hops):
