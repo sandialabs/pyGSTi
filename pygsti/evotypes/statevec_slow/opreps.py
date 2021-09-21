@@ -80,7 +80,7 @@ class OpRepDenseUnitary(OpRep):
 
     def adjoint_acton(self, state):
         return _StateRepDensePure(_np.dot(_np.conjugate(self.base.T), state.base),
-                                  state.state_space, state.basis))
+                                  state.state_space, state.basis)
 
     def __str__(self):
         return "OpRepDenseUnitary:\n" + str(self.base)
