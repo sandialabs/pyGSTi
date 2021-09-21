@@ -16,6 +16,7 @@ from pygsti.modelmembers import operations as _op
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
+from pygsti.evotypes.evotype import Evotype as _Evotype
 
 
 class GaugeGroup(_NicelySerializable):
@@ -743,6 +744,7 @@ class UnitaryGaugeGroup(OpGaugeGroup):
     """
 
     def __init__(self, state_space, basis, evotype='default'):
+        evotype = _Evotype.cast(str(evotype), default_prefer_dense_reps=True)  # since we use deriv_wrt_params
         errgen = _op.LindbladErrorgen.from_operation_matrix(
             _np.identity(state_space.dim, 'd'), "H", basis, mx_basis=basis, evotype=evotype)
         operation = _op.ExpErrorgenOp(errgen)
