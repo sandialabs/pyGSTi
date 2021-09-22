@@ -252,7 +252,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         """
         if not self._rep_type == 'dense':
             #raise NotImplementedError("deriv_wrt_params(...) can only be used when a dense representation is used!")
-            _warnings.warn("Using finite differencing to compute ExpErrogenOp derivative!")
+            #_warnings.warn("Using finite differencing to compute ExpErrogenOp derivative!")
             return super(ExpErrorgenOp, self).deriv_wrt_params(wrt_filter)
 
         if self.base_deriv is None:
