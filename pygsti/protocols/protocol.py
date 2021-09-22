@@ -1609,7 +1609,7 @@ class ProtocolData(_TreeNode):
         """
         p = _pathlib.Path(dirname)
         edesign = parent.edesign[name] if parent and name else \
-            _io.load_edesign_from_dir(dirname, quick_load=quick_load)
+            _io.read_edesign_from_dir(dirname, quick_load=quick_load)
 
         data_dir = p / 'data'
         #with open(data_dir / 'meta.json', 'r') as f:
@@ -1625,15 +1625,15 @@ class ProtocolData(_TreeNode):
                 if parent is None: parent = ProtocolData.from_dir(dirname / '..')
                 dataset = parent.dataset
             elif len(dataset_files) == 1 and dataset_files[0].name == 'dataset.txt':  # a single dataset.txt file
-                dataset = _io.load_dataset(dataset_files[0], ignore_zero_count_lines=False, verbosity=0)
+                dataset = _io.read_dataset(dataset_files[0], ignore_zero_count_lines=False, verbosity=0)
             else:
-                dataset = {pth.stem: _io.load_dataset(pth, ignore_zero_count_lines=False, verbosity=0)
+                dataset = {pth.stem: _io.read_dataset(pth, ignore_zero_count_lines=False, verbosity=0)
                            for pth in dataset_files}
                 #FUTURE: use MultiDataSet, BUT in addition to init_from_dict we'll need to add truncate, filter, and
                 # process_circuits support for MultiDataSet objects -- for now (above) we just use dicts of DataSets.
                 #raise NotImplementedError("Need to implement MultiDataSet.init_from_dict!")
                 #dataset = _data.MultiDataSet.init_from_dict(
-                #    {pth.name: _io.load_dataset(pth, verbosity=0) for pth in dataset_files})
+                #    {pth.name: _io.read_dataset(pth, verbosity=0) for pth in dataset_files})
 
         cache = _io.metadir._read_json_or_pkl_files_to_dict(data_dir / 'cache')
 
@@ -1934,7 +1934,7 @@ class ProtocolResults(object):
         dirname = _pathlib.Path(dirname)
         ret = cls._from_dir_partial(dirname / 'results' / name, quick_load, load_protocol=True)
         ret.data = preloaded_data if (preloaded_data is not None) else \
-            _io.load_data_from_dir(dirname, quick_load=quick_load)
+            _io.read_data_from_dir(dirname, quick_load=quick_load)
         assert(ret.name == name), "ProtocolResults name inconsistency!"
         return ret
 
@@ -2270,7 +2270,7 @@ class ProtocolResultsDir(_TreeNode):
         dirname = _pathlib.Path(dirname)
         data = parent.data[name] if (parent and name) else \
             (preloaded_data if preloaded_data is not None else
-             _io.load_data_from_dir(dirname, quick_load=quick_load))
+             _io.read_data_from_dir(dirname, quick_load=quick_load))
 
         #Load results in results_dir
         results = {}

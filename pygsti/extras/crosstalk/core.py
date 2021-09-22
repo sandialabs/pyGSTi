@@ -46,7 +46,7 @@ def load_pygsti_dataset(filename):
     # 	file.writelines(lines)
     # 	file.close()
 
-    data = _pygio.load_dataset(filename)
+    data = _pygio.read_dataset(filename)
 
     return data
 

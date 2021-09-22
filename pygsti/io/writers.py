@@ -17,12 +17,13 @@ import json as _json
 import numpy as _np
 import json
 
-from pygsti.io import loaders as _loaders
+from pygsti.io import readers as _loaders
 from pygsti import circuits as _circuits
 from pygsti.models import gaugegroup as _gaugegroup
 
 # from . import stdinput as _stdinput
 from pygsti import tools as _tools
+from pygsti.tools.legacytools import deprecate as _deprecated_fn
 from pygsti.modelmembers import instruments as _instrument
 from pygsti.modelmembers import operations as _op
 from pygsti.modelmembers import povms as _povm
@@ -293,6 +294,7 @@ def write_circuit_list(filename, circuits, header=None):
             output.write(circuit.str + '\n')
 
 
+@_deprecated_fn('pygsti.models.Model.write(...)')
 def write_model(model, filename, title=None):
     """
     Write a text-formatted model file.
@@ -313,6 +315,7 @@ def write_model(model, filename, title=None):
     -------
     None
     """
+    _warnings.warn("write_model(...) is unable to write all types of pyGSTi models, and really should NOT be used!")
 
     def writeprop(f, lbl, val):
         """ Write (label,val) property to output file """
@@ -460,30 +463,24 @@ def write_model(model, filename, title=None):
         elif isinstance(model.default_gauge_group, _gaugegroup.UnitaryGaugeGroup):
             output.write("GAUGEGROUP: Unitary\n")
 
-def write_model_json(model, filename):
-    mmgraph = model.create_modelmember_graph()
-    model_dict = mmgraph.create_serialization_dict()
 
-    with open(filename, 'w') as f:
-        json.dump(model_dict, f, indent=2)
-
-def write_empty_protocol_data(edesign, dirname, sparse="auto", clobber_ok=False):
+def write_empty_protocol_data(dirname, edesign, sparse="auto", clobber_ok=False):
     """
     Write to disk an empty :class:`ProtocolData` object.
 
     Write to a directory an experimental design (`edesign`) and the dataset
     template files needed to load in a :class:`ProtocolData` object, e.g.
-    using the :function:`load_data_from_dir` function, after the template
+    using the :function:`read_data_from_dir` function, after the template
     files are filled in.
 
     Parameters
     ----------
-    edesign : ExperimentDesign
-        The experiment design defining the circuits that need to be performed.
-
     dirname : str
         The *root* directory to write into.  This directory will have 'edesign'
         and 'data' subdirectories created beneath it.
+
+    edesign : ExperimentDesign
+        The experiment design defining the circuits that need to be performed.
 
     sparse : bool or "auto", optional
         If True, then the template data set(s) are written in a sparse-data
@@ -501,6 +498,10 @@ def write_empty_protocol_data(edesign, dirname, sparse="auto", clobber_ok=False)
     -------
     None
     """
+    if isinstance(edesign, str):
+        _warnings.warn(("This function has recently changed its signature - it looks like you need to swap"
+                        " the first two arguments.  Continuing using the old signature..."))
+        edesign, dirname = dirname, edesign
 
     dirname = _pathlib.Path(dirname)
     data_dir = dirname / 'data'
@@ -529,9 +530,8 @@ def write_empty_protocol_data(edesign, dirname, sparse="auto", clobber_ok=False)
     write_empty_dataset(pth, circuits, header_str, nZeroCols)
 
 
-def fill_in_empty_dataset_with_fake_data(model, dataset_filename, num_samples,
-                                         sample_error="multinomial", seed=None, rand_state=None,
-                                         alias_dict=None, collision_action="aggregate",
+def fill_in_empty_dataset_with_fake_data(dataset_filename, model, num_samples, sample_error="multinomial", seed=None,
+                                         rand_state=None, alias_dict=None, collision_action="aggregate",
                                          record_zero_counts=True, comm=None, mem_limit=None, times=None,
                                          fixed_column_mode="auto"):
     """
@@ -539,11 +539,11 @@ def fill_in_empty_dataset_with_fake_data(model, dataset_filename, num_samples,
 
     Parameters
     ----------
-    model : Model
-        the model to use to simulate the data.
-
     dataset_filename : str
         the path to the text-formatted data set file.
+
+    model : Model
+        the model to use to simulate the data.
 
     num_samples : int or list of ints or None
         The simulated number of samples for each circuit.  This only has
@@ -619,8 +619,13 @@ def fill_in_empty_dataset_with_fake_data(model, dataset_filename, num_samples,
     DataSet
         The generated data set (also written in place of the template file).
     """
+    if isinstance(model, str):
+        _warnings.warn(("This function has recently changed its signature - it looks like you need to swap"
+                        " the first two arguments.  Continuing using the old signature..."))
+        model, dataset_filename = dataset_filename, model
+
     from pygsti.data.datasetconstruction import simulate_data as _simulate_data
-    ds_template = _loaders.load_dataset(dataset_filename, ignore_zero_count_lines=False, with_times=False, verbosity=0)
+    ds_template = _loaders.read_dataset(dataset_filename, ignore_zero_count_lines=False, with_times=False, verbosity=0)
     ds = _simulate_data(model, list(ds_template.keys()), num_samples,
                         sample_error, seed, rand_state, alias_dict,
                         collision_action, record_zero_counts, comm,
@@ -631,7 +636,7 @@ def fill_in_empty_dataset_with_fake_data(model, dataset_filename, num_samples,
     return ds
 
 
-def write_circuits_as_strs(filename, obj):
+def write_circuit_strings(filename, obj):
     """ TODO: docstring - write various Circuit-containing standard objects with circuits
         replaced by their string reps """
     from pygsti.circuits import Circuit as _Circuit

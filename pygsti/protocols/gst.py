@@ -1572,19 +1572,19 @@ def _load_fiducials_and_germs(prep_fiducial_list_or_filename,
                               germ_list_or_filename):
 
     if isinstance(prep_fiducial_list_or_filename, str):
-        prep_fiducials = _io.load_circuit_list(prep_fiducial_list_or_filename)
+        prep_fiducials = _io.read_circuit_list(prep_fiducial_list_or_filename)
     else: prep_fiducials = prep_fiducial_list_or_filename
 
     if meas_fiducial_list_or_filename is None:
         meas_fiducials = prep_fiducials  # use same strings for meas_fiducials if meas_fiducial_list_or_filename is None
     else:
         if isinstance(meas_fiducial_list_or_filename, str):
-            meas_fiducials = _io.load_circuit_list(meas_fiducial_list_or_filename)
+            meas_fiducials = _io.read_circuit_list(meas_fiducial_list_or_filename)
         else: meas_fiducials = meas_fiducial_list_or_filename
 
     #Get/load germs
     if isinstance(germ_list_or_filename, str):
-        germs = _io.load_circuit_list(germ_list_or_filename)
+        germs = _io.read_circuit_list(germ_list_or_filename)
     else: germs = germ_list_or_filename
 
     return prep_fiducials, meas_fiducials, germs
@@ -1599,7 +1599,7 @@ def _load_dataset(data_filename_or_set, comm, verbosity):
                 with open(data_filename_or_set, 'rb') as pklfile:
                     ds = _pickle.load(pklfile)
             else:
-                ds = _io.load_dataset(data_filename_or_set, True, "aggregate", printer)
+                ds = _io.read_dataset(data_filename_or_set, True, "aggregate", printer)
             if comm is not None: comm.bcast(ds, root=0)
         else:
             ds = comm.bcast(None, root=0)

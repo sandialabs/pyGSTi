@@ -18,7 +18,7 @@ import pathlib as _pathlib
 import pickle as _pickle
 import warnings as _warnings
 
-from pygsti.io import loaders as _load
+from pygsti.io import readers as _load
 from pygsti.io import writers as _write
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
@@ -233,7 +233,7 @@ def _load_auxfile_member(root_dir, filenm, typ, metadata, quick_load):
         elif cur_typ == 'reset':  # 'reset' doesn't write and loads in as None
             val = None  # no file exists for this member
         elif cur_typ == 'text-circuit-list':
-            val = _load.load_circuit_list(pth)
+            val = _load.read_circuit_list(pth)
         elif cur_typ == 'dir-serialized-object':
             val = _cls_from_meta_json(pth).from_dir(pth, quick_load=quick_load)
         elif cur_typ == 'partialdir-serialized-object':
@@ -241,7 +241,7 @@ def _load_auxfile_member(root_dir, filenm, typ, metadata, quick_load):
         elif cur_typ == 'serialized-object':
             val = _NicelySerializable.read(pth)
         elif cur_typ == 'circuit-str-json':
-            val = _load.load_circuits_as_strs(pth)
+            val = _load.read_circuit_strings(pth)
         elif typ == 'numpy-array':
             val = _np.load(pth)
         elif typ == 'json':
@@ -425,7 +425,7 @@ def _write_auxfile_member(root_dir, filenm, typ, val):
                 "Non-nicely-serializable '%s' object given for a 'serialized-object' auxfile type!" % (str(type(val)))
             val.write(pth)
         elif cur_typ == 'circuit-str-json':
-            _write.write_circuits_as_strs(pth, val)
+            _write.write_circuit_strings(pth, val)
         elif cur_typ == 'numpy-array':
             _np.save(pth, val)
         elif typ == 'json':

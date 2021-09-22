@@ -382,7 +382,7 @@ Gx^4  0:100
         with open(temp_files + "/SparseDataset.txt",'w') as f:
             f.write(dataset_txt)
 
-        ds = pygsti.io.load_dataset(temp_files + "/SparseDataset.txt", record_zero_counts=False)
+        ds = pygsti.io.read_dataset(temp_files + "/SparseDataset.txt", record_zero_counts=False)
         self.assertEqual(ds.outcome_labels, [('0',), ('1',), ('2',)])
         self.assertEqual(ds[()].outcomes, [('1',)]) # only nonzero count is 1-count
         self.assertEqual(ds[()]['2'], 0) # but we can query '2' since it's a valid outcome label
@@ -415,7 +415,7 @@ Gx^4 100 0
         with open(temp_files + "/SparseDataset2.txt",'w') as f:
             f.write(dataset_txt2)
 
-        ds = pygsti.io.load_dataset(temp_files + "/SparseDataset2.txt", record_zero_counts=True)
+        ds = pygsti.io.read_dataset(temp_files + "/SparseDataset2.txt", record_zero_counts=True)
         self.assertEqual(ds.outcome_labels, [('0',), ('1',)])
         self.assertEqual(ds[()].outcomes, [('0',),('1',)]) # both outcomes even though only nonzero count is 1-count
         with self.assertRaises(KeyError):

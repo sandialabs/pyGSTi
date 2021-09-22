@@ -296,7 +296,7 @@ class TestWorkspace(ReportBaseCase):
         plts.append( w.ColorBoxPlot(("dscmp",), self.gss, None, self.mdl, dscomparator=dsc) ) # dscmp with 'None' dataset specified
         plts.append( w.ColorBoxPlot(("dscmp",), self.gss, None, self.mdl, dscomparator=dsc2) )
 
-        tds = pygsti.io.load_time_dependent_dataset(compare_files + "/timeseries_data_trunc.txt")
+        tds = pygsti.io.read_time_dependent_dataset(compare_files + "/timeseries_data_trunc.txt")
         #OLD: driftresults = drift.do_basic_drift_characterization(tds)
         results_gst = drift.StabilityAnalyzer(tds, ids=True)
         results_gst.compute_spectra()

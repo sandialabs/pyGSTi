@@ -45,7 +45,7 @@ class LabelTestCase(BaseTestCase):
         gslist = pygsti.circuits.to_circuits([('Gx', 'Gy'), (('Gx', 0), ('Gy', 1)), ((('Gx', 0), ('Gy', 1)), ('Gcnot', 0, 1))])
 
         pygsti.io.write_circuit_list(temp_files + "/test_gslist.txt", gslist)
-        gslist2 = pygsti.io.load_circuit_list(temp_files + "/test_gslist.txt")
+        gslist2 = pygsti.io.read_circuit_list(temp_files + "/test_gslist.txt")
         self.assertEqual(gslist,gslist2)
 
     def test_layerlizzard(self):

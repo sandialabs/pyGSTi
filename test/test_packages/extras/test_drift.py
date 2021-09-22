@@ -105,7 +105,7 @@ class DriftTestCase(BaseTestCase):
     @unittest.skip("Need to update this test - do_stability_analysis no longer exists")
     def test_core_and_stabilityanalyzer(self):
 
-        ds = pygsti.io.load_time_dependent_dataset("cmp_chk_files/timeseries_data_trunc.txt")
+        ds = pygsti.io.read_time_dependent_dataset("cmp_chk_files/timeseries_data_trunc.txt")
         fiducial_strs = ['{}', 'Gx', 'Gy', 'GxGx', 'GxGxGx', 'GyGyGy']
         germ_strs = ['Gi']
         fiducials = [pygsti.objects.Circuit(None, stringrep=fs) for fs in fiducial_strs]

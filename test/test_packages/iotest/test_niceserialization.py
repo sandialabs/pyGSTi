@@ -60,15 +60,15 @@ class NiceSerializationTester(BaseTestCase):
 
         # Next, try writing an empty protocol data
         clear_root(test_serialization_root)
-        pygsti.io.write_empty_protocol_data(combined_design, test_serialization_root, clobber_ok=True)
+        pygsti.io.write_empty_protocol_data(test_serialization_root, combined_design, clobber_ok=True)
 
         # Generate some fake data
         datagen_model = pygsti.models.create_crosstalk_free_model(pspec, depolarization_strengths={'Gxpi2': 0.03, 'Gypi2': 0.01, 'Gcnot': 0.09})
-        pygsti.io.fill_in_empty_dataset_with_fake_data(datagen_model, os.path.join(test_serialization_root, "data/dataset.txt"),
-                                                       1000, seed=1234)
+        pygsti.io.fill_in_empty_dataset_with_fake_data(os.path.join(test_serialization_root, "data/dataset.txt"),
+                                                       datagen_model, 1000, seed=1234)
 
         # Load data & edesigns in 
-        data = pygsti.io.load_data_from_dir(test_serialization_root)
+        data = pygsti.io.read_data_from_dir(test_serialization_root)
 
         # Run protocols & write results
         gst_proto = pygsti.protocols.StandardGST("full TP")
@@ -87,7 +87,7 @@ class NiceSerializationTester(BaseTestCase):
         rb_results.write()
 
         # Read in results and look at them
-        results = pygsti.io.load_results_from_dir(test_serialization_root)
+        results = pygsti.io.read_results_from_dir(test_serialization_root)
 
         rdir = results['gst0'][(0,)]
         rdir.for_protocol['StandardGST'].estimates['full TP'].models
