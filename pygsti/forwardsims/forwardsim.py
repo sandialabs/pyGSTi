@@ -824,6 +824,9 @@ class ForwardSimulator(_NicelySerializable):
             else:
                 yield wrtSlice1, wrtSlice2, hprobs
 
+    def __str__(self):
+        return self.__class__.__name__
+
 
 class CacheForwardSimulator(ForwardSimulator):
     """
