@@ -11,6 +11,8 @@ Defines the UnconstrainedPOVM class
 #***************************************************************************************************
 
 from pygsti.modelmembers.povms.basepovm import _BasePOVM
+from pygsti.modelmembers.povms.effect import POVMEffect as _POVMEffect
+from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 
 
 class UnconstrainedPOVM(_BasePOVM):

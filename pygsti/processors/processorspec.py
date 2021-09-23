@@ -20,9 +20,10 @@ from pygsti.tools import optools as _ot
 from pygsti.tools import basistools as _bt
 from pygsti.baseobjs import qubitgraph as _qgraph
 from pygsti.baseobjs.label import Label as _Lbl
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 
 
-class ProcessorSpec(object):
+class ProcessorSpec(_NicelySerializable):
     """
     The API presented by a quantum processor, and possible classical control processors.
 
@@ -183,6 +184,35 @@ class QubitProcessorSpec(ProcessorSpec):
         if nonstd_gate_symplecticreps is not None:
             self._symplectic_reps.update(nonstd_gate_symplecticreps)
         super(QubitProcessorSpec, self).__init__()
+
+    def _to_nice_serialization(self):  # memo holds already serialized objects
+        state = super()._to_nice_serialization()
+        state.update({'qubit_labels': list(self.qubit_labels),
+                      'gate_names': list(self.gate_names),  # TODO: what if labels and not just strings?
+                      'availability': self.availability,  # should just have native types
+                      'geometry': self.qubit_graph.to_nice_serialization(),
+                      'nonstd_gate_unitaries': {k: self._encodemx(mx) for k, mx in self.nonstd_gate_unitaries.items()},
+                      'symplectic_reps': {k: (self._encodemx(s), self._encodemx(p))
+                                          for k, (s, p) in self._symplectic_reps.items()},
+                      'aux_info': self.aux_info
+                      })
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):  # memo holds already de-serialized objects
+
+        def _tuplize(x):
+            if isinstance(x, (list, tuple)):
+                return tuple((_tuplize(el) for el in x))
+            return x
+
+        nonstd_gate_unitaries = {k: cls._decodemx(mx) for k, mx in state['nonstd_gate_unitaries'].items()}
+        symplectic_reps = {k: (cls._decodemx(s), cls._decodemx(p)) for k, (s, p) in state['symplectic_reps'].items()}
+        availability = {k: _tuplize(v) for k, v in state['availability'].items()}
+        geometry = _qgraph.QubitGraph.from_nice_serialization(state['geometry'])
+
+        return cls(len(state['qubit_labels']), state['gate_names'], nonstd_gate_unitaries, availability,
+                   geometry, state['qubit_labels'], symplectic_reps, state['aux_info'])
 
     @property
     def num_qubits(self):

@@ -13,6 +13,7 @@ Functions for analyzing RB data
 import numpy as _np
 from scipy.optimize import curve_fit as _curve_fit
 
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.tools import rbtools as _rbt
 
 
@@ -351,7 +352,7 @@ def custom_least_squares_fit(lengths, asps, n, a=None, b=None, seed=None, rtype=
     return results
 
 
-class FitResults(object):
+class FitResults(_NicelySerializable):
     """
     An object to contain the results from fitting RB data.
 
@@ -440,6 +441,26 @@ class FitResults(object):
 
         self.bootstraps = bootstraps
         self.bootstraps_failrate = bootstraps_failrate
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'fit_type': self.fittype,
+                      'seed': self.seed,
+                      'r_type': self.rtype,
+                      'success': self.success,
+                      'estimates': self.estimates,
+                      'variable': self.variable,
+                      'stds': self.stds,
+                      'bootstraps': self.bootstraps,
+                      'bootstraps_failrate': self.bootstraps_failrate
+                      })
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        return cls(state['fit_type'], state['seed'], state['r_type'], state['success'],
+                   state['estimates'], state['variable'], state['stds'],
+                   state['bootstraps'], state['bootstraps_failrate'])
 
 # Obsolute RB results class
 # class SimpleRBResults(object):

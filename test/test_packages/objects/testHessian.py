@@ -207,10 +207,16 @@ class TestHessianMethods(BaseTestCase):
 
 
         #Add estimate for with bad objective ---------------------------------------------------------
+        class FooBar:
+            def __init__(self):
+                self.cls_to_build = list  # an invalid objective class
+                self.regularization = {}
+                self.penalties = {}
+        
         res.add_estimate(
             proto.estimate.Estimate.create_gst_estimate(
                 res, stdxyi.target_model(), stdxyi.target_model(),
-                [self.model]*len(self.maxLengthList), parameters={'objective': 'foobar'}),
+                [self.model]*len(self.maxLengthList), parameters={'final_objfn_builder': FooBar()}),
             estimate_key="foo"
         )
 

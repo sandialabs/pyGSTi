@@ -7,6 +7,7 @@ import pygsti.models.modelconstruction as mc
 import pygsti.modelmembers.operations as op
 import pygsti.tools.basistools as bt
 from pygsti.processors.processorspec import QubitProcessorSpec as _ProcessorSpec
+from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as GEEL
 from ..util import BaseCase
 
 
@@ -87,12 +88,11 @@ class ModelConstructionTester(BaseCase):
         addlErr = pygsti.modelmembers.operations.FullTPOp(np.identity(4, 'd'))  # adds 12 params
         addlErr2 = pygsti.modelmembers.operations.FullTPOp(np.identity(4, 'd'))  # adds 12 params
 
+        mdl.operation_blks['gates']['Gi'].append(addlErr)
         mdl.operation_blks['gates']['Gx'].append(addlErr)
         mdl.operation_blks['gates']['Gy'].append(addlErr2)
-        mdl.operation_blks['gates']['Gi'].append(addlErr)
 
         # TODO: If you call mdl.num_params between the 3 calls above, this second one has an error...
-
         self.assertEqual(mdl.num_params, 24)
 
         # TODO: These are maybe not deterministic? Sometimes are swapped for me...
@@ -266,7 +266,7 @@ class ModelConstructionTester(BaseCase):
         )
         Gi_op = mdl_lb1.operation_blks['gates']['Gi']
         self.assertTrue(isinstance(Gi_op, op.ComposedOp))
-        self.assertEqual(Gi_op.errorgen_coefficients(), {('H', 'X'): 0.1, ('S', 'Y'): 0.1})
+        self.assertEqual(Gi_op.errorgen_coefficients(), {GEEL('H', ['X'], [0]): 0.1, GEEL('S', ['Y'], [0]): 0.1})
         self.assertEqual(mdl_lb1.num_params, 2)
     
         # Test param passthrough
@@ -276,7 +276,7 @@ class ModelConstructionTester(BaseCase):
         )
         Gi_op = mdl_lb2.operation_blks['gates']['Gi']
         self.assertTrue(isinstance(Gi_op, op.ComposedOp))
-        self.assertEqual(Gi_op.errorgen_coefficients(), {('H', 'X'): 0.1, ('S', 'Y'): 0.1})
+        self.assertEqual(Gi_op.errorgen_coefficients(), {GEEL('H', ['X'], [0]): 0.1, GEEL('S', ['Y'], [0]): 0.1})
         self.assertEqual(mdl_lb2.num_params, 2)
 
         mdl_prep1 = mc.create_crosstalk_free_model(

@@ -11,6 +11,7 @@ Defines the TPPOVM class
 #***************************************************************************************************
 
 from pygsti.modelmembers.povms.basepovm import _BasePOVM
+from pygsti.modelmembers.povms.effect import POVMEffect as _POVMEffect
 
 
 class TPPOVM(_BasePOVM):

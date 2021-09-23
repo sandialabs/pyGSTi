@@ -75,7 +75,7 @@ cdef class StateRep(_basereps_cython.StateRep):
 
 cdef class StateRepDensePure(StateRep):
 
-    def __cinit__(self, purevec, basis, state_space):
+    def __cinit__(self, purevec, state_space, basis):
         self._cinit_base(purevec, state_space, basis)
 
     @property
@@ -86,7 +86,7 @@ cdef class StateRepDensePure(StateRep):
         pass
 
     def __reduce__(self):
-        return (StateRepDensePure, (self.data, self.basis, self.state_space), (self.data.flags.writeable,))
+        return (StateRepDensePure, (self.data, self.state_space, self.basis), (self.data.flags.writeable,))
 
 
 cdef class StateRepComputational(StateRep):

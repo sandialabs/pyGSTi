@@ -21,7 +21,12 @@ import scipy.stats as _stats
 from pygsti import optimize as _opt
 from pygsti import tools as _tools
 from pygsti.models.explicitcalc import P_RANK_TOL
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from pygsti.circuits.circuitlist import CircuitList as _CircuitList
+from pygsti.objectivefns.objectivefns import PoissonPicDeltaLogLFunction as _PoissonPicDeltaLogLFunction
+from pygsti.objectivefns.objectivefns import Chi2Function as _Chi2Function
+from pygsti.objectivefns.objectivefns import FreqWeightedChi2Function as _FreqWeightedChi2Function
 
 
 # NON-MARKOVIAN ERROR BARS
@@ -49,7 +54,7 @@ from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrint
 #
 
 
-class ConfidenceRegionFactory(object):
+class ConfidenceRegionFactory(_NicelySerializable):
     """
     An object which is capable of generating confidence intervals/regions.
 
@@ -149,6 +154,21 @@ class ConfidenceRegionFactory(object):
     def __setstate__(self, state_dict):
         self.__dict__.update(state_dict)
         self.parent = None  # initialize to None upon unpickling
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'model_label': self.model_lbl,
+                      'circuit_list_label': self.circuit_list_lbl,
+                      'nonmarkovian_radius_squared': self.nonMarkRadiusSq,
+                      'hessian_matrix': self._encodemx(self.hessian) if (self.hessian is not None) else None
+                      })
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        return cls(None, state['model_label'], state['circuit_list_label'],
+                   cls._decodemx(state['hessian_matrix']) if (state['hessian_matrix'] is not None) else None,
+                   state['nonmarkovian_radius_squared'])
 
     def set_parent(self, parent):
         """
@@ -251,18 +271,26 @@ class ConfidenceRegionFactory(object):
         dataset = self.parent.parent.dataset
 
         #extract any parameters we can get from the Estimate
-        parameters = self.parent.parameters
-        obj = parameters.get('objective', 'logl')
-        minProbClip = parameters.get('minProbClip', 1e-4)
-        minProbClipForWeighting = parameters.get('minProbClipForWeighting', 1e-4)
-        probClipInterval = parameters.get('probClipInterval', (-1e6, 1e6))
-        radius = parameters.get('radius', 1e-4)
-        cptp_penalty_factor = parameters.get('cptpPenaltyFactor', 0)
-        spam_penalty_factor = parameters.get('spamPenaltyFactor', 0)
-        useFreqWt = parameters.get('useFreqWeightedChiSq', False)
-        aliases = parameters.get('opLabelAliases', None)
-        if mem_limit is None:
-            mem_limit = parameters.get('mem_limit', None)
+        objfn_builder = self.parent.final_objfn_builder
+        regularization = objfn_builder.regularization if (objfn_builder.regularization is not None) else {}
+        penalties = objfn_builder.penalties if (objfn_builder.penalties is not None) else {}
+        
+        if issubclass(objfn_builder.cls_to_build, _PoissonPicDeltaLogLFunction):
+            obj = 'logl'
+            useFreqWt = False
+        elif issubclass(objfn_builder.cls_to_build, (_Chi2Function, _FreqWeightedChi2Function)):
+            obj = 'chi2'
+            useFreqWt = issubclass(objfn_builder.cls_to_build, _FreqWeightedChi2Function)
+        else:
+            raise ValueError("Unsupported objective function class: " + objfn_builder.cls_to_build.__name__)
+
+        minProbClip = regularization.get('min_prob_clip', 1e-4)
+        minProbClipForWeighting = regularization.get('min_prob_clip_for_weighting', 1e-4)
+        probClipInterval = penalties.get('prob_clip_interval', (-1e6, 1e6))
+        radius = regularization.get('radius', 1e-4)
+        cptp_penalty_factor = penalties.get('cptp_penalty_factor', 0)
+        spam_penalty_factor = penalties.get('spam_penalty_factor', 0)
+        aliases = circuit_list.op_label_aliases if isinstance(circuit_list, _CircuitList) else None
 
         vb = 3 if mem_limit else 0  # only show details of hessian comp when there's a mem limit (a heuristic)
 

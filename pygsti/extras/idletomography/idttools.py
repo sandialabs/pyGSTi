@@ -13,10 +13,10 @@ import itertools as _itertools
 import numpy as _np
 
 from . import pauliobjs as _pobjs
-from ... import tools as _tools
-from ...modelmembers import operations as _op
-from ...circuits import cloudcircuitconstruction as _nqn
-
+from pygsti import tools as _tools
+from pygsti.modelmembers import operations as _op
+from pygsti.circuits import cloudcircuitconstruction as _nqn
+from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel
 
 # maybe need to restructure in future - "tools" usually doesn't import "objects"
 
@@ -417,6 +417,14 @@ def predicted_intrinsic_rates(nqubits, maxweight, model,
         #if stochastic: stochastic_sub_v = sub_v[bsH - 1:bsH - 1 + bsO - 1]
         #if affine: affine_sub_v = sub_v[bsH - 1 + bsO - 1:bsH - 1 + 2 * (bsO - 1)]
 
+        def toGEL(loc_lbl):
+            return _GlobalElementaryErrorgenLabel.cast(
+                loc_lbl, sslbls=experrgen_op.state_space.tensor_product_block_labels(0))
+            # Note: we need to use experrgen_op labels because embedded op state space doesn't
+            # have target label...
+
+        #print("DEBUG errgen lbls = ",list(errgen_coeffs.keys()))
+
         for k, tup in enumerate(nontrivial_paulis(len(targetLabels))):
             lst = ['I'] * nqubits
             for ii, i in enumerate(targetLabels):
@@ -425,14 +433,16 @@ def predicted_intrinsic_rates(nqubits, maxweight, model,
             label = "".join(lst)  # label on *all* qubits (with 'I's)
             P = ''.join(tup)  # nontrivial pauli on target qubits (no 'I's)
 
+            #print("DEBUG testing ", P, " with targets ", targetLabels)
+
             result_index = error_labels.index(label)
-            if hamiltonian and ('H', P) in errgen_coeffs:
-                ham_intrinsic_rates[result_index] = errgen_coeffs[('H', P)]
-            if stochastic and ('S', P) in errgen_coeffs:
-                sto_intrinsic_rates[result_index] = errgen_coeffs[('S', P)]
-            if affine and ('A', P) in errgen_coeffs:
+            if hamiltonian and toGEL(('H', P)) in errgen_coeffs:
+                ham_intrinsic_rates[result_index] = errgen_coeffs[toGEL(('H', P))]
+            if stochastic and toGEL(('S', P)) in errgen_coeffs:
+                sto_intrinsic_rates[result_index] = errgen_coeffs[toGEL(('S', P))]
+            if affine and toGEL(('A', P)) in errgen_coeffs:
                 scale = 1 / (_np.sqrt(2)**nTargetQubits)  # not exactly sure how this is derived
-                aff_intrinsic_rates[result_index] = errgen_coeffs[('A', P)] * scale
+                aff_intrinsic_rates[result_index] = errgen_coeffs[toGEL(('A', P))] * scale
 
     return ham_intrinsic_rates, sto_intrinsic_rates, aff_intrinsic_rates
 

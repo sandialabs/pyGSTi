@@ -802,8 +802,8 @@ class TPInstrumentOpTester(ImmutableDenseOpBase, BaseCase):
         return inst['plus']
 
     def test_vector_conversion(self):
-        with self.assertRaises(ValueError):
-            self.gate.to_vector()
+        #with self.assertRaises(ValueError):
+        self.gate.to_vector()  # now to_vector is allowed
 
     def test_deriv_wrt_params(self):
         super(TPInstrumentOpTester, self).test_deriv_wrt_params()

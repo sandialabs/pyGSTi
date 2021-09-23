@@ -37,24 +37,28 @@ class InstrumentTestCase(BaseTestCase):
         I = pygsti.modelmembers.instruments.Instrument({},
                                                        evotype='default',
                                                        state_space=pygsti.baseobjs.statespace.default_space_for_udim(2))
-        InstEl.set_gpindices(slice(0,16), I)
-        InstEl2.set_gpindices(slice(8,24), I) # some overlap - to test _build_paramvec
 
-        # TESTING ONLY - so we can add items!!!
-        I._readonly = False
-        I['A'] = InstEl
-        I['B'] = InstEl2
-        I._readonly = True
-
-        I._paramvec, I._paramlbls = I._build_paramvec()
-          # this whole test was to exercise this function's ability to
-          # form a parameter vector with weird overlapping gpindices.
-        self.assertEqual( len(I._paramvec) , 24 )
+        #TODO later: add tests to appending elements to an instrument
+        
+        #OLD REMOVE: No need to test this anymore - _build_paramvec has been removed
+        #InstEl.set_gpindices(slice(0,16), I)
+        #InstEl2.set_gpindices(slice(8,24), I) # some overlap - to test _build_paramvec
+        #
+        ## TESTING ONLY - so we can add items!!!
+        #I._readonly = False
+        #I['A'] = InstEl
+        #I['B'] = InstEl2
+        #I._readonly = True
+        #
+        #I._paramvec, I._paramlbls = I._build_paramvec()
+        #  # this whole test was to exercise this function's ability to
+        #  # form a parameter vector with weird overlapping gpindices.
+        #self.assertEqual( len(I._paramvec) , 24 )
 
     def testInstrumentMethods(self):
 
         v = self.mdl_target_wTP.to_vector()
-
+        
         mdl = self.mdl_target_wTP.copy()
         mdl.from_vector(v)
         mdl.basis = self.mdl_target_wTP.basis.copy()
@@ -158,7 +162,7 @@ class InstrumentTestCase(BaseTestCase):
         mdl_targetTP.set_all_parameterizations("full TP")
         self.assertEqual(mdl_targetTP.num_params,71) # 3 + 4*2 + 12*5 = 71
         #print(mdl_targetTP)
-        resultsTP = pygsti.run_long_sequence_gst(ds, mdl_targetTP, fiducials, fiducials, germs, max_lengths)
+        resultsTP = pygsti.run_long_sequence_gst(ds, mdl_targetTP, fiducials, fiducials, germs, max_lengths, verbosity=4)
         mdl_est = resultsTP.estimates[resultsTP.name].models['go0']
         mdl_est_opt = pygsti.gaugeopt_to_target(mdl_est, mdl_datagen)
         print("TP Frobdiff = ", mdl_datagen.frobeniusdist(mdl_est))

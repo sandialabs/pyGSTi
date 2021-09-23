@@ -74,6 +74,7 @@ class StateRepComputational(StateRep):
         ps = state_ps.reshape(1, 2 * nqubits)
         a = _np.ones(1, complex)  # all == 1.0 by default
 
+        self.zvals = zvals
         self.basis = basis
         super(StateRepComputational, self).__init__(state_s, ps, a, state_space)
 

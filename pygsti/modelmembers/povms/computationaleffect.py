@@ -152,6 +152,35 @@ class ComputationalBasisPOVMEffect(_POVMEffect):
         rep = evotype.create_computational_effect_rep(zvals, basis, state_space)
         _POVMEffect.__init__(self, rep, evotype)
 
+    def to_memoized_dict(self, mmg_memo):
+        """Create a serializable dict with references to other objects in the memo.
+
+        Parameters
+        ----------
+        mmg_memo: dict
+            Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
+            are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
+            the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
+
+        Returns
+        -------
+        mm_dict: dict
+            A dict representation of this ModelMember ready for serialization
+            This must have at least the following fields:
+                module, class, submembers, params, state_space, evotype
+            Additional fields may be added by derived classes.
+        """
+        mm_dict = super().to_memoized_dict(mmg_memo)
+        mm_dict['zvals'] = self._rep.zvals.tolist()
+        mm_dict['basis'] = self._rep.basis.to_nice_serialization()
+        return mm_dict
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
+        basis = _Basis.from_nice_serialization(mm_dict['basis'])
+        return cls(_np.array(mm_dict['zvals']), basis, mm_dict['evotype'], state_space)
+
     def to_dense(self, on_space='minimal', scratch=None):
         """
         Return this POVM effect vector as a (dense) numpy array.

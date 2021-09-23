@@ -87,6 +87,37 @@ class CPTPState(_DenseState):
         _DenseState.__init__(self, vector, evotype, state_space)
         self._paramlbls = _np.array(labels, dtype=object)
 
+    def to_memoized_dict(self, mmg_memo):
+        """Create a serializable dict with references to other objects in the memo.
+
+        Parameters
+        ----------
+        mmg_memo: dict
+            Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
+            are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
+            the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
+
+        Returns
+        -------
+        mm_dict: dict
+            A dict representation of this ModelMember ready for serialization
+            This must have at least the following fields:
+                module, class, submembers, params, state_space, evotype
+            Additional fields may be added by derived classes.
+        """
+        mm_dict = super().to_memoized_dict(mmg_memo)  # contains 'dense_state_vector' via DenseState base class
+        mm_dict['basis'] = self.basis.to_nice_serialization()
+
+        return mm_dict
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        vec = _np.array(mm_dict['dense_state_vector'])
+        state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
+        basis = _Basis.from_nice_serialization(mm_dict['basis'])
+        truncate = False  # shouldn't need to since we're loading a valid object
+        return cls(vec, basis, truncate, mm_dict['evotype'], state_space)
+
     def _set_params_from_vector(self, vector, truncate):
         density_mx = _np.dot(self.basis_mxs, vector)
         density_mx = density_mx.squeeze()

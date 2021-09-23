@@ -17,7 +17,13 @@ import uuid as _uuid
 from pygsti.models import model as _mdl
 from pygsti.modelmembers import operations as _op
 from pygsti.modelmembers import povms as _povm
+from pygsti.modelmembers.modelmembergraph import ModelMemberGraph as _MMGraph
 from pygsti.baseobjs.label import Label as _Label
+
+from pygsti.baseobjs.basis import Basis as _Basis
+from pygsti.baseobjs.statespace import StateSpace as _StateSpace
+from pygsti.models.layerrules import LayerRules as _LayerRules
+from pygsti.forwardsims.forwardsim import ForwardSimulator as _FSim
 
 
 class ImplicitOpModel(_mdl.OpModel):
@@ -311,6 +317,55 @@ class ImplicitOpModel(_mdl.OpModel):
         self._opcaches.update(simplified_effect_blks)
         self._opcaches.update(simplified_op_blks)
         self._opcaches['complete-layers'] = {}  # used to hold final layers (of any type) if needed
+
+    def create_modelmember_graph(self):
+        self._clean_paramvec()  # Rebuild params to ensure accurate comparisons with MMGraphs
+
+        root_dicts = {
+            'prep_blks': self.prep_blks,
+            'povm_blks': self.povm_blks,
+            'operation_blks': self.operation_blks,
+            'instrument_blks': self.instrument_blks,
+            'factories': self.factories,
+        }
+        mm_dicts = {(root_str + "|" + k): mm_dict
+                    for root_str, root_dict in root_dicts.items()
+                    for k, mm_dict in root_dict.items()}
+        return _MMGraph(mm_dicts)
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'basis': self.basis.to_nice_serialization(),
+                      'evotype': str(self.evotype),  # TODO or serialize?
+                      'layer_rules': self._layer_rules.to_nice_serialization(),
+                      'simulator': self.sim.to_nice_serialization()
+                     })
+
+        mmgraph = self.create_modelmember_graph()
+        state['modelmembers'] = mmgraph.create_serialization_dict()
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        state_space = _StateSpace.from_nice_serialization(state['state_space'])
+        layer_rules = _LayerRules.from_nice_serialization(state['layer_rules'])
+        basis = _Basis.from_nice_serialization(state['basis'])
+        modelmembers = _MMGraph.load_modelmembers_from_serialization_dict(state['modelmembers'])
+        simulator = _FSim.from_nice_serialization(state['simulator'])
+
+        mdl = cls(state_space, layer_rules, basis, simulator, state['evotype'])
+
+        root_dicts = {
+            'prep_blks': mdl.prep_blks,
+            'povm_blks': mdl.povm_blks,
+            'operation_blks': mdl.operation_blks,
+            'instrument_blks': mdl.instrument_blks,
+            'factories': mdl.factories,
+        }
+        for mm_key, mm_dict in modelmembers.items():
+            root_key, sub_key = mm_key.split('|')
+            root_dicts[root_key][sub_key].update(mm_dict)  # Note: sub_keys should already be created
+        return mdl
 
 
 def _init_spam_layers(model, prep_layers, povm_layers):

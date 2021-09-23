@@ -58,7 +58,7 @@ class ExplicitOpModelCalc(object):
         number of parameters of the associated :class:`ExplicitOpModel`).
     """
 
-    def __init__(self, dim, simplified_preps, simplified_ops, simplified_effects, np):
+    def __init__(self, dim, simplified_preps, simplified_ops, simplified_effects, np, interposer=None):
         """
         Initialize a new ExplicitOpModelCalc object.
 
@@ -75,12 +75,16 @@ class ExplicitOpModelCalc(object):
         np : int
             The total number of parameters in all the operators (the
             number of parameters of the associated :class:`ExplicitOpModel`).
+
+        interposer : ModelParamsInterposer, optional
+            An interposer object that converts between "operator" and "model" parameter arrays.
         """
         self.dim = dim
         self.preps = simplified_preps
         self.operations = simplified_ops
         self.effects = simplified_effects
         self.Np = np
+        self.interposer = interposer
 
     def all_objects(self):
         """
@@ -99,7 +103,7 @@ class ExplicitOpModelCalc(object):
         -------
         ExplicitOpModelCalc
         """
-        return ExplicitOpModelCalc(self.dim, self.preps, self.operations, self.effects, self.Np)
+        return ExplicitOpModelCalc(self.dim, self.preps, self.operations, self.effects, self.Np, self.interposer)
 
     def frobeniusdist(self, other_calc, transform_mx=None,
                       item_weights=None, normalize=True):
@@ -427,14 +431,17 @@ class ExplicitOpModelCalc(object):
             2D array of derivatives.
         """
         num_els = sum([obj.size for _, obj in self.all_objects()])
-        num_params = self.Np
-        deriv = _np.zeros((num_els, num_params), 'd')
+        num_op_params = self.Np if (self.interposer is None) else self.interposer.num_op_params
+        deriv = _np.zeros((num_els, num_op_params), 'd')
 
         eo = 0  # element offset
         for lbl, obj in self.all_objects():
             #Note: no overlaps possible b/c of independent *elements*
             deriv[eo:eo + obj.size, obj.gpindices] = obj.deriv_wrt_params()
             eo += obj.size
+
+        if self.interposer is not None:
+            deriv = _np.dot(deriv, self.interposer.deriv_op_params_wrt_model_params())
 
         return deriv
 

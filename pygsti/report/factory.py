@@ -381,10 +381,11 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
             for iL, L in enumerate(swLs):  # allow different results to have different Ls
                 if L in loc_Ls:
                     k = loc_Ls.index(L)
-                    switchBd.mdl_current[d, i, iL] = est.models['iteration estimates'][k]
-                    switchBd.mdl_current_modvi[d, i, iL] = est_modvi.models['iteration estimates'][k]
-            switchBd.mdl_all[d, i] = est.models['iteration estimates']
-            switchBd.mdl_all_modvi[d, i] = est_modvi.models['iteration estimates']
+                    switchBd.mdl_current[d, i, iL] = est.models['iteration %d estimate' % k]
+                    switchBd.mdl_current_modvi[d, i, iL] = est_modvi.models['iteration %d estimate' % k]
+            switchBd.mdl_all[d, i] = [est.models['iteration %d estimate' % k] for k in range(est.num_iterations)]
+            switchBd.mdl_all_modvi[d, i] = [est_modvi.models['iteration %d estimate' % k]
+                                            for k in range(est_modvi.num_iterations)]
 
             if confidence_level is not None:
                 misfit_sigma = est.misfit_sigma()
@@ -449,7 +450,6 @@ def _construct_idtresults(idt_idle_op, idt_pauli_dicts, gst_results_dict, printe
         return {}
 
     idt_results_dict = {}
-    GiStr = _Circuit((idt_idle_op,))
 
     from ..extras import idletomography as _idt
     autodict = bool(idt_pauli_dicts == "auto")
@@ -464,6 +464,9 @@ def _construct_idtresults(idt_idle_op, idt_pauli_dicts, gst_results_dict, printe
             idt_pauli_dicts = _idt.determine_paulidicts(idt_target)
             if idt_pauli_dicts is None:
                 continue  # automatic creation failed -> skip
+
+        qubit_labels = idt_target.state_space.tensor_product_block_labels(0)
+        GiStr = _Circuit((idt_idle_op,), line_labels=qubit_labels)
 
         circuits_final = results.circuit_lists['final']
         if not isinstance(circuits_final, _CircuitList): continue
@@ -484,12 +487,12 @@ def _construct_idtresults(idt_idle_op, idt_pauli_dicts, gst_results_dict, printe
         maxLengths = circuit_struct.xs
         # just use "L0" (first maxLength) - all should have same fidpairs
         plaq = circuit_struct.plaquette(maxLengths[0], GiStr)
-        pauli_fidpairs = _idt.fidpairs_to_pauli_fidpairs(plaq.fidpairs, idt_pauli_dicts, nQubits)
+        pauli_fidpairs = _idt.fidpairs_to_pauli_fidpairs(list(plaq.fidpairs.values()), idt_pauli_dicts, nQubits)
         idt_advanced = {'pauli_fidpairs': pauli_fidpairs, 'jacobian mode': "together"}
         printer.log(" * Running idle tomography on %s dataset *" % ky)
         idtresults = _idt.do_idle_tomography(nQubits, results.dataset, maxLengths, idt_pauli_dicts,
                                              maxweight=2,  # HARDCODED for now (FUTURE)
-                                             idle_string=idStr, advancedOptions=idt_advanced)
+                                             idle_string=idStr, advanced_options=idt_advanced)
         idt_results_dict[ky] = idtresults
 
     return idt_results_dict

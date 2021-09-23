@@ -173,21 +173,38 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
         """
         dim = self.model.evotype.minimal_dim(self.model.state_space)
         gate = self.model.circuit_layer_operator(op_label, 'op')
-        op_wrtFilter, gpindices = self._process_wrt_filter(wrt_filter, gate)
 
         # Allocate memory for the final result
         num_deriv_cols = self.model.num_params if (wrt_filter is None) else len(wrt_filter)
-        flattened_dprod = _np.zeros((dim**2, num_deriv_cols), 'd')
+        #num_op_params = self.model._param_interposer.num_op_params \
+        #    if (self.model._param_interposer is not None) else self.model.num_params
 
-        _fas(flattened_dprod, [None, gpindices],
-             gate.deriv_wrt_params(op_wrtFilter))  # (dim**2, n_params[op_label])
+        #Note: deriv_wrt_params is more accurately deriv wrt *op* params when there is an interposer
+        # d(op)/d(params) = d(op)/d(op_params) * d(op_params)/d(params)
+        if self.model._param_interposer is not None:
+            #When there is an interposer, we compute derivs wrt *all* the ops params (inefficient?),
+            # then apply interposer, then take desired wrt_filter columns:
+            assert(self.model._param_interposer.num_params == self.model.num_params)
+            num_op_params = self.model._param_interposer.num_op_params
+            deriv_wrt_op_params = _np.zeros((dim**2, num_op_params), 'd')
+            deriv_wrt_op_params[:, gate.gpindices] = gate.deriv_wrt_params()  # *don't* apply wrt filter here
+            deriv_wrt_params = _np.dot(deriv_wrt_op_params,
+                                       self.model._param_interposer.deriv_op_params_wrt_model_params())
+            # deriv_wrt_params is a derivative matrix with respect to *all* the model's parameters, so
+            # now just take requested subset:
+            flattened_dprod = deriv_wrt_params[:, wrt_filter] if (wrt_filter is not None) else deriv_wrt_params
+        else:
+            #Simpler case of no interposer: use _process_wrt_filter to "convert" from op params to model params
+            # (the desired op params are just some subset, given by gpindices and op_wrtFilter, of the model parameters)
+            flattened_dprod = _np.zeros((dim**2, num_deriv_cols), 'd')
+            op_wrtFilter, gpindices = self._process_wrt_filter(wrt_filter, gate)
 
-        if _slct.length(gpindices) > 0:  # works for arrays too
-            # Compute the derivative of the entire circuit with respect to the
-            # gate's parameters and fill appropriate columns of flattened_dprod.
-            #gate = self.model.operation[op_label] UNNEEDED (I think)
-            _fas(flattened_dprod, [None, gpindices],
-                 gate.deriv_wrt_params(op_wrtFilter))  # (dim**2, n_params in wrt_filter for op_label)
+            if _slct.length(gpindices) > 0:  # works for arrays too
+                # Compute the derivative of the entire circuit with respect to the
+                # gate's parameters and fill appropriate columns of flattened_dprod.
+                #gate = self.model.operation[op_label] UNNEEDED (I think)
+                _fas(flattened_dprod, [None, gpindices],
+                     gate.deriv_wrt_params(op_wrtFilter))  # (dim**2, n_params in wrt_filter for op_label)
 
         if flat:
             return flattened_dprod
@@ -206,8 +223,10 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
         op_wrtFilter2, gpindices2 = self._process_wrt_filter(wrt_filter2, gate)
 
         # Allocate memory for the final result
-        num_deriv_cols1 = self.model.num_params if (wrt_filter1 is None) else len(wrt_filter1)
-        num_deriv_cols2 = self.model.num_params if (wrt_filter2 is None) else len(wrt_filter2)
+        num_op_params = self.model._param_interposer.num_op_params \
+            if (self.model._param_interposer is not None) else self.model.num_params
+        num_deriv_cols1 = num_op_params if (wrt_filter1 is None) else len(wrt_filter1)
+        num_deriv_cols2 = num_op_params if (wrt_filter2 is None) else len(wrt_filter2)
         flattened_hprod = _np.zeros((dim**2, num_deriv_cols1, num_deriv_cols2), 'd')
 
         if _slct.length(gpindices1) > 0 and _slct.length(gpindices2) > 0:  # works for arrays too
@@ -215,6 +234,14 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
             # gate's parameters and fill appropriate columns of flattened_dprod.
             _fas(flattened_hprod, [None, gpindices1, gpindices2],
                  gate.hessian_wrt_params(op_wrtFilter1, op_wrtFilter2))
+
+        #Note: deriv_wrt_params is more accurately derive wrt *op* params when there is an interposer
+        # d2(op)/d(p1)d(p2) = d2(op)/d(op_p1)d(op_p2) * d(op_p1)/d(p1) d(op_p2)/d(p2)
+        if self.model._param_interposer is not None:
+            assert(wrt_filter1 is None and wrt_filter2 is None), "Interposers not compatible with wrt-filters yet"
+            d_opp_wrt_p = self.model._param_interposer.deriv_op_params_wrt_model_params()
+            flattened_hprod = _np.einsum('ijk,jl,km->ilm', flattened_hprod, d_opp_wrt_p, d_opp_wrt_p)
+            num_deriv_cols1 = num_deriv_cols2 = self.model._param_interposer.num_params  # num *model* params
 
         if flat:
             return flattened_hprod
@@ -896,6 +923,18 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                  param_blk_sizes=None):
         super().__init__(model, num_atoms, processor_grid, param_blk_sizes)
         self._mode = "distribute_by_timestamp" if distribute_by_timestamp else "time_independent"
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'mode': self._mode,
+                      # (don't serialize parent model or processor distribution info)
+                      })
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        #Note: resets processor-distribution information
+        return cls(None, state['mode'] == "distribute_by_timestamp")
 
     def copy(self):
         """
