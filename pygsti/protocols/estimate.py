@@ -508,7 +508,7 @@ class Estimate(object):
         ref_model = self.models[from_model_label]
         goparams = self._gaugeopt_suite.gaugeopt_argument_dicts[to_model_label]
         goparams_list = [goparams] if hasattr(goparams, 'keys') else goparams
-        start_model = goparams_list[0]['model'].copy()
+        start_model = goparams_list[0]['model'].copy() if ('model' in goparams_list[0]) else ref_model.copy()
         final_model = self.models[to_model_label].copy()
 
         gauge_group_els = []

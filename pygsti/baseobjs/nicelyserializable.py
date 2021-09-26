@@ -335,3 +335,15 @@ class NicelySerializable(object):
             else:
                 decoded = basemx
         return decoded
+
+    @classmethod
+    def _encodevalue(cls, val):
+        return str(val) if _np.iscomplexobj(val) else \
+            (int(val) if isinstance(val, _np.int64) else val)
+
+    @classmethod
+    def _decodevalue(cls, val):
+        if isinstance(val, str):
+            return complex(val)
+        else:
+            return val

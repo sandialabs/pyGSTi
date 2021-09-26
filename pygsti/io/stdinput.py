@@ -67,7 +67,7 @@ def _create_display_progress_fn(show_progress):
 
             def _display_progress(i, n, filename):
                 _time.sleep(0.001); clear_output()
-                print("Loading %s: %.0f%%" % (filename, 100.0 * float(i) / float(n)))
+                print("Reading %s: %.0f%%" % (filename, 100.0 * float(i) / float(n)))
                 _sys.stdout.flush()
         except:
             def _display_progress(i, n, f): pass

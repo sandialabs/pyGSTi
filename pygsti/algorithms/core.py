@@ -204,7 +204,7 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
         lgstModel = _models.ExplicitOpModel([('L%d' % i,) for i in range(svd_truncate_to)], dumb_basis)
 
     for opLabel in op_labelsToEstimate:
-        print("LGST ",opLabel)
+        #print("LGST ",opLabel)
         Xs = _construct_x_matrix(prep_fiducials, effect_fiducials, target_model, (opLabel,),
                                  dataset, op_label_aliases)  # shape (nVariants, nESpecs, nRhoSpecs)
 
@@ -279,11 +279,9 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
         # guessPjt = _np.transpose(guessPj)         # shape = (guessTrunc, K)
 
         AMat = _construct_a(effect_fiducials, guess_model_for_gauge)    # shape = (nESpecs, gsDim)
-        print("AMat = \n"); print(_np.round(AMat, 4))
         # AMat_p = _np.dot( guessPjt, _np.dot(Ud, AMat)) #truncate Evec => Evec', shape (guessTrunc,gsDim) (square!)
 
         BMat = _construct_b(prep_fiducials, guess_model_for_gauge)  # shape = (gsDim, nRhoSpecs)
-        print("BMat = \n"); print(_np.round(BMat, 4))
         BMat_p = _np.dot(_np.dot(BMat, Vd), guessPj)  # truncate Evec => Evec', shape (gsDim,guessTrunc) (square!)
 
         guess_ABMat = _np.dot(AMat, BMat)
@@ -433,8 +431,8 @@ def _construct_x_matrix(prep_fiducials, effect_fiducials, model, op_label_tuple,
                 X[k, eoff:eoff + povmLen, j] = [dsRow_fractions.get(ol, 0) for ol in outcomes]
         eoff += povmLen
 
-    print("DEBUG LGST on instrument, X = ")
-    print(_np.round(X, 4))
+    #print("DEBUG LGST on instrument, X = ")
+    #print(_np.round(X, 4))
     return X
 
 

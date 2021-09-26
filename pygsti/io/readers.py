@@ -107,7 +107,7 @@ def read_dataset(filename, cache=False, collision_action="aggregate",
             if _os.path.exists(cache_filename) and \
                _os.path.getmtime(filename) < _os.path.getmtime(cache_filename):
                 try:
-                    printer.log("Loading from cache file: %s" % cache_filename)
+                    printer.log("Reading from cache file: %s" % cache_filename)
                     ds = _data.DataSet(file_to_load_from=cache_filename)
                     return ds
                 except: print("WARNING: Failed to load from cache file")  # pragma: no cover
@@ -203,7 +203,7 @@ def read_multidataset(filename, cache=False, collision_action="aggregate",
             if _os.path.exists(cache_filename) and \
                _os.path.getmtime(filename) < _os.path.getmtime(cache_filename):
                 try:
-                    printer.log("Loading from cache file: %s" % cache_filename)
+                    printer.log("Reading from cache file: %s" % cache_filename)
                     mds = _data.MultiDataSet(file_to_load_from=cache_filename)
                     return mds
                 except: print("WARNING: Failed to load from cache file")  # pragma: no cover
