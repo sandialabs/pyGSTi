@@ -153,7 +153,7 @@ class CompilationRules(object):
         """
         return {}
 
-    def apply_to_processorspec(self, processor_spec):
+    def apply_to_processorspec(self, processor_spec, action="replace"):
         """
         Use these compilation rules to convert one processor specification into another one.
 
@@ -162,6 +162,10 @@ class CompilationRules(object):
         processor_spec : QubitProcessorSpec
             The initial processor specification, which should contain the gates present within the
             circuits/functions of this compilation rules object.
+
+        action : {"replace", "add"}
+            Whether the existing gates in `processor_spec` are conveyed to the the returned
+            processor spec.  If `"replace"`, then they are not conveyed, if `"add"` they are.
 
         Returns
         -------
@@ -177,7 +181,7 @@ class CompilationRules(object):
                 compilation_circuit = self.local_templates[gn]
                 all_sslbls = compilation_circuit.line_labels
                 gn_nqubits = len(all_sslbls)
-                assert (all_sslbls == tuple(range(0, len(gn_nqubits)))), \
+                assert (all_sslbls == tuple(range(0, gn_nqubits))), \
                     "Template circuits *must* have line labels == 0...(gate's #qubits-1), not %s!" % (
                         str(all_sslbls))
 
@@ -199,13 +203,13 @@ class CompilationRules(object):
                         assert (len(set(layer_availability_sslbls).intersection(gate_sslbls)) == 0), \
                             "Duplicate state space labels in layer: %s" % str(layer)
                         layer_availability_sslbls.extend(gate_sslbls)  # integers
-                    layer_availability = _itertools.product(*layer_availability_factors)
+                    layer_availability = tuple(_itertools.product(*layer_availability_factors))
                     if tuple(layer_availability_sslbls) != all_sslbls:  # then need to permute availability elements
                         p = {to: frm for frm, to in enumerate(layer_availability_sslbls)}  # use sslbls as *indices*
                         new_order = [p[i] for i in range(gn_nqubits)]
                         layer_availability = tuple(map(lambda el: tuple([el[i] for i in new_order]),
                                                        layer_availability))
-                    circuit_availability = layer_availability if (circuit_availability is None) else \
+                    circuit_availability = set(layer_availability) if (circuit_availability is None) else \
                         circuit_availability.intersection(layer_availability)
                 assert (circuit_availability is not None), "Local template circuit cannot be empty!"
                 availability[gn] = tuple(sorted(circuit_availability))
@@ -242,6 +246,15 @@ class CompilationRules(object):
             assert (isinstance(availability[gate_lbl.name], tuple)), \
                 "Cannot add specific values to non-explicit availabilities (e.g. given by functions)"
             availability[gate_lbl.name] += (gate_lbl.sslbls,)
+
+        if action == "add":
+            gate_names = tuple(processor_spec.gate_names) + gate_names
+            gate_unitaries.update(processor_spec.gate_unitaries)
+            availability.update(processor_spec.availability)
+        elif action == "replace":
+            pass
+        else:
+            raise ValueError("Invalid `action` argument: %s" % str(action))
 
         aux_info = processor_spec.aux_info.copy()
         aux_info.update(self.create_aux_info())

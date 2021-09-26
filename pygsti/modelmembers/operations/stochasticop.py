@@ -341,3 +341,7 @@ class StochasticNoiseOp(_LinearOperator):
             (self.state_space, self.num_params)
         s += 'Rates: %s\n' % self._params_to_rates(self.to_vector())
         return s
+
+    def _oneline_contents(self):
+        """ Summarizes the contents of this object in a single line.  Does not summarize submembers. """
+        return 'rates: %s' % self._params_to_rates(self.to_vector())

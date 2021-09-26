@@ -181,20 +181,28 @@ class ModelMemberGraph(object):
 
         return sdict
 
-    def print_graph(self, indent=0):
-        def print_subgraph(node, indent=0, name=None):
-            if name is not None:
-                print(' ' * indent + f'{name}: {node.mm.__class__.__name__} ({node.serialize_id})')
+    def print_graph(self, indent=2):
+        def print_subgraph(node, indent, memo, name=None):
+            if node.serialize_id in memo:
+                node_summary = "--link--^"
             else:
-                print(' ' * indent + f'{node.mm.__class__.__name__} ({node.serialize_id})')
+                node_summary = node.mm._oneline_contents()
+                memo.add(node.serialize_id)
+
+            if name is not None:
+                print(' ' * indent + f'{name}: {node.mm.__class__.__name__} ({node.serialize_id}) : {node_summary}')
+            else:
+                print(' ' * indent + f'{node.mm.__class__.__name__} ({node.serialize_id}) : {node_summary}')
 
             for child in node.children:
-                print_subgraph(child, indent + 2)
+                print_subgraph(child, indent + 2, memo)
 
+        memo = set()
         for mm_type, mm_dict in self.mm_nodes.items():
-            print(f'Modelmember type: {mm_type}')
+            print(f'Modelmember category: {mm_type}')
             for name, node in mm_dict.items():
-                print_subgraph(node, indent=2, name=name)
+                print_subgraph(node, indent=indent, memo=memo, name=name)
+            print("")
 
 
 class MMGNode(object):

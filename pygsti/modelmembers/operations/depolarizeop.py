@@ -151,3 +151,7 @@ class DepolarizeOp(_StochasticNoiseOp):
             (self.dim, self.num_params)
         s += 'Strength: %s\n' % (self.params**2 * (self.basis.size - 1))
         return s
+
+    def _oneline_contents(self):
+        """ Summarizes the contents of this object in a single line.  Does not summarize submembers. """
+        return 'strength: %s' % (self.params**2 * (self.basis.size - 1))

@@ -1868,6 +1868,19 @@ class LindbladErrorgen(_LinearOperator):
             (self.dim, self.num_params)
         return s
 
+    def _oneline_contents(self):
+        """ Summarizes the contents of this object in a single line.  Does not summarize submembers. """
+        MAXLEN = 60
+        coeff_dict = self.coefficients(); s = ""
+        for lbl, val in coeff_dict.items():
+            if len(s) > MAXLEN:
+                s += "..."; break
+            s += str(lbl) + ": " + str(_np.round(val, 3)) + ", "
+        else:
+            s = s[:-2] if len(s) > 2 else s  # trim ", " off end
+        return s
+
+
 
 class LindbladParameterization(_NicelySerializable):
     """

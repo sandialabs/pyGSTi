@@ -6,7 +6,7 @@ import scipy.sparse as sps
 import pygsti.modelmembers.operations as op
 import pygsti.tools.internalgates as itgs
 import pygsti.tools.optools as gt
-from pygsti.models.modelconstruction import _create_spam_vector, _create_operation
+from pygsti.models.modelconstruction import create_spam_vector, create_operation
 from pygsti.evotypes import Evotype
 from pygsti.modelmembers.instruments import TPInstrument
 from pygsti.modelmembers.states import FullState
@@ -824,7 +824,7 @@ class StochasticNoiseOpTester(BaseCase):
         expected_mx = np.identity(4); expected_mx[2, 2] = expected_mx[3, 3] = 0.98  # = 2*(0.1^2)
         self.assertArraysAlmostEqual(sop.to_dense(), expected_mx)
 
-        rho = _create_spam_vector([4], ['Q0'], "0", 'pp')
+        rho = create_spam_vector("0", "Q0", Basis.cast("pp", [4]))
         self.assertAlmostEqual(float(np.dot(rho.T, np.dot(sop.to_dense(), rho))),
                                0.99)  # b/c X dephasing w/rate is 0.1^2 = 0.01
 
@@ -840,6 +840,6 @@ class DepolarizeOpTester(BaseCase):
         expected_mx = np.identity(4); expected_mx[1, 1] = expected_mx[2, 2] = expected_mx[3, 3] = 0.96  # = 4*(0.1^2)
         self.assertArraysAlmostEqual(dop.to_dense(), expected_mx)
 
-        rho = _create_spam_vector([4], ['Q0'], "0", 'pp')
+        rho = create_spam_vector("0", "Q0", Basis.cast("pp", [4]))
         # b/c both X and Y dephasing rates => 0.01 reduction
         self.assertAlmostEqual(float(np.dot(rho.T, np.dot(dop.to_dense(), rho))), 0.98)

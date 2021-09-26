@@ -346,6 +346,11 @@ class DenseOperator(DenseOperatorInterface, _LinearOperator):
         state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
         return cls(m, mm_dict['evotype'], state_space)
 
+    def _oneline_contents(self):
+        """ Summarizes the contents of this object in a single line.  Does not summarize submembers. """
+        dims = tuple(self.to_dense().shape)
+        return "dense %d x %d superop matrix" % dims
+
 
 class DenseUnitaryOperator(DenseOperatorInterface, _LinearOperator):
     """
@@ -553,3 +558,8 @@ class DenseUnitaryOperator(DenseOperatorInterface, _LinearOperator):
         state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
         basis = _Basis.from_nice_serialization(mm_dict['basis'])
         return cls(m, basis, mm_dict['evotype'], state_space)
+
+    def _oneline_contents(self):
+        """ Summarizes the contents of this object in a single line.  Does not summarize submembers. """
+        dims = tuple(self.to_dense().shape)
+        return "dense %d x %d op matrix" % dims

@@ -41,6 +41,7 @@ from pygsti.tools import jamiolkowski as _jt
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import optools as _ot
 from pygsti.tools import fogitools as _fogit
+from pygsti.tools.legacytools import deprecate as _deprecated_fn
 
 
 class ExplicitOpModel(_mdl.OpModel):
@@ -1361,6 +1362,7 @@ class ExplicitOpModel(_mdl.OpModel):
 
         return srep_dict
 
+    @_deprecated_fn
     def print_info(self):
         """
         Print to stdout relevant information about this model.

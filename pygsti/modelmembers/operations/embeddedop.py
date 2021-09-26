@@ -875,6 +875,10 @@ class EmbeddedOp(_LinearOperator):
         state_space = _StateSpace.from_nice_serialization(mm_dict['state_space'])
         return cls(state_space, mm_dict['target_labels'], serial_memo[mm_dict['submembers'][0]])
 
+    def _oneline_contents(self):
+        """ Summarizes the contents of this object in a single line.  Does not summarize submembers. """
+        return "embeds %s into %s" % (str(self.target_labels), str(self.state_space))
+
     def __str__(self):
         """ Return string representation """
         s = "Embedded operation with full dimension %d and state space %s\n" % (self.dim, self.state_space)

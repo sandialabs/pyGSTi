@@ -368,8 +368,10 @@ BASIS: pp 4
 """)
     def test_read_model(self, tmp_path):
         gs1 = stdin.parse_model(tmp_path)
-        rotXPiOv2 = pygsti.models.modelconstruction._create_operation([(4,)], [('Q0',)], "X(pi/2,Q0)")
-        rotYPiOv2 = pygsti.models.modelconstruction._create_operation([(4,)], [('Q0',)], "Y(pi/2,Q0)")
+        sslbls = pygsti.baseobjs.statespace.ExplicitStateSpace("Q0")
+
+        rotXPiOv2 = pygsti.models.modelconstruction.create_operation("X(pi/2,Q0)", sslbls, "pp")
+        rotYPiOv2 = pygsti.models.modelconstruction.create_operation("Y(pi/2,Q0)", sslbls, "pp")
 
         self.assertArraysAlmostEqual(gs1.operations['G1'], rotXPiOv2)
         self.assertArraysAlmostEqual(gs1.operations['G2'], rotYPiOv2)
@@ -419,9 +421,10 @@ GAUGEGROUP: Full
 """)
     def test_read_model_non_liouville(self, tmp_path):
         gs2 = stdin.parse_model(tmp_path)
-        rotXPi = pygsti.models.modelconstruction._create_operation([(4,)], [('Q0',)], "X(pi,Q0)")
-        rotXPiOv2 = pygsti.models.modelconstruction._create_operation([(4,)], [('Q0',)], "X(pi/2,Q0)")
-        rotYPiOv2 = pygsti.models.modelconstruction._create_operation([(4,)], [('Q0',)], "Y(pi/2,Q0)")
+        sslbls = pygsti.baseobjs.statespace.ExplicitStateSpace("Q0")
+        rotXPi = pygsti.models.modelconstruction.create_operation("X(pi,Q0)", sslbls, "pp")
+        rotXPiOv2 = pygsti.models.modelconstruction.create_operation("X(pi/2,Q0)", sslbls, "pp")
+        rotYPiOv2 = pygsti.models.modelconstruction.create_operation("Y(pi/2,Q0)", sslbls, "pp")
         self.assertArraysAlmostEqual(gs2.operations['G1'], rotXPiOv2)
         self.assertArraysAlmostEqual(gs2.operations['G2'], rotYPiOv2)
         self.assertArraysAlmostEqual(gs2.operations['G3'], rotXPi)

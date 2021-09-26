@@ -288,3 +288,7 @@ class RepeatedOp(_LinearOperator):
         s = "Repeated operation that repeates the below op %d times\n" % self.num_repetitions
         s += str(self.repeated_op)
         return s
+
+    def _oneline_contents(self):
+        """ Summarizes the contents of this object in a single line.  Does not summarize submembers. """
+        return "repeats %d times" % self.num_repetitions

@@ -77,7 +77,7 @@ class SPAMVecTestCase(BaseTestCase):
         E0 = model.povms['Mdefault']['0']
         E1 = model.povms['Mdefault']['1']
         Ec = povms.ComplementPOVMEffect(
-            modelconstruction._create_identity_vec([4], "pp"),
+            modelconstruction.create_identity_vec(Basis.cast("pp", [4])),
             [E0])
         print(Ec.gpindices)
 
@@ -177,29 +177,29 @@ class SPAMVecTestCase(BaseTestCase):
 
     def test_compbasis_povm(self):
         cv = states.ComputationalBasisState([0, 1], 'pp', 'densitymx')
-        v = modelconstruction._basis_create_spam_vector("1", pygsti.baseobjs.Basis.cast("pp", 4 ** 2))
+        v = modelconstruction.create_spam_vector("1", ("Q0", "Q1"), "pp")
         self.assertTrue(np.linalg.norm(cv.to_dense()-v.flat) < 1e-6)
 
         cv = states.ComputationalBasisState([0, 0, 1], 'pp', 'densitymx')
-        v = modelconstruction._basis_create_spam_vector("1", pygsti.baseobjs.Basis.cast("pp", 4 ** 3))
+        v = modelconstruction.create_spam_vector("1", ("Q0", "Q1", "Q2"), "pp")
         self.assertTrue(np.linalg.norm(cv.to_dense()-v.flat) < 1e-6)
 
         cv = states.ComputationalBasisState([0, 0, 1], 'pp', 'densitymx')
-        v = modelconstruction._basis_create_spam_vector("1", pygsti.baseobjs.Basis.cast("pp", 4 ** 3))
+        v = modelconstruction.create_spam_vector("1", ("Q0", "Q1", "Q2"), "pp")
         self.assertTrue(np.linalg.norm(cv.to_dense()-v.flat) < 1e-6)
 
         cv = states.ComputationalBasisState([0, 0, 1], 'pp', 'densitymx')
-        v = modelconstruction._basis_create_spam_vector("1", pygsti.baseobjs.Basis.cast("pp", 4 ** 3))
+        v = modelconstruction.create_spam_vector("1", ("Q0", "Q1", "Q2"), "pp")
         self.assertTrue(np.linalg.norm(cv.to_dense()-v.flat) < 1e-6)
 
         #Only works with Python replib (only there is to_dense implemented)
         #cv = pygsti.obj.ComputationalSPAMVec([0,1,1],'densitymx')
-        #v = modelconstruction._basis_create_spam_vector("3", pygsti.obj.Basis.cast("pp",4**3))
+        #v = modelconstruction.create_spam_vector("3", pygsti.obj.Basis.cast("pp",4**3))
         #s = pygsti.obj.FullSPAMVec(v)
         #assert(np.linalg.norm(cv.to_rep("effect").todense(np.empty(cv.dim,'d'))-v.flat) < 1e-6)
         #
         #cv = pygsti.obj.ComputationalSPAMVec([0,1,0,1],'densitymx')
-        #v = modelconstruction._basis_create_spam_vector("5", pygsti.obj.Basis.cast("pp",4**4))
+        #v = modelconstruction.create_spam_vector("5", pygsti.obj.Basis.cast("pp",4**4))
         #assert(np.linalg.norm(cv.to_rep("effect").todense(np.empty(cv.dim,'d'))-v.flat) < 1e-6)
 
         nqubits = 3

@@ -799,9 +799,10 @@ BASIS: pp
         #print " ==> model1:\n", gs1
         #print " ==> model2:\n", gs2
 
-        rotXPi   = pygsti.models.modelconstruction._create_operation([(4,)], [('Q0',)], "X(pi,Q0)")
-        rotXPiOv2   = pygsti.models.modelconstruction._create_operation([(4,)], [('Q0',)], "X(pi/2,Q0)")
-        rotYPiOv2   = pygsti.models.modelconstruction._create_operation([(4,)], [('Q0',)], "Y(pi/2,Q0)")
+        sslbls = pygsti.baseobjs.statespace.ExplicitStateSpace("Q0")
+        rotXPi   = pygsti.models.modelconstruction.create_operation("X(pi,Q0)", sslbls, "pp")
+        rotXPiOv2   = pygsti.models.modelconstruction.create_operation("X(pi/2,Q0)", sslbls, "pp")
+        rotYPiOv2   = pygsti.models.modelconstruction.create_operation("Y(pi/2,Q0)", sslbls, "pp")
 
         self.assertArraysAlmostEqual(gs1.operations['G1'],rotXPiOv2)
         self.assertArraysAlmostEqual(gs1.operations['G2'],rotYPiOv2)

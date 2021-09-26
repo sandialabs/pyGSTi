@@ -211,7 +211,17 @@ class CloudNoiseModel(_ImplicitOpModel):
 
         idle_names = self.processor_spec.idle_gate_names
         global_idle_name = self.processor_spec.global_idle_gate_name
-        noisy_global_idle_name = global_idle_name if build_cloudnoise_fn is not None else None
+
+        # Set noisy_global_idle_name == global_idle_name if the global idle gate isn't the perfect identity
+        #  and if we're generating cloudnoise members (if we're not then layer rules could encouter a key error
+        #  if we let noisy_global_idle_name be non-None).
+        global_idle_gate = mm_gatedict.get(global_idle_name, None)
+        if (global_idle_gate is not None) and (build_cloudnoise_fn is not None) \
+           and not (isinstance(global_idle_gate, _op.ComposedOp) and len(global_idle_gate.factorops) == 0):
+            noisy_global_idle_name = global_idle_name
+        else:
+            noisy_global_idle_name = None
+        
         assert(set(idle_names).issubset([global_idle_name])), \
             "Only global idle operations are allowed in a CloudNoiseModel!"
 
@@ -222,13 +232,13 @@ class CloudNoiseModel(_ImplicitOpModel):
                  'match_parent_evotype': True, 'cast_to_type': None}
         self.prep_blks['layers'] = _OrderedMemberDict(self, None, None, flags)
         self.povm_blks['layers'] = _OrderedMemberDict(self, None, None, flags)
-        self.operation_blks['layers'] = _OrderedMemberDict(self, None, None, flags)
         self.operation_blks['gates'] = _OrderedMemberDict(self, None, None, flags)
         self.operation_blks['cloudnoise'] = _OrderedMemberDict(self, None, None, flags)
+        self.operation_blks['layers'] = _OrderedMemberDict(self, None, None, flags)
         self.instrument_blks['layers'] = _OrderedMemberDict(self, None, None, flags)
-        self.factories['layers'] = _OrderedMemberDict(self, None, None, flags)
         self.factories['gates'] = _OrderedMemberDict(self, None, None, flags)
         self.factories['cloudnoise'] = _OrderedMemberDict(self, None, None, flags)
+        self.factories['layers'] = _OrderedMemberDict(self, None, None, flags)
 
         printer = _VerbosityPrinter.create_printer(verbosity)
         printer.log("Creating a %d-qubit cloud-noise model" % self.processor_spec.num_qubits)
@@ -246,6 +256,8 @@ class CloudNoiseModel(_ImplicitOpModel):
             resolved_avail = self.processor_spec.resolved_availability(gn)
             gate = mm_gatedict.get(gn, None)  # a static op or factory, no need to consider if "independent" (no params)
             gate_is_factory = callable(gate_unitary) or isinstance(gate, _opfactory.OpFactory)
+            #gate_is_noiseless_identity = (gate is None) or \
+            #    (isinstance(gate, _op.ComposedOp) and len(gate.factorops) == 0)
 
             if gate is not None:  # (a gate name may not be in gatedict if it's an identity without any noise)
                 if gate_is_factory:
@@ -364,18 +376,18 @@ class CloudNoiseModel(_ImplicitOpModel):
                  'match_parent_evotype': True, 'cast_to_type': None}
         mdl.prep_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers.get('prep_blks|layers', []))
         mdl.povm_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers.get('povm_blks|layers', []))
-        mdl.operation_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags,
-                                                          modelmembers.get('operation_blks|layers', []))
         mdl.operation_blks['gates'] = _OrderedMemberDict(mdl, None, None, flags,
                                                          modelmembers.get('operation_blks|gates', []))
         mdl.operation_blks['cloudnoise'] = _OrderedMemberDict(mdl, None, None, flags,
                                                               modelmembers.get('operation_blks|cloudnoise', []))
+        mdl.operation_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags,
+                                                          modelmembers.get('operation_blks|layers', []))
         mdl.instrument_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags,
                                                            modelmembers.get('instrument_blks|layers', []))
-        mdl.factories['layers'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers.get('factories|layers', []))
         mdl.factories['gates'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers.get('factories|gates', []))
         mdl.factories['cloudnoise'] = _OrderedMemberDict(mdl, None, None, flags,
                                                          modelmembers.get('factories|cloudnoise', []))
+        mdl.factories['layers'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers.get('factories|layers', []))
 
         mdl._clouds = _collections.OrderedDict()
         mdl._clean_paramvec()

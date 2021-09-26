@@ -925,6 +925,10 @@ class ComposedOp(_LinearOperator):
         """
         self.set_errorgen_coefficients(lindblad_term_dict, action, logscale_nonham=True)
 
+    def _oneline_contents(self):
+        """ Summarizes the contents of this object in a single line.  Does not summarize submembers. """
+        return "composed of %d factors" % len(self.factorops)
+
     def __str__(self):
         """ Return string representation """
         s = "Composed operation of %d factors:\n" % len(self.factorops)

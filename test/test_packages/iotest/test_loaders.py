@@ -78,11 +78,12 @@ class LoadersTester(IOBase):
 
     def test_load_model_alt_format(self):
         mdl_formats = readers.load_model(str(self.reference_path('formatExample.model')))
+        sslbls = pygsti.baseobjs.statespace.ExplicitStateSpace("Q0")
 
-        rotXPi = pygsti.models.modelconstruction._create_operation([(4,)], [('Q0',)], "X(pi,Q0)")
-        rotYPi = pygsti.models.modelconstruction._create_operation([(4,)], [('Q0',)], "Y(pi,Q0)")
-        rotXPiOv2 = pygsti.models.modelconstruction._create_operation([(4,)], [('Q0',)], "X(pi/2,Q0)")
-        rotYPiOv2 = pygsti.models.modelconstruction._create_operation([(4,)], [('Q0',)], "Y(pi/2,Q0)")
+        rotXPi = pygsti.models.modelconstruction.create_operation("X(pi,Q0)", sslbls, "pp")
+        rotYPi = pygsti.models.modelconstruction.create_operation("Y(pi,Q0)", sslbls, "pp")
+        rotXPiOv2 = pygsti.models.modelconstruction.create_operation("X(pi/2,Q0)", sslbls, "pp")
+        rotYPiOv2 = pygsti.models.modelconstruction.create_operation("Y(pi/2,Q0)", sslbls, "pp")
 
         self.assertArraysAlmostEqual(mdl_formats.operations['Gi'], np.identity(4, 'd'))
         self.assertArraysAlmostEqual(mdl_formats.operations['Gx'], rotXPiOv2)

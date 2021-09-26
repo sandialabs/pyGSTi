@@ -127,6 +127,12 @@ class QubitProcessorSpec(ProcessorSpec):
         std_gate_unitaries = _itgs.standard_gatename_unitaries()
         for gname in gate_names:
             if gname in nonstd_gate_unitaries:
+                if callable(nonstd_gate_unitaries[gname]):
+                    try:
+                        assert(len(nonstd_gate_unitaries[gname].shape) == 2), \
+                            "Continuously parameterized gates' `shape` attribute must be a 2-tuple!"
+                    except AttributeError:
+                        raise ValueError("Continuously parameterized gates must have a `shape` attribute!")
                 self.gate_unitaries[gname] = nonstd_gate_unitaries[gname]
             elif gname in std_gate_unitaries:
                 self.gate_unitaries[gname] = std_gate_unitaries[gname]
@@ -142,10 +148,12 @@ class QubitProcessorSpec(ProcessorSpec):
                 else:
                     nq = num_qubits  # if no availability is given, assume an idle on *all* the qubits
                     availability[gname] = [None]  # and update availability for later processing
-                if gname.startswith('(') and gname.endswith(')'):
-                    self.gate_unitaries[gname] = nq  # an identity gate that should not be build unless it's noisy
-                else:
-                    self.gate_unitaries[gname] = _np.identity(2**nq, 'd')
+                self.gate_unitaries[gname] = nq  # an identity gate
+                #OLD REMOVE
+                #if gname.startswith('(') and gname.endswith(')'):
+                #    self.gate_unitaries[gname] = nq  # an identity gate that should not be build unless it's noisy
+                #else:
+                #    self.gate_unitaries[gname] = _np.identity(2**nq, 'd')
             else:
                 raise ValueError(
                     str(gname) + " is not a valid 'standard' gate name, it must be given in `nonstd_gate_unitaries`")
@@ -185,13 +193,18 @@ class QubitProcessorSpec(ProcessorSpec):
             self._symplectic_reps.update(nonstd_gate_symplecticreps)
         super(QubitProcessorSpec, self).__init__()
 
-    def _to_nice_serialization(self):  # memo holds already serialized objects
+    def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
+
+        #Note:self.nonstd_gate_unitaries can contain matrices OR callable objects OR integers
+        nonstd_unitaries = {k: (obj.to_nice_serialization() if isinstance(obj, _NicelySerializable)
+                                else (int(obj) if isinstance(obj, (int, _np.int64)) else self._encodemx(obj)))
+                            for k, obj in self.nonstd_gate_unitaries.items()}
         state.update({'qubit_labels': list(self.qubit_labels),
                       'gate_names': list(self.gate_names),  # TODO: what if labels and not just strings?
                       'availability': self.availability,  # should just have native types
                       'geometry': self.qubit_graph.to_nice_serialization(),
-                      'nonstd_gate_unitaries': {k: self._encodemx(mx) for k, mx in self.nonstd_gate_unitaries.items()},
+                      'nonstd_gate_unitaries': nonstd_unitaries,
                       'symplectic_reps': {k: (self._encodemx(s), self._encodemx(p))
                                           for k, (s, p) in self._symplectic_reps.items()},
                       'aux_info': self.aux_info
@@ -199,14 +212,22 @@ class QubitProcessorSpec(ProcessorSpec):
         return state
 
     @classmethod
-    def _from_nice_serialization(cls, state):  # memo holds already de-serialized objects
+    def _from_nice_serialization(cls, state):
 
         def _tuplize(x):
             if isinstance(x, (list, tuple)):
                 return tuple((_tuplize(el) for el in x))
             return x
 
-        nonstd_gate_unitaries = {k: cls._decodemx(mx) for k, mx in state['nonstd_gate_unitaries'].items()}
+        nonstd_gate_unitaries = {}
+        for k, obj in state['nonstd_gate_unitaries'].items():
+            if isinstance(obj, int):
+                nonstd_gate_unitaries[k] = obj
+            elif isinstance(obj, dict) and "module" in obj:  # then a NicelySerializable object
+                nonstd_gate_unitaries[k] = _NicelySerializable.from_nice_serialization(obj)
+            else:  # assume a matrix encoding of some sort (could be list or dict)
+                nonstd_gate_unitaries[k] = cls._decodemx(obj)
+
         symplectic_reps = {k: (cls._decodemx(s), cls._decodemx(p)) for k, (s, p) in state['symplectic_reps'].items()}
         availability = {k: _tuplize(v) for k, v in state['availability'].items()}
         geometry = _qgraph.QubitGraph.from_nice_serialization(state['geometry'])
@@ -227,7 +248,7 @@ class QubitProcessorSpec(ProcessorSpec):
             if gn.startswith('(') and gn.endswith(')'): continue  # skip implicit gate names
             avail = self.resolved_availability(gn, 'tuple')
             ret.extend([_Lbl(gn, sslbls) for sslbls in avail])
-        return ret
+        return tuple(ret)
 
     def gate_num_qubits(self, gate_name):
         """
@@ -245,8 +266,7 @@ class QubitProcessorSpec(ProcessorSpec):
         unitary = self.gate_unitaries[gate_name]
         if unitary is None: return self.num_qubits  # unitary=None => identity on all qubits
         if isinstance(unitary, (int, _np.int64)): return unitary  # unitary=int => identity in n qubits
-        return int(round(_np.log2(unitary(None).shape[0] if callable(unitary) else unitary.shape[0])))
-        # OR possibly unitary.udim in future
+        return int(round(_np.log2(unitary.shape[0])))  # possibly factory *function* SHAPE (unitary may be callable)
 
     def resolved_availability(self, gate_name, tuple_or_function="auto"):
         """

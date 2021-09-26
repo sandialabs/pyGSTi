@@ -206,3 +206,7 @@ class StaticStandardOp(_LinearOperator, _NoErrorGeneratorInterface):
         #elif self._evotype == 'chp':
         #    s += 'CHP operations: ' + ','.join(self._rep.chp_ops) + '\n'
         return s
+
+    def _oneline_contents(self):
+        """ Summarizes the contents of this object in a single line.  Does not summarize submembers. """
+        return "%s gate" % self.name

@@ -1626,6 +1626,13 @@ class OpModel(Model):
         """
         raise NotImplementedError("Derived classes must implement this")
 
+    def print_modelmembers(self):
+        """
+        Print a summary of all the members within this model.
+        """
+        mmg = self.create_modelmember_graph()
+        mmg.print_graph()
+
 #REMOVE (I think)
 #    @classmethod
 #    def _from_dir_partial(self, state, memo):

@@ -747,9 +747,14 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         self.dirty = True
 
     def __str__(self):
-        s = "Lindblad Parameterized operation map with dim = %d, num params = %d\n" % \
+        s = "Exponentiated operation map with dim = %d, num params = %d\n" % \
             (self.dim, self.num_params)
         return s
+
+    def _oneline_contents(self):
+        """ Summarizes the contents of this object in a single line.  Does not summarize submembers. """
+        return "exponentiates"
+
 
 
 def _d_exp_series(x, dx):

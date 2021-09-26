@@ -177,8 +177,8 @@ class InstrumentTestCase(BaseTestCase):
         #    prep_labels=["rho0"], prep_expressions=["0"],
         #    effect_labels=["0","1"], effect_expressions=["0","complement"])
 
-        v0 = modelconstruction._basis_create_spam_vector("0", pygsti.baseobjs.Basis.cast("pp", 4))
-        v1 = modelconstruction._basis_create_spam_vector("1", pygsti.baseobjs.Basis.cast("pp", 4))
+        v0 = modelconstruction.create_spam_vector("0", "Q0", "pp")
+        v1 = modelconstruction.create_spam_vector("1", "Q0", "pp")
         P0 = np.dot(v0,v0.T)
         P1 = np.dot(v1,v1.T)
         print("v0 = ",v0)

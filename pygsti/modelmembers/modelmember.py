@@ -983,6 +983,10 @@ class ModelMember(ModelChild, _NicelySerializable):
                 #print(prefix, "  Sub%d: " % i, end='')
                 sub._print_gpindices(prefix + "  ", "Sub%d" % i, param_labels, max_depth - 1)
 
+    def _oneline_contents(self):
+        """ Summarizes the contents of this object in a single line.  Does not summarize submembers. """
+        return "(contents not available)"
+
 
 def _compose_gpindices(parent_gpindices, child_gpindices):
     """

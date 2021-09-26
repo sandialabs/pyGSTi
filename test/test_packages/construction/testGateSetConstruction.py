@@ -4,6 +4,7 @@ import numpy as np
 
 import pygsti
 from pygsti.models import modelconstruction
+from pygsti.baseobjs import Basis
 from ..testutils import BaseTestCase
 
 
@@ -49,13 +50,13 @@ class TestGateSetConstructionMethods(BaseTestCase):
         spaceLabels = [('Q0',)]  # interpret the 2x2 density matrix as a single qubit named 'Q0'
 
         with self.assertRaises(AssertionError):
-            modelconstruction._create_identity_vec(stateSpace, basis="foobar")
+            modelconstruction.create_identity_vec(Basis.cast("foobar", stateSpace))
 
 
         gateset_povm_first = pygsti.models.ExplicitOpModel(['Q0']) #set effect vector first
         gateset_povm_first['Mdefault'] = pygsti.modelmembers.povms.TPPOVM(
-            [('0', modelconstruction._create_spam_vector(stateSpace, spaceLabels, "0")),
-             ('1', modelconstruction._create_spam_vector(stateSpace, spaceLabels, "1"))], evotype='default' )
+            [('0', modelconstruction.create_spam_vector("0", stateSpace, "gm")),
+             ('1', modelconstruction.create_spam_vector("1", stateSpace, "gm"))], evotype='default' )
 
         with self.assertRaises(ValueError):
             gateset_povm_first['rhoBad'] =  np.array([1,2,3],'d') #wrong dimension

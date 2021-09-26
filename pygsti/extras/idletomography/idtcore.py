@@ -613,12 +613,10 @@ def determine_paulidicts(model):
 
     #Get several standard 1-qubit pi/2 rotations in Pauli basis:
     pp = _baseobjs.BuiltinBasis('pp', 4)
-    Gx = _modelconstruction._basis_create_operation(
-        [('Q0',)], "X(pi/2,Q0)", basis=pp, parameterization="static"
-    ).to_dense()
-    Gy = _modelconstruction._basis_create_operation(
-        [('Q0',)], "Y(pi/2,Q0)", basis=pp, parameterization="static"
-    ).to_dense()
+    Gx = _modelconstruction.create_operation("X(pi/2,Q0)", [('Q0',)], basis=pp,
+                                             parameterization="static").to_dense()
+    Gy = _modelconstruction.create_operation("Y(pi/2,Q0)", [('Q0',)], basis=pp,
+                                             parameterization="static").to_dense()
 
     #try to find 1-qubit pi/2 rotations
     found = {}
