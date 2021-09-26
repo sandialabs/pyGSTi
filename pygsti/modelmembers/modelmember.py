@@ -208,7 +208,25 @@ class ModelMember(ModelChild, _NicelySerializable):
     @property
     def parameter_bounds(self):
         """ Upper and lower bounds on the values of each parameter, utilized by optimization routines """
-        return self._param_bounds
+        if self._param_bounds is not None:
+            return self._param_bounds
+
+        if len(self.submembers()) > 0:
+            param_bounds = _np.empty((self.num_params, 2), 'd')
+            param_bounds[:, 0] = -_np.inf
+            param_bounds[:, 1] = +_np.inf
+            for subm, local_inds in zip(self.submembers(), self._submember_rpindices):
+                subm_bounds = subm.parameter_bounds
+                if subm_bounds is not None:
+                    param_bounds[local_inds] = subm_bounds
+
+            # reset bounds to None if all are trivial
+            if _np.all(param_bounds[:, 0] == -_np.inf) and _np.all(param_bounds[:, 1] == _np.inf):
+                param_bounds = None
+        else:
+            param_bounds = self._param_bounds  # may be None
+
+        return param_bounds
 
     @parameter_bounds.setter
     def parameter_bounds(self, val):
