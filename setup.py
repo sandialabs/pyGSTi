@@ -284,7 +284,7 @@ try:
             sources=["pygsti/baseobjs/opcalc/fastopcalc.pyx"],
             include_dirs=['.', np.get_include()],
             language="c++",
-            extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
+            extra_compile_args=["-std=c++11", "-Wno-deprecated"],  # ,"-stdlib=libc++"
             extra_link_args=["-std=c++11"]
         ),
         Extension(
@@ -295,7 +295,7 @@ try:
             ],
             include_dirs=['.', np.get_include()],
             language="c++",
-            extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
+            extra_compile_args=["-std=c++11", "-Wno-deprecated"],  # ,"-stdlib=libc++"
             extra_link_args=["-std=c++11"]
         ),
         Extension(
@@ -306,7 +306,7 @@ try:
             ],
             include_dirs=['.', 'pygsti/evotypes', np.get_include()],
             language="c++",
-            extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
+            extra_compile_args=["-std=c++11", "-Wno-deprecated"],  # ,"-stdlib=libc++"
             extra_link_args=["-std=c++11"]
         ),
         Extension(
@@ -318,7 +318,7 @@ try:
             ],
             include_dirs=['.', 'pygsti/evotypes', np.get_include()],
             language="c++",
-            extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
+            extra_compile_args=["-std=c++11", "-Wno-deprecated"],  # ,"-stdlib=libc++"
             extra_link_args=["-std=c++11"]
         ),
         Extension(
@@ -331,7 +331,7 @@ try:
             ],
             include_dirs=['.', 'pygsti/evotypes', np.get_include()],
             language="c++",
-            extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
+            extra_compile_args=["-std=c++11", "-Wno-deprecated"],  # ,"-stdlib=libc++"
             extra_link_args=["-std=c++11"]
         ),
         Extension(
@@ -342,7 +342,7 @@ try:
             ],
             include_dirs=['.', 'pygsti/evotypes', np.get_include()],
             language="c++",
-            extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
+            extra_compile_args=["-std=c++11", "-Wno-deprecated"],  # ,"-stdlib=libc++"
             extra_link_args=["-std=c++11"]
         ),
         Extension(
@@ -354,7 +354,7 @@ try:
             ],
             include_dirs=['.', 'pygsti/evotypes', np.get_include()],
             language="c++",
-            extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
+            extra_compile_args=["-std=c++11", "-Wno-deprecated"],  # ,"-stdlib=libc++"
             extra_link_args=["-std=c++11"]
         ),
         Extension(
@@ -367,7 +367,7 @@ try:
             ],
             include_dirs=['.', 'pygsti/evotypes', np.get_include()],
             language="c++",
-            extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
+            extra_compile_args=["-std=c++11", "-Wno-deprecated"],  # ,"-stdlib=libc++"
             extra_link_args=["-std=c++11"]
         ),
         Extension(
@@ -381,7 +381,7 @@ try:
             ],
             include_dirs=['.', 'pygsti/evotypes', np.get_include()],
             language="c++",
-            extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
+            extra_compile_args=["-std=c++11", "-Wno-deprecated"],  # ,"-stdlib=libc++"
             extra_link_args=["-std=c++11"]
         ),
         Extension(
@@ -392,7 +392,7 @@ try:
             ],
             include_dirs=['.', 'pygsti/evotypes', np.get_include()],
             language="c++",
-            extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
+            extra_compile_args=["-std=c++11", "-Wno-deprecated"],  # ,"-stdlib=libc++"
             extra_link_args=["-std=c++11"]
         ),
         Extension(
@@ -404,7 +404,7 @@ try:
             ],
             include_dirs=['.', 'pygsti/evotypes', np.get_include()],
             language="c++",
-            extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
+            extra_compile_args=["-std=c++11", "-Wno-deprecated"],  # ,"-stdlib=libc++"
             extra_link_args=["-std=c++11"]
         ),
         Extension(
@@ -417,7 +417,7 @@ try:
             ],
             include_dirs=['.', 'pygsti/evotypes', np.get_include()],
             language="c++",
-            extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
+            extra_compile_args=["-std=c++11", "-Wno-deprecated"],  # ,"-stdlib=libc++"
             extra_link_args=["-std=c++11"]
         ),
         Extension(
@@ -431,7 +431,7 @@ try:
             ],
             include_dirs=['.', 'pygsti/evotypes', np.get_include()],
             language="c++",
-            extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
+            extra_compile_args=["-std=c++11", "-Wno-deprecated"],  # ,"-stdlib=libc++"
             extra_link_args=["-std=c++11"]
         ),
         Extension(
@@ -442,7 +442,7 @@ try:
             ],
             include_dirs=['.', 'pygsti/evotypes', np.get_include()],
             language="c++",
-            extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
+            extra_compile_args=["-std=c++11", "-Wno-deprecated"],  # ,"-stdlib=libc++"
             extra_link_args=["-std=c++11"]
         ),
         Extension(
@@ -454,7 +454,7 @@ try:
             ],
             include_dirs=['.', 'pygsti/evotypes', np.get_include()],
             language="c++",
-            extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
+            extra_compile_args=["-std=c++11", "-Wno-deprecated"],  # ,"-stdlib=libc++"
             extra_link_args=["-std=c++11"]
         ),
         Extension(
@@ -466,7 +466,7 @@ try:
             ],
             include_dirs=['.', 'pygsti/evotypes', np.get_include()],
             language="c++",
-            extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
+            extra_compile_args=["-std=c++11", "-Wno-deprecated"],  # ,"-stdlib=libc++"
             extra_link_args=["-std=c++11"]
         ),
         Extension(
@@ -474,7 +474,7 @@ try:
             sources=["pygsti/circuits/circuitparser/fastcircuitparser.pyx"],
             include_dirs=['.', np.get_include()],
             language="c++",
-            extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
+            extra_compile_args=["-std=c++11", "-Wno-deprecated"],  # ,"-stdlib=libc++"
             extra_link_args=["-std=c++11"]
         )
     ]
