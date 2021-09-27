@@ -6,6 +6,7 @@ import numpy as np
 from numpy.random import random, seed
 
 import pygsti
+from pygsti.baseobjs.basis import Basis
 from pygsti.models import modelconstruction
 from pygsti.modelpacks.legacy import std1Q_XYI
 from pygsti.modelmembers.states import State

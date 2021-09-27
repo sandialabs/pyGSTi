@@ -57,7 +57,7 @@ def create_from_unitary_mx(unitary_mx, op_type, basis='pp', stdname=None, evotyp
                 op = StaticUnitaryOp(U, basis, evotype, state_space)
             elif typ == "full unitary":
                 op = FullUnitaryOp(U, basis, evotype, state_space)
-            elif typ in ('static', 'full', 'full TP', 'linear'):
+            elif typ in ('static', 'full', 'TP', 'full TP', 'linear'):
                 superop_mx = _bt.change_basis(_ot.unitary_to_process_mx(U), 'std', basis)
                 op = create_from_superop_mx(superop_mx, op_type, basis, stdname, evotype, state_space)
             elif _ot.is_valid_lindblad_paramtype(typ):  # maybe "lindblad XXX" where XXX is a valid lindblad type?
@@ -100,7 +100,7 @@ def create_from_superop_mx(superop_mx, op_type, basis='pp', stdname=None, evotyp
                 op = StaticArbitraryOp(superop_mx, evotype, state_space)
             elif typ == "full":  # "full arbitrary"?
                 op = FullArbitraryOp(superop_mx, evotype, state_space)
-            elif typ == "full TP":
+            elif typ in ["TP", "full TP"]:
                 op = FullTPOp(superop_mx, evotype, state_space)
             elif typ == "linear":  # "linear arbitrary"?
                 real = _np.isclose(_np.linalg.norm(superop_mx.imag), 0)
@@ -122,6 +122,59 @@ def create_from_superop_mx(superop_mx, op_type, basis='pp', stdname=None, evotyp
 
     raise ValueError("Could not create an operator of type(s) %s from the given superop!" % (str(op_type)))
 
+def get_verbose_type_from_op_type(op_type):
+    """Decode an op type into the "canonical", more verbose op type.
+
+    Parameters:
+    -----------
+    op_type: str or list of str
+        Operation parameterization type (or list of preferences)
+
+    Returns
+    -------
+    povm_type_preferences: tuple of str
+        POVM parameterization types
+    """
+    op_type_preferences = (op_type,) if isinstance(op_type, str) else op_type
+
+    verbose_conversion = {
+        'static standard': 'static standard',
+        'static clifford': 'static clifford',
+        'static unitary': 'static unitary',
+        'full unitary': 'full unitary',
+        'static': 'static',
+        'full': 'full',
+        'full TP': 'full TP',
+        'TP': 'full TP',
+        'linear': 'linear',
+    }
+
+    verbose_type_preferences = []
+    for typ in op_type_preferences:
+        verbose_type = None
+        if _ot.is_valid_lindblad_paramtype(typ):
+            # Lindblad types are passed through, but prepended with lindblad
+            if typ.startswith('lindblad '):
+                verbose_type = typ
+            else:
+                verbose_type = 'lindblad ' + typ
+        else:
+            verbose_type = verbose_conversion.get(typ, None)
+
+        if verbose_type is None:
+            continue
+
+        if verbose_type not in verbose_type_preferences:
+            verbose_type_preferences.append(verbose_type)
+
+    if len(verbose_type_preferences) == 0:
+        raise RuntimeError(
+            'Could not convert any op types from {}.\n'.format(op_type_preferences)
+            + '\tKnown op_types: Lindblad types or {}\n'.format(sorted(list(verbose_conversion.keys())))
+            + '\tValid povm_types: Lindblad types or {}'.format(sorted(list(set(verbose_conversion.values()))))
+        )
+
+    return verbose_type_preferences
 
 def convert(operation, to_type, basis, extra=None):
     """
@@ -163,7 +216,7 @@ def convert(operation, to_type, basis, extra=None):
                 else:
                     return FullArbitraryOp(operation.to_dense(), operation.evotype, operation.state_space)
 
-            elif to_type == "full TP":
+            elif to_type in ["TP", "full TP"]:
                 if isinstance(operation, FullTPOp):
                     return operation  # no conversion necessary
                 else:
