@@ -16,7 +16,7 @@ class KCoverageTester(BaseCase):
         # TODO optimize
         n = 10  # nqubits
         k = 4  # number of "labels" needing distribution
-        rows = cc.get_kcoverage_template(n, k, verbosity=2)
+        rows = cc.create_kcoverage_template(n, k, verbosity=2)
         cc._check_kcoverage_template(rows, n, k, verbosity=1)
 
 

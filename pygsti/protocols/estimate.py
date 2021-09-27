@@ -219,7 +219,7 @@ class Estimate(object):
         """
         _io.write_obj_to_meta_based_dir(self, dirname, 'auxfile_types')
 
-    def get_start_model(self, goparams):
+    def retrieve_start_model(self, goparams):
         """
         Returns the starting model for the gauge optimization given by `goparams`.
 

@@ -6096,7 +6096,7 @@ def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl, prefactor, op_bas
 
 def _errorgen_penalty_jac_fill(errorgen_penalty_vec_grad_to_fill, mdl, prefactor, wrt_slice):
 
-    def get_local_deriv(op):
+    def _get_local_deriv(op):
         z = op.errorgen_coefficients_array()  # val**2 term is abs(z) = sqrt(z*z.conj)
         dz = op.errorgen_coefficients_array_deriv_wrt_params()
         dterms = 0.5 * (z.conjugate()[:, None] * dz + z[:, None] * dz.conjugate()) / _np.abs(z)[:, None]
@@ -6115,16 +6115,16 @@ def _errorgen_penalty_jac_fill(errorgen_penalty_vec_grad_to_fill, mdl, prefactor
 
     #for lbl in mdl.primitive_prep_labels:
     #    op = mdl.circuit_layer_operator(lbl, 'prep')
-    #    errorgen_penalty_vec_grad_to_fill[0, op.gpindices] += get_local_deriv(op)
+    #    errorgen_penalty_vec_grad_to_fill[0, op.gpindices] += _get_local_deriv(op)
 
     for lbl in mdl.primitive_op_labels:
         op = mdl.circuit_layer_operator(lbl, 'op')
         gpinds_subset, within_wrtslice, within_gpinds = _slct.intersect_within(wrt_slice, op.gpindices)
-        errorgen_penalty_vec_grad_to_fill[0, within_wrtslice] += get_local_deriv(op)[within_gpinds]
+        errorgen_penalty_vec_grad_to_fill[0, within_wrtslice] += _get_local_deriv(op)[within_gpinds]
 
     #for lbl in mdl.primitive_povm_labels:
     #    op = mdl.circuit_layer_operator(lbl, 'povm')
-    #    errorgen_penalty_vec_grad_to_fill[0, op.gpindices] += get_local_deriv(op)
+    #    errorgen_penalty_vec_grad_to_fill[0, op.gpindices] += _get_local_deriv(op)
 
     #Above fills derivative of val**2 = sum(terms), but we want deriv of val = sqrt(sum(terms)):
     errorgen_penalty_vec_grad_to_fill[0, :] *= 0.5 / val  # final == 1/sqrt(sum(terms)) * dsumterms

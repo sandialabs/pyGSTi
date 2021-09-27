@@ -289,7 +289,7 @@ class EvalTree(list):
                 #       with the trees in the existing set
                 iStartingTrees = []
 
-                def get_start_indices(max_intersect):
+                def _get_start_indices(max_intersect):
                     """ Builds an initial set of indices by merging single-
                         item trees that don't intersect too much (intersection
                         is less than `max_intersect`.  Returns a list of the
@@ -305,7 +305,7 @@ class EvalTree(list):
                 left, right = 0, max(map(len, singleItemTreeSetList))
                 while left < right:
                     mid = (left + right) // 2
-                    iStartingTrees, startingTreeEls = get_start_indices(mid)
+                    iStartingTrees, startingTreeEls = _get_start_indices(mid)
                     nStartingTrees = len(iStartingTrees)
                     if nStartingTrees < num_sub_trees:
                         left = mid + 1
@@ -314,7 +314,7 @@ class EvalTree(list):
                     else: break  # nStartingTrees == num_sub_trees!
 
                 if len(iStartingTrees) < num_sub_trees:
-                    iStartingTrees, startingTreeEls = get_start_indices(mid + 1)
+                    iStartingTrees, startingTreeEls = _get_start_indices(mid + 1)
                 if len(iStartingTrees) > num_sub_trees:
                     iStartingTrees = iStartingTrees[0:num_sub_trees]
                     startingTreeEls = set()

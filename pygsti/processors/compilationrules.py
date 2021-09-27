@@ -1198,7 +1198,7 @@ class CliffordCompilationRules(CompilationRules):
 
             self.add_specific_compilation_rule(key, circuit, unitary=None)  # Need to take unitary as arg?
 
-    def get_compilation_of(self, oplabel, force=False, allowed_filter=None, verbosity=1, check=True):
+    def retrieve_compilation_of(self, oplabel, force=False, allowed_filter=None, verbosity=1, check=True):
         """
         Get a compilation of `oplabel` in the context of `allowed_filter`, if any.
 

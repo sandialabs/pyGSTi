@@ -124,7 +124,7 @@ class ProbTrajectory(object):
         self.parameters = {o: parameterslist[oind * len(self.hyperparameters):(1 + oind) * len(self.hyperparameters)]
                            for oind, o in enumerate(self.outcomes[:-1])}
 
-    def get_parameters_as_list(self):
+    def parameters_as_list(self):
         """
         Returns the parameters as a list, in the same format as when input to `set_parameters_from_list`.
         See the docstring of that method for more info.
@@ -136,14 +136,14 @@ class ProbTrajectory(object):
 
         return _copy.copy(parameterslist)
 
-    def get_parameters(self):
+    def parameters_copy(self):
         """
         Returns the values of the parameters, in the dictionary form in which it is internally stored.
 
         """
         return _copy.deepcopy(self.parameters)
 
-    def get_probabilities(self, times, trim=True):
+    def probabilities(self, times, trim=True):
         """
         Returns the probability distribution for each time in `times`.
 
@@ -368,7 +368,7 @@ def negloglikelihood(probtrajectory, clickstreams, times, minp=0., maxp=1.):
     float
         The log-likehood of the model given the time-series data.
     """
-    probs = probtrajectory.get_probabilities(times)
+    probs = probtrajectory.probabilities(times)
     return probsdict_negloglikelihood(probs, clickstreams, minp, maxp)
 
 
@@ -467,7 +467,7 @@ def maxlikelihood(probtrajectory, clickstreams, times, minp=0.0001, maxp=0.99999
         options['disp'] = True
 
     start = _tm.time()
-    seed = probtrajectory.get_parameters_as_list()
+    seed = probtrajectory.parameters_as_list()
     optout = _minimize(objfunc, seed, method=method, options=options)
     mleparameters = optout.x
     end = _tm.time()
@@ -543,8 +543,8 @@ def amplitude_compression(probtrajectory, times, epsilon=0., verbosity=1):
     multiplier = 1
 
     alpha0s = {}
-    probs = probtrajectory.get_probabilities(times, trim=False)
-    params = probtrajectory.get_parameters()
+    probs = probtrajectory.probabilities(times, trim=False)
+    params = probtrajectory.parameters_copy()
     # Add in the outcome that's parameters are fully defined by the others.
     params[probtrajectory.outcomes[-1]] = _np.zeros(len(params[list(params.keys())[0]]))
     # Populate those parameters.
@@ -575,7 +575,7 @@ def amplitude_compression(probtrajectory, times, epsilon=0., verbosity=1):
 
     if multiplier < 1:
         shape = (len(probtrajectory.outcomes) - 1, len(probtrajectory.hyperparameters))
-        parameters = _np.reshape(probtrajectory.get_parameters_as_list(), shape)
+        parameters = _np.reshape(probtrajectory.parameters_as_list(), shape)
         compparameters = multiplier * parameters
         # set the alpha0s as unchanged, except if rectified:
         for ind, o in enumerate(probtrajectory.outcomes[:-1]):

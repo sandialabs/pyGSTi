@@ -69,7 +69,7 @@ class DriftTestCase(BaseTestCase):
         pt = drift.probtrajectory.ConstantProbTrajectory(['0','1','2'],{'0':[0.5],'1':[0.2],})
         # Test MLE runs (this calls pretty much everything in the probability trajectory code)
         ptmax = drift.probtrajectory.maxlikelihood(pt, clickstream, times, verbosity=1)
-        parameters = ptmax.get_parameters()
+        parameters = ptmax.parameters_copy()
         # The exact MLE is the data mean, so check the returned MLE is close to that.
         for o in outcomes[:-1]:
             assert(abs(parameters[o][0] - np.mean(clickstream[o])) < 1e-3)
@@ -80,25 +80,25 @@ class DriftTestCase(BaseTestCase):
         ptdct = drift.probtrajectory.CosineProbTrajectory(['0','1','2'], [0,2], {'0':[0.5,0.02],'1':[0.2,0.03],}, 0, 0.1, 1000)
         # Test set parameters from list is working correctly.
         ptdct.set_parameters_from_list([0.5,0.02,0.2,0.03])
-        assert(ptdct.get_parameters() == {'0':[0.5,0.02],'1':[0.2,0.03],})
+        assert(ptdct.parameters_copy() == {'0':[0.5, 0.02], '1':[0.2, 0.03], })
         # Test set parameters from list is working correctly.
-        assert(ptdct.get_parameters_as_list() == [0.5,0.02,0.2,0.03])
+        assert(ptdct.parameters_as_list() == [0.5, 0.02, 0.2, 0.03])
         # Run MLE.
         ptdctmax = drift.probtrajectory.maxlikelihood(ptdct, clickstream, times, verbosity=2)
-        probsmax = ptdctmax.get_probabilities(times)
+        probsmax = ptdctmax.probabilities(times)
         # Check the minimization has actually increased the likelihood from the seed.
         assert(drift.probtrajectory.negloglikelihood(ptdctmax, clickstream, times) <= drift.probtrajectory.negloglikelihood(ptdct, clickstream, times))
 
         ptdct_invalid = drift.probtrajectory.CosineProbTrajectory(['0','1','2'], [0,2], {'0':[0.5, 0.5],'1':[0.2, 1.2],}, 0, 0.1, 1000)
         pt, check = drift.probtrajectory.amplitude_compression(ptdct_invalid, np.linspace(0,1000,2000))
         assert(check)
-        params = pt.get_parameters()
+        params = pt.parameters_copy()
 
     def test_timeresolvemodel(self):
     
         # A trmodel is a baseclass, and it's pretty trivial.
         trmodel = drift.trmodel.TimeResolvedModel([0,],[0.4])
-        trmodel.get_parameters()
+        trmodel.parameters_copy()
         trmodel.set_parameters([0.2])
         trmodel.hyperparameters
 
@@ -137,9 +137,9 @@ class DriftTestCase(BaseTestCase):
         results.run_instability_detection(inclass_correction=inclass_correction, tests=(('circuit',),), saveas='fdr-3',
                                          default=False)
 
-        results.get_unstable_circuits(fromtests=[(), ('circuit',)])
+        results.unstable_circuits(fromtests=[(), ('circuit',)])
 
-        freq, s = results.get_spectrum()
+        freq, s = results.power_spectrum()
         circuit = ds.keys()[0]
 
         #Create a workspace to show plots

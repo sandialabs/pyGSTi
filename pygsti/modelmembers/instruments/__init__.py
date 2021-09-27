@@ -17,7 +17,7 @@ from .tpinstrumentop import TPInstrumentOp
 from pygsti.tools import optools as _ot
 
 
-def get_instrument_type_from_op_type(op_type):
+def instrument_type_from_op_type(op_type):
     """Decode an op type into an appropriate instrument type.
 
     Parameters:

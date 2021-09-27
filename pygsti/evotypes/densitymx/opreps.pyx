@@ -430,7 +430,7 @@ cdef class OpRepExpErrorgen(OpRep):
         (<OpCRep_ExpErrorgen*>self.c_rep)._m_star = m_star
         (<OpCRep_ExpErrorgen*>self.c_rep)._s = s
 
-    def get_exp_params(self):
+    def exp_params(self):
         return ( (<OpCRep_ExpErrorgen*>self.c_rep)._mu,
                  (<OpCRep_ExpErrorgen*>self.c_rep)._eta,
                  (<OpCRep_ExpErrorgen*>self.c_rep)._m_star,

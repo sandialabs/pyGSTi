@@ -186,7 +186,7 @@ class CrosstalkResults(object):
         _nx.draw_networkx_nodes(G, pos, nodelist=range(self.number_of_regions, self.number_of_columns), node_size=1000,
                                 node_color=settings_color, node_shape='s', alpha=0.4, ax=ax)
 
-        label_posns = self.get_offset_label_posns(pos)
+        label_posns = self.offset_label_positions(pos)
 
         _nx.draw_networkx_labels(G, pos=label_posns, labels=self.node_labels, ax=ax)
 
@@ -268,7 +268,7 @@ class CrosstalkResults(object):
         _nx.draw_networkx_nodes(G, pos, nodelist=range(self.number_of_regions, self.number_of_columns), node_size=1000,
                                 node_color=settings_color, node_shape='s', alpha=0.4, ax=ax)
 
-        label_posns = self.get_offset_label_posns(pos)
+        label_posns = self.offset_label_positions(pos)
 
         _nx.draw_networkx_labels(G, pos=label_posns, labels=self.node_labels, ax=ax)
 
@@ -342,7 +342,7 @@ class CrosstalkResults(object):
                                          (self.setting_indices[(source + 1)] if source < (self.number_of_regions - 1)
                                           else self.number_of_columns)):
 
-                        region, setting_number = self.get_setting_region_and_number(dest)
+                        region, setting_number = self.setting_region_and_number(dest)
 
                         cell_text.append([r'R$_{%d}$' % source,
                                           r'S$_{%d}^{(%d)}$' % (region, setting_number),
@@ -356,7 +356,7 @@ class CrosstalkResults(object):
                                            (self.setting_indices[(dest + 1)] if dest < (self.number_of_regions - 1)
                                             else self.number_of_columns)):
 
-                        region, setting_number = self.get_setting_region_and_number(source)
+                        region, setting_number = self.setting_region_and_number(source)
 
                         cell_text.append([r'S$_{%d}^{(%d)}$' % (region, setting_number),
                                           r'R$_{%d}$' % dest,
@@ -386,7 +386,7 @@ class CrosstalkResults(object):
         else:
             _plt.show()
 
-    def get_offset_label_posns(self, pos):
+    def offset_label_positions(self, pos):
         """
             From https://stackoverflow.com/questions/11946005/label-nodes-outside-with-minimum-overlap-with-other-nodes-edges-in-networkx?
         """  # noqa: E501
@@ -422,7 +422,7 @@ class CrosstalkResults(object):
 
         return pos_labels
 
-    def get_setting_region_and_number(self, idx):
+    def setting_region_and_number(self, idx):
         """
             For a graph node with index idx that is a setting, work out the region it belongs to, and its number
             as a setting in that region
@@ -456,7 +456,7 @@ class CrosstalkResults(object):
             if self.is_edge_ct[idx] == 1:
                 if idx in self.max_tvd_explanations.keys():
                     if (source >= self.number_of_regions) and (dest < self.number_of_regions):
-                        region, setting_number = self.get_setting_region_and_number(source)
+                        region, setting_number = self.setting_region_and_number(source)
 
                         print("------ Edge (S_{}^({}) to R_{}) ------".format(region, setting_number, dest))
                         print(self.max_tvd_explanations[idx])

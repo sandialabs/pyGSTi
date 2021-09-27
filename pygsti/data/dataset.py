@@ -277,7 +277,7 @@ class _DataSetRow(object):
         """
         Row data in a time-series format.
 
-        This can be a much less succinct format than returned by `get_timeseries`.
+        This can be a much less succinct format than returned by `counts_as_timeseries`.
         E.g., it is highly inefficient for many-qubit data.
 
         Returns
@@ -336,7 +336,7 @@ class _DataSetRow(object):
 
         return times, {ol: seriesDict[oli] for ol, oli in self.dataset.olIndex.items()}
 
-    def get_timeseries(self):
+    def counts_as_timeseries(self):
         """
         Returns data in a time-series format.
 

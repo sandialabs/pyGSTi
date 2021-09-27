@@ -918,7 +918,7 @@ class ConfidenceRegionFactoryView(object):
         #Get finite difference derivative gradF that is shape (nParams, <shape of f0>)
         gradF = _create_empty_grad_f(f0, nParams)
 
-        fn_dependencies = fn_obj.get_dependencies()
+        fn_dependencies = fn_obj.list_dependencies()
         if 'all' in fn_dependencies:
             fn_dependencies = ['all']  # no need to do anything else
         if 'spam' in fn_dependencies:

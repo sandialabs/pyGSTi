@@ -2527,7 +2527,7 @@ class Circuit(object):
             gate, unless `allow_unchanged_gates` is False. In that case, gate that aren't a key in this dictionary are
             left unchanged.
 
-            If a CompilationLibrary, this will be queried via the get_compilation_of() method to find compilations
+            If a CompilationLibrary, this will be queried via the retrieve_compilation_of() method to find compilations
             for all of the gates in the circuit. So this CompilationLibrary must contain or be able to auto-generate
             compilations for the requested gates, except when `allow_unchanged_gates` is True. In that case, gates
             that a compilation is not returned for are left unchanged.
@@ -2565,11 +2565,11 @@ class Circuit(object):
         from pygsti.processors import CliffordCompilationRules as _CliffordCompilationRules
         if isinstance(compilation, _CliffordCompilationRules):
             # The function we query to find compilations
-            def get_compilation(gate):
+            def _get_compilation(gate):
                 # Use try, because it will fail if it cannot construct a compilation, and this is fine under some
                 # circumstances
                 try:
-                    circuit = compilation.get_compilation_of(gate, allowed_filter=allowed_filter, verbosity=0)
+                    circuit = compilation.retrieve_compilation_of(gate, allowed_filter=allowed_filter, verbosity=0)
                     return circuit
                 except:
                     return None
@@ -2578,20 +2578,20 @@ class Circuit(object):
             assert(allowed_filter is None), \
                 "`allowed_filter` can only been not None if the compilation is a CliffordCompilationRules object!"
 
-            def get_compilation(gate):
+            def _get_compilation(gate):
                 return compilation.specific_compilations.get(gate, None)
 
         else:  # Otherwise, we assume it's a dict.
             assert(allowed_filter is None), \
                 "`allowed_filter` can only been not None if the compilation is a CliffordCompilationRules object!"
 
-            def get_compilation(gate):
+            def _get_compilation(gate):
                 return compilation.get(gate, None)
 
         for ilayer in range(self.num_layers - 1, -1, -1):
             icomps_to_remove = []
             for icomp, l in enumerate(self._layer_components(ilayer)):  # loop over labels in this layer
-                replacement_circuit = get_compilation(l)
+                replacement_circuit = _get_compilation(l)
                 if replacement_circuit is not None:
                     # Replace the gate with a circuit: remove the gate and add insert
                     # the replacement circuit as the following layers.

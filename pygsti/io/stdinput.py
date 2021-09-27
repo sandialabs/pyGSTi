@@ -1121,7 +1121,7 @@ def parse_model(filename):
     if cur_group_obj is not None:
         top_level_objs.append(cur_group_obj)
 
-    def get_liouville_mx(obj, prefix=""):
+    def _get_liouville_mx(obj, prefix=""):
         """ Process properties of `obj` to extract a single liouville representation """
         props = obj['properties']; lmx = None
         if prefix + "StateVec" in props:
@@ -1164,10 +1164,10 @@ def parse_model(filename):
         #Preps
         if cur_typ == "PREP":
             mdl.preps[cur_label] = _state.FullState(
-                get_liouville_mx(obj))
+                _get_liouville_mx(obj))
         elif cur_typ == "TP-PREP":
             mdl.preps[cur_label] = _state.TPState(
-                get_liouville_mx(obj))
+                _get_liouville_mx(obj))
         elif cur_typ == "CPTP-PREP":
             props = obj['properties']
             assert("PureVec" in props and "ErrgenMx" in props)  # must always be Liouville reps!
@@ -1181,7 +1181,7 @@ def parse_model(filename):
             pureVec = _state.StaticState(_np.transpose(_eval_row_list(props["PureVec"], b_complex=False)))
             mdl.preps[cur_label] = _state.ComposedState(pureVec, errorMap)
         elif cur_typ == "STATIC-PREP":
-            mdl.preps[cur_label] = _state.StaticState(get_liouville_mx(obj))
+            mdl.preps[cur_label] = _state.StaticState(_get_liouville_mx(obj))
 
         #POVMs
         elif cur_typ in ("POVM", "TP-POVM", "CPTP-POVM"):
@@ -1189,9 +1189,9 @@ def parse_model(filename):
             for sub_obj in obj['objects']:
                 sub_typ = sub_obj['type']
                 if sub_typ == "EFFECT":
-                    Evec = _povm.FullPOVMEffect(get_liouville_mx(sub_obj))
+                    Evec = _povm.FullPOVMEffect(_get_liouville_mx(sub_obj))
                 elif sub_typ == "STATIC-EFFECT":
-                    Evec = _povm.StaticPOVMEffect(get_liouville_mx(sub_obj))
+                    Evec = _povm.StaticPOVMEffect(_get_liouville_mx(sub_obj))
                 #elif sub_typ == "CPTP-EFFECT":
                 #    Evec = _objs.LindbladSPAMVec.from_spam_vector(qty,qty,"effect")
                 effects.append((sub_obj['label'], Evec))
@@ -1217,15 +1217,15 @@ def parse_model(filename):
 
         elif cur_typ == "GATE":
             mdl.operations[cur_label] = _op.FullArbitraryOp(
-                get_liouville_mx(obj))
+                _get_liouville_mx(obj))
         elif cur_typ == "TP-GATE":
             mdl.operations[cur_label] = _op.FullTPOp(
-                get_liouville_mx(obj))
+                _get_liouville_mx(obj))
         elif cur_typ == "COMPOSED-GATE":
             i = 0; qtys = []
             while True:
                 try:
-                    qtys.append(get_liouville_mx(obj, '%d' % i))
+                    qtys.append(_get_liouville_mx(obj, '%d' % i))
                 except Exception:
                     break
                 i += 1
@@ -1241,13 +1241,13 @@ def parse_model(filename):
             #qty, proj_basis, proj_basis, truncate=False, mx_basis=basis))
 
         elif cur_typ == "STATIC-GATE":
-            mdl.operations[cur_label] = _op.StaticArbitraryOp(get_liouville_mx(obj))
+            mdl.operations[cur_label] = _op.StaticArbitraryOp(_get_liouville_mx(obj))
 
         elif cur_typ in ("Instrument", "TP-Instrument"):
             matrices = []
             for sub_obj in obj['objects']:
                 sub_typ = sub_obj['type']
-                qty = get_liouville_mx(sub_obj)
+                qty = _get_liouville_mx(sub_obj)
                 mxOrOp = _op.StaticArbitraryOp(qty) if cur_typ == "STATIC-IGATE" \
                     else qty  # just add numpy array `qty` to matrices list
                 # and it will be made into a fully-param gate.

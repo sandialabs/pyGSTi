@@ -933,7 +933,7 @@ class RandomizedBenchmarking(_vb.SummaryStatistics):
             else:
                 raise ValueError("No 'std' asymptote for %s datatype!" % self.asymptote)
 
-        def get_rb_fits(circuitdata_per_depth):
+        def _get_rb_fits(circuitdata_per_depth):
             adj_sps = []
             for depth in depths:
                 percircuitdata = circuitdata_per_depth[depth]
@@ -954,7 +954,7 @@ class RandomizedBenchmarking(_vb.SummaryStatistics):
             return full_fit_results, fixed_asym_fit_results
 
         #do RB fit on actual data
-        ff_results, faf_results = get_rb_fits(data_per_depth)
+        ff_results, faf_results = _get_rb_fits(data_per_depth)
 
         if self.bootstrap_samples > 0:
 
@@ -971,7 +971,7 @@ class RandomizedBenchmarking(_vb.SummaryStatistics):
             bootstrap_caches = data.cache['bootstraps']  # if finitecounts else 'infbootstraps'
 
             for bootstrap_cache in bootstrap_caches:
-                bs_ff_results, bs_faf_results = get_rb_fits(bootstrap_cache[self.datatype])
+                bs_ff_results, bs_faf_results = _get_rb_fits(bootstrap_cache[self.datatype])
 
                 if bs_ff_results['success']:
                     for p in parameters:

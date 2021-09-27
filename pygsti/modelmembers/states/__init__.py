@@ -104,7 +104,7 @@ def create_from_dmvec(superket_vector, state_type, basis='pp', evotype='default'
     raise ValueError("Could not create a state of type(s) %s from the given superket vector!" % (str(state_type)))
 
 
-def get_state_type_from_op_type(op_type):
+def state_type_from_op_type(op_type):
     """Decode an op type into an appropriate state type.
 
     Parameters:

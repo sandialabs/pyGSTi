@@ -426,9 +426,9 @@ class TestWorkspace(ReportBaseCase):
             switchbd5['key'] = 10 # can't add switched values like this.
         switchbd5.switchTypes[0] = "foobar" #mess with Switchboard internals to trigger errors below
         with self.assertRaises(ValueError):
-            switchbd5.get_switch_change_handlerjs(0)
+            switchbd5.create_switch_change_handlerjs(0)
         with self.assertRaises(ValueError):
-            switchbd5.get_switch_valuejs(0)
+            switchbd5.create_switch_valuejs(0)
         with self.assertRaises(ValueError):
             switchbd5.render("html")
 

@@ -200,7 +200,7 @@ class RBSummaryDataset(object):
         self.SPs = []
         self.ASPs = []
         for l in self.lengths:
-            SPs = [self.get_success_counts(l, i) / self.get_total_counts(l, i) for i in range(len(self.counts[l]))]
+            SPs = [self.success_counts(l, i) / self.total_counts(l, i) for i in range(len(self.counts[l]))]
             self.SPs.append(SPs)
             self.ASPs.append(_np.mean(SPs))
 
@@ -208,7 +208,7 @@ class RBSummaryDataset(object):
             self.adjusted_SPs = []
             self.adjusted_ASPs = []
             for l in self.lengths:
-                adjSPs = [self.get_adjusted_success_probability(l, i) for i in range(len(self.counts[l]))]
+                adjSPs = [self.adjusted_success_probability(l, i) for i in range(len(self.counts[l]))]
                 self.adjusted_SPs.append(adjSPs)
                 self.adjusted_ASPs.append(_np.mean(adjSPs))
 
@@ -220,13 +220,13 @@ class RBSummaryDataset(object):
 
         return
 
-    def get_adjusted_success_probability(self, length, index):
+    def adjusted_success_probability(self, length, index):
         """
         todo.
         """
-        return _analysis.adjusted_success_probability(self.get_hamming_distance_distribution(length, index))
+        return _analysis.adjusted_success_probability(self.hamming_distance_distribution(length, index))
 
-    def get_success_counts(self, length, index):
+    def success_counts(self, length, index):
         """
         todo
 
@@ -237,7 +237,7 @@ class RBSummaryDataset(object):
         else:
             return self.counts[length][index][0]
 
-    def get_total_counts(self, length, index):
+    def total_counts(self, length, index):
         """
         todo
 
@@ -251,7 +251,7 @@ class RBSummaryDataset(object):
         else:
             return self._total_counts[length][index]
 
-    def get_hamming_distance_distribution(self, length, index):
+    def hamming_distance_distribution(self, length, index):
         """
         todo
 
@@ -262,7 +262,7 @@ class RBSummaryDataset(object):
         else:
             raise ValueError("This is only possible for Hamming distance count data!")
 
-    def get_success_probabilities(self, successtype='raw'):
+    def success_probabilities(self, successtype='raw'):
         """
         todo.
 
@@ -309,7 +309,7 @@ class RBSummaryDataset(object):
 
                         ind = _np.random.randint(numcircuits)
                         sampledSP = self.SPs[j][ind]
-                        totalcounts = self.get_total_counts(l, ind)
+                        totalcounts = self.total_counts(l, ind)
                         if self.finitecounts:
                             success_counts[l].append(_np.random.binomial(totalcounts, sampledSP))
                             total_counts[l].append(totalcounts)
@@ -330,10 +330,10 @@ class RBSummaryDataset(object):
                     for k in range(numcircuits):
 
                         ind = _np.random.randint(numcircuits)
-                        sampledHDProbs = self.get_hamming_distance_distribution(l, ind)
+                        sampledHDProbs = self.hamming_distance_distribution(l, ind)
 
                         if self.finitecounts:
-                            totalcounts = self.get_total_counts(l, ind)
+                            totalcounts = self.total_counts(l, ind)
                             hamming_distance_counts[l].append(list(_np.random.multinomial(totalcounts, sampledHDProbs)))
                         else:
                             hamming_distance_counts[l].append(sampledHDProbs)

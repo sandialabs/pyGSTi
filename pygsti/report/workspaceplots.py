@@ -1729,7 +1729,7 @@ class ColorBoxPlot(WorkspacePlot):
 
                 colormapType = "manuallinlog"
                 linlog_color = "green"
-                pvaluethreshold, junk = stabilityanalyzer.get_pvalue_threshold(test, detectorkey=detectorkey)
+                pvaluethreshold, junk = stabilityanalyzer.pvalue_threshold(test, detectorkey=detectorkey)
                 linlog_trans = -1 * _np.log10(pvaluethreshold)
                 ytitle = "Evidence for instability as quantified by -log10(pvalue)"
                 mx_fn = _mx_fn_driftpv  # use a *global* function so cache can tell it's the same

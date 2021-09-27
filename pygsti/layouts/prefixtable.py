@@ -242,7 +242,7 @@ class PrefixTable(object):
             totalCost += curTableCost
             return subTables, totalCost
 
-        def get_num_applies(content):
+        def _get_num_applies(content):
             """
             Gets the number of "apply" operations required to compute this prefix tree (an int)
             """
@@ -264,7 +264,7 @@ class PrefixTable(object):
             # (but this can yield tables with unequal lengths or cache sizes,
             # which is what we're often after for memory reasons)
             if cost_metric == "applies":
-                maxCost = get_num_applies(table_contents) / num_sub_tables
+                maxCost = _get_num_applies(table_contents) / num_sub_tables
             else: maxCost = len(table_contents) / num_sub_tables
             maxCostLowerBound, maxCostUpperBound = maxCost, None
             maxCostRate, rateLowerBound, rateUpperBound = 0, -1.0, +1.0

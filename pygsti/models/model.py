@@ -1011,7 +1011,7 @@ class OpModel(Model):
             w = _np.delete(w, indices_to_remove)
             wl = _np.delete(wl, indices_to_remove)
             wb = _np.delete(wb, indices_to_remove, axis=0)
-            def get_shift(j): return _bisect.bisect_left(indices_to_remove, j)
+            def _get_shift(j): return _bisect.bisect_left(indices_to_remove, j)
             memo = set()  # keep track of which object's gpindices have been set
             for _, obj in self._iter_parameterized_objs():
                 # ensure object is allocated to this model and thus should be shifted:
@@ -1019,11 +1019,11 @@ class OpModel(Model):
                 if id(obj) in memo: continue  # already processed
                 if isinstance(obj.gpindices, slice):
                     new_inds = _slct.shift(obj.gpindices,
-                                           -get_shift(obj.gpindices.start))
+                                           -_get_shift(obj.gpindices.start))
                 else:
                     new_inds = []
                     for i in obj.gpindices:
-                        new_inds.append(i - get_shift(i))
+                        new_inds.append(i - _get_shift(i))
                     new_inds = _np.array(new_inds, _np.int64)
                 obj.set_gpindices(new_inds, self, memo)
 

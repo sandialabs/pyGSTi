@@ -624,7 +624,7 @@ def _find_amped_polynomials_for_clifford_syntheticidle(qubit_filter, core_filter
 
     #Tile idle_fidpairs for max_weight onto nQubits
     # (similar to _tile_idle_fidpairs(...) but don't need to convert to circuits?)
-    tmpl = get_kcoverage_template(nQubits, max_weight)
+    tmpl = create_kcoverage_template(nQubits, max_weight)
     idle_gatename_fidpair_lists = true_idle_pairs[max_weight]
     #print("IDLE GFP LISTS = ",idle_gatename_fidpair_lists)
 
@@ -1013,7 +1013,7 @@ def _tile_idle_fidpairs(qubit_labels, idle_gatename_fidpair_lists, max_idle_weig
     # XX element to a list of k (prep-gate-name-str, meas-gate-name-str) tuples one per *qubit*.
 
     nQubits = len(qubit_labels)
-    tmpl = get_kcoverage_template(nQubits, max_idle_weight)
+    tmpl = create_kcoverage_template(nQubits, max_idle_weight)
     final_fidpairs = []
 
     def merge_into_1q(g_str, gate_names, qubit_label):
@@ -2130,9 +2130,9 @@ def _get_kcoverage_template_k2(n):
     return half + other_half
 
 
-def get_kcoverage_template(n, k, verbosity=0):
+def create_kcoverage_template(n, k, verbosity=0):
     """
-    Get a template for how to create a "k-coverage" set of length-`n` sequences.
+    Construct a template for how to create a "k-coverage" set of length-`n` sequences.
 
     Consider a set of length-`n` words from a `k`-letter alphabet.  These words
     (sequences of letters) have the "k-coverage" property if, for any choice of
@@ -2342,7 +2342,7 @@ def _check_kcoverage_template(rows, n, k, verbosity=0):
     ----------
     rows : list
         A list of k-coverage words.  The same as whas is returned by
-        :function:`get_kcoverage_template`.
+        :function:`create_kcoverage_template`.
 
     n : int
         The sequences length.

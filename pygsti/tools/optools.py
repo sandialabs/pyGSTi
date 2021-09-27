@@ -3382,7 +3382,7 @@ def compute_best_case_gauge_transform(gate_mx, target_gate_mx, return_all=False)
     assert(_np.linalg.norm(target_gate_mx.imag) < 1e-8)
 
     if True:  # NEW approach that gives sorted eigenvectors
-        def get_eigenspace_pairs(mx, tol=1e-6):
+        def _get_eigenspace_pairs(mx, tol=1e-6):
             evals, U = _np.linalg.eig(mx)  # so mx = U * evals * u_inv
             espace_pairs = {}; conj_pair_indices = []
 
@@ -3429,7 +3429,7 @@ def compute_best_case_gauge_transform(gate_mx, target_gate_mx, return_all=False)
             return evals, U, espace_pairs
 
         def standard_diag(mx, tol=1e-6):
-            evals, U, espairs = get_eigenspace_pairs(mx)
+            evals, U, espairs = _get_eigenspace_pairs(mx)
             std_evals = []
             std_evecs = []
             sorted_rep_evals = sorted(list(espairs.keys()), key=lambda x: (x.real, x.imag))

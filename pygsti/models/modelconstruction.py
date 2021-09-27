@@ -497,11 +497,11 @@ def _create_explicit_model_from_expressions(state_space, basis,
     #prep_prefix="rho", effect_prefix="E", gate_prefix="G")
 
     if prep_type == "auto":
-        prep_type = _state.get_state_type_from_op_type(gate_type)
+        prep_type = _state.state_type_from_op_type(gate_type)
     if povm_type == "auto":
-        povm_type = _povm.get_povm_type_from_op_type(gate_type)
+        povm_type = _povm.povm_type_from_op_type(gate_type)
     if instrument_type == "auto":
-        instrument_type = _instrument.get_instrument_type_from_op_type(gate_type)
+        instrument_type = _instrument.instrument_type_from_op_type(gate_type)
 
     for label, rhoExpr in zip(prep_labels, prep_expressions):
         vec = create_spam_vector(rhoExpr, state_space, basis)
@@ -729,9 +729,9 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
     if ideal_gate_type == "auto":
         ideal_gate_type = ('static standard', 'static clifford', 'static unitary')
     if ideal_prep_type == "auto":
-        ideal_prep_type = _state.get_state_type_from_op_type(ideal_gate_type)
+        ideal_prep_type = _state.state_type_from_op_type(ideal_gate_type)
     if ideal_povm_type == "auto":
-        ideal_povm_type = _povm.get_povm_type_from_op_type(ideal_gate_type)
+        ideal_povm_type = _povm.povm_type_from_op_type(ideal_gate_type)
 
     def _embed_unitary(statespace, target_labels, unitary):
         dummyop = _op.EmbeddedOp(statespace, target_labels,
@@ -1320,9 +1320,9 @@ def _create_crosstalk_free_model(processor_spec, modelnoise, custom_gates=None, 
     if ideal_gate_type == "auto":
         ideal_gate_type = ('static standard', 'static clifford', 'static unitary')
     if ideal_prep_type == "auto":
-        ideal_prep_type = _state.get_state_type_from_op_type(ideal_gate_type)
+        ideal_prep_type = _state.state_type_from_op_type(ideal_gate_type)
     if ideal_povm_type == "auto":
-        ideal_povm_type = _povm.get_povm_type_from_op_type(ideal_gate_type)
+        ideal_povm_type = _povm.povm_type_from_op_type(ideal_gate_type)
 
     gatedict = _setup_local_gates(processor_spec, evotype, modelnoise, custom_gates, ideal_gate_type)
 

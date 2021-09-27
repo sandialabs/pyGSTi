@@ -92,9 +92,9 @@ class HasProcessorSpec(object):
         if gate_type == "auto":
             gate_type = "static"
         if prep_type == "auto":
-            prep_type = _states.get_state_type_from_op_type(gate_type)
+            prep_type = _states.state_type_from_op_type(gate_type)
         if povm_type == "auto":
-            povm_type = _povms.get_povm_type_from_op_type(gate_type)
+            povm_type = _povms.povm_type_from_op_type(gate_type)
 
         return _models.modelconstruction._create_explicit_model(
             self.processor_spec, None, evotype='default', simulator='auto',
@@ -401,7 +401,7 @@ class GSTInitialModel(_NicelySerializable):
         self.depolarize_start = depolarize_start
         self.randomize_start = randomize_start
 
-    def get_model(self, edesign, gaugeopt_target, dataset, comm):
+    def retrieve_model(self, edesign, gaugeopt_target, dataset, comm):
         """
         Retrieve the starting-point :class:`Model` used to seed a long-sequence GST run.
 
@@ -1189,7 +1189,7 @@ class GateSetTomography(_proto.Protocol):
                               for lst in circuit_lists]
 
         tnxt = _time.time(); profiler.add_time('GST: loading', tref); tref = tnxt
-        mdl_start = self.initial_model.get_model(data.edesign, self.gaugeopt_suite.gaugeopt_target, data.dataset, comm)
+        mdl_start = self.initial_model.retrieve_model(data.edesign, self.gaugeopt_suite.gaugeopt_target, data.dataset, comm)
 
         tnxt = _time.time(); profiler.add_time('GST: Prep Initial seed', tref); tref = tnxt
 
@@ -1693,13 +1693,13 @@ def _add_gauge_opt(results, base_est_label, gaugeopt_suite, starting_model,
 
         #Get starting model
         results.estimates[base_est_label].add_gaugeoptimized(goparams, None, go_label, comm, printer - 3)
-        mdl_start = results.estimates[base_est_label].get_start_model(goparams)
+        mdl_start = results.estimates[base_est_label].retrieve_start_model(goparams)
 
         #Gauge optimize data-scaled estimate also
         for suffix in ROBUST_SUFFIX_LIST:
             robust_est_label = base_est_label + suffix
             if robust_est_label in results.estimates:
-                mdl_start_robust = results.estimates[robust_est_label].get_start_model(goparams)
+                mdl_start_robust = results.estimates[robust_est_label].retrieve_start_model(goparams)
 
                 if mdl_start_robust.frobeniusdist(mdl_start) < 1e-8:
                     printer.log("-- Conveying '%s' gauge optimization from %s to %s estimate --" %

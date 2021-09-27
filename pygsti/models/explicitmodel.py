@@ -121,11 +121,11 @@ class ExplicitOpModel(_mdl.OpModel):
                                  'match_parent_evotype': True, 'cast_to_type': typ}
 
         if default_prep_type == "auto":
-            default_prep_type = _state.get_state_type_from_op_type(default_gate_type)
+            default_prep_type = _state.state_type_from_op_type(default_gate_type)
         if default_povm_type == "auto":
-            default_povm_type = _povm.get_povm_type_from_op_type(default_gate_type)
+            default_povm_type = _povm.povm_type_from_op_type(default_gate_type)
         if default_instrument_type == "auto":
-            default_instrument_type = _instrument.get_instrument_type_from_op_type(default_gate_type)
+            default_instrument_type = _instrument.instrument_type_from_op_type(default_gate_type)
 
         self.preps = _OrderedMemberDict(self, default_prep_type, prep_prefix, flagfn("state"))
         self.povms = _OrderedMemberDict(self, default_povm_type, povm_prefix, flagfn("povm"))
@@ -383,9 +383,9 @@ class ExplicitOpModel(_mdl.OpModel):
         basis = self.basis
         if extra is None: extra = {}
 
-        rtyp = _state.get_state_type_from_op_type(gate_type) if prep_type == "auto" else prep_type
-        povmtyp = _povm.get_povm_type_from_op_type(gate_type) if povm_type == "auto" else povm_type
-        ityp = _instrument.get_instrument_type_from_op_type(gate_type) if instrument_type == "auto" else instrument_type
+        rtyp = _state.state_type_from_op_type(gate_type) if prep_type == "auto" else prep_type
+        povmtyp = _povm.povm_type_from_op_type(gate_type) if povm_type == "auto" else povm_type
+        ityp = _instrument.instrument_type_from_op_type(gate_type) if instrument_type == "auto" else instrument_type
 
         for lbl, gate in self.operations.items():
             self.operations[lbl] = _op.convert(gate, typ, basis,

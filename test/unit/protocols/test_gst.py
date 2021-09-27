@@ -119,7 +119,7 @@ class GSTInitialModelTester(BaseCase):
     def test_get_model_target(self):
         #Default
         im = gst.GSTInitialModel()  # default is to use the target
-        mdl = im.get_model(self.edesign, None, None, None)
+        mdl = im.retrieve_model(self.edesign, None, None, None)
         self.assertEqual(im.starting_point, 'target')
         self.assertTrue(self.edesign.create_target_model().frobeniusdist(mdl) < 1e-6)
 
@@ -127,7 +127,7 @@ class GSTInitialModelTester(BaseCase):
         #Custom model
         custom_model = self.edesign.create_target_model('full','full').rotate(max_rotate=0.05, seed=1234)
         im = gst.GSTInitialModel(custom_model)  # default is to use the target
-        mdl = im.get_model(self.edesign, None, None, None)
+        mdl = im.retrieve_model(self.edesign, None, None, None)
         self.assertEqual(im.starting_point, "User-supplied-Model")
         self.assertTrue(mdl is custom_model)
 
@@ -135,7 +135,7 @@ class GSTInitialModelTester(BaseCase):
         #Depolarized start
         depol_model = self.edesign.create_target_model('full', 'full').depolarize(op_noise=0.1)
         im = gst.GSTInitialModel(depolarize_start=0.1)  # default is to use the target
-        mdl = im.get_model(self.edesign, None, None, None)
+        mdl = im.retrieve_model(self.edesign, None, None, None)
         self.assertEqual(im.starting_point, 'target')
         self.assertTrue(depol_model.frobeniusdist(mdl) < 1e-6)
 
@@ -145,10 +145,10 @@ class GSTInitialModelTester(BaseCase):
         ds = simulate_data(datagen_model, self.edesign.all_circuits_needing_data, 1000, sample_error='none')  # no error for reproducibility
 
         im1 = gst.GSTInitialModel(self.edesign.create_target_model('full'), "LGST")
-        mdl1 = im1.get_model(self.edesign, None, ds, None)
+        mdl1 = im1.retrieve_model(self.edesign, None, ds, None)
 
         im2 = gst.GSTInitialModel(self.edesign.create_target_model('full'), "LGST-if-possible")
-        mdl2 = im2.get_model(self.edesign, None, ds, None)
+        mdl2 = im2.retrieve_model(self.edesign, None, ds, None)
 
         self.assertTrue(mdl1.frobeniusdist(mdl2) < 1e-6)
         #TODO: would like some gauge-inv metric between mdl? and datagen_model to be ~0 (FUTURE)

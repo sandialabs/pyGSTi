@@ -199,7 +199,7 @@ def create_effect_from_dmvec(superket_vector, effect_type, basis='pp', evotype='
     raise ValueError("Could not create an effect of type(s) %s from the given superket vector!" % (str(effect_type)))
 
 
-def get_povm_type_from_op_type(op_type):
+def povm_type_from_op_type(op_type):
     """Decode an op type into an appropriate povm type.
 
     Parameters:
