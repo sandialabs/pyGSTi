@@ -140,7 +140,7 @@ class Evotype(object):
         return self.module.StateRepDense(vec, state_space)
 
     def create_pure_state_rep(self, purevec, super_basis, state_space):
-        return self.module.StateRepDensePure(purevec, super_basis, state_space)
+        return self.module.StateRepDensePure(purevec, state_space, super_basis)
 
     def create_computational_state_rep(self, zvals, super_basis, state_space):
         return self.module.StateRepComputational(zvals, super_basis, state_space)

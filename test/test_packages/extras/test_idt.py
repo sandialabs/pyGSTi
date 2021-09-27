@@ -244,14 +244,21 @@ class IDTTestCase(BaseTestCase):
         expList = pygsti.circuits.create_lsgst_circuits(std.target_model(), std.prepStrs,
                                                             std.effectStrs, std.germs_lite, maxLens)
         ds = pygsti.data.simulate_data(std.target_model().depolarize(0.01, 0.01),
-                                               expList, 1000, 'multinomial', seed=1234)
+                                       expList, 1000, 'multinomial', seed=1234)
 
         result = pygsti.run_long_sequence_gst(ds, std.target_model(), std.prepStrs, std.effectStrs, std.germs_lite, maxLens, verbosity=3)
 
         #standard report will run idle tomography
-        pygsti.report.create_standard_report(result, temp_files + "/gstWithIdleTomogTestReportStd1Q",
-                                             "Test GST Report w/Idle Tomography Tab: StdXYI",
-                                             verbosity=3, auto_open=False)
+        report = pygsti.report.construct_standard_report(result, "Test GST Report w/Idle Tomography Tab: StdXYI",
+                                                         advanced_options={'idt_idle_oplabel': ()}, verbosity=3)
+        idt_sections = list(filter(lambda x: isinstance(x, pygsti.report.section.IdleTomographySection), report._sections))
+        self.assertEqual(len(idt_sections), 1)
+        self.assertTrue(isinstance(report._global_qtys['top_switchboard'].idtresults.base[0],
+                                   pygsti.extras.idletomography.idtresults.IdleTomographyResults))
+        
+        #pygsti.report.create_standard_report(result, temp_files + "/gstWithIdleTomogTestReportStd1Q",
+        #                                     "Test GST Report w/Idle Tomography Tab: StdXYI",
+        #                                     verbosity=3, auto_open=False)
 
     def test_idletomog_gstdata_1Qofstd2Q(self):
         # perform idle tomography on first qubit of 2Q
@@ -273,11 +280,19 @@ class IDTTestCase(BaseTestCase):
         start.set_all_parameterizations("full TP")
         result = pygsti.run_long_sequence_gst(ds, start, std.prepStrs[0:4], std.effectStrs[0:4],
                                               std.germs_lite, maxLens, verbosity=3, advanced_options={'objective': 'chi2'})
+
+        report = pygsti.report.construct_standard_report(result, "Test GST Report w/Idle Tomog.: StdXYI from StdXYICNOT",
+                                                         advanced_options={'idt_idle_oplabel': ()}, verbosity=3)
+        idt_sections = list(filter(lambda x: isinstance(x, pygsti.report.section.IdleTomographySection), report._sections))
+        self.assertEqual(len(idt_sections), 1)
+        self.assertTrue(isinstance(report._global_qtys['top_switchboard'].idtresults.base[0],
+                                   pygsti.extras.idletomography.idtresults.IdleTomographyResults))
+
         #result = pygsti.run_model_test(start.depolarize(0.009,0.009), ds, std.target_model(), std.prepStrs[0:4],
         #                              std.effectStrs[0:4], std.germs_lite, maxLens)
-        pygsti.report.create_standard_report(result, temp_files + "/gstWithIdleTomogTestReportStd1Qfrom2Q",
-                                             "Test GST Report w/Idle Tomog.: StdXYI from StdXYICNOT",
-                                             verbosity=3, auto_open=False)
+        #pygsti.report.create_standard_report(result, temp_files + "/gstWithIdleTomogTestReportStd1Qfrom2Q",
+        #                                     "Test GST Report w/Idle Tomog.: StdXYI from StdXYICNOT",
+        #                                     verbosity=3, auto_open=False)
 
     def test_idletomog_gstdata_nQ(self):
 

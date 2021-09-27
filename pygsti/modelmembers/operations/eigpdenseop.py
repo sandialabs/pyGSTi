@@ -15,6 +15,7 @@ import functools as _functools
 import numpy as _np
 
 from pygsti.modelmembers.operations.denseop import DenseOperator as _DenseOperator
+from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from pygsti.tools import matrixtools as _mt
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
@@ -302,6 +303,36 @@ class EigenvalueParamDenseOp(_DenseOperator):
         self._ptr.flags.writeable = True
         self._ptr[:, :] = matrix.real
         self._ptr.flags.writeable = False
+
+    def to_memoized_dict(self, mmg_memo):
+        """Create a serializable dict with references to other objects in the memo.
+
+        Parameters
+        ----------
+        mmg_memo: dict
+            Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
+            are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
+            the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
+
+        Returns
+        -------
+        mm_dict: dict
+            A dict representation of this ModelMember ready for serialization
+            This must have at least the following fields:
+                module, class, submembers, params, state_space, evotype
+            Additional fields may be added by derived classes.
+        """
+        mm_dict = super().to_memoized_dict(mmg_memo)  # includes 'dense_matrix' from DenseOperator
+        mm_dict['include_off_diags_in_degen_2_blocks'] = self.options['includeOffDiags']
+        mm_dict['tp_constrained_and_unital'] = self.options['TPandUnital']
+        return mm_dict
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        matrix = cls._decodemx(mm_dict['dense_matrix'])
+        state_space = _StateSpace.from_nice_serialization(mm_dict['state_space'])
+        return cls(matrix, mm_dict['include_off_diags_in_degen_2_blocks'],
+                   mm_dict['tp_constrained_and_unital'], mm_dict['evotype'], state_space)
 
     @property
     def num_params(self):

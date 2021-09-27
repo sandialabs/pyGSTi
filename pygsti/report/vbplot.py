@@ -122,17 +122,17 @@ def volumetric_plot(data, y_values=None, x_values=None, title=None, fig=None, ax
 
     if fig is None:
         fig, ax = empty_volumetric_plot(figsize=figsize, y_values=y_values, x_values=x_values, title=title)
-    
+
     if qv_threshold is None:
         qv_threshold = pass_threshold
-        
+
     if color is not None:
         cmap = None
         point_color = color
-        
+
     for indw, w in enumerate(y_values):
         for indd, d in enumerate(x_values):
-            
+
             edgecolor = 'k'
             linewidth = 1 * linescale
             datapoint = data.get((d, w), None)
@@ -147,7 +147,7 @@ def volumetric_plot(data, y_values=None, x_values=None, title=None, fig=None, ax
                 if datapoint >= show_threshold:
                     if datapoint < pass_threshold:
                         datapoint = 0
-  
+
                     if color is None:
                         point_color = [datapoint]
                     ax.scatter([indd], [indw], marker="s", s=280 * scale - 30 * linewidth, c=point_color,
@@ -156,22 +156,22 @@ def volumetric_plot(data, y_values=None, x_values=None, title=None, fig=None, ax
     return fig, ax
 
 
-def volumetric_boundary_plot(data, y_values=None, x_values=None, boundary=None, threshold=.5, 
+def volumetric_boundary_plot(data, y_values=None, x_values=None, boundary=None, threshold=.5,
                              missing_data_action='continue', monotonic=True, color='k', linewidth=4,
                              linestyle='-', dashing=None, fig=None, ax=None, figsize=None, title=None,
                              label=None):
     """
-    Creates a volumetric benchmarking boundary plot, that displays boundary at which the given data 
+    Creates a volumetric benchmarking boundary plot, that displays boundary at which the given data
     drops below the specified threshold
     """
     y_values, x_values = _get_xy(data, y_values, x_values)
-    
+
     if fig is None:
         fig, ax = empty_volumetric_plot(figsize=figsize, y_values=y_values, x_values=x_values, title=title)
-    
+
     if boundary is not None:
         boundaries = _np.array([-1 if boundary[d] == 0 else y_values.index(boundary[d]) for d in x_values])
-        # x-values for a jagged line that outlines the boxes (one pair for each box)        
+        # x-values for a jagged line that outlines the boxes (one pair for each box)
         xvals = [y for x in range(len(x_values)) for y in [x - .5, x + .5]]
         # y-values for a jagged line that outlines the boxes (one pair for each box)
         yvals = [y + .5 for boundary in boundaries for y in [boundary, boundary]]
@@ -206,11 +206,11 @@ def volumetric_boundary_plot(data, y_values=None, x_values=None, boundary=None, 
                 previous_boundary = boundary_at_d
 
             if missing_data_action == 'continue':
-                # x-values for a jagged line that outlines the boxes (one pair for each box)        
+                # x-values for a jagged line that outlines the boxes (one pair for each box)
                 xvals = [y for x in range(len(x_values)) for y in [x - .5, x + .5]]
                 # y-values for a jagged line that outlines the boxes (one pair for each box)
                 yvals = [y + .5 for boundary in boundaries for y in [boundary, boundary]]
-           
+
             elif missing_data_action == 'hedge':
                 # x-values for a jagged line that outlines the boxes (one pair for each box)
                 xvals = []
@@ -297,8 +297,8 @@ def volumetric_distribution_plot(vbdataframe, metric='polarization', threshold=1
 
     hypothesis_test : string, optional
         The type of statistical significance adjustment to apply to the boundaries. The options are
-        - 'standard': this reproduces the method used and described in arXiv:2008.11294 (see the 
-            appendices for details). With this option, there will be a difference between the 
+        - 'standard': this reproduces the method used and described in arXiv:2008.11294 (see the
+            appendices for details). With this option, there will be a difference between the
             boundary for the minimum and maximum polarization only if there is statistically significant
             evidence in the data for this.
         - 'none': no statistical significance adjustment: all three boundaries show the point at which
@@ -351,24 +351,25 @@ def volumetric_distribution_plot(vbdataframe, metric='polarization', threshold=1
         raise ValueError("`hypothesis_test` must be 'standard' or 'none'!")
 
     # Plots the data.
-    for statistic in ('min', 'mean', 'max'): 
+    for statistic in ('min', 'mean', 'max'):
         fig, ax = volumetric_plot(vb_data[statistic], y_values=y_values, x_values=x_values, fig=fig, ax=ax,
                                   scale=scale[statistic], linescale=linescale[statistic], cmap=cmap)
-    
+
     # Plots the boundaries that have been adjusted for statistical significance.
-    for statistic in adjusted_boundaries:     
+    for statistic in adjusted_boundaries:
         if statistic == 'max': effective_threshold = 0.99
         elif statistic == 'min': effective_threshold = 1.99
-        volumetric_boundary_plot(capability_regions, y_values=y_values, x_values=x_values, threshold=effective_threshold,
+        volumetric_boundary_plot(capability_regions, y_values=y_values, x_values=x_values,
+                                 threshold=effective_threshold,
                                  missing_data_action='hedge', fig=fig, ax=ax, linestyle='-',
                                  color=boundary_color[statistic], linewidth=boundary_linewidth[statistic],
-                                 dashing=boundary_dashing[statistic])    
-    
+                                 dashing=boundary_dashing[statistic])
+
     # Plots the boundaries that are not adjusted for statistical significance.
     for statistic in unadjusted_boundaries:
         volumetric_boundary_plot(vb_data[statistic], y_values=y_values, x_values=x_values, threshold=threshold,
-                                 monotonic=False, missing_data_action='hedge', fig=fig, ax=ax, linestyle='-', 
-                                 color=boundary_color[statistic], linewidth=boundary_linewidth[statistic], 
+                                 monotonic=False, missing_data_action='hedge', fig=fig, ax=ax, linestyle='-',
+                                 color=boundary_color[statistic], linewidth=boundary_linewidth[statistic],
                                  dashing=boundary_dashing[statistic])
 
     return fig, ax

@@ -229,7 +229,7 @@ class IBMQExperiment(dict):
                     try:
                         print('  - Queue position is {}'.format(self['qjob'][-1].queue_position()))
                     except:
-                        print('  - Failed to get queue position {}'.format(batch_idx))
+                        print('  - Failed to get queue position {}'.format(batch_idx + 1))
                     submit_status = True
                 except Exception as ex:
                     template = "An exception of type {0} occurred. Arguments:\n{1!r}"
@@ -258,8 +258,8 @@ class IBMQExperiment(dict):
         """
         for counter, qjob in enumerate(self['qjob']):
             status = qjob.status()
-            print("Batch {}: {}".format(counter, status))
-            if status.name == 'QUEUED:':
+            print("Batch {}: {}".format(counter + 1, status))
+            if status.name == 'QUEUED':
                 print('  - Queue position is {}'.format(qjob.queue_position()))
 
     def get_results(self):

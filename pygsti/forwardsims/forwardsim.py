@@ -19,10 +19,11 @@ from pygsti.layouts.cachedlayout import CachedCOPALayout as _CachedCOPALayout
 from pygsti.layouts.copalayout import CircuitOutcomeProbabilityArrayLayout as _CircuitOutcomeProbabilityArrayLayout
 from pygsti.baseobjs import outcomelabeldict as _ld
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.tools import slicetools as _slct
 
 
-class ForwardSimulator(object):
+class ForwardSimulator(_NicelySerializable):
     """
     A calculator of circuit outcome probability calculations and their derivatives w.r.t. model parameters.
 
@@ -95,6 +96,14 @@ class ForwardSimulator(object):
         #self.prepreps = { lbl:p.torep('prep') for lbl,p in preps.items() }
         #self.effectreps = { lbl:e.torep('effect') for lbl,e in effects.items() }
 
+    def _to_nice_serialization(self):
+        # (don't serialize parent model)
+        return super()._to_nice_serialization()
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        return cls(None)
+
     def __getstate__(self):
         state_dict = self.__dict__.copy()
         state_dict['_model'] = None  # don't serialize parent model (will cause recursion)
@@ -109,7 +118,7 @@ class ForwardSimulator(object):
         self._model = val
         try:
             evotype = None if val is None else self._model.evotype
-            self._set_evotype(evotype)  # alert the class of the evotype (allows loading evotype-specific calc functions)
+            self._set_evotype(evotype)  # alert the class: new evotype! (allows loading evotype-specific calc functions)
         except AttributeError:
             pass  # not all models have an evotype (OK)
 

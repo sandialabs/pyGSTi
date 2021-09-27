@@ -625,7 +625,7 @@ class ByDepthSummaryStatistics(SummaryStatistics):
         self.names_to_compute = statistics_to_compute if (names_to_compute is None) else names_to_compute
         self.custom_data_src = custom_data_src
         # because this *could* be a model or a qty dict (or just a string?)
-        self.auxfile_types['custom_data_src'] = 'pickle'
+        self.auxfile_types['custom_data_src'] = 'serialized-object'
 
     def _get_statistic_per_depth(self, statistic, data):
         design = data.edesign
@@ -755,7 +755,7 @@ class SummaryStatisticsResults(_proto.ProtocolResults):
         """
         super().__init__(data, protocol_instance)
         self.statistics = {}
-        self.auxfile_types['statistics'] = 'pickle'  # b/c NamedDicts don't json
+        self.auxfile_types['statistics'] = 'dict:serialized-object'  # dict of NamedDicts
 
     def _my_attributes_as_nameddict(self):
         """Overrides base class behavior so elements of self.statistics form top-level NamedDict"""

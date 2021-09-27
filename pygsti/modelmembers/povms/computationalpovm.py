@@ -118,13 +118,16 @@ class ComputationalBasisPOVM(_POVM):
     def __getitem__(self, key):
         """ For lazy creation of effect vectors """
         if _collections.OrderedDict.__contains__(self, key):
-            return _collections.OrderedDict.__getitem__(self, key)
-        elif key in self:  # calls __contains__ to efficiently check for membership
+            ret = _collections.OrderedDict.__getitem__(self, key)
+            if ret.parent is self.parent:  # check for "stale" cached effect vector, and
+                return ret  # ensure we return an effect for our parent!
+
+        if key in self:  # calls __contains__ to efficiently check for membership
             #create effect vector now that it's been requested (lazy creation)
             # decompose key into separate factor-effect labels
             outcomes = [(0 if letter == '0' else 1) for letter in key]
             effect = _ComputationalBasisPOVMEffect(outcomes, 'pp', self._evotype, self.state_space)
-            effect.set_gpindices(slice(0, 0, None), self.parent)  # computational vecs have no params
+            assert(effect.allocate_gpindices(0, self.parent) == 0)  # functional! computational vecs have no params
             _collections.OrderedDict.__setitem__(self, key, effect)
             return effect
         else: raise KeyError("%s is not an outcome label of this StabilizerZPOVM" % key)
@@ -153,12 +156,40 @@ class ComputationalBasisPOVM(_POVM):
         -------
         OrderedDict of POVMEffects
         """
-        # Create "simplified" effect vectors, which infer their parent and
-        # gpindices from the set of "factor-POVMs" they're constructed with.
         if prefix: prefix += "_"
         simplified = _collections.OrderedDict(
             [(prefix + k, self[k]) for k in self.keys()])
         return simplified
+
+    def to_memoized_dict(self, mmg_memo):
+        """Create a serializable dict with references to other objects in the memo.
+
+        Parameters
+        ----------
+        mmg_memo: dict
+            Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
+            are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
+            the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
+
+        Returns
+        -------
+        mm_dict: dict
+            A dict representation of this ModelMember ready for serialization
+            This must have at least the following fields:
+                module, class, submembers, params, state_space, evotype
+            Additional fields may be added by derived classes.
+        """
+        mm_dict = super().to_memoized_dict(mmg_memo)
+
+        mm_dict['nqubits'] = self.nqubits
+        mm_dict['qubit_filter'] = self.qubit_filter
+
+        return mm_dict
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
+        return cls(mm_dict['nqubits'], mm_dict['evotype'], mm_dict['qubit_filter'], state_space)
 
     def __str__(self):
         s = "Computational(Z)-basis POVM on %d qubits and filter %s\n" \

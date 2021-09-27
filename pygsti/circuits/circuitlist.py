@@ -1,7 +1,6 @@
 """
 Defines the CircuitList class, for holding meta-data alongside a list or tuple of Circuits.
 """
-import copy as _copy
 # ***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -10,13 +9,16 @@ import copy as _copy
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 # ***************************************************************************************************
+import copy as _copy
 import uuid as _uuid
+import numpy as _np
 
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.tools import listtools as _lt
 
 
-class CircuitList(object):
+class CircuitList(_NicelySerializable):
     """
     A unmutable list (a tuple) of :class:`Circuit` objects and associated metadata.
 
@@ -86,6 +88,28 @@ class CircuitList(object):
         self.circuit_weights = circuit_weights
         self.name = name  # an optional name for this circuit list
         self.uuid = _uuid.uuid4()  # like a persistent id(), useful for peristent (file) caches
+
+    def _to_nice_serialization(self):  # memo holds already serialized objects
+        assert(self.op_label_aliases is None), "We don't serialize members of op_label_aliases yet."
+        state = super()._to_nice_serialization()
+        state.update({'name': self.name,
+                      'op_label_aliases': self.op_label_aliases,  # dict
+                      'circuits': [c.str for c in self._circuits],
+                      'circuit_weights': list(self.circuit_weights) if (self.circuit_weights is not None) else None,
+                      'uuid': str(self.uuid)
+                     })
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):  # memo holds already de-serialized objects
+        from pygsti.io import stdinput as _stdinput
+        std = _stdinput.StdInputParser()
+        circuits = [std.parse_circuit(s, create_subcircuits=_Circuit.default_expand_subcircuits)
+                    for s in state['circuits']]
+        circuit_weights = _np.array(state['circuit_weights'], 'd') if (state['circuit_weights'] is not None) else None
+        ret = cls(circuits, state['op_label_aliases'], circuit_weights, state['name'])
+        ret.uuid = _uuid.UUID(state['uuid'])
+        return ret
 
     # Mimic list / tuple
     def __len__(self):

@@ -13,11 +13,12 @@ The StaticPureOp class and supporting functionality.
 import numpy as _np
 
 from pygsti.modelmembers.operations.denseop import DenseUnitaryOperator as _DenseUnitaryOperator
+from pygsti.modelmembers.errorgencontainer import NoErrorGeneratorInterface as _NoErrorGeneratorInterface
 from pygsti.modelmembers import term as _term
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
 
 
-class StaticUnitaryOp(_DenseUnitaryOperator):
+class StaticUnitaryOp(_DenseUnitaryOperator, _NoErrorGeneratorInterface):
     """
     A unitary operation matrix that is completely fixed, or "static" (i.e. that posesses no parameters).
 

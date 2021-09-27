@@ -153,6 +153,18 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         _DistributableForwardSimulator.__init__(self, model, num_atoms, processor_grid, param_blk_sizes)
         self._max_cache_size = max_cache_size
 
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'max_cache_size': self._max_cache_size
+                      # (don't serialize parent model or processor distribution info)
+                      })
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        #Note: resets processor-distribution information
+        return cls(None, state['max_cache_size'])
+
     def copy(self):
         """
         Return a shallow copy of this MapForwardSimulator

@@ -40,30 +40,49 @@ class TensorProductState(_State):
         assert(len(factors) > 0), "Must have at least one factor!"
 
         self.factors = factors  # do *not* copy - needs to reference common objects
-        #self.Np = sum([fct.num_params for fct in factors])
 
         evotype = self.factors[0]._evotype
         rep = evotype.create_tensorproduct_state_rep([f._rep for f in factors], state_space)
 
         _State.__init__(self, rep, evotype)
+        self.init_gpindices()  # initialize our gpindices based on sub-members
         self._update_rep()  # initializes rep data
         #sets gpindices, so do before stuff below
 
-        # don't init our own gpindices (prep case), since our parent
-        # is likely to be a Model and it will init them correctly.
-        #But do set the indices of self.factors, since they're now
-        # considered "owned" by this product-prep-vec (different from
-        # the "effect" case when the factors are shared).
-        off = 0
-        for fct in factors:
-            assert(isinstance(fct, _State)), "Factors must be State objects!"
-            if fct.gpindices is None:
-                off += fct.allocate_gpindices(off, None)
-            else:
-                N = fct.num_params
-                fct.set_gpindices(slice(off, off + N), self); off += N
-        self.Np = sum([fct.num_params for fct in factors])
-        assert(off == self.Np)
+        #OLD REMOVE
+        # # don't init our own gpindices (prep case), since our parent
+        # # is likely to be a Model and it will init them correctly.
+        # #But do set the indices of self.factors, since they're now
+        # # considered "owned" by this product-prep-vec (different from
+        # # the "effect" case when the factors are shared).
+        # off = 0
+        # for fct in factors:
+        #     assert(isinstance(fct, _State)), "Factors must be State objects!"
+        #     if fct.gpindices is None:
+        #         off += fct.allocate_gpindices(off, None)
+        #     else:
+        #         N = fct.num_params
+        #         fct.set_gpindices(slice(off, off + N), self); off += N
+        # self.Np = sum([fct.num_params for fct in factors])
+        # assert(off == self.Np)
+
+    #Note: no to_memoized_dict needed, as ModelMember version does all we need.
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
+        factors = [serial_memo[i] for i in mm_dict['submembers']]
+        return cls(factors, state_space)
+
+    def submembers(self):
+        """
+        Get the ModelMember-derived objects contained in this one.
+
+        Returns
+        -------
+        list
+        """
+        return self.factors  # factor POVM object
 
     def _update_rep(self):
         self._rep.reps_have_changed()
@@ -73,10 +92,9 @@ class TensorProductState(_State):
         """
         An array of labels (usually strings) describing this model member's parameters.
         """
-        vl = _np.empty(self.Np, dtype=object); off = 0
-        for fct in self.factors:
-            N = fct.num_params
-            vl[off:off + N] = fct.parameter_labels; off += N
+        vl = _np.empty(self.num_params, dtype=object)
+        for factor_state, factor_local_inds in zip(self.factors, self._submember_rpindices):
+            vl[factor_local_inds] = factor_state.parameter_labels
         return vl
 
     def to_dense(self, on_space='minimal', scratch=None):
@@ -214,7 +232,7 @@ class TensorProductState(_State):
         int
             the number of independent parameters.
         """
-        return self.Np
+        return len(self.gpindices_as_array())
 
     def to_vector(self):
         """
@@ -225,7 +243,10 @@ class TensorProductState(_State):
         numpy array
             The parameters as a 1D array with length num_params().
         """
-        return _np.concatenate([fct.to_vector() for fct in self.factors], axis=0)
+        v = _np.empty(self.num_params, 'd')
+        for factor_state, factor_local_inds in zip(self.factors, self._submember_rpindices):
+            v[factor_local_inds] = factor_state.to_vector()
+        return v
 
     def from_vector(self, v, close=False, dirty_value=True):
         """
@@ -251,8 +272,8 @@ class TensorProductState(_State):
         -------
         None
         """
-        for sv in self.factors:
-            sv.from_vector(v[sv.gpindices], close, dirty_value)  # factors hold local indices
+        for factor_state, factor_local_inds in zip(self.factors, self._submember_rpindices):
+            factor_state.from_vector(v[factor_local_inds], close, dirty_value)
 
         #Update representation, which may be a dense matrix or
         # just fast-kron arrays or a stabilizer state.
@@ -288,7 +309,8 @@ class TensorProductState(_State):
         derivMx = _np.zeros((dim, self.num_params), typ)
 
         #Product rule to compute jacobian
-        for i, (fct, fct_dim) in enumerate(zip(self.factors, dims)):  # loop over the spamvec/povm we differentiate wrt
+        # loop over the spamvec/povm we differentiate wrt:
+        for i, (fct, fct_local_inds, fct_dim) in enumerate(zip(self.factors, self._submember_rpindices, dims)):
             vec = fct
 
             if vec.num_params == 0: continue  # no contribution
@@ -307,11 +329,12 @@ class TensorProductState(_State):
                     post = _np.kron(post, vecA.to_dense(on_space='minimal'))
                 deriv = _np.kron(deriv, post[:, None])  # add a dummy 1-dim to 'post' and do kron properly...
 
-            local_inds = fct.gpindices  # factor vectors hold local indices
+            #REMOVE (OLD):
+            #fct_local_inds = fct.gpindices  # factor vectors hold local indices
 
-            assert(local_inds is not None), \
+            assert(fct_local_inds is not None), \
                 "Error: gpindices has not been initialized for factor %d - cannot compute derivative!" % i
-            derivMx[:, local_inds] += deriv
+            derivMx[:, fct_local_inds] += deriv
 
         derivMx.shape = (dim, self.num_params)  # necessary?
         if wrt_filter is None:

@@ -109,8 +109,8 @@ cdef class StateRepPure(StateRep):
 
 
 cdef class StateRepComputational(StateRep):
-    cdef object zvals
-    cdef object basis
+    cdef public object zvals
+    cdef public object basis
 
     def __cinit__(self, zvals, basis, state_space):
 

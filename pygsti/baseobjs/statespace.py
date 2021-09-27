@@ -1,10 +1,6 @@
 """
 Defines OrderedDict-derived classes used to store specific pyGSTi objects
 """
-import copy as _copy
-import numbers as _numbers
-import sys as _sys
-
 # ***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -13,10 +9,16 @@ import sys as _sys
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 # ***************************************************************************************************
+
+import copy as _copy
+import numbers as _numbers
+import sys as _sys
 import numpy as _np
 
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 
-class StateSpace(object):
+
+class StateSpace(_NicelySerializable):
     """
     Base class for defining a state space (Hilbert or Hilbert-Schmidt space).
 
@@ -411,6 +413,103 @@ class StateSpace(object):
         assert(len(labels) == 0), "One or more elements of `labels` is not a valid label for this state space!"
         return ExplicitStateSpace(sub_tpb_labels, sub_tpb_udims, sub_tpb_types)
 
+    def intersection(self, other_state_space):
+        """
+        Create a state space whose labels are the intersection of the labels of this space and one other.
+
+        Dimensions associated with the labels are preserved, as is the ordering of tensor product blocks.
+        If the two spaces have the same label, but their dimensions or indices do not agree, an
+        error is raised.
+
+        Parameters
+        ----------
+        other_state_space : StateSpace
+            The other state space.
+
+        Returns
+        -------
+        StateSpace
+        """
+        ret_tpb_labels = []
+        ret_tpb_udims = []
+        ret_tpb_types = []
+
+        for iTPB, (lbls, udims, typs) in enumerate(zip(self.tensor_product_blocks_labels,
+                                                       self.tensor_product_blocks_udimensions,
+                                                       self.tensor_product_blocks_types)):
+            ret_lbls = []; ret_udims = []; ret_types = []
+            for lbl, udim, typ in zip(lbls, udims, typs):
+                if other_state_space.contains_label(lbl):
+                    other_iTPB = other_state_space.label_tensor_product_block_index(lbl)
+                    other_udim = other_state_space.label_udimension(lbl)
+                    other_typ = other_state_space.label_type(lbl)
+                    if other_iTPB != iTPB or other_udim != udim or other_typ != typ:
+                        raise ValueError(("Cannot take state space union: repeated label '%s' has inconsistent index,"
+                                          " dim, or type!") % str(lbl))
+                    ret_lbls.append(lbl)
+                    ret_udims.append(udim)
+                    ret_types.append(typ)
+
+            if len(ret_lbls) > 0:
+                ret_tpb_labels.append(ret_lbls)
+                ret_tpb_udims.append(ret_udims)
+                ret_tpb_types.append(ret_types)
+
+        return ExplicitStateSpace(ret_tpb_labels, ret_tpb_udims, ret_tpb_types)
+
+    def union(self, other_state_space):
+        """
+        Create a state space whose labels are the union of the labels of this space and one other.
+
+        Dimensions associated with the labels are preserved, as is the tensor product block index.
+        If the two spaces have the same label, but their dimensions or indices do not agree, an
+        error is raised.
+
+        Parameters
+        ----------
+        other_state_space : StateSpace
+            The other state space.
+
+        Returns
+        -------
+        StateSpace
+        """
+        ret_tpb_labels = []
+        ret_tpb_udims = []
+        ret_tpb_types = []
+
+        # Step 1: add all of the labels of `self`, checking that overlaps are consistent as we go:
+        for iTPB, (lbls, udims, typs) in enumerate(zip(self.tensor_product_blocks_labels,
+                                                       self.tensor_product_blocks_udimensions,
+                                                       self.tensor_product_blocks_types)):
+            ret_lbls = []; ret_udims = []; ret_types = []
+            for lbl, udim, typ in zip(lbls, udims, typs):
+                if other_state_space.contains_label(lbl):
+                    other_iTPB = other_state_space.label_tensor_product_block_index(lbl)
+                    other_udim = other_state_space.label_udimension(lbl)
+                    other_typ = other_state_space.label_type(lbl)
+                    if other_iTPB != iTPB or other_udim != udim or other_typ != typ:
+                        raise ValueError(("Cannot take state space union: repeated label '%s' has inconsistent index,"
+                                          " dim, or type!") % str(lbl))
+                ret_lbls.append(lbl)
+                ret_udims.append(udim)
+                ret_types.append(typ)
+            ret_tpb_labels.append(ret_lbls)
+            ret_tpb_udims.append(ret_udims)
+            ret_tpb_types.append(ret_types)
+
+        # Step 2: add any non-overlapping labels from other_state_space
+        for iTPB, (lbls, udims, typs) in enumerate(zip(other_state_space.tensor_product_blocks_labels,
+                                                       other_state_space.tensor_product_blocks_udimensions,
+                                                       other_state_space.tensor_product_blocks_types)):
+            for lbl, udim, typ in zip(lbls, udims, typs):
+                if not self.contains_label(lbl):
+                    ret_tpb_labels[iTPB].append(lbl)
+                    ret_tpb_udims[iTPB].append(udim)
+                    ret_tpb_types[iTPB].append(typ)
+
+        return ExplicitStateSpace(ret_tpb_labels, ret_tpb_udims, ret_tpb_types)
+
     def create_stencil_subspace(self, labels):
         """
         Create a template sub-`StateSpace` object from a set of potentially stencil-type labels.
@@ -462,6 +561,15 @@ class QubitSpace(StateSpace):
             self.qubit_labels = tuple(range(nqubits_or_labels))
         else:
             self.qubit_labels = tuple(nqubits_or_labels)
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'qubit_labels': self.qubit_labels})
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        return cls(state['qubit_labels'])
 
     @property
     def udim(self):
@@ -671,7 +779,7 @@ class ExplicitStateSpace(StateSpace):
         #    assert(dims is None and types is None), "Clobbering non-None 'dims' and/or 'types' arguments"
         #    dims = [tuple((label_list.labeldims[lbl] for lbl in tpbLbls))
         #            for tpbLbls in label_list.labels]
-        #    types = [tuple((label_list.labeltypes[lbl] for lbl in tpbLbls))
+        #    types = [tuple((label_list.label_types[lbl] for lbl in tpbLbls))
         #             for tpbLbls in label_list.labels]
         #    label_list = label_list.labels
 
@@ -706,15 +814,15 @@ class ExplicitStateSpace(StateSpace):
                     raise ValueError("'%s' is an invalid state-space label (must be a string or integer)" % lbl)
 
         # Get the type of each labeled space
-        self.labeltypes = {}
+        self.label_types = {}
         if types is None:  # use defaults
             for tpbLabels in self.labels:  # loop over tensor-prod-blocks
                 for lbl in tpbLabels:
-                    self.labeltypes[lbl] = 'C' if (isinstance(lbl, str) and lbl.startswith('C')) else 'Q'  # default
+                    self.label_types[lbl] = 'C' if (isinstance(lbl, str) and lbl.startswith('C')) else 'Q'  # default
         else:
             for tpbLabels, tpbTypes in zip(self.labels, types):
                 for lbl, typ in zip(tpbLabels, tpbTypes):
-                    self.labeltypes[lbl] = typ
+                    self.label_types[lbl] = typ
 
         # Get the dimension of each labeled space
         self.label_udims = {}
@@ -764,6 +872,18 @@ class ExplicitStateSpace(StateSpace):
             self._nqubits = len(self.labels[0])  # there's a well-defined number of qubits
         else:
             self._nqubits = None
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'labels': self.labels,
+                      'unitary_space_dimensions': [[self.label_udims[l] for l in tpb] for tpb in self.labels],
+                      'types': [[self.label_types[l] for l in tpb] for tpb in self.labels]
+                      })
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        return cls(state['labels'], state['unitary_space_dimensions'], state['types'])
 
     @property
     def udim(self):
@@ -843,7 +963,7 @@ class ExplicitStateSpace(StateSpace):
         -------
         tuple of tuples
         """
-        return tuple([tuple([self.labeltypes[lbl] for lbl in tpb_labels]) for tpb_labels in self.labels])
+        return tuple([tuple([self.label_types[lbl] for lbl in tpb_labels]) for tpb_labels in self.labels])
 
     def label_dimension(self, label):
         """
@@ -903,12 +1023,12 @@ class ExplicitStateSpace(StateSpace):
         -------
         str
         """
-        return self.labeltypes[label]
+        return self.label_types[label]
 
     def __str__(self):
         if len(self.labels) == 0: return "ZeroDimSpace"
         return ' + '.join(
-            ['*'.join(["%s(%d%s)" % (lbl, self.label_dims[lbl], 'c' if (self.labeltypes[lbl] == 'C') else '')
+            ['*'.join(["%s(%d%s)" % (lbl, self.label_dims[lbl], 'c' if (self.label_types[lbl] == 'C') else '')
                        for lbl in tpb]) for tpb in self.labels])
 
 
