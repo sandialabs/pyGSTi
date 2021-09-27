@@ -129,16 +129,17 @@ class CHPForwardSimulator(_WeakForwardSimulator):
             bitflip = _op.StaticStandardOp('Gxpi', 'pp', evotype='chp', state_space=None)
             for i, zval in enumerate(rho._zvals):
                 if zval:
-                    file_handle.write(bitflip.get_chp_str([target_offset + i]))
+                    file_handle.write(bitflip.chp_str)
+                    #OLD: file_handle.write(bitflip.get_chp_str([target_offset + i]))
 
         # Handle ComposedState of ComputationalBasisState + noise op with chp evotype
         def process_composed_state(rho, target_offset=0):
             if isinstance(rho, _state.ComposedState):
                 assert(rho._evotype == 'chp'), "ComposedState must have `chp` evotype for noise op"
                 process_computational_state(rho.state_vec, target_offset)
-                nqubits = rho.state_space.num_qubits
-                targets = _np.array(range(nqubits)) + target_offset
-                file_handle.write(rho.error_map.get_chp_str(targets))
+                #nqubits = rho.state_space.num_qubits
+                #targets = _np.array(range(nqubits)) + target_offset  # Stefan - this used to be an arg to chp_str (?)
+                file_handle.write(rho.error_map.chp_str)
             else:
                 process_computational_state(rho, target_offset)
 
@@ -196,7 +197,8 @@ class CHPForwardSimulator(_WeakForwardSimulator):
 
                 nqubits = povm.state_space.num_qubits
                 targets = _np.array(range(nqubits)) + target_offset
-                file_handle.write(povm.error_map.get_chp_str(targets))
+                file_handle.write(povm.error_map.chp_str)
+                #OLD: file_handle.write(povm.error_map.get_chp_str(targets))
 
                 process_computational_povm(povm.base_povm, qubit_indices, target_offset)
             else:

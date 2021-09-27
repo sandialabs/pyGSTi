@@ -760,8 +760,9 @@ class LinearOperator(_modelmember.ModelMember):
 
         return matrix
 
-    def get_chp_str(self):
-        """Return a string suitable for printing to a CHP input file after
+    @property
+    def chp_str(self):
+        """A string suitable for printing to a CHP input file after
         probabilistically selecting operation.
 
         Returns

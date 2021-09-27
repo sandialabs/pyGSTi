@@ -146,7 +146,7 @@ def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials,
     prep_povm_tuples = [(_circuits.Circuit((prepLbl,)), _circuits.Circuit((povmLbl,)))
                         for prepLbl, povmLbl in prep_povm_tuples]
 
-    def get_derivs(length):
+    def _get_derivs(length):
         """ Compute all derivative info: get derivative of each <E_i|germ^exp|rho_j>
             where i = composite EVec & fiducial index and j similar """
 
@@ -187,7 +187,7 @@ def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials,
         # where iGerm, f0, f1, and SPAM are all bundled into iElement (but elIndicesForPair
         # provides the necessary indexing for picking out certain pairs)
 
-    def get_number_amplified(m0, m1, len0, len1, verb):
+    def _get_number_amplified(m0, m1, len0, len1, verb):
         """ Return the number of amplified parameters """
         printer = _baseobjs.VerbosityPrinter.create_printer(verb)
         L_ratio = float(len1) / float(len0)
@@ -212,15 +212,15 @@ def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials,
 
     printer.log("------  Fiducial Pair Reduction --------")
 
-    L0 = test_lengths[0]; dP0, elIndices0 = get_derivs(L0)
-    L1 = test_lengths[1]; dP1, elIndices1 = get_derivs(L1)
+    L0 = test_lengths[0]; dP0, elIndices0 = _get_derivs(L0)
+    L1 = test_lengths[1]; dP1, elIndices1 = _get_derivs(L1)
     fullTestMx0 = dP0
     fullTestMx1 = dP1
 
     #Get number of amplified parameters in the "full" test matrix: the one we get when we use all possible fiducial
     #pairs
     if test_pair_list is None:
-        maxAmplified = get_number_amplified(fullTestMx0, fullTestMx1, L0, L1, verbosity + 1)
+        maxAmplified = _get_number_amplified(fullTestMx0, fullTestMx1, L0, L1, verbosity + 1)
         printer.log("maximum number of amplified parameters = %s" % maxAmplified)
 
     #Loop through fiducial pairs and add all derivative rows (1 x nModelParams) to test matrix
@@ -237,7 +237,7 @@ def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials,
                                         for prepfid_index, iEStr in test_pair_list])
         testMx0 = _np.take(fullTestMx0, pairIndices0, axis=0)
         testMx1 = _np.take(fullTestMx1, pairIndices1, axis=0)
-        nAmplified = get_number_amplified(testMx0, testMx1, L0, L1, verbosity)
+        nAmplified = _get_number_amplified(testMx0, testMx1, L0, L1, verbosity)
         printer.log("Number of amplified parameters = %s" % nAmplified)
         return None
 
@@ -263,7 +263,7 @@ def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials,
             pairIndices1 = _np.concatenate([elIndices1[i] for i in pairIndicesToTest])
             testMx0 = _np.take(fullTestMx0, pairIndices0, axis=0)
             testMx1 = _np.take(fullTestMx1, pairIndices1, axis=0)
-            nAmplified = get_number_amplified(testMx0, testMx1, L0, L1, verbosity)
+            nAmplified = _get_number_amplified(testMx0, testMx1, L0, L1, verbosity)
             bestAmplified = max(bestAmplified, nAmplified)
             if printer.verbosity > 1:
                 ret = []
@@ -569,7 +569,7 @@ def test_fiducial_pairs(fid_pairs, target_model, prep_fiducials, meas_fiducials,
     pre_povm_tuples = [(_circuits.Circuit((prepLbl,)), _circuits.Circuit((povmLbl,)))
                        for prepLbl, povmLbl in pre_povm_tuples]
 
-    def get_derivs(length):
+    def _get_derivs(length):
         """ Compute all derivative info: get derivative of each <E_i|germ^exp|rho_j>
             where i = composite EVec & fiducial index and j similar """
 
@@ -592,7 +592,7 @@ def test_fiducial_pairs(fid_pairs, target_model, prep_fiducials, meas_fiducials,
 
         return dP
 
-    def get_number_amplified(m0, m1, len0, len1):
+    def _get_number_amplified(m0, m1, len0, len1):
         """ Return the number of amplified parameters """
         L_ratio = float(len1) / float(len0)
         try:
@@ -616,11 +616,11 @@ def test_fiducial_pairs(fid_pairs, target_model, prep_fiducials, meas_fiducials,
 
     printer.log("----------  Testing Fiducial Pairs ----------")
     printer.log("Getting jacobian at L=%d" % L0, 2)
-    dP0 = get_derivs(L0)
+    dP0 = _get_derivs(L0)
     printer.log("Getting jacobian at L=%d" % L1, 2)
-    dP1 = get_derivs(L1)
+    dP1 = _get_derivs(L1)
     printer.log("Computing number amplified", 2)
-    nAmplified = get_number_amplified(dP0, dP1, L0, L1)
+    nAmplified = _get_number_amplified(dP0, dP1, L0, L1)
     printer.log("Number of amplified parameters = %s" % nAmplified)
 
     return nAmplified

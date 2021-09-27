@@ -322,7 +322,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         """
         if not self._rep_type == 'dense':
             #raise NotImplementedError("hessian_wrt_params is only implemented for *dense-rep* LindbladOps")
-            _warnings.warn("Using finite differencing to compute ExpErrogenOp Hessian!")
+            #_warnings.warn("Using finite differencing to compute ExpErrogenOp Hessian!")
             return super(ExpErrorgenOp, self).hessian_wrt_params(wrt_filter1, wrt_filter2)
 
         if self.base_hessian is None:

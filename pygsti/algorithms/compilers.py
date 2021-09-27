@@ -2133,8 +2133,7 @@ def compile_stabilizer_state(s, p, pspec, absolute_compilation, paulieq_compilat
     failcount, i = 0, 0
 
     # Repeatedly find compilations for the symplectic, and pick the best one.
-    while i < iterations:
-
+    while i < iterations and failcount <= 5 * iterations:
         try:
             tc, tcc = compile_conditional_symplectic(
                 s, pspec, qubit_labels=qubit_labels, calg=algorithm, cargs=aargs, check=False, rand_state=rand_state)
@@ -2149,7 +2148,7 @@ def compile_stabilizer_state(s, p, pspec, absolute_compilation, paulieq_compilat
                 circuit = tc.copy()
                 check_circuit = tcc.copy(editable=True)
                 mincost = cost
-        except:
+        except AssertionError:
             failcount += 1
 
     assert(failcount <= 5 * iterations), \

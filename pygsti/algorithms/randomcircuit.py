@@ -1444,7 +1444,8 @@ def create_direct_rb_circuit(pspec, clifford_compilations, length, qubit_labels=
                                                              qubit_labels, citerations,
                                                              *compilerargs, rand_state=rand_state)
         # If not conditionaltwirl, we do a full random Clifford.
-        else: initial_circuit = _cmpl.compile_clifford(s_initial, p_initial, pspec,
+        else:
+            initial_circuit = _cmpl.compile_clifford(s_initial, p_initial, pspec,
                                                        clifford_compilations.get('absolute', None),
                                                        clifford_compilations.get('paulieq', None),
                                                        qubit_labels, citerations,

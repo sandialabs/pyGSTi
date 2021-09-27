@@ -604,7 +604,7 @@ def logl_max_per_circuit(model, dataset, circuits=None,
 def two_delta_logl_nsigma(model, dataset, circuits=None,
                           min_prob_clip=1e-6, prob_clip_interval=(-1e6, 1e6), radius=1e-4,
                           poisson_picture=True, op_label_aliases=None,
-                          dof_calc_method='nongauge', wildcard=None):
+                          dof_calc_method='modeltest', wildcard=None):
     """
     See docstring for :function:`pygsti.tools.two_delta_logl`
 
@@ -645,11 +645,13 @@ def two_delta_logl_nsigma(model, dataset, circuits=None,
         the dataset. Defaults to the empty dictionary (no aliases defined)
         e.g. op_label_aliases['Gx^3'] = ('Gx','Gx','Gx')
 
-    dof_calc_method : {"all", "nongauge"}
+    dof_calc_method : {"all", "modeltest"}
         How `model`'s number of degrees of freedom (parameters) are obtained
         when computing the number of standard deviations and p-value relative to
         a chi2_k distribution, where `k` is additional degrees of freedom
-        possessed by the maximal model.
+        possessed by the maximal model.  `"all"` uses `model.num_params` whereas
+        `"modeltest"` uses `model.num_modeltest_params` (the number of non-gauge
+        parameters by default).
 
     wildcard : WildcardBudget
         A wildcard budget to apply to this log-likelihood computation.
@@ -666,7 +668,7 @@ def two_delta_logl_nsigma(model, dataset, circuits=None,
     return two_delta_logl(model, dataset, circuits,
                           min_prob_clip, prob_clip_interval, radius,
                           poisson_picture, op_label_aliases,
-                          None, None, dof_calc_method, wildcard)[1]
+                          dof_calc_method, wildcard, None, None)[1]
 
 
 def two_delta_logl(model, dataset, circuits=None,

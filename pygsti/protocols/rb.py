@@ -518,6 +518,7 @@ class DirectRBDesign(_vb.BenchmarkingDesign):
                                 citerations=citerations, compilerargs=compilerargs,
                                 partitioned=partitioned,
                                 seed=lseed + i) for i in range(circuits_per_depth)]
+            #results = [_rc.create_direct_rb_circuit(*(args_list[0]), **(kwargs_list[0]))]  # num_processes == 1 case
             results = _tools.mptools.starmap_with_kwargs(_rc.create_direct_rb_circuit, circuits_per_depth,
                                                          num_processes, args_list, kwargs_list)
 

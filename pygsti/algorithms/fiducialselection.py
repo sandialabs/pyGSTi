@@ -760,7 +760,7 @@ def _find_fiducials_integer_slack(model, fid_list, prep_or_meas=None,
         else:
             return goodFidList
 
-    def get_neighbors(bool_vec):
+    def _get_neighbors(bool_vec):
         """ Iterate over neighbors of `bool_vec` """
         for i in range(nFids):
             v = bool_vec.copy()
@@ -785,7 +785,7 @@ def _find_fiducials_integer_slack(model, fid_list, prep_or_meas=None,
                                   suffix="score=%g, nFids=%d" % (score, L1))
 
             bFoundBetterNeighbor = False
-            for neighbor in get_neighbors(weights):
+            for neighbor in _get_neighbors(weights):
                 if tuple(neighbor) not in scoreD_keys:
                     neighborL1 = sum(neighbor)
                     neighborScore = compute_score(neighbor)
@@ -820,7 +820,7 @@ def _find_fiducials_integer_slack(model, fid_list, prep_or_meas=None,
                 # now...
                 score += slack
 
-                for neighbor in get_neighbors(weights):
+                for neighbor in _get_neighbors(weights):
                     if sum(neighbor) < L1 and scoreD[tuple(neighbor)] < score:
                         weights, score, L1 = (neighbor,
                                               scoreD[tuple(neighbor)],
@@ -966,7 +966,7 @@ def _find_fiducials_grasp(model, fids_list, prep_or_meas, alpha,
         fidsLens = [len(fiducial) for fiducial in fids_list]
         initialWeights[fidsLens.index(0)] = 1
 
-    def get_neighbors_fn(weights): return _grasp.get_swap_neighbors(
+    def _get_neighbors_fn(weights): return _grasp.neighboring_weight_vectors(
         weights, forced_weights=initialWeights)
 
     printer.log("Starting fiducial list optimization. Lower score is better.",
@@ -1013,7 +1013,7 @@ def _find_fiducials_grasp(model, fids_list, prep_or_meas, alpha,
                 iterSolns = _grasp.run_grasp_iteration(
                     elements=fids_list, greedy_score_fn=score_fn, rcl_fn=rcl_fn,
                     local_score_fn=score_fn,
-                    get_neighbors_fn=get_neighbors_fn,
+                    get_neighbors_fn=_get_neighbors_fn,
                     feasible_threshold=feasibleThreshold,
                     initial_elements=initialWeights, seed=seed,
                     verbosity=verbosity)

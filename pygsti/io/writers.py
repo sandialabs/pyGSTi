@@ -17,7 +17,7 @@ import json as _json
 import numpy as _np
 import json
 
-from pygsti.io import readers as _loaders
+from pygsti.io import readers as _readers
 from pygsti import circuits as _circuits
 from pygsti.models import gaugegroup as _gaugegroup
 
@@ -499,7 +499,7 @@ def write_empty_protocol_data(dirname, edesign, sparse="auto", clobber_ok=False)
     None
     """
     if isinstance(edesign, str):
-        _warnings.warn(("This function has recently changed its signature - it looks like you need to swap"
+        _warnings.warn(("write_empty_protocol_data has recently changed its signature - it looks like you need to swap"
                         " the first two arguments.  Continuing using the old signature..."))
         edesign, dirname = dirname, edesign
 
@@ -620,12 +620,12 @@ def fill_in_empty_dataset_with_fake_data(dataset_filename, model, num_samples, s
         The generated data set (also written in place of the template file).
     """
     if isinstance(model, str):
-        _warnings.warn(("This function has recently changed its signature - it looks like you need to swap"
-                        " the first two arguments.  Continuing using the old signature..."))
+        _warnings.warn(("fill_in_empty_dataset_with_fake_data has recently changed its signature - it looks like"
+                        " you need to swap the first two arguments.  Continuing using the old signature..."))
         model, dataset_filename = dataset_filename, model
 
     from pygsti.data.datasetconstruction import simulate_data as _simulate_data
-    ds_template = _loaders.read_dataset(dataset_filename, ignore_zero_count_lines=False, with_times=False, verbosity=0)
+    ds_template = _readers.read_dataset(dataset_filename, ignore_zero_count_lines=False, with_times=False, verbosity=0)
     ds = _simulate_data(model, list(ds_template.keys()), num_samples,
                         sample_error, seed, rand_state, alias_dict,
                         collision_action, record_zero_counts, comm,

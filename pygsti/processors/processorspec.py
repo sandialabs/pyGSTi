@@ -13,6 +13,7 @@ Defines the QubitProcessorSpec class and supporting functionality.
 import numpy as _np
 import itertools as _itertools
 import collections as _collections
+from functools import lru_cache
 
 from pygsti.tools import internalgates as _itgs
 from pygsti.tools import symplectic as _symplectic
@@ -417,6 +418,26 @@ class QubitProcessorSpec(ProcessorSpec):
         return tuple((_Lbl(gate_name, sslbls_subset) for sslbls_subset in _itertools.permutations(sslbls, gate_nqubits)
                      if avail_fn(sslbls_subset)))
 
+    def force_recompute_gate_relationships(self):
+        """
+        Invalidates LRU caches for all `compute_*` methods of this object, forcing them to recompute their values.
+
+        The `compute_*` methods of this processor spec compute various relationships and
+        properties of its gates.  These routines can be computationally intensive, and so
+        their values are cached for performance.  If the gates of a processor spec changes
+        and its `compute_*` methods are used, `force_recompute_gate_relationships` should
+        be called.
+        """
+        #should clear LRU cache on all @lru_cache decorated methods, which should have "compute_" prefix
+        self.compute_clifford_symplectic_reps.cache_clear()
+        self.compute_one_qubit_gate_relations.cache_clear()
+        self.compute_multiqubit_inversion_relations.cache_clear()
+        self.compute_clifford_ops_on_qubits.cache_clear()
+        self.compute_ops_on_qubits.cache_clear()
+        self.compute_clifford_2Q_connectivity.cache_clear()
+        self.compute_2Q_connectivity.cache_clear()
+
+    @lru_cache  # TODO: replace with @cached_decorator when Python 3.8+ is required, as this doesn't prevent GC
     def compute_clifford_symplectic_reps(self, gatename_filter=None):
         """
         Constructs a dictionary of the symplectic representations for all the Clifford gates in this processor spec.
@@ -450,6 +471,7 @@ class QubitProcessorSpec(ProcessorSpec):
                 ret[gn] = self._symplectic_reps[gn]
         return ret
 
+    @lru_cache
     def compute_one_qubit_gate_relations(self):
         """
         Computes the basic pair-wise relationships relationships between the gates.
@@ -509,6 +531,7 @@ class QubitProcessorSpec(ProcessorSpec):
                         # special 1Q gate relation where result is the identity (~no gates)
         return oneQgate_relations, gate_inverse
 
+    @lru_cache
     def compute_multiqubit_inversion_relations(self):
         """
         Computes the inverses of multi-qubit (>1 qubit) gates.
@@ -555,6 +578,7 @@ class QubitProcessorSpec(ProcessorSpec):
         return gate_inverse
 
     ### TODO: do we still need this?
+    @lru_cache
     def compute_clifford_ops_on_qubits(self):
         """
         Constructs a dictionary mapping tuples of state space labels to the clifford operations available on them.
@@ -574,6 +598,7 @@ class QubitProcessorSpec(ProcessorSpec):
 
         return clifford_ops_on_qubits
 
+    @lru_cache
     def compute_ops_on_qubits(self):
         """
         Constructs a dictionary mapping tuples of state space labels to the operations available on them.
@@ -593,6 +618,7 @@ class QubitProcessorSpec(ProcessorSpec):
         return ops_on_qubits
 
     ### TODO: do we still need this?
+    @lru_cache
     def compute_clifford_2Q_connectivity(self):
         """
         Constructs a graph encoding the connectivity between qubits via 2-qubit Clifford gates.
@@ -615,6 +641,7 @@ class QubitProcessorSpec(ProcessorSpec):
 
         return _qgraph.QubitGraph(qubit_labels, CtwoQ_connectivity)
 
+    @lru_cache
     def compute_2Q_connectivity(self):
         """
         Constructs a graph encoding the connectivity between qubits via 2-qubit gates.
