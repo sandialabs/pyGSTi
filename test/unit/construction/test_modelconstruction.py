@@ -330,6 +330,7 @@ class ModelConstructionTester(BaseCase):
             sigmaZ = np.array([[1, 0], [0, -1]], 'd')
             return scipy.linalg.expm(1j * float(a) * sigmaZ)
         fn.udim = 2
+        fn.shape = (2,2)
 
         pspec = _ProcessorSpec(nQubits, ('Gx', 'Gy', 'Gcnot', 'Ga'), nonstd_gate_unitaries={'Ga': fn}, geometry='line')
         cfmdl = mc.create_crosstalk_free_model(pspec)
@@ -349,6 +350,7 @@ class ModelConstructionTester(BaseCase):
             sigmaX = np.array([[0, 1], [1, 0]], 'd')
             return scipy.linalg.expm(1j * float(theta) / 4 * sigmaX)
         fn.udim = 2
+        fn.shape = (2,2)
 
         class XRotationOpFactory(pygsti.modelmembers.operations.OpFactory):
             def __init__(self):

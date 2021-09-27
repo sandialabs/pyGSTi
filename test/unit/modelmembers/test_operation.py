@@ -313,7 +313,7 @@ class FullOpTester(MutableDenseOpBase, BaseCase):
 
     @staticmethod
     def build_gate():
-        return _create_operation([(4,)], [('Q0',)], "X(pi/8,Q0)", "gm", parameterization="full")
+        return create_operation("X(pi/8,Q0)", [('Q0',)], "gm", parameterization="full")
 
     #REMOVED - we don't support .compose methods anymore
     #def test_composition(self):
@@ -370,7 +370,7 @@ class LinearlyParamOpTester(MutableDenseOpBase, BaseCase):
     @staticmethod
     def build_gate():
         # 'I' was 'D', 'full' was 'linear'
-        return _create_operation([(4,)], [('Q0',)], "I(Q0)", "gm", parameterization="full")
+        return create_operation("I(Q0)", [('Q0',)], "gm", parameterization="full")
 
     def test_constructor_raises_on_real_param_constraint_violation(self):
         baseMx = np.zeros((2, 2))
@@ -421,7 +421,7 @@ class TPOpTester(MutableDenseOpBase, BaseCase):
 
     @staticmethod
     def build_gate():
-        return _create_operation([(4,)], [('Q0',)], "Y(pi/4,Q0)", "gm", parameterization="full TP")
+        return create_operation("Y(pi/4,Q0)", [('Q0',)], "gm", parameterization="full TP")
 
     #REMOVED - we don't support .compose methods anymore
     #def test_composition(self):
@@ -471,7 +471,7 @@ class StaticOpTester(ImmutableDenseOpBase, BaseCase):
 
     @staticmethod
     def build_gate():
-        return _create_operation([(4,)], [('Q0',)], "Z(pi/3,Q0)", "gm", parameterization="static")
+        return create_operation("Z(pi/3,Q0)", [('Q0',)], "gm", parameterization="static")
 
     #REMOVED - we don't support .compose methods anymore
     #def test_compose(self):
