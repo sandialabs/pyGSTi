@@ -495,8 +495,11 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
         nPairsToKeep = int(round(float(keep_fraction) * nPairs))
     else: rndm = None
 
+    fidpair_germ_power_keys = False
     if isinstance(fid_pairs, dict) or hasattr(fid_pairs, "keys"):
         fidPairDict = fid_pairs  # assume a dict of per-germ pairs
+        if isinstance(list(fidPairDict.keys())[0], tuple):
+            fidpair_germ_power_keys = True
     else:
         if fid_pairs is not None:  # assume fid_pairs is a list
             fidPairDict = {germ: fid_pairs for germ in germs}
@@ -564,12 +567,17 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
                 if germ_power != germ * power:
                     power = None  # Signals there is no well-defined power
 
+                # Switch on fidpair dicts with germ or (germ, L) keys
+                key = germ
+                if fidpair_germ_power_keys:
+                    key = (germ, maxLen)
+                
                 if rndm is None:
-                    fiducialPairsThisIter = fidPairDict.get(germ, allPossiblePairs) \
+                    fiducialPairsThisIter = fidPairDict.get(key, allPossiblePairs) \
                         if fidPairDict is not None else allPossiblePairs
 
                 elif fidPairDict is not None:
-                    pair_indx_tups = fidPairDict.get(germ, allPossiblePairs)
+                    pair_indx_tups = fidPairDict.get(key, allPossiblePairs)
                     remainingPairs = [(i, j)
                                       for i in range(len(prep_fiducials))
                                       for j in range(len(meas_fiducials))
@@ -580,7 +588,7 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
                     assert(0 <= nPairsToChoose <= nPairsRemaining)
                     # FUTURE: issue warnings when clipping nPairsToChoose?
 
-                    fiducialPairsThisIter = fidPairDict[germ] + \
+                    fiducialPairsThisIter = fidPairDict[key] + \
                         [remainingPairs[k] for k in
                          sorted(rndm.choice(nPairsRemaining, nPairsToChoose,
                                             replace=False))]
