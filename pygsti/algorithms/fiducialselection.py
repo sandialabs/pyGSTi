@@ -263,7 +263,7 @@ def create_prep_mxs(model, prep_fid_list):
     for rho in list(model.preps.values()):
         outputMat = _np.zeros([dimRho, numFid], float)
         for i, prepFid in enumerate(prep_fid_list):
-            outputMat[:, i] = _np.dot(model.sim.product(prepFid), rho)[:, 0]
+            outputMat[:, i] = _np.dot(model.sim.product(prepFid), rho.to_dense())#[:, 0]
         outputMatList.append(outputMat)
     return outputMatList
 
@@ -300,7 +300,7 @@ def create_meas_mxs(model, meas_fid_list):
             if isinstance(E, _ComplementPOVMEffect): continue  # complement is dependent on others
             outputMat = _np.zeros([dimE, numFid], float)
             for i, measFid in enumerate(meas_fid_list):
-                outputMat[:, i] = _np.dot(E.T, model.sim.product(measFid))[0, :]
+                outputMat[:, i] = _np.dot(E.to_dense(), model.sim.product(measFid))#[0, :]
             outputMatList.append(outputMat)
     return outputMatList
 

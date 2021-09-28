@@ -458,7 +458,8 @@ class ResourceAllocation(object):
         -------
         None
         """
-        from mpi4py import MPI
+        if self.comm is not None:
+            from mpi4py import MPI
         participating_local = local if (unit_ralloc is None or unit_ralloc.comm is None or unit_ralloc.comm.rank == 0) \
             else _np.zeros(local.shape, local.dtype)
         if self.host_comm is not None and self.host_comm.size > 1:
@@ -512,8 +513,10 @@ class ResourceAllocation(object):
         float or int
             The sum of all `local` quantities, returned on all the processors.
         """
-        from mpi4py import MPI
-        if self.comm is None: return local
+        if self.comm is None:
+            return local
+        else:
+            from mpi4py import MPI
 
         participating = bool(unit_ralloc is None or unit_ralloc.comm is None or unit_ralloc.comm.rank == 0)
         if hasattr(local, 'shape'):
@@ -558,7 +561,8 @@ class ResourceAllocation(object):
         -------
         None
         """
-        from mpi4py import MPI
+        if self.comm is not None:
+            from mpi4py import MPI
         participating = unit_ralloc is None or unit_ralloc.comm is None or unit_ralloc.comm.rank == 0
 
         if self.host_comm is not None:
@@ -615,7 +619,8 @@ class ResourceAllocation(object):
         -------
         None
         """
-        from mpi4py import MPI
+        if self.comm is not None:
+            from mpi4py import MPI
         participating = unit_ralloc is None or unit_ralloc.comm is None or unit_ralloc.comm.rank == 0
 
         if self.host_comm is not None:

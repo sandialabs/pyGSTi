@@ -251,11 +251,11 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
                  create_atom_fn, create_atom_args, num_atom_processors,
                  num_param_dimension_processors=(), param_dimensions=(), param_dimension_blk_sizes=(),
                  resource_alloc=None, verbosity=0):
-        from mpi4py import MPI
-
         resource_alloc = _ResourceAllocation.cast(resource_alloc)
         printer = _VerbosityPrinter.create_printer(verbosity, resource_alloc)
         comm = resource_alloc.comm
+        if comm is not None:
+            from mpi4py import MPI
 
         rank = resource_alloc.comm_rank
         nprocs = resource_alloc.comm_size

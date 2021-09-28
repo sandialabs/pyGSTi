@@ -751,7 +751,7 @@ def create_explicit_model(processor_spec, custom_gates=None,
                                                for lbl, val in lindblad_error_coeffs.items()}))
 
     return _create_explicit_model(processor_spec, _ComposedOpModelNoise(modelnoises), custom_gates, evotype,
-                                  simulator, ideal_gate_type, ideal_spam_type, embed_gates, basis)
+                                  simulator, ideal_gate_type, ideal_spam_type, ideal_spam_type, embed_gates, basis)
 
 
 def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotype="default", simulator="auto",
