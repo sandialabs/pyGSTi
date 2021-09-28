@@ -746,7 +746,7 @@ class GaugeRobustModelTable(WorkspaceTable):
         for gl in opLabels:
             try:
                 op_decomps[gl] = _get_gig_decomp(model.operations[gl].to_dense(on_space='HilbertSchmidt'),
-                                                target_model.operations[gl].to_dense(on_space='HilbertSchmidt'))
+                                                 target_model.operations[gl].to_dense(on_space='HilbertSchmidt'))
                 M = max(M, max(_np.abs((op_decomps[gl][1] - I).flat)))  # update max
             except Exception as e:
                 _warnings.warn("Failed gauge-robust decomposition of %s op:\n%s" % (gl, str(e)))

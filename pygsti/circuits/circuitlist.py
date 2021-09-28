@@ -97,7 +97,7 @@ class CircuitList(_NicelySerializable):
                       'circuits': [c.str for c in self._circuits],
                       'circuit_weights': list(self.circuit_weights) if (self.circuit_weights is not None) else None,
                       'uuid': str(self.uuid)
-                     })
+                      })
         return state
 
     @classmethod

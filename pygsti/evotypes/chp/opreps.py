@@ -33,7 +33,7 @@ class OpRep(_basereps.OpRep):
     @property
     def num_qubits(self):
         return self.state_space.num_qubits
-    
+
     @property
     def chp_ops(self):
         return self.base_chp_ops
@@ -83,7 +83,7 @@ class OpRepComposed(OpRep):
 
     def reinit_factor_op_reps(self, factor_op_reps):
         self.factors_reps = factor_op_reps
-    
+
     @property
     def chp_ops(self):
         ops = []
@@ -117,7 +117,7 @@ class OpRepEmbedded(OpRep):
         # TODO: This doesn't work as nicely for the stochastic op, where chp_ops can be reset between chp_str calls
         chp_ops = [_update_chp_op(op, self.embedded_to_local_qubit_indices) for op in self.embedded_rep.chp_ops]
         super(OpRepEmbedded, self).__init__(chp_ops, state_space)
-    
+
     @property
     def chp_ops(self):
         return [_update_chp_op(op, self.embedded_to_local_qubit_indices) for op in self.embedded_rep.chp_ops]
@@ -170,7 +170,7 @@ class OpRepStochastic(OpRep):
 
     def update_rates(self, rates):
         self.rates[:] = rates
-    
+
     @property
     def chp_ops(self):
         rates = self.rates

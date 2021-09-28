@@ -437,7 +437,7 @@ class QubitProcessorSpec(ProcessorSpec):
         self.compute_clifford_2Q_connectivity.cache_clear()
         self.compute_2Q_connectivity.cache_clear()
 
-    @lru_cache  # TODO: replace with @cached_decorator when Python 3.8+ is required, as this doesn't prevent GC
+    @lru_cache(maxsize=100)  # TODO: replace w/ @cached_decorator when Python 3.8+ is required, (so doesn't prevent GC)
     def compute_clifford_symplectic_reps(self, gatename_filter=None):
         """
         Constructs a dictionary of the symplectic representations for all the Clifford gates in this processor spec.
@@ -471,7 +471,7 @@ class QubitProcessorSpec(ProcessorSpec):
                 ret[gn] = self._symplectic_reps[gn]
         return ret
 
-    @lru_cache
+    @lru_cache(maxsize=100)
     def compute_one_qubit_gate_relations(self):
         """
         Computes the basic pair-wise relationships relationships between the gates.
@@ -531,7 +531,7 @@ class QubitProcessorSpec(ProcessorSpec):
                         # special 1Q gate relation where result is the identity (~no gates)
         return oneQgate_relations, gate_inverse
 
-    @lru_cache
+    @lru_cache(maxsize=100)
     def compute_multiqubit_inversion_relations(self):
         """
         Computes the inverses of multi-qubit (>1 qubit) gates.
@@ -578,7 +578,7 @@ class QubitProcessorSpec(ProcessorSpec):
         return gate_inverse
 
     ### TODO: do we still need this?
-    @lru_cache
+    @lru_cache(maxsize=100)
     def compute_clifford_ops_on_qubits(self):
         """
         Constructs a dictionary mapping tuples of state space labels to the clifford operations available on them.
@@ -598,7 +598,7 @@ class QubitProcessorSpec(ProcessorSpec):
 
         return clifford_ops_on_qubits
 
-    @lru_cache
+    @lru_cache(maxsize=100)
     def compute_ops_on_qubits(self):
         """
         Constructs a dictionary mapping tuples of state space labels to the operations available on them.
@@ -618,7 +618,7 @@ class QubitProcessorSpec(ProcessorSpec):
         return ops_on_qubits
 
     ### TODO: do we still need this?
-    @lru_cache
+    @lru_cache(maxsize=100)
     def compute_clifford_2Q_connectivity(self):
         """
         Constructs a graph encoding the connectivity between qubits via 2-qubit Clifford gates.
@@ -641,7 +641,7 @@ class QubitProcessorSpec(ProcessorSpec):
 
         return _qgraph.QubitGraph(qubit_labels, CtwoQ_connectivity)
 
-    @lru_cache
+    @lru_cache(maxsize=100)
     def compute_2Q_connectivity(self):
         """
         Constructs a graph encoding the connectivity between qubits via 2-qubit gates.

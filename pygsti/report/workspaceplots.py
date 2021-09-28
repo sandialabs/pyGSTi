@@ -2359,7 +2359,7 @@ class PolarEigenvaluePlot(WorkspacePlot):
             #title='Test Polar',
             #font=dict(size=10),
             plot_bgcolor='rgb(240, 240, 240)',
-            polar = dict(
+            polar=dict(
                 radialaxis=dict(
                     range=[0, 1.25]),
                 angularaxis=dict(

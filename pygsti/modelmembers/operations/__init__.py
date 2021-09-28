@@ -84,7 +84,7 @@ def create_from_unitary_mx(unitary_mx, op_type, basis='pp', stdname=None, evotyp
                 raise ValueError("Unknown operation type '%s'!" % str(typ))
 
             return op  # if we get to here, then we've successfully created an op to return
-        except (ValueError, AssertionError, AttributeError) as e:
+        except (ValueError, AssertionError, AttributeError):  # as e:
             #_warnings.warn('Failed to create operator with type %s with error: %s' % (typ, e))
             pass  # move on to next type
 
@@ -121,6 +121,7 @@ def create_from_superop_mx(superop_mx, op_type, basis='pp', stdname=None, evotyp
             pass  # move on to next type
 
     raise ValueError("Could not create an operator of type(s) %s from the given superop!" % (str(op_type)))
+
 
 def get_verbose_type_from_op_type(op_type):
     """Decode an op type into the "canonical", more verbose op type.
@@ -175,6 +176,7 @@ def get_verbose_type_from_op_type(op_type):
         )
 
     return verbose_type_preferences
+
 
 def convert(operation, to_type, basis, extra=None):
     """

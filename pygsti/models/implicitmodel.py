@@ -339,7 +339,7 @@ class ImplicitOpModel(_mdl.OpModel):
                       'evotype': str(self.evotype),  # TODO or serialize?
                       'layer_rules': self._layer_rules.to_nice_serialization(),
                       'simulator': self.sim.to_nice_serialization()
-                     })
+                      })
 
         mmgraph = self.create_modelmember_graph()
         state['modelmembers'] = mmgraph.create_serialization_dict()

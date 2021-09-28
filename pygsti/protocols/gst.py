@@ -526,7 +526,8 @@ class GSTInitialModel(_NicelySerializable):
                       'contract_start_to_cptp': self.contract_start_to_cptp,
                       'lgst_gaugeopt_tol': self.lgst_gaugeopt_tol,
                       'model': self.model.to_nice_serialization() if (self.model is not None) else None,
-                      'target_model': self.target_model.to_nice_serialization() if (self.target_model is not None) else None,
+                      'target_model': (self.target_model.to_nice_serialization()
+                                       if (self.target_model is not None) else None),
                       })
         return state
 
@@ -710,7 +711,7 @@ class GSTObjFnBuilders(_NicelySerializable):
         state.update({
             'iteration_builders': [b.to_nice_serialization() for b in self.iteration_builders],
             'final_builders': [b.to_nice_serialization() for b in self.final_builders]
-            })
+        })
         return state
 
     @classmethod
@@ -893,7 +894,8 @@ class GSTGaugeOptSuite(_NicelySerializable):
                     {
                         'gates_metric': metric, 'spam_metric': metric,
                         'item_weights': {'gates': 1.0, 'spam': 0.0},
-                        'gauge_group': _models.gaugegroup.UnitaryGaugeGroup(model.state_space, model.basis, model.evotype),
+                        'gauge_group': _models.gaugegroup.UnitaryGaugeGroup(model.state_space,
+                                                                            model.basis, model.evotype),
                         'verbosity': printer
                     })
 
@@ -966,8 +968,8 @@ class GSTGaugeOptSuite(_NicelySerializable):
                         'spam_penalty_factor': valid_spam, 'verbosity': printer}
 
         elif suite_name == "unreliable2Q":
-            raise ValueError(("unreliable2Q is no longer a separate 'suite'.  You should precede it with the suite name, "
-                              "e.g. 'stdgaugeopt-unreliable2Q' or 'varySpam-unreliable2Q'"))
+            raise ValueError(("unreliable2Q is no longer a separate 'suite'.  You should precede it with the suite"
+                              " name, e.g. 'stdgaugeopt-unreliable2Q' or 'varySpam-unreliable2Q'"))
         elif suite_name == "none":
             pass  # add nothing
         else:
@@ -994,7 +996,7 @@ class GSTGaugeOptSuite(_NicelySerializable):
                     to_pickle['gaugeopt_argument_dicts'][lbl] = new_goparams
         return to_pickle
 
-    def _to_nice_serialization(self):        
+    def _to_nice_serialization(self):
         dicts_to_serialize = {}
         if self.gaugeopt_argument_dicts is not None:
             for lbl, goparams in self.gaugeopt_argument_dicts.items():
@@ -1189,7 +1191,8 @@ class GateSetTomography(_proto.Protocol):
                               for lst in circuit_lists]
 
         tnxt = _time.time(); profiler.add_time('GST: loading', tref); tref = tnxt
-        mdl_start = self.initial_model.retrieve_model(data.edesign, self.gaugeopt_suite.gaugeopt_target, data.dataset, comm)
+        mdl_start = self.initial_model.retrieve_model(data.edesign, self.gaugeopt_suite.gaugeopt_target,
+                                                      data.dataset, comm)
 
         tnxt = _time.time(); profiler.add_time('GST: Prep Initial seed', tref); tref = tnxt
 

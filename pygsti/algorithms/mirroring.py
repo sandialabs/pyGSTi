@@ -137,8 +137,8 @@ def create_mirror_circuit(circ, pspec, circ_type='clifford+zxzxz'):
 
     srep_dict = _symp.compute_internal_gate_symplectic_representations(gllist=['I', 'X', 'Y', 'Z'])
     # the `callable` part is a workaround to remove gates with args, defined by functions.
-    srep_dict.update(pspec.compute_clifford_symplectic_reps([gn for gn, u in pspec.gate_unitaries.items()
-                                                             if not callable(u)]))
+    srep_dict.update(pspec.compute_clifford_symplectic_reps(tuple((gn for gn, u in pspec.gate_unitaries.items()
+                                                                   if not callable(u)))))
 
     if 'Gxpi2' in pspec.gate_names:
         xname = 'Gxpi2'
@@ -192,7 +192,7 @@ def create_mirror_circuit(circ, pspec, circ_type='clifford+zxzxz'):
             c.append_circuit_inplace(_cir.Circuit([theta2_layer], line_labels=circ.line_labels))
             c.append_circuit_inplace(_cir.Circuit([Xpi2layer], line_labels=circ.line_labels))
             c.append_circuit_inplace(_cir.Circuit([theta1_layer], line_labels=circ.line_labels))
-            
+
             d_ind += 5
 
         else:
@@ -220,9 +220,9 @@ def create_mirror_circuit(circ, pspec, circ_type='clifford+zxzxz'):
 
             net_paulis_as_layer = [_lbl.Label(pauli_labels[net_paulis[q]], q) for q in qubits]
             #compute new net pauli based on previous pauli
-            temp_circ = _cir.Circuit(new_paulis_as_layer + net_paulis_as_layer, line_labels=circ.line_labels)
-            net_pauli_numbers = _symp.find_pauli_number(_symp.symplectic_rep_of_clifford_circuit(temp_circ, 
-                                                                                                srep_dict=srep_dict)[1])
+            net_pauli_numbers = _symp.find_pauli_number(_symp.symplectic_rep_of_clifford_circuit(
+                _cir.Circuit(new_paulis_as_layer + net_paulis_as_layer, line_labels=circ.line_labels),
+                srep_dict=srep_dict)[1])
 
             # THIS WAS THE (THETA) VERSIONS
             #net_paulis_as_layer = [_lbl.Label(pauli_labels[net_paulis[q]], q) for q in qubits]
@@ -267,9 +267,10 @@ def create_mirror_circuit(circ, pspec, circ_type='clifford+zxzxz'):
         else:
             if circ_type == 'clifford+zxzxz':
                 net_paulis_as_layer = [_lbl.Label(pauli_labels[net_paulis[qubits[i]]], qubits[i]) for i in range(n)]
-                net_paulis = {qubits[i]: pn for i, pn in enumerate(_symp.find_pauli_number(_symp.symplectic_rep_of_clifford_circuit(
-                  _cir.Circuit([layer, net_paulis_as_layer, layer], line_labels=circ.line_labels), srep_dict=srep_dict)[1]))}
-                
+                circ_sandwich = _cir.Circuit([layer, net_paulis_as_layer, layer], line_labels=circ.line_labels)
+                net_paulis = {qubits[i]: pn
+                              for i, pn in enumerate(_symp.find_pauli_number(_symp.symplectic_rep_of_clifford_circuit(
+                                                     circ_sandwich, srep_dict=srep_dict)[1]))}
                 mc.append(layer)
                 #we need to account for how the net pauli changes when it gets passed through the clifford layers
 

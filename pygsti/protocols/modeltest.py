@@ -202,7 +202,6 @@ class ModelTest(_proto.Protocol):
         extra_parameters['raw_objective_values'] = objfn_vals
         extra_parameters['model_test_values'] = chi2k_distributed_vals
 
-
         from .gst import _add_gaugeopt_and_badfit
         from .gst import ModelEstimateResults as _ModelEstimateResults
 

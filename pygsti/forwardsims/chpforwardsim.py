@@ -175,8 +175,8 @@ class CHPForwardSimulator(_WeakForwardSimulator):
         # where most logic is based on simplify_effects and therefore expensive for many qubits)
         qubit_indices = None
         if povm_label.sslbls is not None:
-            flat_sslbls = [lbl for i in range(self.model.state_space.num_tensor_product_blocks) \
-                for lbl in self.model.state_space.tensor_product_block_labels(i)]
+            flat_sslbls = [lbl for i in range(self.model.state_space.num_tensor_product_blocks)
+                           for lbl in self.model.state_space.tensor_product_block_labels(i)]
             qubit_indices = [flat_sslbls.index(q) for q in povm_label.sslbls]
 
         # Handle ComputationalBasisPOVM
@@ -195,10 +195,10 @@ class CHPForwardSimulator(_WeakForwardSimulator):
                 assert povm._evotype == 'chp', \
                     "ComposedPOVM must have `chp` evotype for noise op"
 
-                nqubits = povm.state_space.num_qubits
-                targets = _np.array(range(nqubits)) + target_offset
+                #OLD REMOVE: nqubits = povm.state_space.num_qubits
+                #OLD REMOVE: targets = _np.array(range(nqubits)) + target_offset
+                #OLD REMOVE: file_handle.write(povm.error_map.get_chp_str(targets))
                 file_handle.write(povm.error_map.chp_str)
-                #OLD: file_handle.write(povm.error_map.get_chp_str(targets))
 
                 process_computational_povm(povm.base_povm, qubit_indices, target_offset)
             else:

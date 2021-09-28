@@ -756,7 +756,6 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         return "exponentiates"
 
 
-
 def _d_exp_series(x, dx):
     TERM_TOL = 1e-12
     tr = len(dx.shape)  # tensor rank of dx; tr-2 == # of derivative dimensions

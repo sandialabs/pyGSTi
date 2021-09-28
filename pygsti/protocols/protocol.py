@@ -1368,7 +1368,7 @@ class SimultaneousExperimentDesign(ExperimentDesign):
             #Build tensor product of circuits
             tensored_circuits = []
             circuits_per_edesign = [des.all_circuits_needing_data[:] for des in edesigns]
-            
+
             #Pad shorter lists with None values
             maxLen = max(map(len, circuits_per_edesign))
             for lst in circuits_per_edesign:

@@ -338,7 +338,7 @@ class LocalNoiseModel(_ImplicitOpModel):
 
     def create_processor_spec(self):
         import copy as _copy
-        return _copy.deepcopy(self.processor_spec)    
+        return _copy.deepcopy(self.processor_spec)
 
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()

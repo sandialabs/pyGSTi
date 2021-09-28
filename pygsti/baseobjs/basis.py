@@ -24,6 +24,7 @@ from pygsti.baseobjs.basisconstructors import _basis_constructor_dict
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 
+
 #Helper functions
 def _sparse_equal(a, b, atol=1e-8):
     """ NOTE: same as matrixtools.sparse_equal - but can't import that here """
@@ -1490,7 +1491,7 @@ class TensorProdBasis(LazyBasis):
     def _from_nice_serialization(cls, state):
         component_bases = [Basis.from_nice_serialization(b) for b in state['component_bases']]
         return cls(component_bases, state['name'], state['longname'])
-        
+
     @property
     def dim(self):
         """

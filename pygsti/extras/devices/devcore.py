@@ -46,12 +46,14 @@ from pygsti.tools import rbtools as _anl
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
 
 
-_deprecated_fn('basic_device_information')
+@_deprecated_fn('basic_device_information')
 def get_device_specs(devname):
     return basic_device_information(devname)
 
+
 def basic_device_information(devname):
     return _get_dev_specs(devname)
+
 
 def _get_dev_specs(devname):
 

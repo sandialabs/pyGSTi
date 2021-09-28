@@ -217,11 +217,11 @@ class CloudNoiseModel(_ImplicitOpModel):
         #  if we let noisy_global_idle_name be non-None).
         global_idle_gate = mm_gatedict.get(global_idle_name, None)
         if (global_idle_gate is not None) and (build_cloudnoise_fn is not None) \
-           and not (isinstance(global_idle_gate, _op.ComposedOp) and len(global_idle_gate.factorops) == 0):
+           and (build_cloudnoise_fn(self.processor_spec.global_idle_layer_label) is not None):
             noisy_global_idle_name = global_idle_name
         else:
             noisy_global_idle_name = None
-        
+
         assert(set(idle_names).issubset([global_idle_name])), \
             "Only global idle operations are allowed in a CloudNoiseModel!"
 

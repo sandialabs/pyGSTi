@@ -277,7 +277,7 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
         simplified = _collections.OrderedDict()
         if isinstance(prefix, _Label):  # Deal with case when prefix isn't just a string
             for k, g in self.items():
-                comp = g #.copy()
+                comp = g  # REMOVE .copy()
                 #REMOVE (components now hold global model indices)
                 #comp.set_gpindices(_mm._compose_gpindices(self.gpindices,
                 #                                          g.gpindices), self.parent)
@@ -285,7 +285,7 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
         else:
             if prefix: prefix += "_"
             for k, g in self.items():
-                comp = g #.copy()
+                comp = g  # REMOVE .copy()
                 #REMOVE (components now hold global model indices)
                 #comp.set_gpindices(_mm._compose_gpindices(self.gpindices,
                 #                                          g.gpindices), self.parent)

@@ -1505,7 +1505,7 @@ class ExplicitOpModel(_mdl.OpModel):
 
         return _QubitProcessorSpec(nqubits, list(gate_unitaries.keys()), gate_unitaries, availability,
                                    qubit_labels=qubit_labels)
-    
+
     def create_modelmember_graph(self):
         return _MMGraph({
             'preps': self.preps,
@@ -1528,7 +1528,7 @@ class ExplicitOpModel(_mdl.OpModel):
                       'povm_prefix': self.povms._prefix,
                       'instrument_prefix': self.instruments._prefix,
                       'evotype': str(self.evotype),  # TODO or serialize?
-                      'simulator': self.sim.to_nice_serialization(),  # TODO --- forwardsim needs to be serializable ----------------------------
+                      'simulator': self.sim.to_nice_serialization(),
                       })
 
         mmgraph = self.create_modelmember_graph()

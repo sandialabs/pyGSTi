@@ -792,7 +792,7 @@ class ComposedOp(_LinearOperator):
             number of parameters.
         """
         deriv_mxs = [op.errorgen_coefficients_array_deriv_wrt_params() for op in self.factorops]
-        return _np.concatenate([mx for mx in deriv_mxs if mx.size > 0], axis=0)  # allow (0,0)-shaped matrices to be ignored.
+        return _np.concatenate([mx for mx in deriv_mxs if mx.size > 0], axis=0)  # allow (0,0)-shaped mxs to be ignored
 
     def error_rates(self):
         """

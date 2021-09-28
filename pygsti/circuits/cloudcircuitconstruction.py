@@ -583,14 +583,16 @@ def _find_amped_polynomials_for_clifford_syntheticidle(qubit_filter, core_filter
     if effect_lbls is None:
         povmLbl = model._default_primitive_povm_layer_lbl()
         effect_lbls = [_Lbl("%s_%s" % (povmLbl, l)) for l in model._effect_labels_for_povm(povmLbl)]
-    if single_q_fiducials is None:
-        # TODO: assert model has Gx and Gy gates?
-        single_q_prep_fiducials = single_q_meas_fiducials = [(), ('Gx',), ('Gy',)]  # ('Gx','Gx')
-    elif len(single_q_fiducials) == 2 and all([isinstance(fidlist, list) for fidlist in single_q_fiducials]):
-        single_q_prep_fiducials = single_q_fiducials[0]
-        single_q_meas_fiducials = single_q_fiducials[1]
-    else:  # assume a single list that works for both prep and measure
-        single_q_prep_fiducials = single_q_meas_fiducials = single_q_fiducials
+
+    #OLD (see below)
+    #if single_q_fiducials is None:
+    #    # TODO: assert model has Gx and Gy gates?
+    #    single_q_prep_fiducials = single_q_meas_fiducials = [(), ('Gx',), ('Gy',)]  # ('Gx','Gx')
+    #elif len(single_q_fiducials) == 2 and all([isinstance(fidlist, list) for fidlist in single_q_fiducials]):
+    #    single_q_prep_fiducials = single_q_fiducials[0]
+    #    single_q_meas_fiducials = single_q_fiducials[1]
+    #else:  # assume a single list that works for both prep and measure
+    #    single_q_prep_fiducials = single_q_meas_fiducials = single_q_fiducials
 
     #dummy = 0.05*_np.ones(model.num_params,'d') # for evaluating derivs...
     #dummy = 0.05*_np.arange(1,model.num_params+1) # for evaluating derivs...

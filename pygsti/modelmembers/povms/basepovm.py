@@ -232,7 +232,7 @@ class _BasePOVM(_POVM):
         simplified = _collections.OrderedDict()
         for lbl, effect in self.items():
             #if lbl == self.complement_label: continue #REMOVE: gpindices are global now
-            simplified[prefix + lbl] = effect #.copy()
+            simplified[prefix + lbl] = effect  # .copy()
             #simplified[prefix + lbl].set_gpindices(effect.gpindices, self.parent)
 
             #REMOVE: gpindices are global now

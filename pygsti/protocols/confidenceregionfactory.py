@@ -274,7 +274,7 @@ class ConfidenceRegionFactory(_NicelySerializable):
         objfn_builder = self.parent.final_objfn_builder
         regularization = objfn_builder.regularization if (objfn_builder.regularization is not None) else {}
         penalties = objfn_builder.penalties if (objfn_builder.penalties is not None) else {}
-        
+
         if issubclass(objfn_builder.cls_to_build, _PoissonPicDeltaLogLFunction):
             obj = 'logl'
             useFreqWt = False

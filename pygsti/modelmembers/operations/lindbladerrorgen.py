@@ -1881,7 +1881,6 @@ class LindbladErrorgen(_LinearOperator):
         return s
 
 
-
 class LindbladParameterization(_NicelySerializable):
     """
     An object encapsulating a particular way of parameterizing a LindbladErrorgen

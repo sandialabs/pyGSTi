@@ -974,8 +974,7 @@ class TrivialGaugeGroup(GaugeGroup):
 
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
-        state.update({'state_space': self.state_space.to_nice_serialization(),
-                     })
+        state.update({'state_space': self.state_space.to_nice_serialization()})
         return state
 
     @classmethod
@@ -1081,8 +1080,7 @@ class TrivialGaugeGroupElement(GaugeGroupElement):
 
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
-        state.update({'operation_dimension': self._matrix.shape[0]
-                     })
+        state.update({'operation_dimension': self._matrix.shape[0]})
         return state
 
     @classmethod

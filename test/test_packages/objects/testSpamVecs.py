@@ -131,7 +131,7 @@ class SPAMVecTestCase(BaseTestCase):
             povms.UnconstrainedPOVM("NotAListOrDict")
 
         #povm['0'] = E0 # assignment  -- TEMPORARIY DISABLED until we fix this ability (after POVM-using-submembers update)
-        tp_povm = povms.convert(povm, "TP", model.basis)
+        tp_povm = povms.convert(povm, "full TP", model.basis)
         #tp_povm['0'] = E0 # ok   -- TEMPORARIY DISABLED until we fix this ability (after POVM-using-submembers update)
         #with self.assertRaises(KeyError):
         #    tp_povm['1'] = E0 # can't assign complement vector

@@ -1874,7 +1874,7 @@ def _build_modelnoise_from_args(depolarization_strengths, stochastic_error_probs
     if stochastic_error_probs is not None:
         noise_dict = {}
         for lbl, val in stochastic_error_probs.items():
-            if isinstance(val, dict):  # then value is actually a dictionary of sslbls -> noise specifications                
+            if isinstance(val, dict):  # then value is actually a dictionary of sslbls -> noise specifications
                 if not allow_nonlocal: raise ValueError("Nonlocal stochastic error probs not allowed!")
                 noise_dict[lbl] = {k: _StochasticNoise(v, stochastic_parameterization) for k, v in val.items()}
             else:
@@ -1951,7 +1951,6 @@ def _build_modelnoise_from_args(depolarization_strengths, stochastic_error_probs
                                                    for lbl, val in lindblad_error_coeffs.items()}))
 
     return _ComposedOpModelNoise(modelnoises)
-
 
 
 @_deprecated_fn("This function is overly specific and will be removed soon.")
