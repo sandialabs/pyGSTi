@@ -372,13 +372,10 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
             "`static_effect` evotype must match `errormap` ('%s' != '%s')" % (static_effect._evotype, evotype)
         assert(static_effect.num_params == 0), "`static_effect` 'reference' must have *zero* parameters!"
 
-        #d2 = static_effect.dim
         self.effect_vec = static_effect
         self.error_map = errormap
         self.terms = {}
         self.local_term_poly_coeffs = {}
-        # TODO REMOVE self.direct_terms = {} if evotype in ("svterm","cterm") else None
-        # TODO REMOVE self.direct_term_poly_coeffs = {} if evotype in ("svterm","cterm") else None
 
         #Create representation
         effectRep = self.effect_vec._rep
@@ -412,28 +409,6 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
         """
         return [self.error_map, self.effect_vec]
 
-    # REMOVE - unnecessary
-    #def copy(self, parent=None, memo=None):
-    #    """
-    #    Copy this object.
-    #
-    #    Parameters
-    #    ----------
-    #    parent : Model, optional
-    #        The parent model to set for the copy.
-    #
-    #    Returns
-    #    -------
-    #    LinearOperator
-    #        A copy of this object.
-    #    """
-    #    # We need to override this method so that embedded gate has its
-    #    # parent reset correctly.
-    #    if memo is not None and id(self) in memo: return memo[id(self)]
-    #    cls = self.__class__  # so that this method works for derived classes too
-    #    copyOfMe = cls(self.effect_vec, self.error_map.copy(parent))
-    #    return self._copy_gpindices(copyOfMe, parent, memo)
-
     def set_gpindices(self, gpindices, parent, memo=None):
         """
         Set the parent and indices into the parent's parameter vector that are used by this ModelMember object.
@@ -455,9 +430,6 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
         """
         self.terms = {}  # clear terms cache since param indices have changed now
         self.local_term_poly_coeffs = {}
-        # TODO REMOVE self.direct_terms = {}
-        # TODO REMOVE self.direct_term_poly_coeffs = {}
-        # TODO REMOVE _modelmember.ModelMember.set_gpindices(self, gpindices, parent, memo)
         super().set_gpindices(gpindices, parent, memo)
 
     def to_dense(self, on_space='minimal', scratch=None):

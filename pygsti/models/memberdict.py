@@ -313,8 +313,6 @@ class OrderedMemberDict(_PrefixOrderedDict, _mm.ModelChild):
                 existing = super(OrderedMemberDict, self).__getitem__(key)
             else: existing = None
 
-            #REMOVE: Line below is not needed, as it clears existing gpindices for a member with correct parent
-            #if self.parent is not None: value.set_gpindices(None, self.parent)  # set parent
             super(OrderedMemberDict, self).__setitem__(key, value)
             new_item = value  # keep track of newly set item for later
 

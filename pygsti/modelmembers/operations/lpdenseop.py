@@ -50,17 +50,6 @@ class LinearlyParameterizedElementTerm(object):
         self.coeff = coeff
         self.paramIndices = param_indices
 
-    # REMOVE - unnecessary
-    #def copy(self):
-    #    """
-    #    Copy this term.
-    #
-    #    Returns
-    #    -------
-    #    LinearlyParameterizedElementTerm
-    #    """
-    #    return LinearlyParameterizedElementTerm(self.coeff, self.paramIndices[:])
-
 
 class LinearlyParamArbitraryOp(_DenseOperator):
     """

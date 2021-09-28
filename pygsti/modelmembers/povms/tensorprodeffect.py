@@ -44,7 +44,6 @@ class TensorProductPOVMEffect(_POVMEffect):
         assert(len(factors) > 0), "Must have at least one factor!"
 
         self.factors = factors  # do *not* copy - needs to reference common objects
-        #REMOVE self.Np = sum([fct.num_params for fct in factors])
         self.effectLbls = _np.array(povm_effect_lbls)
 
         evotype = self.factors[0]._evotype
@@ -52,7 +51,6 @@ class TensorProductPOVMEffect(_POVMEffect):
 
         _POVMEffect.__init__(self, rep, evotype)
         self._rep.factor_effects_have_changed()  # initializes rep data
-        #sets gpindices, so do before stuff below
 
         #Set our parent and gpindices based on those of factor-POVMs, which
         # should all be owned by a TensorProdPOVM object.
@@ -60,13 +58,6 @@ class TensorProductPOVMEffect(_POVMEffect):
         #  we really only depend on one element of each POVM, which may allow
         #  using just a subset of each factor POVMs indices - but this is tricky).
         self.init_gpindices()
-
-        #OLD REMOVE:
-        #self.set_gpindices(_slct.list_to_slice(
-        #    _np.concatenate([fct.gpindices_as_array()
-        #                     for fct in factors], axis=0), True, False),
-        #                   factors[0].parent)  # use parent of first factor
-        ## (they should all be the same)
 
     def submembers(self):
         """
@@ -364,11 +355,6 @@ class TensorProductPOVMEffect(_POVMEffect):
                 for j, fctA in enumerate(self.factors[i + 2:], start=i + 2):
                     post = _np.kron(post, fctA[self.effectLbls[j]].to_dense(on_space='minimal'))
                 deriv = _np.kron(deriv, post[:, None])  # add a dummy 1-dim to 'post' and do kron properly...
-
-            #REMOVE (OLD)
-            # # POVM-factors hold global indices (b/c they're meant to be shareable)
-            # fct_local_inds = _modelmember._decompose_gpindices(
-            #     self.gpindices, fct.gpindices)
 
             assert(fct_local_inds is not None), \
                 "Error: gpindices has not been initialized for factor %d - cannot compute derivative!" % i

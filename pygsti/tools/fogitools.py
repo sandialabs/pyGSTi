@@ -293,100 +293,6 @@ def first_order_gauge_action_matrix_for_povm(povm_superbra_vecs, target_sslbls, 
     return culled_action_mx, updated_row_basis
 
 
-#OLD REMOVE?:
-def first_order_ham_gauge_action_matrix(clifford_superop, dmbasis_ham):
-    #Note: clifford_superop must be in the *std* basis!
-    normalize = True  # I think ?
-    ham_gens, _ = _ot.lindblad_error_generators(dmbasis_ham, None, normalize)
-
-    ham_action_mx = _np.empty((len(ham_gens), len(ham_gens)), complex)
-    for j, gen in enumerate(ham_gens):
-        conjugated_gen = _np.dot(clifford_superop, _np.dot(gen, _np.conjugate(clifford_superop.T)))
-        gauge_action_deriv = gen - conjugated_gen
-        for i, gen2 in enumerate(ham_gens):
-            val = _np.vdot(gen2.flat, gauge_action_deriv.flat)
-            ham_action_mx[i, j] = val
-    assert(_np.linalg.norm(ham_action_mx.imag) < 1e-6)
-    ham_action_mx = ham_action_mx.real
-
-    return ham_action_mx
-
-
-#OLD REMOVE?:
-#def first_order_other_gauge_action_matrix(clifford_superop, dmbasis_other, other_mode="all"):
-#    #Note: clifford_superop must be in the *std* basis!
-#    normalize = True  # I think ?
-#    _, other_gens = _ot.lindblad_error_generators(None, dmbasis_other, normalize, other_mode)
-#
-#    if other_mode == 'diagonal':
-#        all_other_gens = other_gens
-#    elif other_mode == 'all':
-#        all_other_gens = [other_gens[i][j] for i in range(len(other_gens)) for j in range(len(other_gens))]
-#    else:
-#        raise ValueError("Invalid `other_mode`: only 'diagonal' and 'all' modes are supported so far.")
-#
-#    other_action_mx = _np.empty((len(all_other_gens), len(all_other_gens)), complex)
-#    for j, gen in enumerate(all_other_gens):
-#        conjugated_gen = _np.dot(clifford_superop, _np.dot(gen, _np.conjugate(clifford_superop.T)))
-#        gauge_action_deriv = gen - conjugated_gen
-#        for i, gen2 in enumerate(all_other_gens):
-#            val = _np.vdot(gen2.flat, gauge_action_deriv.flat)
-#            other_action_mx[i, j] = val
-#    #assert(_np.linalg.norm(other_action_mx.imag) < 1e-6)
-#    other_action_mx = _np.real_if_close(other_action_mx)  # .real
-#
-#    return other_action_mx
-
-
-#def construct_gauge_space_for_model(primitive_op_labels, gauge_action_matrices,
-#                                    errorgen_coefficient_labels, elem_errgen_labels,
-#                                    reduce_to_model_space=True):
-#    """
-#    TODO: docstring
-#    note: elem_errgen_labels labels the basis elements of the (matrix) elements of gauge_action_matrices.
-#    We expect the values of gauge_action_matrices to be square matrices with dimension len(elem_errgen_labels).
-#    """
-#
-#    # Intersect gauge action with the space of elementary errorgens present in the model.
-#    # We may need to eliminate some rows of X_ga matrices, and (only) keep linear combos
-#    # of the columns that are zero on these rows.
-#    ga_by_op = {}  # potentially different than gauge_action_matrices when reduce_to_model_space=True
-#    disallowed_rows_by_op = {}
-#    elgen_lbls_by_op = {}  # labels of the elementary error generators that correspond to the rows of ga_by_op
-#    all_elgen_lbls = _np.empty(len(elem_errgen_labels), dtype=object)  # as an array for convenience below
-#    all_elgen_lbls[:] = elem_errgen_labels
-#
-#    for op_label in primitive_op_labels:
-#        present_elem_lbls = set(errorgen_coefficient_labels[op_label])
-#        assert(present_elem_lbls.issubset(elem_errgen_labels)), \
-#            "The given space of elementary error gens must encompass all those in the %s model op!" % str(op_label)
-#
-#        disallowed_labels = set(elem_errgen_labels) - present_elem_lbls
-#        disallowed_row_indices = [elem_errgen_labels.index(disallowed_lbl) for disallowed_lbl in disallowed_labels]
-#        if reduce_to_model_space and len(disallowed_row_indices) > 0:
-#            ga_by_op[op_label] = _np.delete(gauge_action_matrices[op_label], disallowed_row_indices, axis=0)
-#            elgen_lbls_by_op[op_label] = _np.delete(all_elgen_lbls, disallowed_row_indices, axis=0)
-#            disallowed_rows_by_op[op_label] = _np.take(gauge_action_matrices[op_label],
-#                                                       disallowed_row_indices, axis=0)
-#            assert(set(list(elgen_lbls_by_op[op_label])) == present_elem_lbls)
-#        else:
-#            ga_by_op[op_label] = gauge_action_matrices[op_label]
-#            elgen_lbls_by_op[op_label] = all_elgen_lbls
-#            disallowed_rows_by_op[op_label] = _np.empty((0, gauge_action_matrices[op_label].shape[1]), 'd')
-#
-#    allop_ga_mx = _np.concatenate([ga_by_op[op_label] for op_label in primitive_op_labels], axis=0)
-#
-#    disallowed_rows = _np.concatenate([disallowed_rows_by_op[op_label] for op_label in primitive_op_labels], axis=0)
-#    if reduce_to_model_space and disallowed_rows.shape[0] > 0:
-#        allowed_gauge_linear_combos = _mt.nice_nullspace(disallowed_rows, tol=1e-4)
-#        allop_ga_mx = _np.dot(allop_ga_mx, allowed_gauge_linear_combos)
-#        ga_by_op = {k: _np.dot(v, allowed_gauge_linear_combos) for k, v in ga_by_op.items()}
-#    else:
-#        allowed_gauge_linear_combos = None
-#
-#    return allop_ga_mx, ga_by_op, elgen_lbls_by_op, allowed_gauge_linear_combos
-
-
 def _create_op_errgen_indices_dict(primitive_op_labels, errorgen_coefficient_labels):
     op_errgen_indices = {}; off = 0  # tells us which indices of errgen-set space map to which ops
     for op_label in primitive_op_labels:
@@ -490,10 +396,6 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
 
         #assert(_mt.columns_are_orthogonal(fogi_dirs))  # sparse version?
 
-        #REMOVE fogi_rs = _np.concatenate((fogi_rs, _np.zeros(local_fogi_dirs.shape[1], 'd')))
-        #REMOVE fogi_gaugespace_dirs.extend([None] * new_fogi_dirs.shape[1])  # local qtys don't have corresp gauge dirs
-        #REMOVE fogi_opsets.extend([(op_label,)] * new_fogi_dirs.shape[1])
-
         #LABELS
         op_elemgen_labels = errorgen_coefficient_labels[op_label]
         errgen_names = elem_vec_names(local_fogi_vecs, op_elemgen_labels)
@@ -504,11 +406,6 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                                         op_label_abbrevs.get(op_label, str(op_label)))
             fogi_meta.append({'name': egname_with_op, 'abbrev': egname_abbrev, 'r': 0,
                               'gaugespace_dir': None, 'opset': (op_label,)})
-
-        #REMOVE fogi_names.extend(["%s_%s" % ((("(%s)" % egname) if (' ' in egname) else egname),
-        #REMOVE                               op_label_abbrevs.get(op_label, str(op_label)))
-        #REMOVE                    for egname in errgen_names])
-        #REMOVE fogi_abbrev_names.extend(errgen_names_abbrev)
 
         complement = _mt.nice_nullspace(commutant.T)  # complement of commutant - where op is faithful rep
         assert(_mt.columns_are_orthogonal(complement))
@@ -521,11 +418,9 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
 
     smaller_sets = [(op_label,) for op_label in primitive_op_labels]
     max_size = len(primitive_op_labels)
-    #REMOVE num_indep_fogi_dirs = fogi_dirs.shape[1]
     for set_size in range(1, max_size):
         larger_sets = []
         num_indep_vecs_from_smaller_sets = fogi_dirs.shape[1]
-        #REMOVE num_vecs_from_smaller_sets = fogi_dirs.shape[1]
         for op_label in primitive_op_labels:
             for existing_set in smaller_sets:
                 if op_label in existing_set: continue
@@ -651,42 +546,6 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                         # = int_spc.T * [ pinv_gA  -pinv_gB ] * [[ga] [gB]]
                         # = int_spc.T * (pinv_gA * gA - pinv_gB * gB) = 0 b/c int_vec lies in "support" of A & B,
                         #   i.e. int_spc.T * (pinv_gA * gA) * int_spc == I and similar with B, so get I - I = 0
-
-                        #TODO REMOVE (DEBUG)
-                        #except:
-                        #    print(_np.linalg.norm(_np.dot(gauge_action.T, local_fogi_dirs)))
-                        #    print(_np.linalg.norm(_np.dot(gauge_action.conj().T, local_fogi_dirs)))
-                        #    print("Try conjugating intersection_space:")
-                        #    conj_local_fogi_dirs = _np.dot(inv_diff_gauge_action, intersection_space.conj())
-                        #    print(_np.linalg.norm(_np.dot(gauge_action.T, conj_local_fogi_dirs)))
-                        #    print(_np.linalg.norm(_np.dot(gauge_action.conj().T, conj_local_fogi_dirs)))
-                        #
-                        #    print("Test restricted to intersection space:")
-                        #    restricted_ga = _np.dot(gauge_action, intersection_space)
-                        #    restricted_inv_diff_gauge_action = _np.concatenate(
-                        #                    (_np.linalg.pinv(restricted_ga[0:n, :], rcond=1e-7),
-                        #                     -_np.linalg.pinv(restricted_ga[n:, :], rcond=1e-7)),
-                        #                     axis=1).T
-                        #    restricted_local_fogi_dirs = restricted_inv_diff_gauge_action
-                        #    print(_np.linalg.norm(_np.dot(gauge_action.T, restricted_local_fogi_dirs)))
-                        #    ga = restricted_ga[0:n, :]
-                        #    inv_ga = _np.linalg.pinv(ga, rcond=1e-7)
-                        #    print(_np.linalg.norm(_np.dot(inv_ga, ga) - _np.identity(ga.shape[1],'d')))
-                        #
-                        #    print("DEBUG")
-                        #    gaA = gauge_action[0:n,:]
-                        #    gaB = gauge_action[n:,:]
-                        #    pinvA = _np.linalg.pinv(gaA, rcond=1e-7)
-                        #    pinvB = _np.linalg.pinv(gaB, rcond=1e-7)
-                        #    iA = _np.dot(pinvA, gaA)
-                        #    iB = _np.dot(pinvB, gaB)
-                        #    tA = _np.dot(intersection_space.T, iA)
-                        #    tB = _np.dot(intersection_space.T, iB)
-                        #    print(_np.linalg.norm(tA))
-                        #    print(_np.linalg.norm(tB))
-                        #
-                        #    import bpdb; bpdb.set_trace()
-                        #    print("prob")
 
                         new_fogi_dirs = _sps.lil_matrix((num_elem_errgens, local_fogi_dirs.shape[1]),
                                                         dtype=local_fogi_dirs.dtype); off = 0

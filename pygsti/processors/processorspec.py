@@ -150,11 +150,6 @@ class QubitProcessorSpec(ProcessorSpec):
                     nq = num_qubits  # if no availability is given, assume an idle on *all* the qubits
                     availability[gname] = [None]  # and update availability for later processing
                 self.gate_unitaries[gname] = nq  # an identity gate
-                #OLD REMOVE
-                #if gname.startswith('(') and gname.endswith(')'):
-                #    self.gate_unitaries[gname] = nq  # an identity gate that should not be build unless it's noisy
-                #else:
-                #    self.gate_unitaries[gname] = _np.identity(2**nq, 'd')
             else:
                 raise ValueError(
                     str(gname) + " is not a valid 'standard' gate name, it must be given in `nonstd_gate_unitaries`")

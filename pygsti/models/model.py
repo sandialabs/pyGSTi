@@ -892,14 +892,6 @@ class OpModel(Model):
             completely_allocated = is_allocated[lbl]
             if debug: print("Processing: ", lbl, " gpindices=", obj.gpindices, " allocated = ", completely_allocated)
 
-            #REMOVE
-            #if shift > 0: and obj.parent is self and obj.gpindices is not None:  # already allocated indices
-            #    print("DEBUG: %s: shifting indices by %d.  Initially %s" % (str(lbl), shift, str(obj.gpindices)))
-            #    if isinstance(obj.gpindices, slice):
-            #        obj.set_gpindices(_slct.shift(obj.gpindices, shift), self)  #, memo)
-            #    else:
-            #        obj.set_gpindices(obj.gpindices + shift, self)  #, memo)  # works for integer arrays
-
             if not completely_allocated:  # obj.gpindices_are_allocated(self):
                 # We need to [re-]allocate obj's indices to this model
                 num_new_params, max_existing_index = obj.preallocate_gpindices(self)  # any new indices need allocation?
@@ -927,18 +919,6 @@ class OpModel(Model):
                 newly_added_indices = slice(insertion_point, insertion_point + num_added_params) \
                     if num_added_params > 0 else None  # for updating parameter labels below
 
-                #REMOVE
-                # print("objvec len = ",len(objvec), "num_new_params=",num_new_params,
-                #       " gpinds=",obj.gpindices) #," loc=",new_local_inds)
-
-                #obj.set_gpindices( slice(off, off+obj.num_params), self )
-                #shift += obj.num_params
-                #off += obj.num_params
-
-                #shift += num_new_params
-                #off += num_new_params
-                #print("DEBUG: %s: alloc'd & inserted %d new params.  indices = " \
-                #      % (str(lbl),obj.num_params), obj.gpindices, " off=",off)
             else:
                 inds = obj.gpindices_as_array()
                 M = max(inds) if len(inds) > 0 else -1; L = len(w)
@@ -1632,12 +1612,6 @@ class OpModel(Model):
         """
         mmg = self.create_modelmember_graph()
         mmg.print_graph()
-
-#REMOVE (I think)
-#    @classmethod
-#    def _from_dir_partial(self, state, memo):
-#        #HERE
-#        pass
 
 
 def _default_param_bounds(num_params):

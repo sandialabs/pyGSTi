@@ -72,14 +72,6 @@ class TPInstrumentOp(_DenseOperator):
         self._construct_matrix()
         self.init_gpindices()
 
-        #TODO REMOVE - now use submembers framework
-        ##indices into self.param_ops of the operations this operation depends on
-        #self.set_gpindices(_slct.list_to_slice(
-        #    _np.concatenate([param_ops[i].gpindices_as_array()
-        #                     for i in self.dependents], axis=0), True, False),
-        #                   param_ops[0].parent)  # use parent of first param operation
-        ## (they should all be the same)
-
     def submembers(self):
         """
         Get the ModelMember-derived objects contained in this one.

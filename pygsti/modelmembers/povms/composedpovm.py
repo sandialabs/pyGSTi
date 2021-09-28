@@ -181,8 +181,6 @@ class ComposedPOVM(_POVM):
             effect = _ComposedPOVMEffect(pureVec, self.error_map)
             num_new = effect.allocate_gpindices(0, self.parent)
             assert(self.parent is None or num_new == 0)  # ensure effect inds are already allocated to current model
-            # REMOVE effect.set_gpindices(self.error_map.gpindices, self.parent)
-            # REMOVE initialize gpindices of "child" effect (should be in simplify_effects?)
             _collections.OrderedDict.__setitem__(self, key, effect)
             return effect
         else: raise KeyError("%s is not an outcome label of this LindbladPOVM" % key)
@@ -191,45 +189,6 @@ class ComposedPOVM(_POVM):
         """ Needed for OrderedDict-derived classes (to set dict items) """
         return (ComposedPOVM, (self.error_map.copy(), self.base_povm.copy(), self.matrix_basis),
                 {'_gpindices': self._gpindices})  # preserve gpindices (but not parent)
-
-    #TODO REMOVE - I think this does what base class method does...
-    #def allocate_gpindices(self, starting_index, parent, memo=None):
-    #    """
-    #    Sets gpindices array for this object or any objects it contains (i.e. depends upon).
-    #
-    #    Indices may be obtained from contained objects which have already been
-    #    initialized (e.g. if a contained object is shared with other top-level
-    #    objects), or given new indices starting with `starting_index`.
-    #
-    #    Parameters
-    #    ----------
-    #    starting_index : int
-    #        The starting index for un-allocated parameters.
-    #
-    #    parent : Model or ModelMember
-    #        The parent whose parameter array gpindices references.
-    #
-    #    memo : set, optional
-    #        Used to prevent duplicate calls and self-referencing loops.  If
-    #        `memo` contains an object's id (`id(self)`) then this routine
-    #        will exit immediately.
-    #
-    #    Returns
-    #    -------
-    #    num_new : int
-    #        The number of *new* allocated parameters (so
-    #        the parent should mark as allocated parameter
-    #        indices `starting_index` to `starting_index + new_new`).
-    #    """
-    #    if memo is None: memo = set()
-    #    if id(self) in memo: return 0
-    #    memo.add(id(self))
-    #
-    #    assert(self.base_povm.num_params == 0)  # so no need to do anything w/base_povm
-    #    num_new_params = self.error_map.allocate_gpindices(starting_index, parent, memo)  # *same* parent as self
-    #    _mm.ModelMember.set_gpindices(
-    #        self, self.error_map.gpindices, parent)
-    #    return num_new_params
 
     def submembers(self):
         """
@@ -240,29 +199,6 @@ class ComposedPOVM(_POVM):
         list
         """
         return [self.error_map, self.base_povm] if (self.base_povm is not None) else [self.error_map]
-
-    #REMOVE - should be unnecessary as ModelMember base class does this
-    #def relink_parent(self, parent):  # Unnecessary?
-    #    """
-    #    Sets the parent of this object *without* altering its gpindices.
-    #
-    #    In addition to setting the parent of this object, this method
-    #    sets the parent of any objects this object contains (i.e.
-    #    depends upon) - much like allocate_gpindices.  To ensure a valid
-    #    parent is not overwritten, the existing parent *must be None*
-    #    prior to this call.
-    #
-    #    Parameters
-    #    ----------
-    #    parent : Model or ModelMember
-    #        The parent of this POVM.
-    #
-    #    Returns
-    #    -------
-    #    None
-    #    """
-    #    self.error_map.relink_parent(parent)
-    #    _mm.ModelMember.relink_parent(self, parent)
 
     def set_gpindices(self, gpindices, parent, memo=None):
         """
@@ -286,16 +222,6 @@ class ComposedPOVM(_POVM):
         assert(self.base_povm.num_params == 0)  # so no need to do anything w/base_povm
         self.terms = {}  # clear terms cache since param indices have changed now
         return super().set_gpindices(gpindices, parent, memo)
-
-        #OLD REMOVE:
-        #if memo is None: memo = set()
-        #elif id(self) in memo: return
-        #memo.add(id(self))
-        #
-        #assert(self.base_povm.num_params == 0)  # so no need to do anything w/base_povm
-        #self.error_map.set_gpindices(gpindices, parent, memo)
-        #self.terms = {}  # clear terms cache since param indices have changed now
-        #_mm.ModelMember._set_only_my_gpindices(self, gpindices, parent)
 
     def simplify_effects(self, prefix=""):
         """

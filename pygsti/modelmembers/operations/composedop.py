@@ -245,28 +245,6 @@ class ComposedOp(_LinearOperator):
             self.parent._mark_for_rebuild(self)  # of our params may have changed
             self._parent = None  # mark this object for re-allocation
 
-    # REMOVE - unnecessary and doesn't work correctly when, e.g., multiple factors are the same object
-    #def copy(self, parent=None, memo=None):
-    #    """
-    #    Copy this object.
-    #
-    #    Parameters
-    #    ----------
-    #    parent : Model, optional
-    #        The parent model to set for the copy.
-    #
-    #    Returns
-    #    -------
-    #    LinearOperator
-    #        A copy of this object.
-    #    """
-    #    # We need to override this method so that factor operations have their
-    #    # parent reset correctly.
-    #    if memo is not None and id(self) in memo: return memo[id(self)]
-    #    cls = self.__class__  # so that this method works for derived classes too
-    #    copyOfMe = cls([g.copy(parent, memo) for g in self.factorops], self._evotype, self.state_space)
-    #    return self._copy_gpindices(copyOfMe, parent, memo)
-
     def to_sparse(self, on_space='minimal'):
         """
         Return the operation as a sparse matrix

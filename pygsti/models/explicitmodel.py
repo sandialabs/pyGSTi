@@ -506,9 +506,7 @@ class ExplicitOpModel(_mdl.OpModel):
         int
             the number of gauge model parameters.
         """
-        #REMOVE - but maybe we need some way for some evotypes to punt here? (TODO)
-        #if self._evotype not in ("densitymx", "statevec"):
-        #    return 0  # punt on computing number of gauge parameters for other evotypes
+        #Note maybe we need some way for some evotypes to punt here? (and just return 0?)
         if self.num_params == 0:
             return 0  # save the trouble of getting gauge params when there are no params to begin with
         dPG = self._excalc()._buildup_dpg()
@@ -1846,60 +1844,6 @@ class ExplicitOpModel(_mdl.OpModel):
                 primitive_op_labels + primitive_prep_labels + primitive_povm_labels,
                 self.fogi_store.fogi_directions.toarray(),  # DENSE now (leave sparse in FUTURE?)
                 self.fogi_store.errorgen_space_op_elem_labels)
-
-    def _old_setup_fogi(self, ham_basis, other_basis, other_mode="all",
-                        op_label_abbrevs=None, reparameterize=False, reduce_to_model_space=True,
-                        dependent_fogi_action='drop'):
-
-        # ExplicitOpModel-specific - and assumes model's ops are LindbladOp objects !!
-        primitive_op_labels = list(self.operations.keys())
-
-        ham_ga_matrices = _collections.OrderedDict()
-        other_ga_matrices = _collections.OrderedDict()
-        ham_errorgen_coefficient_labels = _collections.OrderedDict()
-        other_errorgen_coefficient_labels = _collections.OrderedDict()
-        for op_label in primitive_op_labels:  # Note: "ga" stands for "gauge action" in variable names below
-            op = self.operations[op_label]
-
-            # TODO: more general decomposition of op - here it must be Composed(UnitaryOp, ExpErrorGen)
-            #       or just ExpErrorGen
-            if isinstance(op, _op.ExpErrorgenOp):  # assume just an identity op
-                U = _np.identity(op.state_space.dim, 'd')
-            elif isinstance(op, _op.ComposedOp):  # assume first element gives unitary
-                op_mx = op.factorops[0].to_dense()  # assumes a LindbladOp and low num qubits
-                U = _bt.change_basis(op_mx, self.basis, 'std')
-            else:
-                raise ValueError("Could not extract target unitary from %s op!" % str(type(op)))
-
-            ham_ga_matrices[op_label] = _fogit.first_order_ham_gauge_action_matrix(U, ham_basis)
-            other_ga_matrices[op_label] = _fogit.first_order_other_gauge_action_matrix(U, other_basis, other_mode)
-            errgen_labels = op.errorgen_coefficient_labels()
-            ham_errorgen_coefficient_labels[op_label] = list(filter(lambda lbl: lbl.errorgen_type == 'H',
-                                                                    errgen_labels))
-            other_errorgen_coefficient_labels[op_label] = list(filter(lambda lbl: lbl.errogen_type == 'S',
-                                                                      errgen_labels))
-            #Note: the *_ga_matrices are built by constructing normalized elem-error-gen-superoperators,
-            # acting on them, and using the same superoperators to project the result.  This works fine when
-            # the superops are orthogonal (H+S gens) but may not give the right gauge action matrix when they're
-            # just linearly independent (CPTP gens - the O_ij in ptic).  The resulting gauge-action matrices
-            # work to map from a basis of gauge-elem-errgens => *same* basis of gate-elem-errgens (i.e. the
-            # bases have the same normalization).  We view them as taking the superops corresponding to
-            # un-normalized Paulis to each other.
-
-        ham_elem_labels = [('H', bel) for bel in ham_basis.labels[1:]]
-        other_elem_labels = [('S', bel) for bel in other_basis.labels[1:]] if other_mode != "all" else \
-            [('S', bel1, bel2) for bel1 in other_basis.labels[1:] for bel2 in other_basis.labels[1:]]
-
-        self.ham_fogi_store = _FOGIStore(ham_ga_matrices, ham_errorgen_coefficient_labels, ham_elem_labels,
-                                         op_label_abbrevs, reduce_to_model_space, dependent_fogi_action, norm_order=2)
-        self.other_fogi_store = _FOGIStore(other_ga_matrices, other_errorgen_coefficient_labels, other_elem_labels,
-                                           op_label_abbrevs, reduce_to_model_space, dependent_fogi_action, norm_order=1)
-
-        if reparameterize:
-            self.param_interposer = self._add_reparameterization(
-                primitive_op_labels,
-                self.ham_fogi_store.fogi_directions, self.ham_fogi_store.errgen_space_op_elem_labels,
-                self.other_fogi_store.fogi_directions, self.other_fogi_store.errgen_space_op_elem_labels)
 
     def fogi_errorgen_component_labels(self, include_fogv=False, typ='normal'):
         labels = self.fogi_store.fogi_errorgen_direction_labels(typ)

@@ -81,8 +81,6 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         self.terms = {}
         self.exp_terms_cache = {}  # used for repeated calls to the exponentiate_terms function
         self.local_term_poly_coeffs = {}
-        # TODO REMOVE self.direct_terms = {}
-        # TODO REMOVE self.direct_term_poly_coeffs = {}
 
         _LinearOperator.__init__(self, rep, evotype)
         _ErrorGeneratorContainer.__init__(self, self.errorgen)
@@ -106,28 +104,6 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         list
         """
         return [self.errorgen]
-
-    # REMOVE - unnecessary
-    #def copy(self, parent=None, memo=None):
-    #    """
-    #    Copy this object.
-    #
-    #    Parameters
-    #    ----------
-    #    parent : Model, optional
-    #        The parent model to set for the copy.
-    #
-    #    Returns
-    #    -------
-    #    LinearOperator
-    #        A copy of this object.
-    #    """
-    #    # We need to override this method so that error map has its
-    #    # parent reset correctly.
-    #    if memo is not None and id(self) in memo: return memo[id(self)]
-    #    cls = self.__class__  # so that this method works for derived classes too
-    #    copyOfMe = cls(self.errorgen.copy(parent, memo))
-    #    return self._copy_gpindices(copyOfMe, parent, memo)
 
     def _update_rep(self, close=False):
         """
@@ -189,8 +165,6 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         self.terms = {}  # clear terms cache since param indices have changed now
         self.exp_terms_cache = {}
         self.local_term_poly_coeffs = {}
-        #TODO REMOVE self.direct_terms = {}
-        #TODO REMOVE self.direct_term_poly_coeffs = {}
 
     def to_dense(self, on_space='minimal'):
         """
@@ -421,41 +395,6 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         self.errorgen.from_vector(v, close, dirty_value)
         self._update_rep(close)
         self.dirty = dirty_value
-
-    #REMOVE or revive this later - it doesn't seem like something that's really needed
-    #def set_dense(self, m):
-    #    """
-    #    Set the dense-matrix value of this operation.
-    #
-    #    Attempts to modify operation parameters so that the specified raw
-    #    operation matrix becomes mx.  Will raise ValueError if this operation
-    #    is not possible.
-    #
-    #    Parameters
-    #    ----------
-    #    m : array_like or LinearOperator
-    #        An array of shape (dim, dim) or LinearOperator representing the operation action.
-    #
-    #    Returns
-    #    -------
-    #    None
-    #    """
-    #
-    #    #TODO: move this function to errorgen?
-    #    if not isinstance(self.errorgen, ExpErrorgenOp):
-    #        raise NotImplementedError(("Can only set the value of a LindbladDenseOp that "
-    #                                   "contains a single LindbladErrorgen error generator"))
-    #
-    #    tOp = ExpErrorgenOp.from_operation_matrix(
-    #        m, self.unitary_postfactor,
-    #        self.errorgen.ham_basis, self.errorgen.other_basis,
-    #        self.errorgen.param_mode, self.errorgen.nonham_mode,
-    #        True, self.errorgen.matrix_basis, self._evotype)
-    #
-    #    #Note: truncate=True to be safe
-    #    self.errorgen.from_vector(tOp.errorgen.to_vector())
-    #    self._update_rep()
-    #    self.dirty = True
 
     def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
         """

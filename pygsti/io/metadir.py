@@ -319,55 +319,6 @@ def write_meta_based_dir(root_dir, valuedict, auxfile_types=None, init_meta=None
         _check_jsonable(meta)
         _json.dump(meta, f)
 
-    #REMOVE
-    #for auxnm, typ in auxfile_types.items():
-    #    val = valuedict[auxnm]
-    #    ext = _get_auxfile_ext(typ)
-    #
-    #    if typ == 'text-circuit-lists':
-    #        for i, circuit_list in enumerate(val):
-    #            pth = root_dir / (auxnm + str(i) + ext)
-    #            _write.write_circuit_list(pth, circuit_list)
-    #
-    #    elif typ == 'protocolobj':
-    #        val.write(root_dir / (auxnm + ext))
-    #
-    #    elif typ == 'list-of-protocolobjs':
-    #        for i, obj in enumerate(val):
-    #            pth = root_dir / (auxnm + str(i) + ext)
-    #            obj.write(pth)
-    #
-    #    elif typ == 'dict-of-protocolobjs':
-    #        meta[auxnm] = list(val.keys())  # just save a list of the keys in the metadata
-    #        for k, obj in val.items():
-    #            obj_dirname = auxnm + "_" + k + ext  # keys must be strings
-    #            obj.write(root_dir / obj_dirname)
-    #
-    #    elif typ == 'dict-of-resultsobjs':
-    #        meta[auxnm] = list(val.keys())  # just save a list of the keys in the metadata
-    #        for k, obj in val.items():
-    #            obj_dirname = auxnm + "_" + k + ext  # keys must be strings
-    #            obj._write_partial(root_dir / obj_dirname)
-    #
-    #    else:
-    #        # standard path cases
-    #        pth = root_dir / (auxnm + ext)
-    #
-    #        if val is None:   # None values don't get written
-    #            pass
-    #        elif typ == 'text-circuit-list':
-    #            _write.write_circuit_list(pth, val)
-    #        elif typ == 'json':
-    #            with open(str(pth), 'w') as f:
-    #                _json.dump(val, f)
-    #        elif typ == 'pickle':
-    #            with open(str(pth), 'wb') as f:
-    #                _pickle.dump(val, f)
-    #        elif typ in ('none', 'reset'):
-    #            pass
-    #        else:
-    #            raise ValueError("Invalid aux-file type: %s" % typ)
-
 
 def _write_auxfile_member(root_dir, filenm, typ, val):
     subtypes = typ.split(':')

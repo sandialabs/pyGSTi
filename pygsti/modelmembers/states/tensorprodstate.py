@@ -47,24 +47,6 @@ class TensorProductState(_State):
         _State.__init__(self, rep, evotype)
         self.init_gpindices()  # initialize our gpindices based on sub-members
         self._update_rep()  # initializes rep data
-        #sets gpindices, so do before stuff below
-
-        #OLD REMOVE
-        # # don't init our own gpindices (prep case), since our parent
-        # # is likely to be a Model and it will init them correctly.
-        # #But do set the indices of self.factors, since they're now
-        # # considered "owned" by this product-prep-vec (different from
-        # # the "effect" case when the factors are shared).
-        # off = 0
-        # for fct in factors:
-        #     assert(isinstance(fct, _State)), "Factors must be State objects!"
-        #     if fct.gpindices is None:
-        #         off += fct.allocate_gpindices(off, None)
-        #     else:
-        #         N = fct.num_params
-        #         fct.set_gpindices(slice(off, off + N), self); off += N
-        # self.Np = sum([fct.num_params for fct in factors])
-        # assert(off == self.Np)
 
     #Note: no to_memoized_dict needed, as ModelMember version does all we need.
 
@@ -328,9 +310,6 @@ class TensorProductState(_State):
                 for vecA in self.factors[i + 2:]:
                     post = _np.kron(post, vecA.to_dense(on_space='minimal'))
                 deriv = _np.kron(deriv, post[:, None])  # add a dummy 1-dim to 'post' and do kron properly...
-
-            #REMOVE (OLD):
-            #fct_local_inds = fct.gpindices  # factor vectors hold local indices
 
             assert(fct_local_inds is not None), \
                 "Error: gpindices has not been initialized for factor %d - cannot compute derivative!" % i

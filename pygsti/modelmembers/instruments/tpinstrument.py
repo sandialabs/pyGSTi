@@ -99,17 +99,13 @@ class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
             # Create gate objects that are used to parameterize this instrument
             MT_mx = sum([v for k, v in matrix_list])  # sum-of-instrument-members matrix
             MT = _op.FullTPOp(MT_mx, evotype, state_space)
-            # REMOVE MT.set_gpindices(slice(0, MT.num_params), self)
             self.param_ops.append(MT)
 
             dim = MT.dim
-            # REMOVE off = MT.num_params
             for k, v in matrix_list[:-1]:
                 Di = _op.FullArbitraryOp(v - MT_mx, evotype, state_space)
-                #REMOVE Di.set_gpindices(slice(off, off + Di.num_params), self)
                 assert(Di.dim == dim)
                 self.param_ops.append(Di)
-                #REMOVE off += Di.num_params
 
             #Create a TPInstrumentOp for each operation matrix
             # Note: TPInstrumentOp sets it's own parent and gpindices
@@ -224,17 +220,6 @@ class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
         -------
         OrderedDict of Gates
         """
-
-        #REMOVE - a model-param referencing copy of param_ops is not needed anymore since
-        # members now contain global model indices already.
-        # #Create a "simplified" (Model-referencing) set of param gates
-        # param_simplified = []
-        # for g in self.param_ops:
-        #     comp = g.copy()
-        #     comp.set_gpindices(_mm._compose_gpindices(self.gpindices,
-        #                                               g.gpindices), self.parent)
-        #     param_simplified.append(comp)
-
         # Create "simplified" elements, which infer their parent and
         # gpindices from the set of "param-gates" they're constructed with.
         if isinstance(prefix, _Label):  # Deal with case when prefix isn't just a string

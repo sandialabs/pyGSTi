@@ -605,7 +605,6 @@ def mapfill_timedep_dterms(fwdsim, array_to_fill, dest_indices, dest_param_indic
     # so gather together:
     _mpit.gather_slices(all_slices, owners, array_to_fill, [], axes=1, comm=comm)
 
-    #REMOVE
     # DEBUG LINE USED FOR MONITORING N-QUBIT GST TESTS
     #print("DEBUG TIME: dpr_cache(Np=%d, dim=%d, cachesize=%d, treesize=%d, napplies=%d) in %gs" %
     #      (fwdsim.model.num_params, fwdsim.model.dim, cacheSize, len(layout_atom), layout_atom.get_num_applies(), _time.time()-tStart)) #DEBUG

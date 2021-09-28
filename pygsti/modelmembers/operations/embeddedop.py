@@ -122,29 +122,6 @@ class EmbeddedOp(_LinearOperator):
         """
         self.embedded_op.set_time(t)
 
-    # REMOVE - unnecessary; parent is reset correctly using base class and needless .copy() calls can break dependencies
-    #def copy(self, parent=None, memo=None):
-    #    """
-    #    Copy this object.
-    #
-    #    Parameters
-    #    ----------
-    #    parent : Model, optional
-    #        The parent model to set for the copy.
-    #
-    #    Returns
-    #    -------
-    #    LinearOperator
-    #        A copy of this object.
-    #    """
-    #    # We need to override this method so that embedded operation has its
-    #    # parent reset correctly.
-    #    if memo is not None and id(self) in memo: return memo[id(self)]
-    #    cls = self.__class__  # so that this method works for derived classes too
-    #    copyOfMe = cls(self.state_space, self.target_labels,
-    #                   self.embedded_op.copy(parent, memo))
-    #    return self._copy_gpindices(copyOfMe, parent, memo)
-
     def _iter_matrix_elements_precalc(self, on_space):
         divisor = 1; divisors = []
         for l in self.target_labels:
@@ -603,29 +580,6 @@ class EmbeddedOp(_LinearOperator):
         #*** Note: this function is nearly identical to EmbeddedErrorgen.coefficients() ***
         return self.embedded_op.errorgen_coefficients(return_basis, logscale_nonham)
 
-        #REMOVE: no need to embed/unembed labels anymore - now labels are *global*
-        #embedded_coeffs = self.embedded_op.errorgen_coefficients(return_basis, logscale_nonham)
-        #embedded_Ltermdict = _collections.OrderedDict()
-        #
-        #if return_basis:
-        #    # embed basis
-        #    Ltermdict, basis = embedded_coeffs
-        #    embedded_basis = _EmbeddedBasis(basis, self.state_space, self.target_labels)
-        #    bel_map = {lbl: embedded_lbl for lbl, embedded_lbl in zip(basis.labels, embedded_basis.labels)}
-        #
-        #    #go through and embed Ltermdict labels
-        #    for k, val in Ltermdict.items():
-        #        embedded_key = (k[0],) + tuple([bel_map[x] for x in k[1:]])
-        #        embedded_Ltermdict[embedded_key] = val
-        #    return embedded_Ltermdict, embedded_basis
-        #else:
-        #    #go through and embed Ltermdict labels
-        #    Ltermdict = embedded_coeffs
-        #    for k, val in Ltermdict.items():
-        #        embedded_key = (k[0],) + tuple([_EmbeddedBasis.embed_label(x, self.target_labels) for x in k[1:]])
-        #        embedded_Ltermdict[embedded_key] = val
-        #    return embedded_Ltermdict
-
     def errorgen_coefficients_array(self):
         """
         The weighted coefficients of this operation's error generator in terms of "standard" error generators.
@@ -735,15 +689,6 @@ class EmbeddedOp(_LinearOperator):
         None
         """
         self.embedded_op.set_errorgen_coefficients(lindblad_term_dict, action, logscale_nonham, truncate)
-
-        #REMOVE: no need to embed/unembed labels anymore - now labels are *global*
-        ##go through and um-embed Ltermdict labels
-        #unembedded_Ltermdict = _collections.OrderedDict()
-        #for k, val in lindblad_term_dict.items():
-        #    unembedded_key = (k[0],) + tuple([_EmbeddedBasis.unembed_label(x, self.target_labels) for x in k[1:]])
-        #    unembedded_Ltermdict[unembedded_key] = val
-        #self.embedded_op.set_errorgen_coefficients(unembedded_Ltermdict, action, logscale_nonham, truncate)
-
         if self._rep_type == 'dense': self._update_denserep()
         self.dirty = True
 

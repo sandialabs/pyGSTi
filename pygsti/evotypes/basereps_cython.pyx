@@ -51,7 +51,6 @@ cdef class PolynomialRep:
     def __dealloc__(self):
         del self.c_polynomial
 
-    #TODO: REMOVE this function when things are working again
     def reinit(self, int_coeff_dict):
         #Very similar to init, but same max_num_vars
 
