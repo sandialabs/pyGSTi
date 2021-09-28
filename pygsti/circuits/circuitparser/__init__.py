@@ -50,7 +50,7 @@ message.
 
 try:
     # Import cython implementation if it's been built...
-    from .fastcircuitparser import *
+    from .fastcircuitparser import parse_circuit, parse_label
 except ImportError:
     # ... If not, fall back to the python implementation, with a warning.
     import os as _os
@@ -59,9 +59,8 @@ except ImportError:
     if 'PYGSTI_NO_CYTHON_WARNING' not in _os.environ:
         _warnings.warn(warn_msg)
 
-    from .slowcircuitparser import *
+    from .slowcircuitparser import parse_circuit, parse_label
 
-from ply import lex, yacc
 
 from pygsti.baseobjs import label as _lbl
 
@@ -201,6 +200,7 @@ class CircuitParser(object):
 
     def __init__(self, lexer_object=None, lookup={}):
         if self.mode == "ply":
+            from ply import lex, yacc  # these aren't needed for "simple" mode
             self._lookup = lookup
             self._lexer = lex.lex(object=lexer_object if lexer_object else CircuitLexer())
             self._parser = yacc.yacc(module=self, start="ppstring", debug=False,
