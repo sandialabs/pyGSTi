@@ -64,10 +64,12 @@ class CHPForwardSimulator(_WeakForwardSimulator):
         prep_label, op_labels, povm_label = self.model.split_circuit(circuit, erroron=('prep',))
         # Try to get unmarginalized POVM
         if povm_label is None:
-            default_povm_label = self.model._default_primitive_povm_layer_lbl(None)
-            povm_label = _Label(default_povm_label.name, state_space_labels=circuit.line_labels)
+            #OLD way (perhaps to avoid constructing a MarginalizedPOVM on many qubits?):
+            #default_povm_label = self.model._default_primitive_povm_layer_lbl(None)
+            #povm_label = _Label(default_povm_label.name, state_space_labels=circuit.line_labels)
+            povm_label = self.model._default_primitive_povm_layer_lbl(circuit.line_labels)
         assert (povm_label is not None), \
-            "Unable to get unmarginalized default POVM for %s" % str(circuit)
+            "Unable to get default POVM for %s" % str(circuit)
 
         # Use temporary file as per https://stackoverflow.com/a/8577225
         fd, path = _tf.mkstemp()

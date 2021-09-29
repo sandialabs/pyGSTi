@@ -4048,8 +4048,7 @@ class Circuit(object):
 
         The order of the outcome strings (e.g., '0100') is w.r.t. to the
         ordering of the qubits in the circuit. That is, the ith element of the
-        outcome string corresponds to the qubit with label
-        `self.qubit_labels[i]`.
+        outcome string corresponds to the qubit with label `self.line_labels[i]`.
 
         Parameters
         ----------
@@ -4057,10 +4056,10 @@ class Circuit(object):
             A description of the gate and SPAM operations corresponding to the
             labels stored in this Circuit. If this model is over more qubits
             than the circuit, the output will be the probabilities for the qubits
-            in the circuit marginalized over the other qubits. But, the simulation
-            is over the full set of qubits in the model, and so the time taken for
-            the simulation scales with the number of qubits in the model. For
-            models whereby "spectator" qubits do not affect the qubits in this
+            in the circuit marginalized, if possible over the other qubits. But, the
+            simulation is over the full set of qubits in the model, and so the time
+            taken for the simulation scales with the number of qubits in the model.
+            For models where "spectator" qubits do not affect the qubits in this
             circuit (such as with perfect gates), more efficient simulations will
             be obtained by first creating a model only over the qubits in this
             circuit.
@@ -4079,41 +4078,18 @@ class Circuit(object):
         """
         # These results is a dict with strings of outcomes (normally bits) ordered according to the
         # state space ordering in the model.
+
+        # A dict with outcomes (normally bits) ordered according to the POVM, which is ordered
+        # according to the circuit's line labels when a default POVM label is generated (because
+        # the default POVM will have the line labels of the circuit, and this will prompt generation
+        # of a MarginalizedPOVM when possible, or an error when not).
         results = model.probabilities(self)
 
-        # Mapping from the state-space labels of the model to their indices.
-        # (e.g. if model.state_space is [('Qa','Qb')] then sslInds['Qb'] = 1
-        # (and 'Qb' may be a circuit line label)
-        #sslInds = {sslbl: i for i, sslbl in enumerate(model.state_space.tensor_product_block_labels(0))}
-        # Note: we ignore all but the first tensor product block of the state space.
-
-        assert(model.state_space.num_tensor_product_blocks == 1), "Only supports single-TPB state spaces currently"
-        ssls = model.state_space.tensor_product_block_labels(0)
-        reduced_ssls = [ssl for ssl in ssls if ssl in self.line_labels]
-        ll_to_sslInds = {ll: reduced_ssls.index(ll) for ll in self.line_labels}
-
-        def process_outcome(outcome):
-            """Relabels an outcome tuple and drops state space labels not in the circuit."""
-            processed_outcome = []
-            for lbl in outcome:  # lbl is a string - an instrument element or POVM effect label, e.g. '010'
-                relbl = ''.join([lbl[ll_to_sslInds[ll]] for ll in self.line_labels])
-                processed_outcome.append(relbl)
-                #Note: above code *assumes* that each state-space label (and so circuit line label)
-                # corresponds to a *single* letter of the instrument/POVM label `lbl`.  This is almost
-                # always the case, as state space labels are usually qubits and so effect labels are
-                # composed of '0's and '1's.
-            return tuple(processed_outcome)
-
-        processed_results = _ld.OutcomeLabelDict()
-        for outcome, pr in results.items():
-            if return_all_outcomes or pr > 1e-12:  # then process & accumulate pr
-                p_outcome = process_outcome(outcome)  # rearranges and drops parts of `outcome`
-                if p_outcome in processed_results:  # (may occur b/c processing can map many-to-one)
-                    processed_results[p_outcome] += pr  # adding marginalizes the results.
-                else:
-                    processed_results[p_outcome] = pr
-
-        return processed_results
+        # cull out zero probs when return_all_outcomes is False
+        if return_all_outcomes is False:
+            return _ld.OutcomeLabelDict([(outcome, pr) for outcome, pr in results.items() if abs(pr) > 1e-12])
+        else:
+            return results
 
     def done_editing(self):
         """

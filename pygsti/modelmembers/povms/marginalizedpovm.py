@@ -70,10 +70,9 @@ class MarginalizedPOVM(_POVM):
         #now all_sslbls is a tuple of labels, like sslbls_after_marginalizing
         self.sslbls_to_marginalize = all_sslbls
         self.sslbls_after_marginalizing = sslbls_after_marginalizing
-        indices_to_keep = set([list(all_sslbls).index(l) for l in sslbls_after_marginalizing])
-        indices_to_remove = set(range(len(all_sslbls))) - indices_to_keep
-        self.indices_to_marginalize = sorted(indices_to_remove, reverse=True)
+        self.indices_to_keep = tuple([list(all_sslbls).index(l) for l in sslbls_after_marginalizing])
 
+        #Note: we could add special, more efficient, logic when self.povm_to_marginalize is a ComputationalBasisPOVM
         elements_to_sum = {}
         for k in self.povm_to_marginalize.keys():
             mk = self.marginalize_effect_label(k)
@@ -135,9 +134,7 @@ class MarginalizedPOVM(_POVM):
             Effect label (typically of the parent POVM) to marginalize.
         """
         assert(len(elbl) == len(self.sslbls_to_marginalize))
-        for i in self.indices_to_marginalize:
-            elbl = elbl[:i] + elbl[i + 1:]  # remove i-th character
-        return elbl
+        return ''.join([elbl[i] for i in self.indices_to_keep])
 
     def __contains__(self, key):
         """ For lazy creation of effect vectors """
