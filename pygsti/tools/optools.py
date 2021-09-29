@@ -2320,26 +2320,31 @@ def lindblad_terms_to_projections(lindblad_term_dict, basis, other_mode="all"):
         bels = termLbl.basis_element_labels
         if termType == "H":  # Hamiltonian
             assert(len(bels) == 1), "Hamiltonian term labels should have form ('H',<basis element label>)"
-            if bels[0] not in hamBasisLabels:
-                hamBasisLabels.append(bels[0])
+            bel = basis.labels[bels[0]] if isinstance(bels[0], (int, _np.int64)) else bels[0]  # int -> actual lbl
+            if bel not in hamBasisLabels:
+                hamBasisLabels.append(bel)
 
         elif termType == "S":  # Stochastic
             if other_mode in ("diagonal", "diag_affine"):
                 assert(len(bels) == 1), "Stochastic term labels should have form ('S',<basis element label>)"
-                if bels[0] not in otherBasisLabels:
-                    otherBasisLabels.append(bels[0])
+                bel = basis.labels[bels[0]] if isinstance(bels[0], (int, _np.int64)) else bels[0]
+                if bel not in otherBasisLabels:
+                    otherBasisLabels.append(bel)
             else:
                 assert(len(bels) == 2), "Stochastic term labels should have form ('S',<bel1>, <bel2>)"
-                if bels[0] not in otherBasisLabels:
-                    otherBasisLabels.append(bels[0])
-                if bels[1] not in otherBasisLabels:
-                    otherBasisLabels.append(bels[1])
+                bel0 = basis.labels[bels[0]] if isinstance(bels[0], (int, _np.int64)) else bels[0]
+                bel1 = basis.labels[bels[1]] if isinstance(bels[1], (int, _np.int64)) else bels[1]
+                if bel0 not in otherBasisLabels:
+                    otherBasisLabels.append(bel0)
+                if bel1 not in otherBasisLabels:
+                    otherBasisLabels.append(bel1)
 
         elif termType == "A":  # Affine
             assert(other_mode == "diag_affine"), "Affine labels are only allowed in an affine mode"
             assert(len(bels) == 1), "Affine term labels should have form ('A',<basis element label>)"
-            if bels[0] not in otherBasisLabels:
-                otherBasisLabels.append(bels[0])
+            bel = basis.labels[bels[0]] if isinstance(bels[0], (int, _np.int64)) else bels[0]
+            if bel not in otherBasisLabels:
+                otherBasisLabels.append(bel)
 
     #Construct bases
     # Note: the lists of basis matrices shouldn't contain the identity, since
@@ -2393,7 +2398,8 @@ def lindblad_terms_to_projections(lindblad_term_dict, basis, other_mode="all"):
     for termLbl, coeff in lindblad_term_dict.items():
         termLbl = _LocalElementaryErrorgenLabel.cast(termLbl)  # e.g. "HXX" => ('H','XX')
         termType = termLbl.errorgen_type
-        bels = termLbl.basis_element_labels
+        bels = [(basis.labels[bel] if isinstance(bel, (int, _np.int64)) else bel)  # convert int -> actual lbl since
+                for bel in termLbl.basis_element_labels]  # integer "basis el labels" are allowed in lindblad_term_dict
         if termType == "H":  # Hamiltonian
             k = hamBasisIndices[bels[0]]  # index of coefficient in array
             hamProjs[k] = coeff
