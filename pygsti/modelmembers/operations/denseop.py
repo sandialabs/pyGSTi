@@ -351,6 +351,11 @@ class DenseOperator(DenseOperatorInterface, _LinearOperator):
         dims = tuple(self.to_dense().shape)
         return "dense %d x %d superop matrix" % dims
 
+    def _is_similar(self, other, rtol, atol):
+        """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
+            the same local structure, i.e., not considering parameter values or submembers """
+        return self._ptr.shape == other._ptr.shape  # similar (up to params) if have same data shape
+
 
 class DenseUnitaryOperator(DenseOperatorInterface, _LinearOperator):
     """
@@ -563,3 +568,8 @@ class DenseUnitaryOperator(DenseOperatorInterface, _LinearOperator):
         """ Summarizes the contents of this object in a single line.  Does not summarize submembers. """
         dims = tuple(self.to_dense().shape)
         return "dense %d x %d op matrix" % dims
+
+    def _is_similar(self, other, rtol, atol):
+        """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
+            the same local structure, i.e., not considering parameter values or submembers """
+        return self._ptr.shape == other._ptr.shape  # similar (up to params) if have same data shape

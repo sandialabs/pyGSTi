@@ -334,6 +334,11 @@ class EigenvalueParamDenseOp(_DenseOperator):
         return cls(matrix, mm_dict['include_off_diags_in_degen_2_blocks'],
                    mm_dict['tp_constrained_and_unital'], mm_dict['evotype'], state_space)
 
+    def _is_similar(self, other, rtol, atol):
+        """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
+            the same local structure, i.e., not considering parameter values or submembers """
+        return all([self.options[k] == other.options[k] for k in self.options])
+
     @property
     def num_params(self):
         """

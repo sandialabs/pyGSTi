@@ -1863,6 +1863,14 @@ class LindbladErrorgen(_LinearOperator):
         return cls(lindblad_term_dict, parameterization, lindblad_basis,
                    mx_basis, truncate, mm_dict['evotype'], state_space)
 
+    def _is_similar(self, other, rtol, atol):
+        """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
+            the same local structure, i.e., not considering parameter values or submembers """
+        return ((self.parameterization == other.parameterization)
+                and (self.lindblad_basis == other.lindblad_basis)
+                and (self.matrix_basis == other.matrix_basis)
+                and (set(self.coefficients().keys()) == set(other.coefficients().keys())))
+
     def __str__(self):
         s = "Lindblad error generator with dim = %d, num params = %d\n" % \
             (self.dim, self.num_params)
@@ -2000,6 +2008,13 @@ class LindbladParameterization(_NicelySerializable):
         self.ham_params_allowed = ham_params_allowed
         self.nonham_params_allowed = nonham_params_allowed
         self.abbrev = abbrev
+
+    def __eq__(self, other):
+        if not isinstance(other, LindbladParameterization): return False
+        return (self.nonham_mode == other.nonham_mode
+                and self.param_mode == other.param_mode
+                and self.ham_params_allowed == other.ham_params_allowed
+                and self.nonham_params_allowed == other.nonham_params_allowed)
 
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()

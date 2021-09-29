@@ -198,6 +198,11 @@ class StaticStandardOp(_LinearOperator, _NoErrorGeneratorInterface):
         state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
         return cls(mm_dict['name'], basis, mm_dict['evotype'], state_space)
 
+    def _is_similar(self, other, rtol, atol):
+        """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
+            the same local structure, i.e., not considering parameter values or submembers """
+        return self.name == other.name  # also compare self._rep.basis (?)
+
     def __str__(self):
         s = "%s with name %s and evotype %s\n" % (self.__class__.__name__, self.name, self._evotype)
         #TODO: move this to __str__ methods of reps??

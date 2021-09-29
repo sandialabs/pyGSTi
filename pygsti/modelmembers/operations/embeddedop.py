@@ -45,7 +45,7 @@ class EmbeddedOp(_LinearOperator):
     """
 
     def __init__(self, state_space, target_labels, operation_to_embed):
-        self.target_labels = target_labels
+        self.target_labels = tuple(target_labels) if (target_labels is not None) else None
         self.embedded_op = operation_to_embed
         self._iter_elements_cache = {"Hilbert": None, "HilbertSchmidt": None}  # speeds up _iter_matrix_elements
 
@@ -819,6 +819,11 @@ class EmbeddedOp(_LinearOperator):
     def _from_memoized_dict(cls, mm_dict, serial_memo):
         state_space = _StateSpace.from_nice_serialization(mm_dict['state_space'])
         return cls(state_space, mm_dict['target_labels'], serial_memo[mm_dict['submembers'][0]])
+
+    def _is_similar(self, other, rtol, atol):
+        """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
+            the same local structure, i.e., not considering parameter values or submembers """
+        return (self.target_labels == other.target_labels) and (self.state_space == other.state_space)
 
     def _oneline_contents(self):
         """ Summarizes the contents of this object in a single line.  Does not summarize submembers. """

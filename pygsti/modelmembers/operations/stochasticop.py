@@ -315,6 +315,11 @@ class StochasticNoiseOp(_LinearOperator):
         return cls(state_space, basis, mm_dict['evotype'], mm_dict['rates'], seed_or_state=None)
         # Note: we currently don't serialize random seed/state - that gets reset w/serialization
 
+    def _is_similar(self, other, rtol, atol):
+        """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
+            the same local structure, i.e., not considering parameter values or submembers """
+        return (self.basis == other.basis and self.state_space == other.state_space)
+
     def __str__(self):
         s = "Stochastic noise operation map with state space = %s, num params = %d\n" % \
             (self.state_space, self.num_params)

@@ -42,11 +42,12 @@ class ModelMemberGraph(object):
             mm_node_serialized_id = int(mm_node_serialized_id_str)  # convert string keys back to integers
             mm_class = ModelMember._state_class(mm_node_dict)  # checks this is a ModelMember-derived class
             mm_serial[mm_node_serialized_id] = mm_class.from_memoized_dict(mm_node_dict, mm_serial)
-            if 'memberdict_type' in mm_node_dict and 'memberdict_label' in mm_node_dict:
-                mm_type, lbl = mm_node_dict['memberdict_type'], _parse_label(mm_node_dict['memberdict_label'])
-                if mm_type not in mm_nodes:
-                    mm_nodes[mm_type] = {}
-                mm_nodes[mm_type][lbl] = mm_serial[mm_node_serialized_id]
+            if 'memberdict_types' in mm_node_dict and 'memberdict_labels' in mm_node_dict:
+                for mm_type, lbl_str in zip(mm_node_dict['memberdict_types'], mm_node_dict['memberdict_labels']):
+                    lbl = _parse_label(lbl_str)
+                    if mm_type not in mm_nodes:
+                        mm_nodes[mm_type] = {}
+                    mm_nodes[mm_type][lbl] = mm_serial[mm_node_serialized_id]
 
         return mm_nodes
 
@@ -78,22 +79,24 @@ class ModelMemberGraph(object):
                 else:
                     self.mm_nodes[mm_type][lbl] = MMGNode(mm, self.mm_memo)
 
-    def is_similar(self, other):
+    def is_similar(self, other, rtol=1e-5, atol=1e-8):
         """Comparator between two ModelMemberGraph objects for structure only.
 
         Parameters
         ----------
         other: ModelMemberGraph
             Dependency graph to compare to
+        rtol, atol: float
+            Relative and absolute tolerances used to check if floating point values are "equal".
 
         Returns
         -------
         bool
             True if both ModelMemberGraphs have identical modelmember structure/parameterization
         """
-        return self._dfs_comparison(other, False)
+        return self._dfs_comparison(other, False, rtol, atol)
 
-    def is_equivalent(self, other):
+    def is_equivalent(self, other, rtol=1e-5, atol=1e-8):
         """Comparator between two ModelMemberGraph objects for structure and values.
 
         Parameters
@@ -101,14 +104,17 @@ class ModelMemberGraph(object):
         other: ModelMemberGraph
             Dependency graph to compare to
 
+        rtol, atol: float
+            Relative and absolute tolerances used to check if parameter values are "equal".
+
         Returns
         -------
         bool
             True if similar_to AND parameter vectors match
         """
-        return self._dfs_comparison(other, True)
+        return self._dfs_comparison(other, True, rtol, atol)
 
-    def _dfs_comparison(self, other, check_params):
+    def _dfs_comparison(self, other, check_params, rtol=1e-5, atol=1e-8):
         """Helper function for comparators implementing DFS traversal.
 
         Parameters
@@ -117,6 +123,8 @@ class ModelMemberGraph(object):
             Dependency graph to compare to
         check_params: bool
             Whether to check the parameter values (True) or not
+        rtol, atol: float
+            Relative and absolute tolerances used to check if numerical values are "equal".
 
         Returns
         -------
@@ -127,9 +135,9 @@ class ModelMemberGraph(object):
         # Recursive check function
         def dfs_compare(node1, node2):
             if check_params:
-                if not node1.mm.is_equivalent(node2.mm): return False
+                if not node1.mm.is_equivalent(node2.mm, rtol, atol): return False
             else:
-                if not node1.mm.is_similar(node2.mm): return False
+                if not node1.mm.is_similar(node2.mm, rtol, atol): return False
 
             # Check children
             if len(node1.children) != len(node2.children): return False
@@ -175,9 +183,13 @@ class ModelMemberGraph(object):
         # Tag extra metadata for root nodes
         for mm_type, root_nodes in self.mm_nodes.items():
             for lbl, mm_node in root_nodes.items():
-                sdict[str(mm_node.serialize_id)]['memberdict_type'] = mm_type
-                sdict[str(mm_node.serialize_id)]['memberdict_label'] = str(lbl)
-                # serialized-dictionary keys must be *strings*
+                sdict_el = sdict[str(mm_node.serialize_id)]  # serialized-dictionary keys must be *strings*
+                if 'memberdict_types' not in sdict_el:
+                    sdict_el['memberdict_types'] = [mm_type]  # lists, so same object can correspond to
+                    sdict_el['memberdict_labels'] = [str(lbl)]  # multiple top-level items
+                else:
+                    sdict_el['memberdict_types'].append(mm_type)
+                    sdict_el['memberdict_labels'].append(str(lbl))
 
         return sdict
 

@@ -114,6 +114,12 @@ class MarginalizedPOVM(_POVM):
         return cls(serial_memo[mm_dict['submembrers'][0]], mm_dict['statespace_labels_to_marginalize'],
                    mm_dict['statespace_labels_after_marginalizing'])
 
+    def _is_similar(self, other, rtol, atol):
+        """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
+            the same local structure, i.e., not considering parameter values or submembers """
+        return (self.sslbls_to_marginalize == other.sslbls_to_marginalize
+                and self.sslbls_after_marginalizing == other.sslbls_after_marginalizing)
+
     def submembers(self):
         """
         Get the ModelMember-derived objects contained in this one.

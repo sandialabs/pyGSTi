@@ -120,6 +120,11 @@ class TPInstrumentOp(_DenseOperator):
 
         return cls(param_ops, index)
 
+    def _is_similar(self, other, rtol, atol):
+        """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
+            the same local structure, i.e., not considering parameter values or submembers """
+        return (self.index == other.index and self.num_instrument_elements == other.num_instrument_elements)
+
     def _construct_matrix(self):
         """
         Mi = Di + MT for i = 1...(n-1)

@@ -1613,6 +1613,62 @@ class OpModel(Model):
         mmg = self.create_modelmember_graph()
         mmg.print_graph()
 
+    def is_similar(self, other_model, rtol=1e-5, atol=1e-8):
+        """Whether or not two Models have the same structure.
+
+        If `True`, then the two models are the same except for, perhaps, being
+        at different parameter-space points (i.e. having different parameter vectors).
+        Similar models, A and B, can be made equivalent (see :method:`is_equivalent`) by
+        calling `modelA.from_vector(modelB.to_vector())`.
+
+        Parameters
+        ----------
+        other_model: Model
+            The model to compare against
+
+        rtol : float, optional
+            Relative tolerance used to check if floating point values are "equal", as passed to
+            `numpy.allclose`.
+
+        atol: float, optional
+            Absolute tolerance used to check if floating point values are "equal", as passed to
+            `numpy.allclose`.
+
+        Returns
+        -------
+        bool
+        """
+        mmg = self.create_modelmember_graph()
+        other_mmg = other_model.create_modelmember_graph()
+        return mmg.is_similar(other_mmg, rtol, atol)
+
+    def is_equivalent(self, other_model, rtol=1e-5, atol=1e-8):
+        """Whether or not two Models are equivalent to each other.
+
+        If `True`, then the two models have the same structure *and* the same
+        parameters, so they are in all ways alike and will compute the same probabilities.
+
+        Parameters
+        ----------
+        other_model: Model
+            The model to compare against
+
+        rtol : float, optional
+            Relative tolerance used to check if floating point (including parameter) values
+            are "equal", as passed to `numpy.allclose`.
+
+        atol: float, optional
+            Absolute tolerance used to check if floating point (including parameter) values
+            are "equal", as passed to `numpy.allclose`.
+
+        Returns
+        -------
+        bool
+        """
+        mmg = self.create_modelmember_graph()
+        other_mmg = other_model.create_modelmember_graph()
+        return mmg.is_equivalent(other_mmg, rtol, atol)
+
 
 def _default_param_bounds(num_params):
     """Construct an array to hold parameter bounds that starts with no bounds (all bounds +-inf) """

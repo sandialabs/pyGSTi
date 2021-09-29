@@ -774,8 +774,14 @@ class ModelMember(ModelChild, _NicelySerializable):
             memo[id(self.parent)] = None  # so deepcopy uses None instead of copying parent
         return self._copy_gpindices(_copy.deepcopy(self, memo), parent, memo)
 
-    def is_similar(self, other):
-        """Comparator returning whether two ModelMembers are the same type
+    def _is_similar(self, other, rtol, atol):
+        """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
+            the same local structure, i.e., not considering parameter values or submembers """
+        return True  # default is to have no additional checks for similarity
+
+    def is_similar(self, other, rtol=1e-5, atol=1e-8):
+        """
+        Comparator returning whether two ModelMembers are the same type
         and parameterization.
 
         ModelMembers with internal parameterization information (e.g.
@@ -785,13 +791,19 @@ class ModelMember(ModelChild, _NicelySerializable):
         ---------
         other: ModelMember
             ModelMember to compare to
+        rtol: float
+            Relative tolerance for floating poing comparisons (passed to numpy.isclose)
+        atol: float
+            Absolute tolerance for floating point comparisons (passed to numpy.isclose)
 
         Returns
         -------
         bool
-            True if type/parameterization matches
+            True if structure (all but parameter *values*) matches
         """
         if type(self) != type(other): return False
+        #if str(self.evotype) != str(other.evotype): return False  # allow models of different evotypes to be similar
+        if not self._is_similar(other, rtol, atol): return False
 
         # Recursive check on submembers
         if len(self.submembers()) != len(other.submembers()): return False
@@ -801,7 +813,8 @@ class ModelMember(ModelChild, _NicelySerializable):
         return True
 
     def is_equivalent(self, other, rtol=1e-5, atol=1e-8):
-        """Comparator returning whether two ModelMembers are equivalent.
+        """
+        Comparator returning whether two ModelMembers are equivalent.
 
         This uses is_similar for type checking and NumPy allclose for parameter
         checking, so is unlikely to be needed to overload.
@@ -814,14 +827,14 @@ class ModelMember(ModelChild, _NicelySerializable):
         other: ModelMember
             ModelMember to compare to
         rtol: float
-            Relative tolerance for parameter vector comparison passed to NumPy
+            Relative tolerance for floating point comparisons (passed to numpy.isclose)
         atol: float
-            Absolute tolerance for parameter vector comparison passed to NumPy
+            Absolute tolerance for floating point comparisons (passed to numpy.isclose)
 
         Returns
         -------
         bool
-            True if type/parameterization AND parameter vectors match
+            True if structure AND parameter vectors match
         """
         if not self.is_similar(other): return False
 

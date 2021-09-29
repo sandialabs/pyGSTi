@@ -142,6 +142,11 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
                    for lbl, subm_serial_id in zip(mm_dict['member_labels'], mm_dict['submembers'])]
         return cls(members, mm_dict['evotype'], state_space)
 
+    def _is_similar(self, other, rtol, atol):
+        """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
+            the same local structure, i.e., not considering parameter values or submembers """
+        return list(self.keys()) == list(other.keys())
+
     def __setitem__(self, key, value):
         if self._readonly: raise ValueError("Cannot alter Instrument elements")
         else: return _collections.OrderedDict.__setitem__(self, key, value)

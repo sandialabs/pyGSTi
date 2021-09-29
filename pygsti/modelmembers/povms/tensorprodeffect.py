@@ -97,6 +97,12 @@ class TensorProductPOVMEffect(_POVMEffect):
         factors = [serial_memo[i] for i in mm_dict['submembers']]
         return cls(factors, mm_dict['subpovm_effect_labels'], state_space)
 
+    def _is_similar(self, other, rtol, atol):
+        """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
+            the same local structure, i.e., not considering parameter values or submembers """
+        return (self.state_space == other.state_space and
+                _np.array_equal(self.effectLbls, other.effectLbls))
+
     @property
     def parameter_labels(self):
         """

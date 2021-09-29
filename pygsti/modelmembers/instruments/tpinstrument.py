@@ -180,6 +180,12 @@ class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
         ret._readonly = True
         return ret
 
+    def _is_similar(self, other, rtol, atol):
+        """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
+            the same local structure, i.e., not considering parameter values or submembers """
+        # Note: same as for Instrument (in instrument.py)
+        return list(self.keys()) == list(other.keys())
+
     def __setitem__(self, key, value):
         if self._readonly: raise ValueError("Cannot alter Instrument elements")
         else: return _collections.OrderedDict.__setitem__(self, key, value)

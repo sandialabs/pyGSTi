@@ -238,6 +238,11 @@ class DenseState(DenseStateInterface, _State):
         state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
         return cls(vec, mm_dict['evotype'], state_space)
 
+    def _is_similar(self, other, rtol, atol):
+        """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
+            the same local structure, i.e., not considering parameter values or submembers """
+        return self._ptr.shape == other._ptr.shape  # similar (up to params) if have same data shape
+
 
 class DensePureState(DenseStateInterface, _State):
     """
@@ -334,3 +339,9 @@ class DensePureState(DenseStateInterface, _State):
         state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
         basis = _Basis.from_nice_serialization(mm_dict['basis'])
         return cls(vec, basis, mm_dict['evotype'], state_space)
+
+    def _is_similar(self, other, rtol, atol):
+        """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
+            the same local structure, i.e., not considering parameter values or submembers """
+        return self._ptr.shape == other._ptr.shape  # similar (up to params) if have same data shape
+
