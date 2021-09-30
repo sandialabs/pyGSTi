@@ -253,6 +253,29 @@ class QubitGraph(_NicelySerializable):
         self._distance_matrix = None
         self._predecessors = None
 
+    def map_qubit_labels(self, mapper):
+        """
+        Creates a new QubitGraph whose qubit (node) labels are updated according to the mapping function `mapper`.
+
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing self.node_names values
+            and whose value are the new labels, or a function which takes a
+            single (existing qubit-label) argument and returns a new qubit label.
+
+        Returns
+        -------
+        QubitProcessorSpec
+        """
+        def mapper_func(line_label): return mapper[line_label] \
+            if isinstance(mapper, dict) else mapper(line_label)
+
+        mapped_qubit_labels = tuple(map(mapper_func, self.node_names))
+        return QubitGraph(mapped_qubit_labels,
+                          initial_connectivity=self._connectivity,
+                          directed=self.directed, direction_names=self.directions)
+
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
         state.update({'node_names': list(self._nodeinds.keys()),

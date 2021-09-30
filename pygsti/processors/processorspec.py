@@ -135,6 +135,10 @@ class QubitProcessorSpec(ProcessorSpec):
                     except AttributeError:
                         raise ValueError("Continuously parameterized gates must have a `shape` attribute!")
                 self.gate_unitaries[gname] = nonstd_gate_unitaries[gname]
+                if 'idle' in gname and (availability is None or gname not in availability):
+                    # apply default availability of [None] rather than all-edges to idle gates
+                    availability = {} if availability is None else availability.copy()  # get a copy of the availability
+                    availability[gname] = [None]  # and update availability for later processing
             elif gname in std_gate_unitaries:
                 self.gate_unitaries[gname] = std_gate_unitaries[gname]
             elif 'idle' in gname:  # interpret gname as an idle gate on the given number of qubits (all by default)
@@ -154,7 +158,7 @@ class QubitProcessorSpec(ProcessorSpec):
                 raise ValueError(
                     str(gname) + " is not a valid 'standard' gate name, it must be given in `nonstd_gate_unitaries`")
 
-        # Set self.qubit_graph (can be None)
+        # Set self.qubit_graph
         if geometry is None:
             if qubit_labels is None:
                 qubit_labels = tuple(range(num_qubits))
@@ -657,7 +661,7 @@ class QubitProcessorSpec(ProcessorSpec):
 
         return _qgraph.QubitGraph(qubit_labels, twoQ_connectivity)
 
-    def subset(self, gate_names_to_include):
+    def subset(self, gate_names_to_include='all', qubit_labels_to_keep='all'):
         """
         Construct a smaller processor specification by keeping only a select set of gates from this processor spec.
 
@@ -670,11 +674,67 @@ class QubitProcessorSpec(ProcessorSpec):
         -------
         QubitProcessorSpec
         """
+        if gate_names_to_include == 'all': gate_names_to_include = self.gate_names
+        if qubit_labels_to_keep == 'all': qubit_labels_to_keep = self.qubit_labels
+
         gate_names = [gn for gn in gate_names_to_include if gn in self.gate_names]
         gate_unitaries = {gn: self.gate_unitaries[gn] for gn in gate_names}
-        availability = {gn: self.availability[gn] for gn in gate_names}
-        return QubitProcessorSpec(self.num_qubits, gate_names, gate_unitaries, availability,
-                                  self.qubit_graph, self.qubit_labels)
+        qubit_labels = [ql for ql in qubit_labels_to_keep if ql in self.qubit_labels]
+        if len(qubit_labels) != len(qubit_labels_to_keep):
+            raise ValueError("Some of specified qubit_labels_to_keep (%s) aren't in this procesor spec (%s)!"
+                             % (str(qubit_labels_to_keep), str(self.qubit_labels)))
+
+        def keep_avail_tuple(tup):
+            if tup is None: return True  # always keep `None` availability elements
+            return set(tup).issubset(qubit_labels)
+
+        availability = {}
+        for gn in gate_names:
+            if isinstance(self.availability[gn], (list, tuple)):
+                availability[gn] = tuple(filter(keep_avail_tuple, self.availability[gn]))
+            else:
+                availability[gn] = self.availability[gn]
+
+        qubit_graph = self.qubit_graph.subgraph(qubit_labels, reset_nodes=False)
+
+        return QubitProcessorSpec(len(qubit_labels), gate_names, gate_unitaries, availability,
+                                  qubit_graph, qubit_labels)
+
+    def map_qubit_labels(self, mapper):
+        """
+        Creates a new QubitProcessorSpec whose qubit labels are updated according to the mapping function `mapper`.
+
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing self.qubit_labels values
+            and whose value are the new labels, or a function which takes a
+            single (existing qubit-label) argument and returns a new qubit label.
+
+        Returns
+        -------
+        QubitProcessorSpec
+        """
+        def mapper_func(line_label): return mapper[line_label] \
+            if isinstance(mapper, dict) else mapper(line_label)
+
+        mapped_qubit_labels = tuple(map(mapper_func, self.qubit_labels))
+
+        availability = {}
+        for gn in self.gate_names:
+            if isinstance(self.availability[gn], (list, tuple)):
+                availability[gn] = tuple([(tuple(map(mapper_func, avail_el)) if (avail_el is not None) else None)
+                                          for avail_el in self.availability[gn]])
+                #Note: above `None` handling means that a gate with `None` in its availability (e.g. a global idle) has
+                # this availability retained, meaning it remains a gate that acts on *all* the qubits, even though that
+                # may be fewer than it did originally.  This is similar to how non-tuple cases work, e.g. "all-edges"
+            else:
+                availability[gn] = self.availability[gn]
+
+        qubit_graph = self.qubit_graph.map_qubit_labels(mapper)
+
+        return QubitProcessorSpec(self.num_qubits, self.gate_names, self.gate_unitaries, availability,
+                                  qubit_graph, mapped_qubit_labels)
 
     @property
     def idle_gate_names(self):
