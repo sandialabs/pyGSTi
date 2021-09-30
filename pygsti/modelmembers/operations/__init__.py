@@ -154,11 +154,8 @@ def verbose_type_from_op_type(op_type):
     for typ in op_type_preferences:
         verbose_type = None
         if _ot.is_valid_lindblad_paramtype(typ):
-            # Lindblad types are passed through, but prepended with lindblad
-            if typ.startswith('lindblad '):
-                verbose_type = typ
-            else:
-                verbose_type = 'lindblad ' + typ
+            # TODO: DO we want to prepend with lindblad?
+            verbose_type = typ
         else:
             verbose_type = verbose_conversion.get(typ, None)
 
