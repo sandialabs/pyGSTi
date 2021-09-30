@@ -16,6 +16,9 @@ from .tpinstrumentop import TPInstrumentOp
 
 from pygsti.tools import optools as _ot
 
+# Avoid circular import
+import pygsti.modelmembers as _mm
+
 
 def instrument_type_from_op_type(op_type):
     """Decode an op type into an appropriate instrument type.
@@ -30,7 +33,7 @@ def instrument_type_from_op_type(op_type):
     instr_type_preferences: tuple of str
         POVM parameterization types
     """
-    op_type_preferences = (op_type,) if isinstance(op_type, str) else op_type
+    op_type_preferences = _mm.operations.get_verbose_type_from_op_type(op_type)
 
     # Limited set (only matching what is in convert)
     instr_conversion = {

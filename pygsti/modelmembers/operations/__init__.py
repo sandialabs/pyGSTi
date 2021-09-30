@@ -42,7 +42,7 @@ from pygsti.tools import optools as _ot
 
 def create_from_unitary_mx(unitary_mx, op_type, basis='pp', stdname=None, evotype='default', state_space=None):
     """ TODO: docstring - note that op_type can be a list/tuple of types in order of precedence """
-    op_type_preferences = (op_type,) if isinstance(op_type, str) else op_type
+    op_type_preferences = verbose_type_from_op_type(op_type)
     U = unitary_mx
     if state_space is None:
         state_space = _statespace.default_space_for_udim(U.shape[0])
@@ -57,7 +57,7 @@ def create_from_unitary_mx(unitary_mx, op_type, basis='pp', stdname=None, evotyp
                 op = StaticUnitaryOp(U, basis, evotype, state_space)
             elif typ == "full unitary":
                 op = FullUnitaryOp(U, basis, evotype, state_space)
-            elif typ in ('static', 'full', 'TP', 'full TP', 'linear'):
+            elif typ in ('static', 'full', 'full TP', 'linear'):
                 superop_mx = _bt.change_basis(_ot.unitary_to_process_mx(U), 'std', basis)
                 op = create_from_superop_mx(superop_mx, op_type, basis, stdname, evotype, state_space)
             elif _ot.is_valid_lindblad_paramtype(typ):  # maybe "lindblad XXX" where XXX is a valid lindblad type?
@@ -123,7 +123,7 @@ def create_from_superop_mx(superop_mx, op_type, basis='pp', stdname=None, evotyp
     raise ValueError("Could not create an operator of type(s) %s from the given superop!" % (str(op_type)))
 
 
-def get_verbose_type_from_op_type(op_type):
+def verbose_type_from_op_type(op_type):
     """Decode an op type into the "canonical", more verbose op type.
 
     Parameters:

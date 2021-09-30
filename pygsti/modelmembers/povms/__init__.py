@@ -36,6 +36,8 @@ from pygsti.baseobjs import statespace as _statespace
 from pygsti.tools import basistools as _bt
 from pygsti.tools import optools as _ot
 
+# Avoid circular import
+import pygsti.modelmembers as _mm
 
 def create_from_pure_vectors(pure_vectors, povm_type, basis='pp', evotype='default', state_space=None,
                              on_construction_error='warn'):
@@ -212,7 +214,7 @@ def povm_type_from_op_type(op_type):
     povm_type_preferences: tuple of str
         POVM parameterization types
     """
-    op_type_preferences = (op_type,) if isinstance(op_type, str) else op_type
+    op_type_preferences = _mm.operations.verbose_type_from_op_type(op_type)
 
     # computational and TP are directly constructed as POVMS
     # All others pass through to the effects

@@ -27,6 +27,9 @@ from pygsti.baseobjs import statespace as _statespace
 from pygsti.tools import basistools as _bt
 from pygsti.tools import optools as _ot
 
+# Avoid circular import
+import pygsti.modelmembers as _mm
+
 
 def create_from_pure_vector(pure_vector, state_type, basis='pp', evotype='default', state_space=None,
                             on_construction_error='warn'):
@@ -117,7 +120,7 @@ def state_type_from_op_type(op_type):
     str
         State parameterization type
     """
-    op_type_preferences = (op_type,) if isinstance(op_type, str) else op_type
+    op_type_preferences = _mm.operations.verbose_type_from_op_type(op_type)
 
     state_conversion = {
         'auto': 'computational',
