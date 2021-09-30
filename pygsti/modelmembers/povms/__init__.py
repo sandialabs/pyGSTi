@@ -246,7 +246,7 @@ def povm_type_from_op_type(op_type):
             povm_type_preferences.append(povm_type)
 
     if len(povm_type_preferences) == 0:
-        raise RuntimeError(
+        raise ValueError(
             'Could not convert any op types from {}.\n'.format(op_type_preferences)
             + '\tKnown op_types: Lindblad types or {}\n'.format(sorted(list(povm_conversion.keys())))
             + '\tValid povm_types: Lindblad types or {}'.format(sorted(list(set(povm_conversion.values()))))

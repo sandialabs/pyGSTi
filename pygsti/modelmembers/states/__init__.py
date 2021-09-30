@@ -150,7 +150,7 @@ def state_type_from_op_type(op_type):
             state_type_preferences.append(state_type)
 
     if len(state_type_preferences) == 0:
-        raise RuntimeError(
+        raise ValueError(
             'Could not convert any op types from {}.\n'.format(op_type_preferences)
             + '\tKnown op_types: Lindblad types or {}\n'.format(sorted(list(state_conversion.keys())))
             + '\tValid state_types: Lindblad types or {}'.format(sorted(list(set(state_conversion.values()))))

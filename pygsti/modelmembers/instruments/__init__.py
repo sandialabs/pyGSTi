@@ -61,7 +61,7 @@ def instrument_type_from_op_type(op_type):
             instr_type_preferences.append(instr_type)
 
     if len(instr_type_preferences) == 0:
-        raise RuntimeError(
+        raise ValueError(
             'Could not convert any op types from {}.\n'.format(op_type_preferences)
             + '\tKnown op_types: Lindblad types or {}\n'.format(sorted(list(instr_conversion.keys())))
             + '\tValid instrument_types: Lindblad types or {}'.format(sorted(list(set(instr_conversion.values()))))
