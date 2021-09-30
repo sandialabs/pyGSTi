@@ -67,7 +67,8 @@ extras = {
         'rednose',
         'zmq',
         'jinja2',
-        'seaborn'
+        'seaborn',
+        'ply'
     ]
 }
 
@@ -232,7 +233,7 @@ def setup_with_extensions(extensions=None):
             'numpy>=1.15.0',
             'scipy',
             'plotly',
-            'ply'
+            'pandas'
         ],
         extras_require=extras,
         python_requires='>=3.5',
