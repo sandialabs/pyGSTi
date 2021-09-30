@@ -354,7 +354,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
         return resulting_dirs
 
     for op_label in primitive_op_labels:
-        print("##", op_label)
+        #FOGI DEBUG print("##", op_label)
         ga = gauge_action_matrices[op_label]
         # currently `ga` is a dense matrix, if SPARSE need to update nullspace and pinv math below
 
@@ -367,7 +367,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
             commutant = _mt.nice_nullspace(ga)  # columns = *gauge* elem gen directions
             complement = _mt.nice_nullspace(commutant.T)  # complement of commutant - where op is faithful rep
             ccomms[(op_label,)] = complement
-            print("  Skipping - SPAM, no intrinsic qtys")
+            #FOGI DEBUG print("  Skipping - SPAM, no intrinsic qtys")
             continue
 
         #Get commutant and communtant-complement spaces
@@ -385,7 +385,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
         local_fogi_vecs = _mt.normalize_columns(local_fogi_dirs, ord=norm_order)  # this gives us *vec*-norm we want
         vector_L2_norm2s = [_np.linalg.norm(local_fogi_vecs[:, j])**2 for j in range(local_fogi_vecs.shape[1])]
         local_fogi_dirs = local_fogi_vecs / _np.array(vector_L2_norm2s)[None, :]  # gives *dir*-norm we want # DUAL NORM
-        print("  New intrinsic qtys = ", local_fogi_dirs.shape[1])
+        #FOGI DEBUG print("  New intrinsic qtys = ", local_fogi_dirs.shape[1])
         #assert(_np.linalg.norm(local_fogi_dirs.imag) < 1e-6)  # ok for H+S but not for CPTP models
 
         assert(_mt.columns_are_orthogonal(local_fogi_dirs))  # Not for Cnot in 2Q_XYICNOT (check?)
@@ -427,7 +427,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                 new_set = tuple(sorted(existing_set + (op_label,)))
                 if new_set in larger_sets: continue
 
-                print("\n##", existing_set, "+", op_label)
+                #FOGI DEBUG print("\n##", existing_set, "+", op_label)
 
                 # Merge existing set + op_label => new set of larger size
                 ccommA = ccomms.get(existing_set, None)  # Note: commutant-complements are in *gauge* space,
@@ -443,7 +443,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                     #assert(_mt.columns_are_orthogonal(intersection_space))  # Not always true
 
                     if intersection_space.shape[1] > 0:
-                        print(" ==> intersection space dim = ", intersection_space.shape[1])
+                        #FOGI DEBUG print(" ==> intersection space dim = ", intersection_space.shape[1])
                         # Then each basis vector of the intersection space defines a gauge-invariant ("fogi")
                         # direction via the difference between that gauge direction's action on A and B:
                         gauge_action = _np.concatenate([gauge_action_matrices[ol] for ol in existing_set]
@@ -556,7 +556,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
 
                         # figure out which directions are independent
                         indep_cols = _mt.independent_columns(new_fogi_dirs, fogi_dirs)
-                        print(" ==> %d independent columns" % len(indep_cols))
+                        #FOGI DEBUG print(" ==> %d independent columns" % len(indep_cols))
 
                         if dependent_fogi_action == "drop":
                             dep_cols_to_add = []
@@ -703,7 +703,7 @@ def compute_maximum_relational_errors(primitive_op_labels, errorgen_coefficients
             errgen_vec = _np.dot(_np.dot(ga, _np.linalg.pinv(ga)), errgen_vec)
 
             jangle = _mt.jamiolkowski_angle(_create_errgen_op(errgen_vec, gauge_basis_mxs))
-            print("From ", debug, " jangle = ", jangle)
+            #FOGI DEBUG print("From ", debug, " jangle = ", jangle)
             best_gauge_vecs.append(running_best_gauge_vec)
 
     def _create_errgen_op(vec, list_of_mxs):
@@ -717,7 +717,7 @@ def compute_maximum_relational_errors(primitive_op_labels, errorgen_coefficients
 
     for op_label_to_compute_max_for in primitive_op_labels:
 
-        print("Computing for", op_label_to_compute_max_for)
+        #FOGI DEBUG print("Computing for", op_label_to_compute_max_for)
         running_gauge_vec = _np.zeros(gaugeSpaceDim, 'd')
         initial_allowed_gauge_directions = _np.identity(gaugeSpaceDim, 'd')
         resulting_best_gauge_vecs = []

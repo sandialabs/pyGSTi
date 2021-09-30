@@ -1673,7 +1673,7 @@ class ExplicitOpModel(_mdl.OpModel):
                 allowed_gauge_linear_combos = _mt.nice_nullspace(disallowed_rows.toarray(), tol=1e-4)  # DENSE for now
                 mx = _sps.csr_matrix(mx.dot(allowed_gauge_linear_combos))  # dot sometimes/always returns dense array
                 op_gauge_space = _ErrorgenSpace(allowed_gauge_linear_combos, op_gauge_basis)  # DENSE mxs in eg-spaces
-                print("DEBUG => mx reduced to ", mx.shape)
+                #FOGI DEBUG: print("DEBUG => mx reduced to ", mx.shape)
             else:
                 op_gauge_space = _ErrorgenSpace(_np.identity(len(op_gauge_basis), 'd'), op_gauge_basis)
         else:
@@ -1774,10 +1774,10 @@ class ExplicitOpModel(_mdl.OpModel):
             initial_row_basis = create_complete_basis_fn(target_sslbls)
 
             #support_sslbls, gauge_errgen_basis = get_overlapping_labels(gauge_errgen_space_labels, target_sslbls)
-            print("DEBUG -- ", op_label)
+            #FOGI DEBUG print("DEBUG -- ", op_label)
             mx, row_basis = _fogit.first_order_gauge_action_matrix(U, target_sslbls, self.state_space,
                                                                    op_gauge_basis, initial_row_basis)
-            print("DEBUG => mx is ", mx.shape)
+            #FOGI DEBUG print("DEBUG => mx is ", mx.shape)
             # Note: mx is a sparse lil matrix
             # mx cols => op_gauge_basis, mx rows => row_basis, as zero rows have already been removed
             # (DONE: - remove all all-zero rows from mx (and corresponding basis labels) )
@@ -1790,7 +1790,7 @@ class ExplicitOpModel(_mdl.OpModel):
             errorgen_coefficient_labels[op_label] = allowed_row_basis.labels
             gauge_action_matrices[op_label] = allowed_rowspace_mx
             gauge_action_gauge_spaces[op_label] = op_gauge_space
-            print("DEBUG => final allowed_rowspace_mx shape =", allowed_rowspace_mx.shape)
+            #FOGI DEBUG print("DEBUG => final allowed_rowspace_mx shape =", allowed_rowspace_mx.shape)
 
         # Similar for SPAM
         for prep_label in primitive_prep_labels:
