@@ -216,8 +216,7 @@ def _find_amped_polynomials_for_syntheticidle(qubit_filter, idle_str, model, sin
     dummy = 5.0 * _np.random.random(model.num_params) + 0.5 * _np.ones(model.num_params, 'd')
     # expect terms to be either coeff*x or coeff*x^2 - (b/c of latter case don't eval at zero)
 
-    print("DB gpindices = ")
-    model._print_gpindices()
+    #print("DB gpindices = "); model._print_gpindices()  # DEBUG (can REMOVE)
 
     #amped_polys = []
     selected_gatename_fidpair_lists = []
@@ -1607,6 +1606,7 @@ def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
         evotype=evotype,
         errcomp_type="gates")
     clouds = model.clouds
+
     #Note: maxSpamWeight=0 above b/c we don't care about amplifying SPAM errors (?)
     #print("DB: GATES = ",model.operation_blks['layers'].keys())
     #print("DB: CLOUDS = ",clouds)
