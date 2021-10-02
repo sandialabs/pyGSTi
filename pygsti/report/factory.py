@@ -24,7 +24,7 @@ from pygsti.report import merge_helpers as _merge
 from pygsti.report import reportables as _reportables
 from pygsti.report import section as _section
 from pygsti.report import workspace as _ws
-from pygsti import _version
+from pygsti._version import version as _pygsti_version
 from pygsti import tools as _tools
 from pygsti.models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
@@ -1199,7 +1199,7 @@ def construct_standard_report(results, title="auto",
                         " for you: '{}'.").format(autoname))
 
     pdfInfo = [('Author', 'pyGSTi'), ('Title', title),
-               ('Keywords', 'GST'), ('pyGSTi Version', _version.__version__)]
+               ('Keywords', 'GST'), ('pyGSTi Version', _pygsti_version)]
 
     results = results if isinstance(results, dict) else {"unique": results}
 
@@ -1424,7 +1424,7 @@ def construct_nqnoise_report(results, title="auto",
                         " for you: '{}'.").format(autoname))
 
     pdfInfo = [('Author', 'pyGSTi'), ('Title', title),
-               ('Keywords', 'GST'), ('pyGSTi Version', _version.__version__)]
+               ('Keywords', 'GST'), ('pyGSTi Version', _pygsti_version)]
 
     results = results if isinstance(results, dict) else {"unique": results}
 
@@ -1584,7 +1584,7 @@ def create_drift_report(results, title='auto', ws=None, verbosity=1):
                         " for you: '{}'.").format(autoname))
 
     pdfInfo = [('Author', 'pyGSTi'), ('Title', title),
-               ('Keywords', 'GST'), ('pyGSTi Version', _version.__version__)]
+               ('Keywords', 'GST'), ('pyGSTi Version', _pygsti_version)]
 
     results_dict = results if isinstance(results, dict) else {"unique": results}
     assert(len(results_dict) == 1), "Drift reports do not support multiple results objects yet."

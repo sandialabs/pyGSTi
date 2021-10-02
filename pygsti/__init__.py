@@ -22,7 +22,7 @@ from . import serialization
 
 # Import the most important/useful routines of each module/sub-package
 # into the package namespace
-from ._version import __version__
+from ._version import version
 from .algorithms.contract import *
 from .algorithms.core import *
 from .algorithms.gaugeopt import *

@@ -87,7 +87,10 @@ extras['no_mpi'] = [e for e in extras['complete'] if e != 'mpi4py']
 def custom_version():
     from setuptools_scm.version import postrelease_version
 
-    return {'version_scheme': postrelease_version}
+    return {'version_scheme': postrelease_version,
+            'write_to': "pygsti/_version.py",
+            'local_scheme': "no-local-version"  # because pypi doesn't suppport it
+            }
 
 
 #Create a custom command class that allows us to specify different compiler flags

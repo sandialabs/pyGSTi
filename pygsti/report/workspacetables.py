@@ -3537,7 +3537,7 @@ class SoftwareEnvTable(WorkspaceTable):
                              custom_header={'latex': latex_head})
 
         #Python package information
-        from .._version import __version__ as pygsti_version
+        from .._version import version as pygsti_version
         table.add_row(("pyGSTi version", str(pygsti_version)), (None, 'Verbatim'))
 
         packages = ['numpy', 'scipy', 'matplotlib', 'ply', 'cvxopt', 'cvxpy',
