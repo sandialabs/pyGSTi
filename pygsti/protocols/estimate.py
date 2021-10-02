@@ -875,6 +875,10 @@ class Estimate(object):
             state_dict['models'] = state_dict['gatesets']
             del state_dict['gatesets']
 
+        # reset MDC objective function and store objects
+        state_dict['_final_mdc_store'] = None
+        state_dict['_final_objfn'] = None
+
         self.__dict__.update(state_dict)
         for crf in self.confidence_region_factories.values():
             crf.set_parent(self)
