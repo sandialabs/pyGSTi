@@ -1512,10 +1512,11 @@ class StandardGST(_proto.Protocol):
         self.badfit_options = GSTBadFitOptions.cast(badfit_options)
         self.verbosity = verbosity
 
-        if not isinstance(optimizer, _opt.Optimizer) and 'first_fditer' not in optimizer:
+        if not isinstance(optimizer, _opt.Optimizer) and isinstance(optimizer, dict) \
+           and 'first_fditer' not in optimizer:  # then a dict was cast into a CustomLMOptimizer above.
             # by default, set special "first_fditer=auto" behavior (see logic in GateSetTomography.__init__)
             self.optimizer.first_fditer = None
-        
+
         self.auxfile_types['models_to_test'] = 'dict:serialized-object'
         self.auxfile_types['gaugeopt_suite'] = 'serialized-object'
         self.auxfile_types['objfn_builders'] = 'serialized-object'
