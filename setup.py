@@ -1,14 +1,17 @@
 """A python implementation of Gate Set Tomography"""
 
 from warnings import warn
+from collections import defaultdict
 
 try:
     from setuptools import setup
     from setuptools import Extension
+    from setuptools.command.build_ext import build_ext
 except ImportError:
     from distutils.core import setup
     from distutils.extension import Extension
-
+    from distutils.command.build_ext import build_ext
+    
 descriptionTxt = """\
 Gate set tomography (GST) is a quantum tomography protocol that provides full characterization of a quantum logic device
 (e.g. a qubit).  GST estimates a set of quantum logic gates and (simultaneously) the associated state preparation and
@@ -87,10 +90,31 @@ def custom_version():
     return {'version_scheme': postrelease_version}
 
 
+#Create a custom command class that allows us to specify different compiler flags
+# based on the compiler (~platform) being used (see
+# https://stackoverflow.com/questions/30985862/how-to-identify-compiler-before-defining-cython-extensions)
+BUILD_ARGS = defaultdict(lambda: ["-std=c++11"])  # ,"-stdlib=libc++", '-O3', '-g0'
+for compiler, args in [
+        ('msvc', []),
+        ('gcc', ["-std=c++11", "-Wno-deprecated"])]:
+    BUILD_ARGS[compiler] = args
+
+
+class build_ext_compiler_check(build_ext):
+    def build_extensions(self):
+        compiler = self.compiler.compiler_type
+        args = BUILD_ARGS[compiler]
+        print("\n\nCompiler: ",compiler,"\n")
+        for ext in self.extensions:
+            ext.extra_compile_args = args
+        build_ext.build_extensions(self)
+
+
 def setup_with_extensions(extensions=None):
     setup(
         name='pyGSTi',
         use_scm_version=custom_version,
+        cmdclass={'build_ext': build_ext_compiler_check},
         description='A python implementation of Gate Set Tomography',
         long_description=descriptionTxt,
         author='Erik Nielsen, Kenneth Rudinger, Timothy Proctor, John Gamble, Robin Blume-Kohout',
@@ -142,11 +166,6 @@ def setup_with_extensions(extensions=None):
         package_dir={'': '.'},
         package_data={
             'pygsti.tools': ['fastcalc.pyx'],
-            #'pygsti.objects.replib': [
-            #    'fastreplib.pyx',
-            #    'fastreps.cpp',
-            #    'fastreps.h'
-            #],
             'pygsti.evotypes': [
                 'basereps_cython.pxd',
                 'basereps_cython.pyx',
@@ -285,7 +304,6 @@ try:
             sources=["pygsti/baseobjs/opcalc/fastopcalc.pyx"],
             include_dirs=['.', np.get_include()],
             language="c++",
-            extra_compile_args=["-std=c++11", "-Wno-deprecated"],  # ,"-stdlib=libc++"
             extra_link_args=["-std=c++11"]
         ),
         Extension(
@@ -296,7 +314,6 @@ try:
             ],
             include_dirs=['.', np.get_include()],
             language="c++",
-            extra_compile_args=["-std=c++11", "-Wno-deprecated"],  # ,"-stdlib=libc++"
             extra_link_args=["-std=c++11"]
         ),
         Extension(
@@ -307,7 +324,6 @@ try:
             ],
             include_dirs=['.', 'pygsti/evotypes', np.get_include()],
             language="c++",
-            extra_compile_args=["-std=c++11", "-Wno-deprecated"],  # ,"-stdlib=libc++"
             extra_link_args=["-std=c++11"]
         ),
         Extension(
@@ -319,7 +335,6 @@ try:
             ],
             include_dirs=['.', 'pygsti/evotypes', np.get_include()],
             language="c++",
-            extra_compile_args=["-std=c++11", "-Wno-deprecated"],  # ,"-stdlib=libc++"
             extra_link_args=["-std=c++11"]
         ),
         Extension(
@@ -332,7 +347,6 @@ try:
             ],
             include_dirs=['.', 'pygsti/evotypes', np.get_include()],
             language="c++",
-            extra_compile_args=["-std=c++11", "-Wno-deprecated"],  # ,"-stdlib=libc++"
             extra_link_args=["-std=c++11"]
         ),
         Extension(
@@ -343,7 +357,6 @@ try:
             ],
             include_dirs=['.', 'pygsti/evotypes', np.get_include()],
             language="c++",
-            extra_compile_args=["-std=c++11", "-Wno-deprecated"],  # ,"-stdlib=libc++"
             extra_link_args=["-std=c++11"]
         ),
         Extension(
@@ -355,7 +368,6 @@ try:
             ],
             include_dirs=['.', 'pygsti/evotypes', np.get_include()],
             language="c++",
-            extra_compile_args=["-std=c++11", "-Wno-deprecated"],  # ,"-stdlib=libc++"
             extra_link_args=["-std=c++11"]
         ),
         Extension(
@@ -368,7 +380,6 @@ try:
             ],
             include_dirs=['.', 'pygsti/evotypes', np.get_include()],
             language="c++",
-            extra_compile_args=["-std=c++11", "-Wno-deprecated"],  # ,"-stdlib=libc++"
             extra_link_args=["-std=c++11"]
         ),
         Extension(
@@ -382,7 +393,6 @@ try:
             ],
             include_dirs=['.', 'pygsti/evotypes', np.get_include()],
             language="c++",
-            extra_compile_args=["-std=c++11", "-Wno-deprecated"],  # ,"-stdlib=libc++"
             extra_link_args=["-std=c++11"]
         ),
         Extension(
@@ -393,7 +403,6 @@ try:
             ],
             include_dirs=['.', 'pygsti/evotypes', np.get_include()],
             language="c++",
-            extra_compile_args=["-std=c++11", "-Wno-deprecated"],  # ,"-stdlib=libc++"
             extra_link_args=["-std=c++11"]
         ),
         Extension(
@@ -405,7 +414,6 @@ try:
             ],
             include_dirs=['.', 'pygsti/evotypes', np.get_include()],
             language="c++",
-            extra_compile_args=["-std=c++11", "-Wno-deprecated"],  # ,"-stdlib=libc++"
             extra_link_args=["-std=c++11"]
         ),
         Extension(
@@ -418,7 +426,6 @@ try:
             ],
             include_dirs=['.', 'pygsti/evotypes', np.get_include()],
             language="c++",
-            extra_compile_args=["-std=c++11", "-Wno-deprecated"],  # ,"-stdlib=libc++"
             extra_link_args=["-std=c++11"]
         ),
         Extension(
@@ -432,7 +439,6 @@ try:
             ],
             include_dirs=['.', 'pygsti/evotypes', np.get_include()],
             language="c++",
-            extra_compile_args=["-std=c++11", "-Wno-deprecated"],  # ,"-stdlib=libc++"
             extra_link_args=["-std=c++11"]
         ),
         Extension(
@@ -443,7 +449,6 @@ try:
             ],
             include_dirs=['.', 'pygsti/evotypes', np.get_include()],
             language="c++",
-            extra_compile_args=["-std=c++11", "-Wno-deprecated"],  # ,"-stdlib=libc++"
             extra_link_args=["-std=c++11"]
         ),
         Extension(
@@ -455,7 +460,6 @@ try:
             ],
             include_dirs=['.', 'pygsti/evotypes', np.get_include()],
             language="c++",
-            extra_compile_args=["-std=c++11", "-Wno-deprecated"],  # ,"-stdlib=libc++"
             extra_link_args=["-std=c++11"]
         ),
         Extension(
@@ -467,7 +471,6 @@ try:
             ],
             include_dirs=['.', 'pygsti/evotypes', np.get_include()],
             language="c++",
-            extra_compile_args=["-std=c++11", "-Wno-deprecated"],  # ,"-stdlib=libc++"
             extra_link_args=["-std=c++11"]
         ),
         Extension(
@@ -475,7 +478,6 @@ try:
             sources=["pygsti/circuits/circuitparser/fastcircuitparser.pyx"],
             include_dirs=['.', np.get_include()],
             language="c++",
-            extra_compile_args=["-std=c++11", "-Wno-deprecated"],  # ,"-stdlib=libc++"
             extra_link_args=["-std=c++11"]
         )
     ]
