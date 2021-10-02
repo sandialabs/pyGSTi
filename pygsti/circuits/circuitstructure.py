@@ -76,7 +76,7 @@ class CircuitPlaquette(_NicelySerializable):
         # derived class object.
         from pygsti.io import stdinput as _stdinput
         std = _stdinput.StdInputParser()
-        elements = {tuple(ij): std.parse_circuit(s, create_subcircuits=_Circuit.default_expand_subcircuits)
+        elements = {tuple(ij): std.parse_circuit(s, create_subcircuits=not _Circuit.default_expand_subcircuits)
                     for ij, s in state['elements']}
         return cls(elements, state['num_rows'], state['num_cols'], op_label_aliases=None)
         # Note: parent structure will set op_label_aliases, so we don't serialize it
@@ -291,9 +291,9 @@ class FiducialPairPlaquette(CircuitPlaquette):
     def _from_nice_serialization(cls, state):  # memo holds already de-serialized objects
         from pygsti.io import stdinput as _stdinput
         std = _stdinput.StdInputParser()
-        base = std.parse_circuit(state['base_circuit'], create_subcircuits=_Circuit.default_expand_subcircuits)
-        fidpairs = {tuple(ij): (std.parse_circuit(prepfid, create_subcircuits=_Circuit.default_expand_subcircuits),
-                                std.parse_circuit(measfid, create_subcircuits=_Circuit.default_expand_subcircuits))
+        base = std.parse_circuit(state['base_circuit'], create_subcircuits=not _Circuit.default_expand_subcircuits)
+        fidpairs = {tuple(ij): (std.parse_circuit(prepfid, create_subcircuits=not _Circuit.default_expand_subcircuits),
+                                std.parse_circuit(measfid, create_subcircuits=not _Circuit.default_expand_subcircuits))
                     for ij, prepfid, measfid in state['fiducial_pairs']}
         return cls(base, fidpairs, state['num_rows'], state['num_cols'], op_label_aliases=None)
         # Note: parent structure will set op_label_aliases, so we don't serialize it
@@ -454,9 +454,9 @@ class GermFiducialPairPlaquette(FiducialPairPlaquette):
     def _from_nice_serialization(cls, state):  # memo holds already de-serialized objects
         from pygsti.io import stdinput as _stdinput
         std = _stdinput.StdInputParser()
-        germ = std.parse_circuit(state['germ'], create_subcircuits=_Circuit.default_expand_subcircuits)
-        fidpairs = {tuple(ij): (std.parse_circuit(prepfid, create_subcircuits=_Circuit.default_expand_subcircuits),
-                                std.parse_circuit(measfid, create_subcircuits=_Circuit.default_expand_subcircuits))
+        germ = std.parse_circuit(state['germ'], create_subcircuits=not _Circuit.default_expand_subcircuits)
+        fidpairs = {tuple(ij): (std.parse_circuit(prepfid, create_subcircuits=not _Circuit.default_expand_subcircuits),
+                                std.parse_circuit(measfid, create_subcircuits=not _Circuit.default_expand_subcircuits))
                     for ij, prepfid, measfid in state['fiducial_pairs']}
         return cls(germ, state['power'], fidpairs, state['num_rows'], state['num_cols'], op_label_aliases=None)
         # Note: parent structure will set op_label_aliases, so we don't serialize it
@@ -695,15 +695,16 @@ class PlaquetteGridCircuitStructure(_CircuitList):
 
         def _decodeval(typ, val):
             if typ in ("int", "str"): return val
-            if typ == "circuit": return std.parse_circuit(val, create_subcircuits=_Circuit.default_expand_subcircuits)
+            if typ == "circuit": return std.parse_circuit(val,
+                                                          create_subcircuits=not _Circuit.default_expand_subcircuits)
             raise ValueError("Unknown x/y type: %s" % str(typ))
 
         plaquettes = {(_decodeval(state['xtype'], x), _decodeval(state['ytype'], y)):
                       CircuitPlaquette.from_nice_serialization(d)
                       for (x, y), d in state['plaquettes']}
-        additional_circuits = [std.parse_circuit(s, create_subcircuits=_Circuit.default_expand_subcircuits)
+        additional_circuits = [std.parse_circuit(s, create_subcircuits=not _Circuit.default_expand_subcircuits)
                                for s in state['additional_circuits']]
-        circuit_weights = ({std.parse_circuit(s, create_subcircuits=_Circuit.default_expand_subcircuits): weight
+        circuit_weights = ({std.parse_circuit(s, create_subcircuits=not _Circuit.default_expand_subcircuits): weight
                            for s, weight in state['circuit_weights'].items()}
                            if (state['circuit_weights'] is not None) else None)
         xvalues = tuple([_decodeval(state['xtype'], x) for x in state['xvalues']])
