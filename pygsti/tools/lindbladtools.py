@@ -190,14 +190,20 @@ def nonham_lindbladian(Lm, Ln, sparse=False):  # noqa N803
 
     #TODO: there's probably a fast & slick way to so this computation
     #  using vectorization identities
-    assert(len(Lm.shape) == 2)
-    assert(Lm.shape[0] == Lm.shape[1])
-    Lm_dag = _np.conjugate(_np.transpose(Lm))
+
+    #For performance, use dense ops when they're small, even when sparse=True
     d = Lm.shape[0]
-    if sparse:
+    build_sparse_mx = sparse and d > 4  # for < 2Q matrices just convert to sparse at end (it's faster)
+    if build_sparse_mx:
         lindbladian = _sps.lil_matrix((d**2, d**2), dtype=Lm.dtype)
     else:
         lindbladian = _np.empty((d**2, d**2), dtype=Lm.dtype)
+        if _sps.issparse(Lm): Lm = Lm.toarray()
+        if _sps.issparse(Ln): Ln = Ln.toarray()
+
+    assert(len(Lm.shape) == 2)
+    assert(Lm.shape[0] == Lm.shape[1])
+    Lm_dag = _np.conjugate(_np.transpose(Lm))
 
     for i, rho0 in enumerate(basis_matrices('std', d**2)):  # rho0 == input density mx
         rho1 = _mt.safe_dot(Ln, _mt.safe_dot(rho0, Lm_dag)) - 0.5 * (
@@ -205,7 +211,8 @@ def nonham_lindbladian(Lm, Ln, sparse=False):  # noqa N803
         rho1 *= d
         # print("rho0[%d] = \n" % i,rho0)
         # print("rho1[%d] = \n" % i,rho1)
-        lindbladian[:, i] = rho1.flatten()[:, None] if sparse else rho1.flatten()
+        lindbladian[:, i] = rho1.flatten()[:, None] if build_sparse_mx else rho1.flatten()
 
-    if sparse: lindbladian = lindbladian.tocsr()
+    if sparse:
+        lindbladian = lindbladian.tocsr() if build_sparse_mx else _sps.csr_matrix(lindbladian)
     return lindbladian
