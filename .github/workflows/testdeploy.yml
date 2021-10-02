@@ -32,7 +32,13 @@ jobs:
           CIBW_BUILD: cp36-* cp37-* cp38-* cp39-*
           CIBW_BUILD_VERBOSITY: 1
           CIBW_BEFORE_ALL_LINUX: ./.github/ci-scripts/before_install.sh
-          CIBW_BEFORE_BUILD: ./.github/ci-scripts/install-wheelbuilding-deps.sh
+          CIBW_BEFORE_BUILD_LINUX: ./.github/ci-scripts/install-wheelbuilding-deps.sh
+          CIBW_BEFORE_BUILD_MACOS: ./.github/ci-scripts/install-wheelbuilding-deps.sh
+          CIBW_BEFORE_BUILD_WINDOWS: >
+            python -m pip install --upgrade pip  && 
+            python -m pip install "numpy>=1.16.0" && 
+            python -m pip install cython && 
+            python -m pip install wheel flake8
 
       - uses: actions/upload-artifact@v2
         with:
