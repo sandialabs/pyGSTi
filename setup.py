@@ -106,7 +106,8 @@ class build_ext_compiler_check(build_ext):
         args = BUILD_ARGS[compiler]
         print("\n\nCompiler: ",compiler,"\n")
         for ext in self.extensions:
-            ext.extra_compile_args = args
+            if ext.language == "c++":  # only do this for c++ files, so we can specify -std=c++11, etc.
+                ext.extra_compile_args = args
         build_ext.build_extensions(self)
 
 
