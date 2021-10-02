@@ -358,7 +358,7 @@ def read_circuit_strings(filename):
         if isinstance(x, (list, tuple)):
             return [_replace_strs_with_circuits(el) for el in x]
         if isinstance(x, dict):
-            return {_replace_strs_with_circuits(k): _replace_strs_with_circuits(v) for k, v in x.items}
+            return {_replace_strs_with_circuits(k): _replace_strs_with_circuits(v) for k, v in x.items()}
         if isinstance(x, str):
             return std.parse_circuit(x, create_subcircuits=_Circuit.default_expand_subcircuits)
         return x

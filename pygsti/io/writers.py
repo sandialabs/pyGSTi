@@ -645,7 +645,7 @@ def write_circuit_strings(filename, obj):
         if isinstance(x, (list, tuple)):
             return [_replace_circuits_with_strs(el) for el in x]
         if isinstance(x, dict):
-            return {_replace_circuits_with_strs(k): _replace_circuits_with_strs(v) for k, v in x.items}
+            return {_replace_circuits_with_strs(k): _replace_circuits_with_strs(v) for k, v in x.items()}
         return x.str if isinstance(x, _Circuit) else x
 
     json_dict = _replace_circuits_with_strs(obj)
