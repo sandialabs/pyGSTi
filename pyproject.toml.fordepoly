@@ -1,0 +1,8 @@
+
+[build-system]
+requires = ["setuptools>=45", "wheel", "setuptools_scm>=6.2", "cython", "numpy>=1.16.0"]
+
+[tool.setuptools_scm]
+write_to = "pygsti/_version.py"
+version_scheme = "post-release"
+local_scheme = "no-local-version"  # because pypi doesn't suppport it
