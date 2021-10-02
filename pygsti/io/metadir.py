@@ -311,7 +311,12 @@ def write_meta_based_dir(root_dir, valuedict, auxfile_types=None, init_meta=None
 
     for auxnm, typ in auxfile_types.items():
         val = valuedict[auxnm]
-        auxmeta = _write_auxfile_member(root_dir, auxnm, typ, val)
+        try:
+            auxmeta = _write_auxfile_member(root_dir, auxnm, typ, val)
+        except Exception as e:
+            _warnings.warn("FAILED to write aux file member %s w/format %s:" % (auxnm, typ))
+            raise e
+
         if auxmeta is not None:
             meta[auxnm] = auxmeta  # metadata about auxfile(s) for this auxnm
 
