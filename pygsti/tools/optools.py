@@ -1083,7 +1083,7 @@ def dmvec_to_state(dmvec, tol=1e-6):
         if abs(ev) > tol:
             if k is None: k = i
             else: raise ValueError("Cannot convert mixed dmvec to pure state!")
-    if k is None: raise ValueError("Cannot convert zero dmvec to puse state!")
+    if k is None: raise ValueError("Cannot convert zero dmvec to pure state!")
     psi = evecs[:, k] * _np.sqrt(evals[k])
     psi.shape = (d, 1)
     return psi
@@ -1639,7 +1639,6 @@ def lindblad_error_generator(errorgen_type, basis_element_labels, basis_1q, norm
     """
     TODO: docstring  - labels can be, e.g. ('H', 'XX') and basis should be a 1-qubit basis w/single-char labels
     """
-
     if errorgen_type == 'H':
         B = _functools.reduce(_np.kron, [basis_1q[bel] for bel in basis_element_labels[0]])
         ret = _lt.hamiltonian_to_lindbladian(B, sparse)  # in std basis
@@ -3451,6 +3450,8 @@ def compute_best_case_gauge_transform(gate_mx, target_gate_mx, return_all=False)
                         # Im part of Usub * combo = Usub.real*combo.imag + Usub.imag*combo.real
                         combo_real_imag = _mt.nullspace(_np.concatenate((Usub.imag, Usub.real), axis=1))
                         combos = combo_real_imag[0:dim, :] + 1j * combo_real_imag[dim:, :]
+                        if combos.shape[1] > dim:  # if Usub is (actually or near) rank defficient, and we get more
+                            combos = combos[:, 0:dim]  # combos than we need, just discard the last ones
                         if combos.shape[1] != dim:
                             raise ValueError(("Can only find %d (< %d) *real* linear combinations of"
                                               " vectors in eigenspace for %s!") % (combos.shape[1], dim, str(ev)))
