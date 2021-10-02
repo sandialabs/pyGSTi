@@ -24,6 +24,7 @@ from pygsti.models.memberdict import OrderedMemberDict as _OrderedMemberDict
 from pygsti.models.layerrules import LayerRules as _LayerRules
 from pygsti.models.modelparaminterposer import LinearInterposer as _LinearInterposer
 from pygsti.models.fogistore import FirstOrderGaugeInvariantStore as _FOGIStore
+from pygsti.models.gaugegroup import GaugeGroup as _GaugeGroup
 from pygsti.forwardsims.forwardsim import ForwardSimulator as _FSim
 from pygsti.forwardsims import matrixforwardsim as _matrixfwdsim
 from pygsti.modelmembers import instruments as _instrument
@@ -405,7 +406,7 @@ class ExplicitOpModel(_mdl.OpModel):
 
         if typ == 'full':
             self.default_gauge_group = _gg.FullGaugeGroup(self.state_space, self.evotype)
-        elif typ == 'full TP':
+        elif typ in ['full TP', 'TP']:  # TODO: get from verbose_conversion dictionary of modelmembers?
             self.default_gauge_group = _gg.TPGaugeGroup(self.state_space, self.evotype)
         elif typ == 'CPTP':
             self.default_gauge_group = _gg.UnitaryGaugeGroup(self.state_space, basis, self.evotype)
@@ -1453,7 +1454,27 @@ class ExplicitOpModel(_mdl.OpModel):
 
         nqubits = self.state_space.num_qubits
         gate_unitaries = _collections.OrderedDict()
+        all_sslbls = self.state_space.tensor_product_block_labels(0)
         availability = {}
+
+        def extract_unitary(Umx, U_sslbls, extracted_sslbls):
+            if extracted_sslbls is None: return Umx  # no extraction to be done
+            extracted_sslbls = list(extracted_sslbls)
+            extracted_indices = [U_sslbls.index(lbl) for lbl in extracted_sslbls]
+            num_extracted = len(extracted_indices)
+            Nm1 = len(U_sslbls) - 1
+
+            # can assume all lbls are qubits, so increment associated with qubit k is 2^(N-1-k)
+            # assume this is a kronecker product (check this in FUTURE?), so just fill extracted
+            # unitary by fixing all non-extracted qubits (assumed identity-action on these) to 0
+            # and looping over extracted ones:
+            U_extracted = _np.zeros((2**num_extracted, 2**num_extracted), complex)
+            for ii, itup in enumerate(_itertools.product(range(2), repeat=num_extracted)):
+                i = sum([bit * 2**(Nm1 - k) for k, bit in zip(extracted_indices, itup)])
+                for jj, jtup in enumerate(_itertools.product(range(2), repeat=num_extracted)):
+                    j = sum([bit * 2**(Nm1 - k) for k, bit in zip(extracted_indices, jtup)])
+                    U_extracted[ii, jj] = Umx[i, j]
+            return U_extracted
 
         def add_availability(opkey, op):
             if opkey == _Label(()) or opkey.is_simple():
@@ -1470,7 +1491,9 @@ class ExplicitOpModel(_mdl.OpModel):
                     U = _ot.process_mx_to_unitary(_bt.change_basis(
                         op.to_dense('HilbertSchmidt'), self.basis, 'std')) \
                         if (op is not None) else None  # U == None indicates "unknown, up until this point"
-                    gate_unitaries[gn] = U
+
+                    Ulocal = extract_unitary(U, all_sslbls, sslbls)
+                    gate_unitaries[gn] = Ulocal
 
                     if gn in availability:
                         if sslbls not in availability[gn]:
@@ -1484,14 +1507,15 @@ class ExplicitOpModel(_mdl.OpModel):
                 for component in opkey.components:
                     add_availability(component, None)  # recursive call - the reason we need this to be a function!
 
+        #observed_sslbls = set()
+        for opkey, op in self.operations.items():  # TODO: need to deal with special () idle label
+            add_availability(opkey, op)
+
         #Check that there aren't any undetermined unitaries
         unknown_unitaries = [k for k, v in gate_unitaries.items() if v is None]
         if len(unknown_unitaries) > 0:
             raise ValueError("Unitary not specfied for %s gate(s)!" % str(unknown_unitaries))
 
-        #observed_sslbls = set()
-        for opkey, op in self.operations.items():  # TODO: need to deal with special () idle label
-            add_availability(opkey, op)
 
         if qubit_labels == 'auto':
             qubit_labels = self.state_space.tensor_product_block_labels(0)
@@ -1527,6 +1551,8 @@ class ExplicitOpModel(_mdl.OpModel):
                       'instrument_prefix': self.instruments._prefix,
                       'evotype': str(self.evotype),  # TODO or serialize?
                       'simulator': self.sim.to_nice_serialization(),
+                      'default_gauge_group': (self.default_gauge_group.to_nice_serialization()
+                                              if (self.default_gauge_group is not None) else None)
                       })
 
         mmgraph = self.create_modelmember_graph()
@@ -1538,7 +1564,9 @@ class ExplicitOpModel(_mdl.OpModel):
         state_space = _statespace.StateSpace.from_nice_serialization(state['state_space'])
         basis = _Basis.from_nice_serialization(state['basis'])
         modelmembers = _MMGraph.load_modelmembers_from_serialization_dict(state['modelmembers'])
-        simulator = _FSim. from_nice_serialization(state['simulator'])
+        simulator = _FSim.from_nice_serialization(state['simulator'])
+        default_gauge_group = _GaugeGroup.from_nice_serialization(state['default_gauge_group']) \
+            if (state['default_gauge_group'] is not None) else None
 
         mdl = cls(state_space, basis, state['default_gate_type'],
                   state['default_prep_type'], state['default_povm_type'],
@@ -1552,6 +1580,7 @@ class ExplicitOpModel(_mdl.OpModel):
         mdl.instruments.update(modelmembers.get('instruments', {}))
         mdl.factories.update(modelmembers.get('factories', {}))
         mdl._clean_paramvec()
+        mdl.default_gauge_group = default_gauge_group
         return mdl
 
     def errorgen_coefficients(self, normalized_elem_gens=True):
