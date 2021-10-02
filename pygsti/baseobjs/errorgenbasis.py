@@ -44,7 +44,7 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
         self.basis_1q = basis1q if (basis1q is not None) else _Basis.cast('pp', 4)
 
         self.state_space = state_space
-        assert(self.state_space.is_entirely_qubits()), "FOGI only works for models containing just qubits (so far)"
+        assert(self.state_space.is_entirely_qubits), "FOGI only works for models containing just qubits (so far)"
         sslbls = self.state_space.tensor_product_block_labels(0)  # all the model's state space labels
         self.sslbls = sslbls  # the "support" of this space - the qubit labels
         self._cached_elements = None
@@ -176,7 +176,7 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
         nontrivial_bels = basis_1q.labels[1:]  # assume first element is identity
 
         if max_weight is None:
-            assert(state_space.is_entirely_qubits()), "FOGI only works for models containing just qubits (so far)"
+            assert(state_space.is_entirely_qubits), "FOGI only works for models containing just qubits (so far)"
             sslbls = state_space.tensor_product_block_labels(0)  # all the model's state space labels
             max_weight = len(sslbls)
 
@@ -233,7 +233,7 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
         total_support = set()
 
         if max_weight is None:
-            assert(state_space.is_entirely_qubits()), "FOGI only works for models containing just qubits (so far)"
+            assert(state_space.is_entirely_qubits), "FOGI only works for models containing just qubits (so far)"
             sslbls = state_space.tensor_product_block_labels(0)  # all the model's state space labels
             max_weight = len(sslbls)
 
@@ -289,7 +289,7 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
         self._max_other_weight = max_other_weight
         self._must_overlap_with_these_sslbls = must_overlap_with_these_sslbls
 
-        assert(self.state_space.is_entirely_qubits()), "FOGI only works for models containing just qubits (so far)"
+        assert(self.state_space.is_entirely_qubits), "FOGI only works for models containing just qubits (so far)"
 
         self._h_offsets, hsup = self._create_ordered_label_offsets('H', self._basis_1q, self.state_space,
                                                                    'diagonal', self._max_ham_weight,
@@ -446,7 +446,7 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
 #        self._max_other_weight = max_other_weight
 #        self._must_overlap_with_these_sslbls = must_overlap_with_these_sslbls
 #
-#        assert(self.state_space.is_entirely_qubits()), "FOGI only works for models containing just qubits (so far)"
+#        assert(self.state_space.is_entirely_qubits), "FOGI only works for models containing just qubits (so far)"
 #        sslbls = self.state_space.tensor_product_block_labels(0)  # all the model's state space labels
 #        self.sslbls = sslbls  # the "support" of this space - the qubit labels
 #

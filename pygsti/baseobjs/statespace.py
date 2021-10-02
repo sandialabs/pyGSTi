@@ -267,6 +267,7 @@ class StateSpace(_NicelySerializable):
                 return True
         return False
 
+    @property
     def is_entirely_qubits(self):
         """
         Whether this state space is just the tensor product of qubit subspaces.
