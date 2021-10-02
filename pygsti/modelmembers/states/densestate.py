@@ -264,7 +264,11 @@ class DensePureState(DenseStateInterface, _State):
             self._reptype = 'pure'
             self._purevec = self._basis = None
         except Exception:
-            superket_vec = _bt.change_basis(_ot.state_to_dmvec(purevec), 'std', basis)
+            if len(purevec) == basis.dim and _np.linalg.norm(purevec.imag) < 1e-10:
+                # Special case when a *superket* was provided instead of a purevec
+                superket_vec = purevec.real  # used as a convenience case that really shouldn't be used
+            else:
+                superket_vec = _bt.change_basis(_ot.state_to_dmvec(purevec), 'std', basis)
             rep = evotype.create_dense_state_rep(superket_vec, state_space)
             self._reptype = 'superket'
             self._purevec = purevec; self._basis = basis
@@ -328,7 +332,7 @@ class DensePureState(DenseStateInterface, _State):
         """
         mm_dict = super().to_memoized_dict(mmg_memo)
 
-        mm_dict['dense_state_vector'] = self.to_dense().tolist()
+        mm_dict['dense_state_vector'] = self.to_dense('Hilbert').tolist()
         mm_dict['basis'] = self._basis.to_nice_serialization()
 
         return mm_dict

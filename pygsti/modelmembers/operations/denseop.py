@@ -402,7 +402,11 @@ class DenseUnitaryOperator(DenseOperatorInterface, _LinearOperator):
             self._reptype = 'unitary'
             self._unitary = None
         except Exception:
-            superop_mx = _bt.change_basis(_ot.unitary_to_process_mx(mx), 'std', basis)
+            if mx.shape[0] == basis.dim and _np.linalg.norm(mx.imag) < 1e-10:
+                # Special case when a *superop* was provided instead of a unitary mx
+                superop_mx = mx.real  # used as a convenience case that really shouldn't be used
+            else:
+                superop_mx = _bt.change_basis(_ot.unitary_to_process_mx(mx), 'std', basis)
             rep = evotype.create_dense_superop_rep(superop_mx, state_space)
             self._reptype = 'superop'
             self._unitary = mx
@@ -552,7 +556,7 @@ class DenseUnitaryOperator(DenseOperatorInterface, _LinearOperator):
         """
         mm_dict = super().to_memoized_dict(mmg_memo)
 
-        mm_dict['dense_matrix'] = self.to_dense().tolist()
+        mm_dict['dense_matrix'] = self.to_dense('Hilbert').tolist()
         mm_dict['basis'] = self._basis.to_nice_serialization()
 
         return mm_dict
