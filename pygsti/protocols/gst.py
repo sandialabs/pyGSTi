@@ -59,7 +59,8 @@ class HasProcessorSpec(object):
     """
 
     def __init__(self, processorspec_filename_or_obj):
-        self.processor_spec = _load_pspec(processorspec_filename_or_obj)
+        self.processor_spec = _load_pspec(processorspec_filename_or_obj) \
+            if (processorspec_filename_or_obj is not None) else None
         self.auxfile_types['processor_spec'] = 'serialized-object'
 
     def create_target_model(self, gate_type='auto', prep_type='auto', povm_type='auto'):
@@ -284,8 +285,12 @@ class StandardGSTDesign(GateSetTomographyDesign):
         #FUTURE: add support for "advanced options" (probably not in __init__ though?):
         # trunc_scheme=advancedOptions.get('truncScheme', "whole germ powers")
 
-        processor_spec = processor_spec_or_model.create_processor_spec() \
-            if isinstance(processor_spec_or_model, _Model) else processor_spec_or_model
+        try:
+            processor_spec = processor_spec_or_model.create_processor_spec() \
+                if isinstance(processor_spec_or_model, _Model) else processor_spec_or_model
+        except Exception:
+            _warnings.warn("Failed to create a processor spec for GST experiment design!")
+            processor_spec = None  # allow this to bail out
 
         super().__init__(processor_spec, lists, None, qubit_labels, self.nested)
         self.auxfile_types['prep_fiducials'] = 'text-circuit-list'
@@ -786,6 +791,19 @@ class GSTGaugeOptSuite(_NicelySerializable):
 
         self.gaugeopt_target = gaugeopt_target
 
+    def is_empty(self):
+        """
+        Whether this suite is completely empty, i.e., contains NO gauge optimization instructions.
+
+        This is a useful check before constructing quantities needed by gauge optimization,
+        e.g. a target model, which can just be skipped when no gauge optimization will be performed.
+
+        Returns
+        -------
+        bool
+        """
+        return (self.gaugeopt_suite_names is None) and (self.gaugeopt_argument_dicts is None)
+
     def to_dictionary(self, model, unreliable_ops=(), verbosity=0):
         """
         Converts this gauge optimization suite into a raw dictionary of dictionaries.
@@ -864,7 +882,7 @@ class GSTGaugeOptSuite(_NicelySerializable):
 
     def _update_gaugeopt_dict_from_suitename(self, gaugeopt_suite_dict, root_lbl, suite_name, model,
                                              unreliable_ops, printer):
-        if suite_name in ("stdgaugeopt", "stdgaugeopt-unreliable2Q", "stdgaugeopt-tt"):
+        if suite_name in ("stdgaugeopt", "stdgaugeopt-unreliable2Q", "stdgaugeopt-tt", "stdgaugeopt-safe"):
 
             stages = []  # multi-stage gauge opt
             gg = model.default_gauge_group
@@ -896,6 +914,7 @@ class GSTGaugeOptSuite(_NicelySerializable):
                         'item_weights': {'gates': 1.0, 'spam': 0.0},
                         'gauge_group': _models.gaugegroup.UnitaryGaugeGroup(model.state_space,
                                                                             model.basis, model.evotype),
+                        'oob_check_interval': 1 if (suite_name == 'stdgaugeopt-safe') else 0,
                         'verbosity': printer
                     })
 
@@ -1008,6 +1027,8 @@ class GSTGaugeOptSuite(_NicelySerializable):
                         to_add['target_model'] = goparams_dict['target_model'].to_nice_serialization()
                     if 'model' in to_add:
                         del to_add['model']  # don't serialize model argument
+                    if 'comm' in to_add:
+                        del to_add['comm']  # don't serialize comm argument
                     if '_gaugeGroupEl' in to_add:
                         to_add['_gaugeGroupEl'] = goparams_dict['_gaugeGroupEl'].to_nice_serialization()
                     if 'gauge_group' in to_add:
@@ -1103,14 +1124,21 @@ class GateSetTomography(_proto.Protocol):
         self.badfit_options = GSTBadFitOptions.cast(badfit_options)
         self.verbosity = verbosity
 
+        # compute, and set if needed, a default "first iteration # of fintite-difference iters"
+        from pygsti.forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
+        mdl = self.initial_model.model
+        default_first_fditer = 1 if mdl and isinstance(mdl.sim, _MatrixFSim) else 0
+
         if isinstance(optimizer, _opt.Optimizer):
             self.optimizer = optimizer
+            if isinstance(optimizer, _opt.CustomLMOptimizer) and optimizer.first_fditer is None:
+                #special behavior: can set optimizer's first_fditer to `None` to mean "fill with default"
+                self.optimizer = _copy.deepcopy(optimizer)  # don't mess with caller's optimizer
+                self.optimizer.first_fditer = default_first_fditer
         else:
             if optimizer is None: optimizer = {}
             if 'first_fditer' not in optimizer:  # then add default first_fditer value
-                from pygsti.forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
-                mdl = self.initial_model.model
-                optimizer['first_fditer'] = 1 if mdl and isinstance(mdl.sim, _MatrixFSim) else 0
+                optimizer['first_fditer'] = default_first_fditer
             self.optimizer = _opt.CustomLMOptimizer.cast(optimizer)
 
         self.objfn_builders = GSTObjFnBuilders.cast(objfn_builders)
@@ -1193,6 +1221,7 @@ class GateSetTomography(_proto.Protocol):
         tnxt = _time.time(); profiler.add_time('GST: loading', tref); tref = tnxt
         mdl_start = self.initial_model.retrieve_model(data.edesign, self.gaugeopt_suite.gaugeopt_target,
                                                       data.dataset, comm)
+        hack_mdl_start_copy = mdl_start.copy()  # HACK TODO REMOVE LATER - in case edesign can't make a target model
 
         tnxt = _time.time(); profiler.add_time('GST: Prep Initial seed', tref); tref = tnxt
 
@@ -1218,11 +1247,26 @@ class GateSetTomography(_proto.Protocol):
         #TODO: add qtys about fit from optimums_list
 
         ret = ModelEstimateResults(data, self)
-        target_model = self.gaugeopt_suite.gaugeopt_target if (self.gaugeopt_suite.gaugeopt_target is not None) \
-            else (data.edesign.create_target_model() if isinstance(data.edesign, HasProcessorSpec) else None)
+
+        #Get target model for post-processing if we can...
+        if self.gaugeopt_suite.gaugeopt_target is not None:
+            target_model = self.gaugeopt_suite.gaugeopt_target
+        elif self.gaugeopt_suite.is_empty() is False:
+            if isinstance(data.edesign, HasProcessorSpec):
+                try:
+                    target_model = data.edesign.create_target_model()
+                except:
+                    _warnings.warn(("Could not create target model for gauge opt. from edesign"
+                                    " - falling back to initial model!"))
+                    target_model = hack_mdl_start_copy
+            else:
+                target_model = None
+        else:
+            target_model = None
         #Note: above code prefers target model in gaugeopt suite to that of edesign - this is TEMPORARY until
         # processor specs can reliably reconstruct target models (e.g. they don't support instruments yet).
         # After processor specs work all the way, we should prefer it over the gaugeopt suite's target here.
+
         estimate = _Estimate.create_gst_estimate(ret, target_model, mdl_start, mdl_lsgst_list, parameters)
         ret.add_estimate(estimate, estimate_key=self.name)
 
@@ -1300,7 +1344,12 @@ class LinearGateSetTomography(_proto.Protocol):
         if len(edesign.circuit_lists) != 1:
             raise ValueError("There must be at exactly one circuit list in the input experiment design!")
 
-        target_model = self.target_model if (self.target_model is not None) else edesign.create_target_model()
+        if self.target_model is not None:
+            target_model = self.target_model
+        else:
+            target_model = edesign.create_target_model()
+            target_model.set_all_parameterizations('full')  # so LGST can modify them
+
         if isinstance(target_model, _models.ExplicitOpModel):
             if not all([(isinstance(g, _op.FullArbitraryOp)
                          or isinstance(g, _op.FullTPOp))
@@ -1332,7 +1381,12 @@ class LinearGateSetTomography(_proto.Protocol):
         self.check_if_runnable(data)
 
         edesign = data.edesign
-        target_model = self.target_model if (self.target_model is not None) else edesign.create_target_model()
+
+        if self.target_model is not None:
+            target_model = self.target_model
+        else:
+            target_model = edesign.create_target_model()
+            target_model.set_all_parameterizations('full')  # so LGST can modify them
 
         if isinstance(edesign, _proto.CircuitListsDesign):
             circuit_list = edesign.circuit_lists[0]
@@ -1454,15 +1508,22 @@ class StandardGST(_proto.Protocol):
         self.models_to_test = models_to_test
         self.gaugeopt_suite = GSTGaugeOptSuite.cast(gaugeopt_suite)
         self.objfn_builders = objfn_builders
-        self.optimizer = optimizer
+        self.optimizer = _opt.CustomLMOptimizer.cast(optimizer)
         self.badfit_options = GSTBadFitOptions.cast(badfit_options)
         self.verbosity = verbosity
 
+        if not isinstance(optimizer, _opt.Optimizer) and 'first_fditer' not in optimizer:
+            # by default, set special "first_fditer=auto" behavior (see logic in GateSetTomography.__init__)
+            self.optimizer.first_fditer = None
+        
         self.auxfile_types['models_to_test'] = 'dict:serialized-object'
         self.auxfile_types['gaugeopt_suite'] = 'serialized-object'
         self.auxfile_types['objfn_builders'] = 'serialized-object'
         self.auxfile_types['optimizer'] = 'serialized-object'
         self.auxfile_types['badfit_options'] = 'serialized-object'
+
+        self._hack_target_model = None  # TODO REMOVE this hack once ProcessorSpec objects can hold qutrits/qudits
+        self.auxfile_types['_hack_target_model'] = 'reset'
 
         #Advanced options that could be changed by users who know what they're doing
         self.starting_point = {}  # a dict whose keys are modes
@@ -1512,14 +1573,16 @@ class StandardGST(_proto.Protocol):
                 printer.show_progress(i, len(modes), prefix='-- Std Practice: ', suffix=' (%s) --' % mode)
 
                 if mode == "Target":
-                    model_to_test = data.edesign.create_target_model()  # no parameterization change
-                    mdltest = _ModelTest(model_to_test, None, self.gaugeopt_suite,
+                    #model_to_test = data.edesign.create_target_model()  # no parameterization change
+                    model_to_test = data.edesign.create_target_model() \
+                        if (self._hack_target_model is None) else self._hack_target_model  # HACK - REMOVE later
+                    mdltest = _ModelTest(model_to_test, self._hack_target_model, self.gaugeopt_suite,
                                          mt_builder, self.badfit_options, verbosity=printer - 1, name=mode)
                     result = mdltest.run(data, memlimit, comm)
                     ret.add_estimates(result)
 
                 elif mode in models_to_test:
-                    mdltest = _ModelTest(models_to_test[mode], None, self.gaugeopt_suite,
+                    mdltest = _ModelTest(models_to_test[mode], self._hack_target_model, self.gaugeopt_suite,
                                          None, self.badfit_options, verbosity=printer - 1, name=mode)
                     result = mdltest.run(data, memlimit, comm)
                     ret.add_estimates(result)
@@ -1527,7 +1590,8 @@ class StandardGST(_proto.Protocol):
                 else:
                     #Try to interpret `mode` as a parameterization
                     parameterization = mode  # for now, 1-1 correspondence
-                    initial_model = data.edesign.create_target_model()
+                    initial_model = data.edesign.create_target_model() \
+                        if (self._hack_target_model is None) else self._hack_target_model  # HACK - REMOVE later
 
                     try:
                         initial_model.set_all_parameterizations(parameterization)
