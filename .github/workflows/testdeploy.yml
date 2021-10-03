@@ -28,7 +28,8 @@ jobs:
 
       - name: Use deployment pyproject.toml
         run: |
-          pwd
+          git tag
+          python setup.py --version
           rm pyproject.toml
           mv pyproject.toml.fordeploy pyproject.toml
   
