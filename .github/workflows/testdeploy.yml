@@ -50,6 +50,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0  # to fetch all branches and *tags* (needed to get version number correctly)
 
       - uses: actions/setup-python@v2
         name: Install Python
