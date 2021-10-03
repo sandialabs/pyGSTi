@@ -444,7 +444,8 @@ class DistributableForwardSimulator(_ForwardSimulator):
     def _compute_processor_distribution(self, array_types, nprocs, num_params, num_circuits, default_natoms):
         """ Computes commonly needed processor-grid info for distributed layout creation (a helper function)"""
         parameter_dim_letters = _array_type_parameter_dimension_letters()
-        max_param_dims = max([sum([array_type.count(l) for l in parameter_dim_letters]) for array_type in array_types])
+        param_dim_cnts = [sum([array_type.count(l) for l in parameter_dim_letters]) for array_type in array_types]
+        max_param_dims = max(param_dim_cnts) if len(param_dim_cnts) > 0 else 0
 
         bNp1Matters = bool(max_param_dims > 0)
         bNp2Matters = bool(max_param_dims > 1)
