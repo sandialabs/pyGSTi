@@ -128,9 +128,9 @@ class TestDirectRBDesign(BaseCase):
         if len(unequal_circuits) > 0:
             print("%d unequal circuits!!" % len(unequal_circuits))
             for i, sd, md in unequal_circuits:
-                print("Index: ",i)
-                print("Serial design: ", str(sd))
-                print("Parall design: ", str(md))
+                print("Index: ", i)
+                print("Serial design: ", sd.str)
+                print("Parall design: ", md.str)
                 print()
 
         self.assertTrue(all([str(sd) == str(md) for sd, md in zip(serial_design.all_circuits_needing_data,
