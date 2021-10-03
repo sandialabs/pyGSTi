@@ -803,7 +803,7 @@ def create_idletomography_report(results, filename, title="auto",
     qtys['date'] = _time.strftime("%B %d, %Y")
 
     pdfInfo = [('Author', 'pyGSTi'), ('Title', title),
-               ('Keywords', 'GST'), ('pyGSTi Version', _version.__version__)]
+               ('Keywords', 'GST'), ('pyGSTi Version', _version.version)]
     qtys['pdfinfo'] = _merge.to_pdfinfo(pdfInfo)
 
     # Generate Switchboard
