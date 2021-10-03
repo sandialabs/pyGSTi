@@ -24,6 +24,7 @@ hooks/etc/permissions.yml
 .vscode
 doc/_autosummary
 doc/build
+pygsti/_version.py
 
 # Test Metadata #
 #################
