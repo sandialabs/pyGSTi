@@ -29,6 +29,7 @@ jobs:
       - name: Use deployment pyproject.toml
         run: |
           pwd
+          rm pyproject.toml
           mv pyproject.toml.fordeploy pyproject.toml
   
       - name: Build wheels
