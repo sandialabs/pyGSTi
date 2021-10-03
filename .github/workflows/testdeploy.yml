@@ -28,26 +28,18 @@ jobs:
         with:
           python-version: '3.8'
 
-      - name: Use deployment pyproject.toml
-        run: |
-          git tag
-          python setup.py --version
-          rm pyproject.toml
-          mv pyproject.toml.fordeploy pyproject.toml
-  
+      #Now this is the default:
+      #- name: Use cython-enabled pyproject.toml
+      #  run: |
+      #    rm pyproject.toml
+      #    mv pyproject.toml.with_cython pyproject.toml
+          
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.1.2
         env:
           CIBW_BUILD: cp36-* cp37-* cp38-* cp39-*
           CIBW_BUILD_VERBOSITY: 1
           CIBW_BEFORE_ALL_LINUX: ./.github/ci-scripts/before_install.sh
-          # CIBW_BEFORE_BUILD_LINUX: mv pyproject.toml.fordeploy pyproject.toml
-          #   #OLD ./.github/ci-scripts/install-wheelbuilding-deps.sh
-          # CIBW_BEFORE_BUILD_MACOS: mv pyproject.toml.fordeploy pyproject.toml
-          # CIBW_BEFORE_BUILD_WINDOWS: mv pyproject.toml.fordeploy pyproject.toml
-          #  python -m pip install "numpy>=1.16.0" && 
-          #  python -m pip install cython && 
-          #  python -m pip install wheel flake8
 
       - uses: actions/upload-artifact@v2
         with:
@@ -89,3 +81,4 @@ jobs:
           user: __token__
           password: ${{ secrets.TESTPYPI_API_TOKEN }}
           repository_url: https://test.pypi.org/legacy/
+          verbose: true
