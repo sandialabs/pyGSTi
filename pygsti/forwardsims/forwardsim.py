@@ -902,6 +902,11 @@ class CacheForwardSimulator(ForwardSimulator):
         raise NotImplementedError("Derived classes can implement this to speed up derivative computation")
 
 
+def _array_type_parameter_dimension_letters():
+    """ Return all the array-type letters that stand for a parameter dimension """
+    return ('P', 'p', 'b')
+
+
 def _bytes_for_array_type(array_type, global_elements, max_local_elements, max_atom_size,
                           total_circuits, max_local_circuits,
                           global_num_params, max_local_num_params, max_param_block_size,
