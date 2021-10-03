@@ -227,7 +227,7 @@ def drift_neglog10pvalue_matrices(gsplaq, drifttuple):
     assert(dictlabel == ('circuit',)), "Currently can only create these matrices for this single type of test!"
     for i, j, opstr in gsplaq:
         try:
-            pval = stabilityanalyzer.get_pvalue(dictlabel={'circuit': opstr}, cutoff=1e-16)
+            pval = stabilityanalyzer.maximum_power_pvalue(dictlabel={'circuit': opstr}, cutoff=1e-16)
             ret[i, j] = -1 * _np.log10(pval)
         except:
             pass
@@ -265,7 +265,7 @@ def drift_maxtvd_matrices(gsplaq, drifttuple):
     estimator = drifttuple[2]
     for i, j, opstr in gsplaq:
         try:
-            ret[i, j] = stabilityanalyzer.get_max_tvd_bound(opstr, dskey=None,
+            ret[i, j] = stabilityanalyzer.maximum_tvd_bound(opstr, dskey=None,
                                                             estimatekey=estimatekey, estimator=estimator)
         except:
             pass

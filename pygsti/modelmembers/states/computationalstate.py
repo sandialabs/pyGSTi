@@ -324,6 +324,12 @@ class ComputationalBasisState(_State):
         basis = _Basis.from_nice_serialization(mm_dict['basis'])
         return cls(mm_dict['zvals'], basis, mm_dict['evotype'], state_space)
 
+    def _is_similar(self, other, rtol, atol):
+        """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
+            the same local structure, i.e., not considering parameter values or submembers """
+        return (_np.array_equal(self._zvals, other._zvals)  # must compare values too, since now parameters
+                and self._rep.basis == other._rep.basis)
+
     def __str__(self):
         nQubits = len(self._zvals)
         s = "Computational Z-basis state vec for %d qubits w/z-values: %s" % (nQubits, str(self._zvals))

@@ -88,8 +88,6 @@ class _BasePOVM(_POVM):
             assert(state_space.is_compatible_with(effect.state_space)), \
                 "All effect vectors must have compatible state spaces!"
 
-            #N = effect.num_params
-            #effect.set_gpindices(slice(self.Np, self.Np + N), self); self.Np += N  REMOVE
             paramlbls.extend(effect.parameter_labels)
             copied_items.append((k, effect))
         items = copied_items
@@ -106,7 +104,6 @@ class _BasePOVM(_POVM):
                                                 + comp_val, 'd')  # ensure shapes match before summing
             complement_effect = _ComplementPOVMEffect(
                 identity_for_complement, non_comp_effects)
-            #complement_effect.set_gpindices(slice(0, self.Np), self)  # all parameters REMOVE
             items.append((self.complement_label, complement_effect))
 
         super(_BasePOVM, self).__init__(state_space, evotype, items)
@@ -231,22 +228,8 @@ class _BasePOVM(_POVM):
         if prefix: prefix = prefix + "_"
         simplified = _collections.OrderedDict()
         for lbl, effect in self.items():
-            #if lbl == self.complement_label: continue #REMOVE: gpindices are global now
-            simplified[prefix + lbl] = effect #.copy()
-            #simplified[prefix + lbl].set_gpindices(effect.gpindices, self.parent)
+            simplified[prefix + lbl] = effect
 
-            #REMOVE: gpindices are global now
-            #simplified[prefix + lbl].set_gpindices(
-            #    _mm._compose_gpindices(self.gpindices, effect.gpindices),
-            #    self.parent)
-
-        #REMOVE: gpindices are global now
-        #if self.complement_label:
-        #    lbl = self.complement_label
-        #    simplified[prefix + lbl] = _ComplementPOVMEffect(
-        #        self[lbl].identity, [v for k, v in simplified.items()])
-            #self._copy_gpindices(simplified[prefix + lbl], self.parent, memo=None)  # set gpindices
-        #    # of complement vector to the same as POVM (it uses *all* params)
         return simplified
 
     @property

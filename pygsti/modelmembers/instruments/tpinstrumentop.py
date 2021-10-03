@@ -72,14 +72,6 @@ class TPInstrumentOp(_DenseOperator):
         self._construct_matrix()
         self.init_gpindices()
 
-        #TODO REMOVE - now use submembers framework
-        ##indices into self.param_ops of the operations this operation depends on
-        #self.set_gpindices(_slct.list_to_slice(
-        #    _np.concatenate([param_ops[i].gpindices_as_array()
-        #                     for i in self.dependents], axis=0), True, False),
-        #                   param_ops[0].parent)  # use parent of first param operation
-        ## (they should all be the same)
-
     def submembers(self):
         """
         Get the ModelMember-derived objects contained in this one.
@@ -127,6 +119,11 @@ class TPInstrumentOp(_DenseOperator):
             param_ops[paramop_index] = serial_memo[subm_serial_id]
 
         return cls(param_ops, index)
+
+    def _is_similar(self, other, rtol, atol):
+        """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
+            the same local structure, i.e., not considering parameter values or submembers """
+        return (self.index == other.index and self.num_instrument_elements == other.num_instrument_elements)
 
     def _construct_matrix(self):
         """

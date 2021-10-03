@@ -238,6 +238,11 @@ class DenseState(DenseStateInterface, _State):
         state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
         return cls(vec, mm_dict['evotype'], state_space)
 
+    def _is_similar(self, other, rtol, atol):
+        """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
+            the same local structure, i.e., not considering parameter values or submembers """
+        return self._ptr.shape == other._ptr.shape  # similar (up to params) if have same data shape
+
 
 class DensePureState(DenseStateInterface, _State):
     """
@@ -259,7 +264,11 @@ class DensePureState(DenseStateInterface, _State):
             self._reptype = 'pure'
             self._purevec = self._basis = None
         except Exception:
-            superket_vec = _bt.change_basis(_ot.state_to_dmvec(purevec), 'std', basis)
+            if len(purevec) == basis.dim and _np.linalg.norm(purevec.imag) < 1e-10:
+                # Special case when a *superket* was provided instead of a purevec
+                superket_vec = purevec.real  # used as a convenience case that really shouldn't be used
+            else:
+                superket_vec = _bt.change_basis(_ot.state_to_dmvec(purevec), 'std', basis)
             rep = evotype.create_dense_state_rep(superket_vec, state_space)
             self._reptype = 'superket'
             self._purevec = purevec; self._basis = basis
@@ -323,7 +332,7 @@ class DensePureState(DenseStateInterface, _State):
         """
         mm_dict = super().to_memoized_dict(mmg_memo)
 
-        mm_dict['dense_state_vector'] = self.to_dense().tolist()
+        mm_dict['dense_state_vector'] = self.to_dense('Hilbert').tolist()
         mm_dict['basis'] = self._basis.to_nice_serialization()
 
         return mm_dict
@@ -334,3 +343,8 @@ class DensePureState(DenseStateInterface, _State):
         state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
         basis = _Basis.from_nice_serialization(mm_dict['basis'])
         return cls(vec, basis, mm_dict['evotype'], state_space)
+
+    def _is_similar(self, other, rtol, atol):
+        """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
+            the same local structure, i.e., not considering parameter values or submembers """
+        return self._ptr.shape == other._ptr.shape  # similar (up to params) if have same data shape

@@ -77,28 +77,6 @@ class RepeatedOp(_LinearOperator):
         """
         self.repeated_op.set_time(t)
 
-    # REMOVE - unnecessary
-    #def copy(self, parent=None, memo=None):
-    #    """
-    #    Copy this object.
-    #
-    #    Parameters
-    #    ----------
-    #    parent : Model, optional
-    #        The parent model to set for the copy.
-    #
-    #    Returns
-    #    -------
-    #    LinearOperator
-    #        A copy of this object.
-    #    """
-    #    # We need to override this method so that factor operations have their
-    #    # parent reset correctly.
-    #    if memo is not None and id(self) in memo: return memo[id(self)]
-    #    cls = self.__class__  # so that this method works for derived classes too
-    #    copyOfMe = cls(self.repeated_op.copy(parent, memo), self.num_repetitions, self._evotype)
-    #    return self._copy_gpindices(copyOfMe, parent, memo)
-
     def to_sparse(self, on_space='minimal'):
         """
         Return the operation as a sparse matrix
@@ -288,3 +266,7 @@ class RepeatedOp(_LinearOperator):
         s = "Repeated operation that repeates the below op %d times\n" % self.num_repetitions
         s += str(self.repeated_op)
         return s
+
+    def _oneline_contents(self):
+        """ Summarizes the contents of this object in a single line.  Does not summarize submembers. """
+        return "repeats %d times" % self.num_repetitions

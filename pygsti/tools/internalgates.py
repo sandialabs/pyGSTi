@@ -256,19 +256,24 @@ def standard_gatename_unitaries():
     std_unitaries['Gswap'] = _np.array([[1., 0., 0., 0.], [0., 0., 1., 0.], [
                                        0., 1., 0., 0.], [0., 0., 0., 1.]], complex)
 
-    def Gzr(theta):
-        if theta is None: return _np.array([[1., 0.], [0., 1.]], complex)
-        else: return _np.array([[1., 0.], [0., _np.exp(-1j * float(theta[0]))]])
+    from pygsti.processors import UnitaryGateFunction as _UnitaryGateFunction
 
-    std_unitaries['Gzr'] = Gzr
+    class Gzr(_UnitaryGateFunction):
+        shape = (2, 2)
 
-    def Gczr(theta):
-        if theta is None: return _np.array([[1., 0., 0., 0.], [0., 1., 0., 0.],
-                                            [0., 0., 1., 0.], [0., 0., 0., 1.]], complex)
-        else: return _np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.],
-                                [0., 0., 0., _np.exp(-1j * float(theta[0]))]], complex)
+        def __call__(self, theta):
+            return _np.array([[1., 0.], [0., _np.exp(-1j * float(theta[0]))]])
 
-    std_unitaries['Gczr'] = Gczr
+    std_unitaries['Gzr'] = Gzr()
+
+    class Gczr(_UnitaryGateFunction):
+        shape = (4, 4)
+
+        def __call__(self, theta):
+            return _np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.],
+                              [0., 0., 0., _np.exp(-1j * float(theta[0]))]], complex)
+
+    std_unitaries['Gczr'] = Gczr()
 
     return std_unitaries
 

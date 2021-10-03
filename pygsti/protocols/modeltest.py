@@ -11,6 +11,7 @@ ModelTest Protocol objects
 #***************************************************************************************************
 
 import collections as _collections
+import warnings as _warnings
 
 from pygsti.baseobjs.profiler import DummyProfiler as _DummyProfiler
 from pygsti.objectivefns.objectivefns import ModelDatasetCircuitsStore as _ModelDatasetCircuitStore
@@ -154,7 +155,11 @@ class ModelTest(_proto.Protocol):
         if self.target_model is not None:
             target_model = self.target_model
         elif hasattr(data.edesign, 'create_target_model'):
-            target_model = data.edesign.create_target_model()
+            try:
+                target_model = data.edesign.create_target_model()
+            except:
+                _warnings.warn("Experiment design failed to create a target model.")
+                target_model = None
         else:
             target_model = None  # target model isn't necessary
 
@@ -201,7 +206,6 @@ class ModelTest(_proto.Protocol):
         extra_parameters = _collections.OrderedDict()
         extra_parameters['raw_objective_values'] = objfn_vals
         extra_parameters['model_test_values'] = chi2k_distributed_vals
-
 
         from .gst import _add_gaugeopt_and_badfit
         from .gst import ModelEstimateResults as _ModelEstimateResults

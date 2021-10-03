@@ -14,6 +14,7 @@ Defines the LayerLizard class and supporting functionality.
 from pygsti.modelmembers import operations as _op
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 
+
 class LayerRules(_NicelySerializable):
     """
     Rules for composing a layer operation from the elements stored within a model.

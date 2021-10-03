@@ -146,7 +146,7 @@ def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials,
     prep_povm_tuples = [(_circuits.Circuit((prepLbl,)), _circuits.Circuit((povmLbl,)))
                         for prepLbl, povmLbl in prep_povm_tuples]
 
-    def get_derivs(length):
+    def _get_derivs(length):
         """ Compute all derivative info: get derivative of each <E_i|germ^exp|rho_j>
             where i = composite EVec & fiducial index and j similar """
 
@@ -187,7 +187,7 @@ def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials,
         # where iGerm, f0, f1, and SPAM are all bundled into iElement (but elIndicesForPair
         # provides the necessary indexing for picking out certain pairs)
 
-    def get_number_amplified(m0, m1, len0, len1, verb):
+    def _get_number_amplified(m0, m1, len0, len1, verb):
         """ Return the number of amplified parameters """
         printer = _baseobjs.VerbosityPrinter.create_printer(verb)
         L_ratio = float(len1) / float(len0)
@@ -212,15 +212,15 @@ def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials,
 
     printer.log("------  Fiducial Pair Reduction --------")
 
-    L0 = test_lengths[0]; dP0, elIndices0 = get_derivs(L0)
-    L1 = test_lengths[1]; dP1, elIndices1 = get_derivs(L1)
+    L0 = test_lengths[0]; dP0, elIndices0 = _get_derivs(L0)
+    L1 = test_lengths[1]; dP1, elIndices1 = _get_derivs(L1)
     fullTestMx0 = dP0
     fullTestMx1 = dP1
 
     #Get number of amplified parameters in the "full" test matrix: the one we get when we use all possible fiducial
     #pairs
     if test_pair_list is None:
-        maxAmplified = get_number_amplified(fullTestMx0, fullTestMx1, L0, L1, verbosity + 1)
+        maxAmplified = _get_number_amplified(fullTestMx0, fullTestMx1, L0, L1, verbosity + 1)
         printer.log("maximum number of amplified parameters = %s" % maxAmplified)
 
     #Loop through fiducial pairs and add all derivative rows (1 x nModelParams) to test matrix
@@ -237,7 +237,7 @@ def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials,
                                         for prepfid_index, iEStr in test_pair_list])
         testMx0 = _np.take(fullTestMx0, pairIndices0, axis=0)
         testMx1 = _np.take(fullTestMx1, pairIndices1, axis=0)
-        nAmplified = get_number_amplified(testMx0, testMx1, L0, L1, verbosity)
+        nAmplified = _get_number_amplified(testMx0, testMx1, L0, L1, verbosity)
         printer.log("Number of amplified parameters = %s" % nAmplified)
         return None
 
@@ -263,7 +263,7 @@ def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials,
             pairIndices1 = _np.concatenate([elIndices1[i] for i in pairIndicesToTest])
             testMx0 = _np.take(fullTestMx0, pairIndices0, axis=0)
             testMx1 = _np.take(fullTestMx1, pairIndices1, axis=0)
-            nAmplified = get_number_amplified(testMx0, testMx1, L0, L1, verbosity)
+            nAmplified = _get_number_amplified(testMx0, testMx1, L0, L1, verbosity)
             bestAmplified = max(bestAmplified, nAmplified)
             if printer.verbosity > 1:
                 ret = []
@@ -408,12 +408,13 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
 
             #Determine which fiducial-pair indices to iterate over
             goodPairList = _get_per_germ_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples,
-                gsGerm, mem_limit, printer, search_mode, seed, n_random)
+                                                  gsGerm, mem_limit, printer, search_mode, seed, n_random)
 
             assert(goodPairList is not None)
             pairListDict[germ] = goodPairList  # add to final list of per-germ pairs
 
     return pairListDict
+
 
 def find_sufficient_fiducial_pairs_per_germ_power(target_model, prep_fiducials, meas_fiducials,
                                                   germs, max_lengths,
@@ -460,7 +461,7 @@ def find_sufficient_fiducial_pairs_per_germ_power(target_model, prep_fiducials, 
 
     germs : list of Circuits
         The germ circuits that are repeated to amplify errors.
-    
+
     max_lengths: list of int
         The germ powers (number of repetitions) to be used to amplify errors.
 
@@ -530,7 +531,7 @@ def find_sufficient_fiducial_pairs_per_germ_power(target_model, prep_fiducials, 
             expGerm = _gsc.repeat_with_max_length(germ, L)
             if len(expGerm) == 0:
                 # Skip empty circuits (i.e. germ^power > max_length)
-                printer.show_progress(i, len(germs)*len(max_lengths),
+                printer.show_progress(i, len(germs) * len(max_lengths),
                                       suffix='-- %s germ skipped since longer than max length %d' %
                                       (repr(germ), L))
                 continue
@@ -538,16 +539,16 @@ def find_sufficient_fiducial_pairs_per_germ_power(target_model, prep_fiducials, 
             gsGerm.operations["Ggerm"] = _EigenvalueParamDenseOp(
                 germMx, True, constrain_to_tp)
 
-            printer.show_progress(i, len(germs)*len(max_lengths),
-                                suffix='-- %s germ^power (%d params)' %
-                                (repr(expGerm), gsGerm.num_params))
+            printer.show_progress(i, len(germs) * len(max_lengths),
+                                  suffix='-- %s germ^power (%d params)' %
+                                  (repr(expGerm), gsGerm.num_params))
             #Debugging
             #print(gsGerm.operations["Ggerm"].evals)
             #print(gsGerm.operations["Ggerm"].params)
 
             #Determine which fiducial-pair indices to iterate over
             goodPairList = _get_per_germ_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples,
-                gsGerm, mem_limit, printer, search_mode, seed, n_random)
+                                                  gsGerm, mem_limit, printer, search_mode, seed, n_random)
 
             assert(goodPairList is not None)
             pairListDict[germ_power] = goodPairList  # add to final list of per-germ-power pairs
@@ -621,7 +622,7 @@ def test_fiducial_pairs(fid_pairs, target_model, prep_fiducials, meas_fiducials,
     pre_povm_tuples = [(_circuits.Circuit((prepLbl,)), _circuits.Circuit((povmLbl,)))
                        for prepLbl, povmLbl in pre_povm_tuples]
 
-    def get_derivs(length):
+    def _get_derivs(length):
         """ Compute all derivative info: get derivative of each <E_i|germ^exp|rho_j>
             where i = composite EVec & fiducial index and j similar """
 
@@ -644,7 +645,7 @@ def test_fiducial_pairs(fid_pairs, target_model, prep_fiducials, meas_fiducials,
 
         return dP
 
-    def get_number_amplified(m0, m1, len0, len1):
+    def _get_number_amplified(m0, m1, len0, len1):
         """ Return the number of amplified parameters """
         L_ratio = float(len1) / float(len0)
         try:
@@ -668,18 +669,19 @@ def test_fiducial_pairs(fid_pairs, target_model, prep_fiducials, meas_fiducials,
 
     printer.log("----------  Testing Fiducial Pairs ----------")
     printer.log("Getting jacobian at L=%d" % L0, 2)
-    dP0 = get_derivs(L0)
+    dP0 = _get_derivs(L0)
     printer.log("Getting jacobian at L=%d" % L1, 2)
-    dP1 = get_derivs(L1)
+    dP1 = _get_derivs(L1)
     printer.log("Computing number amplified", 2)
-    nAmplified = get_number_amplified(dP0, dP1, L0, L1)
+    nAmplified = _get_number_amplified(dP0, dP1, L0, L1)
     printer.log("Number of amplified parameters = %s" % nAmplified)
 
     return nAmplified
 
+
 # Helper function for per_germ and per_germ_power FPR
 def _get_per_germ_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples,
-    gsGerm, mem_limit, printer, search_mode, seed, n_random):
+                           gsGerm, mem_limit, printer, search_mode, seed, n_random):
     #Get dP-matrix for full set of fiducials, where
     # P_ij = <E_i|germ^exp|rho_j>, i = composite EVec & fiducial index,
     #   j is similar, and derivs are wrt the "eigenvalues" of the germ
@@ -760,7 +762,7 @@ def _get_per_germ_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples,
 
             printer.log("Pair list %s ==> %d of %d amplified parameters"
                         % (" ".join(map(str, pairList)), rank,
-                        gsGerm.num_params), 3)
+                           gsGerm.num_params), 3)
 
             if rank == gsGerm.num_params:
                 printer.log("Found a good set of %d pairs: %s" %
@@ -770,5 +772,5 @@ def _get_per_germ_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples,
 
         if goodPairList is not None:
             break  # exit another loop level if a solution was found
-    
+
     return goodPairList

@@ -54,7 +54,7 @@ from pygsti.tools.legacytools import deprecate as _deprecated_fn
 #############################################
 # Build gates based on "standard" gate names
 ############################################
-def _basis_create_spam_vector(vec_expr, basis):
+def create_spam_vector(vec_expr, state_space, basis):
     """
     Build a rho or E vector from an expression.
 
@@ -68,7 +68,10 @@ def _basis_create_spam_vector(vec_expr, basis):
         space, and is independent of the direct-sum decomposition of density
         matrix space.
 
-    basis : Basis object
+    state_space : StateSpace
+        The state space that the created operation should act upon.
+
+    basis : str or Basis
         The basis of the returned vector.  Allowed
         values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
         and Qutrit (qt) (or a custom basis object).
@@ -85,6 +88,12 @@ def _basis_create_spam_vector(vec_expr, basis):
     except:
         raise ValueError("Expression must be the index of a state (as a string)")
 
+    state_space = _statespace.StateSpace.cast(state_space)
+    if isinstance(basis, str):
+        basis = _Basis.cast(basis, state_space)
+    assert (state_space.dim == basis.dim), \
+        "State space labels dim (%s) != basis dim (%s)" % (state_space.dim, basis.dim)
+
     #standard basis that has the same direct-sum structure as `basis`:
     std_basis = basis.create_equivalent('std')
     vecInSimpleStdBasis = _np.zeros(std_basis.elshape, 'd')  # a matrix, but flattened it is our spamvec
@@ -96,15 +105,7 @@ def _basis_create_spam_vector(vec_expr, basis):
     return vec.reshape(-1, 1)
 
 
-@_deprecated_fn('_basis_create_spam_vector(...)')
-def _create_spam_vector(state_space_dims, state_space_labels, vec_expr, basis="gm"):
-    """
-    DEPRECATED: use :func:`_basis_create_spam_vector` instead.
-    """
-    return _basis_create_spam_vector(vec_expr, _Basis.cast(basis, state_space_dims))
-
-
-def _basis_create_identity_vec(basis):
+def create_identity_vec(basis):
     """
     Build a the identity vector for a given space and basis.
 
@@ -140,37 +141,12 @@ def _basis_create_identity_vec(basis):
     return _bt.change_basis(vecInReducedStdBasis, "std", basis)
 
 
-def _create_identity_vec(state_space_dims, basis="gm"):
-    """
-    Build the identity vector given a certain density matrix struture.
-
-    Parameters
-    ----------
-    state_space_dims : list
-        A list of integers specifying the dimension of each block
-        of a block-diagonal the density matrix.
-
-    basis : str, optional
-        The string abbreviation of the basis of the returned vector.  Allowed
-        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-        and Qutrit (qt).
-
-    Returns
-    -------
-    numpy array
-    """
-    return _basis_create_identity_vec(_Basis.cast(basis, state_space_dims))
-
-
-def _basis_create_operation(state_space, op_expr, basis="gm", parameterization="full", evotype='default'):
+def create_operation(op_expr, state_space, basis="pp", parameterization="full", evotype='default'):
     """
     Build an operation object from an expression.
 
     Parameters
     ----------
-    state_space : StateSpace
-        The state space that the created operation should act upon.
-
     op_expr : string
         expression for the gate to build.  String is first split into parts
         delimited by the colon (:) character, which are composed together to
@@ -195,7 +171,10 @@ def _basis_create_operation(state_space, op_expr, basis="gm", parameterization="
           an x-rotation between states with integer indices i0 and i1 followed
           by complete decoherence between the states.
 
-    basis : Basis object
+    state_space : StateSpace
+        The state space that the created operation should act upon.
+
+    basis : str or Basis
         The basis the returned operation should be represented in.
 
     parameterization : {"full","TP","static"}, optional
@@ -434,19 +413,6 @@ def _basis_create_operation(state_space, op_expr, basis="gm", parameterization="
                                       evotype=evotype, state_space=state_space)
 
 
-@_deprecated_fn('_basis_create_operation(...)')
-def _create_operation(state_space_dims, state_space_labels, op_expr, basis="gm", parameterization="full"):
-    """
-    DEPRECATED: use :func:`_basis_create_operation` instead.
-    """
-    udims = []
-    for tpbdims in state_space_dims:
-        udims.append(tuple([int(_np.sqrt(d)) for d in tpbdims]))
-    sslbls = _statespace.ExplicitStateSpace(state_space_labels, udims)
-    return _basis_create_operation(sslbls, op_expr, _Basis.cast(basis, state_space_dims),
-                                   parameterization, evotype='default')
-
-
 def _create_explicit_model_from_expressions(state_space, basis,
                                             op_labels, op_expressions,
                                             prep_labels=('rho0',), prep_expressions=('0',),
@@ -475,7 +441,7 @@ def _create_explicit_model_from_expressions(state_space, basis,
     op_expressions : list of strings
         A list of gate expressions, each corresponding to a operation label in
         op_labels, which determine what operation each gate performs (see
-        documentation for :meth:`_basis_create_operation`).
+        documentation for :meth:`create_operation`).
 
     prep_labels : list of string, optional
         A list of labels for each created state preparation in the final
@@ -510,7 +476,7 @@ def _create_explicit_model_from_expressions(state_space, basis,
 
     parameterization : {"full","TP","static"}, optional
         How to parameterize the gates of the resulting Model (see
-        documentation for :meth:`_basis_create_operation`).
+        documentation for :meth:`create_operation`).
 
     evotype : Evotype or str, optional
         The evolution type of this model, describing how states are
@@ -531,14 +497,14 @@ def _create_explicit_model_from_expressions(state_space, basis,
     #prep_prefix="rho", effect_prefix="E", gate_prefix="G")
 
     if prep_type == "auto":
-        prep_type = _state.get_state_type_from_op_type(gate_type)
+        prep_type = _state.state_type_from_op_type(gate_type)
     if povm_type == "auto":
-        povm_type = _povm.get_povm_type_from_op_type(gate_type)
+        povm_type = _povm.povm_type_from_op_type(gate_type)
     if instrument_type == "auto":
-        instrument_type = _instrument.get_instrument_type_from_op_type(gate_type)
+        instrument_type = _instrument.instrument_type_from_op_type(gate_type)
 
     for label, rhoExpr in zip(prep_labels, prep_expressions):
-        vec = _basis_create_spam_vector(rhoExpr, basis)
+        vec = create_spam_vector(rhoExpr, state_space, basis)
         ret.preps[label] = _state.create_from_dmvec(vec, prep_type, basis, evotype, state_space)
 
     if isinstance(povm_labels, str):
@@ -563,14 +529,14 @@ def _create_explicit_model_from_expressions(state_space, basis,
         if EExprs == "standard":
             EExprs = list(map(str, range(dmDim)))  # standard = 0,1,...,dmDim
 
-        effect_vecs = {label: _basis_create_spam_vector(expr, basis) for label, expr in zip(ELbls, EExprs)}
+        effect_vecs = {label: create_spam_vector(expr, state_space, basis)
+                       for label, expr in zip(ELbls, EExprs)}
 
         if len(effect_vecs) > 0:  # don't add POVMs with 0 effects
             ret.povms[povmLbl] = _povm.create_from_dmvecs(effect_vecs, povm_type, basis, evotype, state_space)
 
     for (opLabel, opExpr) in zip(op_labels, op_expressions):
-        ret.operations[opLabel] = _basis_create_operation(state_space, opExpr,
-                                                          basis, gate_type, evotype)
+        ret.operations[opLabel] = create_operation(opExpr, state_space, basis, gate_type, evotype)
 
     if gate_type == "full":
         ret.default_gauge_group = _gg.FullGaugeGroup(ret.state_space, evotype)
@@ -609,7 +575,7 @@ def create_explicit_model_from_expressions(state_space,
     op_expressions : list of strings
         A list of gate expressions, each corresponding to a operation label in
         op_labels, which determine what operation each gate performs (see
-        documentation for :meth:`_basis_create_operation`).
+        documentation for :meth:`create_operation`).
 
     prep_labels : list of string
         A list of labels for each created state preparation in the final
@@ -658,7 +624,7 @@ def create_explicit_model_from_expressions(state_space,
 
     parameterization : {"full","TP"}, optional
         How to parameterize the gates of the resulting Model (see
-        documentation for :meth:`_basis_create_operation`).
+        documentation for :meth:`create_operation`).
 
     evotype : Evotype or str, optional
         The evolution type of this model, describing how states are
@@ -739,18 +705,12 @@ def create_explicit_model(processor_spec, custom_gates=None,
                           evotype="default", simulator="auto",
                           ideal_gate_type='auto', ideal_spam_type='computational',
                           embed_gates=False, basis='pp'):
-    modelnoises = []
-    if depolarization_strengths is not None:
-        modelnoises.append(_OpModelPerOpNoise({lbl: _DepolarizationNoise(val, depolarization_parameterization)
-                                               for lbl, val in depolarization_strengths.items()}))
-    if stochastic_error_probs is not None:
-        modelnoises.append(_OpModelPerOpNoise({lbl: _StochasticNoise(val, stochastic_parameterization)
-                                               for lbl, val in stochastic_error_probs.items()}))
-    if lindblad_error_coeffs is not None:
-        modelnoises.append(_OpModelPerOpNoise({lbl: _LindbladNoise(val, lindblad_parameterization)
-                                               for lbl, val in lindblad_error_coeffs.items()}))
 
-    return _create_explicit_model(processor_spec, _ComposedOpModelNoise(modelnoises), custom_gates, evotype,
+    modelnoise = _build_modelnoise_from_args(depolarization_strengths, stochastic_error_probs, lindblad_error_coeffs,
+                                             depolarization_parameterization, stochastic_parameterization,
+                                             lindblad_parameterization, allow_nonlocal=True)
+
+    return _create_explicit_model(processor_spec, modelnoise, custom_gates, evotype,
                                   simulator, ideal_gate_type, ideal_spam_type, ideal_spam_type, embed_gates, basis)
 
 
@@ -769,9 +729,9 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
     if ideal_gate_type == "auto":
         ideal_gate_type = ('static standard', 'static clifford', 'static unitary')
     if ideal_prep_type == "auto":
-        ideal_prep_type = _state.get_state_type_from_op_type(ideal_gate_type)
+        ideal_prep_type = _state.state_type_from_op_type(ideal_gate_type)
     if ideal_povm_type == "auto":
-        ideal_povm_type = _povm.get_povm_type_from_op_type(ideal_gate_type)
+        ideal_povm_type = _povm.povm_type_from_op_type(ideal_gate_type)
 
     def _embed_unitary(statespace, target_labels, unitary):
         dummyop = _op.EmbeddedOp(statespace, target_labels,
@@ -1146,12 +1106,13 @@ def _setup_local_gates(processor_spec, evotype, modelnoise=None, custom_gates=No
         else:
             stdname = None
 
-        if isinstance(U, (int, _np.int64)):  # signals that the gate is an identity on `U` qubits and shouldn't be built
-            # A key is added to the returned gatedict only if there is any noise on this operation
+        if isinstance(U, (int, _np.int64)):  # signals that the gate is an identity on `U` qubits
             ideal_gate_state_space = _statespace.default_space_for_num_qubits(U)
             noiseop = modelnoise.create_errormap(key, evotype, ideal_gate_state_space, target_labels=None)
             if noiseop is not None:
                 gatedict[key] = noiseop
+            else:
+                gatedict[key] = _op.ComposedOp([], evotype, ideal_gate_state_space)  # (identity gate on N qubits)
 
         elif not callable(U):  # normal operation (not a factory)
             ideal_gate = ideal_gates.get(name, None)
@@ -1174,7 +1135,7 @@ def _setup_local_gates(processor_spec, evotype, modelnoise=None, custom_gates=No
         else:  # a factory, given by the unitary-valued function U: args -> unitary
             ideal_factory = ideal_factories.get(name, None)
             if ideal_factory is None:
-                local_state_space = _statespace.default_space_for_udim(U(None).shape[0])  # OR possibly U.udim in future
+                local_state_space = _statespace.default_space_for_udim(U.shape[0])  # factory *function* SHAPE
                 ideal_factory = _opfactory.UnitaryOpFactory(U, local_state_space, 'pp', evotype)
                 ideal_factories[name] = ideal_factory
             noiseop = modelnoise.create_errormap(key, evotype, ideal_factory.state_space, target_labels=None)
@@ -1325,18 +1286,11 @@ def create_crosstalk_free_model(processor_spec, custom_gates=None,
         For instance, the operation label for the `"Gx"` gate on the second
         qubit might be `Label("Gx",1)`.
     """
-    modelnoises = []
-    if depolarization_strengths is not None:
-        modelnoises.append(_OpModelPerOpNoise({lbl: _DepolarizationNoise(val, depolarization_parameterization)
-                                               for lbl, val in depolarization_strengths.items()}))
-    if stochastic_error_probs is not None:
-        modelnoises.append(_OpModelPerOpNoise({lbl: _StochasticNoise(val, stochastic_parameterization)
-                                               for lbl, val in stochastic_error_probs.items()}))
-    if lindblad_error_coeffs is not None:
-        modelnoises.append(_OpModelPerOpNoise({lbl: _LindbladNoise(val, lindblad_parameterization)
-                                               for lbl, val in lindblad_error_coeffs.items()}))
+    modelnoise = _build_modelnoise_from_args(depolarization_strengths, stochastic_error_probs, lindblad_error_coeffs,
+                                             depolarization_parameterization, stochastic_parameterization,
+                                             lindblad_parameterization, allow_nonlocal=False)
 
-    return _create_crosstalk_free_model(processor_spec, _ComposedOpModelNoise(modelnoises), custom_gates, evotype,
+    return _create_crosstalk_free_model(processor_spec, modelnoise, custom_gates, evotype,
                                         simulator, on_construction_error, independent_gates, independent_spam,
                                         ensure_composed_gates, ideal_gate_type, ideal_spam_type, ideal_spam_type,
                                         implicit_idle_mode)
@@ -1366,9 +1320,9 @@ def _create_crosstalk_free_model(processor_spec, modelnoise, custom_gates=None, 
     if ideal_gate_type == "auto":
         ideal_gate_type = ('static standard', 'static clifford', 'static unitary')
     if ideal_prep_type == "auto":
-        ideal_prep_type = _state.get_state_type_from_op_type(ideal_gate_type)
+        ideal_prep_type = _state.state_type_from_op_type(ideal_gate_type)
     if ideal_povm_type == "auto":
-        ideal_povm_type = _povm.get_povm_type_from_op_type(ideal_gate_type)
+        ideal_povm_type = _povm.povm_type_from_op_type(ideal_gate_type)
 
     gatedict = _setup_local_gates(processor_spec, evotype, modelnoise, custom_gates, ideal_gate_type)
 
@@ -1516,79 +1470,12 @@ def create_cloud_crosstalk_model(processor_spec, custom_gates=None,
     -------
     CloudNoiseModel
     """
-    modelnoises = []
-    if depolarization_strengths is not None:
-        modelnoises.append(_OpModelPerOpNoise({lbl: _DepolarizationNoise(val, depolarization_parameterization)
-                                               for lbl, val in depolarization_strengths.items()}))
-    if stochastic_error_probs is not None:
-        modelnoises.append(_OpModelPerOpNoise({lbl: _StochasticNoise(val, stochastic_parameterization)
-                                               for lbl, val in stochastic_error_probs.items()}))
-    if lindblad_error_coeffs is not None:
 
-        def process_stencil_labels(flat_lindblad_errs):
-            nonlocal_errors = _collections.OrderedDict()
-            local_errors = _collections.OrderedDict()
+    modelnoise = _build_modelnoise_from_args(depolarization_strengths, stochastic_error_probs, lindblad_error_coeffs,
+                                             depolarization_parameterization, stochastic_parameterization,
+                                             lindblad_parameterization, allow_nonlocal=True)
 
-            for nm, val in flat_lindblad_errs.items():
-                if isinstance(nm, str): nm = (nm[0], nm[1:])  # e.g. "HXX" => ('H','XX')
-                err_typ, basisEls = nm[0], nm[1:]
-                sslbls = None
-                local_nm = [err_typ]
-                for bel in basisEls:  # e.g. bel could be "X:Q0" or "XX:Q0,Q1"
-                    # OR "X:<n>" where n indexes a target qubit or "X:<dir>" where dir indicates
-                    # a graph *direction*, e.g. "up"
-                    if ':' in bel:
-                        bel_name, bel_sslbls = bel.split(':')  # should have form <name>:<comma-separated-sslbls>
-                        bel_sslbls = bel_sslbls.split(',')  # e.g. ('Q0','Q1')
-                        integerized_sslbls = []
-                        for ssl in bel_sslbls:
-                            try: integerized_sslbls.append(int(ssl))
-                            except: integerized_sslbls.append(ssl)
-                        bel_sslbls = tuple(integerized_sslbls)
-                    else:
-                        bel_name = bel
-                        bel_sslbls = None
-
-                    if sslbls is None:
-                        sslbls = bel_sslbls
-                    else:
-                        #Note: sslbls should always be the same if there are multiple basisEls,
-                        #  i.e for nm == ('S',bel1,bel2)
-                        assert(sslbls is bel_sslbls or sslbls == bel_sslbls), \
-                            "All basis elements of the same error term must operate on the *same* state!"
-                    local_nm.append(bel_name)  # drop the state space labels, e.g. "XY:Q0,Q1" => "XY"
-
-                # keep track of errors by the qubits they act on, as only each such
-                # set will have it's own LindbladErrorgen
-                local_nm = tuple(local_nm)  # so it's hashable
-                if sslbls is not None:
-                    sslbls = tuple(sorted(sslbls))
-                    if sslbls not in nonlocal_errors:
-                        nonlocal_errors[sslbls] = _collections.OrderedDict()
-                    if local_nm in nonlocal_errors[sslbls]:
-                        nonlocal_errors[sslbls][local_nm] += val
-                    else:
-                        nonlocal_errors[sslbls][local_nm] = val
-                else:
-                    if local_nm in local_errors:
-                        local_errors[local_nm] += val
-                    else:
-                        local_errors[local_nm] = val
-
-            if len(nonlocal_errors) == 0:
-                return _LindbladNoise(local_errors, lindblad_parameterization)
-            else:
-                all_errors = []
-                if len(local_errors) > 0:
-                    all_errors.append((None, _LindbladNoise(local_errors, lindblad_parameterization)))
-                for sslbls, errdict in nonlocal_errors.items():
-                    all_errors.append((sslbls, _LindbladNoise(errdict, lindblad_parameterization)))
-                return _collections.OrderedDict(all_errors)
-
-        modelnoises.append(_OpModelPerOpNoise({lbl: process_stencil_labels(val)
-                                               for lbl, val in lindblad_error_coeffs.items()}))
-
-    return _create_cloud_crosstalk_model(processor_spec, _ComposedOpModelNoise(modelnoises), custom_gates, evotype,
+    return _create_cloud_crosstalk_model(processor_spec, modelnoise, custom_gates, evotype,
                                          simulator, independent_gates, independent_spam, errcomp_type,
                                          implicit_idle_mode, verbosity)
 
@@ -1967,6 +1854,103 @@ def _build_weight_maxhops_modelnoise(target_sslbls, weight_maxhops_tuples, lnd_p
             lnd_parameterization, _construct_restricted_weight_pauli_basis(wt),
             local_state_space)
     return modelnoise_dict
+
+
+def _build_modelnoise_from_args(depolarization_strengths, stochastic_error_probs, lindblad_error_coeffs,
+                                depolarization_parameterization, stochastic_parameterization, lindblad_parameterization,
+                                allow_nonlocal):
+
+    modelnoises = []
+    if depolarization_strengths is not None:
+        noise_dict = {}
+        for lbl, val in depolarization_strengths.items():
+            if isinstance(val, dict):  # then value is actually a dictionary of sslbls -> noise specifications
+                if not allow_nonlocal: raise ValueError("Nonlocal depolarization strengths not allowed!")
+                noise_dict[lbl] = {k: _DepolarizationNoise(v, depolarization_parameterization) for k, v in val.items()}
+            else:
+                noise_dict[lbl] = _DepolarizationNoise(val, depolarization_parameterization)
+        modelnoises.append(_OpModelPerOpNoise(noise_dict))
+
+    if stochastic_error_probs is not None:
+        noise_dict = {}
+        for lbl, val in stochastic_error_probs.items():
+            if isinstance(val, dict):  # then value is actually a dictionary of sslbls -> noise specifications
+                if not allow_nonlocal: raise ValueError("Nonlocal stochastic error probs not allowed!")
+                noise_dict[lbl] = {k: _StochasticNoise(v, stochastic_parameterization) for k, v in val.items()}
+            else:
+                noise_dict[lbl] = _StochasticNoise(val, stochastic_parameterization)
+        modelnoises.append(_OpModelPerOpNoise(noise_dict))
+
+    if lindblad_error_coeffs is not None:
+
+        if not allow_nonlocal:  # the easy case
+            modelnoises.append(_OpModelPerOpNoise({lbl: _LindbladNoise(val, lindblad_parameterization)
+                                                   for lbl, val in lindblad_error_coeffs.items()}))
+        else:  # then need to process labels like ('H', 'XX:0,1') or 'HXX:0,1'
+            def process_stencil_labels(flat_lindblad_errs):
+                nonlocal_errors = _collections.OrderedDict()
+                local_errors = _collections.OrderedDict()
+
+                for nm, val in flat_lindblad_errs.items():
+                    if isinstance(nm, str): nm = (nm[0], nm[1:])  # e.g. "HXX" => ('H','XX')
+                    err_typ, basisEls = nm[0], nm[1:]
+                    sslbls = None
+                    local_nm = [err_typ]
+                    for bel in basisEls:  # e.g. bel could be "X:Q0" or "XX:Q0,Q1"
+                        # OR "X:<n>" where n indexes a target qubit or "X:<dir>" where dir indicates
+                        # a graph *direction*, e.g. "up"
+                        if ':' in bel:
+                            bel_name, bel_sslbls = bel.split(':')  # should have form <name>:<comma-separated-sslbls>
+                            bel_sslbls = bel_sslbls.split(',')  # e.g. ('Q0','Q1')
+                            integerized_sslbls = []
+                            for ssl in bel_sslbls:
+                                try: integerized_sslbls.append(int(ssl))
+                                except: integerized_sslbls.append(ssl)
+                            bel_sslbls = tuple(integerized_sslbls)
+                        else:
+                            bel_name = bel
+                            bel_sslbls = None
+
+                        if sslbls is None:
+                            sslbls = bel_sslbls
+                        else:
+                            #Note: sslbls should always be the same if there are multiple basisEls,
+                            #  i.e for nm == ('S',bel1,bel2)
+                            assert(sslbls is bel_sslbls or sslbls == bel_sslbls), \
+                                "All basis elements of the same error term must operate on the *same* state!"
+                        local_nm.append(bel_name)  # drop the state space labels, e.g. "XY:Q0,Q1" => "XY"
+
+                    # keep track of errors by the qubits they act on, as only each such
+                    # set will have it's own LindbladErrorgen
+                    local_nm = tuple(local_nm)  # so it's hashable
+                    if sslbls is not None:
+                        sslbls = tuple(sorted(sslbls))
+                        if sslbls not in nonlocal_errors:
+                            nonlocal_errors[sslbls] = _collections.OrderedDict()
+                        if local_nm in nonlocal_errors[sslbls]:
+                            nonlocal_errors[sslbls][local_nm] += val
+                        else:
+                            nonlocal_errors[sslbls][local_nm] = val
+                    else:
+                        if local_nm in local_errors:
+                            local_errors[local_nm] += val
+                        else:
+                            local_errors[local_nm] = val
+
+                if len(nonlocal_errors) == 0:
+                    return _LindbladNoise(local_errors, lindblad_parameterization)
+                else:
+                    all_errors = []
+                    if len(local_errors) > 0:
+                        all_errors.append((None, _LindbladNoise(local_errors, lindblad_parameterization)))
+                    for sslbls, errdict in nonlocal_errors.items():
+                        all_errors.append((sslbls, _LindbladNoise(errdict, lindblad_parameterization)))
+                    return _collections.OrderedDict(all_errors)
+
+            modelnoises.append(_OpModelPerOpNoise({lbl: process_stencil_labels(val)
+                                                   for lbl, val in lindblad_error_coeffs.items()}))
+
+    return _ComposedOpModelNoise(modelnoises)
 
 
 @_deprecated_fn("This function is overly specific and will be removed soon.")

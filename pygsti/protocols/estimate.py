@@ -219,7 +219,7 @@ class Estimate(object):
         """
         _io.write_obj_to_meta_based_dir(self, dirname, 'auxfile_types')
 
-    def get_start_model(self, goparams):
+    def retrieve_start_model(self, goparams):
         """
         Returns the starting model for the gauge optimization given by `goparams`.
 
@@ -508,7 +508,7 @@ class Estimate(object):
         ref_model = self.models[from_model_label]
         goparams = self._gaugeopt_suite.gaugeopt_argument_dicts[to_model_label]
         goparams_list = [goparams] if hasattr(goparams, 'keys') else goparams
-        start_model = goparams_list[0]['model'].copy()
+        start_model = goparams_list[0]['model'].copy() if ('model' in goparams_list[0]) else ref_model.copy()
         final_model = self.models[to_model_label].copy()
 
         gauge_group_els = []
@@ -874,6 +874,10 @@ class Estimate(object):
         if 'gatesets' in state_dict:
             state_dict['models'] = state_dict['gatesets']
             del state_dict['gatesets']
+
+        # reset MDC objective function and store objects
+        state_dict['_final_mdc_store'] = None
+        state_dict['_final_objfn'] = None
 
         self.__dict__.update(state_dict)
         for crf in self.confidence_region_factories.values():

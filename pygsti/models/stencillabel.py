@@ -56,8 +56,16 @@ class StencilLabel(object):
 
     def _resolve_single_sslbls_tuple(self, sslbls, qubit_graph, state_space, target_lbls):
         if qubit_graph is None:  # without a graph, we need to ensure all the stencil_sslbls are valid
-            assert (state_space.contains_labels(sslbls))
-            return sslbls
+            # We still can resolve @<num> references to target labels, even without a graph
+            try:
+                resolved_sslbls = tuple([(target_lbls[int(s[1:])] if (isinstance(s, str) and s.startswith("@")) else s)
+                                         for s in sslbls])
+            except Exception:
+                raise ValueError(("Could not resolve the relative ('@'-prefixed) labels in %s!"
+                                  " Maybe needs a qubit graph?") % str(sslbls))
+
+            assert (state_space.contains_labels(resolved_sslbls))
+            return resolved_sslbls
         else:
             ret = [qubit_graph.resolve_relative_nodelabel(s, target_lbls) for s in sslbls]
             if any([x is None for x in ret]): return None  # signals there is a non-present dirs, e.g. end of chain

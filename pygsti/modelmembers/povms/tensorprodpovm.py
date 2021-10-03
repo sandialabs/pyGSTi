@@ -49,23 +49,9 @@ class TensorProductPOVM(_POVM):
         else:
             assert(state_space.dim == dim), "`state_space` is incompatible with the product of the factors' spaces!"
 
-        # self.factorPOVMs
         self.factorPOVMs = factor_povms
 
-        #REMOVE - no need to copy anymore
-        # #  Copy each POVM and set it's parent and gpindices.
-        # #  Assume each one's parameters are independent.
-        # self.factorPOVMs = [povm.copy() for povm in factor_povms]
-
-        #off = 0 REMOVE
         for povm in self.factorPOVMs:
-            #REMOVE:
-            #if povm.gpindices is None:
-            #    off += povm.allocate_gpindices(off, None)
-            #else:
-            #    N = povm.num_params
-            #    povm.set_gpindices(slice(off, off + N), self); off += N
-
             if evotype == 'auto': evotype = povm._evotype
             else: assert(evotype == povm._evotype), \
                 "All factor povms must have the same evolution type"
@@ -178,29 +164,6 @@ class TensorProductPOVM(_POVM):
         -------
         OrderedDict of POVMEffects
         """
-        #Note: calling from_vector(...) on the simplified effect vectors (in
-        # order) - e.g. within the finite differencing in MapForwardSimulator -  must
-        # be able to properly initialize them, so need to set gpindices
-        # appropriately.
-
-        #REMOVE: self.factorPOVMs gpindices now reference Model
-        # #Create a "simplified" (Model-referencing) set of factor POVMs
-        # factorPOVMs_simplified = []
-        # for p in self.factorPOVMs:
-        #     povm = p.copy()
-        #     povm.set_gpindices(_mm._compose_gpindices(self.gpindices,
-        #                                               p.gpindices), self.parent)
-        #     factorPOVMs_simplified.append(povm)
-        #
-        # # Create "simplified" effect vectors, which infer their parent and
-        # # gpindices from the set of "factor-POVMs" they're constructed with.
-        # # Currently simplify *all* the effects, creating those that haven't been yet (lazy creation)
-        # if prefix: prefix += "_"
-        # simplified = _collections.OrderedDict(
-        #     [(prefix + k, _TensorProductPOVMEffect(self.factorPOVMs, self[k].effectLbls, self.state_space))
-        #      for k in self.keys()])
-        # return simplified
-
         # Currently simplify *all* the effects, creating those that haven't been yet (lazy creation)
         if prefix: prefix += "_"
         return _collections.OrderedDict([(prefix + k, self[k]) for k in self.keys()])

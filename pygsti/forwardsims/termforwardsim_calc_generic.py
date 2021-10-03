@@ -1185,18 +1185,6 @@ def pathmagnitude_threshold(oprep_lists, e_indices, num_elabels, target_sum_of_p
         mag[e_indices[b[-1]]] += mg
         nPaths[e_indices[b[-1]]] += 1
 
-        # REMOVE?
-        # #Instead of magnitude, accumulate actual current path contribution that we can test for convergence
-        # factors = [oprep_lists[i][factorInd] for i, factorInd in enumerate(b)]
-        # res = _np.product([f.evaluated_coeff for f in factors])
-        # pLeft = _unitary_sim_pre(factors, comm, mem_limit)
-        # pRight = _unitary_sim_post(factors, comm, mem_limit)
-        # res *= (pLeft * pRight)
-        #
-        # final_factor_indx = b[-1]
-        # Ei = e_indices[final_factor_indx]  # final "factor" index == E-vector index
-        # integrals[Ei] += res
-
         return (nPaths[e_indices[b[-1]]] == max_npaths)  # trigger immediate return if hit max_npaths
 
     while nIters < 100:  # TODO: allow setting max_nIters as an arg?

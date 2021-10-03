@@ -168,7 +168,7 @@ class LinearOperator(_modelmember.ModelMember):
         """
         raise NotImplementedError("to_dense(...) not implemented for %s objects!" % self.__class__.__name__)
 
-    def acton(self, state):
+    def acton(self, state, on_space='minimal'):
         """
         Act with this operator upon `state`
 
@@ -190,7 +190,7 @@ class LinearOperator(_modelmember.ModelMember):
         output_rep = self._rep.acton(state._rep)
 
         #Build a State around output_rep
-        return _state.StaticState(output_rep.to_dense(on_space='minimal'), self._evotype, self.state_space)
+        return _state.StaticState(output_rep.to_dense(on_space), self._evotype, self.state_space)
 
     def to_sparse(self, on_space='minimal'):
         """
@@ -760,40 +760,17 @@ class LinearOperator(_modelmember.ModelMember):
 
         return matrix
 
-    def get_chp_str(self, targets=None):
-        """Return a string suitable for printing to a CHP input file after
+    @property
+    def chp_str(self):
+        """A string suitable for printing to a CHP input file after
         probabilistically selecting operation.
-
-        Parameters
-        ----------
-        targets: list of int, optional
-            Qubits to be applied to (if None, uses stored CHP strings directly)
 
         Returns
         -------
         s : str
             String of CHP code
         """
-        assert (self._evotype == 'chp'), 'Only "chp" evotype can use get_chp_str'
-
-        ops = self._rep.chp_ops
-        nqubits = self._rep.nqubits
-
-        if targets is not None:
-            assert len(targets) == nqubits, "Got {0} targets instead of required {1}".format(len(targets), nqubits)
-            target_map = {str(i): str(t) for i, t in enumerate(targets)}
-
-        s = ""
-        for op in ops:
-            # Substitute if alternate targets provided
-            if targets is not None:
-                op_str = ''.join([target_map[c] if c in target_map else c for c in op])
-            else:
-                op_str = op
-
-            s += op_str + '\n'
-
-        return s
+        return self._rep.chp_str()
 
 
 def finite_difference_deriv_wrt_params(operation, wrt_filter, eps=1e-7):
@@ -828,19 +805,19 @@ def finite_difference_deriv_wrt_params(operation, wrt_filter, eps=1e-7):
     #operation.from_vector(operation.to_vector()) #ensure we call from_vector w/close=False first
     op2 = operation.copy()
     p = operation.to_vector()
-    fd_deriv = _np.empty((dim, dim, operation.num_params), dense_operation.dtype)
 
-    for i in range(operation.num_params):
+    if wrt_filter is None:
+        wrt_filter = list(range(operation.num_params))
+    fd_deriv = _np.empty((dim, dim, len(wrt_filter)), dense_operation.dtype)
+
+    for ii, i in enumerate(wrt_filter):
         p_plus_dp = p.copy()
         p_plus_dp[i] += eps
         op2.from_vector(p_plus_dp)
-        fd_deriv[:, :, i] = (op2.to_dense(on_space='minimal') - dense_operation) / eps
+        fd_deriv[:, :, ii] = (op2.to_dense(on_space='minimal') - dense_operation) / eps
 
-    fd_deriv.shape = [dim**2, operation.num_params]
-    if wrt_filter is None:
-        return fd_deriv
-    else:
-        return _np.take(fd_deriv, wrt_filter, axis=1)
+    fd_deriv.shape = [dim**2, len(wrt_filter)]
+    return fd_deriv
 
 
 def finite_difference_hessian_wrt_params(operation, wrt_filter1, wrt_filter2, eps=1e-4):
@@ -879,17 +856,17 @@ def finite_difference_hessian_wrt_params(operation, wrt_filter1, wrt_filter2, ep
     dense_operation = operation.to_dense(on_space='minimal')
     fd_deriv0 = finite_difference_deriv_wrt_params(operation, wrt_filter1, eps=eps)
 
+    if wrt_filter2 is None:
+        wrt_filter2 = list(range(operation.num_params))
+
     dim = dense_operation.shape[0]
-    fd_hessian = _np.empty((dim**2, fd_deriv0.shape[1], operation.num_params), dense_operation.dtype)
+    fd_hessian = _np.empty((dim**2, fd_deriv0.shape[1], len(wrt_filter2)), dense_operation.dtype)
     p = operation.to_vector()
     op2 = operation.copy()
 
-    for i in range(operation.num_params):
+    for ii, i in enumerate(wrt_filter2):
         p_plus_dp = p.copy(); p_plus_dp[i] += eps
         op2.from_vector(p_plus_dp)
-        fd_hessian[:, :, i] = (finite_difference_deriv_wrt_params(op2, wrt_filter2, eps=eps) - fd_deriv0) / eps
+        fd_hessian[:, :, ii] = (finite_difference_deriv_wrt_params(op2, wrt_filter1, eps=eps) - fd_deriv0) / eps
 
-    if wrt_filter2 is None:
-        return fd_hessian
-    else:
-        return _np.take(fd_hessian, wrt_filter2, axis=2)
+    return fd_hessian

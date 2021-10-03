@@ -125,7 +125,7 @@ class InstrumentTestCase(BaseTestCase):
         mdl_datagen = mdl
         ds = pygsti.data.simulate_data(mdl, lsgst_struct, 1000, 'none') #'multinomial')
         pygsti.io.write_dataset(temp_files + "/intermediate_meas_dataset.txt", ds)
-        ds2 = pygsti.io.load_dataset(temp_files + "/intermediate_meas_dataset.txt")
+        ds2 = pygsti.io.read_dataset(temp_files + "/intermediate_meas_dataset.txt")
         for opstr,dsRow in ds.items():
             for lbl,cnt in dsRow.counts.items():
                 self.assertAlmostEqual(cnt, ds2[opstr].counts[lbl],places=2)
@@ -177,8 +177,8 @@ class InstrumentTestCase(BaseTestCase):
         #    prep_labels=["rho0"], prep_expressions=["0"],
         #    effect_labels=["0","1"], effect_expressions=["0","complement"])
 
-        v0 = modelconstruction._basis_create_spam_vector("0", pygsti.baseobjs.Basis.cast("pp", 4))
-        v1 = modelconstruction._basis_create_spam_vector("1", pygsti.baseobjs.Basis.cast("pp", 4))
+        v0 = modelconstruction.create_spam_vector("0", "Q0", "pp")
+        v1 = modelconstruction.create_spam_vector("1", "Q0", "pp")
         P0 = np.dot(v0,v0.T)
         P1 = np.dot(v1,v1.T)
         print("v0 = ",v0)

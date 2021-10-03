@@ -378,15 +378,9 @@ class ComposedState(_State):  # , _ErrorMapContainer
         self.error_map = errormap
         self.terms = {}
         self.local_term_poly_coeffs = {}
-        # TODO REMOVE self.direct_terms = {} if evotype in ("svterm","cterm") else None
-        # TODO REMOVE self.direct_term_poly_coeffs = {} if evotype in ("svterm","cterm") else None
 
         #Create representation
         rep = evotype.create_composed_state_rep(self.state_vec._rep, self.error_map._rep, static_state.state_space)
-        #stateRep =
-        #errmapRep =
-        #rep = errmapRep.acton(stateRep)  # FUTURE: do this acton in place somehow? (like C-reps do)
-        #maybe make a special _Errgen *state* rep?
 
         _State.__init__(self, rep, evotype)
         _ErrorMapContainer.__init__(self, self.error_map)
@@ -414,28 +408,6 @@ class ComposedState(_State):  # , _ErrorMapContainer
         """
         return [self.error_map, self.state_vec]
 
-    # REMOVE - unnecessary
-    #def copy(self, parent=None, memo=None):
-    #    """
-    #    Copy this object.
-    #
-    #    Parameters
-    #    ----------
-    #    parent : Model, optional
-    #        The parent model to set for the copy.
-    #
-    #    Returns
-    #    -------
-    #    LinearOperator
-    #        A copy of this object.
-    #    """
-    #    # We need to override this method so that embedded gate has its
-    #    # parent reset correctly.
-    #    if memo is not None and id(self) in memo: return memo[id(self)]
-    #    cls = self.__class__  # so that this method works for derived classes too
-    #    copyOfMe = cls(self.state_vec, self.error_map.copy(parent))
-    #    return self._copy_gpindices(copyOfMe, parent, memo)
-
     def set_gpindices(self, gpindices, parent, memo=None):
         """
         Set the parent and indices into the parent's parameter vector that are used by this ModelMember object.
@@ -457,9 +429,6 @@ class ComposedState(_State):  # , _ErrorMapContainer
         """
         self.terms = {}  # clear terms cache since param indices have changed now
         self.local_term_poly_coeffs = {}
-        # TODO REMOVE self.direct_terms = {}
-        # TODO REMOVE self.direct_term_poly_coeffs = {}
-        # TODO REmOVE _modelmember.ModelMember.set_gpindices(self, gpindices, parent, memo)
         super().set_gpindices(gpindices, parent, memo)
 
     def to_dense(self, on_space='minimal', scratch=None):

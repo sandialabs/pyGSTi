@@ -11,6 +11,7 @@ Sub-package holding model operation objects.
 #***************************************************************************************************
 
 import numpy as _np
+import warnings as _warnings
 
 from .composederrorgen import ComposedErrorgen
 from .composedop import ComposedOp
@@ -41,7 +42,7 @@ from pygsti.tools import optools as _ot
 
 def create_from_unitary_mx(unitary_mx, op_type, basis='pp', stdname=None, evotype='default', state_space=None):
     """ TODO: docstring - note that op_type can be a list/tuple of types in order of precedence """
-    op_type_preferences = (op_type,) if isinstance(op_type, str) else op_type
+    op_type_preferences = verbose_type_from_op_type(op_type)
     U = unitary_mx
     if state_space is None:
         state_space = _statespace.default_space_for_udim(U.shape[0])
@@ -83,7 +84,8 @@ def create_from_unitary_mx(unitary_mx, op_type, basis='pp', stdname=None, evotyp
                 raise ValueError("Unknown operation type '%s'!" % str(typ))
 
             return op  # if we get to here, then we've successfully created an op to return
-        except (ValueError, AssertionError, AttributeError):
+        except (ValueError, AssertionError, AttributeError):  # as e:
+            #_warnings.warn('Failed to create operator with type %s with error: %s' % (typ, e))
             pass  # move on to next type
 
     raise ValueError("Could not create an operator of type(s) %s from the given unitary op!" % (str(op_type)))
@@ -98,7 +100,7 @@ def create_from_superop_mx(superop_mx, op_type, basis='pp', stdname=None, evotyp
                 op = StaticArbitraryOp(superop_mx, evotype, state_space)
             elif typ == "full":  # "full arbitrary"?
                 op = FullArbitraryOp(superop_mx, evotype, state_space)
-            elif typ == "full TP":
+            elif typ in ["TP", "full TP"]:
                 op = FullTPOp(superop_mx, evotype, state_space)
             elif typ == "linear":  # "linear arbitrary"?
                 real = _np.isclose(_np.linalg.norm(superop_mx.imag), 0)
@@ -119,6 +121,58 @@ def create_from_superop_mx(superop_mx, op_type, basis='pp', stdname=None, evotyp
             pass  # move on to next type
 
     raise ValueError("Could not create an operator of type(s) %s from the given superop!" % (str(op_type)))
+
+
+def verbose_type_from_op_type(op_type):
+    """Decode an op type into the "canonical", more verbose op type.
+
+    Parameters:
+    -----------
+    op_type: str or list of str
+        Operation parameterization type (or list of preferences)
+
+    Returns
+    -------
+    povm_type_preferences: tuple of str
+        POVM parameterization types
+    """
+    op_type_preferences = (op_type,) if isinstance(op_type, str) else op_type
+
+    verbose_conversion = {
+        'static standard': 'static standard',
+        'static clifford': 'static clifford',
+        'static unitary': 'static unitary',
+        'full unitary': 'full unitary',
+        'static': 'static',
+        'full': 'full',
+        'full TP': 'full TP',
+        'TP': 'full TP',
+        'linear': 'linear',
+    }
+
+    verbose_type_preferences = []
+    for typ in op_type_preferences:
+        verbose_type = None
+        if _ot.is_valid_lindblad_paramtype(typ):
+            # TODO: DO we want to prepend with lindblad?
+            verbose_type = typ
+        else:
+            verbose_type = verbose_conversion.get(typ, None)
+
+        if verbose_type is None:
+            continue
+
+        if verbose_type not in verbose_type_preferences:
+            verbose_type_preferences.append(verbose_type)
+
+    if len(verbose_type_preferences) == 0:
+        raise ValueError(
+            'Could not convert any op types from {}.\n'.format(op_type_preferences)
+            + '\tKnown op_types: Lindblad types or {}\n'.format(sorted(list(verbose_conversion.keys())))
+            + '\tValid povm_types: Lindblad types or {}'.format(sorted(list(set(verbose_conversion.values()))))
+        )
+
+    return verbose_type_preferences
 
 
 def convert(operation, to_type, basis, extra=None):
@@ -161,7 +215,7 @@ def convert(operation, to_type, basis, extra=None):
                 else:
                     return FullArbitraryOp(operation.to_dense(), operation.evotype, operation.state_space)
 
-            elif to_type == "full TP":
+            elif to_type in ["TP", "full TP"]:
                 if isinstance(operation, FullTPOp):
                     return operation  # no conversion necessary
                 else:

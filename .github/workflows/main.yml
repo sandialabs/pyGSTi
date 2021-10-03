@@ -51,13 +51,9 @@ jobs:
     - name: Install package
       run: |
         python -m pip install --upgrade pip
-        # see https://github.com/cvxgrp/cvxpy/issues/968 for numpy version
-        python -m pip install "numpy>=1.16.0"
-        # Cython must be pre-installed to build native extensions on pyGSTi install
-        python -m pip install cython
-        python -m pip install wheel flake8
+        python -m pip install flake8
         python -m pip install .[testing]
-        python -m pip freeze
+        # python -m pip freeze  # this isn't relevant anymore since pip install builds a wheel separately
     - name: Lint with flake8
       run: |
         # Critical errors, exit on failure

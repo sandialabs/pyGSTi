@@ -50,17 +50,6 @@ class LinearlyParameterizedElementTerm(object):
         self.coeff = coeff
         self.paramIndices = param_indices
 
-    # REMOVE - unnecessary
-    #def copy(self):
-    #    """
-    #    Copy this term.
-    #
-    #    Returns
-    #    -------
-    #    LinearlyParameterizedElementTerm
-    #    """
-    #    return LinearlyParameterizedElementTerm(self.coeff, self.paramIndices[:])
-
 
 class LinearlyParamArbitraryOp(_DenseOperator):
     """
@@ -163,6 +152,17 @@ class LinearlyParamArbitraryOp(_DenseOperator):
         self._ptr[:, :] = matrix
         self._ptr.flags.writeable = False
 
+    def _construct_param_to_base_indices_map(self):
+        # build mapping for constructor, which has integer keys so ok for serialization
+        param_to_base_indices_map = {}
+        for (i, j), term in self.elementExpressions:
+            assert(len(term.paramIndices) == 1)
+            p = term.paramIndices[0]
+            if p not in param_to_base_indices_map:
+                param_to_base_indices_map[p] = []
+            param_to_base_indices_map[p].append((i, j))
+        return param_to_base_indices_map
+
     def to_memoized_dict(self, mmg_memo):
         """Create a serializable dict with references to other objects in the memo.
 
@@ -181,14 +181,7 @@ class LinearlyParamArbitraryOp(_DenseOperator):
                 module, class, submembers, params, state_space, evotype
             Additional fields may be added by derived classes.
         """
-        # build mapping for constructor, which has integer keys so ok for serialization
-        param_to_base_indices_map = {}
-        for (i, j), term in self.elementExpressions:
-            assert(len(term.paramIndices) == 1)
-            p = term.paramIndices[0]
-            if p not in param_to_base_indices_map:
-                param_to_base_indices_map[p] = []
-            param_to_base_indices_map[p].append((i, j))
+        param_to_base_indices_map = self._construct_param_to_base_indices_map()
 
         mm_dict = super().to_memoized_dict(mmg_memo)  # includes 'dense_matrix' from DenseOperator
         mm_dict['base_matrix'] = self._encodemx(self.baseMatrix)
@@ -210,6 +203,16 @@ class LinearlyParamArbitraryOp(_DenseOperator):
 
         return cls(base_matrix, parameter_array, mm_dict['parameter_to_base_indices_map'],
                    left_transform, right_transform, mm_dict['enforce_real'], mm_dict['evotype'], state_space)
+
+    def _is_similar(self, other, rtol, atol):
+        """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
+            the same local structure, i.e., not considering parameter values or submembers """
+        return ((self.baseMatrix.shape == other.baseMatrix.shape)
+                and _np.allclose(self.baseMatrix, other.baseMatrix, rtol=rtol, atol=atol)
+                and _np.allclose(self.leftTrans, other.leftTrans, rtol=rtol, atol=atol)
+                and _np.allclose(self.rightTrans, other.rightTrans, rtol=rtol, atol=atol)
+                and (self._construct_param_to_base_indices_map() == other._construct_param_to_base_indices_map())
+                and (self.enforceReal == other.enforceReal))
 
     @property
     def num_params(self):

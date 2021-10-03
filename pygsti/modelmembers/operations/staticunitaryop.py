@@ -131,3 +131,10 @@ class StaticUnitaryOp(_DenseUnitaryOperator, _NoErrorGeneratorInterface):
             An array of length self.num_params
         """
         return _np.empty((0,), 'd')
+
+    def _is_similar(self, other, rtol, atol):
+        """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
+            the same local structure, i.e., not considering parameter values or submembers """
+        # static objects must also test their values in is_similar, since these aren't parameters.
+        return (super()._is_similar(other, rtol, atol)
+                and _np.allclose(self.to_dense(), other.to_dense(), rtol=rtol, atol=atol))

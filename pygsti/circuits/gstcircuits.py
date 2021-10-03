@@ -571,7 +571,7 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
                 key = germ
                 if fidpair_germ_power_keys:
                     key = (germ, maxLen)
-                
+
                 if rndm is None:
                     fiducialPairsThisIter = fidPairDict.get(key, allPossiblePairs) \
                         if fidPairDict is not None else allPossiblePairs

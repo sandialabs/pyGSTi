@@ -1,7 +1,7 @@
 import numpy as np
 
 import pygsti.tools.basistools as bt
-from pygsti.models.modelconstruction import _basis_create_operation
+from pygsti.models.modelconstruction import create_operation
 from pygsti.modelpacks.legacy import std1Q_XYI as std1Q
 from pygsti.models import ExplicitOpModel
 from pygsti.baseobjs import statespace
@@ -30,7 +30,7 @@ class JamiolkowskiBasisTester(BaseCase):
         self.sslbls = statespace.ExplicitStateSpace(self.stateSpaceLabels, self.stateSpaceUDims)
 
         #Build a test gate   -- old # X(pi,Qhappy)*LX(pi,0,2)
-        self.testGate = _basis_create_operation(self.sslbls, "LX(pi,0,2)", self.stdSmall)
+        self.testGate = create_operation("LX(pi,0,2)", self.sslbls, self.stdSmall)
         self.testGateGM_mx = bt.change_basis(self.testGate, self.stdSmall, self.gmSmall)
         self.expTestGate_mx = bt.flexible_change_basis(self.testGate, self.stdSmall, self.std)
         self.expTestGateGM_mx = bt.change_basis(self.expTestGate_mx, self.std, self.gm)

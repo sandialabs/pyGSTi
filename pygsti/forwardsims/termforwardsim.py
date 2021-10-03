@@ -1118,13 +1118,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
             circuitsetup_cache, resource_alloc.comm, resource_alloc.mem_limit, fastmode)
         # sopm = "sum of path magnitudes"
 
-        #TODO REMOVE this case -- we don't check for cache hits anymore; I think we can just set prps = poly_reps here
-        if len(poly_reps) == 0:  # HACK - length=0 => there's a cache hit, which we signify by None here
-            prps = None
-        else:
-            prps = poly_reps
-
-        return prps
+        return poly_reps
 
     def _select_paths_set_atom(self, layout_atom, pathset, resource_alloc):
         """

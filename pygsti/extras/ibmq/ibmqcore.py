@@ -111,7 +111,7 @@ class IBMQExperiment(dict):
         IBMQExperiment
             An object containing jobs to be submitted to IBM Q, which can then be submitted
             using the methods .submit() and whose results can be grabbed from IBM Q using
-            the method .get_results(). This object has dictionary-like access for all of
+            the method .retrieve_results(). This object has dictionary-like access for all of
             the objects it contains (e.g., ['qobj'] is a list of the objects to be submitted to
             IBM Q).
 
@@ -126,7 +126,7 @@ class IBMQExperiment(dict):
         # Populated when submitting to IBM Q with .submit()
         self['qjob'] = None
         self['job_ids'] = None
-        # Populated when grabbing results from IBM Q with .get_results()
+        # Populated when grabbing results from IBM Q with .retrieve_results()
         self['batch_result_object'] = None
         self['data'] = None
 
@@ -262,7 +262,7 @@ class IBMQExperiment(dict):
             if status.name == 'QUEUED':
                 print('  - Queue position is {}'.format(qjob.queue_position()))
 
-    def get_results(self):
+    def retrieve_results(self):
         """
         Gets the results of the completed jobs from IBM Q, and processes
         them into a pyGSTi DataProtocol object (stored as the key 'data'),

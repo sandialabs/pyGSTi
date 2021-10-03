@@ -296,7 +296,7 @@ class TestWorkspace(ReportBaseCase):
         plts.append( w.ColorBoxPlot(("dscmp",), self.gss, None, self.mdl, dscomparator=dsc) ) # dscmp with 'None' dataset specified
         plts.append( w.ColorBoxPlot(("dscmp",), self.gss, None, self.mdl, dscomparator=dsc2) )
 
-        tds = pygsti.io.load_time_dependent_dataset(compare_files + "/timeseries_data_trunc.txt")
+        tds = pygsti.io.read_time_dependent_dataset(compare_files + "/timeseries_data_trunc.txt")
         #OLD: driftresults = drift.do_basic_drift_characterization(tds)
         results_gst = drift.StabilityAnalyzer(tds, ids=True)
         results_gst.compute_spectra()
@@ -426,9 +426,9 @@ class TestWorkspace(ReportBaseCase):
             switchbd5['key'] = 10 # can't add switched values like this.
         switchbd5.switchTypes[0] = "foobar" #mess with Switchboard internals to trigger errors below
         with self.assertRaises(ValueError):
-            switchbd5.get_switch_change_handlerjs(0)
+            switchbd5.create_switch_change_handlerjs(0)
         with self.assertRaises(ValueError):
-            switchbd5.get_switch_valuejs(0)
+            switchbd5.create_switch_valuejs(0)
         with self.assertRaises(ValueError):
             switchbd5.render("html")
 

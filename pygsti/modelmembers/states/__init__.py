@@ -11,6 +11,7 @@ Sub-package holding model state preparation objects.
 #***************************************************************************************************
 
 import numpy as _np
+import warnings as _warnings
 
 from .composedstate import ComposedState
 from .computationalstate import ComputationalBasisState
@@ -25,6 +26,9 @@ from .tpstate import TPState
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.tools import basistools as _bt
 from pygsti.tools import optools as _ot
+
+# Avoid circular import
+import pygsti.modelmembers as _mm
 
 
 def create_from_pure_vector(pure_vector, state_type, basis='pp', evotype='default', state_space=None,
@@ -103,7 +107,7 @@ def create_from_dmvec(superket_vector, state_type, basis='pp', evotype='default'
     raise ValueError("Could not create a state of type(s) %s from the given superket vector!" % (str(state_type)))
 
 
-def get_state_type_from_op_type(op_type):
+def state_type_from_op_type(op_type):
     """Decode an op type into an appropriate state type.
 
     Parameters:
@@ -116,7 +120,7 @@ def get_state_type_from_op_type(op_type):
     str
         State parameterization type
     """
-    op_type_preferences = (op_type,) if isinstance(op_type, str) else op_type
+    op_type_preferences = _mm.operations.verbose_type_from_op_type(op_type)
 
     state_conversion = {
         'auto': 'computational',
@@ -146,7 +150,7 @@ def get_state_type_from_op_type(op_type):
             state_type_preferences.append(state_type)
 
     if len(state_type_preferences) == 0:
-        raise RuntimeError(
+        raise ValueError(
             'Could not convert any op types from {}.\n'.format(op_type_preferences)
             + '\tKnown op_types: Lindblad types or {}\n'.format(sorted(list(state_conversion.keys())))
             + '\tValid state_types: Lindblad types or {}'.format(sorted(list(set(state_conversion.values()))))
@@ -254,7 +258,8 @@ def convert(state, to_type, basis, extra=None):
 
             else:
                 raise ValueError("Invalid to_type argument: %s" % to_type)
-        except:
+        except ValueError as e:
+            _warnings.warn('Failed to convert state to type %s with error: %s' % (to_type, e))
             pass
 
     raise ValueError("Could not convert state to to type(s): %s" % str(to_types))

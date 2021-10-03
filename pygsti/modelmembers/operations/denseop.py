@@ -346,6 +346,16 @@ class DenseOperator(DenseOperatorInterface, _LinearOperator):
         state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
         return cls(m, mm_dict['evotype'], state_space)
 
+    def _oneline_contents(self):
+        """ Summarizes the contents of this object in a single line.  Does not summarize submembers. """
+        dims = tuple(self.to_dense().shape)
+        return "dense %d x %d superop matrix" % dims
+
+    def _is_similar(self, other, rtol, atol):
+        """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
+            the same local structure, i.e., not considering parameter values or submembers """
+        return self._ptr.shape == other._ptr.shape  # similar (up to params) if have same data shape
+
 
 class DenseUnitaryOperator(DenseOperatorInterface, _LinearOperator):
     """
@@ -392,7 +402,11 @@ class DenseUnitaryOperator(DenseOperatorInterface, _LinearOperator):
             self._reptype = 'unitary'
             self._unitary = None
         except Exception:
-            superop_mx = _bt.change_basis(_ot.unitary_to_process_mx(mx), 'std', basis)
+            if mx.shape[0] == basis.dim and _np.linalg.norm(mx.imag) < 1e-10:
+                # Special case when a *superop* was provided instead of a unitary mx
+                superop_mx = mx.real  # used as a convenience case that really shouldn't be used
+            else:
+                superop_mx = _bt.change_basis(_ot.unitary_to_process_mx(mx), 'std', basis)
             rep = evotype.create_dense_superop_rep(superop_mx, state_space)
             self._reptype = 'superop'
             self._unitary = mx
@@ -542,7 +556,7 @@ class DenseUnitaryOperator(DenseOperatorInterface, _LinearOperator):
         """
         mm_dict = super().to_memoized_dict(mmg_memo)
 
-        mm_dict['dense_matrix'] = self.to_dense().tolist()
+        mm_dict['dense_matrix'] = self.to_dense('Hilbert').tolist()
         mm_dict['basis'] = self._basis.to_nice_serialization()
 
         return mm_dict
@@ -553,3 +567,13 @@ class DenseUnitaryOperator(DenseOperatorInterface, _LinearOperator):
         state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
         basis = _Basis.from_nice_serialization(mm_dict['basis'])
         return cls(m, basis, mm_dict['evotype'], state_space)
+
+    def _oneline_contents(self):
+        """ Summarizes the contents of this object in a single line.  Does not summarize submembers. """
+        dims = tuple(self.to_dense().shape)
+        return "dense %d x %d op matrix" % dims
+
+    def _is_similar(self, other, rtol, atol):
+        """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
+            the same local structure, i.e., not considering parameter values or submembers """
+        return self._ptr.shape == other._ptr.shape  # similar (up to params) if have same data shape

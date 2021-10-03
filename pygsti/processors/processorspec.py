@@ -13,6 +13,7 @@ Defines the QubitProcessorSpec class and supporting functionality.
 import numpy as _np
 import itertools as _itertools
 import collections as _collections
+from functools import lru_cache
 
 from pygsti.tools import internalgates as _itgs
 from pygsti.tools import symplectic as _symplectic
@@ -127,7 +128,17 @@ class QubitProcessorSpec(ProcessorSpec):
         std_gate_unitaries = _itgs.standard_gatename_unitaries()
         for gname in gate_names:
             if gname in nonstd_gate_unitaries:
+                if callable(nonstd_gate_unitaries[gname]):
+                    try:
+                        assert(len(nonstd_gate_unitaries[gname].shape) == 2), \
+                            "Continuously parameterized gates' `shape` attribute must be a 2-tuple!"
+                    except AttributeError:
+                        raise ValueError("Continuously parameterized gates must have a `shape` attribute!")
                 self.gate_unitaries[gname] = nonstd_gate_unitaries[gname]
+                if 'idle' in gname and (availability is None or gname not in availability):
+                    # apply default availability of [None] rather than all-edges to idle gates
+                    availability = {} if availability is None else availability.copy()  # get a copy of the availability
+                    availability[gname] = [None]  # and update availability for later processing
             elif gname in std_gate_unitaries:
                 self.gate_unitaries[gname] = std_gate_unitaries[gname]
             elif 'idle' in gname:  # interpret gname as an idle gate on the given number of qubits (all by default)
@@ -142,15 +153,12 @@ class QubitProcessorSpec(ProcessorSpec):
                 else:
                     nq = num_qubits  # if no availability is given, assume an idle on *all* the qubits
                     availability[gname] = [None]  # and update availability for later processing
-                if gname.startswith('(') and gname.endswith(')'):
-                    self.gate_unitaries[gname] = nq  # an identity gate that should not be build unless it's noisy
-                else:
-                    self.gate_unitaries[gname] = _np.identity(2**nq, 'd')
+                self.gate_unitaries[gname] = nq  # an identity gate
             else:
                 raise ValueError(
                     str(gname) + " is not a valid 'standard' gate name, it must be given in `nonstd_gate_unitaries`")
 
-        # Set self.qubit_graph (can be None)
+        # Set self.qubit_graph
         if geometry is None:
             if qubit_labels is None:
                 qubit_labels = tuple(range(num_qubits))
@@ -185,13 +193,18 @@ class QubitProcessorSpec(ProcessorSpec):
             self._symplectic_reps.update(nonstd_gate_symplecticreps)
         super(QubitProcessorSpec, self).__init__()
 
-    def _to_nice_serialization(self):  # memo holds already serialized objects
+    def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
+
+        #Note:self.nonstd_gate_unitaries can contain matrices OR callable objects OR integers
+        nonstd_unitaries = {k: (obj.to_nice_serialization() if isinstance(obj, _NicelySerializable)
+                                else (int(obj) if isinstance(obj, (int, _np.int64)) else self._encodemx(obj)))
+                            for k, obj in self.nonstd_gate_unitaries.items()}
         state.update({'qubit_labels': list(self.qubit_labels),
                       'gate_names': list(self.gate_names),  # TODO: what if labels and not just strings?
                       'availability': self.availability,  # should just have native types
                       'geometry': self.qubit_graph.to_nice_serialization(),
-                      'nonstd_gate_unitaries': {k: self._encodemx(mx) for k, mx in self.nonstd_gate_unitaries.items()},
+                      'nonstd_gate_unitaries': nonstd_unitaries,
                       'symplectic_reps': {k: (self._encodemx(s), self._encodemx(p))
                                           for k, (s, p) in self._symplectic_reps.items()},
                       'aux_info': self.aux_info
@@ -199,14 +212,22 @@ class QubitProcessorSpec(ProcessorSpec):
         return state
 
     @classmethod
-    def _from_nice_serialization(cls, state):  # memo holds already de-serialized objects
+    def _from_nice_serialization(cls, state):
 
         def _tuplize(x):
             if isinstance(x, (list, tuple)):
                 return tuple((_tuplize(el) for el in x))
             return x
 
-        nonstd_gate_unitaries = {k: cls._decodemx(mx) for k, mx in state['nonstd_gate_unitaries'].items()}
+        nonstd_gate_unitaries = {}
+        for k, obj in state['nonstd_gate_unitaries'].items():
+            if isinstance(obj, int):
+                nonstd_gate_unitaries[k] = obj
+            elif isinstance(obj, dict) and "module" in obj:  # then a NicelySerializable object
+                nonstd_gate_unitaries[k] = _NicelySerializable.from_nice_serialization(obj)
+            else:  # assume a matrix encoding of some sort (could be list or dict)
+                nonstd_gate_unitaries[k] = cls._decodemx(obj)
+
         symplectic_reps = {k: (cls._decodemx(s), cls._decodemx(p)) for k, (s, p) in state['symplectic_reps'].items()}
         availability = {k: _tuplize(v) for k, v in state['availability'].items()}
         geometry = _qgraph.QubitGraph.from_nice_serialization(state['geometry'])
@@ -227,7 +248,7 @@ class QubitProcessorSpec(ProcessorSpec):
             if gn.startswith('(') and gn.endswith(')'): continue  # skip implicit gate names
             avail = self.resolved_availability(gn, 'tuple')
             ret.extend([_Lbl(gn, sslbls) for sslbls in avail])
-        return ret
+        return tuple(ret)
 
     def gate_num_qubits(self, gate_name):
         """
@@ -245,8 +266,7 @@ class QubitProcessorSpec(ProcessorSpec):
         unitary = self.gate_unitaries[gate_name]
         if unitary is None: return self.num_qubits  # unitary=None => identity on all qubits
         if isinstance(unitary, (int, _np.int64)): return unitary  # unitary=int => identity in n qubits
-        return int(round(_np.log2(unitary(None).shape[0] if callable(unitary) else unitary.shape[0])))
-        # OR possibly unitary.udim in future
+        return int(round(_np.log2(unitary.shape[0])))  # possibly factory *function* SHAPE (unitary may be callable)
 
     def resolved_availability(self, gate_name, tuple_or_function="auto"):
         """
@@ -397,6 +417,26 @@ class QubitProcessorSpec(ProcessorSpec):
         return tuple((_Lbl(gate_name, sslbls_subset) for sslbls_subset in _itertools.permutations(sslbls, gate_nqubits)
                      if avail_fn(sslbls_subset)))
 
+    def force_recompute_gate_relationships(self):
+        """
+        Invalidates LRU caches for all `compute_*` methods of this object, forcing them to recompute their values.
+
+        The `compute_*` methods of this processor spec compute various relationships and
+        properties of its gates.  These routines can be computationally intensive, and so
+        their values are cached for performance.  If the gates of a processor spec changes
+        and its `compute_*` methods are used, `force_recompute_gate_relationships` should
+        be called.
+        """
+        #should clear LRU cache on all @lru_cache decorated methods, which should have "compute_" prefix
+        self.compute_clifford_symplectic_reps.cache_clear()
+        self.compute_one_qubit_gate_relations.cache_clear()
+        self.compute_multiqubit_inversion_relations.cache_clear()
+        self.compute_clifford_ops_on_qubits.cache_clear()
+        self.compute_ops_on_qubits.cache_clear()
+        self.compute_clifford_2Q_connectivity.cache_clear()
+        self.compute_2Q_connectivity.cache_clear()
+
+    @lru_cache(maxsize=100)  # TODO: replace w/ @cached_decorator when Python 3.8+ is required, (so doesn't prevent GC)
     def compute_clifford_symplectic_reps(self, gatename_filter=None):
         """
         Constructs a dictionary of the symplectic representations for all the Clifford gates in this processor spec.
@@ -430,6 +470,7 @@ class QubitProcessorSpec(ProcessorSpec):
                 ret[gn] = self._symplectic_reps[gn]
         return ret
 
+    @lru_cache(maxsize=100)
     def compute_one_qubit_gate_relations(self):
         """
         Computes the basic pair-wise relationships relationships between the gates.
@@ -489,6 +530,7 @@ class QubitProcessorSpec(ProcessorSpec):
                         # special 1Q gate relation where result is the identity (~no gates)
         return oneQgate_relations, gate_inverse
 
+    @lru_cache(maxsize=100)
     def compute_multiqubit_inversion_relations(self):
         """
         Computes the inverses of multi-qubit (>1 qubit) gates.
@@ -535,6 +577,7 @@ class QubitProcessorSpec(ProcessorSpec):
         return gate_inverse
 
     ### TODO: do we still need this?
+    @lru_cache(maxsize=100)
     def compute_clifford_ops_on_qubits(self):
         """
         Constructs a dictionary mapping tuples of state space labels to the clifford operations available on them.
@@ -554,6 +597,7 @@ class QubitProcessorSpec(ProcessorSpec):
 
         return clifford_ops_on_qubits
 
+    @lru_cache(maxsize=100)
     def compute_ops_on_qubits(self):
         """
         Constructs a dictionary mapping tuples of state space labels to the operations available on them.
@@ -573,6 +617,7 @@ class QubitProcessorSpec(ProcessorSpec):
         return ops_on_qubits
 
     ### TODO: do we still need this?
+    @lru_cache(maxsize=100)
     def compute_clifford_2Q_connectivity(self):
         """
         Constructs a graph encoding the connectivity between qubits via 2-qubit Clifford gates.
@@ -595,6 +640,7 @@ class QubitProcessorSpec(ProcessorSpec):
 
         return _qgraph.QubitGraph(qubit_labels, CtwoQ_connectivity)
 
+    @lru_cache(maxsize=100)
     def compute_2Q_connectivity(self):
         """
         Constructs a graph encoding the connectivity between qubits via 2-qubit gates.
@@ -615,7 +661,7 @@ class QubitProcessorSpec(ProcessorSpec):
 
         return _qgraph.QubitGraph(qubit_labels, twoQ_connectivity)
 
-    def subset(self, gate_names_to_include):
+    def subset(self, gate_names_to_include='all', qubit_labels_to_keep='all'):
         """
         Construct a smaller processor specification by keeping only a select set of gates from this processor spec.
 
@@ -628,11 +674,67 @@ class QubitProcessorSpec(ProcessorSpec):
         -------
         QubitProcessorSpec
         """
+        if gate_names_to_include == 'all': gate_names_to_include = self.gate_names
+        if qubit_labels_to_keep == 'all': qubit_labels_to_keep = self.qubit_labels
+
         gate_names = [gn for gn in gate_names_to_include if gn in self.gate_names]
         gate_unitaries = {gn: self.gate_unitaries[gn] for gn in gate_names}
-        availability = {gn: self.availability[gn] for gn in gate_names}
-        return QubitProcessorSpec(self.num_qubits, gate_names, gate_unitaries, availability,
-                                  self.qubit_graph, self.qubit_labels)
+        qubit_labels = [ql for ql in qubit_labels_to_keep if ql in self.qubit_labels]
+        if len(qubit_labels) != len(qubit_labels_to_keep):
+            raise ValueError("Some of specified qubit_labels_to_keep (%s) aren't in this procesor spec (%s)!"
+                             % (str(qubit_labels_to_keep), str(self.qubit_labels)))
+
+        def keep_avail_tuple(tup):
+            if tup is None: return True  # always keep `None` availability elements
+            return set(tup).issubset(qubit_labels)
+
+        availability = {}
+        for gn in gate_names:
+            if isinstance(self.availability[gn], (list, tuple)):
+                availability[gn] = tuple(filter(keep_avail_tuple, self.availability[gn]))
+            else:
+                availability[gn] = self.availability[gn]
+
+        qubit_graph = self.qubit_graph.subgraph(qubit_labels, reset_nodes=False)
+
+        return QubitProcessorSpec(len(qubit_labels), gate_names, gate_unitaries, availability,
+                                  qubit_graph, qubit_labels)
+
+    def map_qubit_labels(self, mapper):
+        """
+        Creates a new QubitProcessorSpec whose qubit labels are updated according to the mapping function `mapper`.
+
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing self.qubit_labels values
+            and whose value are the new labels, or a function which takes a
+            single (existing qubit-label) argument and returns a new qubit label.
+
+        Returns
+        -------
+        QubitProcessorSpec
+        """
+        def mapper_func(line_label): return mapper[line_label] \
+            if isinstance(mapper, dict) else mapper(line_label)
+
+        mapped_qubit_labels = tuple(map(mapper_func, self.qubit_labels))
+
+        availability = {}
+        for gn in self.gate_names:
+            if isinstance(self.availability[gn], (list, tuple)):
+                availability[gn] = tuple([(tuple(map(mapper_func, avail_el)) if (avail_el is not None) else None)
+                                          for avail_el in self.availability[gn]])
+                #Note: above `None` handling means that a gate with `None` in its availability (e.g. a global idle) has
+                # this availability retained, meaning it remains a gate that acts on *all* the qubits, even though that
+                # may be fewer than it did originally.  This is similar to how non-tuple cases work, e.g. "all-edges"
+            else:
+                availability[gn] = self.availability[gn]
+
+        qubit_graph = self.qubit_graph.map_qubit_labels(mapper)
+
+        return QubitProcessorSpec(self.num_qubits, self.gate_names, self.gate_unitaries, availability,
+                                  qubit_graph, mapped_qubit_labels)
 
     @property
     def idle_gate_names(self):

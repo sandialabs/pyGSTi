@@ -191,6 +191,11 @@ class ComputationalBasisPOVM(_POVM):
         state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
         return cls(mm_dict['nqubits'], mm_dict['evotype'], mm_dict['qubit_filter'], state_space)
 
+    def _is_similar(self, other, rtol, atol):
+        """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
+            the same local structure, i.e., not considering parameter values or submembers """
+        return (self.nqubits == other.nqubits and self.qubit_filter == other.qubit_filter)
+
     def __str__(self):
         s = "Computational(Z)-basis POVM on %d qubits and filter %s\n" \
             % (self.nqubits, str(self.qubit_filter))

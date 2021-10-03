@@ -1,7 +1,8 @@
 import numpy as np
 
 import pygsti.models.explicitmodel as mdl
-from pygsti.models.modelconstruction import create_explicit_model_from_expressions, _create_operation
+from pygsti.baseobjs import ExplicitStateSpace
+from pygsti.models.modelconstruction import create_explicit_model_from_expressions, create_operation
 from pygsti.modelpacks.legacy import std1Q_XYI as std
 from ..util import BaseCase
 
@@ -49,9 +50,10 @@ class ExplicitOpModelToolTester(BaseCase):
         # TODO assert correctness
 
     def test_rotate_1q(self):
-        rotXPi = _create_operation([(4,)], [('Q0',)], "X(pi,Q0)")
-        rotXPiOv2 = _create_operation([(4,)], [('Q0',)], "X(pi/2,Q0)")
-        rotYPiOv2 = _create_operation([(4,)], [('Q0',)], "Y(pi/2,Q0)")
+        sslbls = ExplicitStateSpace("Q0")
+        rotXPi = create_operation("X(pi,Q0)", sslbls, "pp")
+        rotXPiOv2 = create_operation("X(pi/2,Q0)", sslbls, "pp")
+        rotYPiOv2 = create_operation("Y(pi/2,Q0)", sslbls, "pp")
         gateset_rot = self.model.rotate((np.pi / 2, 0, 0))  # rotate all gates by pi/2 about X axis
         self.assertArraysAlmostEqual(gateset_rot['Gi'], rotXPiOv2)
         self.assertArraysAlmostEqual(gateset_rot['Gx'], rotXPi)

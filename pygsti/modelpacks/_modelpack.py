@@ -27,6 +27,7 @@ from pygsti.baseobjs.polynomial import bulk_load_compact_polynomials as _bulk_lo
 from pygsti.protocols import gst as _gst
 from pygsti.tools import optools as _ot
 from pygsti.tools import basistools as _bt
+from pygsti.tools.legacytools import deprecate as _deprecated_fn
 from pygsti.processors import QubitProcessorSpec as _QubitProcessorSpec
 
 
@@ -322,8 +323,12 @@ class GSTModelPack(ModelPack):
         """
         return self._indexed_circuitdict(self._pergerm_fidpairsdict_lite, qubit_labels)
 
+    @_deprecated_fn("create_gst_experiment_design")
     def get_gst_experiment_design(self, max_max_length, qubit_labels=None, fpr=False, lite=True,
                                   evotype='default', **kwargs):
+        return self.create_gst_experiment_design(max_max_length, qubit_labels, fpr, lite, **kwargs)
+
+    def create_gst_experiment_design(self, max_max_length, qubit_labels=None, fpr=False, lite=True, **kwargs):
         """
         Construct a :class:`protocols.gst.StandardGSTDesign` from this modelpack
 
@@ -348,10 +353,6 @@ class GSTModelPack(ModelPack):
             you have a need to use the more pessimistic "full" set of germs,
             leave this set to True.
 
-        evotype : Evotype or str, optional
-            The evolution type of this model, describing how states are
-            represented.  The special value `"default"` is equivalent
-            to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
 
         Returns
         -------
@@ -400,7 +401,7 @@ class GSTModelPack(ModelPack):
             kwargs.get('add_default_protocol', False),
         )
 
-    def get_gst_circuits(self, max_max_length, qubit_labels=None, fpr=False, lite=True, **kwargs):
+    def create_gst_circuits(self, max_max_length, qubit_labels=None, fpr=False, lite=True, **kwargs):
         """
         Construct a :class:`pygsti.objects.CircuitList` from this modelpack.
 

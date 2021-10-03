@@ -96,7 +96,7 @@ Gx^4 20 80
 """
         with open(temp_files + "/TinyDataset.txt","w") as output:
             output.write(dataset_txt)
-        ds = pygsti.io.load_dataset(temp_files + "/TinyDataset.txt")
+        ds = pygsti.io.read_dataset(temp_files + "/TinyDataset.txt")
         self.assertEqual(ds[()][('0',)], 0)
         print(ds.cirIndex.keys())
         print(('Gx','Gy') in ds)
@@ -112,7 +112,7 @@ Gx^4 20 80
 """
         with open(temp_files + "/TinyDataset2.txt","w") as output:
             output.write(dataset_txt2)
-        ds2 = pygsti.io.load_dataset(temp_files + "/TinyDataset2.txt")
+        ds2 = pygsti.io.read_dataset(temp_files + "/TinyDataset2.txt")
         self.assertEqualDatasets(ds, ds2)
 
 
@@ -150,12 +150,12 @@ Gx^4 20 80
           # data will be equal.
 
 
-        saved_ds = pygsti.io.load_dataset(compare_files + "/Fake_Dataset_none.txt", cache=True)
+        saved_ds = pygsti.io.read_dataset(compare_files + "/Fake_Dataset_none.txt", cache=True)
         #print("SAVED = ",saved_ds)
         #print("NONE = ",ds_none)
         self.assertEqualDatasets(ds_none, saved_ds)
 
-        saved_ds = pygsti.io.load_dataset(compare_files + "/Fake_Dataset_round.txt")
+        saved_ds = pygsti.io.read_dataset(compare_files + "/Fake_Dataset_round.txt")
         self.assertEqualDatasets(ds_round, saved_ds)
 
 
@@ -169,7 +169,7 @@ Gx^4 20 80 20 80
 """
         with open(temp_files + "/TinyMultiDataset.txt","w") as output:
             output.write(multi_dataset_txt)
-        multiDS = pygsti.io.load_multidataset(temp_files + "/TinyMultiDataset.txt", cache=True)
+        multiDS = pygsti.io.read_multidataset(temp_files + "/TinyMultiDataset.txt", cache=True)
 
         bad_multi_dataset_txt = \
 """## Columns = DS0 0 count, DS0 1 count, DS1 0 count, DS1 1 count
@@ -181,7 +181,7 @@ Gx^4 20 80 20 80
         with open(temp_files + "/BadTinyMultiDataset.txt","w") as output:
             output.write(bad_multi_dataset_txt)
         with self.assertRaises(ValueError):
-            pygsti.io.load_multidataset(temp_files + "/BadTinyMultiDataset.txt")
+            pygsti.io.read_multidataset(temp_files + "/BadTinyMultiDataset.txt")
 
         gstrInds = collections.OrderedDict([(pygsti.circuits.Circuit(('Gx',)), slice(0, 2)),
                                             (pygsti.circuits.Circuit(('Gx', 'Gy')), slice(2, 4)),
@@ -417,7 +417,7 @@ Gy 11001100
 """
         with open(temp_files + "/TDDataset.txt","w") as output:
             output.write(dataset_txt)
-        ds = pygsti.io.load_time_dependent_dataset(temp_files + "/TDDataset.txt")
+        ds = pygsti.io.read_time_dependent_dataset(temp_files + "/TDDataset.txt")
         self.assertEqual(ds[()].fractions['1'], 0.5)
         self.assertEqual(ds[('Gy',)].fractions['1'], 0.5)
         self.assertEqual(ds[('Gx',)].total, 9)
@@ -432,7 +432,7 @@ Gy 11001100
         with open(temp_files + "/BadTDDataset.txt","w") as output:
             output.write(bad_dataset_txt)
         with self.assertRaises(ValueError):
-            pygsti.io.load_time_dependent_dataset(temp_files + "/BadTDDataset.txt")
+            pygsti.io.read_time_dependent_dataset(temp_files + "/BadTDDataset.txt")
 
 
     @unittest.skip("We probably won't be able to unpickle old files given the amount of refactoring")
@@ -464,7 +464,7 @@ Gx^4 20 80
 """
         with open(temp_files + "/AuxDataset.txt","w") as output:
             output.write(dataset_txt)
-        ds = pygsti.io.load_dataset(temp_files + "/AuxDataset.txt")
+        ds = pygsti.io.read_dataset(temp_files + "/AuxDataset.txt")
         self.assertEqual(ds[()][('0',)], 0)
         self.assertEqual(ds[('Gx','Gy')][('1',)], 60)
 

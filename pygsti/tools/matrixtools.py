@@ -348,7 +348,7 @@ def scale_columns(m, scale_values):
         return m * scale_values[None, :]
 
 
-def columns_are_orthogonal(m, tol=1e-7, debug=True):
+def columns_are_orthogonal(m, tol=1e-7):
     """
     Checks whether a matrix contains orthogonal columns.
 
@@ -371,15 +371,6 @@ def columns_are_orthogonal(m, tol=1e-7, debug=True):
     if m.size == 0: return True  # boundary case
     check = _np.dot(m.conj().T, m)
     check[_np.diag_indices_from(check)] = 0.0
-
-    #DEBUG REMOVE - and remove arg
-    #if debug:
-    #    for i in range(check.shape[0]):
-    #        for j in range(i + 1, check.shape[1]):
-    #            if abs(check[i, j]) > 1e-5:
-    #                print("NON-ORTHOGONAL nice nullspace!")
-    #                import bpdb; bpdb.set_trace()
-    #                stop_here = True
 
     return bool(_np.linalg.norm(check) / check.size < tol)
 
@@ -2062,6 +2053,7 @@ def sparse_onenorm(a):
     float
     """
     return max(abs(a).sum(axis=0).flat)
+    # also == return _spsl.norm(a, ord=1) (comparable speed)
 
 
 def ndarray_base(a, verbosity=0):

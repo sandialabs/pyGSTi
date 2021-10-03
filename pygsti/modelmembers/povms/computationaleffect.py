@@ -181,6 +181,12 @@ class ComputationalBasisPOVMEffect(_POVMEffect):
         basis = _Basis.from_nice_serialization(mm_dict['basis'])
         return cls(_np.array(mm_dict['zvals']), basis, mm_dict['evotype'], state_space)
 
+    def _is_similar(self, other, rtol, atol):
+        """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
+            the same local structure, i.e., not considering parameter values or submembers """
+        return (_np.array_equal(self._rep.zvals, other._rep.zvals)
+                and self._rep.basis == other._rep.basis)
+
     def to_dense(self, on_space='minimal', scratch=None):
         """
         Return this POVM effect vector as a (dense) numpy array.

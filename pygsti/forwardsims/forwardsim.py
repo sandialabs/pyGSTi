@@ -824,6 +824,9 @@ class ForwardSimulator(_NicelySerializable):
             else:
                 yield wrtSlice1, wrtSlice2, hprobs
 
+    def __str__(self):
+        return self.__class__.__name__
+
 
 class CacheForwardSimulator(ForwardSimulator):
     """
@@ -897,6 +900,11 @@ class CacheForwardSimulator(ForwardSimulator):
         # array to fill has shape (num_outcomes, len(param_slice)) and should be filled with the "w.r.t. param_slice"
         # derivatives of each specified circuit outcome probability.
         raise NotImplementedError("Derived classes can implement this to speed up derivative computation")
+
+
+def _array_type_parameter_dimension_letters():
+    """ Return all the array-type letters that stand for a parameter dimension """
+    return ('P', 'p', 'b')
 
 
 def _bytes_for_array_type(array_type, global_elements, max_local_elements, max_atom_size,

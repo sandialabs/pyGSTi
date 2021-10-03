@@ -24,6 +24,7 @@ from pygsti.baseobjs.basisconstructors import _basis_constructor_dict
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 
+
 #Helper functions
 def _sparse_equal(a, b, atol=1e-8):
     """ NOTE: same as matrixtools.sparse_equal - but can't import that here """
@@ -897,7 +898,7 @@ class ExplicitBasis(Basis):
         if (len(labels) != len(elements)):
             raise ValueError("Expected a list of %d labels but got: %s" % (len(elements), str(labels)))
 
-        self.labels = labels
+        self.labels = tuple(labels)  # so hashable - see __hash__
         self.elements = []
         size = len(elements)
         if size == 0:
@@ -908,7 +909,7 @@ class ExplicitBasis(Basis):
             elshape = None
             for el in elements:
                 if sparse:
-                    if not _sps.issparse(el):
+                    if not _sps.issparse(el) or not _sps.isspmatrix_csr(el):  # needs to be CSR type for __hash__
                         el = _sps.csr_matrix(el)  # try to convert to a sparse matrix
                 else:
                     if not isinstance(el, _np.ndarray):
@@ -975,7 +976,13 @@ class ExplicitBasis(Basis):
         return ExplicitBasis(self.elements, self.labels, self.name, self.longname, self.real, not self.sparse)
 
     def __hash__(self):
-        return hash((self.name, self.dim, self.elshape, self.sparse))  # better?
+        if self.sparse:
+            els_to_hash = tuple(((_np.round(el.data, 6).tostring(), el.indices.tostring(), el.indptr.tostring())
+                                 for el in self.elements))   # hash sparse matrices
+        else:
+            els_to_hash = tuple((_np.round(el, 6).tostring() for el in self.elements))
+        return hash((self.dim, self.elshape, self.sparse, self.labels, els_to_hash))
+        # OLD return hash((self.name, self.dim, self.elshape, self.sparse))  # better?
 
 
 class BuiltinBasis(LazyBasis):
@@ -1490,7 +1497,7 @@ class TensorProdBasis(LazyBasis):
     def _from_nice_serialization(cls, state):
         component_bases = [Basis.from_nice_serialization(b) for b in state['component_bases']]
         return cls(component_bases, state['name'], state['longname'])
-        
+
     @property
     def dim(self):
         """

@@ -98,7 +98,6 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
 
         _collections.OrderedDict.__init__(self, items)
         _mm.ModelMember.__init__(self, state_space, evotype)
-        #REMOVE self._paramvec, self._paramlbls = self._build_paramvec()
         self.init_gpindices()
         self._readonly = True
 
@@ -143,99 +142,10 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
                    for lbl, subm_serial_id in zip(mm_dict['member_labels'], mm_dict['submembers'])]
         return cls(members, mm_dict['evotype'], state_space)
 
-    #REMOVE
-    #No good way to update Instrument on the fly yet...
-    #def _update_paramvec(self, modified_obj=None):
-    #    """Updates self._paramvec after a member of this Model is modified"""
-    #    for obj in self.values():
-    #        assert(obj.gpindices is self), "Cannot add/adjust parameter vector!"
-    #
-    #    #update parameters changed by modified_obj
-    #    self._paramvec[modified_obj.gpindices] = modified_obj.to_vector()
-    #
-    #    #re-initialze any members that also depend on the updated parameters
-    #    modified_indices = set(modified_obj.gpindices_as_array())
-    #    for obj in self.values()
-    #        if obj is modified_obj: continue
-    #        if modified_indices.intersection(obj.gpindices_as_array()):
-    #            obj.from_vector(self._paramvec[obj.gpindices])
-
-    #def _build_paramvec(self):
-    #    """ Resizes self._paramvec and updates gpindices & parent members as needed,
-    #        and will initialize new elements of _paramvec, but does NOT change
-    #        existing elements of _paramvec (use _clean_paramvec for this)"""
-    #    v = _np.empty(0, 'd'); off = 0
-    #    vl = _np.empty(0, dtype=object)
-    #
-    #    # Step 2: add parameters that don't exist yet
-    #    for lbl, obj in self.items():
-    #        if obj.gpindices is None or obj.parent is not self:
-    #            #Assume all parameters of obj are new independent parameters
-    #            v = _np.insert(v, off, obj.to_vector())
-    #            vl = _np.insert(vl, off, ["%s: %s" % (str(lbl), obj_plbl) for obj_plbl in obj.parameter_labels])
-    #            num_new_params = obj.allocate_gpindices(off, self)
-    #            off += num_new_params
-    #        else:
-    #            inds = obj.gpindices_as_array()
-    #            M = max(inds) if len(inds) > 0 else -1; L = len(v)
-    #            if M >= L:
-    #                #Some indices specified by obj are absent, and must be created.
-    #                w = obj.to_vector()
-    #                wl = _np.array(["%s: %s" % (str(lbl), obj_plbl) for obj_plbl in obj.parameter_labels])
-    #                v = _np.concatenate((v, _np.empty(M + 1 - L, 'd')), axis=0)  # [v.resize(M+1) doesn't work]
-    #                vl = _np.concatenate((vl, _np.empty(M + 1 - L, dtype=object)), axis=0)
-    #                for ii, i in enumerate(inds):
-    #                    if i >= L:
-    #                        v[i] = w[ii]
-    #                        vl[i] = wl[ii]
-    #            off = M + 1
-    #    return v, vl
-
-    #def _clean_paramvec(self):
-    #    """ Updates _paramvec corresponding to any "dirty" elements, which may
-    #        have been modified without out knowing, leaving _paramvec out of
-    #        sync with the element's internal data.  It *may* be necessary
-    #        to resolve conflicts where multiple dirty elements want different
-    #        values for a single parameter.  This method is used as a safety net
-    #        that tries to insure _paramvec & Instrument elements are consistent
-    #        before their use."""
-    #
-    #    #Currently there's not "need-to-rebuild" flag because we don't let the user change
-    #    # the elements of an Instrument after it's created.
-    #    #if self._need_to_rebuild:
-    #    #    self._build_paramvec()
-    #    #    self._need_to_rebuild = False
-    #
-    #    # This closely parallels the _clean_paramvec method of a Model (TODO: consolidate?)
-    #    if self.dirty:  # if any member object is dirty (ModelMember.dirty setter should set this value)
-    #        TOL = 1e-8
-    #
-    #        #Note: lbl args used *just* for potential debugging - could strip out once
-    #        # we're confident this code always works.
-    #        def clean_single_obj(obj, lbl):  # sync an object's to_vector result w/_paramvec
-    #            if obj.dirty:
-    #                w = obj.to_vector()
-    #                chk_norm = _np.linalg.norm(self._paramvec[obj.gpindices] - w)
-    #                #print(lbl, " is dirty! vec = ", w, "  chk_norm = ",chk_norm)
-    #                if (not _np.isfinite(chk_norm)) or chk_norm > TOL:
-    #                    self._paramvec[obj.gpindices] = w
-    #                obj.dirty = False
-    #
-    #        def clean_obj(obj, lbl):  # recursive so works with objects that have sub-members
-    #            for i, subm in enumerate(obj.submembers()):
-    #                clean_obj(subm, _Label(lbl.name + ":%d" % i, lbl.sslbls))
-    #            clean_single_obj(obj, lbl)
-    #
-    #        for lbl, obj in self.items():
-    #            clean_obj(obj, lbl)
-    #
-    #        #re-update everything to ensure consistency ~ self.from_vector(self._paramvec)
-    #        #print("DEBUG: non-trivially CLEANED paramvec due to dirty elements")
-    #        for obj in self.values():
-    #            obj.from_vector(self._paramvec[obj.gpindices], dirty_value=False)
-    #            #object is known to be consistent with _paramvec
-    #
-    #        self.dirty = False
+    def _is_similar(self, other, rtol, atol):
+        """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
+            the same local structure, i.e., not considering parameter values or submembers """
+        return list(self.keys()) == list(other.keys())
 
     def __setitem__(self, key, value):
         if self._readonly: raise ValueError("Cannot alter Instrument elements")
@@ -277,19 +187,11 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
         simplified = _collections.OrderedDict()
         if isinstance(prefix, _Label):  # Deal with case when prefix isn't just a string
             for k, g in self.items():
-                comp = g #.copy()
-                #REMOVE (components now hold global model indices)
-                #comp.set_gpindices(_mm._compose_gpindices(self.gpindices,
-                #                                          g.gpindices), self.parent)
-                simplified[_Label(prefix.name + "_" + k, prefix.sslbls)] = comp
+                simplified[_Label(prefix.name + "_" + k, prefix.sslbls)] = g
         else:
             if prefix: prefix += "_"
             for k, g in self.items():
-                comp = g #.copy()
-                #REMOVE (components now hold global model indices)
-                #comp.set_gpindices(_mm._compose_gpindices(self.gpindices,
-                #                                          g.gpindices), self.parent)
-                simplified[prefix + k] = comp
+                simplified[prefix + k] = g
         return simplified
 
     @property
@@ -396,7 +298,6 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
         # transform the MT and Di (self.param_ops) and re-init the elements.
         for gate in self.values():
             gate.transform_inplace(s)
-            #REMOVE self._paramvec[gate.gpindices] = gate.to_vector()
         self.dirty = True
 
     def depolarize(self, amount):
@@ -420,7 +321,6 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
         # depolarize the MT and Di (self.param_ops) and re-init the elements.
         for gate in self.values():
             gate.depolarize(amount)
-            #REMOVE self._paramvec[gate.gpindices] = gate.to_vector()
         self.dirty = True
 
     def rotate(self, amount, mx_basis='gm'):
@@ -450,7 +350,6 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
         # rotate the MT and Di (self.param_ops) and re-init the elements.
         for gate in self.values():
             gate.rotate(amount, mx_basis)
-            #REMOVE self._paramvec[gate.gpindices] = gate.to_vector()
         self.dirty = True
 
     def acton(self, state):

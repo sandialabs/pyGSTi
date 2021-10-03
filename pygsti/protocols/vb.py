@@ -340,7 +340,7 @@ class SummaryStatistics(_proto.Protocol):
                 adjSP = _np.sum([(-1 / 2)**n * hamming_distance_pdf[n] for n in range(len(hamming_distance_pdf))])
                 return adjSP
 
-        def get_summary_values(icirc, circ, dsrow, idealout):
+        def _get_summary_values(icirc, circ, dsrow, idealout):
             sc = success_counts(dsrow, circ, idealout)
             tc = dsrow.total
             hdc = hamming_distance_counts(dsrow, circ, idealout)
@@ -356,7 +356,7 @@ class SummaryStatistics(_proto.Protocol):
             return ret
 
         return self._compute_dict(data, self.summary_statistics,
-                                  get_summary_values, for_passes='all')
+                                  _get_summary_values, for_passes='all')
 
     def _compute_circuit_statistics(self, data):
         """
@@ -371,7 +371,7 @@ class SummaryStatistics(_proto.Protocol):
         -------
         NamedDict
         """
-        def get_circuit_values(icirc, circ, dsrow, idealout):
+        def _get_circuit_values(icirc, circ, dsrow, idealout):
             ret = {'two_q_gate_count': circ.two_q_gate_count(),
                    'depth': circ.depth,
                    'idealout': idealout,
@@ -380,7 +380,7 @@ class SummaryStatistics(_proto.Protocol):
             ret.update(dsrow.aux)  # note: will only get aux data from *first* pass in multi-pass data
             return ret
 
-        return self._compute_dict(data, self.circuit_statistics, get_circuit_values, for_passes="first")
+        return self._compute_dict(data, self.circuit_statistics, _get_circuit_values, for_passes="first")
 
     # def compute_dscmp_data(self, data, dscomparator):
 
@@ -409,7 +409,7 @@ class SummaryStatistics(_proto.Protocol):
         -------
         NamedDict
         """
-        def get_success_prob(icirc, circ, dsrow, idealout):
+        def _get_success_prob(icirc, circ, dsrow, idealout):
             #if set(circ.line_labels) != set(qubits):
             #    trimmedcirc = circ.copy(editable=True)
             #    for q in circ.line_labels:
@@ -420,7 +420,7 @@ class SummaryStatistics(_proto.Protocol):
             return {'success_probabilities': model.probabilities(circ)[('success',)]}
 
         return self._compute_dict(data, ('success_probabilities',),
-                                  get_success_prob, for_passes="none")
+                                  _get_success_prob, for_passes="none")
 
     def _compute_dict(self, data, component_names, compute_fn, for_passes="all"):
         """

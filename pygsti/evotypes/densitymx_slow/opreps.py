@@ -351,7 +351,7 @@ class OpRepExpErrorgen(OpRep):
         self.m_star = m_star
         self.s = s
 
-    def get_exp_params(self):
+    def exp_params(self):
         return (self.mu, self.eta, self.m_star, self.s)
 
     #def __reduce__(self):

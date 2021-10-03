@@ -75,7 +75,7 @@ def make_idle_tomography_data(nQubits, maxLengths=(0,1,2,4), errMags=(0.01,0.001
                                                          roughNoise=None, addIdleNoiseToAllGates=False, evotype=evotype)
 
     listOfExperiments = idt.make_idle_tomography_list(nQubits, maxLengths, (prepDict,measDict), maxweight=min(2,nQubits),
-                    include_hamiltonian=hamiltonian, include_stochastic=stochastic, include_affine=affine)
+                                    include_hamiltonian=hamiltonian, include_stochastic=stochastic, include_affine=affine)
 
     base_vec = None
     for errMag in errMags:
@@ -118,7 +118,7 @@ def make_idle_tomography_data(nQubits, maxLengths=(0,1,2,4), errMags=(0.01,0.001
 
             #FROM DEBUGGING Python2 vs Python3 issue (ended up being an ordered-dict)
             ##pygsti.io.write_dataset("%s_ds_chk.txt" % fileroot, ds_noIdleInFids)
-            #chk = pygsti.io.load_dataset("%s_ds_chk.txt" % fileroot)
+            #chk = pygsti.io.read_dataset("%s_ds_chk.txt" % fileroot)
             #for opstr,dsrow in ds_noIdleInFids.items():
             #    for outcome in dsrow.counts:
             #        cnt1, cnt2 = dsrow.counts.get(outcome,0.0),chk[opstr].counts.get(outcome,0.0)

@@ -245,28 +245,6 @@ class ComposedOp(_LinearOperator):
             self.parent._mark_for_rebuild(self)  # of our params may have changed
             self._parent = None  # mark this object for re-allocation
 
-    # REMOVE - unnecessary and doesn't work correctly when, e.g., multiple factors are the same object
-    #def copy(self, parent=None, memo=None):
-    #    """
-    #    Copy this object.
-    #
-    #    Parameters
-    #    ----------
-    #    parent : Model, optional
-    #        The parent model to set for the copy.
-    #
-    #    Returns
-    #    -------
-    #    LinearOperator
-    #        A copy of this object.
-    #    """
-    #    # We need to override this method so that factor operations have their
-    #    # parent reset correctly.
-    #    if memo is not None and id(self) in memo: return memo[id(self)]
-    #    cls = self.__class__  # so that this method works for derived classes too
-    #    copyOfMe = cls([g.copy(parent, memo) for g in self.factorops], self._evotype, self.state_space)
-    #    return self._copy_gpindices(copyOfMe, parent, memo)
-
     def to_sparse(self, on_space='minimal'):
         """
         Return the operation as a sparse matrix
@@ -792,7 +770,7 @@ class ComposedOp(_LinearOperator):
             number of parameters.
         """
         deriv_mxs = [op.errorgen_coefficients_array_deriv_wrt_params() for op in self.factorops]
-        return _np.concatenate([mx for mx in deriv_mxs if mx.size > 0], axis=0)  # allow (0,0)-shaped matrices to be ignored.
+        return _np.concatenate([mx for mx in deriv_mxs if mx.size > 0], axis=0)  # allow (0,0)-shaped mxs to be ignored
 
     def error_rates(self):
         """
@@ -924,6 +902,10 @@ class ComposedOp(_LinearOperator):
         None
         """
         self.set_errorgen_coefficients(lindblad_term_dict, action, logscale_nonham=True)
+
+    def _oneline_contents(self):
+        """ Summarizes the contents of this object in a single line.  Does not summarize submembers. """
+        return "composed of %d factors" % len(self.factorops)
 
     def __str__(self):
         """ Return string representation """

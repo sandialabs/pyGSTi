@@ -24,6 +24,7 @@ from pygsti.models.memberdict import OrderedMemberDict as _OrderedMemberDict
 from pygsti.models.layerrules import LayerRules as _LayerRules
 from pygsti.models.modelparaminterposer import LinearInterposer as _LinearInterposer
 from pygsti.models.fogistore import FirstOrderGaugeInvariantStore as _FOGIStore
+from pygsti.models.gaugegroup import GaugeGroup as _GaugeGroup
 from pygsti.forwardsims.forwardsim import ForwardSimulator as _FSim
 from pygsti.forwardsims import matrixforwardsim as _matrixfwdsim
 from pygsti.modelmembers import instruments as _instrument
@@ -41,6 +42,7 @@ from pygsti.tools import jamiolkowski as _jt
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import optools as _ot
 from pygsti.tools import fogitools as _fogit
+from pygsti.tools.legacytools import deprecate as _deprecated_fn
 
 
 class ExplicitOpModel(_mdl.OpModel):
@@ -120,11 +122,11 @@ class ExplicitOpModel(_mdl.OpModel):
                                  'match_parent_evotype': True, 'cast_to_type': typ}
 
         if default_prep_type == "auto":
-            default_prep_type = _state.get_state_type_from_op_type(default_gate_type)
+            default_prep_type = _state.state_type_from_op_type(default_gate_type)
         if default_povm_type == "auto":
-            default_povm_type = _povm.get_povm_type_from_op_type(default_gate_type)
+            default_povm_type = _povm.povm_type_from_op_type(default_gate_type)
         if default_instrument_type == "auto":
-            default_instrument_type = _instrument.get_instrument_type_from_op_type(default_gate_type)
+            default_instrument_type = _instrument.instrument_type_from_op_type(default_gate_type)
 
         self.preps = _OrderedMemberDict(self, default_prep_type, prep_prefix, flagfn("state"))
         self.povms = _OrderedMemberDict(self, default_povm_type, povm_prefix, flagfn("povm"))
@@ -382,9 +384,9 @@ class ExplicitOpModel(_mdl.OpModel):
         basis = self.basis
         if extra is None: extra = {}
 
-        rtyp = _state.get_state_type_from_op_type(gate_type) if prep_type == "auto" else prep_type
-        povmtyp = _povm.get_povm_type_from_op_type(gate_type) if povm_type == "auto" else povm_type
-        ityp = _instrument.get_instrument_type_from_op_type(gate_type) if instrument_type == "auto" else instrument_type
+        rtyp = _state.state_type_from_op_type(gate_type) if prep_type == "auto" else prep_type
+        povmtyp = _povm.povm_type_from_op_type(gate_type) if povm_type == "auto" else povm_type
+        ityp = _instrument.instrument_type_from_op_type(gate_type) if instrument_type == "auto" else instrument_type
 
         for lbl, gate in self.operations.items():
             self.operations[lbl] = _op.convert(gate, typ, basis,
@@ -404,7 +406,7 @@ class ExplicitOpModel(_mdl.OpModel):
 
         if typ == 'full':
             self.default_gauge_group = _gg.FullGaugeGroup(self.state_space, self.evotype)
-        elif typ == 'full TP':
+        elif typ in ['full TP', 'TP']:  # TODO: get from verbose_conversion dictionary of modelmembers?
             self.default_gauge_group = _gg.TPGaugeGroup(self.state_space, self.evotype)
         elif typ == 'CPTP':
             self.default_gauge_group = _gg.UnitaryGaugeGroup(self.state_space, basis, self.evotype)
@@ -505,9 +507,7 @@ class ExplicitOpModel(_mdl.OpModel):
         int
             the number of gauge model parameters.
         """
-        #REMOVE - but maybe we need some way for some evotypes to punt here? (TODO)
-        #if self._evotype not in ("densitymx", "statevec"):
-        #    return 0  # punt on computing number of gauge parameters for other evotypes
+        #Note maybe we need some way for some evotypes to punt here? (and just return 0?)
         if self.num_params == 0:
             return 0  # save the trouble of getting gauge params when there are no params to begin with
         dPG = self._excalc()._buildup_dpg()
@@ -1361,6 +1361,7 @@ class ExplicitOpModel(_mdl.OpModel):
 
         return srep_dict
 
+    @_deprecated_fn
     def print_info(self):
         """
         Print to stdout relevant information about this model.
@@ -1453,7 +1454,27 @@ class ExplicitOpModel(_mdl.OpModel):
 
         nqubits = self.state_space.num_qubits
         gate_unitaries = _collections.OrderedDict()
+        all_sslbls = self.state_space.tensor_product_block_labels(0)
         availability = {}
+
+        def extract_unitary(Umx, U_sslbls, extracted_sslbls):
+            if extracted_sslbls is None: return Umx  # no extraction to be done
+            extracted_sslbls = list(extracted_sslbls)
+            extracted_indices = [U_sslbls.index(lbl) for lbl in extracted_sslbls]
+            num_extracted = len(extracted_indices)
+            Nm1 = len(U_sslbls) - 1
+
+            # can assume all lbls are qubits, so increment associated with qubit k is 2^(N-1-k)
+            # assume this is a kronecker product (check this in FUTURE?), so just fill extracted
+            # unitary by fixing all non-extracted qubits (assumed identity-action on these) to 0
+            # and looping over extracted ones:
+            U_extracted = _np.zeros((2**num_extracted, 2**num_extracted), complex)
+            for ii, itup in enumerate(_itertools.product(range(2), repeat=num_extracted)):
+                i = sum([bit * 2**(Nm1 - k) for k, bit in zip(extracted_indices, itup)])
+                for jj, jtup in enumerate(_itertools.product(range(2), repeat=num_extracted)):
+                    j = sum([bit * 2**(Nm1 - k) for k, bit in zip(extracted_indices, jtup)])
+                    U_extracted[ii, jj] = Umx[i, j]
+            return U_extracted
 
         def add_availability(opkey, op):
             if opkey == _Label(()) or opkey.is_simple():
@@ -1470,7 +1491,9 @@ class ExplicitOpModel(_mdl.OpModel):
                     U = _ot.process_mx_to_unitary(_bt.change_basis(
                         op.to_dense('HilbertSchmidt'), self.basis, 'std')) \
                         if (op is not None) else None  # U == None indicates "unknown, up until this point"
-                    gate_unitaries[gn] = U
+
+                    Ulocal = extract_unitary(U, all_sslbls, sslbls)
+                    gate_unitaries[gn] = Ulocal
 
                     if gn in availability:
                         if sslbls not in availability[gn]:
@@ -1484,14 +1507,14 @@ class ExplicitOpModel(_mdl.OpModel):
                 for component in opkey.components:
                     add_availability(component, None)  # recursive call - the reason we need this to be a function!
 
+        #observed_sslbls = set()
+        for opkey, op in self.operations.items():  # TODO: need to deal with special () idle label
+            add_availability(opkey, op)
+
         #Check that there aren't any undetermined unitaries
         unknown_unitaries = [k for k, v in gate_unitaries.items() if v is None]
         if len(unknown_unitaries) > 0:
             raise ValueError("Unitary not specfied for %s gate(s)!" % str(unknown_unitaries))
-
-        #observed_sslbls = set()
-        for opkey, op in self.operations.items():  # TODO: need to deal with special () idle label
-            add_availability(opkey, op)
 
         if qubit_labels == 'auto':
             qubit_labels = self.state_space.tensor_product_block_labels(0)
@@ -1503,7 +1526,7 @@ class ExplicitOpModel(_mdl.OpModel):
 
         return _QubitProcessorSpec(nqubits, list(gate_unitaries.keys()), gate_unitaries, availability,
                                    qubit_labels=qubit_labels)
-    
+
     def create_modelmember_graph(self):
         return _MMGraph({
             'preps': self.preps,
@@ -1526,7 +1549,9 @@ class ExplicitOpModel(_mdl.OpModel):
                       'povm_prefix': self.povms._prefix,
                       'instrument_prefix': self.instruments._prefix,
                       'evotype': str(self.evotype),  # TODO or serialize?
-                      'simulator': self.sim.to_nice_serialization(),  # TODO --- forwardsim needs to be serializable ----------------------------
+                      'simulator': self.sim.to_nice_serialization(),
+                      'default_gauge_group': (self.default_gauge_group.to_nice_serialization()
+                                              if (self.default_gauge_group is not None) else None)
                       })
 
         mmgraph = self.create_modelmember_graph()
@@ -1538,7 +1563,9 @@ class ExplicitOpModel(_mdl.OpModel):
         state_space = _statespace.StateSpace.from_nice_serialization(state['state_space'])
         basis = _Basis.from_nice_serialization(state['basis'])
         modelmembers = _MMGraph.load_modelmembers_from_serialization_dict(state['modelmembers'])
-        simulator = _FSim. from_nice_serialization(state['simulator'])
+        simulator = _FSim.from_nice_serialization(state['simulator'])
+        default_gauge_group = _GaugeGroup.from_nice_serialization(state['default_gauge_group']) \
+            if (state['default_gauge_group'] is not None) else None
 
         mdl = cls(state_space, basis, state['default_gate_type'],
                   state['default_prep_type'], state['default_povm_type'],
@@ -1552,6 +1579,7 @@ class ExplicitOpModel(_mdl.OpModel):
         mdl.instruments.update(modelmembers.get('instruments', {}))
         mdl.factories.update(modelmembers.get('factories', {}))
         mdl._clean_paramvec()
+        mdl.default_gauge_group = default_gauge_group
         return mdl
 
     def errorgen_coefficients(self, normalized_elem_gens=True):
@@ -1673,7 +1701,7 @@ class ExplicitOpModel(_mdl.OpModel):
                 allowed_gauge_linear_combos = _mt.nice_nullspace(disallowed_rows.toarray(), tol=1e-4)  # DENSE for now
                 mx = _sps.csr_matrix(mx.dot(allowed_gauge_linear_combos))  # dot sometimes/always returns dense array
                 op_gauge_space = _ErrorgenSpace(allowed_gauge_linear_combos, op_gauge_basis)  # DENSE mxs in eg-spaces
-                print("DEBUG => mx reduced to ", mx.shape)
+                #FOGI DEBUG: print("DEBUG => mx reduced to ", mx.shape)
             else:
                 op_gauge_space = _ErrorgenSpace(_np.identity(len(op_gauge_basis), 'd'), op_gauge_basis)
         else:
@@ -1774,10 +1802,10 @@ class ExplicitOpModel(_mdl.OpModel):
             initial_row_basis = create_complete_basis_fn(target_sslbls)
 
             #support_sslbls, gauge_errgen_basis = get_overlapping_labels(gauge_errgen_space_labels, target_sslbls)
-            print("DEBUG -- ", op_label)
+            #FOGI DEBUG print("DEBUG -- ", op_label)
             mx, row_basis = _fogit.first_order_gauge_action_matrix(U, target_sslbls, self.state_space,
                                                                    op_gauge_basis, initial_row_basis)
-            print("DEBUG => mx is ", mx.shape)
+            #FOGI DEBUG print("DEBUG => mx is ", mx.shape)
             # Note: mx is a sparse lil matrix
             # mx cols => op_gauge_basis, mx rows => row_basis, as zero rows have already been removed
             # (DONE: - remove all all-zero rows from mx (and corresponding basis labels) )
@@ -1790,7 +1818,7 @@ class ExplicitOpModel(_mdl.OpModel):
             errorgen_coefficient_labels[op_label] = allowed_row_basis.labels
             gauge_action_matrices[op_label] = allowed_rowspace_mx
             gauge_action_gauge_spaces[op_label] = op_gauge_space
-            print("DEBUG => final allowed_rowspace_mx shape =", allowed_rowspace_mx.shape)
+            #FOGI DEBUG print("DEBUG => final allowed_rowspace_mx shape =", allowed_rowspace_mx.shape)
 
         # Similar for SPAM
         for prep_label in primitive_prep_labels:
@@ -1844,60 +1872,6 @@ class ExplicitOpModel(_mdl.OpModel):
                 primitive_op_labels + primitive_prep_labels + primitive_povm_labels,
                 self.fogi_store.fogi_directions.toarray(),  # DENSE now (leave sparse in FUTURE?)
                 self.fogi_store.errorgen_space_op_elem_labels)
-
-    def _old_setup_fogi(self, ham_basis, other_basis, other_mode="all",
-                        op_label_abbrevs=None, reparameterize=False, reduce_to_model_space=True,
-                        dependent_fogi_action='drop'):
-
-        # ExplicitOpModel-specific - and assumes model's ops are LindbladOp objects !!
-        primitive_op_labels = list(self.operations.keys())
-
-        ham_ga_matrices = _collections.OrderedDict()
-        other_ga_matrices = _collections.OrderedDict()
-        ham_errorgen_coefficient_labels = _collections.OrderedDict()
-        other_errorgen_coefficient_labels = _collections.OrderedDict()
-        for op_label in primitive_op_labels:  # Note: "ga" stands for "gauge action" in variable names below
-            op = self.operations[op_label]
-
-            # TODO: more general decomposition of op - here it must be Composed(UnitaryOp, ExpErrorGen)
-            #       or just ExpErrorGen
-            if isinstance(op, _op.ExpErrorgenOp):  # assume just an identity op
-                U = _np.identity(op.state_space.dim, 'd')
-            elif isinstance(op, _op.ComposedOp):  # assume first element gives unitary
-                op_mx = op.factorops[0].to_dense()  # assumes a LindbladOp and low num qubits
-                U = _bt.change_basis(op_mx, self.basis, 'std')
-            else:
-                raise ValueError("Could not extract target unitary from %s op!" % str(type(op)))
-
-            ham_ga_matrices[op_label] = _fogit.first_order_ham_gauge_action_matrix(U, ham_basis)
-            other_ga_matrices[op_label] = _fogit.first_order_other_gauge_action_matrix(U, other_basis, other_mode)
-            errgen_labels = op.errorgen_coefficient_labels()
-            ham_errorgen_coefficient_labels[op_label] = list(filter(lambda lbl: lbl.errorgen_type == 'H',
-                                                                    errgen_labels))
-            other_errorgen_coefficient_labels[op_label] = list(filter(lambda lbl: lbl.errogen_type == 'S',
-                                                                      errgen_labels))
-            #Note: the *_ga_matrices are built by constructing normalized elem-error-gen-superoperators,
-            # acting on them, and using the same superoperators to project the result.  This works fine when
-            # the superops are orthogonal (H+S gens) but may not give the right gauge action matrix when they're
-            # just linearly independent (CPTP gens - the O_ij in ptic).  The resulting gauge-action matrices
-            # work to map from a basis of gauge-elem-errgens => *same* basis of gate-elem-errgens (i.e. the
-            # bases have the same normalization).  We view them as taking the superops corresponding to
-            # un-normalized Paulis to each other.
-
-        ham_elem_labels = [('H', bel) for bel in ham_basis.labels[1:]]
-        other_elem_labels = [('S', bel) for bel in other_basis.labels[1:]] if other_mode != "all" else \
-            [('S', bel1, bel2) for bel1 in other_basis.labels[1:] for bel2 in other_basis.labels[1:]]
-
-        self.ham_fogi_store = _FOGIStore(ham_ga_matrices, ham_errorgen_coefficient_labels, ham_elem_labels,
-                                         op_label_abbrevs, reduce_to_model_space, dependent_fogi_action, norm_order=2)
-        self.other_fogi_store = _FOGIStore(other_ga_matrices, other_errorgen_coefficient_labels, other_elem_labels,
-                                           op_label_abbrevs, reduce_to_model_space, dependent_fogi_action, norm_order=1)
-
-        if reparameterize:
-            self.param_interposer = self._add_reparameterization(
-                primitive_op_labels,
-                self.ham_fogi_store.fogi_directions, self.ham_fogi_store.errgen_space_op_elem_labels,
-                self.other_fogi_store.fogi_directions, self.other_fogi_store.errgen_space_op_elem_labels)
 
     def fogi_errorgen_component_labels(self, include_fogv=False, typ='normal'):
         labels = self.fogi_store.fogi_errorgen_direction_labels(typ)

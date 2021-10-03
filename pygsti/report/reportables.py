@@ -253,7 +253,7 @@ class GateEigenvalues(_modf.ModelFunction):
         numpy.ndarray
         """
         #avoid calling minweight_match again
-        dMx = nearby_model.operations[self.oplabel] - self.G0
+        dMx = nearby_model.operations[self.oplabel].to_dense() - self.G0.to_dense()
         #evalsM = evals0 + Uinv * (M-M0) * U
         return _np.array([self.evals[k] + _np.dot(self.inv_evecs[k, :], _np.dot(dMx, self.evecs[:, k]))
                           for k in range(dMx.shape[0])])
@@ -1945,7 +1945,7 @@ def robust_log_gti_and_projections(model_a, model_b, synthetic_idle_circuits):
     #    _tools.print_mx(_tools.jamiolkowski_iso(x, mxBasis, mxBasis), width=4, prec=1)
     #    print("")
 
-    def get_projection_vec(errgen):
+    def _get_projection_vec(errgen):
         proj = []
         for ptype in ("hamiltonian", "stochastic", "affine"):
             proj.append(_tools.std_errorgen_projections(
@@ -1989,7 +1989,7 @@ def robust_log_gti_and_projections(model_a, model_b, synthetic_idle_circuits):
         assert(_np.linalg.norm(Sb - _np.identity(model_b.dim, 'd')) < 1e-6), \
             "Synthetic idle %s is not an idle!!" % str(s)
         SIerrgen = _tools.error_generator(Sa, Sb, mxBasis, "logGTi")
-        SIproj = get_projection_vec(SIerrgen)
+        SIproj = _get_projection_vec(SIerrgen)
         jacSI = error_generator_jacobian(s)
         #print("DB jacobian for %s = \n" % str(s)); _tools.print_mx(jacSI, width=4, prec=1) #DEBUG
         if runningJac is None:

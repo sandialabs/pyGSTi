@@ -221,3 +221,13 @@ class StaticCliffordOp(_LinearOperator, _NoErrorGeneratorInterface):
         basis = _Basis._from_nice_serialization(mm_dict['basis'])
         state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
         return cls(unitarymx, symplecticrep, basis, mm_dict['evotype'], state_space)
+
+    def _is_similar(self, other, rtol, atol):
+        """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
+            the same local structure, i.e., not considering parameter values or submembers """
+        smx, svec = self.smatrix(), self.svector()
+        other_smx, other_svec = other.smatrix(), other.svetor()
+        return (smx.shape == other_smx.shape
+                and svec.shape == other_svec.shape
+                and _np.allclose(smx, other_smx, rtol=rtol, atol=atol)
+                and _np.allclose(svec, other_svec, rtol=rtol, atol=atol))

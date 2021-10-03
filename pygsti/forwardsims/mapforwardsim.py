@@ -274,8 +274,12 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
             #                                  (num_params, num_params), (num_params / np1, num_params / np2),
             #                                  approx_cachesize, self.model.dim)
 
+            GB = 1.0 / 1024.0**3
             if mem_estimate > mem_limit:
-                raise MemoryError("Not enough memory for desired layout!")
+                raise MemoryError("Not enough memory for desired layout! (limit=%.1fGB, required=%.1fGB" % (
+                    mem_limit * GB, mem_estimate * GB))
+            else:
+                printer.log("   Esimated memory required = %.1fGB" % (mem_estimate * GB))
 
         return layout
 

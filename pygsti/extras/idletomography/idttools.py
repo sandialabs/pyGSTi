@@ -129,7 +129,7 @@ def tile_pauli_fidpairs(base_fidpairs, nqubits, maxweight):
         qubits).
     """
     nqubit_fidpairs = []
-    tmpl = _nqn.get_kcoverage_template(nqubits, maxweight)
+    tmpl = _nqn.create_kcoverage_template(nqubits, maxweight)
     for base_prep, base_meas in base_fidpairs:
         for tmpl_row in tmpl:
             #Replace 0...weight-1 integers in tmpl_row with Pauli basis
@@ -277,7 +277,7 @@ def set_idle_errors(nqubits, model, errdict, rand_default=None,
     return _np.array(rand_rates, 'd')  # the random rates that were chosen (to keep track of them for later)
 
 
-def get_idle_errors(nqubits, model, hamiltonian=True, stochastic=True, affine=True, scale_for_idt=True):
+def extract_idle_errors(nqubits, model, hamiltonian=True, stochastic=True, affine=True, scale_for_idt=True):
     """
     Get error rates on the global idle operation withina :class:`CloudNoiseModel` object.
 

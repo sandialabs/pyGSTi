@@ -289,7 +289,7 @@ class EvalTree(list):
                 #       with the trees in the existing set
                 iStartingTrees = []
 
-                def get_start_indices(max_intersect):
+                def _get_start_indices(max_intersect):
                     """ Builds an initial set of indices by merging single-
                         item trees that don't intersect too much (intersection
                         is less than `max_intersect`.  Returns a list of the
@@ -305,7 +305,7 @@ class EvalTree(list):
                 left, right = 0, max(map(len, singleItemTreeSetList))
                 while left < right:
                     mid = (left + right) // 2
-                    iStartingTrees, startingTreeEls = get_start_indices(mid)
+                    iStartingTrees, startingTreeEls = _get_start_indices(mid)
                     nStartingTrees = len(iStartingTrees)
                     if nStartingTrees < num_sub_trees:
                         left = mid + 1
@@ -314,7 +314,7 @@ class EvalTree(list):
                     else: break  # nStartingTrees == num_sub_trees!
 
                 if len(iStartingTrees) < num_sub_trees:
-                    iStartingTrees, startingTreeEls = get_start_indices(mid + 1)
+                    iStartingTrees, startingTreeEls = _get_start_indices(mid + 1)
                 if len(iStartingTrees) > num_sub_trees:
                     iStartingTrees = iStartingTrees[0:num_sub_trees]
                     startingTreeEls = set()
@@ -444,57 +444,3 @@ class EvalTree(list):
 
         assert(sum(map(len, disjointLists)) == num_elements), "sub-tree sets are not disjoint!"
         return disjointLists, helpfulScratchLists
-
-
-#TODO: update this or REMOVE it -- maybe move to unit tests?
-#def check_tree(evaltree, original_list): #generate_circuit_list(self, permute=True):
-#    """
-#    Generate a list of the final operation sequences this tree evaluates.
-#
-#    This method essentially "runs" the tree and follows its
-#      prescription for sequentailly building up longer strings
-#      from shorter ones.  When permute == True, the resulting list
-#      should be the same as the one passed to initialize(...), and
-#      so this method may be used as a consistency check.
-#
-#    Parameters
-#    ----------
-#    permute : bool, optional
-#        Whether to permute the returned list of strings into the
-#        same order as the original list passed to initialize(...).
-#        When False, the computed order of the operation sequences is
-#        given, which is matches the order of the results from calls
-#        to `Model` bulk operations.  Non-trivial permutation
-#        occurs only when the tree is split (in order to keep
-#        each sub-tree result a contiguous slice within the parent
-#        result).
-#
-#    Returns
-#    -------
-#    list of gate-label-tuples
-#        A list of the operation sequences evaluated by this tree, each
-#        specified as a tuple of operation labels.
-#    """
-#    circuits = [None] * len(self)
-#
-#    #Set "initial" (single- or zero- gate) strings
-#    for i, opLabel in zip(self.get_init_indices(), self.get_init_labels()):
-#        if opLabel == "": circuits[i] = ()  # special case of empty label
-#        else: circuits[i] = (opLabel,)
-#
-#    #Build rest of strings
-#    for i in self.get_evaluation_order():
-#        iLeft, iRight = self[i]
-#        circuits[i] = circuits[iLeft] + circuits[iRight]
-#
-#    #Permute to get final list:
-#    nFinal = self.num_final_strings()
-#    if self.original_index_lookup is not None and permute:
-#        finalCircuits = [None] * nFinal
-#        for iorig, icur in self.original_index_lookup.items():
-#            if iorig < nFinal: finalCircuits[iorig] = circuits[icur]
-#        assert(None not in finalCircuits)
-#        return finalCircuits
-#    else:
-#        assert(None not in circuits[0:nFinal])
-#        return circuits[0:nFinal]

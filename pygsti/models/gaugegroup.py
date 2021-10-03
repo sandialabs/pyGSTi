@@ -12,6 +12,7 @@ GaugeGroup and derived objects, used primarily in gauge optimization
 
 import numpy as _np
 
+from pygsti.baseobjs import StateSpace as _StateSpace
 from pygsti.modelmembers import operations as _op
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.baseobjs.basis import Basis as _Basis
@@ -531,6 +532,7 @@ class FullGaugeGroup(OpGaugeGroup):
     """
 
     def __init__(self, state_space, evotype='default'):
+        state_space = _StateSpace.cast(state_space)
         operation = _op.FullArbitraryOp(_np.identity(state_space.dim, 'd'), evotype, state_space)
         OpGaugeGroup.__init__(self, operation, FullGaugeGroupElement, "Full")
 
@@ -574,6 +576,7 @@ class TPGaugeGroup(OpGaugeGroup):
     """
 
     def __init__(self, state_space, evotype='default'):
+        state_space = _StateSpace.cast(state_space)
         operation = _op.FullTPOp(_np.identity(state_space.dim, 'd'), evotype, state_space)
         OpGaugeGroup.__init__(self, operation, TPGaugeGroupElement, "TP")
 
@@ -631,6 +634,7 @@ class DiagGaugeGroup(OpGaugeGroup):
     """
 
     def __init__(self, state_space, evotype='default'):
+        state_space = _StateSpace.cast(state_space)
         dim = state_space.dim
         ltrans = _np.identity(dim, 'd')
         rtrans = _np.identity(dim, 'd')
@@ -688,6 +692,7 @@ class TPDiagGaugeGroup(TPGaugeGroup):
         should be the same as `mdl.dim` where `mdl` is a :class:`Model` you
         might gauge-transform.
         """
+        state_space = _StateSpace.cast(state_space)
         dim = state_space.dim
         ltrans = _np.identity(dim, 'd')
         rtrans = _np.identity(dim, 'd')
@@ -744,6 +749,7 @@ class UnitaryGaugeGroup(OpGaugeGroup):
     """
 
     def __init__(self, state_space, basis, evotype='default'):
+        state_space = _StateSpace.cast(state_space)
         evotype = _Evotype.cast(str(evotype), default_prefer_dense_reps=True)  # since we use deriv_wrt_params
         errgen = _op.LindbladErrorgen.from_operation_matrix(
             _np.identity(state_space.dim, 'd'), "H", basis, mx_basis=basis, evotype=evotype)
@@ -811,6 +817,7 @@ class SpamGaugeGroup(OpGaugeGroup):
         should be the same as `mdl.dim` where `mdl` is a :class:`Model` you
         might gauge-transform.
         """
+        state_space = _StateSpace.cast(state_space)
         dim = state_space.dim
         ltrans = _np.identity(dim, 'd')
         rtrans = _np.identity(dim, 'd')
@@ -870,6 +877,7 @@ class TPSpamGaugeGroup(OpGaugeGroup):
         should be the same as `mdl.dim` where `mdl` is a :class:`Model` you
         might gauge-transform.
         """
+        state_space = _StateSpace.cast(state_space)
         dim = state_space.dim
         ltrans = _np.identity(dim, 'd')
         rtrans = _np.identity(dim, 'd')
@@ -921,6 +929,7 @@ class TrivialGaugeGroup(GaugeGroup):
     """
 
     def __init__(self, state_space):
+        state_space = _StateSpace.cast(state_space)
         self.state_space = state_space
         GaugeGroup.__init__(self, "Trivial")
 
@@ -965,8 +974,7 @@ class TrivialGaugeGroup(GaugeGroup):
 
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
-        state.update({'state_space': self.state_space.to_nice_serialization(),
-                     })
+        state.update({'state_space': self.state_space.to_nice_serialization()})
         return state
 
     @classmethod
@@ -1072,8 +1080,7 @@ class TrivialGaugeGroupElement(GaugeGroupElement):
 
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
-        state.update({'operation_dimension': self._matrix.shape[0]
-                     })
+        state.update({'operation_dimension': self._matrix.shape[0]})
         return state
 
     @classmethod

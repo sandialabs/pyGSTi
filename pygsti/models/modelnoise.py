@@ -656,7 +656,8 @@ class ComposedOpModelNoise(OpModelNoise):
         noise_errgens = [modelnoise.apply_errorgen_stencil(s, evotype, state_space, target_labels, qubit_graph, copy)
                          for s, modelnoise in zip(stencil, self.opmodelnoises)]
         noise_errgens = list(filter(lambda x: x is not None, noise_errgens))
-        return _op.ComposedErrorgen(noise_errgens) if len(noise_errgens) > 0 else None
+        return _op.ComposedErrorgen(noise_errgens) if len(noise_errgens) > 1 \
+            else (noise_errgens[0] if len(noise_errgens) == 1 else None)
 
     def create_errormap_stencil(self, opkey, evotype, state_space, num_target_labels=None):
         """
@@ -673,7 +674,8 @@ class ComposedOpModelNoise(OpModelNoise):
         noise_ops = [modelnoise.apply_errormap_stencil(s, evotype, state_space, target_labels, qubit_graph, copy)
                      for s, modelnoise in zip(stencil, self.opmodelnoises)]
         noise_ops = list(filter(lambda x: x is not None, noise_ops))
-        return _op.ComposedOp(noise_ops) if len(noise_ops) > 0 else None
+        return _op.ComposedOp(noise_ops) if len(noise_ops) > 1 \
+            else (noise_ops[0] if len(noise_ops) == 1 else None)
 
     def compute_stencil_absolute_sslbls(self, stencil, state_space, target_labels=None, qubit_graph=None):
         """

@@ -204,8 +204,8 @@ class LocalNoiseModel(_ImplicitOpModel):
                  'match_parent_evotype': True, 'cast_to_type': None}
         self.prep_blks['layers'] = _OrderedMemberDict(self, None, None, flags)
         self.povm_blks['layers'] = _OrderedMemberDict(self, None, None, flags)
-        self.operation_blks['layers'] = _OrderedMemberDict(self, None, None, flags)
         self.operation_blks['gates'] = _OrderedMemberDict(self, None, None, flags)
+        self.operation_blks['layers'] = _OrderedMemberDict(self, None, None, flags)
         self.instrument_blks['layers'] = _OrderedMemberDict(self, None, None, flags)
         self.factories['gates'] = _OrderedMemberDict(self, None, None, flags)
         self.factories['layers'] = _OrderedMemberDict(self, None, None, flags)
@@ -338,7 +338,7 @@ class LocalNoiseModel(_ImplicitOpModel):
 
     def create_processor_spec(self):
         import copy as _copy
-        return _copy.deepcopy(self.processor_spec)    
+        return _copy.deepcopy(self.processor_spec)
 
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
@@ -367,10 +367,10 @@ class LocalNoiseModel(_ImplicitOpModel):
                  'match_parent_evotype': True, 'cast_to_type': None}
         mdl.prep_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers.get('prep_blks|layers', []))
         mdl.povm_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers.get('povm_blks|layers', []))
-        mdl.operation_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags,
-                                                          modelmembers.get('operation_blks|layers', []))
         mdl.operation_blks['gates'] = _OrderedMemberDict(mdl, None, None, flags,
                                                          modelmembers.get('operation_blks|gates', []))
+        mdl.operation_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags,
+                                                          modelmembers.get('operation_blks|layers', []))
         mdl.instrument_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags,
                                                            modelmembers.get('instrument_blks|layers', []))
         mdl.factories['gates'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers.get('factories|gates', []))

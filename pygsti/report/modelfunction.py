@@ -99,7 +99,7 @@ class ModelFunction(object):
         # do stuff assuming nearby_model is eps away from model
         return self.evaluate(nearby_model)
 
-    def get_dependencies(self):
+    def list_dependencies(self):
         """
         Return the dependencies of this model-function.
 
