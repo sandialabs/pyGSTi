@@ -702,7 +702,7 @@ def compute_maximum_relational_errors(primitive_op_labels, errorgen_coefficients
             errgen_vec = errorgen_vec[op_label_to_compute_max_for] + errgen_shift
             errgen_vec = _np.dot(_np.dot(ga, _np.linalg.pinv(ga)), errgen_vec)
 
-            jangle = _mt.jamiolkowski_angle(_create_errgen_op(errgen_vec, gauge_basis_mxs))
+            #jangle = _mt.jamiolkowski_angle(_create_errgen_op(errgen_vec, gauge_basis_mxs))
             #FOGI DEBUG print("From ", debug, " jangle = ", jangle)
             best_gauge_vecs.append(running_best_gauge_vec)
 

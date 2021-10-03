@@ -101,7 +101,6 @@ class ComplementPOVMEffect(_ConjugatedStatePOVMEffect):
         return (self.identity.shape == other.identity.shape
                 and _np.allclose(self.identity.to_dense(), other.identity.to_dense(), rtol=rtol, atol=atol))
 
-
     def submembers(self):
         """
         Get the ModelMember-derived objects contained in this one.

@@ -39,6 +39,7 @@ from pygsti.tools import optools as _ot
 # Avoid circular import
 import pygsti.modelmembers as _mm
 
+
 def create_from_pure_vectors(pure_vectors, povm_type, basis='pp', evotype='default', state_space=None,
                              on_construction_error='warn'):
     """ TODO: docstring -- create a POVM from a list/dict of (key, pure-vector) pairs """

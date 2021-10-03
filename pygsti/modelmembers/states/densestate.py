@@ -348,4 +348,3 @@ class DensePureState(DenseStateInterface, _State):
         """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
             the same local structure, i.e., not considering parameter values or submembers """
         return self._ptr.shape == other._ptr.shape  # similar (up to params) if have same data shape
-

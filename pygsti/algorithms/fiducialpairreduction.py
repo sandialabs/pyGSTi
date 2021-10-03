@@ -408,12 +408,13 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
 
             #Determine which fiducial-pair indices to iterate over
             goodPairList = _get_per_germ_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples,
-                gsGerm, mem_limit, printer, search_mode, seed, n_random)
+                                                  gsGerm, mem_limit, printer, search_mode, seed, n_random)
 
             assert(goodPairList is not None)
             pairListDict[germ] = goodPairList  # add to final list of per-germ pairs
 
     return pairListDict
+
 
 def find_sufficient_fiducial_pairs_per_germ_power(target_model, prep_fiducials, meas_fiducials,
                                                   germs, max_lengths,
@@ -460,7 +461,7 @@ def find_sufficient_fiducial_pairs_per_germ_power(target_model, prep_fiducials, 
 
     germs : list of Circuits
         The germ circuits that are repeated to amplify errors.
-    
+
     max_lengths: list of int
         The germ powers (number of repetitions) to be used to amplify errors.
 
@@ -530,7 +531,7 @@ def find_sufficient_fiducial_pairs_per_germ_power(target_model, prep_fiducials, 
             expGerm = _gsc.repeat_with_max_length(germ, L)
             if len(expGerm) == 0:
                 # Skip empty circuits (i.e. germ^power > max_length)
-                printer.show_progress(i, len(germs)*len(max_lengths),
+                printer.show_progress(i, len(germs) * len(max_lengths),
                                       suffix='-- %s germ skipped since longer than max length %d' %
                                       (repr(germ), L))
                 continue
@@ -538,16 +539,16 @@ def find_sufficient_fiducial_pairs_per_germ_power(target_model, prep_fiducials, 
             gsGerm.operations["Ggerm"] = _EigenvalueParamDenseOp(
                 germMx, True, constrain_to_tp)
 
-            printer.show_progress(i, len(germs)*len(max_lengths),
-                                suffix='-- %s germ^power (%d params)' %
-                                (repr(expGerm), gsGerm.num_params))
+            printer.show_progress(i, len(germs) * len(max_lengths),
+                                  suffix='-- %s germ^power (%d params)' %
+                                  (repr(expGerm), gsGerm.num_params))
             #Debugging
             #print(gsGerm.operations["Ggerm"].evals)
             #print(gsGerm.operations["Ggerm"].params)
 
             #Determine which fiducial-pair indices to iterate over
             goodPairList = _get_per_germ_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples,
-                gsGerm, mem_limit, printer, search_mode, seed, n_random)
+                                                  gsGerm, mem_limit, printer, search_mode, seed, n_random)
 
             assert(goodPairList is not None)
             pairListDict[germ_power] = goodPairList  # add to final list of per-germ-power pairs
@@ -677,9 +678,10 @@ def test_fiducial_pairs(fid_pairs, target_model, prep_fiducials, meas_fiducials,
 
     return nAmplified
 
+
 # Helper function for per_germ and per_germ_power FPR
 def _get_per_germ_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples,
-    gsGerm, mem_limit, printer, search_mode, seed, n_random):
+                           gsGerm, mem_limit, printer, search_mode, seed, n_random):
     #Get dP-matrix for full set of fiducials, where
     # P_ij = <E_i|germ^exp|rho_j>, i = composite EVec & fiducial index,
     #   j is similar, and derivs are wrt the "eigenvalues" of the germ
@@ -760,7 +762,7 @@ def _get_per_germ_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples,
 
             printer.log("Pair list %s ==> %d of %d amplified parameters"
                         % (" ".join(map(str, pairList)), rank,
-                        gsGerm.num_params), 3)
+                           gsGerm.num_params), 3)
 
             if rank == gsGerm.num_params:
                 printer.log("Found a good set of %d pairs: %s" %
@@ -770,5 +772,5 @@ def _get_per_germ_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples,
 
         if goodPairList is not None:
             break  # exit another loop level if a solution was found
-    
+
     return goodPairList

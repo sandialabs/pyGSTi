@@ -127,6 +127,7 @@ class TestDirectRBDesign(BaseCase):
                 unequal_circuits.append((i, sd, md))
         if len(unequal_circuits) > 0:
             print("%d unequal circuits!!" % len(unequal_circuits))
+            print("Seed = ",self.seed, " depths=", self.depths, " circuits_per_depth=", self.circuits_per_depth)
             for i, sd, md in unequal_circuits:
                 print("Index: ", i)
                 print("Serial design: ", sd.str)

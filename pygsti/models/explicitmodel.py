@@ -1516,7 +1516,6 @@ class ExplicitOpModel(_mdl.OpModel):
         if len(unknown_unitaries) > 0:
             raise ValueError("Unitary not specfied for %s gate(s)!" % str(unknown_unitaries))
 
-
         if qubit_labels == 'auto':
             qubit_labels = self.state_space.tensor_product_block_labels(0)
             #OR: qubit_labels = self.state_space.qubit_labels  # only works for a QubitSpace
