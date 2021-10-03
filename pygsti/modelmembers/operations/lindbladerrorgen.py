@@ -12,6 +12,7 @@ The LindbladErrorgen class and supporting functionality.
 
 import warnings as _warnings
 import collections as _collections
+import copy as _copy
 
 import numpy as _np
 import scipy.sparse as _sps
@@ -101,6 +102,8 @@ class LindbladErrorgen(_LinearOperator):
         evaluating the rank-1 terms up to some order).  `"cterm"` is similar
         but uses Clifford operation action on stabilizer states.
     """
+
+    _generators_cache = {}  # a custom cache for _init_generators method calls
 
     @classmethod
     def from_operation_matrix(cls, op_matrix, parameterization='CPTP', lindblad_basis='pp',
@@ -387,16 +390,7 @@ class LindbladErrorgen(_LinearOperator):
         self._coefficient_weights = None
 
         #All representations need to track 1norms:
-        self.hamGens, self.otherGens = self._init_generators(dim)
-
-        if self.hamGens is not None:
-            self.hamGens_1norms = _np.array([_mt.safe_onenorm(mx) for mx in self.hamGens], 'd')
-        if self.otherGens is not None:
-            if self.parameterization.nonham_mode == "diagonal":
-                self.otherGens_1norms = _np.array([_mt.safe_onenorm(mx) for mx in self.otherGens], 'd')
-            else:
-                self.otherGens_1norms = _np.array([_mt.safe_onenorm(mx)
-                                                   for oGenRow in self.otherGens for mx in oGenRow], 'd')
+        self.hamGens, self.otherGens, self.hamGens_1norms, self.otherGens_1norms = self._init_generators(dim)
 
         #Create a representation of the type chosen above:
         if self._rep_type == 'lindblad errorgen':
@@ -446,107 +440,135 @@ class LindbladErrorgen(_LinearOperator):
 
     def _init_generators(self, dim):
         #assumes self.dim, self.ham_basis, self.other_basis, and self.matrix_basis are setup...
-
-        d = int(round(_np.sqrt(dim)))
-        assert(d * d == dim), "Errorgen dim must be a perfect square"
-
-        # Get basis transfer matrix
         sparse_bases = bool(self._rep_type == 'sparse superop')
-        mxBasisToStd = self.matrix_basis.create_transform_matrix(
-            _BuiltinBasis("std", self.matrix_basis.dim, sparse_bases))
-        # use BuiltinBasis("std") instead of just "std" in case matrix_basis is a TensorProdBasis
-        leftTrans = _spsl.inv(mxBasisToStd.tocsc()).tocsr() if _sps.issparse(mxBasisToStd) \
-            else _np.linalg.inv(mxBasisToStd)
-        rightTrans = mxBasisToStd
 
-        hamBasisMxs = self.ham_basis.elements
-        otherBasisMxs = self.other_basis.elements
+        #use caching to increase performance - cache based on all the self.XXX members utilized by this fn
+        cache_key = (self._rep_type, self.matrix_basis, self.ham_basis, self.other_basis, self.parameterization)
+        #print("cache key = ",self._rep_type, (self.matrix_basis.name, self.matrix_basis.dim),
+        #      (self.ham_basis.name, self.ham_basis.dim), (self.other_basis.name, self.other_basis.dim),
+        #      str(self.parameterization))
 
-        hamGens, otherGens = _ot.lindblad_error_generators(
-            hamBasisMxs, otherBasisMxs, normalize=False,
-            other_mode=self.parameterization.nonham_mode)  # in std basis
+        if cache_key not in self._generators_cache:
 
-        # Note: lindblad_error_generators will return sparse generators when
-        #  given a sparse basis (or basis matrices)
+            d = int(round(_np.sqrt(dim)))
+            assert(d * d == dim), "Errorgen dim must be a perfect square"
 
-        if hamGens is not None:
-            bsH = len(hamGens) + 1  # projection-basis size (not nec. == dim)
-            _ot._assert_shape(hamGens, (bsH - 1, dim, dim), sparse_bases)
+            # Get basis transfer matrix
+            mxBasisToStd = self.matrix_basis.create_transform_matrix(
+                _BuiltinBasis("std", self.matrix_basis.dim, sparse_bases))
+            # use BuiltinBasis("std") instead of just "std" in case matrix_basis is a TensorProdBasis
+            leftTrans = _spsl.inv(mxBasisToStd.tocsc()).tocsr() if _sps.issparse(mxBasisToStd) \
+                else _np.linalg.inv(mxBasisToStd)
+            rightTrans = mxBasisToStd
 
-            # apply basis change now, so we don't need to do so repeatedly later
-            if sparse_bases:
-                hamGens = [_mt.safe_real(_mt.safe_dot(leftTrans, _mt.safe_dot(mx, rightTrans)),
-                                         inplace=True, check=True) for mx in hamGens]
-                for mx in hamGens: mx.sort_indices()
-                # for faster addition ops in _construct_errgen_matrix
-            else:
-                #hamGens = _np.einsum("ik,akl,lj->aij", leftTrans, hamGens, rightTrans)
-                hamGens = _np.transpose(_np.tensordot(
-                    _np.tensordot(leftTrans, hamGens, (1, 1)), rightTrans, (2, 0)), (1, 0, 2))
-        else:
-            bsH = 0
-        assert(bsH == self.ham_basis_size)
+            hamBasisMxs = self.ham_basis.elements
+            otherBasisMxs = self.other_basis.elements
 
-        if otherGens is not None:
+            hamGens, otherGens = _ot.lindblad_error_generators(
+                hamBasisMxs, otherBasisMxs, normalize=False,
+                other_mode=self.parameterization.nonham_mode)  # in std basis
 
-            if self.parameterization.nonham_mode == "diagonal":
-                bsO = len(otherGens) + 1  # projection-basis size (not nec. == dim)
-                _ot._assert_shape(otherGens, (bsO - 1, dim, dim), sparse_bases)
+            # Note: lindblad_error_generators will return sparse generators when
+            #  given a sparse basis (or basis matrices)
+
+            if hamGens is not None:
+                bsH = len(hamGens) + 1  # projection-basis size (not nec. == dim)
+                _ot._assert_shape(hamGens, (bsH - 1, dim, dim), sparse_bases)
 
                 # apply basis change now, so we don't need to do so repeatedly later
                 if sparse_bases:
-                    otherGens = [_mt.safe_real(_mt.safe_dot(leftTrans, _mt.safe_dot(mx, rightTrans)),
-                                               inplace=True, check=True) for mx in otherGens]
-                    for mx in otherGens: mx.sort_indices()
+                    hamGens = [_mt.safe_real(_mt.safe_dot(leftTrans, _mt.safe_dot(mx, rightTrans)),
+                                             inplace=True, check=True) for mx in hamGens]
+                    for mx in hamGens: mx.sort_indices()
                     # for faster addition ops in _construct_errgen_matrix
                 else:
-                    #otherGens = _np.einsum("ik,akl,lj->aij", leftTrans, otherGens, rightTrans)
-                    otherGens = _np.transpose(_np.tensordot(
-                        _np.tensordot(leftTrans, otherGens, (1, 1)), rightTrans, (2, 0)), (1, 0, 2))
+                    #hamGens = _np.einsum("ik,akl,lj->aij", leftTrans, hamGens, rightTrans)
+                    hamGens = _np.transpose(_np.tensordot(
+                        _np.tensordot(leftTrans, hamGens, (1, 1)), rightTrans, (2, 0)), (1, 0, 2))
+            else:
+                bsH = 0
+            assert(bsH == self.ham_basis_size)
 
-            elif self.parameterization.nonham_mode == "diag_affine":
-                # projection-basis size (not nec. == dim) [~shape[1] but works for lists too]
-                bsO = len(otherGens[0]) + 1
-                _ot._assert_shape(otherGens, (2, bsO - 1, dim, dim), sparse_bases)
+            if otherGens is not None:
 
-                # apply basis change now, so we don't need to do so repeatedly later
-                if sparse_bases:
-                    otherGens = [[_mt.safe_dot(leftTrans, _mt.safe_dot(mx, rightTrans))
-                                  for mx in mxRow] for mxRow in otherGens]
+                if self.parameterization.nonham_mode == "diagonal":
+                    bsO = len(otherGens) + 1  # projection-basis size (not nec. == dim)
+                    _ot._assert_shape(otherGens, (bsO - 1, dim, dim), sparse_bases)
 
-                    for mxRow in otherGens:
-                        for mx in mxRow: mx.sort_indices()
+                    # apply basis change now, so we don't need to do so repeatedly later
+                    if sparse_bases:
+                        otherGens = [_mt.safe_real(_mt.safe_dot(leftTrans, _mt.safe_dot(mx, rightTrans)),
+                                                   inplace=True, check=True) for mx in otherGens]
+                        for mx in otherGens: mx.sort_indices()
                         # for faster addition ops in _construct_errgen_matrix
+                    else:
+                        #otherGens = _np.einsum("ik,akl,lj->aij", leftTrans, otherGens, rightTrans)
+                        otherGens = _np.transpose(_np.tensordot(
+                            _np.tensordot(leftTrans, otherGens, (1, 1)), rightTrans, (2, 0)), (1, 0, 2))
+
+                elif self.parameterization.nonham_mode == "diag_affine":
+                    # projection-basis size (not nec. == dim) [~shape[1] but works for lists too]
+                    bsO = len(otherGens[0]) + 1
+                    _ot._assert_shape(otherGens, (2, bsO - 1, dim, dim), sparse_bases)
+
+                    # apply basis change now, so we don't need to do so repeatedly later
+                    if sparse_bases:
+                        otherGens = [[_mt.safe_dot(leftTrans, _mt.safe_dot(mx, rightTrans))
+                                      for mx in mxRow] for mxRow in otherGens]
+
+                        for mxRow in otherGens:
+                            for mx in mxRow: mx.sort_indices()
+                            # for faster addition ops in _construct_errgen_matrix
+                    else:
+                        #otherGens = _np.einsum("ik,abkl,lj->abij", leftTrans,
+                        #                          otherGens, rightTrans)
+                        otherGens = _np.transpose(_np.tensordot(
+                            _np.tensordot(leftTrans, otherGens, (1, 2)), rightTrans, (3, 0)), (1, 2, 0, 3))
+
                 else:
-                    #otherGens = _np.einsum("ik,abkl,lj->abij", leftTrans,
-                    #                          otherGens, rightTrans)
-                    otherGens = _np.transpose(_np.tensordot(
-                        _np.tensordot(leftTrans, otherGens, (1, 2)), rightTrans, (3, 0)), (1, 2, 0, 3))
+                    bsO = len(otherGens) + 1  # projection-basis size (not nec. == dim)
+                    _ot._assert_shape(otherGens, (bsO - 1, bsO - 1, dim, dim), sparse_bases)
+
+                    # apply basis change now, so we don't need to do so repeatedly later
+                    if sparse_bases:
+                        otherGens = [[_mt.safe_dot(leftTrans, _mt.safe_dot(mx, rightTrans))
+                                      for mx in mxRow] for mxRow in otherGens]
+                        #Note: complex OK here, as only linear combos of otherGens (like (i,j) + (j,i)
+                        # terms) need to be real
+
+                        for mxRow in otherGens:
+                            for mx in mxRow: mx.sort_indices()
+                            # for faster addition ops in _construct_errgen_matrix
+                    else:
+                        #otherGens = _np.einsum("ik,abkl,lj->abij", leftTrans,
+                        #                            otherGens, rightTrans)
+                        otherGens = _np.transpose(_np.tensordot(
+                            _np.tensordot(leftTrans, otherGens, (1, 2)), rightTrans, (3, 0)), (1, 2, 0, 3))
 
             else:
-                bsO = len(otherGens) + 1  # projection-basis size (not nec. == dim)
-                _ot._assert_shape(otherGens, (bsO - 1, bsO - 1, dim, dim), sparse_bases)
+                bsO = 0
+            assert(bsO == self.other_basis_size)
 
-                # apply basis change now, so we don't need to do so repeatedly later
-                if sparse_bases:
-                    otherGens = [[_mt.safe_dot(leftTrans, _mt.safe_dot(mx, rightTrans))
-                                  for mx in mxRow] for mxRow in otherGens]
-                    #Note: complex OK here, as only linear combos of otherGens (like (i,j) + (j,i)
-                    # terms) need to be real
+            if hamGens is not None:
+                hamGens_1norms = _np.array([_mt.safe_onenorm(mx) for mx in hamGens], 'd')
+            else:
+                hamGens_1norms = None
 
-                    for mxRow in otherGens:
-                        for mx in mxRow: mx.sort_indices()
-                        # for faster addition ops in _construct_errgen_matrix
+            if otherGens is not None:
+                if self.parameterization.nonham_mode == "diagonal":
+                    otherGens_1norms = _np.array([_mt.safe_onenorm(mx) for mx in otherGens], 'd')
                 else:
-                    #otherGens = _np.einsum("ik,abkl,lj->abij", leftTrans,
-                    #                            otherGens, rightTrans)
-                    otherGens = _np.transpose(_np.tensordot(
-                        _np.tensordot(leftTrans, otherGens, (1, 2)), rightTrans, (3, 0)), (1, 2, 0, 3))
+                    otherGens_1norms = _np.array([_mt.safe_onenorm(mx)
+                                                  for oGenRow in otherGens for mx in oGenRow], 'd')
+            else:
+                otherGens_1norms = None
 
-        else:
-            bsO = 0
-        assert(bsO == self.other_basis_size)
-        return hamGens, otherGens
+            self._generators_cache[cache_key] = (hamGens, otherGens, hamGens_1norms, otherGens_1norms)
+
+        cached_hamGens, cached_otherGens, cached_h1norms, cached_o1norms = self._generators_cache[cache_key]
+        return (_copy.deepcopy(cached_hamGens), _copy.deepcopy(cached_otherGens),
+                cached_h1norms.copy() if (cached_h1norms is not None) else None,
+                cached_o1norms.copy() if (cached_o1norms is not None) else None)
 
     def _init_terms(self, lindblad_term_dict, basis, dim, max_polynomial_vars):
 
@@ -844,7 +866,7 @@ class LindbladErrorgen(_LinearOperator):
                 self.paramvals, self.ham_basis_size, self.other_basis_size,
                 self.parameterization.param_mode, self.parameterization.nonham_mode)
 
-            hamGens, otherGens = self._init_generators(self.dim)
+            hamGens, otherGens, _, _ = self._init_generators(self.dim)
 
             if hamCoeffs is not None:
                 lnd_error_gen = _np.tensordot(hamCoeffs, hamGens, (0, 0))
@@ -881,7 +903,7 @@ class LindbladErrorgen(_LinearOperator):
                 self.paramvals, self.ham_basis_size, self.other_basis_size,
                 self.parameterization.param_mode, self.parameterization.nonham_mode)
 
-            hamGens, otherGens = self._init_generators(self.dim)
+            hamGens, otherGens, _, _ = self._init_generators(self.dim)
 
             if hamCoeffs is not None:
                 lnd_error_gen = sum([c * gen for c, gen in zip(hamCoeffs, hamGens)])
@@ -2008,6 +2030,9 @@ class LindbladParameterization(_NicelySerializable):
         self.ham_params_allowed = ham_params_allowed
         self.nonham_params_allowed = nonham_params_allowed
         self.abbrev = abbrev
+
+    def __hash__(self):
+        return hash((self.nonham_mode, self.param_mode, self.ham_params_allowed, self.nonham_params_allowed))
 
     def __eq__(self, other):
         if not isinstance(other, LindbladParameterization): return False

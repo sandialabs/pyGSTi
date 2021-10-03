@@ -2053,6 +2053,7 @@ def sparse_onenorm(a):
     float
     """
     return max(abs(a).sum(axis=0).flat)
+    # also == return _spsl.norm(a, ord=1) (comparable speed)
 
 
 def ndarray_base(a, verbosity=0):
