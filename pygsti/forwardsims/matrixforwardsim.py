@@ -1113,19 +1113,6 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
             GB = 1.0 / 1024.0**3
             if mem_estimate > mem_limit:
-
-                # MEM DEBUG
-                #running = 0
-                #for typ in array_types:
-                #    m1 = _bytes_for_array_types([typ], global_layout.num_elements, max_local_els, max_atom_els,
-                #                                  global_layout.num_circuits, max_local_circuits,
-                #                                  layout._param_dimensions, (loc_nparams1, loc_nparams2),
-                #                                  (blk1, blk2), max_atom_cachesize,
-                #                                  self.model.evotype.minimal_dim(self.model.state_space))
-                #    running += m1
-                #    print(typ, m1*GB, running*GB)
-                #import bpdb; bpdb.set_trace()
-
                 raise MemoryError("Not enough memory for desired layout! (limit=%.1fGB, required=%.1fGB" % (
                     mem_limit * GB, mem_estimate * GB))
             else:
